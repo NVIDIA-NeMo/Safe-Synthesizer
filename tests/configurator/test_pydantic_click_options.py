@@ -478,3 +478,55 @@ def test_deep_nested_override_end_to_end_via_click_runner():
     result = CliRunner().invoke(cmd, ["--replace_pii__globals__seed", "42"])
     assert result.exit_code == 0, result.output
     assert captured["replace_pii"]["globals"]["seed"] == 42
+
+
+def test_structured_generation_nested_option_end_to_end_via_click_runner():
+    """The canonical nested structured-generation option flows through Click parsing."""
+    captured: dict = {}
+
+    @pydantic_options(SafeSynthesizerParameters, field_separator="__")
+    @click.command()
+    def cmd(**kwargs):
+        captured.update(parse_overrides(kwargs))
+
+    result = CliRunner().invoke(cmd, ["--generation__structured_generation__backend", "outlines"])
+    assert result.exit_code == 0, result.output
+    assert captured["generation"]["structured_generation"]["backend"] == "outlines"
+
+
+@pytest.mark.parametrize(
+    ("option", "legacy_key", "value", "expected"),
+    [
+        ("--generation__use_structured_generation", "use_structured_generation", "true", True),
+        ("--generation__structured_generation_backend", "structured_generation_backend", "outlines", "outlines"),
+        (
+            "--generation__structured_generation_schema_method",
+            "structured_generation_schema_method",
+            "json_schema",
+            "json_schema",
+        ),
+        (
+            "--generation__structured_generation_use_single_sequence",
+            "structured_generation_use_single_sequence",
+            "true",
+            True,
+        ),
+    ],
+)
+def test_structured_generation_legacy_options_end_to_end_via_click_runner(
+    option: str,
+    legacy_key: str,
+    value: str,
+    expected: object,
+):
+    """Legacy flat structured-generation CLI aliases remain accepted during migration."""
+    captured: dict = {}
+
+    @pydantic_options(SafeSynthesizerParameters, field_separator="__")
+    @click.command()
+    def cmd(**kwargs):
+        captured.update(parse_overrides(kwargs))
+
+    result = CliRunner().invoke(cmd, [option, value])
+    assert result.exit_code == 0, result.output
+    assert captured["generation"][legacy_key] == expected

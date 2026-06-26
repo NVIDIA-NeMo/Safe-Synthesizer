@@ -109,9 +109,10 @@ generation:
   num_records: 1000
   patience: 1
   repetition_penalty: 1.0
+  structured_generation:
+    enabled: false
   temperature: 0.9
   top_p: 1.0
-  use_structured_generation: false
 privacy:
   delta: auto
   dp_enabled: false

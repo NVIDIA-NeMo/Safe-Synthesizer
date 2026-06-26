@@ -26,7 +26,7 @@ def fixture_safe_synthesizer_config():
     return SafeSynthesizerParameters.from_params(
         group_training_examples_by=None,
         max_sequences_per_example=None,
-        structured_generation_use_single_sequence=False,
+        structured_generation={"use_single_sequence": False},
     )
 
 
@@ -107,7 +107,7 @@ def test_build_json_structural_tag_uses_schema_constrained_jsonl(fixture_safe_sy
 def test_build_json_structural_tag_with_single_sequence(fixture_safe_synthesizer_config):
     """Single-sequence Structural Tag emits exactly one schema-constrained object."""
     fixture_safe_synthesizer_config.data.max_sequences_per_example = 1
-    fixture_safe_synthesizer_config.generation.structured_generation_use_single_sequence = True
+    fixture_safe_synthesizer_config.generation.structured_generation.use_single_sequence = True
     schema = {"type": "object", "properties": {"name": {"type": "string"}}}
 
     structural_tag = json.loads(
@@ -168,7 +168,7 @@ def test_build_json_structural_tag_with_groupby_single_sequence(fixture_safe_syn
     """Grouped single-sequence Structural Tag emits exactly one BOS/EOS-wrapped sequence."""
     fixture_safe_synthesizer_config.data.group_training_examples_by = "id"
     fixture_safe_synthesizer_config.data.max_sequences_per_example = 1
-    fixture_safe_synthesizer_config.generation.structured_generation_use_single_sequence = True
+    fixture_safe_synthesizer_config.generation.structured_generation.use_single_sequence = True
     schema = {"type": "object", "properties": {"name": {"type": "string"}}}
 
     structural_tag = json.loads(
@@ -563,7 +563,7 @@ def test_property_regex(fixture_safe_synthesizer_config):
     [
         ({}, '{"name":"alice"}\n{"name":"bob"}\n'),
         (
-            {"max_sequences_per_example": 1, "structured_generation_use_single_sequence": True},
+            {"max_sequences_per_example": 1, "structured_generation.use_single_sequence": True},
             '{"name":"alice"}',
         ),
         (
@@ -574,7 +574,7 @@ def test_property_regex(fixture_safe_synthesizer_config):
             {
                 "group_training_examples_by": "id",
                 "max_sequences_per_example": 1,
-                "structured_generation_use_single_sequence": True,
+                "structured_generation.use_single_sequence": True,
             },
             '<s>{"name":"alice"}\n</s>',
         ),
@@ -592,8 +592,8 @@ def test_structural_tag_accepts_training_jsonl_shapes(
             fixture_safe_synthesizer_config.data.group_training_examples_by = value
         elif key == "max_sequences_per_example":
             fixture_safe_synthesizer_config.data.max_sequences_per_example = value
-        elif key == "structured_generation_use_single_sequence":
-            fixture_safe_synthesizer_config.generation.structured_generation_use_single_sequence = value
+        elif key == "structured_generation.use_single_sequence":
+            fixture_safe_synthesizer_config.generation.structured_generation.use_single_sequence = value
 
     schema = {
         "type": "object",
@@ -670,10 +670,10 @@ def test_round_trip_doc_summaries_schema_regex_matches(fixture_doc_summaries_dat
 
 
 # Purpose: Validates single-sequence mode without grouping produces a bare record regex (no \n, no repetition).
-# Data: Simple enum schema; structured_generation_use_single_sequence=True, max_sequences_per_example=1, no grouping.
+# Data: Simple enum schema; structured_generation.use_single_sequence=True, max_sequences_per_example=1, no grouping.
 # Asserts: Regex is the raw record pattern; matches a single record without trailing newline; rejects newline-terminated and multi-record inputs.
 def test_single_sequence_no_grouping(fixture_safe_synthesizer_config):
-    fixture_safe_synthesizer_config.generation.structured_generation_use_single_sequence = True
+    fixture_safe_synthesizer_config.generation.structured_generation.use_single_sequence = True
     fixture_safe_synthesizer_config.data.max_sequences_per_example = 1
 
     schema = {
@@ -695,10 +695,10 @@ def test_single_sequence_no_grouping(fixture_safe_synthesizer_config):
 
 
 # Purpose: Validates single-sequence mode with grouping produces a single BOS/EOS group (no trailing \n, no group repetition).
-# Data: Simple enum schema; structured_generation_use_single_sequence=True, max_sequences_per_example=1, group_by="id".
+# Data: Simple enum schema; structured_generation.use_single_sequence=True, max_sequences_per_example=1, group_by="id".
 # Asserts: Regex matches exactly one group; rejects trailing newline after EOS and multiple groups.
 def test_single_sequence_with_groupby(fixture_safe_synthesizer_config):
-    fixture_safe_synthesizer_config.generation.structured_generation_use_single_sequence = True
+    fixture_safe_synthesizer_config.generation.structured_generation.use_single_sequence = True
     fixture_safe_synthesizer_config.data.max_sequences_per_example = 1
     fixture_safe_synthesizer_config.data.group_training_examples_by = "id"
 
@@ -721,12 +721,12 @@ def test_single_sequence_with_groupby(fixture_safe_synthesizer_config):
     assert re.fullmatch(regex, '<s>{"foo":"a"}\n</s>\n<s>{"foo":"b"}\n</s>\n') is None
 
 
-# Purpose: Validates that structured_generation_use_single_sequence is ignored when max_sequences_per_example != 1.
+# Purpose: Validates that structured_generation.use_single_sequence is ignored when max_sequences_per_example != 1.
 # Data: Simple enum schema; flag=True but max_sequences_per_example is None or 2.
 # Asserts: Regex uses the repeated (...\n)+ form despite the flag being set.
 @pytest.mark.parametrize("max_seq", [None, 2])
 def test_single_sequence_flag_ignored_when_max_sequences_not_one(max_seq, fixture_safe_synthesizer_config):
-    fixture_safe_synthesizer_config.generation.structured_generation_use_single_sequence = True
+    fixture_safe_synthesizer_config.generation.structured_generation.use_single_sequence = True
     fixture_safe_synthesizer_config.data.max_sequences_per_example = max_seq
 
     schema = {

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import warnings
+from collections.abc import Mapping
 from typing import Any, Self
 
 from pydantic import BaseModel, Field, model_validator
@@ -63,6 +64,23 @@ def _overlay_set_fields(saved: Parameters, runtime: Parameters) -> Parameters:
     if not overrides:
         return saved
     return saved.model_validate(merge_dicts(saved.model_dump(), overrides))
+
+
+def _section_values(kwargs: dict[str, Any], section: str) -> dict[str, Any]:
+    """Return values for a nested section merged with flat compatibility kwargs."""
+    section_value = kwargs.get(section)
+    match section_value:
+        case BaseModel() as model:
+            section_data = model.model_dump()
+        case Mapping() as mapping:
+            section_data = dict(mapping)
+        case None:
+            section_data = {}
+        case _:
+            section_data = {section: section_value}
+
+    flat_values = {key: value for key, value in kwargs.items() if key != section}
+    return section_data | flat_values
 
 
 class SafeSynthesizerParameters(Parameters):
@@ -212,14 +230,14 @@ class SafeSynthesizerParameters(Parameters):
 
         Example:
             >>> from nemo_safe_synthesizer.config import SafeSynthesizerParameters
-            >>> SafeSynthesizerParameters.from_params(use_structured_generation=True)
+            >>> SafeSynthesizerParameters.from_params(structured_generation={"enabled": True})
         """
-        thp = TrainingHyperparams().model_copy(update=kwargs)
-        gp = GenerateParameters().model_copy(update=kwargs)
-        ep = EvaluationParameters().model_copy(update=kwargs)
-        pp = DifferentialPrivacyHyperparams().model_copy(update=kwargs)
-        dp = DataParameters().model_copy(update=kwargs)
-        tsp = TimeSeriesParameters().model_copy(update=kwargs)
+        thp = TrainingHyperparams.model_validate(_section_values(kwargs, "training"))
+        gp = GenerateParameters.model_validate(_section_values(kwargs, "generation"))
+        ep = EvaluationParameters.model_validate(_section_values(kwargs, "evaluation"))
+        pp = DifferentialPrivacyHyperparams.model_validate(_section_values(kwargs, "privacy"))
+        dp = DataParameters.model_validate(_section_values(kwargs, "data"))
+        tsp = TimeSeriesParameters.model_validate(_section_values(kwargs, "time_series"))
 
         extra: dict[str, Any] = {
             "training": thp,

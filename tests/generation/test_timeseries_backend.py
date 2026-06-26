@@ -94,7 +94,6 @@ def timeseries_base_params():
         ),
         generation=GenerateParameters(
             num_records=100,
-            use_structured_generation=False,
         ),
         time_series=TimeSeriesParameters(
             is_timeseries=True,
@@ -128,7 +127,6 @@ def timeseries_elapsed_params():
         ),
         generation=GenerateParameters(
             num_records=100,
-            use_structured_generation=False,
         ),
         time_series=TimeSeriesParameters(
             is_timeseries=True,

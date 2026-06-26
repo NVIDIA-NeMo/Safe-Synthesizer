@@ -290,7 +290,7 @@ class VllmBackend(GeneratorBackend):
 
         # vllm requires this "config" to set the backend ahead of time.
         structured_outputs_config = StructuredOutputsConfig(
-            backend=self.config.generation.structured_generation_backend,
+            backend=self.config.generation.structured_generation.backend,
         )
         model_ref = ModelRef.parse(self.config.training.pretrained_model)
 
@@ -344,13 +344,13 @@ class VllmBackend(GeneratorBackend):
         Returns:
             StructuredOutputsParams if structured generation is enabled, None otherwise.
         """
-        if not self.config.generation.use_structured_generation:
+        if not self.config.generation.structured_generation.enabled:
             return None
 
         params: dict[str, Any] = {}
         schema_method = resolve_structured_generation_schema_method(
-            self.config.generation.structured_generation_schema_method,
-            self.config.generation.structured_generation_backend,
+            self.config.generation.structured_generation.schema_method,
+            self.config.generation.structured_generation.backend,
         )
 
         if schema_method == "regex":
@@ -366,7 +366,7 @@ class VllmBackend(GeneratorBackend):
         elif schema_method == "json_schema":
             params["json"] = self.schema
         elif schema_method == "structural_tag":
-            backend = self.config.generation.structured_generation_backend
+            backend = self.config.generation.structured_generation.backend
             if message := structural_tag_backend_error_message(backend):
                 raise ParameterError(message)
             logger.info("Structured generation is enabled, using an XGrammar Structural Tag")

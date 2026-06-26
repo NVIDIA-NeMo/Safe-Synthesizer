@@ -360,7 +360,7 @@ def build_json_based_regex(
         # Without grouping, the "sequence" is a single record.
         sequence_regex = record_regex
 
-    if config.generation.structured_generation_use_single_sequence and config.data.max_sequences_per_example == 1:
+    if config.generation.structured_generation.use_single_sequence and config.data.max_sequences_per_example == 1:
         regex = sequence_regex
     else:
         regex = rf"({sequence_regex}\n)+"
@@ -423,7 +423,7 @@ def build_json_structural_tag(
     else:
         sequence_format = record_format
 
-    if config.generation.structured_generation_use_single_sequence and config.data.max_sequences_per_example == 1:
+    if config.generation.structured_generation.use_single_sequence and config.data.max_sequences_per_example == 1:
         output_format = sequence_format
     elif config.data.group_training_examples_by is not None:
         output_format = _plus_format(_sequence_format([sequence_format, _const_string_format("\n")]))
