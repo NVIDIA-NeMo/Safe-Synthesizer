@@ -96,6 +96,14 @@ def _assign_path(target: dict[str, object], path: tuple[str, ...], value: object
     _assign_path(nested, tuple(tail), value)
 
 
+_LEGACY_FLAT_PATHS: dict[str, tuple[str, ...]] = {
+    "use_structured_generation": ("generation", "structured_generation", "enabled"),
+    "structured_generation_backend": ("generation", "structured_generation", "backend"),
+    "structured_generation_schema_method": ("generation", "structured_generation", "schema_method"),
+    "structured_generation_use_single_sequence": ("generation", "structured_generation", "use_single_sequence"),
+}
+
+
 class SafeSynthesizerParameters(Parameters):
     """Main configuration class for the Safe Synthesizer pipeline.
 
@@ -267,6 +275,8 @@ class SafeSynthesizerParameters(Parameters):
                 path = tuple(name.split("."))
             elif name in top_level_fields:
                 path = (name,)
+            elif name in _LEGACY_FLAT_PATHS:
+                path = _LEGACY_FLAT_PATHS[name]
             else:
                 matches = field_index.get(name, [])
                 if not matches:
