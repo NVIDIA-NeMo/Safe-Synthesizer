@@ -12,10 +12,7 @@ from nemo_safe_synthesizer.errors import DataError, ParameterError
 from nemo_safe_synthesizer.training.timeseries_preprocessing import (
     _add_pseudo_group_if_needed,
     _create_elapsed_time_column,
-    _GroupTimestampStats,
-    _infer_and_convert_timestamp_format,
     _sort_by_group_and_timestamp,
-    _validate_start_stop_consistency,
     process_timeseries_data,
 )
 
@@ -135,65 +132,6 @@ def test_sort_by_timestamp_only():
 
     assert list(df_result["timestamp"]) == [1, 2, 3]
     assert list(df_result["value"]) == ["a", "b", "c"]
-
-
-def test_validate_start_stop_consistency_valid():
-    """Test validation passes when all groups have same start/stop."""
-    stats = [
-        _GroupTimestampStats("A", "2024-01-01", "2024-01-03", 3600),
-        _GroupTimestampStats("B", "2024-01-01", "2024-01-03", 3600),
-    ]
-
-    start, stop = _validate_start_stop_consistency(stats)
-
-    assert start == "2024-01-01"
-    assert stop == "2024-01-03"
-
-
-def test_validate_start_stop_consistency_different_starts_raises():
-    """Test DataError when groups have different start timestamps."""
-    stats = [
-        _GroupTimestampStats("A", "2024-01-01", "2024-01-03", 3600),
-        _GroupTimestampStats("B", "2024-01-02", "2024-01-03", 3600),  # Different start
-    ]
-
-    with pytest.raises(DataError, match="Start timestamps differ across groups"):
-        _validate_start_stop_consistency(stats)
-
-
-def test_validate_start_stop_consistency_different_stops_raises():
-    """Test DataError when groups have different stop timestamps."""
-    stats = [
-        _GroupTimestampStats("A", "2024-01-01", "2024-01-03", 3600),
-        _GroupTimestampStats("B", "2024-01-01", "2024-01-04", 3600),  # Different stop
-    ]
-
-    with pytest.raises(DataError, match="Stop timestamps differ across groups"):
-        _validate_start_stop_consistency(stats)
-
-
-class TestInferAndConvertTimestampFormat:
-    """Tests for _infer_and_convert_timestamp_format."""
-
-    @pytest.mark.parametrize(
-        "column_name,values,expected_match",
-        [
-            pytest.param(
-                "ts", ["not_a_date", "also_not"], "Could not infer timestamp format", id="non_datetime_strings"
-            ),
-            pytest.param("my_col", [42, 99], r"column 'my_col'.*first value: '42'", id="names_column_and_first_value"),
-            pytest.param("ts", [100, 200], "elapsed_seconds", id="suggests_elapsed_seconds_for_numeric"),
-        ],
-    )
-    def test_raises_parameter_error_with_informative_message(self, column_name, values, expected_match):
-        """ParameterError is raised when format cannot be inferred, with an actionable message."""
-        df = pd.DataFrame({column_name: values})
-        config = SafeSynthesizerParameters.from_params(rope_scaling_factor=1)
-        config.time_series.timestamp_column = column_name
-        config.time_series.timestamp_format = None
-
-        with pytest.raises(ParameterError, match=expected_match):
-            _infer_and_convert_timestamp_format(df, config.time_series)
 
 
 class TestProcessTimeseriesElapsedSecondsDetection:

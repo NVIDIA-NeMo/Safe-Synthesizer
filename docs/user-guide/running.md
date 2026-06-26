@@ -290,6 +290,7 @@ execute in order (`config` → `dataframe` → `metadata` → `advisory`).
 | `columns.pseudo` | dataframe | Input does not use the reserved `__nss_sequence_id` column name |
 | `columns.constant` | dataframe | No column is constant (warning only) |
 | `timeseries.timestamp` | dataframe | Timestamp column is present and has no nulls (time-series mode) |
+| `timeseries.shape` | dataframe | Timestamp formats parse cleanly and groups have matching lengths, intervals, starts, and stops (time-series mode) |
 | `gpu.vram` | metadata | Free VRAM headroom for the chosen model, quantization load mode, and per-device batch size; emits `low_vram` as a warning and `vram_exceeds_capacity` as an error when the estimate is far above capacity |
 | `token_budget` | metadata | Schema prompt, sampled records, and top groups each fit in the model's context window |
 | `dataset.row_count` | advisory | Training split is above a comfort threshold (warning only) |
@@ -325,6 +326,8 @@ the best-effort caveat below.
     - PII replacement is skipped in validate mode, so the training split
       that preflight sees is the *pre-replacement* data; replacement text
       can be shorter or longer than the original and shift token budgets.
+      If PII replacement alters time-series timestamp or group columns, a
+      later training-time invariant check can still fail.
     - Token-budget checks sample rows and top groups -- a long-tail
       outlier outside the sample can still exceed the budget at assembly.
     - VRAM headroom includes a coarse bf16 compute activation term

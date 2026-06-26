@@ -7,6 +7,11 @@ from __future__ import annotations
 
 from typing_extensions import override
 
+from ...data_processing.timeseries_validation import (
+    TimeSeriesDataValidationError,
+    TimeSeriesParameterValidationError,
+    validate_timeseries_data,
+)
 from ...data_processing.validation import (
     check_column_has_no_nulls,
     check_column_present,
@@ -23,6 +28,7 @@ __all__ = [
     "GroupbyColumnCheck",
     "OrderbyColumnCheck",
     "PseudoColumnCheck",
+    "TimeSeriesDataShapeCheck",
     "TimestampColumnCheck",
 ]
 
@@ -166,3 +172,32 @@ class TimestampColumnCheck(DataFrameCheck):
             expect=DataError,
             code="timestamp_nulls",
         )
+
+
+class TimeSeriesDataShapeCheck(DataFrameCheck):
+    """Validate time-series timestamp format and per-group shape invariants."""
+
+    name = "timeseries.shape"
+    label = "Time-series data shape"
+    requires = ("columns.groupby", "columns.pseudo")
+
+    @override
+    def enabled(self, ctx: PreflightContext) -> bool:
+        if not super().enabled(ctx):
+            return False
+        return bool(ctx.config.time_series.is_timeseries)
+
+    @override
+    def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
+        timestamp_column = ctx.config.time_series.timestamp_column
+        if timestamp_column is not None:
+            try:
+                check_column_present(ctx.data, timestamp_column, role="Timestamp")
+                check_column_has_no_nulls(ctx.data, timestamp_column, role="Timestamp")
+            except (DataError, ParameterError):
+                return
+
+        try:
+            validate_timeseries_data(ctx.data, ctx.config)
+        except (TimeSeriesDataValidationError, TimeSeriesParameterValidationError) as exc:
+            collector.error(exc.code, str(exc))

@@ -22,6 +22,7 @@ from .dataframe import (
     GroupbyColumnCheck,
     OrderbyColumnCheck,
     PseudoColumnCheck,
+    TimeSeriesDataShapeCheck,
     TimestampColumnCheck,
 )
 from .environment import (
@@ -43,6 +44,7 @@ __all__ = [
     "OrderbyColumnCheck",
     "OversamplingCheck",
     "PseudoColumnCheck",
+    "TimeSeriesDataShapeCheck",
     "TimestampColumnCheck",
     "TokenBudgetCheck",
     "VRAMHeadroomCheck",
@@ -66,6 +68,7 @@ _CORE_CHECKS: tuple[PreflightCheck, ...] = (
     PseudoColumnCheck(),
     ConstantColumnCheck(),
     TimestampColumnCheck(),
+    TimeSeriesDataShapeCheck(),
     # METADATA
     VRAMHeadroomCheck(),
     TokenBudgetCheck(),
