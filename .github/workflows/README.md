@@ -240,6 +240,13 @@ Compliance workflows reuse templates from [NVIDIA-NeMo/FW-CI-templates](https://
 - `_copyright_check.yml` - Copyright header validation
 - `_release_library.yml` - Full release automation
 
+Run the changed-file secrets scan locally with the repository tool:
+
+```bash
+uv run --no-project --with detect-secrets==1.5.0 -- \
+  bash tools/secrets-detector-changed-files.sh origin/main
+```
+
 ## Configuration Files
 
 | File | Purpose |
