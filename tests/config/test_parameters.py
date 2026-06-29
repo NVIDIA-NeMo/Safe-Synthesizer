@@ -142,9 +142,14 @@ def test_from_params_accepts_explicit_dotted_path():
     assert config.generation.validation.group_by_fix_unordered_records is True
 
 
+def test_from_params_rejects_unknown_explicit_dotted_path():
+    with pytest.raises(ParameterError, match=r"Unknown parameter path 'generation\.not_a_field'"):
+        SafeSynthesizerParameters.from_params(**{"generation.not_a_field": True})
+
+
 def test_from_params_rejects_top_level_none_before_nested_override():
     with pytest.raises(
-        ParameterError, match="Cannot assign nested parameter path 'generation.num_records'.*'generation'"
+        ParameterError, match=r"Cannot assign nested parameter path 'generation\.num_records'.*'generation'"
     ):
         SafeSynthesizerParameters.from_params(generation=None, **{"generation.num_records": 10})
 
@@ -173,12 +178,12 @@ def test_from_params_merges_section_and_leaf_overrides_order_independently(kwarg
     ],
 )
 def test_from_params_rejects_section_none_with_nested_override(kwargs: dict[str, object]):
-    with pytest.raises(ParameterError, match="Cannot assign nested parameter path 'privacy.dp_enabled'.*'privacy'"):
+    with pytest.raises(ParameterError, match=r"Cannot assign nested parameter path 'privacy\.dp_enabled'.*'privacy'"):
         SafeSynthesizerParameters.from_params(**kwargs)
 
 
 def test_from_params_rejects_duplicate_specific_parameter_paths():
-    with pytest.raises(ParameterError, match="Duplicate parameter path 'generation.num_records'"):
+    with pytest.raises(ParameterError, match=r"Duplicate parameter path 'generation\.num_records'"):
         SafeSynthesizerParameters.from_params(num_records=10, **{"generation.num_records": 20})
 
 
@@ -232,7 +237,7 @@ def test_parameters_get_supports_explicit_dotted_paths():
 def test_parameters_get_rejects_ambiguous_bare_leaf_names():
     params = _DuplicateLeafParameters()
 
-    with pytest.raises(ParameterError, match="left.value.*right.value"):
+    with pytest.raises(ParameterError, match=r"left\.value.*right\.value"):
         params.get("value")
 
 
@@ -247,7 +252,7 @@ def test_parameters_has_supports_explicit_dotted_paths():
 def test_parameters_has_rejects_ambiguous_bare_leaf_names():
     params = _DuplicateLeafParameters()
 
-    with pytest.raises(ParameterError, match="left.value.*right.value"):
+    with pytest.raises(ParameterError, match=r"left\.value.*right\.value"):
         params.has("value")
 
 

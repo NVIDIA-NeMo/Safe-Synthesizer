@@ -55,3 +55,19 @@ def test_with_replace_pii_resolves_raw_config_with_kwargs():
 
     assert builder._replace_pii_config is not None
     assert builder._replace_pii_config.globals.classify.enable_classify is False
+
+
+@pytest.mark.parametrize("as_mapping", [False, True])
+def test_with_replace_pii_deep_merges_nested_kwargs(as_mapping: bool):
+    config_model = PiiReplacerConfig.get_default_config()
+    config_model.globals.locales = ["en_US"]
+    config = config_model.model_dump() if as_mapping else config_model
+
+    builder = ConfigBuilder().with_replace_pii(
+        config=config,
+        globals={"classify": {"enable_classify": False}},
+    )
+
+    assert builder._replace_pii_config is not None
+    assert builder._replace_pii_config.globals.locales == ["en_US"]
+    assert builder._replace_pii_config.globals.classify.enable_classify is False

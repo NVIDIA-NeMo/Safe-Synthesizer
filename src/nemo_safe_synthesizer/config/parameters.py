@@ -264,6 +264,7 @@ class SafeSynthesizerParameters(Parameters):
             "preflight": PreflightParameters(),
         }
         top_level_fields = set(cls.model_fields)
+        default_params = cls()
         field_index: dict[str, list[tuple[str, ...]]] = {}
         for section_name, section in section_defaults.items():
             for path, _ in section._iter_field_paths((section_name,)):
@@ -273,6 +274,8 @@ class SafeSynthesizerParameters(Parameters):
         for name, value in kwargs.items():
             if "." in name:
                 path = tuple(name.split("."))
+                if not default_params.has(name):
+                    raise ParameterError(f"Unknown parameter path {name!r}.")
             elif name in top_level_fields:
                 path = (name,)
             elif name in _LEGACY_FLAT_PATHS:

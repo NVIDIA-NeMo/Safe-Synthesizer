@@ -23,6 +23,7 @@ from ..config import (
 )
 from ..observability import get_logger
 from ..telemetry import _telemetry_enabled
+from ..utils import merge_dicts
 
 logger = get_logger(__name__)
 
@@ -130,12 +131,10 @@ class ConfigBuilder(object):
                 if not isinstance(model, cls):
                     raise TypeError(f"Expected {cls.__name__}, got {type(model).__name__}")
                 raw_values = model.model_dump(exclude_unset=True)
-                raw_values.update(kwargs)
-                return cls.model_validate(raw_values)
+                return cls.model_validate(merge_dicts(raw_values, kwargs))
             case Mapping() as mapping:
                 raw_values = dict(mapping)
-                raw_values.update(kwargs)
-                return cls.model_validate(raw_values)
+                return cls.model_validate(merge_dicts(raw_values, kwargs))
             case _:
                 raise TypeError(f"Unsupported config type: {type(values)}")
 
