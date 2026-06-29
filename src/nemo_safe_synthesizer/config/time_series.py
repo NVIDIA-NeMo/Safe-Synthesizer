@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated, Literal, Self
+from typing import Annotated, Self
 
 from pydantic import Field, field_validator, model_validator
 
@@ -90,39 +90,6 @@ class TimeSeriesParameters(Parameters):
         str | int | None,
         Field(
             description="Stop timestamp. If not provided, the last timestamp in the timestamp column will be used.",
-        ),
-    ] = None
-
-    initialization_strategy: Annotated[
-        Literal["training_prefill", "empty", "start_instruction", "partial_record_prefix"],
-        Field(
-            description=(
-                "Experimental time-series generation initialization strategy. "
-                "'training_prefill' preserves the existing behavior; cold-start strategies avoid injecting "
-                "training rows into the initial prompt."
-            ),
-        ),
-    ] = "training_prefill"
-
-    prefill_context_records: Annotated[
-        int,
-        Field(
-            ge=0,
-            description=(
-                "Number of recently generated records to keep in the rolling time-series prompt context. "
-                "Defaults to 3 to match the current hard-coded behavior."
-            ),
-        ),
-    ] = 3
-
-    cold_start_instruction_template: Annotated[
-        str | None,
-        Field(
-            description=(
-                "Optional format string appended to the time-series generation instruction for cold-start "
-                "experiments. Available fields include group_id, group_column, timestamp_column, "
-                "start_timestamp, stop_timestamp, and timestamp_interval_seconds."
-            ),
         ),
     ] = None
 

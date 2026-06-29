@@ -241,10 +241,10 @@ class SafeSynthesizerParameters(Parameters):
         """Apply resume-time generation/evaluation/telemetry overrides onto a copy of self.
 
         ``self`` is the saved training-run config. Only explicitly-set
-        ``generation``, ``evaluation``, and ``time_series`` fields from
-        ``runtime`` are merged in, plus ``emit_telemetry`` when the caller set
-        it. Training, data, privacy, and other sections are preserved so
-        training provenance survives a generate-only resume.
+        ``generation`` and ``evaluation`` fields from ``runtime`` are merged in,
+        plus ``emit_telemetry`` when the caller set it. Training, data, privacy,
+        and other sections are preserved so training provenance survives a
+        generate-only resume.
 
         Args:
             runtime: Config carrying resume-time CLI/SDK overrides. Typically
@@ -266,9 +266,6 @@ class SafeSynthesizerParameters(Parameters):
         evaluation = _overlay_set_fields(self.evaluation, runtime.evaluation)
         if evaluation is not self.evaluation:
             updates["evaluation"] = evaluation
-        time_series = _overlay_set_fields(self.time_series, runtime.time_series)
-        if time_series is not self.time_series:
-            updates["time_series"] = time_series
         # emit_telemetry is a top-level scalar: detect explicit assignment,
         # since there is no sub-model to inspect for set fields.
         if "emit_telemetry" in runtime.__pydantic_fields_set__:
