@@ -45,7 +45,7 @@ Located in `src/nemo_safe_synthesizer/config/time_series.py`, this configuration
 |-----------|------|---------|-------------|
 | `is_timeseries` | `bool` | `False` | Master switch to enable time series mode. When enabled, `timestamp_column` or `timestamp_interval_seconds` must be provided. |
 | `timestamp_column` | `str \| None` | `None` | Name of the column containing timestamps. Required when `is_timeseries=True` unless `timestamp_interval_seconds` is provided. |
-| `timestamp_interval_seconds` | `int \| None` | `None` | Expected interval in seconds between consecutive timestamps. If not provided, will be inferred from the data. |
+| `timestamp_interval_seconds` | `int \| None` | `None` | Expected positive whole-number interval in seconds between consecutive timestamps. If not provided, will be inferred from the data. |
 | `timestamp_format` | `str \| None` | `None` | Format string for parsing timestamps (e.g., `"%Y-%m-%d %H:%M:%S"`) or `"elapsed_seconds"` for numeric timestamps. If not provided, will be inferred from the data. |
 | `start_timestamp` | `str \| int \| None` | `None` | Start timestamp for generation. Defaults to the first timestamp in the training data (validated to be consistent across groups). |
 | `stop_timestamp` | `str \| int \| None` | `None` | Stop timestamp for generation. Defaults to the last timestamp in the training data (validated to be consistent across groups). |

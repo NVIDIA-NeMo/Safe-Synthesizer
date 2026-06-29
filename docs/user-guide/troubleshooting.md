@@ -650,7 +650,9 @@ Interval mismatch:
 
 : If `timestamp_interval_seconds` does not match the actual intervals in your
   data, pre-flight and training fail with `timestamp_interval_mismatch`.
-  Verify your interval setting matches the data. Time-series synthesis is
+  Verify your interval setting matches the data and is a positive whole number
+  of seconds. Fractional/sub-second intervals are not supported; resample or
+  represent the data at whole-second resolution. Time-series synthesis is
   experimental, and this validation is intentionally strict so mismatches are
   caught before expensive pipeline stages.
 
