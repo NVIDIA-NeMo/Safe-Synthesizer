@@ -21,7 +21,7 @@ This improvement shipped in NeMo Safe Synthesizer `v0.0.6`.
 
 ## The Discovery
 
-The first clear signal came from a small tabular generation job using the default target of 1,000 records. We only needed 1,000 synthetic records, but one run produced 7,871 valid records from 100 prompts. That was a 7.9x overshoot, and generation alone took 338.4 seconds.
+The first clear signal came from a small tabular generation job using the default target of 1,000 records. We only needed 1,000 synthetic records, but one run produced 7,871 valid records from 100 prompts. That was a 7.9x overshoot, and generation alone took over 5 minutes.
 
 Inspecting the log exposed two related inefficiencies.
 
@@ -32,7 +32,7 @@ The prompt-count problem came from starting too aggressively. A Safe Synthesizer
 
 The token-count problem came from the decode cap. For our default `HuggingFaceTB/SmolLM3-3B` model, the vLLM `SamplingParams.max_tokens` value was effectively 12,288 tokens. If a fine-tuned LoRA did not emit EOS promptly, vLLM could keep decoding until that full cap even when the model had only been trained to produce much shorter examples.
 
-The new generation path addresses both pieces. The same case dropped to 1,097 valid records, 1.1x overshoot, and 77.8 seconds of generation time once generation used a small initial probe and a tighter token budget, compared to 338.4 seconds before this improvement.
+The new generation path addresses both pieces. The same case dropped to 1,097 valid records, 1.1x overshoot, and about 1 minute of generation time once generation used a small initial probe and a tighter token budget.
 
 ## What Changed
 
@@ -79,8 +79,6 @@ Values greater than 1.0 mean the experiment arm was faster.
 ![Generation speedups by dataset](assets/generation-speedup/generation_speedup_by_dataset_dot.png){: style="max-width: 820px; width: 100%; display: block; margin: 1.25rem auto;"}
 
 Both dataset charts are ordered by median prompt-aware generation cap, from smallest cap to largest cap. Each circle is one before/after comparison. Color shows the old-to-new token budget reduction factor. Low values mean the new cap stayed close to the old full-context cap. High values mean the implementation removed much more unused decode budget.
-
-The largest improvements in generation time come from datasets where the implementation substantially reduced the decode budget.
 
 ### Why It Speeds Up
 
