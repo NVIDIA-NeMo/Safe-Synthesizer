@@ -35,6 +35,7 @@ logger = get_logger(__name__)
 
 DEFAULT_MAX_SEQ_LENGTH = 2048
 GLOBAL_MAX_SEQ_LENGTH = 2048 * 6
+GLOBAL_MAX_SEQ_LENGTH = 4096
 
 GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER = 1.2
 """Margin applied to ``max_tokens_per_example`` when sizing generation

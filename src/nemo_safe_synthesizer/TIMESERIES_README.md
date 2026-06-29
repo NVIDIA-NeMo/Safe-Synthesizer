@@ -459,6 +459,28 @@ time_series:
   timestamp_interval_seconds: 60  # Or let it be inferred
 ```
 
+### Cold-Start Exploration
+
+Use the exploratory cold-start command after training a time-series adapter. It runs one or more initialization strategies against the same adapter and writes per-variant CSV, JSON diagnostics, and a lightweight HTML report:
+
+```bash
+uv run safe-synthesizer time-series cold-start \
+  --run-path /path/to/trained/run \
+  --variant training_prefill \
+  --variant empty \
+  --variant start_instruction \
+  --variant partial_record_prefix
+```
+
+Artifacts are written to `<run>/generate/time_series_cold_start` by default. The most useful files for iteration are:
+
+- `metrics.csv`: one row per variant with valid-record rate, prompt count, first-timestamp match rate, finish reasons, and top invalid reasons.
+- `<variant>/prompt_previews.json`: prompt seed details for each group, including visible prefill, optional parser prefix, and expected first timestamp.
+- `<variant>/first_record_diagnostics.csv`: first retained timestamp per group and whether it matched the configured start.
+- `report.html`: side-by-side traces for selected numeric columns. Use `--plot-column` to choose columns explicitly.
+
+The command is intentionally exploratory: it does not retrain the model, does not change validation semantics, and preserves `training_prefill` as the default generation behavior.
+
 ---
 
 ## Design Decisions & Rationale

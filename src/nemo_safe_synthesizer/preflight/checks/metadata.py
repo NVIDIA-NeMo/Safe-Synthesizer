@@ -68,5 +68,5 @@ class TokenBudgetCheck(MetadataCheck):
         # a missing column as an error but we still want schema/record
         # checks to run; guarding here keeps them independent).
         group_col = config.data.group_training_examples_by
-        if group_col is not None and group_col in data.columns:
+        if group_col is not None and group_col in data.columns and not config.time_series.is_timeseries:
             check_group_budget(collector, data, group_col, metadata, max_new_tokens, top_n=self.top_groups_to_check)
