@@ -9450,9 +9450,10 @@ Service or any Python project that needs to construct or validate
 </span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a>  run        Run the Safe Synthesizer end-to-end pipeline.
 </span></code></pre></div>
 <h3 id="optional-agent-skill">Optional Agent Skill<a class="headerlink" href="#optional-agent-skill" title="Permanent link">&para;</a></h3>
-<p>This repository includes an Agent Skill at <code>.agents/skills/safe-synthesizer/</code>.
-When working from a source checkout, no separate install step is required for
-agents that discover project skills from <code>.agents/skills/</code>.</p>
+<p>This repository includes an Agent Skill at <code>skills/safe-synthesizer/</code>. The
+<code>.agents/skills/safe-synthesizer</code> path is a repository symlink for agents that
+discover project skills from <code>.agents/skills/</code>.
+When working from a source checkout, no separate install step is required.</p>
 <p>Use it by asking an agent a Safe Synthesizer usage question, or by explicitly
 invoking the skill in an agent that supports slash-style skill calls, for
 example:
@@ -9461,7 +9462,7 @@ example:
 setting parameters, diagnosing failures, and finding artifacts. It points the
 agent back to this user guide and the developer guide instead of duplicating
 the full documentation. For copy-based installs into another project or a
-user-level skill directory, see <code>.agents/skills/safe-synthesizer/README.md</code>.</p>
+user-level skill directory, see <code>skills/safe-synthesizer/README.md</code>.</p>
 <hr />
 <h2 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
 <p>Create a synthetic version of an input dataset in one step by running:</p>
