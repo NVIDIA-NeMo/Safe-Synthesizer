@@ -10,12 +10,12 @@ from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 from nemo_safe_synthesizer.data_processing.timeseries_validation import (
     TimeSeriesDataValidationError,
     TimeSeriesGroupTimestampStats,
-    _infer_and_convert_timestamp_format,
+    TimeSeriesParameterValidationError,
     validate_start_stop_consistency,
     validate_timeseries_data,
 )
 from nemo_safe_synthesizer.defaults import PSEUDO_GROUP_COLUMN
-from nemo_safe_synthesizer.errors import DataError, ParameterError
+from nemo_safe_synthesizer.errors import DataError
 
 
 def test_validate_start_stop_consistency_valid():
@@ -54,22 +54,42 @@ def test_validate_start_stop_consistency_different_stops_raises():
 
 
 @pytest.mark.parametrize(
-    "column_name,values,expected_match",
+    "values,config_overrides,expected_code",
     [
-        pytest.param("ts", ["not_a_date", "also_not"], "Could not infer timestamp format", id="non_datetime_strings"),
-        pytest.param("my_col", [42, 99], r"column 'my_col'.*first value: '42'", id="names_column_and_first_value"),
-        pytest.param("ts", [100, 200], "elapsed_seconds", id="suggests_elapsed_seconds_for_numeric"),
+        pytest.param(
+            ["not_a_date", "also_not"],
+            {},
+            "timestamp_format_mismatch",
+            id="non_datetime_strings",
+        ),
+        pytest.param(
+            ["2024-01-01", "2024-01-02"],
+            {"timestamp_format": "%m/%d/%Y"},
+            "timestamp_format_mismatch",
+            id="explicit_format_mismatch",
+        ),
+        pytest.param(
+            ["01/01/2024", "01/2024"],
+            {},
+            "timestamp_parse_failed",
+            id="mixed_formats",
+        ),
     ],
 )
-def test_infer_and_convert_timestamp_format_raises_informative_error(column_name, values, expected_match):
-    """Timestamp format inference failures include actionable context."""
-    df = pd.DataFrame({column_name: values})
-    config = SafeSynthesizerParameters.from_params(rope_scaling_factor=1)
-    config.time_series.timestamp_column = column_name
-    config.time_series.timestamp_format = None
+def test_validate_timeseries_data_reports_timestamp_format_errors(values, config_overrides, expected_code):
+    """Timestamp format failures are exposed through the public validator."""
+    df = pd.DataFrame({"ts": values, "value": [1, 2]})
+    config = SafeSynthesizerParameters.from_params(
+        is_timeseries=True,
+        timestamp_column="ts",
+        rope_scaling_factor=1,
+        **config_overrides,
+    )
 
-    with pytest.raises(ParameterError, match=expected_match):
-        _infer_and_convert_timestamp_format(df, config.time_series)
+    with pytest.raises((TimeSeriesDataValidationError, TimeSeriesParameterValidationError)) as exc_info:
+        validate_timeseries_data(df, config)
+
+    assert exc_info.value.code == expected_code
 
 
 def test_validate_timeseries_data_rejects_empty_generated_timestamps():
@@ -78,6 +98,21 @@ def test_validate_timeseries_data_rejects_empty_generated_timestamps():
     config = SafeSynthesizerParameters.from_params(
         is_timeseries=True,
         timestamp_interval_seconds=60,
+        rope_scaling_factor=1,
+    )
+
+    with pytest.raises(TimeSeriesDataValidationError) as exc_info:
+        validate_timeseries_data(df, config)
+
+    assert exc_info.value.code == "timeseries_empty"
+
+
+def test_validate_timeseries_data_rejects_empty_explicit_timestamps():
+    """Empty time-series data uses the same issue code with explicit timestamps."""
+    df = pd.DataFrame({"ts": [], "value": []})
+    config = SafeSynthesizerParameters.from_params(
+        is_timeseries=True,
+        timestamp_column="ts",
         rope_scaling_factor=1,
     )
 
@@ -130,6 +165,29 @@ def test_validate_timeseries_data_generated_timestamp_uses_copy():
     assert list(result.data["elapsed_seconds"]) == [0, 60, 120]
 
 
+def test_validate_timeseries_data_generated_timestamp_uses_unique_column_name():
+    """Generated timestamps do not overwrite existing elapsed-seconds columns."""
+    df = pd.DataFrame(
+        {
+            "elapsed_seconds": [100, 100, 100],
+            "_elapsed_seconds": [200, 200, 200],
+            "value": [1, 2, 3],
+        }
+    )
+    config = SafeSynthesizerParameters.from_params(
+        is_timeseries=True,
+        timestamp_interval_seconds=60,
+        rope_scaling_factor=1,
+    )
+
+    result = validate_timeseries_data(df, config)
+
+    assert result.timestamp_column == "_elapsed_seconds_1"
+    assert list(result.data["_elapsed_seconds_1"]) == [0, 60, 120]
+    assert list(result.data["elapsed_seconds"]) == [100, 100, 100]
+    assert list(result.data["_elapsed_seconds"]) == [200, 200, 200]
+
+
 def test_validate_timeseries_data_rejects_interval_mismatch():
     """Interval mismatches are owned by the shared validator."""
     df = pd.DataFrame(
@@ -143,6 +201,38 @@ def test_validate_timeseries_data_rejects_interval_mismatch():
         is_timeseries=True,
         timestamp_column="ts",
         timestamp_format="elapsed_seconds",
+        group_training_examples_by="group",
+        rope_scaling_factor=1,
+    )
+
+    with pytest.raises(TimeSeriesDataValidationError) as exc_info:
+        validate_timeseries_data(df, config)
+
+    assert exc_info.value.code == "timestamp_interval_mismatch"
+
+
+@pytest.mark.parametrize(
+    "values,timestamp_format",
+    [
+        pytest.param([0.0, 0.5, 1.0], "elapsed_seconds", id="elapsed_seconds"),
+        pytest.param(
+            [
+                "2024-01-01 00:00:00.000000",
+                "2024-01-01 00:00:00.500000",
+                "2024-01-01 00:00:01.000000",
+            ],
+            "%Y-%m-%d %H:%M:%S.%f",
+            id="datetime",
+        ),
+    ],
+)
+def test_validate_timeseries_data_rejects_fractional_intervals(values, timestamp_format):
+    """Inferred intervals must fit the integer-second generation contract."""
+    df = pd.DataFrame({"group": ["A", "A", "A"], "ts": values, "value": [1, 2, 3]})
+    config = SafeSynthesizerParameters.from_params(
+        is_timeseries=True,
+        timestamp_column="ts",
+        timestamp_format=timestamp_format,
         group_training_examples_by="group",
         rope_scaling_factor=1,
     )

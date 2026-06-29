@@ -649,8 +649,10 @@ Missing timestamp values:
 Interval mismatch:
 
 : If `timestamp_interval_seconds` does not match the actual intervals in your
-  data, a warning is logged but the pipeline continues. Verify your interval
-  setting matches the data.
+  data, pre-flight and training fail with `timestamp_interval_mismatch`.
+  Verify your interval setting matches the data. Time-series synthesis is
+  experimental, and this validation is intentionally strict so mismatches are
+  caught before expensive pipeline stages.
 
 Groups skipped during generation:
 

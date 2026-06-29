@@ -5,9 +5,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 
@@ -24,6 +25,7 @@ __all__ = [
     "TimeSeriesParameterValidationError",
     "TimeSeriesValidationError",
     "TimeSeriesValidationResult",
+    "resolve_elapsed_time_column_name",
     "validate_start_stop_consistency",
     "validate_timeseries_data",
 ]
@@ -104,6 +106,7 @@ class TimeSeriesValidationResult:
 
 
 def _resolve_group_column(data: pd.DataFrame, config: SafeSynthesizerParameters) -> tuple[pd.DataFrame, str]:
+    """Return a grouped DataFrame copy and the effective group column."""
     group_by_col = config.data.group_training_examples_by
     working_df = data.copy()
 
@@ -126,20 +129,35 @@ def _resolve_group_column(data: pd.DataFrame, config: SafeSynthesizerParameters)
     return working_df, group_by_col
 
 
+def resolve_elapsed_time_column_name(columns: Iterable[str]) -> str:
+    """Return an unused generated timestamp column name."""
+    existing = set(columns)
+    if "elapsed_seconds" not in existing:
+        return "elapsed_seconds"
+    if "_elapsed_seconds" not in existing:
+        return "_elapsed_seconds"
+
+    suffix = 1
+    while True:
+        candidate = f"_elapsed_seconds_{suffix}"
+        if candidate not in existing:
+            return candidate
+        suffix += 1
+
+
 def _add_elapsed_time_column(
     data: pd.DataFrame,
     ts_config: TimeSeriesParameters,
     group_by_col: str,
 ) -> tuple[pd.DataFrame, str]:
+    """Return a copy with a generated elapsed-seconds timestamp column."""
     if ts_config.timestamp_interval_seconds is None:
         raise TimeSeriesParameterValidationError(
             "timestamp_not_found",
             "Time-series mode requires either timestamp_column or timestamp_interval_seconds.",
         )
 
-    timestamp_col = "elapsed_seconds"
-    if timestamp_col in data.columns:
-        timestamp_col = "_elapsed_seconds"
+    timestamp_col = resolve_elapsed_time_column_name(data.columns)
 
     working_df = data.copy()
     working_df[timestamp_col] = working_df.groupby(group_by_col).cumcount() * ts_config.timestamp_interval_seconds
@@ -148,6 +166,7 @@ def _add_elapsed_time_column(
 
 
 def _detect_elapsed_seconds_format(data: pd.DataFrame, ts_config: TimeSeriesParameters, timestamp_col: str) -> bool:
+    """Return whether the timestamp column should be interpreted as elapsed seconds."""
     column = data[timestamp_col]
 
     if ts_config.timestamp_format == "elapsed_seconds":
@@ -222,10 +241,12 @@ def _infer_and_convert_timestamp_format(df: pd.DataFrame, ts_config: TimeSeriesP
 
 
 def _sort_by_group_and_timestamp(df: pd.DataFrame, group_by_col: str, timestamp_col: str) -> pd.DataFrame:
+    """Sort by group and timestamp while returning a fresh indexed DataFrame."""
     return df.sort_values([group_by_col, timestamp_col]).reset_index(drop=True)
 
 
 def _interval_seconds(timestamps: pd.Series, is_elapsed_time: bool) -> pd.Series:
+    """Return timestamp deltas in seconds for one sorted group."""
     time_diffs = timestamps.diff().dropna()
     if time_diffs.empty:
         return time_diffs
@@ -235,6 +256,7 @@ def _interval_seconds(timestamps: pd.Series, is_elapsed_time: bool) -> pd.Series
 
 
 def _validate_equal_group_lengths(df: pd.DataFrame, group_by_col: str) -> None:
+    """Raise when time-series groups do not contain equal record counts."""
     counts = df.groupby(group_by_col, sort=False).size()
     if counts.nunique() <= 1:
         return
@@ -253,6 +275,7 @@ def _collect_group_timestamp_stats(
     group_by_col: str,
     is_elapsed_time: bool,
 ) -> tuple[TimeSeriesGroupTimestampStats, ...]:
+    """Collect per-group start, stop, interval, and record-count statistics."""
     stats_list = []
 
     for group_name, group_df in df.groupby(group_by_col, sort=False):
@@ -262,7 +285,7 @@ def _collect_group_timestamp_stats(
         if not intervals.empty:
             unique_intervals = intervals.unique()
             if len(unique_intervals) == 1 or (unique_intervals.max() - unique_intervals.min()) < 0.1:
-                interval = int(round(float(intervals.iloc[0])))
+                interval = _coerce_whole_second_interval(intervals.iloc[0], group_name=group_name)
 
         stats_list.append(
             TimeSeriesGroupTimestampStats(
@@ -277,6 +300,18 @@ def _collect_group_timestamp_stats(
     return tuple(stats_list)
 
 
+def _coerce_whole_second_interval(value: Any, *, group_name: Any) -> int:
+    """Convert an interval to integer seconds or raise for unsupported precision."""
+    interval = float(value)
+    rounded = round(interval)
+    if rounded <= 0 or abs(interval - rounded) > 0.1:
+        raise TimeSeriesDataValidationError(
+            "timestamp_interval_mismatch",
+            f"Timestamp interval in group '{group_name}' must be a positive whole number of seconds; got {interval:g}.",
+        )
+    return rounded
+
+
 def _validate_interval_consistency(
     df: pd.DataFrame,
     timestamp_col: str,
@@ -285,6 +320,7 @@ def _validate_interval_consistency(
     expected_interval_seconds: int | None,
     group_stats: tuple[TimeSeriesGroupTimestampStats, ...],
 ) -> int | None:
+    """Validate configured or inferred intervals across all groups."""
     tolerance = 0.1
 
     if expected_interval_seconds is not None:
@@ -370,6 +406,12 @@ def validate_timeseries_data(data: pd.DataFrame, config: SafeSynthesizerParamete
         TimeSeriesDataValidationError: If the data violates time-series shape
             invariants.
     """
+    if data.empty:
+        raise TimeSeriesDataValidationError(
+            "timeseries_empty",
+            "Time-series data must contain at least one record.",
+        )
+
     ts_config = config.time_series
     working_df, group_by_col = _resolve_group_column(data, config)
 
@@ -387,22 +429,13 @@ def validate_timeseries_data(data: pd.DataFrame, config: SafeSynthesizerParamete
             raise TimeSeriesDataValidationError("timestamp_nulls", str(exc)) from exc
 
         is_elapsed_time = _detect_elapsed_seconds_format(working_df, ts_config, timestamp_col)
-        timestamp_format = "elapsed_seconds" if is_elapsed_time else ts_config.timestamp_format
 
     if not is_elapsed_time:
         ts_config_copy = ts_config.model_copy(update={"timestamp_column": timestamp_col})
         working_df = _infer_and_convert_timestamp_format(working_df, ts_config_copy)
-        timestamp_format = ts_config_copy.timestamp_format
-        if timestamp_format is None:
-            timestamp_format = guess_datetime_format(str(working_df[timestamp_col].iloc[0]))
+        timestamp_format = cast(str, ts_config_copy.timestamp_format)
     else:
         timestamp_format = "elapsed_seconds"
-
-    if timestamp_format is None:
-        raise TimeSeriesParameterValidationError(
-            "timestamp_format_mismatch",
-            f"Could not resolve timestamp format for column '{timestamp_col}'.",
-        )
 
     working_df = _sort_by_group_and_timestamp(working_df, group_by_col, timestamp_col)
     _validate_equal_group_lengths(working_df, group_by_col)

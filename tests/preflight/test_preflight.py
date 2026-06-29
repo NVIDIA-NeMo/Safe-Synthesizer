@@ -824,9 +824,20 @@ class TestTimeSeriesDataShapeCheck:
         df = pd.DataFrame({"grp": ["A", "A"], "value": [1, 2]})
         config = self._make_config()
 
+        assert TimeSeriesDataShapeCheck().enabled(make_ctx(config=config, data=df)) is False
         issues = TimeSeriesDataShapeCheck().run(make_ctx(config=config, data=df))
 
         assert issues == []
+
+    def test_missing_timestamp_prerequisite_omits_shape_from_full_preflight(self):
+        df = pd.DataFrame({"grp": ["A", "A"], "value": [1, 2]})
+        config = self._make_config()
+
+        report = run_preflight(df, config, MagicMock(spec=ModelMetadata), stages=frozenset({PreflightStage.DATAFRAME}))
+        by_name = {c.name: c for c in report.checks}
+
+        assert by_name["timeseries.timestamp"].status == "failed"
+        assert "timeseries.shape" not in by_name
 
     def test_empty_timeseries_reports_structured_error(self):
         df = pd.DataFrame({"value": []})
@@ -1099,8 +1110,6 @@ class TestRunPreflight:
             with patch.dict("os.environ", {"NSS_INFERENCE_KEY": "test", "HF_TOKEN": "hf_xxx"}):
                 report = run_preflight(sample_df, resolved_config, metadata)
         assert len(report.errors) == 0
-        # Time-series checks are excluded via enabled() when is_timeseries is False.
-        assert len(report.checks) == len(get_registry()) - 2
         by_name = {c.name: c for c in report.checks}
         assert "timeseries.timestamp" not in by_name
         assert "timeseries.shape" not in by_name

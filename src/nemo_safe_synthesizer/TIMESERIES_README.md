@@ -130,13 +130,11 @@ HuggingFaceBackend._process_timeseries()
     └── process_timeseries_data(df, config)
             ├── _add_pseudo_group_if_needed()     # Unify grouped/ungrouped
             ├── _create_elapsed_time_column()     # If no timestamp column
-            ├── check_timestamp_column()          # Shared validator from data_processing.validation
-            ├── _sort_by_group_and_timestamp()    # Sort data
-            ├── _infer_and_convert_timestamp_format()  # Handle datetime conversion
-            ├── _process_grouped_timestamps()     # Validate all groups
-            │       ├── _collect_group_timestamp_stats()
-            │       ├── _validate_interval_consistency()
-            │       └── _validate_start_stop_consistency()
+            ├── validate_timeseries_data()        # Shared time-series validator
+            │       ├── timestamp format/parse validation
+            │       ├── group length validation
+            │       ├── interval consistency validation
+            │       └── start/stop consistency validation
             └── Return (processed_df, updated_config)
 ```
 

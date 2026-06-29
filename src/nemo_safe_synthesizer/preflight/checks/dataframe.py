@@ -185,7 +185,16 @@ class TimeSeriesDataShapeCheck(DataFrameCheck):
     def enabled(self, ctx: PreflightContext) -> bool:
         if not super().enabled(ctx):
             return False
-        return bool(ctx.config.time_series.is_timeseries)
+        if not ctx.config.time_series.is_timeseries:
+            return False
+        timestamp_column = ctx.config.time_series.timestamp_column
+        if timestamp_column is not None:
+            try:
+                check_column_present(ctx.data, timestamp_column, role="Timestamp")
+                check_column_has_no_nulls(ctx.data, timestamp_column, role="Timestamp")
+            except (DataError, ParameterError):
+                return False
+        return True
 
     @override
     def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:

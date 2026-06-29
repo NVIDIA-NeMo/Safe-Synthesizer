@@ -9,7 +9,7 @@ import pandas as pd
 
 from ..config import SafeSynthesizerParameters
 from ..config.time_series import TimeSeriesParameters
-from ..data_processing.timeseries_validation import validate_timeseries_data
+from ..data_processing.timeseries_validation import resolve_elapsed_time_column_name, validate_timeseries_data
 from ..data_processing.validation import (
     check_no_pseudo_column_collision,
 )
@@ -69,9 +69,7 @@ def _create_elapsed_time_column(
     interval = ts_config.timestamp_interval_seconds
 
     logger.info(f"Adding timestamp column with interval {interval} seconds")
-    timestamp_col_name = "elapsed_seconds"
-    if timestamp_col_name in df.columns:
-        timestamp_col_name = "_elapsed_seconds"
+    timestamp_col_name = resolve_elapsed_time_column_name(df.columns)
     ts_config.timestamp_column = timestamp_col_name
 
     # Create elapsed time values (seconds since start of sequence)
@@ -169,6 +167,13 @@ def process_timeseries_data(
     ts_config.start_timestamp = validation.start_timestamp
     ts_config.stop_timestamp = validation.stop_timestamp
     is_elapsed_time = validation.is_elapsed_time
+    logger.info(f"Resolved time-series timestamp format: {validation.timestamp_format}")
+    if validation.timestamp_interval_seconds is not None:
+        logger.info(f"Resolved timestamp_interval_seconds: {validation.timestamp_interval_seconds}s")
+    logger.info(
+        f"Time series range (consistent across {len(validation.group_stats)} groups): "
+        f"{validation.start_timestamp} to {validation.stop_timestamp}",
+    )
 
     # Step 7: Convert timestamp back to string format
     # Skip string conversion for elapsed_seconds format (values are already numeric)
