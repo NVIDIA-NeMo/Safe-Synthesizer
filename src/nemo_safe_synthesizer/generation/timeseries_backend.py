@@ -8,9 +8,11 @@ from __future__ import annotations
 import json
 import math
 import time
+from collections import Counter
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
+from typing import Any, Literal
 
 import pandas as pd
 from vllm.sampling_params import SamplingParams
@@ -50,6 +52,39 @@ class ProgressSnapshot:
 
 
 @dataclass
+class RecordConstraint:
+    """A generated-record constraint derived from the active group state."""
+
+    column: str
+    """Record column to check."""
+
+    expected_value: object
+    """Expected value for the column."""
+
+    scope: Literal["all_records", "first_record"]
+    """Whether to apply the constraint to every record or only the first valid record."""
+
+    error_message: str
+    """Human-readable error message used when invalidating records."""
+
+
+@dataclass
+class PromptSeed:
+    """Initial prompt state for one time-series group."""
+
+    group_id: str
+    strategy: str
+    prompt_prefill: str
+    processor_prefix: str = ""
+    instruction: str | None = None
+    expected_first_timestamp_value: object | None = None
+    expected_first_timestamp_seconds: int | None = None
+    record_constraints: list[RecordConstraint] = field(default_factory=list)
+    first_record_constraints: list[RecordConstraint] = field(default_factory=list)
+    source_prefill_records: int = 0
+
+
+@dataclass
 class GroupState:
     """Mutable state for tracking a single group during parallel generation.
 
@@ -75,6 +110,24 @@ class GroupState:
 
     last_timestamp_seconds: int | None = None
     """Timestamp (in seconds) of the most recently generated record, used for chronological validation."""
+
+    processor_prefix: str = ""
+    """Text prepended to each raw completion before parsing for partial-record exploration."""
+
+    prompt_instruction: str | None = None
+    """Optional per-group instruction override used when formatting prompts."""
+
+    expected_first_timestamp_value: object | None = None
+    """Configured first timestamp expected for diagnostics."""
+
+    expected_first_timestamp_seconds: int | None = None
+    """Parsed expected first timestamp used for cold-start diagnostics."""
+
+    record_constraints: list[RecordConstraint] = field(default_factory=list)
+    """Constraints applied to every valid generated record."""
+
+    first_record_constraints: list[RecordConstraint] = field(default_factory=list)
+    """Constraints applied to the first valid record in each response."""
 
     low_valid_fraction_count: int = 0
     """Consecutive batches with high invalid fraction.  Triggers group failure after ``patience`` is exceeded."""
@@ -213,13 +266,14 @@ class TimeseriesBackend(VllmBackend):
         self._schema_fragment = ",".join([f'"{c}":<unk>' for c in self.columns])
         self._samples_per_prompt = 5  # num of samples per prompt
         self._max_prompts_per_batch = 100  # max prompts per batch for parallel group generation
-        self._prefill_context_size = 3  # number of records to prefill
+        self._prefill_context_size = config.time_series.prefill_context_records
         self._time_column = config.time_series.timestamp_column
         self._time_format: str = config.time_series.timestamp_format or ""
         self._is_elapsed_time = self._time_format == "elapsed_seconds"
         self._start_timestamp_value = config.time_series.start_timestamp
         self._stop_timestamp_value = config.time_series.stop_timestamp
         self._timestamp_interval_seconds = config.time_series.timestamp_interval_seconds
+        self._initialization_strategy = config.time_series.initialization_strategy
 
         # Grouped generation support
         # Note: Since time series preprocessing adds a pseudo-group column when no group
@@ -233,9 +287,27 @@ class TimeseriesBackend(VllmBackend):
                 "This should be set by SequentialExampleAssembler during training."
             )
 
-        # Prefills is a dict mapping group -> prefill string
-        self._group_prefills: dict[str, str] = initial_prefill_value
-        self._groups: list[str] = list(self._group_prefills.keys())
+        # Keep the saved training prefills intact for comparison, but build the
+        # active prompt prefills from the selected exploration strategy.
+        self._training_prefills: dict[str, str] = {
+            str(group): str(prefill) for group, prefill in initial_prefill_value.items()
+        }
+        self._groups: list[str] = list(self._training_prefills.keys())
+        self._group_prefills: dict[str, str] = dict(self._training_prefills)
+        self._initialization_seeds: dict[str, PromptSeed] = {
+            group_id: self._build_prompt_seed(group_id) for group_id in self._groups
+        }
+        self._group_prefills = {
+            group_id: seed.prompt_prefill for group_id, seed in self._initialization_seeds.items()
+        }
+        self._prompt_previews: list[dict[str, Any]] = [
+            self._prompt_seed_to_preview(seed) for seed in self._initialization_seeds.values()
+        ]
+        self._batch_diagnostics: list[dict[str, Any]] = []
+        self._completion_diagnostics: list[dict[str, Any]] = []
+        self._first_record_diagnostics: dict[str, dict[str, Any]] = {}
+        self._parallel_batch_index = 0
+        self._max_completion_diagnostics = 200
 
     def _get_prompt_token_count(self) -> int:
         """Return the longest active prompt length for ``SamplingParams``.
@@ -249,15 +321,20 @@ class TimeseriesBackend(VllmBackend):
         engine has not yet been initialized or no group prefills are
         populated.
         """
+        if self._prompt_token_count is not None:
+            return self._prompt_token_count
         base = super()._get_prompt_token_count()
-        if self.llm is None or not self._group_prefills:
+        if self.llm is None or not self._initialization_seeds:
             return base
         tokenizer = self.llm.get_tokenizer()
-        longest_prefill_tokens = max(
-            (len(tokenizer.encode(prefill)) for prefill in self._group_prefills.values() if prefill),
-            default=0,
+        self._prompt_token_count = max(
+            (
+                len(tokenizer.encode(self._format_prompt(seed.prompt_prefill, instruction=seed.instruction)))
+                for seed in self._initialization_seeds.values()
+            ),
+            default=base,
         )
-        return base + longest_prefill_tokens
+        return self._prompt_token_count
 
     def _build_progress_snapshots(self, total: int, is_group_based: bool = False) -> list[ProgressSnapshot]:
         """Build progress snapshots for saving intermediate results.
@@ -349,13 +426,207 @@ class TimeseriesBackend(VllmBackend):
                 continue
             self._write_progress_snapshot(batches, snapshot, is_group_based=is_group_based)
 
-    def _format_prompt(self, prefill: str) -> str:
+    def _format_prompt(self, prefill: str, instruction: str | None = None) -> str:
         """Format a generation prompt using the model's template and the given prefill."""
         return self.model_metadata.prompt_config.template.format(
-            instruction=self.model_metadata.instruction,
+            instruction=instruction or self.model_metadata.instruction,
             schema=self._schema_fragment,
             prefill=prefill,
         )
+
+    def _format_prompt_for_state(self, state: GroupState) -> str:
+        """Format the active prompt for a group state."""
+        return self._format_prompt(state.current_prefill, instruction=state.prompt_instruction)
+
+    def _format_cold_start_instruction(self, group_id: str) -> str:
+        """Build the per-group instruction used by the start-instruction strategy."""
+        template = self.config.time_series.cold_start_instruction_template or (
+            "Start group {group_id} at timestamp {start_timestamp}. Generate complete JSONL records."
+            " for the configured schema through {stop_timestamp}, using {timestamp_interval_seconds}-second intervals."
+        )
+        suffix = template.format(
+            group_id=group_id,
+            group_column=self._group_column,
+            timestamp_column=self._time_column,
+            start_timestamp=self._start_timestamp_value,
+            stop_timestamp=self._stop_timestamp_value,
+            timestamp_interval_seconds=self._timestamp_interval_seconds,
+        )
+        return f"{self.model_metadata.instruction.rstrip()} {suffix.strip()}"
+
+    def _build_partial_record_prefix(self, group_id: str) -> str:
+        """Build an incomplete first JSON record for parser-prefix experiments."""
+        known_fields: dict[str, object] = {}
+        if self._group_column and self._group_column != PSEUDO_GROUP_COLUMN and self._group_column in self.columns:
+            known_fields[self._group_column] = group_id
+        if self._time_column and self._time_column in self.columns:
+            known_fields[self._time_column] = self._start_timestamp_value
+        if not known_fields:
+            return ""
+        fragments = [
+            self._format_partial_prefix_field(column, known_fields[column])
+            for column in self.columns
+            if column in known_fields
+        ]
+        if not fragments:
+            return ""
+        return "{" + ",".join(fragments) + ","
+
+    def _format_partial_prefix_field(self, column: str, value: object) -> str:
+        """Format one schema-ordered partial-prefix field as compact JSON."""
+        coerced_value = self._coerce_partial_prefix_value(column, value)
+        key_json = json.dumps(column, ensure_ascii=False, separators=(",", ":"))
+        value_json = json.dumps(coerced_value, ensure_ascii=False, separators=(",", ":"))
+        return f"{key_json}:{value_json}"
+
+    def _coerce_partial_prefix_value(self, column: str, value: object) -> object:
+        """Coerce known prefix values to match the JSON schema type."""
+        column_schema = self.schema.get("properties", {}).get(column, {})
+        schema_type = column_schema.get("type")
+        schema_types = schema_type if isinstance(schema_type, list) else [schema_type]
+
+        if "integer" in schema_types:
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return value
+        if "number" in schema_types:
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return value
+        if "string" in schema_types and value is not None:
+            return str(value)
+        return value
+
+    def _expected_start_timestamp_seconds(self) -> int | None:
+        """Return the parsed configured start timestamp for diagnostics."""
+        if self._start_timestamp_value is None:
+            return None
+        return self._parse_timestamp_seconds(self._start_timestamp_value)
+
+    def _build_record_constraints(self, group_id: str) -> list[RecordConstraint]:
+        """Build constraints that every generated record must satisfy."""
+        constraints: list[RecordConstraint] = []
+        if self._group_column and self._group_column != PSEUDO_GROUP_COLUMN and self._group_column in self.columns:
+            constraints.append(
+                RecordConstraint(
+                    column=self._group_column,
+                    expected_value=group_id,
+                    scope="all_records",
+                    error_message=f"Expected {self._group_column} to equal {group_id}",
+                )
+            )
+        return constraints
+
+    def _build_first_record_constraints(self) -> list[RecordConstraint]:
+        """Build constraints for the first valid generated record."""
+        if self._initialization_strategy == "training_prefill":
+            return []
+        if self._time_column is None or self._time_column not in self.columns or self._start_timestamp_value is None:
+            return []
+        return [
+            RecordConstraint(
+                column=self._time_column,
+                expected_value=self._start_timestamp_value,
+                scope="first_record",
+                error_message=f"Expected first {self._time_column} to equal {self._start_timestamp_value}",
+            )
+        ]
+
+    def _build_prompt_seed(self, group_id: str) -> PromptSeed:
+        """Build the initial prompt seed for one group."""
+        strategy = self._initialization_strategy
+        training_prefill = self._group_prefills.get(group_id, self._training_prefills.get(group_id, ""))
+        expected_start = self._expected_start_timestamp_seconds()
+        source_prefill_records = len(extract_records_from_jsonl_string(training_prefill))
+        record_constraints = self._build_record_constraints(group_id)
+        first_record_constraints = self._build_first_record_constraints()
+
+        if strategy == "training_prefill":
+            last_prefill_ts = self._get_timestamp_from_prefill(training_prefill)
+            expected_seconds = self._advance_expected_time(last_prefill_ts) if last_prefill_ts is not None else None
+            return PromptSeed(
+                group_id=group_id,
+                strategy=strategy,
+                prompt_prefill=training_prefill,
+                expected_first_timestamp_value=None,
+                expected_first_timestamp_seconds=expected_seconds,
+                record_constraints=record_constraints,
+                first_record_constraints=[],
+                source_prefill_records=source_prefill_records,
+            )
+
+        if strategy == "start_instruction":
+            return PromptSeed(
+                group_id=group_id,
+                strategy=strategy,
+                prompt_prefill="",
+                instruction=self._format_cold_start_instruction(group_id),
+                expected_first_timestamp_value=self._start_timestamp_value,
+                expected_first_timestamp_seconds=expected_start,
+                record_constraints=record_constraints,
+                first_record_constraints=first_record_constraints,
+                source_prefill_records=source_prefill_records,
+            )
+
+        if strategy == "partial_record_prefix":
+            prefix = self._build_partial_record_prefix(group_id)
+            return PromptSeed(
+                group_id=group_id,
+                strategy=strategy,
+                prompt_prefill=prefix,
+                processor_prefix=prefix,
+                expected_first_timestamp_value=self._start_timestamp_value,
+                expected_first_timestamp_seconds=expected_start,
+                record_constraints=record_constraints,
+                first_record_constraints=first_record_constraints,
+                source_prefill_records=source_prefill_records,
+            )
+
+        return PromptSeed(
+            group_id=group_id,
+            strategy=strategy,
+            prompt_prefill="",
+            expected_first_timestamp_value=self._start_timestamp_value,
+            expected_first_timestamp_seconds=expected_start,
+            record_constraints=record_constraints,
+            first_record_constraints=first_record_constraints,
+            source_prefill_records=source_prefill_records,
+        )
+
+    def _prompt_seed_to_preview(self, seed: PromptSeed) -> dict[str, Any]:
+        """Serialize prompt seed details for exploration artifacts."""
+        full_prompt = self._format_prompt(seed.prompt_prefill, instruction=seed.instruction)
+        return {
+            "group_id": seed.group_id,
+            "strategy": seed.strategy,
+            "prompt_prefill": seed.prompt_prefill,
+            "processor_prefix": seed.processor_prefix,
+            "instruction": seed.instruction or self.model_metadata.instruction,
+            "expected_first_timestamp": seed.expected_first_timestamp_value,
+            "expected_first_timestamp_seconds": seed.expected_first_timestamp_seconds,
+            "record_constraints": [
+                {
+                    "column": constraint.column,
+                    "expected_value": constraint.expected_value,
+                    "scope": constraint.scope,
+                    "error_message": constraint.error_message,
+                }
+                for constraint in seed.record_constraints
+            ],
+            "first_record_constraints": [
+                {
+                    "column": constraint.column,
+                    "expected_value": constraint.expected_value,
+                    "scope": constraint.scope,
+                    "error_message": constraint.error_message,
+                }
+                for constraint in seed.first_record_constraints
+            ],
+            "source_prefill_records": seed.source_prefill_records,
+            "full_prompt": full_prompt,
+        }
 
     def _parse_timestamp_seconds(self, timestamp_value: object) -> int | None:
         """Parse a timestamp value to seconds, returning None on failure.
@@ -399,7 +670,11 @@ class TimeseriesBackend(VllmBackend):
         Returns:
             A new GroupState initialized with the group's prefill.
         """
-        initial_prefill = self._group_prefills.get(group_id, "")
+        seed = self._initialization_seeds.get(group_id)
+        if seed is None:
+            seed = self._build_prompt_seed(group_id)
+            self._initialization_seeds[group_id] = seed
+        initial_prefill = seed.prompt_prefill
 
         # Calculate expected number of records: (stop - start) / interval + 1
         expected_records = self._compute_expected_records_per_group()
@@ -409,6 +684,12 @@ class TimeseriesBackend(VllmBackend):
             initial_prefill=initial_prefill,
             current_prefill=initial_prefill,
             expected_records=expected_records,
+            processor_prefix=seed.processor_prefix,
+            prompt_instruction=seed.instruction,
+            expected_first_timestamp_value=seed.expected_first_timestamp_value,
+            expected_first_timestamp_seconds=seed.expected_first_timestamp_seconds,
+            record_constraints=seed.record_constraints,
+            first_record_constraints=seed.first_record_constraints,
         )
         # Parse the last timestamp from the prefill
         state.last_timestamp_seconds = self._get_timestamp_from_prefill(initial_prefill)
@@ -513,6 +794,130 @@ class TimeseriesBackend(VllmBackend):
                 if record.is_valid:
                     record.invalidate(error)
 
+    def _constraint_values_match(self, column: str, actual: object, expected: object) -> bool:
+        """Return whether a record value satisfies a generic constraint."""
+        if column == self._time_column:
+            actual_seconds = self._parse_timestamp_seconds(actual)
+            expected_seconds = self._parse_timestamp_seconds(expected)
+            if actual_seconds is not None and expected_seconds is not None:
+                return actual_seconds == expected_seconds
+        return actual == expected
+
+    def _check_all_record_constraints(self, response_records: list[ParsedRecord], constraints: list[RecordConstraint]) -> None:
+        """Invalidate records that fail all-record constraints."""
+        if not constraints:
+            return
+        for record in response_records:
+            if not record.is_valid or record.parsed is None:
+                continue
+            for constraint in constraints:
+                actual = record.parsed.get(constraint.column)
+                if self._constraint_values_match(constraint.column, actual, constraint.expected_value):
+                    continue
+                record.invalidate((constraint.error_message, "TimeSeriesConstraint"))
+                break
+
+    def _check_first_record_constraints(
+        self, response_records: list[ParsedRecord], constraints: list[RecordConstraint]
+    ) -> None:
+        """Invalidate an entire response when the first valid record violates a first-record constraint."""
+        if not constraints:
+            return
+
+        first_valid_record = next((record for record in response_records if record.is_valid and record.parsed), None)
+        if first_valid_record is None or first_valid_record.parsed is None:
+            return
+
+        for constraint in constraints:
+            actual = first_valid_record.parsed.get(constraint.column)
+            if self._constraint_values_match(constraint.column, actual, constraint.expected_value):
+                continue
+            error = (constraint.error_message, "TimeSeriesConstraint")
+            for record in response_records:
+                if record.is_valid:
+                    record.invalidate(error)
+            return
+
+    def _check_constraints_for_group(self, batch: Batch, group_state: GroupState) -> None:
+        """Apply generic per-group generation constraints before response selection."""
+        first_record_constraints = (
+            group_state.first_record_constraints if group_state.last_timestamp_seconds is None else []
+        )
+        for response in batch._responses:
+            self._check_all_record_constraints(response.records, group_state.record_constraints)
+            self._check_first_record_constraints(response.records, first_record_constraints)
+
+    def _record_first_timestamp_diagnostic(self, group_state: GroupState, records: list[dict]) -> None:
+        """Capture the first retained timestamp for exploration diagnostics."""
+        if group_state.group_id in self._first_record_diagnostics:
+            return
+
+        actual_value = records[0].get(self._time_column) if records else None
+        actual_seconds = self._parse_timestamp_seconds(actual_value) if actual_value is not None else None
+        expected_seconds = group_state.expected_first_timestamp_seconds
+        matched = None
+        if actual_seconds is not None and expected_seconds is not None:
+            matched = actual_seconds == expected_seconds
+
+        self._first_record_diagnostics[group_state.group_id] = {
+            "group_id": group_state.group_id,
+            "strategy": self._initialization_strategy,
+            "expected_timestamp": group_state.expected_first_timestamp_value,
+            "expected_timestamp_seconds": expected_seconds,
+            "actual_timestamp": actual_value,
+            "actual_timestamp_seconds": actual_seconds,
+            "matched": matched,
+            "had_valid_records": bool(records),
+        }
+
+    def _record_batch_diagnostic(self, group_state: GroupState, batch: Batch) -> None:
+        """Capture per-group batch metrics for exploration artifacts."""
+        error_counts = Counter(
+            (message, validator) for response in batch._responses for message, validator in response.errors
+        )
+        self._batch_diagnostics.append(
+            {
+                "batch_index": self._parallel_batch_index,
+                "group_id": group_state.group_id,
+                "strategy": self._initialization_strategy,
+                "num_valid_records": batch.num_valid_records,
+                "num_invalid_records": batch.num_invalid_records,
+                "valid_record_fraction": batch.valid_record_fraction,
+                "finish_reasons": dict(batch.finish_reasons),
+                "errors": [
+                    {"message": message, "validator": validator, "count": count}
+                    for (message, validator), count in error_counts.items()
+                ],
+            }
+        )
+
+    def _record_completion_diagnostic(
+        self,
+        *,
+        group_state: GroupState,
+        completion_idx: int,
+        finish_reason: object,
+        raw_text: str,
+        processed_text: str,
+        completion_tokens: int,
+    ) -> None:
+        """Capture a bounded sample of raw completions for failed-run inspection."""
+        if len(self._completion_diagnostics) >= self._max_completion_diagnostics:
+            return
+        self._completion_diagnostics.append(
+            {
+                "batch_index": self._parallel_batch_index,
+                "group_id": group_state.group_id,
+                "strategy": self._initialization_strategy,
+                "completion_index": completion_idx,
+                "finish_reason": str(finish_reason or "unknown"),
+                "completion_tokens": completion_tokens,
+                "processor_prefix": group_state.processor_prefix,
+                "raw_text": raw_text,
+                "processed_text": processed_text,
+            }
+        )
+
     def _update_group_state(self, group_state: GroupState, records: list[dict]) -> None:
         """Update a group's state with new records.
 
@@ -523,20 +928,64 @@ class TimeseriesBackend(VllmBackend):
         if not records:
             return
 
+        # The partial-record prefix is only needed until the first accepted
+        # generated record gives us a complete rolling context.
+        group_state.processor_prefix = ""
         group_state.recent_records.extend(records)
-        if len(group_state.recent_records) > self._prefill_context_size:
+        if self._prefill_context_size <= 0:
+            group_state.recent_records = []
+            group_state.current_prefill = ""
+        elif len(group_state.recent_records) > self._prefill_context_size:
             group_state.recent_records = group_state.recent_records[-self._prefill_context_size :]
 
-        # Update prefill
-        tail = group_state.recent_records[-self._prefill_context_size :]
-        lines = [json.dumps(record, ensure_ascii=False) for record in tail]
-        group_state.current_prefill = "\n".join(lines) + "\n"
+        if self._prefill_context_size > 0:
+            # Update prefill
+            tail = group_state.recent_records[-self._prefill_context_size :]
+            lines = [json.dumps(record, ensure_ascii=False) for record in tail]
+            group_state.current_prefill = "\n".join(lines) + "\n"
 
         # Update last timestamp
         last_record = records[-1]
         timestamp_seconds = self._parse_timestamp_seconds(last_record.get(self._time_column))
         if timestamp_seconds is not None:
             group_state.last_timestamp_seconds = timestamp_seconds
+
+    def generation_diagnostics(self) -> dict[str, Any]:
+        """Return diagnostics captured during time-series generation."""
+        constraint_summary = {
+            group_id: {
+                "record_constraints": [
+                    {
+                        "column": constraint.column,
+                        "expected_value": constraint.expected_value,
+                        "scope": constraint.scope,
+                        "error_message": constraint.error_message,
+                    }
+                    for constraint in seed.record_constraints
+                ],
+                "first_record_constraints": [
+                    {
+                        "column": constraint.column,
+                        "expected_value": constraint.expected_value,
+                        "scope": constraint.scope,
+                        "error_message": constraint.error_message,
+                    }
+                    for constraint in seed.first_record_constraints
+                ],
+            }
+            for group_id, seed in self._initialization_seeds.items()
+        }
+        return {
+            "initialization_strategy": self._initialization_strategy,
+            "prefill_context_records": self._prefill_context_size,
+            "timestamp_column": self._time_column,
+            "group_column": self._group_column,
+            "constraints": constraint_summary,
+            "prompt_previews": self._prompt_previews,
+            "first_record_diagnostics": list(self._first_record_diagnostics.values()),
+            "batch_diagnostics": self._batch_diagnostics,
+            "completion_diagnostics": self._completion_diagnostics,
+        }
 
     def _sort_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
         """Sort dataframe by group column then timestamp column.
@@ -620,8 +1069,11 @@ class TimeseriesBackend(VllmBackend):
         """
         if self.config.time_series.timestamp_interval_seconds is not None:
             self._check_chronological_for_group(batch, state)
+        self._check_constraints_for_group(batch, state)
 
         batch_records = self._retain_single_valid_response(batch)
+        self._record_first_timestamp_diagnostic(state, batch_records)
+        self._record_batch_diagnostic(state, batch)
         reached_stop = self._has_reached_stop_time(batch_records)
         self._update_group_state(state, batch_records)
 
@@ -757,6 +1209,7 @@ class TimeseriesBackend(VllmBackend):
         )
 
         while pending_groups or active_states:
+            self._parallel_batch_index += 1
             # Fill active slots with pending groups
             while len(active_states) < max_groups_per_batch and pending_groups:
                 next_group = pending_groups.pop(0)
@@ -770,7 +1223,7 @@ class TimeseriesBackend(VllmBackend):
             start_time = time.perf_counter()
 
             # Build prompts and batches for all active groups
-            prompts = [self._format_prompt(state.current_prefill) for state in active_states]
+            prompts = [self._format_prompt_for_state(state) for state in active_states]
             group_batches: dict[str, Batch] = {
                 state.group_id: Batch(processor=self.processor) for state in active_states
             }
@@ -794,8 +1247,19 @@ class TimeseriesBackend(VllmBackend):
                 group_state = active_states[prompt_idx]
                 batch = group_batches[group_state.group_id]
                 for completion_idx, completion in enumerate(output.outputs):
-                    batch.finish_reasons[str(completion.finish_reason or "unknown")] += 1
-                    batch.process(completion_idx, completion.text, completion_tokens=len(completion.token_ids))
+                    finish_reason = completion.finish_reason
+                    completion_tokens = len(completion.token_ids)
+                    batch.finish_reasons[str(finish_reason or "unknown")] += 1
+                    completion_text = f"{group_state.processor_prefix}{completion.text}"
+                    self._record_completion_diagnostic(
+                        group_state=group_state,
+                        completion_idx=completion_idx,
+                        finish_reason=finish_reason,
+                        raw_text=completion.text,
+                        processed_text=completion_text,
+                        completion_tokens=completion_tokens,
+                    )
+                    batch.process(completion_idx, completion_text, completion_tokens=completion_tokens)
 
             duration = time.perf_counter() - start_time
 

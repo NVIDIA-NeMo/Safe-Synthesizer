@@ -92,12 +92,25 @@ def _create_elapsed_time_column(
         df[ts_config.timestamp_column] = pd.RangeIndex(len(df)) * interval
         logger.info("Created elapsed time timestamps (in seconds)")
 
-    # Move the timestamp column to be the first column
-    cols = [ts_config.timestamp_column] + [c for c in df.columns if c != ts_config.timestamp_column]
-    df = df.loc[:, cols]
     ts_config.timestamp_format = "elapsed_seconds"
 
     return df, True
+
+
+def _reorder_timeseries_columns(df: pd.DataFrame, group_by_col: str | None, timestamp_col: str) -> pd.DataFrame:
+    """Return ``df`` with time-series identity columns first.
+
+    The order here becomes the JSON schema order, prompt schema order, and
+    training JSONL field order. For ungrouped time series, the pseudo-group
+    column remains first internally and is dropped from the persisted schema.
+    """
+    leading_columns = [col for col in (group_by_col, timestamp_col) if col is not None]
+    reordered_columns = []
+    for col in leading_columns:
+        if col in df.columns and col not in reordered_columns:
+            reordered_columns.append(col)
+    reordered_columns.extend(col for col in df.columns if col not in reordered_columns)
+    return df.loc[:, reordered_columns]
 
 
 def _sort_by_group_and_timestamp(df: pd.DataFrame, group_by_col: str | None, timestamp_col: str) -> pd.DataFrame:
@@ -249,6 +262,7 @@ def process_timeseries_data(
     4. Infers timestamp_format from the data
     5. Validates or infers timestamp_interval_seconds
     6. Sets start_timestamp and stop_timestamp
+    7. Reorders columns with group first and timestamp second
 
     Args:
         training_df: The training DataFrame.
@@ -306,6 +320,9 @@ def process_timeseries_data(
         training_df[ts_config.timestamp_column] = training_df[ts_config.timestamp_column].dt.strftime(
             ts_config.timestamp_format
         )
+
+    # Step 8: Make the schema/training JSONL order match time-series generation prefixes.
+    training_df = _reorder_timeseries_columns(training_df, group_by_col, ts_config.timestamp_column)
 
     return training_df, config
 

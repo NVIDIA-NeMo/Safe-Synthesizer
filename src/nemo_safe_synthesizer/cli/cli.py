@@ -14,6 +14,7 @@ import click
 from .artifacts import artifacts
 from .config import config
 from .run import run
+from .time_series import time_series
 
 
 @click.group()
@@ -29,5 +30,6 @@ def cli() -> None:
 cli.add_command(config)
 cli.add_command(run)
 cli.add_command(artifacts)
+cli.add_command(time_series)
 if __name__ == "__main__":
     cli()
