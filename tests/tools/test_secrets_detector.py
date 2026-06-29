@@ -45,9 +45,7 @@ def _detector_env(tmp_path: Path, *, exit_code: int = 0) -> tuple[dict[str, str]
     args_file = tmp_path / "detector-args"
     detector = bin_dir / "detect-secrets-hook"
     detector.write_text(
-        "#!/usr/bin/env bash\n"
-        "printf '%s\\0' \"$@\" > \"$DETECTOR_ARGS_FILE\"\n"
-        "exit \"$DETECTOR_EXIT_CODE\"\n"
+        '#!/usr/bin/env bash\nprintf \'%s\\0\' "$@" > "$DETECTOR_ARGS_FILE"\nexit "$DETECTOR_EXIT_CODE"\n'
     )
     detector.chmod(0o755)
     env = os.environ | {
