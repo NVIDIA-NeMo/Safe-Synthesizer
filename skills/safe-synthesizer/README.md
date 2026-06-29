@@ -62,6 +62,9 @@ rm -rf "$TMP_DIR"
 For a project-local install, set `DEST_DIR=.agents/skills` from the target
 project root.
 
+The task references include links to the published Safe Synthesizer user guide,
+so copied installs do not require the repository's local `docs/` directory.
+
 ## Publishable Package Notes
 
 To publish this as an installable skill, package the

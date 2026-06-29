@@ -7,9 +7,15 @@ Use for install failures, runtime errors, generation failures, OOM, pre-flight v
 
 Read first:
 
-- `docs/user-guide/troubleshooting.md` for phase-specific runtime failures.
-- `docs/user-guide/environment.md` for cache, endpoint, WandB, and offline setup.
-- `docs/user-guide/evaluating-data.md` for metrics, DP errors, and quality issues.
+- `docs/user-guide/troubleshooting.md` or the
+  [published troubleshooting guide](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/troubleshooting/)
+  for phase-specific runtime failures.
+- `docs/user-guide/environment.md` or the
+  [published environment guide](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/environment/)
+  for cache, endpoint, WandB, and offline setup.
+- `docs/user-guide/evaluating-data.md` or the
+  [published data evaluation guide](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/evaluating-data/)
+  for metrics, DP errors, and quality issues.
 
 Debug rerun:
 

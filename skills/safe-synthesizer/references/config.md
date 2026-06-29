@@ -7,9 +7,15 @@ Use for YAML config, CLI overrides, SDK builder overrides, config validation, an
 
 Read first:
 
-- `docs/user-guide/configuration.md` for parameter fields and precedence.
-- `docs/user-guide/running.md` for combining YAML, CLI, SDK, and dataset registry inputs.
-- `docs/user-guide/environment.md` for infrastructure settings controlled by environment variables.
+- `docs/user-guide/configuration.md` or the
+  [published configuration guide](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/configuration/)
+  for parameter fields and precedence.
+- `docs/user-guide/running.md` or the
+  [published running guide](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/running/)
+  for combining YAML, CLI, SDK, and dataset registry inputs.
+- `docs/user-guide/environment.md` or the
+  [published environment guide](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/environment/)
+  for infrastructure settings controlled by environment variables.
 
 Precedence:
 
@@ -35,4 +41,8 @@ synthesizer = (
 )
 ```
 
-For implementation internals around Pydantic models, Click option generation, or validators, read `docs/developer-guide/configuration_management.md`.
+For implementation internals around Pydantic models, Click option generation,
+or validators, read `docs/developer-guide/configuration_management.md` from a
+source checkout or the
+[configuration management guide](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/docs/developer-guide/configuration_management.md)
+from a standalone install.

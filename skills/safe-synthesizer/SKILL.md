@@ -29,7 +29,10 @@ this `SKILL.md`.
 - Cite relevant repo docs paths.
 - Include one next action unless the user asks for a full walkthrough.
 - Keep usage guidance separate from repo development internals.
-- If the user asks to change CLI/config source code, read `docs/developer-guide/configuration_management.md`.
+- If the user asks to change CLI/config source code, read
+  `docs/developer-guide/configuration_management.md` from a source checkout or
+  the [configuration management guide](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/docs/developer-guide/configuration_management.md)
+  from a standalone install.
 
 ## Examples
 
