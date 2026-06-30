@@ -197,15 +197,15 @@ def _build_command(method: GenerationMethod, output_file: Path, root: Path) -> l
         str(output_file),
         "--generation__num_records",
         num_records,
-        "--generation__use_structured_generation",
+        "--generation__structured_generation__enabled",
         str(method.use_structured_generation).lower(),
     ]
     if method.use_structured_generation:
         command.extend(
             [
-                "--generation__structured_generation_backend",
+                "--generation__structured_generation__backend",
                 method.backend,
-                "--generation__structured_generation_schema_method",
+                "--generation__structured_generation__schema_method",
                 method.schema_method or "regex",
             ]
         )

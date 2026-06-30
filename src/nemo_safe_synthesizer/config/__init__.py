@@ -9,7 +9,7 @@ from .data import DataParameters
 from .differential_privacy import DifferentialPrivacyHyperparams
 from .evaluate import EvaluationParameters
 from .external_results import SafeSynthesizerSummary, SafeSynthesizerTiming
-from .generate import GenerateParameters
+from .generate import GenerateParameters, StructuredGenerationParameters
 from .internal_results import SafeSynthesizerResults
 from .job import SafeSynthesizerJobConfig
 from .parameters import SafeSynthesizerParameters
@@ -31,6 +31,7 @@ __all__ = [
     "SafeSynthesizerResults",
     "SafeSynthesizerSummary",
     "SafeSynthesizerTiming",
+    "StructuredGenerationParameters",
     "TimeSeriesParameters",
     "TrainingHyperparams",
 ]

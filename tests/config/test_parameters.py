@@ -146,7 +146,7 @@ def _saved_config() -> SafeSynthesizerParameters:
     saved.training.batch_size = 8
     saved.emit_telemetry = False
     saved.generation.num_records = 3000
-    saved.generation.use_structured_generation = True
+    saved.generation.structured_generation.enabled = True
     saved.generation.validation.group_by_ignore_invalid_records = True
     return saved
 
@@ -175,7 +175,7 @@ class TestWithRuntimeOverrides:
                 SafeSynthesizerParameters,
                 {
                     "generation.num_records": 3000,
-                    "generation.use_structured_generation": True,
+                    "generation.structured_generation.enabled": True,
                     "generation.validation.group_by_ignore_invalid_records": True,
                     "training.batch_size": 8,
                     "emit_telemetry": False,
@@ -186,7 +186,7 @@ class TestWithRuntimeOverrides:
                 _runtime_num_records,
                 {
                     "generation.num_records": 100,
-                    "generation.use_structured_generation": True,  # unset runtime field preserved
+                    "generation.structured_generation.enabled": True,  # unset runtime field preserved
                     "training.batch_size": 8,  # non-overridable section inherited
                 },
                 id="top-level-generation-override",
@@ -240,10 +240,10 @@ class TestWithRuntimeOverrides:
         # Inherited section, overridden section, and an unchanged section.
         merged.data.holdout = 0.42
         merged.training.batch_size = 99
-        merged.generation.use_structured_generation = False
+        merged.generation.structured_generation.enabled = False
 
         assert merged.data is not saved.data
         assert merged.training is not saved.training
         assert saved.data.holdout != 0.42
         assert saved.training.batch_size == 8
-        assert saved.generation.use_structured_generation is True
+        assert saved.generation.structured_generation.enabled is True

@@ -66,7 +66,9 @@ def test_train_and_generate_dp(fixture_financial_transactions_dataset, fixture_s
         dp_enabled=True,
         epsilon=100.0,
         num_records=100,
-        use_structured_generation=True,
+        structured_generation={
+            "enabled": True,
+        },
     )
     logger.info(f"Running DP test with config: {config}")
 

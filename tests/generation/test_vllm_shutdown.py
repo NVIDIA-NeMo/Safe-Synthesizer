@@ -35,7 +35,7 @@ def backend(_mock_vllm_cleanup, fixture_session_cache_dir):
     mock_config.time_series.is_timeseries = False
     mock_config.data.group_training_examples_by = None
     # Pin to a valid literal so StructuredOutputsConfig Pydantic validation passes in initialize().
-    mock_config.generation.structured_generation_backend = "xgrammar"
+    mock_config.generation.structured_generation.backend = "xgrammar"
     mock_config.generation.attention_backend = None
 
     mock_workdir = MagicMock()

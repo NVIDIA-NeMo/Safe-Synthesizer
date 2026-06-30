@@ -7,9 +7,15 @@ Use for output directories, logs, synthetic data, reports, metrics, and generate
 
 Read first:
 
-- `docs/user-guide/running.md` for output layout and logging.
-- `docs/user-guide/evaluating-data.md` for evaluation reports and metrics.
-- `docs/user-guide/environment.md` for artifact path environment variables.
+- `docs/user-guide/running.md` or the
+  [published running guide](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/running/)
+  for output layout and logging.
+- `docs/user-guide/evaluating-data.md` or the
+  [published data evaluation guide](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/evaluating-data/)
+  for evaluation reports and metrics.
+- `docs/user-guide/environment.md` or the
+  [published environment guide](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/environment/)
+  for artifact path environment variables.
 
 Look for:
 

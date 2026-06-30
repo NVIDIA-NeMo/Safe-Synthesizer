@@ -21,6 +21,8 @@ import pytest
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 from nemo_safe_synthesizer.errors import ParameterError
+from nemo_safe_synthesizer.generation.results import GenerateJobResults
+from nemo_safe_synthesizer.generation.utils import GenerationStatus
 from nemo_safe_synthesizer.preflight import PreflightReport, PreflightStage
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
 
@@ -371,6 +373,43 @@ class TestEvaluateUsesOriginalTrainingDf:
         call_kwargs = mock_evaluator_cls.call_args[1]
         pd.testing.assert_frame_equal(call_kwargs["training_df"], train_split)
 
+    @patch("nemo_safe_synthesizer.sdk.library_builder.Evaluator")
+    def test_evaluate_disabled_skips_evaluator_and_builds_results(
+        self,
+        mock_evaluator_cls,
+        fixture_process_data_setup_without_pii,
+    ):
+        """When evaluation is disabled, ``evaluate()`` still prepares saveable results."""
+        builder, train_split, test_split, _, _ = fixture_process_data_setup_without_pii
+        assert builder._nss_config is not None
+        builder._nss_config.evaluation.enabled = False
+        builder._training_df = train_split
+        builder._original_training_df = train_split
+        builder._test_df = test_split
+        builder._total_start = 0.0
+
+        synthetic_df = pd.DataFrame({"patient_name": ["Synthetic Person"], "patient_age": [42]})
+        mock_gen = MagicMock()
+        mock_gen.gen_results = GenerateJobResults(
+            df=synthetic_df,
+            status=GenerationStatus.COMPLETE,
+            num_valid_records=1,
+            num_invalid_records=0,
+            num_prompts=1,
+            valid_record_fraction=1.0,
+            batch_valid_record_fractions=[1.0],
+            elapsed_time=1.0,
+        )
+        builder.generator = mock_gen
+
+        builder.evaluate()
+
+        mock_evaluator_cls.assert_not_called()
+        assert builder.evaluator is None
+        assert builder.results.evaluation_report_html is None
+        assert builder.results.summary.timing.evaluation_time_sec is None
+        pd.testing.assert_frame_equal(builder.results.synthetic_data, synthetic_df)
+
 
 # ---------------------------------------------------------------------------
 # Tests: load_from_save_path round-trip
@@ -456,14 +495,14 @@ class TestLoadFromSavePath:
         saved_config = SafeSynthesizerParameters()
         saved_config.training.batch_size = 8
         saved_config.generation.num_records = 3000
-        saved_config.generation.use_structured_generation = True
-        saved_config.generation.structured_generation_schema_method = "auto"
+        saved_config.generation.structured_generation.enabled = True
+        saved_config.generation.structured_generation.schema_method = "auto"
         workdir.config.write_text(saved_config.model_dump_json())
 
         runtime_config = SafeSynthesizerParameters()
         runtime_config.training.batch_size = 32
         runtime_config.generation.num_records = 100
-        runtime_config.generation.structured_generation_schema_method = "auto"
+        runtime_config.generation.structured_generation.schema_method = "auto"
         runtime_config.evaluation.enabled = False
         mock_metadata_cls.from_metadata_json.return_value = MagicMock()
 
@@ -474,8 +513,8 @@ class TestLoadFromSavePath:
         assert builder._nss_config.training.batch_size == 8
         assert builder._nss_config.generation.num_records == 100
         # Saved value not re-specified at runtime is preserved (field-level merge).
-        assert builder._nss_config.generation.use_structured_generation is True
-        assert builder._nss_config.generation.structured_generation_schema_method == "auto"
+        assert builder._nss_config.generation.structured_generation.enabled is True
+        assert builder._nss_config.generation.structured_generation.schema_method == "auto"
         assert builder._nss_config.evaluation.enabled is False
 
     @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
@@ -494,8 +533,8 @@ class TestLoadFromSavePath:
         )
         saved_config = SafeSynthesizerParameters()
         saved_config.generation.num_records = 3000
-        saved_config.generation.use_structured_generation = True
-        saved_config.generation.structured_generation_schema_method = "auto"
+        saved_config.generation.structured_generation.enabled = True
+        saved_config.generation.structured_generation.schema_method = "auto"
         saved_config.evaluation.enabled = True
         workdir.config.write_text(saved_config.model_dump_json())
 
@@ -506,8 +545,8 @@ class TestLoadFromSavePath:
 
         assert builder._nss_config is not None
         assert builder._nss_config.generation.num_records == 3000
-        assert builder._nss_config.generation.use_structured_generation is True
-        assert builder._nss_config.generation.structured_generation_schema_method == "auto"
+        assert builder._nss_config.generation.structured_generation.enabled is True
+        assert builder._nss_config.generation.structured_generation.schema_method == "auto"
         assert builder._nss_config.evaluation.enabled is True
 
     @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
@@ -561,8 +600,8 @@ class TestLoadFromSavePath:
         saved_config = SafeSynthesizerParameters()
         saved_config.training.batch_size = 8
         saved_config.generation.num_records = 3000
-        saved_config.generation.use_structured_generation = True
-        saved_config.generation.structured_generation_schema_method = "auto"
+        saved_config.generation.structured_generation.enabled = True
+        saved_config.generation.structured_generation.schema_method = "auto"
         saved_config.evaluation.enabled = True
         workdir.config.write_text(saved_config.model_dump_json())
 
@@ -579,8 +618,8 @@ class TestLoadFromSavePath:
         assert builder._nss_config is not None
         assert builder._nss_config.training.batch_size == 8
         assert builder._nss_config.generation.num_records == 100
-        assert builder._nss_config.generation.use_structured_generation is False
-        assert builder._nss_config.generation.structured_generation_schema_method == "auto"
+        assert builder._nss_config.generation.structured_generation.enabled is False
+        assert builder._nss_config.generation.structured_generation.schema_method == "auto"
         assert builder._nss_config.evaluation.enabled is False
 
     @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")

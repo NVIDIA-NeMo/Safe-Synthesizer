@@ -7,9 +7,15 @@ Use for CLI, SDK, first run, logging, offline mode, and general pipeline executi
 
 Read first:
 
-- `docs/user-guide/getting-started.md` for install, prerequisites, and first run.
-- `docs/user-guide/running.md` for CLI, SDK, dataset registry, logging, offline mode, and output layout.
-- `docs/user-guide/environment.md` for cache, endpoint, WandB, and offline environment variables.
+- `docs/user-guide/getting-started.md` or the
+  [published getting started guide](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/getting-started/)
+  for install, prerequisites, and first run.
+- `docs/user-guide/running.md` or the
+  [published running guide](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/running/)
+  for CLI, SDK, dataset registry, logging, offline mode, and output layout.
+- `docs/user-guide/environment.md` or the
+  [published environment guide](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/environment/)
+  for cache, endpoint, WandB, and offline environment variables.
 
 Default CLI:
 

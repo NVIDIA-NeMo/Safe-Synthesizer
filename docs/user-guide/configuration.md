@@ -56,6 +56,40 @@ synthesizer.run()
 See [Using YAML Config Files with the CLI and SDK](running.md#using-yaml-config-files)
 for more detail on combining config files with runtime overrides.
 
+### Python Parameter Construction
+
+The Python SDK accepts both fully nested config objects and compatibility
+shortcuts for fields on top-level parameter sections:
+
+```python
+from nemo_safe_synthesizer.config import SafeSynthesizerParameters
+
+config = SafeSynthesizerParameters.from_params(
+    num_records=2000,  # generation.num_records
+    dp_enabled=True,  # privacy.dp_enabled
+    structured_generation={"enabled": True},  # generation.structured_generation.enabled
+)
+```
+
+Flat keyword arguments are matched by field name against the top-level parameter
+sections. Use the nested shape for fields inside nested subobjects, especially
+when a generic field name could appear in multiple places:
+
+```python
+# Preferred: unambiguous nested form.
+SafeSynthesizerParameters.from_params(
+    structured_generation={"enabled": True},
+)
+
+# Also valid: fully nested generation section.
+SafeSynthesizerParameters.from_params(
+    generation={"structured_generation": {"enabled": True}},
+)
+
+# Avoid: this configures evaluation.enabled, not structured generation.
+SafeSynthesizerParameters.from_params(enabled=True)
+```
+
 ---
 
 ## Training
@@ -158,10 +192,10 @@ for the full API reference.
 | `generation.repetition_penalty` | `1.0` | Penalty for repeated tokens; increase slightly if generation produces repetitive output | 1.0--1.15 typical; start at 1.05 if repetition is a problem |
 | `generation.patience` | `3` | Consecutive bad batches before stopping | Leave at default |
 | `generation.invalid_fraction_threshold` | `0.8` | Invalid record fraction that triggers the patience counter | Leave at default |
-| `generation.use_structured_generation` | `false` | Enable structured output to constrain record format (typically at the cost of reducing the quality of generated records and increasing generation time; use when the pipeline struggles to produce valid records) | Leave off unless the pipeline cannot produce valid records |
-| `generation.structured_generation_backend` | `"auto"` | vLLM guided-decoding backend | Leave at `"auto"` |
-| `generation.structured_generation_schema_method` | `"auto"` | Schema method (`"auto"`, `"structural_tag"`, `"json_schema"`, or `"regex"`) | Leave at `"auto"`; it picks `"structural_tag"` on xgrammar-capable backends and `"regex"` otherwise |
-| `generation.structured_generation_use_single_sequence` | `false` | Match exactly one sequence when `max_sequences_per_example` is 1 | Leave at default |
+| `generation.structured_generation.enabled` | `false` | Enable structured output to constrain record format (typically at the cost of reducing the quality of generated records and increasing generation time; use when the pipeline struggles to produce valid records) | Leave off unless the pipeline cannot produce valid records |
+| `generation.structured_generation.backend` | `"auto"` | vLLM guided-decoding backend | Leave at `"auto"` |
+| `generation.structured_generation.schema_method` | `"auto"` | Schema method (`"auto"`, `"structural_tag"`, `"json_schema"`, or `"regex"`) | Leave at `"auto"`; it picks `"structural_tag"` on xgrammar-capable backends and `"regex"` otherwise |
+| `generation.structured_generation.use_single_sequence` | `false` | Match exactly one sequence when `max_sequences_per_example` is 1 | Leave at default |
 | `generation.enforce_timeseries_fidelity` | `false` | Enforce time series order, intervals, and timestamps | Enable for time series data |
 | `generation.attention_backend` | `"auto"` | vLLM attention backend | Leave at `"auto"` |
 

@@ -12,6 +12,7 @@ from nemo_safe_synthesizer.config import (
     DifferentialPrivacyHyperparams,
     GenerateParameters,
     SafeSynthesizerParameters,
+    StructuredGenerationParameters,
     TrainingHyperparams,
 )
 
@@ -39,6 +40,9 @@ def fixture_simple_safe_synthesizer_parameters() -> SafeSynthesizerParameters:
             num_input_records_to_sample=100,
             batch_size=10,
         ),
-        generation=GenerateParameters(num_records=1000, use_structured_generation=True),
+        generation=GenerateParameters(
+            num_records=1000,
+            structured_generation=StructuredGenerationParameters(enabled=True),
+        ),
         privacy=DifferentialPrivacyHyperparams(dp_enabled=False),
     )

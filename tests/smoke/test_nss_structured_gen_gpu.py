@@ -35,9 +35,11 @@ def test_nss_structured_generation(fixture_local_tinyllama_dir, fixture_gpu_smok
         lora_r=8,
         holdout=0,
         max_holdout=0,
-        use_structured_generation=True,
-        structured_generation_backend="outlines",
-        structured_generation_schema_method="json_schema",
+        structured_generation={
+            "enabled": True,
+            "backend": "outlines",
+            "schema_method": "json_schema",
+        },
     )
     nss = SafeSynthesizer(config=config, save_path=tmp_path)
     nss.with_data_source(fixture_gpu_smoke_df).process_data().train()

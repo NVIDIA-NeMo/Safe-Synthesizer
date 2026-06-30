@@ -9,16 +9,18 @@ Agent-neutral skill definitions. Skills here are available to any agent (Cursor,
 
 ```text
 .agents/
-└── skills/             # One subdirectory per skill, each containing SKILL.md
+└── skills/             # One discovery entry per skill
     ├── git-worktrees/
     ├── github-cli/
-    ├── safe-synthesizer/
+    ├── safe-synthesizer@ -> ../../skills/safe-synthesizer
     └── uv-build/
 ```
 
 ## Skills
 
-Each skill is a self-contained directory with a `SKILL.md` that an agent reads on demand. Skills provide domain knowledge and step-by-step workflows for recurring tasks.
+Each skill resolves to a self-contained directory with a `SKILL.md` that an
+agent reads on demand. Skills provide domain knowledge and step-by-step
+workflows for recurring tasks.
 
 | Skill | Purpose |
 | ----- | ------- |
@@ -35,7 +37,11 @@ developer docs:
 
 ## Discoverability
 
-Cursor natively scans `.agents/skills/` as a first-class skill location -- no symlinks or duplication needed. Claude Code and other agents also read skills directly from this directory.
+Cursor natively scans `.agents/skills/` as a first-class skill location. Claude
+Code and other agents also read skills directly from this directory. Most skills
+live there directly. The publishable `safe-synthesizer` package lives under
+`skills/` and uses a relative symlink from `.agents/skills/` for repository-local
+discovery.
 
 ## Adding skills
 
