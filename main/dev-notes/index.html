@@ -8848,6 +8848,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#speeding-up-nemo-safe-synthesizer-generation-with-prompt-aware-token-budgets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Speeding Up NeMo Safe Synthesizer Generation with Prompt-Aware Token Budgets
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#does-nemo-safe-synthesizer-actually-work-a-case-study-with-financial-transactions-data" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -8887,6 +8898,53 @@
 <h1 id="dev-notes">Dev Notes<a class="headerlink" href="#dev-notes" title="Permanent link">&para;</a></h1>
 <p>Updates, design decisions, and technical notes from the NeMo Safe Synthesizer team.</p>
       </header>
+      
+        <article class="md-post md-post--excerpt">
+  <header class="md-post__header">
+    
+      <nav class="md-post__authors md-typeset">
+        
+          <span class="md-author">
+            <img src="https://github.com/seayang-nv.png" alt="Sean Yang">
+          </span>
+        
+      </nav>
+    
+    <div class="md-post__meta md-meta">
+      <ul class="md-meta__list">
+        <li class="md-meta__item">
+          <time datetime="2026-06-30 00:00:00+00:00">June 30, 2026</time></li>
+        
+        
+          
+          <li class="md-meta__item">
+            
+              6 min read
+            
+          </li>
+        
+        
+      </ul>
+      
+    </div>
+  </header>
+  <div class="md-post__content md-typeset">
+    <h2 id="speeding-up-nemo-safe-synthesizer-generation-with-prompt-aware-token-budgets"><a class="toclink" href="speeding-up-nemo-safe-synthesizer-generation-with-prompt-aware-token-budgets/">Speeding Up NeMo Safe Synthesizer Generation with Prompt-Aware Token Budgets</a></h2>
+<p>NeMo Safe Synthesizer has expanded to more models and larger context windows. That flexibility helps with longer rows, richer text columns, and time-series groups. However, it also exposed a generation bottleneck. Small jobs and short-row datasets could still pay for decode budgets sized for the full context window.</p>
+<p>The updated generation path removes that waste in two places. It starts with a small prompt probe before scaling up the batch size, and it replaces full-context decode caps with prompt-aware caps empirically derived from token lengths of the actual data.</p>
+<p>Our experiments show up to 10.0x generation speedup, a 1.62x median speedup across 39 before/after comparisons, and more consistent generation times overall.</p>
+<p>This improvement shipped in NeMo Safe Synthesizer <code>v0.0.6</code>.</p>
+
+    
+      <nav class="md-post__action">
+        <a href="speeding-up-nemo-safe-synthesizer-generation-with-prompt-aware-token-budgets/">
+          Continue reading
+        </a>
+      </nav>
+    
+    
+  </div>
+</article>
       
         <article class="md-post md-post--excerpt">
   <header class="md-post__header">

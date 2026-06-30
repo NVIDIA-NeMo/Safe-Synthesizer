@@ -10,13 +10,11 @@
       
       
       
-        <link rel="canonical" href="https://nvidia-nemo.github.io/Safe-Synthesizer/main/dev-notes/does-nemo-safe-synthesizer-actually-work-a-case-study-with-financial-transactions-data/">
+        <link rel="canonical" href="https://nvidia-nemo.github.io/Safe-Synthesizer/main/dev-notes/speeding-up-nemo-safe-synthesizer-generation-with-prompt-aware-token-budgets/">
       
       
-        <link rel="prev" href="../private-by-design-introducing-nemo-safe-synthesizer/">
+        <link rel="prev" href="../does-nemo-safe-synthesizer-actually-work-a-case-study-with-financial-transactions-data/">
       
-      
-        <link rel="next" href="../speeding-up-nemo-safe-synthesizer-generation-with-prompt-aware-token-budgets/">
       
       
         
@@ -27,7 +25,7 @@
     
     
       
-        <title>Does NeMo Safe Synthesizer Actually Work? A Case Study with Financial Transactions Data - NeMo Safe Synthesizer</title>
+        <title>Speeding Up NeMo Safe Synthesizer Generation with Prompt-Aware Token Budgets - NeMo Safe Synthesizer</title>
       
     
     
@@ -84,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#does-nemo-safe-synthesizer-actually-work-a-case-study-with-financial-transactions-data" class="md-skip">
+        <a href="#speeding-up-nemo-safe-synthesizer-generation-with-prompt-aware-token-budgets" class="md-skip">
           Skip to content
         </a>
       
@@ -122,7 +120,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Does NeMo Safe Synthesizer Actually Work? A Case Study with Financial Transactions Data
+              Speeding Up NeMo Safe Synthesizer Generation with Prompt-Aware Token Budgets
             
           </span>
         </div>
@@ -8852,10 +8850,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#dataset" class="md-nav__link">
+  <a href="#the-discovery" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Dataset
+        The Discovery
       
     </span>
   </a>
@@ -8863,55 +8861,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#running-nemo-safe-synthesizer" class="md-nav__link">
+  <a href="#what-changed" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Running NeMo Safe Synthesizer
+        What Changed
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#built-in-evaluation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Built-In Evaluation
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#question-1-did-nemo-safe-synthesizer-memorize-rows-or-groups" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Question 1: Did NeMo Safe Synthesizer Memorize Rows or Groups?
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#question-2-did-nemo-safe-synthesizer-preserve-the-patterns" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Question 2: Did NeMo Safe Synthesizer Preserve the Patterns?
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Question 2: Did NeMo Safe Synthesizer Preserve the Patterns?">
+    <nav class="md-nav" aria-label="What Changed">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#category-mix" class="md-nav__link">
+  <a href="#adaptive-first-batch" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Category Mix
+        Adaptive First Batch
       
     </span>
   </a>
@@ -8919,21 +8884,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#time-of-day-behavior" class="md-nav__link">
+  <a href="#prompt-aware-token-budget" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Time-of-Day Behavior
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#amount-distributions" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Amount Distributions
+        Prompt-Aware Token Budget
       
     </span>
   </a>
@@ -8946,10 +8900,60 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#so-does-it-work" class="md-nav__link">
+  <a href="#experiments-and-results" class="md-nav__link">
     <span class="md-ellipsis">
       
-        So, Does It Work?
+        Experiments and Results
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Experiments and Results">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#raw-time" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Raw Time
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#relative-speedup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Relative Speedup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-it-speeds-up" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why It Speeds Up
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quality-and-validity-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quality and Validity Check
       
     </span>
   </a>
@@ -8957,10 +8961,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#next-steps" class="md-nav__link">
+  <a href="#takeaways" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Next Steps
+        Takeaways
       
     </span>
   </a>
@@ -9009,6 +9013,21 @@
                     </span>
                   </div>
                 
+                  <div class="md-profile md-post__profile">
+                    <span class="md-author md-author--long">
+                      <img src="https://github.com/mvansegbroeck.png" alt="Maarten Van Segbroeck">
+                    </span>
+                    <span class="md-profile__description">
+                      <strong>
+                        
+                          Maarten Van Segbroeck
+                        
+                      </strong>
+                      <br>
+                      Director of Research at NVIDIA
+                    </span>
+                  </div>
+                
               </div>
             
             <ul class="md-post__meta md-nav__list">
@@ -9023,7 +9042,7 @@
                     <li class="md-nav__item">
                       <div class="md-nav__link">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 19H5V8h14m-3-7v2H8V1H6v2H5c-1.11 0-2 .89-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-1V1m-1 11h-5v5h5z"/></svg>
-                        <time datetime="2026-06-11 00:00:00+00:00" class="md-ellipsis">June 11, 2026</time>
+                        <time datetime="2026-06-30 00:00:00+00:00" class="md-ellipsis">June 30, 2026</time>
                       </div>
                     </li>
                     
@@ -9035,7 +9054,7 @@
                           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 20a8 8 0 0 0 8-8 8 8 0 0 0-8-8 8 8 0 0 0-8 8 8 8 0 0 0 8 8m0-18a10 10 0 0 1 10 10 10 10 0 0 1-10 10C6.47 22 2 17.5 2 12A10 10 0 0 1 12 2m.5 5v5.25l4.5 2.67-.75 1.23L11 13V7z"/></svg>
                           <span class="md-ellipsis">
                             
-                              7 min read
+                              6 min read
                             
                           </span>
                         </div>
@@ -9062,328 +9081,67 @@
   
 
 
-<h1 id="does-nemo-safe-synthesizer-actually-work-a-case-study-with-financial-transactions-data">Does NeMo Safe Synthesizer Actually Work? A Case Study with Financial Transactions Data<a class="headerlink" href="#does-nemo-safe-synthesizer-actually-work-a-case-study-with-financial-transactions-data" title="Permanent link">&para;</a></h1>
-<p>NeMo Safe Synthesizer creates private, safe versions of sensitive tabular datasets: entirely synthetic data with no one-to-one mapping to the original records, while preserving the statistical structure to remain useful for downstream AI and analytics.</p>
-<p>That promise sounds simple, but it raises the question every synthetic data system eventually has to answer: does it actually work?</p>
+<h1 id="speeding-up-nemo-safe-synthesizer-generation-with-prompt-aware-token-budgets">Speeding Up NeMo Safe Synthesizer Generation with Prompt-Aware Token Budgets<a class="headerlink" href="#speeding-up-nemo-safe-synthesizer-generation-with-prompt-aware-token-budgets" title="Permanent link">&para;</a></h1>
+<p>NeMo Safe Synthesizer has expanded to more models and larger context windows. That flexibility helps with longer rows, richer text columns, and time-series groups. However, it also exposed a generation bottleneck. Small jobs and short-row datasets could still pay for decode budgets sized for the full context window.</p>
+<p>The updated generation path removes that waste in two places. It starts with a small prompt probe before scaling up the batch size, and it replaces full-context decode caps with prompt-aware caps empirically derived from token lengths of the actual data.</p>
+<p>Our experiments show up to 10.0x generation speedup, a 1.62x median speedup across 39 before/after comparisons, and more consistent generation times overall.</p>
+<p>This improvement shipped in NeMo Safe Synthesizer <code>v0.0.6</code>.</p>
 <!-- more -->
 
-<p>For NeMo Safe Synthesizer, "working" means satisfying two requirements at the same time:</p>
+<p><img alt="Prompt-aware token budgets deliver up to 10.0x generation speedup with quality held steady" src="../assets/generation-speedup/prompt-aware-token-budgets-hero.png" /></p>
+<h2 id="the-discovery">The Discovery<a class="headerlink" href="#the-discovery" title="Permanent link">&para;</a></h2>
+<p>The first clear signal came from a small tabular generation job using the default target of 1,000 records. We only needed 1,000 synthetic records, but one run produced 7,871 valid records from 100 prompts. That was a 7.9x overshoot, and generation alone took over 5 minutes.</p>
+<p>Inspecting the log exposed two related inefficiencies.</p>
 <ol>
-<li>Privacy: Does the synthetic data avoid direct memorization of transaction rows?</li>
-<li>Fidelity: Does it preserve the data structure and behavioral patterns in the source data?</li>
+<li>Prompt-count: the first generation batch could be too large for small target jobs.</li>
+<li>Token-count: each completion had an oversized maximum decode length.</li>
 </ol>
-<p>The tension between privacy and fidelity is the interesting part. A dataset that merely avoids copying records is private, but not necessarily useful. A dataset that captures every pattern too literally may be useful, but has higher risk of leaking sensitive aspects of the original. In this dev note, we walk through a concrete financial transactions example and check both sides of that tradeoff.</p>
-<p>The <a href="../../tutorials/time-series-financial-transactions/">full tutorial notebook</a> contains the runnable workflow, including prerequisites and setup.</p>
-<h2 id="dataset">Dataset<a class="headerlink" href="#dataset" title="Permanent link">&para;</a></h2>
-<p>The dataset is a synthetic account transaction ledger with 3,980 transaction detail rows. Each row represents a transaction, with columns such as:</p>
-<ul>
-<li><code>acct_id</code>: account identifier used to group transactions into sequences</li>
-<li><code>cardholder</code>: cardholder name</li>
-<li><code>state</code>: US state</li>
-<li><code>txn_index</code>: sequence order within the account</li>
-<li><code>timestamp</code>: transaction time</li>
-<li><code>merchant_cat</code>: merchant category</li>
-<li><code>merchant</code>: merchant name</li>
-<li><code>txn_amount</code>: transaction amount</li>
-</ul>
-<p>This dataset was generated for the case study so we could evaluate known transaction patterns without using real financial customer data.</p>
-<p>Here is a preview of the source data:</p>
-<table>
-<thead>
-<tr>
-<th>acct_id</th>
-<th>cardholder</th>
-<th>state</th>
-<th style="text-align: right;">txn_index</th>
-<th>timestamp</th>
-<th>merchant_cat</th>
-<th>merchant</th>
-<th style="text-align: right;">txn_amount</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>ACCT-013E4482</code></td>
-<td>Alexis Parsons</td>
-<td>CA</td>
-<td style="text-align: right;">1</td>
-<td>2025-01-02 21:20:56</td>
-<td>entertainment</td>
-<td>AMC Theatres</td>
-<td style="text-align: right;">158.40</td>
-</tr>
-<tr>
-<td><code>ACCT-013E4482</code></td>
-<td>Alexis Parsons</td>
-<td>CA</td>
-<td style="text-align: right;">2</td>
-<td>2025-01-03 09:55:05</td>
-<td>subscription</td>
-<td>Spotify</td>
-<td style="text-align: right;">12.99</td>
-</tr>
-<tr>
-<td><code>ACCT-013E4482</code></td>
-<td>Alexis Parsons</td>
-<td>CA</td>
-<td style="text-align: right;">3</td>
-<td>2025-01-03 10:49:25</td>
-<td>healthcare</td>
-<td>Walgreens</td>
-<td style="text-align: right;">1529.73</td>
-</tr>
-<tr>
-<td><code>ACCT-013E4482</code></td>
-<td>Alexis Parsons</td>
-<td>CA</td>
-<td style="text-align: right;">4</td>
-<td>2025-01-03 17:05:01</td>
-<td>retail</td>
-<td>Best Buy</td>
-<td style="text-align: right;">94.89</td>
-</tr>
-<tr>
-<td><code>ACCT-013E4482</code></td>
-<td>Alexis Parsons</td>
-<td>CA</td>
-<td style="text-align: right;">5</td>
-<td>2025-01-04 00:00:07</td>
-<td>subscription</td>
-<td>Netflix</td>
-<td style="text-align: right;">12.99</td>
-</tr>
-</tbody>
-</table>
-<h2 id="running-nemo-safe-synthesizer">Running NeMo Safe Synthesizer<a class="headerlink" href="#running-nemo-safe-synthesizer" title="Permanent link">&para;</a></h2>
-<p>The code snippet below runs NeMo Safe Synthesizer using the Python SDK with the original financial transactions dataset as the only required input file. Because transaction history is inherently sequential, the configuration tells NeMo Safe Synthesizer to group rows by <code>acct_id</code> and order each account's transactions by <code>txn_index</code>.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nemo_safe_synthesizer.sdk.library_builder</span><span class="w"> </span><span class="kn">import</span> <span class="n">SafeSynthesizer</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">builder</span> <span class="o">=</span> <span class="p">(</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">SafeSynthesizer</span><span class="p">(</span><span class="n">save_path</span><span class="o">=</span><span class="n">ARTIFACT_ROOT</span><span class="p">)</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="o">.</span><span class="n">with_data_source</span><span class="p">(</span><span class="n">source_df</span><span class="p">)</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="o">.</span><span class="n">with_data</span><span class="p">(</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>        <span class="n">holdout</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>        <span class="n">group_training_examples_by</span><span class="o">=</span><span class="s2">&quot;acct_id&quot;</span><span class="p">,</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>        <span class="n">order_training_examples_by</span><span class="o">=</span><span class="s2">&quot;txn_index&quot;</span><span class="p">,</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="p">)</span>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="o">.</span><span class="n">with_replace_pii</span><span class="p">(</span><span class="n">enable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="o">.</span><span class="n">with_train</span><span class="p">(</span>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>        <span class="n">pretrained_model</span><span class="o">=</span><span class="s2">&quot;HuggingFaceTB/SmolLM3-3B&quot;</span><span class="p">,</span>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>        <span class="n">num_input_records_to_sample</span><span class="o">=</span><span class="mi">60000</span><span class="p">,</span>
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>        <span class="n">learning_rate</span><span class="o">=</span><span class="mf">5.0e-4</span><span class="p">,</span>
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>        <span class="n">lora_r</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span>
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>    <span class="p">)</span>
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>    <span class="o">.</span><span class="n">with_time_series</span><span class="p">(</span><span class="n">is_timeseries</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">timestamp_column</span><span class="o">=</span><span class="s2">&quot;txn_index&quot;</span><span class="p">)</span>
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="p">)</span>
-</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>
-</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="n">builder</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>
-</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="n">results</span> <span class="o">=</span> <span class="n">builder</span><span class="o">.</span><span class="n">results</span>
+<p>The prompt-count problem came from starting too aggressively. A Safe Synthesizer prompt can produce more than one valid record, and some datasets produce many records per prompt. If generation uses a full initial batch of prompts before measuring that yield, a small target can overshoot by several multiples.</p>
+<p>The token-count problem came from the decode cap. For our default <code>HuggingFaceTB/SmolLM3-3B</code> model, the vLLM <code>SamplingParams.max_tokens</code> value was effectively 12,288 tokens. If a fine-tuned LoRA did not emit EOS promptly, vLLM could keep decoding until that full cap even when the model had only been trained to produce much shorter examples.</p>
+<p>The new generation path addresses both pieces. The same case dropped to 1,097 valid records, 1.1x overshoot, and about 1 minute of generation time once generation used a small initial probe and a tighter token budget.</p>
+<h2 id="what-changed">What Changed<a class="headerlink" href="#what-changed" title="Permanent link">&para;</a></h2>
+<h3 id="adaptive-first-batch">Adaptive First Batch<a class="headerlink" href="#adaptive-first-batch" title="Permanent link">&para;</a></h3>
+<p>Generation now starts with a 10-prompt probe to estimate how many valid records each prompt returns. After it observes actual valid records per prompt, it sizes future batches based on the remaining record target, plus a small buffer. The value 10 is intentionally small. It gives the generator a cheap yield estimate before larger batches, while explicit maximum prompt-batch settings are still honored.</p>
+<h3 id="prompt-aware-token-budget">Prompt-Aware Token Budget<a class="headerlink" href="#prompt-aware-token-budget" title="Permanent link">&para;</a></h3>
+<p>During assembly, we track statistics about the number of tokens in each example. The maximum observed, <code>max_tokens_per_example</code>, is now persisted in the metadata from training, so we can use this to compute a more realistic token cap for generation.</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>generation_cap_tokens =
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>  max(0, min(int(1.2 * max_tokens_per_example), max_seq_length - prompt_len))
 </span></code></pre></div>
-<p>The results below come from one run of the tutorial notebook. Exact values and plots will vary across runs, which is expected for synthetic generation, but the same checks apply.</p>
-<p>This run produced 3,919 transaction detail rows. The original and synthetic datasets both contained 50 account groups, with a median of 79 transactions per original account and 80 transactions per synthetic account. In other words, NeMo Safe Synthesizer generated a dataset with roughly the same scale and sequence structure as the source.</p>
-<p>Here is a sample of the synthetic output:</p>
-<table>
-<thead>
-<tr>
-<th>acct_id</th>
-<th>cardholder</th>
-<th>state</th>
-<th style="text-align: right;">txn_index</th>
-<th>timestamp</th>
-<th>merchant_cat</th>
-<th>merchant</th>
-<th style="text-align: right;">txn_amount</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>ACCT-013E4482</code></td>
-<td>Nicholas Myers</td>
-<td>CA</td>
-<td style="text-align: right;">4</td>
-<td>2025-01-03 19:40:55</td>
-<td>dining</td>
-<td>McDonald's</td>
-<td style="text-align: right;">46.79</td>
-</tr>
-<tr>
-<td><code>ACCT-013E4482</code></td>
-<td>Nicholas Myers</td>
-<td>CA</td>
-<td style="text-align: right;">5</td>
-<td>2025-01-04 05:51:48</td>
-<td>subscription</td>
-<td>Netflix</td>
-<td style="text-align: right;">4.99</td>
-</tr>
-<tr>
-<td><code>ACCT-013E4482</code></td>
-<td>Nicholas Myers</td>
-<td>CA</td>
-<td style="text-align: right;">6</td>
-<td>2025-01-04 11:59:45</td>
-<td>travel</td>
-<td>Delta Air Lines</td>
-<td style="text-align: right;">397.51</td>
-</tr>
-<tr>
-<td><code>ACCT-013E4482</code></td>
-<td>Nicholas Myers</td>
-<td>CA</td>
-<td style="text-align: right;">7</td>
-<td>2025-01-04 18:03:35</td>
-<td>dining</td>
-<td>Starbucks</td>
-<td style="text-align: right;">46.99</td>
-</tr>
-<tr>
-<td><code>ACCT-013E4482</code></td>
-<td>Nicholas Myers</td>
-<td>CA</td>
-<td style="text-align: right;">8</td>
-<td>2025-01-05 21:31:36</td>
-<td>e-commerce</td>
-<td>Amazon</td>
-<td style="text-align: right;">62.21</td>
-</tr>
-</tbody>
-</table>
-<h2 id="built-in-evaluation">Built-In Evaluation<a class="headerlink" href="#built-in-evaluation" title="Permanent link">&para;</a></h2>
-<p>NeMo Safe Synthesizer generates a built-in <a href="../../product-overview/evaluation/">evaluation summary</a> after generation. Scores are reported on a 0--10 scale, where higher is better.</p>
-<p>Quality:</p>
-<table>
-<thead>
-<tr>
-<th>Metric</th>
-<th style="text-align: right;">Score</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Synthetic Data Quality Score</td>
-<td style="text-align: right;">9.7</td>
-</tr>
-<tr>
-<td>Column Correlation Stability</td>
-<td style="text-align: right;">10.0</td>
-</tr>
-<tr>
-<td>Deep Structure Stability</td>
-<td style="text-align: right;">9.2</td>
-</tr>
-<tr>
-<td>Column Distribution Stability</td>
-<td style="text-align: right;">9.7</td>
-</tr>
-</tbody>
-</table>
-<p>Privacy:</p>
-<table>
-<thead>
-<tr>
-<th>Metric</th>
-<th style="text-align: right;">Score</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Data Privacy Score</td>
-<td style="text-align: right;">9.8</td>
-</tr>
-<tr>
-<td>Attribute Inference Protection</td>
-<td style="text-align: right;">9.8</td>
-</tr>
-</tbody>
-</table>
-<p>The headline numbers are strong. Quality and privacy scores are high. The next question is use-case specific: do the general-purpose evaluation metrics line up with the patterns that matter for this transaction dataset?</p>
-<h2 id="question-1-did-nemo-safe-synthesizer-memorize-rows-or-groups">Question 1: Did NeMo Safe Synthesizer Memorize Rows or Groups?<a class="headerlink" href="#question-1-did-nemo-safe-synthesizer-memorize-rows-or-groups" title="Permanent link">&para;</a></h2>
-<p>The first test is whether synthetic records duplicate the source. The answer is no:</p>
+<p>The <code>1.2x</code> multiplier is a safety margin around the largest tokenized example seen during training. The prompt-length clamp prevents decode requests where <code>prompt_len + max_tokens</code> would exceed the model's context window.</p>
+<p>By using <code>generation_cap_tokens</code> for the vLLM sampling params, we restrict generation to completion lengths similar to the fine-tuning data, avoiding wasted time and tokens that are unlikely to be high quality.</p>
+<h2 id="experiments-and-results">Experiments and Results<a class="headerlink" href="#experiments-and-results" title="Permanent link">&para;</a></h2>
+<p>We compared the new generation path, the <code>experiment</code> arm, with the previous implementation, the <code>control</code> arm, across 13 benchmark datasets. We ran 3 replications for each dataset and arm, and focus our analysis on generation time.</p>
+<p>The experiment used an NVIDIA H100 80GB GPU HBM3, the <code>HuggingFaceTB/SmolLM3-3B</code> model, and the vLLM generation backend (0.18.0) with a roughly 3,000-record generation target.</p>
+<p>The speedup is not expected to be uniform across datasets. The implementation can only remove unneeded decode budget, so the generation cap should predict where the speedup appears. Datasets with much smaller prompt-aware caps should benefit the most. Datasets whose examples already use most of the context window should stay closer to parity.</p>
+<h3 id="raw-time">Raw Time<a class="headerlink" href="#raw-time" title="Permanent link">&para;</a></h3>
+<p>The raw-time view shows absolute generation time for each control and experiment run. The experiment arm is often faster and more consistent, while the previous path can vary more within the same dataset.</p>
+<p><img alt="Raw generation time by dataset" src="../assets/generation-speedup/raw_generation_time_by_dataset_dot.png" style="max-width: 820px; width: 100%; display: block; margin: 1.25rem auto;" /></p>
+<h3 id="relative-speedup">Relative Speedup<a class="headerlink" href="#relative-speedup" title="Permanent link">&para;</a></h3>
+<p>The speedup view normalizes each comparison with this ratio.</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>generation_speedup = control_generation_time / experiment_generation_time
+</span></code></pre></div>
+<p>Values greater than 1.0 mean the experiment arm was faster.</p>
+<p><img alt="Generation speedups by dataset" src="../assets/generation-speedup/generation_speedup_by_dataset_dot.png" style="max-width: 820px; width: 100%; display: block; margin: 1.25rem auto;" /></p>
+<p>Both dataset charts are ordered by median prompt-aware generation cap, from smallest cap to largest cap. Each circle is one before/after comparison. Color shows the old-to-new token budget reduction factor. Low values mean the new cap stayed close to the old full-context cap. High values mean the implementation removed much more unused decode budget.</p>
+<h3 id="why-it-speeds-up">Why It Speeds Up<a class="headerlink" href="#why-it-speeds-up" title="Permanent link">&para;</a></h3>
+<p>The main mechanism is token-budget reduction. The old generation cap was effectively the full 12,288-token context window. The new cap is based on the largest tokenized example that the assembler actually observed. Each run uses this ratio.</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>budget_reduction_factor = old_context_cap / new_generation_cap
+</span></code></pre></div>
+<p><img alt="Generation speedup versus token budget reduction" src="../assets/generation-speedup/budget_reduction_vs_generation_speedup_dot.png" style="max-width: 720px; width: 100%; display: block; margin: 1.25rem auto;" /></p>
+<p>The result supports the expected mechanism. The largest generation speedups appear when the new implementation reduces the token budget the most. The previous generation path permits the full token ceiling on every dataset, while the new generation path adjusts the ceiling based on the dataset. That extra ceiling only becomes runtime cost when a completion keeps decoding toward it.</p>
+<h2 id="quality-and-validity-check">Quality and Validity Check<a class="headerlink" href="#quality-and-validity-check" title="Permanent link">&para;</a></h2>
+<p>A generation-speed optimization is useful only if it does not trade away output quality or validity. Across these comparisons, quality and valid-record fraction stayed near parity overall.</p>
+<p><img alt="Quality score deltas" src="../assets/generation-speedup/quality_delta_dot.png" style="max-width: 700px; width: 100%; display: block; margin: 1.25rem auto;" /></p>
+<p><a href="../../product-overview/evaluation/#synthetic-quality-score-sqs">Synthetic Quality Score</a> measures how well synthetic data matches the training data on a 10-point scale. The median quality delta was 0.0, and the middle 50% ranged from -0.1 to +0.05.</p>
+<p>Valid-record fraction also stayed near parity. The median delta was +0.04 percentage points, and the middle 50% of comparisons stayed within about -0.43 to +0.84 percentage points.</p>
+<h2 id="takeaways">Takeaways<a class="headerlink" href="#takeaways" title="Permanent link">&para;</a></h2>
+<p>The prompt-aware generation path makes NeMo Safe Synthesizer generation faster by removing two sources of waste.</p>
 <ul>
-<li>Exact transaction row overlap: 0.0%</li>
-<li><code>cardholder</code> value overlap: 0.0%</li>
+<li>It starts with a small prompt probe, then sizes later prompt batches from observed records-per-prompt yield.</li>
+<li>It caps decode with assembler-observed token lengths instead of defaulting to the full context window.</li>
 </ul>
-<p>There were no duplicate transaction rows, and no cardholder names from the source appeared in the generated data. NeMo Safe Synthesizer produced novel rows rather than a row-for-row copy of the input.</p>
-<p>We also checked whether account-level metadata could make an account stand out even after row-level values and cardholder names changed:</p>
-<table>
-<thead>
-<tr>
-<th>Account-level signal</th>
-<th style="text-align: right;">Result</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Accounts compared</td>
-<td style="text-align: right;">50</td>
-</tr>
-<tr>
-<td>Exact transaction-count matches</td>
-<td style="text-align: right;">3</td>
-</tr>
-<tr>
-<td>Accounts with absolute delta &lt;= 5 transactions</td>
-<td style="text-align: right;">21</td>
-</tr>
-<tr>
-<td>Accounts with absolute delta &lt;= 10 transactions</td>
-<td style="text-align: right;">38</td>
-</tr>
-<tr>
-<td>Median absolute transaction-count delta</td>
-<td style="text-align: right;">7</td>
-</tr>
-<tr>
-<td>Max absolute transaction-count delta</td>
-<td style="text-align: right;">28</td>
-</tr>
-<tr>
-<td>Exact high-value transaction-count matches</td>
-<td style="text-align: right;">14</td>
-</tr>
-<tr>
-<td>Median absolute total-spend delta</td>
-<td style="text-align: right;">$3,350</td>
-</tr>
-</tbody>
-</table>
-<p>Transaction counts and amount summaries (comparison not shown) varied enough between original and synthetic account histories that there was no obvious one-to-one match from those signals alone.</p>
-<h2 id="question-2-did-nemo-safe-synthesizer-preserve-the-patterns">Question 2: Did NeMo Safe Synthesizer Preserve the Patterns?<a class="headerlink" href="#question-2-did-nemo-safe-synthesizer-preserve-the-patterns" title="Permanent link">&para;</a></h2>
-<p>Privacy alone is not enough. Synthetic data is useful only if it keeps the structure that downstream users care about. For this transaction dataset that might be category mix, time-of-day behavior, amount distributions, and the relationships between those fields.</p>
-<p>This is where the financial transactions example becomes a better test than a simple flat table. We intentionally care about sequences and behavioral patterns, not just whether each column or row looks plausible in isolation.</p>
-<h3 id="category-mix">Category Mix<a class="headerlink" href="#category-mix" title="Permanent link">&para;</a></h3>
-<p>The first target is merchant category mix:</p>
-<p><img alt="Merchant category distribution" src="../assets/does-nss-actually-work/category-mix.png" /></p>
-<p>The synthetic distribution preserves the intended shape. High-frequency categories remain high frequency, low-frequency categories remain low frequency, and wire transfers remain rare.</p>
-<p>That matters because downstream uses are not just looking for valid strings in the <code>merchant_cat</code> column. They need a plausible transaction portfolio. A model trained on a flattened or arbitrary category distribution would learn the wrong baseline behavior before it ever reached a more advanced task.</p>
-<h3 id="time-of-day-behavior">Time-of-Day Behavior<a class="headerlink" href="#time-of-day-behavior" title="Permanent link">&para;</a></h3>
-<p>Next, we checked whether category-specific time patterns survived. This is a stronger test than a simple column distribution because NeMo Safe Synthesizer must preserve a relationship between <code>merchant_cat</code> and <code>timestamp</code>.</p>
-<p><img alt="Time-of-day patterns" src="../assets/does-nss-actually-work/time-of-day-patterns.png" /></p>
-<p>The synthetic heatmap keeps the major temporal signatures:</p>
-<ul>
-<li>Dining is concentrated later in the day, with lunch/dinner behavior.</li>
-<li>Entertainment stays in the evening.</li>
-<li>Healthcare and wire transfers remain closer to business hours.</li>
-<li>Subscriptions remain much more likely to appear overnight than most other categories.</li>
-</ul>
-<p>This is a good example of what "utility" means in practice. The goal is not merely to generate realistic timestamps. The goal is to preserve when different kinds of transactions tend to happen.</p>
-<h3 id="amount-distributions">Amount Distributions<a class="headerlink" href="#amount-distributions" title="Permanent link">&para;</a></h3>
-<p>Financial datasets are dominated by tails: most transactions are small, but a few categories create high-value transactions. Synthetic data needs to preserve that shape or downstream analytics will be misleading.</p>
-<p><img alt="Amount distributions" src="../assets/does-nss-actually-work/amount-distributions.png" /></p>
-<p>The overall distribution is close:</p>
-<ul>
-<li>Median amount: <code>$68.21</code> original vs. <code>$61.87</code> synthetic</li>
-<li>90<sup>th</sup> percentile: <code>$278.16</code> original vs. <code>$249.64</code> synthetic</li>
-<li>99<sup>th</sup> percentile: <code>$2,066.39</code> original vs. <code>$2,384.10</code> synthetic</li>
-</ul>
-<p>The central mass is close, and the high-value tail remains in the right range. That is especially important for financial use cases, where risk models, anomaly detection, and forecasting workflows are often sensitive to rare but high-impact transactions.</p>
-<h2 id="so-does-it-work">So, Does It Work?<a class="headerlink" href="#so-does-it-work" title="Permanent link">&para;</a></h2>
-<p>I hope after reading this article, your answer is Yes!</p>
-<p>NeMo Safe Synthesizer produced novel synthetic rows and transaction sequences, achieved high privacy scores, and preserved statistical patterns in the source data. The synthetic dataset is best understood as another sample from the same broader transaction population: individual values will differ from the source sample, but the category mix, timing behavior, and amount distributions should remain within a useful range.</p>
-<p>That is the practical promise of safe synthetic data: not a perfect clone, and not random fake data, but a privacy-aware substitute that retains enough signal for meaningful development, analysis, and model experimentation.</p>
-<h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
-<p>The <a href="../../tutorials/time-series-financial-transactions/">full financial transactions notebook</a> contains the runnable NeMo Safe Synthesizer job, prerequisites, analysis code, and chart generation used in this dev note.</p>
-<p>Have questions or want to share what you are building? Open a <a href="https://github.com/NVIDIA-NeMo/Safe-Synthesizer/discussions">GitHub discussion</a> or file a <a href="https://github.com/NVIDIA-NeMo/Safe-Synthesizer/issues">feature request</a>.</p>
+<p>Across 39 comparisons, the experiment shows up to 10.0x generation speedup and a 1.62x median generation speedup. The largest gains appear when the assembler-observed generation cap is far below the old 12,288-token context cap.</p>
+<p>This improvement is included in NeMo Safe Synthesizer <code>v0.0.6</code> and later.</p>
 
 
 
@@ -9428,7 +9186,7 @@
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../private-by-design-introducing-nemo-safe-synthesizer/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Private by Design: Introducing NeMo Safe Synthesizer">
+          <a href="../does-nemo-safe-synthesizer-actually-work-a-case-study-with-financial-transactions-data/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Does NeMo Safe Synthesizer Actually Work? A Case Study with Financial Transactions Data">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -9438,27 +9196,11 @@
                 Previous
               </span>
               <div class="md-ellipsis">
-                Private by Design: Introducing NeMo Safe Synthesizer
+                Does NeMo Safe Synthesizer Actually Work? A Case Study with Financial Transactions Data
               </div>
             </div>
           </a>
         
-        
-          
-          <a href="../speeding-up-nemo-safe-synthesizer-generation-with-prompt-aware-token-budgets/" class="md-footer__link md-footer__link--next" aria-label="Next: Speeding Up NeMo Safe Synthesizer Generation with Prompt-Aware Token Budgets">
-            <div class="md-footer__title">
-              <span class="md-footer__direction">
-                Next
-              </span>
-              <div class="md-ellipsis">
-                Speeding Up NeMo Safe Synthesizer Generation with Prompt-Aware Token Budgets
-              </div>
-            </div>
-            <div class="md-footer__button md-icon">
-              
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
-            </div>
-          </a>
         
       </nav>
     
