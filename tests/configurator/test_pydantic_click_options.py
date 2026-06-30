@@ -120,6 +120,12 @@ def test_parse_overrides_empty_segment_raises():
         parse_overrides({"a____b": "x"})
 
 
+@pytest.mark.parametrize("key", [".a", "a.", "a..b"])
+def test_parse_overrides_custom_separator_rejects_empty_segments(key: str):
+    with pytest.raises(ValueError, match=repr(key)):
+        parse_overrides({key: "x"}, field_sep=".")
+
+
 def test_parse_overrides_no_flag_then_nested_override():
     """Nested override takes precedence over --no_ flag for same field."""
     result = parse_overrides({"no_privacy": True, "privacy__epsilon": 1.0})

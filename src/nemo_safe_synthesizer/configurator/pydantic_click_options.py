@@ -29,6 +29,7 @@ from pydantic.fields import FieldInfo
 from typing_extensions import TypeIs
 
 from ..config.types import AUTO_STR
+from .parameter_paths import insert_parameter_value, split_parameter_path
 
 __all__ = ["pydantic_options", "parse_overrides", "AutoParamType"]
 
@@ -70,21 +71,11 @@ def parse_overrides(values: dict[str, Any] | None = None, field_sep: str = "__")
             continue
         if v is None:
             continue
-        match k.split(field_sep):
-            case [key]:
-                overrides[key] = v
-            case [first, *rest, last] if all(rest) and last:
-                target = overrides
-                if not isinstance(target.get(first), dict):
-                    target[first] = {}
-                target = target[first]
-                for part in rest:
-                    if not isinstance(target.get(part), dict):
-                        target[part] = {}
-                    target = target[part]
-                target[last] = v
-            case _:
-                raise ValueError(f"Invalid override key: {k!r}")
+        try:
+            path = split_parameter_path(k, field_sep)
+        except ValueError as error:
+            raise ValueError(f"Invalid override key: {k!r}") from error
+        insert_parameter_value(overrides, path, v)
     return overrides
 
 

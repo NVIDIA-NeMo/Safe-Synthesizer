@@ -10,6 +10,13 @@ from typing import Self, TypeAlias
 from pydantic import BaseModel, Field, model_validator
 from typing_extensions import override
 
+from ..configurator.parameter_paths import (
+    AmbiguousParameterName,
+    ParameterPath,
+    ParameterSchema,
+    ResolvedParameterName,
+    UnknownParameterName,
+)
 from ..configurator.parameters import Parameters
 from ..errors import ParameterError
 from ..observability import get_logger
@@ -102,6 +109,22 @@ _LEGACY_FLAT_PATHS: dict[str, tuple[str, ...]] = {
     "structured_generation_schema_method": ("generation", "structured_generation", "schema_method"),
     "structured_generation_use_single_sequence": ("generation", "structured_generation", "use_single_sequence"),
 }
+
+
+def _resolve_parameter_name(schema: ParameterSchema, name: str) -> ParameterPath:
+    """Resolve one ``from_params`` name while retaining legacy alias policy."""
+    if name not in schema.model_type.model_fields and name in _LEGACY_FLAT_PATHS:
+        return ParameterPath(_LEGACY_FLAT_PATHS[name])
+
+    match schema.resolve(name):
+        case ResolvedParameterName() as resolved:
+            return resolved.path
+        case UnknownParameterName() as unknown:
+            kind = "path" if "." in name else "name"
+            raise ParameterError(f"Unknown parameter {kind} {unknown.name!r}.")
+        case AmbiguousParameterName() as ambiguous:
+            choices = ", ".join(str(path) for path in ambiguous.candidates)
+            raise ParameterError(f"Ambiguous parameter name {ambiguous.name!r}; use one of: {choices}.")
 
 
 class SafeSynthesizerParameters(Parameters):
@@ -254,47 +277,17 @@ class SafeSynthesizerParameters(Parameters):
             >>> from nemo_safe_synthesizer.config import SafeSynthesizerParameters
             >>> SafeSynthesizerParameters.from_params(structured_generation={"enabled": True})
         """
-        section_defaults: dict[str, Parameters] = {
-            "training": TrainingHyperparams(),
-            "generation": GenerateParameters(),
-            "evaluation": EvaluationParameters(),
-            "privacy": DifferentialPrivacyHyperparams(),
-            "data": DataParameters(),
-            "time_series": TimeSeriesParameters(),
-            "preflight": PreflightParameters(),
-        }
-        top_level_fields = set(cls.model_fields)
-        default_params = cls()
-        field_index: dict[str, list[tuple[str, ...]]] = {}
-        for section_name, section in section_defaults.items():
-            for path, _ in section._iter_field_paths((section_name,)):
-                field_index.setdefault(path[-1], []).append(path)
-
-        path_assignments: dict[tuple[str, ...], object] = {}
+        schema = ParameterSchema.from_model(cls)
+        path_assignments: dict[ParameterPath, object] = {}
         for name, value in kwargs.items():
-            if "." in name:
-                path = tuple(name.split("."))
-                if not default_params.has(name):
-                    raise ParameterError(f"Unknown parameter path {name!r}.")
-            elif name in top_level_fields:
-                path = (name,)
-            elif name in _LEGACY_FLAT_PATHS:
-                path = _LEGACY_FLAT_PATHS[name]
-            else:
-                matches = field_index.get(name, [])
-                if not matches:
-                    raise ParameterError(f"Unknown parameter name {name!r}.")
-                if len(matches) > 1:
-                    candidates = ", ".join(".".join(path) for path in matches)
-                    raise ParameterError(f"Ambiguous parameter name {name!r}; use one of: {candidates}.")
-                path = matches[0]
+            path = _resolve_parameter_name(schema, name)
             if path in path_assignments:
-                raise ParameterError(f"Duplicate parameter path {'.'.join(path)!r}.")
+                raise ParameterError(f"Duplicate parameter path {str(path)!r}.")
             path_assignments[path] = value
 
         patch: dict[str, object] = {}
-        for path, value in sorted(path_assignments.items(), key=lambda item: len(item[0])):
-            _assign_path(patch, path, value)
+        for path, value in sorted(path_assignments.items(), key=lambda item: len(item[0].parts)):
+            _assign_path(patch, path.parts, value)
 
         return cls.model_validate(patch)
 

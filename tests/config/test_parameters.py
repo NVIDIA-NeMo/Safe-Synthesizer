@@ -9,8 +9,16 @@ import pytest
 from pydantic import Field, ValidationError
 
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
-from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
+from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig, StepDefinition
 from nemo_safe_synthesizer.config.training import QuantizationScheme
+from nemo_safe_synthesizer.configurator.parameter_paths import (
+    AmbiguousParameterName,
+    ParameterFieldKind,
+    ParameterSchema,
+    ResolvedParameterName,
+    UnknownParameterName,
+    classify_parameter_annotation,
+)
 from nemo_safe_synthesizer.configurator.parameters import Parameters
 from nemo_safe_synthesizer.errors import ParameterError
 
@@ -190,6 +198,43 @@ def test_from_params_rejects_duplicate_specific_parameter_paths():
 def test_from_params_rejects_unknown_flat_parameter():
     with pytest.raises(ParameterError, match="Unknown parameter name 'not_a_parameter'"):
         SafeSynthesizerParameters.from_params(not_a_parameter=True)
+
+
+def test_parameter_schema_indexes_optional_branches_without_an_instance():
+    with patch.object(SafeSynthesizerParameters, "__init__", side_effect=AssertionError("model instantiated")):
+        schema = ParameterSchema.from_model(SafeSynthesizerParameters)
+    fields = {str(field.path): field.kind for field in schema.fields}
+
+    assert "privacy" in fields
+    assert fields["privacy"] is ParameterFieldKind.BRANCH
+    assert fields["privacy.dp_enabled"] is ParameterFieldKind.LEAF
+    assert isinstance(schema.resolve("privacy.dp_enabled"), ResolvedParameterName)
+    assert isinstance(schema.resolve("privacy.not_a_field"), UnknownParameterName)
+
+
+def test_parameter_schema_reports_ambiguous_bare_names_with_candidates():
+    result = ParameterSchema.from_model(SafeSynthesizerParameters).resolve("enabled")
+
+    assert isinstance(result, AmbiguousParameterName)
+    assert {str(path) for path in result.candidates} >= {
+        "evaluation.enabled",
+        "generation.structured_generation.enabled",
+    }
+
+
+def test_mapping_valued_step_vars_annotation_is_a_leaf():
+    annotation = StepDefinition.model_fields["vars"].annotation
+
+    assert classify_parameter_annotation(annotation) is ParameterFieldKind.LEAF
+
+
+def test_parameters_queries_remain_instance_based_for_disabled_optional_branch():
+    params = SafeSynthesizerParameters(privacy=None)
+    schema_result = ParameterSchema.from_model(SafeSynthesizerParameters).resolve("privacy.dp_enabled")
+
+    assert params.get("privacy.dp_enabled", "missing") == "missing"
+    assert params.has("privacy.dp_enabled") is False
+    assert isinstance(schema_result, ResolvedParameterName)
 
 
 def test_from_config_patch_validates_sparse_config():
