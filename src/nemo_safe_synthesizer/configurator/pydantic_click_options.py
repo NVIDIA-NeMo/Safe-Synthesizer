@@ -54,8 +54,8 @@ def parse_overrides(values: dict[str, Any] | None = None, field_sep: str = "__")
         field_sep: Separator used to reconstruct nesting.  For example, ``{"data__holdout": 0.1}`` becomes ``{"data": {"holdout": 0.1}}``.
 
     Returns:
-        A nested dict suitable for ``model_validate()`` or for merging
-        with a loaded config via ``merge_dicts()``.
+        A nested dictionary suitable for schema-aware config patching or direct
+        model validation.
 
     Raises:
         ValueError: If a key contains empty segments (e.g. consecutive

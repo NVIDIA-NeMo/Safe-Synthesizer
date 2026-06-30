@@ -193,26 +193,21 @@ class SafeSynthesizerParameters(Parameters):
     @classmethod
     @override
     def from_params(cls, **kwargs: object) -> "SafeSynthesizerParameters":
-        """Convert singular, flat parameters to nested structure.
+        """Construct parameters from resolved keyword names.
 
-          Takes a flat dictionary of parameters, where keys correspond to
-          attributes of the nested parameter classes, and constructs a
-          ``SafeSynthesizerParameters`` instance with the appropriate nested
-          structure, using default values for each subgroup that are not
-          explicitly provided.
+        Names may be top-level fields, canonical dotted paths, unique bare leaf
+        names, or supported legacy aliases. Ambiguous bare names raise an error
+        that lists the canonical dotted alternatives.
 
-          Args:
-              **kwargs: Flat key-value pairs that map to attributes of the
-                  nested parameter classes (e.g., ``TrainingHyperparams``,
-                  ``GenerateParameters``).
+        Args:
+            **kwargs: Values keyed by a supported parameter name.
 
-          Returns:
-              A fully initialized ``SafeSynthesizerParameters`` instance with
-              nested sub-configurations populated from the provided values.
+        Returns:
+            A validated configuration with unspecified fields defaulted.
 
         Example:
             >>> from nemo_safe_synthesizer.config import SafeSynthesizerParameters
-            >>> SafeSynthesizerParameters.from_params(structured_generation={"enabled": True})
+            >>> SafeSynthesizerParameters.from_params(num_records=2000)
         """
         schema = ParameterSchema.from_model(cls)
         assignments: list[PatchAssignment] = []

@@ -433,17 +433,17 @@ def _initialize_logging_for_cli_from_settings(
 
 
 def merge_overrides(config_path: str | Path | None, overrides: ConfigPatch) -> SafeSynthesizerParameters:
-    """Merge overrides into a SafeSynthesizerParameters object.
+    """Apply schema-aware overrides to a ``SafeSynthesizerParameters`` object.
 
-    If config_path is None, use the overrides to create a new SafeSynthesizerParameters object.
-    Otherwise, merge the overrides into the config file.
+    If ``config_path`` is ``None``, validate the sparse overrides as a new
+    configuration. Otherwise, apply them on top of the loaded YAML config.
 
     Args:
         config_path: Path to config file (YAML)
-        overrides: Dictionary of override values
+        overrides: Sparse nested override values.
 
     Returns:
-        Merged SafeSynthesizerParameters
+        Validated parameters with the overrides applied.
     """
     try:
         if config_path is None:

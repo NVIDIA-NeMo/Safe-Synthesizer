@@ -28,10 +28,9 @@ logger = get_logger(__name__)
 
 DataSource = pd.DataFrame | str
 RawConfig: TypeAlias = Mapping[str, object]
-ParamDict: TypeAlias = RawConfig
 
 
-class ConfigBuilder(object):
+class ConfigBuilder:
     """Fluent builder for assembling Safe Synthesizer configuration.
 
     Accumulates per-section configuration objects (data, training,
@@ -40,11 +39,10 @@ class ConfigBuilder(object):
     ``SafeSynthesizer`` do it) to collapse them into a single
     ``SafeSynthesizerParameters``.
 
-    Each ``with_*`` method accepts an optional typed config object or
-    a raw mapping, plus ``**kwargs`` overrides.  ``kwargs`` always take
-    precedence over fields in the config/mapping.  All ``with_*`` methods
-    return ``Self`` so subclasses preserve their concrete type through
-    fluent chains.
+    Each ``with_*`` method accepts an optional sparse typed config or raw
+    mapping, plus ``**kwargs`` overrides. Keyword arguments take precedence
+    over fields in the source. All ``with_*`` methods return ``Self`` so
+    subclasses preserve their concrete type through fluent chains.
 
     Args:
         config: Optional pre-built parameters.  When supplied, the

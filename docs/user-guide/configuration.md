@@ -58,37 +58,77 @@ for more detail on combining config files with runtime overrides.
 
 ### Python Parameter Construction
 
-The Python SDK accepts both fully nested config objects and compatibility
-shortcuts for fields on top-level parameter sections:
+`SafeSynthesizerParameters.from_params()` accepts four forms of keyword name:
+
+- top-level fields such as `generation` or `replace_pii`;
+- canonical dotted paths such as `generation.num_records`;
+- bare leaf names such as `num_records`, when that leaf name is unique in the
+  configuration schema; and
+- legacy structured-generation aliases, retained for compatibility.
+
+Python syntax requires dotted names to be passed through `**` expansion:
 
 ```python
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 
 config = SafeSynthesizerParameters.from_params(
-    num_records=2000,  # generation.num_records
-    dp_enabled=True,  # privacy.dp_enabled
-    structured_generation={"enabled": True},  # generation.structured_generation.enabled
+    generation={"temperature": 0.8},  # top-level section
+    num_records=2000,  # unique bare leaf
+    **{"generation.structured_generation.enabled": True},  # dotted path
 )
 ```
 
-Flat keyword arguments are matched by field name against the top-level parameter
-sections. Use the nested shape for fields inside nested subobjects, especially
-when a generic field name could appear in multiple places:
+An ambiguous bare name raises an error and lists the accepted dotted paths. For
+example, `enabled` appears in more than one section, so specify the intended
+path:
 
 ```python
-# Preferred: unambiguous nested form.
 SafeSynthesizerParameters.from_params(
-    structured_generation={"enabled": True},
+    **{"generation.structured_generation.enabled": True}
 )
-
-# Also valid: fully nested generation section.
-SafeSynthesizerParameters.from_params(
-    generation={"structured_generation": {"enabled": True}},
-)
-
-# Avoid: this configures evaluation.enabled, not structured generation.
-SafeSynthesizerParameters.from_params(enabled=True)
 ```
+
+Legacy aliases such as `use_structured_generation` and
+`structured_generation_backend` remain accepted. New code should use the
+canonical nested shape or dotted path.
+
+### Sparse Sources and Explicit Values
+
+Absence, explicit `None`, and an explicit value equal to the model default are
+different inputs. An absent field inherits the next lower-precedence source or
+its model default. `None` is applied when the field accepts it, and an explicitly
+supplied default value still counts as an override.
+
+SDK section methods accept a sparse model or mapping as their source. Keyword
+arguments have higher precedence than that source, while omitted source fields
+retain model defaults:
+
+```python
+synthesizer.with_generate({"temperature": 0.8}, num_records=2000)
+```
+
+A mapping is a branch only when its schema field is another Pydantic model.
+Mapping-valued leaf fields, such as free-form dictionaries, are replaced as one
+atomic value rather than recursively merged.
+
+Persistence with `exclude_unset=True` follows Pydantic's explicit-field
+metadata. Sparse model sources also inspect nested explicit fields recursively,
+so an in-place mutation such as
+`source.validation.group_by_fix_unordered_records = True` is captured when that
+model is used as a patch input. Unrelated defaults remain implicit.
+
+Raw mapping sources retain the established behavior of ignoring unknown extra
+keys. After a name has been resolved to a canonical path, however, that path is
+strict: unknown paths and paths that descend through an atomic leaf raise an
+error.
+
+### Resume-Time Overrides
+
+When generation resumes from a saved training run, runtime configuration may
+override only `generation`, `evaluation`, and `emit_telemetry`. Telemetry is
+overridden only when the runtime input explicitly sets it. Saved `training`,
+`data`, `privacy`, PII replacement, time-series, and preflight settings remain
+unchanged.
 
 ---
 
