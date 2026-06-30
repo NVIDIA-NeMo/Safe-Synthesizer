@@ -298,6 +298,7 @@ class VllmBackend(GeneratorBackend):
             self.llm = vLLM(
                 model=model_ref.target(),
                 gpu_memory_utilization=max_vram,
+                max_model_len=self.model_metadata.max_seq_length,
                 enable_lora=True,
                 max_lora_rank=self.config.training.lora_r,
                 structured_outputs_config=structured_outputs_config,

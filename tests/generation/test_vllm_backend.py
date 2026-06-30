@@ -393,6 +393,7 @@ class TestInitializeModelRef:
 
         assert backend.llm is mock_llm
         assert mock_vllm.call_args.kwargs["model"] == str(snapshot)
+        assert mock_vllm.call_args.kwargs["max_model_len"] == mock_model_metadata.max_seq_length
         assert mock_vllm.call_args.kwargs["trust_remote_code"] is True
 
     def test_initialize_caches_engine_runtime_config(
