@@ -135,9 +135,7 @@ class ParameterSchema:
         return ResolvedParameterName(candidates[0])
 
 
-def _iter_parameter_fields(
-    model_type: type[Parameters], prefix: tuple[str, ...] = ()
-) -> tuple[ParameterField, ...]:
+def _iter_parameter_fields(model_type: type[Parameters], prefix: tuple[str, ...] = ()) -> tuple[ParameterField, ...]:
     fields: list[ParameterField] = []
     for name, field_info in model_type.model_fields.items():
         path = ParameterPath((*prefix, name))

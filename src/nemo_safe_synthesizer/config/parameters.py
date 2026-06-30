@@ -26,6 +26,7 @@ from .data import DataParameters
 from .differential_privacy import DifferentialPrivacyHyperparams
 from .evaluate import EvaluationParameters
 from .generate import GenerateParameters
+from .patch import CompiledConfigPatch, PatchAssignment
 from .preflight import PreflightParameters
 from .replace_pii import PiiReplacerConfig
 from .time_series import TimeSeriesParameters
@@ -75,32 +76,6 @@ def _overlay_set_fields(saved: Parameters, runtime: Parameters) -> Parameters:
     if not overrides:
         return saved
     return saved.model_validate(merge_dicts(saved.model_dump(), overrides))
-
-
-def _section_patch(value: object) -> _SectionPatch | None:
-    """Convert a section value to a mutable patch dict when nested fields can merge into it."""
-    if isinstance(value, BaseModel):
-        return value.model_dump(exclude_unset=True)
-    if isinstance(value, Mapping):
-        return {str(key): item for key, item in value.items()}
-    return None
-
-
-def _assign_path(target: dict[str, object], path: tuple[str, ...], value: object) -> None:
-    """Assign ``value`` into ``target`` at a dotted config path."""
-    head, *tail = path
-    if not tail:
-        target[head] = value
-        return
-
-    if head not in target:
-        nested: dict[str, object] = {}
-        target[head] = nested
-    elif (nested := _section_patch(target[head])) is not None:
-        target[head] = nested
-    else:
-        raise ParameterError(f"Cannot assign nested parameter path {'.'.join(path)!r}; {head!r} is already set.")
-    _assign_path(nested, tuple(tail), value)
 
 
 _LEGACY_FLAT_PATHS: dict[str, tuple[str, ...]] = {
@@ -278,23 +253,21 @@ class SafeSynthesizerParameters(Parameters):
             >>> SafeSynthesizerParameters.from_params(structured_generation={"enabled": True})
         """
         schema = ParameterSchema.from_model(cls)
-        path_assignments: dict[ParameterPath, object] = {}
+        assignments: list[PatchAssignment] = []
+        resolved_paths: set[ParameterPath] = set()
         for name, value in kwargs.items():
             path = _resolve_parameter_name(schema, name)
-            if path in path_assignments:
+            if path in resolved_paths:
                 raise ParameterError(f"Duplicate parameter path {str(path)!r}.")
-            path_assignments[path] = value
+            resolved_paths.add(path)
+            assignments.append(PatchAssignment(path, value, f"parameter {name!r}", 0))
 
-        patch: dict[str, object] = {}
-        for path, value in sorted(path_assignments.items(), key=lambda item: len(item[0].parts)):
-            _assign_path(patch, path.parts, value)
-
-        return cls.model_validate(patch)
+        return CompiledConfigPatch.from_paths(cls, assignments).apply()
 
     @classmethod
     def from_config_patch(cls, patch: ConfigPatch) -> Self:
         """Validate a sparse top-level config patch as a full configuration."""
-        return cls.model_validate(patch)
+        return CompiledConfigPatch.from_mapping(cls, patch, origin="config patch", precedence=0).apply()
 
     def with_config_patch(self, patch: ConfigPatch) -> Self:
         """Apply a sparse top-level config patch and revalidate the result.
@@ -303,8 +276,15 @@ class SafeSynthesizerParameters(Parameters):
         applying ``patch``. This preserves file/CLI precedence while keeping
         default values implicit for future ``exclude_unset`` dumps.
         """
-        params = merge_dicts(self.model_dump(exclude_unset=True), patch)
-        return type(self).model_validate(params)
+        model_type = type(self)
+        base = CompiledConfigPatch.from_mapping(
+            model_type,
+            self.model_dump(exclude_unset=True),
+            origin="base config",
+            precedence=0,
+        )
+        override = CompiledConfigPatch.from_mapping(model_type, patch, origin="config patch", precedence=1)
+        return base.combine(override).apply()
 
     def with_runtime_overrides(self, runtime: SafeSynthesizerParameters) -> "SafeSynthesizerParameters":
         """Apply resume-time generation/evaluation/telemetry overrides onto a copy of self.

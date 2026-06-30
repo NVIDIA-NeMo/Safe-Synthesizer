@@ -243,19 +243,43 @@ def test_from_config_patch_validates_sparse_config():
     assert config.replace_pii is None
 
 
-def test_with_config_patch_merges_sparse_patch_and_keeps_defaults_implicit():
+@pytest.mark.parametrize(
+    ("patch", "expected"),
+    [
+        ({"unknown": True}, {}),
+        ({"generation": {"unknown": True}}, {"generation": {}}),
+    ],
+)
+def test_from_config_patch_ignores_unknown_mapping_keys(patch: dict[str, object], expected: dict[str, object]):
+    config = SafeSynthesizerParameters.from_config_patch(patch)
+
+    assert config.model_dump(exclude_unset=True) == expected
+
+
+def test_with_config_patch_ignores_unknown_mapping_keys_and_preserves_sparse_base():
+    config = SafeSynthesizerParameters.model_validate({"generation": {"num_records": 77}})
+
+    merged = config.with_config_patch({"unknown": True, "generation": {"unknown": True, "temperature": 0.7}})
+
+    assert merged.model_dump(exclude_unset=True) == {"generation": {"num_records": 77, "temperature": 0.7}}
+
+
+def test_with_config_patch_keeps_validator_and_factory_defaults_implicit():
     config = SafeSynthesizerParameters.model_validate({"generation": {"num_records": 77}})
 
     merged = config.with_config_patch({"generation": {"temperature": 0.7}, "training": {"batch_size": 4}})
 
     assert merged.generation.num_records == 77
     assert merged.generation.temperature == 0.7
-    assert merged.generation.use_structured_generation is False
+    assert merged.generation.structured_generation.enabled is False
     assert merged.training.batch_size == 4
-    assert merged.model_dump(exclude_unset=True) == {
-        "generation": {"num_records": 77, "temperature": 0.7},
-        "training": {"batch_size": 4},
-    }
+    sparse = merged.model_dump(exclude_unset=True)
+    assert sparse["generation"] == {"num_records": 77, "temperature": 0.7}
+    assert sparse["training"] == {"batch_size": 4}
+    assert "data" not in sparse
+    assert "replace_pii" not in sparse
+    assert "evaluation" not in sparse
+    assert "time_series" not in sparse
 
 
 class _LeftParameters(Parameters):
