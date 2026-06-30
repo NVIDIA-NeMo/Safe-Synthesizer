@@ -1,7 +1,7 @@
 ---
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-date: 2026-06-16
+date: 2026-06-30
 authors:
   - seayang
   - mvansegbroeck
@@ -18,6 +18,8 @@ Our experiments show up to 10.0x generation speedup, a 1.62x median speedup acro
 This improvement shipped in NeMo Safe Synthesizer `v0.0.6`.
 
 <!-- more -->
+
+![Prompt-aware token budgets deliver up to 10.0x generation speedup with quality held steady](assets/generation-speedup/prompt-aware-token-budgets-hero.png)
 
 ## The Discovery
 
@@ -57,6 +59,8 @@ By using `generation_cap_tokens` for the vLLM sampling params, we restrict gener
 
 We compared the new generation path, the `experiment` arm, with the previous implementation, the `control` arm, across 13 benchmark datasets. We ran 3 replications for each dataset and arm, and focus our analysis on generation time.
 
+The experiment used an NVIDIA H100 80GB GPU HBM3, the `HuggingFaceTB/SmolLM3-3B` model, and the vLLM generation backend (0.18.0) with a roughly 3,000-record generation target.
+
 The speedup is not expected to be uniform across datasets. The implementation can only remove unneeded decode budget, so the generation cap should predict where the speedup appears. Datasets with much smaller prompt-aware caps should benefit the most. Datasets whose examples already use most of the context window should stay closer to parity.
 
 ### Raw Time
@@ -90,7 +94,7 @@ budget_reduction_factor = old_context_cap / new_generation_cap
 
 ![Generation speedup versus token budget reduction](assets/generation-speedup/budget_reduction_vs_generation_speedup_dot.png){: style="max-width: 720px; width: 100%; display: block; margin: 1.25rem auto;"}
 
-The result supports the expected mechanism. The largest generation speedups appear when the new implementation reduces the token budget the most. The control run pays for that extra budget on all datasets, while the new generation path adjusts the token cap based on the dataset.
+The result supports the expected mechanism. The largest generation speedups appear when the new implementation reduces the token budget the most. The previous generation path permits the full token ceiling on every dataset, while the new generation path adjusts the ceiling based on the dataset. That extra ceiling only becomes runtime cost when a completion keeps decoding toward it.
 
 ## Quality and Validity Check
 
