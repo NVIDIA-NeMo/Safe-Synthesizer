@@ -101,7 +101,7 @@ supplied default value still counts as an override.
 
 SDK section methods accept a sparse model or mapping as their source. Keyword
 arguments have higher precedence than that source, while omitted source fields
-retain model defaults:
+retain the current lower-precedence configuration values:
 
 ```python
 synthesizer.with_generate({"temperature": 0.8}, num_records=2000)

@@ -16,6 +16,7 @@ from ..config import (
     EvaluationParameters,
     GenerateParameters,
     PiiReplacerConfig,
+    PreflightParameters,
     SafeSynthesizerParameters,
     TimeSeriesParameters,
     TrainingHyperparams,
@@ -56,6 +57,7 @@ class ConfigBuilder:
             self._emit_telemetry_config = self._nss_config.emit_telemetry
             self._evaluation_config = self._nss_config.evaluation
             self._replace_pii_config = self._nss_config.replace_pii
+            self._preflight_config = self._nss_config.preflight
             self._privacy_config: DifferentialPrivacyHyperparams | None = self._nss_config.privacy
             self._training_config = self._nss_config.training
             self._generation_config = self._nss_config.generation
@@ -66,6 +68,7 @@ class ConfigBuilder:
             self._evaluation_config: EvaluationParameters = EvaluationParameters()
             self._generation_config: GenerateParameters = GenerateParameters()
             self._replace_pii_config: PiiReplacerConfig | None = PiiReplacerConfig.get_default_config()
+            self._preflight_config = PreflightParameters()
             self._privacy_config: DifferentialPrivacyHyperparams = DifferentialPrivacyHyperparams()
             self._training_config: TrainingHyperparams = TrainingHyperparams()
             self._time_series_config: TimeSeriesParameters = TimeSeriesParameters()
@@ -248,6 +251,7 @@ class ConfigBuilder:
             privacy=self._privacy_config,
             time_series=self._time_series_config,
             replace_pii=self._replace_pii_config,
+            preflight=self._preflight_config,
             emit_telemetry=self._emit_telemetry_config,
         )
 

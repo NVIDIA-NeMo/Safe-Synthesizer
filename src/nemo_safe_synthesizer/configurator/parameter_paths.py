@@ -161,12 +161,18 @@ def split_parameter_path(name: str, separator: str = ".") -> ParameterPath:
 def insert_parameter_value(target: dict[str, object], path: ParameterPath, value: object) -> None:
     """Insert a value at an already resolved path."""
     current = target
-    for part in path.parts[:-1]:
+    for index, part in enumerate(path.parts[:-1]):
         value_at_part = current.get(part)
         if isinstance(value_at_part, dict):
             current = cast(dict[str, object], value_at_part)
             continue
+        if part in current:
+            prefix = ".".join(path.parts[: index + 1])
+            raise ValueError(f"Conflicting override paths for {str(path)!r}: {prefix!r} already has a parent value.")
         nested: dict[str, object] = {}
         current[part] = nested
         current = nested
-    current[path.parts[-1]] = value
+    leaf = path.parts[-1]
+    if leaf in current:
+        raise ValueError(f"Conflicting override paths for {str(path)!r}: nested values already exist below this path.")
+    current[leaf] = value

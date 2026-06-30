@@ -202,6 +202,13 @@ def test_from_params_rejects_unknown_flat_parameter():
         SafeSynthesizerParameters.from_params(not_a_parameter=True)
 
 
+def test_from_params_rejects_unexpected_parameter_resolution(monkeypatch):
+    monkeypatch.setattr(ParameterSchema, "resolve", lambda _schema, _name: object())
+
+    with pytest.raises(ParameterError, match="Unexpected parameter resolution for 'num_records'"):
+        SafeSynthesizerParameters.from_params(num_records=10)
+
+
 def test_parameter_schema_indexes_optional_branches_without_an_instance():
     with patch.object(SafeSynthesizerParameters, "__init__", side_effect=AssertionError("model instantiated")):
         schema = ParameterSchema.from_model(SafeSynthesizerParameters)

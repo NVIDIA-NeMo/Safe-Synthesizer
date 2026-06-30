@@ -13,6 +13,8 @@ from nemo_safe_synthesizer.config import (
     DifferentialPrivacyHyperparams,
     EvaluationParameters,
     GenerateParameters,
+    PreflightParameters,
+    SafeSynthesizerParameters,
     TimeSeriesParameters,
     TrainingHyperparams,
 )
@@ -193,6 +195,15 @@ def test_resolved_config_is_independent_of_mapping_source():
 
     assert builder._nss_config is not None
     assert builder._nss_config.evaluation.pii_replay_entities == ["email"]
+
+
+def test_resolve_preserves_preflight_from_existing_config():
+    config = SafeSynthesizerParameters(preflight=PreflightParameters(disabled_checks=["gpu.vram"]))
+
+    builder = ConfigBuilder(config).with_data_source(pd.DataFrame({"value": [1]})).resolve()
+
+    assert builder._nss_config is not None
+    assert builder._nss_config.preflight.disabled_checks == ["gpu.vram"]
 
 
 def test_direct_assembly_preserves_classify_model_provider_injection():

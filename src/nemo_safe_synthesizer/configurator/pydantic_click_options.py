@@ -59,7 +59,8 @@ def parse_overrides(values: dict[str, Any] | None = None, field_sep: str = "__")
 
     Raises:
         ValueError: If a key contains empty segments (e.g. consecutive
-            separators like ``a____b``).
+            separators like ``a____b``), or parent and child overrides target
+            incompatible values.
     """
     if not values:
         return {}
@@ -67,7 +68,7 @@ def parse_overrides(values: dict[str, Any] | None = None, field_sep: str = "__")
     for k, v in values.items():
         if k.startswith("no_") and isinstance(v, bool):
             if v:
-                overrides[k[3:]] = None
+                insert_parameter_value(overrides, split_parameter_path(k[3:], field_sep), None)
             continue
         if v is None:
             continue
