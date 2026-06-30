@@ -113,7 +113,7 @@ engine = [
 cpu = [
   "accelerate>=1.1.0",
   "bitsandbytes>=0.46.1",
-  "flashinfer-python==0.6.8.post1; sys_platform=='linux'",
+  "flashinfer-python==0.6.13; sys_platform=='linux'",
   "flashinfer-cubin==0.6.13; sys_platform=='linux'",
   "gliner",
   "kernels>=0.12.1,<0.17",
@@ -137,9 +137,9 @@ cpu = [
 cu129 = [
   "accelerate>=1.1.0",
   "bitsandbytes>=0.46.1",
-  "flashinfer-python==0.6.8.post1; sys_platform == 'linux'",
-  "flashinfer-cubin==0.6.8.post1; sys_platform == 'linux'",
-  "flashinfer-jit-cache==0.6.8.post1+cu129; sys_platform == 'linux'",
+  "flashinfer-python==0.6.13; sys_platform == 'linux'",
+  "flashinfer-cubin==0.6.13; sys_platform == 'linux'",
+  "flashinfer-jit-cache==0.6.13+cu129; sys_platform == 'linux'",
   "gliner",
   "kernels>=0.12.1,<0.17",
   "nvidia-cublas-cu12; sys_platform == 'linux'",
@@ -180,8 +180,8 @@ conflicts = [
 
 
 override-dependencies = [
-    "flashinfer-python==0.6.8.post1; sys_platform != 'darwin'",
-    "flashinfer-cubin==0.6.8.post1; sys_platform != 'darwin'",
+    "flashinfer-python==0.6.13; sys_platform != 'darwin'",
+    "flashinfer-cubin==0.6.13; sys_platform != 'darwin'",
 ]
 
 environments = [
@@ -225,7 +225,7 @@ constraint-dependencies = [
   # here we specifiy the dep's source from which UV should attempt to resolve
   triton = { index = "pytorch-cu129", extra = "cu129" }
   vllm = [
-    { index = "vllm-v0-20-0-cu129", marker = "sys_platform == 'linux'", extra = "cu129" },
+    { index = "vllm-v0-24-0-cu129", marker = "sys_platform == 'linux'", extra = "cu129" },
   ]
 # for torch - we have a "cpu" dep set and "cu129" dep set, specified in the optional dependencies above
   torch = [
@@ -319,7 +319,7 @@ url = "https://flashinfer.ai/whl/cu129"
 explicit = true
 
 [[tool.uv.index]]
-name = "vllm-v0-20-0-cu129"
+name = "vllm-v0-24-0-cu129"
 url = "https://wheels.vllm.ai/ee0da84ab9e04ac7610e28580af62c365e898389/cu129"
 explicit = true
 
