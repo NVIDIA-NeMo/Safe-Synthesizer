@@ -7,7 +7,7 @@ import warnings
 from collections.abc import Mapping
 from typing import Self, TypeAlias
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import Field, model_validator
 from typing_extensions import override
 
 from ..configurator.parameter_paths import (
@@ -21,7 +21,6 @@ from ..configurator.parameters import Parameters
 from ..errors import ParameterError
 from ..observability import get_logger
 from ..telemetry import _telemetry_enabled
-from ..utils import merge_dicts
 from .data import DataParameters
 from .differential_privacy import DifferentialPrivacyHyperparams
 from .evaluate import EvaluationParameters
@@ -34,48 +33,11 @@ from .training import TrainingHyperparams
 from .types import AUTO_STR
 
 ConfigPatch: TypeAlias = Mapping[str, object]
-_SectionPatch: TypeAlias = dict[str, object]
 
 __all__ = ["ConfigPatch", "SafeSynthesizerParameters"]
 
 
 logger = get_logger(__name__)
-
-
-def _collect_set_fields(model: BaseModel) -> _SectionPatch:
-    """Recursively collect a model's explicitly-set fields as a nested dict.
-
-    Unlike ``model_dump(exclude_unset=True)``, nested models are always
-    traversed -- even when the parent did not mark the nested field as set --
-    so in-place mutations of nested fields (e.g.
-    ``cfg.generation.validation.foo = True``) are captured. A nested model is
-    included only when it has at least one set field of its own.
-    """
-    overrides: _SectionPatch = {}
-    for name in type(model).model_fields:
-        value = getattr(model, name)
-        if isinstance(value, BaseModel):
-            nested = _collect_set_fields(value)
-            if nested:
-                overrides[name] = nested
-        elif name in model.__pydantic_fields_set__:
-            overrides[name] = value
-    return overrides
-
-
-def _overlay_set_fields(saved: Parameters, runtime: Parameters) -> Parameters:
-    """Deep-merge ``runtime``'s explicitly-set fields onto ``saved``.
-
-    Only fields ``runtime`` marks as set (recursively, at every nesting level)
-    override ``saved``; unset fields keep their saved values. The merged mapping
-    is revalidated through the model so nested groups and type coercion are
-    handled correctly. Returns ``saved`` unchanged when ``runtime`` sets no
-    fields.
-    """
-    overrides = _collect_set_fields(runtime)
-    if not overrides:
-        return saved
-    return saved.model_validate(merge_dicts(saved.model_dump(), overrides))
 
 
 _LEGACY_FLAT_PATHS: dict[str, tuple[str, ...]] = {
@@ -306,17 +268,18 @@ class SafeSynthesizerParameters(Parameters):
             not affect the other.
         """
         updates: dict[str, object] = {}
-        # Only record sections that actually changed; unchanged sections are
-        # deep-copied by ``model_copy(deep=True)`` below so the returned config
-        # never shares mutable sub-objects with ``self``.
-        generation = _overlay_set_fields(self.generation, runtime.generation)
-        if generation is not self.generation:
+        generation = runtime.generation.explicit_patch().materialize()
+        if generation or "generation" in runtime.model_fields_set:
             updates["generation"] = generation
-        evaluation = _overlay_set_fields(self.evaluation, runtime.evaluation)
-        if evaluation is not self.evaluation:
+        evaluation = runtime.evaluation.explicit_patch().materialize()
+        if evaluation or "evaluation" in runtime.model_fields_set:
             updates["evaluation"] = evaluation
-        # emit_telemetry is a top-level scalar: detect explicit assignment,
-        # since there is no sub-model to inspect for set fields.
-        if "emit_telemetry" in runtime.__pydantic_fields_set__:
+        if "emit_telemetry" in runtime.model_fields_set:
             updates["emit_telemetry"] = runtime.emit_telemetry
-        return self.model_copy(update=updates, deep=True)
+        patch = CompiledConfigPatch.from_mapping(
+            type(self),
+            updates,
+            origin="runtime override",
+            precedence=1,
+        )
+        return self.apply_patch(patch)

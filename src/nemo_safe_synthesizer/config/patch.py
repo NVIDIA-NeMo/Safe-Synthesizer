@@ -97,6 +97,16 @@ class CompiledConfigPatch(Generic[ModelT]):
         _merge_model_mapping(values, self.target_model, self.materialize())
         return self.target_model.model_validate(values)
 
+    def _apply_to_full_model(self, base: ModelT) -> ModelT:
+        """Apply to current full values while retaining sparse field presence."""
+        _require_exact_model(self.target_model, base)
+        patch_values = self.materialize()
+        values = base.model_dump()
+        _merge_model_mapping(values, self.target_model, patch_values)
+        result = self.target_model.model_validate(values)
+        _restore_model_fields_set(result, base, patch_values)
+        return result
+
 
 def _require_model_type(model_type: type[BaseModel]) -> None:
     if not isinstance(model_type, type) or not issubclass(model_type, BaseModel):
@@ -195,6 +205,47 @@ def _extract_set_fields(model: BaseModel) -> dict[str, object]:
         if name in model.model_fields_set:
             extracted[name] = deepcopy(value)
     return extracted
+
+
+def _restore_model_fields_set(result: BaseModel, base: BaseModel, patch: Mapping[str, object]) -> None:
+    """Restore recursive base presence and add fields supplied by ``patch``."""
+    object.__setattr__(result, "__pydantic_fields_set__", set(base.model_fields_set))
+    for name in type(result).model_fields:
+        result_value = result.__dict__[name]
+        if not isinstance(result_value, BaseModel):
+            continue
+        base_value = base.__dict__[name]
+        if isinstance(base_value, BaseModel):
+            _restore_model_fields_set(result_value, base_value, {})
+        else:
+            _clear_model_fields_set(result_value)
+
+    result.__pydantic_fields_set__.update(patch)
+    for name, value in patch.items():
+        result_value = result.__dict__[name]
+        if not isinstance(result_value, BaseModel):
+            continue
+        nested_patch = _branch_mapping(type(result_value), value)
+        if nested_patch is not None:
+            _add_model_fields_set(result_value, nested_patch)
+
+
+def _clear_model_fields_set(model: BaseModel) -> None:
+    object.__setattr__(model, "__pydantic_fields_set__", set())
+    for value in model.__dict__.values():
+        if isinstance(value, BaseModel):
+            _clear_model_fields_set(value)
+
+
+def _add_model_fields_set(model: BaseModel, patch: Mapping[str, object]) -> None:
+    model.__pydantic_fields_set__.update(patch)
+    for name, value in patch.items():
+        model_value = model.__dict__[name]
+        if not isinstance(model_value, BaseModel):
+            continue
+        nested_patch = _branch_mapping(type(model_value), value)
+        if nested_patch is not None:
+            _add_model_fields_set(model_value, nested_patch)
 
 
 def _validate_conflicts(model_type: type[BaseModel], assignments: tuple[PatchAssignment, ...]) -> None:

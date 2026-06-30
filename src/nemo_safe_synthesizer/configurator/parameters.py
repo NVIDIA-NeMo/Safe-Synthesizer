@@ -21,7 +21,7 @@ import typing
 from abc import ABCMeta
 from collections.abc import Generator, Iterator, Mapping
 from pathlib import Path
-from typing import Any, Self, get_args
+from typing import Any, Self, cast, get_args
 
 import yaml
 from pydantic import (
@@ -31,6 +31,7 @@ from pydantic import (
 from ..config.base import (
     pydantic_model_config,
 )
+from ..config.patch import CompiledConfigPatch
 from ..errors import ParameterError
 from .parameter import (
     DataT,
@@ -51,6 +52,58 @@ class Parameters(BaseModel, metaclass=ABCMeta):
     """
 
     model_config = pydantic_model_config
+
+    def explicit_patch(self) -> CompiledConfigPatch[Self]:
+        """Compile this model's recursively explicit fields as a sparse patch.
+
+        Explicit fields inside nested default models are included even when the
+        parent field itself was never assigned. Patch values are deep-copied by
+        the compiler, so later mutations cannot affect patch application.
+        """
+        model_type = type(self)
+        return CompiledConfigPatch.from_model(model_type, self, origin="typed config", precedence=0)
+
+    def apply_patch(self, patch: CompiledConfigPatch[Self]) -> Self:
+        """Overlay a compiled patch on this full model and validate once.
+
+        The base is materialized in full so environment-backed and validator-
+        resolved defaults keep their current values. Patch assignments retain
+        their relative precedence and always follow the base.
+        """
+        return patch._apply_to_full_model(self)
+
+    @classmethod
+    def from_config_source(cls, source: Self | Mapping[str, object] | None = None, **kwargs: object) -> Self:
+        """Normalize one sparse config source plus higher-precedence keyword values.
+
+        ``source`` may be ``None``, an instance of exactly ``cls``, or a raw
+        mapping. Unknown mapping keys retain Pydantic's extra-ignore behavior.
+        A different Pydantic model type is rejected rather than adapted.
+        """
+        match source:
+            case None:
+                source_patch = CompiledConfigPatch.from_mapping(cls, {}, origin="empty config", precedence=0)
+            case BaseModel() as model:
+                if type(model) is not cls:
+                    raise TypeError(f"Expected {cls.__name__}, got {type(model).__name__}")
+                source_patch = CompiledConfigPatch.from_model(
+                    cls,
+                    cast(Self, model),
+                    origin="typed config",
+                    precedence=0,
+                )
+            case Mapping() as mapping:
+                source_patch = CompiledConfigPatch.from_mapping(
+                    cls,
+                    cast(Mapping[str, object], mapping),
+                    origin="mapping config",
+                    precedence=0,
+                )
+            case _:
+                raise TypeError(f"Unsupported config type: {type(source)}")
+
+        overrides = CompiledConfigPatch.from_mapping(cls, kwargs, origin="keyword override", precedence=1)
+        return source_patch.combine(overrides).apply()
 
     def _isparams(self):
         """Marker method used by ``__subclasshook__`` to identify ``Parameters`` subclasses."""

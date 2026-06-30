@@ -2,11 +2,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import warnings
+from collections.abc import Mapping
 from pathlib import Path
+from typing import ClassVar, cast
 from unittest.mock import MagicMock, patch
 
 import pytest
-from pydantic import Field, ValidationError
+from pydantic import Field, ValidationError, model_validator
 
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig, StepDefinition
@@ -295,6 +297,154 @@ class _DuplicateLeafParameters(Parameters):
     right: _RightParameters = Field(default_factory=_RightParameters)
 
 
+class _PresenceParameters(Parameters):
+    left: _LeftParameters = Field(default_factory=_LeftParameters)
+    right: _RightParameters = Field(default_factory=_RightParameters)
+    optional: _LeftParameters | None = Field(default_factory=_LeftParameters)
+
+
+class _MappingParameters(Parameters):
+    payload: dict[str, object] = Field(default_factory=dict)
+
+
+class _OrderedParameters(Parameters):
+    low: int = 1
+    high: int = 2
+
+    @model_validator(mode="after")
+    def validate_order(self):
+        if self.low >= self.high:
+            raise ValueError("low must be less than high")
+        return self
+
+
+class _ValidatedSafeSynthesizerParameters(SafeSynthesizerParameters):
+    validation_runs: ClassVar[int] = 0
+
+    @model_validator(mode="after")
+    def record_validation(self):
+        type(self).validation_runs += 1
+        return self
+
+
+def test_explicit_patch_captures_sparse_nested_in_place_mutation():
+    source = _DuplicateLeafParameters()
+    source.left.value = 17
+
+    result = source.explicit_patch().apply()
+
+    assert result.model_dump(exclude_unset=True) == {"left": {"value": 17}}
+
+
+@pytest.mark.parametrize(
+    ("source", "expected_fields"),
+    [
+        pytest.param(None, set(), id="none"),
+        pytest.param({"value": 5, "ignored": True}, {"value"}, id="mapping"),
+        pytest.param(_LeftParameters(value=7), {"value"}, id="typed"),
+    ],
+)
+def test_from_config_source_normalizes_supported_sources(
+    source: _LeftParameters | Mapping[str, object] | None, expected_fields: set[str]
+):
+    result = _LeftParameters.from_config_source(source)
+
+    assert result.model_fields_set == expected_fields
+
+
+def test_from_config_source_rejects_wrong_exact_model_type():
+    with pytest.raises(TypeError, match=r"Expected _LeftParameters, got _RightParameters"):
+        _LeftParameters.from_config_source(_RightParameters())  # ty: ignore[invalid-argument-type]
+
+
+def test_from_config_source_kwargs_override_source_and_preserve_nested_siblings():
+    result = _DuplicateLeafParameters.from_config_source(
+        {"left": {"value": 4}, "right": {"value": 6}},
+        left={"value": 9},
+    )
+
+    assert result.left.value == 9
+    assert result.right.value == 6
+
+
+def test_from_config_source_copies_mapping_and_returned_mutable_state():
+    nested = {"items": [1]}
+    source = {"payload": nested}
+
+    result = _MappingParameters.from_config_source(source)
+    nested["items"].append(2)  # type: ignore[union-attr]
+    cast(list[int], result.payload["items"]).append(3)
+
+    assert source == {"payload": {"items": [1, 2]}}
+
+
+def test_from_config_source_copies_typed_source_state():
+    source = _MappingParameters(payload={"items": [1]})
+
+    result = _MappingParameters.from_config_source(source)
+    cast(list[int], result.payload["items"]).append(2)
+
+    assert source.payload == {"items": [1]}
+
+
+def test_mapping_valued_atomic_leaf_is_not_parsed_as_model_branch():
+    result = _MappingParameters.from_config_source({"payload": {"unknown": {"nested": True}}})
+
+    assert result.payload == {"unknown": {"nested": True}}
+
+
+def test_apply_patch_preserves_sparse_base_and_runs_validation():
+    base = _OrderedParameters(low=3, high=5)
+    patch = _OrderedParameters.from_config_source({"high": 4}).explicit_patch()
+
+    result = base.apply_patch(patch)
+
+    assert result.model_dump(exclude_unset=True) == {"low": 3, "high": 4}
+    with pytest.raises(ValidationError, match="low must be less than high"):
+        base.apply_patch(_OrderedParameters.from_config_source({"high": 2}).explicit_patch())
+
+
+def test_apply_empty_patch_preserves_recursive_explicit_fields():
+    base = _PresenceParameters()
+    base.left.value = 17
+
+    result = base.apply_patch(_PresenceParameters().explicit_patch())
+
+    assert result.left.value == 17
+    assert result.model_fields_set == set()
+    assert result.left.model_fields_set == {"value"}
+    assert result.right.model_fields_set == set()
+    assert result.optional is not None
+    assert result.optional.model_fields_set == set()
+    assert result.model_dump(exclude_unset=True) == {}
+
+
+def test_apply_nonempty_patch_adds_only_patch_explicit_fields():
+    base = _PresenceParameters.from_config_source({"left": {}})
+    patch = _PresenceParameters.from_config_source(
+        {"left": {"value": 1}, "right": {}, "optional": None}
+    ).explicit_patch()
+
+    result = base.apply_patch(patch)
+
+    assert result.model_fields_set == {"left", "right", "optional"}
+    assert result.left.model_fields_set == {"value"}
+    assert result.right.model_fields_set == set()
+    assert result.optional is None
+    assert result.model_dump(exclude_unset=True) == {
+        "left": {"value": 1},
+        "right": {},
+        "optional": None,
+    }
+
+
+def test_apply_patch_rejects_wrong_exact_target_model():
+    with pytest.raises(TypeError, match=r"target model is _RightParameters.*_LeftParameters"):
+        _LeftParameters().apply_patch(
+            _RightParameters(value=3).explicit_patch()  # ty: ignore[invalid-argument-type] -- runtime rejection tested
+        )
+
+
 def test_parameters_get_supports_explicit_dotted_paths():
     params = _DuplicateLeafParameters()
 
@@ -433,6 +583,70 @@ class TestWithRuntimeOverrides:
         saved = _saved_config()
         saved.with_runtime_overrides(_runtime_num_records())
         assert saved.generation.num_records == 3000
+
+    def test_ignores_explicit_non_runtime_sections(self):
+        saved = _saved_config()
+        runtime = SafeSynthesizerParameters()
+        runtime.training.batch_size = 99
+        assert runtime.privacy is not None
+        runtime.privacy.dp_enabled = True
+
+        merged = saved.with_runtime_overrides(runtime)
+
+        assert merged.training.batch_size == 8
+        assert merged.privacy == saved.privacy
+
+    def test_runs_top_level_validation_once(self):
+        saved = _ValidatedSafeSynthesizerParameters()
+        runtime = SafeSynthesizerParameters.model_validate({"generation": {"num_records": 25}})
+        _ValidatedSafeSynthesizerParameters.validation_runs = 0
+
+        merged = saved.with_runtime_overrides(runtime)
+
+        assert isinstance(merged, _ValidatedSafeSynthesizerParameters)
+        assert _ValidatedSafeSynthesizerParameters.validation_runs == 1
+
+    def test_preserves_saved_implicit_telemetry_when_environment_changes(self, monkeypatch):
+        monkeypatch.setenv("NEMO_TELEMETRY_ENABLED", "false")
+        saved = SafeSynthesizerParameters()
+        monkeypatch.setenv("NEMO_TELEMETRY_ENABLED", "true")
+
+        merged = saved.with_runtime_overrides(SafeSynthesizerParameters())
+
+        assert saved.emit_telemetry is False
+        assert merged.emit_telemetry is False
+
+    def test_empty_overlay_preserves_recursive_explicit_fields(self):
+        saved = SafeSynthesizerParameters()
+        saved.generation.num_records = 3000
+
+        merged = saved.with_runtime_overrides(SafeSynthesizerParameters())
+
+        assert merged.model_fields_set == saved.model_fields_set == set()
+        assert merged.data.max_sequences_per_example == saved.data.max_sequences_per_example == 10
+        assert merged.data.model_fields_set == saved.data.model_fields_set == {"max_sequences_per_example"}
+        assert merged.generation.model_fields_set == saved.generation.model_fields_set == {"num_records"}
+        assert merged.evaluation.model_fields_set == saved.evaluation.model_fields_set == set()
+        assert merged.model_dump(exclude_unset=True) == saved.model_dump(exclude_unset=True) == {}
+
+    def test_nonempty_overlay_adds_only_allowlisted_patch_fields(self):
+        saved = SafeSynthesizerParameters.model_validate({"training": {"batch_size": 8}, "generation": {}})
+        runtime = SafeSynthesizerParameters.model_validate(
+            {"generation": {"num_records": 1000}, "evaluation": {}, "emit_telemetry": False}
+        )
+
+        merged = saved.with_runtime_overrides(runtime)
+
+        assert merged.model_fields_set == {"training", "generation", "evaluation", "emit_telemetry"}
+        assert merged.training.model_fields_set == {"batch_size"}
+        assert merged.generation.model_fields_set == {"num_records"}
+        assert merged.evaluation.model_fields_set == set()
+        assert merged.model_dump(exclude_unset=True) == {
+            "training": {"batch_size": 8},
+            "generation": {"num_records": 1000},
+            "evaluation": {},
+            "emit_telemetry": False,
+        }
 
     def test_returned_config_is_independent_of_saved(self):
         """Mutating the returned config must not affect the original (no shared references)."""

@@ -6,10 +6,9 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Self, TypeAlias, TypeVar, overload
+from typing import Self, TypeAlias
 
 import pandas as pd
-from pydantic import BaseModel
 
 from ..config import (
     DataParameters,
@@ -23,23 +22,10 @@ from ..config import (
 )
 from ..observability import get_logger
 from ..telemetry import _telemetry_enabled
-from ..utils import merge_dicts
 
 logger = get_logger(__name__)
 
 
-NSSParameters = (
-    DataParameters
-    | EvaluationParameters
-    | GenerateParameters
-    | DifferentialPrivacyHyperparams
-    | TimeSeriesParameters
-    | TrainingHyperparams
-    | SafeSynthesizerParameters
-    | PiiReplacerConfig
-)
-
-ParamT = TypeVar("ParamT", bound=BaseModel)
 DataSource = pd.DataFrame | str
 RawConfig: TypeAlias = Mapping[str, object]
 ParamDict: TypeAlias = RawConfig
@@ -67,7 +53,7 @@ class ConfigBuilder(object):
     """
 
     def __init__(self, config: SafeSynthesizerParameters | None = None) -> None:
-        self._nss_config: SafeSynthesizerParameters | None = config
+        self._nss_config = config.model_copy(deep=True) if config is not None else None
         if self._nss_config is not None:
             self._emit_telemetry_config = self._nss_config.emit_telemetry
             self._evaluation_config = self._nss_config.evaluation
@@ -90,53 +76,6 @@ class ConfigBuilder(object):
         self._data_source: DataSource | None = None
         self._classify_model_provider: str | None = None
         self._hf_token_secret: str | None = None
-        self._nss_inputs: list[str] = [
-            "_data_config",
-            "_evaluation_config",
-            "_generation_config",
-            "_replace_pii_config",
-            "_privacy_config",
-            "_training_config",
-            "_time_series_config",
-        ]
-
-    @overload
-    def _resolve_config(self, values: ParamT, cls: type[ParamT], **kwargs: object) -> ParamT: ...
-
-    @overload
-    def _resolve_config(self, values: RawConfig, cls: type[ParamT], **kwargs: object) -> ParamT: ...
-
-    @overload
-    def _resolve_config(self, values: None, cls: type[ParamT], **kwargs: object) -> ParamT: ...
-
-    def _resolve_config(self, values: object, cls: type[ParamT], **kwargs: object) -> ParamT:
-        """Resolve configuration from various input types.
-
-        Precedence: ``kwargs`` override ``values``; ``values`` override
-        model defaults.
-
-        Args:
-            values: Existing config, a raw mapping, or ``None`` for
-                defaults-only.
-            cls: The Pydantic model class to validate against.
-            **kwargs: Field-level overrides applied on top.
-
-        Returns:
-            A validated config instance of type ``cls``.
-        """
-        match values:
-            case None:
-                return cls.model_validate(kwargs)
-            case BaseModel() as model:
-                if not isinstance(model, cls):
-                    raise TypeError(f"Expected {cls.__name__}, got {type(model).__name__}")
-                raw_values = model.model_dump(exclude_unset=True)
-                return cls.model_validate(merge_dicts(raw_values, kwargs))
-            case Mapping() as mapping:
-                raw_values = dict(mapping)
-                return cls.model_validate(merge_dicts(raw_values, kwargs))
-            case _:
-                raise TypeError(f"Unsupported config type: {type(values)}")
 
     def with_data_source(self, df_source: DataSource) -> Self:
         """Set the data source for synthetic data generation.
@@ -160,7 +99,7 @@ class ConfigBuilder(object):
         Returns:
             This builder instance with data processing settings applied.
         """
-        self._data_config = self._resolve_config(values=config, cls=DataParameters, **kwargs)
+        self._data_config = DataParameters.from_config_source(config, **kwargs)
         return self
 
     def with_train(self, config: TrainingHyperparams | RawConfig | None = None, **kwargs: object) -> Self:
@@ -173,9 +112,7 @@ class ConfigBuilder(object):
         Returns:
             This builder instance with training hyperparameters applied.
         """
-        self._training_config: TrainingHyperparams | None = self._resolve_config(
-            values=config, cls=TrainingHyperparams, **kwargs
-        )
+        self._training_config = TrainingHyperparams.from_config_source(config, **kwargs)
         return self
 
     def with_generate(self, config: GenerateParameters | RawConfig | None = None, **kwargs: object) -> Self:
@@ -188,9 +125,7 @@ class ConfigBuilder(object):
         Returns:
             This builder instance with generation settings applied.
         """
-        self._generation_config: GenerateParameters | None = self._resolve_config(
-            values=config, cls=GenerateParameters, **kwargs
-        )
+        self._generation_config = GenerateParameters.from_config_source(config, **kwargs)
         return self
 
     def with_time_series(self, config: TimeSeriesParameters | RawConfig | None = None, **kwargs: object) -> Self:
@@ -203,7 +138,7 @@ class ConfigBuilder(object):
         Returns:
             This builder instance with time-series synthesis settings applied.
         """
-        self._time_series_config = self._resolve_config(values=config, cls=TimeSeriesParameters, **kwargs)
+        self._time_series_config = TimeSeriesParameters.from_config_source(config, **kwargs)
         return self
 
     def with_differential_privacy(
@@ -218,7 +153,7 @@ class ConfigBuilder(object):
         Returns:
             This builder instance with differential privacy settings applied.
         """
-        self._privacy_config = self._resolve_config(values=config, cls=DifferentialPrivacyHyperparams, **kwargs)
+        self._privacy_config = DifferentialPrivacyHyperparams.from_config_source(config, **kwargs)
         return self
 
     def with_replace_pii(
@@ -264,13 +199,9 @@ class ConfigBuilder(object):
 
         match config:
             case PiiReplacerConfig() | Mapping() as values:
-                cfg = self._resolve_config(values=values, cls=PiiReplacerConfig, **kwargs)
+                cfg = PiiReplacerConfig.from_config_source(values, **kwargs)
             case None:
-                cfg = self._resolve_config(
-                    values=PiiReplacerConfig.get_default_config(),
-                    cls=PiiReplacerConfig,
-                    **kwargs,
-                )
+                cfg = PiiReplacerConfig.from_config_source(PiiReplacerConfig.get_default_config(), **kwargs)
             case _:
                 raise ValueError(f"Config must be a PiiReplacerConfig, raw mapping, or None, got {config!r}")
 
@@ -287,7 +218,7 @@ class ConfigBuilder(object):
         Returns:
             This builder instance with evaluation settings applied.
         """
-        self._evaluation_config = self._resolve_config(values=config, cls=EvaluationParameters, **kwargs)
+        self._evaluation_config = EvaluationParameters.from_config_source(config, **kwargs)
         return self
 
     def resolve(self) -> Self:
@@ -307,28 +238,20 @@ class ConfigBuilder(object):
     def _resolve_nss_config(self) -> None:
         """Assemble per-section configs into a ``SafeSynthesizerParameters``.
 
-        Iterates over ``_nss_inputs``, maps each ``_*_config`` attribute
-        to its ``SafeSynthesizerParameters`` field name, and constructs
-        the unified config.  Also injects ``_classify_model_provider``
-        into the PII replacer config when set.
+        Constructs the unified config from already-normalized typed sections,
+        then injects ``_classify_model_provider`` into PII configuration when
+        requested.
         """
-        params_map: dict = {k: k.split("_")[1] for k in self._nss_inputs}
-        params_map["_replace_pii_config"] = "replace_pii"
-        params_map["_time_series_config"] = "time_series"
-        params_to_use: dict = {k: None for k in params_map.values()}
-
-        for pg, name in params_map.items():
-            param: NSSParameters | None = getattr(self, pg, None)
-            match param:
-                case BaseModel() as c:
-                    params_to_use[name] = c
-                case dict() as d:
-                    params_to_use[name] = d
-                case None:
-                    logger.debug(f"Using default values for {pg}")
-                case _:
-                    raise ValueError(f"Input must be a BaseModel, dictionary, or None: {type(param)}")
-        self._nss_config = SafeSynthesizerParameters(**params_to_use, emit_telemetry=self._emit_telemetry_config)
+        self._nss_config = SafeSynthesizerParameters(
+            data=self._data_config,
+            evaluation=self._evaluation_config,
+            training=self._training_config,
+            generation=self._generation_config,
+            privacy=self._privacy_config,
+            time_series=self._time_series_config,
+            replace_pii=self._replace_pii_config,
+            emit_telemetry=self._emit_telemetry_config,
+        )
 
         # Inject classify_model_provider into PII replacer config if set
         if self._classify_model_provider and self._nss_config.replace_pii:
