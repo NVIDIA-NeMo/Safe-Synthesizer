@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from typing import TYPE_CHECKING, Annotated, Self, Union, cast, get_args, get_origin
 
+from typing_extensions import override
+
 if TYPE_CHECKING:
     from .parameters import Parameters
 
@@ -24,6 +26,7 @@ class ParameterPath:
         if not self.parts or any(not part for part in self.parts):
             raise ValueError("A parameter path cannot contain empty segments.")
 
+    @override
     def __str__(self) -> str:
         return ".".join(self.parts)
 
