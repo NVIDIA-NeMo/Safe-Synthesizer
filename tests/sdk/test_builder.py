@@ -168,6 +168,19 @@ def test_builder_change_training_params_with_kwargs():
     assert builder._nss_config.training.num_input_records_to_sample == 5000
 
 
+def test_builder_change_training_memory_with_nested_kwargs():
+    builder = (
+        SafeSynthesizer()
+        .with_data_source(pd.DataFrame(data={"name": ["John", "Jane", "Jim"]}))
+        .with_train(memory={"chunked_causal_lm_loss": True, "chunked_causal_lm_loss_tokens": 256})
+        .resolve()
+    )
+
+    assert builder._nss_config is not None
+    assert builder._nss_config.training.memory.chunked_causal_lm_loss is True
+    assert builder._nss_config.training.memory.chunked_causal_lm_loss_tokens == 256
+
+
 def test_builder_change_generation_params_with_object(fixture_base_builder: SafeSynthesizer):
     builder = (
         fixture_base_builder.with_data_source(pd.DataFrame(data={"name": ["John", "Jane", "Jim"]}))

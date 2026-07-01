@@ -145,6 +145,24 @@ def test_training_memory_controls_from_yaml_round_trip():
     assert memory.debug_loss_memory is True
 
 
+def test_training_memory_controls_from_params_shortcut():
+    params = SafeSynthesizerParameters.from_params(
+        memory={"chunked_causal_lm_loss": True, "chunked_causal_lm_loss_tokens": 256}
+    )
+
+    assert params.training.memory.chunked_causal_lm_loss is True
+    assert params.training.memory.chunked_causal_lm_loss_tokens == 256
+
+
+def test_training_memory_controls_from_nested_training_section():
+    params = SafeSynthesizerParameters.from_params(
+        training={"memory": {"disable_dp_bf16": True, "debug_loss_memory": True}}
+    )
+
+    assert params.training.memory.disable_dp_bf16 is True
+    assert params.training.memory.debug_loss_memory is True
+
+
 @pytest.mark.parametrize("max_physical_batch_size", [AUTO_STR, None])
 def test_max_physical_batch_size_absent_value_is_noop(max_physical_batch_size):
     training = TrainingHyperparams(

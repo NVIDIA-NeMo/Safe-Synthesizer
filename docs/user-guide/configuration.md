@@ -161,6 +161,23 @@ for the full field list.
 | `training.validation_ratio` | `0.0` | Fraction of training data held out for validation loss monitoring | Leave at 0.0 unless you specifically want to monitor validation loss |
 | `training.max_vram_fraction` | `0.8` | Fraction of total GPU VRAM to allocate for training. Must be in [0, 1] | Lower if other GPU consumers are active on the same device |
 
+Pass `memory` as a nested dictionary when configuring these controls through
+the Python SDK. A canonical dotted keyword is also accepted through `**`
+expansion. Bare memory-control fields are not direct `with_train()` keyword
+arguments; an attempted bare field reports the accepted nested path.
+
+```python
+from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+
+synthesizer = SafeSynthesizer().with_train(
+    memory={"chunked_causal_lm_loss": True, "chunked_causal_lm_loss_tokens": 256}
+)
+
+synthesizer = SafeSynthesizer().with_train(
+    **{"memory.chunked_causal_lm_loss": True}
+)
+```
+
 !!! note "validation_ratio vs holdout"
     `training.validation_ratio` splits the training data to monitor
     validation loss during fine-tuning. `data.holdout` splits the full
