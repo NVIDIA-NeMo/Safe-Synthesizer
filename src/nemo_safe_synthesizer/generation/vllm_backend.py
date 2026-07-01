@@ -76,6 +76,28 @@ os.environ.setdefault("VLLM_USE_DEEP_GEMM", "0")
 os.environ["VLLM_V1_USE_OUTLINES_CACHE"] = "0"
 
 
+def _build_rope_hf_overrides(model_metadata: ModelMetadata) -> dict[str, Any] | None:
+    """Return vLLM ``hf_overrides`` needed for NSS RoPE context extension."""
+    rope_scaling = model_metadata.rope_scaling
+    if rope_scaling is None or rope_scaling.factor <= 1.0:
+        return None
+
+    rope_type = rope_scaling.rope_type
+    if rope_type == "default":
+        rope_type = "linear"
+
+    return {
+        "max_position_embeddings": model_metadata.max_seq_length,
+        "max_model_len": model_metadata.max_seq_length,
+        "rope_parameters": {
+            "rope_type": rope_type,
+            "factor": float(rope_scaling.factor),
+            "original_max_position_embeddings": model_metadata.base_max_seq_length,
+            "rope_theta": float(rope_scaling.theta),
+        },
+    }
+
+
 def _secure_outlines_cache_dir() -> None:
     """Pin ``OUTLINES_CACHE_DIR`` to a per-user path and tighten permissions.
 
@@ -293,6 +315,9 @@ class VllmBackend(GeneratorBackend):
             backend=self.config.generation.structured_generation.backend,
         )
         model_ref = ModelRef.parse(self.config.training.pretrained_model)
+        llm_kwargs: dict[str, Any] = {}
+        if hf_overrides := _build_rope_hf_overrides(self.model_metadata):
+            llm_kwargs["hf_overrides"] = hf_overrides
 
         with heartbeat("Model loading", logger_name=__name__, model=self.config.training.pretrained_model):
             self.llm = vLLM(
@@ -304,6 +329,7 @@ class VllmBackend(GeneratorBackend):
                 structured_outputs_config=structured_outputs_config,
                 attention_config=attention_config,
                 trust_remote_code=model_ref.trust_remote_code,
+                **llm_kwargs,
             )
 
         # Cache the engine's *effective* runtime config once at init. Read by
