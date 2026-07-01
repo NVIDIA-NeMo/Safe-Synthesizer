@@ -167,6 +167,7 @@ class ParameterSchema:
             case AmbiguousParameterName() as ambiguous:
                 choices = ", ".join(str(path) for path in ambiguous.candidates)
                 raise ParameterError(f"Ambiguous parameter name {ambiguous.name!r}; use one of: {choices}.")
+        raise ParameterError(f"Unexpected parameter resolution for {name!r}.")
 
     def normalize_aliases(self, source: Mapping[str, object]) -> dict[str, object]:
         """Translate declared aliases to canonical paths, with aliases taking precedence."""
