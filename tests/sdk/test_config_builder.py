@@ -20,6 +20,7 @@ from nemo_safe_synthesizer.config import (
 )
 from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
 from nemo_safe_synthesizer.configurator.parameters import Parameters
+from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.sdk.config_builder import ConfigBuilder
 
 
@@ -99,14 +100,48 @@ def test_with_generate_preserves_sparse_typed_config_fields():
     builder = ConfigBuilder().with_generate(config=GenerateParameters(num_records=10))
 
     assert builder._generation_config is not None
-    assert builder._generation_config.__pydantic_fields_set__ == {"num_records"}
+    assert builder._generation_config.model_fields_set == {"num_records"}
 
 
 def test_with_generate_marks_typed_config_kwargs_as_explicit_fields():
     builder = ConfigBuilder().with_generate(config=GenerateParameters(num_records=10), patience=7)
 
     assert builder._generation_config is not None
-    assert builder._generation_config.__pydantic_fields_set__ == {"num_records", "patience"}
+    assert builder._generation_config.model_fields_set == {"num_records", "patience"}
+
+
+def test_with_generate_accepts_legacy_alias_keyword():
+    builder = ConfigBuilder().with_generate(use_structured_generation=True)
+
+    assert builder._generation_config.structured_generation.enabled is True
+    assert builder._generation_config.model_dump(exclude_unset=True) == {"structured_generation": {"enabled": True}}
+
+
+def test_with_generate_accepts_legacy_alias_in_raw_mapping():
+    builder = ConfigBuilder().with_generate(config={"use_structured_generation": True})
+
+    assert builder._generation_config.structured_generation.enabled is True
+
+
+def test_with_generate_legacy_mapping_alias_overrides_canonical_value():
+    builder = ConfigBuilder().with_generate(
+        config={
+            "structured_generation": {"enabled": False},
+            "use_structured_generation": True,
+        }
+    )
+
+    assert builder._generation_config.structured_generation.enabled is True
+
+
+def test_with_generate_rejects_duplicate_alias_keyword_path():
+    with pytest.raises(ParameterError, match=r"Duplicate parameter path 'structured_generation\.enabled'"):
+        ConfigBuilder().with_generate(
+            **{
+                "structured_generation.enabled": False,
+                "use_structured_generation": True,
+            }  # ty: ignore[invalid-argument-type] -- dotted names require dynamic keywords
+        )
 
 
 def test_with_generate_rejects_wrong_typed_config_object():

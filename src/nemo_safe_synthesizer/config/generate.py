@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import warnings
+from collections.abc import Mapping
 from typing import Annotated, Any, ClassVar, Literal, Self
 
 from pydantic import (
@@ -12,6 +13,7 @@ from pydantic import (
     model_validator,
 )
 
+from ..configurator.parameter_paths import ParameterSchema
 from ..configurator.parameters import (
     Parameters,
 )
@@ -270,45 +272,19 @@ class GenerateParameters(Parameters, BaseModel):
         ),
     ] = "auto"
 
-    _STRUCTURED_GENERATION_LEGACY_FIELDS: ClassVar[dict[str, str]] = {
-        "use_structured_generation": "enabled",
-        "structured_generation_backend": "backend",
-        "structured_generation_schema_method": "schema_method",
-        "structured_generation_use_single_sequence": "use_single_sequence",
+    parameter_aliases: ClassVar[Mapping[str, str]] = {
+        "use_structured_generation": "structured_generation.enabled",
+        "structured_generation_backend": "structured_generation.backend",
+        "structured_generation_schema_method": "structured_generation.schema_method",
+        "structured_generation_use_single_sequence": "structured_generation.use_single_sequence",
     }
 
     @model_validator(mode="before")
     @classmethod
     def _migrate_legacy_structured_generation_fields(cls, data: Any) -> Any:
-        if not isinstance(data, dict):
+        if not isinstance(data, Mapping):
             return data
-
-        values = dict(data)
-        legacy = {
-            new_name: values.pop(old_name)
-            for old_name, new_name in cls._STRUCTURED_GENERATION_LEGACY_FIELDS.items()
-            if old_name in values
-        }
-        if not legacy:
-            return values
-
-        structured_generation = values.get("structured_generation")
-        match structured_generation:
-            case StructuredGenerationParameters() as params:
-                structured_values = params.model_dump()
-            case BaseModel() as model:
-                structured_values = model.model_dump()
-            case dict() as mapping:
-                structured_values = dict(mapping)
-            case None:
-                structured_values = {}
-            case _:
-                return values
-
-        # Legacy flat keys are treated as explicit overrides for migration
-        # paths such as ``from_params(generation={...}, structured_generation_backend=...)``.
-        values["structured_generation"] = structured_values | legacy
-        return values
+        return ParameterSchema.from_model(cls).normalize_aliases(data)
 
     @property
     def use_structured_generation(self) -> bool:

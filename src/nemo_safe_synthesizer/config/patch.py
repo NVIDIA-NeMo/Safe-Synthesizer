@@ -5,18 +5,19 @@
 
 from __future__ import annotations
 
-import types
 from collections.abc import Iterable, Mapping
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Annotated, Generic, TypeVar, Union, cast, get_args, get_origin
+from typing import Generic, Literal, TypeAlias, TypeVar, cast
 
 from pydantic import BaseModel
 
 from ..configurator.parameter_paths import ParameterPath
+from ..configurator.pydantic_compat import nested_model_type
 from ..errors import ParameterError
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
+UnknownFieldBehavior: TypeAlias = Literal["ignore", "reject"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,9 +55,18 @@ class CompiledConfigPatch(Generic[ModelT]):
         *,
         origin: str,
         precedence: int,
+        unknown_fields: UnknownFieldBehavior,
     ) -> CompiledConfigPatch[ModelT]:
+        """Compile a mapping with an explicit policy for traversable unknown fields.
+
+        Collections are atomic patch leaves. Pydantic validates their contents
+        when the patch is applied.
+        """
         _require_model_type(target_model)
-        assignments = _mapping_assignments(target_model, source, origin=origin, precedence=precedence)
+        if unknown_fields not in ("ignore", "reject"):
+            raise ValueError(f"Unsupported unknown-field behavior {unknown_fields!r}.")
+        compatible_source = _mapping_without_extras(target_model, source) if unknown_fields == "ignore" else source
+        assignments = _mapping_assignments(target_model, compatible_source, origin=origin, precedence=precedence)
         return CompiledConfigPatch.from_paths(target_model, assignments)
 
     @staticmethod
@@ -64,12 +74,10 @@ class CompiledConfigPatch(Generic[ModelT]):
         target_model: type[ModelT], source: ModelT, *, origin: str, precedence: int
     ) -> CompiledConfigPatch[ModelT]:
         _require_exact_model(target_model, source)
-        return CompiledConfigPatch.from_mapping(
-            target_model,
-            _extract_set_fields(source),
-            origin=origin,
-            precedence=precedence,
+        assignments = _mapping_assignments(
+            target_model, _extract_set_fields(source), origin=origin, precedence=precedence
         )
+        return CompiledConfigPatch.from_paths(target_model, assignments)
 
     def combine(self, other: CompiledConfigPatch[ModelT]) -> CompiledConfigPatch[ModelT]:
         if self.target_model is not other.target_model:
@@ -97,8 +105,8 @@ class CompiledConfigPatch(Generic[ModelT]):
         _merge_model_mapping(values, self.target_model, self.materialize())
         return self.target_model.model_validate(values)
 
-    def _apply_to_full_model(self, base: ModelT) -> ModelT:
-        """Apply to current full values while retaining sparse field presence."""
+    def apply_to_full_model(self, base: ModelT) -> ModelT:
+        """Apply to full current values while retaining sparse field presence."""
         _require_exact_model(self.target_model, base)
         patch_values = self.materialize()
         values = base.model_dump()
@@ -118,30 +126,13 @@ def _require_exact_model(model_type: type[ModelT], value: BaseModel) -> None:
         raise TypeError(f"Patch target model is {model_type.__name__}; received {type(value).__name__}.")
 
 
-def _unwrap_annotation(annotation: object) -> object:
-    while get_origin(annotation) is Annotated:
-        annotation = get_args(annotation)[0]
-    origin = get_origin(annotation)
-    if origin not in (types.UnionType, Union):
-        return annotation
-    members = tuple(_unwrap_annotation(item) for item in get_args(annotation) if item is not type(None))
-    return members[0] if len(members) == 1 else annotation
-
-
-def _nested_model_type(annotation: object) -> type[BaseModel] | None:
-    annotation = _unwrap_annotation(annotation)
-    if isinstance(annotation, type) and issubclass(annotation, BaseModel):
-        return annotation
-    return None
-
-
 def _field_model_at_path(model_type: type[BaseModel], path: ParameterPath) -> type[BaseModel] | None:
     current = model_type
     for index, part in enumerate(path.parts):
         field = current.model_fields.get(part)
         if field is None:
             raise ParameterError(f"Unknown configuration path {str(path)!r}.")
-        nested = _nested_model_type(field.annotation)
+        nested = nested_model_type(field.annotation, BaseModel)
         if index == len(path.parts) - 1:
             return nested
         if nested is None:
@@ -161,18 +152,21 @@ def _mapping_assignments(
 ) -> tuple[PatchAssignment, ...]:
     assignments: list[PatchAssignment] = []
     for name, value in source.items():
-        # Raw mappings retain Pydantic's extra-ignore adapter contract. Canonical
-        # assignments use from_paths, which validates every resolved path.
         if name not in model_type.model_fields:
-            continue
+            path = ".".join((*prefix, name))
+            raise ParameterError(f"Unknown configuration path {path!r}.")
         path = ParameterPath((*prefix, name))
         nested = _field_model_at_path(model_type, ParameterPath((name,)))
         nested_source = _branch_mapping(nested, value)
         if nested is None or nested_source is None or not nested_source:
-            assignments.append(PatchAssignment(path, deepcopy(value), origin, precedence))
+            assignments.append(PatchAssignment(path, value, origin, precedence))
             continue
         nested_assignments = _mapping_assignments(
-            nested, nested_source, origin=origin, precedence=precedence, prefix=path.parts
+            nested,
+            nested_source,
+            origin=origin,
+            precedence=precedence,
+            prefix=path.parts,
         )
         if nested_assignments:
             assignments.extend(nested_assignments)
@@ -181,6 +175,23 @@ def _mapping_assignments(
             # provided children are ignored extras.
             assignments.append(PatchAssignment(path, {}, origin, precedence))
     return tuple(assignments)
+
+
+def _mapping_without_extras(model_type: type[BaseModel], source: Mapping[str, object]) -> dict[str, object]:
+    """Adapt a raw mapping to Pydantic's recursive extra-ignore behavior."""
+    adapted: dict[str, object] = {}
+    for name, value in source.items():
+        field = model_type.model_fields.get(name)
+        if field is None:
+            continue
+        nested_model = nested_model_type(field.annotation, BaseModel)
+        nested_source = _branch_mapping(nested_model, value)
+        adapted[name] = (
+            _mapping_without_extras(nested_model, nested_source)
+            if nested_model is not None and nested_source is not None
+            else value
+        )
+    return adapted
 
 
 def _branch_mapping(nested_model: type[BaseModel] | None, value: object) -> Mapping[str, object] | None:
@@ -196,7 +207,7 @@ def _branch_mapping(nested_model: type[BaseModel] | None, value: object) -> Mapp
 def _extract_set_fields(model: BaseModel) -> dict[str, object]:
     extracted: dict[str, object] = {}
     for name in type(model).model_fields:
-        value = model.__dict__[name]
+        value = _stored_field_value(model, name)
         if isinstance(value, BaseModel):
             nested = _extract_set_fields(value)
             if nested or name in model.model_fields_set:
@@ -207,45 +218,39 @@ def _extract_set_fields(model: BaseModel) -> dict[str, object]:
     return extracted
 
 
+def _stored_field_value(model: BaseModel, name: str) -> object:
+    """Read a validated field without triggering Pydantic access warnings."""
+    return vars(model)[name]
+
+
 def _restore_model_fields_set(result: BaseModel, base: BaseModel, patch: Mapping[str, object]) -> None:
     """Restore recursive base presence and add fields supplied by ``patch``."""
-    object.__setattr__(result, "__pydantic_fields_set__", set(base.model_fields_set))
+    _replace_model_fields_set(result, (*base.model_fields_set, *patch))
     for name in type(result).model_fields:
-        result_value = result.__dict__[name]
+        result_value = _stored_field_value(result, name)
         if not isinstance(result_value, BaseModel):
             continue
-        base_value = base.__dict__[name]
+        base_value = _stored_field_value(base, name)
+        nested_patch = _branch_mapping(type(result_value), patch.get(name)) or {}
         if isinstance(base_value, BaseModel):
-            _restore_model_fields_set(result_value, base_value, {})
+            _restore_model_fields_set(result_value, base_value, nested_patch)
         else:
-            _clear_model_fields_set(result_value)
+            _set_model_fields_from_patch(result_value, nested_patch)
 
-    result.__pydantic_fields_set__.update(patch)
-    for name, value in patch.items():
-        result_value = result.__dict__[name]
-        if not isinstance(result_value, BaseModel):
+
+def _set_model_fields_from_patch(model: BaseModel, patch: Mapping[str, object]) -> None:
+    _replace_model_fields_set(model, patch)
+    for name in type(model).model_fields:
+        value = _stored_field_value(model, name)
+        if not isinstance(value, BaseModel):
             continue
-        nested_patch = _branch_mapping(type(result_value), value)
-        if nested_patch is not None:
-            _add_model_fields_set(result_value, nested_patch)
+        nested_patch = _branch_mapping(type(value), patch.get(name)) or {}
+        _set_model_fields_from_patch(value, nested_patch)
 
 
-def _clear_model_fields_set(model: BaseModel) -> None:
-    object.__setattr__(model, "__pydantic_fields_set__", set())
-    for value in model.__dict__.values():
-        if isinstance(value, BaseModel):
-            _clear_model_fields_set(value)
-
-
-def _add_model_fields_set(model: BaseModel, patch: Mapping[str, object]) -> None:
-    model.__pydantic_fields_set__.update(patch)
-    for name, value in patch.items():
-        model_value = model.__dict__[name]
-        if not isinstance(model_value, BaseModel):
-            continue
-        nested_patch = _branch_mapping(type(model_value), value)
-        if nested_patch is not None:
-            _add_model_fields_set(model_value, nested_patch)
+def _replace_model_fields_set(model: BaseModel, fields: Iterable[str]) -> None:
+    model.model_fields_set.clear()
+    model.model_fields_set.update(fields)
 
 
 def _validate_conflicts(model_type: type[BaseModel], assignments: tuple[PatchAssignment, ...]) -> None:
@@ -280,12 +285,12 @@ def _insert_value(
 ) -> None:
     name, *tail = parts
     field = model_type.model_fields[name]
-    nested_model = _nested_model_type(field.annotation)
+    nested_model = nested_model_type(field.annotation, BaseModel)
     if tail:
         if nested_model is None:
             raise AssertionError("Validated paths cannot descend through atomic fields.")
         branch = target.get(name)
-        nested = _as_object_dict(branch)
+        nested = cast(dict[str, object], branch) if isinstance(branch, dict) else {}
         target[name] = nested
         _insert_value(nested, nested_model, tuple(tail), value)
         return
@@ -296,19 +301,13 @@ def _insert_value(
     if nested_model is None:
         raise AssertionError("A branch mapping must have a nested model type.")
     branch = target.get(name)
-    nested = _as_object_dict(branch)
+    nested = cast(dict[str, object], branch) if isinstance(branch, dict) else {}
     target[name] = nested
     _merge_model_mapping(nested, nested_model, branch_source)
-
-
-def _as_object_dict(value: object) -> dict[str, object]:
-    if isinstance(value, dict):
-        return cast(dict[str, object], value)
-    return {}
 
 
 def _merge_model_mapping(target: dict[str, object], model_type: type[BaseModel], source: Mapping[str, object]) -> None:
     for name, value in source.items():
         if name not in model_type.model_fields:
             raise ParameterError(f"Unknown configuration path {name!r} for {model_type.__name__}.")
-        _insert_value(target, model_type, (name,), deepcopy(value))
+        _insert_value(target, model_type, (name,), value)

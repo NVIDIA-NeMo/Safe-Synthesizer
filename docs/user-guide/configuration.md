@@ -62,7 +62,7 @@ for more detail on combining config files with runtime overrides.
 
 - top-level fields such as `generation` or `replace_pii`;
 - canonical dotted paths such as `generation.num_records`;
-- bare leaf names such as `num_records`, when that leaf name is unique in the
+- bare nested names such as `num_records`, when that name is unique in the
   configuration schema; and
 - legacy structured-generation aliases, retained for compatibility.
 

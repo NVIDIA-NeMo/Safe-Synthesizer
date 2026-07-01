@@ -21,7 +21,7 @@ import typing
 from abc import ABCMeta
 from collections.abc import Generator, Iterator, Mapping
 from pathlib import Path
-from typing import Any, Self, cast, get_args
+from typing import Any, ClassVar, Self, cast, get_args
 
 import yaml
 from pydantic import (
@@ -31,11 +31,12 @@ from pydantic import (
 from ..config.base import (
     pydantic_model_config,
 )
-from ..config.patch import CompiledConfigPatch
+from ..config.patch import CompiledConfigPatch, PatchAssignment
 from ..errors import ParameterError
 from .parameter import (
     DataT,
 )
+from .parameter_paths import ParameterSchema
 
 __all__ = ["Parameters"]
 
@@ -52,6 +53,7 @@ class Parameters(BaseModel, metaclass=ABCMeta):
     """
 
     model_config = pydantic_model_config
+    parameter_aliases: ClassVar[Mapping[str, str]] = {}
 
     def explicit_patch(self) -> CompiledConfigPatch[Self]:
         """Compile this model's recursively explicit fields as a sparse patch.
@@ -70,19 +72,26 @@ class Parameters(BaseModel, metaclass=ABCMeta):
         resolved defaults keep their current values. Patch assignments retain
         their relative precedence and always follow the base.
         """
-        return patch._apply_to_full_model(self)
+        return patch.apply_to_full_model(self)
 
     @classmethod
     def from_config_source(cls, source: Self | Mapping[str, object] | None = None, **kwargs: object) -> Self:
         """Normalize one sparse config source plus higher-precedence keyword values.
 
         ``source`` may be ``None``, an instance of exactly ``cls``, or a raw
-        mapping. Unknown mapping keys retain Pydantic's extra-ignore behavior.
-        A different Pydantic model type is rejected rather than adapted.
+        mapping. Declared compatibility aliases are normalized for raw mappings
+        and keyword overrides. Unknown mapping keys retain Pydantic's
+        extra-ignore behavior. Keyword overrides accept top-level fields and
+        canonical dotted paths, but reject inferred bare nested names with an
+        actionable path suggestion. A different Pydantic model type is rejected
+        rather than adapted.
         """
+        schema = ParameterSchema.from_model(cls)
         match source:
             case None:
-                source_patch = CompiledConfigPatch.from_mapping(cls, {}, origin="empty config", precedence=0)
+                source_patch = CompiledConfigPatch.from_mapping(
+                    cls, {}, origin="empty config", precedence=0, unknown_fields="reject"
+                )
             case BaseModel() as model:
                 if type(model) is not cls:
                     raise TypeError(f"Expected {cls.__name__}, got {type(model).__name__}")
@@ -95,14 +104,21 @@ class Parameters(BaseModel, metaclass=ABCMeta):
             case Mapping() as mapping:
                 source_patch = CompiledConfigPatch.from_mapping(
                     cls,
-                    cast(Mapping[str, object], mapping),
+                    schema.normalize_aliases(cast(Mapping[str, object], mapping)),
                     origin="mapping config",
                     precedence=0,
+                    unknown_fields="ignore",
                 )
             case _:
                 raise TypeError(f"Unsupported config type: {type(source)}")
 
-        overrides = CompiledConfigPatch.from_mapping(cls, kwargs, origin="keyword override", precedence=1)
+        overrides = CompiledConfigPatch.from_paths(
+            cls,
+            (
+                PatchAssignment(schema.require(name, infer_bare_name=False), value, f"keyword override {name!r}", 1)
+                for name, value in kwargs.items()
+            ),
+        )
         return source_patch.combine(overrides).apply()
 
     def _isparams(self):

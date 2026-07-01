@@ -10,12 +10,14 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import Field, ValidationError, model_validator
 
+from nemo_safe_synthesizer.config.generate import GenerateParameters, StructuredGenerationParameters
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig, StepDefinition
 from nemo_safe_synthesizer.config.training import QuantizationScheme
 from nemo_safe_synthesizer.configurator.parameter_paths import (
     AmbiguousParameterName,
     ParameterFieldKind,
+    ParameterPath,
     ParameterSchema,
     ResolvedParameterName,
     UnknownParameterName,
@@ -202,13 +204,6 @@ def test_from_params_rejects_unknown_flat_parameter():
         SafeSynthesizerParameters.from_params(not_a_parameter=True)
 
 
-def test_from_params_rejects_unexpected_parameter_resolution(monkeypatch):
-    monkeypatch.setattr(ParameterSchema, "resolve", lambda _schema, _name: object())
-
-    with pytest.raises(ParameterError, match="Unexpected parameter resolution for 'num_records'"):
-        SafeSynthesizerParameters.from_params(num_records=10)
-
-
 def test_parameter_schema_indexes_optional_branches_without_an_instance():
     with patch.object(SafeSynthesizerParameters, "__init__", side_effect=AssertionError("model instantiated")):
         schema = ParameterSchema.from_model(SafeSynthesizerParameters)
@@ -304,6 +299,10 @@ class _DuplicateLeafParameters(Parameters):
     right: _RightParameters = Field(default_factory=_RightParameters)
 
 
+class _NestedParameters(Parameters):
+    child: _LeftParameters = Field(default_factory=_LeftParameters)
+
+
 class _PresenceParameters(Parameters):
     left: _LeftParameters = Field(default_factory=_LeftParameters)
     right: _RightParameters = Field(default_factory=_RightParameters)
@@ -372,6 +371,70 @@ def test_from_config_source_kwargs_override_source_and_preserve_nested_siblings(
 
     assert result.left.value == 9
     assert result.right.value == 6
+
+
+def test_from_config_source_kwargs_resolve_dotted_nested_parameter_name():
+    result = _NestedParameters.from_config_source(
+        **{"child.value": 9}  # ty: ignore[invalid-argument-type] -- dotted names require dynamic keywords
+    )
+
+    assert result.child.value == 9
+    assert result.model_dump(exclude_unset=True) == {"child": {"value": 9}}
+
+
+def test_from_config_source_rejects_inferred_bare_nested_parameter_name():
+    with pytest.raises(ParameterError, match=r"Nested parameter name 'value'.*child\.value.*child"):
+        _NestedParameters.from_config_source(value=9)
+
+
+def test_from_config_source_rejects_unknown_keyword_override():
+    with pytest.raises(ParameterError, match="Unknown parameter name 'unknown'"):
+        _NestedParameters.from_config_source(unknown=9)
+
+
+def test_from_config_source_rejects_ambiguous_keyword_override():
+    with pytest.raises(ParameterError, match=r"Ambiguous parameter name 'value'.*left\.value.*right\.value"):
+        _DuplicateLeafParameters.from_config_source(value=9)
+
+
+@pytest.mark.parametrize(
+    ("model_type", "name", "expected"),
+    [
+        pytest.param(
+            GenerateParameters,
+            "use_structured_generation",
+            ParameterPath(("structured_generation", "enabled")),
+            id="section",
+        ),
+        pytest.param(
+            SafeSynthesizerParameters,
+            "use_structured_generation",
+            ParameterPath(("generation", "structured_generation", "enabled")),
+            id="nested-bare",
+        ),
+        pytest.param(
+            SafeSynthesizerParameters,
+            "generation.use_structured_generation",
+            ParameterPath(("generation", "structured_generation", "enabled")),
+            id="nested-dotted",
+        ),
+    ],
+)
+def test_parameter_schema_resolves_model_declared_aliases(
+    model_type: type[Parameters], name: str, expected: ParameterPath
+):
+    assert ParameterSchema.from_model(model_type).resolve(name) == ResolvedParameterName(expected)
+
+
+def test_alias_normalization_preserves_sparse_typed_canonical_branch():
+    result = GenerateParameters.from_config_source(
+        {
+            "structured_generation": StructuredGenerationParameters(backend="guidance"),
+            "use_structured_generation": True,
+        }
+    )
+
+    assert result.model_dump(exclude_unset=True) == {"structured_generation": {"enabled": True, "backend": "guidance"}}
 
 
 def test_from_config_source_copies_mapping_and_returned_mutable_state():

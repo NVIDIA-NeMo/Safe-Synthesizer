@@ -11,11 +11,8 @@ from pydantic import Field, model_validator
 from typing_extensions import override
 
 from ..configurator.parameter_paths import (
-    AmbiguousParameterName,
     ParameterPath,
     ParameterSchema,
-    ResolvedParameterName,
-    UnknownParameterName,
 )
 from ..configurator.parameters import Parameters
 from ..errors import ParameterError
@@ -38,31 +35,6 @@ __all__ = ["ConfigPatch", "SafeSynthesizerParameters"]
 
 
 logger = get_logger(__name__)
-
-
-_LEGACY_FLAT_PATHS: dict[str, tuple[str, ...]] = {
-    "use_structured_generation": ("generation", "structured_generation", "enabled"),
-    "structured_generation_backend": ("generation", "structured_generation", "backend"),
-    "structured_generation_schema_method": ("generation", "structured_generation", "schema_method"),
-    "structured_generation_use_single_sequence": ("generation", "structured_generation", "use_single_sequence"),
-}
-
-
-def _resolve_parameter_name(schema: ParameterSchema, name: str) -> ParameterPath:
-    """Resolve one ``from_params`` name while retaining legacy alias policy."""
-    if name not in schema.model_type.model_fields and name in _LEGACY_FLAT_PATHS:
-        return ParameterPath(_LEGACY_FLAT_PATHS[name])
-
-    match schema.resolve(name):
-        case ResolvedParameterName() as resolved:
-            return resolved.path
-        case UnknownParameterName() as unknown:
-            kind = "path" if "." in name else "name"
-            raise ParameterError(f"Unknown parameter {kind} {unknown.name!r}.")
-        case AmbiguousParameterName() as ambiguous:
-            choices = ", ".join(str(path) for path in ambiguous.candidates)
-            raise ParameterError(f"Ambiguous parameter name {ambiguous.name!r}; use one of: {choices}.")
-    raise ParameterError(f"Unexpected parameter resolution for {name!r}.")
 
 
 class SafeSynthesizerParameters(Parameters):
@@ -196,7 +168,7 @@ class SafeSynthesizerParameters(Parameters):
     def from_params(cls, **kwargs: object) -> "SafeSynthesizerParameters":
         """Construct parameters from resolved keyword names.
 
-        Names may be top-level fields, canonical dotted paths, unique bare leaf
+        Names may be top-level fields, canonical dotted paths, unique bare
         names, or supported legacy aliases. Ambiguous bare names raise an error
         that lists the canonical dotted alternatives.
 
@@ -214,7 +186,7 @@ class SafeSynthesizerParameters(Parameters):
         assignments: list[PatchAssignment] = []
         resolved_paths: set[ParameterPath] = set()
         for name, value in kwargs.items():
-            path = _resolve_parameter_name(schema, name)
+            path = schema.require(name)
             if path in resolved_paths:
                 raise ParameterError(f"Duplicate parameter path {str(path)!r}.")
             resolved_paths.add(path)
@@ -225,7 +197,10 @@ class SafeSynthesizerParameters(Parameters):
     @classmethod
     def from_config_patch(cls, patch: ConfigPatch) -> Self:
         """Validate a sparse top-level config patch as a full configuration."""
-        return CompiledConfigPatch.from_mapping(cls, patch, origin="config patch", precedence=0).apply()
+        normalized = ParameterSchema.from_model(cls).normalize_aliases(patch)
+        return CompiledConfigPatch.from_mapping(
+            cls, normalized, origin="config patch", precedence=0, unknown_fields="ignore"
+        ).apply()
 
     def with_config_patch(self, patch: ConfigPatch) -> Self:
         """Apply a sparse top-level config patch and revalidate the result.
@@ -240,8 +215,12 @@ class SafeSynthesizerParameters(Parameters):
             self.model_dump(exclude_unset=True),
             origin="base config",
             precedence=0,
+            unknown_fields="reject",
         )
-        override = CompiledConfigPatch.from_mapping(model_type, patch, origin="config patch", precedence=1)
+        normalized = ParameterSchema.from_model(model_type).normalize_aliases(patch)
+        override = CompiledConfigPatch.from_mapping(
+            model_type, normalized, origin="config patch", precedence=1, unknown_fields="ignore"
+        )
         return base.combine(override).apply()
 
     def with_runtime_overrides(self, runtime: SafeSynthesizerParameters) -> "SafeSynthesizerParameters":
@@ -277,5 +256,6 @@ class SafeSynthesizerParameters(Parameters):
             updates,
             origin="runtime override",
             precedence=1,
+            unknown_fields="reject",
         )
         return self.apply_patch(patch)

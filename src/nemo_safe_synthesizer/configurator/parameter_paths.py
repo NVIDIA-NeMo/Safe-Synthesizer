@@ -5,12 +5,16 @@
 
 from __future__ import annotations
 
-import types
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import TYPE_CHECKING, Annotated, Self, Union, cast, get_args, get_origin
+from typing import TYPE_CHECKING, Self, cast
 
+from pydantic import BaseModel
 from typing_extensions import override
+
+from ..errors import ParameterError
+from .pydantic_compat import nested_model_type
 
 if TYPE_CHECKING:
     from .parameters import Parameters
@@ -45,25 +49,10 @@ def classify_parameter_annotation(annotation: object) -> ParameterFieldKind:
     return ParameterFieldKind.LEAF
 
 
-def _unwrap_annotated(annotation: object) -> object:
-    while get_origin(annotation) is Annotated:
-        annotation = get_args(annotation)[0]
-    return annotation
-
-
 def _nested_parameters_type(annotation: object) -> type[Parameters] | None:
     from .parameters import Parameters
 
-    annotation = _unwrap_annotated(annotation)
-    origin = get_origin(annotation)
-    if origin in (types.UnionType, Union):
-        members = tuple(_unwrap_annotated(member) for member in get_args(annotation) if member is not type(None))
-        if len(members) != 1:
-            return None
-        annotation = members[0]
-    if isinstance(annotation, type) and issubclass(annotation, Parameters):
-        return annotation
-    return None
+    return nested_model_type(annotation, Parameters)
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,6 +61,14 @@ class ParameterField:
 
     path: ParameterPath
     kind: ParameterFieldKind
+
+
+@dataclass(frozen=True, slots=True)
+class ParameterAlias:
+    """One accepted compatibility name and its canonical parameter path."""
+
+    name: str
+    path: ParameterPath
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,6 +102,7 @@ class ParameterSchema:
 
     model_type: type[Parameters]
     fields: tuple[ParameterField, ...]
+    aliases: tuple[ParameterAlias, ...]
 
     @classmethod
     def from_model(cls, model_type: type[Parameters]) -> Self:
@@ -114,9 +112,16 @@ class ParameterSchema:
         if not issubclass(model_type, Parameters):
             raise TypeError(f"Expected a Parameters model type, received {model_type!r}.")
         fields = tuple(_iter_parameter_fields(model_type))
-        return cls(model_type=model_type, fields=fields)
+        aliases = tuple(_iter_parameter_aliases(model_type))
+        field_paths = {field.path for field in fields}
+        for alias in aliases:
+            if alias.path not in field_paths:
+                raise TypeError(
+                    f"Parameter alias {alias.name!r} on {model_type.__name__} targets unknown path {str(alias.path)!r}."
+                )
+        return cls(model_type=model_type, fields=fields, aliases=aliases)
 
-    def resolve(self, name: str) -> ParameterNameResolution:
+    def resolve(self, name: str, *, infer_bare_name: bool = True) -> ParameterNameResolution:
         """Resolve a canonical dotted or bare parameter name."""
         if "." in name:
             try:
@@ -125,17 +130,80 @@ class ParameterSchema:
                 return UnknownParameterName(name)
             if any(field.path == requested for field in self.fields):
                 return ResolvedParameterName(requested)
-            return UnknownParameterName(name)
+            return _resolution_from_candidates(name, self._alias_candidates(name))
 
         top_level = next((field.path for field in self.fields if field.path.parts == (name,)), None)
         if top_level is not None:
             return ResolvedParameterName(top_level)
-        candidates = tuple(field.path for field in self.fields if field.path.parts[-1] == name)
-        if not candidates:
+        aliases = self._alias_candidates(name)
+        if aliases:
+            return _resolution_from_candidates(name, aliases)
+        if not infer_bare_name:
             return UnknownParameterName(name)
-        if len(candidates) > 1:
-            return AmbiguousParameterName(name, candidates)
-        return ResolvedParameterName(candidates[0])
+        candidates = tuple(field.path for field in self.fields if field.path.parts[-1] == name)
+        return _resolution_from_candidates(name, candidates)
+
+    def require(self, name: str, *, infer_bare_name: bool = True) -> ParameterPath:
+        """Resolve one name or raise a user-facing configuration error."""
+        resolution = self.resolve(name, infer_bare_name=infer_bare_name)
+        if not infer_bare_name and isinstance(resolution, UnknownParameterName) and "." not in name:
+            inferred = tuple(field.path for field in self.fields if field.path.parts[-1] == name)
+            if len(inferred) == 1:
+                path = inferred[0]
+                parent = path.parts[0]
+                raise ParameterError(
+                    f"Nested parameter name {name!r} is not a direct override; "
+                    f"use {str(path)!r} or pass the {parent!r} mapping."
+                )
+            if len(inferred) > 1:
+                resolution = AmbiguousParameterName(name, inferred)
+
+        match resolution:
+            case ResolvedParameterName() as resolved:
+                return resolved.path
+            case UnknownParameterName() as unknown:
+                kind = "path" if "." in name else "name"
+                raise ParameterError(f"Unknown parameter {kind} {unknown.name!r}.")
+            case AmbiguousParameterName() as ambiguous:
+                choices = ", ".join(str(path) for path in ambiguous.candidates)
+                raise ParameterError(f"Ambiguous parameter name {ambiguous.name!r}; use one of: {choices}.")
+
+    def normalize_aliases(self, source: Mapping[str, object]) -> dict[str, object]:
+        """Translate declared aliases to canonical paths, with aliases taking precedence."""
+        values = dict(source)
+        for name, field_info in self.model_type.model_fields.items():
+            nested_type = _nested_parameters_type(field_info.annotation)
+            value = values.get(name)
+            if nested_type is not None and isinstance(value, Mapping):
+                values[name] = ParameterSchema.from_model(nested_type).normalize_aliases(
+                    cast(Mapping[str, object], value)
+                )
+
+        for name in tuple(values):
+            if name in self.model_type.model_fields:
+                continue
+            candidates = self._alias_candidates(name)
+            if not candidates:
+                continue
+            resolution = _resolution_from_candidates(name, candidates)
+            if isinstance(resolution, AmbiguousParameterName):
+                choices = ", ".join(str(path) for path in resolution.candidates)
+                raise ParameterError(f"Ambiguous parameter alias {name!r}; use one of: {choices}.")
+            if isinstance(resolution, ResolvedParameterName):
+                _set_parameter_value(values, resolution.path, values.pop(name))
+        return values
+
+    def _alias_candidates(self, name: str) -> tuple[ParameterPath, ...]:
+        return tuple(alias.path for alias in self.aliases if alias.name == name)
+
+
+def _resolution_from_candidates(name: str, candidates: tuple[ParameterPath, ...]) -> ParameterNameResolution:
+    unique = tuple(sorted(set(candidates), key=lambda path: path.parts))
+    if not unique:
+        return UnknownParameterName(name)
+    if len(unique) > 1:
+        return AmbiguousParameterName(name, unique)
+    return ResolvedParameterName(unique[0])
 
 
 def _iter_parameter_fields(model_type: type[Parameters], prefix: tuple[str, ...] = ()) -> tuple[ParameterField, ...]:
@@ -149,6 +217,37 @@ def _iter_parameter_fields(model_type: type[Parameters], prefix: tuple[str, ...]
             if nested_type is not None:
                 fields.extend(_iter_parameter_fields(nested_type, path.parts))
     return tuple(fields)
+
+
+def _iter_parameter_aliases(model_type: type[Parameters], prefix: tuple[str, ...] = ()) -> tuple[ParameterAlias, ...]:
+    aliases: list[ParameterAlias] = []
+    for name, target in model_type.parameter_aliases.items():
+        target_path = split_parameter_path(target)
+        canonical_path = ParameterPath((*prefix, *target_path.parts))
+        aliases.append(ParameterAlias(name, canonical_path))
+        if prefix:
+            aliases.append(ParameterAlias(".".join((*prefix, name)), canonical_path))
+
+    for name, field_info in model_type.model_fields.items():
+        nested_type = _nested_parameters_type(field_info.annotation)
+        if nested_type is not None:
+            aliases.extend(_iter_parameter_aliases(nested_type, (*prefix, name)))
+    return tuple(aliases)
+
+
+def _set_parameter_value(target: dict[str, object], path: ParameterPath, value: object) -> None:
+    current = target
+    for part in path.parts[:-1]:
+        branch = current.get(part)
+        if isinstance(branch, BaseModel):
+            nested = branch.model_dump(exclude_unset=True)
+        elif isinstance(branch, Mapping):
+            nested = dict(branch)
+        else:
+            nested = {}
+        current[part] = nested
+        current = nested
+    current[path.parts[-1]] = value
 
 
 def split_parameter_path(name: str, separator: str = ".") -> ParameterPath:

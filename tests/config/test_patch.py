@@ -46,7 +46,9 @@ def _paths(*assignments: PatchAssignment) -> CompiledConfigPatch[_PatchTarget]:
 def test_mapping_leaf_with_nested_dictionaries_is_atomic_and_isolated() -> None:
     fallback = {"fallback": "name"}
     source = {"vars": {"template": {"given": ["first", fallback]}}}
-    patch = CompiledConfigPatch.from_mapping(StepDefinition, source, origin="mapping", precedence=0)
+    patch = CompiledConfigPatch.from_mapping(
+        StepDefinition, source, origin="mapping", precedence=0, unknown_fields="reject"
+    )
     fallback["fallback"] = "changed"
 
     first = patch.apply()
@@ -61,7 +63,11 @@ def test_nested_nss_model_branch_patch_preserves_pii_global_siblings() -> None:
     base = PiiReplacerConfig.get_default_config()
     original_entities = deepcopy(base.globals.classify.entities)
     patch = CompiledConfigPatch.from_mapping(
-        PiiReplacerConfig, {"globals": {"seed": 17}}, origin="override", precedence=1
+        PiiReplacerConfig,
+        {"globals": {"seed": 17}},
+        origin="override",
+        precedence=1,
+        unknown_fields="reject",
     )
 
     result = patch.apply(base)
@@ -149,7 +155,9 @@ def test_higher_precedence_parent_seed_wins_only_its_overlapping_children() -> N
 
 
 def test_absence_explicit_none_and_explicit_default_remain_distinct() -> None:
-    absent = CompiledConfigPatch.from_mapping(_PatchTarget, {}, origin="empty", precedence=0).apply()
+    absent = CompiledConfigPatch.from_mapping(
+        _PatchTarget, {}, origin="empty", precedence=0, unknown_fields="reject"
+    ).apply()
     explicit_none = _paths(_assignment("child", None)).apply()
     explicit_default = _paths(_assignment("child.count", 3)).apply()
 
@@ -166,11 +174,40 @@ def test_mapping_constructor_ignores_unknown_keys_at_each_model_level() -> None:
         {"unknown": True, "child": {"unknown": True}},
         origin="mapping",
         precedence=0,
+        unknown_fields="ignore",
     )
 
     result = patch.apply()
 
     assert result.model_dump(exclude_unset=True) == {"child": {}}
+
+
+@pytest.mark.parametrize(
+    ("source", "path"),
+    [
+        pytest.param({"unknown": True}, "unknown", id="top-level"),
+        pytest.param({"child": {"unknown": True}}, "child.unknown", id="nested"),
+    ],
+)
+def test_mapping_constructor_can_reject_unknown_keys(source: dict[str, object], path: str) -> None:
+    with pytest.raises(ParameterError, match=path):
+        CompiledConfigPatch.from_mapping(_PatchTarget, source, origin="mapping", precedence=0, unknown_fields="reject")
+
+
+def test_unknown_field_rejection_leaves_model_collections_to_pydantic() -> None:
+    step = PiiReplacerConfig.get_default_config().steps[0].model_dump()
+    step["unknown"] = True
+    patch = CompiledConfigPatch.from_mapping(
+        PiiReplacerConfig,
+        {"steps": [step]},
+        origin="mapping",
+        precedence=0,
+        unknown_fields="reject",
+    )
+
+    result = patch.apply()
+
+    assert "unknown" not in result.steps[0].model_dump()
 
 
 def test_path_constructor_remains_strict_for_unknown_canonical_path() -> None:
@@ -212,7 +249,7 @@ def test_top_level_validator_runs_at_application_boundary() -> None:
 
 def test_wrong_target_model_is_rejected_for_combine_and_apply() -> None:
     patch = _paths(_assignment("child.count", 6))
-    other = CompiledConfigPatch.from_mapping(_OtherTarget, {}, origin="other", precedence=0)
+    other = CompiledConfigPatch.from_mapping(_OtherTarget, {}, origin="other", precedence=0, unknown_fields="reject")
 
     with pytest.raises(TypeError, match="target model"):
         patch.combine(other)  # ty: ignore[invalid-argument-type] -- runtime rejection is the contract
@@ -226,6 +263,7 @@ def test_patch_schema_does_not_widen_public_pii_name_resolution() -> None:
         {"replace_pii": {"globals": {"seed": 3}}},
         origin="config",
         precedence=0,
+        unknown_fields="reject",
     )
 
     assert isinstance(
