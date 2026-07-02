@@ -183,8 +183,7 @@ class Parameters(BaseModel, metaclass=ABCMeta):
     def _iter_field_paths(self, prefix: tuple[str, ...] = ()) -> Iterator[tuple[tuple[str, ...], Any]]:
         """Yield every field path and value in this parameter tree."""
         for name in type(self).model_fields:
-            value = self.__dict__.get(name, _MISSING)
-            if value is _MISSING:
+            if (value := self.__dict__.get(name, _MISSING)) is _MISSING:
                 continue
             path = (*prefix, name)
             yield path, value
@@ -197,10 +196,21 @@ class Parameters(BaseModel, metaclass=ABCMeta):
         for part in path:
             if not isinstance(value, Parameters) or part not in type(value).model_fields:
                 return _MISSING
-            value = value.__dict__.get(part, _MISSING)
-            if value is _MISSING:
+            if (value := value.__dict__.get(part, _MISSING)) is _MISSING:
                 return _MISSING
         return value
+
+    def _matching_field_paths(self, name: str) -> list[tuple[tuple[str, ...], Any]]:
+        """Return every ``(path, value)`` whose bare field name is ``name``.
+
+        Raises:
+            ParameterError: If more than one field in the tree matches ``name``.
+        """
+        matches = [(path, value) for path, value in self._iter_field_paths() if path[-1] == name]
+        if len(matches) > 1:
+            candidates = ", ".join(format_parameter_path(path) for path, _ in matches)
+            raise ParameterError(f"Ambiguous parameter name {name!r}; use one of: {candidates}.")
+        return matches
 
     def __iter__(self) -> Iterator[Mapping[str, Any]]:  # ty: ignore[invalid-method-override] -- intentionally overrides pydantic BaseModel.__iter__ with parameter-group semantics
         """Iterate over all parameters, recursing into nested groups."""
@@ -224,13 +234,11 @@ class Parameters(BaseModel, metaclass=ABCMeta):
             value = self._get_field_path(tuple(name.split(PARAMETER_PATH_SEPARATOR)))
             return default if value is _MISSING else value
 
-        matches = [(path, value) for path, value in self._iter_field_paths() if path[-1] == name]
+        matches = self._matching_field_paths(name)
         if not matches:
             return default
-        if len(matches) > 1:
-            candidates = ", ".join(format_parameter_path(path) for path, _ in matches)
-            raise ParameterError(f"Ambiguous parameter name {name!r}; use one of: {candidates}.")
-        return matches[0][1]
+        _, value = matches[0]
+        return value
 
     def has(self, name: str) -> bool:
         """Check whether ``name`` exists anywhere in the parameter tree.
@@ -247,11 +255,7 @@ class Parameters(BaseModel, metaclass=ABCMeta):
         """
         if PARAMETER_PATH_SEPARATOR in name:
             return self._get_field_path(tuple(name.split(PARAMETER_PATH_SEPARATOR))) is not _MISSING
-        matches = [path for path, _ in self._iter_field_paths() if path[-1] == name]
-        if len(matches) > 1:
-            candidates = ", ".join(format_parameter_path(path) for path in matches)
-            raise ParameterError(f"Ambiguous parameter name {name!r}; use one of: {candidates}.")
-        return bool(matches)
+        return bool(self._matching_field_paths(name))
 
     @classmethod
     def from_yaml_str(cls, raw: str) -> Self:

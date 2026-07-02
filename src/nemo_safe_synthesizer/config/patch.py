@@ -129,8 +129,7 @@ def _require_exact_model(model_type: type[ModelT], value: BaseModel) -> None:
 def _field_model_at_path(model_type: type[BaseModel], path: ParameterPath) -> type[BaseModel] | None:
     current = model_type
     for index, part in enumerate(path.parts):
-        field = current.model_fields.get(part)
-        if field is None:
+        if (field := current.model_fields.get(part)) is None:
             raise ParameterError(f"Unknown configuration path {str(path)!r}.")
         nested = nested_model_type(field.annotation, BaseModel)
         if index == len(path.parts) - 1:
@@ -181,8 +180,7 @@ def _mapping_without_extras(model_type: type[BaseModel], source: Mapping[str, ob
     """Adapt a raw mapping to Pydantic's recursive extra-ignore behavior."""
     adapted: dict[str, object] = {}
     for name, value in source.items():
-        field = model_type.model_fields.get(name)
-        if field is None:
+        if (field := model_type.model_fields.get(name)) is None:
             continue
         nested_model = nested_model_type(field.annotation, BaseModel)
         nested_source = _branch_mapping(nested_model, value)
@@ -280,6 +278,14 @@ def _ancestor_pair(left: PatchAssignment, right: PatchAssignment) -> tuple[Patch
     return None, right
 
 
+def _ensure_branch(target: dict[str, object], name: str) -> dict[str, object]:
+    """Return ``target[name]`` as a nested dict, replacing any non-dict value."""
+    branch = target.get(name)
+    nested = cast(dict[str, object], branch) if isinstance(branch, dict) else {}
+    target[name] = nested
+    return nested
+
+
 def _insert_value(
     target: dict[str, object], model_type: type[BaseModel], parts: tuple[str, ...], value: object
 ) -> None:
@@ -289,10 +295,7 @@ def _insert_value(
     if tail:
         if nested_model is None:
             raise AssertionError("Validated paths cannot descend through atomic fields.")
-        branch = target.get(name)
-        nested = cast(dict[str, object], branch) if isinstance(branch, dict) else {}
-        target[name] = nested
-        _insert_value(nested, nested_model, tuple(tail), value)
+        _insert_value(_ensure_branch(target, name), nested_model, tuple(tail), value)
         return
     branch_source = _branch_mapping(nested_model, value)
     if branch_source is None:
@@ -300,10 +303,7 @@ def _insert_value(
         return
     if nested_model is None:
         raise AssertionError("A branch mapping must have a nested model type.")
-    branch = target.get(name)
-    nested = cast(dict[str, object], branch) if isinstance(branch, dict) else {}
-    target[name] = nested
-    _merge_model_mapping(nested, nested_model, branch_source)
+    _merge_model_mapping(_ensure_branch(target, name), nested_model, branch_source)
 
 
 def _merge_model_mapping(target: dict[str, object], model_type: type[BaseModel], source: Mapping[str, object]) -> None:

@@ -33,6 +33,9 @@ from .parameter_paths import insert_parameter_value, split_parameter_path
 
 __all__ = ["pydantic_options", "parse_overrides", "AutoParamType"]
 
+_NEGATION_PREFIX = "no_"
+"""Prefix marking a generated disable flag for a nullable sub-config field."""
+
 _LEGACY_CLI_OPTION_PATHS: dict[str, tuple[str, ...]] = {
     "generation.structured_generation.enabled": ("generation.use_structured_generation",),
     "generation.structured_generation.backend": ("generation.structured_generation_backend",),
@@ -66,9 +69,11 @@ def parse_overrides(values: dict[str, Any] | None = None, field_sep: str = "__")
         return {}
     overrides: dict[str, Any] = {}
     for k, v in values.items():
-        if k.startswith("no_") and isinstance(v, bool):
+        if k.startswith(_NEGATION_PREFIX) and isinstance(v, bool):
             if v:
-                insert_parameter_value(overrides, split_parameter_path(k[3:], field_sep), None)
+                insert_parameter_value(
+                    overrides, split_parameter_path(k.removeprefix(_NEGATION_PREFIX), field_sep), None
+                )
             continue
         if v is None:
             continue
@@ -275,7 +280,7 @@ def _collect_params(cls: type[BaseModel], prefix: str = "") -> list[ClickParam]:
                 model_arg = _nullable_model_arg(get_args(t))
                 if model_arg is not None:
                     params.extend(_collect_params(model_arg, f"{full}."))
-                    params.append(FlagParam(f"no_{full}", full))
+                    params.append(FlagParam(f"{_NEGATION_PREFIX}{full}", full))
                 else:
                     params.append(LeafParam(full, field))
             case _:

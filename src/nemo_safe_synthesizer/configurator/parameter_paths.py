@@ -139,11 +139,9 @@ class ParameterSchema:
                 return ResolvedParameterName(requested)
             return _resolution_from_candidates(name, self._alias_candidates(name))
 
-        top_level = next((field.path for field in self.fields if field.path.parts == (name,)), None)
-        if top_level is not None:
+        if (top_level := next((field.path for field in self.fields if field.path.parts == (name,)), None)) is not None:
             return ResolvedParameterName(top_level)
-        aliases = self._alias_candidates(name)
-        if aliases:
+        if aliases := self._alias_candidates(name):
             return _resolution_from_candidates(name, aliases)
         if not infer_bare_name:
             return UnknownParameterName(name)

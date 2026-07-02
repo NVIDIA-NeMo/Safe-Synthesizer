@@ -186,8 +186,7 @@ class SafeSynthesizerParameters(Parameters):
         assignments: list[PatchAssignment] = []
         resolved_paths: set[ParameterPath] = set()
         for name, value in kwargs.items():
-            path = schema.require(name)
-            if path in resolved_paths:
+            if (path := schema.require(name)) in resolved_paths:
                 raise ParameterError(f"Duplicate parameter path {str(path)!r}.")
             resolved_paths.add(path)
             assignments.append(PatchAssignment(path, value, f"parameter {name!r}", 0))
@@ -243,12 +242,13 @@ class SafeSynthesizerParameters(Parameters):
             not affect the other.
         """
         updates: dict[str, object] = {}
-        generation = runtime.generation.explicit_patch().materialize()
-        if generation or "generation" in runtime.model_fields_set:
-            updates["generation"] = generation
-        evaluation = runtime.evaluation.explicit_patch().materialize()
-        if evaluation or "evaluation" in runtime.model_fields_set:
-            updates["evaluation"] = evaluation
+
+        def _add_section(name: str, section: Parameters) -> None:
+            if (materialized := section.explicit_patch().materialize()) or name in runtime.model_fields_set:
+                updates[name] = materialized
+
+        _add_section("generation", runtime.generation)
+        _add_section("evaluation", runtime.evaluation)
         if "emit_telemetry" in runtime.model_fields_set:
             updates["emit_telemetry"] = runtime.emit_telemetry
         patch = CompiledConfigPatch.from_mapping(
