@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from enum import Enum, auto
 from typing import TYPE_CHECKING, Self, cast
@@ -195,11 +195,13 @@ class ParameterSchema:
             candidates = self._alias_candidates(name)
             if not candidates:
                 continue
-            resolution = _resolution_from_candidates(name, candidates)
-            if isinstance(resolution, AmbiguousParameterName):
-                raise _ambiguous_error("alias", name, resolution.candidates)
-            if isinstance(resolution, ResolvedParameterName):
-                _set_parameter_value(values, resolution.path, values.pop(name))
+            match _resolution_from_candidates(name, candidates):
+                case AmbiguousParameterName() as ambiguous:
+                    raise _ambiguous_error("alias", name, ambiguous.candidates)
+                case ResolvedParameterName() as resolved:
+                    _set_parameter_value(values, resolved.path, values.pop(name))
+                case UnknownParameterName():
+                    pass
         return values
 
     def _alias_candidates(self, name: str) -> tuple[ParameterPath, ...]:
@@ -223,45 +225,47 @@ def _resolution_from_candidates(name: str, candidates: tuple[ParameterPath, ...]
     return ResolvedParameterName(unique[0])
 
 
-def _iter_parameter_fields(model_type: type[Parameters], prefix: tuple[str, ...] = ()) -> tuple[ParameterField, ...]:
-    fields: list[ParameterField] = []
-    for name, field_info in model_type.model_fields.items():
-        path = ParameterPath((*prefix, name))
-        kind = classify_parameter_annotation(field_info.annotation)
-        fields.append(ParameterField(path, kind))
-        if kind is ParameterFieldKind.BRANCH:
-            nested_type = _nested_parameters_type(field_info.annotation)
-            if nested_type is not None:
-                fields.extend(_iter_parameter_fields(nested_type, path.parts))
-    return tuple(fields)
-
-
-def _iter_parameter_aliases(model_type: type[Parameters], prefix: tuple[str, ...] = ()) -> tuple[ParameterAlias, ...]:
-    aliases: list[ParameterAlias] = []
-    for name, target in model_type.parameter_aliases.items():
-        target_path = split_parameter_path(target)
-        canonical_path = ParameterPath((*prefix, *target_path.parts))
-        aliases.append(ParameterAlias(name, canonical_path))
-        if prefix:
-            aliases.append(ParameterAlias(format_parameter_path((*prefix, name)), canonical_path))
-
+def _walk_parameter_models(
+    model_type: type[Parameters], prefix: tuple[str, ...] = ()
+) -> Iterator[tuple[type[Parameters], tuple[str, ...]]]:
+    """Yield every ``Parameters`` model in the tree with its path prefix, pre-order."""
+    yield model_type, prefix
     for name, field_info in model_type.model_fields.items():
         nested_type = _nested_parameters_type(field_info.annotation)
         if nested_type is not None:
-            aliases.extend(_iter_parameter_aliases(nested_type, (*prefix, name)))
+            yield from _walk_parameter_models(nested_type, (*prefix, name))
+
+
+def _iter_parameter_fields(model_type: type[Parameters]) -> tuple[ParameterField, ...]:
+    fields: list[ParameterField] = []
+    for model, prefix in _walk_parameter_models(model_type):
+        for name, field_info in model.model_fields.items():
+            path = ParameterPath((*prefix, name))
+            fields.append(ParameterField(path, classify_parameter_annotation(field_info.annotation)))
+    return tuple(fields)
+
+
+def _iter_parameter_aliases(model_type: type[Parameters]) -> tuple[ParameterAlias, ...]:
+    aliases: list[ParameterAlias] = []
+    for model, prefix in _walk_parameter_models(model_type):
+        for name, target in model.parameter_aliases.items():
+            canonical_path = ParameterPath((*prefix, *split_parameter_path(target).parts))
+            aliases.append(ParameterAlias(name, canonical_path))
+            if prefix:
+                aliases.append(ParameterAlias(format_parameter_path((*prefix, name)), canonical_path))
     return tuple(aliases)
 
 
 def _set_parameter_value(target: dict[str, object], path: ParameterPath, value: object) -> None:
     current = target
     for part in path.parts[:-1]:
-        branch = current.get(part)
-        if isinstance(branch, BaseModel):
-            nested = branch.model_dump(exclude_unset=True)
-        elif isinstance(branch, Mapping):
-            nested = dict(branch)
-        else:
-            nested = {}
+        match current.get(part):
+            case BaseModel() as branch:
+                nested = branch.model_dump(exclude_unset=True)
+            case Mapping() as branch:
+                nested = dict(branch)
+            case _:
+                nested = {}
         current[part] = nested
         current = nested
     current[path.parts[-1]] = value
