@@ -336,6 +336,12 @@ class ModelMetadata(BaseModel):
     )
     """Currently used for time series data. May be a single string or a per-column dict."""
 
+    cold_start_training_metrics: dict[str, int | float] = Field(
+        default_factory=dict,
+        description="Training-time start-example exposure metrics for time-series cold-start experiments.",
+    )
+    """Captured during time-series training and surfaced in cold-start diagnostics."""
+
     max_tokens_per_example: int | None = Field(
         default=None,
         description="Maximum tokenized example length observed during training.",

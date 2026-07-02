@@ -27,6 +27,12 @@ from ..data_processing.record_utils import (
 from ..defaults import FIXED_RUNTIME_GENERATE_ARGS, LOG_DASHES, PSEUDO_GROUP_COLUMN
 from ..generation.batch import Batch
 from ..generation.results import GenerateJobResults, GenerationBatches, GenerationStatus
+from ..generation.timeseries_prompting import (
+    build_partial_record_prefix,
+    coerce_partial_prefix_value,
+    format_cold_start_instruction,
+    format_partial_prefix_field,
+)
 from ..generation.vllm_backend import VllmBackend
 from ..llm.metadata import ModelMetadata
 from ..observability import get_logger
@@ -440,11 +446,9 @@ class TimeseriesBackend(VllmBackend):
 
     def _format_cold_start_instruction(self, group_id: str) -> str:
         """Build the per-group instruction used by the start-instruction strategy."""
-        template = self.config.time_series.cold_start_instruction_template or (
-            "Start group {group_id} at timestamp {start_timestamp}. Generate complete JSONL records."
-            " for the configured schema through {stop_timestamp}, using {timestamp_interval_seconds}-second intervals."
-        )
-        suffix = template.format(
+        return format_cold_start_instruction(
+            base_instruction=self.model_metadata.instruction,
+            template=self.config.time_series.cold_start_instruction_template,
             group_id=group_id,
             group_column=self._group_column,
             timestamp_column=self._time_column,
@@ -452,52 +456,25 @@ class TimeseriesBackend(VllmBackend):
             stop_timestamp=self._stop_timestamp_value,
             timestamp_interval_seconds=self._timestamp_interval_seconds,
         )
-        return f"{self.model_metadata.instruction.rstrip()} {suffix.strip()}"
 
     def _build_partial_record_prefix(self, group_id: str) -> str:
         """Build an incomplete first JSON record for parser-prefix experiments."""
-        known_fields: dict[str, object] = {}
-        if self._group_column and self._group_column != PSEUDO_GROUP_COLUMN and self._group_column in self.columns:
-            known_fields[self._group_column] = group_id
-        if self._time_column and self._time_column in self.columns:
-            known_fields[self._time_column] = self._start_timestamp_value
-        if not known_fields:
-            return ""
-        fragments = [
-            self._format_partial_prefix_field(column, known_fields[column])
-            for column in self.columns
-            if column in known_fields
-        ]
-        if not fragments:
-            return ""
-        return "{" + ",".join(fragments) + ","
+        return build_partial_record_prefix(
+            columns=self.columns,
+            schema=self.schema,
+            group_column=self._group_column,
+            group_id=group_id,
+            timestamp_column=self._time_column,
+            start_timestamp=self._start_timestamp_value,
+        )
 
     def _format_partial_prefix_field(self, column: str, value: object) -> str:
         """Format one schema-ordered partial-prefix field as compact JSON."""
-        coerced_value = self._coerce_partial_prefix_value(column, value)
-        key_json = json.dumps(column, ensure_ascii=False, separators=(",", ":"))
-        value_json = json.dumps(coerced_value, ensure_ascii=False, separators=(",", ":"))
-        return f"{key_json}:{value_json}"
+        return format_partial_prefix_field(column, value, self.schema)
 
     def _coerce_partial_prefix_value(self, column: str, value: object) -> object:
         """Coerce known prefix values to match the JSON schema type."""
-        column_schema = self.schema.get("properties", {}).get(column, {})
-        schema_type = column_schema.get("type")
-        schema_types = schema_type if isinstance(schema_type, list) else [schema_type]
-
-        if "integer" in schema_types:
-            try:
-                return int(value)
-            except (TypeError, ValueError):
-                return value
-        if "number" in schema_types:
-            try:
-                return float(value)
-            except (TypeError, ValueError):
-                return value
-        if "string" in schema_types and value is not None:
-            return str(value)
-        return value
+        return coerce_partial_prefix_value(column, value, self.schema)
 
     def _expected_start_timestamp_seconds(self) -> int | None:
         """Return the parsed configured start timestamp for diagnostics."""
@@ -980,6 +957,7 @@ class TimeseriesBackend(VllmBackend):
             "prefill_context_records": self._prefill_context_size,
             "timestamp_column": self._time_column,
             "group_column": self._group_column,
+            "cold_start_training_metrics": self.model_metadata.cold_start_training_metrics,
             "constraints": constraint_summary,
             "prompt_previews": self._prompt_previews,
             "first_record_diagnostics": list(self._first_record_diagnostics.values()),

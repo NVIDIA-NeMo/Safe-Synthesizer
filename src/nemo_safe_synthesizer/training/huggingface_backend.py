@@ -759,6 +759,11 @@ class HuggingFaceBackend(TrainingBackend):
 
         if self.params.time_series.is_timeseries:
             self.model_metadata.initial_prefill = assembler._get_initial_prefill()  # ty: ignore[unresolved-attribute]
+            self.model_metadata.cold_start_training_metrics = {
+                "num_start_examples": self.training_examples.num_start_examples,
+                "num_training_examples": len(self.training_examples.train),
+                "start_example_ratio": self.training_examples.start_example_ratio,
+            }
 
         self._propagate_max_tokens_per_example()
 

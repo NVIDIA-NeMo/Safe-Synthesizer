@@ -11,6 +11,7 @@ from nemo_safe_synthesizer.config import (
     DifferentialPrivacyHyperparams,
     PiiReplacerConfig,
     SafeSynthesizerParameters,
+    TimeSeriesColdStartTrainingParameters,
     TimeSeriesParameters,
 )
 from nemo_safe_synthesizer.configurator.parameters import Parameters
@@ -227,6 +228,24 @@ class TestSafeSynthesizerParameters:
         """Negative ``timestamp_interval_seconds`` is rejected at construction time."""
         with pytest.raises(ValueError, match="positive"):
             TimeSeriesParameters(is_timeseries=True, timestamp_interval_seconds=-1)
+
+    def test_cold_start_training_defaults_to_noop_weight(self):
+        """The cold-start training multiplier is no-op by default."""
+        params = TimeSeriesColdStartTrainingParameters()
+        assert params.enabled is False
+        assert params.strategies == []
+        assert params.start_example_weight == 1.0
+        assert params.start_example_records is None
+
+    def test_cold_start_training_weight_must_be_at_least_one(self):
+        """``1.0`` is the no-op baseline, so lower weights are rejected."""
+        with pytest.raises(ValidationError):
+            TimeSeriesColdStartTrainingParameters(start_example_weight=0.5)
+
+    def test_cold_start_training_rejects_unknown_strategy(self):
+        """Only implemented cold-start training strategies are accepted."""
+        with pytest.raises(ValidationError):
+            TimeSeriesColdStartTrainingParameters(strategies=["empty"])  # ty: ignore[list-item]
 
     def test_timeseries_without_group_column_warns(self):
         """``is_timeseries=True`` without a group column warns about the auto-injected sequence id."""

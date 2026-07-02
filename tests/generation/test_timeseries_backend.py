@@ -374,6 +374,23 @@ class TestBuildProgressSnapshots:
         assert len(thresholds) == len(set(thresholds))
 
 
+class TestGenerationDiagnostics:
+    """Tests for time-series generation diagnostics payloads."""
+
+    def test_includes_cold_start_training_metrics(self, timeseries_base_params, timeseries_model_metadata, mock_workdir):
+        """Diagnostics expose training-time start-example exposure metrics."""
+        timeseries_model_metadata.cold_start_training_metrics = {
+            "num_start_examples": 4,
+            "num_training_examples": 10,
+            "start_example_ratio": 0.4,
+        }
+        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
+
+        diagnostics = backend.generation_diagnostics()
+
+        assert diagnostics["cold_start_training_metrics"] == timeseries_model_metadata.cold_start_training_metrics
+
+
 class TestUpdateGroupState:
     """Tests for the _update_group_state method."""
 

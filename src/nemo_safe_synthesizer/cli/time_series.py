@@ -223,6 +223,7 @@ def _write_variant_diagnostics(output_dir: Path, diagnostics: dict[str, Any]) ->
 def _build_variant_metrics(variant: str, results: Any, diagnostics: dict[str, Any]) -> dict[str, Any]:
     """Build a compact metrics row for one variant."""
     first_records = diagnostics.get("first_record_diagnostics", [])
+    cold_start_training_metrics = diagnostics.get("cold_start_training_metrics", {})
     comparable = [row for row in first_records if row.get("matched") is not None]
     first_match_rate = (
         sum(1 for row in comparable if row.get("matched")) / len(comparable) if comparable else None
@@ -244,6 +245,9 @@ def _build_variant_metrics(variant: str, results: Any, diagnostics: dict[str, An
         "num_prompts": results.num_prompts,
         "valid_record_fraction": results.valid_record_fraction,
         "first_timestamp_match_rate": first_match_rate,
+        "training_num_start_examples": cold_start_training_metrics.get("num_start_examples"),
+        "training_num_examples": cold_start_training_metrics.get("num_training_examples"),
+        "training_start_example_ratio": cold_start_training_metrics.get("start_example_ratio"),
         "elapsed_time": results.elapsed_time,
         "tokens_per_prompt": results.tokens_per_prompt,
         "finish_reasons": json.dumps(dict(finish_counter), sort_keys=True),
@@ -255,6 +259,7 @@ def _build_failed_variant_metrics(variant: str, exc: Exception, diagnostics: dic
     """Build a metrics row when generation fails before producing results."""
     first_records = diagnostics.get("first_record_diagnostics", [])
     batch_diagnostics = diagnostics.get("batch_diagnostics", [])
+    cold_start_training_metrics = diagnostics.get("cold_start_training_metrics", {})
     valid_records = sum(int(row.get("num_valid_records", 0)) for row in batch_diagnostics)
     invalid_records = sum(int(row.get("num_invalid_records", 0)) for row in batch_diagnostics)
     total_records = valid_records + invalid_records
@@ -273,6 +278,9 @@ def _build_failed_variant_metrics(variant: str, exc: Exception, diagnostics: dic
         "num_prompts": len(diagnostics.get("completion_diagnostics", [])),
         "valid_record_fraction": valid_records / total_records if total_records else 0.0,
         "first_timestamp_match_rate": first_match_rate,
+        "training_num_start_examples": cold_start_training_metrics.get("num_start_examples"),
+        "training_num_examples": cold_start_training_metrics.get("num_training_examples"),
+        "training_start_example_ratio": cold_start_training_metrics.get("start_example_ratio"),
         "elapsed_time": None,
         "tokens_per_prompt": None,
         "finish_reasons": "{}",

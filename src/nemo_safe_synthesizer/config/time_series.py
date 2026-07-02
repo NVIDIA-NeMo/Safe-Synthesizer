@@ -13,8 +13,55 @@ from ..configurator.parameters import (
 )
 
 __all__ = [
+    "TimeSeriesColdStartTrainingParameters",
     "TimeSeriesParameters",
 ]
+
+
+TimeSeriesColdStartStrategy = Literal["partial_record_prefix", "start_instruction"]
+
+
+class TimeSeriesColdStartTrainingParameters(Parameters):
+    """Experimental training controls for time-series cold-start strategies."""
+
+    enabled: Annotated[
+        bool,
+        Field(
+            description=(
+                "Whether to add cold-start-shaped training examples at the beginning of each time-series group."
+            ),
+        ),
+    ] = False
+
+    strategies: list[TimeSeriesColdStartStrategy] = Field(
+        default_factory=list,
+        description=(
+            "Cold-start strategies to add as start-shaped training examples. "
+            "When empty and enabled, the active initialization_strategy is used if it is a cold-start strategy."
+        ),
+    )
+
+    start_example_weight: Annotated[
+        float,
+        Field(
+            ge=1.0,
+            description=(
+                "Multiplier for start-shaped training example exposure. "
+                "1.0 preserves current training, 2.0 doubles the start examples, and 3.0 triples them."
+            ),
+        ),
+    ] = 1.0
+
+    start_example_records: Annotated[
+        int | None,
+        Field(
+            ge=1,
+            description=(
+                "Number of initial records per group to include in each start-shaped example. "
+                "When unset, time_series.prefill_context_records is used."
+            ),
+        ),
+    ] = None
 
 
 class TimeSeriesParameters(Parameters):
@@ -125,6 +172,11 @@ class TimeSeriesParameters(Parameters):
             ),
         ),
     ] = None
+
+    cold_start_training: TimeSeriesColdStartTrainingParameters = Field(
+        description="Experimental training augmentation controls for time-series cold-start strategies.",
+        default_factory=TimeSeriesColdStartTrainingParameters,
+    )
 
     @model_validator(mode="after")
     def check_timestamp_column_or_interval_when_timeseries(self) -> Self:

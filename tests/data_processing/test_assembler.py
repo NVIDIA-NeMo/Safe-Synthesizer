@@ -11,6 +11,7 @@ from datasets import Dataset
 from transformers import PretrainedConfig, PreTrainedTokenizer
 
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
+from nemo_safe_synthesizer.generation.timeseries_prompting import build_partial_record_prefix
 from nemo_safe_synthesizer.data_processing.assembler import (
     Example,
     GroupedDataExampleAssembler,
@@ -29,6 +30,14 @@ from nemo_safe_synthesizer.llm.metadata import DEFAULT_MAX_SEQ_LENGTH, LLMPrompt
 
 STUB_PROMPT = "Test prompt"
 STUB_SEQUENCE = dict(input_ids=[66, 67], attention_mask=[1, 1])
+
+
+def _find_subsequence(values: list[int], needle: list[int]) -> int:
+    """Return the first index of ``needle`` in ``values``, or -1."""
+    for idx in range(len(values) - len(needle) + 1):
+        if values[idx : idx + len(needle)] == needle:
+            return idx
+    return -1
 
 
 # Purpose: Session-scoped assembler config pointing at a local SmolLM3 tokenizer directory
@@ -821,6 +830,163 @@ def test_sequential_assembler_initial_prefill(
     assert '"value": 30' in prefill_a_lines[2] or '"value":30' in prefill_a_lines[2]
     assert '"value": 100' in prefill_b_lines[0] or '"value":100' in prefill_b_lines[0]
     assert '"value": 200' in prefill_b_lines[1] or '"value":200' in prefill_b_lines[1]
+
+
+def test_sequential_assembler_start_example_weight_multiplier_adds_examples(
+    fixture_tokenizer: PreTrainedTokenizer,
+    fixture_session_cache_dir: str,
+    fixture_sequential_metadata: ModelMetadata,
+):
+    """``start_example_weight=2.0`` doubles start-example exposure."""
+    df = pd.DataFrame(
+        {
+            "group": ["A", "A", "B", "B"],
+            "time": [1, 2, 1, 2],
+            "value": [10, 20, 100, 200],
+        }
+    )
+
+    def _make_config(weight: float) -> SafeSynthesizerParameters:
+        config = SafeSynthesizerParameters.from_params(
+            group_training_examples_by="group",
+            order_training_examples_by="time",
+            is_timeseries=True,
+            timestamp_column="time",
+            timestamp_interval_seconds=1,
+            pretrained_model=fixture_tokenizer.name_or_path,
+            rope_scaling_factor=1,
+        )
+        config.time_series.cold_start_training.enabled = True
+        config.time_series.cold_start_training.strategies = ["start_instruction"]
+        config.time_series.cold_start_training.start_example_weight = weight
+        config.time_series.cold_start_training.start_example_records = 2
+        return config
+
+    baseline = SequentialExampleAssembler(
+        dataset=Dataset.from_pandas(df),
+        tokenizer=fixture_tokenizer,
+        metadata=fixture_sequential_metadata,
+        group_training_examples_by="group",
+        order_training_examples_by="time",
+        cache_file_path=fixture_session_cache_dir,
+        seed=42,
+        config=_make_config(1.0),
+    ).assemble_training_examples()
+    doubled = SequentialExampleAssembler(
+        dataset=Dataset.from_pandas(df),
+        tokenizer=fixture_tokenizer,
+        metadata=fixture_sequential_metadata,
+        group_training_examples_by="group",
+        order_training_examples_by="time",
+        cache_file_path=fixture_session_cache_dir,
+        seed=42,
+        config=_make_config(2.0),
+    ).assemble_training_examples()
+
+    assert baseline.num_start_examples == 2
+    assert doubled.train.num_rows == baseline.train.num_rows + 2
+    assert doubled.num_start_examples == baseline.num_start_examples + 2
+    assert doubled.start_example_ratio == pytest.approx(doubled.num_start_examples / doubled.train.num_rows)
+
+
+def test_sequential_assembler_partial_record_prefix_masks_prefix(
+    fixture_tokenizer: PreTrainedTokenizer,
+    fixture_session_cache_dir: str,
+    fixture_sequential_metadata: ModelMetadata,
+):
+    """Partial-prefix start examples mask the prefix and train on the completion."""
+    df = pd.DataFrame(
+        {
+            "group": ["A", "A", "B", "B"],
+            "time": [1, 2, 1, 2],
+            "value": [10, 20, 100, 200],
+        }
+    )
+    config = SafeSynthesizerParameters.from_params(
+        group_training_examples_by="group",
+        order_training_examples_by="time",
+        is_timeseries=True,
+        timestamp_column="time",
+        timestamp_interval_seconds=1,
+        pretrained_model=fixture_tokenizer.name_or_path,
+        rope_scaling_factor=1,
+    )
+    config.time_series.cold_start_training.enabled = True
+    config.time_series.cold_start_training.strategies = ["partial_record_prefix"]
+    config.time_series.cold_start_training.start_example_weight = 2.0
+    config.time_series.cold_start_training.start_example_records = 2
+
+    assembler = SequentialExampleAssembler(
+        dataset=Dataset.from_pandas(df),
+        tokenizer=fixture_tokenizer,
+        metadata=fixture_sequential_metadata,
+        group_training_examples_by="group",
+        order_training_examples_by="time",
+        cache_file_path=fixture_session_cache_dir,
+        seed=42,
+        config=config,
+    )
+    examples = assembler.assemble_training_examples()
+    start_example = examples.train[2]
+    prefix = build_partial_record_prefix(
+        columns=["group", "time", "value"],
+        schema={},
+        group_column="group",
+        group_id="A",
+        timestamp_column="time",
+        start_timestamp=1,
+    )
+    prefix_ids = fixture_tokenizer(prefix, add_special_tokens=False)["input_ids"]
+    suffix_ids = fixture_tokenizer('"value":10}\n', add_special_tokens=False)["input_ids"]
+
+    prefix_idx = _find_subsequence(start_example["input_ids"], prefix_ids)
+    suffix_idx = _find_subsequence(start_example["input_ids"], suffix_ids)
+
+    assert prefix_idx >= 0
+    assert suffix_idx >= 0
+    assert all(label == -100 for label in start_example["labels"][prefix_idx : prefix_idx + len(prefix_ids)])
+    assert any(label != -100 for label in start_example["labels"][suffix_idx : suffix_idx + len(suffix_ids)])
+
+
+def test_sequential_assembler_cold_start_training_supports_pseudo_group(
+    fixture_iris_dataset: Dataset,
+    fixture_tokenizer: PreTrainedTokenizer,
+    fixture_session_cache_dir: str,
+    fixture_sequential_metadata: ModelMetadata,
+):
+    """Cold-start training examples keep the internal pseudo-group hidden."""
+    df = cast(pd.DataFrame, fixture_iris_dataset.select(range(4)).to_pandas())
+    df[PSEUDO_GROUP_COLUMN] = 0
+    df["timestamp"] = range(len(df))
+    config = SafeSynthesizerParameters.from_params(
+        group_training_examples_by=PSEUDO_GROUP_COLUMN,
+        order_training_examples_by="timestamp",
+        is_timeseries=True,
+        timestamp_column="timestamp",
+        timestamp_interval_seconds=1,
+        pretrained_model=fixture_tokenizer.name_or_path,
+        rope_scaling_factor=1,
+    )
+    config.time_series.cold_start_training.enabled = True
+    config.time_series.cold_start_training.strategies = ["start_instruction"]
+    config.time_series.cold_start_training.start_example_weight = 2.0
+    config.time_series.cold_start_training.start_example_records = 2
+
+    examples = SequentialExampleAssembler(
+        dataset=Dataset.from_pandas(df),
+        tokenizer=fixture_tokenizer,
+        metadata=fixture_sequential_metadata,
+        group_training_examples_by=PSEUDO_GROUP_COLUMN,
+        order_training_examples_by="timestamp",
+        cache_file_path=fixture_session_cache_dir,
+        seed=42,
+        config=config,
+    ).assemble_training_examples()
+
+    assert examples.num_start_examples == 2
+    extra_text = fixture_tokenizer.decode(examples.train[-1]["input_ids"], skip_special_tokens=True)
+    assert PSEUDO_GROUP_COLUMN not in extra_text
+    assert "timestamp" in extra_text
 
 
 def test_should_flush_example_boundary_conditions():

@@ -40,6 +40,7 @@ from ..errors import (
     GenerationError,
     ParameterError,
 )
+from ..generation.timeseries_prompting import build_partial_record_prefix, format_cold_start_instruction
 from ..holdout.holdout import grouped_train_test_split, naive_train_test_split
 from ..llm.metadata import ModelMetadata
 from ..observability import get_logger
@@ -240,6 +241,8 @@ class TrainingExamples:
     train: Dataset
     stats: dict[str, Statistics]
     test: Dataset | None = None
+    num_start_examples: int = 0
+    start_example_ratio: float = 0.0
 
 
 class TrainingExampleAssembler(ABC):
@@ -838,8 +841,13 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
     ):
         self.group_by_column = group_training_examples_by
         self.order_by_column = order_training_examples_by
+        self.config: SafeSynthesizerParameters = kwargs.pop("config", SafeSynthesizerParameters())
+        self._num_regular_start_examples = 0
+        self._num_added_start_examples = 0
+        self._last_start_example_ratio = 0.0
 
         dataset = self._reorder_columns(dataset)
+        self._schema_columns = list(dataset.column_names)
         keep_columns = self._build_keep_columns(keep_columns)
 
         super().__init__(
@@ -917,6 +925,16 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
         )
         self.schema_prompt_ids = tokenizer(self.schema_prompt, add_special_tokens=False)["input_ids"]
 
+    def _format_schema_prompt(self, *, instruction: str, prefill: str = "") -> str:
+        """Format a time-series schema prompt with pseudo-group columns hidden."""
+        return utils.create_schema_prompt(
+            self._schema_columns,
+            instruction=instruction,
+            prompt_template=self.metadata.prompt_config.template,
+            prefill=prefill,
+            exclude_columns=list(DEFAULT_EXCLUDE_COLUMNS),
+        )
+
     def _preprocess_before_splitting(self, tokenized_records: Dataset) -> Dataset:
         """No preprocessing needed - sorting is done after split in _apply_grouped_train_test_split."""
         return tokenized_records
@@ -960,7 +978,7 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
     def _get_initial_prefill(self) -> dict[str, str]:
         """Return sample records from the training dataset for each group.
 
-        Returns a dictionary mapping each group_id to its prefill string (first 3 samples per group).
+        Returns a dictionary mapping each group_id to its prefill string.
         For pseudo-grouped single sequences, returns a dict with one key.
 
         Note:
@@ -976,18 +994,165 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
         if self.group_by_column not in self.training_dataset.column_names:
             return {}
 
-        # Get first 3 samples from each group, return as dict
+        prefill_records = self.config.time_series.prefill_context_records
+
+        # Get the configured number of samples from each group, return as dict
         # Use the preserved 'text' column directly to avoid encode/decode roundtrip issues
         seen_groups: dict[str, list[str]] = {}
         for record in self.training_dataset:
             group_value = record[self.group_by_column]
             if group_value not in seen_groups:
                 seen_groups[group_value] = []
-            if len(seen_groups[group_value]) < 3:
+            if len(seen_groups[group_value]) < prefill_records:
                 seen_groups[group_value].append(record["text"])
 
         # Convert lists to joined strings
         return {group: " " + "\n".join(samples) for group, samples in seen_groups.items()}
+
+    def _cold_start_training_strategies(self) -> list[str]:
+        """Return enabled cold-start training strategies for this assembler."""
+        cold_start_config = self.config.time_series.cold_start_training
+        if not cold_start_config.enabled:
+            return []
+        allowed = {"partial_record_prefix", "start_instruction"}
+        configured = [strategy for strategy in cold_start_config.strategies if strategy in allowed]
+        if configured:
+            return configured
+        strategy = self.config.time_series.initialization_strategy
+        return [strategy] if strategy in allowed else []
+
+    def _start_example_records(self) -> int:
+        """Return the configured number of records per cold-start training example."""
+        configured = self.config.time_series.cold_start_training.start_example_records
+        if configured is not None:
+            return configured
+        return max(1, self.config.time_series.prefill_context_records)
+
+    def _iter_group_start_slices(self, dataset: Dataset, num_records: int) -> list[tuple[object, int, int]]:
+        """Return group start slices as ``(group_id, start, end)`` tuples."""
+        if len(dataset) == 0:
+            return []
+        slices: list[tuple[object, int, int]] = []
+        start = 0
+        while start < len(dataset):
+            group_id = dataset[start][self.group_by_column]
+            end_of_group = start + 1
+            while end_of_group < len(dataset) and dataset[end_of_group][self.group_by_column] == group_id:
+                end_of_group += 1
+            slices.append((group_id, start, min(start + num_records, end_of_group)))
+            start = end_of_group
+        return slices
+
+    def _tokenize_text(self, text: str) -> dict[str, list[int]]:
+        """Tokenize a text fragment as a training sequence."""
+        tokenized = self.tokenizer(text, add_special_tokens=False)
+        return {
+            "input_ids": tokenized["input_ids"],
+            "attention_mask": tokenized["attention_mask"],
+        }
+
+    def _build_start_instruction_example(self, dataset: Dataset, group_id: object, start: int, end: int) -> dict:
+        """Build one start-instruction training example."""
+        first_record = dataset[start]
+        instruction = format_cold_start_instruction(
+            base_instruction=self.metadata.instruction,
+            template=self.config.time_series.cold_start_instruction_template,
+            group_id=group_id,
+            group_column=self.group_by_column,
+            timestamp_column=self.order_by_column,
+            start_timestamp=first_record[self.order_by_column],
+            stop_timestamp=self.config.time_series.stop_timestamp,
+            timestamp_interval_seconds=self.config.time_series.timestamp_interval_seconds,
+        )
+        example = Example(
+            prompt=self._format_schema_prompt(instruction=instruction),
+            tokenizer=self.tokenizer,
+            metadata=self.metadata,
+        )
+        target_text = "".join(dataset[start:end]["text"])
+        example.add_sequence(self._tokenize_text(target_text))
+        self.stats["start_records_per_example"].update(end - start)
+        self.stats["start_tokens_per_example"].update(example.num_tokens)
+        return example.to_dict()
+
+    def _build_partial_record_prefix_example(self, dataset: Dataset, group_id: object, start: int, end: int) -> dict | None:
+        """Build one partial-prefix training example with the prefix masked in the prompt."""
+        first_record = dataset[start]
+        prefix = build_partial_record_prefix(
+            columns=self._schema_columns,
+            schema={},
+            group_column=self.group_by_column,
+            group_id=group_id,
+            timestamp_column=self.order_by_column,
+            start_timestamp=first_record[self.order_by_column],
+        )
+        if not prefix:
+            return None
+
+        texts = dataset[start:end]["text"]
+        first_text = texts[0]
+        if not first_text.startswith(prefix):
+            logger.debug(
+                "Skipping partial-record start example because the generated prefix did not match the first record.",
+            )
+            return None
+
+        example = Example(
+            prompt=self._format_schema_prompt(instruction=self.metadata.instruction, prefill=prefix),
+            tokenizer=self.tokenizer,
+            metadata=self.metadata,
+        )
+        target_text = first_text[len(prefix) :] + "".join(texts[1:])
+        example.add_sequence(self._tokenize_text(target_text), add_special_tokens=False)
+        self.stats["start_records_per_example"].update(end - start)
+        self.stats["start_tokens_per_example"].update(example.num_tokens)
+        return example.to_dict()
+
+    def _build_start_example(self, strategy: str, dataset: Dataset, group_id: object, start: int, end: int) -> dict | None:
+        """Build one cold-start training example for the requested strategy."""
+        if strategy == "start_instruction":
+            return self._build_start_instruction_example(dataset, group_id, start, end)
+        if strategy == "partial_record_prefix":
+            return self._build_partial_record_prefix_example(dataset, group_id, start, end)
+        return None
+
+    def _build_weighted_start_examples(self, dataset: Dataset, rng: np.random.Generator) -> Dataset | None:
+        """Build extra train-only cold-start examples according to the configured multiplier."""
+        strategies = self._cold_start_training_strategies()
+        extra_multiplier = max(0.0, self.config.time_series.cold_start_training.start_example_weight - 1.0)
+        if not strategies or extra_multiplier <= 0:
+            return None
+
+        slices = self._iter_group_start_slices(dataset, self._start_example_records())
+        if not slices:
+            return None
+
+        examples = []
+        full_copies = int(math.floor(extra_multiplier))
+        fractional = extra_multiplier - full_copies
+        selected_slices: list[tuple[object, int, int]] = []
+        for _ in range(full_copies):
+            selected_slices.extend(slices)
+        if fractional > 0:
+            num_fractional = math.ceil(fractional * len(slices))
+            indices = rng.permutation(len(slices))[:num_fractional]
+            selected_slices.extend(slices[int(idx)] for idx in indices)
+
+        for strategy in strategies:
+            for group_id, start, end in selected_slices:
+                example = self._build_start_example(strategy, dataset, group_id, start, end)
+                if example is not None:
+                    examples.append(example)
+
+        if not examples:
+            return None
+
+        self._num_added_start_examples = len(examples)
+        logger.info(
+            f"Added {self._num_added_start_examples} cold-start training examples "
+            f"for strategies {', '.join(strategies)}",
+        )
+        return Dataset.from_list(examples)
 
     def _apply_train_test_split(self, dataset: Dataset) -> None:
         """Override split logic to preserve record order and split along group boundaries."""
@@ -1093,20 +1258,40 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
             f"Assembling sequential examples from {data_fraction:.1%} of the input records",
         )
 
+        self._num_regular_start_examples = 0
+        self._num_added_start_examples = 0
+        self._last_start_example_ratio = 0.0
+
         rng = utils.get_random_number_generator(self.seed)
         training_dataset = self._prepare_dataset_for_training(self.training_dataset, data_fraction, rng)
         validation_dataset = self._prepare_dataset_for_training(self.validation_dataset, 1.0, rng)
 
         assert training_dataset is not None
+        start_examples = self._build_weighted_start_examples(
+            self.training_dataset,
+            utils.get_random_number_generator(self.seed),
+        )
+        if start_examples is not None:
+            training_dataset = concatenate_datasets([training_dataset, start_examples]).flatten_indices()
+
+        num_start_examples = self._num_regular_start_examples + self._num_added_start_examples
+        self._last_start_example_ratio = num_start_examples / len(training_dataset) if len(training_dataset) > 0 else 0.0
+        stats = {
+            "tokens_per_record": self.stats["tokens_per_record"],
+            "tokens_per_example": self.stats["tokens_per_example"],
+            "records_per_example": self.stats["records_per_example"],
+            "examples_per_group": self.stats["examples_per_group"],
+        }
+        if self.stats["start_tokens_per_example"].count > 0:
+            stats["start_tokens_per_example"] = self.stats["start_tokens_per_example"]
+            stats["start_records_per_example"] = self.stats["start_records_per_example"]
+
         examples = TrainingExamples(
             train=training_dataset,
             test=validation_dataset,
-            stats={
-                "tokens_per_record": self.stats["tokens_per_record"],
-                "tokens_per_example": self.stats["tokens_per_example"],
-                "records_per_example": self.stats["records_per_example"],
-                "examples_per_group": self.stats["examples_per_group"],
-            },
+            stats=stats,
+            num_start_examples=num_start_examples,
+            start_example_ratio=self._last_start_example_ratio,
         )
 
         utils.log_training_example_stats(examples.stats)
@@ -1191,6 +1376,7 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
         prev_row_idx = None
         current_group_value = None
         num_examples = 0
+        example_starts_at_group_start = True
 
         # Track examples per group for statistics
         examples_per_group: dict[str, int] = defaultdict(int)
@@ -1211,6 +1397,8 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
                 if token_total == 0:
                     current_group_value = record_group
 
+                restart_boundary = prev_row_idx is not None and row_idx < prev_row_idx
+                group_boundary = current_group_value is not None and record_group != current_group_value
                 if _should_flush_example(
                     prev_row_idx=prev_row_idx,
                     row_idx=row_idx,
@@ -1227,6 +1415,8 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
                         num_examples += 1
                         assert current_group_value is not None
                         examples_per_group[current_group_value] += 1
+                        if not is_val and example_starts_at_group_start:
+                            self._num_regular_start_examples += 1
                         pbar.set_postfix({"num_examples": num_examples})
                         yield example_dict
                     # Reset state for next example
@@ -1235,6 +1425,7 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
                     token_total = 0
                     prev_row_idx = None
                     current_group_value = None
+                    example_starts_at_group_start = restart_boundary or group_boundary
                     token_budget = self._next_token_budget(max_new_tokens, is_val)
                     continue
 
@@ -1249,6 +1440,8 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
                 num_examples += 1
                 if current_group_value is not None:
                     examples_per_group[current_group_value] += 1
+                if not is_val and example_starts_at_group_start:
+                    self._num_regular_start_examples += 1
                 pbar.set_postfix({"num_examples": num_examples})
                 yield example_dict
 

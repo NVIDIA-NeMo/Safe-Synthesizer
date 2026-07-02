@@ -160,11 +160,17 @@ The `SequentialExampleAssembler` in `src/nemo_safe_synthesizer/data_processing/a
 4. Pseudo-Group Handling: When no group column is specified, preprocessing adds a `__pseudo_group__` column so ungrouped time series is treated as a single group. This unifies the grouped and ungrouped code paths.
 
 5. Initial Prefill Extraction
-   - Dictionary mapping each group to its first 3 decoded samples (including pseudo-group for single sequences).
+   - Dictionary mapping each group to its first `time_series.prefill_context_records` decoded samples (including pseudo-group for single sequences).
    - Stored in `model_metadata.initial_prefill` for use during generation.
    - Used by `TimeseriesBackend` to seed each group's context.
 
-6. Train/Test Split
+6. Cold-Start Training Augmentation
+   - Optional `time_series.cold_start_training` settings add train-only examples for group starts.
+   - `start_example_weight=1.0` preserves the current exposure; `2.0` doubles and `3.0` triples the start-example exposure.
+   - Supported start-shaped strategies are `partial_record_prefix` and `start_instruction`.
+   - Training records `num_start_examples`, `num_training_examples`, and `start_example_ratio` in model metadata for experiment tracking.
+
+7. Train/Test Split
    - Split is done by group boundaries using `grouped_train_test_split`.
    - Entire groups go to train OR validation, never split across.
    - Re-sort after split since GroupShuffleSplit shuffles indices.
@@ -235,7 +241,7 @@ TimeseriesBackend(VllmBackend)
 
 ### Sliding Window Approach
 
-1. Prefill Initialization: Start with initial prefill from training data (first 3 records per group).
+1. Prefill Initialization: Start with initial prefill from training data (controlled by `time_series.prefill_context_records`).
 2. Batch Generation: Generate multiple samples (default 5) per prompt for each active group.
 3. Response Selection: Keep the response with the most valid records per group.
 4. Context Update: Update sliding window with new valid records.
@@ -247,7 +253,7 @@ TimeseriesBackend(VllmBackend)
 |-----------|-------|-------------|
 | `_samples_per_prompt` | 5 | Number of samples generated per prompt |
 | `_max_prompts_per_batch` | 100 | Max prompts per batch in parallel generation |
-| `_prefill_context_size` | 3 | Number of recent records in sliding window |
+| `_prefill_context_size` | `time_series.prefill_context_records` | Number of recent records in sliding window |
 
 ### Parallel Group Generation Flow
 
@@ -474,7 +480,7 @@ uv run safe-synthesizer time-series cold-start \
 
 Artifacts are written to `<run>/generate/time_series_cold_start` by default. The most useful files for iteration are:
 
-- `metrics.csv`: one row per variant with valid-record rate, prompt count, first-timestamp match rate, finish reasons, and top invalid reasons.
+- `metrics.csv`: one row per variant with valid-record rate, prompt count, first-timestamp match rate, training start-example ratio, finish reasons, and top invalid reasons.
 - `<variant>/prompt_previews.json`: prompt seed details for each group, including visible prefill, optional parser prefix, and expected first timestamp.
 - `<variant>/first_record_diagnostics.csv`: first retained timestamp per group and whether it matched the configured start.
 - `report.html`: side-by-side traces for selected numeric columns. Use `--plot-column` to choose columns explicitly.

@@ -15,7 +15,7 @@ from .job import SafeSynthesizerJobConfig
 from .parameters import SafeSynthesizerParameters
 from .preflight import PreflightParameters
 from .replace_pii import DEFAULT_PII_TRANSFORM_CONFIG, PiiReplacerConfig
-from .time_series import TimeSeriesParameters
+from .time_series import TimeSeriesColdStartTrainingParameters, TimeSeriesParameters
 from .training import TrainingHyperparams
 
 __all__ = [
@@ -31,6 +31,7 @@ __all__ = [
     "SafeSynthesizerResults",
     "SafeSynthesizerSummary",
     "SafeSynthesizerTiming",
+    "TimeSeriesColdStartTrainingParameters",
     "TimeSeriesParameters",
     "TrainingHyperparams",
 ]
