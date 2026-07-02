@@ -12,7 +12,7 @@ from typing import Generic, Literal, TypeAlias, TypeVar, cast
 
 from pydantic import BaseModel
 
-from ..configurator.parameter_paths import ParameterPath
+from ..configurator.parameter_paths import ParameterPath, format_parameter_path
 from ..configurator.pydantic_compat import nested_model_type
 from ..errors import ParameterError
 
@@ -136,7 +136,7 @@ def _field_model_at_path(model_type: type[BaseModel], path: ParameterPath) -> ty
         if index == len(path.parts) - 1:
             return nested
         if nested is None:
-            prefix = ".".join(path.parts[: index + 1])
+            prefix = format_parameter_path(path.parts[: index + 1])
             raise ParameterError(f"Configuration path {str(path)!r} descends through atomic field {prefix!r}.")
         current = nested
     raise AssertionError("ParameterPath guarantees at least one path segment.")
@@ -153,7 +153,7 @@ def _mapping_assignments(
     assignments: list[PatchAssignment] = []
     for name, value in source.items():
         if name not in model_type.model_fields:
-            path = ".".join((*prefix, name))
+            path = format_parameter_path((*prefix, name))
             raise ParameterError(f"Unknown configuration path {path!r}.")
         path = ParameterPath((*prefix, name))
         nested = _field_model_at_path(model_type, ParameterPath((name,)))

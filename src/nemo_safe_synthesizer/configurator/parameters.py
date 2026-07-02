@@ -36,7 +36,7 @@ from ..errors import ParameterError
 from .parameter import (
     DataT,
 )
-from .parameter_paths import ParameterSchema
+from .parameter_paths import PARAMETER_PATH_SEPARATOR, ParameterSchema, format_parameter_path
 
 __all__ = ["Parameters"]
 
@@ -220,15 +220,15 @@ class Parameters(BaseModel, metaclass=ABCMeta):
         Returns:
             The parameter value or sub-group if found, otherwise ``default``.
         """
-        if "." in name:
-            value = self._get_field_path(tuple(name.split(".")))
+        if PARAMETER_PATH_SEPARATOR in name:
+            value = self._get_field_path(tuple(name.split(PARAMETER_PATH_SEPARATOR)))
             return default if value is _MISSING else value
 
         matches = [(path, value) for path, value in self._iter_field_paths() if path[-1] == name]
         if not matches:
             return default
         if len(matches) > 1:
-            candidates = ", ".join(".".join(path) for path, _ in matches)
+            candidates = ", ".join(format_parameter_path(path) for path, _ in matches)
             raise ParameterError(f"Ambiguous parameter name {name!r}; use one of: {candidates}.")
         return matches[0][1]
 
@@ -245,11 +245,11 @@ class Parameters(BaseModel, metaclass=ABCMeta):
         Returns:
             ``True`` if the parameter or sub-group exists.
         """
-        if "." in name:
-            return self._get_field_path(tuple(name.split("."))) is not _MISSING
+        if PARAMETER_PATH_SEPARATOR in name:
+            return self._get_field_path(tuple(name.split(PARAMETER_PATH_SEPARATOR))) is not _MISSING
         matches = [path for path, _ in self._iter_field_paths() if path[-1] == name]
         if len(matches) > 1:
-            candidates = ", ".join(".".join(path) for path in matches)
+            candidates = ", ".join(format_parameter_path(path) for path in matches)
             raise ParameterError(f"Ambiguous parameter name {name!r}; use one of: {candidates}.")
         return bool(matches)
 

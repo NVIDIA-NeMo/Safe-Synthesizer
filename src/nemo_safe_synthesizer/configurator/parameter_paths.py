@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from enum import Enum, auto
 from typing import TYPE_CHECKING, Self, cast
@@ -18,6 +18,13 @@ from .pydantic_compat import nested_model_type
 
 if TYPE_CHECKING:
     from .parameters import Parameters
+
+PARAMETER_PATH_SEPARATOR = "."
+
+
+def format_parameter_path(parts: Iterable[str]) -> str:
+    """Join path segments into the canonical dotted string."""
+    return PARAMETER_PATH_SEPARATOR.join(parts)
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,7 +39,7 @@ class ParameterPath:
 
     @override
     def __str__(self) -> str:
-        return ".".join(self.parts)
+        return format_parameter_path(self.parts)
 
 
 class ParameterFieldKind(Enum):
@@ -123,7 +130,7 @@ class ParameterSchema:
 
     def resolve(self, name: str, *, infer_bare_name: bool = True) -> ParameterNameResolution:
         """Resolve a canonical dotted or bare parameter name."""
-        if "." in name:
+        if PARAMETER_PATH_SEPARATOR in name:
             try:
                 requested = split_parameter_path(name)
             except ValueError:
@@ -140,14 +147,17 @@ class ParameterSchema:
             return _resolution_from_candidates(name, aliases)
         if not infer_bare_name:
             return UnknownParameterName(name)
-        candidates = tuple(field.path for field in self.fields if field.path.parts[-1] == name)
-        return _resolution_from_candidates(name, candidates)
+        return _resolution_from_candidates(name, self._fields_ending_with(name))
 
     def require(self, name: str, *, infer_bare_name: bool = True) -> ParameterPath:
         """Resolve one name or raise a user-facing configuration error."""
         resolution = self.resolve(name, infer_bare_name=infer_bare_name)
-        if not infer_bare_name and isinstance(resolution, UnknownParameterName) and "." not in name:
-            inferred = tuple(field.path for field in self.fields if field.path.parts[-1] == name)
+        if (
+            not infer_bare_name
+            and isinstance(resolution, UnknownParameterName)
+            and PARAMETER_PATH_SEPARATOR not in name
+        ):
+            inferred = self._fields_ending_with(name)
             if len(inferred) == 1:
                 path = inferred[0]
                 parent = path.parts[0]
@@ -162,11 +172,10 @@ class ParameterSchema:
             case ResolvedParameterName() as resolved:
                 return resolved.path
             case UnknownParameterName() as unknown:
-                kind = "path" if "." in name else "name"
+                kind = "path" if PARAMETER_PATH_SEPARATOR in name else "name"
                 raise ParameterError(f"Unknown parameter {kind} {unknown.name!r}.")
             case AmbiguousParameterName() as ambiguous:
-                choices = ", ".join(str(path) for path in ambiguous.candidates)
-                raise ParameterError(f"Ambiguous parameter name {ambiguous.name!r}; use one of: {choices}.")
+                raise _ambiguous_error("name", ambiguous.name, ambiguous.candidates)
         raise ParameterError(f"Unexpected parameter resolution for {name!r}.")
 
     def normalize_aliases(self, source: Mapping[str, object]) -> dict[str, object]:
@@ -188,14 +197,21 @@ class ParameterSchema:
                 continue
             resolution = _resolution_from_candidates(name, candidates)
             if isinstance(resolution, AmbiguousParameterName):
-                choices = ", ".join(str(path) for path in resolution.candidates)
-                raise ParameterError(f"Ambiguous parameter alias {name!r}; use one of: {choices}.")
+                raise _ambiguous_error("alias", name, resolution.candidates)
             if isinstance(resolution, ResolvedParameterName):
                 _set_parameter_value(values, resolution.path, values.pop(name))
         return values
 
     def _alias_candidates(self, name: str) -> tuple[ParameterPath, ...]:
         return tuple(alias.path for alias in self.aliases if alias.name == name)
+
+    def _fields_ending_with(self, name: str) -> tuple[ParameterPath, ...]:
+        return tuple(field.path for field in self.fields if field.path.parts[-1] == name)
+
+
+def _ambiguous_error(kind: str, name: str, candidates: tuple[ParameterPath, ...]) -> ParameterError:
+    choices = ", ".join(str(path) for path in candidates)
+    return ParameterError(f"Ambiguous parameter {kind} {name!r}; use one of: {choices}.")
 
 
 def _resolution_from_candidates(name: str, candidates: tuple[ParameterPath, ...]) -> ParameterNameResolution:
@@ -227,7 +243,7 @@ def _iter_parameter_aliases(model_type: type[Parameters], prefix: tuple[str, ...
         canonical_path = ParameterPath((*prefix, *target_path.parts))
         aliases.append(ParameterAlias(name, canonical_path))
         if prefix:
-            aliases.append(ParameterAlias(".".join((*prefix, name)), canonical_path))
+            aliases.append(ParameterAlias(format_parameter_path((*prefix, name)), canonical_path))
 
     for name, field_info in model_type.model_fields.items():
         nested_type = _nested_parameters_type(field_info.annotation)
@@ -251,7 +267,7 @@ def _set_parameter_value(target: dict[str, object], path: ParameterPath, value: 
     current[path.parts[-1]] = value
 
 
-def split_parameter_path(name: str, separator: str = ".") -> ParameterPath:
+def split_parameter_path(name: str, separator: str = PARAMETER_PATH_SEPARATOR) -> ParameterPath:
     """Split a parameter name into a canonical path."""
     if not separator:
         raise ValueError("A parameter path separator cannot be empty.")
@@ -270,7 +286,7 @@ def insert_parameter_value(target: dict[str, object], path: ParameterPath, value
             current = cast(dict[str, object], value_at_part)
             continue
         if part in current:
-            prefix = ".".join(path.parts[: index + 1])
+            prefix = format_parameter_path(path.parts[: index + 1])
             raise ValueError(f"Conflicting override paths for {str(path)!r}: {prefix!r} already has a parent value.")
         nested: dict[str, object] = {}
         current[part] = nested
