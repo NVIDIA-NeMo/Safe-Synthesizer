@@ -270,9 +270,9 @@ def activation_memory_gib(
 ) -> float:
     r"""Rough activation VRAM on one device given micro-batch geometry.
 
-    Uses ``training.batch_size`` (HF ``per_device_train_batch_size``), not
-    ``gradient_accumulation_steps``. Matches bf16-ish training tensors at
-    2 bytes/element:
+    Uses the resolved physical microbatch (HF
+    ``per_device_train_batch_size``), not the logical batch or accumulation
+    count. Matches bf16-ish training tensors at 2 bytes/element:
 
     \[
         M_\text{act} \approx B \cdot S \cdot H \cdot L \cdot 2\text{ bytes}
@@ -397,11 +397,13 @@ class VRAMHeadroomCheck(MetadataCheck):
                 n_params / 1e9,
             )
 
+        batching = config.training.resolve_batching()
+        per_device_batch_size = batching.per_device_train_batch_size
         seq_len = getattr(ctx.metadata, "max_seq_length", None)
         comp = estimate_training_vram_components(
             n_params=n_params,
             training_cfg=config.training,
-            batch_size=config.training.batch_size,
+            batch_size=per_device_batch_size,
             seq_len=seq_len,
             hidden_size=getattr(autoconfig, "hidden_size", None),
             num_hidden_layers=getattr(autoconfig, "num_hidden_layers", None),
@@ -429,7 +431,7 @@ class VRAMHeadroomCheck(MetadataCheck):
                         f"~{comp.overhead_gib:.1f} GiB reserved){qualifier} "
                         f"exceeds available ~{max_free_gib:.1f} GiB "
                         f"(training.max_vram_fraction={config.training.max_vram_fraction:.2g}). "
-                        f"Per-device batch_size={config.training.batch_size}. {oom_risk}. "
+                        f"Per-device batch_size={per_device_batch_size}. {oom_risk}. "
                         "This remains an estimate -- attention blocks, adapters, optimizer state, and "
                         "checkpointing materially affect real usage."
                     ),
