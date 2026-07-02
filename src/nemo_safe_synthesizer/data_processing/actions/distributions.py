@@ -1,11 +1,18 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Statistical distribution models for sampling numeric and datetime values.
+
+Provides ``Distribution`` (float-valued) and ``DatetimeDistribution``
+hierarchies, each with Gaussian and Uniform concrete implementations.
+Pydantic discriminated unions (``DistributionT``, ``DatetimeDistributionT``)
+allow YAML/JSON configs to select the distribution type via ``distribution_type``.
+"""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
-from functools import partial
 from typing import Annotated, Any, Literal, Optional, Union
 
 import numpy as np
@@ -13,10 +20,10 @@ from pydantic import BaseModel, Field
 
 
 class Distribution(BaseModel, ABC):
-    """
-    Abstract base class representing a distribution.
-    Child classes should specify whichever arguments are needed
-    to properly parametrize their distribution.
+    """Abstract base for float-valued distributions.
+
+    Subclasses specify the parameters needed to define their distribution
+    and implement ``sample`` to draw values.
     """
 
     @abstractmethod
@@ -24,19 +31,13 @@ class Distribution(BaseModel, ABC):
 
 
 class DatetimeDistribution(BaseModel, ABC):
-    """
-    This class is separate from the `Distribution` ABC above
-    because datetimes need slightly different handling than floats.
-    Providing this separate class hierarchy also makes it easier
-    in pydantic to specify what datatypes we expect in the distribution
-    parameters (float vs datetime), as well as dt-specific arguments.
+    """Abstract base for datetime-valued distributions.
 
-    In practice, this means creating a "copy" `DatetimeDistribution`
-    for each regular `Distribution` where it makes sense. We could probably
-    automate some of this with generics, but IMO that'd just make it confusing
-    to read. We're still able to reuse the original `Distribution` class most
-    of the time in `DatetimeDistribution`, making the only business logic
-    really be about how we want to translate dates --> floats.
+    Separate from ``Distribution`` because datetime parameters (``datetime``,
+    ``timedelta``) differ from floats, and pydantic validation benefits from
+    distinct type hierarchies. Subclasses implement ``sample_datetimes`` to
+    produce raw datetime samples; universal post-processing (rounding via
+    ``precision``, formatting via ``format``) is applied by ``sample``.
     """
 
     precision: Optional[timedelta] = None
@@ -67,7 +68,7 @@ class DatetimeDistribution(BaseModel, ABC):
     @abstractmethod
     def sample_datetimes(self, num_records: int) -> list[datetime]: ...
 
-    def sample(self, num_records: int) -> Union[list[datetime], list[str]]:
+    def sample(self, num_records: int) -> list[datetime] | list[str]:
         samples = self.sample_datetimes(num_records)
         return self._apply_universal_params(samples)
 
@@ -75,21 +76,20 @@ class DatetimeDistribution(BaseModel, ABC):
         rounded_ts = round(dt.timestamp() / precision.total_seconds()) * precision.total_seconds()
         return datetime.fromtimestamp(rounded_ts)
 
-    def _apply_universal_params(self, samples: list[datetime]) -> list[datetime]:
-        ret: list[str] | list[datetime] = samples
-
-        ops = []
-        if self.precision is not None:
-            ops.append(partial(self._round_datetime, self.precision))
+    def _apply_universal_params(self, samples: list[datetime]) -> list[datetime] | list[str]:
         if self.format is not None:
-            ops.append(lambda x: x.strftime(self.format))
+            formatted: list[str] = []
+            for sample in samples:
+                if self.precision is not None:
+                    sample = self._round_datetime(sample, self.precision)
+                formatted.append(sample.strftime(self.format))
+            return formatted
 
+        ret: list[datetime] = []
         for sample in samples:
-            n = sample
-            for op in ops:
-                n = op(n)
-            ret.append(n)
-
+            if self.precision is not None:
+                sample = self._round_datetime(sample, self.precision)
+            ret.append(sample)
         return ret
 
 
@@ -136,7 +136,7 @@ class DatetimeUniformDistribution(DatetimeDistribution):
 
 
 DistributionT = Annotated[Distribution, Field(discriminator="distribution_type")]
-DistributionT.__origin__ = Union[tuple(Distribution.__subclasses__())]  # type: ignore
+DistributionT.__origin__ = Union[tuple(Distribution.__subclasses__())]  # type: ignore  # noqa: UP007 -- runtime Union needed for dynamic tuple()
 
 DatetimeDistributionT = Annotated[DatetimeDistribution, Field(discriminator="distribution_type")]
-DatetimeDistributionT.__origin__ = Union[tuple(DatetimeDistribution.__subclasses__())]  # type: ignore
+DatetimeDistributionT.__origin__ = Union[tuple(DatetimeDistribution.__subclasses__())]  # type: ignore  # noqa: UP007 -- runtime Union needed for dynamic tuple()

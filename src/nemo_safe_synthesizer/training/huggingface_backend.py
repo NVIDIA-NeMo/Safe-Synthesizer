@@ -1,12 +1,19 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""HuggingFace Trainer backend for LoRA fine-tuning."""
+
+from __future__ import annotations
+
 import io
 import logging
+import math
 import time
+from collections.abc import Callable
 from contextlib import redirect_stdout
 from functools import partial
-from typing import TYPE_CHECKING
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pandas as pd
@@ -15,21 +22,23 @@ import wandb
 from datasets import Dataset
 from peft import LoftQConfig, LoraConfig, TaskType, prepare_model_for_kbit_training
 from peft import get_peft_model as get_peft_model_hf
-from rich import print
 from transformers import (
     AutoConfig,
     AutoModelForCausalLM,
-    AutoTokenizer,
     DataCollatorForTokenClassification,
     EvalPrediction,
     IntervalStrategy,
+    PreTrainedModel,
+    PreTrainedTokenizer,
     PrinterCallback,
     Trainer,
     TrainingArguments,
 )
 from transformers.trainer_pt_utils import get_model_param_count
+from transformers.utils.quantization_config import QuantizationConfigMixin
 
 from .. import utils
+from ..cli.artifact_structure import BoundDir
 from ..config.autoconfig import AutoConfigResolver
 from ..data_processing.assembler import TrainingExampleAssembler
 from ..data_processing.dataset import make_json_schema
@@ -42,11 +51,13 @@ from ..defaults import (
 from ..errors import DataError, ParameterError
 from ..generation.processors import create_processor
 from ..llm.utils import (
+    ModelRef,
     add_bos_eos_tokens_to_tokenizer,
     cleanup_memory,
     get_device_map,
-    get_max_vram,
+    get_max_memory_map,
     get_quantization_config,
+    load_fast_tokenizer,
 )
 from ..observability import get_logger, traced_runtime, traced_user
 from ..privacy.dp_transformers.dp_utils import (
@@ -66,8 +77,12 @@ from ..training.callbacks import (
 from ..training.timeseries_preprocessing import process_timeseries_data
 from ..utils import write_json
 
+if TYPE_CHECKING:
+    from ..config.training import QuantizationScheme
+
 logger = get_logger(__name__)
 
+DEFAULT_ROPE_THETA = 10000.0
 
 FIXED_RUNTIME_TRAINING_ARGS = {
     # the training time is set by the number of training records
@@ -78,30 +93,54 @@ FIXED_RUNTIME_TRAINING_ARGS = {
     "per_device_eval_batch_size": 2,
     "optim": "paged_adamw_32bit",
     "bf16": True,
-    "group_by_length": False,
     "ddp_find_unused_parameters": False,
 }
+"""Training arguments fixed by Safe Synthesizer at runtime.
+
+Training duration is controlled by ``num_input_records_to_sample`` and the
+assembled ``data_fraction``, not by epochs. These values keep the HuggingFace
+Trainer behavior stable across CLI and SDK entry points.
+"""
 
 
 class HuggingFaceBackend(TrainingBackend):
+    """Training backend built on the HuggingFace ``Trainer``.
+
+    Handles model loading (``AutoModelForCausalLM``), LoRA/QLoRA wrapping,
+    RoPE scaling, optional differential-privacy training via
+    [`OpacusDPTrainer`][nemo_safe_synthesizer.privacy.dp_transformers.dp_utils.OpacusDPTrainer],
+    and artifact persistence (adapter, schema, metadata).
+
+    Quantized training prepares the model with
+    ``prepare_model_for_kbit_training`` before applying LoRA. Non-quantized
+    training enables gradient checkpointing, input gradients, and disables
+    ``use_cache`` before wrapping the model.
+    """
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.trainer_type = Trainer
+        self.trainer_type: type[Trainer] | partial[OpacusDPTrainer] = Trainer
         self.model_loader_type = AutoModelForCausalLM
-        self.training_output_dir = self.workdir.train.cache.path
+        self.training_output_dir = Path(self.workdir.train.cache)
+        self.model_ref = ModelRef.parse(self.params.training.pretrained_model)
         self.autoconfig = AutoConfig.from_pretrained(
-            self.params.training.pretrained_model, trust_remote_code=self._trust_remote_code_for_model()
+            self.model_ref.target(),
+            trust_remote_code=self.model_ref.trust_remote_code,
         )
 
-    def _load_pretrained_model(self, **model_args):
+    def _load_pretrained_model(self, **model_args: Any) -> None:
+        """Load the pretrained model and tokenizer via ``AutoModelForCausalLM``."""
         self.autoconfig.max_position_embeddings = (
             model_args.pop("max_seq_length", None) or self.model_metadata.max_seq_length
         )
+        self._normalize_rope_parameters()
         self.model = self.model_loader_type.from_pretrained(**self.framework_load_params, config=self.autoconfig)
 
-        self.tokenizer = add_bos_eos_tokens_to_tokenizer(
-            AutoTokenizer.from_pretrained(
-                self.params.training.pretrained_model, model_max_length=model_args.get("max_seq_length", None)
+        self.tokenizer: PreTrainedTokenizer = add_bos_eos_tokens_to_tokenizer(
+            load_fast_tokenizer(
+                self.model_ref.target(),
+                trust_remote_code=self.model_ref.trust_remote_code,
+                model_max_length=model_args.get("max_seq_length", None),
             )
         )
 
@@ -115,7 +154,6 @@ class HuggingFaceBackend(TrainingBackend):
             "model_metadata",
             "training_dataset",
             "data_fraction",
-            "logging_level",
             "true_dataset_size",
             "eval_dataset",
             "generation_eval",
@@ -140,40 +178,103 @@ class HuggingFaceBackend(TrainingBackend):
         """
         return {k: v for k, v in kwargs.items() if k not in self._TRAINER_SPECIFIC_KEYS}
 
+    def _resolve_attn_implementation(self, configured: str) -> str:
+        """Resolve attention implementation, falling back to sdpa if kernels is unavailable.
+
+        Args:
+            configured: The configured attention implementation string.
+
+        Returns:
+            The resolved attention implementation string.
+        """
+        if configured.startswith("kernels-community/"):
+            try:
+                import kernels  # noqa: F401
+
+                return configured
+            except ImportError:
+                logger.warning(
+                    f"kernels package not installed, cannot use '{configured}'. "
+                    "Falling back to 'sdpa'. Install with: pip install kernels"
+                )
+                return "sdpa"
+        return configured
+
     def _build_base_framework_params(self, model_kwargs: dict) -> dict:
         """Build the base framework parameters for model loading.
 
         Args:
             model_kwargs: Filtered model keyword arguments.
-            max_seq_length: The maximum sequence length.
+
+        Returns:
+            Dictionary of parameters for ``from_pretrained``.
         """
         return dict(
-            pretrained_model_name_or_path=self.params.training.pretrained_model,
+            pretrained_model_name_or_path=self.model_ref.target(),
+            trust_remote_code=self.model_ref.trust_remote_code,
             device_map=model_kwargs.pop(
-                "device_map", get_device_map(self.params.training.pretrained_model, autoconfig=self.autoconfig)
+                "device_map",
+                get_device_map(
+                    self.model_ref.target(),
+                    autoconfig=self.autoconfig,
+                    trust_remote_code=self.model_ref.trust_remote_code,
+                ),
             ),
-            attn_implementation=model_kwargs.pop("attn_implementation", "flash_attention_2"),
+            attn_implementation=model_kwargs.pop(
+                "attn_implementation", self._resolve_attn_implementation(self.params.training.attn_implementation)
+            ),
             dtype=model_kwargs.pop("dtype", torch.bfloat16),
             **model_kwargs,
         )
 
-    def _get_quantization_config_if_enabled(self):
-        """Get the quantization config if quantization is enabled.
+    def _resolve_quantization_scheme(self) -> "QuantizationScheme":
+        """Resolve which quantization scheme to apply.
 
-        Returns:
-            The quantization config, or None if quantization is disabled.
+        Prefers the explicit ``quantization_scheme`` field; falls back to
+        the legacy ``quantization_bits`` alias when unset.
+        """
+        from ..config.training import QuantizationScheme
+
+        cfg = self.params.training
+        if cfg.quantization_scheme is not None:
+            return cfg.quantization_scheme
+        return QuantizationScheme.BNB_4BIT if cfg.quantization_bits == 4 else QuantizationScheme.BNB_8BIT
+
+    def _get_quantization_config_if_enabled(self) -> QuantizationConfigMixin | None:
+        """Build the v5 quantization config for the configured scheme, or None.
+
+        Returns ``None`` when ``quantize_model`` is disabled. Otherwise
+        resolves the scheme (new ``quantization_scheme`` field, or legacy
+        ``quantization_bits`` fallback) and returns the corresponding v5
+        config object — ``BitsAndBytesConfig`` for the bnb-* schemes,
+        ``FineGrainedFP8Config``/``TorchAoConfig``/``Mxfp4Config`` for the
+        others.
         """
         if not self.params.training.quantize_model:
             return None
 
-        if self.params.training.quantization_bits:
-            logger.info(f"Quantizing model to {self.params.training.quantization_bits} bits")
-            return get_quantization_config(self.params.training.quantization_bits)
-        else:
-            logger.warning("Quantization bits not specified. 8 bits will be used")
-            return get_quantization_config(8)
+        scheme = self._resolve_quantization_scheme()
+        logger.info(f"Quantizing model with scheme={scheme.value}")
+        return get_quantization_config(scheme)
 
-    def _apply_rope_scaling(self, framework_params: dict, **kwargs):
+    def _normalize_rope_parameters(self) -> None:
+        """Ensure Transformers v5 ``rope_parameters`` includes ``rope_theta``."""
+        rope_parameters = getattr(self.autoconfig, "rope_parameters", None)
+        if not isinstance(rope_parameters, dict) or "rope_theta" in rope_parameters:
+            return
+
+        theta = rope_parameters.get("theta")
+        if not isinstance(theta, (int, float)):
+            rope_scaling = getattr(self.model_metadata, "rope_scaling", None)
+            theta = getattr(rope_scaling, "theta", None)
+        if not isinstance(theta, (int, float)):
+            theta = getattr(self.autoconfig, "rope_theta", DEFAULT_ROPE_THETA)
+        if not isinstance(theta, (int, float)):
+            theta = DEFAULT_ROPE_THETA
+
+        rope_parameters["rope_theta"] = float(theta)
+
+    def _apply_rope_scaling(self, framework_params: dict, **kwargs: Any) -> None:
         """Apply rope scaling from model_metadata to the config.
 
         The RopeScaling configuration is now managed by the ModelMetadata class,
@@ -205,13 +306,12 @@ class HuggingFaceBackend(TrainingBackend):
         logger.warning(msg)
 
     @traced_runtime("prepare_config")
-    def prepare_config(self, add_max_memory: bool = True, **kwargs):
-        """
-        Set common model arguments for initializing a model.
+    def prepare_config(self, add_max_memory: bool = True, **kwargs: Any) -> None:
+        """Set common model arguments for initializing a model.
 
         Args:
             add_max_memory: Whether to add max_memory to the model arguments.
-            kwargs: Additional keyword arguments, overriding default arguments when set.
+            **kwargs: Additional keyword arguments, overriding default arguments when set.
         """
         if self.framework_load_params:
             logger.info("already prepared loading parameters")
@@ -220,9 +320,15 @@ class HuggingFaceBackend(TrainingBackend):
         logger.info(f"preparing parameters for HF Automodel with model: {self.params.training.pretrained_model}")
 
         model_kwargs = self._filter_model_kwargs(kwargs)
+        # Pop unconditionally: max_vram_fraction is an NSS-internal kwarg that
+        # transformers does not accept, so it must not leak into
+        # framework_load_params even when add_max_memory is False.
+        frac = model_kwargs.pop("max_vram_fraction", None)
 
         if add_max_memory:
-            model_kwargs["max_memory"] = get_max_vram(memory_fraction=model_kwargs.pop("max_vram_fraction", None))
+            if frac is None:
+                frac = self.params.training.max_vram_fraction
+            model_kwargs["max_memory"] = get_max_memory_map(max_vram_fraction=frac)
 
         framework_params = self._build_base_framework_params(model_kwargs)
         quant_config = self._get_quantization_config_if_enabled()
@@ -232,7 +338,12 @@ class HuggingFaceBackend(TrainingBackend):
         self._apply_rope_scaling(framework_params=framework_params, **kwargs)
         self.framework_load_params = framework_params
 
-    def _prepare_quantize_base(self, **quantize_params: dict):
+    def _prepare_quantize_base(self, **quantize_params: dict) -> None:
+        """Populate ``quant_params`` with LoRA and optional quantization settings.
+
+        ``peft_implementation="loftq"`` adds a ``LoftQConfig`` initialized
+        with the configured quantization bit width.
+        """
         self.quant_params = dict(
             task_type=TaskType.CAUSAL_LM,
             init_lora_weights=True,
@@ -242,20 +353,26 @@ class HuggingFaceBackend(TrainingBackend):
             peft_type=self.params.training.peft_implementation,
             lora_alpha=int(self.params.training.lora_alpha_over_r * self.params.training.lora_r),
             use_rslora=FIXED_RUNTIME_LORA_ARGS["use_rslora"],
-            bias="none",  # only none is unsloth optimized
-            lora_dropout=0,  # only 0 is unsloth optimized
         )
 
         if self.params.training.quantize_model:
+            scheme = self._resolve_quantization_scheme()
             self.quant_params = self.quant_params | quantize_params
-            logger.info(f"Quantizing model to {self.params.training.quantization_bits} bits")
+            logger.info(f"Quantizing model with scheme={scheme.value} (~{scheme.effective_bits} bits/param)")
             self.quant_params["peft_type"] = self.params.training.peft_implementation.upper()
             self.quant_params["init_lora_weights"] = True
             if self.params.training.peft_implementation == "loftq":
-                logger.info(f"using loftq with {self.params.training.quantization_bits} bits")
-                self.quant_params["loftq_config"] = LoftQConfig(loftq_bits=self.params.training.quantization_bits)
+                if not scheme.is_bitsandbytes:
+                    raise ParameterError(
+                        f"peft_implementation='loftq' requires a bitsandbytes scheme; "
+                        f"got quantization_scheme={scheme.value}. Use bnb-4bit or bnb-8bit, "
+                        f"or switch to peft_implementation='qlora'/'lora'."
+                    )
+                logger.info(f"using loftq with {scheme.effective_bits} bits")
+                self.quant_params["loftq_config"] = LoftQConfig(loftq_bits=scheme.effective_bits)
 
-    def maybe_quantize(self, **quant_params: dict):
+    def maybe_quantize(self, **quant_params: dict) -> None:
+        """Apply LoRA wrapping (and optional k-bit quantization) to the model."""
         self._prepare_quantize_base(**quant_params)
         lora_config = LoraConfig(**self.quant_params)
         if not self.params.training.quantize_model:
@@ -266,19 +383,21 @@ class HuggingFaceBackend(TrainingBackend):
         else:
             self.model = prepare_model_for_kbit_training(self.model, use_gradient_checkpointing=True)
 
-        self.model = get_peft_model_hf(self.model, peft_config=lora_config)
+        if not isinstance(self.model, PreTrainedModel):
+            raise TypeError(f"Expected PreTrainedModel, got {type(self.model)}")
+        peft_model = get_peft_model_hf(self.model, peft_config=lora_config)
+        self.model = peft_model  # ty: ignore[invalid-assignment] -- get_peft_model returns PeftModel|PeftMixedModel; PeftMixedModel is never produced here (single adapter)
         parameter_count = get_model_param_count(self.model, trainable_only=True) / 1e6
         logger.info(
             f"Using PEFT - {parameter_count:.2f} million parameters are trainable",
         )
 
-    def load_model(self, **model_args):
-        """
-        Load an AutoModelForCausalLM instance with specified arguments.
+    def load_model(self, **model_args: Any) -> None:
+        """Load an ``AutoModelForCausalLM`` instance with specified arguments.
 
         Args:
             **model_args: Additional keyword arguments for model configuration,
-                          passed directly to AutoModelForCausalLM.from_pretrained().
+                passed directly to ``AutoModelForCausalLM.from_pretrained()``.
         """
         logger.info(f"loading pretrained model: {self.params.training.pretrained_model}")
         self.prepare_config(**model_args)
@@ -295,7 +414,7 @@ class HuggingFaceBackend(TrainingBackend):
             IntervalStrategy.STEPS if self.params.training.validation_ratio > 0 else IntervalStrategy.NO
         )
         return dict(
-            output_dir=self.workdir.train.cache.path,
+            output_dir=Path(self.workdir.train.cache),
             per_device_train_batch_size=self.params.training.batch_size,
             gradient_accumulation_steps=self.params.training.gradient_accumulation_steps,
             lr_scheduler_type=self.params.training.lr_scheduler,
@@ -312,6 +431,9 @@ class HuggingFaceBackend(TrainingBackend):
     def _apply_eval_dataset_overrides(self, training_args: dict) -> None:
         """Apply eval dataset-specific overrides to training args.
 
+        When an explicit eval dataset is present, evaluation is step-based and
+        includes loss for metrics with accumulation disabled.
+
         Args:
             training_args: The training arguments dictionary to modify.
         """
@@ -322,8 +444,13 @@ class HuggingFaceBackend(TrainingBackend):
             training_args["include_for_metrics"] = ["loss"]
             training_args["eval_accumulation_steps"] = 1
 
-    def _configure_dp_training(self, training_args: dict):
+    def _configure_dp_training(self, training_args: dict) -> DataCollatorForPrivateTokenClassification:
         """Configure differential privacy training settings.
+
+        DP uses ``DataCollatorForPrivateTokenClassification`` and
+        ``OpacusDPTrainer``. The HuggingFace ``max_grad_norm`` is set to zero
+        because Opacus handles per-sample clipping. Gradient checkpointing is
+        disabled because it is not compatible with the Opacus optimizer wrapping.
 
         Args:
             training_args: The training arguments dictionary to modify.
@@ -334,7 +461,11 @@ class HuggingFaceBackend(TrainingBackend):
         Raises:
             ParameterError: If required DP parameters are missing.
         """
-        eps = self.params.privacy.epsilon
+        privacy = self.params.privacy
+        if privacy is None:
+            raise ParameterError("Privacy configuration is required for DP training")
+
+        eps = privacy.epsilon
         logger.user.info(
             f"Differentially-private training is enabled, ε is set to {eps}",
         )
@@ -343,6 +474,14 @@ class HuggingFaceBackend(TrainingBackend):
 
         training_args["remove_unused_columns"] = False  # required for DP data processing
         training_args["max_grad_norm"] = 0.0  # required for opacus optimizer
+        _ = training_args.pop("gradient_checkpointing", None)
+
+        if hasattr(self, "model"):
+            model = self.model
+            if hasattr(model, "gradient_checkpointing_disable"):
+                model.gradient_checkpointing_disable()
+            if hasattr(model, "config"):
+                model.config.use_cache = False
 
         if self.true_dataset_size is None or self.data_fraction is None:
             raise ParameterError(
@@ -351,21 +490,20 @@ class HuggingFaceBackend(TrainingBackend):
 
         privacy_args = PrivacyArguments(
             target_epsilon=eps,
-            target_delta=self.params.privacy.delta,
-            per_sample_max_grad_norm=self.params.privacy.per_sample_max_grad_norm,
+            target_delta=privacy.delta,
+            per_sample_max_grad_norm=privacy.per_sample_max_grad_norm,
         )
 
-        self.trainer_type: partial[OpacusDPTrainer] = partial(
+        self.trainer_type = partial(  # ty: ignore[invalid-assignment] -- partial is assignable at runtime
             OpacusDPTrainer,
             privacy_args=privacy_args,
             true_dataset_size=self.true_dataset_size,
             data_fraction=self.data_fraction,
         )
-        _ = training_args.pop("gradient_checkpointing", None)
 
         return data_collator
 
-    def _configure_standard_training(self, training_args: dict):
+    def _configure_standard_training(self, training_args: dict) -> DataCollatorForTokenClassification:
         """Configure standard (non-DP) training settings.
 
         Args:
@@ -385,7 +523,11 @@ class HuggingFaceBackend(TrainingBackend):
 
         return data_collator
 
-    def _create_trainer(self, training_args: TrainingArguments, data_collator) -> Trainer:
+    def _create_trainer(
+        self,
+        training_args: TrainingArguments,
+        data_collator: DataCollatorForTokenClassification | DataCollatorForPrivateTokenClassification,
+    ) -> Trainer:
         """Create the trainer instance with the configured parameters.
 
         Args:
@@ -395,7 +537,8 @@ class HuggingFaceBackend(TrainingBackend):
         Returns:
             The configured Trainer instance.
         """
-        return self.trainer_type(
+        factory = cast(Callable[..., Trainer], self.trainer_type)
+        trainer = factory(
             model=self.model,
             processing_class=self.tokenizer,
             args=training_args,
@@ -406,6 +549,7 @@ class HuggingFaceBackend(TrainingBackend):
             preprocess_logits_for_metrics=preprocess_logits_for_metrics,
             callbacks=self.callbacks,
         )
+        return trainer
 
     def _configure_trainer_callbacks(self, trainer: Trainer, training_args: dict) -> None:
         """Configure callbacks on the trainer.
@@ -419,9 +563,7 @@ class HuggingFaceBackend(TrainingBackend):
 
         # Add our own callbacks. The progress bar should be used internally.
         trainer.add_callback(
-            SafeSynthesizerWorkerCallback()
-            if self.logging_level in (logging.INFO, logging.DEBUG)
-            else ProgressBarCallback()
+            SafeSynthesizerWorkerCallback() if logger.isEnabledFor(logging.INFO) else ProgressBarCallback()
         )
 
         for callback in self.callbacks or []:
@@ -437,6 +579,9 @@ class HuggingFaceBackend(TrainingBackend):
             trainer: The Trainer instance to configure.
             training_args: The training arguments dictionary containing inference_eval_kwargs.
         """
+        if self.dataset_schema is None:
+            raise ParameterError("dataset_schema must be set before configuring inference eval callback")
+
         logger.info(
             "👀 Heads up -> Generation eval is enabled ✅",
         )
@@ -448,6 +593,7 @@ class HuggingFaceBackend(TrainingBackend):
                     config=self.params,
                     schema=self.dataset_schema,
                     metadata=self.model_metadata,
+                    tokenizer=self.tokenizer,
                 ),
                 num_prompts_per_batch=DEFAULT_VALID_RECORD_EVAL_BATCH_SIZE,
                 **training_args["inference_eval_kwargs"],
@@ -455,7 +601,7 @@ class HuggingFaceBackend(TrainingBackend):
         )
 
     @traced_runtime("prepare_params")
-    def prepare_params(self, **training_args):
+    def prepare_params(self, **training_args: Any) -> None:
         """Prepare training parameters and create the trainer.
 
         Args:
@@ -467,7 +613,7 @@ class HuggingFaceBackend(TrainingBackend):
         training_args = self._build_base_training_args()
         self._apply_eval_dataset_overrides(training_args)
 
-        if self.params.privacy.dp_enabled:
+        if self.params.privacy is not None and self.params.privacy.dp_enabled:
             data_collator = self._configure_dp_training(training_args)
         else:
             data_collator = self._configure_standard_training(training_args)
@@ -478,52 +624,7 @@ class HuggingFaceBackend(TrainingBackend):
         self.trainer = self._create_trainer(self.train_args, data_collator)
         self._configure_trainer_callbacks(self.trainer, training_args)
 
-    def _validate_groupby_column(self, df) -> None:
-        """Validate the groupby column exists and has no missing values.
-
-        Args:
-            df: The DataFrame to validate.
-
-        Raises:
-            ParameterError: If the groupby column doesn't exist.
-            DataError: If the groupby column has missing values.
-        """
-        col = self.params.data.group_training_examples_by
-        if col is None:
-            return
-
-        if col not in df.columns:
-            msg = f"Group by column '{col}' not found in the input data."
-            logger.error(msg)
-            raise ParameterError(msg)
-
-        if df[col].isnull().any():
-            msg = f"Group by column '{col}' has missing values. Please remove/replace them."
-            logger.error(msg)
-            raise DataError(msg)
-
-    def _validate_orderby_column(self, df) -> None:
-        """Validate the orderby column exists in the dataset.
-
-        Args:
-            df: The DataFrame to validate.
-
-        Raises:
-            ParameterError: If the orderby column doesn't exist.
-        """
-        orderby_col = self.params.data.order_training_examples_by
-
-        ## For timeseries, if groupby is set without timestamp column, we will skip for now
-        ## timestamp column will be added later and orderby column will be the added timestamp column
-        if self.params.time_series.is_timeseries and self.params.time_series.timestamp_column is None:
-            return
-
-        if orderby_col and orderby_col not in df.columns:
-            msg = f"Order by column '{orderby_col}' not found in the input data."
-            logger.error(msg)
-            raise ParameterError(msg)
-
-    def _apply_preprocessing(self, df):
+    def _apply_preprocessing(self, df: pd.DataFrame) -> pd.DataFrame:
         """Apply action_executor preprocessing if available.
 
         Args:
@@ -559,7 +660,7 @@ class HuggingFaceBackend(TrainingBackend):
         df, self.params = process_timeseries_data(df, self.params)
         return df
 
-    def _create_example_assembler(self, hf_dataset: Dataset):
+    def _create_example_assembler(self, hf_dataset: Dataset) -> TrainingExampleAssembler:
         """Create the example assembler for training.
 
         Args:
@@ -579,7 +680,7 @@ class HuggingFaceBackend(TrainingBackend):
         )
 
     @traced_user("log_dataset_statistics")
-    def _log_dataset_statistics(self, assembler) -> None:
+    def _log_dataset_statistics(self, assembler: TrainingExampleAssembler) -> None:
         """Log statistics about the training and validation datasets.
 
         Args:
@@ -599,34 +700,50 @@ class HuggingFaceBackend(TrainingBackend):
             }
             logger.user.info("", extra=extra)
 
-    def prepare_training_data(self):
-        """Prepare training data for training."""
+    def prepare_training_data(self) -> None:
+        """Validate, preprocess, and tokenize the training dataset.
+
+        Validates groupby/orderby columns, resolves auto-config values,
+        runs time-series preprocessing, and assembles tokenized training examples.
+        Populates ``training_examples``, ``dataset_schema``,
+        ``training_df``, and ``data_fraction``.
+
+        Raises:
+            DataError: If the training dataset is missing or malformed.
+        """
         logger.info("Preparing training data.")
 
-        df_all = self.training_dataset.to_pandas()
-        self.params = AutoConfigResolver(df_all, self.params).resolve()
+        if self.training_dataset is None:
+            raise DataError("training_dataset must be set before preparing training data")
 
-        # Validate groupby/orderby parameters as a preprocessing step.
-        self._validate_groupby_column(df_all)
-        self._validate_orderby_column(df_all)
+        training_df = self.training_dataset.to_pandas()
+        if not isinstance(training_df, pd.DataFrame):
+            raise DataError("Expected DataFrame from to_pandas(), got an iterator")
+
+        self.params = AutoConfigResolver(training_df, self.params).resolve()
 
         # Process time series data (sort by timestamp, infer intervals, etc.)
-        df_all = self._process_timeseries(df_all)
+        training_df = self._process_timeseries(training_df)
 
-        df_train = self._apply_preprocessing(df_all)
-        df_test = None
+        training_df = self._apply_preprocessing(training_df)
+        test_df = None
 
-        hf_dataset = Dataset.from_pandas(df_train, preserve_index=False)
+        hf_dataset = Dataset.from_pandas(training_df, preserve_index=False)
         # Exclude PSEUDO_GROUP_COLUMN from schema (internal column for ungrouped time series)
-        schema_df = df_train.drop(columns=[PSEUDO_GROUP_COLUMN], errors="ignore")
+        schema_df = training_df.drop(columns=[PSEUDO_GROUP_COLUMN], errors="ignore")
         self.dataset_schema = make_json_schema(schema_df)
-        self.df_train = df_train
-        self.df_test = df_test
+        self.training_df = training_df
+        self.test_df = test_df
 
         assembler = self._create_example_assembler(hf_dataset)
 
         # This is a proxy for the number of training steps.
-        self.data_fraction = self.params.training.num_input_records_to_sample / assembler.num_records_train
+        num_records_to_sample = self.params.training.num_input_records_to_sample
+        if not isinstance(num_records_to_sample, int):
+            raise DataError(
+                f"num_input_records_to_sample was not resolved to an int after AutoConfigResolver: {num_records_to_sample!r}"
+            )
+        self.data_fraction = num_records_to_sample / assembler.num_records_train
 
         self._log_dataset_statistics(assembler)
 
@@ -638,28 +755,51 @@ class HuggingFaceBackend(TrainingBackend):
 
         # This info is needed inside the trainer for DP
         # Number of records, if group_training_examples_by is None, or else number of groups
-        self.true_dataset_size = len(assembler.train_dataset)
+        self.true_dataset_size = len(assembler.training_dataset)
 
         if self.params.time_series.is_timeseries:
-            self.model_metadata.initial_prefill = assembler._get_initial_prefill()
+            self.model_metadata.initial_prefill = assembler._get_initial_prefill()  # ty: ignore[unresolved-attribute]
+
+        self._propagate_max_tokens_per_example()
+
+    def _propagate_max_tokens_per_example(self) -> None:
+        """Copy the assembler's ``tokens_per_example.max`` onto ``ModelMetadata``.
+
+        Sized from the actual tokenized examples rather than a char-count
+        heuristic, this bound feeds ``ModelMetadata.generation_max_tokens_for``
+        so ``SamplingParams.max_tokens`` caps decoding at output lengths
+        the model was trained to produce. Tight caps let the engine retire
+        EOS-failed sequences promptly (a known fine-tuned-LoRA failure
+        mode) instead of letting them decode wasted tokens to the full
+        context window. No-op when the stat is absent or unpopulated.
+        """
+        tokens_per_example = self.training_examples.stats.get("tokens_per_example")
+        if tokens_per_example is not None and tokens_per_example.count > 0:
+            self.model_metadata.max_tokens_per_example = int(math.ceil(tokens_per_example.max))
 
     @utils.time_function
-    def train(self, **training_args):
+    def train(self, **training_args: Any) -> None:
+        """Run the full training pipeline and populate ``results``.
+
+        Sequentially calls ``prepare_training_data``,
+        ``prepare_params``, trains the model, and saves artifacts.
+        """
         training_start = time.monotonic()
         self.prepare_training_data()
         self.prepare_params(**training_args)
         self.trainer.train()
         training_time_sec = time.monotonic() - training_start
 
-        # Save log_history before save_model() which may delete the trainer
+        # Capture log_history before teardown deletes the trainer.
         log_history = self.trainer.state.log_history
         is_complete = "training_incomplete" not in sum([list(d.keys()) for d in log_history], [])
 
         self.save_model()
+        self.teardown()
 
         self.results = NSSTrainerResult(
-            df_train=self.df_train,
-            df_ml_utility_holdout=self.df_test,
+            training_df=self.training_df,
+            df_ml_utility_holdout=self.test_df,
             config=self.params,
             training_complete=is_complete,
             log_history=log_history,
@@ -667,52 +807,76 @@ class HuggingFaceBackend(TrainingBackend):
             elapsed_time=training_time_sec,
         )
 
-    def save_model(self, delete_trainable_model: bool = True) -> None:
-        """Save the fine-tuning adapter and related artifacts to the given path.
+    def save_model(self) -> None:
+        """Save the fine-tuning adapter and related artifacts under ``self.workdir``.
 
-        Args:
-            delete_trainable_model: If True, delete the model from memory after saving.
+        Does not release resources -- callers should invoke :meth:`teardown`
+        explicitly when they are done with the backend (the abstract contract
+        on :class:`TrainingBackend` keeps save and teardown as separate
+        lifecycle events).
         """
+        if self.dataset_schema is None:
+            raise ParameterError("dataset_schema must be set before saving model")
+
+        adapter_dir = self.workdir.train.adapter
+        if not isinstance(adapter_dir, BoundDir):
+            raise TypeError(f"Expected BoundDir, got {type(adapter_dir)}")
         self.workdir.ensure_directories()
-        logger.user.info(f"Saving LoRA adapter to {self.workdir.train.adapter}")
+        logger.user.info(f"Saving LoRA adapter to {adapter_dir}")
         with redirect_stdout(io.StringIO()) as stdout:
-            self.model.save_pretrained(self.workdir.train.adapter)
+            self.model.save_pretrained(str(adapter_dir))
         logger.runtime.debug(stdout.getvalue())
-        logger.user.info(f"Saving model metadata to {self.workdir.train.adapter.metadata}")
+        logger.user.info(f"Saving model metadata to {adapter_dir.metadata}")
         self.model_metadata.save_metadata()
-        logger.user.info(f"Saving dataset schema to {self.workdir.train.adapter.schema}")
-        write_json(self.dataset_schema, self.workdir.train.adapter.schema, indent=4)
+        logger.user.info(f"Saving dataset schema to {adapter_dir.schema}")
+        write_json(self.dataset_schema, adapter_dir.schema, indent=4)
         logger.user.info(f"Saving model parameters to {self.workdir.train.config}")
         write_json(
             self.params.model_dump(mode="json"),
             path=self.workdir.train.config,
             indent=4,
         )
-        if delete_trainable_model:
-            self.delete_trainable_model()
 
-    def delete_trainable_model(self) -> None:
-        """Delete the trainable model, trainer, and clean up GPU memory and distributed resources."""
+    def teardown(self) -> None:
+        """Release GPU memory, distributed resources, and trainer state. Idempotent -- safe to call multiple times."""
+        if getattr(self, "_torn_down", False):
+            return
+        self._torn_down = True
+
         import torch.distributed as dist
 
-        # Delete the trainer first, as it holds references to the model
-        if hasattr(self, "trainer"):
-            del self.trainer
-        del self.model
-        cleanup_memory()
-        # Clean up distributed process group if it was initialized by the Trainer
+        try:
+            if hasattr(self, "trainer"):
+                del self.trainer
+        except Exception:  # pragma: no cover -- defensive; del on an instance attr does not raise
+            logger.warning("trainer cleanup failed during teardown", exc_info=True)
+
+        try:
+            if hasattr(self, "model"):
+                del self.model
+        except Exception:  # pragma: no cover -- defensive; del on an instance attr does not raise
+            logger.warning("model cleanup failed during teardown", exc_info=True)
+
+        try:
+            cleanup_memory()
+        except Exception:
+            logger.warning("cleanup_memory failed during teardown", exc_info=True)
 
         if TYPE_CHECKING:
             assert hasattr(dist, "destroy_process_group")
             assert hasattr(dist, "is_initialized")
-        if dist.is_initialized():
-            dist.destroy_process_group()
+        try:
+            if dist.is_initialized():
+                dist.destroy_process_group()
+        except Exception:
+            logger.warning("destroy_process_group failed during teardown", exc_info=True)
 
     def __str__(self):
         f = f"HuggingFaceBackend(pretrained_model={self.params.training.pretrained_model}, params={self.params})"
         return f
 
-    def info(self):
+    def info(self) -> None:
+        """Print a summary of key trainer attributes to stdout."""
         fields = [
             "params",
             "training_output_dir",
@@ -725,43 +889,52 @@ class HuggingFaceBackend(TrainingBackend):
         msg += "\n" + "\n".join([f"{field}: {value}" for field, value in info.items()])
         msg += "\n" + "-" * len(msg)
 
-        print(msg)
+        logger.info(msg)
 
 
 def preprocess_logits_for_metrics(
     logits: tuple[torch.Tensor, ...], labels: torch.Tensor
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """
+    """Reduce logits to argmax predictions to avoid OOM during evaluation.
 
-    Running into OOM errors for ecommerce dataset during evaluation loop.
-    Found this workaround online: https://discuss.huggingface.co/t/cuda-out-of-memory-when-using-trainer-with-compute-metrics/2941/13
-    Original Trainer may have a memory leak.
-    This is a workaround to avoid storing too many tensors that are not needed.
+    The default Trainer stores full logit tensors across evaluation batches,
+    which can exhaust GPU memory on large datasets. This callback replaces
+    them with predicted token IDs immediately after the forward pass.
+
+    See: https://discuss.huggingface.co/t/cuda-out-of-memory-when-using-trainer-with-compute-metrics/2941/13
 
     Args:
-        logits: Tuple of logits tensors from the model output
-        labels: Ground truth labels tensor
+        logits: Tuple of logits tensors from the model output.
+        labels: Ground truth labels tensor.
 
     Returns:
-        Tuple containing:
-            - Predicted token IDs
-            - Ground truth labels
+        Tuple of ``(predicted_token_ids, labels)``.
     """
     pred_ids = torch.argmax(logits[0], dim=-1)
     return pred_ids, labels
 
 
 def compute_metrics(eval_preds: EvalPrediction) -> dict[str, float]:
-    """Compute metrics for evaluation.
+    """Compute evaluation metrics from forward-pass losses.
+
+    Metrics returned:
+
+    - mean cross-entropy loss (``eval_loss``) -- average of per-batch
+      losses collected during the evaluation loop.
+
+    The per-batch losses are pre-computed during the forward pass
+    (via ``include_for_metrics``).
 
     Args:
-        eval_preds: Evaluation predictions object containing losses and predictions
+        eval_preds: Evaluation predictions object whose ``losses`` field
+            contains per-batch losses collected during the eval loop.
 
     Returns:
-        Dictionary containing evaluation metrics
+        Dictionary mapping metric names to values.
     """
     # include_for_metrics has "loss", so the loss is already computed in the forward pass
-    metrics = {"eval_loss": np.mean(eval_preds.losses)}
+    losses = eval_preds.losses if eval_preds.losses is not None else []
+    metrics = {"eval_loss": np.mean(losses)}
 
     # Log the evaluation loss using the same style as callbacks.py
     if metrics["eval_loss"] is not None:

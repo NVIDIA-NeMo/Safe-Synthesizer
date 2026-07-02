@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Module that supports reading in custom Regex predictors from a config file.
+r"""Module that supports reading in custom Regex predictors from a config file.
 
 Support reading in a YAML file of user defined predictor properties and load
 them into individual Regex predictors and patterns.
@@ -26,11 +26,12 @@ phrase:
 ------
 """
 
+from __future__ import annotations
+
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from re import Pattern
-from typing import List, Optional, Union
+from typing import Optional
 
 import yaml
 
@@ -44,10 +45,10 @@ logger = get_logger(__name__)
 
 score_map = {"low": Score.LOW, "med": Score.MED, "high": Score.HIGH}
 
-PatternListType = List[re.Pattern]
+PatternListType = list[re.Pattern]
 
 
-def _str_to_pattern(data: Union[str, List[str]]) -> PatternListType:
+def _str_to_pattern(data: str | list[str]) -> PatternListType:
     if isinstance(data, str):
         return [re.compile(data)]
 
@@ -67,8 +68,8 @@ class CustomRegexPattern:
 
     score: str
     regex: str
-    header_match: Optional[Union[str, List[str]]] = field(default_factory=list)
-    header_skip: Optional[Union[str, List[str]]] = field(default_factory=list)
+    header_match: Optional[str | list[str]] = field(default_factory=list)
+    header_skip: Optional[str | list[str]] = field(default_factory=list)
 
     # set after init
     regex_compiled: re.Pattern = None
@@ -80,7 +81,7 @@ class CustomRegexPattern:
             raise CustomPredictorError("score must be one of low, med, high")
 
         self.regex_compiled = self.regex
-        if not isinstance(self.regex, Pattern):
+        if not isinstance(self.regex, re.Pattern):
             self.regex_compiled = re.compile(str(self.regex))
 
         self._load_header_patterns()
@@ -108,10 +109,10 @@ class CustomRegexPattern:
 class CustomRegexPredictor:
     namespace: str
     name: str
-    patterns: List[CustomRegexPattern]
+    patterns: list[CustomRegexPattern]
 
     @classmethod
-    def from_config(cls, name: str, namespace: str, patterns: List[dict]):
+    def from_config(cls, name: str, namespace: str, patterns: list[dict]):
         _patterns = [CustomRegexPattern(**p) for p in patterns]
         return cls(name=name, namespace=namespace, patterns=_patterns)
 
@@ -139,13 +140,13 @@ def _namespace_from_config(config: dict) -> str:
 #####################
 
 
-def get_regex_predictors_from_config(config: dict) -> Optional[List[RegexPredictor]]:
+def get_regex_predictors_from_config(config: dict) -> list[RegexPredictor]:
     out_predictors = []
     namespace = _namespace_from_config(config)
 
     predictor_dicts = config.get("regex", None)
     if predictor_dicts is None:
-        return
+        return []
 
     for name, patterns in predictor_dicts.items():
         predictor_name = name.lower()
@@ -177,13 +178,13 @@ def _process_phrase_list_file(config: dict, builder: PhraseMatcherBuilder) -> Ph
     return builder
 
 
-def get_phrase_predictors_from_config(config: dict) -> Optional[List[RegexPredictor]]:
+def get_phrase_predictors_from_config(config: dict) -> list[RegexPredictor]:
     out_predictors = []
     namespace = _namespace_from_config(config)
 
     phrase_predictors = config.get("phrase", None)
     if phrase_predictors is None:
-        return
+        return []
 
     for predictor_name, phrase_config in phrase_predictors.items():
         predictor_name = predictor_name.lower()
@@ -215,11 +216,11 @@ def _yaml_to_dict(file_path: str) -> dict:
     return config_dict
 
 
-def get_regex_predictors_from_yaml(file_path: str) -> List[RegexPredictor]:
+def get_regex_predictors_from_yaml(file_path: str) -> list[RegexPredictor]:
     return get_regex_predictors_from_config(_yaml_to_dict(file_path))
 
 
-def get_phrase_predictors_from_yaml(file_path: str) -> List[RegexPredictor]:
+def get_phrase_predictors_from_yaml(file_path: str) -> list[RegexPredictor]:
     return get_phrase_predictors_from_config(_yaml_to_dict(file_path))
 
 
@@ -228,7 +229,7 @@ def get_phrase_predictors_from_yaml(file_path: str) -> List[RegexPredictor]:
 #####################
 
 
-def get_predictors_from_yaml(file_path: str) -> List[Predictor]:
+def get_predictors_from_yaml(file_path: str) -> list[Predictor]:
     out = []
     parsing_fns = (get_regex_predictors_from_yaml, get_phrase_predictors_from_yaml)
     for fn in parsing_fns:

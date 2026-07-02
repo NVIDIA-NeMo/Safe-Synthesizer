@@ -1,0 +1,20 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+authors:
+  ahaushalter:
+    name: Alexa Haushalter
+    description: Product Manager at NVIDIA
+    avatar: https://github.com/alexahaushalter.png
+  kendrickb:
+    name: Kendrick Boyd
+    description: Researcher at NVIDIA
+    avatar: https://github.com/kendrickb-nvidia.png
+  seayang:
+    name: Sean Yang
+    description: Researcher at NVIDIA
+    avatar: https://github.com/seayang-nv.png
+  mvansegbroeck:
+    name: Maarten Van Segbroeck
+    description: Director of Research at NVIDIA
+    avatar: https://github.com/mvansegbroeck.png

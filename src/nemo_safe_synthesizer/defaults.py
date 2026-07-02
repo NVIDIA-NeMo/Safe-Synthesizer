@@ -1,7 +1,14 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Collection of default settings for the Nemo Safe Synthesizer implementation."""
+"""Default constants for the Safe Synthesizer pipeline.
+
+Includes artifact paths, logging parameters, training and generation
+defaults, prompt templates, and miscellaneous constants shared across
+modules.
+"""
+
+from __future__ import annotations
 
 from pathlib import Path
 
@@ -62,13 +69,16 @@ NUM_EVAL_BATCHES_GROUPED = 1
 # allowing unified processing of grouped and ungrouped time series.
 # It is excluded from JSONL conversion so the model never sees it.
 PSEUDO_GROUP_COLUMN = "__nss_sequence_id"
+DEFAULT_EXCLUDE_COLUMNS: tuple[str, ...] = (PSEUDO_GROUP_COLUMN,)
+
+# default LLM inference endpoint for PII column classification.
+DEFAULT_NSS_INFERENCE_ENDPOINT = "https://integrate.api.nvidia.com/v1"
 
 # training +  parameters
 DEFAULT_BASE_SEQ_LENGTH = 2048
 MAX_ROPE_SCALING_FACTOR = 6
 DEFAULT_MAX_SEQ_LENGTH = DEFAULT_BASE_SEQ_LENGTH * MAX_ROPE_SCALING_FACTOR
 
-DEFAULT_PRETRAINED_MODEL_NAME = "TinyLlama-1.1B-Chat-v1.0"
 PROMPT_TEMPLATE = "[INST] {instruction} {schema} [/INST]{prefill}"
 DEFAULT_INSTRUCTION = "Generate a JSONL dataset with the following columns: "
 DEFAULT_SAMPLING_PARAMETERS = {
@@ -92,3 +102,5 @@ RUNTIME_MODEL_CONFIG_NAME = "safe-synthesizer-config"
 EPS = 1e-15
 NUM_SPECIAL_TOKENS = 2
 DEFAULT_CACHE_PREFIX = "safe-synthesizer-dataset-cache"
+DEFAULT_ATTN_IMPLEMENTATION = "FLASH_ATTN"
+BACKUP_ATTN_IMPLEMENTATION = "sdpa"

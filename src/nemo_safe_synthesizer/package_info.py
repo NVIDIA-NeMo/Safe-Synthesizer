@@ -22,6 +22,8 @@ To create a release version, tag a commit:
     uv build --wheel
 """
 
+from __future__ import annotations
+
 import importlib.metadata
 
 try:

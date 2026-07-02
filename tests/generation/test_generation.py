@@ -2,10 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
-from typing import List, Tuple
+from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
+
 from nemo_safe_synthesizer.data_processing.actions.data_actions import (
     ActionExecutor,
     CategoricalCol,
@@ -14,8 +15,13 @@ from nemo_safe_synthesizer.data_processing.actions.data_actions import (
 )
 from nemo_safe_synthesizer.errors import GenerationError
 from nemo_safe_synthesizer.generation.batch import Batch
-from nemo_safe_synthesizer.generation.processors import ParsedResponse
-from nemo_safe_synthesizer.generation.results import GenerationBatches, GenerationStatus
+from nemo_safe_synthesizer.generation.processors import ParsedRecord, ParsedResponse
+from nemo_safe_synthesizer.generation.results import (
+    INITIAL_PROBE_PROMPTS,
+    GenerateJobResults,
+    GenerationBatches,
+    GenerationStatus,
+)
 
 
 # Purpose: Builds reusable good/bad Batch sets for generation tests.
@@ -27,7 +33,7 @@ from nemo_safe_synthesizer.generation.results import GenerationBatches, Generati
 @pytest.fixture()
 def fixture_stub_batches(
     fixture_mock_processor, fixture_mock_processor_without_valid_records
-) -> Tuple[List[Batch], List[Batch]]:
+) -> tuple[list[Batch], list[Batch]]:
     batch_1 = Batch(fixture_mock_processor)
     batch_1.process(1, "stub")
     batch_1.process(2, "stub")
@@ -89,6 +95,38 @@ def test_generation_add_batch_stop_no_records_status_first_batch(fixture_stub_ba
         patience=3,
     )
     generation_with_stop_params.add_batch(bad_batches[0])
+    assert generation_with_stop_params.status == GenerationStatus.STOP_NO_RECORDS
+
+
+def test_generation_add_batch_length_truncated_first_batch_uses_patience(fixture_stub_batches):
+    _, bad_batches = fixture_stub_batches
+    bad_batches[0].finish_reasons["length"] = bad_batches[0].num_prompts
+
+    generation_with_stop_params = GenerationBatches(
+        target_num_records=5,
+        invalid_fraction_threshold=0.9,
+        patience=3,
+    )
+    generation_with_stop_params.add_batch(bad_batches[0])
+
+    assert generation_with_stop_params.status == GenerationStatus.IN_PROGRESS
+
+
+def test_generation_add_batch_partially_length_truncated_first_batch_stops(
+    fixture_mock_processor_without_valid_records,
+):
+    batch = Batch(fixture_mock_processor_without_valid_records)
+    for prompt_idx in range(INITIAL_PROBE_PROMPTS):
+        batch.process(prompt_idx, "stub")
+    batch.finish_reasons.update({"length": 1, "stop": INITIAL_PROBE_PROMPTS - 1})
+
+    generation_with_stop_params = GenerationBatches(
+        target_num_records=5,
+        invalid_fraction_threshold=0.9,
+        patience=3,
+    )
+    generation_with_stop_params.add_batch(batch)
+
     assert generation_with_stop_params.status == GenerationStatus.STOP_NO_RECORDS
 
 
@@ -162,6 +200,20 @@ def test_get_next_num_prompts(fixture_stub_batches):
     assert generation_with_target.get_next_num_prompts() == 16
 
 
+# Purpose: First batch (no history) ships a small probe so the records-per-prompt
+# ratio can be measured before committing to a full batch.
+# Data: Empty GenerationBatches with various target_num_records and no prior batches.
+# Asserts: Returns INITIAL_PROBE_PROMPTS regardless of target whenever the records-remaining
+# bound (target + NUM_PROMPT_BUFFER) is at least the probe size.
+@pytest.mark.parametrize(
+    "target",
+    [10, 50, 200],
+)
+def test_get_next_num_prompts_first_batch(target):
+    generation = GenerationBatches(target_num_records=target)
+    assert generation.get_next_num_prompts() == INITIAL_PROBE_PROMPTS
+
+
 # Purpose: Build a DataFrame of valid records across batches, honoring max record cap and validity.
 # Data: Only invalid → empty; only valid → all rows; mixed → valid-only; with max_num_records enforced.
 # Asserts: Columns preserved; lengths are 0, 9, 6; cap respected at 2.
@@ -208,15 +260,11 @@ def test_apply_data_actions(fixture_mock_processor, caplog):
     batch = Batch(fixture_mock_processor)
     batch._responses = [
         ParsedResponse(
-            valid_records=data.iloc[:3].to_dict("records"),
-            invalid_records=[],
-            errors=[],
+            records=[ParsedRecord(text=str(r), parsed=r) for r in data.iloc[:3].to_dict("records")],
             prompt_number=1,
         ),
         ParsedResponse(
-            valid_records=data.iloc[3:].to_dict("records"),
-            invalid_records=[],
-            errors=[],
+            records=[ParsedRecord(text=str(r), parsed=r) for r in data.iloc[3:].to_dict("records")],
             prompt_number=2,
         ),
     ]
@@ -273,3 +321,91 @@ def test_log_status_raises_generation_error_on_no_records(fixture_stub_batches):
     assert generation.status == GenerationStatus.STOP_NO_RECORDS
     with pytest.raises(GenerationError):
         generation.log_status()
+
+
+# ---------------------------------------------------------------------------
+# Token-aggregation tests
+# ---------------------------------------------------------------------------
+
+
+def _make_batch_with_tokens(
+    valid_counts: list[int],
+    invalid_counts: list[int],
+    completion_tokens: int,
+    tok_time: float = 0.01,
+) -> Batch:
+    """Build a Batch with a mock processor that returns specific token counts."""
+    records = [
+        ParsedRecord(text=f'{{"a": {i}}}', parsed={"a": i}, token_count=tc) for i, tc in enumerate(valid_counts)
+    ] + [ParsedRecord(text=f"bad{i}", error=("err", "err"), token_count=tc) for i, tc in enumerate(invalid_counts)]
+    mock_proc = MagicMock()
+    mock_proc.return_value = ParsedResponse(
+        records=records,
+        tokenization_time_sec=tok_time,
+    )
+    batch = Batch(processor=mock_proc)
+    batch.process(0, "stub", completion_tokens=completion_tokens)
+    return batch
+
+
+class TestGenerationBatchesTokenAggregation:
+    """GenerationBatches aggregates token properties across batches."""
+
+    def test_total_completion_tokens(self):
+        b1 = _make_batch_with_tokens([10, 20], [5], completion_tokens=100)
+        b2 = _make_batch_with_tokens([30], [10, 15], completion_tokens=200)
+        gen = GenerationBatches(batches=[b1, b2])
+        assert gen.total_completion_tokens == 300
+
+    def test_total_valid_record_tokens(self):
+        b1 = _make_batch_with_tokens([10, 20], [5], completion_tokens=100)
+        b2 = _make_batch_with_tokens([30], [10], completion_tokens=200)
+        gen = GenerationBatches(batches=[b1, b2])
+        assert gen.total_valid_record_tokens == 60  # 10+20+30
+
+    def test_total_invalid_record_tokens(self):
+        b1 = _make_batch_with_tokens([10], [5, 15], completion_tokens=100)
+        gen = GenerationBatches(batches=[b1])
+        assert gen.total_invalid_record_tokens == 20
+
+    def test_total_non_record_tokens(self):
+        b1 = _make_batch_with_tokens([10], [5], completion_tokens=100)
+        gen = GenerationBatches(batches=[b1])
+        assert gen.total_non_record_tokens == 85  # 100 - 10 - 5
+
+    def test_total_tokenization_time_sec(self):
+        b1 = _make_batch_with_tokens([10], [5], completion_tokens=100, tok_time=0.01)
+        b2 = _make_batch_with_tokens([20], [10], completion_tokens=200, tok_time=0.02)
+        gen = GenerationBatches(batches=[b1, b2])
+        assert gen.total_tokenization_time_sec == pytest.approx(0.03)
+
+
+class TestGenerateJobResultsFromBatches:
+    """GenerateJobResults.from_batches populates token fields correctly."""
+
+    def test_with_token_data(self):
+        b = _make_batch_with_tokens([10, 20], [5], completion_tokens=100, tok_time=0.05)
+        gen = GenerationBatches(batches=[b])
+        gen.job_complete()
+        results = GenerateJobResults.from_batches(gen, max_num_records=None, columns=["a"], elapsed_time=2.0)
+
+        assert results.num_completion_tokens == 100
+        assert results.num_valid_record_tokens == 30
+        assert results.num_invalid_record_tokens == 5
+        assert results.num_non_record_tokens == 65
+        assert results.tokens_per_prompt == pytest.approx(100.0)  # 100/1 prompt
+        assert results.tokens_per_second == pytest.approx(50.0)  # 100/2.0
+        assert results.valid_tokens_per_second == pytest.approx(15.0)  # 30/2.0
+        assert results.tokenization_overhead_sec == pytest.approx(0.05)
+
+    def test_without_token_data(self):
+        """When completion_tokens=0, all token fields stay None."""
+        b = _make_batch_with_tokens([], [], completion_tokens=0)
+        gen = GenerationBatches(batches=[b])
+        gen.job_complete()
+        results = GenerateJobResults.from_batches(gen, max_num_records=None, columns=["a"], elapsed_time=2.0)
+
+        assert results.num_completion_tokens is None
+        assert results.tokens_per_second is None
+        assert results.valid_tokens_per_second is None
+        assert results.tokenization_overhead_sec is None

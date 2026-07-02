@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Single-batch container for generated records and error statistics."""
+
 from __future__ import annotations
 
 from collections import Counter, defaultdict
@@ -24,13 +26,19 @@ logger = get_logger(__name__)
 
 
 def _group_error_messages(all_error_messages: list[str], common_error_string: str) -> list[str]:
-    """
-    Take messages like
-    'col1' is a required property
-    'col2' is a required property
+    """Consolidate error messages that share a common suffix.
 
-    and group them into a single message like
-    "Grouped error message: 'col1'/'col2' is a required property"
+    For example, ``"'col1' is a required property"`` and
+    ``"'col2' is a required property"`` become a single entry:
+    ``"Grouped error message: 'col1'/'col2' is a required property"``.
+
+    Args:
+        all_error_messages: Raw error messages from record validation.
+        common_error_string: The shared substring to group on
+            (e.g. ``" is a required property"``).
+
+    Returns:
+        Updated error messages with duplicates consolidated.
     """
     # Split the error messages to obtain the invidual parts from the similar error messages
     all_message_parts = set()
@@ -71,50 +79,127 @@ def _group_error_messages(all_error_messages: list[str], common_error_string: st
 
 
 class Batch:
-    """A class to store the results of a batch generation."""
+    """Container for the results of a single generation batch.
+
+    Collects
+    [`ParsedResponse`][nemo_safe_synthesizer.generation.processors.ParsedResponse]
+    objects produced by the processor and exposes aggregate counts and error
+    statistics.
+
+    Args:
+        processor: The processor used to parse LLM outputs into records.
+    """
 
     def __init__(self, processor: Processor):
         self._responses: list[ParsedResponse] = []
         self._processor = processor
+        self._total_completion_tokens: int = 0
+        self.finish_reasons: Counter[str] = Counter()
 
     @property
     def num_prompts(self) -> int:
-        """Return the total number of prompts submitted."""
+        """Total number of prompts submitted in this batch."""
         return len(self._responses)
 
     @property
     def num_invalid_records(self) -> int:
-        """Return the number of invalid records generated."""
+        """Number of invalid records generated in this batch."""
         return sum([len(resp.invalid_records) for resp in self._responses])
 
     @property
     def num_valid_records(self) -> int:
-        """Return the number of valid records generated."""
+        """Number of valid records generated in this batch."""
         return sum([len(resp.valid_records) for resp in self._responses])
 
     @property
     def data_config_rejected_records(self) -> list[tuple[str, str]]:
+        """Error tuples for records rejected by ``data_config`` validation."""
         return [error for resp in self._responses for error in resp.errors if "data_config" in error[1]]
 
     @property
     def num_data_config_rejected_records(self) -> int:
-        """Return the number of records rejected due to data_config."""
+        """Count of records rejected by ``data_config`` validation."""
         return len(self.data_config_rejected_records)
 
     @property
     def valid_record_fraction(self) -> float:
-        """Return the fraction of valid records generated."""
+        """Fraction of generated records that passed validation."""
         total_records = self.num_valid_records + self.num_invalid_records
         return 0 if total_records == 0 else self.num_valid_records / total_records
 
-    def error_statistics(self, detailed_errors: bool) -> pd.DataFrame:
+    @property
+    def total_completion_tokens(self) -> int:
+        """Total tokens across all completions in this batch (from vLLM output)."""
+        return self._total_completion_tokens
+
+    @property
+    def num_length_truncated_completions(self) -> int:
+        """Number of completions that stopped because they reached ``max_tokens``."""
+        return self.finish_reasons["length"]
+
+    def _record_token_totals(self) -> tuple[int, int]:
+        """Return ``(valid_tokens, invalid_tokens)`` from a single scan of ``_responses``."""
+        valid = invalid = 0
+        for resp in self._responses:
+            for record in resp.records:
+                if record.is_valid:
+                    valid += record.token_count
+                else:
+                    invalid += record.token_count
+        return valid, invalid
+
+    @property
+    def total_valid_record_tokens(self) -> int:
+        """Sum of token counts for all valid records in this batch."""
+        valid, _ = self._record_token_totals()
+        return valid
+
+    @property
+    def total_invalid_record_tokens(self) -> int:
+        """Sum of token counts for all invalid records in this batch."""
+        _, invalid = self._record_token_totals()
+        return invalid
+
+    @property
+    def total_non_record_tokens(self) -> int:
+        """Tokens not part of any recognized record (completion - valid - invalid).
+
+        Clamped to zero if negative (possible due to tokenizer boundary effects).
         """
-        Return count statistics on the errors encountered during generation.
+        valid, invalid = self._record_token_totals()
+        value = self._total_completion_tokens - valid - invalid
+        if value < 0:
+            logger.warning(
+                "Non-record token count is negative; clamping to 0. "
+                "This can happen due to tokenizer boundary effects between individual records and full completions.",
+                extra={
+                    "ctx": {
+                        "delta": value,
+                        "completion_tokens": self._total_completion_tokens,
+                        "valid_record_tokens": valid,
+                        "invalid_record_tokens": invalid,
+                    }
+                },
+            )
+            return 0
+        return value
+
+    @property
+    def total_tokenization_time_sec(self) -> float:
+        """Wall-clock seconds spent tokenizing records in this batch."""
+        return sum(r.tokenization_time_sec for r in self._responses)
+
+    def error_statistics(self, detailed_errors: bool) -> pd.DataFrame:
+        """Return count statistics on errors encountered during generation.
 
         Args:
-            detailed_errors (bool): If True, return detailed error statistics,
-                including expected column names or allowed field values.
-                If False, only report high-level error categories.
+            detailed_errors: If ``True``, include expected column names
+                and allowed field values.  If ``False``, report only
+                high-level error categories.
+
+        Returns:
+            DataFrame indexed by error message with a ``Percentage``
+            column, sorted by frequency descending.
         """
         idx = 0 if detailed_errors else 1
         err_msgs = [e[idx] for resp in self._responses for e in resp.errors]
@@ -149,14 +234,17 @@ class Batch:
 
     @property
     def stopping_metric(self) -> float:
-        """Return metric used to determine if generation should stop."""
+        """Invalid record fraction, used by
+        [`GenerationStopCondition`][nemo_safe_synthesizer.generation.stopping.GenerationStopCondition].
+        """
         return 1.0 - self.valid_record_fraction
 
     def to_dataframe(self) -> pd.DataFrame | None:
-        """Return the valid records as a DataFrame.
+        """Return the valid records as a normalized DataFrame.
 
         Returns:
-            DataFrame of valid records.
+            DataFrame of valid records, or ``None`` if no valid records
+            were generated.
         """
         valid = [resp.valid_records for resp in self._responses]
         flat_records = [record for records in valid for record in records]
@@ -164,27 +252,34 @@ class Batch:
         return None if df.empty else normalize_dataframe(df)
 
     def log_summary(self, detailed_errors: bool = False) -> None:
-        """
-        Output a summary of the batch generation results to the log.
+        """Log a summary of the batch generation results.
 
-        Outputs:
-            - Console: Automatically rendered as Rich ASCII tables by structlog processor
-            - JSON logs: Structured key/value pairs for machine parsing
+        Emits structured data via ``logger.user.info`` that is rendered
+        as Rich ASCII tables on the console and as key/value pairs in
+        JSON logs.
 
         Args:
-            detailed_errors (bool): If True, include detailed error statistics in the log.
+            detailed_errors: If ``True``, include per-column error
+                statistics in the log output.
         """
         err_stats: pd.DataFrame = self.error_statistics(detailed_errors=detailed_errors)
 
         # Build structured summary data - processor renders as table for console
-        summary_data = {
+        summary_data: dict[str, object] = {
             "num_prompts": self.num_prompts,
             "num_valid_records": self.num_valid_records,
             "num_invalid_records": self.num_invalid_records,
             "valid_record_fraction": round(self.valid_record_fraction, 2),
         }
+        if self.finish_reasons:
+            summary_data["finish_reasons"] = dict(self.finish_reasons)
         if self.num_data_config_rejected_records:
             summary_data["num_data_config_rejected_records"] = self.num_data_config_rejected_records
+        if self._total_completion_tokens > 0:
+            summary_data["completion_tokens"] = self._total_completion_tokens
+            summary_data["valid_record_tokens"] = self.total_valid_record_tokens
+            summary_data["invalid_record_tokens"] = self.total_invalid_record_tokens
+            summary_data["non_record_tokens"] = self.total_non_record_tokens
 
         # Pass structured data - processor renders for console, JSON keeps as-is
         logger.user.info(
@@ -213,11 +308,15 @@ class Batch:
                 },
             )
 
-    def process(self, prompt_number: int, text: str) -> None:
+    def process(self, prompt_number: int, text: str, completion_tokens: int = 0) -> None:
         """Process text response from a single prompt in the current batch.
 
         Args:
             prompt_number: The prompt number in the current batch.
             text: Text generated by the fine-tuned model.
+            completion_tokens: Number of tokens in this completion
+                (from vLLM ``output.token_ids``).  Defaults to 0 when
+                the backend does not provide token counts.
         """
         self._responses.append(self._processor(prompt_number, text))
+        self._total_completion_tokens += completion_tokens

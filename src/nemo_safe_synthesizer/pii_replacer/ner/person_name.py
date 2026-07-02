@@ -3,19 +3,16 @@
 
 """Custom module for Person Name detection."""
 
+from __future__ import annotations
+
 import gzip
 import io
 import itertools
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import FrozenSet, Iterable, List
 
 from flashtext import KeywordProcessor
-
-try:
-    from re import Pattern
-except ImportError:
-    from typing import Pattern
 
 from ...data_processing.records.base import KVPair, tokenize_header
 from ...data_processing.records.json_record import JSONRecord
@@ -48,7 +45,7 @@ TOKEN_REGEX = re.compile(r"\b(?!\d)\w+", re.IGNORECASE)
 MAX_STR_LEN = 64
 
 
-def build_name_only_headers(others: Iterable[str]) -> List[Pattern]:
+def build_name_only_headers(others: Iterable[str]) -> list[re.Pattern]:
     out = []
     for other in others:
         out.append(r"{}.?{}".format("name", other))
@@ -65,18 +62,18 @@ class WordList:
     word_list: KeywordProcessor = field(default_factory=frozenset)
     """The master list of actual names"""
 
-    headers: Pattern = None  # NOTE: init'd as a FrozenSet then converted
+    headers: re.Pattern | None = None  # NOTE: init'd as a FrozenSet then converted
     """The list of partial header names that can trigger the prediction flow"""
 
     headers_neg: KeywordProcessor = None  # NOTE: init'd as a FrozenSet then converted
     """A list of header tokens that should not be present to trigger prediction flow"""
 
-    headers_pairs: FrozenSet[str] = field(default_factory=frozenset)
+    headers_pairs: frozenset[str] = field(default_factory=frozenset)
     """A list of words that can be combined with the word 'name', this should
     be used to build additional header pairs for analysis
     """
 
-    parts: FrozenSet[str] = field(default_factory=frozenset)
+    parts: frozenset[str] = field(default_factory=frozenset)
     """These are parts of a name that can be used to match, things like
     Mr., Mrs., etc
     """
@@ -178,7 +175,7 @@ class PersonNamePredictor(Predictor):
                 return True
         return False
 
-    def evaluate(self, in_record: JSONRecord) -> List[NERPrediction]:
+    def evaluate(self, in_record: JSONRecord) -> list[NERPrediction]:
         record_fields = in_record.kv_pairs
         result_set_by_field = [set() for _ in record_fields]
 

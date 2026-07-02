@@ -1,13 +1,15 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+from __future__ import annotations
+
 import json
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from ....data_processing.records.value_path import value_path_to_json_path
 
-Prediction = Dict[str, Any]
+Prediction = dict[str, Any]
 
 
 @dataclass
@@ -21,9 +23,9 @@ class RecordResult:
     """
 
     index: int
-    entities: List[Prediction]
+    entities: list[Prediction]
 
-    def __init__(self, index: int, entities: List[Prediction]):
+    def __init__(self, index: int, entities: list[Prediction]):
         self.index = index
         self.entities = entities
 
@@ -51,7 +53,7 @@ class RecordResultExporter:
         config: Configuration for how to export the predictions.
     """
 
-    _keys_to_export: Dict[str, str]
+    _keys_to_export: dict[str, str]
     """
     A mapping from names in the NERPrediction to names that will be exported.
 
@@ -96,7 +98,7 @@ class RecordResultExporter:
         return exported_entity
 
 
-DatasetPredictions = List[RecordResult]
+DatasetPredictions = list[RecordResult]
 
 
 class DatasetClassifyResults:

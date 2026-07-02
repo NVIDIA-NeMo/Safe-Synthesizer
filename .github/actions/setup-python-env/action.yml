@@ -21,59 +21,113 @@ inputs:
     required: false
     default: ""
   python-version:
-    description: "Python version to use"
+    description: "Python version to use (defaults to .python-version when empty)"
     required: false
-    default: "3.11"
+    default: ""
   fetch-depth:
     description: "Number of commits to fetch (0 for all history)"
     required: false
     default: "1"
+  checkout:
+    description: "Whether to checkout the repository before setting up Python"
+    required: false
+    default: "true"
   bootstrap-tools:
-    description: "Whether to run make bootstrap-tools"
+    description: "Whether to install dev tools via mise"
     required: false
     default: "true"
 
 outputs:
   merge-base:
-    description: "The merge base SHA (only available when fetch-depth is 0)"
+    description: "The base SHA for diffs (only available when fetch-depth is 0)"
     value: ${{ steps.get_merge_base.outputs.merge_base }}
 
 runs:
   using: "composite"
   steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      if: inputs.checkout == 'true'
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       with:
         ref: ${{ inputs.ref || github.ref }}
         fetch-depth: ${{ inputs.fetch-depth }}
 
     - name: Get the merge base SHA
       id: get_merge_base
-      if: inputs.fetch-depth == '0'
+      if: inputs.checkout == 'true' && inputs.fetch-depth == '0'
       shell: bash
+      env:
+        BASE_REF: ${{ github.base_ref }}
+        EVENT_BEFORE: ${{ github.event.before }}
+        EVENT_NAME: ${{ github.event_name }}
+        EVENT_SHA: ${{ github.sha }}
       run: |
-        if [ -n "${{ github.base_ref }}" ]; then
-          # Pull request: diff against the merge base with the target branch
-          MERGE_BASE_SHA=$(git merge-base origin/${{ github.base_ref }} ${{ github.sha }})
-        else
-          # Push to branch: diff against the previous commit
-          MERGE_BASE_SHA=$(git rev-parse HEAD~1)
-        fi
-        echo "Merge Base SHA: $MERGE_BASE_SHA"
-        echo "merge_base=$MERGE_BASE_SHA" >> $GITHUB_OUTPUT
+        EMPTY_TREE_SHA=$(git hash-object -t tree /dev/null)
 
-    - name: Install uv
-      uses: astral-sh/setup-uv@v6
-      with:
-        # version is parsed from pyproject.toml
-        enable-cache: true
+        if [ -n "$BASE_REF" ]; then
+          # Pull request: diff against the merge base with the target branch.
+          git fetch --no-tags --prune origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+          if ! MERGE_BASE_SHA=$(git merge-base "origin/${BASE_REF}" "$EVENT_SHA"); then
+            echo "::error::Unable to determine merge base between origin/${BASE_REF} and ${EVENT_SHA}"
+            exit 1
+          fi
+        elif [ "$EVENT_NAME" = "push" ] && [ -n "$EVENT_BEFORE" ] && [[ ! "$EVENT_BEFORE" =~ ^0+$ ]] && git cat-file -e "${EVENT_BEFORE}^{commit}" 2>/dev/null; then
+          # Push: diff against the previous branch tip from the event payload.
+          MERGE_BASE_SHA="$EVENT_BEFORE"
+        else
+          MERGE_BASE_SHA=""
+        fi
+
+        if [ -z "$MERGE_BASE_SHA" ] && git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+          # Manual or scheduled run on an existing branch: diff against the parent.
+          MERGE_BASE_SHA=$(git rev-parse HEAD~1)
+        elif [ -z "$MERGE_BASE_SHA" ]; then
+          # Initial commit or synthetic ref with no parent.
+          MERGE_BASE_SHA="$EMPTY_TREE_SHA"
+        fi
+        echo "Diff Base SHA: $MERGE_BASE_SHA"
+        echo "merge_base=$MERGE_BASE_SHA" >> "$GITHUB_OUTPUT"
 
     - name: Set up Python ${{ inputs.python-version }}
-      uses: actions/setup-python@v5
+      if: inputs.python-version != ''
+      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
       with:
         python-version: ${{ inputs.python-version }}
 
-    - name: Install tools
+    - name: Set up Python from .python-version
+      if: inputs.python-version == ''
+      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+      with:
+        python-version-file: ".python-version"
+
+    - name: Export Python version for uv
+      shell: bash
+      run: |
+        if [ -n "${{ inputs.python-version }}" ]; then
+          python_version="${{ inputs.python-version }}"
+        else
+          python_version="$(tr -d '[:space:]' < .python-version)"
+        fi
+        echo "PYTHON_VERSION=${python_version}" >> "$GITHUB_ENV"
+
+    - name: Install mise and dev tools (uv, ruff, ty, etc.)
       if: inputs.bootstrap-tools == 'true'
       shell: bash
-      run: make bootstrap-tools-ci
+      run: |
+        MISE_GPG_KEY=24853EC9F655CE80B48E6C3A8B81C9D17413A06D \
+          bash tools/install-mise.sh
+        export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        echo "$HOME/.local/share/mise/shims" >> "$GITHUB_PATH"
+        MISE_YES=1 mise trust
+        MISE_YES=1 mise run setup
+
+    - name: Install uv (fallback when mise is skipped)
+      if: inputs.bootstrap-tools != 'true'
+      uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+      with:
+        enable-cache: true
+
+    - name: Disable telemetry in CI
+      shell: bash
+      run: echo "NEMO_TELEMETRY_ENABLED=false" >> "$GITHUB_ENV"

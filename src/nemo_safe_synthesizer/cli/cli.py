@@ -1,6 +1,12 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Top-level CLI group for Safe Synthesizer.
+
+Assembles the ``config``, ``run``, and ``artifacts`` subcommand groups
+into a single Python Click entry point.
+"""
+
 from __future__ import annotations
 
 import click
@@ -11,7 +17,7 @@ from .run import run
 
 
 @click.group()
-def cli():
+def cli() -> None:
     """NeMo Safe Synthesizer command-line interface.
     This application is used to run the Safe Synthesizer pipeline.
     It can be used to train a model, generate synthetic data, and evaluate the synthetic data.

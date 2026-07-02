@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+from __future__ import annotations
+
 import re
 
 import tldextract
@@ -78,7 +80,8 @@ class DomainName(RegexPredictor):
 
 class Hostname(RegexPredictor):
     """Hostname detection. The same pattern as domain name, however
-    we do not rely on requiring an extracted fqdn from the match."""
+    we do not rely on requiring an extracted fqdn from the match.
+    """
 
     def __init__(self):
         entity = Entity.HOSTNAME

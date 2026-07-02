@@ -21,6 +21,17 @@
     padding: 0.1rem 0.3rem;
 }
 
+/* griffe-pydantic badges */
+.doc-label-pydantic-model {
+    background-color: var(--md-code-hl-special-color, #db1457);
+}
+.doc-label-pydantic-field {
+    background-color: var(--md-code-hl-name-color, #0ea5e9);
+}
+.doc-label-pydantic-validator {
+    background-color: var(--md-code-hl-function-color, #a855f7);
+}
+
 /* Source code toggle */
 details.quote > summary {
     font-size: 0.85rem;

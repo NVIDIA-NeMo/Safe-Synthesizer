@@ -5,6 +5,9 @@
 
 from __future__ import annotations
 
+import pytest
+from pydantic import ValidationError
+
 from nemo_safe_synthesizer.cli.settings import CLISettings
 from nemo_safe_synthesizer.cli.wandb_setup import WandbMode
 
@@ -17,7 +20,7 @@ class TestCLISettings:
         settings = CLISettings()
 
         # CLI-specific defaults
-        assert settings.url is None
+        assert settings.data_source is None
         assert settings.config_path is None
         assert settings.artifact_path is None
         assert settings.run_path is None
@@ -56,13 +59,13 @@ class TestCLISettings:
     def test_from_cli_kwargs_filters_none(self):
         """Test that from_cli_kwargs filters out None values and passes through non-None."""
         settings = CLISettings.from_cli_kwargs(
-            url="data.csv",
+            data_source="data.csv",
             config_path=None,  # Should be filtered
             run_path="/tmp/run1",  # Should be passed through (no env var alias)
             output_file=None,  # Should be filtered
         )
 
-        assert settings.url == "data.csv"
+        assert settings.data_source == "data.csv"
         assert settings.run_path == "/tmp/run1"
         # None values should be filtered, so these come from defaults
         assert settings.config_path is None
@@ -71,7 +74,7 @@ class TestCLISettings:
     def test_from_cli_kwargs_all_values(self):
         """Test from_cli_kwargs with values that don't have env var aliases."""
         settings = CLISettings.from_cli_kwargs(
-            url="data.csv",
+            data_source="data.csv",
             run_path="/tmp/run1",  # No env var alias
             output_file="output.csv",  # No env var alias
             log_color=False,  # No env var alias
@@ -82,7 +85,7 @@ class TestCLISettings:
             dataset_registry="path/to/registry.yaml",
         )
 
-        assert settings.url == "data.csv"
+        assert settings.data_source == "data.csv"
         assert settings.run_path == "/tmp/run1"
         assert settings.output_file == "output.csv"
         assert settings.log_color is False
@@ -101,15 +104,15 @@ class TestCLISettings:
 
         # Create settings without providing those CLI kwargs
         settings = CLISettings.from_cli_kwargs(
-            url="data.csv",  # Only provide url
+            data_source="data.csv",  # Only provide data_source
         )
 
         # Env vars provide values for fields with AliasChoices
         assert settings.artifact_path == "/env/artifacts"
         assert settings.log_format == "json"
         assert settings.dataset_registry == "path/to/registry.yaml"
-        # url is set from CLI
-        assert settings.url == "data.csv"
+        # data_source is set from CLI
+        assert settings.data_source == "data.csv"
 
     def test_composed_settings_accessible(self):
         """Test that composed settings are accessible."""
@@ -182,7 +185,7 @@ class TestCLISettings:
 
     def test_verbose_string_conversion(self):
         """Test that verbose accepts string values (for env var loading)."""
-        settings = CLISettings(verbose="2")  # type: ignore[arg-type]
+        settings = CLISettings(verbose="2")  # ty: ignore[invalid-argument-type]
         assert settings.verbose == 2
 
     def test_synthesis_overrides_default(self):
@@ -196,7 +199,6 @@ class TestCLISettings:
         overrides = {
             "training": {"epochs": 10, "batch_size": 32},
             "generation": {"num_samples": 1000},
-            "enable_synthesis": True,
         }
         settings = CLISettings.from_cli_kwargs(synthesis_overrides=overrides)
         assert settings.synthesis_overrides == overrides
@@ -217,6 +219,70 @@ class TestCLISettings:
         monkeypatch.setenv("NSS_DATASET_REGISTRY", "/other/registry.yaml")
         settings = CLISettings.from_cli_kwargs(dataset_registry="path/to/registry.yaml")
         assert settings.dataset_registry == "path/to/registry.yaml"
+
+    def test_inference_endpoint_url_from_nss_inference_env(self, monkeypatch):
+        """NSS_INFERENCE_ENDPOINT loads into inference_endpoint_url."""
+        monkeypatch.setenv("NSS_INFERENCE_ENDPOINT", "https://custom.example/v1")
+        settings = CLISettings()
+        assert settings.inference_endpoint_url == "https://custom.example/v1"
+
+    def test_inference_api_key_from_nss_inference_env(self, monkeypatch):
+        """NSS_INFERENCE_KEY loads into inference_api_key."""
+        monkeypatch.setenv("NSS_INFERENCE_KEY", "token-from-env")
+        settings = CLISettings()
+        assert settings.inference_api_key == "token-from-env"  # pragma: allowlist secret
+
+    def test_inference_endpoint_url_cli_overrides_env(self, monkeypatch):
+        """CLI --inference-endpoint-url takes precedence over NSS_INFERENCE_ENDPOINT."""
+        monkeypatch.setenv("NSS_INFERENCE_ENDPOINT", "https://env.example/v1")
+        settings = CLISettings.from_cli_kwargs(inference_endpoint_url="https://cli.example/v1")
+        assert settings.inference_endpoint_url == "https://cli.example/v1"
+
+    def test_inference_api_key_cli_overrides_env(self, monkeypatch):
+        """CLI --inference-api-key takes precedence over NSS_INFERENCE_KEY."""
+        monkeypatch.setenv("NSS_INFERENCE_KEY", "token-from-env")
+        settings = CLISettings.from_cli_kwargs(inference_api_key="token-from-cli")  # pragma: allowlist secret
+        assert settings.inference_api_key == "token-from-cli"  # pragma: allowlist secret
+
+    def test_log_color_from_nss_log_color_env(self, monkeypatch):
+        """NSS_LOG_COLOR loads into CLISettings.log_color."""
+        monkeypatch.setenv("NSS_LOG_COLOR", "false")
+        settings = CLISettings()
+        assert settings.log_color is False
+        assert settings.effective_log_color is False
+
+    def test_log_color_cli_overrides_nss_log_color_env(self, monkeypatch):
+        """CLI --log-color takes precedence over NSS_LOG_COLOR."""
+        monkeypatch.setenv("NSS_LOG_COLOR", "false")
+        settings = CLISettings.from_cli_kwargs(log_color=True)
+        assert settings.effective_log_color is True
+
+    def test_runtime_settings_from_env(self, monkeypatch):
+        """Remaining runtime settings load from their documented env vars."""
+        monkeypatch.setenv("NSS_INFERENCE_MODEL", "custom/model")
+        monkeypatch.setenv("NSS_PII_REPLACER_CPU_COUNT", "4")
+
+        settings = CLISettings()
+        assert settings.inference_model_id == "custom/model"
+        assert settings.cpu_count == 4
+
+    def test_huggingface_remote_is_cli_only(self, monkeypatch):
+        """huggingface_remote is set via the CLI flag, not a parallel NSS env var."""
+        settings = CLISettings.from_cli_kwargs(huggingface_remote=False)
+        assert settings.huggingface_remote is False
+
+    @pytest.mark.parametrize("bad_value", ["0", "-1"])
+    def test_cpu_count_rejects_non_positive(self, monkeypatch, bad_value):
+        """cpu_count must be >= 1; 0 or negative fails fast at parse time."""
+        monkeypatch.setenv("NSS_PII_REPLACER_CPU_COUNT", bad_value)
+        with pytest.raises(ValidationError):
+            CLISettings()
+
+    @pytest.mark.parametrize("bad_value", [0, -1])
+    def test_cpu_count_rejects_non_positive_from_cli(self, bad_value):
+        """A non-positive --cpu-count is rejected when passed via CLI kwargs."""
+        with pytest.raises(ValidationError):
+            CLISettings.from_cli_kwargs(cpu_count=bad_value)
 
 
 class TestCLISettingsIntegration:

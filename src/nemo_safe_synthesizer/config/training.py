@@ -3,14 +3,15 @@
 
 from __future__ import annotations
 
+import importlib
+from enum import StrEnum
 from typing import (
+    TYPE_CHECKING,
     Annotated,
     Literal,
 )
 
-from pydantic import (
-    Field,
-)
+from pydantic import Field
 
 from ..configurator.parameters import (
     Parameters,
@@ -22,14 +23,130 @@ from ..configurator.validators import (
 from .base import LRScheduler
 from .types import (
     AUTO_STR,
-    AutoBoolParam,
+    AutoFloatParam,
     AutoIntParam,
     OptionalAutoInt,
 )
 
+if TYPE_CHECKING:
+    from transformers.utils.quantization_config import QuantizationConfigMixin
+
 __all__ = [
+    "QuantizationScheme",
     "TrainingHyperparams",
 ]
+
+
+class QuantizationScheme(StrEnum):
+    """Quantization schemes supported when ``quantize_model=True``.
+
+    Members are string values so they serialize cleanly through pydantic
+    and JSON configs. The enum also owns construction of the corresponding
+    transformers ``quantization_config`` object; optional ML dependencies stay
+    locally imported in that construction path.
+
+    Selection guide:
+    - ``bnb-4bit`` / ``bnb-8bit``: bitsandbytes NF4 / int8. Widest hardware
+      support (Ampere+), works with QLoRA and LoftQ. Default for training.
+    - ``fp8``: transformers ``FineGrainedFP8Config``. Float8 with block-wise
+      scaling. Requires Hopper (sm_90+) or Blackwell. Inference-leaning.
+    - ``nvfp4``: NVIDIA FP4 via ``torchao.prototype.mx_formats.NVFP4WeightOnlyConfig``
+      wrapped in ``TorchAoConfig``. Requires Blackwell (sm_100+). Weight-only.
+    - ``mxfp4``: OCP Microscaling FP4 via transformers ``Mxfp4Config``.
+      Hardware support varies by torch/torchao version.
+    """
+
+    BNB_4BIT = "bnb-4bit"
+    BNB_8BIT = "bnb-8bit"
+    FP8 = "fp8"
+    NVFP4 = "nvfp4"
+    MXFP4 = "mxfp4"
+
+    @property
+    def effective_bits(self) -> int:
+        """Per-parameter bit width for memory estimation."""
+        return {
+            QuantizationScheme.BNB_4BIT: 4,
+            QuantizationScheme.BNB_8BIT: 8,
+            QuantizationScheme.FP8: 8,
+            QuantizationScheme.NVFP4: 4,
+            QuantizationScheme.MXFP4: 4,
+        }[self]
+
+    @property
+    def is_bitsandbytes(self) -> bool:
+        """Whether the scheme is implemented via bitsandbytes (QLoRA-compatible)."""
+        return self in (QuantizationScheme.BNB_4BIT, QuantizationScheme.BNB_8BIT)
+
+    @classmethod
+    def from_alias(cls, scheme: QuantizationScheme | str | Literal[4, 8]) -> QuantizationScheme:
+        """Normalize string and legacy bit-count aliases to a scheme."""
+        if isinstance(scheme, int):
+            legacy_aliases = {
+                4: cls.BNB_4BIT,
+                8: cls.BNB_8BIT,
+            }
+            try:
+                return legacy_aliases[scheme]
+            except KeyError as exc:
+                raise ValueError(f"Unknown quantization bit-count alias: {scheme!r}. Expected 4 or 8.") from exc
+        return cls(scheme)
+
+    def to_transformers_config(self) -> QuantizationConfigMixin:
+        """Build the transformers quantization config for this scheme."""
+        match self:
+            case QuantizationScheme.BNB_4BIT:
+                return self._bnb_4bit_config()
+            case QuantizationScheme.BNB_8BIT:
+                return self._bnb_8bit_config()
+            case QuantizationScheme.FP8:
+                return self._fp8_config()
+            case QuantizationScheme.NVFP4:
+                return self._nvfp4_config()
+            case QuantizationScheme.MXFP4:
+                return self._mxfp4_config()
+        raise ValueError(f"Unknown quantization scheme: {self!r}")
+
+    @staticmethod
+    def _bnb_4bit_config() -> QuantizationConfigMixin:
+        import torch
+        from transformers import BitsAndBytesConfig
+
+        return BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_compute_dtype=torch.bfloat16,
+        )
+
+    @staticmethod
+    def _bnb_8bit_config() -> QuantizationConfigMixin:
+        from transformers import BitsAndBytesConfig
+
+        return BitsAndBytesConfig(load_in_8bit=True)
+
+    @staticmethod
+    def _fp8_config() -> QuantizationConfigMixin:
+        from transformers import FineGrainedFP8Config
+
+        return FineGrainedFP8Config()
+
+    @staticmethod
+    def _nvfp4_config() -> QuantizationConfigMixin:
+        from transformers import TorchAoConfig
+
+        # Keep this dynamic because the experimental torchao module is runtime-only
+        # in some type-checker environments.
+        torchao_mx_formats = importlib.import_module("torchao.prototype.mx_formats")
+        nvfp4_weight_only_config = torchao_mx_formats.NVFP4WeightOnlyConfig
+        return TorchAoConfig(quant_type=nvfp4_weight_only_config())
+
+    @staticmethod
+    def _mxfp4_config() -> QuantizationConfigMixin:
+        from transformers.utils.quantization_config import Mxfp4Config
+
+        return Mxfp4Config()
+
 
 ValueGTZero = ValueValidator(lambda p: range_validator(p, lambda v: v >= 0))
 
@@ -40,45 +157,6 @@ class TrainingHyperparams(Parameters):
     This class contains all the fine-tuning hyperparameters that control how the model
     learns, including learning rates, batch sizes, LoRA configuration, and optimization
     settings. These parameters directly affect training performance and quality.
-
-    Attributes:
-        num_input_records_to_sample: Number of records the model will see during training.
-            This parameter is a proxy for training time. For example, if its value is the same
-            size as the input dataset, this is like training for a single epoch. If its value
-            is larger, this is like training for multiple (possibly fractional) epochs. If its
-            value is smaller, this is like training for a fraction of an epoch. Supports 'auto'
-            where a reasonable value is chosen based on other config params and data.
-        batch_size: The batch size per device for training.
-        gradient_accumulation_steps: Number of update steps to accumulate the gradients for,
-            before performing a backward/update pass. This technique increases the effective
-            batch size that will fit into GPU memory.
-        weight_decay: The weight decay to apply (if not zero) to all layers except all
-            bias and LayerNorm weights in the AdamW optimizer.
-        warmup_ratio: Ratio of total training steps used for a linear warmup from 0
-            to the learning rate.
-        lr_scheduler: The scheduler type to use. See the HuggingFace documentation of
-            `SchedulerType` for all possible values.
-        learning_rate: The initial learning rate for `AdamW` optimizer.
-        lora_r: The rank of the LoRA update matrices, expressed in int. Lower
-            rank results in smaller update matrices with fewer trainable parameters.
-        lora_alpha_over_r: The ratio of the LoRA scaling factor (alpha) to
-            the LoRA rank. Empirically, this parameter works well when set to 0.5, 1, or 2.
-        lora_target_modules: The list of transformer modules to apply LoRA to.
-            Possible modules: 'q_proj', 'k_proj', 'v_proj', 'o_proj', 'gate_proj', 'up_proj', 'down_proj'
-        use_unsloth: Whether to use unsloth.
-        rope_scaling_factor: Scale the base LLM's context length by this factor using RoPE scaling.
-        validation_ratio: The fraction of the training data that will be used for validation.
-            The range should be 0 to 1. If set to 0, no validation will be performed.
-            If set larger than 0, validation loss will be computed and reported throughout training.
-        validation_steps: The number of steps between validation checks for the HF Trainer arguments.
-        pretrained_model: Pretrained model to use for fine-tuning. Uses default of TinyLlama.
-        quantize_model: Whether to quantize the model during training. This can reduce memory usage
-            and potentially speed up training, but may also impact model accuracy.
-        quantization_bits: The number of bits to use for quantization if `quantize_model` is True.
-            Common values are 8 or 4 bits.
-        peft_implementation: The PEFT (Parameter-Efficient Fine-Tuning) implementation to use.
-            Options include 'lora' for Low-Rank Adaptation, QLoRA for Quantized LoRA. Each method has its own trade-offs in terms of performance
-            and resource requirements.
     """
 
     num_input_records_to_sample: Annotated[
@@ -103,7 +181,7 @@ class TrainingHyperparams(Parameters):
         ValueValidator(value_func=lambda v: v >= 1),
         Field(
             title="batch_size",
-            description="The batch size per device for training",
+            description="The batch size per device for training. Must be >= 1.",
         ),
     ] = 1
 
@@ -115,7 +193,7 @@ class TrainingHyperparams(Parameters):
             description=(
                 "Number of update steps to accumulate the gradients for, before "
                 "performing a backward/update pass. This technique increases "
-                "the effective batch size that will fit into GPU memory."
+                "the effective batch size that will fit into GPU memory. Must be >= 1."
             ),
         ),
     ] = 8
@@ -126,8 +204,8 @@ class TrainingHyperparams(Parameters):
         Field(
             title="weight_decay",
             description=(
-                "The weight decay to apply (if not zero) to all layers except all bias and "
-                "LayerNorm weights in the AdamW optimizer."
+                "The weight decay to apply to all layers except all bias and "
+                "LayerNorm weights in the AdamW optimizer. Must be in (0, 1)."
             ),
         ),
     ] = 0.01
@@ -137,7 +215,7 @@ class TrainingHyperparams(Parameters):
         ValueValidator(value_func=lambda v: v > 0),
         Field(
             title="warmup_ratio",
-            description="Ratio of total training steps used for a linear warmup from 0 to the learning rate.",
+            description="Ratio of total training steps used for a linear warmup from 0 to the learning rate. Must be > 0.",
         ),
     ] = 0.05
 
@@ -146,19 +224,22 @@ class TrainingHyperparams(Parameters):
         Field(
             title="lr_scheduler",
             description=(
-                "The scheduler type to use. See the HuggingFace documentation of `SchedulerType` for all possible values."
+                "The scheduler type to use. See the HuggingFace documentation of ``SchedulerType`` for all possible values."
             ),
         ),
     ] = LRScheduler.COSINE.value
 
     learning_rate: Annotated[
-        float,
-        ValueValidator(value_func=lambda v: 0 < v < 1),
+        AutoFloatParam,
+        ValueValidator(lambda p: range_validator(p, lambda v: 0 < v < 1)),
         Field(
             title="learning_rate",
-            description="The initial learning rate for `AdamW` optimizer.",
+            description=(
+                "The initial learning rate for `AdamW` optimizer. Must be in (0, 1). "
+                "Setting to 'auto' uses a model-specific default if one exists."
+            ),
         ),
-    ] = 0.0005
+    ] = AUTO_STR
 
     lora_r: Annotated[
         int,
@@ -166,8 +247,9 @@ class TrainingHyperparams(Parameters):
         Field(
             title="lora_r",
             description=(
-                "The rank of the LoRA update matrices, expressed in int. "
-                "Lower rank results in smaller update matrices with fewer trainable parameters."
+                "The rank of the LoRA update matrices. "
+                "Lower rank results in smaller update matrices with fewer trainable parameters. "
+                "Must be > 0."
             ),
         ),
     ] = 32
@@ -179,7 +261,8 @@ class TrainingHyperparams(Parameters):
             title="lora_alpha_over_r",
             description=(
                 "The ratio of the LoRA scaling factor (alpha) to the LoRA rank. "
-                "Empirically, this parameter works well when set to 0.5, 1, or 2."
+                "Empirically, this parameter works well when set to 0.5, 1, or 2. "
+                "Must be in [0.5, 3]."
             ),
         ),
     ] = 1.0
@@ -190,26 +273,17 @@ class TrainingHyperparams(Parameters):
             title="lora_target_modules",
             description=(
                 "The list of transformer modules to apply LoRA to. Possible modules: "
-                "'q_proj', 'k_proj', 'v_proj', 'o_proj', 'gate_proj', 'up_proj', 'down_proj'"
+                "'q_proj', 'k_proj', 'v_proj', 'o_proj', 'gate_proj', 'up_proj', 'down_proj'."
             ),
         ),
     ] = ["q_proj", "k_proj", "v_proj", "o_proj"]
-
-    use_unsloth: Annotated[
-        AutoBoolParam,
-        ValueValidator(value_func=lambda v: v is not None),
-        Field(
-            title="use_unsloth",
-            description="Whether to use unsloth.",
-        ),
-    ] = AUTO_STR
 
     rope_scaling_factor: Annotated[
         OptionalAutoInt,
         ValueValidator(lambda p: range_validator(p, lambda v: v >= 1)),
         Field(
             title="rope_scaling_factor",
-            description="Scale the base LLM's context length by this factor using RoPE scaling.",
+            description="Scale the base LLM's context length by this factor using RoPE scaling. Must be >= 1 or 'auto'.",
         ),
     ] = AUTO_STR
 
@@ -219,8 +293,8 @@ class TrainingHyperparams(Parameters):
         Field(
             title="validation_ratio",
             description=(
-                "The fraction of the training data that will be used for validation."
-                "The range should be 0 to 1. If set to 0, no validation will be performed."
+                "The fraction of the training data used for validation. Must be in [0, 1]. "
+                "If set to 0, no validation will be performed. "
                 "If set larger than 0, validation loss will be computed and reported "
                 "throughout training."
             ),
@@ -232,7 +306,7 @@ class TrainingHyperparams(Parameters):
         ValueValidator(value_func=lambda v: v > 0),
         Field(
             title="validation_steps",
-            description="The number of steps between validation checks for the HF Trainer arguments.",
+            description="The number of steps between validation checks for the HF Trainer arguments. Must be > 0.",
         ),
     ] = 15
 
@@ -240,9 +314,13 @@ class TrainingHyperparams(Parameters):
         str,
         Field(
             title="pretrained_model",
-            description="Pretrained model to use for fine tuning. Uses default of TinyLlama.",
+            description=(
+                "Pretrained model to use for fine-tuning. Defaults to SmolLM3. "
+                "May be a Hugging Face model ID (loaded from the Hugging Face Hub or cache) "
+                "or a local path. See security note in docs before using untrusted sources."
+            ),
         ),
-    ] = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+    ] = "HuggingFaceTB/SmolLM3-3B"
 
     quantize_model: Annotated[
         bool,
@@ -259,11 +337,28 @@ class TrainingHyperparams(Parameters):
         Literal[4, 8],
         Field(
             title="quantization_bits",
+            deprecated=True,
             description=(
-                "The number of bits to use for quantization if `quantize_model` is True. Common values are 8 or 4 bits."
+                "Deprecated: use ``quantization_scheme`` instead. Bit width for "
+                "bitsandbytes quantization when ``quantization_scheme`` is not set "
+                "(back-compat alias: 4 → bnb-4bit, 8 → bnb-8bit)."
             ),
         ),
     ] = 8
+
+    quantization_scheme: Annotated[
+        QuantizationScheme | None,
+        Field(
+            title="quantization_scheme",
+            description=(
+                "Quantization scheme to use when ``quantize_model=True``. Accepts "
+                "``bnb-4bit``, ``bnb-8bit``, ``fp8``, ``nvfp4``, or ``mxfp4``. "
+                "If unset, falls back to ``quantization_bits`` for backward "
+                "compatibility. Non-bitsandbytes schemes are incompatible with "
+                "``peft_implementation='loftq'``."
+            ),
+        ),
+    ] = None
 
     peft_implementation: Annotated[
         str,
@@ -271,8 +366,7 @@ class TrainingHyperparams(Parameters):
             title="peft_implementation",
             description=(
                 "The PEFT (Parameter-Efficient Fine-Tuning) implementation to use. "
-                "Options include 'lora' for Low-Rank Adaptation or QLoRA for Quantized LoRA. "
-                "Each method has its own trade-offs in terms of performance and resource requirements."
+                "Options: 'lora' for Low-Rank Adaptation, 'QLORA' for Quantized LoRA."
             ),
         ),
     ] = "QLORA"
@@ -282,6 +376,31 @@ class TrainingHyperparams(Parameters):
         ValueValidator(value_func=lambda v: 0 <= v <= 1),
         Field(
             title="max_vram_fraction",
-            description="The fraction of the total VRAM to use for training. Default is 0.9. Modify this to allow longer sequences to be used.",
+            description="The fraction of the total VRAM to use for training. Modify this to allow longer sequences. Must be in [0, 1].",
         ),
     ] = 0.80
+
+    attn_implementation: Annotated[
+        str,
+        Field(
+            title="attn_implementation",
+            description=(
+                "The attention implementation to use for model loading. "
+                "Default uses 'sdpa' (PyTorch scaled dot product attention) for broad compatibility. "
+                "Other common values: 'flash_attention_2' (requires flash-attn pip package), "
+                "'flash_attention_3' (requires flash-attn-3 support), 'eager' (standard PyTorch). "
+                "Custom HuggingFace Kernels Hub paths (e.g. 'kernels-community/flash-attn2') are also supported."
+            ),
+        ),
+    ] = "sdpa"
+
+    @property
+    def effective_batch_size(self) -> int:
+        """Effective batch size = ``batch_size * gradient_accumulation_steps``.
+
+        This is the number of examples that contribute to each optimizer
+        update (the "global" batch seen by the loss curve). Canonical
+        source for any caller that needs this product -- used by preflight
+        checks and logged by the training callbacks.
+        """
+        return self.batch_size * self.gradient_accumulation_steps

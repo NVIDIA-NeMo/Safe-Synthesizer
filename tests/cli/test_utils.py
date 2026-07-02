@@ -5,13 +5,15 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
+
 from nemo_safe_synthesizer.cli.settings import CLISettings
-from nemo_safe_synthesizer.cli.utils import common_setup
+from nemo_safe_synthesizer.cli.utils import _propagate_runtime_settings_to_env, common_setup, merge_overrides
 
 
 @pytest.fixture
@@ -26,7 +28,7 @@ datasets:
       training:
         batch_size: 16
         learning_rate: 0.01
-      enable_replace_pii: false
+      replace_pii: null
 """)
     return registry_path
 
@@ -90,7 +92,7 @@ class TestCommonSetupDatasetRegistry:
     ):
         """Test step 3: An empty DatasetRegistry is created when not specified."""
         settings = CLISettings.from_cli_kwargs(
-            url=str(dummy_csv),
+            data_source=str(dummy_csv),
             dataset_registry=None,
         )
 
@@ -99,7 +101,7 @@ class TestCommonSetupDatasetRegistry:
         # Verify the common_setup completed successfully
         assert df is not None
         assert isinstance(df, pd.DataFrame)
-        # Dataset should be loaded directly from the url
+        # Dataset should be loaded directly from the data_source
         assert list(df.columns) == ["col1", "col2"]
         assert len(df) == 2
 
@@ -111,7 +113,7 @@ class TestCommonSetupDatasetRegistry:
     ):
         """Test step 3: DatasetRegistry is created from YAML file when specified."""
         settings = CLISettings.from_cli_kwargs(
-            url=str(dummy_csv),
+            data_source=str(dummy_csv),
             dataset_registry=str(registry_with_base_url),
         )
 
@@ -130,7 +132,7 @@ class TestCommonSetupDatasetRegistry:
     ):
         """Test step 4: Dataset is loaded by name when it exists in registry."""
         settings = CLISettings.from_cli_kwargs(
-            url="my-dataset",  # Name in registry, not a file path
+            data_source="my-dataset",  # Name in registry, not a file path
             dataset_registry=str(registry_with_dataset),
         )
 
@@ -149,7 +151,7 @@ class TestCommonSetupDatasetRegistry:
     ):
         """Test step 4: Dataset URL is resolved relative to base_url."""
         settings = CLISettings.from_cli_kwargs(
-            url="test-data",  # Name in registry
+            data_source="test-data",  # Name in registry
             dataset_registry=str(registry_with_base_url),
         )
 
@@ -168,7 +170,7 @@ class TestCommonSetupDatasetRegistry:
     ):
         """Test step 5: Dataset overrides from registry are applied to config."""
         settings = CLISettings.from_cli_kwargs(
-            url="my-dataset",
+            data_source="my-dataset",
             dataset_registry=str(registry_with_dataset),
         )
 
@@ -185,7 +187,7 @@ class TestCommonSetupDatasetRegistry:
     ):
         """Test step 5: CLI overrides take precedence over dataset overrides."""
         settings = CLISettings.from_cli_kwargs(
-            url="my-dataset",
+            data_source="my-dataset",
             dataset_registry=str(registry_with_dataset),
             synthesis_overrides={
                 "training": {
@@ -208,7 +210,7 @@ class TestCommonSetupDatasetRegistry:
     ):
         """Test step 5: Dataset and CLI overrides are merged correctly."""
         settings = CLISettings.from_cli_kwargs(
-            url="test-data",
+            data_source="test-data",
             dataset_registry=str(registry_with_base_url),
             synthesis_overrides={
                 "training": {
@@ -228,6 +230,29 @@ class TestCommonSetupDatasetRegistry:
         assert config.training.batch_size == 8
         assert config.data.holdout == 0.1
 
+    def test_resume_uses_registry_data_without_registry_config_overrides(
+        self,
+        registry_with_base_url: Path,
+        patched_common_setup_dependencies: dict,
+    ):
+        """Resume treats dataset registry overrides as default-like, not runtime overrides."""
+        settings = CLISettings.from_cli_kwargs(
+            data_source="test-data",
+            dataset_registry=str(registry_with_base_url),
+            synthesis_overrides={
+                "generation": {
+                    "temperature": 0.7,
+                },
+            },
+        )
+
+        _, config, df, _ = common_setup(settings, resume=True)
+
+        assert df is not None
+        assert list(df.columns) == ["x", "y", "z"]
+        assert config.generation.num_records == 1000
+        assert config.generation.temperature == 0.7
+
     def test_overrides_config_registry_and_cli(
         self,
         registry_with_dataset: Path,
@@ -245,18 +270,19 @@ training:
   learning_rate: 0.05
   batch_size: 8
 generation:
-  use_structured_generation: true
+  structured_generation:
+    enabled: true
 """)
 
         # Overrides from registry for reference (see registry_with_dataset fixture)
         # training:
         #   batch_size: 16
         #   learning_rate: 0.01
-        # enable_replace_pii: false
+        # replace_pii: null
 
         # CLI overrides in synthesis_overrides
         settings = CLISettings.from_cli_kwargs(
-            url="my-dataset",
+            data_source="my-dataset",
             dataset_registry=str(registry_with_dataset),
             synthesis_overrides={
                 "training": {
@@ -273,9 +299,9 @@ generation:
 
         # Only given in config file
         assert config.training.num_input_records_to_sample == 150
-        assert config.generation.use_structured_generation
+        assert config.generation.structured_generation.enabled
         # Only given in registry
-        assert not config.enable_replace_pii
+        assert config.replace_pii is None
         # Only given in CLI
         assert config.generation.num_records == 496
         # Present in config file and registry, registry takes precedence
@@ -294,7 +320,7 @@ class TestCommonSetupWithoutRegistry:
     ):
         """Test that CSV is loaded directly when no registry is specified."""
         settings = CLISettings.from_cli_kwargs(
-            url=str(dummy_csv),
+            data_source=str(dummy_csv),
         )
 
         _, _, df, _ = common_setup(settings)
@@ -310,7 +336,7 @@ class TestCommonSetupWithoutRegistry:
     ):
         """Test that CLI overrides are applied when no registry is used."""
         settings = CLISettings.from_cli_kwargs(
-            url=str(dummy_csv),
+            data_source=str(dummy_csv),
             synthesis_overrides={
                 "generation": {
                     "num_records": 100,
@@ -325,6 +351,94 @@ class TestCommonSetupWithoutRegistry:
         assert config.generation.temperature == 0.7
 
 
+class TestMergeOverrides:
+    """Tests for config-file and CLI override merging."""
+
+    def test_partial_config_preserves_explicit_field_metadata(self, tmp_path: Path):
+        """Partial config files should not make default values look explicit."""
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text("""
+generation:
+  num_records: 77
+""")
+
+        config = merge_overrides(config_file, {})
+
+        assert config.generation.num_records == 77
+        assert config.generation.structured_generation.enabled is False
+        assert config.model_dump(exclude_unset=True) == {"generation": {"num_records": 77}}
+
+
+class TestPropagateRuntimeSettingsToEnv:
+    """Tests for materializing CLISettings runtime fields back to os.environ."""
+
+    def test_propagates_nss_inference_settings(self, monkeypatch):
+        """Endpoint and key propagate to NSS_INFERENCE_* env vars read by pii_replacer."""
+        monkeypatch.delenv("NSS_INFERENCE_ENDPOINT", raising=False)
+        monkeypatch.delenv("NSS_INFERENCE_KEY", raising=False)
+
+        settings = CLISettings.from_cli_kwargs(
+            inference_endpoint_url="https://cli.example/v1",
+            inference_api_key="token-propagated-cli",  # pragma: allowlist secret
+        )
+        _propagate_runtime_settings_to_env(settings)
+
+        assert os.environ["NSS_INFERENCE_ENDPOINT"] == "https://cli.example/v1"
+        assert os.environ["NSS_INFERENCE_KEY"] == "token-propagated-cli"
+
+    def test_propagates_remaining_runtime_settings(self, monkeypatch):
+        """Model ID, offline mode, and CPU count propagate to their runtime env vars."""
+        monkeypatch.delenv("NSS_INFERENCE_MODEL", raising=False)
+        monkeypatch.delenv("HF_HUB_OFFLINE", raising=False)
+        monkeypatch.delenv("TRANSFORMERS_OFFLINE", raising=False)
+        monkeypatch.delenv("NSS_PII_REPLACER_CPU_COUNT", raising=False)
+
+        settings = CLISettings.from_cli_kwargs(
+            inference_model_id="custom/model",
+            huggingface_remote=False,
+            cpu_count=3,
+        )
+        _propagate_runtime_settings_to_env(settings)
+
+        assert os.environ["NSS_INFERENCE_MODEL"] == "custom/model"
+        assert os.environ["HF_HUB_OFFLINE"] == "1"
+        assert os.environ["TRANSFORMERS_OFFLINE"] == "1"
+        assert os.environ["NSS_PII_REPLACER_CPU_COUNT"] == "3"
+
+    def test_enabling_huggingface_remote_disables_offline_env(self, monkeypatch):
+        """--enable-huggingface-remote sets the HF offline vars to 0, overriding inherited offline env."""
+        monkeypatch.setenv("HF_HUB_OFFLINE", "1")
+        monkeypatch.setenv("TRANSFORMERS_OFFLINE", "1")
+
+        settings = CLISettings.from_cli_kwargs(huggingface_remote=True)
+        _propagate_runtime_settings_to_env(settings)
+
+        assert os.environ["HF_HUB_OFFLINE"] == "0"
+        assert os.environ["TRANSFORMERS_OFFLINE"] == "0"
+
+    def test_common_setup_propagates_before_workdir(self, monkeypatch, dummy_csv: Path):
+        """common_setup writes resolved runtime settings before downstream imports."""
+        monkeypatch.delenv("NSS_INFERENCE_KEY", raising=False)
+
+        settings = CLISettings.from_cli_kwargs(
+            data_source=str(dummy_csv),
+            inference_api_key="token-propagated-setup",  # pragma: allowlist secret
+        )
+
+        with (
+            patch("nemo_safe_synthesizer.cli.utils._create_workdir") as mock_create_workdir,
+            patch("nemo_safe_synthesizer.cli.utils.initialize_wandb_run"),
+            patch("nemo_safe_synthesizer.cli.utils._initialize_logging_for_cli_from_settings") as mock_init_logging,
+        ):
+            mock_workdir = MagicMock()
+            mock_create_workdir.return_value = mock_workdir
+            mock_init_logging.return_value = MagicMock()
+
+            common_setup(settings)
+
+        assert os.environ["NSS_INFERENCE_KEY"] == "token-propagated-setup"
+
+
 class TestCommonSetupReturnValues:
     """Tests for common_setup return values."""
 
@@ -337,7 +451,7 @@ class TestCommonSetupReturnValues:
         from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 
         settings = CLISettings.from_cli_kwargs(
-            url=str(dummy_csv),
+            data_source=str(dummy_csv),
         )
 
         result = common_setup(settings)

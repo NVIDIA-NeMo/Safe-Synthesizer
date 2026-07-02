@@ -8,6 +8,8 @@ from typing import cast
 import pandas as pd
 import pytest
 from datasets import Dataset
+from transformers import PretrainedConfig, PreTrainedTokenizer
+
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 from nemo_safe_synthesizer.data_processing.assembler import (
     Example,
@@ -24,15 +26,16 @@ from nemo_safe_synthesizer.data_processing.record_utils import (
 from nemo_safe_synthesizer.defaults import PROMPT_TEMPLATE, PSEUDO_GROUP_COLUMN
 from nemo_safe_synthesizer.errors import GenerationError, ParameterError
 from nemo_safe_synthesizer.llm.metadata import DEFAULT_MAX_SEQ_LENGTH, LLMPromptConfig, ModelMetadata
-from transformers import PretrainedConfig, PreTrainedTokenizer
 
 STUB_PROMPT = "Test prompt"
 STUB_SEQUENCE = dict(input_ids=[66, 67], attention_mask=[1, 1])
 
 
+# Purpose: Session-scoped assembler config pointing at a local SmolLM3 tokenizer directory
+# to avoid HuggingFace Hub downloads during tests.
 @pytest.fixture(scope="session")
-def fixture_assembler_config() -> SafeSynthesizerParameters:
-    config = SafeSynthesizerParameters.from_params(use_unsloth=False, rope_scaling_factor=1)
+def fixture_assembler_config(fixture_smollm3_tokenizer: str) -> SafeSynthesizerParameters:
+    config = SafeSynthesizerParameters.from_params(rope_scaling_factor=1, pretrained_model=fixture_smollm3_tokenizer)
     return config
 
 
@@ -48,9 +51,7 @@ def fixture_autoconfig() -> PretrainedConfig:
 def fixture_llm_metadata(
     fixture_session_cache_dir, fixture_assembler_config: SafeSynthesizerParameters
 ) -> ModelMetadata:
-    metadata = ModelMetadata.from_str_or_path(
-        model_name_or_path=fixture_assembler_config.training.pretrained_model, save_path=fixture_session_cache_dir
-    )
+    metadata = ModelMetadata.from_str_or_path(model_name_or_path=fixture_assembler_config.training.pretrained_model)
     assert metadata is not None
     return metadata
 
@@ -61,19 +62,18 @@ def test_example_with_special_tokens_in_prompt(
     fixture_llm_metadata.prompt_config.add_bos_token_to_prompt = True
     fixture_llm_metadata.prompt_config.add_eos_token_to_prompt = True
     example = Example(prompt=STUB_PROMPT, tokenizer=fixture_tokenizer, metadata=fixture_llm_metadata)
-
     example.add_sequence(STUB_SEQUENCE, add_special_tokens=True)
     assert example.num_tokens == 8
-    assert example.input_ids == [1, 4321, 9508, 2, 1, 66, 67, 2]
+    assert example.input_ids == [128011, 2323, 10137, 128012, 128011, 66, 67, 128012]
     assert example.attention_mask == [1] * 8
-    assert example.labels == [-100, -100, -100, -100, 1, 66, 67, 2]
+    assert example.labels == [-100, -100, -100, -100, 128011, 66, 67, 128012]
 
     example.add_sequence(STUB_SEQUENCE, add_special_tokens=False)
     assert example.num_sequences == 2
     assert example.num_tokens == 10
-    assert example.input_ids == [1, 4321, 9508, 2, 1, 66, 67, 2, 66, 67]
+    assert example.input_ids == [128011, 2323, 10137, 128012, 128011, 66, 67, 128012, 66, 67]
     assert example.attention_mask == [1] * 10
-    assert example.labels == [-100, -100, -100, -100, 1, 66, 67, 2, 66, 67]
+    assert example.labels == [-100, -100, -100, -100, 128011, 66, 67, 128012, 66, 67]
     assert set(example.to_dict().keys()) == {"input_ids", "attention_mask", "labels"}
 
 
@@ -86,15 +86,15 @@ def test_example_without_special_tokens_in_prompt(
 
     example.add_sequence(STUB_SEQUENCE, add_special_tokens=True)
     assert example.num_tokens == 6
-    assert example.input_ids == [4321, 9508, 1, 66, 67, 2]
+    assert example.input_ids == [2323, 10137, 128011, 66, 67, 128012]
     assert example.attention_mask == [1] * 6
-    assert example.labels == [-100, -100, 1, 66, 67, 2]
+    assert example.labels == [-100, -100, 128011, 66, 67, 128012]
 
     example.add_sequence(STUB_SEQUENCE, add_special_tokens=False)
     assert example.num_tokens == 8
-    assert example.input_ids == [4321, 9508, 1, 66, 67, 2, 66, 67]
+    assert example.input_ids == [2323, 10137, 128011, 66, 67, 128012, 66, 67]
     assert example.attention_mask == [1] * 8
-    assert example.labels == [-100, -100, 1, 66, 67, 2, 66, 67]
+    assert example.labels == [-100, -100, 128011, 66, 67, 128012, 66, 67]
 
 
 def test_add_sequence_raising_exception(fixture_llm_metadata: ModelMetadata, fixture_tokenizer: PreTrainedTokenizer):
@@ -134,9 +134,7 @@ def test_tabular_data_assembler(
     fixture_assembler_config: SafeSynthesizerParameters,
     fixture_session_cache_dir: str,
 ):
-    metadata = ModelMetadata.from_str_or_path(
-        model_name_or_path=fixture_assembler_config.training.pretrained_model, save_path=fixture_session_cache_dir
-    )
+    metadata = ModelMetadata.from_str_or_path(model_name_or_path=fixture_assembler_config.training.pretrained_model)
     assembler = TabularDataExampleAssembler(
         dataset=fixture_iris_dataset,
         tokenizer=fixture_tokenizer,
@@ -149,7 +147,7 @@ def test_tabular_data_assembler(
     assert assembler.num_records_validation == 0
 
     examples = assembler.assemble_training_examples()
-    assert examples.train.num_rows == 4
+    assert examples.train.num_rows == 1
     assert examples.test is None
 
 
@@ -174,10 +172,9 @@ def test_tabular_data_assembler_shorter_context_with_test_split(
     assert assembler.num_records_validation == 30
 
     examples = assembler.assemble_training_examples()
-    assert (
-        examples.test.num_rows == 4
-    )  # changed from 30 to 4 because we are filling context with records for the test set as well
-    assert examples.train.num_rows == 14
+    assert examples.test is not None
+    assert examples.test.num_rows == 3  # depends on tokenizer/model: we fill context with records for the test set
+    assert examples.train.num_rows == 11
 
 
 def test_tabular_data_assembler_dp(
@@ -207,6 +204,8 @@ def test_assembler_schema_tokenization_exception(
     fixture_session_cache_dir,
     fixture_assembler_config: SafeSynthesizerParameters,
 ):
+    # Use a small context size so this test exercises the max-token limit (default is 12k for non-tinyllama).
+    fixture_llm_metadata.base_max_seq_length = 2048
     with pytest.raises(
         GenerationError,
         match="The dataset schema requires more tokens than the max length of the model.",
@@ -256,7 +255,6 @@ def test_grouped_data_assembler(
         # Provide specific values for auto params as auto param resolution
         # only happens in the skynet or jarvis implementations.
         num_input_records_to_sample=5000,
-        use_unsloth=True,
         rope_scaling_factor=1,
     )
     llm_metadata = ModelMetadata(
@@ -272,7 +270,6 @@ def test_grouped_data_assembler(
         ),
         model_name_or_path=fixture_tokenizer.name_or_path,
         autoconfig=fixture_autoconfig,
-        save_path=Path(fixture_session_cache_dir),
     )
 
     assembler = TrainingExampleAssembler.from_data(
@@ -291,9 +288,9 @@ def test_grouped_data_assembler(
     examples = assembler.assemble_training_examples()
     assert examples.train.num_rows == 7
     assert examples.test is None
-    assert round(examples.stats["tokens_per_record"].mean, 4) == 22.9135
-    assert round(examples.stats["tokens_per_group"].mean, 4) == 264.88
-    assert round(examples.stats["tokens_per_example"].mean, 4) == 1949.2857
+    assert round(examples.stats["tokens_per_record"].mean, 4) == 19.0
+    assert round(examples.stats["tokens_per_group"].mean, 4) == 219.64
+    assert round(examples.stats["tokens_per_example"].mean, 4) == 1628.1429
     assert round(examples.stats["records_per_example"].mean, 4) == 82.5714
     assert round(examples.stats["groups_per_example"].mean, 4) == 7.1429
 
@@ -311,7 +308,6 @@ def test_grouped_data_assembler_training_examples_low_decimal(
         # Provide specific values for auto params as auto param resolution
         # only happens in the skynet or jarvis implementations.
         num_input_records_to_sample=5000,
-        use_unsloth=True,
         rope_scaling_factor=1,
     )
     llm_metadata = ModelMetadata(
@@ -342,13 +338,13 @@ def test_grouped_data_assembler_training_examples_low_decimal(
     assert assembler.num_records_validation == 0
 
     examples = assembler.assemble_training_examples(data_fraction=1.01)
-    assert examples.train.num_rows == 4
+    assert examples.train.num_rows == 3
     assert examples.test is None
-    assert round(examples.stats["tokens_per_record"].mean, 4) == 27.755
-    assert round(examples.stats["tokens_per_group"].mean, 4) == 462.5833
-    assert round(examples.stats["tokens_per_example"].mean, 4) == 1571.0
-    assert round(examples.stats["records_per_example"].mean, 4) == 55.0
-    assert round(examples.stats["groups_per_example"].mean, 4) == 3.25
+    assert round(examples.stats["tokens_per_record"].mean, 4) == 18.88
+    assert round(examples.stats["tokens_per_group"].mean, 4) == 314.6667
+    assert round(examples.stats["tokens_per_example"].mean, 4) == 1431.3333
+    assert round(examples.stats["records_per_example"].mean, 4) == 73.3333
+    assert round(examples.stats["groups_per_example"].mean, 4) == 4.3333
 
 
 def test_grouped_data_assembler_training_examples_high_decimal(
@@ -364,7 +360,6 @@ def test_grouped_data_assembler_training_examples_high_decimal(
         # Provide specific values for auto params as auto param resolution
         # only happens in the skynet or jarvis implementations.
         num_input_records_to_sample=5000,
-        use_unsloth=True,
         rope_scaling_factor=1,
     )
     llm_metadata = ModelMetadata(
@@ -380,7 +375,6 @@ def test_grouped_data_assembler_training_examples_high_decimal(
         ),
         model_name_or_path=fixture_tokenizer.name_or_path,
         autoconfig=fixture_autoconfig,
-        save_path=Path(fixture_session_cache_dir),
     )
     assembler = TrainingExampleAssembler.from_data(
         dataset=fixture_sample_patient_dataset,
@@ -395,13 +389,13 @@ def test_grouped_data_assembler_training_examples_high_decimal(
     assert assembler.num_records_validation == 0
 
     examples = assembler.assemble_training_examples(data_fraction=2.999)
-    assert examples.train.num_rows == 10
+    assert examples.train.num_rows == 7
     assert examples.test is None
-    assert round(examples.stats["tokens_per_record"].mean, 4) == 27.755
-    assert round(examples.stats["tokens_per_group"].mean, 4) == 462.5833
-    assert round(examples.stats["tokens_per_example"].mean, 4) == 1714.5
-    assert round(examples.stats["records_per_example"].mean, 4) == 60.0
-    assert round(examples.stats["groups_per_example"].mean, 4) == 3.6
+    assert round(examples.stats["tokens_per_record"].mean, 4) == 18.88
+    assert round(examples.stats["tokens_per_group"].mean, 4) == 314.6667
+    assert round(examples.stats["tokens_per_example"].mean, 4) == 1667.5714
+    assert round(examples.stats["records_per_example"].mean, 4) == 85.7143
+    assert round(examples.stats["groups_per_example"].mean, 4) == 5.1429
 
 
 def test_grouped_data_assembler_shorter_context_with_test_split(
@@ -417,7 +411,6 @@ def test_grouped_data_assembler_shorter_context_with_test_split(
         # Provide specific values for auto params as auto param resolution
         # only happens in the skynet or jarvis implementations.
         num_input_records_to_sample=5000,
-        use_unsloth=True,
         rope_scaling_factor=1,
         validation_ratio=0.2,
     )
@@ -434,7 +427,6 @@ def test_grouped_data_assembler_shorter_context_with_test_split(
         ),
         model_name_or_path=fixture_tokenizer.name_or_path,
         autoconfig=fixture_autoconfig,
-        save_path=Path(fixture_session_cache_dir),
     )
     assembler = TrainingExampleAssembler.from_data(
         dataset=fixture_chickweight_dataset,
@@ -453,18 +445,19 @@ def test_grouped_data_assembler_shorter_context_with_test_split(
     assert assembler.num_groups_validation == 10
     assert (
         assembler.num_groups_train + assembler.num_groups_validation
-        == fixture_chickweight_dataset.to_pandas()["Chick"].nunique()
+        == cast(pd.DataFrame, fixture_chickweight_dataset.to_pandas())["Chick"].nunique()
     )
 
     examples = assembler.assemble_training_examples()
 
-    assert examples.train.num_rows == 39
-    assert examples.test.num_rows == 10
-    assert round(examples.stats["tokens_per_record"].mean, 4) == 22.9135
-    assert round(examples.stats["tokens_per_group"].mean, 4) == 264.88
-    assert round(examples.stats["tokens_per_example"].mean, 4) == 316.8462
-    assert round(examples.stats["records_per_example"].mean, 4) == 11.8718
-    assert round(examples.stats["groups_per_example"].mean, 4) == 1.0256
+    assert examples.train.num_rows == 37
+    assert examples.test is not None
+    assert examples.test.num_rows == 9
+    assert round(examples.stats["tokens_per_record"].mean, 4) == 19.0
+    assert round(examples.stats["tokens_per_group"].mean, 4) == 219.64
+    assert round(examples.stats["tokens_per_example"].mean, 4) == 284.9189
+    assert round(examples.stats["records_per_example"].mean, 4) == 12.5135
+    assert round(examples.stats["groups_per_example"].mean, 4) == 1.0811
 
 
 def test_grouped_data_assembler_dp(
@@ -480,7 +473,6 @@ def test_grouped_data_assembler_dp(
         # Provide specific values for auto params as auto param resolution
         # only happens in the skynet or jarvis implementations.
         num_input_records_to_sample=5000,
-        use_unsloth=True,
         rope_scaling_factor=1,
         validation_ratio=0.2,
     )
@@ -497,7 +489,6 @@ def test_grouped_data_assembler_dp(
         ),
         model_name_or_path=fixture_tokenizer.name_or_path,
         autoconfig=fixture_autoconfig,
-        save_path=Path(fixture_session_cache_dir),
         # Set max_sequences_per_example=1 for DP mode (1 group per example)
         max_sequences_per_example=1,
     )
@@ -528,11 +519,13 @@ def test_grouped_data_assembler_context_width_exception(
         # Provide specific values for auto params as auto param resolution
         # only happens in the skynet or jarvis implementations.
         num_input_records_to_sample=5000,
-        use_unsloth=True,
         rope_scaling_factor=1,
     )
     llm_metadata = ModelMetadata(
-        base_max_seq_length=2048,
+        # Use a small context so at least one group exceeds it during example generation.
+        # Must be large enough for initial tokenization to pass but small enough that
+        # the generator hits context limit.
+        base_max_seq_length=512,
         prompt_config=LLMPromptConfig(
             template=PROMPT_TEMPLATE,
             add_bos_token_to_prompt=True,
@@ -544,7 +537,6 @@ def test_grouped_data_assembler_context_width_exception(
         ),
         model_name_or_path=fixture_tokenizer.name_or_path,
         autoconfig=fixture_autoconfig,
-        save_path=Path(fixture_session_cache_dir),
     )
     assembler = TrainingExampleAssembler.from_data(
         dataset=fixture_dow_jones_index_dataset,
@@ -606,7 +598,6 @@ def test_create_group_example_assembler(
         # Provide specific values for auto params as auto param resolution
         # only happens in the skynet or jarvis implementations.
         num_input_records_to_sample=5000,
-        use_unsloth=True,
         rope_scaling_factor=1,
     )
     llm_metadata = ModelMetadata(
@@ -622,7 +613,6 @@ def test_create_group_example_assembler(
             eos_token="</s>",
             eos_token_id=2,
         ),
-        save_path=Path(fixture_session_cache_dir),
     )
     assert isinstance(
         TrainingExampleAssembler.from_data(
@@ -656,46 +646,7 @@ def fixture_sequential_metadata(
         ),
         model_name_or_path=fixture_tokenizer.name_or_path,
         autoconfig=fixture_autoconfig,
-        save_path=Path(fixture_session_cache_dir),
     )
-
-
-def test_sequential_assembler_raises_for_missing_group_column(
-    fixture_iris_dataset: Dataset,
-    fixture_tokenizer: PreTrainedTokenizer,
-    fixture_session_cache_dir: str,
-    fixture_sequential_metadata: ModelMetadata,
-):
-    """Test that SequentialExampleAssembler raises for missing group column."""
-    with pytest.raises(ParameterError, match="Group by column.*not found in dataset"):
-        SequentialExampleAssembler(
-            dataset=fixture_iris_dataset,
-            tokenizer=fixture_tokenizer,
-            metadata=fixture_sequential_metadata,
-            group_training_examples_by="nonexistent_column",
-            order_training_examples_by="sepal.length",
-            cache_file_path=fixture_session_cache_dir,
-            seed=1,
-        )
-
-
-def test_sequential_assembler_raises_for_missing_order_column(
-    fixture_iris_dataset: Dataset,
-    fixture_tokenizer: PreTrainedTokenizer,
-    fixture_session_cache_dir: str,
-    fixture_sequential_metadata: ModelMetadata,
-):
-    """Test that SequentialExampleAssembler raises for missing order column."""
-    with pytest.raises(ParameterError, match="Order by column.*not found in dataset"):
-        SequentialExampleAssembler(
-            dataset=fixture_iris_dataset,
-            tokenizer=fixture_tokenizer,
-            metadata=fixture_sequential_metadata,
-            group_training_examples_by="variety",
-            order_training_examples_by="nonexistent_column",
-            cache_file_path=fixture_session_cache_dir,
-            seed=1,
-        )
 
 
 def test_sequential_assembler_reorders_columns(
@@ -717,6 +668,35 @@ def test_sequential_assembler_reorders_columns(
     assert assembler.schema_prompt.index("Chick") < assembler.schema_prompt.index("Time")
 
 
+@pytest.mark.parametrize(
+    ("group_by", "order_by", "missing_role"),
+    [
+        ("nonexistent_group", "Time", "Group by"),
+        ("Chick", "nonexistent_order", "Order by"),
+    ],
+)
+def test_sequential_assembler_raises_parameter_error_for_missing_required_columns(
+    fixture_chickweight_dataset: Dataset,
+    fixture_tokenizer: PreTrainedTokenizer,
+    fixture_session_cache_dir: str,
+    fixture_sequential_metadata: ModelMetadata,
+    group_by: str,
+    order_by: str,
+    missing_role: str,
+):
+    """Direct constructor callers should get actionable user-facing errors."""
+    with pytest.raises(ParameterError, match=f"{missing_role} column 'nonexistent_"):
+        SequentialExampleAssembler(
+            dataset=fixture_chickweight_dataset,
+            tokenizer=fixture_tokenizer,
+            metadata=fixture_sequential_metadata,
+            group_training_examples_by=group_by,
+            order_training_examples_by=order_by,
+            cache_file_path=fixture_session_cache_dir,
+            seed=1,
+        )
+
+
 def test_sequential_assembler_excludes_pseudo_group_from_schema(
     fixture_iris_dataset: Dataset,
     fixture_tokenizer: PreTrainedTokenizer,
@@ -724,7 +704,7 @@ def test_sequential_assembler_excludes_pseudo_group_from_schema(
     fixture_sequential_metadata: ModelMetadata,
 ):
     """Test that SequentialExampleAssembler excludes PSEUDO_GROUP_COLUMN from schema."""
-    df = fixture_iris_dataset.to_pandas()
+    df = cast(pd.DataFrame, fixture_iris_dataset.to_pandas())
     df[PSEUDO_GROUP_COLUMN] = 0
     dataset_with_pseudo = Dataset.from_pandas(df)
 
@@ -757,8 +737,9 @@ def test_sequential_assembler_sorts_records_by_group_and_order(
         seed=42,
     )
 
-    train_df = assembler.train_dataset.to_pandas()
-    for chick_id, group_df in train_df.groupby("Chick"):
+    assert assembler.training_dataset is not None
+    training_df = cast(pd.DataFrame, assembler.training_dataset.to_pandas())
+    for chick_id, group_df in training_df.groupby("Chick"):
         time_values = group_df["Time"].tolist()
         assert time_values == sorted(time_values), f"Time values not sorted for Chick {chick_id}"
 
@@ -798,7 +779,6 @@ def test_sequential_assembler_initial_prefill(
     fixture_sequential_metadata: ModelMetadata,
 ):
     """Test that SequentialExampleAssembler returns correct prefill for each group."""
-
     # Create a small, controlled dataset with 2 groups and known values
     df = pd.DataFrame(
         {
@@ -942,7 +922,6 @@ def test_sequential_assembler_end_to_end(
         order_training_examples_by="Time",
         pretrained_model=fixture_tokenizer.name_or_path,
         num_input_records_to_sample=5000,
-        use_unsloth=True,
         rope_scaling_factor=1,
     )
     config.time_series.is_timeseries = True
@@ -960,7 +939,6 @@ def test_sequential_assembler_end_to_end(
         ),
         model_name_or_path=fixture_tokenizer.name_or_path,
         autoconfig=fixture_autoconfig,
-        save_path=Path(fixture_session_cache_dir),
     )
 
     assembler = TrainingExampleAssembler.from_data(
@@ -987,6 +965,7 @@ def test_sequential_assembler_end_to_end(
     for i in range(examples.train.num_rows):
         input_ids = examples.train[i]["input_ids"]
         text = fixture_tokenizer.decode(input_ids, skip_special_tokens=True)
+        assert isinstance(text, str)
         record_strings = extract_records_from_jsonl_string(text)
         records = [json.loads(r) for r in record_strings]
 
@@ -1011,10 +990,9 @@ def test_sequential_assembler_single_group_with_pseudo_column(
     fixture_autoconfig: PretrainedConfig,
 ):
     """Test SequentialExampleAssembler with a single group using pseudo column."""
-
     # Add pseudo group column to simulate ungrouped time series
     # Adding pseudo group is already tested in test_timeseries_preprocessing.py
-    df = fixture_iris_dataset.to_pandas()
+    df = cast(pd.DataFrame, fixture_iris_dataset.to_pandas())
     df[PSEUDO_GROUP_COLUMN] = 0  # All records in one group
     df["timestamp"] = range(len(df))  # Add a synthetic timestamp column
     dataset_with_pseudo = Dataset.from_pandas(df)
@@ -1033,7 +1011,6 @@ def test_sequential_assembler_single_group_with_pseudo_column(
         ),
         model_name_or_path=fixture_tokenizer.name_or_path,
         autoconfig=fixture_autoconfig,
-        save_path=Path(fixture_session_cache_dir),
     )
 
     assembler = SequentialExampleAssembler(
@@ -1064,6 +1041,7 @@ def test_sequential_assembler_single_group_with_pseudo_column(
     for i in range(examples.train.num_rows):
         input_ids = examples.train[i]["input_ids"]
         text = fixture_tokenizer.decode(input_ids, skip_special_tokens=True)
+        assert isinstance(text, str)
         record_strings = extract_records_from_jsonl_string(text)
         records = [json.loads(r) for r in record_strings]
 

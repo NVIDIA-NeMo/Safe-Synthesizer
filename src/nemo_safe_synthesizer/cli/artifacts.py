@@ -1,6 +1,12 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""CLI entry points for artifact management.
+
+Provides CLI commands for inspecting and cleaning up artifact directories
+produced by Safe Synthesizer runs.
+"""
+
 from __future__ import annotations
 
 import shutil
@@ -8,13 +14,13 @@ from pathlib import Path
 
 import click
 
-from .artifact_structure import BoundDir, PathT, Workdir
+from .artifact_structure import BoundDir, Workdir
 
 
 @click.group(invoke_without_command=True)
 @click.pass_context
-def artifacts(ctx: click.Context):
-    """Artifacts management commands."""
+def artifacts(ctx: click.Context) -> None:
+    """Artifact management commands."""
     pass
 
 
@@ -27,7 +33,7 @@ def artifacts(ctx: click.Context):
 @click.option("--dry-run", is_flag=True, help="Dry run the command.")
 @click.option("--caches-only", is_flag=True, help="Only clean caches.")
 @click.option("--force", is_flag=True, help="Force clean.")
-def clean(ctx: click.Context, artifact_path: PathT | None, dry_run: bool, caches_only: bool, force: bool):
+def clean(artifact_path: str | Path | None, dry_run: bool, caches_only: bool, force: bool) -> None:
     """Clean artifacts in a Workdir structure."""
     if artifact_path is None:
         artifact_path = Path("safe-synthesizer-artifacts")
@@ -35,13 +41,13 @@ def clean(ctx: click.Context, artifact_path: PathT | None, dry_run: bool, caches
     try:
         workdir = Workdir.from_path(Path(artifact_path))
     except ValueError as e:
-        click.secho(f"Error: {e}", fg="red", err=True)
-        return
+        raise click.ClickException(str(e))
 
     # Determine what to clean
     if caches_only:
         cache_dir = workdir.train.cache
-        assert isinstance(cache_dir, BoundDir)
+        if not isinstance(cache_dir, BoundDir):
+            raise TypeError(f"Expected BoundDir, got {type(cache_dir)}")
         target = cache_dir.path
         item_name = "cache"
     else:
@@ -69,4 +75,4 @@ def clean(ctx: click.Context, artifact_path: PathT | None, dry_run: bool, caches
                 target.unlink()
             click.secho(f"Successfully deleted: {target}", fg="green")
         except Exception as e:
-            click.secho(f"Error deleting {target}: {e}", fg="red", err=True)
+            raise click.ClickException(f"Error deleting {target}: {e}")

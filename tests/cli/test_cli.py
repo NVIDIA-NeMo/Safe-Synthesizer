@@ -5,6 +5,7 @@ import json
 import re
 
 from click.testing import CliRunner
+
 from nemo_safe_synthesizer.cli.cli import cli
 from nemo_safe_synthesizer.utils import merge_dicts
 
@@ -50,7 +51,7 @@ def test_merge_dicts():
     assert test_data_base == test_data_base_copy
 
 
-def test_config_keep_default_with_nested_replacement(tmp_path_factory, yaml_config_str):
+def test_config_keep_default_with_nested_replacement(tmp_path_factory, fixture_yaml_config_str):
     """
     Note these tests need to be run without extra pytest capturing
     to see the print statements, e.g. pytest -s or pytest --log-cli-level=DEBUG
@@ -58,7 +59,7 @@ def test_config_keep_default_with_nested_replacement(tmp_path_factory, yaml_conf
     tmp_path = tmp_path_factory.mktemp("data", numbered=True)
     config_path = tmp_path / "test_safe_synth.yaml"
     with open(config_path, "w") as f:
-        f.write(yaml_config_str)
+        f.write(fixture_yaml_config_str)
     runner = CliRunner()
     result = runner.invoke(
         cli,
@@ -84,7 +85,7 @@ def test_config_keep_default_with_nested_replacement(tmp_path_factory, yaml_conf
     assert vals["data"]["max_sequences_per_example"] == 2
 
 
-def test_config_accurate_replacement(tmp_path_factory, yaml_config_str):
+def test_config_accurate_replacement(tmp_path_factory, fixture_yaml_config_str):
     """
     Note these tests need to be ran without extra pytest capturing
     to see the print statements, e.g. pytest -s or pytest --log-cli-level=DEBUG
@@ -92,7 +93,7 @@ def test_config_accurate_replacement(tmp_path_factory, yaml_config_str):
     tmp_path = tmp_path_factory.mktemp("data", numbered=True)
     config_path = tmp_path / "test_safe_synth.yaml"
     with open(config_path, "w") as f:
-        f.write(yaml_config_str)
+        f.write(fixture_yaml_config_str)
     runner = CliRunner()
     result = runner.invoke(
         cli,
@@ -119,7 +120,7 @@ def test_config_accurate_replacement(tmp_path_factory, yaml_config_str):
     assert result.exit_code == 0
 
 
-def test_config_accurate_replacement_multiples(tmp_path_factory, yaml_config_str):
+def test_config_accurate_replacement_multiples(tmp_path_factory, fixture_yaml_config_str):
     """
     Note these tests need to be ran without extra pytest capturing
     to see the print statements, e.g. pytest -s or pytest --log-cli-level=DEBUG
@@ -127,7 +128,7 @@ def test_config_accurate_replacement_multiples(tmp_path_factory, yaml_config_str
     tmp_path = tmp_path_factory.mktemp("data", True)
     config_path = tmp_path / "test_safe_synth.yaml"
     with open(config_path, "w") as f:
-        f.write(yaml_config_str)
+        f.write(fixture_yaml_config_str)
     runner = CliRunner()
     result = runner.invoke(
         cli,

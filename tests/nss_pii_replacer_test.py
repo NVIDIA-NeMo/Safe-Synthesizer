@@ -8,13 +8,13 @@ import pytest
 pytest.importorskip("torch", reason="torch is required for these tests (install with: uv sync --extra cpu)")
 
 import pandas as pd
+
 from nemo_safe_synthesizer.pii_replacer.nemo_pii import NemoPII
 
-# Currently use env variables to configure various pieces
-# Inferenc endpoint for classify:
-# export NIM_API_KEY=<...>
-# export NIM_ENDPOINT_URL=https://integrate.api.nvidia.com/v1
-# export NIM_MODEL_ID=qwen/qwen2.5-coder-32b-instruct
+# Currently use env variables to configure the endpoint and model for column classification.
+# export NSS_INFERENCE_KEY=<...>
+# export NSS_INFERENCE_ENDPOINT=https://integrate.api.nvidia.com/v1
+# export NSS_INFERENCE_MODEL=qwen/qwen3-next-80b-a3b-instruct
 
 
 def main():
@@ -30,7 +30,9 @@ def main():
 
     column_classifications = nemo_pii.classify_df(df.head(10))
     print(column_classifications)
-    result = nemo_pii.transform_df(df)
+    nemo_pii.transform_df(df)
+    result = nemo_pii.result
+    assert result is not None
 
     print("Result df:")
     print(result.transformed_df.to_csv(index=False))

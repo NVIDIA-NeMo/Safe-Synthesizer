@@ -1,12 +1,19 @@
 # ignores agents.local.md, cursor.local.md, claude.local.md, etc.
 *.local.md
 .cursor/rules/personal/
+.cursor/sandbox.json
+.agents/skills/personal/
+.agents/skills
 .claude/settings.local.json
+.cursor/sandbox.json
 ai/tmp/
 venv*/
 env*/
 *.env
+*.env.local
 *.envrc
+mise.local.toml
+.mise.local.toml
 temp
 __pycache__/*
 *.pyc
@@ -22,14 +29,18 @@ integration-report.xml
 .eggs
 *.egg-info
 build
+!.mise/tasks/**/build/
+!.mise/tasks/**/build/**
 dist
 .mypy_cache
-.python-version
+# .python-version is tracked -- uv reads it to select the interpreter
 .history
 .venv
 .ruff_cache
 report.xml
 test_db.sqlite
+# File used for populating vulns
+dependabot.json
 
 # Visual Studio Code config
 .vscode/
@@ -64,9 +75,6 @@ docs/**/_snippets/**/*.tgz
 
 # this is sometimes used by wandb as a local path.
 wandb/
-
-# output from unsloth defaults to the local path
-unsloth_compiled_cache/
 
 # symbolic link to the nmp repo folder for uv dependency resolution.
 .nmp_repo

@@ -1,14 +1,31 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Artifact directory structure for Safe Synthesizer."""
+"""Artifact directory structure for Safe Synthesizer.
+
+Defines the on-disk layout produced by each pipeline run using a declarative
+descriptor pattern. ``FileNode`` and ``DirNode`` descriptors declare the
+tree shape on ``Workdir``; at runtime they resolve to ``Path`` and ``BoundDir``
+objects respectively, giving typed access to every artifact path without
+hard-coding strings throughout the CLI.
+
+Typical directory tree:
+
+    <base_path>/<config>---<dataset>/<run_name>/
+    - train/  ...
+    - generate/  ...
+    - dataset/  ...
+
+See ``Workdir`` for the full structure.
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from os import PathLike
 from pathlib import Path
-from typing import Self, overload
+from typing import TYPE_CHECKING, Generic, Self, TypeVar, overload
 
 from ..observability import get_logger
 from ..utils import write_json
@@ -68,17 +85,19 @@ def _parse_project_name(project_name: str) -> tuple[str, str]:
 class RunName:
     """Run name for artifact directories.
 
-    Supports two modes:
-    - Auto-generated: Creates a timestamp-based name (default when no value provided)
-    - Explicit: Stores an arbitrary string name (from --run-path)
+    Supports two modes: 1) Auto-generated based on timestamp or 2) an arbitrary string name provided by the user
+    (from --run-path).
 
     Examples:
         - Auto-generated: "2026-01-15T12:00:00"
-        - Explicit: "unsloth_adult_0", "my-experiment-run"
+        - Explicit: "my-experiment-run", "adult-baseline"
     """
 
     _value: str = field(default="")
+    """Raw run name string (auto-generated timestamp or user-provided)."""
+
     _timestamp: datetime | None = field(default=None, repr=False)
+    """Parsed timestamp, or ``None`` for non-timestamp-based names."""
 
     def __post_init__(self) -> None:
         """Initialize the run name, auto-generating timestamp if no value provided."""
@@ -98,22 +117,22 @@ class RunName:
         the timestamp is also stored for potential use.
 
         Args:
-            name: Run name string (e.g., "2026-01-15T12:00:00" or "unsloth_adult_0")
+            name: Run name string (e.g., "2026-01-15T12:00:00" or "my-experiment-run").
 
         Returns:
-            RunName with the provided name and optional parsed timestamp
+            RunName with the provided name and optional parsed timestamp.
         """
         ts = _try_parse_timestamp(name)
         return cls(_value=name, _timestamp=ts)
 
     @property
     def is_timestamp_based(self) -> bool:
-        """Check if this run name was generated from or parsed as a timestamp."""
+        """Whether this run name was generated from or parsed as a timestamp."""
         return self._timestamp is not None
 
     @property
     def timestamp(self) -> datetime | None:
-        """Get the timestamp if this is a timestamp-based run name."""
+        """Parsed timestamp, or None for non-timestamp-based run names."""
         return self._timestamp
 
 
@@ -122,14 +141,12 @@ class FileNode:
 
     When accessed on a class, returns the descriptor itself.
     When accessed on an instance, returns the full Path to the file.
+
+    Args:
+        name: The filename (e.g., "config.json").
     """
 
     def __init__(self, name: str):
-        """Initialize a FileNode descriptor.
-
-        Args:
-            name: The filename (e.g., "config.json")
-        """
         self.name = name
         self._attr_name: str | None = None
 
@@ -143,7 +160,7 @@ class FileNode:
     def __get__(self, obj: BoundDir | Workdir, objtype: type | None = None) -> Path: ...
 
     def __get__(self, obj: object | None, objtype: type | None = None) -> FileNode | Path:
-        # Get the parent path from the instance using pattern matching
+        """Resolve to the descriptor itself (class access) or a full ``Path`` (instance access)."""
         match obj:
             case None:
                 return self
@@ -155,21 +172,37 @@ class FileNode:
                 raise TypeError(f"FileNode can only be used with BoundDir or Workdir, got {type(obj)}")
 
 
-class DirNode:
+# Covariant type parameter of ``DirNode``.
+#
+# At runtime every ``DirNode`` resolves to a plain ``BoundDir``. The parameter
+# exists purely so that type checkers can specialise each usage with a
+# ``BoundDir`` subclass (e.g. ``_TrainDir``) that declares the typed children
+# of that subtree -- mirroring SQLAlchemy's ``Mapped[T]`` pattern.
+T_co = TypeVar("T_co", bound="BoundDir", covariant=True)
+
+
+class DirNode(Generic[T_co]):
     """Descriptor for directory paths within a directory structure.
 
     Supports nested children (both FileNode and DirNode).
     When accessed on a class, returns the descriptor itself.
     When accessed on an instance, returns a BoundDir with the resolved path.
+
+    The generic parameter ``T_co`` lets callers specialise instance-access with
+    a :class:`BoundDir` subclass that declares typed children (see
+    :class:`_TrainDir` et al.). Runtime always returns a plain ``BoundDir``;
+    the subscripted type is a typing-only fiction.
+
+    Keep the typed-view subclass annotations in sync with ``children``. The
+    tests compare every ``DirNode[_FooDir](...)`` child set with the matching
+    ``_FooDir`` annotations to prevent descriptor/type-view drift.
+
+    Args:
+        name: The directory name (e.g., "train").
+        **children: Child nodes (FileNode or DirNode instances).
     """
 
     def __init__(self, name: str, **children: FileNode | DirNode):
-        """Initialize a DirNode descriptor.
-
-        Args:
-            name: The directory name (e.g., "train")
-            **children: Child nodes (FileNode or DirNode instances)
-        """
         self.name = name
         self.children: dict[str, FileNode | DirNode] = children
         self._attr_name: str | None = None
@@ -178,13 +211,13 @@ class DirNode:
         self._attr_name = name
 
     @overload
-    def __get__(self, obj: None, objtype: type | None = None) -> DirNode: ...
+    def __get__(self, obj: None, objtype: type | None = None) -> Self: ...
 
     @overload
-    def __get__(self, obj: BoundDir | Workdir, objtype: type | None = None) -> BoundDir: ...
+    def __get__(self, obj: BoundDir | Workdir, objtype: type | None = None) -> T_co: ...
 
     def __get__(self, obj: object | None, objtype: type | None = None) -> DirNode | BoundDir:
-        # Get the parent path from the instance using pattern matching
+        """Resolve to the descriptor itself (class access) or a ``BoundDir`` (instance access)."""
         match obj:
             case None:
                 return self
@@ -196,26 +229,24 @@ class DirNode:
                 raise TypeError(f"DirNode can only be used with BoundDir or Workdir, got {type(obj)}")
 
 
-class BoundDir:
+class BoundDir(PathLike[str]):
     """Runtime class representing a bound directory path.
 
-    Provides access to child FileNode and DirNode descriptors as attributes,
-    and implements __fspath__ for use with os.path functions.
+    Provides access to child FileNode and DirNode descriptors as attributes.
+    Implements ``os.PathLike[str]`` so instances can be used wherever paths are expected.
+
+    Args:
+        path: The resolved directory path.
+        children: Child nodes from the DirNode.
     """
 
     def __init__(self, path: Path, children: dict[str, FileNode | DirNode]):
-        """Initialize a BoundDir.
-
-        Args:
-            path: The resolved directory path
-            children: Child nodes from the DirNode
-        """
         self._path = path
         self._children = children
 
     @property
     def path(self) -> Path:
-        """Get the directory path."""
+        """The resolved directory path."""
         return self._path
 
     def __fspath__(self) -> str:
@@ -240,13 +271,8 @@ class BoundDir:
     def __hash__(self) -> int:
         return hash(self._path)
 
-    def __getattribute__(self, name: str) -> Path | BoundDir:
-        # Allow access to special methods, private attrs, and the path property
-        if name.startswith("_") or name == "path":
-            return super().__getattribute__(name)
-        return self.__getattr__(name)
-
     def __getattr__(self, name: str) -> Path | BoundDir:
+        """Resolve child ``FileNode`` to ``Path`` or child ``DirNode`` to ``BoundDir``."""
         if name.startswith("_"):
             raise AttributeError(f"'{type(self).__name__}' has no attribute '{name}'")
 
@@ -263,99 +289,207 @@ class BoundDir:
                 raise TypeError(f"Unknown child type: {type(other)}")
 
 
+# ---------------------------------------------------------------------------
+# Typed-view ``BoundDir`` subclasses
+# ---------------------------------------------------------------------------
+#
+# Each ``_*Dir`` subclass below declares the typed shape of one subtree.
+# Their bodies live entirely inside ``if TYPE_CHECKING:`` and contain only
+# attribute annotations — they have no runtime behaviour.  The actual object
+# returned by ``DirNode.__get__`` at runtime is always a plain ``BoundDir``;
+# the subclass exists solely as the type parameter to the generic descriptor
+# ``DirNode[T_co]``, so that ``ty`` can resolve nested attribute access like
+# ``workdir.train.adapter.metadata`` to the correct ``Path`` / ``BoundDir``
+# type without ``# ty: ignore[unresolved-attribute]`` at every call site.
+#
+# Prior art
+# ---------
+# This is a composition of two well-established typing patterns:
+#
+# 1. Generic descriptor with overloaded ``__get__`` -- the same idiom
+#    SQLAlchemy 2.0 uses for ``Mapped[T]`` / ``InstrumentedAttribute[T]``
+#    (class access returns the descriptor; instance access returns ``T``).
+#    See https://docs.sqlalchemy.org/en/stable/orm/mapped_attributes.html
+#    Similar shapes appear in attrs ``Field[T]``, Django model fields,
+#    and Pydantic ``FieldInfo``.
+#
+# 2. ``if TYPE_CHECKING:`` runtime-invisible declarations, specified in
+#    PEP 484 (section "Runtime or type checking?"). ``TYPE_CHECKING`` is a
+#    compile-time-true, runtime-false flag used to hide declarations from
+#    the interpreter while keeping them visible to type checkers.
+#
+# Naming note
+# -----------
+# We call these "typed views" internally.  They are *not* "phantom types" in
+# the sense used by the ``phantom-types`` library (refinement types with
+# runtime predicates, per the Haskell/ML tradition); the name collision is
+# unhelpful, so we avoid it.
+#
+# Maintenance contract
+# --------------------
+# When adding or renaming a child in one of the ``DirNode(...)`` trees on
+# ``Workdir``, add/rename the matching attribute annotation on the typed-view
+# subclass below.  The ``TestTypedViewDrift`` class in
+# ``tests/cli/test_artifact_structure.py`` parses this module's AST and
+# fails CI if the two sides drift.
+# ---------------------------------------------------------------------------
+
+
+class _AdapterDir(BoundDir):
+    """Typed view of the ``train/adapter`` subtree."""
+
+    if TYPE_CHECKING:
+        adapter_config: Path
+        metadata: Path
+        schema: Path
+
+
+class _TrainDir(BoundDir):
+    """Typed view of the ``train`` subtree."""
+
+    if TYPE_CHECKING:
+        config: Path
+        cache: BoundDir
+        adapter: _AdapterDir
+
+
+class _GenerateDir(BoundDir):
+    """Typed view of the ``generate`` subtree."""
+
+    if TYPE_CHECKING:
+        logs: Path
+        output: Path
+        report: Path
+        evaluation_metrics: Path
+        info: Path
+
+
+class _DatasetDir(BoundDir):
+    """Typed view of the ``dataset`` subtree."""
+
+    if TYPE_CHECKING:
+        training: Path
+        test: Path
+        validation: Path
+        transformed_training: Path
+
+
 @dataclass
 class Workdir:
     """Working directory structure for Safe Synthesizer artifacts.
 
-    This class defines the complete directory layout and provides typed access
-    to all paths within the structure. It uses FileNode and DirNode descriptors
-    for declarative path definitions.
+    This class defines the complete directory layout and provides typed access to all paths within the structure.
+    It uses FileNode and DirNode descriptors for declarative path definitions.
 
-    Structure:
-        $base_path/<config>---<dataset>/<run_name>/
-        ├── safe-synthesizer-config.json
-        ├── train/
-        │   ├── safe-synthesizer-config.json
-        │   └── adapter/
-        │       ├── adapter_config.json
-        │       ├── metadata_v2.json
-        │       └── dataset_schema.json
-        ├── generate/
-        │   ├── safe-synthesizer-config.json
-        │   ├── logs.jsonl
-        │   ├── synthetic_data.csv
-        │   └── evaluation_report.html
-        └── dataset/
-            ├── training.csv
-            ├── test.csv
-            └── validation.csv
+    Full directory structure:
 
-    Args:
-        base_path: The base path for the workdir
-        config_name: The name of the config
-        dataset_name: The name of the dataset
-        run_name: The run name (auto-generated timestamp or explicit name from CLI)
-        _current_phase: The current phase of the workdir
-        _parent_workdir: The parent workdir
+        <base_path>/<config>---<dataset>/<run_name>/
+        - train/
+          - safe-synthesizer-config.json
+          - cache/
+          - adapter/                     (trained PEFT adapter)
+            - adapter_config.json
+            - adapter_model.safetensors
+            - metadata_v2.json
+            - dataset_schema.json
+        - generate/
+          - logs.jsonl                   (generate-only workflow)
+          - info.json                    (generate-only workflow)
+          - synthetic_data.csv
+          - evaluation_report.html
+          - evaluation_metrics.json      (machine-readable metrics)
+        - dataset/
+          - training.csv
+          - test.csv
+          - validation.csv               (when training.validation_ratio > 0)
+          - transformed_training.csv     (when PII replacement transforms the data)
+        - logs/
+          - <phase>.jsonl                (e.g. end_to_end.jsonl or train.jsonl)
+
     """
 
     base_path: Path
+    """Root directory under which project and run directories are created."""
+
     config_name: str
+    """Stem of the config file name, used in the project directory name."""
+
     dataset_name: str
-    run_name: str | None = None
+    """Stem of the dataset file name, used in the project directory name."""
+
+    run_name: str = ""
+    """Run name (auto-generated timestamp or explicit name from CLI).
+
+    When empty, a timestamp-based name is generated in ``__post_init__``.
+    """
+
     _run_name_obj: RunName = field(default_factory=RunName, repr=False)
+    """Parsed ``RunName`` backing ``run_name``."""
+
     _current_phase: str = field(default="unknown", repr=False)
+    """Pipeline phase (``"train"``, ``"generate"``, ``"end_to_end"``, or ``"unknown"``)."""
+
     _parent_workdir: Workdir | None = field(default=None, repr=False)
+    """Parent workdir for generation runs spawned from a training run."""
+
     _explicit_run_path: Path | None = field(default=None, repr=False)
+    """Explicit run directory path provided via ``--run-path``.
+
+    When set, overrides the normal ``<project>/<timestamp>`` directory layout.
+    """
 
     # Root-level config file
     config = FileNode("safe-synthesizer-config.json")
+    """Location for NSS config file."""
 
     # WandB run ID file
     wandb_run_id_file = FileNode("wandb_run_id.txt")
+    """Location for WandB run ID file."""
 
     # Train directory structure
-    train = DirNode(
+    train = DirNode[_TrainDir](
         "train",
         config=FileNode("safe-synthesizer-config.json"),
-        cache=DirNode(
-            "cache",
-        ),
-        adapter=DirNode(
+        cache=DirNode("cache"),
+        adapter=DirNode[_AdapterDir](
             "adapter",
             adapter_config=FileNode("adapter_config.json"),
             metadata=FileNode("metadata_v2.json"),
             schema=FileNode("dataset_schema.json"),
         ),
     )
+    """Location and contents of train directory structure."""
 
     # Generate directory structure
-    generate = DirNode(
+    generate = DirNode[_GenerateDir](
         "generate",
-        config=FileNode("safe-synthesizer-config.json"),
         logs=FileNode("logs.jsonl"),
         output=FileNode("synthetic_data.csv"),
         report=FileNode("evaluation_report.html"),
+        evaluation_metrics=FileNode("evaluation_metrics.json"),
         info=FileNode("info.json"),
     )
+    """Location and contents of generate directory structure."""
 
     # Dataset directory structure
-    dataset = DirNode(
+    dataset = DirNode[_DatasetDir](
         "dataset",
         training=FileNode("training.csv"),
         test=FileNode("test.csv"),
         validation=FileNode("validation.csv"),
+        transformed_training=FileNode("transformed_training.csv"),
     )
+    """Location and contents of dataset directory structure."""
 
     def __post_init__(self) -> None:
-        """Initialize the workdir after dataclass fields are set."""
+        """Initialize private attributes after dataclass fields are set."""
         # Convert string base_path to Path
         if isinstance(self.base_path, str):
             self.base_path = Path(self.base_path)
 
         # Generate run_name if not provided, otherwise parse it
         # RunName.from_string() accepts both timestamp and arbitrary names
-        if self.run_name is None:
+        if not self.run_name:
             self._run_name_obj = RunName()  # Auto-generates timestamp
             self.run_name = self._run_name_obj.to_string()
         else:
@@ -363,15 +497,14 @@ class Workdir:
 
     @property
     def project_name(self) -> str:
-        """Get the project name (config---dataset)."""
+        """Project name in ``<config>---<dataset>`` format."""
         return f"{self.config_name}{PROJECT_NAME_DELIMITER}{self.dataset_name}"
 
     @property
     def project_dir(self) -> Path:
-        """Get the project directory path ($base_path/<config>---<dataset>/).
+        """Project directory path (``<base_path>/<config>---<dataset>/``).
 
-        If an explicit run path was provided, returns its parent directory.
-        Otherwise returns $base_path/<config>---<dataset>/.
+        Falls back to the parent of ``_explicit_run_path`` when one was provided.
         """
         if self._explicit_run_path is not None:
             return self._explicit_run_path.parent
@@ -379,10 +512,9 @@ class Workdir:
 
     @property
     def run_dir(self) -> Path:
-        """Get the run directory path.
+        """Run directory path (``<base_path>/<config>---<dataset>/<run_name>/``).
 
-        If an explicit run path was provided, returns that path directly.
-        Otherwise returns $base_path/<config>---<dataset>/<run_name>/.
+        Uses ``_explicit_run_path`` directly when one is provided.
         """
         if self._explicit_run_path is not None:
             return self._explicit_run_path
@@ -402,10 +534,10 @@ class Workdir:
 
     @property
     def log_file(self) -> Path:
-        """Get the log file path for the current phase."""
+        """Log file path for the current phase."""
         phase = self._current_phase or "unknown"
         if phase == "generate":
-            return self.generate.logs  # type: ignore[return-value]
+            return self.generate.logs
         return self.run_dir / "logs" / f"{phase}.jsonl"
 
     @property
@@ -416,8 +548,8 @@ class Workdir:
         returns the parent's adapter path since that's where the trained adapter lives.
         """
         if self._parent_workdir is not None:
-            return self._parent_workdir.train.adapter.path  # type: ignore[return-value]
-        return self.train.adapter.path  # type: ignore[return-value]
+            return self._parent_workdir.train.adapter.path
+        return self.train.adapter.path
 
     @property
     def metadata_file(self) -> Path:
@@ -426,8 +558,8 @@ class Workdir:
         Uses parent workdir's path when available.
         """
         if self._parent_workdir is not None:
-            return self._parent_workdir.train.adapter.metadata  # type: ignore[return-value]
-        return self.train.adapter.metadata  # type: ignore[return-value]
+            return self._parent_workdir.train.adapter.metadata
+        return self.train.adapter.metadata
 
     @property
     def schema_file(self) -> Path:
@@ -436,8 +568,8 @@ class Workdir:
         Uses parent workdir's path when available.
         """
         if self._parent_workdir is not None:
-            return self._parent_workdir.train.adapter.schema  # type: ignore[return-value]
-        return self.train.adapter.schema  # type: ignore[return-value]
+            return self._parent_workdir.train.adapter.schema
+        return self.train.adapter.schema
 
     @property
     def dataset_schema_file(self) -> Path:
@@ -447,12 +579,17 @@ class Workdir:
     @property
     def output_file(self) -> Path:
         """Shortcut to generate.output."""
-        return self.generate.output  # type: ignore[return-value]
+        return self.generate.output
 
     @property
     def evaluation_report(self) -> Path:
         """Shortcut to generate.report."""
-        return self.generate.report  # type: ignore[return-value]
+        return self.generate.report
+
+    @property
+    def evaluation_metrics(self) -> Path:
+        """Shortcut to generate.evaluation_metrics."""
+        return self.generate.evaluation_metrics
 
     # =========================================================================
     # Source paths (for generation runs that have a parent training run)
@@ -460,18 +597,18 @@ class Workdir:
 
     @property
     def source_run_dir(self) -> Path:
-        """Get the source run directory (parent's run_dir if this is a child generation run)."""
+        """Source run directory (parent's ``run_dir`` for child generation runs)."""
         if self._parent_workdir is not None:
             return self._parent_workdir.run_dir
         return self.run_dir
 
     @property
     def source_config(self) -> Path:
-        """Get the source config file (from parent workdir if available).
+        """Source config file path (from parent workdir if available).
 
         Checks multiple locations for backwards compatibility:
-        1. Root level config: <run_dir>/safe-synthesizer-config.json
-        2. Train config: <run_dir>/train/safe-synthesizer-config.json
+        1. Root level config: ``<run_dir>/safe-synthesizer-config.json``
+        2. Train config: ``<run_dir>/train/safe-synthesizer-config.json``
         """
         source_workdir = self._parent_workdir if self._parent_workdir is not None else self
 
@@ -481,7 +618,7 @@ class Workdir:
             return root_config
 
         # Fallback to train directory config (older training runs)
-        train_config = source_workdir.train.config  # type: ignore[return-value]
+        train_config = source_workdir.train.config
         if train_config.exists():
             return train_config
 
@@ -490,21 +627,21 @@ class Workdir:
 
     @property
     def source_adapter_path(self) -> Path:
-        """Get the source adapter path (from parent workdir if available)."""
+        """Source adapter path (from parent workdir if available)."""
         if self._parent_workdir is not None:
             return self._parent_workdir.adapter_path
         return self.adapter_path
 
     @property
     def source_dataset(self) -> BoundDir:
-        """Get the source dataset directory (from parent workdir if available)."""
+        """Source dataset directory (from parent workdir if available)."""
         if self._parent_workdir is not None:
-            return self._parent_workdir.dataset  # type: ignore[return-value]
-        return self.dataset  # type: ignore[return-value]
+            return self._parent_workdir.dataset
+        return self.dataset
 
     @property
     def source_schema_file(self) -> Path:
-        """Get the source schema file (from parent workdir if available)."""
+        """Source schema file path (from parent workdir if available)."""
         if self._parent_workdir is not None:
             return self._parent_workdir.schema_file
         return self.schema_file
@@ -516,8 +653,8 @@ class Workdir:
     def ensure_directories(self) -> Self:
         """Create directories based on the current phase.
 
-        For training runs: creates train/, generate/, and dataset/ directories
-        For generation-only runs: creates only generate/ directory and writes info.txt
+        For training runs: creates ``train/``, ``generate/``, and ``dataset/`` directories
+        For generation-only runs: creates only ``generate/`` directory and writes info.txt
 
         Returns:
             self for method chaining
@@ -527,14 +664,14 @@ class Workdir:
         if self._current_phase == "generate" and self._parent_workdir is not None:
             # Generation-only run - only create generate directory
             # Train and dataset are in the parent workdir
-            self.generate.path.mkdir(parents=True, exist_ok=True)  # type: ignore[union-attr]
+            self.generate.path.mkdir(parents=True, exist_ok=True)
             self._write_generation_info()
         else:
             # Training run or end-to-end - create all directories
-            self.train.cache.path.mkdir(parents=True, exist_ok=True)  # type: ignore[union-attr]
-            self.train.adapter.path.mkdir(parents=True, exist_ok=True)  # type: ignore[union-attr]
-            self.generate.path.mkdir(parents=True, exist_ok=True)  # type: ignore[union-attr]
-            self.dataset.path.mkdir(parents=True, exist_ok=True)  # type: ignore[union-attr]
+            self.train.cache.path.mkdir(parents=True, exist_ok=True)
+            self.train.adapter.path.mkdir(parents=True, exist_ok=True)
+            self.generate.path.mkdir(parents=True, exist_ok=True)
+            self.dataset.path.mkdir(parents=True, exist_ok=True)
 
         return self
 
@@ -552,13 +689,13 @@ class Workdir:
             },
             "Source Files": {
                 "Config": str(self.source_config),
-                "Training data": str(self.source_dataset.training),
+                "Original training data": str(self.source_dataset.training),
                 "Test data": str(self.source_dataset.test),
                 "Schema": str(self.schema_file),
             },
         }
 
-        info_file = self.generate.info  # type: ignore[attr-defined]
+        info_file = self.generate.info
         write_json(info_dict, info_file, indent=2)
 
     def new_generation_run(self) -> Self:
@@ -719,7 +856,7 @@ class Workdir:
             config_name, dataset_name = _parse_project_name(project_dir.name)
 
             logger.info(f"Found {len(adapter_files)} runs with adapters across all projects in {path}")
-            logger.info(f"Usig ggmost recent run: {run_dir}")
+            logger.info(f"Using most recent run: {run_dir}")
 
             return cls(
                 base_path=path,

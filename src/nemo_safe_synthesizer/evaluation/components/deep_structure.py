@@ -16,7 +16,7 @@ from ...artifacts.analyzers.field_features import (
 )
 from ...config.parameters import SafeSynthesizerParameters
 from ...evaluation.components.component import Component
-from ...evaluation.data_model.evaluation_dataset import EvaluationDataset
+from ...evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from ...evaluation.data_model.evaluation_field import EvaluationField
 from ...evaluation.data_model.evaluation_score import EvaluationScore
 from ...evaluation.statistics import stats
@@ -27,70 +27,81 @@ logger = get_logger(__name__)
 
 
 class DeepStructure(Component):
+    """Deep Structure Stability metric via joined PCA.
+
+    Projects training and synthetic data into a shared principal-component
+    space and scores the distributional similarity of the projections.
+    """
+
     name: str = Field(default="Deep Structure Stability")
-    reference_pca: pd.DataFrame | None = Field(default=None)
-    output_pca: pd.DataFrame | None = Field(default=None)
+    training_pca: pd.DataFrame | None = Field(default=None, description="PCA-projected training dataframe.")
+    synthetic_pca: pd.DataFrame | None = Field(default=None, description="PCA-projected synthetic dataframe.")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @cached_property
-    def jinja_context(self):
+    def jinja_context(self) -> dict:
+        """Template context with PCA scatter plot figure."""
         d = super().jinja_context
         d["anchor_link"] = "#structure-stability"
-        if Component.is_nonempty([self.reference_pca, self.output_pca]):
-            d["figure"] = figures.structure_stability_figure(
-                reference=self.reference_pca, output=self.output_pca
-            ).to_html(full_html=False, include_plotlyjs=False)
-        else:
-            d["figure"] = None
+        d["figure"] = None
+        if Component.is_nonempty([self.training_pca, self.synthetic_pca]):
+            training_pca = self.training_pca
+            synthetic_pca = self.synthetic_pca
+            if training_pca is not None and synthetic_pca is not None:
+                d["figure"] = figures.structure_stability_figure(
+                    training_df=training_pca,
+                    synthetic_df=synthetic_pca,
+                ).to_html(full_html=False, include_plotlyjs=False)
         return d
 
     @staticmethod
-    def from_evaluation_dataset(
-        evaluation_dataset: EvaluationDataset, config: SafeSynthesizerParameters | None = None
+    def from_evaluation_datasets(
+        evaluation_datasets: EvaluationDatasets, config: SafeSynthesizerParameters | None = None
     ) -> DeepStructure:
-        """
-        Hook into _calculate_pca to get our PCA values and then use these to get the principal_component_stability SQS.
+        """Compute PCA projections and the principal component stability score.
 
         Args:
-            evaluation_dataset: EvaluationDataset
-            config: the main configuration object
+            evaluation_datasets: Paired training/synthetic data.
+            config: Pipeline configuration (unused, reserved for future use).
 
-        Returns: tuple of reference and output PCA and the principal_component_stability SQS.
-
+        Returns:
+            A ``DeepStructure`` with PCA dataframes and the stability score.
         """
-        tabular_columns = evaluation_dataset.get_tabular_columns(mode="both")
+        tabular_columns = evaluation_datasets.get_tabular_columns(based_on="both")
         if not tabular_columns:
             return DeepStructure(score=EvaluationScore(notes="No columns detected for PCA."))
 
-        reference_pca, output_pca = DeepStructure._calculate_pca(
-            evaluation_dataset.reference[tabular_columns],  # ty: ignore[invalid-argument-type]
-            evaluation_dataset.output[tabular_columns],  # ty: ignore[invalid-argument-type]
+        training_pca, synthetic_pca = DeepStructure._calculate_pca(
+            evaluation_datasets.training.reindex(columns=tabular_columns),
+            evaluation_datasets.synthetic.reindex(columns=tabular_columns),
         )
 
         principal_component_stability = DeepStructure.get_principal_component_stability(
-            reference_pca,
-            output_pca,
+            training_pca,
+            synthetic_pca,
         )
 
-        return DeepStructure(score=principal_component_stability, reference_pca=reference_pca, output_pca=output_pca)
+        return DeepStructure(
+            score=principal_component_stability, training_pca=training_pca, synthetic_pca=synthetic_pca
+        )
 
     @staticmethod
     def _fill_in_numeric_columns(df: pd.DataFrame, numeric_columns: list[str]) -> pd.DataFrame | None:
-        """
-        Fill in missing values in numeric columns with the median value.
+        """Fill missing values in numeric columns with the column median.
 
         Args:
-            df: The dataframe to fill in.
-            numeric_columns: The columns to fill in.
+            df: Dataframe to fill in.
+            numeric_columns: Columns to retain and fill.
 
         Returns:
-            The dataframe with missing values filled in, keeping only the numeric columns.
+            A dataframe containing only ``numeric_columns`` with NaNs replaced,
+            or ``None`` if ``numeric_columns`` is empty.
         """
         df_num = df.reindex(columns=numeric_columns)
         int64_dtypes = df_num.columns[df_num.dtypes == pd.Int64Dtype()]
-        # Check that all columns are numeric, especially needed for the output_df
-        # which may have different column types than the reference_df
+        # Check that all columns are numeric, especially needed for the synthetic_df
+        # which may have different column types than the training_df
         for col in numeric_columns:
             if not pd.api.types.is_numeric_dtype(df_num[col]):
                 raise ValueError(f"Column {col} is not numeric.")
@@ -104,160 +115,180 @@ class DeepStructure(Component):
 
     @staticmethod
     def _encode_categorical_columns(
-        reference_df: pd.DataFrame, output_df: pd.DataFrame, categorical_columns: list[str]
+        training_df: pd.DataFrame, synthetic_df: pd.DataFrame, categorical_columns: list[str]
     ) -> tuple[pd.DataFrame | None, pd.DataFrame | None]:
-        """
-        Encode the categorical columns of the train and synthetic dataframes by the frequency of each value,
-        as observed in the train dataframe. Any new values in the synthetic dataframe will be encoded as 0.
+        """Frequency-encode categorical columns, fitted on the training data.
+
+        New values in ``synthetic_df`` that were not seen in ``training_df`` are
+        encoded as 0.
 
         Args:
-            reference_df: The train dataframe.
-            output_df: The synthetic dataframe.
-            categorical_columns: The columns to encode.
+            training_df: Training dataframe (used to fit the encoder).
+            synthetic_df: Synthetic dataframe (transformed only).
+            categorical_columns: Columns to encode.
 
         Returns:
-            Encoded dataframes of categorical columns from the train and synthetic dataframes.
+            Tuple of (encoded training, encoded synthetic), or ``(None, None)``
+            if ``categorical_columns`` is empty.
         """
         if len(categorical_columns) == 0:
             return None, None
 
-        reference_df_cat = reference_df.reindex(columns=categorical_columns)
-        output_df_cat = output_df.reindex(columns=categorical_columns)
+        training_df_cat = training_df.reindex(columns=categorical_columns)
+        synthetic_df_cat = synthetic_df.reindex(columns=categorical_columns)
 
         # Convert columns to object because count encoder only encodes string or categorical columns
-        reference_df_cat = reference_df_cat.astype("object")
-        output_df_cat = output_df_cat.astype("object")
+        training_df_cat = training_df_cat.astype("object")
+        synthetic_df_cat = synthetic_df_cat.astype("object")
 
         # Encode categorical columns by the frequency of each value
         # By default the encoder treats nans as a countable category at fit time
         encoder = CountEncoder(handle_missing="value", handle_unknown=0)
-        reference_df_cat_labels = pd.DataFrame(encoder.fit_transform(reference_df_cat))
-        output_df_cat_labels = pd.DataFrame(encoder.transform(output_df_cat))
-        return reference_df_cat_labels, output_df_cat_labels
+        training_df_cat_labels = pd.DataFrame(encoder.fit_transform(training_df_cat))
+        synthetic_df_cat_labels = pd.DataFrame(encoder.transform(synthetic_df_cat))
+        return training_df_cat_labels, synthetic_df_cat_labels
 
     @staticmethod
     def _prep_datasets_for_joined_pca(
-        reference_df: pd.DataFrame,
-        output_df: pd.DataFrame,
+        training_df: pd.DataFrame,
+        synthetic_df: pd.DataFrame,
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
-        """
-        Preprocess dataframes for joined PCA. Divide the dataframe into numeric/categorical/others,
-        fill missing values and encode categorical columns by the frequency of each value.
-        Drop the columns that are not numeric or categorical.
+        """Preprocess dataframes for joined PCA.
+
+        Splits columns into numeric and categorical, fills missing values,
+        frequency-encodes categoricals, and drops text/other columns that
+        would distort the PCA projection.
 
         Args:
-            reference_df: The training dataframe to be subjected to PCA.
-            output_df: The synthetic dataframe. It will be projected onto the principal components of the training dataframe.
+            training_df: Training dataframe (used to fit encoders and PCA).
+            synthetic_df: Synthetic dataframe (transformed only).
 
         Returns:
-            The preprocessed dataframes, ready for joined PCA.
-
+            Tuple of (preprocessed training, preprocessed synthetic) ready
+            for ``compute_joined_pcas``.
         """
         # Identify field types
-        reference_field_types = [describe_field(name, reference_df[name]).type for name in reference_df.columns]
-        output_field_types = [describe_field(name, output_df[name]).type for name in output_df.columns]
+        training_field_types = [describe_field(name, training_df[name]).type for name in training_df.columns]
+        synthetic_field_types = [describe_field(name, synthetic_df[name]).type for name in synthetic_df.columns]
         # Only keep columns that are numeric or categorical.
         # Added this because unique text columns or unique ID columns would distort the results
         # now that we are projecting the count encoding to the synthetic set.
         # When we were encoding them separately, every row would get a value of 1 on both dfs
         # and that column effectively would not contribute to the PCA calculation;
-        # in the new joinedvcalculation, the column in the training set would be a 1s,
-        # but the column in the synth set would be all 0s, because they are all out of distribution.
+        # in the new joined calculation, the column in the training set would be a 1s,
+        # but the column in the synthetic set would be all 0s, because they are all out of distribution.
         categorical_columns = [
             name
-            for name, field_type in zip(reference_df.columns, reference_field_types)
+            for name, field_type in zip(training_df.columns, training_field_types)
             if field_type in [FieldType.CATEGORICAL, FieldType.BINARY]
         ]
-        numeric_columns_ref = [
+        numeric_columns_training = [
             name
-            for name, field_type in zip(reference_df.columns, reference_field_types)
+            for name, field_type in zip(training_df.columns, training_field_types)
             if field_type == FieldType.NUMERIC
         ]
-        numeric_columns_out = [
-            name for name, field_type in zip(output_df.columns, output_field_types) if field_type == FieldType.NUMERIC
+        numeric_columns_synthetic = [
+            name
+            for name, field_type in zip(synthetic_df.columns, synthetic_field_types)
+            if field_type == FieldType.NUMERIC
         ]
-        numeric_columns = list(set(numeric_columns_ref).intersection(set(numeric_columns_out)))
+        numeric_columns = list(set(numeric_columns_training).intersection(set(numeric_columns_synthetic)))
         # TODO: use embeddings to represent text columns
         # TODO: try to include more "OTHER" columns and handle column type mismatch
 
         if len(categorical_columns) + len(numeric_columns) == 0:
             return pd.DataFrame(), pd.DataFrame()
 
-        reference_df_cat_labels, output_df_cat_labels = DeepStructure._encode_categorical_columns(
-            reference_df, output_df, categorical_columns
+        training_df_cat_labels, synthetic_df_cat_labels = DeepStructure._encode_categorical_columns(
+            training_df, synthetic_df, categorical_columns
         )
-        reference_df_num = DeepStructure._fill_in_numeric_columns(reference_df, numeric_columns)
-        output_df_num = DeepStructure._fill_in_numeric_columns(output_df, numeric_columns)
+        training_df_num = DeepStructure._fill_in_numeric_columns(training_df, numeric_columns)
+        synthetic_df_num = DeepStructure._fill_in_numeric_columns(synthetic_df, numeric_columns)
 
         # Merge numeric and categorical back into one dataframe
-        reference_df = pd.concat([reference_df_num, reference_df_cat_labels], axis=1, sort=False)
-        output_df = pd.concat([output_df_num, output_df_cat_labels], axis=1, sort=False)
-        return reference_df, output_df
+        training_df = pd.concat([training_df_num, training_df_cat_labels], axis=1, sort=False)
+        synthetic_df = pd.concat([synthetic_df_num, synthetic_df_cat_labels], axis=1, sort=False)
+        return training_df, synthetic_df
 
     @staticmethod
-    def _calculate_pca(reference: pd.DataFrame, output: pd.DataFrame):
-        """
-        Compute the PCA values for reference and output dataframes, after doing some sanity checks and sampling.
+    def _calculate_pca(training_df: pd.DataFrame, synthetic_df: pd.DataFrame) -> tuple:
+        """Compute PCA projections for training and synthetic dataframes.
+
+        Subsamples, preprocesses, and runs joined PCA. Returns ``(None, None)``
+        if data is insufficient (fewer than 2 rows or 2 columns after prep).
 
         Args:
-            reference: pd.DataFrame
-            output: pd.DataFrame
+            training_df: Tabular training dataframe.
+            synthetic_df: Tabular synthetic dataframe.
 
-        Returns: tuple of reference and output PCA values
-
+        Returns:
+            Tuple of (training PCA dataframe, synthetic PCA dataframe).
         """
-        reference_pca = None
-        output_pca = None
+        training_pca = None
+        synthetic_pca = None
         try:
             # PCA, start by taking a subsample and dropping empty columns and NAs.
-            reference_rows = reference.shape[0]
-            output_rows = output.shape[0]
+            training_rows = training_df.shape[0]
+            synthetic_rows = synthetic_df.shape[0]
 
-            reference_subsample = (
-                (reference.sample(n=output_rows, random_state=333) if reference_rows > output_rows else reference)
+            training_subsample = (
+                (
+                    training_df.sample(n=synthetic_rows, random_state=333)
+                    if training_rows > synthetic_rows
+                    else training_df
+                )
                 .replace([np.inf, -np.inf], np.nan)
                 .dropna(axis="columns", how="all")
             )
-            output_subsample = (
-                (output.sample(n=reference_rows, random_state=333) if output_rows > reference_rows else output)
+            synthetic_subsample = (
+                (
+                    synthetic_df.sample(n=training_rows, random_state=333)
+                    if synthetic_rows > training_rows
+                    else synthetic_df
+                )
                 .replace([np.inf, -np.inf], np.nan)
                 .dropna(axis="columns", how="all")
             )
 
             # Fill in missing values and encode categorical columns to numeric values
-            reference_subsample_prepped, output_subsample_prepped = DeepStructure._prep_datasets_for_joined_pca(
-                reference_subsample, output_subsample
+            training_subsample_prepped, synthetic_subsample_prepped = DeepStructure._prep_datasets_for_joined_pca(
+                training_subsample, synthetic_subsample
             )
 
-            reference_ss_rows, reference_ss_cols = reference_subsample_prepped.shape
-            output_ss_rows, output_ss_cols = output_subsample_prepped.shape
+            training_ss_rows, training_ss_cols = training_subsample_prepped.shape
+            synthetic_ss_rows, synthetic_ss_cols = synthetic_subsample_prepped.shape
             # PCA will fail if number of rows is less than two or number of columns is less than two
-            if (reference_ss_cols < 2) or (output_ss_cols < 2) or (reference_ss_rows < 2) or (output_ss_rows < 2):
+            if (training_ss_cols < 2) or (synthetic_ss_cols < 2) or (training_ss_rows < 2) or (synthetic_ss_rows < 2):
                 logger.warning(
                     "Need at least 2x2 matrix to calculate PCA values. Not enough non-missing rows or numeric columns after pre-processing."
                 )
                 return None, None
             else:
-                reference_pca, output_pca = stats.compute_joined_pcas(
-                    reference_subsample_prepped, output_subsample_prepped
+                training_pca, synthetic_pca = stats.compute_joined_pcas(
+                    training_subsample_prepped, synthetic_subsample_prepped
                 )
         except Exception:
             logger.exception("Failed to calculate PCA.")
-        return reference_pca, output_pca
+        return training_pca, synthetic_pca
 
     @staticmethod
     def get_principal_component_stability(
-        reference_pca: pd.DataFrame | None,
-        output_pca: pd.DataFrame | None,
+        training_pca: pd.DataFrame | None,
+        synthetic_pca: pd.DataFrame | None,
     ) -> EvaluationScore:
-        if reference_pca is None or output_pca is None:
+        """Score the distributional similarity of PCA projections.
+
+        Computes per-component Jensen-Shannon divergence, averages,
+        and applies an exponential function to produce a 0--10 score.
+        """
+        if training_pca is None or synthetic_pca is None:
             return EvaluationScore(notes="Missing input Dataframe.")
 
         try:
             sum_pca_distances = 0.0
             pca_df_fields = [
-                EvaluationField.from_series(field, reference_pca[field], output_pca[field])
-                for field in reference_pca.columns
+                EvaluationField.from_series(field, training=training_pca[field], synthetic=synthetic_pca[field])
+                for field in training_pca.columns
             ]
             for field in pca_df_fields:
                 # field.distribution_distance is None for highly unique fields

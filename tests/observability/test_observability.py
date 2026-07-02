@@ -1,15 +1,19 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import importlib
+import inspect
 import json
 import logging
 import time
+from pathlib import Path
 from unittest import mock
 from unittest.mock import MagicMock
 
-import nemo_safe_synthesizer.observability as obs
 import pytest
 import structlog
+from rich.table import Table
+
 from nemo_safe_synthesizer.observability import (
     CategoryFilter,
     CategoryLogger,
@@ -24,10 +28,12 @@ from nemo_safe_synthesizer.observability import (
     _render_rich_table,
     _render_table_data_for_console,
     get_logger,
+    heartbeat,
     initialize_observability,
     traced,
 )
-from rich.table import Table
+
+obs = importlib.import_module("nemo_safe_synthesizer.observability")
 
 # =============================================================================
 # NSSObservabilitySettings Tests
@@ -37,9 +43,16 @@ from rich.table import Table
 class TestNSSObservabilitySettings:
     """Tests for NSSObservabilitySettings configuration class."""
 
+    @staticmethod
+    def _clear_nss_log_env(monkeypatch: pytest.MonkeyPatch) -> None:
+        """Defaults must not inherit ``NSS_LOG_*`` left by other tests on xdist workers."""
+        for name in ("NSS_LOG_LEVEL", "NSS_LOG_FORMAT", "NSS_LOG_FILE", "NSS_LOG_COLOR"):
+            monkeypatch.delenv(name, raising=False)
+
     def test_default_values_tty(self, monkeypatch):
         """Test that default settings are applied correctly."""
         # we dont' want this test to be affected by the actual terminal being a tty or being run in ci
+        self._clear_nss_log_env(monkeypatch)
         with mock.patch("nemo_safe_synthesizer.observability.sys.stdout") as stdout:
             stdout.isatty.return_value = True
 
@@ -52,6 +65,7 @@ class TestNSSObservabilitySettings:
     def test_default_values_no_tty(self, monkeypatch):
         """Test that default settings are applied correctly."""
         # we dont' want this test to be affected by the actual terminal being a tty or being run in ci
+        self._clear_nss_log_env(monkeypatch)
         with mock.patch("nemo_safe_synthesizer.observability.sys.stdout") as stdout:
             stdout.isatty.return_value = False
 
@@ -79,6 +93,17 @@ class TestNSSObservabilitySettings:
         monkeypatch.setenv("NSS_LOG_FILE", log_file)
         settings = NSSObservabilitySettings()
         assert settings.nss_log_file == log_file
+
+    @pytest.mark.parametrize("explicit_value", [False, True])
+    @pytest.mark.parametrize("is_tty", [False, True])
+    def test_explicit_log_color_bool_overrides_tty_default(self, explicit_value, is_tty):
+        """Explicit boolean log-color settings should not be recomputed from stdout."""
+        with mock.patch("nemo_safe_synthesizer.observability.sys.stdout") as stdout:
+            stdout.isatty.return_value = is_tty
+
+            settings = NSSObservabilitySettings(nss_log_color=explicit_value)
+
+        assert settings.nss_log_color is explicit_value
 
 
 class TestCategoryFilter:
@@ -259,7 +284,25 @@ class TestRenderRichTable:
         assert "Count" in result
         assert "100" in result
         assert "Rate" in result
-        assert "95.000%" in result  # Formatted as percentage
+        assert "95.00%" in result  # Formatted as percentage
+
+    def test_sec_suffix_not_formatted_as_percentage(self):
+        """Keys ending in _sec or _seconds are rendered as plain floats, not percentages."""
+        data = {"tokenization_overhead_sec": 0.35, "total_seconds": 0.72, "rate": 0.95}
+        result = _render_rich_table(data)
+
+        assert "0.35" in result
+        assert "0.72" in result
+        assert "95.00%" in result
+
+    def test_renders_mapping_values_without_python_repr(self):
+        """Mapping values in flat tables are rendered as compact key-value lists."""
+        data = {"num_prompts": 10, "finish_reasons": {"length": 10, "stop": 2}}
+        result = _render_rich_table(data)
+
+        assert "Finish Reasons" in result
+        assert "length: 10, stop: 2" in result
+        assert "{'length': 10" not in result
 
     def test_renders_nested_dict(self):
         """Test rendering a nested statistics dictionary."""
@@ -479,6 +522,65 @@ class TestInitializeObservability:
 class TestGetLogger:
     """Tests for get_logger function."""
 
+    @pytest.fixture
+    def callsite_test_logging(self, monkeypatch, caplog):
+        """Initialize observability while preserving caplog capture.
+
+        Leaves ``_INITIALIZED_OBSERVABILITY`` False and structlog reset on
+        teardown so the global state is internally consistent. Tests that need
+        an initialized observability stack (e.g. ``TestObservabilityIntegration``)
+        re-initialize via their own autouse fixture.
+        """
+        root_logger = logging.getLogger()
+        original_handlers = root_logger.handlers.copy()
+        original_level = root_logger.level
+
+        # Manage _INITIALIZED_OBSERVABILITY manually rather than through
+        # monkeypatch.setattr. monkeypatch restores the pre-test value AFTER
+        # this fixture's teardown runs, which would re-flip the flag back to
+        # True (set by earlier tests) while structlog has just been reset to
+        # defaults. That mismatch causes get_logger() to return a structlog
+        # BoundLoggerFilteringAtNotset wrapped in a stdlib LoggerAdapter, which
+        # blows up on isEnabledFor() in subsequent tests.
+        obs._INITIALIZED_OBSERVABILITY = False
+        monkeypatch.setenv("NSS_LOG_FORMAT", "plain")
+        monkeypatch.setenv("NSS_LOG_LEVEL", "INFO")
+        monkeypatch.setenv("NSS_LOG_COLOR", "false")
+        monkeypatch.delenv("NSS_LOG_FILE", raising=False)
+        monkeypatch.setattr(obs, "SETTINGS", NSSObservabilitySettings())
+        structlog.reset_defaults()
+        root_logger.handlers.clear()
+
+        yield
+
+        structlog.reset_defaults()
+        root_logger.handlers = original_handlers
+        root_logger.setLevel(original_level)
+        obs._INITIALIZED_OBSERVABILITY = False
+
+    @staticmethod
+    def _record_callsite(record: logging.LogRecord) -> tuple[str, int]:
+        match record.msg:
+            case {"filename": filename, "lineno": lineno}:
+                return str(filename), int(lineno)
+            case _:
+                return record.filename, record.lineno
+
+    @staticmethod
+    def _assert_log_record_callsite(
+        caplog,
+        *,
+        message: str,
+        expected_filename: str,
+        expected_lineno: int,
+    ) -> None:
+        records = [record for record in caplog.records if message in record.getMessage()]
+        assert len(records) == 1
+
+        filename, lineno = TestGetLogger._record_callsite(records[0])
+        assert filename == expected_filename
+        assert lineno == expected_lineno
+
     def test_returns_category_logger_by_default(self):
         """Test that get_logger returns CategoryLogger by default."""
         logger = get_logger("test_module")
@@ -537,6 +639,59 @@ class TestGetLogger:
         # Root logger configuration should be unchanged
         assert root_logger.handlers == original_handlers
         assert root_logger.level == original_level
+
+    def test_logger_created_before_observability_configuration_reports_real_callsite(
+        self,
+        callsite_test_logging,
+        caplog,
+    ):
+        """Logger created before configuration still reports the caller filename."""
+        logger = get_logger("test_callsite_before_configuration")
+
+        initialize_observability()
+        root_logger = logging.getLogger()
+        if caplog.handler not in root_logger.handlers:
+            root_logger.addHandler(caplog.handler)
+        caplog.set_level(logging.INFO, logger=logger.name)
+
+        message = "logger before configuration callsite"
+        frame = inspect.currentframe()
+        assert frame is not None
+        expected_lineno = frame.f_lineno + 1
+        logger.info(message)
+
+        self._assert_log_record_callsite(
+            caplog,
+            message=message,
+            expected_filename=Path(__file__).name,
+            expected_lineno=expected_lineno,
+        )
+
+    def test_logger_created_after_observability_configuration_reports_real_callsite(
+        self,
+        callsite_test_logging,
+        caplog,
+    ):
+        """Logger created after configuration still reports the caller filename."""
+        initialize_observability()
+        root_logger = logging.getLogger()
+        if caplog.handler not in root_logger.handlers:
+            root_logger.addHandler(caplog.handler)
+        caplog.set_level(logging.INFO)
+
+        logger = get_logger("test_callsite_after_configuration")
+        message = "logger after configuration callsite"
+        frame = inspect.currentframe()
+        assert frame is not None
+        expected_lineno = frame.f_lineno + 1
+        logger.info(message)
+
+        self._assert_log_record_callsite(
+            caplog,
+            message=message,
+            expected_filename=Path(__file__).name,
+            expected_lineno=expected_lineno,
+        )
 
 
 class TestObservabilityIntegration:
@@ -616,3 +771,78 @@ class TestObservabilityIntegration:
 
         assert "Error in error_test" in caplog.text
         assert "RuntimeError" in caplog.text
+
+
+class TestHeartbeat:
+    """Tests for the heartbeat context manager."""
+
+    def test_heartbeat_logs_completion(self, caplog):
+        caplog.set_level(logging.INFO)
+        with heartbeat("Test op", interval=0.05):
+            time.sleep(0.01)
+
+        assert "Test op complete" in caplog.text
+
+    def test_heartbeat_logs_progress_on_long_operation(self, caplog):
+        caplog.set_level(logging.INFO)
+        with heartbeat("Slow op", interval=0.05):
+            time.sleep(0.5)
+
+        assert "Slow op in progress" in caplog.text
+        assert "Slow op complete" in caplog.text
+
+    def test_heartbeat_progress_note_on_periodic_logs_only(self, caplog):
+        caplog.set_level(logging.INFO)
+        message = "Generation"
+        progress_note = "Records update only after each batch finishes."
+        with heartbeat(message, interval=0.05, progress_note=progress_note):
+            time.sleep(0.15)
+
+        assert f"{message} in progress. {progress_note}" in caplog.text
+        assert f"{message} complete" in caplog.text
+        for record in caplog.records:
+            if "complete" in record.getMessage():
+                assert progress_note not in record.getMessage()
+
+    def test_heartbeat_includes_extra_fields(self, caplog):
+        caplog.set_level(logging.INFO)
+        with heartbeat("Loading", interval=0.05, model="test-model"):
+            time.sleep(0.2)
+
+        # Extra fields appear on record.ctx (plain logging) or get
+        # merged into the structlog event dict (when structlog is
+        # initialized). Check both paths.
+        has_field = any(
+            getattr(r, "ctx", {}).get("model") == "test-model" or "test-model" in getattr(r, "message", r.getMessage())
+            for r in caplog.records
+        )
+        assert has_field, f"model field not found in records: {caplog.text}"
+
+    def test_heartbeat_logs_elapsed_seconds(self, caplog):
+        caplog.set_level(logging.INFO)
+        with heartbeat("Timed op", interval=0.05):
+            time.sleep(0.2)
+
+        has_elapsed = any(
+            "elapsed_seconds" in getattr(r, "ctx", {}) or "elapsed_seconds" in getattr(r, "message", r.getMessage())
+            for r in caplog.records
+        )
+        assert has_elapsed, f"elapsed_seconds not found in records: {caplog.text}"
+
+    def test_heartbeat_logs_failure_on_exception(self, caplog):
+        def fail() -> None:
+            raise RuntimeError("boom")
+
+        caplog.set_level(logging.INFO)
+        with pytest.raises(RuntimeError):
+            with heartbeat("Failing op", interval=60.0):
+                fail()
+
+        assert "Failing op failed" in caplog.text
+        assert "Failing op complete" not in caplog.text
+        has_error_type = any(
+            getattr(r, "ctx", {}).get("error_type") == "RuntimeError"
+            or "'error_type': 'RuntimeError'" in getattr(r, "message", r.getMessage())
+            for r in caplog.records
+        )
+        assert has_error_type, f"error_type not found in records: {caplog.text}"

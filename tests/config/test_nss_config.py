@@ -4,6 +4,8 @@
 from typing import Annotated, Literal
 
 import pytest
+from pydantic import Field, ValidationError
+
 from nemo_safe_synthesizer.config import (
     DataParameters,
     DifferentialPrivacyHyperparams,
@@ -11,10 +13,8 @@ from nemo_safe_synthesizer.config import (
     SafeSynthesizerParameters,
     TimeSeriesParameters,
 )
-from nemo_safe_synthesizer.configurator.parameter import AutoParam, Parameter, UnsetParam
 from nemo_safe_synthesizer.configurator.parameters import Parameters
 from nemo_safe_synthesizer.configurator.validators import ValueValidator
-from pydantic import Field, ValidationError
 
 
 class SubGroup(Parameters):
@@ -55,7 +55,8 @@ def parent_fixture() -> ParentGroup:
                 basic_str_param=None,
                 basic_union_basic_input=None,
             )
-        ]
+        ],
+        autoparam_with_auto="auto",
     )
 
 
@@ -70,34 +71,6 @@ def subgroup_fixture() -> SubGroup:
     )
 
 
-class TestParameterClasses:
-    def test_parameter_equality(self, basic_parameter):
-        assert basic_parameter == 10
-        assert Parameter(value=10) == 10
-        assert AutoParam(value=10) == 10
-
-    def test_parameter_pattern_matching(self):
-        param = Parameter(name=None, value=1)
-
-        match param:
-            case UnsetParam():
-                result = "UnsetParam"
-            case Parameter():
-                result = "Parameter"
-            case _:
-                result = "Other"
-
-        assert result == "Parameter"
-
-    def test_auto_param_is_parameter_instance(self):
-        assert isinstance(AutoParam(), Parameter)
-
-    def test_parameter_naming(self):
-        param = Parameter(name="test_name", value=42)
-        assert param.name == "test_name"
-        assert param == 42
-
-
 class TestValueValidation:
     def test_value_validator_success(self):
         class TestParams(Parameters):
@@ -108,7 +81,7 @@ class TestValueValidation:
             ]
 
         # These should succeed
-        assert TestParams().validation_ratio == 0.0
+        assert TestParams(validation_ratio=0.0).validation_ratio == 0.0
         assert TestParams(validation_ratio=0.5).validation_ratio == 0.5
 
     def test_value_validator_failure(self):
@@ -125,11 +98,11 @@ class TestValueValidation:
 
 
 class TestParametersClass:
-    def test_parameters_get_method(self, simple_safe_synthesizer_parameters):
-        assert simple_safe_synthesizer_parameters.get("num_input_records_to_sample") == 100
+    def test_parameters_get_method(self, fixture_simple_safe_synthesizer_parameters):
+        assert fixture_simple_safe_synthesizer_parameters.get("num_input_records_to_sample") == 100
 
-    def test_parameters_nesting(self, simple_safe_synthesizer_parameters):
-        assert simple_safe_synthesizer_parameters.get("num_input_records_to_sample") == 100
+    def test_parameters_nesting(self, fixture_simple_safe_synthesizer_parameters):
+        assert fixture_simple_safe_synthesizer_parameters.get("num_input_records_to_sample") == 100
 
     def test_nested_auto_param_round_trip(self, subgroup_fixture, parent_fixture):
         subgroup_py = subgroup_fixture.model_dump()
@@ -145,7 +118,7 @@ class TestParametersClass:
 class TestPiiParameters:
     def test_pii_parameters_create_without_steps(self):
         with pytest.raises(ValidationError):
-            _ = PiiReplacerConfig()
+            _ = PiiReplacerConfig()  # ty: ignore[missing-argument] -- intentionally omits required field to test that ValidationError is raised
 
     def test_create_default(self):
         params = PiiReplacerConfig.get_default_config()
@@ -173,21 +146,20 @@ class TestSafeSynthesizerParameters:
         )
         assert params.get("max_sequences_per_example") == expected
 
-    def test_parameter_values(self, simple_safe_synthesizer_parameters):
-        params = simple_safe_synthesizer_parameters
+    def test_parameter_values(self, fixture_simple_safe_synthesizer_parameters):
+        params = fixture_simple_safe_synthesizer_parameters
         assert params.get("num_input_records_to_sample") == 100
         assert params.get("batch_size") == 10
         print(params.training)
         assert params.get("group_training_examples_by") == "my_col"
 
     @pytest.mark.parametrize(
-        "enabled_pii, expected_enabled_pii, expected_pii_config",
-        [(True, True, True), (False, False, None)],
+        "replace_pii_kwarg, expected_pii_config",
+        [({}, True), ({"replace_pii": None}, None)],
         ids=["enabled", "disabled"],
     )
-    def test_enabled_pii(self, enabled_pii, expected_enabled_pii, expected_pii_config):
-        params = SafeSynthesizerParameters.from_params(enable_replace_pii=enabled_pii)
-        assert params.enable_replace_pii == expected_enabled_pii
+    def test_enabled_pii(self, replace_pii_kwarg, expected_pii_config):
+        params = SafeSynthesizerParameters.from_params(**replace_pii_kwarg)
         val = True if params.replace_pii is not None else None
         assert val == expected_pii_config
 
@@ -205,6 +177,96 @@ class TestSafeSynthesizerParameters:
         params = TimeSeriesParameters(is_timeseries=True, timestamp_column="event_time")
         assert params.timestamp_column == "event_time"
 
-    def test_read_from_yaml(self, yaml_config_str):
-        p = SafeSynthesizerParameters.from_yaml_str(yaml_config_str)
+    def test_dp_and_time_series_are_mutually_exclusive(self):
+        """DP + time-series raises because DP would force ``max_sequences_per_example=1``,
+        collapsing the per-example temporal structure time-series mode is built around.
+        """
+        with pytest.raises(ValidationError, match="not supported in time-series mode"):
+            SafeSynthesizerParameters(
+                privacy=DifferentialPrivacyHyperparams(dp_enabled=True),
+                time_series=TimeSeriesParameters(is_timeseries=True, timestamp_column="event_time"),
+            )
+
+    @pytest.mark.parametrize(
+        "max_seq_input, expected",
+        [
+            pytest.param("auto", None, id="auto_resolves_to_none_in_timeseries"),
+            pytest.param(None, None, id="explicit_none_preserved"),
+            pytest.param(5, 5, id="explicit_value_preserved"),
+        ],
+    )
+    def test_max_sequences_per_example_default_in_timeseries(self, max_seq_input, expected):
+        """In time-series mode, ``max_sequences_per_example='auto'`` resolves to ``None``.
+
+        The default of ``10`` would chop sequences into short fragments and
+        lose the long-range temporal structure the model needs to learn,
+        so we let each example fill the context window instead.
+        """
+        params = SafeSynthesizerParameters(
+            data=DataParameters(max_sequences_per_example=max_seq_input),
+            time_series=TimeSeriesParameters(is_timeseries=True, timestamp_column="event_time"),
+        )
+        assert params.data.max_sequences_per_example == expected
+
+    @pytest.mark.parametrize(
+        "max_seq_input, expected",
+        [
+            pytest.param("auto", 10, id="auto_resolves_to_10"),
+            pytest.param(None, None, id="explicit_none_preserved"),
+            pytest.param(5, 5, id="explicit_value_preserved"),
+        ],
+    )
+    def test_max_sequences_per_example_default_non_timeseries(self, max_seq_input, expected):
+        """Outside time-series mode, ``max_sequences_per_example='auto'`` resolves to ``10``."""
+        params = SafeSynthesizerParameters(
+            data=DataParameters(max_sequences_per_example=max_seq_input),
+        )
+        assert params.data.max_sequences_per_example == expected
+
+    def test_timestamp_interval_must_be_positive(self):
+        """Negative ``timestamp_interval_seconds`` is rejected at construction time."""
+        with pytest.raises(ValueError, match="positive"):
+            TimeSeriesParameters(is_timeseries=True, timestamp_interval_seconds=-1)
+
+    def test_timeseries_without_group_column_warns(self):
+        """``is_timeseries=True`` without a group column warns about the auto-injected sequence id."""
+        import warnings
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            SafeSynthesizerParameters(
+                time_series=TimeSeriesParameters(is_timeseries=True, timestamp_interval_seconds=5),
+            )
+        assert any("group_training_examples_by" in str(warning.message) for warning in w)
+
+    def test_data_validation_error_without_phantom_dp_error(self):
+        """A bad data section should not produce a phantom 'DP is enabled' error when DP is disabled."""
+        with pytest.raises(ValidationError) as exc_info:
+            SafeSynthesizerParameters.from_yaml_str(
+                "data:\n  order_training_examples_by: event_id\n  group_training_examples_by: null\n"
+            )
+        error_messages = [e["msg"] for e in exc_info.value.errors()]
+        assert any("order_training_examples_by" in msg for msg in error_messages)
+        assert not any("DP is enabled" in msg for msg in error_messages)
+
+    def test_read_from_yaml(self, fixture_yaml_config_str):
+        p = SafeSynthesizerParameters.from_yaml_str(fixture_yaml_config_str)
         assert p.get("gradient_accumulation_steps") == 8
+
+
+class TestGroupTrainingExamplesBy:
+    def test_single_column_string_accepted(self):
+        params = DataParameters(group_training_examples_by="patient_id")
+        assert params.group_training_examples_by == "patient_id"
+
+    def test_none_accepted(self):
+        params = DataParameters(group_training_examples_by=None)
+        assert params.group_training_examples_by is None
+
+    def test_list_rejected_by_pydantic(self):
+        with pytest.raises(ValidationError):
+            DataParameters(group_training_examples_by=["patient_id", "event_id"])  # ty: ignore[invalid-argument-type]
+
+    def test_comma_separated_string_accepted_by_pydantic(self):
+        params = DataParameters(group_training_examples_by="patient_id,event_id")
+        assert params.group_training_examples_by == "patient_id,event_id"

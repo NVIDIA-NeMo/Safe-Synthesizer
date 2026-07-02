@@ -22,15 +22,31 @@
 name: GPU Tests
 
 on:
-  push:
-    branches:
-      - main
-      - "pull-request/[0-9]+"
+  schedule:
+    # Nightly at 02:00 UTC.
+    - cron: '0 2 * * *'
+  # disabled for now to avoid running on PRs
+  # push:
+  #   branches:
+  #     - "pull-request/[0-9]+"
   workflow_dispatch:
+    inputs:
+      suite:
+        description: "GPU test suite to run"
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - smoke
+          - e2e
 
 defaults:
   run:
     shell: bash -x -e -u -o pipefail {0}
+
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -41,63 +57,138 @@ jobs:
     name: Detect changes
     if: github.event_name != 'workflow_dispatch'
     runs-on: linux-amd64-cpu4
-    permissions:
-      contents: read
     outputs:
-      src: ${{ steps.changes.outputs.src }}
-      test: ${{ steps.changes.outputs.test }}
+      src_test_deps: ${{ steps.changes.outputs.src_test_deps }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
       - name: Detect changes
         id: changes
         uses: ./.github/actions/detect-changes
 
-  gpu-e2e-test:
-    name: GPU E2E Tests - (Python ${{ matrix.python-version }})
+  gpu-smoke-test:
+    name: GPU Smoke Tests
     needs: changes
-    if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.test == 'true' || github.event_name == 'workflow_dispatch' }}
-    timeout-minutes: 60
+    # `changes` is intentionally skipped on workflow_dispatch. `always()` lets
+    # manual runs bypass that skipped dependency and run the selected GPU suite.
+    if: >-
+      ${{
+        always() &&
+        (
+          github.event_name == 'workflow_dispatch' ||
+          needs.changes.outputs.src_test_deps == 'true'
+        ) &&
+        (
+          github.event_name != 'workflow_dispatch' ||
+          inputs.suite == 'all' ||
+          inputs.suite == 'smoke'
+        )
+      }}
+    timeout-minutes: 30
     runs-on: linux-amd64-gpu-a100-latest-1
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11"]
+        python-version: ["3.13"]
     steps:
       - name: checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          persist-credentials: false
           fetch-depth: 0
 
-      - name: Setup Python environment
-        id: setup
-        uses: ./.github/actions/setup-python-env
+      - name: Setup GPU test environment
+        uses: ./.github/actions/setup-gpu-test-env
         with:
           python-version: ${{ matrix.python-version }}
-          bootstrap-tools: "true"
+
+      - name: Run GPU smoke tests - train only
+        timeout-minutes: 10
+        run: mise run test:smoke:gpu:train-only
+
+      - name: Run GPU smoke tests - generation
+        timeout-minutes: 10
+        run: mise run test:smoke:gpu:generation
+
+      - name: Run GPU smoke tests - resume
+        timeout-minutes: 10
+        run: mise run test:smoke:gpu:resume
+
+      - name: Run GPU smoke tests - structured generation
+        timeout-minutes: 10
+        run: mise run test:smoke:gpu:structured-generation
+
+      - name: Run GPU smoke tests - timeseries
+        timeout-minutes: 10
+        run: mise run test:smoke:gpu:timeseries
+
+      - name: Run GPU smoke tests - SmolLM2
+        timeout-minutes: 20
+        run: mise run test:smoke:gpu:smollm2
+
+  gpu-e2e-test:
+    name: GPU E2E Tests
+    needs: changes
+    # `changes` is intentionally skipped on workflow_dispatch. `always()` lets
+    # manual runs bypass that skipped dependency and run the selected GPU suite.
+    if: >-
+      ${{
+        always() &&
+        (
+          github.event_name == 'workflow_dispatch' ||
+          needs.changes.outputs.src_test_deps == 'true'
+        ) &&
+        (
+          github.event_name != 'workflow_dispatch' ||
+          inputs.suite == 'all' ||
+          inputs.suite == 'e2e'
+        )
+      }}
+    timeout-minutes: 210
+    runs-on: linux-amd64-gpu-a100-latest-1
+    steps:
+      - name: checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Setup GPU test environment
+        uses: ./.github/actions/setup-gpu-test-env
 
       - name: Run GPU E2E tests
-        timeout-minutes: 45
-        run: |
-          make bootstrap-nss cu128
-          make test-e2e
+        run: mise run test:e2e
+        timeout-minutes: 190
 
   # ---------------------------------------------------------------------------
   # Single required status check for branch protection.
+  # Smoke tests are required; E2E failures produce a warning but don't block.
   # ---------------------------------------------------------------------------
   gpu-ci-status:
     name: GPU CI Status
     if: always() && !cancelled()
-    needs: [changes, gpu-e2e-test]
+    needs: [changes, gpu-smoke-test, gpu-e2e-test]
     runs-on: linux-amd64-cpu4
     steps:
       - name: Check job results
         run: |
-          echo "changes:      ${{ needs.changes.result }}"
-          echo "gpu-e2e-test: ${{ needs.gpu-e2e-test.result }}"
+          echo "changes:        ${{ needs.changes.result }}"
+          echo "gpu-smoke-test: ${{ needs.gpu-smoke-test.result }}"
+          echo "gpu-e2e-test:   ${{ needs.gpu-e2e-test.result }}"
 
-          if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" ]]; then
-            echo "::error::GPU E2E tests failed"
+          if [[ "${{ needs.changes.result }}" == "failure" ]]; then
+            echo "::error::Change detection failed"
             exit 1
           fi
 
-          echo "All GPU jobs passed (or were skipped)."
+          if [[ "${{ needs.gpu-smoke-test.result }}" == "failure" ]]; then
+            echo "::error::GPU smoke tests failed (required)"
+            exit 1
+          fi
+
+          if [[ "${{ needs.gpu-e2e-test.result }}" == "failure" ]]; then
+            echo "::warning::GPU E2E tests failed (informational, does not block merge)"
+          fi
+
+          echo "All required GPU jobs passed (or were skipped)."

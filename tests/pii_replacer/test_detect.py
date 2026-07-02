@@ -10,25 +10,48 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pandas as pd
+from pandas.testing import assert_index_equal
+from pydantic import ValidationError
+
 from nemo_safe_synthesizer.pii_replacer.data_editor.detect import (
     DEFAULT_ENTITIES,
+    UNKNOWN_ENTITY,
     ClassifyConfig,
     ColumnClassifierLLM,
+    DefaultLLMConfig,
     EntityExtractorGliner,
+    _format_prompt,
     merge_subsume,
     redact_from_entities,
     sample_columns,
 )
 from nemo_safe_synthesizer.pii_replacer.data_editor.environment import redact_entities_fn
 from nemo_safe_synthesizer.pii_replacer.ner.ner import NERPrediction
-from pandas.testing import assert_index_equal
-from pydantic import ValidationError
+
+
+class TestDefaultLLMConfigId:
+    def test_uses_env_override(self, monkeypatch):
+        monkeypatch.setenv("NSS_INFERENCE_MODEL", "custom/model")
+        assert DefaultLLMConfig.config_id() == "custom/model"
+
+    def test_falls_back_when_unset(self, monkeypatch):
+        monkeypatch.delenv("NSS_INFERENCE_MODEL", raising=False)
+        assert DefaultLLMConfig.config_id() == DefaultLLMConfig.DEFAULT_CONFIG_ID
+
+    @pytest.mark.parametrize("blank", ["", "   ", "\t"])
+    def test_blank_value_falls_back(self, monkeypatch, blank):
+        monkeypatch.setenv("NSS_INFERENCE_MODEL", blank)
+        assert DefaultLLMConfig.config_id() == DefaultLLMConfig.DEFAULT_CONFIG_ID
+
+    def test_strips_surrounding_whitespace(self, monkeypatch):
+        monkeypatch.setenv("NSS_INFERENCE_MODEL", "  custom/model  ")
+        assert DefaultLLMConfig.config_id() == "custom/model"
 
 
 def test_gliner_batch_predict_config():
     # Test batch_update_cache is short-circuited iff batch mode disabled.
     cfg = ClassifyConfig(
-        valid_entities=["name"],
+        valid_entities={"name"},
         ner_threshold=0.8,
         ner_regexps_enabled=False,
         ner_entities=None,
@@ -36,16 +59,17 @@ def test_gliner_batch_predict_config():
         gliner_batch_mode_enabled=False,
         gliner_batch_mode_chunk_length=10,
         gliner_batch_mode_batch_size=20,
-        gliner_model="gretelai/gretel-gliner-bi-large-v1.0",
+        gliner_model="nvidia/gliner-PII",
     )
 
     with patch("nemo_safe_synthesizer.pii_replacer.data_editor.detect.GLiNER", MagicMock()):
         entity_extractor = EntityExtractorGliner.get_entity_extractor(cfg)
         entity_extractor.batch_update_cache(["abc"], None)
-        entity_extractor._model.batch_predict_entities.assert_not_called()
+        assert entity_extractor._model is not None
+        entity_extractor._model.batch_predict_entities.assert_not_called()  # ty: ignore[call-non-callable, unresolved-attribute] -- mock object
 
     cfg = ClassifyConfig(
-        valid_entities=set(["name"]),
+        valid_entities={"name"},
         ner_threshold=0.8,
         ner_regexps_enabled=False,
         ner_entities=None,
@@ -53,13 +77,76 @@ def test_gliner_batch_predict_config():
         gliner_batch_mode_enabled=True,
         gliner_batch_mode_chunk_length=10,
         gliner_batch_mode_batch_size=20,
-        gliner_model="gretelai/gretel-gliner-bi-large-v1.0",
+        gliner_model="nvidia/gliner-PII",
     )
 
     with patch("nemo_safe_synthesizer.pii_replacer.data_editor.detect.GLiNER", MagicMock()):
         entity_extractor = EntityExtractorGliner.get_entity_extractor(cfg)
         entity_extractor.batch_update_cache(["abc"], None)
-        entity_extractor._model.batch_predict_entities.assert_called()
+        assert entity_extractor._model is not None
+        entity_extractor._model.batch_predict_entities.assert_called()  # ty: ignore[call-non-callable, unresolved-attribute] -- mock object
+
+
+@pytest.mark.parametrize("offline_var", ["HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE"])
+@pytest.mark.parametrize("env_value", ["1", "yes", "on"])
+def test_gliner_local_files_only_follows_hf_offline_env(env_value, offline_var, monkeypatch):
+    """GLiNER offline mode follows the standard Hugging Face offline env vars."""
+    cfg = ClassifyConfig(
+        valid_entities={"name"},
+        ner_threshold=0.8,
+        ner_regexps_enabled=False,
+        ner_entities=None,
+        gliner_enabled=True,
+        gliner_batch_mode_enabled=False,
+        gliner_batch_mode_chunk_length=10,
+        gliner_batch_mode_batch_size=20,
+        gliner_model="nvidia/gliner-PII",
+    )
+    monkeypatch.delenv("HF_HUB_OFFLINE", raising=False)
+    monkeypatch.delenv("TRANSFORMERS_OFFLINE", raising=False)
+    monkeypatch.setenv(offline_var, env_value)
+
+    with patch("nemo_safe_synthesizer.pii_replacer.data_editor.detect.GLiNER") as mock_gliner:
+        EntityExtractorGliner.get_entity_extractor(cfg)
+        assert mock_gliner.from_pretrained.call_args.kwargs["local_files_only"] is True
+
+
+@pytest.mark.slow
+def test_gliner_pii_detection_recall():
+    # Tests GLiNER’s PII detection on a short text, ensuring it finds a reasonable number of entities without over- or under-detecting.
+
+    GLINER_PII_TEST_MIN_ENTITIES = 4
+    GLINER_PII_TEST_MAX_ENTITIES = 10
+    entity_labels = {"first_name", "last_name", "ssn", "age", "date_time", "phone_number", "address", "city"}
+
+    cfg = ClassifyConfig(
+        valid_entities=entity_labels,
+        ner_threshold=0.3,
+        ner_regexps_enabled=False,
+        ner_entities=None,
+        gliner_enabled=True,
+        gliner_batch_mode_enabled=False,
+        gliner_batch_mode_chunk_length=512,
+        gliner_batch_mode_batch_size=8,
+        gliner_model="nvidia/gliner-PII",
+    )
+    extractor = EntityExtractorGliner.get_entity_extractor(cfg)
+
+    # Short text with clear PII.
+    text_with_pii = "Daniel Martinez, born September 3, 1988, age 38, visited the clinic for a follow-up regarding hypertension. His patient ID is PT30984. He lives at 912 Cedar Avenue, Vernon, CA 90058, and can be reached at 323-555-6724 for appointment reminders. During the visit, the physician reviewed his recent blood pressure readings and confirmed he has been taking his prescribed Lisinopril daily. A follow-up appointment was scheduled in two months to monitor his response to the treatment plan."
+
+    all_predictions = []
+    preds = extractor.extract_ner_predictions(text_with_pii, entity_labels)
+    all_predictions.extend(preds)
+
+    total = len(all_predictions)
+    assert total >= GLINER_PII_TEST_MIN_ENTITIES, (
+        f"Expected at least {GLINER_PII_TEST_MIN_ENTITIES} entities, got {total}. GLiNER may have missed expected PII."
+    )
+    assert total <= GLINER_PII_TEST_MAX_ENTITIES, (
+        f"Expected at most {GLINER_PII_TEST_MAX_ENTITIES} entities, got {total}. "
+        "GLiNER may be over-labeling text as PII."
+    )
 
 
 def test_column_sample_sizes():
@@ -99,7 +186,7 @@ def test_column_sample_values():
     cols = sample_columns(df, 3, random_state=random_seed)
     assert cols.keys() == expected.keys()
     for name, expected_col in expected.items():
-        assert_index_equal(expected_col, cols[name], check_names=False)
+        assert_index_equal(expected_col, pd.Index(cols[name]), check_names=False)
 
 
 def test_column_sample_size_limit():
@@ -122,7 +209,7 @@ def test_column_sample_size_limit():
     cols = sample_columns(df, 3, random_state=random_seed)
     assert cols.keys() == expected.keys()
     for name, expected_col in expected.items():
-        assert_index_equal(expected_col, cols[name], check_names=False)
+        assert_index_equal(expected_col, pd.Index(cols[name]), check_names=False)
 
 
 def test_column_empty_after_filtered():
@@ -150,7 +237,57 @@ def test_column_empty_after_filtered():
     cols = sample_columns(df, 3, random_state=random_seed)
     assert cols.keys() == expected.keys()
     for name, expected_col in expected.items():
-        assert_index_equal(expected_col, cols[name], check_names=False)
+        assert_index_equal(expected_col, pd.Index(cols[name]), check_names=False)
+
+
+def test_format_prompt_renders_template_and_samples():
+    """Guards str.format + {{ }} example block: regression would break these invariants."""
+    df = pd.DataFrame(
+        {
+            "name_col": ["Alice"],
+            "count_col": [7],
+        }
+    )
+    prompt = _format_prompt(df, DEFAULT_ENTITIES, num_samples=2)
+    assert prompt is not None
+    assert "Valid types are: [" in prompt
+    assert "Additional instructions:" in prompt
+    # TEMPLATE uses {{ }} so the user message contains a single-brace JSON example
+    assert '{"prenom": "first_name"' in prompt
+    assert '"ciudad": "city"' in prompt
+    # Sampled columns (stable for one row per column)
+    assert "name_col: Alice" in prompt
+    assert "count_col: 7" in prompt
+    assert "Input:" in prompt and "Output:" in prompt
+    # Built-in type list + unknown
+    assert "first_name," in prompt
+    assert f"{UNKNOWN_ENTITY}," in prompt
+
+
+def test_format_prompt_includes_custom_entity_types():
+    """User-defined entity names are appended to the valid-types list before 'none'."""
+    custom = "custom_entity_acme"
+    df = pd.DataFrame({"x": [1]})
+    prompt = _format_prompt(df, DEFAULT_ENTITIES | {custom}, num_samples=1)
+    assert prompt is not None
+    assert f"{custom}," in prompt
+    none_idx = prompt.index(f"{UNKNOWN_ENTITY},")
+    custom_idx = prompt.index(f"{custom},")
+    assert custom_idx < none_idx, "custom types should appear before the unknown sentinel in the list"
+
+
+def test_format_prompt_returns_none_without_sampleable_columns():
+    long_str = (
+        "This is a very long string, and in fact it is so long that it needs to be filtered "
+        "from the column before samples are taken for column classification."
+    )
+    df = pd.DataFrame(
+        {
+            "ColA": [long_str, long_str, long_str],
+            "ColC": [np.nan, np.nan, np.nan],
+        }
+    )
+    assert _format_prompt(df, DEFAULT_ENTITIES, num_samples=3) is None
 
 
 def test_no_columns_after_filter():
@@ -347,8 +484,8 @@ def test_redact_from_entities_key_almost_adjacent_entities():
 )
 def test_merge_subsume(predictions: list[tuple], expected: list[tuple]):
     def to_ner_prediction(params: tuple):
-        return NERPrediction("na", params[0], params[1], params[2], "na", "na")
+        return NERPrediction("na", params[0], params[1], params[2], "na", None)
 
-    predictions = [to_ner_prediction(v) for v in predictions]
-    expected = [to_ner_prediction(v) for v in expected]
-    assert merge_subsume(predictions) == expected
+    ner_predictions = [to_ner_prediction(v) for v in predictions]
+    ner_expected = [to_ner_prediction(v) for v in expected]
+    assert merge_subsume(ner_predictions) == ner_expected

@@ -2,11 +2,19 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-"""Generates correlation reports between data sets."""
+"""Statistical functions for synthetic data evaluation.
+
+Provides distribution comparison (Jensen-Shannon), correlation matrix
+computation (Pearson, Theil's U, Correlation Ratio), PCA, and
+data-overlap detection used by the evaluation components.
+"""
+
+from __future__ import annotations
 
 import math
 import uuid
 import warnings
+from typing import TypeAlias
 
 import numpy as np
 import pandas as pd
@@ -18,6 +26,8 @@ from scipy.stats import pearsonr
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 
+DistributionDict: TypeAlias = dict[str, float]
+
 warnings.filterwarnings("ignore", module="dython")
 warnings.filterwarnings("ignore", module="dython.nominal")
 from dython.nominal import correlation_ratio, theils_u  # noqa
@@ -27,16 +37,15 @@ _DEFAULT_REPLACE_VALUE = 0.0
 UNIQUENESS_THRESHOLD = 0.1
 
 
-def count_memorized_lines(df1: pd.DataFrame, df2: pd.DataFrame) -> int:
-    """
-    Checks for overlap between training and synthesized data.
+def count_memorized_lines(training_df: pd.DataFrame, synthetic_df: pd.DataFrame) -> int:
+    """Count exact row matches between training and synthetic data.
 
     Args:
-        df1: DataFrame of training data.
-        df2: DataFrame of synthetic data.
+        training_df: Training dataframe.
+        synthetic_df: Synthetic dataframe.
 
     Returns:
-        int, the number of overlapping elements.
+        Number of rows present in both dataframes after deduplication.
     """
 
     # Look for cases where col is numeric in one df, object in the other. Attempt to cast to float.
@@ -50,8 +59,8 @@ def count_memorized_lines(df1: pd.DataFrame, df2: pd.DataFrame) -> int:
                     try:
                         l = l.astype({col: "float"})  # noqa: E741
                         r = r.astype({col: "float"})  # noqa: E741
-                    except Exception:
-                        # In particular ValueErrors if the non-numeric is not convertible, but catch everything.
+                    except (TypeError, ValueError, OverflowError):
+                        # Keep non-convertible mixed columns in their original dtype.
                         pass
         return l, r
 
@@ -76,7 +85,7 @@ def count_memorized_lines(df1: pd.DataFrame, df2: pd.DataFrame) -> int:
         return l.astype(conversions), r.astype(conversions)
 
     # Do the casts.
-    l, r = _uptype_object_to_float(df1, df2)  # noqa: E741
+    l, r = _uptype_object_to_float(training_df, synthetic_df)  # noqa: E741
     l, r = _objectify(_floatify(l), _floatify(r))  # noqa: E741
 
     # Do an inner join on the intersection of columns present in both dfs.
@@ -85,15 +94,14 @@ def count_memorized_lines(df1: pd.DataFrame, df2: pd.DataFrame) -> int:
     return len(inner_join)
 
 
-def get_categorical_field_distribution(field: pd.Series) -> dict:
-    """
-    Calculates the normalized distribution of a categorical field.
+def get_categorical_field_distribution(field: pd.Series) -> DistributionDict:
+    """Compute the normalized value-count distribution of a categorical column.
 
     Args:
-        field: A sanitized column extracted from one of the df's.
+        field: Column series to analyze.
 
     Returns:
-        dict: keys are the unique values in the field, values are percentages (floats in [0, 100]).
+        Mapping of ``{value_str: percentage}`` where percentages are in ``[0, 100]``.
     """
     distribution = {}
     if len(field) > 0:
@@ -105,18 +113,18 @@ def get_categorical_field_distribution(field: pd.Series) -> dict:
     return distribution
 
 
-def get_numeric_distribution_bins(training: pd.Series, synthetic: pd.Series):
-    """
-    To calculate the distribution distance between two numeric series a la categorical fields
-    we need to bin the data.  We want the same bins between both series, based on scrubbed data.
+def get_numeric_distribution_bins(training: pd.Series, synthetic: pd.Series) -> np.ndarray:
+    """Compute shared histogram bin edges for two numeric series.
+
+    Uses the ``"doane"`` strategy on the combined data, falling back to
+    500 fixed bins if the result is empty or too large.
 
     Args:
-        training: The numeric series from the training dataframe.
-        synthetic: The numeric series from the synthetic dataframe.
+        training: Numeric series from the training dataframe.
+        synthetic: Numeric series from the synthetic dataframe.
 
     Returns:
-        bin_edges, numpy array of dtype float
-
+        Array of bin edges spanning both series.
     """
     training = training.replace([np.inf, -np.inf], np.nan).dropna().astype("float64")
     synthetic = synthetic.replace([np.inf, -np.inf], np.nan).dropna().astype("float64")
@@ -136,29 +144,28 @@ def get_numeric_distribution_bins(training: pd.Series, synthetic: pd.Series):
     # We also bin across the training and synthetic Series combined since we are binning across the combined range, otherwise we can see OOM's or sigkill's.
     try:
         bins = np.histogram_bin_edges(pd.concat([training, synthetic]), bins="doane", range=(min_value, max_value))
-    except Exception:
-        pass
+    except (TypeError, ValueError):
+        bins = np.array([], dtype=np.float64)
     # If 'doane' still doesn't do the trick just force 500 bins.
     if len(bins) == 0 or len(bins) > 500:
         try:
             bins = np.histogram_bin_edges(pd.concat([training, synthetic]), bins=500, range=(min_value, max_value))
-        except Exception:
-            pass
+        except (TypeError, ValueError):
+            bins = np.array([], dtype=np.float64)
     return bins
 
 
-def get_numeric_field_distribution(field: pd.Series, bins) -> dict:
-    """
-    Calculates the normalized distribution of a numeric field cut into bins.
+def get_numeric_field_distribution(field: pd.Series, bins: np.ndarray | pd.IntervalIndex | int) -> DistributionDict:
+    """Compute the normalized distribution of a numeric column cut into bins.
 
     Args:
-        field: A sanitized column extracted from one of the df's.
-        bins: Usually an np.ndarray from get_bins, but can be anything that can be safely passed to pandas.cut.
+        field: Numeric column series.
+        bins: Bin edges (typically from ``get_numeric_distribution_bins``).
 
     Returns:
-        dict: keys are the unique values in the field, values are floats in [0, 1].
+        Mapping of ``{bin_label: proportion}`` where proportions are in ``[0, 1]``.
     """
-    binned_data = pd.cut(field, bins, include_lowest=True)
+    binned_data = pd.cut(field, bins, include_lowest=True)  # ty: ignore[no-matching-overload]
     distribution = {}
     for d in binned_data:
         if str(d) != "nan":
@@ -169,17 +176,16 @@ def get_numeric_field_distribution(field: pd.Series, bins) -> dict:
     return distribution
 
 
-def compute_distribution_distance(d1: dict, d2: dict) -> float:
-    """
-    Calculates the Jensen Shannon distance between two distributions.
+def compute_distribution_distance(d1: DistributionDict, d2: DistributionDict) -> float:
+    """Compute the Jensen-Shannon distance between two distributions.
 
     Args:
-        d1: Distribution dict.  Values must be a probability vector
-            (all values are floats in [0,1], sum of all values is 1.0).
-        d2: Another distribution dict.
+        d1: First distribution dict (values are a probability vector).
+        d2: Second distribution dict.
 
     Returns:
-        float: The distance between the two vectors, range in [0, 1].
+        JS distance in ``[0, 1]``. Returns ``0.5887`` if either distribution
+        sums to zero.
     """
     all_keys = set(d1.keys()).union(set(d2.keys()))
     if len(all_keys) == 0:
@@ -197,19 +203,16 @@ def compute_distribution_distance(d1: dict, d2: dict) -> float:
 
 
 def calculate_pearsons_r(x: pd.Series | np.ndarray, y: pd.Series | np.ndarray, opt: bool) -> tuple[float, float]:
-    """
-    Calculate the Pearson correlation coefficient for this pair of rows of our correlation matrix.
-    See https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.pearsonr.html.
+    """Compute the Pearson correlation coefficient for a column pair.
 
     Args:
-        x: first input array.
-        y: second input array.
-        opt: "optimized."  If False, drop missing values when either the x or y value is null/nan.  If True,
-            we've already replaced nan's with 0's for entire datafile.
+        x: First input array.
+        y: Second input array.
+        opt: If ``False``, drop rows where either value is NaN before
+            computing.  If ``True``, assume NaNs have already been replaced.
 
     Returns:
-        As per scipy, tuple of Pearson’s correlation coefficient and Two-tailed p-value.
-
+        Tuple of (Pearson r, two-tailed p-value).
     """
     if not opt:
         # drop missing values, when either the x or y value is null/nan
@@ -228,18 +231,15 @@ def calculate_pearsons_r(x: pd.Series | np.ndarray, y: pd.Series | np.ndarray, o
 
 
 def calculate_correlation_ratio(x: pd.Series, y: pd.Series, opt: bool) -> float:
-    """
-    Calculates the Correlation Ratio for categorical-continuous association.  Used in constructing correlation matrix.
-    See http://shakedzy.xyz/dython/modules/nominal/#correlation_ratio.
+    """Compute the Correlation Ratio for a categorical-numeric column pair.
 
     Args:
-        x: first input array, categorical.
-        y: second input array, numeric.
-        opt: "optimized."  If False, drop missing values if y (the numeric column) is null/nan.
+        x: Categorical input array.
+        y: Numeric input array.
+        opt: If ``False``, drop rows where ``y`` is NaN before computing.
 
     Returns:
-        float in the range of [0,1].
-
+        Correlation ratio in ``[0, 1]``.
     """
     if not opt:
         # Drop missing values if y (the numeric column) is null/nan
@@ -253,19 +253,15 @@ def calculate_correlation_ratio(x: pd.Series, y: pd.Series, opt: bool) -> float:
         return correlation_ratio(x, y, nan_strategy="none")
 
 
-def calculate_theils_u(x, y):
-    """
-    Calculates Theil's U statistic (Uncertainty coefficient) for categorical-categorical association.
-    Used in constructing correlation matrix.
-    See http://shakedzy.xyz/dython/modules/nominal/#theils_u.
+def calculate_theils_u(x: pd.Series, y: pd.Series) -> float:
+    """Compute Theil's U (uncertainty coefficient) for two categorical columns.
 
     Args:
-        x: first input array, categorical.
-        y: second input array, categorical.
+        x: First categorical array.
+        y: Second categorical array.
 
     Returns:
-        float in the range of [0,1].
-
+        Theil's U in ``[0, 1]``.
     """
     # Drop missing values if x or y is null/nan
     df = pd.DataFrame({"x": x, "y": y})
@@ -285,20 +281,21 @@ def calculate_correlation(
     job_count: int = _DEFAULT_JOB_COUNT,
     opt: bool = False,
 ) -> pd.DataFrame:
-    """
-    Given a dataframe, calculate a matrix of the correlations between the various rows.  We use the
-    calculate_pearsons_r, calculate_correlation_ratio and calculate_theils_u to fill in the matrix values.
+    """Build a full correlation matrix using Pearson, Theil's U, and Correlation Ratio.
+
+    Numeric-numeric pairs use Pearson's r, categorical-categorical pairs use
+    Theil's U, and categorical-numeric pairs use Correlation Ratio (or
+    Theil's U for highly-unique categoricals).
 
     Args:
-        df: The input dataframe.
+        df: Input dataframe.
         nominal_columns: Columns to treat as categorical.
-        job_count: For parallelization of computations.
-        opt: "optimized."  If opt is True, then go the faster (just not quite as accurate) route of global
-            replace missing with 0.
+        job_count: Number of parallel jobs for pairwise computations.
+        opt: If ``True``, globally replace NaNs with ``0`` for speed
+            (slightly less accurate).
 
     Returns:
-        A dataframe of correlation values.
-
+        Square correlation dataframe indexed and columned by ``df.columns``.
     """
     # PLAT-1131 Ensure that all nominal columns are present in df.
     if nominal_columns is not None:
@@ -380,7 +377,7 @@ def calculate_correlation(
         corr[x_index, :] = 0.0
         corr[x_index, x_index] = 1.0
 
-    # Do nominal-nominal exluding any that are 100% unique (Theil's U)
+    # Do nominal-nominal excluding any that are 100% unique (Theil's U)
     scores = Parallel(n_jobs=job_count)(
         delayed(calculate_theils_u)(df_cp[field1], df_cp[field2])
         for field1 in notcompletely_unique_nominal
@@ -472,24 +469,22 @@ def calculate_correlation(
 
 
 def normalize_dataset(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Prep a dataframe for PCA.  Divide the dataframe into numeric and categorical,
-    fill missing values and encode categorical columns by the frequency of each value and
-    standardize all values.
+    """Normalize a dataframe for PCA: fill missing values, encode categoricals, and standardize.
 
     Args:
-        df: The dataframe to be subjected to PCA.
+        df: Raw dataframe to prepare.
 
     Returns:
-        The dataframe, normalized.
-
+        Standardized dataframe (mean 0, std 1) with all columns numeric.
     """
     df_cp = df.copy()
     # Divide the dataframe into numeric and categorical
     nominal_columns = list(df_cp.select_dtypes(include=["object", "category", "boolean"]).columns)
     int64_dtypes = df_cp.columns[df_cp.dtypes == pd.Int64Dtype()]
     # Convert pandas boolean dtype columns to object to replace possible NaNs with "Missing" values:
-    boolean_dtypes = df_cp[nominal_columns].columns[df_cp[nominal_columns].dtypes.eq(pd.BooleanDtype())]
+    boolean_dtypes = df_cp[nominal_columns].columns[
+        df_cp[nominal_columns].dtypes.apply(lambda x: isinstance(x, pd.BooleanDtype))
+    ]
     df_cp[boolean_dtypes] = df_cp[boolean_dtypes].astype("object")
     numeric_columns = []
     for c in df_cp.columns:
@@ -527,16 +522,14 @@ def normalize_dataset(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def compute_pca(df: pd.DataFrame, n_components: int = 2) -> pd.DataFrame:
-    """
-    Do PCA on a dataframe.  See https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.PCA.html.
+    """Run PCA on a single dataframe after normalization.
 
     Args:
-        df: The dataframe to analyze for principal components.
-        n_components: Number of components to keep.
+        df: Dataframe to decompose.
+        n_components: Number of principal components to keep.
 
     Returns:
-        Dataframe of principal components.
-
+        Dataframe with columns ``pc1``, ``pc2``, etc.
     """
     seed = 444
     df_ = df.replace([np.inf, -np.inf], np.nan, inplace=False).dropna(axis="columns", how="all")
@@ -549,34 +542,32 @@ def compute_pca(df: pd.DataFrame, n_components: int = 2) -> pd.DataFrame:
 
 
 def compute_joined_pcas(
-    reference_df: pd.DataFrame,
-    output_df: pd.DataFrame,
+    training_df: pd.DataFrame,
+    synthetic_df: pd.DataFrame,
     n_components: int = 2,
     include_variance: bool = False,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """
-    Joined PCA on train and synthetic dataframes.
-    See https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.PCA.html.
+    """Run joined PCA: fit on training, transform both training and synthetic.
 
     Args:
-        reference_df: The train dataframe to analyze for principal components.
-        output_df: The synthetic dataframe to analyze for principal components.
-        n_components: Number of components to keep.
+        training_df: Training dataframe (used to fit the scaler and PCA).
+        synthetic_df: Synthetic dataframe (transformed only).
+        n_components: Number of principal components to keep.
+        include_variance: If ``True``, column names include explained variance ratios.
 
     Returns:
-        Dataframes of principal components.
-
+        Tuple of (training PCA dataframe, synthetic PCA dataframe).
     """
     seed = 444
 
-    # Normalize the train and synthetic dataframes to mean 0 and std 1
+    # Normalize the training and synthetic dataframes to mean 0 and std 1
     sc = StandardScaler()
-    reference_norm = sc.fit_transform(reference_df)
-    output_norm = sc.transform(output_df)
+    training_norm = sc.fit_transform(training_df)
+    synthetic_norm = sc.transform(synthetic_df)
 
     pca = PCA(n_components=n_components, random_state=seed)
-    projected_reference = pca.fit_transform(reference_norm)
-    projected_output = pca.transform(output_norm)
+    projected_training = pca.fit_transform(training_norm)
+    projected_synthetic = pca.transform(synthetic_norm)
 
     if include_variance:
         eigenvalues = pca.explained_variance_ratio_
@@ -584,34 +575,32 @@ def compute_joined_pcas(
     else:
         columns = [f"pc{i + 1}" for i in range(n_components)]
 
-    reference_pca = pd.DataFrame(data=projected_reference, columns=columns)
-    output_pca = pd.DataFrame(data=projected_output, columns=columns)
+    training_pca = pd.DataFrame(data=projected_training, columns=columns)
+    synthetic_pca = pd.DataFrame(data=projected_synthetic, columns=columns)
 
-    return (reference_pca, output_pca)
+    return (training_pca, synthetic_pca)
 
 
 def count_missing(df: pd.DataFrame) -> int:
-    """
-    Count the number of missing values in a dataframe.
+    """Count total missing (NaN/null) values across all cells.
 
     Args:
-        df: The dataframe to analyze.
+        df: Dataframe to inspect.
 
     Returns:
-        int, the number of missing values.
+        Total number of missing values.
     """
     return int(df.isnull().sum().sum())
 
 
 def percent_missing(df: pd.DataFrame) -> float:
-    """
-    Determine the percentage of missing values in a dataframe.
+    """Compute the percentage of missing values in a dataframe.
 
     Args:
-        df: The dataframe to analyze.
+        df: Dataframe to inspect.
 
     Returns:
-        float in [0, 100], the percent of missing values.
+        Percentage of missing values in ``[0, 100]``.
     """
     r, c = df.shape
     total_cells = r * c

@@ -6,9 +6,20 @@
 # Original source: https://github.com/microsoft/dp-transformers/blob/main/src/dp_transformers/arguments.py
 # See THIRD_PARTY.md for the original MIT license terms.
 
+"""Privacy arguments and noise multiplier computation for DP training.
 
+Provides ``PrivacyArguments`` (target epsilon/delta, noise multiplier, clipping norm),
+``SafeSynthesizerAccountant`` for epsilon accounting (PRV or RDP), and
+``prv_find_noise_multiplier()`` to solve for noise scale given a target epsilon.
+"""
+
+from __future__ import annotations
+
+import signal
+import threading
+import warnings
 from dataclasses import dataclass, field
-from typing import Literal, Optional
+from typing import Literal, cast
 
 import numpy as np
 from opacus.accountants import RDPAccountant
@@ -20,52 +31,162 @@ from ...observability import get_logger
 
 logger = get_logger()
 
+# Timeout (seconds) for PRV accountant construction.  The PRV library can
+# hang for small noise multipliers (high epsilon) due to numerical overflow
+# in its internal domain-size computation.
+_PRV_TIMEOUT_SECONDS: int = 120
+
+
+def _can_use_sigalrm() -> bool:
+    """Check if SIGALRM is available and we're on the main thread."""
+    return hasattr(signal, "SIGALRM") and threading.current_thread() is threading.main_thread()
+
+
+def _create_prv_accountant(
+    noise_multiplier: float,
+    sampling_probability: float,
+    delta: float,
+    max_compositions: int,
+    eps_error: float,
+    timeout: int | None = None,
+) -> PRVAccountant:
+    """Construct a PRV accountant, raising ``RuntimeError`` on overflow or hang.
+
+    Uses ``np.errstate`` to promote overflow to an error.  On Unix main
+    threads, also sets a SIGALRM timeout to interrupt hangs that don't
+    trigger an overflow warning.  On other platforms or from non-main
+    threads the timeout is skipped and only overflow detection is active.
+    """
+    if timeout is None:
+        timeout = _PRV_TIMEOUT_SECONDS
+    use_alarm = _can_use_sigalrm()
+    prev = None
+
+    def _on_timeout(signum, frame):
+        raise RuntimeError(f"PRV accountant timed out after {timeout}s (noise_multiplier={noise_multiplier})")
+
+    if use_alarm:
+        prev = signal.signal(signal.SIGALRM, _on_timeout)
+        signal.alarm(timeout)
+    try:
+        with warnings.catch_warnings(), np.errstate(over="raise", invalid="raise"):
+            warnings.filterwarnings("error", message="overflow", category=RuntimeWarning)
+            return PRVAccountant(
+                noise_multiplier=noise_multiplier,
+                sampling_probability=sampling_probability,
+                delta=delta,
+                max_compositions=max_compositions,
+                eps_error=eps_error,
+            )
+    except (FloatingPointError, RuntimeWarning, OverflowError) as exc:
+        raise RuntimeError(
+            f"PRV accountant construction failed (noise_multiplier={noise_multiplier}): {type(exc).__name__}: {exc}"
+        ) from exc
+    finally:
+        if use_alarm:
+            signal.alarm(0)
+            signal.signal(signal.SIGALRM, prev)
+
 
 @dataclass
 class SafeSynthesizerAccountant:
+    """Privacy accountant for computing epsilon from training steps.
+
+    Wraps either PRV (privacy random variable) or Opacus RDP accountant.
+    Use PRV when possible; RDP is used as fallback if PRV fails to converge.
+
+    Args:
+        use_prv: If True, use PRV accountant; otherwise RDP.
+        noise_multiplier: Scale of Gaussian noise added to gradients.
+        sampling_probability: Probability of a record being in a batch.
+        delta: Target delta for (epsilon, delta)-DP.
+        num_steps: Maximum number of composition steps (+1 for headroom)
+            (i.e. "would one more step exceed the budget?").
+    """
+
+    accountant: RDPAccountant | PRVAccountant = field(init=False)
+
     def __init__(self, use_prv: bool, noise_multiplier, sampling_probability, delta, num_steps):
         # +1 provides headroom for a forward-looking epsilon check
         # (i.e. "would one more step exceed the budget?").
         self.max_compositions = num_steps + 1
-        if use_prv:
-            self.accountant = PRVAccountant(
-                noise_multiplier=noise_multiplier,
-                sampling_probability=sampling_probability,
-                delta=delta,
-                max_compositions=self.max_compositions,
-                eps_error=0.01,
-            )
-        else:
-            self.accountant = RDPAccountant()
-        self.use_prv = use_prv
         self.delta = delta
 
-    def compute_epsilon(self, steps):
+        if use_prv:
+            try:
+                self.accountant = _create_prv_accountant(
+                    noise_multiplier=noise_multiplier,
+                    sampling_probability=sampling_probability,
+                    delta=delta,
+                    max_compositions=self.max_compositions,
+                    eps_error=0.01,
+                )
+                self.use_prv = True
+            except RuntimeError as exc:
+                logger.warning(f"PRV accountant unavailable ({exc}), falling back to RDP")
+                self.accountant = RDPAccountant()
+                self.use_prv = False
+        else:
+            self.accountant = RDPAccountant()
+            self.use_prv = False
+
+    def compute_epsilon(self, steps: int) -> float:
+        """Compute epsilon consumed after the given number of steps.
+
+        Args:
+            steps: Number of optimizer steps taken.
+
+        Returns:
+            The current epsilon value for the configured delta.
+        """
         if self.use_prv:
             # Cap to max_compositions so callers never exceed the
             # accountant's pre-computed range.  This can happen when the
             # HF Trainer runs an extra optimizer step for an incomplete
             # gradient-accumulation batch at the end of an epoch.
             steps = min(steps, self.max_compositions)
-            return self.accountant.compute_epsilon(steps)[2]
+            acct = cast(PRVAccountant, self.accountant)
+            return acct.compute_epsilon(steps)[2]
         else:
-            return self.accountant.get_epsilon(self.delta)
+            acct = cast(RDPAccountant, self.accountant)
+            return acct.get_epsilon(self.delta)
 
 
 @dataclass
 class PrivacyArguments:
-    target_epsilon: Optional[float] = field(
+    """Store for DP training parameters (epsilon, delta, noise, clipping).
+
+    Exactly one of ``target_epsilon`` or ``noise_multiplier`` must be set.
+    If ``target_epsilon`` is set, ``initialize()`` must be called to solve
+    for the noise multiplier before training.
+
+    Args:
+        target_epsilon: Target epsilon at end of training (mutually exclusive with noise multiplier).
+        target_delta: Target delta.
+        per_sample_max_grad_norm: Max L2 norm for per-sample gradient clipping.
+        noise_multiplier: Gaussian noise scale for gradients. Mutually exclusive with target_epsilon.
+        poisson_sampling: Enable Poisson sampling for proper DP accounting.
+        use_prv: If True, use PRV accountant; fallback to RDP if PRV fails to converge.
+    """
+
+    target_epsilon: float | None = field(
         default=None,
         metadata={"help": "Target epsilon at end of training (mutually exclusive with noise multiplier)"},
     )
     target_delta: float | Literal["auto"] | None = field(default=None, metadata={"help": "Target delta"})
-    per_sample_max_grad_norm: Optional[float] = field(default=None, metadata={"help": "Max per sample clip norm"})
-    noise_multiplier: Optional[float] = field(default=None, metadata={"help": "Noise multiplier for DP training"})
-    poisson_sampling: Optional[bool] = field(
+    per_sample_max_grad_norm: float | None = field(
+        default=None, metadata={"help": "Max L2 norm for per-sample gradient clipping."}
+    )
+
+    noise_multiplier: float | None = field(
+        default=None, metadata={"help": "Gaussian noise scale for gradients. Mutually exclusive with target_epsilon."}
+    )
+
+    poisson_sampling: bool = field(
         default=False,
         metadata={"help": "Enable Poisson sampling for proper DP accounting"},
     )
-    use_prv: Optional[bool] = field(
+    use_prv: bool = field(
         default=True,
         metadata={
             "help": "Flag indicating whether PRV accountant was used. "
@@ -76,31 +197,40 @@ class PrivacyArguments:
     )
 
     def initialize(self, sampling_probability: float, num_steps: int) -> None:
+        """Solve for noise multiplier from target epsilon, or confirm existing multiplier.
+
+        Called before training when ``target_epsilon`` is set. Uses PRV accountant
+        first; on convergence failure, falls back to Opacus RDP and sets
+        ``use_prv`` to False.
+
+        Args:
+            sampling_probability: Probability of a record being in a batch.
+            num_steps: Expected number of optimization steps.
+        """
         if self.noise_multiplier is None:
+            target_eps = self.target_epsilon
+            target_del = self.target_delta
+            if target_eps is None or target_del is None or target_del == "auto":
+                raise ValueError("target_epsilon and target_delta (numeric) are required for DP initialization")
             try:
                 self.noise_multiplier = prv_find_noise_multiplier(
                     sampling_probability=sampling_probability,
                     num_steps=num_steps,
-                    target_delta=self.target_delta,
-                    target_epsilon=self.target_epsilon,
+                    target_delta=target_del,
+                    target_epsilon=target_eps,
                 )
-            except Exception as known_error:
-                if "Discrete mean differs" in str(known_error):
-                    logger.warning(
-                        f"DP setup failed due to PRV accountant({known_error}), trying Opacus RDP Accountant"
-                    )
-
-                try:
-                    self.noise_multiplier = opacus_get_noise_multiplier(
-                        target_epsilon=self.target_epsilon,
-                        target_delta=self.target_delta,
-                        sample_rate=sampling_probability,
-                        steps=num_steps,
-                        accountant="rdp",
-                    )
-                    self.use_prv = False
-                except Exception as other_error:
-                    raise other_error
+            except Exception as prv_error:
+                logger.warning(
+                    f"PRV noise-multiplier search failed ({prv_error}), falling back to Opacus RDP accountant"
+                )
+                self.noise_multiplier = opacus_get_noise_multiplier(
+                    target_epsilon=target_eps,
+                    target_delta=target_del,
+                    sample_rate=sampling_probability,
+                    steps=num_steps,
+                    accountant="rdp",
+                )
+                self.use_prv = False
 
         logger.info(
             f"The noise multiplier is set to: {self.noise_multiplier}",
@@ -108,6 +238,7 @@ class PrivacyArguments:
 
     @property
     def is_initialized(self) -> bool:
+        """True if per_sample_max_grad_norm, noise_multiplier, and target_delta are set."""
         return (
             self.per_sample_max_grad_norm is not None
             and self.noise_multiplier is not None
@@ -128,29 +259,41 @@ def prv_find_noise_multiplier(
     target_delta: float,
     eps_error: float = 0.05,
 ) -> float:
-    """
-    Find a noise multiplier that satisfies a given target epsilon.
+    """Find a noise multiplier that satisfies a given target epsilon.
 
-    :param float sampling_probability: Probability of a record being in batch
-    :param int num_steps: Number of optimization steps
-    :param float target_epsilon: Desired target epsilon
-    :param float target_delta: Value of DP delta
-    :param float eps_error: Error allowed for final epsilon
+    Uses binary search with PRV accountant to solve for the noise scale.
+    Adapted from https://github.com/microsoft/prv_accountant/blob/main/prv_accountant/dpsgd.py#L39
 
-    This function has been adapted from
-    https://github.com/microsoft/prv_accountant/blob/main/prv_accountant/dpsgd.py#L39
+    Args:
+        sampling_probability: Probability of a record being in a batch.
+        num_steps: Number of optimization steps.
+        target_epsilon: Desired epsilon at end of training.
+        target_delta: Delta for (epsilon, delta)-DP.
+        eps_error: Allowed error for the final epsilon value.
+
+    Returns:
+        Noise multiplier achieving approximately target_epsilon.
+
+    Raises:
+        RuntimeError: If no valid noise multiplier found (e.g. epsilon too low
+            or too few records), or if epsilon cannot be computed within eps_error.
     """
 
     def compute_epsilon(noise_multiplier: float) -> tuple[float, float, float]:
+        """Initialize a privacy accountant and compute epsilon bounds for a given noise multiplier after ``num_steps``.
+
+        Uses the PRV (privacy loss random variables) accountant to compose
+        privacy guarantees and compute epsilon (https://arxiv.org/abs/2106.02848).
+
+        Args:
+            noise_multiplier: Gaussian noise scale (sigma) to evaluate.
+
+        Returns:
+            Tuple of three floats: ``(epsilon_lower, epsilon_point, epsilon_upper)``.
+            The outer search uses ``[0]`` and ``[2]`` when comparing to ``target_epsilon``.
         """
-        Initialize a privacy accountant and compute epsilon for a given noise
-        multiplier. This privacy accountant uses a fast algorithm to optimally
-        compose privacy guarantees and based on the notion of privacy loss
-        random variables to quantify the privacy loss of DP algorithms.
-        Based on https://arxiv.org/abs/2106.02848
-        """
-        # TODO: +1 was added in max_compositions due to a bug in NavFT, we should try to fix it
-        acc = PRVAccountant(
+        # TODO: +1 was added in max_compositions due to a bug in NSS-DP, this requires a fix.
+        acc = _create_prv_accountant(
             noise_multiplier=noise_multiplier,
             sampling_probability=sampling_probability,
             delta=target_delta,

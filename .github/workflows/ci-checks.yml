@@ -21,11 +21,16 @@ on:
   pull_request:
     branches:
       - main
+  merge_group:
+    types: [checks_requested]
   workflow_dispatch:
 
 defaults:
   run:
     shell: bash -x -e -u -o pipefail {0}
+
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -47,95 +52,99 @@ jobs:
       pull-requests: read
     outputs:
       src: ${{ steps.changes.outputs.src }}
-      test: ${{ steps.changes.outputs.test }}
+      tests: ${{ steps.changes.outputs.tests }}
+      pytest_ini: ${{ steps.changes.outputs.pytest_ini }}
+      pyproject: ${{ steps.changes.outputs.pyproject }}
+      uv_lock: ${{ steps.changes.outputs.uv_lock }}
+      docs_src: ${{ steps.changes.outputs.docs_src }}
+      any: ${{ steps.changes.outputs.any }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
       - name: Detect changes
         id: changes
         uses: ./.github/actions/detect-changes
 
   format:
     name: Format
-    needs: changes
-    if: ${{ needs.changes.outputs.src == 'true' || github.event_name == 'workflow_dispatch' }}
+    # Intentionally does not depend on `changes`: format and lock checks run on
+    # every push, pull request, and workflow_dispatch.
     runs-on: ubuntu-latest
     steps:
       - name: checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Setup Python environment
         id: setup
         uses: ./.github/actions/setup-python-env
         with:
-          fetch-depth: 0
+          checkout: "false"
           bootstrap-tools: "true"
 
-      - name: Check code formatting
-        run: |
-          make bootstrap-nss dev
-          bash tools/format/format.sh --check ${{ steps.setup.outputs.merge-base }}
+      - name: Bootstrap
+        run: mise run bootstrap-nss dev
 
-  lint:
-    name: Lint
-    needs: changes
-    if: ${{ needs.changes.outputs.src == 'true' || github.event_name == 'workflow_dispatch' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: checkout
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
+      - name: Check formatting, linting, and copyright headers
+        run: mise run format-check
 
-      - name: Setup Python environment
-        id: setup
-        uses: ./.github/actions/setup-python-env
-        with:
-          fetch-depth: 0
-          bootstrap-tools: "true"
-
-      - name: Run ruff linting
-        run: |
-          make bootstrap-nss dev
-          bash tools/lint/ruff-lint.sh ${{ steps.setup.outputs.merge-base }}
+      - name: Check uv.lock is up to date
+        run: mise run lock-check
 
   typecheck:
     name: Typecheck
-    needs: changes
-    if: ${{ needs.changes.outputs.src == 'true' || github.event_name == 'workflow_dispatch' }}
+    # Intentionally does not depend on `changes`: type checks run on every push,
+    # pull request, and workflow_dispatch.
     runs-on: ubuntu-latest
     steps:
       - name: checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Setup Python environment
         id: setup
         uses: ./.github/actions/setup-python-env
         with:
-          fetch-depth: 0
+          checkout: "false"
           bootstrap-tools: "true"
 
+      - name: Bootstrap
+        run: mise run bootstrap-nss cpu
+
       - name: Run ty type checks
-        run: |
-          make bootstrap-nss cpu
-          bash tools/lint/run-ty-check.sh ${{ steps.setup.outputs.merge-base }}
+        run: mise run typecheck
 
   unit-test:
-    name: Unit Tests - (Python ${{ matrix.python-version }})
+    name: Unit Tests
     needs: changes
-    if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.test == 'true' || github.event_name == 'workflow_dispatch' }}
+    # `changes` is intentionally skipped on workflow_dispatch. `always()` lets
+    # manual runs bypass that skipped dependency and run the full test job.
+    if: >-
+      ${{
+        always() &&
+        (
+          github.event_name == 'workflow_dispatch' ||
+          needs.changes.outputs.any == 'true'
+        )
+      }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11"]
+        python-version: ["3.11", "3.12", "3.13"]
     steps:
       - name: checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Setup Python environment
@@ -143,27 +152,68 @@ jobs:
         uses: ./.github/actions/setup-python-env
         with:
           python-version: ${{ matrix.python-version }}
+          checkout: "false"
           bootstrap-tools: "true"
 
+      - name: Bootstrap
+        run: mise run bootstrap-nss cpu
+
       - name: Run unit tests with coverage
-        run: |
-          make bootstrap-nss cpu
-          make test-ci
+        run: mise run test:ci
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v6
-        if: matrix.python-version == '3.11'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        if: matrix.python-version == '3.13'
         with:
           name: coverage-report
           path: coverage.json
           retention-days: 30
-
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v6
+        if: matrix.python-version == '3.13'
         with:
           files: coverage.json
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
+          comment: true
+          flags: python${{ matrix.python-version }}
+
+  smoke-test:
+    name: Smoke Tests
+    needs: changes
+    # `changes` is intentionally skipped on workflow_dispatch. `always()` lets
+    # manual runs bypass that skipped dependency and run the full smoke job.
+    if: >-
+      ${{
+        always() &&
+        (
+          github.event_name == 'workflow_dispatch' ||
+          needs.changes.outputs.src == 'true' ||
+          needs.changes.outputs.tests == 'true' ||
+          needs.changes.outputs.pytest_ini == 'true' ||
+          needs.changes.outputs.uv_lock == 'true' ||
+          needs.changes.outputs.pyproject == 'true'
+        )
+      }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Setup Python environment
+        uses: ./.github/actions/setup-python-env
+        with:
+          checkout: "false"
+          bootstrap-tools: "true"
+
+      - name: Run CPU smoke tests
+        run: |
+          mise run bootstrap-nss cpu
+          mise run test:smoke
+
 
   # ---------------------------------------------------------------------------
   # Single required status check for branch protection.
@@ -173,16 +223,16 @@ jobs:
   ci-status:
     name: CI Status
     if: always() && !cancelled()
-    needs: [changes, format, lint, typecheck, unit-test]
+    needs: [changes, format, typecheck, unit-test, smoke-test]
     runs-on: ubuntu-latest
     steps:
       - name: Check job results
         run: |
-          echo "changes:   ${{ needs.changes.result }}"
-          echo "format:    ${{ needs.format.result }}"
-          echo "lint:      ${{ needs.lint.result }}"
-          echo "typecheck: ${{ needs.typecheck.result }}"
-          echo "unit-test: ${{ needs.unit-test.result }}"
+          echo "changes:    ${{ needs.changes.result }}"
+          echo "format:     ${{ needs.format.result }}"
+          echo "typecheck:  ${{ needs.typecheck.result }}"
+          echo "unit-test:  ${{ needs.unit-test.result }}"
+          echo "smoke-test: ${{ needs.smoke-test.result }}"
 
           if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" ]]; then
             echo "::error::One or more CI jobs failed"

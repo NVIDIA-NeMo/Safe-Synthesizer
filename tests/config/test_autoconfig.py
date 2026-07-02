@@ -15,16 +15,16 @@ and the Expected values (what AutoConfigResolver should produce)his makes it exp
 """
 
 from collections.abc import Callable
-from contextlib import nullcontext
 from dataclasses import dataclass
-from typing import ContextManager
 
 import pandas as pd
 import pytest
+
 from nemo_safe_synthesizer.config import (
     DataParameters,
     DifferentialPrivacyHyperparams,
     SafeSynthesizerParameters,
+    TimeSeriesParameters,
     TrainingHyperparams,
 )
 from nemo_safe_synthesizer.config.autoconfig import POW, AutoConfigResolver
@@ -35,9 +35,9 @@ class Expected:
     """Expected output values after AutoConfigResolver runs.
 
     Fields:
-        use_unsloth: Expected resolved value for use_unsloth
         rope_scaling_factor: Expected value (None = will be auto-resolved to an int)
         num_input_records_to_sample: Expected value (None = will be auto-resolved)
+        learning_rate: Expected value (None = will be auto-resolved)
         delta: Expected value (None = will be auto-resolved for DP configs)
         dp_enabled: Whether DP is enabled (affects auto-resolution behavior)
         max_seq: Expected resolved value for max_sequences_per_example
@@ -45,31 +45,17 @@ class Expected:
         raises_match: Regex pattern to match exception message
     """
 
-    use_unsloth: bool
     rope_scaling_factor: int | None  # None = auto-resolved
     num_input_records_to_sample: int | None  # None = auto-resolved
+    learning_rate: float | None  # None = auto-resolved
     delta: float | None  # None = auto-resolved or not set
     dp_enabled: bool
     max_seq: int | None  # Expected resolved value
-    raises: type[Exception] | None = None
-    raises_match: str | None = None
 
     @property
     def is_auto(self) -> bool:
         """True if this config uses auto-resolution (rope_scaling_factor=None)."""
         return self.rope_scaling_factor is None
-
-    @property
-    def should_fail(self) -> bool:
-        """True if this config is expected to raise an exception."""
-        return self.raises is not None
-
-    @property
-    def contextmanager(self) -> ContextManager:
-        """Return pytest.raises context if error expected, else nullcontext."""
-        if self.raises is not None:
-            return pytest.raises(self.raises, match=self.raises_match)
-        return nullcontext()
 
 
 @dataclass(frozen=True)
@@ -86,9 +72,9 @@ class AutoConfigTestCase:
 
     def get_config(self) -> SafeSynthesizerParameters:
         """Get the config, calling it if it's a factory function."""
-        if callable(self.config):
-            return self.config()
-        return self.config
+        if isinstance(self.config, SafeSynthesizerParameters):
+            return self.config
+        return self.config()
 
 
 AUTO_NO_DP = AutoConfigTestCase(
@@ -97,18 +83,18 @@ AUTO_NO_DP = AutoConfigTestCase(
         training=TrainingHyperparams(
             rope_scaling_factor="auto",
             num_input_records_to_sample="auto",
-            use_unsloth="auto",
+            learning_rate="auto",
         ),
         data=DataParameters(max_sequences_per_example="auto"),
         privacy=DifferentialPrivacyHyperparams(dp_enabled=False, delta="auto"),
     ),
     expected=Expected(
-        use_unsloth=True,  # "auto" resolves to True when DP disabled
         rope_scaling_factor=None,  # Will be auto-resolved to an int
         num_input_records_to_sample=None,  # Will be auto-resolved
+        learning_rate=None,  # Will be auto-resolved based on model name
         delta=None,  # Not used (DP disabled)
         dp_enabled=False,
-        max_seq=None,  # "auto" with no DP -> None
+        max_seq=10,  # "auto" with no DP -> 10
     ),
 )
 
@@ -118,39 +104,18 @@ AUTO_WITH_DP = AutoConfigTestCase(
         training=TrainingHyperparams(
             rope_scaling_factor="auto",
             num_input_records_to_sample="auto",
-            use_unsloth="auto",
+            learning_rate="auto",
         ),
         data=DataParameters(max_sequences_per_example="auto"),
         privacy=DifferentialPrivacyHyperparams(dp_enabled=True, delta="auto"),
     ),
     expected=Expected(
-        use_unsloth=False,  # "auto" resolves to False when DP enabled
         rope_scaling_factor=None,  # Will be auto-resolved to an int
         num_input_records_to_sample=None,  # Will be auto-resolved
+        learning_rate=None,  # Will be auto-resolved based on model name
         delta=None,  # Will be auto-resolved based on data size
         dp_enabled=True,
         max_seq=1,  # DP enabled -> always 1
-    ),
-)
-
-AUTO_WITH_DP_NULL_MAX_SEQ = AutoConfigTestCase(
-    name="auto_with_dp_null_max_seq",
-    config=SafeSynthesizerParameters(
-        training=TrainingHyperparams(
-            rope_scaling_factor="auto",
-            num_input_records_to_sample="auto",
-            use_unsloth="auto",
-        ),
-        data=DataParameters(max_sequences_per_example=None),  # Explicit None
-        privacy=DifferentialPrivacyHyperparams(dp_enabled=True, delta="auto"),
-    ),
-    expected=Expected(
-        use_unsloth=False,  # "auto" resolves to False when DP enabled
-        rope_scaling_factor=None,  # Will be auto-resolved to an int
-        num_input_records_to_sample=None,  # Will be auto-resolved
-        delta=None,  # Will be auto-resolved based on data size
-        dp_enabled=True,
-        max_seq=1,  # DP enabled -> always 1 (even with None input)
     ),
 )
 
@@ -160,60 +125,56 @@ EXPLICIT = AutoConfigTestCase(
         training=TrainingHyperparams(
             rope_scaling_factor=2,
             num_input_records_to_sample=5000,
-            use_unsloth=True,
+            learning_rate=0.001,
         ),
         data=DataParameters(max_sequences_per_example=3),
         privacy=DifferentialPrivacyHyperparams(dp_enabled=False, delta=0.001),
     ),
     expected=Expected(
-        use_unsloth=True,  # Explicit value preserved
         rope_scaling_factor=2,  # Explicit value preserved
         num_input_records_to_sample=5000,  # Explicit value preserved
+        learning_rate=0.001,  # Explicit value preserved
         delta=0.001,  # Explicit value preserved
         dp_enabled=False,
         max_seq=3,  # Explicit value preserved
     ),
 )
 
-# Error case: DP enabled with use_unsloth=True is invalid
-# Config is a lambda because Pydantic validation would fail at module load time
-DP_WITH_UNSLOTH_TRUE = AutoConfigTestCase(
-    name="dp_with_unsloth_true",
-    config=lambda: SafeSynthesizerParameters(
+AUTO_TIMESERIES = AutoConfigTestCase(
+    name="auto_timeseries",
+    config=SafeSynthesizerParameters(
         training=TrainingHyperparams(
             rope_scaling_factor="auto",
             num_input_records_to_sample="auto",
-            use_unsloth=True,  # Invalid: explicit True with DP
+            learning_rate="auto",
         ),
         data=DataParameters(max_sequences_per_example="auto"),
-        privacy=DifferentialPrivacyHyperparams(dp_enabled=True, delta="auto"),
+        privacy=DifferentialPrivacyHyperparams(dp_enabled=False, delta="auto"),
+        time_series=TimeSeriesParameters(is_timeseries=True, timestamp_column="t"),
     ),
     expected=Expected(
-        use_unsloth=True,  # This causes the error
-        rope_scaling_factor=None,
-        num_input_records_to_sample=None,
-        delta=None,
-        dp_enabled=True,
-        max_seq=1,
-        raises=Exception,
-        raises_match="Unsloth is currently not compatible with DP|not compatible with DP",
+        rope_scaling_factor=None,  # Will be auto-resolved to an int
+        num_input_records_to_sample=None,  # Will be auto-resolved
+        learning_rate=None,  # Will be auto-resolved based on model name
+        delta=None,  # Not used (DP disabled)
+        dp_enabled=False,
+        max_seq=None,  # Time-series mode -> None (fills context window)
     ),
 )
-
 
 ALL_TEST_CASES: list[AutoConfigTestCase] = [
     AUTO_NO_DP,
     AUTO_WITH_DP,
-    AUTO_WITH_DP_NULL_MAX_SEQ,
     EXPLICIT,
-    DP_WITH_UNSLOTH_TRUE,
+    AUTO_TIMESERIES,
 ]
 
-# Valid test cases (configs that should pass) for standard tests
-VALID_TEST_CASES = [tc for tc in ALL_TEST_CASES if not tc.expected.should_fail]
 
-# Error cases that should fail validation
-ERROR_TEST_CASES = [tc for tc in ALL_TEST_CASES if tc.expected.should_fail]
+def test_auto_config_test_case_get_config_calls_factory():
+    config = SafeSynthesizerParameters()
+    test_case = AutoConfigTestCase(name="factory", config=lambda: config, expected=AUTO_NO_DP.expected)
+
+    assert test_case.get_config() is config
 
 
 @pytest.fixture
@@ -229,7 +190,7 @@ def variable_data(request) -> pd.DataFrame:
     return pd.DataFrame({"col_a": range(n), "col_b": ["text"] * n})
 
 
-@pytest.fixture(params=VALID_TEST_CASES, ids=lambda tc: tc.name)
+@pytest.fixture(params=ALL_TEST_CASES, ids=lambda tc: tc.name)
 def test_case(request) -> AutoConfigTestCase:
     """Parametrized fixture providing each valid test case."""
     return request.param
@@ -291,16 +252,27 @@ class TestAutoConfigResolver:
         else:
             assert result == {}
 
-    def test_determine_use_unsloth(self, sample_data, config, expected):
-        """Use_unsloth should be False with DP, True without, or unchanged for explicit."""
-        resolver = AutoConfigResolver(sample_data, config)
-        result = resolver._determine_use_unsloth()
+    @pytest.mark.parametrize(
+        "pretrained_model, expected_lr",
+        [
+            pytest.param(None, 0.0005, id="default_model"),
+            pytest.param("HuggingFaceTB/SmolLM3-3B", 0.0005, id="smollm"),
+            pytest.param("mistralai/Mistral-7B-Instruct-v0.3", 0.0001, id="mistral"),
+        ],
+    )
+    def test_determine_learning_rate(self, sample_data, config, expected, pretrained_model, expected_lr):
+        """Learning rate is auto configured with pretrained model → 0.0001 for Mistral, 0.0005 otherwise"""
+        config_copy = config
+        if pretrained_model is not None:
+            config_copy = config.model_copy(deep=True)
+            config_copy.training.pretrained_model = pretrained_model
+
+        resolver = AutoConfigResolver(sample_data, config_copy)
+        result = resolver._determine_learning_rate()
 
         if expected.is_auto:
-            # Auto configs have use_unsloth="auto" which gets resolved
-            assert result == {"use_unsloth": expected.use_unsloth}
+            assert result == {"learning_rate": expected_lr}
         else:
-            # Explicit configs don't change use_unsloth
             assert result == {}
 
     @pytest.mark.parametrize("data_size", [50, 1000, 10000], ids=lambda n: f"{n}_rows")
@@ -320,20 +292,40 @@ class TestAutoConfigResolver:
         else:
             assert result == {}
 
-    def test_determine_max_sequences_per_example(self, sample_data, config, expected):
-        """Max sequences should be 1 for DP, None for non-DP auto, or explicit value."""
-        resolver = AutoConfigResolver(sample_data, config)
+    @pytest.mark.parametrize(
+        "max_seq_input, expected_dp, expected_non_dp, expected_timeseries",
+        [
+            pytest.param("auto", 1, 10, None, id="auto_max_seq"),
+            pytest.param(5, 1, 5, 5, id="explicit_max_seq"),
+            pytest.param(None, 1, None, None, id="none_max_seq"),
+        ],
+    )
+    def test_determine_max_sequences_per_example(
+        self, sample_data, config, max_seq_input, expected_dp, expected_non_dp, expected_timeseries
+    ):
+        """Max sequences resolution depends on DP, time-series, and explicit-value rules.
 
-        # Verify validation already resolved the config value
-        assert config.data.max_sequences_per_example == expected.max_seq
-
+        - DP enabled: always ``1`` regardless of input.
+        - Time-series mode (DP disabled): ``"auto"`` -> ``None``, explicit values preserved.
+        - Otherwise: ``"auto"`` -> ``10``, explicit values preserved.
+        """
+        config_copy = config.model_copy(deep=True)
+        config_copy.data.max_sequences_per_example = max_seq_input
+        resolver = AutoConfigResolver(sample_data, config_copy)
         result = resolver._determine_max_sequences_per_example()
-        assert result == {"max_sequences_per_example": expected.max_seq}
+
+        if config_copy.privacy.dp_enabled:
+            expected = expected_dp
+        elif config_copy.time_series.is_timeseries:
+            expected = expected_timeseries
+        else:
+            expected = expected_non_dp
+        assert result == {"max_sequences_per_example": expected}
 
     def test_resolve(self, sample_data, config, expected):
         """Full resolution should produce valid SafeSynthesizerParameters.
 
-        Parametrized via `test_case` fixture over VALID_TEST_CASES, which provides
+        Parametrized via `test_case` fixture over ALL_TEST_CASES, which provides
         the `config` and `expected` fixtures for each test case.
         """
         resolver = AutoConfigResolver(sample_data, config)
@@ -344,29 +336,16 @@ class TestAutoConfigResolver:
         if expected.is_auto:
             assert isinstance(result.training.rope_scaling_factor, int)
             assert isinstance(result.training.num_input_records_to_sample, int)
-            assert result.training.use_unsloth is expected.use_unsloth
+            assert isinstance(result.training.learning_rate, float)
             assert result.data.max_sequences_per_example == expected.max_seq
             if expected.dp_enabled:
                 assert result.privacy and isinstance(result.privacy.delta, float)
         else:
             assert result.training.rope_scaling_factor == expected.rope_scaling_factor
             assert result.training.num_input_records_to_sample == expected.num_input_records_to_sample
-            assert result.training.use_unsloth is expected.use_unsloth
+            assert result.training.learning_rate == expected.learning_rate
             assert result.data.max_sequences_per_example == expected.max_seq
             assert result.privacy and result.privacy.delta == expected.delta
-
-    @pytest.mark.parametrize(
-        "error_case",
-        ERROR_TEST_CASES,
-        ids=lambda tc: tc.name,
-    )
-    def test_invalid_config_combinations(self, sample_data, error_case: AutoConfigTestCase):
-        """Test that invalid config combinations raise expected errors. This is done mostly to semantically separate the expected-to-fail cases
-        from the above resolve parametrization."""
-        with error_case.expected.contextmanager:
-            config = error_case.get_config()
-            resolver = AutoConfigResolver(sample_data, config)
-            resolver()
 
     def test_resolve_with_variable_data_sizes(self, variable_data, config, expected):
         """Resolution should handle various data sizes correctly."""

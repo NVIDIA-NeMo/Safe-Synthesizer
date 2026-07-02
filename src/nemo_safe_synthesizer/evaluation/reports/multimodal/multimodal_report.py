@@ -24,6 +24,7 @@ from ....evaluation.components.column_distribution import (
     ColumnDistribution,
     ColumnDistributionPlotRow,
 )
+from ....evaluation.components.component import Component
 from ....evaluation.components.correlation import (
     Correlation,
 )
@@ -48,7 +49,7 @@ from ....evaluation.components.text_semantic_similarity import TextSemanticSimil
 from ....evaluation.components.text_structure_similarity import TextStructureSimilarity
 from ....evaluation.components.time_series_similarity_score import TimeSeriesSimilarityScore
 from ....evaluation.components.tsc_utility import TSCUtility
-from ....evaluation.data_model.evaluation_dataset import EvaluationDataset
+from ....evaluation.data_model.evaluation_datasets import EvaluationDataset
 from ....evaluation.data_model.evaluation_report import EvaluationReport
 from ....evaluation.data_model.evaluation_score import (
     EvaluationScore,
@@ -61,15 +62,28 @@ logger = get_logger(__name__)
 
 
 class MultimodalReport(EvaluationReport):
-    config: SafeSynthesizerParameters | None = Field(default=None)
+    """Multi-modal evaluation report combining quality and privacy components.
+
+    Assembles all evaluation components (SQS sub-metrics for tabular and/or text columns,
+    privacy scores, PII replay, dataset statistics) from paired training/synthetic
+    dataframes and renders them into an HTML report via Jinja2 templates.
+
+    Use ``from_dataframes`` to construct a fully populated report.
+    """
+
+    config: SafeSynthesizerParameters | None = Field(
+        default=None, description="Pipeline configuration parameters used for this evaluation."
+    )
 
     @cached_property
-    def jinja_context(self):
+    def jinja_context(self) -> dict:
+        """Template context with tooltips, flags, and per-column distribution figures."""
         try:
             ctx = super().jinja_context
             ctx["tooltips"] = tooltips
-            # Get the job ID if it exist or create a new one.
-            ctx["job_id"] = os.environ.get("NEMO_JOB_ID") or "N/A"
+            # Job ID from the runtime environment (e.g. cluster); omit from HTML when unset.
+            raw_job_id = os.environ.get("NEMO_JOB_ID")
+            ctx["job_id"] = (raw_job_id or "").strip() or None
 
             # Shorthands used in template
             ctx["with_synthesizer"] = False
@@ -84,16 +98,17 @@ class MultimodalReport(EvaluationReport):
 
             ctx["with_transform"] = False
             if (
-                self.evaluation_dataset is not None
-                and self.evaluation_dataset.column_statistics is not None
-                and len(self.evaluation_dataset.column_statistics) > 0
+                self.evaluation_datasets is not None
+                and self.evaluation_datasets.column_statistics is not None
+                and len(self.evaluation_datasets.column_statistics) > 0
             ):
                 ctx["with_transform"] = True
 
-            ctx["dp_enabled"] = self.config and self.config.get("dp_enabled")
-            if ctx["dp_enabled"]:
-                ctx["delta"] = self.config.get("delta")
-                ctx["epsilon"] = self.config.get("epsilon")
+            config = self.config
+            ctx["dp_enabled"] = config is not None and config.get("dp_enabled")
+            if ctx["dp_enabled"] and config is not None:
+                ctx["delta"] = config.get("delta")
+                ctx["epsilon"] = config.get("epsilon")
 
             ctx["with_time_series"] = any(
                 [
@@ -109,8 +124,8 @@ class MultimodalReport(EvaluationReport):
 
             # Numeric per-column figures require access to the original data, a little hacky.
             if "column_distribution_stability" in ctx:
-                ctx["column_distribution_stability"]["figures"] = ColumnDistributionPlotRow.from_evaluation_dataset(
-                    self.evaluation_dataset
+                ctx["column_distribution_stability"]["figures"] = ColumnDistributionPlotRow.from_evaluation_datasets(
+                    self.evaluation_datasets
                 )
 
             return ctx
@@ -119,7 +134,8 @@ class MultimodalReport(EvaluationReport):
             raise
 
     @staticmethod
-    def _get_config_value(param: str, default: Any, config: SafeSynthesizerParameters | None = None):
+    def _get_config_value(param: str, default: Any, config: SafeSynthesizerParameters | None = None) -> Any:
+        """Return a config parameter value, falling back to ``default``."""
         if config and config.get(param):
             return config.get(param)
         return default
@@ -152,47 +168,58 @@ class MultimodalReport(EvaluationReport):
 
     @staticmethod
     def from_dataframes(
-        reference: pd.DataFrame,
-        output: pd.DataFrame,
+        training: pd.DataFrame,
+        synthetic: pd.DataFrame,
         test: pd.DataFrame | None = None,
         column_statistics: dict[str, ColumnStatistics] | None = None,
         config: SafeSynthesizerParameters | None = None,
     ) -> MultimodalReport:
-        # Check is_timeseries directly since config.get() doesn't find nested attributes reliably
-        is_timeseries = config.time_series.is_timeseries if config and getattr(config, "time_series", None) else False
+        """Build a complete multi-modal evaluation report from dataframes.
 
-        evaluation_dataset = EvaluationDataset.from_dataframes(
-            reference=reference,
-            output=output,
+        Constructs an ``EvaluationDatasets``, runs all enabled evaluation
+        components (quality and privacy), and assembles them into a report.
+
+        Args:
+            training: Training dataframe.
+            synthetic: Synthetic dataframe.
+            test: Optional holdout dataframe for privacy metrics.
+            column_statistics: Per-column PII entity metadata.
+            config: Pipeline configuration controlling which metrics are enabled.
+
+        Returns:
+            A fully populated ``MultimodalReport`` ready for rendering.
+        """
+
+        is_timeseries = config.time_series.is_timeseries if config and getattr(config, "time_series", None) else False
+        evaluation_datasets = EvaluationDatasets.from_dataframes(
+            training=training,
+            synthetic=synthetic,
             test=test,
             column_statistics=column_statistics,
-            rows=MultimodalReport._get_config_value("sqs_rows", DEFAULT_RECORD_COUNT, config),
-            cols=MultimodalReport._get_config_value("sqs_columns", DEFAULT_SQS_REPORT_COLUMNS, config),
-            mandatory_columns=list(
-                set(
-                    (MultimodalReport._get_config_value("mandatory_columns", [], config) or [])
-                    + MultimodalReport._collect_time_series_columns(config)
-                )
-            ),
+            rows=MultimodalReport._get_config_value("sqs_report_rows", DEFAULT_RECORD_COUNT, config),
+            cols=MultimodalReport._get_config_value("sqs_report_columns", DEFAULT_SQS_REPORT_COLUMNS, config),
+            mandatory_columns=MultimodalReport._get_config_value("mandatory_columns", [], config),
             enable_sampling=not is_timeseries,
         )
 
-        components = []
+        components: list[Component] = []
 
         attribute_inference_protection = AttributeInferenceProtection(
             score=EvaluationScore(grade=PrivacyGrade.UNAVAILABLE)
         )
-        if config and config.get("enable_synthesis") and config.get("aia_enabled"):
-            attribute_inference_protection = AttributeInferenceProtection.from_evaluation_dataset(
-                evaluation_dataset, config
+        if config and config.get("aia_enabled"):
+            attribute_inference_protection = AttributeInferenceProtection.from_evaluation_datasets(
+                evaluation_datasets, config
             )
         components.append(attribute_inference_protection)
 
         membership_inference_protection = MembershipInferenceProtection(
             score=EvaluationScore(grade=PrivacyGrade.UNAVAILABLE)
         )
-        if config and config.get("enable_synthesis") and config.get("mia_enabled"):
-            membership_inference_protection = MembershipInferenceProtection.from_evaluation_dataset(evaluation_dataset)
+        if config and config.get("mia_enabled"):
+            membership_inference_protection = MembershipInferenceProtection.from_evaluation_datasets(
+                evaluation_datasets
+            )
         components.append(membership_inference_protection)
 
         data_privacy_score = DataPrivacyScore(score=EvaluationScore(grade=PrivacyGrade.UNAVAILABLE))
@@ -205,14 +232,14 @@ class MultimodalReport(EvaluationReport):
         pii_replay = PIIReplay()
         if column_statistics and config is not None and config.get("pii_replay_enabled"):
             # PII Replay requires full df's. Make a one-off dataset for that call.
-            pii_replay = PIIReplay.from_evaluation_dataset(
-                EvaluationDataset.from_dataframes(
-                    reference=reference,
-                    output=output,
+            pii_replay = PIIReplay.from_evaluation_datasets(
+                EvaluationDatasets.from_dataframes(
+                    training=training,
+                    synthetic=synthetic,
                     test=test,
                     column_statistics=column_statistics,
-                    rows=MultimodalReport._get_config_value("sqs_rows", DEFAULT_RECORD_COUNT, config),
-                    cols=MultimodalReport._get_config_value("sqs_columns", DEFAULT_SQS_REPORT_COLUMNS, config),
+                    rows=MultimodalReport._get_config_value("sqs_report_rows", DEFAULT_RECORD_COUNT, config),
+                    cols=MultimodalReport._get_config_value("sqs_report_columns", DEFAULT_SQS_REPORT_COLUMNS, config),
                     mandatory_columns=MultimodalReport._get_config_value("mandatory_columns", [], config),
                     enable_sampling=False,
                 ),
@@ -225,24 +252,16 @@ class MultimodalReport(EvaluationReport):
         ]
         components.append(pii_replay)
 
-        dataset_statistics = DatasetStatistics.from_evaluation_dataset(evaluation_dataset)
+        dataset_statistics = DatasetStatistics.from_evaluation_datasets(evaluation_datasets)
 
-        # column_distribution = ColumnDistribution(score=EvaluationScore())
-        column_distribution = ColumnDistribution.from_evaluation_dataset(evaluation_dataset)
-        correlation = Correlation(score=EvaluationScore())
-        deep_structure = DeepStructure(score=EvaluationScore())
-        text_semantic_similarity = TextSemanticSimilarity(score=EvaluationScore())
-        text_structure_similarity = TextStructureSimilarity(score=EvaluationScore())
-        sqs_score = SQSScore(score=EvaluationScore())
-        if config and config.get("enable_synthesis"):
-            column_distribution = ColumnDistribution.from_evaluation_dataset(evaluation_dataset)
-            correlation = Correlation.from_evaluation_dataset(evaluation_dataset)
-            deep_structure = DeepStructure.from_evaluation_dataset(evaluation_dataset)
-            text_semantic_similarity = TextSemanticSimilarity.from_evaluation_dataset(evaluation_dataset)
-            text_structure_similarity = TextStructureSimilarity.from_evaluation_dataset(evaluation_dataset)
-            sqs_score = SQSScore.from_components(
-                [column_distribution, correlation, deep_structure, text_semantic_similarity, text_structure_similarity]
-            )
+        column_distribution = ColumnDistribution.from_evaluation_datasets(evaluation_datasets)
+        correlation = Correlation.from_evaluation_datasets(evaluation_datasets)
+        deep_structure = DeepStructure.from_evaluation_datasets(evaluation_datasets)
+        text_semantic_similarity = TextSemanticSimilarity.from_evaluation_datasets(evaluation_datasets)
+        text_structure_similarity = TextStructureSimilarity.from_evaluation_datasets(evaluation_datasets)
+        sqs_score = SQSScore.from_components(
+            [column_distribution, correlation, deep_structure, text_semantic_similarity, text_structure_similarity]
+        )
 
         components += [
             dataset_statistics,
@@ -285,6 +304,7 @@ class MultimodalReport(EvaluationReport):
 
         components += time_series_components
 
-        report = MultimodalReport(config=config, evaluation_dataset=evaluation_dataset, components=components)
-        report.evaluation_dataset = evaluation_dataset
+        report = MultimodalReport(config=config, evaluation_datasets=evaluation_dataset, components=components)
+        report.evaluation_datasets = evaluation_dataset
+
         return report

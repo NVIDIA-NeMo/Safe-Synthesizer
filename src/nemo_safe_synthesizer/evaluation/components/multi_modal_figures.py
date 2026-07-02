@@ -2,7 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-from typing import cast
+"""Plotly figure builders for the multi-modal evaluation report."""
+
+from __future__ import annotations
+
+from typing import Protocol
 
 import numpy as np
 import pandas as pd
@@ -15,6 +19,9 @@ from ...evaluation.data_model.evaluation_score import (
     PrivacyGrade,
 )
 from ...evaluation.statistics.stats import get_numeric_distribution_bins
+from ...observability import get_logger
+
+logger = get_logger(__name__)
 
 _REPORT_PALETTE = ["#3C2ED1", "#1AA2E6"]
 _GRAPH_BARGAP = 0.2  # gap between bars of adjacent location coordinates
@@ -31,11 +38,19 @@ INFERENCE_ATTACK_VALUES_FOR_GRAPHS = {
 }
 
 
-def degree_to_radian(degrees):
+def degree_to_radian(degrees: float) -> float:
+    """Convert degrees to radians."""
     return degrees * pi / 180
 
 
-def gauge_chart(evaluation_score: EvaluationScore, degree_start=210, degree_end=-30, min=False, dps=False) -> go.Figure:
+def gauge_chart(
+    evaluation_score: EvaluationScore,
+    degree_start: int = 210,
+    degree_end: int = -30,
+    min: bool = False,
+    dps: bool = False,
+) -> go.Figure:
+    """Render a semicircular gauge chart for a single evaluation score."""
     if isinstance(evaluation_score.grade, PrivacyGrade):
         dps = True
 
@@ -126,6 +141,7 @@ def pie(
     textinfo: str = "label+percent",
     sort: bool = True,
 ) -> go.Figure:
+    """Create a pie chart with privacy-grade color mapping."""
     return go.Figure(
         data=[
             go.Pie(
@@ -150,8 +166,9 @@ def scatter(
     y: pd.Series,
     mode: str = "markers",
     color: str = _REPORT_PALETTE[0],
-    name: str = "Reference",
+    name: str = "Training",
 ) -> go.Scatter:
+    """Create a scatter trace for overlay plots."""
     return go.Scatter(
         x=x,
         y=y,
@@ -169,9 +186,10 @@ def scatter(
 def histogram(
     x: pd.Series,
     color: str = _REPORT_PALETTE[0],
-    name: str = "Reference",
+    name: str = "Training",
     **kwargs,
 ) -> go.Histogram:
+    """Create a histogram trace for distribution plots."""
     return go.Histogram(
         x=x,
         marker=dict(
@@ -187,21 +205,57 @@ def histogram(
 
 
 def get_auto_bins(x1: pd.Series, x2: pd.Series) -> dict:
-    """
-    Get common bin edges for the training and synthetic principal components.
-    """
-    data = pd.concat([x1, x2]).to_numpy()
-    edges = np.histogram_bin_edges(data, bins="auto")
+    """Get common histogram bins for training/synthetic PCA projections.
 
-    # Bin start, end, and size
-    start = edges[0]
-    end = edges[-1]
-    bin_size = edges[1] - edges[0]
+    NumPy ``bins="auto"`` is adaptive, but for some pathological distributions
+    (very small IQR with wide range/outliers) it can request an extreme number
+    of bins and raise. We cap to at most 100 bins for report stability.
+    """
+    max_bins = 100
+    data = pd.concat([x1, x2]).to_numpy()
+    finite_data = data[np.isfinite(data)]
+
+    def _single_value_fallback(value: float) -> dict:
+        """Build a one-bin range anchored at the observed value."""
+        return dict(start=value, end=value + 1.0, size=1.0)
+
+    if finite_data.size == 0:
+        return _single_value_fallback(0.0)
+    if np.min(finite_data) == np.max(finite_data):
+        return _single_value_fallback(float(np.min(finite_data)))
+
+    try:
+        edges = np.histogram_bin_edges(finite_data, bins="auto")
+        start = float(edges[0])
+        end = float(edges[-1])
+        auto_bin_count = max(len(edges) - 1, 1)
+        bin_count = min(auto_bin_count, max_bins)
+    except (ValueError, MemoryError) as exc:
+        # Fallback for edge cases where numpy "auto" overestimates bin count
+        # and raises before returning edges (ValueError/MemoryError).
+        logger.warning(
+            "np.histogram_bin_edges(bins='auto') failed; falling back to %d bins: %s",
+            max_bins,
+            exc,
+        )
+        start = float(np.min(finite_data))
+        end = float(np.max(finite_data))
+        bin_count = max_bins
+
+    if not np.isfinite(start) or not np.isfinite(end):
+        return _single_value_fallback(0.0)
+    if start == end:
+        return _single_value_fallback(start)
+
+    bin_size = (end - start) / float(bin_count)
+    if not np.isfinite(bin_size) or bin_size <= 0:
+        return _single_value_fallback(0.0)
 
     return dict(start=start, end=end, size=bin_size)
 
 
 def generate_mia_figure(df: pd.DataFrame) -> go.Figure:
+    """Generate a pie chart summarizing membership inference attack results."""
     # Done for legend ordering
     PROTECTION_COLUMN = "Protection"
     df[PROTECTION_COLUMN] = df[PROTECTION_COLUMN].astype("category")
@@ -211,8 +265,7 @@ def generate_mia_figure(df: pd.DataFrame) -> go.Figure:
     df.sort_values(by=PROTECTION_COLUMN, inplace=True, ascending=False)
 
     fig = pie(
-        # the cast done bc ty infers this as a list of bools instead of str.
-        labels=cast(list[str], df[PROTECTION_COLUMN].dropna().astype(str).tolist()),
+        labels=df[PROTECTION_COLUMN].dropna().astype(str).tolist(),
         values=df["Attack Percentage"].replace({0: np.nan}),
         sort=False,
     )
@@ -224,6 +277,7 @@ def generate_mia_figure(df: pd.DataFrame) -> go.Figure:
 
 
 def generate_aia_figure(df: pd.DataFrame) -> go.Figure:
+    """Generate a horizontal bar chart of per-column attribute inference risk."""
     fig = go.Figure()
     df.sort_values(by="Risk", inplace=True, ascending=True)
     for grade in PrivacyGrade:
@@ -268,15 +322,14 @@ def generate_aia_figure(df: pd.DataFrame) -> go.Figure:
 
 
 def correlation_heatmap(matrix: pd.DataFrame, name: str = "Correlation") -> go.Figure:
-    """
-    Generate the figure for a list of correlation matrices.
+    """Generate a heatmap figure for a correlation matrix.
 
-    Arguments:
-        matrix: The correlation matrix computed by dython.
-        name: Name to use in add_trace.
+    Args:
+        matrix: Correlation matrix (columns are truncated to 15 chars for display).
+        name: Trace name used in the legend.
 
     Returns:
-        A plotly.graph_objects.Figure, a subplot with heatmaps.
+        A Plotly ``Figure`` containing a single heatmap trace.
     """
     fig = go.Figure()
     fields = [x if len(x) <= 15 else x[0:14] + "..." for x in matrix.columns]
@@ -312,21 +365,24 @@ def correlation_heatmap(matrix: pd.DataFrame, name: str = "Correlation") -> go.F
     return fig
 
 
-def _generate_correlation_hovertext(corr_reference: pd.DataFrame, corr_output: pd.DataFrame, corr_diff: pd.DataFrame):
+def _generate_correlation_hovertext(
+    corr_training: pd.DataFrame, corr_synthetic: pd.DataFrame, corr_diff: pd.DataFrame
+) -> list[list[str]]:
+    """Build a 2-D hover-text matrix showing training, synthetic, and difference correlations."""
     hovertext = list()
     # Loop through the y values
-    for y in corr_reference.columns:
+    for y in corr_training.columns:
         # Create one list per y value
         next_ylist = list()
 
         # Loop through the x values, add an entry in the above next_ylist for each x value
         # with the text to be displayed
-        for x in corr_reference.columns:
-            corr_reference_value = corr_reference[x][y]
-            corr_output_value = corr_output[x][y]
+        for x in corr_training.columns:
+            corr_training_value = corr_training[x][y]
+            corr_synthetic_value = corr_synthetic[x][y]
             corr_diff_value = corr_diff[x][y]
-            text = "x: " + x + "<br>y: " + y + "<br>Reference correlation: " + str(round(corr_reference_value, 2))
-            text = text + "<br>Output correlation: " + str(round(corr_output_value, 2))
+            text = "x: " + x + "<br>y: " + y + "<br>Training correlation: " + str(round(corr_training_value, 2))
+            text = text + "<br>Synthetic correlation: " + str(round(corr_synthetic_value, 2))
             text = text + "<br>Correlation difference: " + str(round(corr_diff_value, 2))
             next_ylist.append(text)
 
@@ -336,31 +392,37 @@ def _generate_correlation_hovertext(corr_reference: pd.DataFrame, corr_output: p
 
 
 def generate_combined_correlation_figure(
-    reference_correlation: pd.DataFrame,
-    output_correlation: pd.DataFrame,
+    training_correlation_df: pd.DataFrame,
+    synthetic_correlation_df: pd.DataFrame,
     correlation_difference: pd.DataFrame,
 ) -> go.Figure:
-    """
-    Combine two of the correlation figures into a single row.
+    """Combine training, synthetic, and difference correlation heatmaps into one row.
+
+    Args:
+        training_correlation_df: Correlation matrix of the training data.
+        synthetic_correlation_df: Correlation matrix of the synthetic data.
+        correlation_difference: Element-wise absolute difference matrix.
 
     Returns:
-        a new Figure.
+        A Plotly ``Figure`` with three side-by-side heatmap subplots.
     """
-    hovertext = _generate_correlation_hovertext(reference_correlation, output_correlation, correlation_difference)
+    hovertext = _generate_correlation_hovertext(
+        training_correlation_df, synthetic_correlation_df, correlation_difference
+    )
 
-    reference_correlation_figure = correlation_heatmap(reference_correlation, "Reference Correlations")
-    output_correlation_figure = correlation_heatmap(output_correlation, "Output Correlations")
+    training_correlation_figure = correlation_heatmap(training_correlation_df, "Training Correlations")
+    synthetic_correlation_figure = correlation_heatmap(synthetic_correlation_df, "Synthetic Correlations")
     correlation_difference_figure = correlation_heatmap(correlation_difference, "Difference of Correlations")
 
     fig = combine_subplots(
         figures=[
-            reference_correlation_figure,
-            output_correlation_figure,
+            training_correlation_figure,
+            synthetic_correlation_figure,
             correlation_difference_figure,
         ],
         titles=[
-            "Reference Correlations",
-            "Output Correlations",
+            "Training Correlations",
+            "Synthetic Correlations",
             "Correlation Difference",
         ],
     )
@@ -379,21 +441,18 @@ def generate_combined_correlation_figure(
     return fig
 
 
-def scatter_plot(x: pd.Series, y: pd.Series, color=_REPORT_PALETTE[0], maximum_points=5000) -> go.Figure:
-    """
-    Make a plotly scatter plot.
+def scatter_plot(x: pd.Series, y: pd.Series, color: str = _REPORT_PALETTE[0], maximum_points: int = 5000) -> go.Figure:
+    """Create a scatter plot, capping the number of points to avoid browser crashes.
 
     Args:
-        x: series of x values
-        y: corresponding series of y values
-        color: marker color, defaults to _REPORT_PALETTE[0]
-        maximum_points: this plot will crash the browser page if there are too many points. Cap at this number of points.
-            No callers currently attempt to change the default value.  If you use a value of 0, the code will
-            make NO ATTEMPT to cap the number of points and your page may crash.
+        x: Series of x-axis values.
+        y: Series of y-axis values.
+        color: Marker color (defaults to the first palette color).
+        maximum_points: Maximum number of points to render. ``0`` disables
+            the cap (use with caution -- may crash the browser).
 
     Returns:
-        A plotly.graph_objects.Figure
-
+        A Plotly ``Figure`` with a single scatter trace.
     """
     # Sample training set to equal synthetic set or vice versa
     if maximum_points == 0:
@@ -417,12 +476,13 @@ def scatter_plot(x: pd.Series, y: pd.Series, color=_REPORT_PALETTE[0], maximum_p
     return fig
 
 
-def structure_stability_figure(reference: pd.DataFrame, output: pd.DataFrame) -> go.Figure:
-    reference_scatter = scatter_plot(x=reference["pc1"], y=reference["pc2"])
-    output_scatter = scatter_plot(x=output["pc1"], y=output["pc2"], color=_REPORT_PALETTE[1])
+def structure_stability_figure(training_df: pd.DataFrame, synthetic_df: pd.DataFrame) -> go.Figure:
+    """Generate side-by-side PCA scatter plots for training and synthetic data."""
+    training_scatter = scatter_plot(x=training_df["pc1"], y=training_df["pc2"])
+    synthetic_scatter = scatter_plot(x=synthetic_df["pc1"], y=synthetic_df["pc2"], color=_REPORT_PALETTE[1])
     fig = combine_subplots(
-        figures=[reference_scatter, output_scatter],
-        titles=["Reference Data", "Output Data"],
+        figures=[training_scatter, synthetic_scatter],
+        titles=["Training Data", "Synthetic Data"],
     )
 
     fig.update_layout(
@@ -444,29 +504,25 @@ def combine_subplots(
     titles: list[str] | None = None,
     general_title: str | None = None,
     subplot_type: str = "xy",
-    shared_xaxes=True,
-    shared_yaxes=True,
-    height=None,
-    margin=None,
+    shared_xaxes: bool = True,
+    shared_yaxes: bool = True,
+    height: int | None = None,
+    margin: dict | None = None,
 ) -> go.Figure:
-    """
-    Take a list of go.Figures and make a single go.Figure out of them.  They will all be on one row.
+    """Combine multiple Plotly figures into a single-row subplot figure.
 
     Args:
-        figures: List of go.Figures to combine.
-        titles: List of subplot titles, must be same length as number of traces.
-        general_title: Title for the entire figure.
-        subplot_type: see https://plotly.com/python/subplots/#subplots-types,
-        shared_xaxes: Passed into plotly make_subplots call, see
-            https://plotly.com/python-api-reference/generated/plotly.subplots.make_subplots.html
-        shared_yaxes: Passed into plotly make_subplots call, see
-            https://plotly.com/python-api-reference/generated/plotly.subplots.make_subplots.html
-        height: Passed to fig.update_layout if present. Local jupyter notebooks can look wonky if this
-            is absent, other environments are usually okay without it.
-        margin: Passed to fig.update_layout if present. Updates the margin of the figure.
+        figures: Figures to combine (one subplot column each).
+        titles: Per-subplot titles (same length as ``figures``).
+        general_title: Overall figure title.
+        subplot_type: Plotly subplot type (e.g. ``"xy"``, ``"domain"``).
+        shared_xaxes: Share x-axes across subplots.
+        shared_yaxes: Share y-axes across subplots.
+        height: Optional explicit figure height in pixels.
+        margin: Optional margin dict passed to ``update_layout``.
 
     Returns:
-        a single new plotly.graph_objects.Figure.
+        A single Plotly ``Figure`` containing all traces in one row.
     """
     specs = [[{"type": subplot_type}] * len(figures)]
 
@@ -495,31 +551,30 @@ def combine_subplots(
     return fig
 
 
-def bar_chart(reference_distribution: dict, output_distribution: dict) -> go.Figure:
-    """
-    Generate a bar chart for a categorical distribution.
+def bar_chart(training_distribution: dict, synthetic_distribution: dict) -> go.Figure:
+    """Generate a grouped bar chart comparing two categorical distributions.
 
-    Arguments:
-        reference_distribution: dict of (distribution value, count) from the reference df
-        output_distribution: dict of (distribution value, count) from the output df
+    Args:
+        training_distribution: Mapping of ``{category: percentage}`` from the training data.
+        synthetic_distribution: Mapping of ``{category: percentage}`` from the synthetic data.
 
     Returns:
-        A plotly.graph_objects.Figure
+        A Plotly ``Figure`` with grouped bars for training and synthetic.
     """
-    columns = sorted(set(reference_distribution.keys()).union(output_distribution.keys()))
-    reference_values = []
-    output_values = []
+    columns = sorted(set(training_distribution.keys()).union(synthetic_distribution.keys()))
+    training_values = []
+    synthetic_values = []
 
     for column in columns:
-        reference_values.append(reference_distribution.get(column, 0.0))
-        output_values.append(output_distribution.get(column, 0.0))
+        training_values.append(training_distribution.get(column, 0.0))
+        synthetic_values.append(synthetic_distribution.get(column, 0.0))
 
     fig = go.Figure()
     fig.add_trace(
         go.Bar(
             x=columns,
-            y=reference_values,
-            name="Reference",
+            y=training_values,
+            name="Training",
             marker=dict(color=_REPORT_PALETTE[0]),
             opacity=0.7,
             width=[] if len(columns) < 60 else [len(columns) / 150] * len(columns),
@@ -529,8 +584,8 @@ def bar_chart(reference_distribution: dict, output_distribution: dict) -> go.Fig
     fig.add_trace(
         go.Bar(
             x=columns,
-            y=output_values,
-            name="Output",
+            y=synthetic_values,
+            name="Synthetic",
             marker=dict(color=_REPORT_PALETTE[1]),
             opacity=0.7,
             width=[] if len(columns) < 60 else [len(columns) / 150] * len(columns),
@@ -548,16 +603,15 @@ def bar_chart(reference_distribution: dict, output_distribution: dict) -> go.Fig
     return fig
 
 
-def histogram_figure(reference: pd.Series, output: pd.Series) -> go.Figure | None:
-    """
-    Generate a histogram distplot for a numeric distribution.
+def histogram_figure(training: pd.Series, synthetic: pd.Series) -> go.Figure | None:
+    """Generate overlaid histograms for a numeric distribution.
 
-    Arguments:
-        reference: The reference pd.Series for which we make the histogram.
-        output: The output pd.Series for which we make the histogram.
+    Args:
+        training: Numeric training series.
+        synthetic: Numeric synthetic series.
 
     Returns:
-        A plotly.graph_objects.Figure
+        A Plotly ``Figure`` with overlaid training/synthetic histograms.
     """
     fig = go.Figure()
     fig.update_layout(
@@ -567,17 +621,17 @@ def histogram_figure(reference: pd.Series, output: pd.Series) -> go.Figure | Non
         showlegend=False,
     )
 
-    reference_copy = pd.Series(reference)
-    reference_copy.dropna(inplace=True)
-    output_copy = pd.Series(output)
-    output_copy.dropna(inplace=True)
+    training_copy = pd.Series(training)
+    training_copy.dropna(inplace=True)
+    synthetic_copy = pd.Series(synthetic)
+    synthetic_copy.dropna(inplace=True)
 
     # Quantile, min and max will fail on empty Series. Fail fast and return empty fig.
-    if len(reference_copy) == 0 or len(output_copy) == 0:
+    if len(training_copy) == 0 or len(synthetic_copy) == 0:
         return fig
 
-    max_range = max(max(reference_copy), max(output_copy)) + 1
-    min_range = min(min(reference_copy), min(output_copy))
+    max_range = max(max(training_copy), max(synthetic_copy)) + 1
+    min_range = min(min(training_copy), min(synthetic_copy))
 
     # Calculate bin size for the plot, handling edge case of no variance as needed.
     binsize = 1
@@ -585,22 +639,22 @@ def histogram_figure(reference: pd.Series, output: pd.Series) -> go.Figure | Non
         max_range = min_range + binsize
     else:
         # number of bins/bin size match the ones in JS divenrgence calculation.
-        bins = get_numeric_distribution_bins(reference, output)
-        binsize = bins[1] - bins[0]
+        bins = get_numeric_distribution_bins(training, synthetic)
+        binsize = float(bins[1] - bins[0])
 
     xbins = dict(start=min_range, end=max_range, size=binsize)
     fig.add_trace(
         histogram(
-            x=reference_copy,
+            x=training_copy,
             histnorm="percent",
             xbins=xbins,
             hovertemplate="(%{x}, %{y:.2f})",
         )
     ).add_trace(
         histogram(
-            x=output_copy,
+            x=synthetic_copy,
             color=_REPORT_PALETTE[1],
-            name="Output",
+            name="Synthetic",
             histnorm="percent",
             xbins=xbins,
             hovertemplate="(%{x}, %{y:.2f})",
@@ -609,15 +663,20 @@ def histogram_figure(reference: pd.Series, output: pd.Series) -> go.Figure | Non
     return fig
 
 
+class _TextStatsLike(Protocol):
+    per_record_statistics: pd.DataFrame
+
+
 def generate_text_structure_similarity_figures(
-    training_statistics: pd.DataFrame, synthetic_statistics: pd.DataFrame, title: str
+    training_statistics: _TextStatsLike, synthetic_statistics: _TextStatsLike, title: str
 ) -> go.Figure | None:
+    """Generate overlaid histograms of sentence/word/character distributions."""
     statistics_keys = [
         "sentence_count",
         "average_words_per_sentence",
         "average_characters_per_word",
     ]
-    figures = []
+    figures: list[go.Figure] = []
     for key in statistics_keys:
         if training_statistics.per_record_statistics.empty or synthetic_statistics.per_record_statistics.empty:
             break
@@ -625,7 +684,8 @@ def generate_text_structure_similarity_figures(
             training_statistics.per_record_statistics[key],
             synthetic_statistics.per_record_statistics[key],
         )
-        figures.append(figure)
+        if figure is not None:
+            figures.append(figure)
     if not figures:
         return None
 
@@ -651,6 +711,7 @@ def generate_text_structure_similarity_figures(
 def generate_text_semantic_similarity_figures(
     training_pca: pd.DataFrame, synthetic_pca: pd.DataFrame, title: str
 ) -> go.Figure | None:
+    """Generate a PCA scatter matrix for text embedding similarity."""
     figures = []
     for key in training_pca.columns:
         for subkey in synthetic_pca.columns:
@@ -669,7 +730,7 @@ def generate_text_semantic_similarity_figures(
                         x=synthetic_pca[key],
                         y=synthetic_pca[subkey],
                         color=_REPORT_PALETTE[1],
-                        name="Output",
+                        name="Synthetic",
                     )
                 )
             else:
@@ -687,7 +748,7 @@ def generate_text_semantic_similarity_figures(
                     histogram(
                         x=synthetic_pca[subkey],
                         color=_REPORT_PALETTE[1],
-                        name="Output",
+                        name="Synthetic",
                         histnorm="probability density",
                         xbins=common_bins,
                     )
@@ -712,7 +773,10 @@ def generate_text_semantic_similarity_figures(
         for subkey in synthetic_pca.columns:
             if key != subkey and key == synthetic_pca.columns[-1]:
                 continue
-            col = synthetic_pca.columns.get_loc(key) + synthetic_pca.columns.get_loc(subkey) + 1  # ty: ignore[unsupported-operator]
+            key_loc = synthetic_pca.columns.get_loc(key)
+            subkey_loc = synthetic_pca.columns.get_loc(subkey)
+            assert isinstance(key_loc, int) and isinstance(subkey_loc, int)
+            col = key_loc + subkey_loc + 1
             result.update_xaxes(
                 title_text=key,
                 row=1,

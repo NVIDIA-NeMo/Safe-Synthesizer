@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from ...artifacts.analyzers.field_features import FieldType
 from ...config.parameters import SafeSynthesizerParameters
 from ...evaluation.components.component import Component
-from ...evaluation.data_model.evaluation_dataset import EvaluationDataset
+from ...evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from ...evaluation.data_model.evaluation_field import EvaluationField
 from ...evaluation.data_model.evaluation_score import EvaluationScore
 from ...observability import get_logger
@@ -26,34 +26,63 @@ _WORD_REGEX = re.compile(r"\w+")
 
 
 class TextDataSetStatistics(BaseModel):
-    row_count: int = Field(default=0)
-    column_count: int = Field(default=0)
-    duplicate_lines: int = Field(default=0)
-    missing_values: int = Field(default=0)
-    unique_values: int = Field(default=0)
-    per_record_statistics: pd.DataFrame = Field(default=pd.DataFrame())
-    average_sentence_count: float = Field(default=0)
-    average_words_per_sentence: float = Field(default=0)
-    average_characters_per_word: float = Field(default=0)
-    text_statistic_score: EvaluationScore | None = Field(default=None)
+    """Per-column text structure statistics (sentence count, word length, etc.)."""
+
+    row_count: int = Field(
+        default=0, description="Number of non-empty records analyzed (after dropping NAs and optional downsampling)."
+    )
+    column_count: int = Field(default=0, description="Always 1; each instance describes a single text column.")
+    duplicate_lines: int = Field(
+        default=0,
+        description="Number of text values appearing in both training and synthetic series. Populated on the synthetic instance only; 0 on training.",
+    )
+    missing_values: int = Field(
+        default=0, description="Always 0; NAs are dropped during preprocessing before statistics are computed."
+    )
+    unique_values: int = Field(default=0, description="Number of distinct values in the preprocessed text series.")
+    per_record_statistics: pd.DataFrame = Field(
+        default=pd.DataFrame(),
+        description="DataFrame with per-record sentence_count, average_words_per_sentence, and average_characters_per_word.",
+    )
+    average_sentence_count: float = Field(default=0, description="Mean sentence count per record.")
+    average_words_per_sentence: float = Field(default=0, description="Mean per-record words-per-sentence ratio.")
+    average_characters_per_word: float = Field(default=0, description="Mean per-record characters-per-word ratio.")
+    text_statistic_score: EvaluationScore | None = Field(
+        default=None,
+        description="JS-divergence-based similarity score comparing training and synthetic structure. Populated on the synthetic instance only.",
+    )
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 class TextStructureSimilarity(Component):
+    """Text Structure Similarity metric.
+
+    Compares per-record sentence count, words-per-sentence, and
+    characters-per-word distributions between training and synthetic
+    text columns using Jensen-Shannon divergence.
+    """
+
     name: str = Field(default="Text Structure Similarity")
-    training_statistics: dict[str, TextDataSetStatistics] = Field(default=dict())
-    synthetic_statistics: dict[str, TextDataSetStatistics] = Field(default=dict())
+    training_statistics: dict[str, TextDataSetStatistics] = Field(
+        default=dict(), description="Per-column text structure statistics for the training data."
+    )
+    synthetic_statistics: dict[str, TextDataSetStatistics] = Field(
+        default=dict(), description="Per-column text structure statistics for the synthetic data."
+    )
 
     @cached_property
-    def jinja_context(self):
+    def jinja_context(self) -> dict:
+        """Template context with per-column text structure histogram figures."""
         d = super().jinja_context
         d["anchor_link"] = "#structure-similarity"
         d["figures"] = []
         if self.training_statistics:
             maybe_figs = [
                 figures.generate_text_structure_similarity_figures(
-                    self.training_statistics[col], self.synthetic_statistics[col], col
+                    self.training_statistics[col],
+                    self.synthetic_statistics[col],
+                    col,
                 )
                 for col in self.training_statistics
             ]
@@ -64,16 +93,17 @@ class TextStructureSimilarity(Component):
         return d
 
     @staticmethod
-    def from_evaluation_dataset(
-        evaluation_dataset: EvaluationDataset, config: SafeSynthesizerParameters | None = None
+    def from_evaluation_datasets(
+        evaluation_datasets: EvaluationDatasets, config: SafeSynthesizerParameters | None = None
     ) -> TextStructureSimilarity:
+        """Compute text structure similarity across all text columns."""
         text_fields = [
-            f.name for f in evaluation_dataset.evaluation_fields if f.reference_field_features.type == FieldType.TEXT
+            f.name for f in evaluation_datasets.evaluation_fields if f.training_field_features.type == FieldType.TEXT
         ]
 
-        training = evaluation_dataset.reference
-        synthetic = evaluation_dataset.output
-        nrows = min(len(evaluation_dataset.reference), len(evaluation_dataset.output))
+        training_df = evaluation_datasets.training
+        synthetic_df = evaluation_datasets.synthetic
+        nrows = min(len(evaluation_datasets.training), len(evaluation_datasets.synthetic))
 
         # Initialize a stub instance before trying anything.
         training_statistics_dict = dict()
@@ -82,17 +112,17 @@ class TextStructureSimilarity(Component):
         try:
             for field in text_fields:
                 try:
-                    training = evaluation_dataset.reference[field]
-                    synthetic = evaluation_dataset.output[field]
+                    training_df = evaluation_datasets.training[field]
+                    synthetic_df = evaluation_datasets.synthetic[field]
 
-                    training = TextStructureSimilarity._preprocess_text_data(training, nrows)
-                    synthetic = TextStructureSimilarity._preprocess_text_data(synthetic, nrows)
+                    training_df = TextStructureSimilarity._preprocess_text_data(training_df, nrows)
+                    synthetic_df = TextStructureSimilarity._preprocess_text_data(synthetic_df, nrows)
 
                     # Text statistics.
-                    training_statistics = TextStructureSimilarity._get_text_statistics(training)
-                    synthetic_statistics = TextStructureSimilarity._get_text_statistics(synthetic)
+                    training_statistics = TextStructureSimilarity._get_text_statistics(training_df)
+                    synthetic_statistics = TextStructureSimilarity._get_text_statistics(synthetic_df)
                     synthetic_statistics.duplicate_lines = TextStructureSimilarity._count_duplicate_lines(
-                        training, synthetic
+                        training_df, synthetic_df
                     )
 
                     synthetic_statistics.text_statistic_score = TextStructureSimilarity._get_text_statistics_score(
@@ -126,9 +156,7 @@ class TextStructureSimilarity(Component):
 
     @staticmethod
     def _preprocess_text_data(text_data: pd.Series, nrows: int) -> pd.Series:
-        """
-        Helper function to clean and possibly downsample text data.
-        """
+        """Clean and possibly downsample text data."""
         # Use first column only as a pd.Series
 
         # Drop na's and cast everything to string first so we are only selecting good rows.
@@ -143,19 +171,13 @@ class TextStructureSimilarity(Component):
 
     @staticmethod
     def _get_sentence_count(text: str) -> int:
-        """
-        Calculates the number of the sentences in a text. This counts acronyms with periods in other
-        languages as well.
-
-        Sources:
-        https://www.quora.com/Do-all-living-languages-use-the-period-to-end-a-sentence
-        https://github.com/zaemyung/sentsplit/blob/main/sentsplit/segment.py#L277
+        """Count sentences in a text string using a multilingual regex.
 
         Args:
-            text: A string text in (almost) any language.
+            text: A string of text in (almost) any language.
 
-        Returns: Counts of sentences
-
+        Returns:
+            Number of non-empty sentence segments.
         """
         return sum([1 if len(s.strip()) > 0 else 0 for s in _SENTENCE_REGEX.findall(text)])
 
@@ -172,11 +194,12 @@ class TextStructureSimilarity(Component):
         return float(np.mean([len(w) for w in words]))
 
     @staticmethod
-    def _count_duplicate_lines(train: pd.Series, synth: pd.Series) -> int:
-        return len(pd.merge(pd.DataFrame(train), pd.DataFrame(synth), how="inner"))
+    def _count_duplicate_lines(training: pd.Series, synthetic: pd.Series) -> int:
+        return len(pd.merge(pd.DataFrame(training), pd.DataFrame(synthetic), how="inner"))
 
     @staticmethod
     def _get_text_statistics(text: pd.Series) -> TextDataSetStatistics:
+        """Compute text structure statistics for a single text column."""
         if text is None or len(text) == 0:
             logger.error("Empty text series. Returning empty text statistics.")
             return TextDataSetStatistics()
@@ -205,7 +228,7 @@ class TextStructureSimilarity(Component):
                 row_count=_row_count,
                 # For now we only support 1 column.
                 column_count=1,
-                # We need to examine both train and synth to set this, we do so elsewhere.
+                # We need to examine both training and synthetic to set this, we do so elsewhere.
                 duplicate_lines=0,
                 missing_values=_missing_values,
                 unique_values=_unique_values,
@@ -222,16 +245,17 @@ class TextStructureSimilarity(Component):
     def _get_text_statistics_score(
         training_statistics: TextDataSetStatistics, synthetic_statistics: TextDataSetStatistics
     ) -> EvaluationScore:
-        """Calculates the distribution score averaged across character, word and sentence count for real
-        and synthetic text. Plots word, character and sentence distribution for train and synthetic data.
+        """Score text structure similarity for a single text column using per-record statistic distributions.
+
+        Computes ``EvaluationField`` JS divergence for sentence count,
+        words-per-sentence, and characters-per-word, then averages.
 
         Args:
-            real (pd.Series): real text data.
-            synth (pd.Series): synthetic text data.
+            training_statistics: Per-record text statistics for the training data.
+            synthetic_statistics: Per-record text statistics for the synthetic data.
 
         Returns:
-            int: distribution score of the text statistics (syllable, word and sentence count.)
-
+            A finalized ``EvaluationScore`` for text structure similarity.
         """
         try:
             count_df_fields = []
@@ -239,8 +263,8 @@ class TextStructureSimilarity(Component):
                 count_df_fields.append(
                     EvaluationField.from_series(
                         col,
-                        reference=training_statistics.per_record_statistics[col],
-                        output=synthetic_statistics.per_record_statistics[col],
+                        training=training_statistics.per_record_statistics[col],
+                        synthetic=synthetic_statistics.per_record_statistics[col],
                     )
                 )
             count_average_divergence = EvaluationField.get_average_divergence(count_df_fields)

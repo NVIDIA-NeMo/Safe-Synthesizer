@@ -1,11 +1,13 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+from __future__ import annotations
+
 import itertools
 import math
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Optional, Tuple, Union
+from typing import Optional
 
 from dateparser import parse
 from dateparser.date import get_date_from_timestamp
@@ -116,17 +118,15 @@ class BirthDateContext(BaseContext):
         return Entity.BIRTH_DATE.tag
 
 
-def _parse_dates(
-    value: Union[str, int, float], scalar_type: Optional[str] = None
-) -> Optional[List[Tuple[str, datetime]]]:
+def _parse_dates(value: str | int | float, scalar_type: Optional[str] = None) -> Optional[list[tuple[str, datetime]]]:
     if scalar_type == "number" and isinstance(value, str):
         # TODO(PROD-276): this is necessary, as our regex predictors change values from kv_pair
         #  to strings, so we need to use "scalar_type" field to figure out if the
         #  original value was a number.
         try:
             value = float(value)
-        except Exception:
-            pass
+        except (ValueError, TypeError):
+            value = str(value)
 
     if isinstance(value, float) and math.isnan(value):
         # don't try to match something that is NaN
@@ -166,9 +166,7 @@ def _parse_dates(
 
 
 class DateTime(Predictor):
-    """
-    Date date/time matcher.
-    """
+    """Date date/time matcher."""
 
     default_name: str = "datetime"
 
@@ -178,7 +176,7 @@ class DateTime(Predictor):
         super().__init__(name)
         self._context = DateTimeContext(LABELS)
 
-    def evaluate(self, in_record: JSONRecord) -> List[NERPrediction]:
+    def evaluate(self, in_record: JSONRecord) -> list[NERPrediction]:
         """
         Given a single record determine if any
         entities are represented.

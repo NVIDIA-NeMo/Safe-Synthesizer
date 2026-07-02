@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 # yaml-language-server: $schema=https://squidfunk.github.io/mkdocs-material/schema.json
 
 site_name: NeMo Safe Synthesizer
@@ -15,6 +18,10 @@ theme:
   font:
     text: Roboto
     code: Fira Code
+  icon:
+    logo: fontawesome/solid/shield
+    repo: fontawesome/brands/github
+  favicon: assets/shield-favicon.svg
   palette:
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
@@ -43,15 +50,21 @@ theme:
     - search.suggest
     - search.highlight
     - toc.follow
-  icon:
-    repo: fontawesome/brands/github
 
 extra_css:
   - css/style.css
   - css/mkdocstrings.css
 
 extra_javascript:
+  - js/mathjax.js
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
   - js/toc-toggle.js
+
+extra:
+  version:
+    provider: mike
+    default: latest
+    alias: true
 
 watch:
   - src/nemo_safe_synthesizer
@@ -59,10 +72,18 @@ watch:
 
 strict: !ENV [MKDOCS_STRICT, false]
 
+validation:
+  links:
+    not_found: warn    # broken page links emit a warning
+    anchors: warn      # broken anchor links emit a warning (default is info)
+
+hooks:
+  - docs/hooks.py
+
 plugins:
   - search
   - blog:
-      blog_dir: blog
+      blog_dir: dev-notes
       blog_toc: true
       post_date_format: long
       post_url_format: "{slug}"
@@ -88,6 +109,9 @@ plugins:
             show_if_no_docstring: false
             summary: true
             filters: ["!^_"]
+            extensions:
+              - griffe_pydantic:
+                  schema: false
   - gen-files:
       scripts:
         - docs/gen_ref_pages.py
@@ -143,22 +167,33 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Getting Started:
-      - Installation: getting-started/installation.md
-      - Quick Start: getting-started/quickstart.md
-  - User Guide:
-      - Pipeline Overview: user-guide/pipeline.md
-      - CLI Reference: user-guide/cli.md
-      - Configuration: user-guide/configuration.md
-      - Python SDK: user-guide/sdk.md
-      - Evaluation: user-guide/evaluation.md
-      - Privacy: user-guide/privacy.md
-  - Architecture:
-      - Design: architecture/design.md
+  - Product Overview:
+      - Pipeline: product-overview/pipeline.md
+      - Data Synthesis: product-overview/data_synthesis.md
+      - PII Replacement: product-overview/pii_replacement.md
+      - Evaluation: product-overview/evaluation.md
   - Tutorials:
       - tutorials/index.md
-  - API Reference: reference/
-  - Contributing:
-      - contributing/index.md
+      - Safe Synthesizer 101: tutorials/safe-synthesizer-101.ipynb
+      - Differential Privacy: tutorials/differential-privacy.ipynb
+      - Time-Series Financial Transactions: tutorials/time-series-financial-transactions.ipynb
+  - User Guide:
+      - Getting Started: user-guide/getting-started.md
+      - Running Safe Synthesizer: user-guide/running.md
+      - Docker: user-guide/docker.md
+      - Troubleshooting:
+          - Synthetic Data Quality: user-guide/evaluating-data.md
+          - Program Runtime: user-guide/troubleshooting.md
+      - Reference:
+          - Configuration: user-guide/configuration.md
+          - Environment Variables: user-guide/environment.md
+  - Developer Guide:
+      - Architecture: developer-guide/architecture.md
+      - Configuration Management: developer-guide/configuration_management.md
+      - Docker: developer-guide/docker.md
+      - Example Generation: developer-guide/example-generation.md
+      - Observability: developer-guide/observability.md
+      - Preflight Plugins: developer-guide/preflight-plugins.md
+      - API Reference: reference/
   - Dev Notes:
-      - blog/index.md
+      - dev-notes/index.md

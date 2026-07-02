@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 version: 2
 updates:
   - package-ecosystem: "pip"
@@ -5,9 +8,31 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    # constraints.txt is generated from [tool.uv] constraint-dependencies in pyproject.toml
+    # via tools/patch_dependabot.py; do not update it independently.
+    exclude-paths:
+      - "constraints.txt"
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore(ci)"
+    # Delay version-update PRs until releases are at least 5 days old (supply-chain risk).
+    # Security updates are not subject to cooldown. See dependabot cooldown docs.
+    cooldown:
+      default-days: 5
+    groups:
+      github-actions:
+        patterns:
+          - "actions/*"
+          - "astral-sh/*"
+          - "codecov/*"
+          - "docker/*"
+          - "dorny/*"
+          - "github/codeql-action/*"
+          - "NVIDIA-NeMo/FW-CI-templates*"

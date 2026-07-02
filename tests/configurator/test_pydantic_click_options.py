@@ -1,0 +1,532 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+"""Tests for pydantic_click_options: _collect_params, _click_type, parse_overrides, decorator."""
+
+from __future__ import annotations
+
+import click
+import pytest
+from click.testing import CliRunner
+from pydantic import BaseModel, Field
+from pydantic.fields import FieldInfo
+
+from nemo_safe_synthesizer.config import SafeSynthesizerParameters
+from nemo_safe_synthesizer.configurator.pydantic_click_options import (
+    AutoParamType,
+    FlagParam,
+    LeafParam,
+    _click_type,
+    _collect_params,
+    parse_overrides,
+    pydantic_options,
+)
+
+# ---------------------------------------------------------------------------
+# Minimal fixture models
+# ---------------------------------------------------------------------------
+
+
+class Inner(BaseModel):
+    value: int = Field(default=1, description="An inner value.")
+
+
+class Mid(BaseModel):
+    inner: Inner = Field(default_factory=Inner)
+    label: str = Field(default="x", description="A label.")
+
+
+class Deep(BaseModel):
+    mid: Mid = Field(default_factory=Mid)
+    flag: bool = Field(default=False, description="A flag.")
+
+
+class ModelWithNullable(BaseModel):
+    nested: Inner | None = Field(default_factory=Inner, description="A nullable nested model.")
+    scalar: str | None = Field(default=None, description="A nullable scalar.")
+
+
+class ModelWithBoth(BaseModel):
+    """A model with a plain sub-model and a nullable sub-model side by side."""
+
+    plain: Inner = Field(default_factory=Inner)
+    optional: Inner | None = Field(default_factory=Inner, description="Nullable sub-model.")
+
+
+# ---------------------------------------------------------------------------
+# parse_overrides
+# ---------------------------------------------------------------------------
+
+
+def test_parse_overrides_no_flag_true_injects_none():
+    assert parse_overrides({"no_replace_pii": True}) == {"replace_pii": None}
+
+
+def test_parse_overrides_no_flag_false_is_dropped():
+    assert parse_overrides({"no_replace_pii": False}) == {}
+
+
+def test_parse_overrides_no_flag_with_other_keys():
+    result = parse_overrides({"no_replace_pii": True, "training__batch_size": "4"})
+    assert result == {"replace_pii": None, "training": {"batch_size": "4"}}
+
+
+def test_parse_overrides_none_values_dropped():
+    result = parse_overrides({"training__batch_size": None, "training__lr": "0.001"})
+    assert result == {"training": {"lr": "0.001"}}
+
+
+def test_parse_overrides_empty_and_none():
+    assert parse_overrides({}) == {}
+    assert parse_overrides(None) == {}
+
+
+def test_parse_overrides_nested_setdefault_does_not_overwrite():
+    result = parse_overrides({"training__batch_size": "4", "training__lr": "0.001"})
+    assert result == {"training": {"batch_size": "4", "lr": "0.001"}}
+
+
+def test_parse_overrides_field_sep_dot():
+    """Config validate uses field_sep='.' -- no_ handling must still work."""
+    result = parse_overrides({"no_replace_pii": True, "training.batch_size": "4"}, field_sep=".")
+    assert result == {"replace_pii": None, "training": {"batch_size": "4"}}
+
+
+def test_parse_overrides_deep_nesting():
+    result = parse_overrides({"a__b__c": "x", "a__b__d": "y"})
+    assert result == {"a": {"b": {"c": "x", "d": "y"}}}
+
+
+def test_parse_overrides_five_levels():
+    result = parse_overrides({"a__b__c__d__e": "v"})
+    assert result == {"a": {"b": {"c": {"d": {"e": "v"}}}}}
+
+
+def test_parse_overrides_mixed_depth():
+    result = parse_overrides(
+        {
+            "training__batch_size": "4",
+            "replace_pii__globals__seed": "42",
+        }
+    )
+    assert result == {
+        "training": {"batch_size": "4"},
+        "replace_pii": {"globals": {"seed": "42"}},
+    }
+
+
+def test_parse_overrides_empty_segment_raises():
+    with pytest.raises(ValueError, match="Invalid override key"):
+        parse_overrides({"a____b": "x"})
+
+
+def test_parse_overrides_no_flag_then_nested_override():
+    """Nested override takes precedence over --no_ flag for same field."""
+    result = parse_overrides({"no_privacy": True, "privacy__epsilon": 1.0})
+    assert result == {"privacy": {"epsilon": 1.0}}
+
+
+def test_parse_overrides_nested_then_no_flag():
+    """--no_ flag after nested override disables the field."""
+    result = parse_overrides({"privacy__epsilon": 1.0, "no_privacy": True})
+    assert result["privacy"] is None
+
+
+# ---------------------------------------------------------------------------
+# _click_type
+# ---------------------------------------------------------------------------
+
+
+def test_click_type_str_or_int_returns_string():
+    assert _click_type(str | int | None) == click.STRING
+
+
+def test_click_type_literal_auto_int_returns_auto_param_type():
+    """Literal['auto'] | int must use AutoParamType so Click accepts both 'auto' and integers."""
+    from typing import Literal
+
+    result = _click_type(Literal["auto"] | int)
+    assert isinstance(result, AutoParamType)
+    assert result.base_type is click.INT
+
+
+def test_click_type_literal_auto_float_returns_auto_param_type():
+    from typing import Literal
+
+    result = _click_type(Literal["auto"] | float)
+    assert isinstance(result, AutoParamType)
+    assert result.base_type is click.FLOAT
+
+
+def test_click_type_literal_auto_bool_returns_auto_param_type():
+    from typing import Literal
+
+    result = _click_type(Literal["auto"] | bool)
+    assert isinstance(result, AutoParamType)
+    assert result.base_type is click.BOOL
+
+
+def test_click_type_literal_auto_str_returns_string():
+    """Literal['auto'] | str has no numeric side -- STRING is correct."""
+    from typing import Literal
+
+    assert _click_type(Literal["auto"] | str) == click.STRING
+
+
+def test_click_type_literal_non_auto_int_returns_string():
+    """Literal['disabled'] | int must NOT use AutoParamType.
+
+    AutoParamType only accepts the AUTO_STR sentinel, so a sentinel like
+    'disabled' would be rejected with a confusing 'not a valid integer' error
+    even though Pydantic would accept it. Falling through to STRING keeps the
+    sentinel routable to Pydantic for validation.
+    """
+    from typing import Literal
+
+    assert _click_type(Literal["disabled"] | int) == click.STRING
+
+
+def test_click_type_int_literal_returns_int():
+    """Literal[4, 8] must parse CLI values as ints before Pydantic validation."""
+    from typing import Literal
+
+    assert _click_type(Literal[4, 8]) == click.INT
+
+
+def test_click_type_string_literal_plus_int_literal_returns_string():
+    """String literals still need STRING so Pydantic can validate sentinel values."""
+    from typing import Literal
+
+    assert _click_type(Literal["disabled", 4]) == click.STRING
+
+
+def test_click_type_literal_auto_plus_other_int_returns_string():
+    """Literal['auto', 'manual'] | int must NOT use AutoParamType (multiple sentinels)."""
+    from typing import Literal
+
+    assert _click_type(Literal["auto", "manual"] | int) == click.STRING
+
+
+# ---------------------------------------------------------------------------
+# AutoParamType
+# ---------------------------------------------------------------------------
+
+
+def test_auto_param_type_accepts_auto_sentinel():
+    assert AutoParamType(click.INT).convert("auto", None, None) == "auto"
+
+
+@pytest.mark.parametrize(
+    "base_type,value,expected",
+    [
+        (click.INT, "2", 2),
+        (click.INT, "100", 100),
+        (click.FLOAT, "1.5", 1.5),
+        (click.FLOAT, "0.001", 0.001),
+        (click.BOOL, "true", True),
+        (click.BOOL, "false", False),
+    ],
+)
+def test_auto_param_type_converts_numeric_values(base_type, value, expected):
+    assert AutoParamType(base_type).convert(value, None, None) == expected
+
+
+def test_auto_param_type_rejects_non_auto_string():
+    runner = CliRunner()
+
+    @click.command()
+    @click.option("--val", type=AutoParamType(click.INT))
+    def cmd(val):
+        pass
+
+    result = runner.invoke(cmd, ["--val", "notanumber"])
+    assert result.exit_code != 0
+
+
+def test_auto_param_type_name():
+    assert AutoParamType(click.INT).name == "integer|auto"
+    assert AutoParamType(click.FLOAT).name == "float|auto"
+    assert AutoParamType(click.BOOL).name == "boolean|auto"
+
+
+def test_click_type_plain_int_returns_int():
+    assert _click_type(int) == click.INT
+
+
+def test_click_type_plain_float_returns_float():
+    assert _click_type(float) == click.FLOAT
+
+
+# ---------------------------------------------------------------------------
+# _collect_params
+# ---------------------------------------------------------------------------
+
+
+def test_collect_params_leaf_for_scalar():
+    params = _collect_params(Inner)
+    assert len(params) == 1
+    p = params[0]
+    assert isinstance(p, LeafParam)
+    assert p.name == "value"
+    assert isinstance(p.field, FieldInfo)
+
+
+def test_collect_params_flag_for_nullable_model():
+    params = _collect_params(ModelWithNullable)
+    names = {p.name for p in params}
+    # sub-field of Inner
+    assert "nested.value" in names
+    # is-flag for the nullable model
+    assert "no_nested" in names
+    # scalar | None must NOT produce a flag
+    assert "no_scalar" not in names
+
+
+def test_collect_params_flag_has_correct_field_name():
+    params = _collect_params(ModelWithNullable)
+    flag = next(p for p in params if isinstance(p, FlagParam))
+    assert flag.name == "no_nested"
+    assert flag.field_name == "nested"
+
+
+def test_collect_params_no_raw_nested_leaf():
+    """The nullable-model field itself must not appear as a LeafParam."""
+    params = _collect_params(ModelWithNullable)
+    leaf_names = {p.name for p in params if isinstance(p, LeafParam)}
+    assert "nested" not in leaf_names
+
+
+def test_collect_params_sorted():
+    params = _collect_params(ModelWithNullable)
+    names = [p.name for p in params]
+    assert names == sorted(names)
+
+
+def test_collect_params_deep_nesting():
+    params = _collect_params(Deep)
+    names = {p.name for p in params}
+    assert "mid.inner.value" in names
+    assert "mid.label" in names
+    assert "flag" in names
+
+
+def test_collect_params_mixed_plain_and_nullable():
+    params = _collect_params(ModelWithBoth)
+    names = {p.name for p in params}
+    assert "plain.value" in names
+    assert "optional.value" in names
+    assert "no_optional" in names
+    assert "no_plain" not in names
+
+
+# ---------------------------------------------------------------------------
+# decorator -- param inspection
+# ---------------------------------------------------------------------------
+
+
+def test_no_double_emit_for_nullable_model():
+    """Nullable-model fields must not appear as both sub-fields and a leaf STRING option."""
+
+    @pydantic_options(ModelWithNullable)
+    @click.command()
+    def cmd(**kwargs):
+        pass
+
+    param_names = {p.name for p in cmd.params}
+    assert "nested__value" in param_names
+    # raw "nested" must not be a plain STRING option
+    assert "nested" not in param_names
+
+
+def test_no_flag_emitted_for_nullable_model():
+    @pydantic_options(ModelWithNullable)
+    @click.command()
+    def cmd(**kwargs):
+        pass
+
+    param_names = {p.name for p in cmd.params}
+    assert "no_nested" in param_names
+
+
+def test_no_flag_is_bool_type():
+    @pydantic_options(ModelWithNullable)
+    @click.command()
+    def cmd(**kwargs):
+        pass
+
+    flag = next(p for p in cmd.params if p.name == "no_nested")
+    assert flag.is_flag
+
+
+def test_no_flag_not_emitted_for_nullable_scalar():
+    @pydantic_options(ModelWithNullable)
+    @click.command()
+    def cmd(**kwargs):
+        pass
+
+    param_names = {p.name for p in cmd.params}
+    assert "no_scalar" not in param_names
+
+
+def test_decorator_mixed_plain_and_nullable():
+    """Plain sub-models get sub-fields only; nullable sub-models get sub-fields plus a --no_ flag."""
+
+    @pydantic_options(ModelWithBoth)
+    @click.command()
+    def cmd(**kwargs):
+        pass
+
+    param_names = {p.name for p in cmd.params}
+    assert "plain__value" in param_names
+    assert "optional__value" in param_names
+    assert "no_optional" in param_names
+    assert "no_plain" not in param_names
+    assert "plain" not in param_names
+    assert "optional" not in param_names
+
+
+# ---------------------------------------------------------------------------
+# SafeSynthesizerParameters -- integration checks
+# ---------------------------------------------------------------------------
+
+
+def test_no_replace_pii_flag_on_nss_params():
+    @pydantic_options(SafeSynthesizerParameters, field_separator="__")
+    @click.command()
+    def cmd(**kwargs):
+        pass
+
+    param_names = {p.name for p in cmd.params}
+    assert "no_replace_pii" in param_names
+
+
+def test_no_privacy_flag_on_nss_params():
+    @pydantic_options(SafeSynthesizerParameters, field_separator="__")
+    @click.command()
+    def cmd(**kwargs):
+        pass
+
+    param_names = {p.name for p in cmd.params}
+    assert "no_privacy" in param_names
+
+
+def test_no_replace_pii_end_to_end_via_click_runner():
+    """--no-replace-pii must produce replace_pii=None in parsed overrides."""
+    captured: dict = {}
+
+    @pydantic_options(SafeSynthesizerParameters, field_separator="__")
+    @click.command()
+    def cmd(**kwargs):
+        captured.update(parse_overrides(kwargs))
+
+    result = CliRunner().invoke(cmd, ["--no-replace-pii"])
+    assert result.exit_code == 0, result.output
+    assert captured.get("replace_pii") is None
+
+
+def test_no_replace_pii_absent_does_not_inject():
+    """Omitting --no-replace-pii must not inject replace_pii into overrides."""
+    captured: dict = {}
+
+    @pydantic_options(SafeSynthesizerParameters, field_separator="__")
+    @click.command()
+    def cmd(**kwargs):
+        captured.update(parse_overrides(kwargs))
+
+    result = CliRunner().invoke(cmd, [])
+    assert result.exit_code == 0, result.output
+    assert "replace_pii" not in captured
+
+
+def test_leaf_override_end_to_end_via_click_runner():
+    """A nested leaf option flows through the decorator and parse_overrides correctly."""
+    captured: dict = {}
+
+    @pydantic_options(SafeSynthesizerParameters, field_separator="__")
+    @click.command()
+    def cmd(**kwargs):
+        captured.update(parse_overrides(kwargs))
+
+    result = CliRunner().invoke(cmd, ["--training__batch_size", "4"])
+    assert result.exit_code == 0, result.output
+    assert captured["training"]["batch_size"] == 4
+
+
+def test_literal_int_override_end_to_end_via_click_runner():
+    """A numeric Literal option must reach Pydantic as an int, not a string."""
+    captured: dict = {}
+
+    @pydantic_options(SafeSynthesizerParameters, field_separator="__")
+    @click.command()
+    def cmd(**kwargs):
+        captured.update(parse_overrides(kwargs))
+
+    result = CliRunner().invoke(cmd, ["--training__quantization_bits", "4"])
+    assert result.exit_code == 0, result.output
+    assert captured["training"]["quantization_bits"] == 4
+
+
+def test_deep_nested_override_end_to_end_via_click_runner():
+    """A deeply nested option (3+ segments) flows through decorator + parse_overrides."""
+    captured: dict = {}
+
+    @pydantic_options(SafeSynthesizerParameters, field_separator="__")
+    @click.command()
+    def cmd(**kwargs):
+        captured.update(parse_overrides(kwargs))
+
+    result = CliRunner().invoke(cmd, ["--replace_pii__globals__seed", "42"])
+    assert result.exit_code == 0, result.output
+    assert captured["replace_pii"]["globals"]["seed"] == 42
+
+
+def test_structured_generation_nested_option_end_to_end_via_click_runner():
+    """The canonical nested structured-generation option flows through Click parsing."""
+    captured: dict = {}
+
+    @pydantic_options(SafeSynthesizerParameters, field_separator="__")
+    @click.command()
+    def cmd(**kwargs):
+        captured.update(parse_overrides(kwargs))
+
+    result = CliRunner().invoke(cmd, ["--generation__structured_generation__backend", "outlines"])
+    assert result.exit_code == 0, result.output
+    assert captured["generation"]["structured_generation"]["backend"] == "outlines"
+
+
+@pytest.mark.parametrize(
+    ("option", "legacy_key", "value", "expected"),
+    [
+        ("--generation__use_structured_generation", "use_structured_generation", "true", True),
+        ("--generation__structured_generation_backend", "structured_generation_backend", "outlines", "outlines"),
+        (
+            "--generation__structured_generation_schema_method",
+            "structured_generation_schema_method",
+            "json_schema",
+            "json_schema",
+        ),
+        (
+            "--generation__structured_generation_use_single_sequence",
+            "structured_generation_use_single_sequence",
+            "true",
+            True,
+        ),
+    ],
+)
+def test_structured_generation_legacy_options_end_to_end_via_click_runner(
+    option: str,
+    legacy_key: str,
+    value: str,
+    expected: object,
+):
+    """Legacy flat structured-generation CLI aliases remain accepted during migration."""
+    captured: dict = {}
+
+    @pydantic_options(SafeSynthesizerParameters, field_separator="__")
+    @click.command()
+    def cmd(**kwargs):
+        captured.update(parse_overrides(kwargs))
+
+    result = CliRunner().invoke(cmd, [option, value])
+    assert result.exit_code == 0, result.output
+    assert captured["generation"][legacy_key] == expected

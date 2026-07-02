@@ -1,0 +1,92 @@
+[
+  {
+    "id": "safe-synthesizer-run-dp-cli",
+    "question": "I have a local CSV at customers.csv and want to run NeMo Safe Synthesizer with differential privacy enabled at epsilon 8.0. Give me the command and the relevant docs path.",
+    "expected_skill": "safe-synthesizer",
+    "should_trigger": true,
+    "expected_script": null,
+    "ground_truth": "The agent loads safe-synthesizer, routes to references/run.md, and gives a safe-synthesizer run command that passes --data-source customers.csv plus differential privacy CLI overrides such as --privacy__dp_enabled true and --privacy__epsilon 8.0. The answer should cite docs/user-guide/getting-started.md or docs/user-guide/running.md and mention that CLI overrides take precedence over YAML defaults.",
+    "expected_behavior": [
+      "The agent read skills/safe-synthesizer/SKILL.md before answering",
+      "The agent routed the request to references/run.md",
+      "The answer includes a safe-synthesizer run command with customers.csv as the data source",
+      "The command enables differential privacy and sets epsilon to 8.0",
+      "The answer cites the relevant Safe Synthesizer user-guide docs",
+      "The answer mentions CLI override precedence when overrides are used"
+    ]
+  },
+  {
+    "id": "safe-synthesizer-config-num-records",
+    "question": "How do I set generation.num_records to 10000 in NeMo Safe Synthesizer from both the CLI and the Python SDK?",
+    "expected_skill": "safe-synthesizer",
+    "should_trigger": true,
+    "expected_script": null,
+    "ground_truth": "The agent loads safe-synthesizer, routes to references/config.md, and explains that CLI nested fields use double underscores, for example --generation__num_records 10000. The answer should also show or describe the SDK builder override with with_generate(num_records=10000), cite docs/user-guide/configuration.md or docs/user-guide/running.md, and state the CLI and SDK precedence rules.",
+    "expected_behavior": [
+      "The agent read skills/safe-synthesizer/SKILL.md before answering",
+      "The agent routed the request to references/config.md",
+      "The answer uses --generation__num_records 10000 for the CLI override",
+      "The answer uses with_generate(num_records=10000) or an equivalent SDK builder pattern",
+      "The answer cites the relevant configuration or running docs",
+      "The answer states CLI and SDK precedence rules"
+    ]
+  },
+  {
+    "id": "safe-synthesizer-diagnose-generation-oom",
+    "question": "My NeMo Safe Synthesizer run fails with an out-of-memory error during generation. What should I check next?",
+    "expected_skill": "safe-synthesizer",
+    "should_trigger": true,
+    "expected_script": null,
+    "ground_truth": "The agent loads safe-synthesizer, routes to references/diagnose.md, identifies generation as the likely failing phase, suggests a verification rerun with -v or -vv, and points to docs/user-guide/troubleshooting.md plus environment or evaluating-data docs as needed. The answer should give one concrete next fix such as reducing generation load, checking GPU memory, using a smaller supported model, or reviewing vLLM/cache settings, without proposing source changes unless logs indicate a code bug.",
+    "expected_behavior": [
+      "The agent read skills/safe-synthesizer/SKILL.md before answering",
+      "The agent routed the request to references/diagnose.md",
+      "The answer identifies generation as the likely phase",
+      "The answer includes one verification command using -v or -vv",
+      "The answer gives one concrete next fix",
+      "The answer cites docs/user-guide/troubleshooting.md",
+      "The answer does not propose implementation changes without log evidence"
+    ]
+  },
+  {
+    "id": "safe-synthesizer-artifact-locations",
+    "question": "After a NeMo Safe Synthesizer run, where should I find synthetic_data.csv, evaluation_report.html, and evaluation_metrics.json?",
+    "expected_skill": "safe-synthesizer",
+    "should_trigger": true,
+    "expected_script": null,
+    "ground_truth": "The agent loads safe-synthesizer, routes to references/artifacts.md, and describes the default run path pattern under ./safe-synthesizer-artifacts/<config>---<dataset>/<run_name>/, where the triple hyphen is the literal separator between config and dataset names. It should name generate/synthetic_data.csv, generate/evaluation_report.html, generate/evaluation_metrics.json, logs/, and train/adapter/ where relevant, and cite docs/user-guide/running.md or docs/user-guide/environment.md.",
+    "expected_behavior": [
+      "The agent read skills/safe-synthesizer/SKILL.md before answering",
+      "The agent routed the request to references/artifacts.md",
+      "The answer includes the default artifact root and run path pattern",
+      "The answer names generate/synthetic_data.csv",
+      "The answer names generate/evaluation_report.html",
+      "The answer names generate/evaluation_metrics.json",
+      "The answer cites the running or environment docs"
+    ]
+  },
+  {
+    "id": "safe-synthesizer-negative-react-ui",
+    "question": "I am building a React UI for a synthetic data demo. How should I structure the components?",
+    "expected_skill": null,
+    "should_trigger": false,
+    "expected_script": null,
+    "ground_truth": "The agent should not activate safe-synthesizer for a general React UI architecture question, even though the prompt mentions synthetic data.",
+    "expected_behavior": [
+      "The agent did not answer as a NeMo Safe Synthesizer usage workflow",
+      "The answer focuses on React component structure rather than Safe Synthesizer CLI, SDK, configuration, diagnostics, or artifacts"
+    ]
+  },
+  {
+    "id": "safe-synthesizer-negative-general-dp",
+    "question": "Explain differential privacy at a high level for a blog post. Do not include product-specific commands.",
+    "expected_skill": null,
+    "should_trigger": false,
+    "expected_script": null,
+    "ground_truth": "The agent should not activate safe-synthesizer for a general differential privacy explainer that explicitly asks for no product-specific commands.",
+    "expected_behavior": [
+      "The agent did not answer as a NeMo Safe Synthesizer usage workflow",
+      "The answer avoids Safe Synthesizer CLI, SDK, configuration, diagnostics, and artifact guidance"
+    ]
+  }
+]

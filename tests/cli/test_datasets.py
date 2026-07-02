@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+
 from nemo_safe_synthesizer.cli.datasets import DatasetInfo, DatasetRegistry
 
 
@@ -179,6 +180,21 @@ class TestDatasetInfo:
         assert isinstance(result, pd.DataFrame)
         assert list(result.columns) == ["col1", "col2"]
         assert len(result) == 2
+
+    def test_fetch_rejects_non_dataframe_reader_result(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Test fetch raises a clear error when a pandas reader returns an unexpected type."""
+        csv_file = tmp_path / "test.csv"
+        csv_file.write_text("col1,col2\n1,2\n")
+
+        def fake_read_csv(*_args, **_kwargs) -> list[dict[str, int]]:
+            return [{"col1": 1, "col2": 2}]
+
+        monkeypatch.setattr(pd, "read_csv", fake_read_csv)
+
+        info = DatasetInfo(name="test", url=str(csv_file))
+
+        with pytest.raises(TypeError, match="Expected dataset reader"):
+            info.fetch()
 
     def test_fetch_uses_registry_base_url(self, tmp_path: Path):
         """Test fetch uses get_url() which includes base_url."""

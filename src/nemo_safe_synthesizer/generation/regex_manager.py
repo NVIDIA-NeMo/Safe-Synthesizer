@@ -1,10 +1,20 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""JSON-schema-to-regex compiler for structured generation.
+
+Converts a subset of JSON Schema into a regular expression that can be
+used by vLLM's structured-output backend to constrain model output to
+valid JSONL records.
+"""
+
+from __future__ import annotations
+
 import json
 import re
+from typing import TYPE_CHECKING, Any
 
-from outlines_core.json_schema import (
+from outlines_core._json_schema import (  # noqa: F401  # ty:ignore[unresolved-import]
     BOOLEAN,
     DATE,
     DATE_TIME,
@@ -18,6 +28,9 @@ from range_regex import bounded_regex_for_range
 
 from ..observability import get_logger
 
+if TYPE_CHECKING:
+    from ..config.parameters import SafeSynthesizerParameters
+
 logger = get_logger()
 
 
@@ -29,8 +42,8 @@ JSON_STRING = rf'"{JSON_STRING_INNER}*"'
 
 # Helper method not exported by outlines_core and outlines doesn't have it anymore
 # past outlines==0.11.8
-def _get_num_items_pattern(min_items, max_items, **kwargs):
-    # Helper function for arrays and objects
+def _get_num_items_pattern(min_items: int | None, max_items: int | None, **kwargs) -> str | None:
+    """Return a regex quantifier ``{min,max}`` for array/object items."""
     min_items = int(min_items or 0)
     if max_items is None:
         return rf"{{{max(min_items - 1, 0)},}}"
@@ -42,11 +55,13 @@ def _get_num_items_pattern(min_items, max_items, **kwargs):
 
 
 def _build_object_key_prefix(name: str, whitespace_pattern: str) -> str:
+    """Build the regex fragment for a JSON object key followed by a colon."""
     key_inner = json.dumps(name, ensure_ascii=True)[1:-1]
     return f'{whitespace_pattern}"{re.escape(key_inner)}"{whitespace_pattern}:{whitespace_pattern}'
 
 
-def _properties_regex(instance, whitespace_pattern, **kwargs):
+def _properties_regex(instance: dict[str, Any], whitespace_pattern: str, **kwargs) -> str:
+    """Build a regex matching a JSON object with known property names."""
     regex = ""
     regex += r"\{"
     properties = instance["properties"]
@@ -100,11 +115,8 @@ def _properties_regex(instance, whitespace_pattern, **kwargs):
     return regex
 
 
-def _enum_regex(instance, **kwargs):
-    """
-    The enum keyword is used to restrict a value to a fixed set of values. It
-    must be an array with at least one element, where each element is unique.
-    """
+def _enum_regex(instance: dict[str, Any], **kwargs) -> str:
+    """Build a regex matching any value in the schema's ``enum`` array."""
     choices = []
     for choice in instance["enum"]:
         if isinstance(choice, bool):
@@ -129,7 +141,7 @@ def _enum_regex(instance, **kwargs):
     return f"({'|'.join(choices)})"
 
 
-def _string_type_regex(instance, **kwargs):
+def _string_type_regex(instance: dict[str, Any], **kwargs) -> str:
     if "maxLength" in instance or "minLength" in instance:
         max_items = instance.get("maxLength", "")
         min_items = instance.get("minLength", "")
@@ -165,7 +177,7 @@ def _string_type_regex(instance, **kwargs):
     return JSON_STRING
 
 
-def _type_array_regex(instance, whitespace_pattern, **kwargs):
+def _type_array_regex(instance: dict[str, Any], whitespace_pattern: str, **kwargs) -> str:
     num_repeats = _get_num_items_pattern(instance.get("minItems"), instance.get("maxItems"))
     if num_repeats is None:
         return rf"\[{whitespace_pattern}\]"
@@ -179,7 +191,7 @@ def _type_array_regex(instance, whitespace_pattern, **kwargs):
         # Here we need to make the choice to exclude generating list of objects
         # if the specification of the object is not given, even though a JSON
         # object that contains an object here would be valid under the specification.
-        types = [
+        types: list[dict[str, Any]] = [
             {"type": "boolean"},
             {"type": "null"},
             {"type": "number"},
@@ -190,7 +202,7 @@ def _type_array_regex(instance, whitespace_pattern, **kwargs):
         return rf"\[{whitespace_pattern}({'|'.join(regexes)})(,{whitespace_pattern}({'|'.join(regexes)})){num_repeats}){allow_empty}{whitespace_pattern}\]"
 
 
-def _type_object_regex(instance, whitespace_pattern, **kwargs):
+def _type_object_regex(instance: dict[str, Any], whitespace_pattern: str, **kwargs) -> str:
     # pattern for json object with values defined by instance["additionalProperties"]
     # enforces value type constraints recursively, "minProperties", and "maxProperties"
     # doesn't enforce "required", "dependencies", "propertyNames" "any/all/on Of"
@@ -211,7 +223,7 @@ def _type_object_regex(instance, whitespace_pattern, **kwargs):
     return r"\{" + whitespace_pattern + multiple_key_value_pattern + whitespace_pattern + r"\}"
 
 
-def _type_int_regex(instance, **kwargs):
+def _type_int_regex(instance: dict[str, Any], **kwargs) -> str:
     if "minimum" in instance and "maximum" in instance:
         min_int = int(instance["minimum"])
         max_int = int(instance["maximum"])
@@ -233,13 +245,12 @@ def _type_int_regex(instance, **kwargs):
     return regex
 
 
-def _type_regex(instance, whitespace_pattern, **kwargs):
-    """
-    The type keyword may either be a string or an array:
-    - If it's a string, it is the name of one of the basic types.
-    - If it is an array, it must be an array of strings, where each string is
-    the name of one of the basic types, and each element is unique. In this
-    case, the JSON snippet is valid if it matches any of the given types.
+def _type_regex(instance: dict[str, Any], whitespace_pattern: str, **kwargs) -> str:
+    """Dispatch to the appropriate regex builder based on the ``type`` keyword.
+
+    The ``type`` keyword may be a string naming a single basic type or an
+    array of type strings.  When it is an array, the resulting regex
+    matches any of the listed types.
     """
     instance_type = instance["type"]
     dispatch = {
@@ -266,7 +277,7 @@ def _type_regex(instance, whitespace_pattern, **kwargs):
             regexes = [_build_regex({"type": t}, whitespace_pattern) for t in instance_type if t != "object"]
             return rf"({'|'.join(regexes)})"
         case x if x in dispatch:
-            return dispatch[x](**kwargs)
+            return dispatch[x](**kwargs)  # ty: ignore[invalid-argument-type] -- kwargs values are correct per-key; ty can't narrow the union through dict unpacking
 
         case "number":
             return NUMBER
@@ -278,30 +289,26 @@ def _type_regex(instance, whitespace_pattern, **kwargs):
             raise NotImplementedError(f"Unsupported type={instance_type}")
 
 
-def _build_regex(instance: dict, whitespace_pattern: str, **kwargs) -> str:
-    """
-    Custom implementation of limited set of json schema to regex.
+def _build_regex(instance: dict[str, Any], whitespace_pattern: str, **kwargs) -> str:
+    """Convert a JSON schema fragment into a regex string.
 
-    We support what's needed for TabFT schemas, but this should not be
-    considered a generic json to regex method.
+    Supports the subset of JSON Schema needed for TabFT schemas --
+    ``properties``, ``enum``, and ``type`` keywords.  This is not a
+    general-purpose JSON-to-regex converter.
 
-    Notable missing features of JSON schema:
-    - Handle `additionalProperties` keyword
-    - Handle oneOf, anyOf, allOf keywords
-    - Handle $ref keyword
+    Notable unsupported keywords: ``additionalProperties``,
+    ``oneOf``/``anyOf``/``allOf``, and ``$ref``.
 
-
-    Copied with modifications from
-    https://github.com/dottxt-ai/outlines/blob/0b4d12b0b9998a26e9dbde3bd558e695c51b75be/outlines/fsm/json_schema.py#L99
+    Adapted from
+    `outlines <https://github.com/dottxt-ai/outlines/blob/0b4d12b0b/outlines/fsm/json_schema.py#L99>`_.
 
     Args:
-        schema: The dict-based JSON schema used as a base for generating the
-            regular expression.
-        whitespace_pattern: String pattern to match whitespaces while
-            constructing the regex.
+        instance: JSON schema fragment (dict) to compile.
+        whitespace_pattern: Regex fragment for matching whitespace
+            between JSON tokens.
 
     Returns:
-        The constructed regex as a string.
+        Regex string matching values conforming to the schema.
     """
     match instance:
         case {"properties": _, **rest}:  # noqa: F841
@@ -315,30 +322,118 @@ def _build_regex(instance: dict, whitespace_pattern: str, **kwargs) -> str:
 
 
 def build_json_based_regex(
-    schema: dict,
+    schema: dict[str, Any],
+    config: SafeSynthesizerParameters,
     bos_token: str,
     eos_token: str,
     whitespace_pattern: str | None = None,
-    group_by: bool = False,
-):
-    """
-    Builds a regular expression based on the provided JSON schema.
+) -> str:
+    """Build a regex that constrains LLM output to valid JSONL records.
+
+    Supports ``properties``, ``required``, ``enum``, primitive ``type`` values,
+    arrays/objects with min/max item or property counts, string length bounds,
+    ``pattern``, and ``format`` values for date-time, date, time, and UUID.
+    Use vLLM's native JSON schema structured-output path for unsupported schema
+    features such as ``additionalProperties``, composition keywords, and
+    ``$ref``.
 
     Args:
-        schema: The dict-based JSON schema used as a base for generating the
-            regular expression.
-        whitespace_pattern: An optional string pattern to match
-            whitespaces while constructing the regex.
-        group_by: The grouping token used to wrap the regex across
-            multiple lines. Based on the tokenizer used outside of this.
+        schema: JSON schema dictionary describing the record format.
+        config: Pipeline configuration (used for grouping and
+            structured-generation settings).
+        bos_token: Beginning-of-sequence token (used when grouping).
+        eos_token: End-of-sequence token (used when grouping).
+        whitespace_pattern: Optional regex fragment for matching
+            whitespace between JSON tokens.
+
+    Returns:
+        Compiled regex string suitable for vLLM's structured-output
+        backend.
     """
     whitespace_pattern = whitespace_pattern or ""
 
-    json_regex = _build_regex(schema, whitespace_pattern)
+    record_regex = _build_regex(schema, whitespace_pattern)
 
-    if group_by:
-        json_lines_regex = rf"({bos_token}({json_regex}\n)+{eos_token}\n)+"
+    if config.data.group_training_examples_by is not None:
+        sequence_regex = rf"{re.escape(bos_token)}({record_regex}\n)+{re.escape(eos_token)}"
     else:
-        json_lines_regex = rf"({json_regex}\n)+"
+        # Without grouping, the "sequence" is a single record.
+        sequence_regex = record_regex
 
-    return json_lines_regex
+    if config.generation.structured_generation.use_single_sequence and config.data.max_sequences_per_example == 1:
+        regex = sequence_regex
+    else:
+        regex = rf"({sequence_regex}\n)+"
+
+    return regex
+
+
+def _const_string_format(value: str) -> dict[str, str]:
+    """Return a Structural Tag constant-string format."""
+    return {"type": "const_string", "value": value}
+
+
+def _sequence_format(elements: list[dict[str, Any]]) -> dict[str, Any]:
+    """Return a Structural Tag sequence format."""
+    return {"type": "sequence", "elements": elements}
+
+
+def _plus_format(content: dict[str, Any]) -> dict[str, Any]:
+    """Return a Structural Tag one-or-more repetition format."""
+    return {"type": "plus", "content": content}
+
+
+def build_json_structural_tag(
+    schema: dict[str, Any],
+    config: SafeSynthesizerParameters,
+    bos_token: str,
+    eos_token: str,
+) -> str:
+    """Build an XGrammar Structural Tag for schema-constrained JSONL records.
+
+    The raw vLLM ``json`` constraint describes a single JSON value. Structural
+    Tag lets NSS describe the larger generation shape directly: one or more
+    schema-constrained JSON records separated by newlines, optionally wrapped
+    in BOS/EOS group delimiters.
+
+    Args:
+        schema: JSON schema dictionary describing one record.
+        config: Pipeline configuration (used for grouping and
+            structured-generation settings).
+        bos_token: Beginning-of-sequence token (used when grouping).
+        eos_token: End-of-sequence token (used when grouping).
+
+    Returns:
+        JSON string suitable for ``StructuredOutputsParams(structural_tag=...)``.
+    """
+    record_format: dict[str, Any] = {
+        "type": "json_schema",
+        "json_schema": schema,
+    }
+    record_line_format = _sequence_format([record_format, _const_string_format("\n")])
+
+    if config.data.group_training_examples_by is not None:
+        sequence_format = _sequence_format(
+            [
+                _const_string_format(bos_token),
+                _plus_format(record_line_format),
+                _const_string_format(eos_token),
+            ]
+        )
+    else:
+        sequence_format = record_format
+
+    if config.generation.structured_generation.use_single_sequence and config.data.max_sequences_per_example == 1:
+        output_format = sequence_format
+    elif config.data.group_training_examples_by is not None:
+        output_format = _plus_format(_sequence_format([sequence_format, _const_string_format("\n")]))
+    else:
+        output_format = _plus_format(record_line_format)
+
+    return json.dumps(
+        {
+            "type": "structural_tag",
+            "format": output_format,
+        },
+        ensure_ascii=True,
+    )

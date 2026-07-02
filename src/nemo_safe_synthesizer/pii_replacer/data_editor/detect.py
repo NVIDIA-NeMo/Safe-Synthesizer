@@ -6,21 +6,22 @@ from __future__ import annotations
 import logging
 import os
 from abc import ABC, abstractmethod
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
 from itertools import chain, islice
 from time import monotonic
 from timeit import default_timer as timer
-from typing import Callable, Iterable, Iterator, Optional
+from typing import Optional
 
 import json_repair
 import pandas as pd
 import torch
 from gliner import GLiNER
-from langchain_core.prompts import PromptTemplate
 from openai import OpenAI
 from pydantic import ConfigDict, TypeAdapter, ValidationError
 
 from ...observability import get_logger
+from ...utils import hf_offline_enabled
 from ..ner import ner_mp
 from ..ner.factory import LabelSetPredictorFilter, NERFactory
 from ..ner.ner import NERPrediction
@@ -30,10 +31,38 @@ logger = get_logger(__name__)
 
 
 class DefaultLLMConfig:
-    CONFIG_ID = os.environ.get("NIM_MODEL_ID", "qwen/qwen2.5-coder-32b-instruct")
+    """Default settings for the LLM used in column classification.
+
+    Used by ``classify_columns`` when calling the inference API for column-type
+    classification.
+
+    Attributes:
+        SYSTEM_PROMPT: System message describing the column-type annotation task
+            sent to the LLM.
+        MAX_OUTPUT_TOKENS: Maximum number of tokens allowed in the LLM response
+            (default 2048).
+        TEMPERATURE: Sampling temperature for LLM generation (default 0.2).
+            Lower values give more deterministic output.
+    """
+
+    DEFAULT_CONFIG_ID = "qwen/qwen3-next-80b-a3b-instruct"
     SYSTEM_PROMPT = "You are a helpful AI that annotates columns in datasets with their respective types. "
     MAX_OUTPUT_TOKENS = 2048
     TEMPERATURE = 0.2
+
+    @classmethod
+    def config_id(cls) -> str:
+        """Model identifier for the LLM, read from env at call-time.
+
+        Reads ``NSS_INFERENCE_MODEL`` on each call (falling back to
+        ``DEFAULT_CONFIG_ID``) so a value set after this module is imported still
+        takes effect, matching the call-time env handling used elsewhere in this
+        module. A blank or whitespace-only value is treated as unset, so it falls
+        back to ``DEFAULT_CONFIG_ID`` rather than sending an empty model id to the
+        inference API.
+        """
+        model = os.environ.get("NSS_INFERENCE_MODEL", "").strip()
+        return model or cls.DEFAULT_CONFIG_ID
 
 
 DEFAULT_ENTITIES: set[str] = {
@@ -65,7 +94,7 @@ TEMPLATE = """Valid types are: [
 
 Return the column type for each of the column names and example values in the question.
 
- Additional instructions:
+Additional instructions:
 * You only return the list of columns and types (e.g. column_name: column_type) in json format and no written explanations.
 * The type should exactly match one of the valid types.
 * You don't write other helpful information outside of the column names and types.
@@ -78,7 +107,7 @@ Return the column type for each of the column names and example values in the qu
 * Only use the column type "name" if the example values are referring to the name of a person. Names of non-persons get the column type "none".
 * Use the column type "age" if the example values are referring to the age of a person.
 * Use the column type "sexuality" if the example values are referring to sexual orientation. For example "heterosexual" or "gay"
-* Use the column type "gender" if the example values are referring to the sex of a person.  For example "male" or "female"
+* Use the column type "gender" if the example values are referring to the sex of a person. For example "male" or "female"
 * Use the column type "date_of_birth" if the example values are referring to birth dates.
 * The type "vehicle_identifier" refers to an alphanumeric string that is exactly 17 characters long with no dashes.
 * The type "license_plate" refers to an alphanumeric string, sometimes with dashes, that is not longer than 15 characters
@@ -95,9 +124,9 @@ Output:
 {{"prenom": "first_name",
 "ciudad": "city"}}
 
- Input: {prompt_columns}
+Input: {prompt_columns}
 
- Output:
+Output:
 """
 
 
@@ -106,6 +135,16 @@ def _format_prompt(
     entities: set[str],
     num_samples: Optional[int],
 ) -> Optional[str]:
+    """Build the LLM prompt for column classification from sampled DataFrame columns.
+
+    Args:
+        df: DataFrame to sample from.
+        entities: Set of valid entity type names.
+        num_samples: Number of value samples per column (or ``None`` for default).
+
+    Returns:
+        Formatted prompt string, or ``None`` if no sampleable columns.
+    """
     types = [
         "certificate_license_number",
         "first_name",
@@ -186,17 +225,13 @@ def _format_prompt(
     # Not actually valid json with notes, but it's what AS team has found to work.
     valid_types_str = "\n".join(f"{t}{notes.get(t, '')}," for t in types)
 
-    prompt = PromptTemplate.from_template(TEMPLATE)
     column_samples = sample_columns(df, num_samples)
     if not column_samples:
         return None
     prompt_columns = "\n".join([f"{name}: {', '.join(values)}" for name, values in column_samples.items()])
-
-    return prompt.format(
+    return TEMPLATE.format(
         prompt_columns=prompt_columns,
         valid_types_str=valid_types_str,
-        entities=", ".join(entities),
-        unknown_entity_type=UNKNOWN_ENTITY,
     )
 
 
@@ -208,13 +243,26 @@ def classify_columns(
     on_validation_error: Callable[[], None],
     logger: logging.Logger,
 ) -> dict[str, Optional[str]]:
+    """Classify DataFrame columns to entity types via LLM and return column-to-entity map.
+
+    Args:
+        df: DataFrame to classify.
+        entities: Set of valid entity type names.
+        num_samples: Number of value samples per column for the prompt.
+        client: OpenAI client for chat completions.
+        on_validation_error: Callback invoked when LLM output is invalid JSON.
+        logger: Logger for timing and context.
+
+    Returns:
+        Map of column name to entity type (or ``UNKNOWN_ENTITY``).
+    """
     formatted_prompt = _format_prompt(df, entities, num_samples)
     if not formatted_prompt:
         return {}
 
     llm_start = timer()
     response = client.chat.completions.create(
-        model=DefaultLLMConfig.CONFIG_ID,
+        model=DefaultLLMConfig.config_id(),
         messages=[
             {"role": "system", "content": DefaultLLMConfig.SYSTEM_PROMPT},
             {"role": "user", "content": formatted_prompt},
@@ -238,6 +286,7 @@ def classify_columns(
 
 
 def sample_columns(df: pd.DataFrame, num_samples: int, random_state: Optional[int] = None) -> dict[str, pd.Series]:
+    """Sample up to ``num_samples`` unique values per non-empty column for classification prompts."""
     nonempty_columns = df.dropna(axis="columns", how="all").columns
     col_samples = {}
     for col in nonempty_columns:
@@ -254,6 +303,15 @@ def _try_extract_entities(
     entities_str: str,
     on_validation_error: Callable[[], None],
 ) -> dict[str, Optional[str]]:
+    """Parse LLM response JSON into column-to-entity map; call ``on_validation_error`` on failure.
+
+    Args:
+        entities_str: Raw string from LLM (expected JSON object).
+        on_validation_error: Callback invoked when parsing or validation fails.
+
+    Returns:
+        Map of column name to entity type string.
+    """
     entity_types = json_repair.loads(entities_str)
 
     # `json_repair` has a tendency to wrap singleton objects in a list during
@@ -269,27 +327,31 @@ def _try_extract_entities(
     except ValidationError:
         logger.exception("Error decoding classification JSON returned by llm")
         on_validation_error()
+        return {}
 
 
 class ColumnClassifier(ABC):
-    """
-    Object used to classify column types. Derived implementation classes
-    may hold various backends such as VertexAI, OpenAI, etc.
-    """
+    """Abstract column-type classifier; implementations may use LLM, VertexAI, or other backends."""
 
     @abstractmethod
     def detect_types(self, df: pd.DataFrame, entities: Optional[set[str]]) -> dict[str, Optional[str]]:
-        """
-        Classify dataframe column types into given entities.
-        Return dict mapping from column name to entity type.
+        """Classify each column into one of the given entity types.
+
+        Implementations may sample column values and use an LLM, lookup table, or
+        other backend to assign exactly one entity type per column. Columns that
+        cannot be classified or are not in ``entities`` should be mapped to
+        ``UNKNOWN_ENTITY``.
+
+        Args:
+            df: DataFrame whose columns are to be classified.
+            entities: Set of valid entity type names to assign; may be ``None``
+                for implementations that use a fixed or default set.
         """
         ...
 
 
 class ColumnClassifierNoop(ColumnClassifier):
-    """
-    NOOP column classifier
-    """
+    """No-op classifier that assigns ``UNKNOWN_ENTITY`` to every column."""
 
     def detect_types(self, df: pd.DataFrame, entities: Optional[set[str]] = None) -> dict[str, Optional[str]]:
         return {col: UNKNOWN_ENTITY for col in df.columns}
@@ -297,18 +359,24 @@ class ColumnClassifierNoop(ColumnClassifier):
 
 @dataclass
 class IAPIClassifierConfig:
-    """
-    Fields required to communicate"""
+    """Configuration for an inference-API-based column classifier."""
 
     endpoint: str
+    """Inference endpoint URL."""
     model_key: str
+    """Model identifier."""
     job_id: str
+    """Job identifier."""
     num_samples: int
+    """Number of value samples per column for classification."""
 
 
 class ColumnClassifierLLM(ColumnClassifier):
-    """
-    Classify column types using an LLM
+    """Classify column types using an LLM (OpenAI-compatible inference API).
+
+    Construct via factory; set ``_llm`` and ``_num_samples`` before calling
+    ``detect_types``. Not initialized with config in ``__init__``.
+
     """
 
     _llm: Optional[OpenAI]
@@ -319,11 +387,7 @@ class ColumnClassifierLLM(ColumnClassifier):
         self._num_samples = None
 
     def detect_types(self, df: pd.DataFrame, entities: set[str]) -> dict[str, Optional[str]]:
-        """
-        Detect column datatypes by sampling column data and asking
-        InferenceAPI to classify it.
-        """
-
+        """Sample column data and call the inference API to classify columns into entity types."""
         if self._llm is None:
             raise Exception("InferenceAPI classifier not initialized. Use get_classifier() method.")
 
@@ -346,24 +410,34 @@ class ColumnClassifierLLM(ColumnClassifier):
 
 @dataclass
 class ClassifyConfig:
-    """
-    Configuration options for column classification and NER
-    """
+    """Configuration for column classification and NER (entities, thresholds, GLiNER, regex)."""
 
     valid_entities: set[str]
+    """Set of valid entity type names for classification."""
     ner_threshold: float
+    """Score threshold for NER predictions."""
     ner_regexps_enabled: bool
+    """Whether regex-based NER is enabled."""
     ner_entities: set[str] | None
+    """Entity types for NER (or ``None`` to use default)."""
     gliner_enabled: bool
+    """Whether GLiNER model is used."""
     gliner_batch_mode_enabled: bool
+    """Whether GLiNER batch mode is enabled."""
     gliner_batch_mode_chunk_length: int
+    """Chunk length for GLiNER."""
     gliner_batch_mode_batch_size: int
+    """Batch size for GLiNER."""
     gliner_model: str
+    """GLiNER model name or path."""
 
 
 class EntityExtractor(ABC):
-    """
-    Object used to extract entity/value pairs from free text.
+    """Abstract extractor of entity/value pairs from free text.
+
+    Attributes:
+        column_report: Per-column NER report (entity counts and values).
+        current_column: Name of the column currently being processed.
     """
 
     column_report: NerReport
@@ -371,17 +445,12 @@ class EntityExtractor(ABC):
 
     @abstractmethod
     def extract_entity_values(self, text: str, entities: Optional[set[str]]) -> list[dict[str, str]]:
-        """
-        Return a list of dicts which each contain an entity and its value.
-        """
+        """Return a list of dicts with ``entity`` and ``value`` keys for each detection."""
         ...
 
     @abstractmethod
     def extract_ner_predictions(self, text: str, entities: Optional[set[str]]) -> list[NERPrediction]:
-        """
-        Return a list of NERPrediction objects. Includes enough
-        information to compose and dedup multiple EntityExtractors
-        """
+        """Return NER predictions with spans and labels for dedup/merge across extractors."""
         ...
 
     @classmethod
@@ -396,11 +465,7 @@ class EntityExtractor(ABC):
         self.current_column = "unknown"
 
     def extract_and_replace_entities(self, redact_fn: RedactFn, text: str, entities: Optional[set[str]] = None) -> str:
-        """
-        Make NER predictions using subclass instantiations of above abstract methods,
-        deduplicate / merge, update report, replace entities using the given
-        redact function.
-        """
+        """Run NER, merge/dedupe predictions, update ``column_report``, and replace spans with ``redact_fn``."""
         # Ensure text is a string - Jinja templates may pass non-string types (e.g., float/NaN)
         text = str(text)
 
@@ -421,9 +486,7 @@ class EntityExtractor(ABC):
 
 
 class EntityExtractorNoop(EntityExtractor):
-    """
-    NOOP extractor
-    """
+    """No-op extractor that returns no entities."""
 
     def extract_entity_values(self, text: str, entities: Optional[set[str]]) -> list[dict[str, str]]:
         return []
@@ -434,22 +497,25 @@ class EntityExtractorNoop(EntityExtractor):
 
 @dataclass
 class EntityReport:
+    """Per-entity stats for one column: count of detections and set of unique values."""
+
     count: int
-    values: set()
+    """Number of detections for this entity in the column."""
+    values: set
+    """Set of unique detected values for this entity."""
 
 
 NerReport = dict[str, dict[str, EntityReport]]
-"""Dictionary of column name to dictionary of entity name to EntityReport."""
+"""Per-column NER report: column name → entity name → ``EntityReport`` (counts and values)."""
 
 
 class EntityExtractorRegexp(EntityExtractor):
-    """
-    Extract entities using regular expressions.
-    """
+    """Extract entities using regex-based NER pipeline."""
 
     _entity_types: set[str]
 
     def pipeline_from_entities(self, entities: set[str]) -> Callable[[], Pipeline]:
+        """Build a pipeline factory for the given entity set (or ``_entity_types`` if empty)."""
         if not entities:
             entities = self._entity_types
         predictor_filter = LabelSetPredictorFilter(entities)
@@ -479,6 +545,7 @@ class EntityExtractorRegexp(EntityExtractor):
         cls,
         clsfy_cfg: ClassifyConfig,
     ) -> EntityExtractor:
+        """Return a regex extractor with entity types from ``clsfy_cfg`` (or ``DEFAULT_ENTITIES``)."""
         entity_types = DEFAULT_ENTITIES
         if clsfy_cfg.ner_entities:
             entity_types = clsfy_cfg.ner_entities
@@ -488,8 +555,9 @@ class EntityExtractorRegexp(EntityExtractor):
 
 
 class EntityExtractorGliner(EntityExtractor):
-    """
-    Extract entities using GLiNER
+    """Extract entities from text using a GLiNER model with chunking and optional batch caching.
+
+    Use ``get_entity_extractor`` to construct; config comes from ``ClassifyConfig``.
     """
 
     _entity_types: set[str]
@@ -508,6 +576,7 @@ class EntityExtractorGliner(EntityExtractor):
         cls,
         clsfy_cfg: ClassifyConfig,
     ) -> EntityExtractorGliner:
+        """Load GLiNER model and return extractor configured from ``clsfy_cfg``."""
         extractor = cls()
         extractor._model = None
 
@@ -519,7 +588,7 @@ class EntityExtractorGliner(EntityExtractor):
         extractor._model = GLiNER.from_pretrained(
             clsfy_cfg.gliner_model,
             map_location=map_location,
-            local_files_only=os.environ.get("LOCAL_FILES_ONLY") in ["true", "True"],
+            local_files_only=hf_offline_enabled(),
         )
         entity_types = DEFAULT_ENTITIES
         if clsfy_cfg.ner_entities:
@@ -542,12 +611,18 @@ class EntityExtractorGliner(EntityExtractor):
         text: str,
         entity_labels: Optional[set[str]],
     ) -> list[dict]:
-        """
-        Detect entities from free text using a GLiNER model, chunking text to avoid overloading model context.
+        """Detect entities from text using GLiNER with chunking; update ``column_report``.
 
-        Returns a list of dicts in GLiNER return value format, including entity name, value, start/end indices.
-        """
+        Chunks text to stay within model context; merges overlapping chunks. Returns
+        list of dicts in GLiNER format (e.g. ``label``, ``text``, ``start``, ``end``).
 
+        Args:
+            text: Input text.
+            entity_labels: Entity types to detect; if ``None``, use ``_entity_types``.
+
+        Returns:
+            List of entity dicts with ``label``, ``text``, ``start``, ``end``.
+        """
         last_log = monotonic()
         if entity_labels is None:
             entity_labels = self._entity_types
@@ -590,7 +665,6 @@ class EntityExtractorGliner(EntityExtractor):
                     "ctx": {"nchunks": nchunks, "misses": n_cache_miss},
                 },
             )
-            last_log = monotonic()
         entities_to_delete = []
         for idx, ent in enumerate(entities):
             has_superset = any(
@@ -676,25 +750,19 @@ class EntityExtractorGliner(EntityExtractor):
 
 
 class EntityExtractorMulti(EntityExtractor):
-    """
-    EntityExtractor which encapsulates multiple extractors.
-    """
+    """Composite extractor that runs multiple extractors and concatenates their results."""
 
     extractors: list[EntityExtractor]
 
     def extract_entity_values(self, text: str, entities: Optional[set[str]] = None) -> list[dict[str, str]]:
-        """
-        Return a list of dicts which each contain an entity and its value.
-        """
+        """Return combined entity/value dicts from all sub-extractors."""
         retval = []
         for extractor in self.extractors:
             retval += extractor.extract_entity_values(text, entities)
         return retval
 
     def extract_ner_predictions(self, text: str, entities: Optional[set[str]] = None) -> list[NERPrediction]:
-        """
-        Get entities across all providers and merge
-        """
+        """Return merged NER predictions from all sub-extractors."""
         predictions = []
         for extractor in self.extractors:
             predictions += extractor.extract_ner_predictions(text, entities)
@@ -702,6 +770,7 @@ class EntityExtractorMulti(EntityExtractor):
 
     @classmethod
     def get_entity_extractor(cls, clsfy_cfg: ClassifyConfig) -> EntityExtractorMulti:
+        """Return an empty composite; add extractors with ``add_entity_extractor``."""
         self = cls()
         self.extractors = []
         return self
@@ -710,10 +779,8 @@ class EntityExtractorMulti(EntityExtractor):
         for extractor in self.extractors:
             extractor.batch_update_cache(texts, entities)
 
-    def add_entity_extractor(self, extractor: EntityExtractor):
-        """
-        Add an extractor to the list.
-        """
+    def add_entity_extractor(self, extractor: EntityExtractor) -> None:
+        """Append an extractor to the composite."""
         self.extractors.append(extractor)
 
 
@@ -721,14 +788,23 @@ RedactFn = Callable[[NERPrediction], str]
 
 
 def redact_from_entities(text: str, detected: list[NERPrediction], redact_fn: RedactFn) -> str:
+    """Replace each detected span in ``text`` with the result of ``redact_fn(prediction)``."""
     return "".join(chain(*traverse_redact(text, detected, redact_fn)))
 
 
 def traverse_redact(text: str, entities: list[NERPrediction], redact_fn: RedactFn) -> Iterator[Iterable[str]]:
-    """
-    Take a text string and a list of entities with start/end indicies
-    within the string and yield iterators to replace the entities in
-    the string with their labels via chain()
+    """Yield iterables of text segments and redacted spans for assembly via ``chain()``.
+
+    Entities must be sorted by span; yields alternating slices of ``text`` and
+    ``redact_fn(entity)`` so that ``chain(*traverse_redact(...))`` gives the full string.
+
+    Args:
+        text: Source text.
+        entities: NER predictions with ``start``/``end`` indices (sorted by span).
+        redact_fn: Function mapping each prediction to its replacement string.
+
+    Yields:
+        Iterables of strings (text slices and redaction results).
     """
     prev = 0
     for entity in sorted(entities, key=lambda e: e.start):
@@ -741,11 +817,7 @@ def traverse_redact(text: str, entities: list[NERPrediction], redact_fn: RedactF
 
 
 def find_best(entities: list[NERPrediction]) -> NERPrediction:
-    """
-    Given a list of ner predictions, determine which one is "best".
-    For now, just pick the one with the largest span.
-    """
-
+    """Return the prediction with the largest span (used when merging overlapping spans)."""
     span_max = 0
     best = entities[0]
     for entity in entities:
@@ -757,10 +829,7 @@ def find_best(entities: list[NERPrediction]) -> NERPrediction:
 
 
 def merge_subsume(entities: list[NERPrediction]) -> list[NERPrediction]:
-    """
-    Find overlaping ner prediction spans and replace with "best" prediction,
-    as determined by find_best()
-    """
+    """Merge overlapping NER spans into a single prediction per span using ``find_best``."""
     result = []
     entities = sorted(entities, key=lambda e: (e.start, e.end))
     while entities:

@@ -12,7 +12,7 @@ from pydantic import ConfigDict, Field
 from ...config.parameters import SafeSynthesizerParameters
 from ...evaluation.components.component import Component
 from ...evaluation.constants import JOB_COUNT
-from ...evaluation.data_model.evaluation_dataset import EvaluationDataset
+from ...evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from ...evaluation.data_model.evaluation_field import EvaluationField
 from ...evaluation.data_model.evaluation_score import EvaluationScore
 from ...evaluation.statistics import stats
@@ -23,110 +23,128 @@ logger = get_logger(__name__)
 
 
 class Correlation(Component):
+    """Column Correlation Stability metric.
+
+    Computes per-column-pair correlations (Pearson, Theil's U, Correlation
+    Ratio) for both training and synthetic dataframes, then scores the mean
+    absolute difference.
+    """
+
     name: str = Field(default="Column Correlation Stability")
-    reference_correlation: pd.DataFrame | None = Field(default=None)
-    output_correlation: pd.DataFrame | None = Field(default=None)
-    correlation_difference: pd.DataFrame | None = Field(default=None)
+    training_correlation: pd.DataFrame | None = Field(
+        default=None, description="Correlation matrix for the training data."
+    )
+    synthetic_correlation: pd.DataFrame | None = Field(
+        default=None, description="Correlation matrix for the synthetic data."
+    )
+    correlation_difference: pd.DataFrame | None = Field(
+        default=None, description="Element-wise absolute difference of the two matrices."
+    )
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @cached_property
-    def jinja_context(self):
+    def jinja_context(self) -> dict:
+        """Template context with combined correlation heatmap figure."""
         d = super().jinja_context
         d["anchor_link"] = "#correlation-stability"
+        d["figure"] = None
 
-        if Component.is_nonempty([self.reference_correlation, self.output_correlation, self.correlation_difference]):
-            d["figure"] = figures.generate_combined_correlation_figure(
-                reference_correlation=self.reference_correlation,
-                output_correlation=self.output_correlation,
-                correlation_difference=self.correlation_difference,
-            ).to_html(full_html=False, include_plotlyjs=False)
-        else:
-            d["figure"] = None
+        if Component.is_nonempty([self.training_correlation, self.synthetic_correlation, self.correlation_difference]):
+            training_corr = self.training_correlation
+            synthetic_corr = self.synthetic_correlation
+            diff_corr = self.correlation_difference
+            if training_corr is not None and synthetic_corr is not None and diff_corr is not None:
+                d["figure"] = figures.generate_combined_correlation_figure(
+                    training_correlation_df=training_corr,
+                    synthetic_correlation_df=synthetic_corr,
+                    correlation_difference=diff_corr,
+                ).to_html(full_html=False, include_plotlyjs=False)
         return d
 
     @staticmethod
-    def from_evaluation_dataset(
-        evaluation_dataset: EvaluationDataset, config: SafeSynthesizerParameters | None = None
+    def from_evaluation_datasets(
+        evaluation_datasets: EvaluationDatasets, config: SafeSynthesizerParameters | None = None
     ) -> Correlation:
+        """Compute correlation matrices and the correlation stability score."""
         # We only want to use these types for correlation.
-        tabular_columns = evaluation_dataset.get_tabular_columns()
-        # We use different calculations (Thiel's U) for nominal columns.
-        nominal_columns = evaluation_dataset.get_nominal_columns()
+        tabular_columns = evaluation_datasets.get_tabular_columns()
+        # We use different calculations (Theil's U) for nominal columns.
+        nominal_columns = evaluation_datasets.get_nominal_columns()
 
         (
-            reference_correlation,
-            output_correlation,
+            training_correlation,
+            synthetic_correlation,
             correlation_difference,
             mean_absolute_error,
         ) = Correlation._get_correlation_calculations(
-            reference=evaluation_dataset.reference[tabular_columns],  # ty: ignore[invalid-argument-type]
-            output=evaluation_dataset.output[tabular_columns],  # ty: ignore[invalid-argument-type]
+            training_df=evaluation_datasets.training[tabular_columns],
+            synthetic_df=evaluation_datasets.synthetic[tabular_columns],
             nominal_columns=nominal_columns,
-            fields=evaluation_dataset.evaluation_fields,
+            fields=evaluation_datasets.evaluation_fields,
         )
         evaluation_score = Correlation._get_field_correlation_stability(mean_absolute_error)
         return Correlation(
-            reference_correlation=reference_correlation,
-            output_correlation=output_correlation,
+            training_correlation=training_correlation,
+            synthetic_correlation=synthetic_correlation,
             correlation_difference=correlation_difference,
             score=evaluation_score,
         )
 
     @staticmethod
     def _get_correlation_calculations(
-        reference: pd.DataFrame,
-        output: pd.DataFrame,
+        training_df: pd.DataFrame,
+        synthetic_df: pd.DataFrame,
         nominal_columns: list[str],
         fields: list[EvaluationField],
-    ):
-        """
-        Calculate everything correlation related -- the actual L and R correlation matrices, their difference
-        and the mean absolute error.
+    ) -> tuple:
+        """Compute training and synthetic correlation matrices and their difference.
 
         Args:
-            reference: pd.DataFrame
-            output: pd.DataFrame
-            nominal_columns: nominal columns to pass into correlation methods
+            training_df: Tabular training dataframe.
+            synthetic_df: Tabular synthetic dataframe.
+            nominal_columns: Columns to treat as categorical in correlation methods.
+            fields: Per-column evaluation metadata (unused, reserved for future use).
 
-        Returns: tuple of reference_correlation, output_correlation, correlation_difference, mean_absolute_error
-
+        Returns:
+            Tuple of (training_correlation, synthetic_correlation,
+            correlation_difference, mean_absolute_error).
         """
         # Legacy code has constant for default value of 4 and function to see if we can go higher.
         # See what we want to do now that we work for a GPU manufacturer.
         job_count = JOB_COUNT
 
         mean_absolute_error = None
-        reference_correlation = None
-        output_correlation = None
+        training_correlation = None
+        synthetic_correlation = None
         correlation_difference = None
 
         try:
-            if reference.shape[1] < 2:
+            if training_df.shape[1] < 2:
                 logger.info("Less than two correlatable columns found. Skipping correlation calculations.")
                 return (
-                    reference_correlation,
-                    output_correlation,
+                    training_correlation,
+                    synthetic_correlation,
                     correlation_difference,
                     mean_absolute_error,
                 )
 
-            reference_correlation = stats.calculate_correlation(
-                reference, nominal_columns=nominal_columns, job_count=job_count
+            training_correlation = stats.calculate_correlation(
+                training_df, nominal_columns=nominal_columns, job_count=job_count
             )
 
-            output_correlation = stats.calculate_correlation(
-                output, nominal_columns=nominal_columns, job_count=job_count
+            synthetic_correlation = stats.calculate_correlation(
+                synthetic_df, nominal_columns=nominal_columns, job_count=job_count
             )
 
-            correlation_difference = (reference_correlation - output_correlation).abs()
+            correlation_difference = (training_correlation - synthetic_correlation).abs()
 
-            mean_absolute_error = (reference_correlation - output_correlation).abs().mean().mean()
+            mean_absolute_error = (training_correlation - synthetic_correlation).abs().mean().mean()
         except Exception:
             logger.exception("Failure during correlation calculations.")
         return (
-            reference_correlation,
-            output_correlation,
+            training_correlation,
+            synthetic_correlation,
             correlation_difference,
             mean_absolute_error,
         )
@@ -135,14 +153,14 @@ class Correlation(Component):
     def _get_field_correlation_stability(
         mean_absolute_error: float | None,
     ) -> EvaluationScore:
-        """
-        Calculate the field_correlation_stability SQS based on the MAE, one of our correlation calculations.
+        """Convert mean absolute correlation error to a graded stability score.
 
         Args:
-            mean_absolute_error: float, as produced by _get_correlation_calculations
+            mean_absolute_error: Average absolute difference between training
+                and synthetic correlation matrices. ``None`` if calculation failed.
 
-        Returns: the field_correlation_stability SQS
-
+        Returns:
+            A finalized ``EvaluationScore`` for correlation stability.
         """
         if mean_absolute_error is None or np.isnan(mean_absolute_error):
             return EvaluationScore()

@@ -1,0 +1,16 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+data:
+  random_state: 329896
+generation:
+  num_records: 500
+  structured_generation:
+    enabled: true
+    backend: outlines
+privacy:
+  dp_enabled: true
+training:
+  batch_size: 4
+  gradient_accumulation_steps: 16
+  pretrained_model: TinyLlama/TinyLlama-1.1B-Chat-v1.0

@@ -1,0 +1,23 @@
+---
+alwaysApply: true
+description: Index of available Claude command files. Use when user asks about available commands, workflows, or tasks like running tests, building docs, formatting, or syncing.
+globs:
+  - .claude/commands/**
+---
+
+# Claude Commands
+
+Pre-defined command files live in `.claude/commands/`. When a user asks about a development task, read the corresponding file for instructions.
+
+| Command | Task |
+|---------|------|
+| `unit-test` | Run unit tests |
+| `test-slow` | All tests including slow |
+| `test-ci-container` | CI tests in a container |
+| `gpu-test` | GPU integration and e2e tests |
+| `format` | Format code (ruff + copyright) |
+| `lint` | Lint and typecheck |
+| `bootstrap` | Bootstrap dev environment |
+| `build-wheel` | Build Python wheel |
+| `build-docs` | Build documentation site |
+| `start-docs-server` | Local docs dev server |

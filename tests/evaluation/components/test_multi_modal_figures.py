@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import pytest
+
 from nemo_safe_synthesizer.evaluation.components.multi_modal_figures import (
     bar_chart,
     combine_subplots,
@@ -147,7 +148,7 @@ class TestScatter:
 
         assert isinstance(trace, go.Scatter)
         assert trace.mode == "markers"
-        assert trace.name == "Reference"
+        assert trace.name == "Training"
 
     def test_scatter_custom_params(self):
         x = pd.Series([1, 2, 3])
@@ -167,15 +168,15 @@ class TestHistogram:
         trace = histogram(x)
 
         assert isinstance(trace, go.Histogram)
-        assert trace.name == "Reference"
+        assert trace.name == "Training"
         assert trace.showlegend is False
 
     def test_histogram_custom_params(self):
         x = pd.Series([1, 2, 3, 4, 5])
-        trace = histogram(x, color="#00FF00", name="Output", histnorm="percent")
+        trace = histogram(x, color="#00FF00", name="Synthetic", histnorm="percent")
 
         assert isinstance(trace, go.Histogram)
-        assert trace.name == "Output"
+        assert trace.name == "Synthetic"
 
 
 class TestGetAutoBins:
@@ -199,20 +200,53 @@ class TestGetAutoBins:
         assert bins["start"] <= 1
         assert bins["end"] >= 5
 
+    def test_get_auto_bins_caps_at_100_bins_for_pathological_distribution(self):
+        # Tiny IQR + very large range can make numpy "auto" request huge bin counts.
+        x1 = pd.Series(np.concatenate([np.full(5000, 1.0), np.array([1e9])]))
+        x2 = pd.Series(np.full(5000, 1.0000001))
+        bins = get_auto_bins(x1, x2)
+
+        assert bins["size"] > 0
+        approx_bin_count = (bins["end"] - bins["start"]) / bins["size"]
+        assert approx_bin_count == pytest.approx(100.0, abs=1e-6)
+
+    def test_get_auto_bins_returns_safe_defaults_when_all_values_non_finite(self):
+        x1 = pd.Series([np.nan, np.inf, -np.inf])
+        x2 = pd.Series([np.nan, np.inf, -np.inf])
+        bins = get_auto_bins(x1, x2)
+
+        assert bins == {"start": 0.0, "end": 1.0, "size": 1.0}
+
+    def test_get_auto_bins_anchors_single_value_range_when_degenerate(self):
+        x1 = pd.Series([5.0, 5.0, 5.0])
+        x2 = pd.Series([5.0, 5.0, 5.0])
+        bins = get_auto_bins(x1, x2)
+
+        assert bins == {"start": 5.0, "end": 6.0, "size": 1.0}
+
+    def test_get_auto_bins_returns_plausible_bins_with_mixture_of_finite_and_nan(self):
+        x1 = pd.Series([1.0, 2.0, 3.0, np.nan, np.nan, np.inf, -np.inf])
+        x2 = pd.Series([1.0, 2.0, 3.0, np.nan, np.nan, np.inf, -np.inf])
+        bins = get_auto_bins(x1, x2)
+
+        assert bins["start"] <= 1.0
+        assert bins["end"] >= 3.0
+        assert bins["size"] > 0
+
 
 class TestGenerateMiaFigure:
     """Tests for generate_mia_figure function."""
 
-    def test_generate_mia_figure_basic(self, mia_aia_df):
-        df = mia_aia_df
+    def test_generate_mia_figure_basic(self, fixture_mia_aia_df):
+        df = fixture_mia_aia_df
         fig = generate_mia_figure(df)
 
         assert isinstance(fig, go.Figure)
         assert len(fig.data) == 1
         assert isinstance(fig.data[0], go.Pie)
 
-    def test_generate_mia_figure_with_zero_percentages(self, mia_aia_df):
-        df = mia_aia_df
+    def test_generate_mia_figure_with_zero_percentages(self, fixture_mia_aia_df):
+        df = fixture_mia_aia_df
         df.loc[df["Attack Percentage"] == 0, "Attack Percentage"] = np.nan
         fig = generate_mia_figure(df)
 
@@ -220,8 +254,8 @@ class TestGenerateMiaFigure:
         assert len(fig.data) == 1
         assert isinstance(fig.data[0], go.Pie)
 
-    def test_generate_mia_figure_with_nan_percentages(self, mia_aia_df_with_nan_protection):
-        df = mia_aia_df_with_nan_protection
+    def test_generate_mia_figure_with_nan_percentages(self, fixture_mia_aia_df_with_nan_protection):
+        df = fixture_mia_aia_df_with_nan_protection
         fig = generate_mia_figure(df)
 
         assert isinstance(fig, go.Figure)
@@ -229,9 +263,9 @@ class TestGenerateMiaFigure:
         pie_trace = fig.data[0]
         assert pie_trace is not None
 
-    def test_generate_mia_figure_ordering(self, mia_aia_df):
+    def test_generate_mia_figure_ordering(self, fixture_mia_aia_df):
         # Test that the figure sorts by Protection grade
-        df = mia_aia_df
+        df = fixture_mia_aia_df
         fig = generate_mia_figure(df)
 
         assert isinstance(fig, go.Figure)
@@ -240,12 +274,8 @@ class TestGenerateMiaFigure:
 class TestGenerateAiaFigure:
     """Tests for generate_aia_figure function."""
 
-    def test_generate_aia_figure_basic(self, mia_aia_df):
-        df = mia_aia_df
-        fig = generate_aia_figure(df)
-
-        assert isinstance(fig, go.Figure)
-        df = mia_aia_df
+    def test_generate_aia_figure_basic(self, fixture_mia_aia_df):
+        df = fixture_mia_aia_df
         fig = generate_aia_figure(df)
 
         assert isinstance(fig, go.Figure)
@@ -254,16 +284,16 @@ class TestGenerateAiaFigure:
 class TestCorrelationHeatmap:
     """Tests for correlation_heatmap function."""
 
-    def test_correlation_heatmap_basic(self, mia_aia_df):
-        matrix = mia_aia_df
+    def test_correlation_heatmap_basic(self, fixture_mia_aia_df):
+        matrix = fixture_mia_aia_df
         fig = correlation_heatmap(matrix)
 
         assert isinstance(fig, go.Figure)
         assert len(fig.data) == 1
         assert isinstance(fig.data[0], go.Heatmap)
 
-    def test_correlation_heatmap_truncates_long_names(self, mia_aia_df):
-        matrix = mia_aia_df
+    def test_correlation_heatmap_truncates_long_names(self, fixture_mia_aia_df):
+        matrix = fixture_mia_aia_df
         fig = correlation_heatmap(matrix)
 
         assert isinstance(fig, go.Figure)
@@ -290,16 +320,16 @@ class TestGenerateCombinedCorrelationFigure:
 class TestScatterPlot:
     """Tests for scatter_plot function."""
 
-    def test_scatter_plot_basic(self, mia_aia_df):
-        x = mia_aia_df["Risk"]
-        y = mia_aia_df["Attack Percentage"]
+    def test_scatter_plot_basic(self, fixture_mia_aia_df):
+        x = fixture_mia_aia_df["Risk"]
+        y = fixture_mia_aia_df["Attack Percentage"]
         fig = scatter_plot(x, y)
 
         assert isinstance(fig, go.Figure)
 
-    def test_scatter_plot_respects_maximum_points(self, mia_aia_df):
-        x = mia_aia_df["Risk"]
-        y = mia_aia_df["Attack Percentage"]
+    def test_scatter_plot_respects_maximum_points(self, fixture_mia_aia_df):
+        x = fixture_mia_aia_df["Risk"]
+        y = fixture_mia_aia_df["Attack Percentage"]
         fig = scatter_plot(x, y, maximum_points=100)
 
         assert isinstance(fig, go.Figure)
@@ -307,9 +337,9 @@ class TestScatterPlot:
         scatter_trace = fig.data[0]
         assert len(scatter_trace.x) <= 100
 
-    def test_scatter_plot_no_cap_when_zero(self, mia_aia_df):
-        x = mia_aia_df["Risk"]
-        y = mia_aia_df["Attack Percentage"]
+    def test_scatter_plot_no_cap_when_zero(self, fixture_mia_aia_df):
+        x = fixture_mia_aia_df["Risk"]
+        y = fixture_mia_aia_df["Attack Percentage"]
         fig = scatter_plot(x, y, maximum_points=0)
 
         assert isinstance(fig, go.Figure)
@@ -322,10 +352,10 @@ class TestStructureStabilityFigure:
     """Tests for structure_stability_figure function."""
 
     def test_structure_stability_figure_basic(self):
-        reference = pd.DataFrame({"pc1": np.random.randn(100), "pc2": np.random.randn(100)})
-        output = pd.DataFrame({"pc1": np.random.randn(100), "pc2": np.random.randn(100)})
+        training_df = pd.DataFrame({"pc1": np.random.randn(100), "pc2": np.random.randn(100)})
+        synthetic_df = pd.DataFrame({"pc1": np.random.randn(100), "pc2": np.random.randn(100)})
 
-        fig = structure_stability_figure(reference, output)
+        fig = structure_stability_figure(training_df, synthetic_df)
 
         assert isinstance(fig, go.Figure)
         assert fig.layout.height == 420
@@ -364,11 +394,11 @@ class TestBarChart:
         fig = bar_chart(ref_dist, out_dist)
 
         assert isinstance(fig, go.Figure)
-        assert len(fig.data) == 2  # Reference and Output bars
+        assert len(fig.data) == 2  # Training and Synthetic bars
         assert all(isinstance(trace, go.Bar) for trace in fig.data)
 
     def test_bar_chart_missing_keys(self):
-        # Output has key that reference doesn't have
+        # Synthetic distribution has a key that training doesn't have
         ref_dist = {"A": 0.5, "B": 0.5}
         out_dist = {"A": 0.4, "C": 0.6}
 
@@ -403,38 +433,37 @@ class TestHistogramFigure:
     """Tests for histogram_figure function."""
 
     def test_histogram_figure_basic(self):
-        reference = pd.Series(np.random.randn(1000))
-        output = pd.Series(np.random.randn(1000))
+        training = pd.Series(np.random.randn(1000))
+        synthetic = pd.Series(np.random.randn(1000))
 
-        fig = histogram_figure(reference, output)
+        fig = histogram_figure(training, synthetic)
 
         assert isinstance(fig, go.Figure)
-        assert len(fig.data) == 2  # Reference and Output histograms
+        assert len(fig.data) == 2  # Training and Synthetic histograms
 
     def test_histogram_figure_with_nans(self):
-        reference = pd.Series([1.0, 2.0, np.nan, 3.0, np.nan])
-        output = pd.Series([1.5, np.nan, 2.5, 3.5, 4.0])
+        training = pd.Series([1.0, 2.0, np.nan, 3.0, np.nan])
+        synthetic = pd.Series([1.5, np.nan, 2.5, 3.5, 4.0])
 
-        fig = histogram_figure(reference, output)
+        fig = histogram_figure(training, synthetic)
 
         assert isinstance(fig, go.Figure)
 
     def test_histogram_figure_empty_after_dropna(self):
-        reference = pd.Series([np.nan, np.nan])
-        output = pd.Series([1.0, 2.0])
+        training = pd.Series([np.nan, np.nan])
+        synthetic = pd.Series([1.0, 2.0])
 
-        fig = histogram_figure(reference, output)
+        fig = histogram_figure(training, synthetic)
 
         # Should return empty figure when one series is all NaN
         assert isinstance(fig, go.Figure)
         assert len(fig.data) == 0
 
     def test_histogram_figure_same_values(self):
-        # Edge case: all values are the same (no variance)
-        reference = pd.Series([5.0, 5.0, 5.0, 5.0])
-        output = pd.Series([5.0, 5.0, 5.0, 5.0])
+        training = pd.Series([5.0, 5.0, 5.0, 5.0])
+        synthetic = pd.Series([5.0, 5.0, 5.0, 5.0])
 
-        fig = histogram_figure(reference, output)
+        fig = histogram_figure(training, synthetic)
 
         assert isinstance(fig, go.Figure)
 

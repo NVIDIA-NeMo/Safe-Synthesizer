@@ -8,6 +8,8 @@ import numpy as np
 import pandas as pd
 import pytest
 import torch
+from transformers import EvalPrediction, IntervalStrategy
+
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
 from nemo_safe_synthesizer.config import (
     DataParameters,
@@ -16,13 +18,13 @@ from nemo_safe_synthesizer.config import (
     SafeSynthesizerParameters,
     TrainingHyperparams,
 )
-from nemo_safe_synthesizer.errors import DataError, ParameterError
+from nemo_safe_synthesizer.errors import ParameterError
+from nemo_safe_synthesizer.training.callbacks import ProgressBarCallback, SafeSynthesizerWorkerCallback
 from nemo_safe_synthesizer.training.huggingface_backend import (
     HuggingFaceBackend,
     compute_metrics,
     preprocess_logits_for_metrics,
 )
-from transformers import EvalPrediction, IntervalStrategy
 
 
 @pytest.fixture
@@ -207,17 +209,6 @@ def sample_dataframe():
     )
 
 
-@pytest.fixture
-def dataframe_with_null_group():
-    """Create a DataFrame with null values in the group column."""
-    return pd.DataFrame(
-        {
-            "col1": [1, 2, 3],
-            "group_col": ["g1", None, "g2"],
-        }
-    )
-
-
 class TestFilterModelKwargs:
     def test_filters_trainer_specific_keys(self, backend):
         """Test that trainer-specific keys are filtered out."""
@@ -240,13 +231,13 @@ class TestFilterModelKwargs:
         """Test that non-trainer-specific keys are preserved."""
         kwargs = {
             "device_map": "cuda:0",
-            "attn_implementation": "flash_attention_2",
+            "attn_implementation": "sdpa",
             "custom_param": "custom_value",
         }
         result = backend._filter_model_kwargs(kwargs)
 
         assert result["device_map"] == "cuda:0"
-        assert result["attn_implementation"] == "flash_attention_2"
+        assert result["attn_implementation"] == "sdpa"
         assert result["custom_param"] == "custom_value"
 
     def test_empty_kwargs(self, backend):
@@ -279,15 +270,63 @@ class TestFilterModelKwargs:
 
 @patch("nemo_safe_synthesizer.training.huggingface_backend.get_device_map")
 class TestBuildBaseFrameworkParams:
-    def test_builds_correct_params(self, mock_get_device_map, backend):
-        """Test that base framework params are built correctly."""
+    def test_uses_cached_model_ref_target_and_trust(
+        self,
+        mock_get_device_map,
+        base_params,
+        mock_model_metadata,
+        mock_workdir,
+    ):
+        """Framework params use resolved model refs before HuggingFace model loading."""
+        cached_target = "/tmp/hf-cache/models--nvidia--TinyLlama/snapshots/abc123"
+        model_ref = MagicMock()
+        model_ref.target.return_value = cached_target
+        model_ref.trust_remote_code = True
+        mock_get_device_map.return_value = "auto"
+
+        with patch(
+            "nemo_safe_synthesizer.training.huggingface_backend.ModelRef.parse", return_value=model_ref
+        ) as parse:
+            backend = HuggingFaceBackend(
+                params=base_params,
+                model_metadata=mock_model_metadata,
+                workdir=mock_workdir,
+            )
+
+        result = backend._build_base_framework_params({})
+
+        parse.assert_called_once_with(base_params.training.pretrained_model)
+        assert result["pretrained_model_name_or_path"] == cached_target
+        assert result["trust_remote_code"] is True
+        mock_get_device_map.assert_called_once_with(
+            cached_target,
+            autoconfig=backend.autoconfig,
+            trust_remote_code=True,
+        )
+
+    def test_builds_correct_params_with_kernels(self, mock_get_device_map, backend):
+        """Test that base framework params use the configured default attention implementation."""
         mock_get_device_map.return_value = "auto"
         model_kwargs = {"custom_key": "custom_value"}
-        result = backend._build_base_framework_params(model_kwargs)
+        with patch.dict("sys.modules", {"kernels": MagicMock()}):
+            result = backend._build_base_framework_params(model_kwargs)
 
         assert result["pretrained_model_name_or_path"] == "test-model"
         assert result["device_map"] == "auto"
-        assert result["attn_implementation"] == "flash_attention_2"
+        assert result["attn_implementation"] == "sdpa"
+        assert result["dtype"] == torch.bfloat16
+        assert result["custom_key"] == "custom_value"
+
+    def test_builds_correct_params_without_kernels(self, mock_get_device_map, backend):
+        """Test that base framework params use the default when kernels is not available."""
+        mock_get_device_map.return_value = "auto"
+        model_kwargs = {"custom_key": "custom_value"}
+        with patch.dict("sys.modules", {"kernels": None}):
+            result = backend._build_base_framework_params(model_kwargs)
+
+        assert result["pretrained_model_name_or_path"] == "test-model"
+        assert result["device_map"] == "auto"
+        assert result["attn_implementation"] == "sdpa"
         assert result["dtype"] == torch.bfloat16
         assert result["custom_key"] == "custom_value"
 
@@ -299,11 +338,21 @@ class TestBuildBaseFrameworkParams:
         assert result["device_map"] == "cuda:1"
 
     def test_uses_custom_attn_implementation(self, mock_get_device_map, backend):
-        """Test that custom attn_implementation is used when provided."""
+        """Test that custom attn_implementation from kwargs overrides config."""
         mock_get_device_map.return_value = "auto"
         model_kwargs = {"device_map": "auto", "attn_implementation": "sdpa"}
         result = backend._build_base_framework_params(model_kwargs)
         assert result["attn_implementation"] == "sdpa"
+
+    def test_uses_config_attn_implementation(self, mock_get_device_map, backend):
+        """Test that attn_implementation from config is used when not in kwargs."""
+        mock_get_device_map.return_value = "auto"
+        backend.params.training.attn_implementation = "eager"
+        model_kwargs = {"device_map": "auto"}
+        result = backend._build_base_framework_params(model_kwargs)
+        assert result["attn_implementation"] == "eager"
+        # Reset to default
+        backend.params.training.attn_implementation = "sdpa"
 
     def test_uses_custom_dtype(self, mock_get_device_map, backend):
         """Test that custom dtype is used when provided."""
@@ -311,6 +360,93 @@ class TestBuildBaseFrameworkParams:
         model_kwargs = {"device_map": "auto", "dtype": torch.float32}
         result = backend._build_base_framework_params(model_kwargs)
         assert result["dtype"] == torch.float32
+
+
+class TestResolvedModelLoading:
+    def test_init_uses_cached_model_ref_target_for_autoconfig(self, base_params, mock_model_metadata, mock_workdir):
+        """Backend initialization resolves cached model refs before loading AutoConfig."""
+        cached_target = "/tmp/hf-cache/models--nvidia--TinyLlama/snapshots/abc123"
+        model_ref = MagicMock()
+        model_ref.target.return_value = cached_target
+        model_ref.trust_remote_code = True
+        autoconfig = MagicMock()
+
+        with (
+            patch("nemo_safe_synthesizer.training.huggingface_backend.ModelRef.parse", return_value=model_ref) as parse,
+            patch(
+                "nemo_safe_synthesizer.training.huggingface_backend.AutoConfig.from_pretrained",
+                return_value=autoconfig,
+            ) as from_pretrained,
+        ):
+            backend = HuggingFaceBackend(
+                params=base_params,
+                model_metadata=mock_model_metadata,
+                workdir=mock_workdir,
+            )
+
+        assert backend.model_ref is model_ref
+        parse.assert_called_once_with(base_params.training.pretrained_model)
+        from_pretrained.assert_called_once_with(cached_target, trust_remote_code=True)
+
+    def test_load_pretrained_model_uses_cached_model_ref_target_for_tokenizer(self, backend):
+        """Tokenizer loading uses the same resolved model ref as model loading."""
+        cached_target = "/tmp/hf-cache/models--nvidia--TinyLlama/snapshots/abc123"
+        model_ref = MagicMock()
+        model_ref.target.return_value = cached_target
+        model_ref.trust_remote_code = True
+        tokenizer = MagicMock()
+        backend.model_ref = model_ref
+        backend.framework_load_params = {
+            "pretrained_model_name_or_path": cached_target,
+            "trust_remote_code": True,
+        }
+        backend.model_loader_type = MagicMock()
+        backend.model_loader_type.from_pretrained.return_value = MagicMock()
+        backend.model_metadata.max_seq_length = 2048
+
+        with (
+            patch(
+                "nemo_safe_synthesizer.training.huggingface_backend.load_fast_tokenizer",
+                return_value=tokenizer,
+            ) as load_tok,
+            patch(
+                "nemo_safe_synthesizer.training.huggingface_backend.add_bos_eos_tokens_to_tokenizer",
+                return_value=tokenizer,
+            ),
+        ):
+            backend._load_pretrained_model()
+
+        load_tok.assert_called_once_with(
+            cached_target,
+            trust_remote_code=True,
+            model_max_length=None,
+        )
+
+
+class TestResolveAttnImplementation:
+    def test_kernels_available(self, backend):
+        """Test that kernels-community path is returned when kernels is importable."""
+        with patch.dict("sys.modules", {"kernels": MagicMock()}):
+            result = backend._resolve_attn_implementation("sdpa")
+        assert result == "sdpa"
+
+    def test_kernels_not_available(self, backend):
+        """Test that sdpa fallback is returned when kernels is not importable."""
+        with patch.dict("sys.modules", {"kernels": None}):
+            result = backend._resolve_attn_implementation("sdpa")
+        assert result == "sdpa"
+
+    def test_kernels_community_other_kernel(self, backend):
+        """Test fallback for other kernels-community paths."""
+        with patch.dict("sys.modules", {"kernels": None}):
+            result = backend._resolve_attn_implementation("kernels-community/flash-attn2")
+        assert result == "sdpa"
+
+    def test_non_kernels_value_passthrough(self, backend):
+        """Test that non-kernels values are passed through as-is."""
+        assert backend._resolve_attn_implementation("eager") == "eager"
+        assert backend._resolve_attn_implementation("sdpa") == "sdpa"
+        assert backend._resolve_attn_implementation("flash_attention_2") == "flash_attention_2"
 
 
 class TestGetQuantizationConfigIfEnabled:
@@ -321,26 +457,56 @@ class TestGetQuantizationConfigIfEnabled:
 
     @patch("nemo_safe_synthesizer.training.huggingface_backend.get_quantization_config")
     def test_returns_config_when_enabled(self, mock_get_config, backend_with_quantization):
-        """Test that quantization config is returned when enabled."""
+        """Legacy bits-based path: quantization_bits=4 -> BNB_4BIT scheme."""
+        from nemo_safe_synthesizer.config.training import QuantizationScheme
+
         mock_config = MagicMock()
         mock_get_config.return_value = mock_config
 
         result = backend_with_quantization._get_quantization_config_if_enabled()
 
-        mock_get_config.assert_called_once_with(4)
+        mock_get_config.assert_called_once_with(QuantizationScheme.BNB_4BIT)
         assert result == mock_config
 
     @patch("nemo_safe_synthesizer.training.huggingface_backend.get_quantization_config")
     def test_defaults_to_8_bits(self, mock_get_config, backend_with_quantization):
-        """Test that 8 bits is used as default when not specified."""
-        backend_with_quantization.params.training.quantization_bits = None
+        """Legacy bits-based path: quantization_bits=8 -> BNB_8BIT scheme."""
+        from nemo_safe_synthesizer.config.training import QuantizationScheme
+
+        backend_with_quantization.params.training.quantization_bits = 8
         mock_config = MagicMock()
         mock_get_config.return_value = mock_config
 
         result = backend_with_quantization._get_quantization_config_if_enabled()
 
-        mock_get_config.assert_called_once_with(8)
+        mock_get_config.assert_called_once_with(QuantizationScheme.BNB_8BIT)
         assert result == mock_config
+
+    @patch("nemo_safe_synthesizer.training.huggingface_backend.get_quantization_config")
+    def test_explicit_scheme_overrides_bits(self, mock_get_config, backend_with_quantization):
+        """When quantization_scheme is set, it overrides the bits-based fallback."""
+        from nemo_safe_synthesizer.config.training import QuantizationScheme
+
+        backend_with_quantization.params.training.quantization_scheme = QuantizationScheme.NVFP4
+        mock_get_config.return_value = MagicMock()
+
+        backend_with_quantization._get_quantization_config_if_enabled()
+
+        mock_get_config.assert_called_once_with(QuantizationScheme.NVFP4)
+
+
+class TestPrepareQuantizeBase:
+    @pytest.mark.parametrize("scheme_name", ["FP8", "NVFP4", "MXFP4"])
+    def test_loftq_rejects_non_bitsandbytes_schemes(self, backend_with_quantization, scheme_name):
+        """LoftQ depends on bitsandbytes quantization schemes."""
+        from nemo_safe_synthesizer.config.training import QuantizationScheme
+
+        scheme = getattr(QuantizationScheme, scheme_name)
+        backend_with_quantization.params.training.quantization_scheme = scheme
+        backend_with_quantization.params.training.peft_implementation = "loftq"
+
+        with pytest.raises(ParameterError, match="requires a bitsandbytes scheme"):
+            backend_with_quantization._prepare_quantize_base()
 
 
 class TestApplyRopeScaling:
@@ -403,6 +569,38 @@ class TestApplyRopeScaling:
         assert backend.autoconfig.rope_scaling == {
             "rope_type": "linear",
             "factor": 5.0,
+        }
+
+
+class TestNormalizeRopeParameters:
+    def test_normalizes_rope_parameters_theta_key(self, backend):
+        """Test that legacy theta is copied to Transformers v5 rope_theta."""
+        backend.model_metadata.rope_scaling = None
+        backend.autoconfig.rope_scaling = None
+        backend.autoconfig.rope_parameters = {"rope_type": "default", "theta": 50000.0}
+
+        backend._normalize_rope_parameters()
+
+        assert backend.autoconfig.rope_parameters == {
+            "rope_type": "default",
+            "theta": 50000.0,
+            "rope_theta": 50000.0,
+        }
+
+    def test_normalizes_rope_parameters_from_metadata(self, backend):
+        """Test that model metadata supplies theta when rope_parameters lacks it."""
+        from nemo_safe_synthesizer.llm.metadata import RopeScaling
+
+        backend.model_metadata.rope_scaling = RopeScaling(rope_type="yarn", factor=4.0, theta=1500000.0)
+        backend.autoconfig.rope_scaling = {"rope_type": "yarn", "factor": 4.0}
+        backend.autoconfig.rope_parameters = {"rope_type": "yarn", "factor": 4.0}
+
+        backend._normalize_rope_parameters()
+
+        assert backend.autoconfig.rope_parameters == {
+            "rope_type": "yarn",
+            "factor": 4.0,
+            "rope_theta": 1500000.0,
         }
 
 
@@ -469,6 +667,18 @@ class TestConfigureDpTraining:
         assert training_args["max_grad_norm"] == 0.0
         assert "gradient_checkpointing" not in training_args
 
+    def test_disables_model_gradient_checkpointing(self, backend_with_dp):
+        """Test that DP training disables model-level gradient checkpointing."""
+        model = MagicMock()
+        model.config.use_cache = True
+        backend_with_dp.model = model
+        training_args = {"gradient_checkpointing": True}
+
+        backend_with_dp._configure_dp_training(training_args)
+
+        model.gradient_checkpointing_disable.assert_called_once_with()
+        assert model.config.use_cache is False
+
     def test_raises_when_missing_data_fraction(self, backend_with_dp):
         """Test that ParameterError is raised when data_fraction is missing."""
         backend_with_dp.data_fraction = None
@@ -509,47 +719,25 @@ class TestConfigureStandardTraining:
         assert "data_collator" not in training_args
 
 
-class TestValidateGroupbyColumn:
-    def test_does_nothing_when_no_groupby(self, backend, sample_dataframe):
-        """Test that nothing happens when groupby is None."""
-        backend._validate_groupby_column(sample_dataframe)  # Should not raise
+class TestConfigureTrainerCallbacks:
+    @pytest.mark.parametrize(
+        ("is_info_enabled", "expected_callback_type"),
+        [
+            (True, SafeSynthesizerWorkerCallback),
+            (False, ProgressBarCallback),
+        ],
+    )
+    def test_uses_central_logger_level_for_progress_callback(self, backend, is_info_enabled, expected_callback_type):
+        """Trainer progress callback follows observability-controlled logger level."""
+        trainer = MagicMock()
 
-    def test_passes_when_column_exists(self, backend, sample_dataframe):
-        """Test that validation passes when column exists."""
-        backend.params.data.group_training_examples_by = "group_col"
-        backend._validate_groupby_column(sample_dataframe)  # Should not raise
+        with patch("nemo_safe_synthesizer.training.huggingface_backend.logger") as mock_logger:
+            mock_logger.isEnabledFor.return_value = is_info_enabled
+            backend._configure_trainer_callbacks(trainer, {})
 
-    def test_raises_when_column_missing(self, backend, sample_dataframe):
-        """Test that ParameterError is raised when column is missing."""
-        backend.params.data.group_training_examples_by = "nonexistent_col"
-
-        with pytest.raises(ParameterError, match="Group by column 'nonexistent_col' not found"):
-            backend._validate_groupby_column(sample_dataframe)
-
-    def test_raises_when_column_has_nulls(self, backend, dataframe_with_null_group):
-        """Test that DataError is raised when column has null values."""
-        backend.params.data.group_training_examples_by = "group_col"
-
-        with pytest.raises(DataError, match="has missing values"):
-            backend._validate_groupby_column(dataframe_with_null_group)
-
-
-class TestValidateOrderbyColumn:
-    def test_does_nothing_when_no_orderby(self, backend, sample_dataframe):
-        """Test that nothing happens when orderby is None."""
-        backend._validate_orderby_column(sample_dataframe)  # Should not raise
-
-    def test_passes_when_column_exists(self, backend, sample_dataframe):
-        """Test that validation passes when column exists."""
-        backend.params.data.order_training_examples_by = "order_col"
-        backend._validate_orderby_column(sample_dataframe)  # Should not raise
-
-    def test_raises_when_column_missing(self, backend, sample_dataframe):
-        """Test that ParameterError is raised when column is missing."""
-        backend.params.data.order_training_examples_by = "nonexistent_col"
-
-        with pytest.raises(ParameterError, match="Order by column 'nonexistent_col' not found"):
-            backend._validate_orderby_column(sample_dataframe)
+        trainer.remove_callback.assert_called_once()
+        callback = trainer.add_callback.call_args.args[0]
+        assert isinstance(callback, expected_callback_type)
 
 
 class TestApplyPreprocessing:
@@ -613,19 +801,21 @@ class TestComputeMetrics:
 
 
 @patch("nemo_safe_synthesizer.training.huggingface_backend.get_device_map")
-@patch("nemo_safe_synthesizer.training.huggingface_backend.get_max_vram")
+@patch("nemo_safe_synthesizer.training.huggingface_backend.get_max_memory_map")
 @patch("nemo_safe_synthesizer.training.huggingface_backend.AutoConfig")
 class TestPrepareConfigIntegration:
-    def test_early_return_when_already_prepared(self, mock_autoconfig, mock_get_max_vram, mock_get_device_map, backend):
+    def test_early_return_when_already_prepared(
+        self, mock_autoconfig, mock_get_max_memory_map, mock_get_device_map, backend
+    ):
         """Test that prepare_config returns early when already prepared."""
         backend.framework_load_params = {"already": "prepared"}
         backend.prepare_config()
 
         mock_autoconfig.from_pretrained.assert_not_called()
 
-    def test_prepares_config_correctly(self, mock_autoconfig, mock_get_max_vram, mock_get_device_map, backend):
+    def test_prepares_config_correctly(self, mock_autoconfig, mock_get_max_memory_map, mock_get_device_map, backend):
         """Test that prepare_config sets framework_load_params correctly."""
-        mock_get_max_vram.return_value = {"cuda:0": "16GB"}
+        mock_get_max_memory_map.return_value = {0: 16 * 1024**3}
         mock_get_device_map.return_value = "auto"
         mock_config = MagicMock()
         mock_autoconfig.from_pretrained.return_value = mock_config
@@ -634,5 +824,85 @@ class TestPrepareConfigIntegration:
 
         backend.prepare_config()
 
+        mock_get_max_memory_map.assert_called_once_with(max_vram_fraction=backend.params.training.max_vram_fraction)
         assert backend.framework_load_params is not None
         assert backend.framework_load_params["pretrained_model_name_or_path"] == "test-model"
+        assert backend.framework_load_params["max_memory"] == {0: 16 * 1024**3}
+
+    def test_prepare_config_max_vram_fraction_kwarg_overrides_config(
+        self, mock_autoconfig, mock_get_max_memory_map, mock_get_device_map, backend
+    ):
+        """Explicit model-load VRAM fraction overrides the configured default."""
+        mock_get_max_memory_map.return_value = {0: 8 * 1024**3}
+        mock_get_device_map.return_value = "auto"
+        mock_autoconfig.from_pretrained.return_value = MagicMock()
+        backend.model_metadata.rope_scaling = None
+
+        backend.prepare_config(max_vram_fraction=0.5)
+
+        mock_get_max_memory_map.assert_called_once_with(max_vram_fraction=0.5)
+        assert backend.framework_load_params is not None
+        assert backend.framework_load_params["max_memory"] == {0: 8 * 1024**3}
+        assert "max_vram_fraction" not in backend.framework_load_params
+
+
+class TestPropagateMaxTokensPerExample:
+    """Tests for HuggingFaceBackend._propagate_max_tokens_per_example."""
+
+    @staticmethod
+    def _make_stat(count: int, max_value: float) -> MagicMock:
+        """Create a stub mirroring ``RunningStatistics`` shape."""
+        stat = MagicMock()
+        stat.count = count
+        stat.max = max_value
+        return stat
+
+    def _set_training_examples_stats(self, backend: HuggingFaceBackend, stats: dict) -> None:
+        """Attach a minimal ``training_examples`` stub exposing ``.stats``."""
+        training_examples = MagicMock()
+        training_examples.stats = stats
+        backend.training_examples = training_examples
+
+    def test_copies_max_onto_metadata(self, backend):
+        """Populated stat is written as ``math.ceil`` onto metadata."""
+        self._set_training_examples_stats(
+            backend,
+            {"tokens_per_example": self._make_stat(count=7, max_value=2251.5)},
+        )
+
+        backend._propagate_max_tokens_per_example()
+
+        # math.ceil(2251.5) = 2252
+        assert backend.model_metadata.max_tokens_per_example == 2252
+
+    def test_noop_when_stat_missing(self, backend):
+        """Missing ``tokens_per_example`` key leaves the metadata untouched."""
+        backend.model_metadata.max_tokens_per_example = None
+        self._set_training_examples_stats(backend, {"records_per_example": self._make_stat(1, 10)})
+
+        backend._propagate_max_tokens_per_example()
+
+        assert backend.model_metadata.max_tokens_per_example is None
+
+    def test_noop_when_stat_unpopulated(self, backend):
+        """Stat with ``count == 0`` is treated as absent."""
+        backend.model_metadata.max_tokens_per_example = None
+        self._set_training_examples_stats(
+            backend,
+            {"tokens_per_example": self._make_stat(count=0, max_value=float("-inf"))},
+        )
+
+        backend._propagate_max_tokens_per_example()
+
+        assert backend.model_metadata.max_tokens_per_example is None
+
+    def test_rounds_up_fractional_max(self, backend):
+        """Fractional ``max`` (from running mean interactions) rounds up."""
+        self._set_training_examples_stats(
+            backend,
+            {"tokens_per_example": self._make_stat(count=3, max_value=1000.01)},
+        )
+
+        backend._propagate_max_tokens_per_example()
+
+        assert backend.model_metadata.max_tokens_per_example == 1001

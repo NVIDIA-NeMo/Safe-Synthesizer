@@ -1,26 +1,52 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 
 export USER_NAME="${USER_NAME:-}"
-export LUSTRE_DIR="/lustre/fsw/portfolios/llmservice/users/${USER_NAME}" ## do not change this
+export LUSTRE_DIR="/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/${USER_NAME}" ## do not change this
 
-# NOTE: This directory is only setup on cs-oci-ord and cw-dfw-cs right now,
+# NOTE: This directory is only setup on cs-oci-ord and cw-pdx-cs right now,
 # will need to create the same structure on other clusters as we need them.
-export NSS_SHARED_DIR="/lustre/fsw/portfolios/llmservice/users/kendrickb/shared_safe_synthesizer"
+export NSS_SHARED_DIR="/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/kendrickb/shared_safe_synthesizer"
 
 ## change the followings if you want them to be different
-CONFIGS=(unsloth dp dp_usg_guidance) # the jobs will run all datasets with these configs
-export NMP_DIR="/lustre/fsw/portfolios/llmservice/users/${USER_NAME}/nmp" # where the nmp repo is located
-export NSS_SLURM_DIR="${NMP_DIR}/packages/nemo_safe_synthesizer/script/slurm" # slurm scripts location (inside repo)
-export CONFIG_DIR="${NSS_SLURM_DIR}" # where the config files are located
+CONFIGS=(
+    smollm3-nodp
+    smollm3-dp
+    tinyllama-nodp
+    tinyllama-dp
+    mistral-nodp
+    mistral-dp
+) # the jobs will run all datasets with these configs
+export NSS_DIR="${NSS_DIR:-${LUSTRE_DIR}/Safe-Synthesizer}" # where the nss repo is located
+export NSS_SLURM_DIR="${NSS_DIR}/script/slurm" # slurm scripts location (inside repo)
+export CONFIG_DIR="${NSS_SLURM_DIR}/configs" # where the config files are located
 export BASE_LOG_DIR="${LUSTRE_DIR}/nss_results" # where you want the slurm logs to be saved, each job will have err and out files
-export ADAPTER_PATH="${LUSTRE_DIR}/nmp/exp/adapters" # base path for run directories (each run creates a subdirectory via --run-path)
+export ADAPTER_PATH="${LUSTRE_DIR}/nss_results/adapters" # base path for run directories (each run creates a subdirectory via --run-path)
 export VLLM_CACHE_ROOT="${LUSTRE_DIR}/.cache/vllm/" # where the vllm cache is saved, this is to prevent the login node from blowing up
 export UV_CACHE_DIR="${LUSTRE_DIR}/.cache/uv"
 export UV_PYTHON_INSTALL_DIR="${LUSTRE_DIR}/.local/share/uv/python"
 export UV_PYTHON_BIN_DIR="${LUSTRE_DIR}/.local/bin"
 export UV_TOOL_DIR="${LUSTRE_DIR}/.local/share/uv/tools"
+# Cap concurrent wheel downloads. The repo venv pre-build pulls large CUDA/torch/
+# vLLM/flashinfer wheels, and uv's default high concurrency might spike memory on
+# the login node. Override by exporting UV_CONCURRENT_DOWNLOADS first.
+export UV_CONCURRENT_DOWNLOADS="${UV_CONCURRENT_DOWNLOADS:-20}"
+# Python version for Slurm virtualenvs. Defaults to the repo's pinned version
+# (.python-version) so it tracks dependency/Python bumps automatically; override
+# by exporting NSS_PYTHON_VERSION before sourcing this file.
+if [[ -z "${NSS_PYTHON_VERSION:-}" ]]; then
+    if [[ -f "${NSS_DIR}/.python-version" ]]; then
+        NSS_PYTHON_VERSION="$(tr -d '[:space:]' < "${NSS_DIR}/.python-version")"
+    else
+        NSS_PYTHON_VERSION="3.13"
+    fi
+fi
+export NSS_PYTHON_VERSION
 export HF_HOME="${LUSTRE_DIR}/.cache/huggingface"
-export WANDB_MODE="disabled" # "online", "offline" or "disabled"
+export WANDB_MODE="online" # "online", "offline" or "disabled"
+export NEMO_DEPLOYMENT_TYPE="slurm-nvidia-internal" # sets the values for telemetry
 
 # NSS CLI environment variables (used by safe-synthesizer CLI via pydantic-settings)
 # These are picked up automatically by CLISettings in the CLI:
@@ -30,16 +56,3 @@ export WANDB_MODE="disabled" # "online", "offline" or "disabled"
 #   NSS_LOG_FORMAT - Log format ("json" or "plain")
 #   NSS_LOG_FILE - Path to log file
 export NSS_ARTIFACTS_PATH="${ADAPTER_PATH}"
-
-# time limits for the short and long jobs
-declare -A CONFIG_TIME_LIMITS_SHORT
-declare -A CONFIG_TIME_LIMITS_LONG
-
-CONFIG_TIME_LIMITS_SHORT[unsloth]="00:40:00"
-CONFIG_TIME_LIMITS_SHORT[dp]="02:00:00"
-CONFIG_TIME_LIMITS_SHORT[max]="04:00:00" #fallback if config names do not include unsloth or dp
-
-CONFIG_TIME_LIMITS_LONG[unsloth]="01:20:00"
-CONFIG_TIME_LIMITS_LONG[dp]="02:00:00"
-CONFIG_TIME_LIMITS_LONG[max]="04:00:00" #fallback if config names do not include unsloth or dp
-

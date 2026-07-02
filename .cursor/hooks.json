@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": ".cursor/hooks/session_context.sh"
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": ".cursor/hooks/enforce-signoff.sh",
+        "matcher": "git commit"
+      }
+    ]
+  }
+}

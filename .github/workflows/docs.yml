@@ -26,7 +26,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: docs-deploy
@@ -36,9 +36,11 @@ jobs:
   deploy:
     name: Deploy docs to GitHub Pages
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
 
@@ -46,19 +48,16 @@ jobs:
         id: setup
         uses: ./.github/actions/setup-python-env
         with:
-          fetch-depth: 0
+          checkout: "false"
           bootstrap-tools: "true"
-          python-version: "3.11"
 
       - name: Install docs dependencies
-        run: make bootstrap-nss dev
+        run: mise run bootstrap-nss dev
 
-      - name: Build documentation
-        run: make docs-build
+      - name: Configure git for mike
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./site
-          publish_branch: gh-pages
+      - name: Deploy latest docs to GitHub Pages
+        run: mise run docs:deploy

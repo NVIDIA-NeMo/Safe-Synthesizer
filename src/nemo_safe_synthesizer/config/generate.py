@@ -3,11 +3,13 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+import warnings
+from typing import Annotated, Any, ClassVar, Literal, Self
 
 from pydantic import (
     BaseModel,
     Field,
+    model_validator,
 )
 
 from ..configurator.parameters import (
@@ -17,8 +19,58 @@ from ..configurator.validators import (
     ValueValidator,
     range_validator,
 )
+from ..errors import ParameterError
 
-__all__ = ["GenerateParameters", "ValidationParameters"]
+StructuredGenerationSchemaMethod = Literal["auto", "regex", "json_schema", "structural_tag"]
+ResolvedStructuredGenerationSchemaMethod = Literal["regex", "json_schema", "structural_tag"]
+StructuredGenerationBackend = Literal["auto", "xgrammar", "guidance", "outlines", "lm-format-enforcer"]
+
+STRUCTURAL_TAG_COMPATIBLE_BACKENDS = frozenset({"auto", "xgrammar"})
+
+__all__ = [
+    "GenerateParameters",
+    "ResolvedStructuredGenerationSchemaMethod",
+    "StructuredGenerationParameters",
+    "StructuredGenerationBackend",
+    "StructuredGenerationSchemaMethod",
+    "STRUCTURAL_TAG_COMPATIBLE_BACKENDS",
+    "ValidationParameters",
+    "resolve_structured_generation_schema_method",
+    "structural_tag_backend_error_message",
+]
+
+
+def resolve_structured_generation_schema_method(
+    schema_method: StructuredGenerationSchemaMethod,
+    backend: StructuredGenerationBackend | str,
+) -> ResolvedStructuredGenerationSchemaMethod:
+    """Resolve ``auto`` schema method from the configured structured-output backend.
+
+    ``auto`` picks ``structural_tag`` on xgrammar-capable backends and ``regex``
+    elsewhere, preserving legacy behavior for outlines/guidance configs that omit
+    an explicit schema method.
+    """
+    if schema_method != "auto":
+        return schema_method
+    if backend in STRUCTURAL_TAG_COMPATIBLE_BACKENDS:
+        return "structural_tag"
+    return "regex"
+
+
+def structural_tag_backend_error_message(backend: str) -> str | None:
+    """Return an error message when *backend* cannot serve ``structural_tag``.
+
+    vLLM only supports XGrammar Structural Tag constraints when the guided
+    decoding backend is ``xgrammar`` or ``auto`` (which selects xgrammar for
+    this schema method).
+    """
+    if backend in STRUCTURAL_TAG_COMPATIBLE_BACKENDS:
+        return None
+    return (
+        "Invalid structured generation configuration: "
+        "`schema_method='structural_tag'` requires "
+        f"`backend` to be 'xgrammar' or 'auto', got {backend!r}."
+    )
 
 
 class ValidationParameters(Parameters, BaseModel):
@@ -48,7 +100,7 @@ class ValidationParameters(Parameters, BaseModel):
         bool,
         Field(
             title="group_by_fix_non_unique_value",
-            description="Whether to automatically fix non-unique group by values in a sequence by using the first unique value for all records.",
+            description="Whether to automatically fix non-unique group-by values in a sequence by using the first unique value for all records.",
         ),
     ] = False
 
@@ -61,21 +113,72 @@ class ValidationParameters(Parameters, BaseModel):
     ] = False
 
 
+class StructuredGenerationParameters(Parameters, BaseModel):
+    """Configuration for vLLM structured generation.
+
+    These parameters control whether generation is constrained to schema-shaped
+    output, which backend enforces the constraint, and how the constraint schema
+    is built.
+    """
+
+    enabled: Annotated[
+        bool,
+        Field(
+            title="enabled",
+            description="Whether to use structured generation for better format control.",
+        ),
+    ] = False
+
+    backend: Annotated[
+        StructuredGenerationBackend,
+        Field(
+            title="backend",
+            description=(
+                "The backend used by vLLM when structured generation is enabled. "
+                "Supported backends: 'outlines', 'guidance', 'xgrammar', 'lm-format-enforcer'. "
+                "'auto' will allow vLLM to choose the backend."
+            ),
+        ),
+    ] = "auto"
+
+    schema_method: Annotated[
+        StructuredGenerationSchemaMethod,
+        Field(
+            title="schema_method",
+            description=(
+                "The method used to generate the schema from your dataset and pass it to the generation backend. "
+                "'auto' picks 'structural_tag' on xgrammar-capable backends and 'regex' otherwise. "
+                "'regex' uses a custom regex construction method that tends to be more comprehensive "
+                "than 'json_schema' at the cost of speed. 'structural_tag' uses XGrammar Structural Tag "
+                "to compose schema-constrained JSONL output."
+            ),
+        ),
+    ] = "auto"
+
+    use_single_sequence: Annotated[
+        bool,
+        Field(
+            title="use_single_sequence",
+            description="Whether to use a regex that matches exactly one sequence or record if ``max_sequences_per_example`` is 1.",
+        ),
+    ] = False
+
+    @model_validator(mode="after")
+    def _validate_structural_tag_backend(self) -> Self:
+        if not self.enabled:
+            return self
+        if self.schema_method != "structural_tag":
+            return self
+        if message := structural_tag_backend_error_message(self.backend):
+            raise ParameterError(message)
+        return self
+
+
 class GenerateParameters(Parameters, BaseModel):
     """Configuration parameters for synthetic data generation.
 
     These parameters control how synthetic data is generated after the model is trained.
     They affect the quality, diversity, and validity of the generated synthetic records.
-
-    Attributes:
-        num_records: Number of synthetic records to generate. Maximum is 130,000 records.
-        temperature: Sampling temperature for controlling randomness (higher = more random).
-        repetition_penalty: Penalty for token repetition (≥1.0, higher = less repetition).
-        top_p: Nucleus sampling probability for token selection (0 < value ≤ 1).
-        patience: Number of invalid records fraction before stopping.
-        invalid_fraction_threshold: "The fraction of invalid records that will stop generation after the `patience` limit is reached."
-        use_structured_generation: Whether to use structured generation for better format control.
-
     """
 
     num_records: Annotated[
@@ -90,7 +193,7 @@ class GenerateParameters(Parameters, BaseModel):
         float,
         Field(
             title="temperature",
-            description="Sampling temperature.",
+            description="Sampling temperature for controlling randomness (higher = more random).",
         ),
     ] = 0.9
 
@@ -99,7 +202,7 @@ class GenerateParameters(Parameters, BaseModel):
         ValueValidator(value_func=lambda v: v > 0),
         Field(
             title="repetition_penalty",
-            description="The value used to control the likelihood of the model repeating the same token.",
+            description="The value used to control the likelihood of the model repeating the same token. Must be > 0.",
         ),
     ] = 1.0
 
@@ -108,7 +211,7 @@ class GenerateParameters(Parameters, BaseModel):
         ValueValidator(value_func=lambda v: 0 < v <= 1),
         Field(
             title="top_p",
-            description="Nucleus sampling probability.",
+            description="Nucleus sampling probability for token selection. Must be in (0, 1].",
         ),
     ] = 1.0
 
@@ -118,8 +221,8 @@ class GenerateParameters(Parameters, BaseModel):
         Field(
             title="patience",
             description=(
-                "Number of consecutive generations where the `invalid_fraction_threshold` "
-                "is reached before stopping generation."
+                "Number of consecutive generations where the ``invalid_fraction_threshold`` "
+                "is reached before stopping generation. Must be >= 1."
             ),
         ),
     ] = 3
@@ -130,48 +233,23 @@ class GenerateParameters(Parameters, BaseModel):
         Field(
             title="invalid_fraction_threshold",
             description=(
-                "The fraction of invalid records that will stop generation after the `patience` limit is reached."
+                "The fraction of invalid records that will stop generation after the ``patience`` limit is reached. "
+                "Must be in [0, 1]."
             ),
         ),
     ] = 0.8
 
-    use_structured_generation: Annotated[
-        bool,
-        Field(
-            title="use_structured_generation",
-            description="Use structured generation.",
-        ),
-    ] = False
-
-    structured_generation_backend: Annotated[
-        Literal["auto", "xgrammar", "guidance", "outlines", "lm-format-enforcer"],
-        Field(
-            title="structured_generation_backend",
-            description=(
-                "The backend used by VLLM when use_structured_generation=True. "
-                "Supported backends (from vllm) are 'outlines', 'guidance', 'xgrammar', 'lm-format-enforcer'. 'auto' will allow vllm to choose the backend."
-            ),
-        ),
-    ] = "auto"
-
-    structured_generation_schema_method: Annotated[
-        Literal["regex", "json_schema"],
-        Field(
-            title="structured_generation_schema_method",
-            description=(
-                "The method used to generate the schema from your dataset and pass it to the generation backend. "
-                "auto will usually default to 'json_schema'. Use 'regex to use our custom regex construction method, which "
-                "tends to be more comprehensive  than 'json_schema' at the cost of speed."
-            ),
-        ),
-    ] = "regex"
+    structured_generation: StructuredGenerationParameters = Field(
+        description="Structured generation parameters controlling schema-constrained output.",
+        default_factory=StructuredGenerationParameters,
+    )
 
     # TODO: We will merge this with `timestamp_validation_mode` described in the MR !5153
     enforce_timeseries_fidelity: Annotated[
         bool,
         Field(
             title="enforce_timeseries_fidelity",
-            description="Enforce timeseries fidelity by enforcing the time series order, intervals, start and end times of the records.",
+            description="Enforce time-series fidelity by enforcing order, intervals, start and end times of the records.",
         ),
     ] = False
 
@@ -179,3 +257,131 @@ class GenerateParameters(Parameters, BaseModel):
         description="Validation parameters controlling validation logic and automatic fixes when parsing LLM output and converting to tabular data.",
         default_factory=ValidationParameters,
     )
+
+    attention_backend: Annotated[
+        str | None,
+        Field(
+            title="attention_backend",
+            description=(
+                "The attention backend for the vLLM engine. Common values: 'FLASHINFER', "
+                "'FLASH_ATTN', 'TRITON_ATTN', 'FLEX_ATTENTION'. "
+                "If ``None`` or 'auto', vLLM will auto-select the best available backend."
+            ),
+        ),
+    ] = "auto"
+
+    _STRUCTURED_GENERATION_LEGACY_FIELDS: ClassVar[dict[str, str]] = {
+        "use_structured_generation": "enabled",
+        "structured_generation_backend": "backend",
+        "structured_generation_schema_method": "schema_method",
+        "structured_generation_use_single_sequence": "use_single_sequence",
+    }
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_legacy_structured_generation_fields(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+
+        values = dict(data)
+        legacy = {
+            new_name: values.pop(old_name)
+            for old_name, new_name in cls._STRUCTURED_GENERATION_LEGACY_FIELDS.items()
+            if old_name in values
+        }
+        if not legacy:
+            return values
+
+        structured_generation = values.get("structured_generation")
+        match structured_generation:
+            case StructuredGenerationParameters() as params:
+                structured_values = params.model_dump()
+            case BaseModel() as model:
+                structured_values = model.model_dump()
+            case dict() as mapping:
+                structured_values = dict(mapping)
+            case None:
+                structured_values = {}
+            case _:
+                return values
+
+        # Legacy flat keys are treated as explicit overrides for migration
+        # paths such as ``from_params(generation={...}, structured_generation_backend=...)``.
+        values["structured_generation"] = structured_values | legacy
+        return values
+
+    @property
+    def use_structured_generation(self) -> bool:
+        """Deprecated flat alias for ``structured_generation.enabled``."""
+        warnings.warn(
+            "use_structured_generation is deprecated; use structured_generation.enabled instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.structured_generation.enabled
+
+    @use_structured_generation.setter
+    def use_structured_generation(self, value: bool) -> None:
+        warnings.warn(
+            "use_structured_generation is deprecated; use structured_generation.enabled instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        self.structured_generation.enabled = value
+
+    @property
+    def structured_generation_backend(self) -> StructuredGenerationBackend:
+        """Deprecated flat alias for ``structured_generation.backend``."""
+        warnings.warn(
+            "structured_generation_backend is deprecated; use structured_generation.backend instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.structured_generation.backend
+
+    @structured_generation_backend.setter
+    def structured_generation_backend(self, value: StructuredGenerationBackend) -> None:
+        warnings.warn(
+            "structured_generation_backend is deprecated; use structured_generation.backend instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        self.structured_generation.backend = value
+
+    @property
+    def structured_generation_schema_method(self) -> StructuredGenerationSchemaMethod:
+        """Deprecated flat alias for ``structured_generation.schema_method``."""
+        warnings.warn(
+            "structured_generation_schema_method is deprecated; use structured_generation.schema_method instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.structured_generation.schema_method
+
+    @structured_generation_schema_method.setter
+    def structured_generation_schema_method(self, value: StructuredGenerationSchemaMethod) -> None:
+        warnings.warn(
+            "structured_generation_schema_method is deprecated; use structured_generation.schema_method instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        self.structured_generation.schema_method = value
+
+    @property
+    def structured_generation_use_single_sequence(self) -> bool:
+        """Deprecated flat alias for ``structured_generation.use_single_sequence``."""
+        warnings.warn(
+            "structured_generation_use_single_sequence is deprecated; use structured_generation.use_single_sequence instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.structured_generation.use_single_sequence
+
+    @structured_generation_use_single_sequence.setter
+    def structured_generation_use_single_sequence(self, value: bool) -> None:
+        warnings.warn(
+            "structured_generation_use_single_sequence is deprecated; use structured_generation.use_single_sequence instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        self.structured_generation.use_single_sequence = value

@@ -1,28 +1,75 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Shared utilities for Safe Synthesizer.
+
+Provides schema prompt creation, statistics logging, file I/O helpers,
+data loading, and general-purpose functions used across the pipeline.
+"""
+
 from __future__ import annotations
 
 import functools
 import json
+import os
 import time
+from collections.abc import Callable, Generator, Iterable
 from pathlib import Path
-from typing import Any, Generator, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 import numpy as np
 import pandas as pd
-from datasets import Dataset
 from pandas import DataFrame
+from typing_extensions import TypeIs
 
 from .data_processing.stats import Statistics
 from .observability import get_logger
 
+if TYPE_CHECKING:
+    # Annotation-only. Imported here to keep the CLI import chain free of
+    # `datasets` (which pulls huggingface_hub, caching HF_HUB_OFFLINE at import
+    # time). See cli.utils._propagate_runtime_settings_to_env.
+    from datasets import Dataset
+
 logger = get_logger(__name__)
 
+_TRUTHY_ENV_VALUES = frozenset({"1", "true", "yes", "on"})
 
-# This is being patched in here because outlines_core doesn't export it and outlines doesn't have it anymore
-# past outlines==0.11.8
-def _get_num_items_pattern(min_items, max_items, whitespace_pattern):
+_HF_OFFLINE_ENV_VARS = ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE")
+
+
+def _is_statistics_list(stats: Statistics | list[Statistics]) -> TypeIs[list[Statistics]]:
+    return isinstance(stats, list) and all(isinstance(stat, Statistics) for stat in stats)
+
+
+def env_flag_is_true(name: str, *, default: bool = False) -> bool:
+    """Return whether ``name`` is set to a truthy env value.
+
+    Accepts common boolean spellings used across NSS and pydantic-settings:
+    ``1``, ``true``, ``yes``, and ``on`` (case-insensitive).
+    """
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in _TRUTHY_ENV_VALUES
+
+
+def hf_offline_enabled() -> bool:
+    """Return whether Hugging Face offline mode is enabled.
+
+    True when ``HF_HUB_OFFLINE`` or ``TRANSFORMERS_OFFLINE`` is set to a truthy
+    value. huggingface_hub honors these globally, so when enabled both the base
+    model and GLiNER skip network downloads and resolve from the local cache.
+    """
+    return any(env_flag_is_true(name) for name in _HF_OFFLINE_ENV_VARS)
+
+
+def _get_num_items_pattern(min_items: int | None, max_items: int | None, whitespace_pattern: str) -> str | None:
+    """Return a regex quantifier for JSON array/object item counts.
+
+    Patched in because ``outlines_core`` does not export it and ``outlines``
+    dropped it after v0.11.8.
+    """
     # Helper function for arrays and objects
     min_items = int(min_items or 0)
     if max_items is None:
@@ -41,15 +88,18 @@ def create_schema_prompt(
     prefill: str = "",
     exclude_columns: list[str] | None = None,
 ) -> str:
-    """Create the schema prompt based on the given column names.
+    """Create the schema prompt from column names and a template.
 
     Args:
-        columns: List of column names.
-        instruction: Instruction of the prompt.
-        prompt_template: Template with variables for the instruction and schema.
+        columns: List of column names to include in the schema.
+        instruction: Instruction text placed before the schema.
+        prompt_template: Template string with ``{instruction}``, ``{schema}``,
+            and ``{prefill}`` placeholders.
+        prefill: Optional text appended after the schema.
+        exclude_columns: Column names to omit from the schema.
 
     Returns:
-        The schema prompt.
+        The formatted prompt string.
     """
     exclude_set = set(exclude_columns or [])
     return prompt_template.format(
@@ -59,7 +109,7 @@ def create_schema_prompt(
     )
 
 
-def get_random_number_generator(seed: int) -> np.random.Generator:
+def get_random_number_generator(seed: int | None) -> np.random.Generator:
     """Return a random number generator with the given seed."""
     return np.random.default_rng(seed)
 
@@ -69,23 +119,22 @@ def log_stats(
     headers: list[str] | None = None,
     title: str | None = None,
 ) -> None:
-    """Log the given aggregated statistics.
+    """Log aggregated statistics as a structured table.
 
-    Outputs:
-        - Console: Automatically rendered as Rich ASCII table by structlog processor
-        - JSON logs: Structured key/value pairs for machine parsing
+    Console output is rendered as a Rich ASCII table by the structlog
+    processor; JSON logs receive structured key/value pairs.
 
     Args:
-        stats: Single or list of statistics objects.
-        headers: Column headers.
-        title: Optional title for the table.
+        stats: One or more ``Statistics`` objects.
+        headers: Column headers (one per ``Statistics`` object).
+        title: Optional table title.
     """
     headers = headers or []
-    stats = stats if isinstance(stats, list) else [stats]
+    stats_list = stats if _is_statistics_list(stats) else [stats]
 
     # Build structured data - processor will render as table for console
     structured_stats = {}
-    for header, stat in zip(headers, stats):
+    for header, stat in zip(headers, stats_list):
         key = header.lower().replace(" ", "_")
         structured_stats[key] = {
             "min": round_number_if_float(stat.min),
@@ -116,19 +165,25 @@ def log_training_example_stats(stats_dict: dict[str, Statistics], **kwargs) -> N
     log_stats(title="Training Example Statistics", stats=stats, headers=headers, **kwargs)
 
 
-def round_number_if_float(number, precision=3):
+def round_number_if_float(number: int | float, precision: int = 3) -> int | float:
     """Round the number to the given precision if it is a float."""
     return round(number, precision) if isinstance(number, float) else number
 
 
 def smart_read_table(df_or_path: str | Path | pd.DataFrame) -> pd.DataFrame:
-    """Load (if needed) and return tabular data set as a DataFrame
+    """Load tabular data from a file path, or return an existing DataFrame.
+
+    Supported formats: CSV, JSON, JSONL, and Parquet.
 
     Args:
-        df_or_path: DataFrame or path to a table file.
+        df_or_path: A ``DataFrame`` (returned as-is), or a path to a
+            ``.csv``, ``.json``, ``.jsonl``, or ``.parquet`` file.
 
     Returns:
-        The tabular data as a DataFrame.
+        The loaded (or passed-through) ``DataFrame``.
+
+    Raises:
+        ValueError: If the file extension is not supported.
     """
     if isinstance(df_or_path, pd.DataFrame):
         return df_or_path
@@ -150,16 +205,17 @@ def smart_read_table(df_or_path: str | Path | pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def time_function(func):
+def time_function(func: Callable[..., Any]) -> Callable[..., Any]:
     """Decorator to log the time taken by a function to execute."""
 
     @functools.wraps(func)
-    def time_closure(*args, **kwargs):
+    def time_closure(*args: Any, **kwargs: Any) -> Any:
         start = time.perf_counter()
         result = func(*args, **kwargs)
         time_elapsed = time.perf_counter() - start
         time_elapsed = f"{time_elapsed:.2f} sec" if time_elapsed <= 120 else f"{time_elapsed / 60:.2f} min"
-        logger.info(f"⏱️  Function: {func.__name__}, Time: {time_elapsed}\n")
+        func_name = getattr(func, "__name__", None) or repr(func)
+        logger.info(f"⏱️  Function: {func_name}, Time: {time_elapsed}\n")
         return result
 
     return time_closure
@@ -168,31 +224,31 @@ def time_function(func):
 def grouped_train_test_split(
     dataset: Dataset,
     test_size: float,
-    group_by: str | list[str],
+    group_by: str,
     seed: int | None = None,
 ) -> tuple[DataFrame, DataFrame | None]:
-    """
-    Currently unused, but this function supports multi_column split for future reference.
+    """Split a HuggingFace Dataset preserving group membership.
 
-    Modified this to work with the Assemblers.
-    Split a HuggingFace Dataset into train and test sets while ensuring that the groups stay together.
+    Currently unused. Converts the dataset to a pandas ``DataFrame`` and
+    delegates to ``holdout.grouped_train_test_split``.
 
     Args:
-        dataset: The HuggingFace Dataset to split.
-        test_size: The size of the test set.
-        group_by: Column name or list of column names to group by.
-        seed: The random state to use for the split.
+        dataset: The HuggingFace ``Dataset`` to split.
+        test_size: Fraction or absolute number of test rows.
+        group_by: Column name defining groups.
+        seed: Random state for reproducibility.
 
     Returns:
-        A tuple of the train and test sets.
+        Tuple of ``(training_df, test_df)``, or ``(training_df, None)`` on
+        failure.
     """
-
     # Convert to pandas for group operations
     df = dataset.to_pandas()
+    assert isinstance(df, pd.DataFrame)
     # importing like this to avoid a dep for testing on the sdk side
     from .holdout import holdout as nss_holdout
 
-    return nss_holdout.grouped_train_test_split(df=df, test_size=test_size, group_by=group_by, random_state=seed)
+    return nss_holdout.grouped_train_test_split(input_df=df, test_size=test_size, group_by=group_by, random_state=seed)
 
 
 class DataActionsFn(Protocol):
@@ -200,16 +256,12 @@ class DataActionsFn(Protocol):
 
 
 def debug_fmt(df: pd.DataFrame) -> str:
-    """
-    Format dataframes for the purposes of data actions debugging.
-    """
+    """Format dataframes for the purposes of data actions debugging."""
     return df.head(5).to_json(orient="records", date_format="iso")
 
 
 def merge_dicts(base: dict, new: dict) -> dict:
-    """Merge two dictionaries. Will prefer values from the `new` dict and
-    handles deeply nested dicts.
-    """
+    """Deep-merge two dicts, preferring values from ``new`` on conflict."""
     result = base.copy()
     for k, new_v in new.items():
         base_v = result.get(k)
@@ -220,23 +272,21 @@ def merge_dicts(base: dict, new: dict) -> dict:
     return result
 
 
-def is_iterable(x: Any):
-    """
-    checks if the object is iterable. valid for items with __getitem__ iters.
-    Rare cases of `__getitem__` not being iterable abound.
-    """
+def is_iterable(x: object) -> bool:
+    """Check whether ``x`` has both ``__iter__`` and ``__getitem__``."""
     return hasattr(x, "__iter__") and hasattr(x, "__getitem__")
 
 
-def flatten(iter) -> Generator:
+def flatten(iter: Iterable) -> Generator:
+    """Flatten a possibly nested iterable.
+
+    Strings are yielded as-is (not broken into characters). Dicts are
+    yielded whole with a warning since flattening them is not meaningful.
     """
-    Flatten an iterable that might contain other iterables.
-    Note that this will break strings apart.
-    """
-    """Flattens a nested iterable."""
     if isinstance(iter, dict):
         logger.warning("Flattening a dictionary is not supported. Returning the dictionary as is.")
         yield iter
+        return
     for v in iter:
         if is_iterable(v) and not isinstance(v, str):
             yield from flatten(v)
@@ -244,17 +294,16 @@ def flatten(iter) -> Generator:
             yield v
 
 
-def all_equal_type(iter, type_, flatten_iter=True) -> bool:
-    """
-    check if all the values in an iterable.
+def all_equal_type(iter: Iterable[object], type_: type, flatten_iter: bool = True) -> bool:
+    """Check whether every element in an iterable is an instance of ``type_``.
 
     Args:
-        iter: the iterable
-        type_: type to check against
-        flatten_iter: flatten the iterable's nested iterables - which includes strings.
+        iter: The iterable to check.
+        type_: The type to check against.
+        flatten_iter: If ``True``, flatten nested iterables before checking.
     """
 
-    def typecheck(x):
+    def typecheck(x: object) -> bool:
         return isinstance(x, type_)
 
     if flatten_iter:
@@ -269,14 +318,11 @@ def all_equal_type(iter, type_, flatten_iter=True) -> bool:
 
 def write_json(
     data: dict,
-    path: str | Path,
+    path: str | os.PathLike[str],
     encoding: str | None = None,
     indent: int | None = None,
 ) -> None:
-    """
-    Write the given dictionary to JSON.
-    The directory is created if it does not yet exist.
-    """
+    """Write a dictionary to a JSON file, creating parent directories as needed."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding=encoding) as file:

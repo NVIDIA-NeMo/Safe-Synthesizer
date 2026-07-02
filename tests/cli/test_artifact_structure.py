@@ -3,10 +3,13 @@
 
 """Tests for the artifact_structure module."""
 
+import ast
+import inspect
 import os
 from pathlib import Path
 
 import pytest
+
 from nemo_safe_synthesizer.cli.artifact_structure import (
     PROJECT_NAME_DELIMITER,
     BoundDir,
@@ -79,7 +82,7 @@ class TestRunName:
 
     def test_from_string_with_arbitrary_name(self):
         """from_string() accepts arbitrary non-timestamp strings."""
-        arbitrary_name = "unsloth_adult_0"
+        arbitrary_name = "my-experiment-run"
         run_name = RunName.from_string(arbitrary_name)
 
         assert run_name.to_string() == arbitrary_name
@@ -215,7 +218,7 @@ class TestBoundDir:
                 )
             },
         )
-        assert bound.level1.level2.file == Path("/test/level1/level2/deep.txt")
+        assert bound.level1.level2.file == Path("/test/level1/level2/deep.txt")  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
 
     def test_missing_child_raises_attribute_error(self):
         """Accessing non-existent child raises AttributeError."""
@@ -241,7 +244,7 @@ class TestWorkdir:
     def test_base_path_string_conversion(self):
         """base_path is converted from string to Path."""
         workdir = Workdir(
-            base_path="/string/path",  # type: ignore[arg-type]
+            base_path=Path("/string/path"),
             config_name="cfg",
             dataset_name="data",
             run_name="2026-01-15T12:00:00",
@@ -259,6 +262,7 @@ class TestWorkdir:
 
     def test_run_dir(self, workdir: Workdir):
         """run_dir is project_dir/run_name."""
+        assert workdir.run_name, "run_name should be populated by __post_init__"
         assert workdir.run_dir == workdir.project_dir / workdir.run_name
 
     def test_workdir_with_arbitrary_run_name(self, fixture_session_cache_dir: Path):
@@ -267,11 +271,11 @@ class TestWorkdir:
             base_path=fixture_session_cache_dir,
             config_name="test",
             dataset_name="data",
-            run_name="unsloth_adult_0",  # Job-style name
+            run_name="my-experiment-run",  # Job-style name
         )
 
-        assert workdir.run_name == "unsloth_adult_0"
-        assert workdir.run_dir == workdir.project_dir / "unsloth_adult_0"
+        assert workdir.run_name == "my-experiment-run"
+        assert workdir.run_dir == workdir.project_dir / "my-experiment-run"
         # Should have a RunName object that's not timestamp-based
         assert not workdir._run_name_obj.is_timestamp_based
 
@@ -334,10 +338,10 @@ class TestWorkdir:
     def test_generate_files(self, workdir: Workdir):
         """Generate directory contains expected files."""
         gen = workdir.generate
-        assert gen.config == gen.path / "safe-synthesizer-config.json"
         assert gen.logs == gen.path / "logs.jsonl"
         assert gen.output == gen.path / "synthetic_data.csv"
         assert gen.report == gen.path / "evaluation_report.html"
+        assert gen.evaluation_metrics == gen.path / "evaluation_metrics.json"
 
     # =========================================================================
     # Dataset directory structure
@@ -377,6 +381,10 @@ class TestWorkdir:
     def test_evaluation_report_alias(self, workdir: Workdir):
         """evaluation_report shortcut matches full path."""
         assert workdir.evaluation_report == workdir.generate.report
+
+    def test_evaluation_metrics_alias(self, workdir: Workdir):
+        """evaluation_metrics shortcut matches full path."""
+        assert workdir.evaluation_metrics == workdir.generate.evaluation_metrics
 
     # =========================================================================
     # Directory creation
@@ -666,3 +674,192 @@ class TestParseProjectName:
         config, dataset = _parse_project_name(workdir.project_name)
         assert config == "test-config"
         assert dataset == "test-dataset"
+
+
+# =============================================================================
+# Typed-View Drift Guard
+# =============================================================================
+#
+# The `Workdir` class declares its directory tree using `DirNode[_FooDir](...)`.
+# `_FooDir` is a `BoundDir` subclass whose body lives under `if TYPE_CHECKING:`
+# and exists only to declare the typed children of that subtree so `ty` (and
+# editors) can resolve attribute access through `BoundDir.__getattr__`. We
+# call these subclasses "typed views" internally (see the section comment in
+# `artifact_structure.py` for context and prior art).
+#
+# If someone adds or renames a child in a `DirNode(...)` tree but forgets to
+# update the matching typed-view subclass (or vice versa), type checking will
+# silently weaken: the code still runs (thanks to `__getattr__`) but static
+# analysis loses precision and ``ty: ignore`` comments start creeping back.
+#
+# This test reads `artifact_structure.py` with `ast` (typed-view annotations
+# are gated by `TYPE_CHECKING` and therefore absent at runtime) and asserts
+# that every `DirNode[_Foo](...)` call's keyword-argument names exactly match
+# the attribute names declared on `_Foo`'s `if TYPE_CHECKING:` block.
+
+
+def _typed_view_annotations(cls_node: ast.ClassDef) -> set[str]:
+    """Extract attribute names from a typed-view class's ``if TYPE_CHECKING:`` body."""
+    names: set[str] = set()
+    for stmt in cls_node.body:
+        if isinstance(stmt, ast.If) and isinstance(stmt.test, ast.Name) and stmt.test.id == "TYPE_CHECKING":
+            for inner in stmt.body:
+                if isinstance(inner, ast.AnnAssign) and isinstance(inner.target, ast.Name):
+                    names.add(inner.target.id)
+    return names
+
+
+def _dir_node_view_and_children(call: ast.Call) -> tuple[str, set[str]] | None:
+    """Return ``(view_name, child_kwarg_names)`` for ``DirNode[_Foo](name, **kwargs)``.
+
+    Returns ``None`` for bare ``DirNode(...)`` calls (no typed-view type parameter).
+    """
+    func = call.func
+    if (
+        isinstance(func, ast.Subscript)
+        and isinstance(func.value, ast.Name)
+        and func.value.id == "DirNode"
+        and isinstance(func.slice, ast.Name)
+    ):
+        view_name = func.slice.id
+        kwargs = {kw.arg for kw in call.keywords if kw.arg is not None}
+        return view_name, kwargs
+    return None
+
+
+def _collect_dir_node_calls(node: ast.AST) -> list[ast.Call]:
+    """Walk an AST subtree and return every ``ast.Call`` node."""
+    return [child for child in ast.walk(node) if isinstance(child, ast.Call)]
+
+
+def _compute_drift_mismatches(
+    view_annotations: dict[str, set[str]],
+    dir_node_usages: list[tuple[str, set[str]]],
+) -> list[str]:
+    """Diff each ``DirNode[_Foo](...)`` call's kwargs against ``_Foo``'s annotations.
+
+    Returns an empty list when every usage's kwargs exactly equal the
+    annotations on its referenced typed view, otherwise one human-readable
+    diagnostic per mismatch.
+    """
+    mismatches: list[str] = []
+    for view_name, child_kwargs in dir_node_usages:
+        annotated = view_annotations.get(view_name)
+        if annotated is None:
+            mismatches.append(f"DirNode[{view_name}] references unknown typed-view class")
+            continue
+        if annotated != child_kwargs:
+            only_in_view = sorted(annotated - child_kwargs)
+            only_in_dir_node = sorted(child_kwargs - annotated)
+            mismatches.append(
+                f"DirNode[{view_name}]: "
+                f"only in {view_name} annotations = {only_in_view}; "
+                f"only in DirNode kwargs = {only_in_dir_node}"
+            )
+    return mismatches
+
+
+class TestTypedViewDrift:
+    """Guards that `DirNode[_Foo](...)` keys match `_Foo`'s typed attributes.
+
+    Failures here mean somebody added/renamed a child on one side of the
+    ``DirNode[_FooDir]`` ↔ typed-view-subclass pair without updating the
+    other. ``artifact_structure.py`` documents the convention.
+    """
+
+    @pytest.fixture(scope="class")
+    def module_ast(self) -> ast.Module:
+        module = inspect.getmodule(Workdir)
+        assert module is not None, "Workdir must be importable from a real source file"
+        return ast.parse(inspect.getsource(module))
+
+    @pytest.fixture(scope="class")
+    def typed_view_annotations(self, module_ast: ast.Module) -> dict[str, set[str]]:
+        """Map typed-view class name → attribute names declared under ``TYPE_CHECKING``."""
+        return {
+            node.name: _typed_view_annotations(node)
+            for node in module_ast.body
+            if isinstance(node, ast.ClassDef) and node.name.startswith("_") and node.name.endswith("Dir")
+        }
+
+    @pytest.fixture(scope="class")
+    def dir_node_usages(self, module_ast: ast.Module) -> list[tuple[str, set[str]]]:
+        """List of every ``DirNode[_Foo](...)`` call's (typed-view name, child kwarg names)."""
+        usages: list[tuple[str, set[str]]] = []
+        for call in _collect_dir_node_calls(module_ast):
+            result = _dir_node_view_and_children(call)
+            if result is not None:
+                usages.append(result)
+        return usages
+
+    def test_typed_view_classes_discovered(self, typed_view_annotations: dict[str, set[str]]):
+        """Sanity check: ensure we actually found the typed-view subclasses."""
+        assert {"_AdapterDir", "_TrainDir", "_GenerateDir", "_DatasetDir"} <= set(typed_view_annotations)
+
+    def test_dir_node_usages_discovered(self, dir_node_usages: list[tuple[str, set[str]]]):
+        """Sanity check: ensure we actually found at least the top-level typed DirNodes."""
+        views_used = {view for view, _ in dir_node_usages}
+        assert {"_TrainDir", "_AdapterDir", "_GenerateDir", "_DatasetDir"} <= views_used
+
+    def test_dir_node_keys_match_typed_view_annotations(
+        self,
+        typed_view_annotations: dict[str, set[str]],
+        dir_node_usages: list[tuple[str, set[str]]],
+    ):
+        """Every ``DirNode[_Foo](...)`` kwargs must equal ``_Foo``'s TYPE_CHECKING attrs."""
+        mismatches = _compute_drift_mismatches(typed_view_annotations, dir_node_usages)
+        assert not mismatches, "Typed-view / DirNode drift:\n  " + "\n  ".join(mismatches)
+
+
+class TestTypedViewDriftHelpers:
+    """Direct unit tests for the typed-view drift helper functions.
+
+    These exercise the error-reporting branches that the real module never
+    hits (unknown typed view, kwargs mismatch, bare ``DirNode(...)`` calls).
+    """
+
+    @staticmethod
+    def _parse_single_call(source: str) -> ast.Call:
+        """Parse a one-expression snippet and return its single ``ast.Call`` node."""
+        tree = ast.parse(source, mode="eval")
+        assert isinstance(tree.body, ast.Call)
+        return tree.body
+
+    def test_dir_node_view_and_children_extracts_subscripted_call(self):
+        """``DirNode[_Foo](name, a=..., b=...)`` → ``('_Foo', {'a', 'b'})``."""
+        call = self._parse_single_call('DirNode[_FooDir]("foo", a=1, b=2)')
+        assert _dir_node_view_and_children(call) == ("_FooDir", {"a", "b"})
+
+    def test_dir_node_view_and_children_returns_none_for_bare_dir_node(self):
+        """Unsubscripted ``DirNode(...)`` calls yield ``None`` (typed view unknown)."""
+        call = self._parse_single_call('DirNode("foo", a=1)')
+        assert _dir_node_view_and_children(call) is None
+
+    def test_dir_node_view_and_children_returns_none_for_other_calls(self):
+        """Calls that aren't ``DirNode[...](...)`` at all yield ``None``."""
+        call = self._parse_single_call("FileNode('foo.json')")
+        assert _dir_node_view_and_children(call) is None
+
+    def test_compute_drift_mismatches_clean(self):
+        """No mismatches when every usage lines up with its typed-view annotations."""
+        views = {"_FooDir": {"a", "b"}}
+        usages = [("_FooDir", {"a", "b"})]
+        assert _compute_drift_mismatches(views, usages) == []
+
+    def test_compute_drift_mismatches_unknown_view(self):
+        """``DirNode[_Missing]`` with no matching class is reported by name."""
+        mismatches = _compute_drift_mismatches(
+            view_annotations={},
+            dir_node_usages=[("_Missing", {"x"})],
+        )
+        assert mismatches == ["DirNode[_Missing] references unknown typed-view class"]
+
+    def test_compute_drift_mismatches_reports_both_sides(self):
+        """Diagnostic splits extras into 'only in typed view' vs 'only in DirNode kwargs'."""
+        views = {"_FooDir": {"a", "b", "c"}}
+        usages = [("_FooDir", {"a", "d"})]
+        mismatches = _compute_drift_mismatches(views, usages)
+        assert len(mismatches) == 1
+        msg = mismatches[0]
+        assert "only in _FooDir annotations = ['b', 'c']" in msg
+        assert "only in DirNode kwargs = ['d']" in msg

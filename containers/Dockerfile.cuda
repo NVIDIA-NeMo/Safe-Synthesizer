@@ -1,0 +1,214 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Multistage GPU Dockerfile for Safe-Synthesizer.
+#
+# CUDA support is selected through the project extras instead of a CUDA base
+# image. The current distributable variant is cu129; adding cu130 later should
+# only require a matching pyproject extra plus another workflow matrix row.
+#
+# Build:
+#   docker build -f containers/Dockerfile.cuda \
+#     --build-arg CONTAINER_EXTRA=cu129 \
+#     --build-arg CONTAINER_VARIANT=cu129 \
+#     --target runtime -t nss-gpu:latest .
+#   docker build -f containers/Dockerfile.cuda --target dev -t nss-gpu-dev:latest .
+#
+# Run with your data:
+#   docker run --gpus all --shm-size=1g \
+#     -v $(pwd)/my_data:/workspace/data \
+#     -v ~/.cache/huggingface:/workspace/.hf_cache \
+#     -e HF_HOME=/workspace/.hf_cache \
+#     nss-gpu:latest \
+#     run --data-source /workspace/data/input.csv
+#
+# uv Docker best practices: https://docs.astral.sh/uv/guides/integration/docker/
+
+ARG PYTHON_VERSION=3.13
+ARG PYTHON_IMAGE=python:${PYTHON_VERSION}-slim-bookworm
+ARG UV_IMAGE=ghcr.io/astral-sh/uv:0.9.30
+
+# ---------------------------------------------------------------------------
+# Stage 1: uv -- copy the pinned uv binaries from the official image
+# ---------------------------------------------------------------------------
+FROM ${UV_IMAGE} AS uv
+
+# ---------------------------------------------------------------------------
+# Stage 2: runtime -- slim image wrapping the safe-synthesizer CLI
+# ---------------------------------------------------------------------------
+FROM ${PYTHON_IMAGE} AS runtime
+
+ARG CONTAINER_EXTRA=cu129
+ARG CONTAINER_VARIANT=cu129
+ARG PACKAGE_VERSION=
+ARG PYTHON_VERSION=3.13
+ARG OMIT_FLASHINFER_PACKAGES="--no-install-package flashinfer-cubin --no-install-package flashinfer-jit-cache"
+ARG OMIT_TORCH_PACKAGES="--no-install-package torch --no-install-package torch-c-dlpack-ext --no-install-package torchaudio --no-install-package torchao --no-install-package torchvision --no-install-package triton"
+ARG OMIT_VLLM_PACKAGES="--no-install-package vllm"
+
+COPY --from=uv /uv /uvx /usr/local/bin/
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+        bash \
+        ca-certificates \
+        libgomp1 \
+        tini
+
+# uv settings for reproducible container builds.
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
+    PATH="/opt/venv/bin:${PATH}" \
+    UV_LINK_MODE=copy \
+    UV_COMPILE_BYTECODE=1 \
+    UV_NO_INSTALLER_METADATA=1 \
+    UV_NO_MANAGED_PYTHON=1 \
+    UV_FROZEN=true \
+    UV_DYNAMIC_VERSIONING_BYPASS=${PACKAGE_VERSION}
+
+WORKDIR /build
+
+# Install base dependencies first, then layer larger GPU dependency families.
+# Each sync solves the final extra set but temporarily omits selected packages;
+# later syncs install those omitted packages without removing prior layers.
+COPY pyproject.toml uv.lock ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --python /usr/local/bin/python \
+        --no-install-project \
+        --no-group dev
+
+# Engine dependencies are variant-neutral and can be reused by future CUDA
+# extras.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --python /usr/local/bin/python \
+        --no-install-project \
+        --extra engine \
+        --no-group dev
+
+# Install the CUDA dependency closure before the largest binary package
+# families. This captures NVIDIA runtime libraries separately from PyTorch,
+# FlashInfer, and vLLM.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --python /usr/local/bin/python \
+        --no-install-project \
+        --extra engine \
+        --extra "${CONTAINER_EXTRA}" \
+        ${OMIT_FLASHINFER_PACKAGES} \
+        ${OMIT_TORCH_PACKAGES} \
+        ${OMIT_VLLM_PACKAGES} \
+        --no-group dev
+
+# Add FlashInfer binary/cache wheels in their own layer.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --python /usr/local/bin/python \
+        --no-install-project \
+        --extra engine \
+        --extra "${CONTAINER_EXTRA}" \
+        ${OMIT_TORCH_PACKAGES} \
+        ${OMIT_VLLM_PACKAGES} \
+        --no-group dev
+
+# Add PyTorch, TorchVision, TorchAudio, TorchAO, and Triton separately from
+# vLLM.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --python /usr/local/bin/python \
+        --no-install-project \
+        --extra engine \
+        --extra "${CONTAINER_EXTRA}" \
+        ${OMIT_VLLM_PACKAGES} \
+        --no-group dev
+
+# Install the remaining runtime dependencies, currently dominated by vLLM,
+# before source files are copied.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --python /usr/local/bin/python \
+        --no-install-project \
+        --extra engine \
+        --extra "${CONTAINER_EXTRA}" \
+        --no-group dev
+
+# Install the project non-editably so runtime does not need source code.
+COPY LICENSE THIRD_PARTY.md README.md ./
+COPY src/ src/
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --python /usr/local/bin/python \
+        --no-editable \
+        --extra engine \
+        --extra "${CONTAINER_EXTRA}" \
+        --no-group dev
+
+ENV PATH="/opt/venv/bin:${PATH}" \
+    NSS_CONTAINER_EXTRA=${CONTAINER_EXTRA} \
+    NSS_CONTAINER_VARIANT=${CONTAINER_VARIANT} \
+    NVIDIA_VISIBLE_DEVICES=all \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
+LABEL org.opencontainers.image.title="Safe Synthesizer" \
+      org.opencontainers.image.description="NVIDIA NeMo Safe Synthesizer GPU runtime (${CONTAINER_VARIANT}); CUDA libraries are supplied by the ${CONTAINER_EXTRA} Python extra." \
+      org.opencontainers.image.vendor="NVIDIA" \
+      org.opencontainers.image.licenses="Apache-2.0" \
+      org.opencontainers.image.source="https://github.com/NVIDIA-NeMo/Safe-Synthesizer" \
+      org.opencontainers.image.documentation="https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/docker/" \
+      org.opencontainers.image.base.name="python:${PYTHON_VERSION}-slim-bookworm" \
+      com.nvidia.nemo.safe-synthesizer.extra="${CONTAINER_EXTRA}" \
+      com.nvidia.nemo.safe-synthesizer.variant="${CONTAINER_VARIANT}" \
+      org.opencontainers.image.usage="docker run --gpus all --shm-size=1g -v /path/to/data:/workspace/data -v ~/.cache/huggingface:/workspace/.hf_cache -e HF_HOME=/workspace/.hf_cache nss-gpu:latest run --config /workspace/data/config.yaml --data-source /workspace/data/input.csv"
+
+RUN groupadd -r -g 1000 appuser && \
+    useradd -r -u 1000 -g appuser -m appuser
+
+COPY --chmod=755 containers/entrypoint.sh /usr/local/bin/entrypoint.sh
+
+USER appuser
+WORKDIR /workspace
+
+ENTRYPOINT ["tini", "--", "entrypoint.sh"]
+CMD ["--help"]
+
+# ---------------------------------------------------------------------------
+# Stage 3: dev -- interactive development and testing
+# ---------------------------------------------------------------------------
+FROM runtime AS dev
+
+ARG CONTAINER_EXTRA=cu129
+ARG PACKAGE_VERSION=
+
+USER root
+
+COPY --from=uv /uv /uvx /usr/local/bin/
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+        bash \
+        build-essential \
+        ca-certificates \
+        curl \
+        git \
+        make
+
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
+    UV_LINK_MODE=copy \
+    UV_COMPILE_BYTECODE=1 \
+    UV_NO_INSTALLER_METADATA=1 \
+    UV_NO_MANAGED_PYTHON=1 \
+    UV_FROZEN=true \
+    UV_DYNAMIC_VERSIONING_BYPASS=${PACKAGE_VERSION}
+
+WORKDIR /build
+
+# Copy the full repo (.dockerignore filters out .git, .venv, caches, etc.).
+# Bind-mount at /workspace overrides this at runtime for live editing.
+COPY . .
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --python /usr/local/bin/python \
+        --extra "${CONTAINER_EXTRA}" \
+        --extra engine \
+        --group dev
+
+RUN git config --global --add safe.directory /workspace
+
+WORKDIR /workspace
+ENTRYPOINT []
+CMD ["/bin/bash"]

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 import wandb
 from pydantic import AliasChoices, Field, field_validator
@@ -22,8 +22,6 @@ from ..observability import get_logger
 from .artifact_structure import Workdir
 
 logger = get_logger(__name__)
-
-PathT = str | Path
 
 
 def resolve_wandb_run_id(id_or_path: str) -> str:
@@ -67,18 +65,33 @@ class WandbSettings(BaseSettings):
     """
 
     wandb_mode: WandbMode = Field(
-        default=WandbMode.DISABLED, validation_alias=AliasChoices("WANDB_MODE", "NSS_WANDB_MODE")
+        default=WandbMode.DISABLED,
+        description="Run mode, one of online, offline, or disabled.",
+        validation_alias=AliasChoices("WANDB_MODE", "NSS_WANDB_MODE"),
     )
-    wandb_project: str | None = Field(default=None, validation_alias=AliasChoices("WANDB_PROJECT", "NSS_WANDB_PROJECT"))
-    exp_name: str = Field(default="nss_experiments")  # fallback for wandb_project
-    phase: WandbPhase = WandbPhase.UNKNOWN
+    """Run mode, one of online, offline, or disabled (env variable: ``WANDB_MODE`` or ``NSS_WANDB_MODE``)."""
+
+    wandb_project: str | None = Field(
+        default=None,
+        description="WandB project name override.",
+        validation_alias=AliasChoices("WANDB_PROJECT", "NSS_WANDB_PROJECT"),
+    )
+    """WandB project name override (env variable: ``WANDB_PROJECT`` or ``NSS_WANDB_PROJECT``)."""
+
+    exp_name: str = Field(
+        default="nss_experiments", description="Fallback project name when ``wandb_project`` is not set."
+    )
+    """Fallback project name when ``wandb_project`` is not set."""
+
+    phase: WandbPhase = Field(default=WandbPhase.UNKNOWN, description="Current pipeline phase for WandB grouping.")
+    """Current pipeline phase for WandB grouping."""
 
     model_config = {"env_prefix": "NSS_", "env_file": ".env", "extra": "ignore"}
 
     @field_validator("wandb_mode", mode="before")
     @classmethod
     def validate_wandb_mode(cls, v: str | WandbMode | None) -> WandbMode:
-        """Validate the wandb mode."""
+        """Coerce string or None to ``WandbMode`` enum, defaulting to DISABLED."""
         if v is None:
             return WandbMode.DISABLED
         if isinstance(v, WandbMode):
@@ -88,7 +101,7 @@ class WandbSettings(BaseSettings):
     @field_validator("phase", mode="before")
     @classmethod
     def validate_phase(cls, v: str | WandbPhase | None) -> WandbPhase:
-        """Validate the wandb phase."""
+        """Coerce string or None to ``WandbPhase``, defaulting to UNKNOWN."""
         if v is None:
             return WandbPhase.UNKNOWN
         if isinstance(v, WandbPhase):
@@ -97,7 +110,7 @@ class WandbSettings(BaseSettings):
 
     @property
     def effective_wandb_project(self) -> str:
-        """Get the effective wandb project name."""
+        """Effective wandb project name, falling back to ``exp_name``."""
         return self.wandb_project or self.exp_name
 
 
@@ -250,3 +263,40 @@ def initialize_wandb_run(
     logger.info(f"Wandb run id: {wandb.run.id if wandb.run else 'None'}")
     if settings.wandb_mode != WandbMode.DISABLED:
         logger.info(f"Wandb run url: {wandb.run.url if wandb.run else 'None'}")
+
+
+class WandbLoggable(Protocol):
+    """Structural type for observability events that can be logged to wandb.
+
+    Any event exposing ``to_wandb_payload(prefix) -> dict`` satisfies this --
+    e.g. ``TrainingObservability`` and the generation-side
+    ``GenerationObservability``. Using a Protocol keeps :func:`log_observability_event`
+    decoupled from the concrete event types (no import of the training/generation
+    subpackages from this CLI module).
+    """
+
+    def to_wandb_payload(self, prefix: str = "") -> dict[str, Any]:
+        """Return wandb metrics for this event, namespaced under ``prefix``."""
+
+
+def log_observability_event(event: WandbLoggable, prefix: str) -> None:
+    """Log an observability event to the currently active wandb run.
+
+    Generic sink shared by the training and generation observability paths.
+    No-op when no wandb run is active (``WANDB_MODE=disabled`` or the pipeline
+    hasn't called :func:`initialize_wandb_run`). Errors during ``wandb.log`` are
+    swallowed at warning level -- observability is best-effort and a wandb
+    failure must not break the run.
+
+    Args:
+        event: Any object exposing ``to_wandb_payload(prefix) -> dict`` (see
+            :class:`WandbLoggable`).
+        prefix: wandb key namespace for this event's metrics (e.g. ``"training"``
+            or ``"vllm_gen"``).
+    """
+    if wandb.run is None:
+        return
+    try:
+        wandb.log(event.to_wandb_payload(prefix=prefix))
+    except Exception as exc:  # noqa: BLE001 -- degraded mode
+        logger.warning(f"failed to log observability event ({prefix!r}) to wandb: {exc}")

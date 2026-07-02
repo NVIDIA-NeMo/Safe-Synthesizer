@@ -1,12 +1,21 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Utilities for extracting, validating, and converting JSONL records.
+
+Provides regex-based JSONL extraction, JSON-schema validation (including
+time-series interval checks), DataFrame normalization, and JSONL serialization.
+"""
+
 from __future__ import annotations
 
 import calendar
 import json
 import re
+import time
+from collections.abc import Callable
 from csv import QUOTE_NONNUMERIC
+from dataclasses import dataclass, field
 from datetime import datetime
 from io import StringIO
 
@@ -21,14 +30,103 @@ RECORD_REGEX_PATTEN_LOOKAHEAD = r"{.+?}(?=\n|$)"
 logger = get_logger()
 
 
+@dataclass
+class ParsedRecord:
+    """A single record extracted from an LLM completion.
+
+    Validity is tracked by the invariant that exactly one of ``parsed``
+    and ``error`` is non-``None``: a valid record has ``parsed`` set and
+    ``error`` as ``None``, an invalid record has ``error`` set and
+    ``parsed`` as ``None``.
+    [`is_valid`][nemo_safe_synthesizer.data_processing.record_utils.ParsedRecord.is_valid]
+    is the canonical accessor.
+
+    ``text`` and ``token_count`` are captured at extraction time and
+    remain invariant even if the record is reclassified later (e.g. by
+    group-level checks or data-fidelity filters) via
+    [`invalidate`][nemo_safe_synthesizer.data_processing.record_utils.ParsedRecord.invalidate].
+    """
+
+    text: str
+    """Original regex-matched JSON string (invariant under reclassification)."""
+
+    parsed: dict | None = None
+    """Parsed dict when validation succeeded, ``None`` when invalid."""
+
+    error: tuple[str, str] | None = None
+    """``(detailed_msg, validator)`` when invalid, ``None`` when valid."""
+
+    token_count: int = 0
+    """Number of tokens in ``text``; 0 when no tokenizer was provided."""
+
+    @property
+    def is_valid(self) -> bool:
+        """Return ``True`` when this record passed validation."""
+        return self.error is None
+
+    def invalidate(self, error: tuple[str, str]) -> None:
+        """Reclassify this record as invalid.
+
+        ``text`` and ``token_count`` are kept intact; ``parsed`` is
+        cleared so downstream consumers don't accidentally use a stale
+        dict.
+
+        Args:
+            error: ``(detailed_msg, validator)`` tuple describing the
+                reason for invalidation.
+        """
+        self.error = error
+        self.parsed = None
+
+
+@dataclass
+class ParsedResponse:
+    """Parsed result of a single LLM prompt response.
+
+    Holds a flat list of
+    [`ParsedRecord`][nemo_safe_synthesizer.data_processing.record_utils.ParsedRecord]
+    objects (in input order) plus aggregated tokenization timing.
+    ``valid_records`` / ``invalid_records`` / ``errors`` are convenience
+    views that project the record list into the shapes expected by
+    downstream aggregation code (parsed dicts, original text,
+    ``(msg, validator)`` tuples respectively).
+    """
+
+    records: list[ParsedRecord] = field(default_factory=list)
+    """Per-record extraction + validation outcomes, in input order."""
+
+    tokenization_time_sec: float = 0.0
+    """Wall-clock seconds spent tokenizing records in this response."""
+
+    prompt_number: int | None = None
+    """Index of the prompt within the batch (set by the processor call)."""
+
+    @property
+    def valid_records(self) -> list[dict]:
+        """Parsed dicts for records that passed validation."""
+        return [r.parsed for r in self.records if r.is_valid and r.parsed is not None]
+
+    @property
+    def invalid_records(self) -> list[str]:
+        """Original text for records that failed validation."""
+        return [r.text for r in self.records if not r.is_valid]
+
+    @property
+    def errors(self) -> list[tuple[str, str]]:
+        """``(detailed_msg, validator)`` tuples for each invalid record."""
+        return [r.error for r in self.records if r.error is not None]
+
+
 def is_safe_for_float_conversion(value: str | int | float | None | list | dict) -> bool:
     """Check if a value can be safely converted to float64 without overflow.
 
+    Only ``int`` values can cause overflow; all other types are considered safe.
+
     Args:
-        value: The value to check
+        value: The value to check.
 
     Returns:
-        bool: True if the value can be safely converted to float64
+        True if the value can be safely converted to float64, False otherwise.
     """
     # not considering Decimal because the input of this validation
     # is coming from converting a jsonl string to JSON object.
@@ -45,13 +143,14 @@ def is_safe_for_float_conversion(value: str | int | float | None | list | dict) 
 
 
 def check_record_for_large_numbers(record: dict) -> str | None:
-    """Check if a record contains any numbers that would cause float conversion errors.
+    """Check if a record contains any numbers that would cause float64 overflow.
 
     Args:
-        record: The record to check
+        record: Dictionary of field names to values.
 
     Returns:
-        Tuple[bool, str]: (is_safe, err_msg)
+        An error message describing the first unsafe value found,
+        or None if all values are safe.
     """
     for key, value in record.items():
         if not is_safe_for_float_conversion(value):
@@ -95,42 +194,74 @@ def extract_groups_from_jsonl_string(jsonl_string: str, bos: str, eos: str) -> l
         eos: End-of-sequence token used to identify the end of a group.
 
     Returns:
-
+        Substrings matching complete bos/eos-delimited record groups.
     """
     bos_re = re.escape(rf"{bos}")
     eos_re = re.escape(rf"{eos}")
     return re.findall(rf"{bos_re}\s?(?:{RECORD_REGEX_PATTERN}\s?)+\s?{eos_re}", jsonl_string)
 
 
+def timed_encode(
+    encode: Callable[[str], list[int]] | None,
+) -> Callable[[str], tuple[int, float]]:
+    """Wrap an encode callable with timing, or return a no-op.
+
+    Returns a function ``timed(text)`` that returns ``(n_tokens,
+    elapsed_seconds)``.  When *encode* is ``None`` the returned
+    function always returns ``(0, 0.0)``.
+    """
+    if encode is None:
+
+        def _noop(_text: str) -> tuple[int, float]:
+            return 0, 0.0
+
+        return _noop
+
+    def _timed(text: str) -> tuple[int, float]:
+        t0 = time.monotonic()
+        n = len(encode(text))
+        return n, time.monotonic() - t0
+
+    return _timed
+
+
 def extract_and_validate_records(
-    jsonl_string: str, schema: dict
-) -> tuple[list[dict], list[str], list[tuple[str, str]]]:
+    jsonl_string: str,
+    schema: dict,
+    encode: Callable[[str], list[int]] | None = None,
+) -> ParsedResponse:
     """Extract and validate records from the given JSONL string.
 
-    The records are validated against the given schema using jsonschema.
+    Each regex-matched JSON string is tokenized (when *encode* is
+    provided) before validation so that exact token counts are
+    available for every record regardless of later reclassification.
 
     Args:
         jsonl_string: Single JSONL string containing tabular records.
         schema: JSON schema as a dictionary.
+        encode: Optional tokenizer encode callable.  When provided,
+            each matched record string is tokenized and its token count
+            is stored on the corresponding
+            [`ParsedRecord`][nemo_safe_synthesizer.data_processing.record_utils.ParsedRecord].
 
     Returns:
-        valid_records (list[dict]): List of valid records.
-        invalid_records (list[str]): List of invalid records.
-        invalid_record_errors (list[tuple[str, str]]): List of errors for invalid records, each a (message, validator) tuple.
+        A
+        [`ParsedResponse`][nemo_safe_synthesizer.data_processing.record_utils.ParsedResponse]
+        whose ``records`` list is in input order, with ``parsed`` set
+        for valid records and ``error`` set for invalid ones.
     """
-    valid_records = []
-    invalid_records = []
-    invalid_record_errors = []
+    records: list[ParsedRecord] = []
+    tokenization_time = 0.0
+    timed = timed_encode(encode)
 
     for matched_json in extract_records_from_jsonl_string(jsonl_string):
-        matched_dict, error = _parse_and_validate_json(matched_json, schema)
-        if error:
-            invalid_records.append(matched_json)
-            invalid_record_errors.append(error)
-        else:
-            valid_records.append(matched_dict)
+        n_tokens, dt = timed(matched_json)
+        tokenization_time += dt
 
-    return valid_records, invalid_records, invalid_record_errors
+        parsed, error = _parse_and_validate_json(matched_json, schema)
+        records.append(ParsedRecord(text=matched_json, parsed=parsed, error=error, token_count=n_tokens))
+
+    return ParsedResponse(records=records, tokenization_time_sec=tokenization_time)
 
 
 def _parse_timestamp_to_seconds(value: object, time_format: str) -> int:
@@ -149,7 +280,7 @@ def _parse_timestamp_to_seconds(value: object, time_format: str) -> int:
     """
     if time_format == "elapsed_seconds":
         # Value is already in seconds (int for now and float for future)
-        return int(float(value))
+        return int(float(value))  # ty: ignore[invalid-argument-type] -- third-party stub mismatch
 
     # Parse using strptime format
     dt = datetime.strptime(str(value), time_format)
@@ -286,23 +417,37 @@ def extract_and_validate_timeseries_records(
     time_column: str,
     interval_seconds: int | None,
     time_format: str,
-) -> tuple[list[dict], list[str], list[tuple[str, str]]]:
-    """Extract and validate sequential records with enforced time interval constraints.
+    encode: Callable[[str], list[int]] | None = None,
+) -> ParsedResponse:
+    """Extract and validate sequential records with time-interval constraints.
+
+    Each regex-matched JSON string is tokenized (when *encode* is
+    provided) before validation so that exact token counts are captured
+    for both validated and cascade-invalidated records.
 
     Args:
         jsonl_string: JSONL string containing series data.
         schema: JSON schema describing the records.
-        time_column: Column containing the timestamp used for interval validation.
-        interval_seconds: (Optional) Expected interval in seconds between consecutive
-            timestamps. If not provided, no time interval validation is performed.
-        time_format: Format of the timestamp column (required, should be set from config).
+        time_column: Column containing the timestamp used for interval
+            validation.
+        interval_seconds: Expected interval in seconds between
+            consecutive timestamps.  When ``None``, no interval check
+            is performed.
+        time_format: Format of the timestamp column (required).
+        encode: Optional tokenizer encode callable.  When provided,
+            each matched record string is tokenized and its token count
+            is stored on the corresponding
+            [`ParsedRecord`][nemo_safe_synthesizer.data_processing.record_utils.ParsedRecord].
 
     Returns:
-        Tuple of valid records, invalid record strings, and their associated errors.
+        A
+        [`ParsedResponse`][nemo_safe_synthesizer.data_processing.record_utils.ParsedResponse]
+        in input order. Once a record fails, every subsequent record is
+        marked invalid with a cascade error.
     """
-    valid_records: list[dict] = []
-    invalid_records: list[str] = []
-    invalid_record_errors: list[tuple[str, str]] = []
+    records: list[ParsedRecord] = []
+    tokenization_time = 0.0
+    timed = timed_encode(encode)
 
     last_absolute_seconds: int | None = None
     day_offset = 0
@@ -317,25 +462,27 @@ def extract_and_validate_timeseries_records(
         allow_rollover = not has_date
 
     all_json_records = list(extract_records_from_jsonl_string(jsonl_string))
+    cascade_error = ("Invalid due to previous record error", "TimeSeries")
 
     for idx, matched_json in enumerate(all_json_records):
-        # Step 1: Parse and validate JSON/schema
-        matched_dict, error = _parse_and_validate_json(matched_json, schema)
-        if error or matched_dict is None:
-            invalid_records.append(matched_json)
-            if error:
-                invalid_record_errors.append(error)
+        n_tokens, dt = timed(matched_json)
+        tokenization_time += dt
+
+        # Step 1: Parse and validate JSON/schema.
+        parsed, error = _parse_and_validate_json(matched_json, schema)
+        if error or parsed is None:
+            records.append(ParsedRecord(text=matched_json, error=error, token_count=n_tokens))
+            # Parse/schema errors stop validation without cascading to later records.
             break
 
-        # Step 2: Extract and parse timestamp
-        timestamp_seconds, error = _extract_timestamp_seconds(matched_dict, time_column, time_format)
+        # Step 2: Extract and parse timestamp.
+        timestamp_seconds, error = _extract_timestamp_seconds(parsed, time_column, time_format)
         if error or timestamp_seconds is None:
-            invalid_records.append(matched_json)
-            if error:
-                invalid_record_errors.append(error)
+            records.append(ParsedRecord(text=matched_json, error=error, token_count=n_tokens))
+            # Missing timestamp stops validation without cascading to later records.
             break
 
-        # Step 3: Validate time interval (if interval_seconds is specified)
+        # Step 3: Validate time interval (if interval_seconds is specified).
         if interval_seconds is not None:
             absolute_seconds, day_offset, error = _validate_time_interval(
                 timestamp_seconds,
@@ -346,37 +493,38 @@ def extract_and_validate_timeseries_records(
                 allow_rollover,
             )
             if error:
-                # Mark current record with the specific error, and remaining records with cascade error
-                invalid_records.append(matched_json)
-                invalid_record_errors.append(error)
-                # Mark remaining records (after current) as invalid due to previous error
-                remaining_records = all_json_records[idx + 1 :]
-                cascade_error = ("Invalid due to previous record error", "TimeSeries")
-                invalid_records.extend(remaining_records)
-                invalid_record_errors.extend([cascade_error] * len(remaining_records))
+                records.append(ParsedRecord(text=matched_json, error=error, token_count=n_tokens))
+                # Interval errors cascade: mark all remaining records invalid so the
+                # caller can report how many were affected.
+                for remaining in all_json_records[idx + 1 :]:
+                    rem_tokens, rem_dt = timed(remaining)
+                    tokenization_time += rem_dt
+                    records.append(ParsedRecord(text=remaining, error=cascade_error, token_count=rem_tokens))
                 break
             last_absolute_seconds = absolute_seconds
 
-        valid_records.append(matched_dict)
+        records.append(ParsedRecord(text=matched_json, parsed=parsed, token_count=n_tokens))
 
-    return valid_records, invalid_records, invalid_record_errors
+    return ParsedResponse(records=records, tokenization_time_sec=tokenization_time)
 
 
 def normalize_dataframe(dataframe: pd.DataFrame) -> pd.DataFrame:
-    """Normalize the given pandas dataframe
-    - Convert missing values to consistent pd.NA
-    - Resolve any utf-8 encoding errors
+    """Normalize a DataFrame of generated records via a CSV round-trip.
+
+    Serializes to CSV and reads back to standardize missing-value
+    representations (NaN/None/NA) across mixed-type columns. Falls back
+    to ignoring encoding errors if the initial round-trip fails.
 
     Args:
         dataframe: DataFrame to normalize.
 
     Returns:
-        DataFrame with missing values normalized, invalid utf-8 characters dropped.
+        DataFrame with missing values normalized and invalid UTF-8 characters
+        dropped.
     """
-
     # HACK: Handle NaN/None/NA values with mixed types by
     # normalizing through pandas csv io format, which will match
-    # the format in reports generated via the gretel client.
+    # the format in reports generated via the nss client.
     try:
         # try without trying to resolve utf-8 issues first
         return pd.read_csv(StringIO(dataframe.to_csv(index=False, quoting=QUOTE_NONNUMERIC)))

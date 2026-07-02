@@ -1,20 +1,66 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+from pathlib import Path
+from unittest.mock import MagicMock
+
 import pandas as pd
 import pytest
+
 from nemo_safe_synthesizer.config import GenerateParameters, SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.replace_pii import (
     DEFAULT_PII_TRANSFORM_CONFIG,
     PiiReplacerConfig,
 )
-from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer, _emit_nss_telemetry
+from nemo_safe_synthesizer.telemetry import DeploymentTypeEnum, TaskStatusEnum
+
+_SMALL_DF = pd.DataFrame({"a": [1, 2, 3]})
+_REPORT_HTML = "<html><body>report</body></html>"
 
 PATCH_PREFIX = "nemo_safe_synthesizer.sdk.builder"
 
 
-def test_safe_synthesizer_builder_sanity():
-    SafeSynthesizer(config=SafeSynthesizerParameters())
+def test_safe_synthesizer_builder_sanity(monkeypatch):
+    monkeypatch.delenv("NEMO_DEPLOYMENT_TYPE", raising=False)
+    monkeypatch.delenv("NEMO_TELEMETRY_ENABLED", raising=False)
+    builder = SafeSynthesizer(config=SafeSynthesizerParameters())
+    assert builder._emit_telemetry is True
+    assert builder._deployment_type == DeploymentTypeEnum.SDK
+
+
+def test_safe_synthesizer_builder_uses_env_telemetry_setting_when_unset(monkeypatch):
+    monkeypatch.setenv("NEMO_TELEMETRY_ENABLED", "false")
+
+    builder = SafeSynthesizer()
+
+    assert builder._emit_telemetry is False
+
+
+def test_safe_synthesizer_builder_config_default_uses_env_telemetry_setting(monkeypatch):
+    monkeypatch.setenv("NEMO_TELEMETRY_ENABLED", "false")
+
+    builder = SafeSynthesizer(config=SafeSynthesizerParameters())
+
+    assert builder._emit_telemetry is False
+
+
+def test_safe_synthesizer_builder_uses_config_telemetry_setting():
+    builder = SafeSynthesizer(config=SafeSynthesizerParameters(emit_telemetry=False))
+    assert builder._emit_telemetry is False
+
+
+def test_safe_synthesizer_builder_resolve_preserves_config_telemetry_setting():
+    builder = (
+        SafeSynthesizer(config=SafeSynthesizerParameters(emit_telemetry=False)).with_data_source(_SMALL_DF).resolve()
+    )
+    assert builder._nss_config is not None
+    assert builder._nss_config.emit_telemetry is False
+
+
+def test_safe_synthesizer_builder_explicit_telemetry_override_wins():
+    builder = SafeSynthesizer(config=SafeSynthesizerParameters(emit_telemetry=False), emit_telemetry=True)
+    assert builder._emit_telemetry is True
 
 
 @pytest.fixture
@@ -51,19 +97,8 @@ def test_pii_replacer_only_builder(fixture_base_builder: SafeSynthesizer):
     ).resolve()
 
     assert builder._nss_config is not None
-    assert builder._nss_config.enable_replace_pii is True
-    assert builder._nss_config.enable_synthesis is False
     assert builder._nss_config.replace_pii is not None
     assert builder._nss_config.replace_pii.globals.classify.enable_classify is True
-
-
-def test_synthesize_only_builder():
-    builder = SafeSynthesizer().with_data_source(pd.DataFrame({"name": ["John", "Jane", "Jim"]})).synthesize().resolve()
-
-    assert builder._nss_config is not None
-    assert builder._nss_config.enable_replace_pii is False
-    assert builder._nss_config.enable_synthesis is True
-    assert builder._nss_config.replace_pii is None
 
 
 def test_all_builder():
@@ -95,13 +130,10 @@ def test_all_builder():
                 ],
             }
         )
-        .synthesize()
         .resolve()
     )
 
     assert builder._nss_config is not None
-    assert builder._nss_config.enable_replace_pii is True
-    assert builder._nss_config.enable_synthesis is True
     assert builder._nss_config.replace_pii is not None
     assert builder._nss_config.training.num_input_records_to_sample == "auto"
 
@@ -118,9 +150,7 @@ def test_builder_change_training_params_with_dict():
         .resolve()
     )
     assert builder._nss_config is not None
-    assert builder._nss_config.enable_replace_pii is False
-    assert builder._nss_config.enable_synthesis is True
-    assert builder._nss_config.replace_pii is None
+    assert builder._nss_config.replace_pii is not None
     assert builder._nss_config.training.batch_size == 128
 
 
@@ -133,9 +163,7 @@ def test_builder_change_training_params_with_kwargs():
     )
 
     assert builder._nss_config is not None
-    assert builder._nss_config.enable_replace_pii is False
-    assert builder._nss_config.enable_synthesis is True
-    assert builder._nss_config.replace_pii is None
+    assert builder._nss_config.replace_pii is not None
     assert builder._nss_config.training.num_input_records_to_sample == 5000
 
 
@@ -147,9 +175,7 @@ def test_builder_change_generation_params_with_object(fixture_base_builder: Safe
     )
 
     assert builder._nss_config is not None
-    assert builder._nss_config.enable_replace_pii is False
-    assert builder._nss_config.enable_synthesis is True
-    assert builder._nss_config.replace_pii is None
+    assert builder._nss_config.replace_pii is not None
     assert builder._nss_config.training.num_input_records_to_sample == "auto"
     assert builder._nss_config.generation.num_records == 10000
 
@@ -161,9 +187,7 @@ def test_builder_change_generation_params_with_kwargs(fixture_base_builder):
         .resolve()
     )
     assert builder._nss_config is not None
-    assert builder._nss_config.enable_replace_pii is False
-    assert builder._nss_config.enable_synthesis is True
-    assert builder._nss_config.replace_pii is None
+    assert builder._nss_config.replace_pii is not None
     assert builder._nss_config.generation.patience == 42
     assert builder._nss_config.training.num_input_records_to_sample == "auto"
     assert builder._nss_config.generation.num_records == 10000
@@ -174,10 +198,8 @@ def test_pii_replacer_with_default_config_object(fixture_base_builder):
     default_config = PiiReplacerConfig.get_default_config()
 
     builder = fixture_base_builder.with_replace_pii(config=default_config).resolve()
-    assert default_config == builder._nss_config.replace_pii
     assert builder._nss_config is not None
-    assert builder._nss_config.enable_replace_pii is True
-    assert builder._nss_config.replace_pii is not None
+    assert default_config == builder._nss_config.replace_pii
 
 
 def test_builder_with_all_parameters_customized():
@@ -211,15 +233,12 @@ def test_builder_with_all_parameters_customized():
             aia_enabled=True,
             sqs_report_rows=1000,
         )
-        .synthesize()
         .resolve()
     )
     config = builder._nss_config
     assert config is not None
 
-    # Check all customizations were applied
-    assert config.enable_replace_pii is True
-    assert config.enable_synthesis is True
+    assert config.replace_pii is not None
 
     # Training params
     assert config.training.batch_size == 64
@@ -264,24 +283,19 @@ def test_pii_replacer_from_yaml_str(fixture_base_builder):
     builder = fixture_base_builder.with_replace_pii(config=config).resolve()
 
     assert builder._nss_config is not None
-    assert builder._nss_config.enable_replace_pii is True
     assert builder._nss_config.replace_pii is not None
 
 
 def test_builder_with_evaluation_config(fixture_base_builder):
     """Test builder with evaluation configuration"""
-    builder = (
-        fixture_base_builder.with_evaluate(
-            mia_enabled=True,
-            aia_enabled=True,
-            sqs_report_columns=100,
-            sqs_report_rows=2000,
-            pii_replay_enabled=True,
-            pii_replay_entities=["email", "phone_number"],
-        )
-        .synthesize()
-        .resolve()
-    )
+    builder = fixture_base_builder.with_evaluate(
+        mia_enabled=True,
+        aia_enabled=True,
+        sqs_report_columns=100,
+        sqs_report_rows=2000,
+        pii_replay_enabled=True,
+        pii_replay_entities=["email", "phone_number"],
+    ).resolve()
     assert builder._nss_config is not None
     config = builder._nss_config
     assert config.evaluation.mia_enabled is True
@@ -303,7 +317,6 @@ def test_builder_with_data_config():
             random_state=42,
             group_training_examples_by="col",
         )
-        .synthesize()
         .resolve()
     )
 
@@ -313,3 +326,252 @@ def test_builder_with_data_config():
     assert config.data.max_holdout == 1000
     assert config.data.random_state == 42
     assert config.data.group_training_examples_by == "col"
+
+
+def test_default_builder_has_pii_enabled():
+    builder = SafeSynthesizer().with_data_source(_SMALL_DF).resolve()
+    assert builder._nss_config is not None
+    assert builder._nss_config.replace_pii is not None
+
+
+def test_with_replace_pii_enable_false_disables_pii():
+    builder = SafeSynthesizer().with_data_source(_SMALL_DF).with_replace_pii(enable=False).resolve()
+    assert builder._nss_config is not None
+    assert builder._nss_config.replace_pii is None
+
+
+def test_with_train_still_enables_pii_by_default():
+    builder = SafeSynthesizer().with_data_source(_SMALL_DF).with_train().resolve()
+    assert builder._nss_config is not None
+    assert builder._nss_config.replace_pii is not None
+
+
+# Regression tests for https://github.com/NVIDIA/NeMo-Safe-Synthesizer/issues/132
+# Root cause: ConfigBuilder had a stale default that silently skipped PII replacement
+# when no with_replace_pii() call was made.
+
+
+def test_regression_132_sdk_no_with_replace_pii_call_still_enables_pii():
+    """Bare SDK builder with no with_replace_pii() call must resolve to PII enabled.
+
+    This is the exact scenario from issue #132: the old code had a stale default
+    that resolved to None, silently skipping PII.
+    """
+    config = SafeSynthesizer().with_data_source(_SMALL_DF).resolve()._nss_config
+    assert config is not None
+    assert config.replace_pii is not None
+
+
+def test_regression_132_cli_path_no_overrides_enables_pii():
+    """CLI path (model_validate with empty overrides) must also default to PII enabled.
+
+    Ensures SDK and CLI agree on the default: both produce a populated replace_pii
+    config when no PII flags are passed.
+    """
+    config = SafeSynthesizerParameters.model_validate({})
+    assert config.replace_pii is not None
+
+
+def test_builder_seeded_from_config_with_pii_disabled():
+    """SafeSynthesizer(config=existing) must propagate replace_pii=None from the seed config.
+
+    The __init__ branch that reads from an existing SafeSynthesizerParameters
+    seeds _replace_pii_config from config.replace_pii directly. This test
+    confirms that a disabled seed stays disabled after resolve().
+    """
+    existing = SafeSynthesizerParameters(replace_pii=None)
+    config = SafeSynthesizer(config=existing).with_data_source(_SMALL_DF).resolve()._nss_config
+    assert config is not None
+    assert config.replace_pii is None
+
+
+def test_builder_seeded_from_config_with_pii_enabled():
+    """SafeSynthesizer(config=existing) must propagate a populated replace_pii from the seed config."""
+    existing = SafeSynthesizerParameters()
+    config = SafeSynthesizer(config=existing).with_data_source(_SMALL_DF).resolve()._nss_config
+    assert config is not None
+    assert config.replace_pii is not None
+
+
+def _builder_for_telemetry() -> SafeSynthesizer:
+    builder = SafeSynthesizer(config=SafeSynthesizerParameters(emit_telemetry=True))
+    builder._data_source = _SMALL_DF
+    builder._total_start = 0.0
+    return builder
+
+
+class TestTelemetryEmission:
+    def test_run_emits_completed_after_save_results(self, monkeypatch, tmp_path: Path):
+        builder = SafeSynthesizer(config=SafeSynthesizerParameters(), save_path=tmp_path)
+        emitted = []
+
+        def fake_emit(ss, status):
+            emitted.append(status)
+
+        def fake_save_results(*, output_file=None):
+            emitted.append("save_results")
+            return builder
+
+        monkeypatch.setattr("nemo_safe_synthesizer.sdk.library_builder._emit_nss_telemetry", fake_emit)
+        builder._data_source = _SMALL_DF
+        builder.process_data = MagicMock(return_value=builder)
+        builder.train = MagicMock(return_value=builder)
+        builder.generate = MagicMock(return_value=builder)
+        builder.evaluate = MagicMock(return_value=builder)
+        builder.save_results = MagicMock(side_effect=fake_save_results)
+
+        builder.run()
+
+        builder.evaluate.assert_called_once_with()
+        assert emitted == ["save_results", TaskStatusEnum.COMPLETED]
+
+    def test_run_emits_error_when_save_results_fails(self, monkeypatch, tmp_path: Path):
+        builder = SafeSynthesizer(config=SafeSynthesizerParameters(), save_path=tmp_path)
+        emitted = []
+
+        def fake_emit(ss, status):
+            emitted.append(status)
+
+        monkeypatch.setattr("nemo_safe_synthesizer.sdk.library_builder._emit_nss_telemetry", fake_emit)
+        builder._data_source = _SMALL_DF
+        builder.process_data = MagicMock(return_value=builder)
+        builder.train = MagicMock(return_value=builder)
+        builder.generate = MagicMock(return_value=builder)
+        builder.evaluate = MagicMock(return_value=builder)
+        builder.save_results = MagicMock(side_effect=RuntimeError("save failed"))
+
+        with pytest.raises(RuntimeError, match="save failed"):
+            builder.run()
+
+        builder.evaluate.assert_called_once_with()
+        assert emitted == [TaskStatusEnum.ERROR]
+
+    def test_emit_nss_telemetry_enqueues_and_flushes_event(self, monkeypatch):
+        handlers = []
+
+        class FakeTelemetryHandler:
+            def __init__(self, source_client_version: str) -> None:
+                self.source_client_version = source_client_version
+                self.events = []
+                self.stopped = False
+                handlers.append(self)
+
+            def enqueue(self, event) -> None:
+                self.events.append(event)
+
+            def stop(self) -> None:
+                self.stopped = True
+
+        monkeypatch.setattr("nemo_safe_synthesizer.sdk.library_builder.TelemetryHandler", FakeTelemetryHandler)
+        builder = _builder_for_telemetry()
+
+        _emit_nss_telemetry(builder, TaskStatusEnum.COMPLETED)
+        _emit_nss_telemetry(builder, TaskStatusEnum.ERROR)
+
+        assert len(handlers) == 2
+        assert [handler.stopped for handler in handlers] == [True, True]
+        assert [len(handler.events) for handler in handlers] == [1, 1]
+        events = [handler.events[0] for handler in handlers]
+        assert [event.task for event in events] == ["run", "run"]
+        assert [event.task_status for event in events] == [TaskStatusEnum.COMPLETED, TaskStatusEnum.ERROR]
+        assert [event.deployment_type for event in events] == [DeploymentTypeEnum.SDK, DeploymentTypeEnum.SDK]
+
+    def test_emit_nss_telemetry_swallows_handler_errors(self, monkeypatch):
+        class FailingTelemetryHandler:
+            def __init__(self, source_client_version: str) -> None:
+                pass
+
+            def enqueue(self, event) -> None:
+                pass
+
+            def stop(self) -> None:
+                raise RuntimeError("telemetry send failed")
+
+        monkeypatch.setattr("nemo_safe_synthesizer.sdk.library_builder.TelemetryHandler", FailingTelemetryHandler)
+        builder = _builder_for_telemetry()
+
+        _emit_nss_telemetry(builder, TaskStatusEnum.ERROR)
+
+        assert builder._emit_telemetry is True
+
+    def test_emit_nss_telemetry_skips_when_disabled(self, monkeypatch):
+        handler_cls = MagicMock()
+        monkeypatch.setattr("nemo_safe_synthesizer.sdk.library_builder.TelemetryHandler", handler_cls)
+        builder = _builder_for_telemetry()
+        builder._emit_telemetry = False
+
+        _emit_nss_telemetry(builder, TaskStatusEnum.COMPLETED)
+
+        handler_cls.assert_not_called()
+        assert builder._emit_telemetry is False
+
+
+def test_with_replace_pii_reenable_after_disable():
+    """Calling with_replace_pii() after with_replace_pii(enable=False) re-enables PII."""
+    config = (
+        SafeSynthesizer()
+        .with_data_source(_SMALL_DF)
+        .with_replace_pii(enable=False)
+        .with_replace_pii()
+        .resolve()
+        ._nss_config
+    )
+    assert config is not None
+    assert config.replace_pii is not None
+
+
+_METRICS_JSON = '{"timing": {}}'
+
+
+def _builder_with_mock_results(tmp_path: Path) -> SafeSynthesizer:
+    """Create a SafeSynthesizer with mocked results for save_results testing."""
+    nss = SafeSynthesizer(save_path=tmp_path / "artifacts")
+    nss.results = MagicMock()
+    nss.results.synthetic_data = _SMALL_DF
+    nss.results.evaluation_report_html = _REPORT_HTML
+    nss.results.summary.model_dump_json.return_value = _METRICS_JSON
+    return nss
+
+
+class TestSaveResults:
+    """Verify save_results persists CSV, HTML, and evaluation metrics."""
+
+    def test_saves_to_default_workdir(self, tmp_path: Path):
+        nss = _builder_with_mock_results(tmp_path)
+
+        nss.save_results()
+        assert nss._workdir is not None
+
+        csv_path = nss._workdir.output_file
+        report_path = nss._workdir.evaluation_report
+        metrics_path = nss._workdir.evaluation_metrics
+        assert csv_path.exists()
+        assert report_path.exists()
+        assert metrics_path.exists()
+        assert pd.read_csv(csv_path).equals(_SMALL_DF)
+        assert report_path.read_text() == _REPORT_HTML
+        assert metrics_path.read_text() == _METRICS_JSON
+
+    def test_output_file_override_writes_csv_to_custom_path(self, tmp_path: Path):
+        nss = _builder_with_mock_results(tmp_path)
+        custom_csv = tmp_path / "custom" / "output.csv"
+
+        nss.save_results(output_file=custom_csv)
+
+        assert custom_csv.exists()
+        assert pd.read_csv(custom_csv).equals(_SMALL_DF)
+        # Report still goes to the workdir regardless of output_file
+        assert nss._workdir is not None
+        assert nss._workdir.evaluation_report.exists()
+        assert nss._workdir.evaluation_report.read_text() == _REPORT_HTML
+
+    def test_skips_report_when_html_is_none(self, tmp_path: Path):
+        nss = _builder_with_mock_results(tmp_path)
+        nss.results.evaluation_report_html = None
+
+        nss.save_results()
+        assert nss._workdir is not None
+
+        assert nss._workdir.output_file.exists()
+        assert not nss._workdir.evaluation_report.exists()
+        assert not nss._workdir.evaluation_metrics.exists()

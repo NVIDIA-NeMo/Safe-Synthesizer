@@ -2,9 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-"""
-Named Entity Recognition
-"""
+"""Named Entity Recognition"""
 
 from __future__ import annotations
 
@@ -12,7 +10,7 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass
 from dataclasses import field as dataclasses_field
-from typing import TYPE_CHECKING, List, Optional, Set, Tuple, Union
+from typing import TYPE_CHECKING, Optional
 
 from ...data_processing.records.json_record import JSONRecord
 from ...data_processing.records.value_path import (
@@ -68,7 +66,7 @@ class NERPrediction:
     def json_path(self):
         return value_path_to_json_path(self.value_path)
 
-    def get_dedupe_key_by_label(self, record: JSONRecord) -> Tuple:
+    def get_dedupe_key_by_label(self, record: JSONRecord) -> tuple:
         """Returns a string that can be used to dedupe
         predictions from different sources.
 
@@ -98,7 +96,7 @@ class NERPrediction:
 
 
 """Represents the prediction results of a pipeline"""
-PipelineResult = List[List[Union[NERPrediction, dict]]]
+PipelineResult = list[list[NERPrediction | dict]]
 
 
 PRECISION = 4
@@ -172,7 +170,7 @@ class NER:
         dict_result: bool = False,
         min_score: float = 0.0,
         timings_only: bool = False,
-        include_labels: Optional[Set[str]] = None,
+        include_labels: Optional[set[str]] = None,
     ) -> PipelineResult:
         """
         Predict entities from a string, list or dictionary object.

@@ -1,47 +1,53 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""
-Observability for Safe Synthesizer.
+"""Observability for Safe Synthesizer.
 
 Provides structured logging with category support for batch/CLI operations.
 
-Log Categories:
-    - RUNTIME: Internal operational details (memory, timings, debug info)
-    - USER: User-relevant progress and results
-    - SYSTEM: System-level events (startup, shutdown, config)
-    - BACKEND: Logs from dependencies
+Log categories:
+
+  - RUNTIME: internal operational details (memory, timings, debug info)
+  - USER: user-relevant progress and results
+  - SYSTEM: system-level events (startup, shutdown, config)
+  - BACKEND: logs from dependencies
 
 Configure via environment variables:
-    - NSS_LOG_FORMAT: 'json' or 'plain' (default: json)
-    - NSS_LOG_LEVEL: One of 'DEBUG_NO_DEPS', 'INFO', 'WARNING', 'ERROR', 'CRITICAL',
-        'DEBUG_DEPENDENCIES', 'DEBUG' (default: INFO)
-    - NSS_LOG_FILE: Path to file for JSON logs (optional, logs to file in addition to console)
-    - OTEL_SERVICE_NAME: Name of the service for OpenTelemetry (default: nemo-safe-synthesizer)
 
-Usage:
-    Logging is NOT auto-initialized when importing this module. Entry points (CLI, scripts)
-    must explicitly call initialize_logging() or initialize_observability() before logging.
+  - ``NSS_LOG_FORMAT``: ``"json"`` or ``"plain"`` (default: auto-detect from tty)
+  - ``NSS_LOG_LEVEL``: ``"INFO"``, ``"WARNING"``, ``"ERROR"``, ``"CRITICAL"``,
+    ``"DEBUG_DEPENDENCIES"``, or ``"DEBUG"`` (default: ``"INFO"``)
+  - ``NSS_LOG_FILE``: path to file for JSON logs (optional)
+  - ``OTEL_SERVICE_NAME``: OpenTelemetry service name
+    (default: ``"nemo-safe-synthesizer"``)
 
-    When used as a library (imported by other applications), get_logger() returns basic
-    stdlib loggers that integrate with the parent application's logging configuration.
+Logging is NOT auto-initialized on import. Entry points (CLI, scripts) must
+call ``initialize_observability()`` first. When used as a library,
+``get_logger()`` returns basic stdlib loggers that integrate with the parent
+application's logging configuration.
 """
 
+from __future__ import annotations
+
+import contextlib
 import contextvars
 import inspect
 import logging
 import os
 import sys
+import threading
 import time
 import warnings
+from collections.abc import Callable, Generator, Mapping, MutableMapping
 from datetime import datetime
 from enum import Enum
 from functools import wraps
 from io import StringIO
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Literal, ParamSpec, TypeVar
+from typing import TYPE_CHECKING, Any, Literal, ParamSpec, TypeVar, cast
 
 import colorama
+from structlog.types import BindableLogger, Processor
 
 if TYPE_CHECKING:
     from .cli.artifact_structure import Workdir
@@ -60,6 +66,8 @@ R = TypeVar("R")
 
 __all__ = [
     "NSSObservabilitySettings",
+    "NSS_LOG_LEVELS",
+    "NSS_LOG_FORMATS",
     "LogCategory",
     "CategoryLogger",
     "CategoryFilter",
@@ -72,6 +80,9 @@ __all__ = [
     "traced_runtime",
     "traced_system",
     "traced_backend",
+    "heartbeat",
+    "NvmlPeakSampler",
+    "read_loadavg",
 ]
 
 
@@ -84,12 +95,19 @@ verbosity_mapping = {
     "DEBUG_DEPENDENCIES": (logging.DEBUG, logging.DEBUG),
 }
 
+#: Valid values for the ``NSS_LOG_LEVEL`` environment variable. Derived
+#: from ``verbosity_mapping`` so the validator set stays in sync with
+#: the levels the runtime actually knows how to handle.
+NSS_LOG_LEVELS: frozenset[str] = frozenset(verbosity_mapping.keys())
+
+#: Valid values for the ``NSS_LOG_FORMAT`` environment variable.
+NSS_LOG_FORMATS: frozenset[str] = frozenset({"json", "plain"})
+
 PACKAGES_TO_SET_TO_WARN = [
     "accelerate",
     "arrow",
     "bitsandbytes",
     "datasets",
-    "faiss",
     "httpx",
     "matplotlib",
     "nvidia",
@@ -99,18 +117,13 @@ PACKAGES_TO_SET_TO_WARN = [
     "torch.distributed",
     "torchao",
     "transformers",
-    "unsloth",
     "vllm",
     "wandb",
 ]
 
 
 class NSSObservabilitySettings(BaseSettings):
-    """
-    Logging configuration for Safe Synthesizer.
-
-    All settings can be configured via environment variables or passed via the CLI.
-    """
+    """Logging configuration read from environment variables or CLI flags."""
 
     # NSS-specific settings
     nss_log_format: Literal["json", "plain"] | None = None
@@ -122,27 +135,34 @@ class NSSObservabilitySettings(BaseSettings):
 
     @field_validator("nss_log_format", mode="before")
     @classmethod
-    def set_log_format_default(cls, value: Any) -> Literal["json", "plain"]:
-        """Set nss_log_format default based on whether stdout is a tty at instantiation time."""
+    def set_log_format_default(cls, value: str | None) -> str:
+        """Set nss_log_format default based on whether stdout is a tty or notebook."""
         match value:
             case str():
                 return value.lower()
+            case _ if sys.stdout.isatty():
+                return "plain"
             case _:
-                return "plain" if sys.stdout.isatty() else "json"
+                try:
+                    from IPython import get_ipython
+
+                    if get_ipython().__class__.__name__ == "ZMQInteractiveShell":
+                        return "plain"
+                except (ImportError, AttributeError):
+                    pass
+                return "json"
 
     @field_validator("nss_log_color", mode="before")
     @classmethod
-    def set_log_color_default(cls, value: Any) -> bool:
+    def set_log_color_default(cls, value: str | bool | None) -> bool:
         """Set nss_log_color default based on whether stdout is a tty at instantiation time."""
         match value:
             case str():
                 return value.lower() == "true"
-            case _ if sys.stdout.isatty():
-                warnings.warn("stdout is a tty, setting nss_log_color to True", UserWarning)
-                return True
+            case bool():
+                return value
             case _:
-                warnings.warn("stdout is not a tty, setting nss_log_color to False", UserWarning)
-                return False
+                return sys.stdout.isatty()
 
 
 with warnings.catch_warnings():
@@ -160,9 +180,8 @@ class LogCategory(str, Enum):
 
 
 # Contextvar to pass category from LoggerAdapter to processor without going through 'extra'
-_current_log_category: contextvars.ContextVar[str | None] = contextvars.ContextVar(  # ty: ignore[invalid-assignment]
-    "_current_log_category", default=None
-)
+_current_log_category: contextvars.ContextVar[str | None]
+_current_log_category = contextvars.ContextVar("_current_log_category", default=None)
 
 
 def _category_log_processor(logger: logging.Logger, method_name: str, event_dict: EventDict) -> EventDict:
@@ -187,6 +206,16 @@ def _move_category_for_column(logger: logging.Logger, method_name: str, event_di
     return event_dict
 
 
+def _format_table_value(key: str, value: object) -> str:
+    """Format values for user-facing Rich tables."""
+    if isinstance(value, float):
+        is_fraction = 0 < value < 1 and key not in ("loss", "eval_loss") and not key.endswith(("_sec", "_seconds"))
+        return f"{value:.2%}" if is_fraction else f"{value:.2f}"
+    if isinstance(value, Mapping):
+        return ", ".join(f"{mapping_key}: {value[mapping_key]}" for mapping_key in sorted(value))
+    return str(value)
+
+
 def _render_rich_table(data: dict, title: str | None = None) -> str:
     """Render a dictionary as a Rich ASCII table string."""
     table = Table(title=title, box=box.ASCII)
@@ -203,23 +232,14 @@ def _render_rich_table(data: dict, title: str | None = None) -> str:
         stat_keys = list(first_value.keys()) if first_value else []
         for stat_key in stat_keys:
             row_values = [str(data[col].get(stat_key, "")) for col in data.keys()]
-            table.add_row(stat_key, *row_values)
+            table.add_row(stat_key, *row_values)  # ty: ignore[invalid-argument-type] -- rich stub mismatch
     else:
         # Flat format: render as key-value pairs
         table.add_column("Metric", style="bold")
         table.add_column("Value")
         for key, value in data.items():
             display_key = key.replace("_", " ").title()
-            # TODO: Refactor this formatting logic to be more generic and maintainable.
-            # Currently requires updating this file whenever new metrics are added that
-            # need special formatting (e.g., the "loss", "eval_loss" exclusion list).
-            if isinstance(value, float):
-                if key not in ("loss", "eval_loss") and value < 1 and value > 0:
-                    display_value = f"{value:.3%}"
-                else:
-                    display_value = f"{value:.3f}"
-            else:
-                display_value = str(value)
+            display_value = _format_table_value(key, value)
             table.add_row(display_key, display_value)
 
     return _convert_rich_table_to_string(table)
@@ -321,9 +341,7 @@ def _prepare_json_logging() -> tuple[
 
 
 def _prepare_file_logging() -> logging.Handler | None:
-    """
-    Prepare file logging for JSON logs.
-    """
+    """Prepare file logging for JSON logs."""
     if SETTINGS and SETTINGS.nss_log_file:
         json_renderer, json_timestamp_processor, json_env_processors = _prepare_json_logging()
         json_foreign_pre_chain = [
@@ -494,21 +512,23 @@ def _get_console_columns() -> list:
     ]
 
 
-def _remove_category_before_render(logger: logging.Logger, method_name: str, event_dict: dict) -> dict:
+def _remove_category_before_render(
+    logger: logging.Logger, method_name: str, event_dict: MutableMapping[str, Any]
+) -> MutableMapping[str, Any]:
     """Remove category from event_dict right before rendering to prevent duplicate display."""
     event_dict.pop("category", None)
     return event_dict
 
 
 def _prepare_console_logging(
-    shared_processors: list,
-    renderer: structlog.stdlib.ProcessorFormatter | structlog.dev.ConsoleRenderer,
+    shared_processors: list[Processor],
+    renderer: Processor,
     is_plain: bool = False,
 ) -> logging.Handler:
     # Console handler formatter
     # For plain format, add a processor to remove 'category' right before the renderer
     # since it's already displayed in the column header
-    final_processors = [
+    final_processors: list[Processor] = [
         structlog.stdlib.ProcessorFormatter.remove_processors_meta,
     ]
     if is_plain:
@@ -527,10 +547,7 @@ def _prepare_console_logging(
     return console_handler
 
 
-def _prepare_common_processors() -> tuple[
-    list[structlog.stdlib.ProcessorFormatter],
-    Any,
-]:
+def _prepare_common_processors() -> tuple[list, Any]:
     json_renderer, json_timestamp_processor, json_env_processors = _prepare_json_logging()
     global SETTINGS
     if SETTINGS and SETTINGS.nss_log_format == "json":
@@ -547,7 +564,7 @@ def _prepare_common_processors() -> tuple[
             return event_dict
 
         timestamp_processor = structlog.processors.TimeStamper()
-        timestamp_processor._stamper = _stamper  # type: ignore[attr-defined]
+        timestamp_processor._stamper = _stamper
         # For console output: render table data as Rich tables, then handle categories
         env_processors = [_category_log_processor, _render_table_data_for_console, _move_category_for_column]
 
@@ -572,10 +589,10 @@ def _prepare_common_processors() -> tuple[
         structlog.processors.EventRenamer(to="message"),
     ]
 
-    return shared_processors, renderer  # type: ignore[return-value]
+    return shared_processors, renderer
 
 
-def _clear_loggers():
+def _clear_loggers() -> None:
     logging.getLogger().handlers.clear()
 
 
@@ -586,17 +603,17 @@ class _CategoryLogAdapter(logging.LoggerAdapter):
         super().__init__(logger, {})
         self.category = category
 
-    def process(self, msg, kwargs):
+    def process(self, msg: str, kwargs: MutableMapping[str, Any]) -> tuple[str, MutableMapping[str, Any]]:
         # Set category via contextvar to avoid it appearing in ExtraAdder output
         _current_log_category.set(self.category.value)
         return msg, kwargs
 
 
 class CategoryLogger(logging.Logger):
-    """
-    A logger wrapper that adds category support.
+    """Logger wrapper that adds category support.
 
-    Usage:
+    Usage::
+
         logger = get_logger(__name__)
 
         # Runtime logs (internal details)
@@ -621,42 +638,33 @@ class CategoryLogger(logging.Logger):
         self.system = _CategoryLogAdapter(base_logger, LogCategory.SYSTEM)
         self.backend = _CategoryLogAdapter(base_logger, LogCategory.BACKEND)
         self.default = self.runtime
+        # Assign standard log methods as direct aliases to self.default rather than
+        # wrapping them in delegation methods. A delegation method in this class would
+        # add an observability.py frame to the call stack, which confuses both
+        # Python's stdlib findCaller() (used for pre-init foreign logs) and structlog's
+        # CallsiteParameterAdder. Using aliases means logger.info() calls
+        # LoggerAdapter.info() directly -- a logging-module frame that is already
+        # skipped by both mechanisms -- so the reported callsite is the real caller.
+        self.__dict__.update(
+            log=self.default.log,
+            debug=self.default.debug,
+            info=self.default.info,
+            warning=self.default.warning,
+            error=self.default.error,
+            exception=self.default.exception,
+            critical=self.default.critical,
+        )
 
     @property
     def name(self) -> str:
         return self._logger.name
 
-    # Delegate standard methods to runtime by default (backwards compatible)
-    def log(self, level: int, msg, *args, **kwargs):
-        self.default.log(level, msg, *args, **kwargs)
-
-    def debug(self, msg, *args, **kwargs):
-        self.default.debug(msg, *args, **kwargs)
-
-    def info(self, msg, *args, **kwargs):
-        self.default.info(msg, *args, **kwargs)
-
-    def warning(self, msg, *args, **kwargs):
-        self.default.warning(msg, *args, **kwargs)
-
-    def error(self, msg, *args, **kwargs):
-        self.default.error(msg, *args, **kwargs)
-
-    def exception(self, msg, *args, **kwargs):
-        self.default.exception(msg, *args, **kwargs)
-
-    def critical(self, msg, *args, **kwargs):
-        self.default.critical(msg, *args, **kwargs)
-
     def isEnabledFor(self, level: int) -> bool:
         return self._logger.isEnabledFor(level)
 
 
-def _initialize_logging():
-    """
-    Initialize logging for Safe Synthesizer. Note that this is to be called only by initialize_observability().
-    """
-
+def _initialize_logging() -> None:
+    """Initialize logging for Safe Synthesizer. Note that this is to be called only by initialize_observability()."""
     SETTINGS.__init__()
     program_level, dependencies_level = verbosity_mapping[SETTINGS.nss_log_level.upper()]
     _clear_loggers()
@@ -681,7 +689,7 @@ def _initialize_logging():
             *shared_processors,
             structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
         ],
-        wrapper_class=structlog.stdlib.BoundLogger,
+        wrapper_class=cast(type[BindableLogger], structlog.stdlib.BoundLogger),
         context_class=dict,
         logger_factory=structlog.stdlib.LoggerFactory(),
         cache_logger_on_first_use=True,
@@ -695,15 +703,12 @@ def _initialize_logging():
 _INITIALIZED_OBSERVABILITY = False
 
 
-def initialize_observability():
-    """
-    Initialize observability for Safe Synthesizer.
+def initialize_observability() -> None:
+    """Initialize observability for Safe Synthesizer.
 
-    This is to be used eventually as a central entrypoint for observability - right now
-    it only initializes logging.
-
-    Must be called explicitly by entry points (CLI, scripts). Not called automatically
-    when the package is imported.
+    Central entry point for all observability setup -- currently initializes
+    logging only. Must be called explicitly by entry points (CLI, scripts);
+    not called automatically on import. Idempotent.
     """
     global _INITIALIZED_OBSERVABILITY
     if _INITIALIZED_OBSERVABILITY:
@@ -763,14 +768,13 @@ def configure_logging_from_workdir(
 
 
 def get_logger(name: str | None = None) -> CategoryLogger:
-    """
-    Get a logger with the given name and common configuration.
+    """Return a category logger for structured logging.
 
-    If logging has been initialized via initialize_observability(),
-    returns a structlog-based logger with full formatting.
-
-    If observability has NOT been initialized (e.g., when imported as a library), returns a basic
-    stdlib logger that integrates with the parent application's logging configuration.
+    Always pass ``__name__`` as the argument. After
+    ``initialize_observability()`` is called, returns a structlog-based
+    logger with full formatting. Before initialization (e.g. when imported
+    as a library), returns a basic stdlib logger that integrates with the
+    parent application's logging configuration.
     """
     if _INITIALIZED_OBSERVABILITY:
         return CategoryLogger(structlog.get_logger(name))
@@ -782,15 +786,15 @@ def get_logger(name: str | None = None) -> CategoryLogger:
 
 
 class TracedContext:
-    """
-    A traced context that can be used as both a decorator and a context manager.
+    """Traced context usable as both a decorator and a context manager.
 
-    As a decorator:
+    As a decorator::
+
         @traced("operation_name", category=LogCategory.USER)
-        def my_function():
-            ...
+        def my_function(): ...
 
-    As a context manager:
+    As a context manager::
+
         with traced("operation_name", category=LogCategory.USER):
             ...
     """
@@ -894,26 +898,28 @@ def traced(
     record_duration: bool = True,
     level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "DEBUG",
 ) -> TracedContext:
-    """
-    Decorator/context manager to log function entry/exit with category-aware logging.
+    """Create a traced context for logging operation entry/exit.
 
     Args:
-        name: Operation name (defaults to function qualname when used as decorator)
-        category: Log category for automatic entry/exit logs
-        log_entry: Whether to log function entry
-        log_exit: Whether to log function exit
-        record_duration: Whether to record duration in the exit log
+        name: Operation name (defaults to function qualname when used as
+            a decorator).
+        category: Log category for entry/exit messages.
+        log_entry: Whether to log function entry.
+        log_exit: Whether to log function exit.
+        record_duration: Whether to record duration in the exit log.
+        level: Log level for entry/exit messages.
 
-    Usage as decorator:
+    Example::
+        # Usage as a decorator
         @traced("training.epoch", category=LogCategory.USER)
-        def train_epoch(self, epoch_num: int):
-            ...
+        def train_epoch(self, epoch_num: int): ...
+
 
         @traced(category=LogCategory.RUNTIME)  # Internal operation
-        def _compute_gradients(self):
-            ...
+        def _compute_gradients(self): ...
 
-    Usage as context manager:
+
+        # Usage as a context manager
         with traced("data_loading", category=LogCategory.USER):
             data = load_data()
             process(data)
@@ -928,21 +934,212 @@ def traced(
     )
 
 
-def traced_user(name: str | None = None, **kwargs):
+def traced_user(name: str | None = None, **kwargs) -> TracedContext:
     """Log a user-relevant operation (progress, results)."""
     return traced(name=name, category=LogCategory.USER, **kwargs)
 
 
-def traced_runtime(name: str | None = None, **kwargs):
+def traced_runtime(name: str | None = None, **kwargs) -> TracedContext:
     """Log a runtime/internal operation."""
     return traced(name=name, category=LogCategory.RUNTIME, **kwargs)
 
 
-def traced_system(name: str | None = None, **kwargs):
+def traced_system(name: str | None = None, **kwargs) -> TracedContext:
     """Log a system-level operation."""
     return traced(name=name, category=LogCategory.SYSTEM, **kwargs)
 
 
-def traced_backend(name: str | None = None, **kwargs):
+def traced_backend(name: str | None = None, **kwargs) -> TracedContext:
     """Log a backend operation."""
     return traced(name=name, category=LogCategory.BACKEND, **kwargs)
+
+
+@contextlib.contextmanager
+def heartbeat(
+    message: str,
+    interval: float = 60.0,
+    *,
+    logger_name: str | None = None,
+    progress_note: str | None = None,
+    **extra_fields,
+) -> Generator[None, None, None]:
+    """Context manager that logs a periodic heartbeat during a long-running operation.
+
+    Args:
+        message: Description of the operation (e.g. "Model loading", "Generation").
+        interval: Seconds between heartbeat log messages.
+        logger_name: Logger name (pass ``__name__`` so heartbeat logs attribute
+            to the calling module).
+        progress_note: Optional sentence appended only to periodic ``... in progress``
+            lines (so ``message`` can stay short for ``... complete`` / ``... failed``).
+        **extra_fields: Additional structured fields passed to the logger
+            (e.g. ``model="SmolLM3"``).
+    """
+    if interval <= 0:
+        raise ValueError(f"heartbeat interval must be positive, got {interval}")
+    _logger = get_logger(logger_name or __name__)
+    stop = threading.Event()
+    start = time.monotonic()
+
+    def _extra() -> dict:
+        return {"elapsed_seconds": round(time.monotonic() - start, 1), **extra_fields}
+
+    def _run() -> None:
+        while not stop.wait(timeout=interval):
+            event = f"{message} in progress"
+            if progress_note:
+                event = f"{event}. {progress_note}"
+            _logger.info(event, extra={"ctx": _extra()})
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+    exc: BaseException | None = None
+    try:
+        yield
+    except BaseException as e:
+        exc = e
+        raise
+    finally:
+        stop.set()
+        thread.join(timeout=1)
+        if exc is not None:
+            ctx = {**_extra(), "error_type": type(exc).__name__}
+            _logger.error(f"{message} failed", extra={"ctx": ctx})
+        else:
+            _logger.info(f"{message} complete", extra={"ctx": _extra()})
+
+
+# ---------------------------------------------------------------------------
+# Hardware sampling primitives (shared across training + generation backends)
+# ---------------------------------------------------------------------------
+
+#: Plain stdlib logger for the degraded-mode hardware-sampling primitives.
+#: Avoids reentrancy with the structlog machinery this module configures.
+_hw_logger = logging.getLogger(__name__)
+
+
+def _default_nvml_device_index() -> int:
+    """Physical NVML index of the first CUDA-visible device.
+
+    NVML's ``nvmlDeviceGetHandleByIndex`` enumerates *physical* GPUs and
+    ignores ``CUDA_VISIBLE_DEVICES``, whereas the workload (single-GPU here)
+    runs on CUDA logical device 0 -- which the env var may remap to a different
+    physical GPU. Returns the physical index of the first visible device so the
+    sampler tracks the GPU the workload actually uses.
+
+    Falls back to ``0`` when ``CUDA_VISIBLE_DEVICES`` is unset, empty, or not a
+    plain integer list (e.g. ``GPU-<uuid>`` / ``MIG-...`` specs this does not
+    decode) -- degraded mode, consistent with the rest of this primitive.
+    """
+    raw = os.environ.get("CUDA_VISIBLE_DEVICES")
+    if not raw:
+        return 0
+    first = raw.split(",")[0].strip()
+    try:
+        return int(first)
+    except ValueError:
+        return 0
+
+
+class NvmlPeakSampler:
+    """Daemon-thread sampler tracking peak device VRAM via NVML.
+
+    Use as a context manager wrapping the work whose peak VRAM you want::
+
+        with NvmlPeakSampler() as vram:
+            ...  # build engine / run training / generate
+        peak_gb = vram.peak_gb  # float | None
+
+    Returns ``None`` from :attr:`peak_gb` when NVML isn't available (driver
+    missing, pynvml import failed, device index invalid). Reads at the driver
+    layer, so it sees allocations made by worker subprocesses regardless of
+    which process holds the torch handle. Reports device-wide VRAM -- on a
+    dedicated host that equals the workload's allocation; on a shared GPU it
+    includes other process allocations.
+
+    ``device_index`` defaults to the first ``CUDA_VISIBLE_DEVICES`` entry (see
+    :func:`_default_nvml_device_index`) so the sampler follows the workload's
+    GPU on multi-GPU hosts instead of always reading physical GPU 0. Pass an
+    explicit index to override.
+    """
+
+    def __init__(self, device_index: int | None = None, interval_seconds: float = 0.25) -> None:
+        self._device_index = _default_nvml_device_index() if device_index is None else device_index
+        self._interval = interval_seconds
+        self._stop = threading.Event()
+        self._peak_bytes = 0
+        self._lock = threading.Lock()
+        self._thread: threading.Thread | None = None
+        self._handle: Any = None
+        self._pynvml: Any = None
+
+    def __enter__(self) -> NvmlPeakSampler:
+        try:
+            import pynvml  # noqa: PLC0415 -- soft dep, no top-level cost
+        except ImportError:
+            _hw_logger.debug("nvml-sampler: pynvml unavailable; peak VRAM will be None")
+            return self
+        try:
+            pynvml.nvmlInit()
+            self._pynvml = pynvml
+            self._handle = pynvml.nvmlDeviceGetHandleByIndex(self._device_index)
+        except pynvml.NVMLError as exc:  # driver missing, bad index, etc. -- degraded mode
+            _hw_logger.warning("nvml-sampler: init failed; peak VRAM will be None: %s", exc)
+            if self._pynvml is not None:
+                try:
+                    self._pynvml.nvmlShutdown()
+                except self._pynvml.NVMLError:
+                    _hw_logger.debug("nvml-sampler: nvmlShutdown failed after init error", exc_info=True)
+            self._pynvml = None
+            return self
+        self._thread = threading.Thread(target=self._run, daemon=True, name=f"nvml-sampler[{self._device_index}]")
+        self._thread.start()
+        return self
+
+    def __exit__(self, *exc: Any) -> None:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=2.0)
+        if self._pynvml is not None:
+            try:
+                self._pynvml.nvmlShutdown()
+            except self._pynvml.NVMLError:  # shutdown is best-effort; init already succeeded
+                _hw_logger.debug("nvml-sampler: nvmlShutdown failed", exc_info=True)
+
+    @property
+    def peak_gb(self) -> float | None:
+        """Peak device-wide VRAM (GiB) observed during sampling; ``None`` if NVML unavailable."""
+        if self._pynvml is None:
+            return None
+        with self._lock:
+            return self._peak_bytes / (1024**3)
+
+    def _run(self) -> None:
+        """Poll loop. Tolerates transient NVML errors without dying."""
+        assert self._pynvml is not None
+        while not self._stop.is_set():
+            try:
+                info = self._pynvml.nvmlDeviceGetMemoryInfo(self._handle)
+                used = int(info.used)
+                with self._lock:
+                    if used > self._peak_bytes:
+                        self._peak_bytes = used
+            except self._pynvml.NVMLError:  # transient driver hiccup -- keep sampling
+                pass
+            self._stop.wait(self._interval)
+
+
+def read_loadavg() -> tuple[float, float, float] | None:
+    """Return ``/proc/loadavg`` as a (1m, 5m, 15m) triple; ``None`` when unavailable.
+
+    Linux-only. Cheap (one syscall). Safe to call from any process -- the read
+    is host-scoped, not process-scoped. Designed to bracket a workload: caller
+    reads pre + post, the pair is informative about whether host load drifted
+    during the run.
+    """
+    try:
+        with open("/proc/loadavg", encoding="utf-8") as f:
+            parts = f.read().split()
+        return (float(parts[0]), float(parts[1]), float(parts[2]))
+    except (OSError, ValueError, IndexError):
+        return None

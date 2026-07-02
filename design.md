@@ -39,7 +39,6 @@ graph TB
     subgraph "Training Backend"
         TrainingBackend[TrainingBackend<br/>Abstract]
         HFBackend[HuggingFaceBackend<br/>LoRA + DP Support]
-        UnslothBackend[UnslothBackend<br/>Optimized Training]
         
         subgraph "Training Components"
             ModelLoader[Model Loader<br/>AutoModel + Tokenizer]
@@ -89,6 +88,8 @@ graph TB
         Privacy[Privacy Module<br/>DP Transformers]
         Records[Records System<br/>JSON/Fragment]
         Stats[Statistics]
+        Observability[Observability<br/>CategoryLogger + Tracing]
+        Configurator[Configurator<br/>Pydantic→Click]
     end
 
     CLI --> ConfigBuilder
@@ -108,7 +109,6 @@ graph TB
     Assembler --> TrainingBackend
 
     TrainingBackend --> HFBackend
-    TrainingBackend --> UnslothBackend
     HFBackend --> ModelLoader
     HFBackend --> Quantization
     HFBackend --> LoRA
@@ -142,13 +142,10 @@ graph TB
     DataActions -.-> Records
     Evaluator -.-> Stats
     DataActions -.-> Artifacts
-
-    style CLI fill:#e1f5ff
-    style SDK fill:#e1f5ff
-    style HFBackend fill:#ffe1e1
-    style VLLMBackend fill:#ffe1e1
-    style Evaluator fill:#e1ffe1
-    style SafeSynthesizerParams fill:#fff4e1
+    TrainingBackend -.-> Observability
+    GenBackend -.-> Observability
+    Evaluator -.-> Observability
+    ConfigBuilder -.-> Configurator
 ```
 
 ---
@@ -190,7 +187,7 @@ sequenceDiagram
 ```mermaid
 flowchart LR
     B[(data)]
-    B --> C{optional pii <br>relpacement}
+    B --> C{optional pii <br>replacement}
     C --> D(assemble <br> examples)
     D --> E(Fine-tune)
     E --> F[Generate Samples]
@@ -203,51 +200,49 @@ flowchart LR
 
 ### 1. Configuration Layer
 
-**Path**: `src/nemo_safe_synthesizer/config/`
+Path: `src/nemo_safe_synthesizer/config/`
 
-- **SafeSynthesizerParameters**: Main configuration class that aggregates all parameters
-- **DataParameters**: Dataset and preprocessing configurations
-- **TrainingHyperparams**: Training settings (learning rate, epochs, batch size, etc.)
-- **GenerateParameters**: Generation settings (temperature, top_p, num_records, etc.)
-- **EvaluationParameters**: Evaluation component toggles and settings
-- **PiiReplacerConfig**: PII detection and replacement settings
-- **DifferentialPrivacyHyperparams**: DP training parameters (epsilon, delta, clipping norm)
+- `SafeSynthesizerParameters`: Main configuration class that aggregates all parameters
+- `DataParameters`: Dataset and preprocessing configurations
+- `TrainingHyperparams`: Training settings (learning rate, epochs, batch size, etc.)
+- `GenerateParameters`: Generation settings (temperature, top_p, num_records, etc.)
+- `EvaluationParameters`: Evaluation component toggles and settings
+- `PiiReplacerConfig`: PII detection and replacement settings
+- `DifferentialPrivacyHyperparams`: DP training parameters (epsilon, delta, clipping norm)
 
 ### 2. Data Processing Pipeline
 
-**Path**: `src/nemo_safe_synthesizer/data_processing/`
+Path: `src/nemo_safe_synthesizer/data_processing/`
 
 #### Components:
 
-- **Holdout** (`holdout/`): Splits data into train/test sets with stratification support
-- **NemoPII** (`pii_replacer/`): 
+- Holdout (`holdout/`): Splits data into train/test sets with stratification support
+- `NemoPII` (`pii_replacer/`): 
   - Detects PII entities (names, emails, SSN, etc.)
   - Replaces with synthetic but realistic values
   - Maintains column statistics
-- **ActionExecutor** (`actions/`): Executes data transformations (date normalization, distributions)
-- **ExampleAssembler** (`assembler.py`): 
+- `ActionExecutor` (`actions/`): Executes data transformations (date normalization, distributions)
+- `ExampleAssembler` (`assembler.py`): 
   - Converts records to JSON format
   - Tokenizes for model training
   - Handles truncation and padding
 
 ### 3. Training Backend
 
-**Path**: `src/nemo_safe_synthesizer/training/`
+Path: `src/nemo_safe_synthesizer/training/`
 
 #### Abstract Base:
 
-- **TrainingBackend**: Defines interface for training implementations
+- `TrainingBackend`: Defines interface for training implementations
 
 #### Implementations:
 
-- **HuggingFaceBackend**: 
+- `HuggingFaceBackend`: 
   - Supports quantization (4-bit, 8-bit via bitsandbytes)
   - LoRA fine-tuning via PEFT
   - Differential Privacy via Opacus integration
   - Custom callbacks for monitoring
   
-- **UnslothBackend**: Optimized training with Unsloth library
-
 #### Key Features:
 
 - Model loading from HuggingFace Hub
@@ -257,43 +252,43 @@ flowchart LR
 
 ### 4. Generation Backend
 
-**Path**: `src/nemo_safe_synthesizer/generation/`
+Path: `src/nemo_safe_synthesizer/generation/`
 
 #### Components:
 
-- **VllmBackend**: 
+- `VllmBackend`: 
   - Fast inference using VLLM
   - Loads base model + LoRA adapter
   - Batch generation support
   
-- **RegexManager**: 
+- `RegexManager`: 
   - Enforces structured output (JSON format)
   - Validates generated records
   
-- **Processors**: Post-processing of generated text
-- **BatchGenerator**: Manages batch generation with retry logic
-- **Stopping Criteria**: Custom stopping conditions for generation
+- Processors: Post-processing of generated text
+- `BatchGenerator`: Manages batch generation with retry logic
+- Stopping Criteria: Custom stopping conditions for generation
 
 ### 5. Evaluation System
 
-**Path**: `src/nemo_safe_synthesizer/evaluation/`
+Path: `src/nemo_safe_synthesizer/evaluation/`
 
 #### Core:
 
-- **Evaluator**: Orchestrates all evaluation components
+- Evaluator: Orchestrates all evaluation components
 
 #### Evaluation Components (`components/`):
 
-- **Data Privacy Score**: Overall privacy assessment
-- **PII Replay**: Detects if original PII values appear in synthetic data
-- **Membership Inference Protection**: Measures resistance to MI attacks
-- **Attribute Inference Protection**: Measures resistance to AI attacks
-- **Column Distributions**: Statistical similarity of distributions
-- **Correlations**: Preservation of column relationships
-- **Text Semantic Similarity**: Semantic similarity (embedding-based)
-- **Text Structure Similarity**: Structural similarity
-- **SQS Score**: Synthetic Quality Score
-- **Deep Structure**: Deep structural analysis
+- Data Privacy Score: Overall privacy assessment
+- PII Replay: Detects if original PII values appear in synthetic data
+- Membership Inference Protection: Measures resistance to MI attacks
+- Attribute Inference Protection: Measures resistance to AI attacks
+- Column Distributions: Statistical similarity of distributions
+- Correlations: Preservation of column relationships
+- Text Semantic Similarity: Semantic similarity (embedding-based)
+- Text Structure Similarity: Structural similarity
+- SQS Score: Synthetic Quality Score
+- Deep Structure: Deep structural analysis
 
 #### Reporting (`reports/`, `render.py`):
 
@@ -306,27 +301,27 @@ flowchart LR
 
 #### LLM Utilities (`llm/`)
 
-- **LLM Definition**: Model metadata and configuration
-- **Model Loading**: Utilities for loading models
-- **Memory Management**: VRAM optimization
+- LLM Definition: Model metadata and configuration
+- Model Loading: Utilities for loading models
+- Memory Management: VRAM optimization
 
 #### Privacy Module (`privacy/dp_transformers/`)
 
-- **OpacusDPTrainer**: Integration with Opacus for DP-SGD
-- **Privacy Arguments**: DP hyperparameters
-- **Custom Layers**: DP-compatible layers
+- `[Opacus](https://opacus.ai/)DPTrainer`: Integration with Opacus for DP-SGD
+- Privacy Arguments: DP hyperparameters
+- Custom Layers: DP-compatible layers
 
 #### Artifacts (`artifacts/`)
 
-- **Analyzers**: Data quality checks and field analysis
-- **Metadata**: Dataset metadata management
-- **Manifest**: Artifact tracking
+- Analyzers: Data quality checks and field analysis
+- Metadata: Dataset metadata management
+- Manifest: Artifact tracking
 
 #### Records System (`data_processing/records/`)
 
-- **JSONRecord**: JSON record representation
-- **Fragment**: Record fragment handling
-- **ValuePath**: Path-based value access
+- JSONRecord: JSON record representation
+- Fragment: Record fragment handling
+- `ValuePath`: Path-based value access
 
 ---
 
@@ -350,7 +345,7 @@ synthesizer.run()
 ### 2. Backend Abstraction
 
 Training and generation backends use abstract base classes to allow multiple implementations:
-- Training: HuggingFace, Unsloth
+- Training: HuggingFace
 - Generation: VLLM (extensible to others)
 
 ### 3. Component-Based Evaluation
@@ -365,13 +360,13 @@ The execution follows a clear pipeline: Data → PII Replacement → Training �
 
 ## Technology Stack
 
-- **ML Frameworks**: PyTorch, Transformers, PEFT (LoRA)
-- **Inference**: VLLM for fast generation
-- **Privacy**: Opacus for Differential Privacy
-- **Data**: Pandas, Datasets (HuggingFace)
-- **Config**: Pydantic for validation
-- **CLI**: Click for command-line interface
-- **Visualization**: Jinja2, HTML/CSS/JS for reports
+- ML Frameworks: PyTorch, Transformers, PEFT (LoRA)
+- Inference: VLLM for fast generation
+- Privacy: Opacus for Differential Privacy
+- Data: Pandas, Datasets (HuggingFace)
+- Config: Pydantic for validation
+- CLI: Click for command-line interface
+- Visualization: Jinja2, HTML/CSS/JS for reports
 
 ---
 
@@ -380,9 +375,9 @@ The execution follows a clear pipeline: Data → PII Replacement → Training �
 ### CLI Usage
 
 ```bash
-nemo-safe-synthesizer run \
+safe-synthesizer run \
   --config config.yaml \
-  --url data.csv \
+  --data-source data.csv \
   --output-path synthetic.csv
 ```
 
@@ -402,14 +397,14 @@ results = synthesizer.results
 
 ## Data Flow
 
-1. **Input**: Raw CSV/DataFrame with potentially sensitive data
-2. **Holdout**: Split into train/test sets
-3. **PII Replacement**: Detect and replace PII in training set only
-4. **Data Assembly**: Convert to JSON format and tokenize
-5. **Training**: Fine-tune LLM with LoRA (+ optional DP)
-6. **Generation**: Generate synthetic records using trained adapter
-7. **Evaluation**: Compute privacy and quality metrics
-8. **Output**: 
+1. Input: Raw CSV/DataFrame with potentially sensitive data
+2. Holdout: Split into train/test sets
+3. PII Replacement: Detect and replace PII in training set only
+4. Data Assembly: Convert to JSON format and tokenize
+5. Training: Fine-tune LLM with LoRA (+ optional DP)
+6. Generation: Generate synthetic records using trained adapter
+7. Evaluation: Compute privacy and quality metrics
+8. Output: 
    - Synthetic data CSV
    - HTML evaluation report
    - Timing and summary statistics
@@ -439,39 +434,53 @@ results = synthesizer.results
 
 ## Output Artifacts
 
-```bash
+```text
 safe-synthesizer-artifacts/
-├── safe-synthesizer-model/
-│   ├── adapter_config.json
-│   ├── adapter_model.safetensors
-│   ├── metadata_v2.json
-│   └── training_args.bin
-├── safe-synthesizer-config.json
-├── dataset_schema.json
-├── synthetic_data.csv
-└── evaluation_report.html
+└── <config>---<dataset>/
+    └── <run_name>/
+        ├── train/
+        │   ├── safe-synthesizer-config.json
+        │   ├── cache/                          # training checkpoints and tokenized data
+        │   └── adapter/                        # trained PEFT adapter
+        │       ├── adapter_config.json
+        │       ├── adapter_model.safetensors
+        │       ├── metadata_v2.json
+        │       └── dataset_schema.json
+        ├── generate/
+        │   ├── logs.jsonl                      # generate-only workflow
+        │   ├── info.json                       # generate-only workflow
+        │   ├── synthetic_data.csv
+        │   ├── evaluation_report.html
+        │   └── evaluation_metrics.json         # machine-readable metrics
+        ├── dataset/
+        │   ├── training.csv
+        │   ├── test.csv
+        │   ├── validation.csv                  # when training.validation_ratio > 0
+        │   └── transformed_training.csv        # when PII replacement transforms the data
+        └── logs/
+            └── <phase>.jsonl                   # e.g. end_to_end.jsonl or train.jsonl
 ```
 
 ---
 
 ## Extension Points
 
-1. **Custom Training Backend**: Implement `TrainingBackend` abstract class
-2. **Custom Generation Backend**: Implement `GeneratorBackend` abstract class
-3. **Custom Evaluation Component**: Extend `Component` base class
-4. **Custom Data Actions**: Add to `data_processing/actions/`
-5. **Custom PII Detectors**: Extend NER pipeline
+1. Custom Training Backend: Implement `TrainingBackend` abstract class
+2. Custom Generation Backend: Implement `GeneratorBackend` abstract class
+3. Custom Evaluation Component: Extend `Component` base class
+4. Custom Data Actions: Add to `data_processing/actions/`
+5. Custom PII Detectors: Extend NER pipeline
 
 ---
 
 ## Performance Considerations
 
-- **Quantization**: 4-bit/8-bit quantization for memory efficiency
-- **LoRA**: Low-rank adaptation for efficient fine-tuning
-- **VLLM**: Optimized inference with PagedAttention
-- **Batch Processing**: Configurable batch sizes for generation
-- **GPU Memory Management**: Automatic cleanup and optimization
+- Quantization: 4-bit/8-bit quantization for memory efficiency
+- `LoRA`: Low-rank adaptation for efficient fine-tuning
+- VLLM: Optimized inference with PagedAttention
+- Batch Processing: Configurable batch sizes for generation
+- GPU Memory Management: Automatic cleanup and optimization
 
 ---
 
-Last updated: 2025-11-21
+Last updated: 2026-02-19

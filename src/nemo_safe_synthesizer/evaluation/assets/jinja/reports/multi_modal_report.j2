@@ -39,7 +39,7 @@
             {% endif %}
 
             {% if ctx.get('column_distribution_stability', {}).get('evaluation_fields') %}
-                <a href="#reference-columns" class="level-2">Reference Columns</a>
+                <a href="#training-columns" class="level-2">Training Data Columns</a>
             {% endif %}
 
             {% if ctx.with_synthesizer %}
@@ -111,10 +111,12 @@
     <section class="main">
         <section class="overview" id="overview">
             <h1>Overview</h1>
+            {% if ctx.job_id %}
             <div>
                 <div class="field">Job ID</div>
                 <div class="text">{{ ctx.job_id }}</div>
             </div>
+            {% endif %}
             <div>
                 <div class="field">Generated</div>
                 <div class="text">{{ now.strftime("%m/%d/%Y") }}</div>
@@ -233,7 +235,7 @@
             {% endif %}
 
             {% if ctx.get('column_distribution_stability', {}).get('evaluation_fields') %}
-                {% include "jinja/components/reference_columns.j2" %}
+                {% include "jinja/components/training_columns.j2" %}
             {% endif %}
 
             {% if ctx.get('column_correlation_stability', {}).get('figure') %}
@@ -492,7 +494,7 @@
                     <div class="hr-vertical"></div>
                     <div class="dps-overview">
                         <p class="score-description">                           
-                            The Data Privacy Score is determined by the privacy mechanisms you've enabled in the
+                            The Data Privacy Score is influenced by the privacy mechanisms you've enabled in the
                             synthetic configuration.
                             The use of these mechanisms helps to ensure that your synthetic data is safe from adversarial
                             attacks.

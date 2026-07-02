@@ -3,10 +3,14 @@
 
 import copy
 from pathlib import Path
+from typing import cast
+from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
 from datasets import Dataset
+from transformers import AutoTokenizer, PreTrainedTokenizer
+
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.generate import ValidationParameters
 from nemo_safe_synthesizer.data_processing.assembler import TrainingExampleAssembler
@@ -19,14 +23,11 @@ from nemo_safe_synthesizer.generation.processors import (
 )
 from nemo_safe_synthesizer.observability import get_logger
 from nemo_safe_synthesizer.training.backend import ModelMetadata
-from transformers import AutoTokenizer, PreTrainedTokenizer
 
 logger = get_logger(__name__)
 
 BOS = "<s>"
 EOS = "</s>"
-
-TOKENIZERS_DIR = Path(__file__).parent.parent / "test_data" / "tokenizers"
 
 
 @pytest.fixture(scope="session")
@@ -35,38 +36,25 @@ def fixture_save_path(fixture_session_cache_dir: Path) -> Path:
 
 
 @pytest.fixture(
-    params=["TinyLlama/TinyLlama-1.1B-Chat-v1.0", "HuggingFaceTB/SmolLM3-3B", "mistralai/Mistral-7B-Instruct-v0.3"],
+    params=["tinyllama", "smollm3b", "mistral7b"],
     ids=["tinyllama", "smollm3", "mistral"],
 )
-def fixture_over_tokenizers(request) -> tuple[str, PreTrainedTokenizer]:
-    """Fixture parameterized over multiple tokenizers of interest."""
-    model_name = request.param
-
-    repo_name = model_name
-    local_files_only = False
-    if model_name == "TinyLlama/TinyLlama-1.1B-Chat-v1.0":
-        repo_name = str(TOKENIZERS_DIR / "tinyllama")
-        local_files_only = True
-    elif model_name == "HuggingFaceTB/SmolLM3-3B":
-        repo_name = str(TOKENIZERS_DIR / "smollm3b")
-        local_files_only = True
-    elif model_name == "mistralai/Mistral-7B-Instruct-v0.3":
-        repo_name = str(TOKENIZERS_DIR / "mistral7b")
-        local_files_only = True
-    else:
-        logger.warning(f"Tokenizer for {model_name} not stored in repo, loading from HF Hub")
-
-    tokenizer = AutoTokenizer.from_pretrained(repo_name, local_files_only=local_files_only)
-
-    return model_name, tokenizer
+def fixture_over_tokenizers(request, tokenizers_dir) -> tuple[str, PreTrainedTokenizer]:
+    # Purpose: Parameterized over local tokenizer directories (tinyllama, smollm3, mistral).
+    # Data: Each directory under tests/test_data/tokenizers/ contains tokenizer files and config.json
+    # so that both AutoTokenizer and AutoConfig can load without network access.
+    local_path = str(tokenizers_dir / request.param)
+    tokenizer = AutoTokenizer.from_pretrained(local_path, local_files_only=True)
+    return local_path, cast(PreTrainedTokenizer, tokenizer)
 
 
-# Purpose: Builds training metadata for tests, using the stub tokenizer and explicit params.
+# Purpose: Builds training metadata for tests, using the local SmolLM3 tokenizer directory.
 @pytest.fixture
 def fixture_metadata(
     fixture_save_path,
+    fixture_smollm3_tokenizer,
 ) -> ModelMetadata:
-    config = SafeSynthesizerParameters.from_params(use_unsloth=False, rope_scaling_factor=1)
+    config = SafeSynthesizerParameters.from_params(rope_scaling_factor=1, pretrained_model=fixture_smollm3_tokenizer)
     metadata = ModelMetadata.from_str_or_path(config.training.pretrained_model, save_path=fixture_save_path)
     return metadata
 
@@ -179,49 +167,6 @@ def test_grouped_data_processor_out_of_order_records(
     assert len(response.invalid_records) == 5
     assert len(response.errors) == 5
     assert response.errors[-1] == ("Group not ordered", "groupby")
-
-
-# Purpose: Composite group_by works when the tuple uniquely identifies groups.
-# Data: Grouped by ["petal.width", "variety"].
-# Asserts: 5 valid; 0 invalid/errors.
-def test_grouped_data_processor_multiple_group_by(
-    fixture_valid_iris_dataset_jsonl_and_schema,
-    fixture_validation_config: ValidationParameters,
-):
-    jsonl_str, jsonl_schema = fixture_valid_iris_dataset_jsonl_and_schema
-    groups_jsonl_str = BOS + jsonl_str + EOS
-    response = GroupedDataProcessor(
-        schema=jsonl_schema,
-        config=fixture_validation_config,
-        group_by=["petal.width", "variety"],
-        bos_token=BOS,
-        eos_token=EOS,
-    )(1, groups_jsonl_str)
-    assert len(response.valid_records) == 5
-    assert len(response.invalid_records) == 0
-    assert len(response.errors) == 0
-
-
-# Purpose: Composite group_by should fail when the tuple does not uniquely identify groups.
-# Data: Grouped by ["sepal.length", "variety"] (non-unique).
-# Asserts: 0 valid; 5 invalid/errors; last error indicates non-unique group value.
-def test_grouped_data_processor_multiple_group_by_error(
-    fixture_valid_iris_dataset_jsonl_and_schema,
-    fixture_validation_config: ValidationParameters,
-):
-    jsonl_str, jsonl_schema = fixture_valid_iris_dataset_jsonl_and_schema
-    groups_jsonl_str = BOS + jsonl_str + EOS
-    response = GroupedDataProcessor(
-        schema=jsonl_schema,
-        config=fixture_validation_config,
-        group_by=["sepal.length", "variety"],
-        bos_token=BOS,
-        eos_token=EOS,
-    )(1, groups_jsonl_str)
-    assert len(response.valid_records) == 0
-    assert len(response.invalid_records) == 5
-    assert len(response.errors) == 5
-    assert response.errors[-1] == ("Groupby value is not unique", "groupby")
 
 
 # Purpose: group_by_accept_no_delineator=True treats raw JSONL (no BOS/EOS) as a single group.
@@ -382,7 +327,7 @@ def test_grouped_data_processor_all_relaxations_with_fixes(
 # Asserts: TabularDataProcessor is returned
 def test_create_processor_tabular(fixture_metadata):
     stub_schema = {"this": "is_a_stub"}
-    config = SafeSynthesizerParameters.from_params(use_unsloth=False, rope_scaling_factor=1)
+    config = SafeSynthesizerParameters.from_params(rope_scaling_factor=1)
     assert isinstance(
         create_processor(schema=stub_schema, metadata=fixture_metadata, config=config),
         TabularDataProcessor,
@@ -395,9 +340,7 @@ def test_create_processor_tabular(fixture_metadata):
 def test_create_processor_grouped(fixture_metadata):
     stub_schema = {"this": "is_a_stub"}
 
-    config = SafeSynthesizerParameters.from_params(
-        use_unsloth=False, rope_scaling_factor=1, group_training_examples_by="patient_id"
-    )
+    config = SafeSynthesizerParameters.from_params(rope_scaling_factor=1, group_training_examples_by="patient_id")
     assert isinstance(
         create_processor(
             schema=stub_schema,
@@ -517,6 +460,7 @@ def _check_assembler_to_processor(
         completion_input_ids = [id for id, label in zip(input_ids, labels) if label != -100]
 
         text = tokenizer.decode(completion_input_ids)
+        assert isinstance(text, str)
         response = processor(idx, text)
 
         assert len(response.valid_records) > 0
@@ -535,7 +479,6 @@ def test_assembler_to_processor_tabular(
 ):
     model_name, tokenizer = fixture_over_tokenizers
     config = SafeSynthesizerParameters.from_params(
-        use_unsloth=True,
         rope_scaling_factor=1,
         max_sequences_per_example=max_sequences_per_example,
         pretrained_model=model_name,
@@ -558,7 +501,6 @@ def test_assembler_to_processor_tabular(
 def test_assembler_to_processor_grouped(fixture_over_tokenizers, fixture_session_cache_dir, max_sequences_per_example):
     model_name, tokenizer = fixture_over_tokenizers
     config = SafeSynthesizerParameters.from_params(
-        use_unsloth=True,
         rope_scaling_factor=1,
         max_sequences_per_example=max_sequences_per_example,
         group_training_examples_by="group_id",
@@ -577,18 +519,17 @@ def test_assembler_to_processor_grouped(fixture_over_tokenizers, fixture_session
     _check_assembler_to_processor(config, df, tokenizer, cache_file_path=fixture_session_cache_dir)
 
 
-def test_assembler_to_processor_adobe(
-    fixture_over_tokenizers, fixture_session_cache_dir, fixture_adobe_sampled_dataset
+def test_assembler_to_processor_doc_summaries(
+    fixture_over_tokenizers, fixture_session_cache_dir, fixture_doc_summaries_dataset
 ):
     model_name, tokenizer = fixture_over_tokenizers
     config = SafeSynthesizerParameters.from_params(
-        use_unsloth=True,
         rope_scaling_factor=1,
         max_sequences_per_example=1,
         pretrained_model=model_name,
     )
     _check_assembler_to_processor(
-        config=config, df=fixture_adobe_sampled_dataset, tokenizer=tokenizer, cache_file_path=fixture_session_cache_dir
+        config=config, df=fixture_doc_summaries_dataset, tokenizer=tokenizer, cache_file_path=fixture_session_cache_dir
     )
 
 
@@ -597,7 +538,6 @@ def test_assembler_to_processor_non_english(
 ):
     model_name, tokenizer = fixture_over_tokenizers
     config = SafeSynthesizerParameters.from_params(
-        use_unsloth=True,
         rope_scaling_factor=1,
         max_sequences_per_example=1,
         pretrained_model=model_name,
@@ -608,3 +548,96 @@ def test_assembler_to_processor_non_english(
         tokenizer=tokenizer,
         cache_file_path=fixture_session_cache_dir,
     )
+
+
+# ---------------------------------------------------------------------------
+# Token-counting tests for processors
+# ---------------------------------------------------------------------------
+
+
+def _make_mock_tokenizer(chars_per_token: int = 1) -> MagicMock:
+    """Create a mock tokenizer whose encode returns one token per `chars_per_token` chars."""
+    tokenizer = MagicMock()
+
+    def _encode(text: str, add_special_tokens: bool = True) -> list[int]:
+        n = max(1, len(text) // chars_per_token)
+        return list(range(n))
+
+    tokenizer.encode = _encode
+    return tokenizer
+
+
+class TestTabularProcessorTokenCounts:
+    def test_populates_token_counts(self, fixture_valid_iris_dataset_jsonl_and_schema, fixture_validation_config):
+        jsonl_str, jsonl_schema = fixture_valid_iris_dataset_jsonl_and_schema
+        tokenizer = _make_mock_tokenizer()
+        proc = TabularDataProcessor(schema=jsonl_schema, config=fixture_validation_config, tokenizer=tokenizer)
+        response = proc(1, jsonl_str)
+
+        assert all(r.is_valid and r.token_count > 0 for r in response.records)
+        assert response.tokenization_time_sec >= 0
+
+    def test_no_tokenizer_gives_zero_counts(
+        self, fixture_valid_iris_dataset_jsonl_and_schema, fixture_validation_config
+    ):
+        jsonl_str, jsonl_schema = fixture_valid_iris_dataset_jsonl_and_schema
+        proc = TabularDataProcessor(schema=jsonl_schema, config=fixture_validation_config, tokenizer=None)
+        response = proc(1, jsonl_str)
+
+        assert all(r.is_valid for r in response.records)
+        assert all(r.token_count == 0 for r in response.records)
+        assert response.tokenization_time_sec == 0.0
+
+
+class TestGroupedProcessorTokenShift:
+    """Token counts stay attached to each record through reclassification."""
+
+    def test_non_unique_group_preserves_text_and_tokens(
+        self,
+        fixture_valid_iris_dataset_jsonl_and_schema,
+        fixture_validation_config,
+    ):
+        jsonl_str, jsonl_schema = fixture_valid_iris_dataset_jsonl_and_schema
+
+        jsonl_schema_copy = copy.deepcopy(jsonl_schema)
+        jsonl_schema_copy["properties"]["variety"]["enum"].append("NewSetosa")
+        groups_jsonl_str = (
+            BOS
+            + jsonl_str
+            + '{"sepal.length":5.1,"sepal.width":3.5,"petal.length":1.4,"petal.width":0.2,"variety":"NewSetosa"}\n'
+            + EOS
+        )
+        tokenizer = _make_mock_tokenizer()
+        proc = GroupedDataProcessor(
+            schema=jsonl_schema_copy,
+            config=fixture_validation_config,
+            group_by="variety",
+            bos_token=BOS,
+            eos_token=EOS,
+            tokenizer=tokenizer,
+        )
+        response = proc(1, groups_jsonl_str)
+
+        assert len(response.records) == 6
+        assert all(not r.is_valid for r in response.records)
+        assert all(r.token_count > 0 for r in response.records)
+        # After reclassification ``text`` is the original JSON string, not
+        # str(dict), so users can recover the original completion slice.
+        assert all(r.text.startswith("{") and r.text.endswith("}") for r in response.records)
+
+    def test_valid_group_keeps_tokens(self, fixture_valid_iris_dataset_jsonl_and_schema, fixture_validation_config):
+        jsonl_str, jsonl_schema = fixture_valid_iris_dataset_jsonl_and_schema
+        groups_jsonl_str = BOS + jsonl_str + EOS
+        tokenizer = _make_mock_tokenizer()
+        proc = GroupedDataProcessor(
+            schema=jsonl_schema,
+            config=fixture_validation_config,
+            group_by="variety",
+            bos_token=BOS,
+            eos_token=EOS,
+            tokenizer=tokenizer,
+        )
+        response = proc(1, groups_jsonl_str)
+
+        assert len(response.records) == 5
+        assert all(r.is_valid and r.token_count > 0 for r in response.records)

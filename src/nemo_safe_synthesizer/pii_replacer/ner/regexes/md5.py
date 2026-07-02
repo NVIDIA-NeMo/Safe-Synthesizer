@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+from __future__ import annotations
 
 from ..entity import Entity, Score
 from ..regex import Pattern, RegexPredictor
@@ -14,11 +15,11 @@ class MD5(RegexPredictor):
     isolation (not embedded in a longer string), regardless of label or lack thereof.
 
     Examples:
-        {"foo": "f63e93baeb60ca18fdc9a81e9358417d"}
-        "f63e93baeb60ca18fdc9a81e9358417d"
+        {"foo": "f63e93baeb60ca18fdc9a81e9358417d"}  # pragma: allowlist secret
+        "f63e93baeb60ca18fdc9a81e9358417d"  # pragma: allowlist secret
 
     Counterexamples:
-        {"bar": "baz f63e93baeb60ca18fdc9a81e9358417d"}
+        {"bar": "baz f63e93baeb60ca18fdc9a81e9358417d"}  # pragma: allowlist secret
     """
 
     def __init__(self):

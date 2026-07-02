@@ -1,11 +1,11 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-
 """This module provides an interface to Nemo Safe Synthesizer Pii Replacer NER functionality."""
 
+from __future__ import annotations
+
 import re
-from typing import Pattern, Tuple
 
 from ...data_processing.records.fragment import create_ner_api_response
 from ...pii_replacer.ner.entity import Score
@@ -13,14 +13,12 @@ from ...pii_replacer.ner.ner import ner
 from ...pii_replacer.ner.pipeline import pipeline
 from ...pii_replacer.ner.regex import regex
 
-InputData = str | dict | list[str] | list[dict]
-
 INPUT_ERR = "Input data must be a string, dict, or a list of either"
 
 _source_validator = re.compile(r"[A-Za-z_]{2,15}$")
 
 
-def _parse_custom_source(source: str) -> Tuple[str, str]:
+def _parse_custom_source(source: str) -> tuple[str, str]:
     """Return a namespace, name str tuple"""
     parts = source.split("/")
     if len(parts) != 2:
@@ -48,7 +46,7 @@ class Model:
     def predictors(self) -> list[str]:
         return [pred.source for pred in self._ner.pipeline.predictors]
 
-    def predict(self, input_data: InputData, *, timings_only=False) -> list[dict] | dict:
+    def predict(self, input_data: str | dict | list[str] | list[dict], *, timings_only=False) -> list[dict] | dict:
         if isinstance(input_data, (str, dict)):
             input_data = [input_data]
 
@@ -73,7 +71,7 @@ class Model:
 
         return create_ner_api_response(input_data, predictions, pure_dict=True)
 
-    def add_regex(self, source: str, pattern: str | Pattern, score: Score | None = None):
+    def add_regex(self, source: str, pattern: str | re.Pattern, score: Score | None = None):
         namespace, name = _parse_custom_source(source)
         if score is None:
             score = Score.HIGH

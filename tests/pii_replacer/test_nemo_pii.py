@@ -6,17 +6,49 @@ import pytest
 # Skip all tests in this module if torch is not available
 pytest.importorskip("torch", reason="torch is required for these tests (install with: uv sync --extra cpu)")
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
+
+from nemo_safe_synthesizer.defaults import DEFAULT_NSS_INFERENCE_ENDPOINT
 from nemo_safe_synthesizer.pii_replacer.data_editor.edit import TransformFnAccounting
-from nemo_safe_synthesizer.pii_replacer.nemo_pii import ColumnClassification, NemoPII, _build_column_statistics
+from nemo_safe_synthesizer.pii_replacer.nemo_pii import (
+    ColumnClassification,
+    NemoPII,
+    _build_column_statistics,
+    _get_classify_endpoint_url,
+)
+
+
+class TestGetClassifyEndpointUrl:
+    def test_configured_value_is_used(self, monkeypatch):
+        monkeypatch.setenv("NSS_INFERENCE_ENDPOINT", "https://custom.example/v1")
+        assert _get_classify_endpoint_url() == "https://custom.example/v1"
+
+    def test_configured_value_is_stripped(self, monkeypatch):
+        monkeypatch.setenv("NSS_INFERENCE_ENDPOINT", "  https://custom.example/v1  ")
+        assert _get_classify_endpoint_url() == "https://custom.example/v1"
+
+    def test_unset_falls_back_to_default(self, monkeypatch):
+        monkeypatch.delenv("NSS_INFERENCE_ENDPOINT", raising=False)
+        assert _get_classify_endpoint_url() == DEFAULT_NSS_INFERENCE_ENDPOINT
+
+    @pytest.mark.parametrize("blank", ["", "   ", "\t"])
+    def test_blank_falls_back_to_default(self, monkeypatch, blank):
+        # A blank endpoint must resolve to the default, never reach the OpenAI
+        # client as an empty base_url. Mirrors the preflight blank-endpoint rule.
+        monkeypatch.setenv("NSS_INFERENCE_ENDPOINT", blank)
+        assert _get_classify_endpoint_url() == DEFAULT_NSS_INFERENCE_ENDPOINT
+
+
+@pytest.fixture
+def fake_people_csv(pii_test_data_dir):
+    return pii_test_data_dir / "fake_people_dataset.csv"
 
 
 @patch("nemo_safe_synthesizer.pii_replacer.nemo_pii.build_entity_extractor", return_value=MagicMock())
-def test_nemo_pii_classify_df(_build_entity_extractor):
-    df = pd.read_csv(Path(__file__).parent / "fake_people_dataset.csv")
+def test_nemo_pii_classify_df(_build_entity_extractor, fake_people_csv):
+    df = pd.read_csv(fake_people_csv)
 
     mock_column_classifier = MagicMock()
     mock_column_classifier.detect_types.return_value = {
@@ -40,7 +72,7 @@ def test_nemo_pii_classify_df(_build_entity_extractor):
             "email": "email",
             "full address": "address",
             "height": None,
-            "date of birth": "date",
+            "date of birth": None,
             "notes": None,
         }
         assert {field.field_name: field.entity_count for field in classification} == {
@@ -49,7 +81,7 @@ def test_nemo_pii_classify_df(_build_entity_extractor):
             "email": 20,
             "full address": 20,
             "height": None,
-            "date of birth": 20,
+            "date of birth": None,
             "notes": None,
         }
 
@@ -65,8 +97,8 @@ def test_nemo_pii_classify_df(_build_entity_extractor):
 
 
 @patch("nemo_safe_synthesizer.pii_replacer.nemo_pii.build_entity_extractor", return_value=MagicMock())
-def test_classify_df_no_column_classifier(_build_entity_extractor):
-    df = pd.read_csv(Path(__file__).parent / "fake_people_dataset.csv")
+def test_classify_df_no_column_classifier(_build_entity_extractor, fake_people_csv):
+    df = pd.read_csv(fake_people_csv)
 
     mock_column_classifier = MagicMock()
     mock_column_classifier.detect_types.side_effect = Exception("Classification failed")
@@ -91,9 +123,9 @@ def test_classify_df_no_column_classifier(_build_entity_extractor):
 
 
 @patch("nemo_safe_synthesizer.pii_replacer.nemo_pii.build_entity_extractor", return_value=MagicMock())
-def test_nemo_pii_classify_disabled(_build_entity_extractor):
+def test_nemo_pii_classify_disabled(_build_entity_extractor, fake_people_csv):
     """Test that when enable_classify is False, no external API calls are made."""
-    df = pd.read_csv(Path(__file__).parent / "fake_people_dataset.csv")
+    df = pd.read_csv(fake_people_csv)
 
     # Create a config with classify disabled
     from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
@@ -156,6 +188,7 @@ def test_nemo_pii_default_config_national_id(_build_entity_extractor):
         classifications = nemo_pii.classify_df(df)
         nemo_pii.transform_df(df, classifications)
         result = nemo_pii.result
+        assert result is not None
         # check that the transformed dataframe is not the same as the original dataframe for ID fields
         assert not result.transformed_df["national_id"].equals(df["national_id"])
         assert not result.transformed_df["tax_id"].equals(df["tax_id"])
@@ -168,7 +201,6 @@ def test_nemo_pii_default_config_national_id(_build_entity_extractor):
 
 def test_build_column_statistics():
     """Test _build_column_statistics with mocked classification and transformer."""
-
     # Create mock classifications for a small dataset/easier to test.
     mock_classifications = [
         ColumnClassification(
@@ -221,7 +253,7 @@ def test_build_column_statistics():
     column_statistics = _build_column_statistics(
         mock_classifications,
         mock_transform_fn_accounting,
-        mock_column_report,
+        mock_column_report,  # ty: ignore[invalid-argument-type] -- mock object
     )
     # Test for correct column names in column statistics
     assert set(column_statistics.keys()) == {"notes", "fname", "height"}

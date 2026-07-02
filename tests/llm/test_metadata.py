@@ -18,14 +18,19 @@ pytest.importorskip(
 from dataclasses import dataclass
 from unittest.mock import MagicMock, patch
 
+from pydantic import ValidationError
+from transformers import PretrainedConfig, PreTrainedTokenizerBase
+
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
 from nemo_safe_synthesizer.defaults import (
     DEFAULT_INSTRUCTION,
     MAX_ROPE_SCALING_FACTOR,
     PROMPT_TEMPLATE,
 )
+from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.llm.metadata import (
     DEFAULT_MAX_SEQ_LENGTH,
+    GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER,
     GLOBAL_MAX_SEQ_LENGTH,
     Llama32,
     LLMPromptConfig,
@@ -39,7 +44,6 @@ from nemo_safe_synthesizer.llm.metadata import (
     TinyLlama,
     resolve_rope_scaling_factor,
 )
-from transformers import PretrainedConfig
 
 
 @dataclass(frozen=True)
@@ -89,7 +93,7 @@ MODEL_DETECTION_SCENARIOS = [
     ModelDetectionScenario("llama32", "meta-llama/Llama32-1B", Llama32),
     ModelDetectionScenario("smollm2", "HuggingFaceTB/SmolLM2-135M", SmolLM2),
     ModelDetectionScenario("smollm3", "HuggingFaceTB/SmolLM3-3B", SmolLM3),
-    ModelDetectionScenario("mistral", "mistralai/Mistral-7B-v0.1", Mistral),
+    ModelDetectionScenario("mistral", "mistralai/Mistral-7B-Instruct-v0.3", Mistral),
     ModelDetectionScenario("nemotron", "nvidia/Nemotron-4-340B", Nemotron),
 ]
 
@@ -133,16 +137,16 @@ MODEL_INIT_SCENARIOS = [
         expected_add_bos=False,
         expected_add_eos=False,
         expected_bos_token="<|im_start|>",
-        expected_bos_token_id=151644,
+        expected_bos_token_id=1,
         custom_max_position_embeddings=8192,
     ),
     ModelInitScenario(
         id="smollm3",
         model_class=SmolLM3,
         model_path="HuggingFaceTB/SmolLM3-3B",
-        expected_template="user\n {instruction} {schema} <|im_end|> \n <|im_start|>assistant\n{prefill}",
+        expected_template="user\n {instruction} {schema} <|im_end|> \n assistant\n{prefill}",
         expected_add_bos=True,
-        expected_add_eos=True,
+        expected_add_eos=False,
         expected_bos_token="<|im_start|>",
         expected_bos_token_id=128011,
         use_global_max_seq=True,
@@ -150,7 +154,7 @@ MODEL_INIT_SCENARIOS = [
     ModelInitScenario(
         id="mistral",
         model_class=Mistral,
-        model_path="mistralai/Mistral-7B-v0.1",
+        model_path="mistralai/Mistral-7B-Instruct-v0.3",
         expected_template="[INST] {instruction} \n\n {schema} [/INST]{prefill}",
         expected_add_bos=True,
         expected_add_eos=True,
@@ -291,11 +295,13 @@ ROPE_SCALING_SCENARIOS = [
 @pytest.fixture
 def mock_tokenizer():
     """Create a mock tokenizer for testing."""
-    tokenizer = MagicMock()
+    tokenizer = MagicMock(spec=PreTrainedTokenizerBase)
     tokenizer.bos_token = "<s>"
     tokenizer.bos_token_id = 1
     tokenizer.eos_token = "</s>"
     tokenizer.eos_token_id = 2
+    _token_ids = {"<|im_start|>": 1, "<|im_end|>": 2}
+    tokenizer.convert_tokens_to_ids = lambda tok: _token_ids.get(tok, 0)
     return tokenizer
 
 
@@ -381,7 +387,7 @@ class TestLLMPromptConfig:
         assert sample_prompt_config.eos_token == "</s>"
         assert sample_prompt_config.eos_token_id == 2
 
-    @patch("nemo_safe_synthesizer.llm.metadata.AutoTokenizer")
+    @patch("nemo_safe_synthesizer.llm.metadata.load_fast_tokenizer")
     def test_from_tokenizer(self, mock_auto_tokenizer, sample_prompt_config):
         """Test the from_tokenizer method creates a new config from tokenizer."""
         mock_tokenizer = MagicMock()
@@ -389,7 +395,7 @@ class TestLLMPromptConfig:
         mock_tokenizer.bos_token_id = 10
         mock_tokenizer.eos_token = "<eos>"
         mock_tokenizer.eos_token_id = 20
-        mock_auto_tokenizer.from_pretrained.return_value = mock_tokenizer
+        mock_auto_tokenizer.return_value = mock_tokenizer
 
         new_config = sample_prompt_config.from_tokenizer("test-model")
 
@@ -401,7 +407,7 @@ class TestLLMPromptConfig:
         assert new_config.add_bos_token_to_prompt is True
         assert new_config.add_eos_token_to_prompt is True
 
-    @patch("nemo_safe_synthesizer.llm.metadata.AutoTokenizer")
+    @patch("nemo_safe_synthesizer.llm.metadata.load_fast_tokenizer")
     def test_from_tokenizer_with_kwargs_override(self, mock_auto_tokenizer, sample_prompt_config):
         """Test that kwargs can override default values in from_tokenizer."""
         mock_tokenizer = MagicMock()
@@ -409,7 +415,7 @@ class TestLLMPromptConfig:
         mock_tokenizer.bos_token_id = 10
         mock_tokenizer.eos_token = "<eos>"
         mock_tokenizer.eos_token_id = 20
-        mock_auto_tokenizer.from_pretrained.return_value = mock_tokenizer
+        mock_auto_tokenizer.return_value = mock_tokenizer
 
         new_config = sample_prompt_config.from_tokenizer(
             "test-model",
@@ -461,6 +467,47 @@ class TestModelMetadata:
         assert sample_model_metadata.base_max_seq_length == 2048
         assert sample_model_metadata.is_adapter is False
         assert sample_model_metadata.instruction == DEFAULT_INSTRUCTION
+
+    @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
+    def test_empty_model_name_loads_config_at_source(self, mock_auto_config, sample_prompt_config):
+        """Test empty model names fail at the AutoConfig load instead of later derived fields."""
+        mock_auto_config.from_pretrained.side_effect = ValueError("empty model name")
+
+        with pytest.raises(ValueError, match="empty model name"):
+            ModelMetadata.model_validate({"model_name_or_path": "", "prompt_config": sample_prompt_config})
+
+        mock_auto_config.from_pretrained.assert_called_once_with("", trust_remote_code=False)
+
+    @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
+    def test_offline_huggingface_cache_miss_has_actionable_error(self, mock_auto_config):
+        """Offline cache misses should explain how to make the model available."""
+        mock_auto_config.from_pretrained.side_effect = OSError(
+            "We couldn't connect to 'https://huggingface.co' to load the files, "
+            "and couldn't find them in the cached files."
+        )
+
+        with pytest.raises(ParameterError) as exc_info:
+            TinyLlama(model_name_or_path="TinyLlama/TinyLlama-1.1B-Chat-v1.0")
+
+        message = str(exc_info.value)
+        assert "Could not load model metadata" in message
+        assert "local Hugging Face cache" in message
+        assert "pre-download the model" in message
+        assert "HF_HUB_OFFLINE" in message
+        assert "Original error:" in message
+
+    @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
+    def test_derived_field_config_load_has_actionable_error(self, mock_auto_config, sample_prompt_config):
+        """Derived autoconfig loading should use the same friendly cache-miss error."""
+        mock_auto_config.from_pretrained.side_effect = OSError("outgoing traffic has been disabled")
+
+        with pytest.raises(ValidationError, match="local Hugging Face cache"):
+            ModelMetadata.model_validate(
+                {
+                    "model_name_or_path": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+                    "prompt_config": sample_prompt_config,
+                }
+            )
 
     def test_adapter_path_property(self, sample_model_metadata, sample_workdir):
         """Test the adapter_path property returns the correct path."""
@@ -562,11 +609,130 @@ class TestModelMetadata:
             ModelMetadata.from_str_or_path("unknown-model-xyz")
 
 
+class TestGenerationMaxTokensFor:
+    """Tests for ``ModelMetadata.generation_max_tokens_for(prompt_len)``."""
+
+    def test_metadata_generation_max_tokens_for_returns_stat_when_prompt_is_small(self, sample_model_metadata):
+        """Stat-derived ceiling wins when the prompt leaves enough headroom."""
+        sample_model_metadata.max_tokens_per_example = 1000
+
+        expected = int(1000 * GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER)
+        # ``max_seq_length=2048`` and ``prompt_len=10`` leave 2038 headroom > 1200.
+        assert sample_model_metadata.generation_max_tokens_for(10) == expected
+
+    def test_metadata_generation_max_tokens_for_clamps_when_prompt_is_large(self, sample_model_metadata):
+        """Prompt clamp wins when ``max_seq_length - prompt_len`` is tighter than the stat."""
+        # ``base_max_seq_length=2048`` and no RoPE scaling.
+        assert sample_model_metadata.max_seq_length == 2048
+        sample_model_metadata.max_tokens_per_example = 1500  # * 1.2 = 1800
+
+        prompt_len = 1000  # 2048 - 1000 = 1048 < 1800
+        assert sample_model_metadata.generation_max_tokens_for(prompt_len) == 1048
+
+    def test_metadata_generation_max_tokens_for_falls_back_to_remaining_context_when_stat_unset(
+        self, sample_model_metadata
+    ):
+        """Unset stat falls back to ``max_seq_length - prompt_len``."""
+        assert sample_model_metadata.max_tokens_per_example is None
+
+        prompt_len = 256
+        assert sample_model_metadata.generation_max_tokens_for(prompt_len) == (
+            sample_model_metadata.max_seq_length - prompt_len
+        )
+
+    @pytest.mark.parametrize("value", [0, -1, -100])
+    def test_metadata_generation_max_tokens_for_treats_non_positive_stat_as_missing(self, sample_model_metadata, value):
+        """Non-positive stats fall through to the remaining-context branch."""
+        sample_model_metadata.max_tokens_per_example = value
+        prompt_len = 32
+        assert sample_model_metadata.generation_max_tokens_for(prompt_len) == (
+            sample_model_metadata.max_seq_length - prompt_len
+        )
+
+    def test_metadata_generation_max_tokens_for_zero_prompt_recovers_legacy_property(self, sample_model_metadata):
+        """``prompt_len=0`` reproduces the old prompt-agnostic ceiling."""
+        sample_model_metadata.max_tokens_per_example = 1000
+        expected = int(1000 * GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER)
+        assert sample_model_metadata.generation_max_tokens_for(0) == expected
+
+        # Stat unset path: the legacy property returned ``max_seq_length``.
+        sample_model_metadata.max_tokens_per_example = None
+        assert sample_model_metadata.generation_max_tokens_for(0) == sample_model_metadata.max_seq_length
+
+    def test_metadata_generation_max_tokens_for_never_returns_negative(self, sample_model_metadata):
+        """Prompts at or beyond ``max_seq_length`` produce a non-negative ceiling."""
+        sample_model_metadata.max_tokens_per_example = 500
+        # Beyond-context prompts still produce a safe value vLLM can accept.
+        assert sample_model_metadata.generation_max_tokens_for(sample_model_metadata.max_seq_length + 64) == 0
+
+    def test_metadata_max_tokens_per_example_round_trips_through_metadata_json(self, sample_model_metadata):
+        """``max_tokens_per_example`` persists through save → load."""
+        sample_model_metadata.max_tokens_per_example = 1500
+        sample_model_metadata.save_metadata()
+
+        with patch("nemo_safe_synthesizer.llm.metadata.AutoConfig") as mock_ac:
+            mock_ac.from_pretrained.return_value = sample_model_metadata.autoconfig
+            reloaded = ModelMetadata.from_metadata_json(
+                sample_model_metadata.workdir.train.adapter.metadata,  # ty: ignore[unresolved-attribute]
+                workdir=sample_model_metadata.workdir,
+            )
+
+        assert reloaded.max_tokens_per_example == 1500
+        # prompt_len=0 reproduces the old prompt-agnostic budget for round-trip parity.
+        assert reloaded.generation_max_tokens_for(0) == int(1500 * GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER)
+
+    @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
+    @patch("nemo_safe_synthesizer.llm.metadata.load_json")
+    def test_metadata_legacy_json_without_max_tokens_per_example_loads(
+        self, mock_load_json, mock_auto_config, sample_prompt_config, mock_autoconfig_obj, tmp_path, sample_workdir
+    ):
+        """Metadata files written before this field was added still load."""
+        mock_auto_config.from_pretrained.return_value = mock_autoconfig_obj
+        # Legacy payload: no ``max_tokens_per_example`` key.
+        mock_load_json.return_value = {
+            "model_name_or_path": "legacy-model",
+            "prompt_config": sample_prompt_config.model_dump(),
+            "base_max_seq_length": 2048,
+        }
+
+        metadata = ModelMetadata.from_metadata_json(tmp_path / "metadata.json", workdir=sample_workdir)
+
+        assert metadata.max_tokens_per_example is None
+        assert metadata.generation_max_tokens_for(0) == metadata.max_seq_length
+
+
+class TestResolveModelClass:
+    """Tests for ModelMetadata._resolve_model_class (model name → class, no instantiation)."""
+
+    @pytest.mark.parametrize(
+        "model_name_or_path",
+        [
+            "google/gemma-2-27b",
+            "SomeRandomModel/1B",
+        ],
+        ids=["gemma", "random_model"],
+    )
+    def test_resolve_model_class_raises_for_unknown_model(self, model_name_or_path):
+        """When the model name does not match any valid ModelMetadata subclass, raise ValueError.
+
+        Covers failed jobs where the configured model is not in the expected set
+        (TinyLlama, Qwen, Llama32, SmolLM2, SmolLM3, Mistral, Nemotron, Granite).
+        """
+        with pytest.raises(ValueError, match=r"Unknown model name or path"):
+            ModelMetadata._resolve_model_class(model_name_or_path)
+
+    def test_resolve_model_class_returns_class_for_known_model(self):
+        """When the model name matches a valid subclass name, return that class (no instantiation)."""
+        assert ModelMetadata._resolve_model_class("HuggingFaceTB/SmolLM3-3B") is SmolLM3
+        assert ModelMetadata._resolve_model_class("mistralai/Mistral-7B-v0.3") is Mistral
+        assert ModelMetadata._resolve_model_class("TinyLlama/TinyLlama-1.1B-Chat-v1.0") is TinyLlama
+
+
 class TestModelDetection:
     """Tests for ModelMetadata.from_str_or_path model detection."""
 
     @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
-    @patch("nemo_safe_synthesizer.llm.metadata.AutoTokenizer")
+    @patch("nemo_safe_synthesizer.llm.metadata.load_fast_tokenizer")
     def test_model_detection(
         self,
         mock_auto_tokenizer,
@@ -576,7 +742,7 @@ class TestModelDetection:
         model_detection_scenario: ModelDetectionScenario,
     ):
         """Test that models are correctly detected from their paths."""
-        mock_auto_tokenizer.from_pretrained.return_value = mock_tokenizer
+        mock_auto_tokenizer.return_value = mock_tokenizer
         mock_auto_config.from_pretrained.return_value = mock_autoconfig_obj
 
         metadata = ModelMetadata.from_str_or_path(model_detection_scenario.model_path)
@@ -588,7 +754,7 @@ class TestModelInitialization:
     """Tests for individual model class initialization."""
 
     @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
-    @patch("nemo_safe_synthesizer.llm.metadata.AutoTokenizer")
+    @patch("nemo_safe_synthesizer.llm.metadata.load_fast_tokenizer")
     def test_model_initialization(
         self,
         mock_auto_tokenizer,
@@ -598,7 +764,7 @@ class TestModelInitialization:
         model_init_scenario: ModelInitScenario,
     ):
         """Test model initialization with expected configuration values."""
-        mock_auto_tokenizer.from_pretrained.return_value = mock_tokenizer
+        mock_auto_tokenizer.return_value = mock_tokenizer
         mock_auto_config.from_pretrained.return_value = mock_autoconfig_obj
 
         # Set custom max_position_embeddings if specified
@@ -634,7 +800,7 @@ class TestFromConfig:
     """Tests for ModelMetadata.from_config method."""
 
     @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
-    @patch("nemo_safe_synthesizer.llm.metadata.AutoTokenizer")
+    @patch("nemo_safe_synthesizer.llm.metadata.load_fast_tokenizer")
     @pytest.mark.parametrize(
         "rope_factor, max_seq_per_example, expected_rope_factor, expected_max_seq",
         [
@@ -655,7 +821,7 @@ class TestFromConfig:
         expected_max_seq,
     ):
         """Test from_config creates metadata from SafeSynthesizerParameters."""
-        mock_auto_tokenizer.from_pretrained.return_value = mock_tokenizer
+        mock_auto_tokenizer.return_value = mock_tokenizer
         mock_auto_config.from_pretrained.return_value = mock_autoconfig_obj
 
         mock_config = MagicMock()
@@ -672,12 +838,70 @@ class TestFromConfig:
             assert metadata.rope_scaling.factor == expected_rope_factor
         assert metadata.max_sequences_per_example == expected_max_seq
 
+    @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
+    @patch("nemo_safe_synthesizer.llm.metadata.load_fast_tokenizer")
+    def test_from_config_uses_cached_model_ref_target(
+        self,
+        mock_auto_tokenizer,
+        mock_auto_config,
+        mock_tokenizer,
+        mock_autoconfig_obj,
+    ):
+        """Metadata loads resolve cached model refs before calling HuggingFace APIs."""
+        cached_target = "/tmp/hf-cache/models--nvidia--TinyLlama/snapshots/abc123"
+        model_ref = MagicMock()
+        model_ref.target.return_value = cached_target
+        model_ref.trust_remote_code = True
+        mock_auto_tokenizer.return_value = mock_tokenizer
+        mock_auto_config.from_pretrained.return_value = mock_autoconfig_obj
+
+        mock_config = MagicMock()
+        mock_config.training.pretrained_model = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+        mock_config.training.rope_scaling_factor = None
+        mock_config.data.max_sequences_per_example = None
+
+        with patch("nemo_safe_synthesizer.llm.metadata.ModelRef.parse", return_value=model_ref) as parse:
+            metadata = ModelMetadata.from_config(mock_config)
+
+        assert isinstance(metadata, TinyLlama)
+        parse.assert_called_once_with(mock_config.training.pretrained_model)
+        mock_auto_config.from_pretrained.assert_called_once_with(cached_target, trust_remote_code=True)
+        mock_auto_tokenizer.assert_called_once_with(cached_target, trust_remote_code=True)
+
+    @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
+    @patch("nemo_safe_synthesizer.llm.metadata.load_fast_tokenizer")
+    def test_from_config_wraps_model_load_errors(
+        self,
+        mock_auto_tokenizer,
+        mock_auto_config,
+    ):
+        """Metadata load failures keep user-facing parameter diagnostics."""
+        model_name = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+        model_ref = MagicMock()
+        model_ref.target.return_value = model_name
+        model_ref.trust_remote_code = False
+        mock_auto_config.from_pretrained.side_effect = OSError("outgoing traffic has been disabled")
+
+        mock_config = MagicMock()
+        mock_config.training.pretrained_model = model_name
+        mock_config.training.rope_scaling_factor = None
+        mock_config.data.max_sequences_per_example = None
+
+        with (
+            patch("nemo_safe_synthesizer.llm.metadata.ModelRef.parse", return_value=model_ref),
+            pytest.raises(ParameterError, match="local Hugging Face cache"),
+        ):
+            ModelMetadata.from_config(mock_config)
+
+        mock_auto_config.from_pretrained.assert_called_once_with(model_name, trust_remote_code=False)
+        mock_auto_tokenizer.assert_not_called()
+
 
 class TestModelMetadataKwargsPassthrough:
     """Tests for kwargs passthrough in model classes."""
 
     @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
-    @patch("nemo_safe_synthesizer.llm.metadata.AutoTokenizer")
+    @patch("nemo_safe_synthesizer.llm.metadata.load_fast_tokenizer")
     @pytest.mark.parametrize(
         "kwarg_name, kwarg_value, attr_name, expected_value",
         [
@@ -697,7 +921,7 @@ class TestModelMetadataKwargsPassthrough:
         expected_value,
     ):
         """Test that kwargs are correctly passed through to model metadata."""
-        mock_auto_tokenizer.from_pretrained.return_value = mock_tokenizer
+        mock_auto_tokenizer.return_value = mock_tokenizer
         mock_auto_config.from_pretrained.return_value = mock_autoconfig_obj
 
         kwargs = {kwarg_name: kwarg_value}
@@ -706,12 +930,12 @@ class TestModelMetadataKwargsPassthrough:
         assert getattr(metadata, attr_name) == expected_value
 
     @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
-    @patch("nemo_safe_synthesizer.llm.metadata.AutoTokenizer")
+    @patch("nemo_safe_synthesizer.llm.metadata.load_fast_tokenizer")
     def test_workdir_passthrough(
         self, mock_auto_tokenizer, mock_auto_config, mock_tokenizer, mock_autoconfig_obj, sample_workdir
     ):
         """Test that workdir can be passed through kwargs."""
-        mock_auto_tokenizer.from_pretrained.return_value = mock_tokenizer
+        mock_auto_tokenizer.return_value = mock_tokenizer
         mock_auto_config.from_pretrained.return_value = mock_autoconfig_obj
 
         metadata = TinyLlama(model_name_or_path="TinyLlama/TinyLlama-1.1B-Chat-v1.0", workdir=sample_workdir)
@@ -719,12 +943,12 @@ class TestModelMetadataKwargsPassthrough:
         assert metadata.workdir == sample_workdir
 
     @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
-    @patch("nemo_safe_synthesizer.llm.metadata.AutoTokenizer")
+    @patch("nemo_safe_synthesizer.llm.metadata.load_fast_tokenizer")
     def test_rope_scaling_factor_passthrough(
         self, mock_auto_tokenizer, mock_auto_config, mock_tokenizer, mock_autoconfig_obj
     ):
         """Test that rope_scaling_factor can be passed through kwargs."""
-        mock_auto_tokenizer.from_pretrained.return_value = mock_tokenizer
+        mock_auto_tokenizer.return_value = mock_tokenizer
         mock_auto_config.from_pretrained.return_value = mock_autoconfig_obj
 
         metadata = TinyLlama(model_name_or_path="TinyLlama/TinyLlama-1.1B-Chat-v1.0", rope_scaling_factor=4)

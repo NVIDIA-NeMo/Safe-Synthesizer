@@ -11,28 +11,51 @@ import pandas as pd
 from pydantic import BaseModel, Field
 
 from ...config.parameters import SafeSynthesizerParameters
-from ...evaluation.data_model.evaluation_dataset import EvaluationDataset
+from ...evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from ...evaluation.data_model.evaluation_score import EvaluationScore
 from . import multi_modal_figures as figures
 
 
 class Component(ABC, BaseModel):
-    name: str = Field(
-        description="Override this with the fancy display name of your component. It is used for json summaries and rendering scores."
+    """Abstract base for all evaluation components.
+
+    Each component computes one quality or privacy metric from an
+    ``EvaluationDatasets`` and exposes a ``jinja_context`` property
+    for HTML report rendering.
+
+    Subclasses should override ``from_evaluation_datasets`` to perform
+    their metric-specific computation.
+    """
+
+    name: str = Field(description="Display name used in JSON summaries and the HTML report.")
+    score: EvaluationScore = Field(
+        default=EvaluationScore(), description="The computed EvaluationScore for this component."
     )
-    score: EvaluationScore = Field(default=EvaluationScore())
 
     @staticmethod
-    def from_evaluation_dataset(
-        evaluation_dataset: EvaluationDataset, config: SafeSynthesizerParameters | None = None
+    def from_evaluation_datasets(
+        evaluation_datasets: EvaluationDatasets, config: SafeSynthesizerParameters | None = None
     ) -> Component:
-        return Component()
+        """Create a component from an ``EvaluationDatasets``.
+
+        Subclasses override this to compute their specific metric.
+
+        Args:
+            evaluation_datasets: Paired training/synthetic data.
+            config: Optional pipeline configuration parameters.
+
+        Returns:
+            A new component instance with computed scores.
+        """
+        return Component(name="Placeholder")
 
     def get_json(self) -> str:
+        """Serialize the component score to a JSON string."""
         return self.score.model_dump_json()
 
     @cached_property
     def jinja_context(self) -> dict[str, Any]:
+        """Template context dict for Jinja2 rendering, keyed by name, score, and figure HTML."""
         # Dict values are typed as "Any" but err on the side of primitives (html strings, not plotly.Figure e.g.).
         # Prepping up front saves formatting logic inlined in templates.
         d = dict()
@@ -45,9 +68,7 @@ class Component(ABC, BaseModel):
 
     @staticmethod
     def is_nonempty(dfs: None | pd.DataFrame | list[pd.DataFrame | None]) -> bool:
-        """
-        Util for components that need to check dataframes before attempting to render (correlation and PCA)
-        """
+        """Return ``True`` if all provided DataFrames are non-``None`` and non-empty."""
         if dfs is None:
             return False
         if isinstance(dfs, pd.DataFrame):

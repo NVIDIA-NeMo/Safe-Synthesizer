@@ -1,34 +1,25 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Config test fixtures: parameter objects for config validation tests."""
+
+from __future__ import annotations
+
 import pytest
+
 from nemo_safe_synthesizer.config import (
     DataParameters,
     DifferentialPrivacyHyperparams,
     GenerateParameters,
     SafeSynthesizerParameters,
+    StructuredGenerationParameters,
     TrainingHyperparams,
 )
-from nemo_safe_synthesizer.configurator.parameter import AutoParam, Parameter, UnsetParam
 
 
 @pytest.fixture
-def basic_parameter():
-    return Parameter(name="test_param", value=10)
-
-
-@pytest.fixture
-def auto_parameter():
-    return AutoParam(name="auto_param", value=5)
-
-
-@pytest.fixture
-def unset_parameter():
-    return UnsetParam()
-
-
-@pytest.fixture
-def training_hyperparams():
+def fixture_training_hyperparams() -> TrainingHyperparams:
+    """Minimal TrainingHyperparams with 100 samples, batch 10, 8 grad-accum steps."""
     return TrainingHyperparams(
         num_input_records_to_sample=100,
         batch_size=10,
@@ -38,7 +29,8 @@ def training_hyperparams():
 
 
 @pytest.fixture
-def simple_safe_synthesizer_parameters():
+def fixture_simple_safe_synthesizer_parameters() -> SafeSynthesizerParameters:
+    """SafeSynthesizerParameters with group-by, order-by, structured gen, and DP off."""
     return SafeSynthesizerParameters(
         data=DataParameters(
             group_training_examples_by="my_col",
@@ -48,6 +40,9 @@ def simple_safe_synthesizer_parameters():
             num_input_records_to_sample=100,
             batch_size=10,
         ),
-        generation=GenerateParameters(num_records=1000, use_structured_generation=True),
+        generation=GenerateParameters(
+            num_records=1000,
+            structured_generation=StructuredGenerationParameters(enabled=True),
+        ),
         privacy=DifferentialPrivacyHyperparams(dp_enabled=False),
     )

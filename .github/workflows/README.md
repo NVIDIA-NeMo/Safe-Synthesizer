@@ -1,34 +1,48 @@
+<!-- SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # GitHub Actions Workflows
 
 This directory contains GitHub Actions workflows for CI/CD automation.
 
 ## Workflows Overview
 
+All workflows that use `.github/actions/setup-python-env` now default to the version in `../../.python-version`. Set the action input `python-version` only when a job intentionally needs an override.
 
-| Workflow                                           | Trigger                               | Description                                          |
-| -------------------------------------------------- | ------------------------------------- | ---------------------------------------------------- |
-| [ci-checks.yml](ci-checks.yml)                     | Push to `main`, PRs, manual           | Format, lint, typecheck, and unit tests (CPU)        |
-| [gpu-tests.yml](gpu-tests.yml)                     | Push to `main`/`pull-request/*`, manual | GPU E2E tests (A100)                               |
-| [conventional-commit.yml](conventional-commit.yml) | PRs                                   | Validates PR titles follow conventional commit format |
-| [copyright-check.yml](copyright-check.yml)         | Push to `main`/`pull-request/*`        | Validates NVIDIA copyright headers on Python files   |
-| [docs.yml](docs.yml)                               | Push to `main` (docs paths)           | Builds and deploys documentation to GitHub Pages     |
-| [internal-release.yml](internal-release.yml)       | Manual dispatch                       | Builds and publishes wheel to NVIDIA Artifactory     |
-| [release.yml](release.yml)                         | Manual dispatch                       | Builds and publishes package to PyPI (production)    |
-| [secrets-detector.yml](secrets-detector.yml)       | PRs                                   | Scans for accidentally committed secrets             |
+| Workflow                                           | Trigger                     | Description                                                                                                |
+| -------------------------------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| [ci-checks.yml](ci-checks.yml)                     | Push to `main`, PRs, manual | Format, typecheck, unit tests, and CPU smoke tests                                                         |
+| [gpu-tests.yml](gpu-tests.yml)                     | Nightly, manual             | GPU smoke tests (required) and E2E tests                                                                   |
+| [container-build.yml](container-build.yml)         | `v*`, manual                 | Builds the extra-driven GPU container image and publishes GHCR tags for release tags                       |
+| [conventional-commit.yml](conventional-commit.yml) | PRs                         | Validates PR titles follow conventional commit format                                                      |
+| [docs.yml](docs.yml)                               | Push to `main` (docs paths) | Publishes `main` docs as the `latest` GitHub Pages version                                                 |
+| [release.yml](release.yml)                         | Push tags to `v*`           | Builds and publishes package to Test PyPI/PyPI, creates a GitHub release, and publishes versioned docs     |
+| [secrets-detector.yml](secrets-detector.yml)       | PRs                         | Scans for accidentally committed secrets                                                                   |
 
+## Pull Request Testing
 
-## Pull Request Testing (copy-pr-bot)
+GPU tests on PRs are currently disabled due to internal constraints. `gpu-tests.yml` has its `push` trigger commented out, so it runs only on the nightly schedule or manual `workflow_dispatch`.
 
-GPU tests (`gpu-tests.yml`) run on NVIDIA self-hosted runners, which block `pull_request`-triggered jobs. They use the [copy-pr-bot](https://docs.gha-runners.nvidia.com/platform/apps/copy-pr-bot/) pattern instead:
+GPU tests (`gpu-tests.yml`) run on NVIDIA self-hosted runners, which block `pull_request`-triggered jobs. When PR GPU testing is re-enabled, use the [copy-pr-bot](https://docs.gha-runners.nvidia.com/platform/apps/copy-pr-bot/) pattern:
 
 1. When a PR is opened by a trusted user with trusted changes, `copy-pr-bot` automatically copies the code to a `pull-request/<number>` branch
 2. The push to `pull-request/<number>` triggers the GPU workflow
 3. Untrusted PRs require a vetter to comment `/ok to test <SHA>` before GPU tests run
-4. Draft PRs do **not** auto-sync (`auto_sync_draft: false`), saving GPU resources
+4. Draft PRs do not auto-sync (`auto_sync_draft: false`), saving GPU resources
 
 Configuration: [`.github/copy-pr-bot.yaml`](../copy-pr-bot.yaml)
 
 CPU checks (`ci-checks.yml`) run on GitHub-hosted `ubuntu-latest` runners and use standard `pull_request` triggers.
+
+### On-demand GPU test runs for PRs
+
+This path is disabled while the `push` trigger in `gpu-tests.yml` is commented out. When it is re-enabled, comment `/sync` on the PR to trigger a GPU test run without waiting for auto-sync. copy-pr-bot will push the current HEAD to `pull-request/<number>`, fire `gpu-tests.yml`, and post the `GPU CI Status` check result back to the PR -- the same check as the automatic trigger.
+
+When this path is re-enabled, use `/sync` when:
+
+- The PR is a draft (auto-sync is disabled for drafts)
+- You want to re-run after a flaky failure without pushing a new commit
+- You want a GPU test result before marking the PR ready for review
 
 ## Workflow Diagram
 
@@ -36,7 +50,7 @@ CPU checks (`ci-checks.yml`) run on GitHub-hosted `ubuntu-latest` runners and us
 flowchart LR
     subgraph triggers [Triggers]
         push[Push to main]
-        cpb[copy-pr-bot push to pull-request/*]
+        schedule[Nightly Schedule]
         pr[Pull Request event]
         manual[Manual Dispatch]
     end
@@ -44,19 +58,21 @@ flowchart LR
     subgraph ci [CI Checks - GitHub-hosted runners]
         changes_ci[Detect Changes]
         format[Format]
-        lint[Lint]
         typecheck[Typecheck]
         unit[Unit Tests]
+        smoke_cpu[Smoke Tests]
         ci_status[CI Status]
-        changes_ci --> format & lint & typecheck & unit
-        format & lint & typecheck & unit --> ci_status
+        changes_ci --> unit & smoke_cpu
+        format & typecheck & unit & smoke_cpu --> ci_status
     end
 
     subgraph gpu [GPU Tests - on-prem runners]
         changes_gpu[Detect Changes]
+        gpu_smoke[GPU Smoke Tests]
         e2e[GPU E2E Tests]
         gpu_status[GPU CI Status]
-        changes_gpu --> e2e --> gpu_status
+        changes_gpu --> gpu_smoke & e2e
+        gpu_smoke & e2e --> gpu_status
     end
 
     subgraph compliance [Compliance Workflows]
@@ -72,50 +88,97 @@ flowchart LR
         slackNotify[Slack Notification]
     end
 
-    push --> ci & gpu
-    cpb --> gpu & copyright
+    subgraph containers [Container Build]
+        buildContainer[Build cu129 Image]
+        publishGhcr[Publish GHCR Tags]
+    end
+
+    subgraph internalRelease [Internal Release]
+        buildWheelInt[Build Wheel]
+        publishArtifactory[Publish to Artifactory/PyPI]
+    end
+
+    push --> ci
+    schedule --> gpu
+    manual --> ci & gpu
     pr --> ci & conventional & secrets
-    manual --> release
+    tag[Tag push v[0-9]*] --> release & containers
 
     buildWheel --> publishPyPI --> ghRelease --> slackNotify
+    buildContainer --> publishGhcr
+    buildWheelInt --> publishArtifactory
 
     conventional -.->|reuses| FW-CI-templates
     secrets -.->|reuses| FW-CI-templates
-    copyright -.->|reuses| FW-CI-templates
-    release -.->|reuses| FW-CI-templates
 ```
 
 ## CI Checks Workflow
 
-The `ci-checks.yml` workflow runs on every push to `main` and on pull requests:
+The `ci-checks.yml` workflow runs on every push to `main` and on pull requests. Every check step calls a mise task. Declarative tasks live in `.mise/tasks/*.toml`; bash-heavy tasks are executable file tasks under `.mise/tasks/`.
 
-- **Detect Changes**: Uses `dorny/paths-filter` to skip jobs when only non-source files change
-- **Format**: Verifies code formatting with `ruff format --check`
-- **Lint**: Runs `ruff check` linting
-- **Typecheck**: Runs `ty` type checks
-- **Unit Tests**: Runs pytest with coverage
-- **CI Status**: Aggregation job -- single required check for branch protection
+| Job | mise task | What it checks |
+| --- | --- | --- |
+| Format | `format-check` | `ruff format --check` + `ruff check` + SPDX copyright headers |
+| Format (lock) | `lock-check` | `uv.lock` matches `pyproject.toml` |
+| Typecheck | `typecheck` | `ty check` (excludes per `pyproject.toml [tool.ty.src]`) |
+| Unit Tests | `test:ci` | pytest with coverage (excludes slow, e2e, gpu, smoke) |
+| Smoke Tests | `test:smoke` | CPU smoke tests (training/generation hot paths, tiny models) |
+
+The `changes` detection job uses `dorny/paths-filter` to decide which test jobs run on push and pull request events. Format and typecheck intentionally do not depend on `changes`; they are ungated and run on every push, pull request, and manual dispatch. Unit tests run when any tracked source, docs source, test, dependency, CI, or mise task path changes. Smoke tests run when source, test, `pytest.ini`, or dependency paths change.
+
+On manual dispatch, `changes` is intentionally skipped and the test jobs explicitly bypass that skipped dependency. Manual dispatch runs unit tests and CPU smoke tests even when there is no changed-file signal to inspect.
+
+Docs source paths include `docs/*.py`, `docs/**/*.py`, and `mkdocs.yml`. These paths trigger unit tests through the aggregate `any` output, but do not trigger CPU smoke tests. The CI Status aggregation job is the single required check for branch protection.
+
+To replicate CI locally:
+
+```bash
+mise run check        # format-check + typecheck
+mise run lock-check   # verify uv.lock
+mise run test:ci      # CI unit tests with coverage selectors
+mise run test:smoke   # CPU smoke tests
+```
 
 All jobs run on `ubuntu-latest` (GitHub-hosted).
 
 ## GPU Tests Workflow
 
-The `gpu-tests.yml` workflow runs on pushes to `main` and `pull-request/*` branches (via copy-pr-bot):
+The `gpu-tests.yml` workflow runs nightly at 02:00 UTC, and can also be triggered manually via `workflow_dispatch`. Manual dispatch includes a `suite` dropdown with `all`, `smoke`, and `e2e` options. The `push` trigger for `pull-request/*` branches is currently commented out due to internal blockers, so PRs do not automatically produce GPU status checks. We expect to re-enable that path as soon as those blockers are resolved. There are several key jobs:
 
-- **GPU E2E Tests**: Runs end-to-end tests on `linux-amd64-gpu-a100-latest-1` (A100) with a 60-minute job timeout and 45-minute step timeout
-- **GPU CI Status**: Aggregation job -- single required check for branch protection
+- GPU Smoke Tests: staged smoke tests on a gpu runner with a 30-minute job timeout. The train-only, generation, resume, structured generation, timeseries, and SmolLM2 lanes run as separate workflow steps. Required for merge when the workflow is part of branch protection.
+- GPU E2E Tests: End-to-end tests on a gpu runner with a 60-minute job timeout and 45-minute step timeout. Informational -- failures produce a warning but don't block merge.
+- GPU CI Status: Aggregation job for the GPU workflow. It is not currently a live branch-protection requirement while PR GPU runs are disabled; when re-enabled, it is intended to be the required GPU check. It fails if smoke tests fail and warns if E2E tests fail.
+
+The `changes` (Detect Changes) job is skipped on `workflow_dispatch`. GPU jobs use `always()` in their job conditions so manual runs can bypass the skipped dependency and run the selected suite. On scheduled runs, `changes` gates GPU jobs with the `src_test_deps` output, which is true for source, test, `pytest.ini`, dependency, or CI workflow/action changes.
+
+GPU jobs use `.github/actions/setup-gpu-test-env` for shared GPU setup: enabling the `uv` cache, setting up Python from `.python-version`, bootstrapping CUDA dependencies with mise, and checking GPU availability.
+
+To trigger manually from the CLI (produces a run but not a PR status check):
+
+```bash
+gh workflow run gpu-tests.yml --ref <branch-name> -f suite=all
+gh workflow run gpu-tests.yml --ref <branch-name> -f suite=smoke
+gh workflow run gpu-tests.yml --ref <branch-name> -f suite=e2e
+```
+
+PR status-check GPU runs are currently disabled while the workflow `push` trigger is commented out due to internal blockers. When that path is re-enabled, `/sync` will provide the PR-status flow described in [On-demand GPU test runs for PRs](#on-demand-gpu-test-runs-for-prs).
 
 ### Runners
+
+Internal runners and projects are defined in an internal repo, `nv-gha-runners/enterprise-runner-configuration`.
 
 | Workflow | Job | Runner Label | Type |
 | --- | --- | --- | --- |
 | CI Checks | All jobs | `ubuntu-latest` | GitHub-hosted |
-| GPU Tests | GPU E2E Tests | `linux-amd64-gpu-a100-latest-1` | NVIDIA self-hosted GPU (A100) |
+| GPU Tests | GPU Smoke Tests | `linux-amd64-gpu-a100-latest-1` | NVIDIA self-hosted GPU |
+| GPU Tests | GPU E2E Tests | `linux-amd64-gpu-a100-latest-1` | NVIDIA self-hosted GPU |
 | GPU Tests | Detect Changes, GPU CI Status | `linux-amd64-cpu4` | NVIDIA self-hosted CPU (4-core) |
+| Dev Wheel | All jobs | `linux-amd64-cpu4` | NVIDIA self-hosted CPU (4-core) |
+| Internal Release | All jobs | `linux-amd64-cpu4` | NVIDIA self-hosted CPU (4-core) |
 
 ### Coverage
 
-Coverage reports are uploaded as artifacts from both workflows.
+Coverage reports are uploaded as artifacts from the unit test job.
 
 ## Compliance Workflows
 
@@ -150,127 +213,44 @@ Or comment on the PR: `I have read the DCO Document and I hereby sign the DCO`
 
 Scans PRs for accidentally committed secrets. False positives can be added to `.github/workflows/config/.secrets.baseline`.
 
-### Copyright Check
-
-Validates that Python files have proper NVIDIA copyright headers.
-
-## Internal Release Workflow
-
-The `internal-release.yml` workflow builds a wheel and publishes it to NVIDIA Artifactory. Use this for testing the release process or distributing internal builds.
-
-### How to Publish Internally
-
-**Via GitHub Actions:**
-
-1. Go to **Actions** > **Internal Release**
-2. Click **Run workflow**
-3. Enter the branch, tag, or commit SHA to build (defaults to `main`)
-4. The workflow builds the wheel, uploads it as an artifact, and publishes to Artifactory
-
-Requires `ARTIFACTORY_USERNAME`, `ARTIFACTORY_TOKEN`, and `ARTIFACTORY_INTERNAL_URL` secrets to be configured.
-
-**Locally (via Makefile):**
-
-Add the required env vars to your `.local.envrc` (git-ignored):
-
-```bash
-export TWINE_REPOSITORY_URL=<artifactory-repo-url>
-export TWINE_USERNAME=<your-username>
-export TWINE_PASSWORD=<your-api-key>
-```
-
-Then run:
-
-```bash
-# Build wheel only
-make build-wheel
-
-# Build and publish to Artifactory
-make publish-internal
-```
-
 ## Release Workflow (Production)
 
-The production release workflow uses the [FW-CI-templates `_release_library.yml`](https://github.com/NVIDIA-NeMo/FW-CI-templates) reusable workflow to publish to PyPI.
+The production release workflow publishes to test PyPI and regular PyPI. It also creates release notes
 
 ### How to Release
 
-this is placeholder information until we do a real release. will update then.
-
-1. Go to **Actions** > **Release NeMo Safe Synthesizer**
-2. Click **Run workflow**
-3. Fill in the required inputs:
-  - `release-ref`: Full SHA or tag of the commit to release
-  - `dry-run`: Set to `false` for production release (publishes to PyPI)
-  - `create-gh-release`: Whether to create a GitHub release
-  - `version-bump-branch`: Branch to push the version bump PR (usually `main`)
+1. Push a tag to the repository (start with a release candidate like `v0.0.5rc0` for big changes)
+2. Monitor the release pipeline to see it makes its way to Test PyPI/PyPI.
 
 ### Release Process
 
 The workflow performs the following steps:
 
-1. **Dry-run build** - Validates the wheel can be built
-2. **Version bump** - Creates a PR to bump the version in `package_info.py`
-3. **Build wheel** - Builds the production wheel
-4. **Publish to PyPI** - Uploads to PyPI (or test PyPI for dry runs)
-5. **Create GitHub release** - Creates a tagged release with changelog
-6. **Notify** - Sends Slack notification
-
-### Version Management
-
-Version is managed in `[src/nemo_safe_synthesizer/package_info.py](../../src/nemo_safe_synthesizer/package_info.py)`:
-
-```python
-MAJOR = 0
-MINOR = 1
-PATCH = 0
-PRE_RELEASE = ""
-BUILD = 1
-DEV_RELEASE = False
-```
-
-The release workflow automatically bumps the PATCH version (or PRE_RELEASE for release candidates).
-
-## Required Secrets
-
-The following secrets must be configured in GitHub repository settings:
-
-
-| Secret                   | Purpose                      |
-| ------------------------ | ---------------------------- |
-| `TWINE_USERNAME`         | PyPI username                |
-| `TWINE_PASSWORD`         | PyPI API token               |
-| `SLACK_WEBHOOK_ADMIN`    | Slack admin notifications    |
-| `SLACK_RELEASE_ENDPOINT` | Slack release notifications  |
-| `PAT`                    | GitHub Personal Access Token |
-| `SSH_KEY`                | GPG signing key              |
-| `SSH_PWD`                | GPG key passphrase           |
-| `BOT_KEY`                | GitHub App private key       |
-| `ARTIFACTORY_USERNAME`     | NVIDIA Artifactory username  |
-| `ARTIFACTORY_TOKEN`       | NVIDIA Artifactory API key   |
-| `ARTIFACTORY_INTERNAL_URL`| NVIDIA Artifactory repo URL  |
-
-
-
-| Variable | Purpose       |
-| -------- | ------------- |
-| `BOT_ID` | GitHub App ID |
-
+1. Build wheel - Builds the production wheel
+2. Push to test PyPI
+3. Publish to PyPI - Uploads to PyPI
+4. Create GitHub release
 
 ## Reusable Workflows
 
-All compliance and release workflows reuse templates from [NVIDIA-NeMo/FW-CI-templates](https://github.com/NVIDIA-NeMo/FW-CI-templates) (pinned to `v0.66.6`):
+Compliance workflows reuse templates from [NVIDIA-NeMo/FW-CI-templates](https://github.com/NVIDIA-NeMo/FW-CI-templates), pinned to immutable commit SHAs in the workflow files:
 
 - `_semantic_pull_request.yml` - Conventional commit validation
 - `_secrets-detector.yml` - Secrets scanning
 - `_copyright_check.yml` - Copyright header validation
 - `_release_library.yml` - Full release automation
 
+Run the changed-file secrets scan locally with the repository tool:
+
+```bash
+uv run --no-project --with detect-secrets==1.5.0 -- \
+  bash tools/secrets-detector-changed-files.sh origin/main
+```
+
 ## Configuration Files
 
-
-| File                                              | Purpose                              |
-| ------------------------------------------------- | ------------------------------------ |
-| `config/.secrets.baseline`                        | False positives for secrets detector |
-| `../../.python-version`                           | Python version for uv packaging      |
-| `../../src/nemo_safe_synthesizer/package_info.py` | Version information                  |
+| File | Purpose |
+| --- | --- |
+| `config/.secrets.baseline` | False positives for secrets detector |
+| `../../.python-version` | Python version source for CI |
+| `../../src/nemo_safe_synthesizer/package_info.py` | Version information |

@@ -14,6 +14,12 @@ import pandas as pd
 from ..config import SafeSynthesizerParameters
 from ..config.time_series import TimeSeriesParameters
 from ..data_processing.actions.utils import guess_datetime_format
+from ..data_processing.validation import (
+    check_no_pseudo_column_collision,
+)
+from ..data_processing.validation import (
+    check_timestamp_column as _check_timestamp_column,
+)
 from ..defaults import PSEUDO_GROUP_COLUMN
 from ..errors import DataError, ParameterError
 from ..observability import get_logger
@@ -39,10 +45,7 @@ def _add_pseudo_group_if_needed(df: pd.DataFrame, config: SafeSynthesizerParamet
     group_by_col = config.data.group_training_examples_by
 
     if group_by_col is None:
-        if PSEUDO_GROUP_COLUMN in df.columns:
-            raise DataError(
-                f"Column '{PSEUDO_GROUP_COLUMN}' is reserved for internal use. Please rename this column in your data."
-            )
+        check_no_pseudo_column_collision(df)
         logger.info("No group column specified, treating entire dataset as a single sequence")
         df[PSEUDO_GROUP_COLUMN] = 0  # All rows belong to one "group"
         config.data.group_training_examples_by = PSEUDO_GROUP_COLUMN
@@ -69,7 +72,11 @@ def _create_elapsed_time_column(
     if ts_config.timestamp_column is not None:
         return df, False
 
-    logger.info(f"Adding timestamp column with interval {ts_config.timestamp_interval_seconds} seconds")
+    if ts_config.timestamp_interval_seconds is None:
+        raise ValueError("timestamp_interval_seconds must be set when creating elapsed timestamp column")
+    interval = ts_config.timestamp_interval_seconds
+
+    logger.info(f"Adding timestamp column with interval {interval} seconds")
     timestamp_col_name = "elapsed_seconds"
     if timestamp_col_name in df.columns:
         timestamp_col_name = "_elapsed_seconds"
@@ -78,11 +85,11 @@ def _create_elapsed_time_column(
     # Create elapsed time values (seconds since start of sequence)
     if group_by_col is not None:
         # For grouped data, reset elapsed time at the start of each group
-        df[ts_config.timestamp_column] = df.groupby(group_by_col).cumcount() * ts_config.timestamp_interval_seconds
+        df[ts_config.timestamp_column] = df.groupby(group_by_col).cumcount() * interval
         logger.info("Created elapsed time timestamps per group (in seconds)")
     else:
         # Single sequence - use positional range (not df.index which may be non-contiguous)
-        df[ts_config.timestamp_column] = pd.RangeIndex(len(df)) * ts_config.timestamp_interval_seconds
+        df[ts_config.timestamp_column] = pd.RangeIndex(len(df)) * interval
         logger.info("Created elapsed time timestamps (in seconds)")
 
     # Move the timestamp column to be the first column
@@ -93,25 +100,7 @@ def _create_elapsed_time_column(
     return df, True
 
 
-def _validate_timestamp_column(df: pd.DataFrame, timestamp_column: str) -> None:
-    """Validate that the timestamp column exists and has no nulls.
-
-    Args:
-        df: The input DataFrame.
-        timestamp_column: Name of the timestamp column.
-
-    Raises:
-        ParameterError: If timestamp column is not found.
-        DataError: If timestamp column has missing values.
-    """
-    if timestamp_column not in df.columns:
-        raise ParameterError(f"Timestamp column '{timestamp_column}' not found in the input data.")
-
-    if df[timestamp_column].isnull().any():
-        raise DataError(f"Timestamp column '{timestamp_column}' has missing values. Please clean the column.")
-
-
-def _sort_by_group_and_timestamp(df: pd.DataFrame, group_by_col: str, timestamp_col: str) -> pd.DataFrame:
+def _sort_by_group_and_timestamp(df: pd.DataFrame, group_by_col: str | None, timestamp_col: str) -> pd.DataFrame:
     """Sort DataFrame by group and timestamp columns.
 
     Args:
@@ -130,6 +119,54 @@ def _sort_by_group_and_timestamp(df: pd.DataFrame, group_by_col: str, timestamp_
         return df.sort_values([group_by_col, timestamp_col]).reset_index(drop=True)
     else:
         return df.sort_values(timestamp_col).reset_index(drop=True)
+
+
+def _detect_elapsed_seconds_format(df: pd.DataFrame, ts_config: TimeSeriesParameters) -> bool:
+    """Detect whether the timestamp column should be treated as elapsed seconds.
+
+    Two cases are recognized:
+
+    - The user explicitly set ``timestamp_format="elapsed_seconds"``. The column
+      must be numeric; otherwise we fail fast with a ``ParameterError`` rather
+      than a non-obvious ``TypeError`` later in interval inference.
+    - ``timestamp_format`` is unset and the column is integer-typed. Auto-detection
+      is intentionally restricted to integer dtypes because downstream
+      interval/start/stop handling assumes integer-second resolution (see
+      ``_collect_group_timestamp_stats``); accepting floats would silently
+      truncate sub-second values. Users with fractional-second data must set
+      ``timestamp_format`` explicitly.
+
+    Side effect: when auto-detection succeeds, ``ts_config.timestamp_format`` is
+    set to ``"elapsed_seconds"``.
+
+    Args:
+        df: DataFrame containing the already-validated timestamp column.
+        ts_config: Time series configuration (may be mutated).
+
+    Returns:
+        ``True`` if the column should be treated as elapsed seconds, ``False`` otherwise.
+
+    Raises:
+        ParameterError: If ``timestamp_format="elapsed_seconds"`` is set on a non-numeric column.
+    """
+    column = df[ts_config.timestamp_column]
+
+    if ts_config.timestamp_format == "elapsed_seconds":
+        if not pd.api.types.is_numeric_dtype(column):
+            raise ParameterError(
+                f"timestamp_format='elapsed_seconds' requires timestamp column "
+                f"'{ts_config.timestamp_column}' to be numeric, but got dtype '{column.dtype}'."
+            )
+        return True
+
+    if ts_config.timestamp_format is None and pd.api.types.is_integer_dtype(column):
+        ts_config.timestamp_format = "elapsed_seconds"
+        logger.info(
+            f"Timestamp column '{ts_config.timestamp_column}' is integer-typed; treating as elapsed seconds",
+        )
+        return True
+
+    return False
 
 
 def _infer_and_convert_timestamp_format(df: pd.DataFrame, ts_config: TimeSeriesParameters) -> pd.DataFrame:
@@ -158,7 +195,12 @@ def _infer_and_convert_timestamp_format(df: pd.DataFrame, ts_config: TimeSeriesP
             ts_config.timestamp_format = inferred_format
             logger.info(f"Inferred timestamp format: {inferred_format}")
         else:
-            logger.warning("Could not infer timestamp format from data")
+            raise ParameterError(
+                f"Could not infer timestamp format from column '{ts_config.timestamp_column}' "
+                f"(first value: '{first_timestamp}'). "
+                f"If the column contains numeric elapsed time values, set timestamp_format='elapsed_seconds'. "
+                f"Otherwise, provide an explicit timestamp_format (e.g. '%Y-%m-%d %H:%M:%S')."
+            )
     else:
         # Validate user-provided format matches the data
         try:
@@ -189,10 +231,16 @@ def _infer_and_convert_timestamp_format(df: pd.DataFrame, ts_config: TimeSeriesP
 
 
 def process_timeseries_data(
-    df_all: pd.DataFrame,
+    training_df: pd.DataFrame,
     config: SafeSynthesizerParameters,
 ) -> tuple[pd.DataFrame, SafeSynthesizerParameters]:
     """Process time series data and validate/infer timestamp parameters.
+
+    Normalizes grouped and ungrouped time series into the same training path.
+    When no group column is configured, a reserved pseudo-group column
+    (``PSEUDO_GROUP_COLUMN``) is added so the whole dataset is treated as one
+    sequence. Timestamp format and interval metadata inferred here are saved
+    back into the resolved config for generation.
 
     This function:
     1. Creates a timestamp column if one doesn't exist
@@ -203,45 +251,50 @@ def process_timeseries_data(
     6. Sets start_timestamp and stop_timestamp
 
     Args:
-        df_all: The input DataFrame
+        training_df: The training DataFrame.
         config: The configuration object with time_series settings
 
     Returns:
         Tuple of (processed DataFrame, updated config)
 
     Raises:
-        ParameterError: If timestamp column is not found
-        DataError: If timestamp column has missing values or intervals are inconsistent
+        ParameterError: If the timestamp column is missing, if ``timestamp_format="elapsed_seconds"``
+            is set on a non-numeric column, or if an explicit format fails to parse the data.
+        DataError: If the timestamp column has missing values or intervals are inconsistent.
     """
     ts_config = config.time_series
 
     # Step 1: Add pseudo-group if needed
-    df_all, group_by_col = _add_pseudo_group_if_needed(df_all, config)
+    training_df, group_by_col = _add_pseudo_group_if_needed(training_df, config)
 
     if group_by_col is None:
         raise RuntimeError("group_by_col should have been set by _add_pseudo_group_if_needed")
 
     # Step 2: Create elapsed time column if timestamp not provided
-    df_all, is_elapsed_time = _create_elapsed_time_column(df_all, ts_config, group_by_col)
+    training_df, is_elapsed_time = _create_elapsed_time_column(training_df, ts_config, group_by_col)
 
     # timestamp_column should be set by now
     if ts_config.timestamp_column is None:
         raise RuntimeError("timestamp_column should have been set by _create_elapsed_time_column")
     config.data.order_training_examples_by = ts_config.timestamp_column
 
-    # Step 3: Validate timestamp column
-    _validate_timestamp_column(df_all, ts_config.timestamp_column)
+    # Step 3: Validate timestamp column -- run before any dtype checks so a missing
+    # column raises ParameterError with actionable guidance rather than KeyError.
+    _check_timestamp_column(training_df, ts_config.timestamp_column)
+
+    if not is_elapsed_time:
+        is_elapsed_time = _detect_elapsed_seconds_format(training_df, ts_config)
 
     # Step 4: Sort by group and timestamp
-    df_all = _sort_by_group_and_timestamp(df_all, group_by_col, ts_config.timestamp_column)
+    training_df = _sort_by_group_and_timestamp(training_df, group_by_col, ts_config.timestamp_column)
 
     # Step 5: Infer format and convert to datetime (if not elapsed time)
     # Skip datetime conversion for elapsed_seconds format (either created or user-provided)
     if not is_elapsed_time and ts_config.timestamp_format != "elapsed_seconds":
-        df_all = _infer_and_convert_timestamp_format(df_all, ts_config)
+        training_df = _infer_and_convert_timestamp_format(training_df, ts_config)
 
     # Step 6: Process groups and validate consistency
-    ts_config = _process_grouped_timestamps(df_all, ts_config, group_by_col, is_elapsed_time)
+    ts_config = _process_grouped_timestamps(training_df, ts_config, group_by_col, is_elapsed_time)
 
     # Step 7: Convert timestamp back to string format
     # Skip string conversion for elapsed_seconds format (values are already numeric)
@@ -250,9 +303,11 @@ def process_timeseries_data(
         and ts_config.timestamp_format is not None
         and ts_config.timestamp_format != "elapsed_seconds"
     ):
-        df_all[ts_config.timestamp_column] = df_all[ts_config.timestamp_column].dt.strftime(ts_config.timestamp_format)
+        training_df[ts_config.timestamp_column] = training_df[ts_config.timestamp_column].dt.strftime(
+            ts_config.timestamp_format
+        )
 
-    return df_all, config
+    return training_df, config
 
 
 @dataclass
@@ -260,9 +315,16 @@ class _GroupTimestampStats:
     """Statistics collected from a single group's timestamps."""
 
     group_name: Any
+    """Identifier for the group."""
+
     start_timestamp: Any
+    """First timestamp in the group."""
+
     stop_timestamp: Any
-    interval_seconds: int | None  # None if inconsistent within group
+    """Last timestamp in the group."""
+
+    interval_seconds: int | None
+    """Seconds between consecutive timestamps, or ``None`` if inconsistent within the group."""
 
 
 def _collect_group_timestamp_stats(

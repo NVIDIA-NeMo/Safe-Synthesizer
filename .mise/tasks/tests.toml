@@ -1,0 +1,191 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+[test]
+description = "Run unit tests excluding slow, e2e, and smoke tests. Requires Python dependencies; exits non-zero on test failure."
+run = 'uv run --frozen pytest -n auto --dist loadscope -vv -m "unit and not slow"'
+
+["test:unit-slow"]
+description = "Run all unit tests including slow tests, excluding e2e and smoke. Requires Python dependencies; may take longer than test."
+alias = "test-unit-slow"
+run = 'uv run --frozen pytest -n auto --dist loadscope -vv tests -m "unit"'
+
+["test:ci"]
+description = "Run CI unit tests with coverage, excluding slow, e2e, GPU, and smoke tests. Produces coverage.json."
+alias = "test-ci"
+run = 'uv run --frozen pytest -n auto --dist loadscope -vv --cov --cov-report json:coverage.json tests -m "not e2e and not requires_gpu and not slow and not smoke"'
+
+["test:ci-slow"]
+description = "Run slow tests with coverage for CI. Produces coverage.json and can take longer than normal unit tests."
+alias = "test-ci-slow"
+run = 'uv run --frozen pytest -n auto --dist loadscope -vv --cov --cov-report json:coverage.json tests -m "slow"'
+
+["test:smoke"]
+description = "Run CPU smoke tests for training/generation hot paths. No GPU required; exits non-zero on smoke failure."
+alias = "test-smoke"
+run = 'uv run --frozen pytest -n auto --dist loadscope -vv -m "smoke and not requires_gpu"'
+
+["test:smoke:gpu"]
+description = "Run all GPU smoke test stages sequentially. Requires CUDA and GPU dependencies; use before GPU-impacting changes."
+alias = "test-smoke-gpu"
+run = [
+  { task = "test:smoke:gpu:train-only" },
+  { task = "test:smoke:gpu:generation" },
+  { task = "test:smoke:gpu:resume" },
+  { task = "test:smoke:gpu:structured-generation" },
+  { task = "test:smoke:gpu:timeseries" },
+  { task = "test:smoke:gpu:smollm2" },
+]
+
+["test:smoke:gpu:train-only"]
+description = "Run GPU train-only smoke tests (no vLLM)"
+alias = "test-smoke-gpu-train-only"
+run = 'uv run --frozen pytest --dist loadscope -vv -n 0 tests/smoke/ -m "requires_gpu and not vllm and not smollm2"'
+
+["test:smoke:gpu:generation"]
+description = "Run GPU generation smoke tests"
+alias = "test-smoke-gpu-generation"
+run = "uv run --frozen pytest --dist loadscope -vv -n 0 tests/smoke/test_nss_generation_gpu.py"
+
+["test:smoke:gpu:resume"]
+description = "Run GPU resume smoke tests"
+alias = "test-smoke-gpu-resume"
+run = "uv run --frozen pytest --dist loadscope -vv -n 0 tests/smoke/test_nss_resume_gpu.py"
+
+["test:smoke:gpu:structured-generation"]
+description = "Run GPU structured generation smoke tests"
+alias = "test-smoke-gpu-structured-generation"
+run = "uv run --frozen pytest --dist loadscope -vv -n 0 tests/smoke/test_nss_structured_gen_gpu.py"
+
+["test:smoke:gpu:timeseries"]
+description = "Run GPU timeseries smoke tests"
+alias = "test-smoke-gpu-timeseries"
+run = "uv run --frozen pytest --dist loadscope -vv -n 0 tests/smoke/test_nss_timeseries_gpu.py"
+
+["test:smoke:gpu:smollm2"]
+description = "Run GPU SmolLM2 smoke tests"
+alias = "test-smoke-gpu-smollm2"
+run = 'uv run --frozen pytest --dist loadscope -vv -n 0 tests/smoke/ -m "requires_gpu and smollm2"'
+
+["test:gpu-integration"]
+description = "Run GPU integration e2e tests for default and DP configs. Requires CUDA; stages are sequential to control GPU load."
+alias = "test-gpu-integration"
+run = [
+  { task = "bootstrap-nss", args = ["cu129"] },
+  "uv run --frozen pytest -n 0 --dist loadscope -vv tests/e2e/test_safe_synthesizer.py -k default",
+  "uv run --frozen pytest -n 0 --dist loadscope -vv tests/e2e/test_safe_synthesizer.py -k dp",
+]
+
+["test:e2e"]
+description = "Run all GPU e2e tests: default then DP. Requires CUDA; stages are sequential to control GPU load."
+alias = "test-e2e"
+run = [{ task = "test:e2e:default" }, { task = "test:e2e:dp" }]
+
+["test:e2e:default"]
+description = "Run default e2e tests (requires CUDA)"
+alias = "test-e2e-default"
+run = [
+  { task = "bootstrap-nss", args = ["cu129"] },
+  "uv run --frozen pytest --dist loadscope -vv -n 0 tests/e2e/test_safe_synthesizer.py -k default"
+]
+
+["test:e2e:dp"]
+description = "Run dp e2e tests (requires CUDA)"
+alias = "test-e2e-dp"
+run = [
+  { task = "bootstrap-nss", args = ["cu129"] },
+  "uv run --frozen pytest --dist loadscope -vv -n 0 tests/e2e/test_safe_synthesizer.py -k dp"
+]
+
+["test:e2e:collect"]
+description = "Dry-run e2e and GPU selectors with pytest collection only. Does not run tests; useful before changing task selectors."
+alias = "test-e2e-collect"
+run = [
+  { task = "bootstrap-nss", args = ["cu129"] },
+  '''
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "--- test-e2e-default ---"
+uv run --frozen pytest --dist loadscope -vv -n 0 tests/e2e/test_safe_synthesizer.py -k default -o "addopts=" --collect-only -qq -p no:warnings 2>/dev/null || true
+echo "--- test-e2e-dp ---"
+uv run --frozen pytest --dist loadscope -vv -n 0 tests/e2e/test_safe_synthesizer.py -k dp -o "addopts=" --collect-only -qq -p no:warnings 2>/dev/null || true
+echo "--- test-gpu-integration (default) ---"
+uv run --frozen pytest -n auto --dist loadscope -vv tests/e2e/test_safe_synthesizer.py -k default -o "addopts=" --collect-only -qq -p no:warnings 2>/dev/null || true
+echo "--- test-gpu-integration (dp) ---"
+uv run --frozen pytest -n auto --dist loadscope -vv tests/e2e/test_safe_synthesizer.py -k dp -o "addopts=" --collect-only -qq -p no:warnings 2>/dev/null || true
+'''
+]
+
+["test:nss-config-dataset"]
+description = "Run pytest for one config and dataset combination"
+hide = true
+usage = '''
+arg "<config>" {
+  choices "tinyllama_nodp" "tinyllama_dp" "smollm3_nodp" "smollm3_dp" "mistral_nodp" "mistral_dp"
+}
+arg "<dataset>" {
+  choices "clinc_oos" "dow_jones_index"
+}
+'''
+run = [
+  { task = "bootstrap-nss", args = ["cu129"] },
+  '''
+#!/usr/bin/env bash
+set -euo pipefail
+
+config_name="${usage_config?}"
+config_name="${config_name//_/-}"
+uv run --frozen pytest --dist loadscope -vv -n 0 --cov --cov-report json:coverage.json \
+  tests/e2e/test_dataset_config.py \
+  -k "test_${usage_dataset?}_dataset[${config_name}]"
+''',
+]
+
+["test-nss-tinyllama_nodp-clinc_oos-ci"]
+description = "Run pytest test for tinyllama-nodp config with clinc-oos dataset"
+run = [{ task = "test:nss-config-dataset", args = ["tinyllama_nodp", "clinc_oos"] }]
+
+["test-nss-tinyllama_nodp-dow_jones_index-ci"]
+description = "Run pytest test for tinyllama-nodp config with dow-jones-index dataset"
+run = [{ task = "test:nss-config-dataset", args = ["tinyllama_nodp", "dow_jones_index"] }]
+
+["test-nss-tinyllama_dp-clinc_oos-ci"]
+description = "Run pytest test for tinyllama-dp config with clinc-oos dataset"
+run = [{ task = "test:nss-config-dataset", args = ["tinyllama_dp", "clinc_oos"] }]
+
+["test-nss-tinyllama_dp-dow_jones_index-ci"]
+description = "Run pytest test for tinyllama-dp config with dow-jones-index dataset"
+run = [{ task = "test:nss-config-dataset", args = ["tinyllama_dp", "dow_jones_index"] }]
+
+["test-nss-smollm3_nodp-clinc_oos-ci"]
+description = "Run pytest test for smollm3-nodp config with clinc-oos dataset"
+run = [{ task = "test:nss-config-dataset", args = ["smollm3_nodp", "clinc_oos"] }]
+
+["test-nss-smollm3_nodp-dow_jones_index-ci"]
+description = "Run pytest test for smollm3-nodp config with dow-jones-index dataset"
+run = [{ task = "test:nss-config-dataset", args = ["smollm3_nodp", "dow_jones_index"] }]
+
+["test-nss-smollm3_dp-clinc_oos-ci"]
+description = "Run pytest test for smollm3-dp config with clinc-oos dataset"
+run = [{ task = "test:nss-config-dataset", args = ["smollm3_dp", "clinc_oos"] }]
+
+["test-nss-smollm3_dp-dow_jones_index-ci"]
+description = "Run pytest test for smollm3-dp config with dow-jones-index dataset"
+run = [{ task = "test:nss-config-dataset", args = ["smollm3_dp", "dow_jones_index"] }]
+
+["test-nss-mistral_nodp-clinc_oos-ci"]
+description = "Run pytest test for mistral-nodp config with clinc-oos dataset"
+run = [{ task = "test:nss-config-dataset", args = ["mistral_nodp", "clinc_oos"] }]
+
+["test-nss-mistral_nodp-dow_jones_index-ci"]
+description = "Run pytest test for mistral-nodp config with dow-jones-index dataset"
+run = [{ task = "test:nss-config-dataset", args = ["mistral_nodp", "dow_jones_index"] }]
+
+["test-nss-mistral_dp-clinc_oos-ci"]
+description = "Run pytest test for mistral-dp config with clinc-oos dataset"
+run = [{ task = "test:nss-config-dataset", args = ["mistral_dp", "clinc_oos"] }]
+
+["test-nss-mistral_dp-dow_jones_index-ci"]
+description = "Run pytest test for mistral-dp config with dow-jones-index dataset"
+run = [{ task = "test:nss-config-dataset", args = ["mistral_dp", "dow_jones_index"] }]

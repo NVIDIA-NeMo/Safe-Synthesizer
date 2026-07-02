@@ -1,18 +1,15 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""CLI entry points for Safe Synthesizer.
-
-This module provides the main CLI commands for running the Safe Synthesizer pipeline:
-- `run` (default): Full end-to-end pipeline
-- `run train`: Training stage only
-- `run generate`: Generation stage only (requires trained model)
-"""
+"""CLI run commands for Safe Synthesizer."""
 
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING
+import sys
+from collections.abc import Callable
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import click
 
@@ -21,7 +18,10 @@ from ..configurator.pydantic_click_options import (
     parse_overrides,
     pydantic_options,
 )
+from ..errors import UserError
 from ..observability import traced_user
+from ..telemetry import DeploymentTypeEnum, TaskStatusEnum
+from ..tooling import PreflightRenderContext, render_preflight_report
 from .settings import CLISettings
 from .utils import (
     CLI_NESTED_FIELD_SEPARATOR,
@@ -30,14 +30,20 @@ from .utils import (
 )
 
 if TYPE_CHECKING:
+    import pandas as pd
+
     from ..sdk.library_builder import SafeSynthesizer
+    from .artifact_structure import Workdir
 
 
-def common_run_options(f):
+def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
     """Decorator to add common options for run commands.
 
-    Note: Environment variable handling is done by CLISettings, not Click's envvar=.
-    This keeps env var logic in one place (pydantic-settings) rather than duplicating it.
+    Apply this above ``@pydantic_options`` in source order. Python applies
+    decorators bottom-up, so the shared command options are added after the
+    generated parameter options. Environment-variable handling stays in
+    ``CLISettings`` rather than Click ``envvar=`` declarations, so precedence is
+    centralized in one settings model.
     """
     options = []
     options.append(
@@ -45,7 +51,7 @@ def common_run_options(f):
     )
     options.append(
         click.option(
-            "--url",
+            "--data-source",
             type=str,
             default=None,
             required=False,
@@ -148,38 +154,248 @@ def common_run_options(f):
             required=False,
             default=None,
             help="URL or path of a dataset registry YAML file. If provided, "
-            "datasets in the registry may be referenced by name in --url. "
+            "datasets in the registry may be referenced by name in --data-source. "
             "Can also be set via NSS_DATASET_REGISTRY env var. "
             "If both env var and CLI option are provided, the CLI option takes precedence.",
         )
     )
-
+    options.append(
+        click.option(
+            "--inference-endpoint-url",
+            type=str,
+            required=False,
+            default=None,
+            help="OpenAI-compatible inference endpoint URL for PII column classification. "
+            "Can also be set via NSS_INFERENCE_ENDPOINT env var.",
+        )
+    )
+    options.append(
+        click.option(
+            "--inference-api-key",
+            type=str,
+            required=False,
+            default=None,
+            help="API key for the inference endpoint used in PII column classification. "
+            "Can also be set via NSS_INFERENCE_KEY env var.",
+        )
+    )
+    options.append(
+        click.option(
+            "--inference-model-id",
+            type=str,
+            required=False,
+            default=None,
+            help="Model ID sent to the inference endpoint for PII column classification. "
+            "Can also be set via NSS_INFERENCE_MODEL env var. "
+            "[default: qwen/qwen3-next-80b-a3b-instruct]",
+        )
+    )
+    options.append(
+        click.option(
+            "--enable-huggingface-remote/--disable-huggingface-remote",
+            "huggingface_remote",
+            required=False,
+            default=None,
+            help="Allow or block Hugging Face remote downloads for both the base model "
+            "and GLiNER. --disable-huggingface-remote forces a fully offline run by "
+            "setting HF_HUB_OFFLINE and TRANSFORMERS_OFFLINE; both must already be "
+            "cached. Equivalent to setting HF_HUB_OFFLINE in the environment. When "
+            "neither flag is given, the run inherits HF_HUB_OFFLINE/TRANSFORMERS_OFFLINE "
+            "from the environment (remote downloads enabled when unset). "
+            "[default: --enable-huggingface-remote]",
+        )
+    )
+    options.append(
+        click.option(
+            "--cpu-count",
+            type=int,
+            required=False,
+            default=None,
+            help="Number of CPU worker processes used for NER (PII replacement). "
+            "Can also be set via NSS_PII_REPLACER_CPU_COUNT env var. "
+            "[default: max(1, cpu_count - 1)]",
+        )
+    )
     # Apply each option decorator in reverse order (decorators apply bottom-up)
     for option in reversed(options):
         f = option(f)
     return f
 
 
+def _parse_run_overrides(kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Parse generated config options plus manual run aliases into config overrides."""
+    return parse_overrides(kwargs)
+
+
+# CLISettings fields populated from common_run_options flags. ``synthesis_overrides``
+# is excluded -- it is derived from the leftover pydantic_options kwargs, not bound
+# to a single flag. ``observability``/``wandb`` are nested sub-settings with no CLI
+# flag, so they never appear in command kwargs.
+_CLI_SETTINGS_FIELDS: frozenset[str] = frozenset(CLISettings.model_fields) - {"synthesis_overrides"}
+
+
+def _settings_from_run_kwargs(kwargs: dict[str, Any]) -> CLISettings:
+    """Build ``CLISettings`` from a run command's ``**kwargs``.
+
+    ``common_run_options`` binds each infrastructure flag to a kwarg whose name
+    matches a ``CLISettings`` field; those are pulled out here. Everything left
+    (the ``pydantic_options`` ``--section__field`` options) becomes synthesis
+    overrides. This keeps the three run commands from re-listing the shared flag
+    set in both their signature and their settings construction -- adding a flag
+    now means editing ``common_run_options`` and ``CLISettings`` only.
+
+    ``kwargs`` is mutated: matched settings keys are popped before the remainder
+    is parsed into overrides.
+    """
+    settings_kwargs = {name: kwargs.pop(name) for name in _CLI_SETTINGS_FIELDS if name in kwargs}
+    settings_kwargs["synthesis_overrides"] = _parse_run_overrides(kwargs)
+    return CLISettings.from_cli_kwargs(**settings_kwargs)
+
+
+def _set_cli_deployment_type_default() -> None:
+    """Default telemetry deployment type for CLI commands without overriding Slurm or explicit settings."""
+    os.environ.setdefault("NEMO_DEPLOYMENT_TYPE", DeploymentTypeEnum.CLI.value)
+
+
+def _format_dataset_runtime_info(data: pd.DataFrame) -> str:
+    """Format dataset size summary for validate runtime info."""
+    return f"{len(data):,} rows, {len(data.columns):,} columns"
+
+
+def _build_validate_run_info(
+    *,
+    version: str,
+    model_name: str,
+    data: pd.DataFrame,
+    training_records: int | None = None,
+) -> dict[str, str]:
+    """Build runtime info displayed in validate output.
+
+    ``training_records`` is the size of the training split that preflight
+    actually checked; it is shown alongside the input dataset size so the
+    scope of the report is obvious.
+    """
+    info: dict[str, str] = {
+        "nemo-safe-synthesizer": version,
+        "model": model_name,
+        "input data": _format_dataset_runtime_info(data),
+    }
+    if training_records is not None:
+        info["training split"] = f"{training_records:,} rows (pre-flight scope)"
+    info["log level"] = os.environ.get("NSS_LOG_LEVEL", "INFO")
+    return info
+
+
+def _run_validate_and_render(
+    nss: SafeSynthesizer,
+    *,
+    settings: CLISettings,
+    workdir: Workdir,
+    config: SafeSynthesizerParameters,
+    data: pd.DataFrame,
+) -> None:
+    """Run preflight in validate mode and render the resulting report.
+
+    Shared by the ``run`` (end-to-end) and ``run train`` command paths so
+    the ``--validate`` branch in each stays a single line.
+
+    Note: ``process_data(check_only=True)`` deliberately skips PII
+    replacement, so preflight runs against the pre-replacement training
+    split. This is why ``--validate`` is documented as a best-effort
+    fail-fast gate rather than a full-run guarantee.
+    """
+    click.echo("Running pre-flight validation...", nl=False)
+    # ``process_data(check_only=True)`` raises ``UserError`` (specifically
+    # ``ParameterError``) when preflight surfaces errors, but it populates
+    # ``nss.preflight_report`` first. Catch the raise so the Rich report still
+    # renders before we propagate the failure -- otherwise the user gets only
+    # the bare traceback text.
+    error: UserError | None = None
+    try:
+        nss.process_data(check_only=True)
+    except UserError as exc:
+        error = exc
+    finally:
+        _clear_progress_line()
+
+    # intentionally deferred import to avoid delay in user startup
+    from ..package_info import __version__
+    from ..preflight import get_registry
+
+    if nss.preflight_report is not None:
+        render_preflight_report(
+            nss.preflight_report,
+            registry=get_registry(),
+            context=_build_validate_render_context(
+                config_path=nss._preflight_config_path,
+                data_source=settings.data_source,
+                artifact_dir=workdir.run_dir,
+                log_file=workdir.log_file,
+                version=__version__,
+                model_name=config.training.pretrained_model,
+                data=data,
+                training_records=len(nss._training_df) if nss._training_df is not None else None,
+            ),
+        )
+
+    if error is not None:
+        raise error
+
+
+def _clear_progress_line() -> None:
+    r"""Clear the ``Running pre-flight validation...`` progress line.
+
+    Emits the ANSI clear sequence only when stdout is a TTY so CI logs and
+    other non-terminal sinks don't show raw ``\\r\\x1b[K`` control bytes.
+    On non-TTYs, just drop to a new line.
+    """
+    if sys.stdout.isatty():
+        click.echo("\r\033[K", nl=False)
+    else:
+        click.echo()
+
+
+def _build_validate_render_context(
+    *,
+    config_path: PathT | None,
+    data_source: str | None,
+    artifact_dir: PathT | None,
+    log_file: PathT | None,
+    version: str,
+    model_name: str,
+    data: pd.DataFrame,
+    training_records: int | None = None,
+) -> PreflightRenderContext:
+    """Build display context for validate-mode preflight rendering."""
+    return PreflightRenderContext(
+        config_path=Path(config_path) if config_path is not None else None,
+        data_source=data_source,
+        artifact_dir=Path(artifact_dir) if artifact_dir is not None else None,
+        log_file=Path(log_file) if log_file is not None else None,
+        run_info=_build_validate_run_info(
+            version=version,
+            model_name=model_name,
+            data=data,
+            training_records=training_records,
+        ),
+    )
+
+
 @click.group(invoke_without_command=True)
 @click.pass_context
 @common_run_options
 @pydantic_options(SafeSynthesizerParameters, field_separator=CLI_NESTED_FIELD_SEPARATOR)
+@click.option(
+    "--validate",
+    is_flag=True,
+    default=False,
+    help="Run pre-flight validation only, then exit without training or generating.",
+)
 def run(
     ctx: click.Context,
-    config_path: PathT | None,
-    url: str,
-    artifact_path: PathT | None,
-    run_path: PathT | None,
-    output_file: PathT | None,
-    log_file: PathT | None,
-    log_color: bool | None,
-    log_format: str | None,
-    verbose: int = 0,
-    wandb_mode: str | None = None,
-    wandb_project: str | None = None,
-    dataset_registry: str | None = None,
-    **kwargs,
-):
+    validate: bool = False,
+    **kwargs: Any,
+) -> None:
     """Run the Safe Synthesizer end-to-end pipeline.
 
     Without a subcommand, runs the full end-to-end pipeline.
@@ -189,92 +405,108 @@ def run(
     if ctx.invoked_subcommand is not None:
         return
 
-    # Create unified settings from CLI kwargs (CLI values override env vars)
-    settings = CLISettings.from_cli_kwargs(
-        url=url,
-        config_path=config_path,
-        artifact_path=artifact_path,
-        run_path=run_path,
-        output_file=output_file,
-        log_file=log_file,
-        log_color=log_color,
-        log_format=log_format,
-        verbose=verbose,
-        wandb_mode=wandb_mode,
-        wandb_project=wandb_project,
-        synthesis_overrides=parse_overrides(kwargs),
-        dataset_registry=dataset_registry,
-    )
+    _set_cli_deployment_type_default()
 
-    # Full pipeline execution
-    os.environ["NSS_PHASE"] = "end_to_end"
+    settings = _settings_from_run_kwargs(kwargs)
+
+    if validate:
+        os.environ["NSS_PHASE"] = "process_data"
+    else:
+        os.environ["NSS_PHASE"] = "end_to_end"
+
     run_logger, config, df, workdir = common_setup(
         settings=settings,
-        phase="end_to_end",
+        phase="process_data" if validate else "end_to_end",
+        skip_wandb=validate,
+        quiet=validate,
+        run_name="validate" if validate else None,
     )
-    run_logger.warning("Nemo Safe Synthesizer starting")
-    run_logger.debug("running with: ", extra={"config": config.model_dump()})
 
-    with traced_user("SafeSynthesizer"):
-        from ..sdk.library_builder import SafeSynthesizer
+    try:
+        run_logger.warning("Nemo Safe Synthesizer starting")
+        run_logger.debug("running with: ", extra={"config": config.model_dump()})
 
-        ss: SafeSynthesizer = SafeSynthesizer(config=config, workdir=workdir).with_data_source(df)
-        ss.run()
-        ss.save_results(output_file=settings.output_file or workdir.output_file)
-        ss.results.summary.log_summary(run_logger)
-        ss.results.summary.timing.log_timing(run_logger)
-        ss.results.summary.log_wandb()
+        with traced_user("SafeSynthesizer"):
+            from ..sdk.library_builder import SafeSynthesizer
+
+            assert df is not None
+            nss: SafeSynthesizer = SafeSynthesizer(
+                config=config,
+                workdir=workdir,
+                emit_telemetry=config.emit_telemetry,
+            ).with_data_source(df)
+
+            if validate:
+                _run_validate_and_render(nss, settings=settings, workdir=workdir, config=config, data=df)
+                return
+
+            try:
+                nss.run(output_file=settings.output_file)
+                nss.results.summary.log_summary(run_logger)
+                nss.results.summary.timing.log_timing(run_logger)
+                nss.results.summary.log_wandb()
+            finally:
+                if hasattr(nss, "generator") and nss.generator is not None:
+                    nss.generator.teardown()
+    except UserError as exc:
+        click.secho(str(exc), fg="red", err=True)
+        raise SystemExit(1)
 
 
 @run.command("train")
 @common_run_options
+@pydantic_options(SafeSynthesizerParameters, field_separator=CLI_NESTED_FIELD_SEPARATOR)
+@click.option(
+    "--validate",
+    is_flag=True,
+    default=False,
+    help="Run pre-flight validation only, then exit without training or generating.",
+)
 def run_train(
-    config_path: PathT,
-    url: str,
-    artifact_path: PathT | None,
-    run_path: PathT | None,
-    output_file: PathT | None,
-    log_format: str | None,
-    log_color: bool | None,
-    log_file: PathT | None,
-    verbose: int,
-    wandb_mode: str | None = None,
-    wandb_project: str | None = None,
-    dataset_registry: str | None = None,
-    **kwargs,
-):
+    validate: bool = False,
+    **kwargs: Any,
+) -> None:
     """Run the training stage only.
 
     This command processes data and trains the model, saving the adapter to the run directory.
     Use 'run generate' afterwards to generate synthetic data from the trained adapter.
     """
-    # Create unified settings from CLI kwargs
-    settings = CLISettings.from_cli_kwargs(
-        url=url,
-        config_path=config_path,
-        artifact_path=artifact_path,
-        run_path=run_path,
-        output_file=output_file,
-        log_file=log_file,
-        log_color=log_color,
-        log_format=log_format,
-        verbose=verbose,
-        wandb_mode=wandb_mode,
-        wandb_project=wandb_project,
-        synthesis_overrides=parse_overrides(kwargs),
-        dataset_registry=dataset_registry,
-    )
+    _set_cli_deployment_type_default()
 
-    os.environ["NSS_PHASE"] = "train"
+    settings = _settings_from_run_kwargs(kwargs)
+
+    if validate:
+        os.environ["NSS_PHASE"] = "process_data"
+    else:
+        os.environ["NSS_PHASE"] = "train"
+
     run_logger, config, df, workdir = common_setup(
         settings=settings,
-        phase="train",
+        phase="process_data" if validate else "train",
+        skip_wandb=validate,
+        quiet=validate,
+        run_name="validate" if validate else None,
     )
     from ..sdk.library_builder import SafeSynthesizer
 
-    with traced_user("SafeSynthesizer"):
-        SafeSynthesizer(config, workdir=workdir).with_data_source(df).process_data().train()
-        run_logger.info(f"Training complete. Adapter saved to: {workdir.adapter_path}")
+    try:
+        with traced_user("SafeSynthesizer"):
+            assert df is not None
+            nss = SafeSynthesizer(
+                config,
+                workdir=workdir,
+                emit_telemetry=config.emit_telemetry,
+            ).with_data_source(df)
+
+            if validate:
+                _run_validate_and_render(nss, settings=settings, workdir=workdir, config=config, data=df)
+                return
+
+            nss.process_data().train()
+            run_logger.info(f"Training complete. Adapter saved to: {workdir.adapter_path}")
+    except UserError as exc:
+        click.secho(str(exc), fg="red", err=True)
+        raise SystemExit(1)
 
 
 @run.command("generate")
@@ -296,22 +528,10 @@ def run_train(
 )
 @pydantic_options(SafeSynthesizerParameters, field_separator=CLI_NESTED_FIELD_SEPARATOR)
 def run_generate(
-    config_path: PathT,
-    url: str,
-    run_path: PathT | None,
-    artifact_path: PathT | None,
-    output_file: PathT | None,
-    log_format: str | None,
-    log_color: bool | None,
-    log_file: PathT | None,
-    verbose: int,
-    wandb_mode: str | None = None,
-    wandb_project: str | None = None,
     auto_discover_adapter: bool = False,
     wandb_resume_job_id: str | None = None,
-    dataset_registry: str | None = None,
-    **kwargs,
-):
+    **kwargs: Any,
+) -> None:
     """Run the generation stage only.
 
     This command loads a trained adapter and generates synthetic data.
@@ -321,22 +541,10 @@ def run_generate(
     or use --auto-discover-adapter with --artifact-path to automatically find
     the latest trained run.
     """
+    _set_cli_deployment_type_default()
+
     # Create unified settings from CLI kwargs
-    settings = CLISettings.from_cli_kwargs(
-        url=url,
-        config_path=config_path,
-        artifact_path=artifact_path,
-        run_path=run_path,
-        output_file=output_file,
-        log_file=log_file,
-        log_color=log_color,
-        log_format=log_format,
-        verbose=verbose,
-        wandb_mode=wandb_mode,
-        wandb_project=wandb_project,
-        synthesis_overrides=parse_overrides(kwargs),
-        dataset_registry=dataset_registry,
-    )
+    settings = _settings_from_run_kwargs(kwargs)
 
     os.environ["NSS_PHASE"] = "generate"
     # Generation always resumes from an existing workdir with a trained model
@@ -347,20 +555,40 @@ def run_generate(
         auto_discover_adapter=auto_discover_adapter,
         wandb_resume_job_id=wandb_resume_job_id,
     )
-    from ..sdk.library_builder import SafeSynthesizer
+    from ..sdk.library_builder import SafeSynthesizer, _emit_nss_telemetry
 
     final_output_file = settings.output_file or workdir.output_file
     with traced_user("SafeSynthesizer"):
-        ss = SafeSynthesizer(config, workdir=workdir)
+        nss = SafeSynthesizer(
+            config,
+            workdir=workdir,
+            emit_telemetry=config.emit_telemetry,
+        )
 
-        # Only set data source if provided via --url
+        # Only set data source if provided via --data-source
         # Otherwise, load_from_save_path() will load from cached files
         if df is not None:
-            ss = ss.with_data_source(df)
+            nss = nss.with_data_source(df)
 
-        ss = ss.load_from_save_path().process_data().generate().evaluate().save_results(output_file=final_output_file)
-        ss.generator.teardown()
-        ss.results.summary.log_summary(run_logger)
-        ss.results.summary.timing.log_timing(run_logger)
-        run_logger.info(f"Generation complete. Results saved to: {final_output_file}")
-        ss.results.summary.log_wandb()
+        try:
+            nss = (
+                nss.load_from_save_path(runtime_config=config)
+                .process_data()
+                .generate()
+                .evaluate()
+                .save_results(output_file=final_output_file)
+            )
+            _emit_nss_telemetry(nss, TaskStatusEnum.COMPLETED)
+            nss.results.summary.log_summary(run_logger)
+            nss.results.summary.timing.log_timing(run_logger)
+            run_logger.info(f"Generation complete. Results saved to: {final_output_file}")
+            nss.results.summary.log_wandb()
+        except KeyboardInterrupt:
+            _emit_nss_telemetry(nss, TaskStatusEnum.CANCELED)
+            raise
+        except Exception:
+            _emit_nss_telemetry(nss, TaskStatusEnum.ERROR)
+            raise
+        finally:
+            if hasattr(nss, "generator") and nss.generator is not None:
+                nss.generator.teardown()

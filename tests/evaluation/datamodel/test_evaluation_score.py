@@ -27,7 +27,7 @@ def test_scores_are_clipped():
     assert score.raw_score is None
     assert score.score is None
     assert score.grade == Grade.UNAVAILABLE
-    assert "1 validation error for EvaluationScore" in score.notes
+    assert score.notes is not None and "1 validation error for EvaluationScore" in score.notes
 
 
 def test_nones_okay():

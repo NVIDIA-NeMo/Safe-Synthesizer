@@ -18,15 +18,24 @@ logger = get_logger(__name__)
 
 
 class SQSScore(CompositeScore):
+    """Synthetic Quality Score -- weighted aggregate of quality sub-metrics.
+
+    Combines column distribution stability, correlation stability, deep
+    structure stability, text semantic similarity, and text structure
+    similarity into a single 0--10 score weighted by the number of
+    tabular vs. text columns.
+    """
+
     name: str = Field(default="Synthetic Quality Score")
 
     @staticmethod
-    def from_components(components: list[Component] | Component) -> SQSScore:
+    def from_components(components: list[Component] | Component, name: str = "Synthetic Quality Score") -> SQSScore:
+        """Compute the SQS from a list of quality sub-metric components."""
         if isinstance(components, Component):
             # wrap with a list and continue
             components = [components]
         if components is None or len(components) == 0:
-            return SQSScore(score=EvaluationScore())
+            return SQSScore(name=name, score=EvaluationScore())
 
         # We need to recover the number of text and tabular fields to get proper weighted sum below.
         text_cols = 0
@@ -36,12 +45,12 @@ class SQSScore(CompositeScore):
             # If it is absent, something is really wrong -- we get that field info before even trying to make any components.
             # So if we don't have this, it's not worth trying to get consolation field counts from other components.
             if isinstance(c, ColumnDistribution):
-                text_cols = len([f for f in c.evaluation_fields if f.reference_field_features.type == FieldType.TEXT])
+                text_cols = len([f for f in c.evaluation_fields if f.training_field_features.type == FieldType.TEXT])
                 tabular_cols = len(c.evaluation_fields) - text_cols
 
         if tabular_cols + text_cols == 0:
             logger.warning("Failed to detect text/tabular columns for SQS.")
-            return SQSScore(score=EvaluationScore())
+            return SQSScore(name="Synthetic Quality Score", score=EvaluationScore())
 
         # Make it easier to pick out components by name
         component_dict = {c.name: c.score.score for c in components}
@@ -67,6 +76,25 @@ class SQSScore(CompositeScore):
         tabular_cols: int,
         text_cols: int,
     ) -> EvaluationScore:
+        """Compute the overall SQS from individual sub-metric scores.
+
+        The tabular SQS is a weighted combination of correlation, distribution,
+        and PCA stability.  The text SQS blends semantic and structural
+        similarity.  The final score weights tabular and text SQS by their
+        respective column counts.
+
+        Args:
+            field_correlation_stability: Correlation stability sub-score (0--10).
+            principal_component_stability: PCA stability sub-score (0--10).
+            field_distribution_stability: Distribution stability sub-score (0--10).
+            text_semantic_similarity: Semantic similarity sub-score (0--10).
+            text_structure_similarity: Structural similarity sub-score (0--10).
+            tabular_cols: Number of tabular columns in the dataset.
+            text_cols: Number of text columns in the dataset.
+
+        Returns:
+            A finalized ``EvaluationScore`` for the overall SQS.
+        """
         # Compute SQS for tabular fields.
         tabular_sqs = None
         try:
