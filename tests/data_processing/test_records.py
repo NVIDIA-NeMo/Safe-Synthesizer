@@ -8,6 +8,7 @@ from io import BytesIO
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from nemo_safe_synthesizer.data_processing.record_utils import (
     _extract_timestamp_seconds,
@@ -43,6 +44,13 @@ def test_json_type_guards_accept_recursive_json_objects():
     assert is_json_object(value) is True
     assert is_json_object({1: "not-json-object"}) is False
     assert is_json_value({"bad": object()}) is False
+
+
+@pytest.mark.parametrize("value", ["NaN", "Infinity", "-Infinity"])
+def test_json_type_guards_reject_non_finite_numbers(value: str):
+    assert is_json_value(float(value)) is False
+    response = extract_and_validate_records('{"value": ' + value + "}", {"type": "object"})
+    assert response.valid_records == []
 
 
 def test_is_safe_for_float_conversion():

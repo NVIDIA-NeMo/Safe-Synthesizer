@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from typing import TypeAlias
 
@@ -21,7 +22,9 @@ JsonSchema: TypeAlias = Mapping[str, JsonValue]
 def is_json_value(value: object) -> TypeIs[JsonValue]:
     """Return whether ``value`` is representable as JSON."""
     match value:
-        case str() | int() | float() | bool() | None:
+        case float() as number:
+            return math.isfinite(number)
+        case str() | int() | bool() | None:
             return True
         case list() as values:
             return all(is_json_value(item) for item in values)
