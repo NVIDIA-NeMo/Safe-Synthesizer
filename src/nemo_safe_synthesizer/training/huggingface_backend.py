@@ -12,14 +12,14 @@ import time
 from collections.abc import Callable
 from contextlib import redirect_stdout
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 import numpy as np
 import pandas as pd
 import torch
 import wandb
 from datasets import Dataset
-from peft import LoftQConfig, LoraConfig, TaskType, prepare_model_for_kbit_training
+from peft import LoftQConfig, LoraConfig, PeftModel, TaskType, prepare_model_for_kbit_training
 from peft import get_peft_model as get_peft_model_hf
 from transformers import (
     AutoConfig,
@@ -31,6 +31,7 @@ from transformers import (
     PreTrainedTokenizer,
     PrinterCallback,
     Trainer,
+    TrainerCallback,
     TrainingArguments,
 )
 from transformers.trainer_pt_utils import get_model_param_count
@@ -84,6 +85,27 @@ logger = get_logger(__name__)
 
 DEFAULT_ROPE_THETA = 10000.0
 
+
+class _TrainerFactory(Protocol):
+    """Construct the trainer variant used by ``HuggingFaceBackend``."""
+
+    def __call__(
+        self,
+        *,
+        model: PreTrainedModel | PeftModel,
+        processing_class: PreTrainedTokenizer,
+        args: TrainingArguments,
+        train_dataset: Dataset,
+        eval_dataset: Dataset | None,
+        data_collator: DataCollatorForTokenClassification | DataCollatorForPrivateTokenClassification,
+        compute_metrics: Callable[[EvalPrediction], dict[str, float]],
+        preprocess_logits_for_metrics: Callable[
+            [tuple[torch.Tensor, ...], torch.Tensor], tuple[torch.Tensor, torch.Tensor]
+        ],
+        callbacks: list[TrainerCallback],
+    ) -> Trainer: ...
+
+
 # Training arguments fixed by Safe Synthesizer at runtime.
 #
 # Training duration is controlled by ``num_input_records_to_sample`` and the
@@ -111,7 +133,7 @@ def _opacus_trainer_factory(
     privacy_args: PrivacyArguments,
     true_dataset_size: int,
     data_fraction: float,
-) -> Callable[..., Trainer]:
+) -> _TrainerFactory:
     def factory(**kwargs: Any) -> Trainer:
         return OpacusDPTrainer(
             privacy_args=privacy_args,
@@ -139,7 +161,7 @@ class HuggingFaceBackend(TrainingBackend):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.trainer_type: Callable[..., Trainer] = _standard_trainer_factory
+        self.trainer_type: _TrainerFactory = _standard_trainer_factory
         self.model_loader_type = AutoModelForCausalLM
         self.training_output_dir = Path(self.workdir.train.cache)
         self.model_ref = ModelRef.parse(self.params.training.pretrained_model)

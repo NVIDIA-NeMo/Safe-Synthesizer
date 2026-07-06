@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import abc
-from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -118,9 +117,6 @@ class TrainingBackend(metaclass=abc.ABCMeta):
 
     load_params: dict
     """Raw parameters used when calling ``from_pretrained``."""
-
-    trainer_type: Callable[..., Trainer]
-    """Trainer factory to instantiate standard or DP-aware HuggingFace trainers."""
 
     trainer: OpacusDPTrainer | Trainer
     """Instantiated trainer, created during ``prepare_params``."""
