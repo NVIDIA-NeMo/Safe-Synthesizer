@@ -16,7 +16,7 @@
         <link rel="prev" href="../../config/types/">
       
       
-        <link rel="next" href="../parameters/">
+        <link rel="next" href="../parameter_paths/">
       
       
         
@@ -2217,6 +2217,8 @@
       
         
       
+        
+      
     
     
     
@@ -2551,6 +2553,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../config/patch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    patch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../config/preflight/" class="md-nav__link">
         
   
@@ -2702,6 +2732,10 @@
   
     
     
+      
+        
+      
+        
       
         
       
@@ -2879,6 +2913,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../parameter_paths/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    parameter_paths
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../parameters/" class="md-nav__link">
         
   
@@ -2915,6 +2977,34 @@
     
   
     pydantic_click_options
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pydantic_compat/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pydantic_compat
   
 
     
@@ -9357,7 +9447,7 @@ True
 <span class="normal"><a href="#__codelineno-0-54">54</a></span>
 <span class="normal"><a href="#__codelineno-0-55">55</a></span>
 <span class="normal"><a href="#__codelineno-0-56">56</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-50"><a id="__codelineno-0-50" name="__codelineno-0-50"></a><span class="nd">@model_serializer</span>
-</span><span id="__span-0-51"><a id="__codelineno-0-51" name="__codelineno-0-51"></a><span class="k">def</span><span class="w"> </span><span class="nf">ser_model</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;dict[str, DataT] | DataT | Sequence[DataT] | Parameter[DataT] | None&quot;</span><span class="p">:</span>
+</span><span id="__span-0-51"><a id="__codelineno-0-51" name="__codelineno-0-51"></a><span class="k">def</span><span class="w"> </span><span class="nf">ser_model</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">DataT</span><span class="p">]</span> <span class="o">|</span> <span class="n">DataT</span> <span class="o">|</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">DataT</span><span class="p">]</span> <span class="o">|</span> <span class="n">Parameter</span><span class="p">[</span><span class="n">DataT</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
 </span><span id="__span-0-52"><a id="__codelineno-0-52" name="__codelineno-0-52"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Serialize to the bare value for Pydantic ``model_dump`` / ``model_dump_json``.&quot;&quot;&quot;</span>
 </span><span id="__span-0-53"><a id="__codelineno-0-53" name="__codelineno-0-53"></a>    <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;value&quot;</span><span class="p">):</span>
 </span><span id="__span-0-54"><a id="__codelineno-0-54" name="__codelineno-0-54"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">value</span>
@@ -9439,13 +9529,13 @@ True
         
         
           
-          <a href="../parameters/" class="md-footer__link md-footer__link--next" aria-label="Next: parameters">
+          <a href="../parameter_paths/" class="md-footer__link md-footer__link--next" aria-label="Next: parameter_paths">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                parameters
+                parameter_paths
               </div>
             </div>
             <div class="md-footer__button md-icon">
