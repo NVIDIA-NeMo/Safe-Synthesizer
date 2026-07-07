@@ -127,7 +127,7 @@ cpu = [
   "torchvision==0.26.0; sys_platform == 'darwin'",
   "torchvision==0.26.0+cpu; sys_platform == 'linux'",
   "torchao==0.17.0",
-  "transformers>=5.12,<5.12.1",
+  "transformers==5.12.0",
   "triton>=2.0.0; sys_platform=='linux'",
   "trl>=0.23.0",
   "vllm==0.24.0; sys_platform=='linux'",

@@ -3349,7 +3349,7 @@ requires-dist = [
     { name = "torchvision", marker = "sys_platform == 'linux' and extra == 'cu129'", specifier = "==0.26.0+cu129", index = "https://download.pytorch.org/whl/cu129", conflict = { package = "nemo-safe-synthesizer", extra = "cu129" } },
     { name = "tqdm", specifier = ">=4.67.1" },
     { name = "tqdm", marker = "extra == 'engine'", specifier = ">=4.67.1" },
-    { name = "transformers", marker = "extra == 'cpu'", specifier = ">=5.12,<5.12.1" },
+    { name = "transformers", marker = "extra == 'cpu'", specifier = "==5.12.0" },
     { name = "transformers", marker = "extra == 'cu129'", specifier = ">=5.12,<5.12.1" },
     { name = "triton", marker = "sys_platform == 'linux' and extra == 'cpu'", specifier = ">=2.0.0" },
     { name = "triton", marker = "sys_platform == 'linux' and extra == 'cu129'", specifier = ">=2.0.0", index = "https://download.pytorch.org/whl/cu129", conflict = { package = "nemo-safe-synthesizer", extra = "cu129" } },
