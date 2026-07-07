@@ -24,6 +24,7 @@ import pandas as pd
 from pydantic import ValidationError
 
 from ..config import SafeSynthesizerParameters
+from ..config.parameters import ConfigPatch
 from ..defaults import DEFAULT_ARTIFACTS_PATH
 from ..observability import configure_logging_from_workdir, get_logger, initialize_observability
 from ..utils import merge_dicts
@@ -431,26 +432,24 @@ def _initialize_logging_for_cli_from_settings(
     return run_logger
 
 
-def merge_overrides(config_path: str | Path | None, overrides: dict) -> SafeSynthesizerParameters:
-    """Merge overrides into a SafeSynthesizerParameters object.
+def merge_overrides(config_path: str | Path | None, overrides: ConfigPatch) -> SafeSynthesizerParameters:
+    """Apply schema-aware overrides to a ``SafeSynthesizerParameters`` object.
 
-    If config_path is None, use the overrides to create a new SafeSynthesizerParameters object.
-    Otherwise, merge the overrides into the config file.
+    If ``config_path`` is ``None``, validate the sparse overrides as a new
+    configuration. Otherwise, apply them on top of the loaded YAML config.
 
     Args:
         config_path: Path to config file (YAML)
-        overrides: Dictionary of override values
+        overrides: Sparse nested override values.
 
     Returns:
-        Merged SafeSynthesizerParameters
+        Validated parameters with the overrides applied.
     """
     try:
         if config_path is None:
-            my_config = SafeSynthesizerParameters.model_validate(overrides)
+            my_config = SafeSynthesizerParameters.from_config_patch(overrides)
         else:
-            file_config = SafeSynthesizerParameters.from_yaml(config_path).model_dump(exclude_unset=True)
-            params = merge_dicts(file_config, overrides)
-            my_config = SafeSynthesizerParameters.model_validate(params)
+            my_config = SafeSynthesizerParameters.from_yaml(config_path).with_config_patch(overrides)
     except ValidationError as e:
         click.echo(f"{config_path} is invalid:\n{e}")
         sys.exit(1)

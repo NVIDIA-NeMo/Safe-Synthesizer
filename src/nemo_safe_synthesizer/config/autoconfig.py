@@ -20,8 +20,7 @@ import pandas as pd
 from ..defaults import DEFAULT_MAX_SEQ_LENGTH, MAX_ROPE_SCALING_FACTOR
 from ..llm.metadata import ModelMetadata
 from ..observability import get_logger
-from ..utils import merge_dicts
-from .parameters import SafeSynthesizerParameters
+from .parameters import ConfigPatch, SafeSynthesizerParameters
 from .types import AUTO_STR
 
 if TYPE_CHECKING:
@@ -304,14 +303,13 @@ class AutoConfigResolver:
         Returns:
             The validated SafeSynthesizerParameters.
         """
-        new_params = {
+        new_params: ConfigPatch = {
             "training": training_params,
             "data": data_params,
             "privacy": privacy_params,
         }
-        updated_params = merge_dicts(self._config.model_dump(exclude_unset=True), new_params)
-        logger.debug(f"params to update: {updated_params}")
-        my_config = SafeSynthesizerParameters.model_validate(updated_params)
+        logger.debug(f"params to update: {new_params}")
+        my_config = self._config.with_config_patch(new_params)
         logger.debug(f"auto-updated config: {my_config.model_dump(exclude_unset=True)}")
         return my_config
 

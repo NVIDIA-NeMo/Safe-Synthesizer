@@ -443,23 +443,17 @@ def teardown(self) -> None:
 Tier 2 -- moderate. Summary + `Args:` / `Returns:` / `Raises:` blocks:
 
 ```python
-def _resolve_config(self, values: ParamDict | NSSParameters | None, cls: type[ParamT], **kwargs) -> ParamT:
-    """Resolve configuration from various input types.
-
-    Merges caller-supplied overrides on top of a base config. Accepts Pydantic models
-    (copied with updates), plain dicts (validated then updated), or None (built from
-    overrides alone).
+def load_config(path: Path) -> SafeSynthesizerParameters:
+    """Load and validate a Safe Synthesizer YAML configuration.
 
     Args:
-        values: Base configuration -- a Pydantic model, a dict, or None.
-        cls: The Pydantic model class to validate against.
-        **kwargs: Field-level overrides applied on top of the base.
+        path: YAML configuration path.
 
     Returns:
-        An instance of `cls` with all overrides applied.
+        The validated pipeline configuration.
 
     Raises:
-        TypeError: If `values` is not a BaseModel, dict, or None.
+        FileNotFoundError: If ``path`` does not exist.
     """
 ```
 
