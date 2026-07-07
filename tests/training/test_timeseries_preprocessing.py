@@ -9,16 +9,11 @@ import pytest
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 from nemo_safe_synthesizer.defaults import PSEUDO_GROUP_COLUMN
 from nemo_safe_synthesizer.errors import ParameterError
-from nemo_safe_synthesizer.training.timeseries_preprocessing import (
-    _add_pseudo_group_if_needed,
-    _create_elapsed_time_column,
-    _sort_by_group_and_timestamp,
-    process_timeseries_data,
-)
+from nemo_safe_synthesizer.training.timeseries_preprocessing import process_timeseries_data
 
 
-def test_add_pseudo_group_when_no_group_column():
-    """Test PSEUDO_GROUP_COLUMN is added when group_training_examples_by is None."""
+def test_process_timeseries_data_adds_pseudo_group_and_elapsed_timestamp():
+    """Ungrouped time-series data is normalized through the shared validator."""
     df = pd.DataFrame({"value": [1, 2, 3]})
     config = SafeSynthesizerParameters.from_params(
         group_training_examples_by=None,
@@ -27,17 +22,23 @@ def test_add_pseudo_group_when_no_group_column():
         rope_scaling_factor=1,
     )
 
-    df_result, group_col = _add_pseudo_group_if_needed(df.copy(), config)
+    df_result, result_config = process_timeseries_data(df.copy(), config)
 
     assert PSEUDO_GROUP_COLUMN in df_result.columns
-    assert group_col == PSEUDO_GROUP_COLUMN
-    assert config.data.group_training_examples_by == PSEUDO_GROUP_COLUMN
+    assert result_config.data.group_training_examples_by == PSEUDO_GROUP_COLUMN
+    assert result_config.data.order_training_examples_by == "elapsed_seconds"
+    assert result_config.time_series.timestamp_column == "elapsed_seconds"
+    assert result_config.time_series.timestamp_format == "elapsed_seconds"
+    assert result_config.time_series.timestamp_interval_seconds == 60
+    assert result_config.time_series.start_timestamp == "0"
+    assert result_config.time_series.stop_timestamp == "120"
+    assert list(df_result["elapsed_seconds"]) == [0, 60, 120]
     assert df_result[PSEUDO_GROUP_COLUMN].nunique() == 1
 
 
-def test_add_pseudo_group_preserves_existing_group():
-    """Test existing group column is preserved when specified."""
-    df = pd.DataFrame({"group_id": ["A", "B"], "value": [1, 2]})
+def test_process_timeseries_data_preserves_existing_group_column():
+    """Grouped time-series data keeps its configured group column."""
+    df = pd.DataFrame({"group_id": ["A", "A", "B", "B"], "value": [1, 2, 3, 4]})
     config = SafeSynthesizerParameters.from_params(
         group_training_examples_by="group_id",
         is_timeseries=True,
@@ -45,65 +46,15 @@ def test_add_pseudo_group_preserves_existing_group():
         rope_scaling_factor=1,
     )
 
-    df_result, group_col = _add_pseudo_group_if_needed(df.copy(), config)
+    df_result, result_config = process_timeseries_data(df.copy(), config)
 
     assert PSEUDO_GROUP_COLUMN not in df_result.columns
-    assert group_col == "group_id"
+    assert result_config.data.group_training_examples_by == "group_id"
+    assert list(df_result["elapsed_seconds"]) == [0, 60, 0, 60]
 
 
-def test_create_elapsed_time_column_with_groups():
-    """Test elapsed time resets at start of each group."""
-    df = pd.DataFrame({"group_id": ["A", "A", "B", "B"], "value": [1, 2, 3, 4]})
-    config = SafeSynthesizerParameters.from_params(
-        rope_scaling_factor=1,
-    )
-    config.time_series.is_timeseries = True
-    config.time_series.timestamp_column = None
-    config.time_series.timestamp_interval_seconds = 60
-
-    df_result, is_elapsed = _create_elapsed_time_column(df.copy(), config.time_series, group_by_col="group_id")
-
-    assert is_elapsed is True
-    assert config.time_series.timestamp_column in df_result.columns
-    # Group A: 0, 60; Group B: 0, 60
-    assert list(df_result[config.time_series.timestamp_column]) == [0, 60, 0, 60]
-    assert config.time_series.timestamp_format == "elapsed_seconds"
-
-
-def test_create_elapsed_time_column_no_groups():
-    """Test elapsed time uses global index when no groups."""
-    df = pd.DataFrame({"value": [1, 2, 3]})
-    config = SafeSynthesizerParameters.from_params(
-        rope_scaling_factor=1,
-    )
-    config.time_series.is_timeseries = True
-    config.time_series.timestamp_column = None
-    config.time_series.timestamp_interval_seconds = 30
-
-    df_result, is_elapsed = _create_elapsed_time_column(df.copy(), config.time_series, group_by_col=None)
-
-    assert is_elapsed is True
-    # Global index: 0, 30, 60
-    assert list(df_result[config.time_series.timestamp_column]) == [0, 30, 60]
-
-
-def test_create_elapsed_time_column_skips_when_timestamp_exists():
-    """Test no elapsed time created when timestamp_column is already set."""
-    df = pd.DataFrame({"timestamp": ["2024-01-01", "2024-01-02"], "value": [1, 2]})
-    config = SafeSynthesizerParameters.from_params(
-        rope_scaling_factor=1,
-    )
-    config.time_series.is_timeseries = True
-    config.time_series.timestamp_column = "timestamp"
-
-    df_result, is_elapsed = _create_elapsed_time_column(df.copy(), config.time_series, group_by_col=None)
-
-    assert is_elapsed is False
-    assert "elapsed_seconds" not in df_result.columns
-
-
-def test_sort_by_group_and_timestamp():
-    """Test sorting by group then timestamp."""
+def test_process_timeseries_data_sorts_by_group_and_timestamp():
+    """Processed data is sorted by group and timestamp."""
     df = pd.DataFrame(
         {
             "group_id": ["B", "A", "B", "A"],
@@ -111,24 +62,38 @@ def test_sort_by_group_and_timestamp():
             "value": [1, 2, 3, 4],
         }
     )
+    config = SafeSynthesizerParameters.from_params(
+        group_training_examples_by="group_id",
+        is_timeseries=True,
+        timestamp_column="timestamp",
+        timestamp_format="elapsed_seconds",
+        rope_scaling_factor=1,
+    )
 
-    df_result = _sort_by_group_and_timestamp(df, "group_id", "timestamp")
+    df_result, _ = process_timeseries_data(df.copy(), config)
 
     # Should be sorted: A-1, A-2, B-1, B-2
     assert list(df_result["group_id"]) == ["A", "A", "B", "B"]
     assert list(df_result["timestamp"]) == [1, 2, 1, 2]
 
 
-def test_sort_by_timestamp_only():
-    """Test sorting by timestamp when no group column."""
+def test_process_timeseries_data_sorts_ungrouped_timestamp_data():
+    """Ungrouped explicit timestamp data is sorted by timestamp."""
     df = pd.DataFrame(
         {
             "timestamp": [3, 1, 2],
             "value": ["c", "a", "b"],
         }
     )
+    config = SafeSynthesizerParameters.from_params(
+        group_training_examples_by=None,
+        is_timeseries=True,
+        timestamp_column="timestamp",
+        timestamp_format="elapsed_seconds",
+        rope_scaling_factor=1,
+    )
 
-    df_result = _sort_by_group_and_timestamp(df, None, "timestamp")
+    df_result, _ = process_timeseries_data(df.copy(), config)
 
     assert list(df_result["timestamp"]) == [1, 2, 3]
     assert list(df_result["value"]) == ["a", "b", "c"]

@@ -8,107 +8,10 @@ from __future__ import annotations
 import pandas as pd
 
 from ..config import SafeSynthesizerParameters
-from ..config.time_series import TimeSeriesParameters
-from ..data_processing.timeseries_validation import resolve_elapsed_time_column_name, validate_timeseries_data
-from ..data_processing.validation import (
-    check_no_pseudo_column_collision,
-)
-from ..defaults import PSEUDO_GROUP_COLUMN
+from ..data_processing.timeseries_validation import validate_timeseries_data
 from ..observability import get_logger
 
 logger = get_logger(__name__)
-
-
-def _add_pseudo_group_if_needed(df: pd.DataFrame, config: SafeSynthesizerParameters) -> tuple[pd.DataFrame, str | None]:
-    """Add pseudo-group column when no group column is specified.
-
-    This allows unified processing of grouped and ungrouped time series.
-
-    Args:
-        df: The input DataFrame.
-        config: The configuration object.
-
-    Returns:
-        Tuple of (DataFrame with pseudo-group if needed, group column name).
-
-    Raises:
-        DataError: If the DataFrame already contains a column with the reserved name.
-    """
-    group_by_col = config.data.group_training_examples_by
-
-    if group_by_col is None:
-        check_no_pseudo_column_collision(df)
-        logger.info("No group column specified, treating entire dataset as a single sequence")
-        df[PSEUDO_GROUP_COLUMN] = 0  # All rows belong to one "group"
-        config.data.group_training_examples_by = PSEUDO_GROUP_COLUMN
-        group_by_col = PSEUDO_GROUP_COLUMN
-
-    return df, group_by_col
-
-
-def _create_elapsed_time_column(
-    df: pd.DataFrame,
-    ts_config: TimeSeriesParameters,
-    group_by_col: str | None,
-) -> tuple[pd.DataFrame, bool]:
-    """Create timestamp column with elapsed time values if not provided.
-
-    Args:
-        df: The input DataFrame.
-        ts_config: Time series configuration.
-        group_by_col: Column name used for grouping.
-
-    Returns:
-        Tuple of (DataFrame with timestamp column, is_elapsed_time flag).
-    """
-    if ts_config.timestamp_column is not None:
-        return df, False
-
-    if ts_config.timestamp_interval_seconds is None:
-        raise ValueError("timestamp_interval_seconds must be set when creating elapsed timestamp column")
-    interval = ts_config.timestamp_interval_seconds
-
-    logger.info(f"Adding timestamp column with interval {interval} seconds")
-    timestamp_col_name = resolve_elapsed_time_column_name(df.columns)
-    ts_config.timestamp_column = timestamp_col_name
-
-    # Create elapsed time values (seconds since start of sequence)
-    if group_by_col is not None:
-        # For grouped data, reset elapsed time at the start of each group
-        df[ts_config.timestamp_column] = df.groupby(group_by_col).cumcount() * interval
-        logger.info("Created elapsed time timestamps per group (in seconds)")
-    else:
-        # Single sequence - use positional range (not df.index which may be non-contiguous)
-        df[ts_config.timestamp_column] = pd.RangeIndex(len(df)) * interval
-        logger.info("Created elapsed time timestamps (in seconds)")
-
-    # Move the timestamp column to be the first column
-    cols = [ts_config.timestamp_column] + [c for c in df.columns if c != ts_config.timestamp_column]
-    df = df.loc[:, cols]
-    ts_config.timestamp_format = "elapsed_seconds"
-
-    return df, True
-
-
-def _sort_by_group_and_timestamp(df: pd.DataFrame, group_by_col: str | None, timestamp_col: str) -> pd.DataFrame:
-    """Sort DataFrame by group and timestamp columns.
-
-    Args:
-        df: The input DataFrame.
-        group_by_col: Column name used for grouping (can be None).
-        timestamp_col: Name of the timestamp column.
-
-    Returns:
-        Sorted DataFrame with reset index.
-    """
-    logger.info(
-        f"Sorting dataset by timestamp column '{timestamp_col}' for sequential training",
-    )
-
-    if group_by_col is not None:
-        return df.sort_values([group_by_col, timestamp_col]).reset_index(drop=True)
-    else:
-        return df.sort_values(timestamp_col).reset_index(drop=True)
 
 
 def process_timeseries_data(
@@ -144,23 +47,16 @@ def process_timeseries_data(
         DataError: If the timestamp column has missing values or intervals are inconsistent.
     """
     ts_config = config.time_series
-
-    # Step 1: Add pseudo-group if needed
-    training_df, group_by_col = _add_pseudo_group_if_needed(training_df, config)
-
-    if group_by_col is None:
-        raise RuntimeError("group_by_col should have been set by _add_pseudo_group_if_needed")
-
-    # Step 2: Create elapsed time column if timestamp not provided
-    training_df, is_elapsed_time = _create_elapsed_time_column(training_df, ts_config, group_by_col)
-
-    # timestamp_column should be set by now
-    if ts_config.timestamp_column is None:
-        raise RuntimeError("timestamp_column should have been set by _create_elapsed_time_column")
-    config.data.order_training_examples_by = ts_config.timestamp_column
-
+    original_group_column = config.data.group_training_examples_by
+    original_timestamp_column = ts_config.timestamp_column
     validation = validate_timeseries_data(training_df, config)
     training_df = validation.data
+    if original_group_column is None:
+        logger.info("No group column specified, treating entire dataset as a single sequence")
+    if original_timestamp_column is None:
+        logger.info(f"Added timestamp column '{validation.timestamp_column}' with elapsed seconds")
+    config.data.group_training_examples_by = validation.group_by_column
+    config.data.order_training_examples_by = validation.timestamp_column
     ts_config.timestamp_column = validation.timestamp_column
     ts_config.timestamp_format = validation.timestamp_format
     ts_config.timestamp_interval_seconds = validation.timestamp_interval_seconds

@@ -10,6 +10,7 @@ from typing_extensions import override
 from ...data_processing.timeseries_validation import (
     TimeSeriesDataValidationError,
     TimeSeriesParameterValidationError,
+    TimeSeriesValidationReason,
     validate_timeseries_data,
 )
 from ...data_processing.validation import (
@@ -180,6 +181,22 @@ class TimeSeriesDataShapeCheck(DataFrameCheck):
     name = "timeseries.shape"
     label = "Time-series data shape"
     requires = ("columns.groupby", "columns.pseudo")
+    issue_codes = {
+        TimeSeriesValidationReason.COLUMN_NOT_FOUND: "column_not_found",
+        TimeSeriesValidationReason.COLUMN_NULLS: "column_nulls",
+        TimeSeriesValidationReason.PSEUDO_COLUMN_COLLISION: "pseudo_column_collision",
+        TimeSeriesValidationReason.TIMESTAMP_NOT_FOUND: "timestamp_not_found",
+        TimeSeriesValidationReason.TIMESTAMP_NULLS: "timestamp_nulls",
+        TimeSeriesValidationReason.TIMESTAMP_FORMAT_MISMATCH: "timestamp_format_mismatch",
+        TimeSeriesValidationReason.TIMESTAMP_PARSE_FAILED: "timestamp_parse_failed",
+        TimeSeriesValidationReason.TIMESTAMP_ELAPSED_NON_NUMERIC: "timestamp_elapsed_non_numeric",
+        TimeSeriesValidationReason.TIMESTAMP_ELAPSED_INVALID: "timestamp_elapsed_invalid",
+        TimeSeriesValidationReason.TIMESTAMP_INTERVAL_MISMATCH: "timestamp_interval_mismatch",
+        TimeSeriesValidationReason.TIMESERIES_EMPTY: "timeseries_empty",
+        TimeSeriesValidationReason.TIMESERIES_GROUP_LENGTH_MISMATCH: "timeseries_group_length_mismatch",
+        TimeSeriesValidationReason.TIMESERIES_START_MISMATCH: "timeseries_start_mismatch",
+        TimeSeriesValidationReason.TIMESERIES_STOP_MISMATCH: "timeseries_stop_mismatch",
+    }
 
     @override
     def enabled(self, ctx: PreflightContext) -> bool:
@@ -209,4 +226,4 @@ class TimeSeriesDataShapeCheck(DataFrameCheck):
         try:
             validate_timeseries_data(ctx.data, ctx.config)
         except (TimeSeriesDataValidationError, TimeSeriesParameterValidationError) as exc:
-            collector.error(exc.code, str(exc))
+            collector.error(self.issue_codes[exc.reason], str(exc))

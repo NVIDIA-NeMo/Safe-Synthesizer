@@ -531,6 +531,7 @@ check of its own.
 | `timestamp_format_mismatch` | error | `timeseries.shape` | Timestamp format could not be inferred or the configured format does not match the timestamp values |
 | `timestamp_parse_failed` | error | `timeseries.shape` | One or more timestamp values could not be parsed with the inferred or configured timestamp format |
 | `timestamp_elapsed_non_numeric` | error | `timeseries.shape` | `timestamp_format='elapsed_seconds'` was configured for a non-numeric timestamp column |
+| `timestamp_elapsed_invalid` | error | `timeseries.shape` | `timestamp_format='elapsed_seconds'` was configured for boolean or infinite timestamp values |
 | `timestamp_interval_mismatch` | error | `timeseries.shape` | Timestamp intervals are inconsistent within or across groups, or do not match `timestamp_interval_seconds` |
 | `timeseries_empty` | error | `timeseries.shape` | Time-series data contains no records to validate |
 | `timeseries_group_length_mismatch` | error | `timeseries.shape` | Time-series groups do not contain the same number of records |

@@ -8,6 +8,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
+from enum import Enum, auto
 from typing import Any, cast
 
 import pandas as pd
@@ -23,7 +24,7 @@ __all__ = [
     "TimeSeriesDataValidationError",
     "TimeSeriesGroupTimestampStats",
     "TimeSeriesParameterValidationError",
-    "TimeSeriesValidationError",
+    "TimeSeriesValidationReason",
     "TimeSeriesValidationResult",
     "resolve_elapsed_time_column_name",
     "validate_start_stop_consistency",
@@ -31,25 +32,44 @@ __all__ = [
 ]
 
 
-class TimeSeriesValidationError:
-    """Mixin for time-series validation errors that carry preflight issue codes."""
+class TimeSeriesValidationReason(Enum):
+    """Domain-specific reason for a time-series validation failure."""
 
-    code: str
+    COLUMN_NOT_FOUND = auto()
+    COLUMN_NULLS = auto()
+    PSEUDO_COLUMN_COLLISION = auto()
+    TIMESTAMP_NOT_FOUND = auto()
+    TIMESTAMP_NULLS = auto()
+    TIMESTAMP_FORMAT_MISMATCH = auto()
+    TIMESTAMP_PARSE_FAILED = auto()
+    TIMESTAMP_ELAPSED_NON_NUMERIC = auto()
+    TIMESTAMP_ELAPSED_INVALID = auto()
+    TIMESTAMP_INTERVAL_MISMATCH = auto()
+    TIMESERIES_EMPTY = auto()
+    TIMESERIES_GROUP_LENGTH_MISMATCH = auto()
+    TIMESERIES_START_MISMATCH = auto()
+    TIMESERIES_STOP_MISMATCH = auto()
 
 
-class TimeSeriesDataValidationError(TimeSeriesValidationError, DataError):
+class _TimeSeriesValidationError:
+    """Mixin for time-series validation errors that carry a domain reason."""
+
+    reason: TimeSeriesValidationReason
+
+
+class TimeSeriesDataValidationError(_TimeSeriesValidationError, DataError):
     """Data-side time-series validation failure."""
 
-    def __init__(self, code: str, message: str) -> None:
-        self.code = code
+    def __init__(self, reason: TimeSeriesValidationReason, message: str) -> None:
+        self.reason = reason
         super().__init__(message)
 
 
-class TimeSeriesParameterValidationError(TimeSeriesValidationError, ParameterError):
+class TimeSeriesParameterValidationError(_TimeSeriesValidationError, ParameterError):
     """Parameter-side time-series validation failure."""
 
-    def __init__(self, code: str, message: str) -> None:
-        self.code = code
+    def __init__(self, reason: TimeSeriesValidationReason, message: str) -> None:
+        self.reason = reason
         super().__init__(message)
 
 
@@ -114,18 +134,20 @@ def _resolve_group_column(data: pd.DataFrame, config: SafeSynthesizerParameters)
         try:
             check_no_pseudo_column_collision(working_df)
         except ParameterError as exc:
-            raise TimeSeriesParameterValidationError("pseudo_column_collision", str(exc)) from exc
+            raise TimeSeriesParameterValidationError(
+                TimeSeriesValidationReason.PSEUDO_COLUMN_COLLISION, str(exc)
+            ) from exc
         except DataError as exc:
-            raise TimeSeriesDataValidationError("pseudo_column_collision", str(exc)) from exc
+            raise TimeSeriesDataValidationError(TimeSeriesValidationReason.PSEUDO_COLUMN_COLLISION, str(exc)) from exc
         working_df[PSEUDO_GROUP_COLUMN] = 0
         return working_df, PSEUDO_GROUP_COLUMN
 
     try:
         check_groupby_column(working_df, group_by_col)
     except ParameterError as exc:
-        raise TimeSeriesParameterValidationError("column_not_found", str(exc)) from exc
+        raise TimeSeriesParameterValidationError(TimeSeriesValidationReason.COLUMN_NOT_FOUND, str(exc)) from exc
     except DataError as exc:
-        raise TimeSeriesDataValidationError("column_nulls", str(exc)) from exc
+        raise TimeSeriesDataValidationError(TimeSeriesValidationReason.COLUMN_NULLS, str(exc)) from exc
     return working_df, group_by_col
 
 
@@ -153,16 +175,15 @@ def _add_elapsed_time_column(
     """Return a copy with a generated elapsed-seconds timestamp column."""
     if ts_config.timestamp_interval_seconds is None:
         raise TimeSeriesParameterValidationError(
-            "timestamp_not_found",
+            TimeSeriesValidationReason.TIMESTAMP_NOT_FOUND,
             "Time-series mode requires either timestamp_column or timestamp_interval_seconds.",
         )
 
     timestamp_col = resolve_elapsed_time_column_name(data.columns)
 
-    working_df = data.copy()
-    working_df[timestamp_col] = working_df.groupby(group_by_col).cumcount() * ts_config.timestamp_interval_seconds
-    cols = [timestamp_col] + [c for c in working_df.columns if c != timestamp_col]
-    return working_df.loc[:, cols], timestamp_col
+    data[timestamp_col] = data.groupby(group_by_col).cumcount() * ts_config.timestamp_interval_seconds
+    cols = [timestamp_col] + [c for c in data.columns if c != timestamp_col]
+    return data.loc[:, cols], timestamp_col
 
 
 def _detect_elapsed_seconds_format(data: pd.DataFrame, ts_config: TimeSeriesParameters, timestamp_col: str) -> bool:
@@ -170,31 +191,54 @@ def _detect_elapsed_seconds_format(data: pd.DataFrame, ts_config: TimeSeriesPara
     column = data[timestamp_col]
 
     if ts_config.timestamp_format == "elapsed_seconds":
+        _validate_elapsed_seconds_column(column, timestamp_col)
         if not pd.api.types.is_numeric_dtype(column):
             raise TimeSeriesParameterValidationError(
-                "timestamp_elapsed_non_numeric",
+                TimeSeriesValidationReason.TIMESTAMP_ELAPSED_NON_NUMERIC,
                 f"timestamp_format='elapsed_seconds' requires timestamp column "
                 f"'{timestamp_col}' to be numeric, but got dtype '{column.dtype}'.",
             )
         return True
 
     if ts_config.timestamp_format is None and pd.api.types.is_integer_dtype(column):
+        _validate_elapsed_seconds_column(column, timestamp_col)
         return True
 
     return False
+
+
+def _validate_elapsed_seconds_column(column: pd.Series, timestamp_col: str) -> None:
+    """Raise when elapsed-seconds data cannot safely feed interval inference."""
+    if pd.api.types.is_bool_dtype(column):
+        raise TimeSeriesDataValidationError(
+            TimeSeriesValidationReason.TIMESTAMP_ELAPSED_INVALID,
+            f"timestamp_format='elapsed_seconds' requires timestamp column '{timestamp_col}' "
+            "to contain numeric elapsed seconds, not boolean values.",
+        )
+
+    invalid_mask = column.isna()
+    if pd.api.types.is_numeric_dtype(column):
+        invalid_mask = invalid_mask | column.isin([float("inf"), float("-inf")])
+
+    if bool(invalid_mask.any()):
+        raise TimeSeriesDataValidationError(
+            TimeSeriesValidationReason.TIMESTAMP_ELAPSED_INVALID,
+            f"timestamp_format='elapsed_seconds' requires timestamp column '{timestamp_col}' "
+            "to contain finite elapsed-second values.",
+        )
 
 
 def _infer_and_convert_timestamp_format(df: pd.DataFrame, ts_config: TimeSeriesParameters) -> pd.DataFrame:
     """Infer or validate timestamp format and return a converted copy."""
     if len(df) == 0:
         raise TimeSeriesDataValidationError(
-            "timestamp_parse_failed", "Cannot infer timestamp format from empty DataFrame"
+            TimeSeriesValidationReason.TIMESTAMP_PARSE_FAILED, "Cannot infer timestamp format from empty DataFrame"
         )
 
     timestamp_col = ts_config.timestamp_column
     if timestamp_col is None:
         raise TimeSeriesParameterValidationError(
-            "timestamp_not_found",
+            TimeSeriesValidationReason.TIMESTAMP_NOT_FOUND,
             "timestamp_column must be set before inferring timestamp format.",
         )
 
@@ -206,7 +250,7 @@ def _infer_and_convert_timestamp_format(df: pd.DataFrame, ts_config: TimeSeriesP
         timestamp_format = guess_datetime_format(str(first_timestamp))
         if timestamp_format is None:
             raise TimeSeriesParameterValidationError(
-                "timestamp_format_mismatch",
+                TimeSeriesValidationReason.TIMESTAMP_FORMAT_MISMATCH,
                 f"Could not infer timestamp format from column '{timestamp_col}' "
                 f"(first value: '{first_timestamp}'). "
                 f"If the column contains numeric elapsed time values, set timestamp_format='elapsed_seconds'. "
@@ -220,24 +264,23 @@ def _infer_and_convert_timestamp_format(df: pd.DataFrame, ts_config: TimeSeriesP
             inferred_format = guess_datetime_format(str(first_timestamp))
             suggestion = f" Did you mean: '{inferred_format}'?" if inferred_format is not None else ""
             raise TimeSeriesParameterValidationError(
-                "timestamp_format_mismatch",
+                TimeSeriesValidationReason.TIMESTAMP_FORMAT_MISMATCH,
                 f"Provided timestamp_format '{timestamp_format}' does not match the data. "
                 f"First timestamp value: '{first_timestamp}'.{suggestion}",
             ) from exc
 
-    converted = df.copy()
-    converted[timestamp_col] = pd.to_datetime(converted[timestamp_col], format=timestamp_format, errors="coerce")
+    df[timestamp_col] = pd.to_datetime(df[timestamp_col], format=timestamp_format, errors="coerce")
 
-    nat_count = int(converted[timestamp_col].isna().sum())
+    nat_count = int(df[timestamp_col].isna().sum())
     if nat_count > 0:
         format_source = "provided" if user_provided_format else "inferred"
         raise TimeSeriesDataValidationError(
-            "timestamp_parse_failed",
+            TimeSeriesValidationReason.TIMESTAMP_PARSE_FAILED,
             f"Failed to parse {nat_count} timestamp values using {format_source} format "
             f"'{timestamp_format}'. Please check your data or provide a valid timestamp_format.",
         )
 
-    return converted
+    return df
 
 
 def _sort_by_group_and_timestamp(df: pd.DataFrame, group_by_col: str, timestamp_col: str) -> pd.DataFrame:
@@ -255,16 +298,16 @@ def _interval_seconds(timestamps: pd.Series, is_elapsed_time: bool) -> pd.Series
     return time_diffs.dt.total_seconds()
 
 
-def _validate_equal_group_lengths(df: pd.DataFrame, group_by_col: str) -> None:
+def _validate_equal_group_lengths(group_stats: tuple[TimeSeriesGroupTimestampStats, ...]) -> None:
     """Raise when time-series groups do not contain equal record counts."""
-    counts = df.groupby(group_by_col, sort=False).size()
-    if counts.nunique() <= 1:
+    counts = {stats.record_count for stats in group_stats}
+    if len(counts) <= 1:
         return
 
-    examples = ", ".join(f"{group}={count}" for group, count in counts.head(5).items())
-    suffix = "..." if len(counts) > 5 else ""
+    examples = ", ".join(f"{stats.group_name}={stats.record_count}" for stats in group_stats[:5])
+    suffix = "..." if len(group_stats) > 5 else ""
     raise TimeSeriesDataValidationError(
-        "timeseries_group_length_mismatch",
+        TimeSeriesValidationReason.TIMESERIES_GROUP_LENGTH_MISMATCH,
         f"Time-series groups must contain the same number of records. Found group sizes: {examples}{suffix}.",
     )
 
@@ -306,38 +349,35 @@ def _coerce_whole_second_interval(value: Any, *, group_name: Any) -> int:
     rounded = round(interval)
     if rounded <= 0 or abs(interval - rounded) > 0.1:
         raise TimeSeriesDataValidationError(
-            "timestamp_interval_mismatch",
+            TimeSeriesValidationReason.TIMESTAMP_INTERVAL_MISMATCH,
             f"Timestamp interval in group '{group_name}' must be a positive whole number of seconds; got {interval:g}.",
         )
     return rounded
 
 
 def _validate_interval_consistency(
-    df: pd.DataFrame,
-    timestamp_col: str,
-    group_by_col: str,
-    is_elapsed_time: bool,
     expected_interval_seconds: int | None,
     group_stats: tuple[TimeSeriesGroupTimestampStats, ...],
 ) -> int | None:
-    """Validate configured or inferred intervals across all groups."""
+    """Return the configured or inferred interval, or ``None`` for single-record groups."""
     tolerance = 0.1
 
     if expected_interval_seconds is not None:
-        for group_name, group_df in df.groupby(group_by_col, sort=False):
-            intervals = _interval_seconds(group_df[timestamp_col], is_elapsed_time)
-            if not intervals.empty and not all(abs(intervals - expected_interval_seconds) <= tolerance):
+        for stats in group_stats:
+            if stats.record_count > 1 and (
+                stats.interval_seconds is None or abs(stats.interval_seconds - expected_interval_seconds) > tolerance
+            ):
                 raise TimeSeriesDataValidationError(
-                    "timestamp_interval_mismatch",
+                    TimeSeriesValidationReason.TIMESTAMP_INTERVAL_MISMATCH,
                     f"Provided timestamp_interval_seconds ({expected_interval_seconds}s) does not match "
-                    f"actual intervals in group '{group_name}'.",
+                    f"actual intervals in group '{stats.group_name}'.",
                 )
         return expected_interval_seconds
 
     invalid_groups = [s.group_name for s in group_stats if s.record_count > 1 and s.interval_seconds is None]
     if invalid_groups:
         raise TimeSeriesDataValidationError(
-            "timestamp_interval_mismatch",
+            TimeSeriesValidationReason.TIMESTAMP_INTERVAL_MISMATCH,
             f"Timestamp intervals are inconsistent within group '{invalid_groups[0]}'.",
         )
 
@@ -345,7 +385,7 @@ def _validate_interval_consistency(
     unique_intervals = set(valid_intervals)
     if len(unique_intervals) > 1:
         raise TimeSeriesDataValidationError(
-            "timestamp_interval_mismatch",
+            TimeSeriesValidationReason.TIMESTAMP_INTERVAL_MISMATCH,
             f"Timestamp intervals differ across groups. Found intervals: {sorted(unique_intervals)}.",
         )
     if valid_intervals:
@@ -359,7 +399,7 @@ def validate_start_stop_consistency(
     """Validate all groups have the same start/stop timestamps."""
     if not group_stats:
         raise TimeSeriesDataValidationError(
-            "timeseries_empty",
+            TimeSeriesValidationReason.TIMESERIES_EMPTY,
             "Time-series data must contain at least one record.",
         )
 
@@ -368,7 +408,7 @@ def validate_start_stop_consistency(
 
     if len(unique_starts) > 1:
         raise TimeSeriesDataValidationError(
-            "timeseries_start_mismatch",
+            TimeSeriesValidationReason.TIMESERIES_START_MISMATCH,
             f"Start timestamps differ across groups. Found {len(unique_starts)} different start timestamps: "
             f"{sorted([str(t) for t in list(unique_starts)[:5]])}{'...' if len(unique_starts) > 5 else ''}. "
             f"All groups must have the same start timestamp.",
@@ -376,7 +416,7 @@ def validate_start_stop_consistency(
 
     if len(unique_stops) > 1:
         raise TimeSeriesDataValidationError(
-            "timeseries_stop_mismatch",
+            TimeSeriesValidationReason.TIMESERIES_STOP_MISMATCH,
             f"Stop timestamps differ across groups. Found {len(unique_stops)} different stop timestamps: "
             f"{sorted([str(t) for t in list(unique_stops)[:5]])}{'...' if len(unique_stops) > 5 else ''}. "
             f"All groups must have the same stop timestamp.",
@@ -408,7 +448,7 @@ def validate_timeseries_data(data: pd.DataFrame, config: SafeSynthesizerParamete
     """
     if data.empty:
         raise TimeSeriesDataValidationError(
-            "timeseries_empty",
+            TimeSeriesValidationReason.TIMESERIES_EMPTY,
             "Time-series data must contain at least one record.",
         )
 
@@ -424,9 +464,9 @@ def validate_timeseries_data(data: pd.DataFrame, config: SafeSynthesizerParamete
         try:
             check_timestamp_column(working_df, timestamp_col)
         except ParameterError as exc:
-            raise TimeSeriesParameterValidationError("timestamp_not_found", str(exc)) from exc
+            raise TimeSeriesParameterValidationError(TimeSeriesValidationReason.TIMESTAMP_NOT_FOUND, str(exc)) from exc
         except DataError as exc:
-            raise TimeSeriesDataValidationError("timestamp_nulls", str(exc)) from exc
+            raise TimeSeriesDataValidationError(TimeSeriesValidationReason.TIMESTAMP_NULLS, str(exc)) from exc
 
         is_elapsed_time = _detect_elapsed_seconds_format(working_df, ts_config, timestamp_col)
 
@@ -438,14 +478,10 @@ def validate_timeseries_data(data: pd.DataFrame, config: SafeSynthesizerParamete
         timestamp_format = "elapsed_seconds"
 
     working_df = _sort_by_group_and_timestamp(working_df, group_by_col, timestamp_col)
-    _validate_equal_group_lengths(working_df, group_by_col)
     group_stats = _collect_group_timestamp_stats(working_df, timestamp_col, group_by_col, is_elapsed_time)
+    _validate_equal_group_lengths(group_stats)
     start_ts, stop_ts = validate_start_stop_consistency(group_stats)
     interval_seconds = _validate_interval_consistency(
-        working_df,
-        timestamp_col,
-        group_by_col,
-        is_elapsed_time,
         ts_config.timestamp_interval_seconds,
         group_stats,
     )

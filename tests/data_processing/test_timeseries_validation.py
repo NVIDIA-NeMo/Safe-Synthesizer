@@ -11,6 +11,7 @@ from nemo_safe_synthesizer.data_processing.timeseries_validation import (
     TimeSeriesDataValidationError,
     TimeSeriesGroupTimestampStats,
     TimeSeriesParameterValidationError,
+    TimeSeriesValidationReason,
     validate_start_stop_consistency,
     validate_timeseries_data,
 )
@@ -54,29 +55,34 @@ def test_validate_start_stop_consistency_different_stops_raises():
 
 
 @pytest.mark.parametrize(
-    "values,config_overrides,expected_code",
+    "values,config_overrides,expected_error,expected_reason",
     [
         pytest.param(
             ["not_a_date", "also_not"],
             {},
-            "timestamp_format_mismatch",
+            TimeSeriesParameterValidationError,
+            TimeSeriesValidationReason.TIMESTAMP_FORMAT_MISMATCH,
             id="non_datetime_strings",
         ),
         pytest.param(
             ["2024-01-01", "2024-01-02"],
             {"timestamp_format": "%m/%d/%Y"},
-            "timestamp_format_mismatch",
+            TimeSeriesParameterValidationError,
+            TimeSeriesValidationReason.TIMESTAMP_FORMAT_MISMATCH,
             id="explicit_format_mismatch",
         ),
         pytest.param(
             ["01/01/2024", "01/2024"],
             {},
-            "timestamp_parse_failed",
+            TimeSeriesDataValidationError,
+            TimeSeriesValidationReason.TIMESTAMP_PARSE_FAILED,
             id="mixed_formats",
         ),
     ],
 )
-def test_validate_timeseries_data_reports_timestamp_format_errors(values, config_overrides, expected_code):
+def test_validate_timeseries_data_reports_timestamp_format_errors(
+    values, config_overrides, expected_error, expected_reason
+):
     """Timestamp format failures are exposed through the public validator."""
     df = pd.DataFrame({"ts": values, "value": [1, 2]})
     config = SafeSynthesizerParameters.from_params(
@@ -86,10 +92,10 @@ def test_validate_timeseries_data_reports_timestamp_format_errors(values, config
         **config_overrides,
     )
 
-    with pytest.raises((TimeSeriesDataValidationError, TimeSeriesParameterValidationError)) as exc_info:
+    with pytest.raises(expected_error) as exc_info:
         validate_timeseries_data(df, config)
 
-    assert exc_info.value.code == expected_code
+    assert exc_info.value.reason is expected_reason
 
 
 def test_validate_timeseries_data_rejects_empty_generated_timestamps():
@@ -104,7 +110,7 @@ def test_validate_timeseries_data_rejects_empty_generated_timestamps():
     with pytest.raises(TimeSeriesDataValidationError) as exc_info:
         validate_timeseries_data(df, config)
 
-    assert exc_info.value.code == "timeseries_empty"
+    assert exc_info.value.reason is TimeSeriesValidationReason.TIMESERIES_EMPTY
 
 
 def test_validate_timeseries_data_rejects_empty_explicit_timestamps():
@@ -119,7 +125,7 @@ def test_validate_timeseries_data_rejects_empty_explicit_timestamps():
     with pytest.raises(TimeSeriesDataValidationError) as exc_info:
         validate_timeseries_data(df, config)
 
-    assert exc_info.value.code == "timeseries_empty"
+    assert exc_info.value.reason is TimeSeriesValidationReason.TIMESERIES_EMPTY
 
 
 def test_validate_timeseries_data_does_not_mutate_inputs():
@@ -182,10 +188,37 @@ def test_validate_timeseries_data_generated_timestamp_uses_unique_column_name():
 
     result = validate_timeseries_data(df, config)
 
-    assert result.timestamp_column == "_elapsed_seconds_1"
-    assert list(result.data["_elapsed_seconds_1"]) == [0, 60, 120]
+    assert result.timestamp_column not in {"elapsed_seconds", "_elapsed_seconds"}
+    assert result.timestamp_column in result.data.columns
+    assert list(result.data[result.timestamp_column]) == [0, 60, 120]
     assert list(result.data["elapsed_seconds"]) == [100, 100, 100]
     assert list(result.data["_elapsed_seconds"]) == [200, 200, 200]
+
+
+@pytest.mark.parametrize(
+    "values,expected_reason",
+    [
+        pytest.param([True, False, True], TimeSeriesValidationReason.TIMESTAMP_ELAPSED_INVALID, id="boolean"),
+        pytest.param([0.0, float("nan"), 60.0], TimeSeriesValidationReason.TIMESTAMP_NULLS, id="nan"),
+        pytest.param([0.0, float("inf"), 60.0], TimeSeriesValidationReason.TIMESTAMP_ELAPSED_INVALID, id="pos_inf"),
+        pytest.param([0.0, float("-inf"), 60.0], TimeSeriesValidationReason.TIMESTAMP_ELAPSED_INVALID, id="neg_inf"),
+    ],
+)
+def test_validate_timeseries_data_rejects_invalid_elapsed_second_values(values, expected_reason):
+    """Elapsed-seconds timestamps reject boolean, null, and infinite values before interval work."""
+    df = pd.DataFrame({"group": ["A", "A", "A"], "ts": values, "value": [1, 2, 3]})
+    config = SafeSynthesizerParameters.from_params(
+        is_timeseries=True,
+        timestamp_column="ts",
+        timestamp_format="elapsed_seconds",
+        group_training_examples_by="group",
+        rope_scaling_factor=1,
+    )
+
+    with pytest.raises(TimeSeriesDataValidationError) as exc_info:
+        validate_timeseries_data(df, config)
+
+    assert exc_info.value.reason is expected_reason
 
 
 def test_validate_timeseries_data_rejects_interval_mismatch():
@@ -208,7 +241,7 @@ def test_validate_timeseries_data_rejects_interval_mismatch():
     with pytest.raises(TimeSeriesDataValidationError) as exc_info:
         validate_timeseries_data(df, config)
 
-    assert exc_info.value.code == "timestamp_interval_mismatch"
+    assert exc_info.value.reason is TimeSeriesValidationReason.TIMESTAMP_INTERVAL_MISMATCH
 
 
 @pytest.mark.parametrize(
@@ -240,7 +273,7 @@ def test_validate_timeseries_data_rejects_fractional_intervals(values, timestamp
     with pytest.raises(TimeSeriesDataValidationError) as exc_info:
         validate_timeseries_data(df, config)
 
-    assert exc_info.value.code == "timestamp_interval_mismatch"
+    assert exc_info.value.reason is TimeSeriesValidationReason.TIMESTAMP_INTERVAL_MISMATCH
 
 
 def test_validate_timeseries_data_rejects_group_length_mismatch():
@@ -263,4 +296,4 @@ def test_validate_timeseries_data_rejects_group_length_mismatch():
     with pytest.raises(TimeSeriesDataValidationError) as exc_info:
         validate_timeseries_data(df, config)
 
-    assert exc_info.value.code == "timeseries_group_length_mismatch"
+    assert exc_info.value.reason is TimeSeriesValidationReason.TIMESERIES_GROUP_LENGTH_MISMATCH

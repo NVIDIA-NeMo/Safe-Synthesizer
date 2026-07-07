@@ -128,9 +128,9 @@ Time series preprocessing occurs during training data preparation in `src/nemo_s
 ```
 HuggingFaceBackend._process_timeseries()
     └── process_timeseries_data(df, config)
-            ├── _add_pseudo_group_if_needed()     # Unify grouped/ungrouped
-            ├── _create_elapsed_time_column()     # If no timestamp column
-            ├── validate_timeseries_data()        # Shared time-series validator
+            ├── validate_timeseries_data()        # Shared normalization + validation
+            │       ├── pseudo-group normalization
+            │       ├── generated elapsed-seconds timestamp normalization
             │       ├── timestamp format/parse validation
             │       ├── group length validation
             │       ├── interval consistency validation

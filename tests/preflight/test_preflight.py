@@ -880,6 +880,27 @@ class TestTimeSeriesDataShapeCheck:
 
         assert any(i.code == "timestamp_elapsed_non_numeric" and i.severity == "error" for i in issues)
 
+    @pytest.mark.parametrize(
+        "values,expected_check,expected_code",
+        [
+            pytest.param([True, False, True], "timeseries.shape", "timestamp_elapsed_invalid", id="boolean"),
+            pytest.param([0.0, float("nan"), 60.0], "timeseries.timestamp", "timestamp_nulls", id="nan"),
+            pytest.param([0.0, float("inf"), 60.0], "timeseries.shape", "timestamp_elapsed_invalid", id="pos_inf"),
+            pytest.param([0.0, float("-inf"), 60.0], "timeseries.shape", "timestamp_elapsed_invalid", id="neg_inf"),
+        ],
+    )
+    def test_invalid_elapsed_second_values_report_stable_preflight_codes(self, values, expected_check, expected_code):
+        df = pd.DataFrame({"grp": ["A", "A", "A"], "ts": values, "value": [1, 2, 3]})
+        config = self._make_config(timestamp_format="elapsed_seconds")
+
+        report = run_preflight(df, config, MagicMock(spec=ModelMetadata), stages=frozenset({PreflightStage.DATAFRAME}))
+
+        assert any(
+            issue.check == expected_check and issue.code == expected_code and issue.severity == "error"
+            for issue in report.issues
+        )
+        assert not any(issue.code == "preflight.check_crash" for issue in report.issues)
+
     def test_interval_mismatch_reports_error(self):
         df = pd.DataFrame(
             {
