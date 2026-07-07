@@ -91,7 +91,7 @@ class RopeScalingScenario:
 MODEL_DETECTION_SCENARIOS = [
     ModelDetectionScenario("tinyllama", "TinyLlama/TinyLlama-1.1B-Chat-v1.0", TinyLlama),
     ModelDetectionScenario("qwen", "Qwen/Qwen2-0.5B", Qwen),
-    ModelDetectionScenario("llama32", "meta-llama/Llama32-1B", Llama32),
+    ModelDetectionScenario("llama32", "meta-llama/Llama-3.2-1B-Instruct", Llama32),
     ModelDetectionScenario("smollm2", "HuggingFaceTB/SmolLM2-135M", SmolLM2),
     ModelDetectionScenario("smollm3", "HuggingFaceTB/SmolLM3-3B", SmolLM3),
     ModelDetectionScenario("mistral", "mistralai/Mistral-7B-Instruct-v0.3", Mistral),
@@ -124,12 +124,12 @@ MODEL_INIT_SCENARIOS = [
     ModelInitScenario(
         id="llama32",
         model_class=Llama32,
-        model_path="meta-llama/Llama32-1B",
+        model_path="meta-llama/Llama-3.2-1B-Instruct",
         expected_template="user\n {instruction} {schema} \n assistant\n{prefill}",
         expected_add_bos=False,
         expected_add_eos=False,
-        expected_bos_token="<|im_start|>",
-        expected_bos_token_id=1,  #  this is the token_id that the mock_tockenizer injects, not what a real model would use
+        expected_bos_token="<s>",
+        expected_bos_token_id=10,
     ),
     ModelInitScenario(
         id="smollm2",
@@ -801,6 +801,25 @@ class TestResolveModelClass:
         assert ModelMetadata._resolve_model_class("HuggingFaceTB/SmolLM3-3B") is SmolLM3
         assert ModelMetadata._resolve_model_class("mistralai/Mistral-7B-v0.3") is Mistral
         assert ModelMetadata._resolve_model_class("TinyLlama/TinyLlama-1.1B-Chat-v1.0") is TinyLlama
+
+    def test_resolve_model_class_accepts_canonical_llama32_id(self):
+        """Canonical Hugging Face Llama 3.2 IDs resolve despite punctuation in the family name."""
+        assert ModelMetadata._resolve_model_class("meta-llama/Llama-3.2-1B-Instruct") is Llama32
+
+
+class TestRequiredBosToken:
+    """Tests for model families that require a specific BOS token."""
+
+    @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
+    def test_unknown_required_bos_token_is_rejected(self, mock_auto_config, mock_tokenizer, mock_autoconfig_obj):
+        """Do not silently use the tokenizer's unknown-token ID as a required BOS token."""
+        mock_auto_config.from_pretrained.return_value = mock_autoconfig_obj
+        mock_tokenizer.unk_token = "<unk>"
+        mock_tokenizer.unk_token_id = 0
+        mock_tokenizer.convert_tokens_to_ids = lambda _token: 0
+
+        with pytest.raises(ValueError, match="did not resolve required BOS token"):
+            SmolLM3(model_name_or_path="HuggingFaceTB/SmolLM3-3B", tokenizer=mock_tokenizer)
 
 
 class TestModelDetection:

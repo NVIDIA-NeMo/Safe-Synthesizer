@@ -305,6 +305,7 @@ class ModelMetadata(BaseModel):
     bos_token: ClassVar[str | None] = None
     supports_rope_scaling: ClassVar[bool] = True
     rope_parameters_location_default: ClassVar[Literal["autoconfig", "automodel"]] = "autoconfig"
+    model_name_markers: ClassVar[tuple[str, ...]] = ()
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -417,8 +418,10 @@ class ModelMetadata(BaseModel):
         match cls.bos_token:
             case str() as bos_token:
                 bos_token_id = tokenizer.convert_tokens_to_ids(bos_token)
-                if not isinstance(bos_token_id, int):
-                    raise ValueError(f"Tokenizer did not resolve BOS token {bos_token!r} to an integer token id")
+                unk_token_id = getattr(tokenizer, "unk_token_id", None)
+                resolved_to_unk = isinstance(unk_token_id, int) and bos_token_id == unk_token_id
+                if not isinstance(bos_token_id, int) or resolved_to_unk:
+                    raise ValueError(f"Tokenizer did not resolve required BOS token {bos_token!r}")
                 prompt_kwargs["bos_token"] = bos_token
                 prompt_kwargs["bos_token_id"] = bos_token_id
             case None:
@@ -615,16 +618,19 @@ class ModelMetadata(BaseModel):
     def _resolve_model_class(cls: type["ModelMetadata"], model_name_or_path: Path | str) -> type["ModelMetadata"]:
         """Resolve model name or path to the matching metadata subclass.
 
-        Uses case-insensitive substring matching over the registered subclass
-        names. The returned class is not instantiated; callers such as
-        ``AutoConfigResolver`` use it to inspect class-level metadata.
+        Uses case-insensitive substring matching over each family's declared
+        name markers, falling back to its class name. The returned class is not
+        instantiated; callers such as ``AutoConfigResolver`` use it to inspect
+        class-level metadata.
 
         Raises:
             ValueError: If no registered subclass matches.
         """
         classes = TinyLlama, Qwen, Llama32, SmolLM2, SmolLM3, Mistral, Nemotron, Granite
+        normalized_name = str(model_name_or_path).casefold()
         for class_ in classes:
-            if class_.__name__.lower() in str(model_name_or_path).lower():
+            markers = class_.model_name_markers or (class_.__name__,)
+            if any(marker.casefold() in normalized_name for marker in markers):
                 return class_
         raise ValueError(f"Unknown model name or path: {model_name_or_path}")
 
@@ -794,8 +800,8 @@ class Granite(ModelFamilyMetadata):
 class Llama32(ModelFamilyMetadata):
     """Metadata for Meta Llama 3.2 model family.
 
-    Uses ``<|im_start|>`` as the BOS token and disables automatic
-    BOS/EOS injection in prompts.
+    Uses the tokenizer's native BOS token and disables automatic BOS/EOS
+    injection in prompts.
 
     Args:
         model_name_or_path: HuggingFace model identifier or local path.
@@ -807,7 +813,7 @@ class Llama32(ModelFamilyMetadata):
     prompt_template: ClassVar[str] = "user\n {instruction} {schema} \n assistant\n{prefill}"
     add_bos_token_to_prompt: ClassVar[bool] = False
     add_eos_token_to_prompt: ClassVar[bool] = False
-    bos_token: ClassVar[str | None] = "<|im_start|>"
+    model_name_markers: ClassVar[tuple[str, ...]] = ("llama32", "llama-3.2")
 
     def __init__(
         self,
