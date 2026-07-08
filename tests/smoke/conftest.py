@@ -19,6 +19,7 @@ from nemo_safe_synthesizer.config import (
     DataParameters,
     GenerateParameters,
     RemoteParameters,
+    StructuredGenerationParameters,
     TrainingHyperparams,
 )
 from nemo_safe_synthesizer.config.generate import RemoteDialect, StructuredGenerationSchemaMethod
@@ -250,8 +251,10 @@ def build_remote_config(
         training=TrainingHyperparams(pretrained_model="remote-stub", lora_r=16),
         generation=GenerateParameters(
             num_records=num_records,
-            use_structured_generation=use_structured_generation,
-            structured_generation_schema_method=structured_generation_schema_method,
+            structured_generation=StructuredGenerationParameters(
+                enabled=use_structured_generation,
+                schema_method=structured_generation_schema_method,
+            ),
             remote=RemoteParameters(
                 endpoint_url=endpoint_url,
                 model=model,

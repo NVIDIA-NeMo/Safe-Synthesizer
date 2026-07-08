@@ -268,12 +268,13 @@ class RemoteBackend(GeneratorBackend):
         """
         gen = self.config.generation
         self._compact_json = False
-        if not gen.use_structured_generation:
+        structured_generation = gen.structured_generation
+        if not structured_generation.enabled:
             return {}
 
         method = resolve_structured_generation_schema_method(
-            gen.structured_generation_schema_method,
-            gen.structured_generation_backend,
+            structured_generation.schema_method,
+            structured_generation.backend,
         )
         pc = self.model_metadata.prompt_config
         if method == "regex":

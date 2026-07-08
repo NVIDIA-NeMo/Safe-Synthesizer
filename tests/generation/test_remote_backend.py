@@ -18,6 +18,7 @@ from nemo_safe_synthesizer.config import (
     GenerateParameters,
     RemoteParameters,
     SafeSynthesizerParameters,
+    StructuredGenerationParameters,
     TimeSeriesParameters,
     TrainingHyperparams,
 )
@@ -71,7 +72,7 @@ def make_params(
         training=TrainingHyperparams(pretrained_model="test-model", lora_r=16),
         generation=GenerateParameters(
             num_records=10,
-            use_structured_generation=False,
+            structured_generation=StructuredGenerationParameters(enabled=False),
             remote=RemoteParameters(
                 endpoint_url=endpoint_url,
                 model=model,
@@ -232,8 +233,8 @@ class TestPrepareParams:
 
     def test_structured_outputs_json_vllm_dialect_disables_whitespace(self, mock_model_metadata, mock_schema):
         config = make_params(dialect="vllm")
-        config.generation.use_structured_generation = True
-        config.generation.structured_generation_schema_method = "json_schema"
+        config.generation.structured_generation.enabled = True
+        config.generation.structured_generation.schema_method = "json_schema"
         backend = make_backend(config, mock_model_metadata, mock_schema)
         backend.prepare_params(**self._sampling_kwargs())
         body = backend._request_body
@@ -245,8 +246,8 @@ class TestPrepareParams:
 
     def test_structured_outputs_json_openai_dialect_omits_vllm_extension(self, mock_model_metadata, mock_schema):
         config = make_params(dialect="openai")
-        config.generation.use_structured_generation = True
-        config.generation.structured_generation_schema_method = "json_schema"
+        config.generation.structured_generation.enabled = True
+        config.generation.structured_generation.schema_method = "json_schema"
         backend = make_backend(config, mock_model_metadata, mock_schema)
         backend.prepare_params(**self._sampling_kwargs())
         body = backend._request_body
@@ -258,9 +259,9 @@ class TestPrepareParams:
 
     def test_compact_json_not_armed_for_other_methods(self, mock_model_metadata, mock_schema):
         config = make_params()
-        config.generation.use_structured_generation = True
-        config.generation.structured_generation_schema_method = "regex"
-        config.generation.structured_generation_backend = "outlines"
+        config.generation.structured_generation.enabled = True
+        config.generation.structured_generation.schema_method = "regex"
+        config.generation.structured_generation.backend = "outlines"
         backend = make_backend(config, mock_model_metadata, mock_schema)
         with patch(f"{MODULE}.build_json_based_regex", return_value="REGEX"):
             backend.prepare_params(**self._sampling_kwargs())
@@ -273,9 +274,9 @@ class TestPrepareParams:
 
     def test_structured_outputs_regex_when_regex_method(self, mock_model_metadata, mock_schema):
         config = make_params()
-        config.generation.use_structured_generation = True
-        config.generation.structured_generation_schema_method = "regex"
-        config.generation.structured_generation_backend = "outlines"
+        config.generation.structured_generation.enabled = True
+        config.generation.structured_generation.schema_method = "regex"
+        config.generation.structured_generation.backend = "outlines"
         backend = make_backend(config, mock_model_metadata, mock_schema)
         with patch(f"{MODULE}.build_json_based_regex", return_value="REGEX") as build_regex:
             backend.prepare_params(**self._sampling_kwargs())
@@ -286,9 +287,9 @@ class TestPrepareParams:
 
     def test_structured_outputs_structural_tag_when_structural_tag_method(self, mock_model_metadata, mock_schema):
         config = make_params()
-        config.generation.use_structured_generation = True
-        config.generation.structured_generation_schema_method = "structural_tag"
-        config.generation.structured_generation_backend = "xgrammar"
+        config.generation.structured_generation.enabled = True
+        config.generation.structured_generation.schema_method = "structural_tag"
+        config.generation.structured_generation.backend = "xgrammar"
         backend = make_backend(config, mock_model_metadata, mock_schema)
         with patch(f"{MODULE}.build_json_structural_tag", return_value="TAG") as build_tag:
             backend.prepare_params(**self._sampling_kwargs())

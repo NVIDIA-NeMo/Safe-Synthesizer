@@ -45,6 +45,7 @@ from ..generation.vllm_observability import (
     read_vllm_runtime_metrics,
 )
 from ..llm.metadata import ModelMetadata
+from ..llm.model_host import ModelHost
 from ..llm.utils import ModelRef, cleanup_memory, get_max_vram
 from ..observability import get_logger, heartbeat
 from ..utils import all_equal_type, load_json
@@ -215,7 +216,7 @@ def _install_noop_remote_cache_backends() -> None:
 _install_noop_remote_cache_backends()
 
 
-class VllmBackend(GeneratorBackend):
+class VllmBackend(GeneratorBackend, ModelHost[vLLM, PreTrainedTokenizerBase]):
     """Generation backend using vLLM for high-throughput inference.
 
     Loads the base model with a LoRA adapter via vLLM and generates
@@ -273,6 +274,20 @@ class VllmBackend(GeneratorBackend):
         adapter_path = self.workdir.adapter_path if self.workdir.adapter_path else self.model_metadata.adapter_path
         self.lora_req = LoRARequest("lora", 1, str(adapter_path)) if adapter_path else None
         self._torn_down = False
+
+    @property
+    def model(self) -> vLLM | None:
+        """Return the locally hosted vLLM engine."""
+        return self.llm
+
+    @property
+    def tokenizer(self) -> PreTrainedTokenizerBase | None:
+        """Return the tokenizer owned by the locally hosted engine."""
+        if self.llm is None:
+            return None
+        # vLLM declares a wider tokenizer union, but supported NSS engines
+        # expose a Hugging Face tokenizer implementing this interface.
+        return cast(PreTrainedTokenizerBase, self.llm.get_tokenizer())
 
     def teardown(self) -> None:
         """Release GPU memory and distributed resources. Idempotent -- safe to call multiple times."""
@@ -350,7 +365,9 @@ class VllmBackend(GeneratorBackend):
         # asked for.
         self._engine_runtime_config = probe_engine_runtime_config(self.llm)
 
-        tokenizer: EncodeOnlyTokenizer = self.llm.get_tokenizer()
+        tokenizer = self.tokenizer
+        if tokenizer is None:
+            raise InternalError("VllmBackend.initialize() did not create a tokenizer.")
         self.processor = create_processor(
             self.schema,
             self.model_metadata,
@@ -368,9 +385,9 @@ class VllmBackend(GeneratorBackend):
         """
         if self._prompt_token_count is not None:
             return self._prompt_token_count
-        if self.llm is None:
+        tokenizer = self.tokenizer
+        if tokenizer is None:
             return 0
-        tokenizer = self.llm.get_tokenizer()
         self._prompt_token_count = len(tokenizer.encode(self.prompt))
         return self._prompt_token_count
 
