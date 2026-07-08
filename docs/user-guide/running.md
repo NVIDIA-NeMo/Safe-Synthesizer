@@ -282,7 +282,7 @@ execute in order (`config` → `dataframe` → `metadata` → `advisory`).
 | Check name | Stage | What it validates |
 |-------|-------|-------------------|
 | `gpu.cuda` | config | PyTorch is importable and a CUDA GPU is visible |
-| `env.inference` | config | Inference config for PII classification: `NSS_INFERENCE_KEY` is set, `NSS_INFERENCE_MODEL` is non-empty, and `NSS_INFERENCE_ENDPOINT` is a valid http(s) URL (warnings only) |
+| `env.inference` | config | Inference config for PII classification: API backend env vars are usable, or the `local_hf` classifier model reference is usable locally or fetchable from Hugging Face |
 | `env.hf_model_availability` | config | The pretrained model reference is usable locally or can be fetched from Hugging Face; warns about a missing HF token only when online HF access may be needed |
 | `dataset.size` | dataframe | Training split meets the hard minimum row count |
 | `columns.groupby` | dataframe | `group_training_examples_by` column is present and has no nulls |
@@ -621,22 +621,37 @@ default in both the CLI and SDK. PII on by default means no config flag is neede
 
 ### LLM Column Classification
 
-To enable LLM-based PII column classification (optional), set the API key
-before running the pipeline. The endpoint defaults to
-`https://integrate.api.nvidia.com/v1`; override `NSS_INFERENCE_ENDPOINT` for a
-custom OpenAI-compatible endpoint.
+LLM-based PII column classification is optional and can use either the default
+OpenAI-compatible API backend or a local Hugging Face model.
 
-When using the CLI, set both for column classification:
+For API classification, set the API key before running the pipeline. The
+endpoint defaults to `https://integrate.api.nvidia.com/v1`; override
+`NSS_INFERENCE_ENDPOINT` for a custom OpenAI-compatible endpoint.
 
 ```bash
 export NSS_INFERENCE_ENDPOINT="https://integrate.api.nvidia.com/v1"  # optional; this is the default
 export NSS_INFERENCE_KEY="your-api-key"  # pragma: allowlist secret  (required for column classification with the inference endpoint)
 ```
 
-PII column classification requires `NSS_INFERENCE_KEY` (and optionally `NSS_INFERENCE_ENDPOINT` if not using the default).
-When `NSS_INFERENCE_KEY` is unset, the classification step is attempted but
-falls back to NER-only detection (with an error log). No environment
-variables are required for NER-only PII replacement.
+For local classification, configure the `local_hf` backend. No inference API
+key is required:
+
+```yaml
+replace_pii:
+  globals:
+    classify:
+      backend: local_hf
+      model: HuggingFaceTB/SmolLM3-3B  # optional default; can also be a local model path
+```
+
+The local backend loads the default 3B model from the Hugging Face cache or
+downloads it when online. In HF offline mode (`HF_HUB_OFFLINE=1` or
+`TRANSFORMERS_OFFLINE=1`), pre-download the complete model snapshot or set
+`replace_pii.globals.classify.model` to a complete local model directory.
+
+When the API key is unset for the `api` backend, classification falls back to
+NER-only detection after logging an error. No environment variables are required
+for NER-only PII replacement.
 
 See [Configuration Reference -- Replacing PII](configuration.md#replacing-pii) for the full parameter reference.
 

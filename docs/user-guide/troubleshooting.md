@@ -517,10 +517,17 @@ check of its own.
 | `inference_key_missing` | warning | `env.inference` | `NSS_INFERENCE_KEY` not set; PII classification degraded |
 | `inference_model_blank` | warning | `env.inference` | `NSS_INFERENCE_MODEL` set but empty; the blank value is ignored and the default model id is used |
 | `inference_endpoint_invalid` | error | `env.inference` | `NSS_INFERENCE_ENDPOINT` set but not a valid http(s) URL; classification requests will fail |
-| `hf_token_missing` | warning | `env.hf_model_availability` | Neither `HF_TOKEN` nor `HUGGING_FACE_HUB_TOKEN` set, and model loading may need online Hugging Face access |
+| `classify_model_ref_empty` | error | `env.inference` | `replace_pii.globals.classify.model` is empty for the `local_hf` classifier backend |
+| `classify_model_ref_invalid` | error | `env.inference` | Local classifier model value is neither an existing path nor a valid Hugging Face model ID |
+| `classify_local_model_missing` | error | `env.inference` | Local classifier model is path-like, but the path does not exist |
+| `classify_local_model_not_directory` | error | `env.inference` | Local classifier model path exists but is not a directory |
+| `classify_local_model_incomplete` | error | `env.inference` | Local classifier model directory is missing required config, tokenizer, weights, or shards |
+| `classify_hf_model_not_cached` | warning/error | `env.inference` | Local classifier Hugging Face model is not present in the local cache; severity is error when HF offline mode is enabled |
+| `classify_hf_model_cache_incomplete` | warning/error | `env.inference` | Cached local classifier model snapshot is missing required files; severity is error when HF offline mode is enabled |
+| `hf_token_missing` | warning | `env.hf_model_availability` / `env.inference` | Neither `HF_TOKEN` nor `HUGGING_FACE_HUB_TOKEN` set, and model loading may need online Hugging Face access |
 | `hf_model_not_cached` | warning/error | `env.hf_model_availability` | Hugging Face model is not present in the local cache; severity is error when HF offline mode is enabled |
 | `hf_model_cache_incomplete` | warning/error | `env.hf_model_availability` | Cached Hugging Face model snapshot is missing required config, tokenizer, weights, or shards; severity is error when HF offline mode is enabled |
-| `hf_remote_code_not_cached` | warning/error | `env.hf_model_availability` | Trusted model references remote code that is not cached locally; severity is error when HF offline mode is enabled |
+| `hf_remote_code_not_cached` | warning/error | `env.hf_model_availability` / `env.inference` | Trusted model references remote code that is not cached locally; severity is error when HF offline mode is enabled |
 | `preflight.check_crash` | error | (crashing check) | A check raised an unexpected exception; the issue's `check` field names the crashing check and other checks continued running |
 | `column_not_found` | error | `columns.groupby` / `columns.orderby` | Required column missing from dataset, or input DataFrame uses unsupported MultiIndex columns |
 | `column_nulls` | error | `columns.groupby` | Required column contains null values |

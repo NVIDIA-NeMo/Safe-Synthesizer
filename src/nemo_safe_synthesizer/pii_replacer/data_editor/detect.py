@@ -9,9 +9,10 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
 from itertools import chain, islice
+from pathlib import Path
 from time import monotonic
 from timeit import default_timer as timer
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import json_repair
 import pandas as pd
@@ -21,6 +22,7 @@ from openai import OpenAI
 from pydantic import ConfigDict, TypeAdapter, ValidationError
 
 from ...defaults import DEFAULT_PII_CLASSIFY_LOCAL_MODEL
+from ...llm.model_host import ModelHost
 from ...llm.utils import ModelRef, cleanup_memory
 from ...observability import get_logger
 from ...utils import hf_offline_enabled
@@ -30,6 +32,12 @@ from ..ner.ner import NERPrediction
 from ..ner.pipeline import Pipeline
 
 logger = get_logger(__name__)
+
+if TYPE_CHECKING:
+    from transformers import PreTrainedModel, PreTrainedTokenizerBase
+else:
+    PreTrainedModel = Any
+    PreTrainedTokenizerBase = Any
 
 
 class DefaultLLMConfig:
@@ -262,7 +270,24 @@ def classify_columns(
     formatted_prompt = _format_prompt(df, entities, num_samples)
     if not formatted_prompt:
         return {}
+    if client is None:
+        raise RuntimeError("InferenceAPI classifier not initialized. Use get_classifier() method.")
 
+    entities_str = _classify_prompt_with_openai(
+        formatted_prompt=formatted_prompt,
+        client=client,
+        logger=logger,
+    )
+    return _filter_entities(entities_str, entities, on_validation_error)
+
+
+def _classify_prompt_with_openai(
+    *,
+    formatted_prompt: str,
+    client: OpenAI,
+    logger: logging.Logger,
+) -> str:
+    """Send one formatted classification prompt to an OpenAI-compatible backend."""
     llm_start = timer()
     response = client.chat.completions.create(
         model=DefaultLLMConfig.config_id(),
@@ -284,7 +309,7 @@ def classify_columns(
         },
     )
 
-    return _filter_entities(entities_str, entities, on_validation_error)
+    return entities_str
 
 
 def _filter_entities(
@@ -345,21 +370,34 @@ def _try_extract_entities(
 class ColumnClassifier(ABC):
     """Abstract column-type classifier; implementations may use LLM, VertexAI, or other backends."""
 
-    @abstractmethod
+    _num_samples: Optional[int]
+
     def detect_types(self, df: pd.DataFrame, entities: Optional[set[str]]) -> dict[str, Optional[str]]:
         """Classify each column into one of the given entity types.
-
-        Implementations may sample column values and use an LLM, lookup table, or
-        other backend to assign exactly one entity type per column. Columns that
-        cannot be classified or are not in ``entities`` should be mapped to
-        ``UNKNOWN_ENTITY``.
 
         Args:
             df: DataFrame whose columns are to be classified.
             entities: Set of valid entity type names to assign; may be ``None``
                 for implementations that use a fixed or default set.
         """
-        ...
+        valid_entities = entities if entities is not None else DEFAULT_ENTITIES
+        formatted_prompt = _format_prompt(df, valid_entities, self._num_samples)
+        if not formatted_prompt:
+            return {}
+
+        entities_str = self._classify_prompt(formatted_prompt)
+        return _filter_entities(entities_str, valid_entities, self._on_validation_error)
+
+    @abstractmethod
+    def _classify_prompt(self, formatted_prompt: str) -> str:
+        """Return raw JSON-ish classifier output for a formatted prompt."""
+
+    def _on_validation_error(self) -> None:
+        raise RuntimeError(
+            "There was an error performing classification: "
+            "the classifier LLM failed to return valid JSON. "
+            "Please reach out to support if the error recurs."
+        )
 
     def close(self) -> None:
         """Release backend resources after classification."""
@@ -370,6 +408,9 @@ class ColumnClassifierNoop(ColumnClassifier):
 
     def detect_types(self, df: pd.DataFrame, entities: Optional[set[str]] = None) -> dict[str, Optional[str]]:
         return {col: UNKNOWN_ENTITY for col in df.columns}
+
+    def _classify_prompt(self, formatted_prompt: str) -> str:
+        raise NotImplementedError("ColumnClassifierNoop.detect_types does not classify prompts.")
 
 
 @dataclass
@@ -406,14 +447,26 @@ class ColumnClassifierLLM(ColumnClassifier):
         if self._llm is None:
             raise Exception("InferenceAPI classifier not initialized. Use get_classifier() method.")
 
-        return classify_columns(
-            df=df,
-            entities=entities,
-            num_samples=self._num_samples,
+        return super().detect_types(df, entities)
+
+    def _classify_prompt(self, formatted_prompt: str) -> str:
+        if self._llm is None:
+            raise RuntimeError("InferenceAPI classifier not initialized. Use get_classifier() method.")
+        return _classify_prompt_with_openai(
+            formatted_prompt=formatted_prompt,
             client=self._llm,
-            on_validation_error=self._on_validation_error,
             logger=logger,
         )
+
+    def close(self) -> None:
+        if self._llm is None:
+            return
+        try:
+            self._llm.close()
+        except Exception:
+            logger.debug("OpenAI client cleanup failed during column classifier teardown", exc_info=True)
+        finally:
+            self._llm = None
 
     def _on_validation_error(self) -> None:
         raise RuntimeError(
@@ -423,13 +476,13 @@ class ColumnClassifierLLM(ColumnClassifier):
         )
 
 
-class ColumnClassifierHF(ColumnClassifier):
+class ColumnClassifierHF(ColumnClassifier, ModelHost[PreTrainedModel, PreTrainedTokenizerBase]):
     """Classify column types with an in-process Hugging Face causal LM."""
 
     _model_name_or_path: str
     _num_samples: Optional[int]
-    _model: Any | None
-    _tokenizer: Any | None
+    _model: PreTrainedModel | None
+    _tokenizer: PreTrainedTokenizerBase | None
 
     def __init__(self, model_name_or_path: str, num_samples: Optional[int]):
         self._model_name_or_path = model_name_or_path
@@ -437,44 +490,24 @@ class ColumnClassifierHF(ColumnClassifier):
         self._model = None
         self._tokenizer = None
 
-    def detect_types(self, df: pd.DataFrame, entities: set[str]) -> dict[str, Optional[str]]:
-        """Sample columns, run local text generation, and parse JSON entity labels."""
-        formatted_prompt = _format_prompt(df, entities, self._num_samples)
-        if not formatted_prompt:
-            return {}
+    @property
+    def model(self) -> PreTrainedModel | None:
+        """Return the local classifier model, if loaded."""
+        return self._model
 
-        self._load()
-        if self._model is None or self._tokenizer is None:
+    @property
+    def tokenizer(self) -> PreTrainedTokenizerBase | None:
+        """Return the local classifier tokenizer, if loaded."""
+        return self._tokenizer
+
+    def _classify_prompt(self, formatted_prompt: str) -> str:
+        self.initialize()
+        model = self.model
+        tokenizer = self.tokenizer
+        if model is None or tokenizer is None:
             raise RuntimeError("Local Hugging Face classifier failed to initialize.")
 
-        messages = [
-            {"role": "system", "content": DefaultLLMConfig.SYSTEM_PROMPT},
-            {"role": "user", "content": formatted_prompt},
-        ]
-        tokenizer = self._tokenizer
-        model = self._model
-
-        if hasattr(tokenizer, "apply_chat_template"):
-            encoded = tokenizer.apply_chat_template(
-                messages,
-                add_generation_prompt=True,
-                return_tensors="pt",
-            )
-        else:
-            prompt = f"{DefaultLLMConfig.SYSTEM_PROMPT}\n\n{formatted_prompt}"
-            encoded = tokenizer(prompt, return_tensors="pt")
-
-        try:
-            input_ids = encoded["input_ids"]
-            attention_mask = encoded.get("attention_mask", None)
-        except (KeyError, TypeError):
-            input_ids = encoded
-            attention_mask = None
-        input_ids = input_ids.to(model.device)
-        if attention_mask is None:
-            attention_mask = torch.ones_like(input_ids)
-        else:
-            attention_mask = attention_mask.to(model.device)
+        input_ids, attention_mask = self._encode_prompt(tokenizer, model, formatted_prompt)
 
         pad_token_id = tokenizer.pad_token_id
         if pad_token_id is None:
@@ -502,15 +535,55 @@ class ColumnClassifierHF(ColumnClassifier):
                 },
             },
         )
-        return _filter_entities(entities_str, entities, self._on_validation_error)
+        return entities_str
 
-    def _load(self) -> None:
+    def _encode_prompt(
+        self,
+        tokenizer: PreTrainedTokenizerBase,
+        model: PreTrainedModel,
+        formatted_prompt: str,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        messages = [
+            {"role": "system", "content": DefaultLLMConfig.SYSTEM_PROMPT},
+            {"role": "user", "content": formatted_prompt},
+        ]
+        encoded: Any
+        if getattr(tokenizer, "chat_template", None):
+            encoded = tokenizer.apply_chat_template(
+                messages,
+                add_generation_prompt=True,
+                return_tensors="pt",
+            )
+        else:
+            prompt = self._plain_prompt(formatted_prompt)
+            encoded = tokenizer(prompt, return_tensors="pt")
+
+        try:
+            input_ids = encoded["input_ids"]
+            attention_mask = encoded.get("attention_mask", None)
+        except (KeyError, TypeError):
+            input_ids = encoded
+            attention_mask = None
+        input_ids = input_ids.to(model.device)
+        if attention_mask is None:
+            attention_mask = torch.ones_like(input_ids)
+        else:
+            attention_mask = attention_mask.to(model.device)
+
+        return input_ids, attention_mask
+
+    @staticmethod
+    def _plain_prompt(formatted_prompt: str) -> str:
+        return f"{DefaultLLMConfig.SYSTEM_PROMPT}\n\n{formatted_prompt}"
+
+    def initialize(self) -> None:
         if self._model is not None and self._tokenizer is not None:
             return
 
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
         model_ref = ModelRef.parse(self._model_name_or_path)
+        load_target = self._load_target(model_ref)
         load_kwargs = {
             "trust_remote_code": model_ref.trust_remote_code,
             "local_files_only": hf_offline_enabled(),
@@ -521,21 +594,48 @@ class ColumnClassifierHF(ColumnClassifier):
 
         logger.info("Loading local column classification model: %s", self._model_name_or_path)
         self._tokenizer = AutoTokenizer.from_pretrained(
-            model_ref.target(),
+            load_target,
             trust_remote_code=model_ref.trust_remote_code,
             local_files_only=hf_offline_enabled(),
         )
         if getattr(self._tokenizer, "pad_token_id", None) is None:
             self._tokenizer.pad_token = self._tokenizer.eos_token
-        self._model = AutoModelForCausalLM.from_pretrained(model_ref.target(), **load_kwargs)
+        self._model = AutoModelForCausalLM.from_pretrained(load_target, **load_kwargs)
         if not torch.cuda.is_available():
             self._model = self._model.to("cpu")
         self._model.eval()
 
-    def close(self) -> None:
+    def _load(self) -> None:
+        """Backward-compatible alias for older tests and callers."""
+        self.initialize()
+
+    @staticmethod
+    def _load_target(model_ref: ModelRef) -> str | Path:
+        """Prefer the repo ID over an incomplete online cache snapshot.
+
+        Transformers treats a snapshot directory as an authoritative local
+        model. If the HF cache only has metadata or tokenizer files, passing
+        that path prevents Transformers from downloading the missing files.
+        """
+        if (
+            model_ref.repo_id is not None
+            and model_ref.local_path is not None
+            and not hf_offline_enabled()
+            and ModelRef.missing_required_components(model_ref.local_path)
+        ):
+            return model_ref.repo_id
+        return model_ref.target()
+
+    def teardown(self) -> None:
         self._model = None
         self._tokenizer = None
-        cleanup_memory()
+        try:
+            cleanup_memory()
+        except Exception:
+            logger.debug("cleanup_memory failed during column classifier teardown", exc_info=True)
+
+    def close(self) -> None:
+        self.teardown()
 
     def _on_validation_error(self) -> None:
         raise RuntimeError(

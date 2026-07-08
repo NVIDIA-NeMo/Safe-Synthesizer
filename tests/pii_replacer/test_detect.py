@@ -390,6 +390,7 @@ def test_detect_types_local_hf_uses_shared_prompt_and_parser():
     )
 
     class FakeTokenizer:
+        chat_template = "{{ messages }}"
         pad_token_id = 0
         eos_token_id = 1
 
@@ -426,6 +427,68 @@ def test_detect_types_local_hf_uses_shared_prompt_and_parser():
         "email": "email",
         "height": "none",
     }
+
+
+def test_detect_types_local_hf_falls_back_without_chat_template():
+    classifier = ColumnClassifierHF(model_name_or_path="local/smollm", num_samples=1)
+    df = pd.DataFrame({"email": ["alice@example.com"]})
+
+    class FakeTokenizer:
+        chat_template = None
+        pad_token_id = 0
+        eos_token_id = 1
+
+        def __call__(self, prompt, *, return_tensors):
+            assert return_tensors == "pt"
+            assert prompt.startswith(DefaultLLMConfig.SYSTEM_PROMPT)
+            assert "email:" in prompt
+            return {
+                "input_ids": torch.tensor([[20, 21]]),
+                "attention_mask": torch.tensor([[1, 1]]),
+            }
+
+        def decode(self, generated_ids, *, skip_special_tokens):
+            assert skip_special_tokens is True
+            return '{"email": "email"}'
+
+    class FakeModel:
+        device = torch.device("cpu")
+
+        def generate(self, *, input_ids, attention_mask, max_new_tokens, do_sample, pad_token_id, eos_token_id):
+            assert input_ids.tolist() == [[20, 21]]
+            return torch.tensor([[20, 21, 22]])
+
+    classifier._tokenizer = FakeTokenizer()
+    classifier._model = FakeModel()
+
+    assert classifier.detect_types(df, DEFAULT_ENTITIES) == {"email": "email"}
+
+
+def test_local_hf_uses_repo_id_for_incomplete_online_cache(tmp_path, monkeypatch):
+    snapshot = tmp_path / "models--org--model" / "snapshots" / "abc"
+    snapshot.mkdir(parents=True)
+    model_ref = MagicMock(
+        repo_id="org/model",
+        local_path=snapshot,
+        target=MagicMock(return_value=snapshot),
+    )
+    monkeypatch.delenv("HF_HUB_OFFLINE", raising=False)
+    monkeypatch.delenv("TRANSFORMERS_OFFLINE", raising=False)
+
+    assert ColumnClassifierHF._load_target(model_ref) == "org/model"
+
+
+def test_local_hf_keeps_incomplete_cache_path_when_offline(tmp_path, monkeypatch):
+    snapshot = tmp_path / "models--org--model" / "snapshots" / "abc"
+    snapshot.mkdir(parents=True)
+    model_ref = MagicMock(
+        repo_id="org/model",
+        local_path=snapshot,
+        target=MagicMock(return_value=snapshot),
+    )
+    monkeypatch.setenv("HF_HUB_OFFLINE", "1")
+
+    assert ColumnClassifierHF._load_target(model_ref) == snapshot
 
 
 def test_redact_from_entities():

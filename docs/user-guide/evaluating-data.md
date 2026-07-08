@@ -89,10 +89,10 @@ or
 Could not perform classify, falling back to default entities.
 ```
 
-When `NSS_INFERENCE_KEY` is not set, the same log line is followed by guidance to set it (and a note that `NSS_INFERENCE_ENDPOINT` is optional with the default API). When the key is set, a traceback may be included to show the underlying API error.
+When `NSS_INFERENCE_KEY` is not set for the default `api` backend, the same log line is followed by guidance to set it (and a note that `NSS_INFERENCE_ENDPOINT` is optional with the default API). When the key is set, a traceback may be included to show the underlying API error. For local Hugging Face classification, use `replace_pii.globals.classify.backend: local_hf` instead of API environment variables.
 
-Fix: set entity types explicitly in your config, or when using the CLI ensure
-`NSS_INFERENCE_KEY` is set (and `NSS_INFERENCE_ENDPOINT` if not using the default). PII classify config is deeply nested -- use YAML or SDK:
+Fix: set entity types explicitly in your config, configure the `api` backend with
+`NSS_INFERENCE_KEY` (and `NSS_INFERENCE_ENDPOINT` if not using the default), or use the `local_hf` backend with a cached/downloadable model. PII classify config is deeply nested -- use YAML or SDK:
 
 === "Config reference"
 

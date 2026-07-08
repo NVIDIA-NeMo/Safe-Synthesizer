@@ -37,7 +37,6 @@ files are written next to that path using its stem.
 # ruff: noqa: E402
 from __future__ import annotations
 
-import fcntl
 import json
 import os
 from contextlib import contextmanager
@@ -78,12 +77,32 @@ def _load_gold(path: Path) -> list[dict[str, Any]]:
 def _column_accuracy(predicted: dict[str, str | None], expected: dict[str, str]) -> float:
     if not expected:
         return 1.0
+    _validate_prediction_columns(predicted, expected)
     correct = sum(_normalize_label(predicted.get(column)) == label for column, label in expected.items())
     return correct / len(expected)
 
 
+def _positive_recall(predicted: dict[str, str | None], expected: dict[str, str]) -> float:
+    _validate_prediction_columns(predicted, expected)
+    positives = {column: label for column, label in expected.items() if label != UNKNOWN_ENTITY}
+    if not positives:
+        return 1.0
+    correct = sum(_normalize_label(predicted.get(column)) == label for column, label in positives.items())
+    return correct / len(positives)
+
+
+def _validate_prediction_columns(predicted: dict[str, str | None], expected: dict[str, str]) -> None:
+    missing = set(expected) - set(predicted)
+    if missing:
+        raise AssertionError(f"Classifier did not return predictions for columns: {sorted(missing)}")
+
+
 def _normalize_label(label: str | None) -> str:
     return label if label else UNKNOWN_ENTITY
+
+
+def _expected_positive_labels(cases: list[dict[str, Any]]) -> set[str]:
+    return {label for case in cases for label in case["expected_entities"].values() if label != UNKNOWN_ENTITY}
 
 
 def _parse_csv_env(name: str, default: tuple[str, ...]) -> tuple[str, ...]:
@@ -174,7 +193,7 @@ def _upsert_result(results: list[dict[str, Any]] | Any, result: dict[str, Any]) 
 
 
 def _render_benchmark_markdown(report: dict[str, Any]) -> str:
-    header = ["Backend", "Model", "Macro Accuracy", *CLASSIFICATION_BENCHMARK_CASE_IDS]
+    header = ["Backend", "Model", "Macro Accuracy", "Macro Positive Recall", *CLASSIFICATION_BENCHMARK_CASE_IDS]
     lines = [
         "# Column Classification Benchmark",
         "",
@@ -187,6 +206,7 @@ def _render_benchmark_markdown(report: dict[str, Any]) -> str:
             result["backend"],
             result["model_name"],
             f"{result['macro_accuracy']:.3f}",
+            f"{result['macro_positive_recall']:.3f}",
             *(
                 f"{case_scores[case_id]:.3f}" if case_id in case_scores else "n/a"
                 for case_id in CLASSIFICATION_BENCHMARK_CASE_IDS
@@ -227,6 +247,11 @@ def _write_benchmark_reports(result: dict[str, Any]) -> tuple[Path, Path, Path]:
 @contextmanager
 def _classification_benchmark_lock():
     """Serialize live benchmark cases even when pytest-xdist is enabled."""
+    try:
+        import fcntl
+    except ImportError:
+        pytest.skip("Column classification live benchmark locking requires fcntl.")
+
     CLASSIFICATION_BENCHMARK_LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
     with CLASSIFICATION_BENCHMARK_LOCK_PATH.open("w") as lock_file:
         fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
@@ -242,6 +267,9 @@ def _evaluate_classifier(
     config = PiiReplacerConfig.get_default_config()
     config.globals.classify.backend = backend
     config.globals.classify.model = model
+    config.globals.classify.entities = sorted(
+        classify_config_from_params(config).valid_entities | _expected_positive_labels(cases)
+    )
     classify_config = classify_config_from_params(config)
     model_env = {"NSS_INFERENCE_MODEL": model} if backend == "api" else {}
 
@@ -254,10 +282,12 @@ def _evaluate_classifier(
                 df = pd.DataFrame(case["rows"])
                 predicted = classifier.detect_types(df, classify_config.valid_entities)
                 accuracy = _column_accuracy(predicted, case["expected_entities"])
+                positive_recall = _positive_recall(predicted, case["expected_entities"])
                 case_results.append(
                     {
                         "case_id": case["id"],
                         "accuracy": accuracy,
+                        "positive_recall": positive_recall,
                         "expected": case["expected_entities"],
                         "predicted": {column: _normalize_label(label) for column, label in predicted.items()},
                     }
@@ -267,18 +297,21 @@ def _evaluate_classifier(
                 classifier.close()
 
     macro_accuracy = sum(case_result["accuracy"] for case_result in case_results) / len(case_results)
+    macro_positive_recall = sum(case_result["positive_recall"] for case_result in case_results) / len(case_results)
     return {
         "backend": backend,
         "model_name": model_name,
         "model": model,
         "status": "ok",
         "macro_accuracy": macro_accuracy,
+        "macro_positive_recall": macro_positive_recall,
         "cases": case_results,
     }
 
 
 def test_column_classification_gold_fixture_schema(pii_test_data_dir):
     cases = _load_gold(pii_test_data_dir / "column_classification_gold.json")
+    valid_entities = classify_config_from_params(PiiReplacerConfig.get_default_config()).valid_entities
 
     assert {case["id"] for case in cases} == {
         "pii_dataset_structured",
@@ -291,13 +324,37 @@ def test_column_classification_gold_fixture_schema(pii_test_data_dir):
         assert case["source"].startswith("cleaned/")
         assert set(expected) == set(df.columns)
         assert all(isinstance(label, str) and label for label in expected.values())
+        assert set(expected.values()) <= valid_entities | {UNKNOWN_ENTITY}
 
 
-def test_column_accuracy_metric_normalizes_missing_labels():
+def test_column_accuracy_metric_normalizes_none_labels():
     expected = {"name": "name", "height": UNKNOWN_ENTITY}
     predicted = {"name": "name", "height": None}
 
     assert _column_accuracy(predicted, expected) == 1.0
+
+
+def test_column_accuracy_metric_rejects_missing_predictions():
+    expected = {"name": "name", "height": UNKNOWN_ENTITY}
+    predicted = {"height": None}
+
+    with pytest.raises(AssertionError, match="name"):
+        _column_accuracy(predicted, expected)
+
+
+def test_positive_recall_ignores_negative_columns():
+    expected = {
+        "name": "name",
+        "email": "email",
+        "height": UNKNOWN_ENTITY,
+    }
+    predicted = {
+        "name": "name",
+        "email": UNKNOWN_ENTITY,
+        "height": UNKNOWN_ENTITY,
+    }
+
+    assert _positive_recall(predicted, expected) == 0.5
 
 
 def test_classification_benchmark_matrix_defaults(monkeypatch):
@@ -321,6 +378,7 @@ def test_benchmark_summary_report_upserts_and_renders_table(tmp_path, monkeypatc
         "model": LOCAL_HF_CLASSIFICATION_BENCHMARK_MODELS["smollm3"],
         "status": "ok",
         "macro_accuracy": 0.5,
+        "macro_positive_recall": 0.25,
         "cases": [
             {"case_id": "pii_dataset_structured", "accuracy": 1.0},
             {"case_id": "credit_card_transactions", "accuracy": 0.5},
@@ -337,10 +395,10 @@ def test_benchmark_summary_report_upserts_and_renders_table(tmp_path, monkeypatc
     assert summary_json["results"][0]["macro_accuracy"] == 0.75
     summary_md = (tmp_path / "classification-benchmark-summary.md").read_text()
     assert (
-        "| Backend | Model | Macro Accuracy | pii_dataset_structured | credit_card_transactions | adult_negative_control |"
+        "| Backend | Model | Macro Accuracy | Macro Positive Recall | pii_dataset_structured | credit_card_transactions | adult_negative_control |"
         in summary_md
     )
-    assert "| local_hf | smollm3 | 0.750 | 1.000 | 0.500 | 0.000 |" in summary_md
+    assert "| local_hf | smollm3 | 0.750 | 0.250 | 1.000 | 0.500 | 0.000 |" in summary_md
 
 
 @pytest.mark.slow

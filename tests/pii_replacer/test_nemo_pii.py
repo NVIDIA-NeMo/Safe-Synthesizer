@@ -50,6 +50,17 @@ class TestGetColumnClassifier:
         mock_openai.assert_called_once()
 
     @patch("nemo_safe_synthesizer.pii_replacer.nemo_pii.OpenAI")
+    def test_api_backend_close_closes_openai_client(self, mock_openai):
+        config = PiiReplacerConfig.get_default_config()
+        client = MagicMock()
+        mock_openai.return_value = client
+
+        classifier = get_column_classifier(config)
+        classifier.close()
+
+        client.close.assert_called_once()
+
+    @patch("nemo_safe_synthesizer.pii_replacer.nemo_pii.OpenAI")
     def test_local_hf_backend_does_not_create_openai_client(self, mock_openai):
         config = PiiReplacerConfig.get_default_config()
         config.globals.classify.backend = "local_hf"
@@ -124,6 +135,7 @@ def test_nemo_pii_classify_df(_build_entity_extractor, fake_people_csv):
             "date of birth": "date",
             "notes": "text",
         }
+        mock_column_classifier.close.assert_called_once()
 
 
 @patch("nemo_safe_synthesizer.pii_replacer.nemo_pii.build_entity_extractor", return_value=MagicMock())

@@ -193,7 +193,9 @@ Key config parameters:
 
 | Field | Default | Description | Guidance |
 |-------|---------|-------------|----------|
-| `replace_pii.globals.classify.enable_classify` | `true` | Enable LLM-based PII column classification | When using the CLI, set `NSS_INFERENCE_KEY` (and optionally `NSS_INFERENCE_ENDPOINT`); set to `false` if no LLM endpoint is available |
+| `replace_pii.globals.classify.enable_classify` | `true` | Enable LLM-based PII column classification | For the `api` backend, set `NSS_INFERENCE_KEY` (and optionally `NSS_INFERENCE_ENDPOINT`); set to `false` to skip LLM classification |
+| `replace_pii.globals.classify.backend` | `api` | Column classification backend: `api` or `local_hf` | Use `api` for an OpenAI-compatible endpoint; use `local_hf` for an in-process Hugging Face model with no inference API key |
+| `replace_pii.globals.classify.model` | `null` | Local Hugging Face model ID or local path for `local_hf` | When unset with `local_hf`, defaults to `HuggingFaceTB/SmolLM3-3B`; ignored by `api`, which uses `NSS_INFERENCE_MODEL` |
 | `replace_pii.globals.classify.entities` | (see default list) | Entity types used for LLM-based column classification. Defaults to 15 types covering names, addresses, phone numbers, emails, SSN, national/tax IDs, and credit/debit cards -- see [PII Replacement](../product-overview/pii_replacement.md) and [`PiiReplacerConfig`][nemo_safe_synthesizer.config.replace_pii.PiiReplacerConfig] | Override to add or remove entity types from classification |
 | `replace_pii.globals.ner.ner_threshold` | `0.3` | GLiNER confidence threshold for NER detection | Lower to catch more entities (more false positives); raise to reduce false positives |
 

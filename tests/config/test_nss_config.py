@@ -13,6 +13,7 @@ from nemo_safe_synthesizer.config import (
     SafeSynthesizerParameters,
     TimeSeriesParameters,
 )
+from nemo_safe_synthesizer.config.replace_pii import ClassifyConfig
 from nemo_safe_synthesizer.configurator.parameters import Parameters
 from nemo_safe_synthesizer.configurator.validators import ValueValidator
 
@@ -123,6 +124,24 @@ class TestPiiParameters:
     def test_create_default(self):
         params = PiiReplacerConfig.get_default_config()
         assert params.globals.ner.ner_threshold == 0.3
+
+    def test_api_backend_warns_when_model_is_set(self):
+        import warnings
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            ClassifyConfig(backend="api", model="local/model")
+
+        assert any("NSS_INFERENCE_MODEL" in str(warning.message) for warning in caught)
+
+    def test_local_hf_backend_accepts_model_without_warning(self):
+        import warnings
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            ClassifyConfig(backend="local_hf", model="local/model")
+
+        assert caught == []
 
 
 class TestSafeSynthesizerParameters:

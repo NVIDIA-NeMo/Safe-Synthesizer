@@ -48,8 +48,8 @@ Grouped by the `Category` column -- `nss`-native settings first, then
 | `NSS_WANDB_MODE` | nss | `--wandb-mode` | WandB | `disabled` | WandB run mode | Alias for `WANDB_MODE` |
 | `NSS_WANDB_PROJECT` | nss | `--wandb-project` | WandB | -- | WandB project name | Alias for `WANDB_PROJECT` |
 | `NSS_INFERENCE_ENDPOINT` | nss | `--inference-endpoint-url` | PII column classifier | NVIDIA integrate URL | OpenAI-compatible endpoint for column classification | [PII appendix](#pii-ner-and-column-classification) |
-| `NSS_INFERENCE_KEY` | nss | `--inference-api-key` | PII column classifier | -- | API key for `NSS_INFERENCE_ENDPOINT` | Required for LLM column classification |
-| `NSS_INFERENCE_MODEL` | nss | `--inference-model-id` | PII column classifier | `qwen/qwen3-next-80b-a3b-instruct` | Model ID sent to the inference endpoint | [PII appendix](#pii-ner-and-column-classification) |
+| `NSS_INFERENCE_KEY` | nss | `--inference-api-key` | PII column classifier | -- | API key for `NSS_INFERENCE_ENDPOINT` | Required only for the `api` classifier backend |
+| `NSS_INFERENCE_MODEL` | nss | `--inference-model-id` | PII column classifier | `qwen/qwen3-next-80b-a3b-instruct` | Model ID sent to the API inference endpoint | [PII appendix](#pii-ner-and-column-classification) |
 | `NSS_PII_REPLACER_CPU_COUNT` | nss | `--cpu-count` | NER worker pool | `max(1, cpu_count - 1)` | CPU processes for PII NER | [PII appendix](#pii-ner-and-column-classification) |
 | `NEMO_TELEMETRY_ENABLED` | telemetry | `--emit_telemetry` | telemetry | `true` | Enable anonymous usage telemetry | Also `emit_telemetry` in YAML; see [Telemetry](#telemetry) |
 | `HF_HOME` | third-party | -- | Hugging Face Hub | platform cache dir | Root directory for HF downloads | [HF appendix](#hugging-face-cache-and-offline) |
@@ -177,8 +177,9 @@ replacement. For setup examples and NER-only fallback behavior, see
 
 ### `NSS_INFERENCE_ENDPOINT` and `NSS_INFERENCE_KEY`
 
-OpenAI-compatible endpoint and API key for column classification. The endpoint
-defaults to `https://integrate.api.nvidia.com/v1` when unset.
+OpenAI-compatible endpoint and API key for the default `api` column
+classification backend. The endpoint defaults to
+`https://integrate.api.nvidia.com/v1` when unset.
 
 ```bash
 export NSS_INFERENCE_ENDPOINT="https://your-llm-inference-endpoint"
@@ -188,14 +189,23 @@ export NSS_INFERENCE_KEY="your-api-key"  # pragma: allowlist secret
 On the CLI, can also use `--inference-api-key` and optionally
 `--inference-endpoint-url` instead of exporting these variables.
 
+For local Hugging Face classification, set
+`replace_pii.globals.classify.backend: local_hf` in YAML or the SDK. That mode
+does not use `NSS_INFERENCE_KEY`; it loads
+`replace_pii.globals.classify.model` or the default
+`HuggingFaceTB/SmolLM3-3B` from the Hugging Face cache, online Hub access, or a
+complete local model path.
+
 To disable column classification entirely, set
 `replace_pii.globals.classify.enable_classify: false` in YAML or use the SDK.
 See [Configuration Reference -- Replacing PII](configuration.md#replacing-pii).
 
 ### `NSS_INFERENCE_MODEL`
 
-Model ID sent to the inference endpoint. Defaults to
+Model ID sent to the API inference endpoint. Defaults to
 `qwen/qwen3-next-80b-a3b-instruct`. Override with `--inference-model-id`.
+This environment variable is ignored by the `local_hf` backend; use
+`replace_pii.globals.classify.model` for local Hugging Face classification.
 
 ### `NSS_PII_REPLACER_CPU_COUNT`
 

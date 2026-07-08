@@ -124,8 +124,8 @@ docker run --gpus all --shm-size=1g \
 | Variable | Required | Purpose |
 |----------|----------|---------|
 | `HF_TOKEN` | For gated models | Hugging Face token for downloading gated models (Llama, Mistral, etc.). Get one at [hf.co/settings/tokens](https://huggingface.co/settings/tokens) |
-| `NSS_INFERENCE_KEY` | For PII classification | API key for `NSS_INFERENCE_ENDPOINT`. Set when using the CLI/SDK for column classification |
-| `NSS_INFERENCE_ENDPOINT` | For PII classification | NIM/OpenAI-compatible endpoint URL (default: `https://integrate.api.nvidia.com/v1`). Override for a custom endpoint |
+| `NSS_INFERENCE_KEY` | For API PII classification | API key for `NSS_INFERENCE_ENDPOINT`. Not used by `replace_pii.globals.classify.backend: local_hf` |
+| `NSS_INFERENCE_ENDPOINT` | For API PII classification | NIM/OpenAI-compatible endpoint URL (default: `https://integrate.api.nvidia.com/v1`). Override for a custom endpoint |
 | `WANDB_API_KEY` | For experiment tracking | WandB API key. Only needed when `--wandb-mode online` is used |
 
 If `HF_TOKEN` is already stored in your HF cache (`~/.cache/huggingface/token`),

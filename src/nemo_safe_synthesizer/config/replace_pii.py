@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+import warnings
 from typing import Annotated, Any, Literal, Self
 
 from faker.config import AVAILABLE_LOCALES
@@ -198,6 +199,18 @@ class ClassifyConfig(NSSBaseModel):
         description="Name of the model provider in the Inference Gateway for column classification. "
         "The job compiler will resolve this to the appropriate endpoint URL.",
     )
+
+    @model_validator(mode="after")
+    def warn_api_model_ignored(self) -> Self:
+        """Warn when a local-HF-only model setting is provided for API classification."""
+        if self.backend != "local_hf" and self.model is not None:
+            warnings.warn(
+                "`replace_pii.globals.classify.model` is only used when "
+                "`replace_pii.globals.classify.backend` is 'local_hf'. "
+                "For the api backend, set `NSS_INFERENCE_MODEL` or use `--inference-model-id`.",
+                stacklevel=2,
+            )
+        return self
 
 
 class Globals(NSSBaseModel):

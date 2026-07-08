@@ -261,6 +261,20 @@ override it to use a different endpoint.
 When using the CLI or Python SDK, set `NSS_INFERENCE_KEY` (and `NSS_INFERENCE_ENDPOINT` only if not
 using the default) so column classification can run.
 
+Column classification can also run locally with a Hugging Face causal LM:
+
+```yaml
+replace_pii:
+  globals:
+    classify:
+      backend: local_hf
+      model: HuggingFaceTB/SmolLM3-3B  # optional default; can also be a local model path
+```
+
+The local backend does not use `NSS_INFERENCE_KEY`. It loads the default 3B
+model from the Hugging Face cache or downloads it when online; in HF offline
+mode, pre-download the model or set `model` to a complete local directory.
+
 ### Local Endpoint
 
 To point to a locally hosted LLM, add the variables to `.env.local` (git-ignored, auto-loaded by mise):

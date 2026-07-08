@@ -525,6 +525,21 @@ class TestInferenceModelCheck:
 
         assert any(i.code == "classify_local_model_missing" and i.severity == "error" for i in issues)
 
+    def test_local_hf_backend_incomplete_cache_warns(self, default_config, hf_cached_snapshot_factory, monkeypatch):
+        cache_root, _ = hf_cached_snapshot_factory(files=("config.json", "tokenizer.json"))
+        default_config.replace_pii.globals.classify.backend = "local_hf"
+        default_config.replace_pii.globals.classify.model = "nvidia/Nemotron-Mini-4B-Instruct"
+        monkeypatch.setattr(ModelRef, "_default_hf_cache_root", staticmethod(lambda: cache_root))
+        monkeypatch.delenv("HF_HUB_OFFLINE", raising=False)
+        monkeypatch.delenv("TRANSFORMERS_OFFLINE", raising=False)
+        monkeypatch.delenv("HF_TOKEN", raising=False)
+        monkeypatch.delenv("HUGGING_FACE_HUB_TOKEN", raising=False)
+
+        issues = InferenceModelCheck().run(make_ctx(config=default_config))
+
+        assert any(i.code == "classify_hf_model_cache_incomplete" and i.severity == "warning" for i in issues)
+        assert any(i.code == "hf_token_missing" and i.check == "env.inference" for i in issues)
+
 
 @pytest.mark.unit
 class TestHFModelAvailabilityCheck:
