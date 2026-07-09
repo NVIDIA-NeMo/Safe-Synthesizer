@@ -71,22 +71,21 @@ configuration reference.
 `uv sync` fails with an error mentioning incompatible `transformers` and
 `vllm` requirements.
 
-Safe Synthesizer requires `transformers>=5.6,<6`. vLLM 0.20.0 accepts
-transformers v5, but excludes several early 5.x releases that are not
-compatible with its runtime. Keep vLLM's exclusions intact and resolve to a
-newer transformers v5 release.
+Safe Synthesizer requires `transformers>=5.12,<5.12.1` with vLLM 0.24.0.
+Keep vLLM's constraints intact so the resolver selects the tested
+Transformers/vLLM pairing.
 
 ```toml
 [project]
 dependencies = [
-  "transformers>=5.6,<6",
-  "vllm==0.20.0",
+  "transformers>=5.12,<5.12.1",
+  "vllm==0.24.0",
 ]
 ```
 
 If you've vendored or copied parts of `pyproject.toml` into another project,
 avoid adding a broad `transformers>=5.0,<6` override for vLLM. That can erase
-vLLM's explicit exclusions and allow incompatible early v5 releases.
+vLLM's explicit constraints and allow incompatible Transformers releases.
 
 ### Slow Tokenizer Warning
 

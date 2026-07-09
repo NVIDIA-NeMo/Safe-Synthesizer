@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any
+from typing import Any, Protocol
 
 from ..config import SafeSynthesizerParameters
 from ..config.generate import ValidationParameters
@@ -21,9 +21,6 @@ from ..data_processing.record_utils import (
 from ..llm.metadata import ModelMetadata
 from ..observability import get_logger
 
-if TYPE_CHECKING:
-    from transformers import PreTrainedTokenizerBase
-
 logger = get_logger(__name__)
 
 # Re-export the parsed-record types so existing imports of
@@ -37,6 +34,13 @@ __all__ = [
     "TimeSeriesDataProcessor",
     "create_processor",
 ]
+
+
+class EncodeOnlyTokenizer(Protocol):
+    """Tokenizer interface needed for per-record token counting."""
+
+    def encode(self, text: str, *args: Any, **kwargs: Any) -> list[int]:
+        """Return token IDs for ``text``."""
 
 
 class Processor(ABC):
@@ -55,7 +59,7 @@ class Processor(ABC):
         self,
         schema: dict[str, Any],
         config: ValidationParameters,
-        tokenizer: PreTrainedTokenizerBase | None = None,
+        tokenizer: EncodeOnlyTokenizer | None = None,
     ):
         self.schema = schema
         self.config = config
@@ -166,7 +170,7 @@ class TimeSeriesDataProcessor(Processor):
         time_column: str | None,
         interval_seconds: int | None,
         time_format: str | None,
-        tokenizer: PreTrainedTokenizerBase | None = None,
+        tokenizer: EncodeOnlyTokenizer | None = None,
     ):
         super().__init__(schema=schema, config=config, tokenizer=tokenizer)
         if time_column is None:
@@ -232,7 +236,7 @@ class GroupedDataProcessor(Processor):
         eos_token: str,
         group_by: str,
         order_by: str | None = None,
-        tokenizer: PreTrainedTokenizerBase | None = None,
+        tokenizer: EncodeOnlyTokenizer | None = None,
     ):
         super().__init__(schema=schema, config=config, tokenizer=tokenizer)
         self.group_by: list[str] = [group_by]
@@ -376,7 +380,7 @@ def create_processor(
     schema: dict[str, Any],
     metadata: ModelMetadata,
     config: SafeSynthesizerParameters,
-    tokenizer: PreTrainedTokenizerBase | None = None,
+    tokenizer: EncodeOnlyTokenizer | None = None,
 ) -> Processor:
     """Create the appropriate record processor for the current pipeline mode.
 

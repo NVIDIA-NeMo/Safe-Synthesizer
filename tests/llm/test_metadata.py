@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from unittest.mock import MagicMock, patch
 
 from pydantic import ValidationError
-from transformers import PretrainedConfig, PreTrainedTokenizerBase
+from transformers import PretrainedConfig, PreTrainedTokenizerBase, Qwen2Config
 
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
 from nemo_safe_synthesizer.defaults import (
@@ -457,6 +457,30 @@ class TestResolveRopeScalingFactor:
             assert result.factor == rope_scaling_scenario.expected_factor
             assert result.theta == rope_scaling_scenario.expected_theta
 
+    def test_qwen2_config_preserves_transformers5_rope_parameters(self):
+        """Qwen2 stores native theta in ``rope_parameters`` instead of ``rope_theta``."""
+        config = Qwen2Config()
+        config.rope_parameters = {
+            "rope_type": "default",
+            "rope_theta": 1_000_000.0,
+            "low_freq_factor": 1.0,
+            "high_freq_factor": 4.0,
+        }
+
+        result = resolve_rope_scaling_factor(2.0, autoconfig=config)
+
+        assert result == RopeScaling(
+            rope_type="default",
+            factor=2.0,
+            theta=1_000_000.0,
+            rope_parameters={
+                "rope_type": "default",
+                "rope_theta": 1_000_000.0,
+                "low_freq_factor": 1.0,
+                "high_freq_factor": 4.0,
+            },
+        )
+
 
 class TestModelMetadata:
     """Tests for the ModelMetadata class."""
@@ -680,6 +704,45 @@ class TestGenerationMaxTokensFor:
         assert reloaded.max_tokens_per_example == 1500
         # prompt_len=0 reproduces the old prompt-agnostic budget for round-trip parity.
         assert reloaded.generation_max_tokens_for(0) == int(1500 * GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER)
+
+    def test_qwen2_rope_parameters_round_trip_through_metadata_json(self, sample_prompt_config, sample_workdir):
+        """Native Qwen2 RoPE parameters survive the saved artifact metadata."""
+        autoconfig = Qwen2Config()
+        autoconfig.max_position_embeddings = 2048
+        autoconfig.rope_parameters = {
+            "rope_type": "default",
+            "rope_theta": 1_000_000.0,
+            "low_freq_factor": 1.0,
+            "high_freq_factor": 4.0,
+        }
+        metadata = ModelMetadata(
+            model_name_or_path="Qwen/Qwen2-0.5B",
+            prompt_config=sample_prompt_config,
+            autoconfig=autoconfig,
+            workdir=sample_workdir,
+            rope_scaling=2.0,  # ty: ignore[invalid-argument-type] -- validator accepts numeric factors.
+        )
+
+        metadata.save_metadata()
+
+        with patch("nemo_safe_synthesizer.llm.metadata.AutoConfig") as mock_ac:
+            mock_ac.from_pretrained.return_value = autoconfig
+            reloaded = ModelMetadata.from_metadata_json(
+                sample_workdir.train.adapter.metadata,
+                workdir=sample_workdir,
+            )
+
+        assert reloaded.rope_scaling == RopeScaling(
+            rope_type="default",
+            factor=2.0,
+            theta=1_000_000.0,
+            rope_parameters={
+                "rope_type": "default",
+                "rope_theta": 1_000_000.0,
+                "low_freq_factor": 1.0,
+                "high_freq_factor": 4.0,
+            },
+        )
 
     @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
     @patch("nemo_safe_synthesizer.llm.metadata.load_json")

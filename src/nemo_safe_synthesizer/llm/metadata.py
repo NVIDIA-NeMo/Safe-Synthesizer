@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import importlib
 from pathlib import Path
-from typing import ClassVar, Literal
+from typing import Any, ClassVar, Literal
 
 from pydantic import (
     BaseModel,
@@ -204,6 +204,11 @@ class RopeScaling(BaseModel):
 
     theta: float = Field(default=10000.0, description="Theta for rope scaling.")
 
+    rope_parameters: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Native Transformers v5 RoPE parameters preserved from the model config.",
+    )
+
     @field_validator("factor", mode="after")
     @classmethod
     def validate_factor(cls, v: float | int | None) -> float | int | None:
@@ -219,8 +224,9 @@ class RopeScaling(BaseModel):
     def from_autoconfig(cls, config: PretrainedConfig, factor: float | int | None = None) -> "RopeScaling":
         """Create a ``RopeScaling`` from a HuggingFace ``PretrainedConfig``.
 
-        Reads the model's native ``rope_theta`` and ``rope_type`` and
-        optionally overrides the scaling ``factor``.
+        Reads the model's native Transformers v5 ``rope_parameters`` and
+        optionally overrides the scaling ``factor``. Falls back to legacy
+        top-level ``rope_theta`` and ``rope_scaling`` fields for older configs.
 
         Args:
             config: A loaded HuggingFace model config.
@@ -229,20 +235,24 @@ class RopeScaling(BaseModel):
         Returns:
             A ``RopeScaling`` populated from the config.
         """
-        # Try to get theta from config (different models use different attribute names)
-        theta = getattr(config, "rope_theta", None) or 10000.0
+        rope_parameters = getattr(config, "rope_parameters", None)
+        rope_parameters = dict(rope_parameters) if isinstance(rope_parameters, dict) else {}
 
-        # Try to get rope_type from config
-        rope_type = getattr(config, "rope_scaling", {})
-        if isinstance(rope_type, dict):
-            rope_type = rope_type.get("rope_type", "default")
-        else:
-            rope_type = "default"
+        legacy_rope_scaling = getattr(config, "rope_scaling", None)
+        if isinstance(legacy_rope_scaling, dict):
+            rope_parameters = {**legacy_rope_scaling, **rope_parameters}
+
+        theta = rope_parameters.get("rope_theta", rope_parameters.get("theta"))
+        if not isinstance(theta, (int, float)):
+            theta = getattr(config, "rope_theta", None) or 10000.0
+
+        rope_type = rope_parameters.get("rope_type", rope_parameters.get("type", "default"))
 
         return cls(
             rope_type=rope_type,
             factor=factor or 1.0,
             theta=theta,
+            rope_parameters=rope_parameters,
         )
 
     def to_hf_dict(self) -> dict | None:
@@ -256,11 +266,15 @@ class RopeScaling(BaseModel):
         """
         if self.factor == 1.0:
             return None
-        return {
-            "rope_type": self.rope_type,
-            "factor": self.factor,
-            "theta": self.theta,
-        }
+        rope_parameters = dict(self.rope_parameters)
+        rope_parameters.update(
+            {
+                "rope_type": self.rope_type,
+                "factor": self.factor,
+                "theta": self.theta,
+            }
+        )
+        return {key: value for key, value in rope_parameters.items() if key != "rope_theta"}
 
 
 class ModelMetadata(BaseModel):
