@@ -244,6 +244,24 @@ def test_validate_timeseries_data_rejects_interval_mismatch():
     assert exc_info.value.reason is TimeSeriesValidationReason.TIMESTAMP_INTERVAL_MISMATCH
 
 
+def test_validate_timeseries_data_checks_every_delta_against_configured_interval():
+    """Every group delta must be within tolerance of the configured interval."""
+    df = pd.DataFrame({"group": ["A", "A", "A"], "ts": [0.0, 10.09, 20.27], "value": [1, 2, 3]})
+    config = SafeSynthesizerParameters.from_params(
+        is_timeseries=True,
+        timestamp_column="ts",
+        timestamp_format="elapsed_seconds",
+        timestamp_interval_seconds=10,
+        group_training_examples_by="group",
+        rope_scaling_factor=1,
+    )
+
+    with pytest.raises(TimeSeriesDataValidationError) as exc_info:
+        validate_timeseries_data(df, config)
+
+    assert exc_info.value.reason is TimeSeriesValidationReason.TIMESTAMP_INTERVAL_MISMATCH
+
+
 @pytest.mark.parametrize(
     "values,timestamp_format",
     [

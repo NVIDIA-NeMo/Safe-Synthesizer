@@ -326,9 +326,9 @@ def _collect_group_timestamp_stats(
         intervals = _interval_seconds(timestamps, is_elapsed_time)
         interval = None
         if not intervals.empty:
-            unique_intervals = intervals.unique()
-            if len(unique_intervals) == 1 or (unique_intervals.max() - unique_intervals.min()) < 0.1:
-                interval = _coerce_whole_second_interval(intervals.iloc[0], group_name=group_name)
+            coerced_intervals = {_coerce_whole_second_interval(value, group_name=group_name) for value in intervals}
+            if len(coerced_intervals) == 1:
+                interval = coerced_intervals.pop()
 
         stats_list.append(
             TimeSeriesGroupTimestampStats(
