@@ -4,6 +4,7 @@
 """Unit tests for the VllmBackend class private methods and module-level side effects."""
 
 import os
+from functools import partial
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -20,7 +21,7 @@ from nemo_safe_synthesizer.defaults import DEFAULT_SAMPLING_PARAMETERS
 from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.generation.processors import TabularDataProcessor
 from nemo_safe_synthesizer.generation.vllm_observability import GenerationObservability
-from nemo_safe_synthesizer.llm.metadata import ModelMetadata
+from nemo_safe_synthesizer.llm.metadata import ModelMetadata, RopeScaling
 
 
 @pytest.fixture
@@ -43,6 +44,8 @@ def mock_model_metadata(fixture_session_cache_dir):
     # helper's fallback when ``max_tokens_per_example`` is unset).
     # Individual tests override per-prompt return values where needed.
     metadata.max_seq_length = 2048
+    metadata.base_max_seq_length = 2048
+    metadata.rope_scaling = None
     metadata.max_tokens_per_example = None
     metadata.generation_max_tokens_for.return_value = 2048
     return metadata
@@ -393,7 +396,55 @@ class TestInitializeModelRef:
 
         assert backend.llm is mock_llm
         assert mock_vllm.call_args.kwargs["model"] == str(snapshot)
+        assert mock_vllm.call_args.kwargs["max_model_len"] == mock_model_metadata.max_seq_length
+        assert mock_vllm.call_args.kwargs["hf_overrides"] is None
         assert mock_vllm.call_args.kwargs["trust_remote_code"] is True
+
+    def test_initialize_passes_rope_hf_overrides_for_extended_context(
+        self,
+        base_params,
+        mock_model_metadata,
+        mock_schema,
+        mock_workdir,
+        fixture_cached_nvidia_snapshot,
+    ):
+        """VLLM 0.24 requires config overrides when max_model_len exceeds the base context."""
+        cache_root, snapshot = fixture_cached_nvidia_snapshot
+        base_params.training.pretrained_model = "nvidia/Nemotron-Mini-4B-Instruct"
+        mock_model_metadata.base_max_seq_length = 2048
+        mock_model_metadata.max_seq_length = 4096
+        mock_model_metadata.rope_scaling = RopeScaling(
+            rope_type="linear",
+            factor=2.0,
+            theta=10000.0,
+            rope_parameters={"rope_type": "linear", "rope_theta": 10000.0, "low_freq_factor": 1.0},
+        )
+        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
+        mock_llm = MagicMock()
+        mock_llm.get_tokenizer.return_value = MagicMock()
+
+        with (
+            patch(
+                "nemo_safe_synthesizer.generation.vllm_backend.ModelRef._default_hf_cache_root",
+                return_value=cache_root,
+            ),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.vLLM", return_value=mock_llm) as mock_vllm,
+            patch("nemo_safe_synthesizer.generation.vllm_backend.get_max_vram", return_value={0: 0.8}),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.create_processor", return_value=MagicMock()),
+        ):
+            backend.initialize()
+
+        assert mock_vllm.call_args.kwargs["model"] == str(snapshot)
+        assert mock_vllm.call_args.kwargs["max_model_len"] == 4096
+        assert mock_vllm.call_args.kwargs["hf_overrides"] == {
+            "rope_parameters": {
+                "rope_type": "linear",
+                "factor": 2.0,
+                "low_freq_factor": 1.0,
+                "original_max_position_embeddings": 2048,
+                "rope_theta": 10000.0,
+            },
+        }
 
     def test_initialize_caches_engine_runtime_config(
         self,
@@ -623,17 +674,15 @@ class TestGetApiParamMapping:
         assert key == "temperature"
         assert value == 0.8  # Uses resolved, not input
 
-    def test_num_beams_greater_than_one_maps_to_beam_width(
-        self, base_params, mock_model_metadata, mock_schema, mock_workdir
-    ):
-        """Test that num_beams > 1 maps to beam_width."""
+    def test_num_beams_greater_than_one_is_omitted(self, base_params, mock_model_metadata, mock_schema, mock_workdir):
+        """Test that num_beams is omitted because vLLM 0.24 removed beam_width."""
         backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
 
         mapping = backend._get_api_param_mapping(resolved_temperature=0.5)
         key, value = mapping["num_beams"](4)
 
-        assert key == "beam_width"
-        assert value == 4
+        assert key is None
+        assert value is None
 
     def test_num_beams_one_returns_none(self, base_params, mock_model_metadata, mock_schema, mock_workdir):
         """Test that num_beams == 1 returns (None, None) to exclude from params."""
@@ -730,6 +779,44 @@ class TestTransformKwargsToSamplingParams:
         result = backend._transform_kwargs_to_sampling_params(kwargs={}, api_mapping={})
 
         assert result == {}
+
+
+class TestGenerateDispatch:
+    """Tests for vLLM generation dispatch."""
+
+    def test_generate_passes_flat_token_ids_through_prompts(
+        self, base_params, mock_model_metadata, mock_schema, mock_workdir
+    ):
+        """Flat token IDs use the vLLM 0.24 ``prompts=`` token prompt API."""
+        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
+        captured = {}
+
+        def fake_generate(**kwargs):
+            captured.update(kwargs)
+            return ["ok"]
+
+        backend._gen_method = partial(fake_generate, sampling_params=object())
+
+        assert backend._generate(input_ids=[1, 2, 3]) == ["ok"]
+        assert captured["prompts"] == {"prompt_token_ids": [1, 2, 3]}
+        assert "prompt_token_ids" not in captured
+
+    def test_generate_passes_batched_token_ids_through_prompts(
+        self, base_params, mock_model_metadata, mock_schema, mock_workdir
+    ):
+        """Batched token IDs use one token prompt per batch element."""
+        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
+        captured = {}
+
+        def fake_generate(**kwargs):
+            captured.update(kwargs)
+            return ["ok"]
+
+        backend._gen_method = partial(fake_generate, sampling_params=object())
+
+        assert backend._generate(input_ids=[[1, 2], [3, 4]]) == ["ok"]
+        assert captured["prompts"] == [{"prompt_token_ids": [1, 2]}, {"prompt_token_ids": [3, 4]}]
+        assert "prompt_token_ids" not in captured
 
 
 class TestNoopRemoteCacheBackend:
