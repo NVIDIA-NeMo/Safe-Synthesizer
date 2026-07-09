@@ -15,11 +15,11 @@ from pathlib import Path
 from typing import Any, cast
 
 import torch
-from transformers import PreTrainedTokenizerBase
 from vllm import LLM as vLLM
 from vllm import RequestOutput
-from vllm.config import StructuredOutputsConfig
+from vllm.config import AttentionConfig, StructuredOutputsConfig
 from vllm.distributed import cleanup_dist_env_and_memory
+from vllm.inputs.llm import TokensPrompt
 from vllm.lora.request import LoRARequest
 from vllm.sampling_params import SamplingParams, StructuredOutputsParams
 
@@ -35,7 +35,7 @@ from ..defaults import DEFAULT_SAMPLING_PARAMETERS, FIXED_RUNTIME_GENERATE_ARGS
 from ..errors import InternalError, ParameterError
 from ..generation.backend import GeneratorBackend
 from ..generation.batch import Batch
-from ..generation.processors import Processor, TabularDataProcessor, create_processor
+from ..generation.processors import EncodeOnlyTokenizer, Processor, TabularDataProcessor, create_processor
 from ..generation.regex_manager import build_json_based_regex, build_json_structural_tag
 from ..generation.results import GenerateJobResults, GenerationBatches, GenerationStatus
 from ..generation.vllm_observability import (
@@ -74,6 +74,38 @@ os.environ.setdefault("VLLM_USE_DEEP_GEMM", "0")
 #   2. Pin OUTLINES_CACHE_DIR to a per-user path and chmod it to 0700, since
 #      outlines always uses diskcache for its FSM/index cache.
 os.environ["VLLM_V1_USE_OUTLINES_CACHE"] = "0"
+
+
+def _build_rope_hf_overrides(model_metadata: ModelMetadata) -> dict[str, Any] | None:
+    """Return vLLM ``hf_overrides`` needed for NSS RoPE context extension."""
+    rope_scaling = model_metadata.rope_scaling
+    if rope_scaling is None or rope_scaling.factor <= 1.0:
+        return None
+
+    rope_parameters = dict(rope_scaling.rope_parameters)
+    rope_type = rope_parameters.get("rope_type", rope_scaling.rope_type)
+    if rope_type == "default":
+        rope_type = "linear"
+
+    rope_parameters.update(
+        {
+            "rope_type": rope_type,
+            "factor": float(rope_scaling.factor),
+            "original_max_position_embeddings": model_metadata.base_max_seq_length,
+            "rope_theta": float(rope_scaling.theta),
+        }
+    )
+
+    # vLLM 0.24 expects only native RoPE config overrides here. The effective
+    # context length still belongs on the top-level ``LLM(max_model_len=...)``.
+    return {
+        "rope_parameters": rope_parameters,
+    }
+
+
+def _tokens_prompt(prompt_token_ids: list[int]) -> TokensPrompt:
+    """Build a vLLM token prompt for pre-tokenized generation."""
+    return TokensPrompt(prompt_token_ids=prompt_token_ids)
 
 
 def _secure_outlines_cache_dir() -> None:
@@ -282,7 +314,11 @@ class VllmBackend(GeneratorBackend):
         # vLLM 0.12+ accepts attention_config as a constructor arg (replaces the
         # VLLM_ATTENTION_BACKEND env var used in 0.11.x).
         attn_backend = self.config.generation.attention_backend
-        attention_config = {"backend": attn_backend} if attn_backend not in (None, "auto") else None
+        attention_config = (
+            AttentionConfig(backend=attn_backend)  # ty: ignore[invalid-argument-type] -- vLLM validates backend strings.
+            if attn_backend not in (None, "auto")
+            else None
+        )
 
         max_vram = get_max_vram()
         # note this only works for single GPU setups
@@ -293,16 +329,19 @@ class VllmBackend(GeneratorBackend):
             backend=self.config.generation.structured_generation.backend,
         )
         model_ref = ModelRef.parse(self.config.training.pretrained_model)
+        hf_overrides = _build_rope_hf_overrides(self.model_metadata)
 
         with heartbeat("Model loading", logger_name=__name__, model=self.config.training.pretrained_model):
             self.llm = vLLM(
                 model=model_ref.target(),
                 gpu_memory_utilization=max_vram,
+                max_model_len=self.model_metadata.max_seq_length,
                 enable_lora=True,
                 max_lora_rank=self.config.training.lora_r,
                 structured_outputs_config=structured_outputs_config,
                 attention_config=attention_config,
                 trust_remote_code=model_ref.trust_remote_code,
+                hf_overrides=hf_overrides,
             )
 
         # Cache the engine's *effective* runtime config once at init. Read by
@@ -312,9 +351,7 @@ class VllmBackend(GeneratorBackend):
         # asked for.
         self._engine_runtime_config = probe_engine_runtime_config(self.llm)
 
-        # vLLM's get_tokenizer() returns a wider union than HF's PreTrainedTokenizerBase;
-        # in practice it's always a HF tokenizer subclass, so cast for the processor.
-        tokenizer = cast(PreTrainedTokenizerBase, self.llm.get_tokenizer())
+        tokenizer: EncodeOnlyTokenizer = self.llm.get_tokenizer()
         self.processor = create_processor(
             self.schema,
             self.model_metadata,
@@ -434,7 +471,7 @@ class VllmBackend(GeneratorBackend):
                 x if isinstance(x, list) else [x],
             ),
             "temperature": lambda x: ("temperature", resolved_temperature),
-            "num_beams": lambda x: ("beam_width", x) if x > 1 else (None, None),
+            "num_beams": lambda x: (None, None),
             "early_stopping": lambda x: (None, None),
         }
 
@@ -470,8 +507,8 @@ class VllmBackend(GeneratorBackend):
 
         Parses a dictionary of parameters into ``SamplingParams``, applying
         necessary transformations from the Safe Synthesizer API to vLLM's API.
-        ``num_beams`` is mapped to ``beam_width`` only when greater than 1;
-        otherwise it is omitted.
+        ``num_beams`` is omitted because vLLM 0.24 no longer accepts the old
+        ``beam_width`` sampling parameter.
 
         Args:
             **kwargs: Sampling parameters to configure.
@@ -536,15 +573,20 @@ class VllmBackend(GeneratorBackend):
                 result = None
                 match input_ids:
                     case torch.Tensor():
-                        logger.debug("vllm generate: prompt_token_ids (torch.Tensor)")
-                        result = self._gen_method(prompt_token_ids=input_ids.tolist())
+                        token_ids = input_ids.tolist()
+                        logger.debug("vllm generate: token prompts (torch.Tensor)")
+                        if all_equal_type(token_ids, int, flatten_iter=False):
+                            result = self._gen_method(prompts=_tokens_prompt(token_ids))
+                        else:
+                            result = self._gen_method(prompts=[_tokens_prompt(ids) for ids in token_ids])
                     case [[*_inner], *_] if all_equal_type(input_ids, int):  # ty: ignore[invalid-argument-type]
                         assert isinstance(input_ids, list)
-                        logger.debug(f"vllm generate: prompt_token_ids ({len(input_ids)} prompts)")
-                        result = self._gen_method(prompt_token_ids=input_ids)
+                        token_ids_batch = cast(list[list[int]], input_ids)
+                        logger.debug(f"vllm generate: token prompts ({len(input_ids)} prompts)")
+                        result = self._gen_method(prompts=[_tokens_prompt(ids) for ids in token_ids_batch])
                     case [*ids] if all_equal_type(ids, int, flatten_iter=False):
-                        logger.debug("vllm generate: prompt_token_ids (single flat list)")
-                        result = self._gen_method(prompt_token_ids=[ids])
+                        logger.debug("vllm generate: token prompts (single flat list)")
+                        result = self._gen_method(prompts=_tokens_prompt(ids))
                     case None:
                         logger.debug(
                             f"vllm generate: processing {len(prompts) if isinstance(prompts, list) else 1} prompts"

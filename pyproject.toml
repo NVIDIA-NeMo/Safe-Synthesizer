@@ -113,8 +113,8 @@ engine = [
 cpu = [
   "accelerate>=1.1.0",
   "bitsandbytes>=0.46.1",
-  "flashinfer-python==0.6.8.post1; sys_platform=='linux'",
-  "flashinfer-cubin==0.6.8.post1; sys_platform=='linux'",
+  "flashinfer-python==0.6.13; sys_platform=='linux'",
+  "flashinfer-cubin==0.6.13; sys_platform=='linux'",
   "gliner",
   "kernels>=0.12.1,<0.15",
   "peft>=0.18.0",
@@ -127,19 +127,19 @@ cpu = [
   "torchvision==0.26.0; sys_platform == 'darwin'",
   "torchvision==0.26.0+cpu; sys_platform == 'linux'",
   "torchao==0.17.0",
-  "transformers>=5.6,<6",
+  "transformers==5.12.0",
   "triton>=2.0.0; sys_platform=='linux'",
   "trl>=0.23.0",
-  "vllm==0.20.0; sys_platform=='linux'",
+  "vllm==0.24.0; sys_platform=='linux'",
   "xgrammar>=0.2.0; sys_platform=='linux'",
 ]
 
 cu129 = [
   "accelerate>=1.1.0",
   "bitsandbytes>=0.46.1",
-  "flashinfer-python==0.6.8.post1; sys_platform == 'linux'",
-  "flashinfer-cubin==0.6.8.post1; sys_platform == 'linux'",
-  "flashinfer-jit-cache==0.6.8.post1+cu129; sys_platform == 'linux'",
+  "flashinfer-python==0.6.13; sys_platform == 'linux'",
+  "flashinfer-cubin==0.6.13; sys_platform == 'linux'",
+  "flashinfer-jit-cache==0.6.13+cu129; sys_platform == 'linux'",
   "gliner",
   "kernels>=0.12.1,<0.15",
   "nvidia-cublas-cu12; sys_platform == 'linux'",
@@ -152,10 +152,10 @@ cu129 = [
   "torchaudio==2.11.0+cu129; sys_platform == 'linux'",
   "torchvision==0.26.0+cu129; sys_platform == 'linux'",
   "torchao==0.17.0+cu129; sys_platform == 'linux' and platform_machine == 'x86_64'",
-  "transformers>=5.6,<6",
+  "transformers>=5.12,<5.12.1",
   "triton>=2.0.0; sys_platform == 'linux'",
   "trl>=0.23.0",
-  "vllm==0.20.0+cu129; sys_platform == 'linux'",
+  "vllm==0.24.0+cu129; sys_platform == 'linux'",
   "xgrammar>=0.2.0; sys_platform == 'linux'",
 ]
 
@@ -180,8 +180,8 @@ conflicts = [
 
 
 override-dependencies = [
-    "flashinfer-python==0.6.8.post1; sys_platform != 'darwin'",
-    "flashinfer-cubin==0.6.8.post1; sys_platform != 'darwin'",
+    "flashinfer-python==0.6.13; sys_platform != 'darwin'",
+    "flashinfer-cubin==0.6.13; sys_platform != 'darwin'",
 ]
 
 environments = [
@@ -225,7 +225,7 @@ constraint-dependencies = [
   # here we specifiy the dep's source from which UV should attempt to resolve
   triton = { index = "pytorch-cu129", extra = "cu129" }
   vllm = [
-    { index = "vllm-v0-20-0-cu129", marker = "sys_platform == 'linux'", extra = "cu129" },
+    { index = "vllm-v0-24-0-cu129", marker = "sys_platform == 'linux'", extra = "cu129" },
   ]
 # for torch - we have a "cpu" dep set and "cu129" dep set, specified in the optional dependencies above
   torch = [
@@ -319,8 +319,8 @@ url = "https://flashinfer.ai/whl/cu129"
 explicit = true
 
 [[tool.uv.index]]
-name = "vllm-v0-20-0-cu129"
-url = "https://wheels.vllm.ai/88d34c6409e9fb3c7b8ca0c04756f061d2099eb1/cu129"
+name = "vllm-v0-24-0-cu129"
+url = "https://wheels.vllm.ai/ee0da84ab9e04ac7610e28580af62c365e898389/cu129"
 explicit = true
 
 [[tool.uv.index]]

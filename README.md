@@ -21,14 +21,14 @@ Read detailed usage below, or jump to the documentation with [Getting Started](h
 uv pip install "nemo-safe-synthesizer[cu129,engine]" \
   --index https://flashinfer.ai/whl/cu129 \
   --index https://download.pytorch.org/whl/cu129 \
-  --index https://wheels.vllm.ai/88d34c6409e9fb3c7b8ca0c04756f061d2099eb1/cu129 \
+  --index https://wheels.vllm.ai/ee0da84ab9e04ac7610e28580af62c365e898389/cu129 \
   --index-strategy unsafe-best-match
 
 # With pip:
 pip install "nemo-safe-synthesizer[cu129,engine]" \
   --extra-index-url https://download.pytorch.org/whl/cu129 \
   --extra-index-url https://flashinfer.ai/whl/cu129 \
-  --extra-index-url https://wheels.vllm.ai/88d34c6409e9fb3c7b8ca0c04756f061d2099eb1/cu129
+  --extra-index-url https://wheels.vllm.ai/ee0da84ab9e04ac7610e28580af62c365e898389/cu129
 ```
 
 Or install from source:

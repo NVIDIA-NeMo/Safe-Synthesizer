@@ -29,6 +29,7 @@ def backend(_mock_vllm_cleanup, fixture_session_cache_dir):
     mock_metadata.instruction = "Generate"
     mock_metadata.prompt_config = MagicMock()
     mock_metadata.prompt_config.template = "{instruction} {schema}"
+    mock_metadata.rope_scaling = None
 
     mock_config = MagicMock()
     # Pin branching fields so create_processor() selects TabularDataProcessor deterministically.
