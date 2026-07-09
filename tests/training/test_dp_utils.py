@@ -15,26 +15,6 @@ from nemo_safe_synthesizer.privacy.dp_transformers.dp_utils import OpacusDPTrain
 pytestmark = pytest.mark.unit
 
 
-def test_loss_memory_probe_rejects_overlapping_installs():
-    """Concurrent enabled probes must fail fast instead of sharing global state."""
-    dp_utils._uninstall_causal_lm_loss_memory_probe()
-    try:
-        assert dp_utils._install_causal_lm_loss_memory_probe(
-            debug_loss_memory=True,
-            chunked_loss=False,
-            chunk_tokens=1024,
-        )
-
-        with pytest.raises(RuntimeError, match="already installed"):
-            dp_utils._install_causal_lm_loss_memory_probe(
-                debug_loss_memory=True,
-                chunked_loss=False,
-                chunk_tokens=1024,
-            )
-    finally:
-        dp_utils._uninstall_causal_lm_loss_memory_probe()
-
-
 def test_ghost_clipping_fails_when_model_ignores_logits_to_keep():
     """Ghost clipping should report models that return full-sequence logits."""
 
@@ -50,43 +30,137 @@ def test_ghost_clipping_fails_when_model_ignores_logits_to_keep():
         trainer._compute_ghost_clipping_loss(LogitsModel(), {"labels": torch.tensor([[1, 2, 3]])})
 
 
-def test_chunked_cross_entropy_matches_transformers_loss_with_masked_labels():
-    """Chunked loss should preserve masking and normalization semantics."""
-    from transformers.loss import loss_utils
-
-    logits = torch.randn(2, 5, 7)
+def test_chunked_cross_entropy_averages_per_sequence_means():
+    """Chunked DP loss should keep each sequence as one privacy unit."""
+    logits = torch.randn(3, 5, 7, requires_grad=True)
     shift_labels = torch.tensor(
         [
-            [1, -100, 3, 4, -100],
-            [-100, 2, 5, -100, 6],
+            [1, -100, 3, -100, -100],
+            [1, 2, 5, -100, 6],
+            [-100, -100, -100, -100, -100],
         ]
     )
 
-    flat_logits = logits.float().view(-1, logits.shape[-1])
-    flat_labels = shift_labels.view(-1).to(flat_logits.device)
-
-    expected_mean = loss_utils.fixed_cross_entropy(flat_logits, flat_labels, None, -100)
-    actual_mean = dp_utils._chunked_cross_entropy(
+    expected = torch.stack(
+        [
+            torch.nn.functional.cross_entropy(logits[0, [0, 2]].float(), shift_labels[0, [0, 2]]),
+            torch.nn.functional.cross_entropy(logits[1, [0, 1, 2, 4]].float(), shift_labels[1, [0, 1, 2, 4]]),
+            logits[2].reshape(-1)[0].float() * 0,
+        ]
+    ).mean()
+    actual = dp_utils._chunked_cross_entropy(
         logits,
         shift_labels,
         vocab_size=logits.shape[-1],
-        num_items_in_batch=None,
         ignore_index=-100,
         chunk_size=3,
     )
-    assert torch.allclose(actual_mean, expected_mean)
+    torch.testing.assert_close(actual, expected)
+    (expected_grad,) = torch.autograd.grad(expected, logits, retain_graph=True)
+    (actual_grad,) = torch.autograd.grad(actual, logits)
+    torch.testing.assert_close(actual_grad, expected_grad)
 
-    num_items = torch.tensor(4)
-    expected_scaled = loss_utils.fixed_cross_entropy(flat_logits, flat_labels, num_items, -100)
-    actual_scaled = dp_utils._chunked_cross_entropy(
-        logits,
-        shift_labels,
-        vocab_size=logits.shape[-1],
-        num_items_in_batch=num_items,
-        ignore_index=-100,
-        chunk_size=3,
+
+def test_chunked_cross_entropy_saves_only_inputs_for_backward():
+    """Chunking should not retain a full-vocabulary fp32 tensor per chunk."""
+    logits = torch.randn(2, 5, 7, requires_grad=True)
+    labels = torch.tensor([[1, 2, 3, 4, 5], [1, -100, 3, -100, 5]])
+    saved_tensors: list[torch.Tensor] = []
+
+    def record(tensor):
+        saved_tensors.append(tensor)
+        return tensor
+
+    with torch.autograd.graph.saved_tensors_hooks(record, lambda tensor: tensor):
+        loss = dp_utils._chunked_cross_entropy(
+            logits,
+            labels,
+            vocab_size=7,
+            ignore_index=-100,
+            chunk_size=2,
+        )
+
+    assert [tensor.shape for tensor in saved_tensors] == [logits.shape, labels.shape]
+    loss.backward()
+
+
+def test_hooks_chunked_loss_records_fp32_logits_size():
+    """Hooks mode should apply memory controls without patching Transformers globals."""
+    logits = torch.randn(2, 5, 7, requires_grad=True)
+
+    class LogitsModel:
+        def __call__(self, **_model_inputs):
+            return (logits,)
+
+    trainer = object.__new__(OpacusDPTrainer)
+    trainer.memory_controls = TrainingMemoryControls(
+        chunked_causal_lm_loss=True,
+        chunked_causal_lm_loss_tokens=2,
+        debug_loss_memory=True,
     )
-    assert torch.allclose(actual_scaled, expected_scaled)
+    trainer._peak_loss_logits_bytes = 0
+    labels = torch.tensor(
+        [
+            [0, 1, -100, 3, -100],
+            [0, 1, 2, 3, 4],
+        ]
+    )
+
+    loss = trainer._compute_hooks_causal_lm_loss(LogitsModel(), {"labels": labels})
+
+    assert loss.requires_grad
+    assert trainer._peak_loss_logits_bytes == logits.numel() * 4
+
+
+@pytest.mark.parametrize(
+    ("compute_loss_func", "label_smoother", "message"),
+    [
+        (lambda *_args, **_kwargs: torch.tensor(0.0), None, "compute_loss_func"),
+        (None, object(), "label smoothing"),
+    ],
+)
+def test_hooks_rejects_nonseparable_trainer_loss_customizations(compute_loss_func, label_smoother, message):
+    trainer = object.__new__(OpacusDPTrainer)
+    trainer.grad_sample_mode = "hooks"
+    trainer.compute_loss_func = compute_loss_func
+    trainer.label_smoother = label_smoother
+
+    with pytest.raises(ValueError, match=message):
+        trainer._validate_hooks_loss_configuration()
+
+
+@pytest.mark.parametrize(
+    ("model", "message"),
+    [
+        (SimpleNamespace(loss_type="ForSequenceClassification"), "default causal-LM loss"),
+        (SimpleNamespace(loss_type="ForCausalLM", _loss_function=lambda: None), "loss_function overrides"),
+    ],
+)
+def test_hooks_rejects_model_loss_customizations(model, message):
+    trainer = object.__new__(OpacusDPTrainer)
+    trainer.grad_sample_mode = "hooks"
+
+    with pytest.raises(ValueError, match=message):
+        trainer._validate_hooks_model_loss_configuration(model)
+
+
+@pytest.mark.parametrize(
+    "outputs",
+    [
+        SimpleNamespace(logits=torch.randn(1, 3, 5), aux_loss=torch.tensor(1.0)),
+        (torch.tensor(1.0), torch.randn(1, 3, 5)),
+    ],
+)
+def test_hooks_rejects_model_auxiliary_losses(outputs):
+    class AuxiliaryLossModel:
+        def __call__(self, **_model_inputs):
+            return outputs
+
+    trainer = object.__new__(OpacusDPTrainer)
+    trainer.memory_controls = TrainingMemoryControls()
+
+    with pytest.raises(RuntimeError, match="auxiliary loss"):
+        trainer._compute_hooks_causal_lm_loss(AuxiliaryLossModel(), {"labels": torch.tensor([[1, 2, 3]])})
 
 
 def test_gib_upper_bound_bucket_is_coarse():
@@ -95,7 +169,7 @@ def test_gib_upper_bound_bucket_is_coarse():
     assert dp_utils._gib_upper_bound_bucket(int(1.25 * 1024**3)) == 2.0
 
 
-def test_loss_memory_probe_log_omits_exact_logits_shape(monkeypatch):
+def test_loss_memory_log_omits_exact_logits_shape(monkeypatch):
     logits = SimpleNamespace(
         is_cuda=True,
         device="cuda:0",
@@ -120,8 +194,8 @@ def test_loss_memory_probe_log_omits_exact_logits_shape(monkeypatch):
     assert "allocated_gib_bucket_le=2.0" in warnings[0]
 
 
-def test_loss_memory_probe_skips_ghost_mode_and_warns(monkeypatch):
-    """Ghost clipping bypasses Transformers causal-LM loss, so probe-only controls warn."""
+def test_loss_memory_controls_warn_when_ignored_in_ghost_mode(monkeypatch):
+    """Ghost clipping uses its own loss wrapper, so hooks-only controls warn."""
     trainer = object.__new__(OpacusDPTrainer)
     trainer.grad_sample_mode = "ghost"
     trainer.memory_controls = TrainingMemoryControls(
@@ -129,14 +203,10 @@ def test_loss_memory_probe_skips_ghost_mode_and_warns(monkeypatch):
         debug_loss_memory=True,
     )
 
-    def fail_install(**_kwargs):
-        raise AssertionError("ghost mode should not install the Transformers loss probe")
-
     warnings: list[str] = []
-    monkeypatch.setattr(dp_utils, "_install_causal_lm_loss_memory_probe", fail_install)
     monkeypatch.setattr(dp_utils.logger, "warning", lambda message, *_args, **_kwargs: warnings.append(message))
 
-    assert trainer._install_loss_memory_probe() is False
+    trainer._warn_if_ghost_memory_controls_ignored()
     assert any("ignored for grad_sample_mode='ghost'" in message for message in warnings)
 
 

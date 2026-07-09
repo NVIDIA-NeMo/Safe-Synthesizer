@@ -18,11 +18,10 @@ from __future__ import annotations
 
 import math
 import os
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from importlib import import_module
 from importlib.metadata import PackageNotFoundError, version
-from threading import Lock
 from types import MethodType
 from typing import Any, Literal, cast
 
@@ -71,20 +70,6 @@ logger = get_logger(__name__)
 GradSampleMode = Literal["hooks", "ghost"]
 _MIN_GHOST_CLIPPING_OPACUS_VERSION = Version("1.6.0")
 
-_CAUSAL_LM_LOSS_MEMORY_PROBE_INSTALLED = False
-_CAUSAL_LM_LOSS_MEMORY_PROBE_LOCK = Lock()
-
-
-class _CausalLmLossProbeState:
-    """Mutable state needed to restore the process-global Transformers loss patch."""
-
-    def __init__(self) -> None:
-        self.original_fn: Any | None = None
-        self.patched_mapping_keys: list[Any] = []
-
-
-_CAUSAL_LM_LOSS_MEMORY_PROBE_STATE = _CausalLmLossProbeState()
-
 
 def _gib_upper_bound_bucket(nbytes: int | float | None) -> float | None:
     """Return a coarse power-of-two GiB upper bound for diagnostic memory values."""
@@ -120,161 +105,76 @@ def _log_cuda_loss_memory(stage: str, logits: torch.Tensor, *, enabled: bool) ->
     )
 
 
+class _ChunkedCrossEntropyFunction(torch.autograd.Function):
+    """Cross entropy that retains no full-vocabulary fp32 tensors for backward."""
+
+    @staticmethod
+    def forward(
+        ctx: Any,
+        logits: torch.Tensor,
+        shift_labels: torch.Tensor,
+        ignore_index: int,
+        chunk_size: int,
+    ) -> torch.Tensor:
+        ctx.save_for_backward(logits, shift_labels)
+        ctx.ignore_index = ignore_index
+        ctx.chunk_size = chunk_size
+
+        sequence_losses = []
+        for sequence_logits, sequence_labels in zip(logits, shift_labels, strict=True):
+            loss_sum = sequence_logits.reshape(-1)[0].float() * 0
+            valid_token_count = (sequence_labels != ignore_index).sum()
+            for start in range(0, sequence_logits.shape[0], chunk_size):
+                end = min(start + chunk_size, sequence_logits.shape[0])
+                loss_sum = loss_sum + F.cross_entropy(
+                    sequence_logits[start:end].float(),
+                    sequence_labels[start:end],
+                    ignore_index=ignore_index,
+                    reduction="sum",
+                )
+            sequence_losses.append(loss_sum / valid_token_count.clamp_min(1))
+        return torch.stack(sequence_losses).mean()
+
+    @staticmethod
+    def backward(ctx: Any, *grad_outputs: Any) -> tuple[torch.Tensor, None, None, None]:
+        grad_output = cast(torch.Tensor, grad_outputs[0])
+        logits, shift_labels = ctx.saved_tensors
+        grad_logits = torch.zeros_like(logits)
+        batch_size = logits.shape[0]
+        for sequence_index, sequence_labels in enumerate(shift_labels):
+            valid_token_count = (sequence_labels != ctx.ignore_index).sum().clamp_min(1)
+            for start in range(0, logits.shape[1], ctx.chunk_size):
+                end = min(start + ctx.chunk_size, logits.shape[1])
+                chunk_labels = sequence_labels[start:end]
+                keep = chunk_labels != ctx.ignore_index
+                chunk_grad = F.softmax(logits[sequence_index, start:end].float(), dim=-1)
+                safe_labels = chunk_labels.masked_fill(~keep, 0)
+                chunk_grad[torch.arange(chunk_grad.shape[0], device=logits.device), safe_labels] -= keep.to(
+                    chunk_grad.dtype
+                )
+                chunk_grad *= keep.unsqueeze(-1)
+                chunk_grad *= grad_output.float() / (batch_size * valid_token_count)
+                grad_logits[sequence_index, start:end] = chunk_grad.to(logits.dtype)
+        return grad_logits, None, None, None
+
+
 def _chunked_cross_entropy(
     logits: torch.Tensor,
     shift_labels: torch.Tensor,
     *,
     vocab_size: int,
-    num_items_in_batch: torch.Tensor | int | None,
     ignore_index: int,
     chunk_size: int,
-    **kwargs,
 ) -> torch.Tensor:
-    """Compute causal-LM cross entropy without upcasting all logits at once."""
-    flat_logits = logits.view(-1, vocab_size)
-    flat_labels = shift_labels.view(-1).to(flat_logits.device)
-
-    loss_sum = flat_logits.new_zeros((), dtype=torch.float32)
-    valid_token_count = flat_logits.new_zeros((), dtype=torch.float32)
-    for start in range(0, flat_logits.shape[0], chunk_size):
-        end = min(start + chunk_size, flat_logits.shape[0])
-        chunk_labels = flat_labels[start:end]
-        keep = chunk_labels != ignore_index
-        if not torch.any(keep):
-            continue
-        chunk_logits = flat_logits[start:end][keep].float()
-        chunk_labels = chunk_labels[keep]
-        loss_sum = loss_sum + F.cross_entropy(
-            chunk_logits,
-            chunk_labels,
-            reduction="sum",
+    """Return the batch mean of per-sequence valid-token cross entropy."""
+    if logits.ndim != 3 or logits.shape[-1] != vocab_size or shift_labels.shape != logits.shape[:2]:
+        raise RuntimeError(
+            "DP causal-LM loss expected logits shaped [batch, tokens, vocab] "
+            f"and matching labels, got {tuple(logits.shape)} and {tuple(shift_labels.shape)}."
         )
-        valid_token_count = valid_token_count + keep.sum().to(dtype=torch.float32)
-
-    if num_items_in_batch is not None:
-        if torch.is_tensor(num_items_in_batch):
-            num_items_in_batch = num_items_in_batch.to(loss_sum.device)
-        return loss_sum / num_items_in_batch
-    return loss_sum / valid_token_count.clamp_min(1)
-
-
-def _install_causal_lm_loss_memory_probe(
-    *,
-    debug_loss_memory: bool,
-    chunked_loss: bool,
-    chunk_tokens: int,
-    peak_recorder: Callable[[int], None] | None = None,
-) -> bool:
-    """Install the opt-in Transformers causal-LM loss probe from config flags.
-
-    Args:
-        debug_loss_memory: Log coarse CUDA memory buckets around the fp32
-            logits upcast and feed ``peak_recorder`` (when supplied) the
-            internal fp32 logits size used later for bucketed observability.
-        chunked_loss: Compute cross entropy in token chunks instead of a single
-            full-logits fp32 upcast.
-        chunk_tokens: Token chunk size used when ``chunked_loss`` is set.
-        peak_recorder: Optional sink receiving the fp32 logits byte count on
-            each loss call when ``debug_loss_memory`` is set. The exported
-            observability event reports only a coarse upper-bound bucket.
-
-    Returns ``True`` when this call installed the process-global probe and the
-    caller must later uninstall it. Returns ``False`` when neither probe feature
-    is enabled.
-    """
-    if not debug_loss_memory and not chunked_loss:
-        return False
-
-    from transformers.loss import loss_utils
-
-    def probed_for_causal_lm_loss(
-        logits,
-        labels,
-        vocab_size: int,
-        num_items_in_batch: torch.Tensor | None = None,
-        ignore_index: int = -100,
-        shift_labels: torch.Tensor | None = None,
-        **kwargs,
-    ) -> torch.Tensor:
-        if debug_loss_memory and peak_recorder is not None and logits is not None:
-            # fp32 logits size -- the spike the upcast materializes (or that
-            # chunked loss avoids). float32 == 4 bytes/element.
-            peak_recorder(logits.numel() * 4)
-        _log_cuda_loss_memory("before_logits_float", logits, enabled=debug_loss_memory)
-        if shift_labels is None:
-            labels = F.pad(labels, (0, 1), value=ignore_index)
-            shift_labels = labels[..., 1:].contiguous()
-
-        if chunked_loss:
-            return _chunked_cross_entropy(
-                logits,
-                shift_labels,
-                vocab_size=vocab_size,
-                num_items_in_batch=num_items_in_batch,
-                ignore_index=ignore_index,
-                chunk_size=chunk_tokens,
-                **kwargs,
-            )
-
-        logits = logits.float()
-        _log_cuda_loss_memory("after_logits_float", logits, enabled=debug_loss_memory)
-        logits = logits.view(-1, vocab_size)
-        shift_labels = shift_labels.view(-1).to(logits.device)
-        loss = loss_utils.fixed_cross_entropy(logits, shift_labels, num_items_in_batch, ignore_index, **kwargs)
-        return loss
-
-    global _CAUSAL_LM_LOSS_MEMORY_PROBE_INSTALLED
-    with _CAUSAL_LM_LOSS_MEMORY_PROBE_LOCK:
-        if _CAUSAL_LM_LOSS_MEMORY_PROBE_INSTALLED:
-            raise RuntimeError(
-                "Causal-LM loss memory probe is already installed; concurrent DP training runs "
-                "with debug_loss_memory or chunked_causal_lm_loss are not supported."
-            )
-
-        original = loss_utils.ForCausalLMLoss
-        state = _CAUSAL_LM_LOSS_MEMORY_PROBE_STATE
-        state.original_fn = original
-        state.patched_mapping_keys = []
-        setattr(loss_utils, "ForCausalLMLoss", probed_for_causal_lm_loss)
-        for loss_name, loss_fn in loss_utils.LOSS_MAPPING.items():
-            if loss_fn is original:
-                loss_utils.LOSS_MAPPING[loss_name] = probed_for_causal_lm_loss
-                state.patched_mapping_keys.append(loss_name)
-        _CAUSAL_LM_LOSS_MEMORY_PROBE_INSTALLED = True
-    logger.warning(
-        "Installed causal-LM loss wrapper for memory diagnostics/experiments "
-        f"(debug_loss_memory={debug_loss_memory}, chunked_loss={chunked_loss}, chunk_tokens={chunk_tokens})"
-    )
-    return True
-
-
-def _uninstall_causal_lm_loss_memory_probe(installed: bool = True) -> None:
-    """Revert the opt-in causal-LM loss probe, restoring Transformers globals.
-
-    Idempotent and safe to call when the probe was never installed. Resets the
-    installed flag so a subsequent training run re-installs cleanly.
-    """
-    if not installed:
-        return
-
-    global _CAUSAL_LM_LOSS_MEMORY_PROBE_INSTALLED
-    from transformers.loss import loss_utils
-
-    with _CAUSAL_LM_LOSS_MEMORY_PROBE_LOCK:
-        if not _CAUSAL_LM_LOSS_MEMORY_PROBE_INSTALLED:
-            return
-
-        state = _CAUSAL_LM_LOSS_MEMORY_PROBE_STATE
-        original = state.original_fn
-        if original is not None:
-            setattr(loss_utils, "ForCausalLMLoss", original)
-            for loss_name in state.patched_mapping_keys:
-                loss_utils.LOSS_MAPPING[loss_name] = original
-
-        state.patched_mapping_keys.clear()
-        state.original_fn = None
-        _CAUSAL_LM_LOSS_MEMORY_PROBE_INSTALLED = False
-    logger.warning("Reverted causal-LM loss wrapper installed for memory diagnostics/experiments")
+    if not torch.any(shift_labels != ignore_index):
+        raise RuntimeError("DP causal-LM training requires at least one non-ignored label.")
+    return _ChunkedCrossEntropyFunction.apply(logits, shift_labels.to(logits.device), ignore_index, chunk_size)
 
 
 class DPCallback(TrainerCallback):
@@ -659,6 +559,7 @@ class OpacusDPTrainer(Trainer):
         self.privacy_args = privacy_args
         self.grad_sample_mode = grad_sample_mode
         self.memory_controls = memory_controls or TrainingMemoryControls()
+        self._warn_if_ghost_memory_controls_ignored()
         self._peak_loss_logits_bytes = 0
         #: Last training-complete event, set by :meth:`train`; the backend forwards it to wandb.
         self.last_training_observability: TrainingObservability | None = None
@@ -702,6 +603,7 @@ class OpacusDPTrainer(Trainer):
         assert pa.noise_multiplier is not None
 
         if grad_sample_mode == "hooks":
+            self._validate_hooks_model_loss_configuration(model)
             model = GradSampleModule(model)
         elif grad_sample_mode == "ghost":
             grad_sample_cls, self._ghost_optimizer_cls, self._ghost_loss_cls = _load_ghost_clipping_classes()
@@ -721,6 +623,7 @@ class OpacusDPTrainer(Trainer):
             callbacks=callbacks,
             **kwargs,
         )
+        self._validate_hooks_loss_configuration()
         self.accountant = SafeSynthesizerAccountant(
             use_prv=pa.use_prv,
             noise_multiplier=pa.noise_multiplier,
@@ -860,44 +763,48 @@ class OpacusDPTrainer(Trainer):
         if nbytes > self._peak_loss_logits_bytes:
             self._peak_loss_logits_bytes = nbytes
 
-    def _install_loss_memory_probe(self) -> bool:
-        """Install the causal-LM loss probe from ``self.memory_controls`` (idempotent)."""
-        mc = self.memory_controls
-        if self.grad_sample_mode == "ghost":
-            if mc.debug_loss_memory or mc.chunked_causal_lm_loss:
-                logger.warning(
-                    "DP memory controls debug_loss_memory and chunked_causal_lm_loss are "
-                    "ignored for grad_sample_mode='ghost' because ghost clipping bypasses "
-                    "Transformers' causal-LM loss."
-                )
-            return False
+    def _validate_hooks_loss_configuration(self) -> None:
+        """Reject loss customizations that cannot preserve per-sequence clipping semantics."""
+        if self.grad_sample_mode != "hooks":
+            return
+        if self.compute_loss_func is not None:
+            raise ValueError("DP hooks mode does not support Trainer compute_loss_func overrides.")
+        if self.label_smoother is not None:
+            raise ValueError("DP hooks mode does not support Trainer label smoothing.")
 
-        return _install_causal_lm_loss_memory_probe(
-            debug_loss_memory=mc.debug_loss_memory,
-            chunked_loss=mc.chunked_causal_lm_loss,
-            chunk_tokens=mc.chunked_causal_lm_loss_tokens,
-            peak_recorder=self._record_peak_loss_logits,
-        )
+    def _validate_hooks_model_loss_configuration(self, model: nn.Module) -> None:
+        """Reject model-level loss overrides before wrapping the model with Opacus."""
+        if self.grad_sample_mode != "hooks":
+            return
+        if getattr(model, "_loss_function", None) is not None:
+            raise ValueError("DP hooks mode does not support model loss_function overrides.")
+        loss_type = getattr(model, "loss_type", None)
+        if loss_type not in (None, "ForCausalLM"):
+            raise ValueError(f"DP hooks mode supports only the default causal-LM loss, got loss_type={loss_type!r}.")
+
+    def _warn_if_ghost_memory_controls_ignored(self) -> None:
+        """Warn when hooks-only causal-LM memory controls are configured for ghost clipping."""
+        memory = self.memory_controls
+        if self.grad_sample_mode == "ghost" and (memory.debug_loss_memory or memory.chunked_causal_lm_loss):
+            logger.warning(
+                "DP memory controls debug_loss_memory and chunked_causal_lm_loss are "
+                "ignored for grad_sample_mode='ghost' because ghost clipping uses "
+                "Opacus' loss wrapper."
+            )
 
     def train(self, *args: Any, **kwargs: Any) -> Any:
         """Run training, sampling peak VRAM and emitting a ``training.complete`` event.
 
-        Installs the opt-in causal-LM loss probe, then wraps ``Trainer.train``
-        in an :class:`NvmlPeakSampler`. In a ``finally``, emits a single
-        :class:`TrainingObservability` event and reverts the probe. Install and
-        teardown bracket the run in this one method, and the teardown runs even
-        when training raises, so the process-global Transformers loss patch
-        never leaks into a later model in the same process.
+        Wraps ``Trainer.train`` in an :class:`NvmlPeakSampler` and emits one
+        :class:`TrainingObservability` event even when training raises.
         """
         self._peak_loss_logits_bytes = 0
-        probe_installed = self._install_loss_memory_probe()
         sampler = NvmlPeakSampler()
         try:
             with sampler:
                 return super().train(*args, **kwargs)
         finally:
             self._emit_training_observability(sampler.peak_gb)
-            _uninstall_causal_lm_loss_memory_probe(installed=probe_installed)
 
     def _emit_training_observability(self, peak_vram_gb: float | None) -> None:
         """Assemble the ``training.complete`` event, log it, and stash it.
@@ -955,23 +862,77 @@ class OpacusDPTrainer(Trainer):
         model.train()
         getattr(self.optimizer, "train", lambda: None)()
 
-        # Pass `num_items_in_batch=None` so the HF Trainer skips its built-in
-        # per-token scaling; Opacus already applies per-sample gradient scaling
-        # and we divide the logged loss by gradient_accumulation_steps below.
-        # The loss memory probe is installed once in `train()`, not per step.
+        # Compute the hooks loss here so every sequence remains an independent
+        # privacy unit. Opacus applies clipping and accumulation scaling.
         inputs = self._prepare_inputs(inputs)
         if self.grad_sample_mode == "ghost":
             return self._ghost_clipping_training_step(model, inputs)
 
         with self.compute_loss_context_manager():
-            loss = self.compute_loss(model, inputs, num_items_in_batch=None)
-        if isinstance(loss, tuple):
-            loss = loss[0]
+            loss = self._compute_hooks_causal_lm_loss(model, inputs)
         del inputs
 
         loss.backward()
 
         return loss.detach() / self.args.gradient_accumulation_steps
+
+    def _compute_hooks_causal_lm_loss(self, model: nn.Module, inputs: dict[str, Any]) -> torch.Tensor:
+        """Compute a privacy-unit-separable causal-LM loss for hooks mode."""
+        labels = inputs.get("labels")
+        if labels is None:
+            raise RuntimeError("Hooks DP training requires labels in the batch.")
+
+        model_inputs = dict(inputs)
+        labels = model_inputs.pop("labels")
+        outputs = model(**model_inputs)
+        logits = getattr(outputs, "logits", None)
+        if logits is None and isinstance(outputs, dict):
+            logits = outputs.get("logits")
+        if logits is None and isinstance(outputs, tuple) and outputs:
+            tuple_logits = outputs[0]
+            if not torch.is_tensor(tuple_logits) or tuple_logits.ndim != 3:
+                raise RuntimeError(
+                    "DP hooks mode requires tuple model outputs to place 3D logits first; "
+                    "tuple outputs containing auxiliary losses are not supported."
+                )
+            logits = tuple_logits
+        if logits is None:
+            raise RuntimeError("Hooks DP training requires model outputs with logits.")
+        for auxiliary_loss_name in ("aux_loss", "router_aux_loss"):
+            auxiliary_loss = (
+                outputs.get(auxiliary_loss_name)
+                if isinstance(outputs, dict)
+                else getattr(outputs, auxiliary_loss_name, None)
+            )
+            if auxiliary_loss is not None:
+                raise RuntimeError(
+                    f"DP hooks mode does not support model-provided auxiliary loss {auxiliary_loss_name}; "
+                    "the loss must remain separable by sequence before clipping."
+                )
+
+        shift_labels = F.pad(labels, (0, 1), value=-100)[..., 1:].contiguous()
+        memory = self.memory_controls
+        if memory.debug_loss_memory:
+            self._record_peak_loss_logits(logits.numel() * 4)
+        _log_cuda_loss_memory("before_logits_float", logits, enabled=memory.debug_loss_memory)
+        if memory.chunked_causal_lm_loss:
+            return _chunked_cross_entropy(
+                logits,
+                shift_labels,
+                vocab_size=logits.shape[-1],
+                ignore_index=-100,
+                chunk_size=memory.chunked_causal_lm_loss_tokens,
+            )
+
+        logits = logits.float()
+        _log_cuda_loss_memory("after_logits_float", logits, enabled=memory.debug_loss_memory)
+        return _chunked_cross_entropy(
+            logits,
+            shift_labels,
+            vocab_size=logits.shape[-1],
+            ignore_index=-100,
+            chunk_size=logits.shape[1],
+        )
 
     def _ghost_clipping_training_step(self, model: nn.Module, inputs: dict[str, Any]) -> torch.Tensor:
         """Run one Fast/Ghost Gradient Clipping training step."""

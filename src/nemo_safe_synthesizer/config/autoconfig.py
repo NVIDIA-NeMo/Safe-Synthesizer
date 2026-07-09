@@ -308,9 +308,9 @@ class AutoConfigResolver:
             "data": data_params,
             "privacy": privacy_params,
         }
-        logger.debug(f"params to update: {new_params}")
+        logger.debug("params to update", extra={"ctx": new_params})
         my_config = self._config.with_config_patch(new_params)
-        logger.debug(f"auto-updated config: {my_config.model_dump(exclude_unset=True)}")
+        logger.debug("auto-updated config", extra={"ctx": my_config.model_dump(exclude_unset=True)})
         return my_config
 
     def resolve(self) -> SafeSynthesizerParameters:

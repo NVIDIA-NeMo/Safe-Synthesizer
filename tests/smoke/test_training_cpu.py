@@ -17,7 +17,7 @@ import torch
 from datasets import Dataset
 from packaging.version import Version
 from peft import LoraConfig, TaskType, get_peft_model
-from transformers import DataCollatorForTokenClassification, LlamaForCausalLM, Trainer, TrainingArguments
+from transformers import DataCollatorForTokenClassification, LlamaConfig, LlamaForCausalLM, Trainer, TrainingArguments
 
 from nemo_safe_synthesizer.data_processing.assembler import TrainingExampleAssembler
 from nemo_safe_synthesizer.defaults import DEFAULT_INSTRUCTION, PROMPT_TEMPLATE
@@ -46,18 +46,18 @@ def _cpu_training_args(tmp_path, **overrides):
     return TrainingArguments(**defaults)
 
 
-def _privacy_args(*, noise_multiplier: float | None = None) -> PrivacyArguments:
+def _privacy_args(*, noise_multiplier: float | None = None, per_sample_max_grad_norm: float = 1.0) -> PrivacyArguments:
     if noise_multiplier is not None:
         return PrivacyArguments(
             noise_multiplier=noise_multiplier,
             target_delta=1e-5,
-            per_sample_max_grad_norm=1.0,
+            per_sample_max_grad_norm=per_sample_max_grad_norm,
             use_prv=False,
         )
     return PrivacyArguments(
         target_epsilon=100.0,
         target_delta=1e-5,
-        per_sample_max_grad_norm=1.0,
+        per_sample_max_grad_norm=per_sample_max_grad_norm,
     )
 
 
@@ -74,6 +74,7 @@ def _dp_trainer(
     grad_sample_mode: Literal["hooks", "ghost"] = "hooks",
     privacy_args: PrivacyArguments | None = None,
     secure_mode: bool = True,
+    true_dataset_size: int = 8,
     **training_arg_overrides,
 ) -> OpacusDPTrainer:
     return OpacusDPTrainer(
@@ -89,7 +90,7 @@ def _dp_trainer(
         privacy_args=privacy_args or _privacy_args(),
         grad_sample_mode=grad_sample_mode,
         secure_mode=secure_mode,
-        true_dataset_size=8,
+        true_dataset_size=true_dataset_size,
         data_fraction=1.0,
     )
 
@@ -263,88 +264,124 @@ def test_dp_clipping_training_with_gradient_accumulation(
     assert len(trainer.state.log_history) > 0
 
 
-@pytest.mark.parametrize("gradient_accumulation_steps", [1, 2])
-def test_dp_ghost_clipping_matches_hooks_without_noise(
-    fixture_tiny_llama_config,
+def _uneven_mask_training_dataset() -> Dataset:
+    input_ids = [[1 + (row + position) % 14 for position in range(6)] for row in range(4)]
+    labels = []
+    for supervised_count, row_ids in enumerate(input_ids, start=1):
+        row_labels = [-100] * len(row_ids)
+        row_labels[1 : supervised_count + 1] = row_ids[1 : supervised_count + 1]
+        labels.append(row_labels)
+    return Dataset.from_dict(
+        {
+            "input_ids": input_ids,
+            "attention_mask": [[1] * 6 for _ in input_ids],
+            "position_ids": [list(range(6)) for _ in input_ids],
+            "labels": labels,
+        }
+    )
+
+
+def _per_sample_trainable_gradients(model: torch.nn.Module, dataset: Dataset) -> list[dict[str, torch.Tensor]]:
+    named_parameters = [(name, parameter) for name, parameter in model.named_parameters() if parameter.requires_grad]
+    gradients = []
+    for example in dataset:
+        inputs = {
+            name: torch.tensor(example[name]).unsqueeze(0) for name in ("input_ids", "attention_mask", "position_ids")
+        }
+        labels = torch.tensor(example["labels"]).unsqueeze(0)
+        logits = model(**inputs).logits
+        shift_labels = torch.nn.functional.pad(labels, (0, 1), value=-100)[..., 1:]
+        keep = shift_labels != -100
+        loss = torch.nn.functional.cross_entropy(logits[keep], shift_labels[keep])
+        values = torch.autograd.grad(loss, [parameter for _, parameter in named_parameters])
+        gradients.append(
+            {
+                name.removeprefix("_module."): value.detach().clone()
+                for (name, _), value in zip(named_parameters, values)
+            }
+        )
+    return gradients
+
+
+def _clipped_sgd_expected_state(
+    initial_state: dict[str, torch.Tensor], gradients: list[dict[str, torch.Tensor]], learning_rate: float
+) -> tuple[dict[str, torch.Tensor], float]:
+    norms = [
+        torch.sqrt(torch.stack([gradient.square().sum() for gradient in sample.values()]).sum()) for sample in gradients
+    ]
+    sorted_norms = sorted(norm.item() for norm in norms)
+    clip_norm = (sorted_norms[1] + sorted_norms[2]) / 2
+    assert sum(norm.item() > clip_norm for norm in norms) == 2
+
+    expected = {}
+    for name, initial in initial_state.items():
+        clipped_mean = torch.stack(
+            [sample[name] * min(1.0, clip_norm / norm.item()) for sample, norm in zip(gradients, norms, strict=True)]
+        ).mean(dim=0)
+        expected[name] = initial - learning_rate * clipped_mean
+    return expected, clip_norm
+
+
+@pytest.mark.parametrize(
+    ("per_device_batch_size", "gradient_accumulation_steps"),
+    [(4, 1), (2, 2)],
+)
+def test_dp_ghost_clipping_matches_hooks_and_clipped_sgd_oracle(
     fixture_stub_tokenizer,
-    fixture_tiny_training_dataset_with_position_ids,
     tmp_path,
-    monkeypatch,
+    per_device_batch_size,
     gradient_accumulation_steps,
 ):
-    """Ghost clipping should match hooks when noise is disabled, including accumulation."""
-    monkeypatch.setattr(dp_utils, "_get_opacus_version", lambda: Version("1.6.0"))
+    """Hooks and ghost should match separable clipped DP-SGD with uneven masks."""
+    config = LlamaConfig(
+        vocab_size=16,
+        hidden_size=16,
+        intermediate_size=32,
+        num_hidden_layers=1,
+        num_attention_heads=2,
+        num_key_value_heads=2,
+        max_position_embeddings=16,
+    )
+    dataset = _uneven_mask_training_dataset()
 
     def make_model() -> torch.nn.Module:
         torch.manual_seed(2026)
-        model = _tiny_lora_model(LlamaForCausalLM(fixture_tiny_llama_config))
+        model = _tiny_lora_model(LlamaForCausalLM(config))
         model.enable_input_require_grads()
         return model
 
-    hooks_model = make_model()
-    ghost_model = make_model()
-    initial_state = _trainable_parameter_state(hooks_model)
-    training_args = {
-        "gradient_accumulation_steps": gradient_accumulation_steps,
-        "seed": 1729,
-        "data_seed": 1729,
-    }
-    hooks_trainer = _dp_trainer(
-        model=hooks_model,
-        tokenizer=fixture_stub_tokenizer,
-        train_dataset=fixture_tiny_training_dataset_with_position_ids,
-        tmp_path=tmp_path / "hooks",
-        grad_sample_mode="hooks",
-        privacy_args=_privacy_args(noise_multiplier=0.0),
-        secure_mode=False,
-        **training_args,
-    )
-    ghost_trainer = _dp_trainer(
-        model=ghost_model,
-        tokenizer=fixture_stub_tokenizer,
-        train_dataset=fixture_tiny_training_dataset_with_position_ids,
-        tmp_path=tmp_path / "ghost",
-        grad_sample_mode="ghost",
-        privacy_args=_privacy_args(noise_multiplier=0.0),
-        secure_mode=False,
-        **training_args,
-    )
+    oracle_model = make_model()
+    initial_state = _trainable_parameter_state(oracle_model)
+    gradients = _per_sample_trainable_gradients(oracle_model, dataset)
+    learning_rate = 0.1
+    expected_state, clip_norm = _clipped_sgd_expected_state(initial_state, gradients, learning_rate)
 
-    torch.manual_seed(99)
-    hooks_trainer.train()
-    torch.manual_seed(99)
-    ghost_trainer.train()
+    states = {}
+    for grad_sample_mode in ("hooks", "ghost"):
+        trainer = _dp_trainer(
+            model=make_model(),
+            tokenizer=fixture_stub_tokenizer,
+            train_dataset=dataset,
+            tmp_path=tmp_path / f"{grad_sample_mode}-{gradient_accumulation_steps}",
+            grad_sample_mode=grad_sample_mode,
+            privacy_args=_privacy_args(noise_multiplier=0.0, per_sample_max_grad_norm=clip_norm),
+            secure_mode=False,
+            true_dataset_size=4,
+            per_device_train_batch_size=per_device_batch_size,
+            gradient_accumulation_steps=gradient_accumulation_steps,
+            learning_rate=learning_rate,
+            lr_scheduler_type="constant",
+            optim="sgd",
+            weight_decay=0.0,
+            seed=1729,
+            data_seed=1729,
+        )
+        trainer.train()
+        states[grad_sample_mode] = _trainable_parameter_state(trainer.model)
 
-    hooks_state = _trainable_parameter_state(hooks_trainer.model)
-    ghost_state = _trainable_parameter_state(ghost_trainer.model)
-    assert hooks_state.keys() == ghost_state.keys()
-    assert any(not torch.allclose(hooks_state[name], initial_state[name], rtol=0, atol=0) for name in hooks_state)
-    for name in hooks_state:
-        torch.testing.assert_close(ghost_state[name], hooks_state[name], rtol=1e-5, atol=1e-7)
-
-
-def test_loss_memory_probe_install_and_uninstall_round_trip():
-    """The opt-in loss probe must fully restore process-global Transformers state."""
-    from transformers.loss import loss_utils
-
-    original_fn = loss_utils.ForCausalLMLoss
-    original_mapping = {name: fn for name, fn in loss_utils.LOSS_MAPPING.items() if fn is original_fn}
-    assert original_mapping, "expected at least one LOSS_MAPPING entry pointing at ForCausalLMLoss"
-
-    # Reset any leftover global state from earlier in the process.
-    dp_utils._uninstall_causal_lm_loss_memory_probe()
-    try:
-        dp_utils._install_causal_lm_loss_memory_probe(debug_loss_memory=True, chunked_loss=False, chunk_tokens=1024)
-        assert dp_utils._CAUSAL_LM_LOSS_MEMORY_PROBE_INSTALLED is True
-        assert loss_utils.ForCausalLMLoss is not original_fn
-        assert all(loss_utils.LOSS_MAPPING[name] is not original_fn for name in original_mapping)
-    finally:
-        dp_utils._uninstall_causal_lm_loss_memory_probe()
-
-    assert dp_utils._CAUSAL_LM_LOSS_MEMORY_PROBE_INSTALLED is False
-    assert loss_utils.ForCausalLMLoss is original_fn
-    for name in original_mapping:
-        assert loss_utils.LOSS_MAPPING[name] is original_fn
+    for name, expected in expected_state.items():
+        torch.testing.assert_close(states["hooks"][name], expected, rtol=1e-5, atol=1e-7)
+        torch.testing.assert_close(states["ghost"][name], expected, rtol=1e-5, atol=1e-7)
 
 
 @pytest.mark.parametrize("grad_sample_mode", ["hooks", "ghost"])
