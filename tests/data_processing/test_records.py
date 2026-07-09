@@ -52,6 +52,7 @@ def test_json_type_guards_reject_non_finite_numbers(value: str):
     assert is_json_value(float(value)) is False
     response = extract_and_validate_records('{"value": ' + value + "}", {"type": "object"})
     assert response.valid_records == []
+    assert response.errors == [("Object contains a value that is not valid JSON", "Invalid JSON value")]
 
 
 def test_is_safe_for_float_conversion():

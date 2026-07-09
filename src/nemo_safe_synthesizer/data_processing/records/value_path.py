@@ -98,7 +98,7 @@ def unflatten(data: dict[ValuePath, Any]) -> Optional[dict[Any, Any] | list[Any]
 
 def _ensure_array_size(result: list[Any], item: int) -> None:
     if len(result) <= item:
-        for i in range(len(result), item + 1):
+        for _ in range(len(result), item + 1):
             result.append(None)
 
 

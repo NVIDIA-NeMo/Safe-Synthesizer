@@ -321,8 +321,10 @@ def _parse_and_validate_json(matched_json: str, schema: JsonSchema) -> tuple[Rec
     """
     try:
         matched_dict = json.loads(matched_json)
-        if not is_json_object(matched_dict):
+        if not isinstance(matched_dict, dict):
             return None, ("Expected a JSON object", "Invalid JSON type")
+        if not is_json_object(matched_dict):
+            return None, ("Object contains a value that is not valid JSON", "Invalid JSON value")
 
         jsonschema.validate(matched_dict, schema)
 
