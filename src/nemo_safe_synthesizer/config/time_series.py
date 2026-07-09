@@ -49,7 +49,10 @@ class TimeSeriesParameters(Parameters):
     timestamp_interval_seconds: Annotated[
         int | None,
         Field(
-            description="Interval in seconds between timestamps. If not provided, the timestamp column will be used to infer the interval.",
+            description=(
+                "Positive whole-number interval in seconds between timestamps. "
+                "If not provided, the timestamp column will be used to infer the interval."
+            ),
         ),
     ] = None
 

@@ -326,7 +326,7 @@ for the full field list.
 |-------|---------|-------------|----------|
 | `time_series.is_timeseries` | `false` | Enable time series mode | Enable for datasets with sequential time-ordered records |
 | `time_series.timestamp_column` | `null` | Timestamp column name | Required when `is_timeseries: true` |
-| `time_series.timestamp_interval_seconds` | `null` | Fixed interval between timestamps | Set if your data has a regular sampling interval |
+| `time_series.timestamp_interval_seconds` | `null` | Positive whole-number interval in seconds between timestamps | Set if your data has a regular whole-second sampling interval |
 | `time_series.timestamp_format` | `null` | strftime format or `"elapsed_seconds"` | Required when `is_timeseries: true` |
 | `time_series.start_timestamp` | `null` | Override start timestamp for all groups (inferred from data if `null`) | Leave `null` to infer from data |
 | `time_series.stop_timestamp` | `null` | Override stop timestamp for all groups (inferred from data if `null`) | Leave `null` to infer from data |

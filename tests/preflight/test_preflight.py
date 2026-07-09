@@ -40,6 +40,7 @@ from nemo_safe_synthesizer.preflight import (
     PreflightStage,
     PseudoColumnCheck,
     SmallDatasetCheck,
+    TimeSeriesDataShapeCheck,
     TimestampColumnCheck,
     TokenBudgetCheck,
     VRAMHeadroomCheck,
@@ -804,6 +805,167 @@ class TestTimestampColumnCheck:
 
 
 @pytest.mark.unit
+class TestTimeSeriesDataShapeCheck:
+    @staticmethod
+    def _make_config(**time_series_overrides):
+        return SafeSynthesizerParameters(
+            data=DataParameters(group_training_examples_by="grp"),
+            time_series=TimeSeriesParameters(
+                is_timeseries=True,
+                timestamp_column="ts",
+                **time_series_overrides,
+            ),
+        )
+
+    def test_disabled_when_not_timeseries(self, default_config):
+        assert TimeSeriesDataShapeCheck().enabled(make_ctx(config=default_config)) is False
+
+    def test_missing_timestamp_prerequisite_is_not_duplicated(self):
+        df = pd.DataFrame({"grp": ["A", "A"], "value": [1, 2]})
+        config = self._make_config()
+
+        assert TimeSeriesDataShapeCheck().enabled(make_ctx(config=config, data=df)) is False
+        issues = TimeSeriesDataShapeCheck().run(make_ctx(config=config, data=df))
+
+        assert issues == []
+
+    def test_missing_timestamp_prerequisite_omits_shape_from_full_preflight(self):
+        df = pd.DataFrame({"grp": ["A", "A"], "value": [1, 2]})
+        config = self._make_config()
+
+        report = run_preflight(df, config, MagicMock(spec=ModelMetadata), stages=frozenset({PreflightStage.DATAFRAME}))
+        by_name = {c.name: c for c in report.checks}
+
+        assert by_name["timeseries.timestamp"].status == "failed"
+        assert "timeseries.shape" not in by_name
+
+    def test_empty_timeseries_reports_structured_error(self):
+        df = pd.DataFrame({"value": []})
+        config = SafeSynthesizerParameters(
+            time_series=TimeSeriesParameters(is_timeseries=True, timestamp_interval_seconds=60),
+        )
+
+        issues = TimeSeriesDataShapeCheck().run(make_ctx(config=config, data=df))
+
+        assert any(i.code == "timeseries_empty" and i.severity == "error" for i in issues)
+        assert not any(i.code == "preflight.check_crash" for i in issues)
+
+    def test_mixed_timestamp_formats_report_parse_failure(self):
+        df = pd.DataFrame(
+            {
+                "grp": ["A", "A", "B", "B"],
+                "ts": ["01/01/2024", "01/02/2024", "01/01/2024", "01/2024"],
+                "value": [1, 2, 3, 4],
+            }
+        )
+        config = self._make_config()
+
+        issues = TimeSeriesDataShapeCheck().run(make_ctx(config=config, data=df))
+
+        assert any(i.code == "timestamp_parse_failed" and i.severity == "error" for i in issues)
+
+    def test_explicit_timestamp_format_mismatch_reports_error(self):
+        df = pd.DataFrame({"grp": ["A", "A"], "ts": ["2024-01-01", "2024-01-02"], "value": [1, 2]})
+        config = self._make_config(timestamp_format="%m/%d/%Y")
+
+        issues = TimeSeriesDataShapeCheck().run(make_ctx(config=config, data=df))
+
+        assert any(i.code == "timestamp_format_mismatch" and i.severity == "error" for i in issues)
+
+    def test_elapsed_seconds_requires_numeric_timestamp(self):
+        df = pd.DataFrame({"grp": ["A", "A"], "ts": ["0", "60"], "value": [1, 2]})
+        config = self._make_config(timestamp_format="elapsed_seconds")
+
+        issues = TimeSeriesDataShapeCheck().run(make_ctx(config=config, data=df))
+
+        assert any(i.code == "timestamp_elapsed_non_numeric" and i.severity == "error" for i in issues)
+
+    @pytest.mark.parametrize(
+        "values,expected_check,expected_code",
+        [
+            pytest.param([True, False, True], "timeseries.shape", "timestamp_elapsed_invalid", id="boolean"),
+            pytest.param([0.0, float("nan"), 60.0], "timeseries.timestamp", "timestamp_nulls", id="nan"),
+            pytest.param([0.0, float("inf"), 60.0], "timeseries.shape", "timestamp_elapsed_invalid", id="pos_inf"),
+            pytest.param([0.0, float("-inf"), 60.0], "timeseries.shape", "timestamp_elapsed_invalid", id="neg_inf"),
+        ],
+    )
+    def test_invalid_elapsed_second_values_report_stable_preflight_codes(self, values, expected_check, expected_code):
+        df = pd.DataFrame({"grp": ["A", "A", "A"], "ts": values, "value": [1, 2, 3]})
+        config = self._make_config(timestamp_format="elapsed_seconds")
+
+        report = run_preflight(df, config, MagicMock(spec=ModelMetadata), stages=frozenset({PreflightStage.DATAFRAME}))
+
+        assert any(
+            issue.check == expected_check and issue.code == expected_code and issue.severity == "error"
+            for issue in report.issues
+        )
+        assert not any(issue.code == "preflight.check_crash" for issue in report.issues)
+
+    def test_interval_mismatch_reports_error(self):
+        df = pd.DataFrame(
+            {
+                "grp": ["A", "A", "A", "B", "B", "B"],
+                "ts": [
+                    "2024-01-01 00:00:00",
+                    "2024-01-01 01:00:00",
+                    "2024-01-01 02:00:00",
+                    "2024-01-01 00:00:00",
+                    "2024-01-01 00:30:00",
+                    "2024-01-01 02:00:00",
+                ],
+                "value": [1, 2, 3, 4, 5, 6],
+            }
+        )
+        config = self._make_config(timestamp_format="%Y-%m-%d %H:%M:%S")
+
+        issues = TimeSeriesDataShapeCheck().run(make_ctx(config=config, data=df))
+
+        assert any(i.code == "timestamp_interval_mismatch" and i.severity == "error" for i in issues)
+
+    def test_group_length_mismatch_reports_error(self):
+        df = pd.DataFrame(
+            {
+                "grp": ["A", "A", "A", "B", "B"],
+                "ts": ["2024-01-01", "2024-01-02", "2024-01-03", "2024-01-01", "2024-01-02"],
+                "value": [1, 2, 3, 4, 5],
+            }
+        )
+        config = self._make_config(timestamp_format="%Y-%m-%d")
+
+        issues = TimeSeriesDataShapeCheck().run(make_ctx(config=config, data=df))
+
+        assert any(i.code == "timeseries_group_length_mismatch" and i.severity == "error" for i in issues)
+
+    def test_start_mismatch_reports_error(self):
+        df = pd.DataFrame(
+            {
+                "grp": ["A", "A", "B", "B"],
+                "ts": ["2024-01-01", "2024-01-02", "2024-01-02", "2024-01-03"],
+                "value": [1, 2, 3, 4],
+            }
+        )
+        config = self._make_config(timestamp_format="%Y-%m-%d")
+
+        issues = TimeSeriesDataShapeCheck().run(make_ctx(config=config, data=df))
+
+        assert any(i.code == "timeseries_start_mismatch" and i.severity == "error" for i in issues)
+
+    def test_stop_mismatch_reports_error(self):
+        df = pd.DataFrame(
+            {
+                "grp": ["A", "A", "B", "B"],
+                "ts": ["2024-01-01", "2024-01-02", "2024-01-01", "2024-01-03"],
+                "value": [1, 2, 3, 4],
+            }
+        )
+        config = self._make_config(timestamp_format="%Y-%m-%d")
+
+        issues = TimeSeriesDataShapeCheck().run(make_ctx(config=config, data=df))
+
+        assert any(i.code == "timeseries_stop_mismatch" and i.severity == "error" for i in issues)
+
+
+@pytest.mark.unit
 class TestConstantColumnCheck:
     def test_constant_column_is_flagged(self):
         df = pd.DataFrame({"a": [1, 1, 1], "b": [1, 2, 3]})
@@ -969,10 +1131,9 @@ class TestRunPreflight:
             with patch.dict("os.environ", {"NSS_INFERENCE_KEY": "test", "HF_TOKEN": "hf_xxx"}):
                 report = run_preflight(sample_df, resolved_config, metadata)
         assert len(report.errors) == 0
-        # timeseries.timestamp is excluded via enabled() when is_timeseries is False
-        assert len(report.checks) == len(get_registry()) - 1
         by_name = {c.name: c for c in report.checks}
         assert "timeseries.timestamp" not in by_name
+        assert "timeseries.shape" not in by_name
 
     def test_result_status_reflects_outcome(self, sample_df, default_config):
         """``PreflightCheckResult.status`` is populated for all three outcomes."""
