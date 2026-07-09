@@ -322,7 +322,7 @@ def _parse_and_validate_json(matched_json: str, schema: JsonSchema) -> tuple[Rec
     try:
         matched_dict = json.loads(matched_json)
         if not is_json_object(matched_dict):
-            return None, ("Expected a JSON object", "Invalid JSON")
+            return None, ("Expected a JSON object", "Invalid JSON type")
 
         jsonschema.validate(matched_dict, schema)
 
@@ -564,10 +564,8 @@ def records_to_jsonl(records: pd.DataFrame | list[RawRecordMapping] | RawRecordM
     Returns:
         The JSONL string.
     """
-    match records:
-        case pd.DataFrame() as dataframe:
-            return dataframe.to_json(orient="records", lines=True, force_ascii=False)
-        case list() | dict():
-            return pd.DataFrame(records).to_json(orient="records", lines=True, force_ascii=False)
-        case _:
-            raise ValueError(f"Unsupported type: {type(records)}")
+    if isinstance(records, pd.DataFrame):
+        return records.to_json(orient="records", lines=True, force_ascii=False)
+    if isinstance(records, list | Mapping):
+        return pd.DataFrame(records).to_json(orient="records", lines=True, force_ascii=False)
+    raise ValueError(f"Unsupported type: {type(records)}")

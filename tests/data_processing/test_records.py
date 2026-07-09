@@ -12,6 +12,7 @@ import pytest
 
 from nemo_safe_synthesizer.data_processing.record_utils import (
     _extract_timestamp_seconds,
+    _parse_and_validate_json,
     _validate_time_interval,
     check_record_for_large_numbers,
     extract_and_validate_records,
@@ -175,6 +176,13 @@ def test_extract_and_validate_records_with_invalid_records(
     assert len(result.errors[0]) == 2
     assert result.errors[0][0] == "Invalid JSON: Expecting ',' delimiter"
     assert result.errors[0][1] == "Invalid JSON"
+
+
+def test_parse_and_validate_json_classifies_non_object_json_type():
+    parsed, error = _parse_and_validate_json("[1, 2, 3]", {"type": "object"})
+
+    assert parsed is None
+    assert error == ("Expected a JSON object", "Invalid JSON type")
 
 
 def test_extract_and_validate_records_with_invalid_schema(

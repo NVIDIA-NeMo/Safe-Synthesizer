@@ -11,6 +11,17 @@ from typing import TypeAlias
 
 from typing_extensions import TypeIs
 
+__all__ = [
+    "JsonArray",
+    "JsonContainer",
+    "JsonObject",
+    "JsonScalar",
+    "JsonSchema",
+    "JsonValue",
+    "is_json_object",
+    "is_json_value",
+]
+
 JsonScalar: TypeAlias = str | int | float | bool | None
 JsonValue: TypeAlias = JsonScalar | dict[str, "JsonValue"] | list["JsonValue"]
 JsonObject: TypeAlias = dict[str, JsonValue]
@@ -21,17 +32,15 @@ JsonSchema: TypeAlias = Mapping[str, JsonValue]
 
 def is_json_value(value: object) -> TypeIs[JsonValue]:
     """Return whether ``value`` is representable as JSON."""
-    match value:
-        case float() as number:
-            return math.isfinite(number)
-        case str() | int() | bool() | None:
-            return True
-        case list() as values:
-            return all(is_json_value(item) for item in values)
-        case dict() as values:
-            return all(isinstance(key, str) and is_json_value(item) for key, item in values.items())
-        case _:
-            return False
+    if isinstance(value, float):
+        return math.isfinite(value)
+    if isinstance(value, (str, int)) or value is None:
+        return True
+    if isinstance(value, list):
+        return all(is_json_value(item) for item in value)
+    if isinstance(value, dict):
+        return all(isinstance(key, str) and is_json_value(item) for key, item in value.items())
+    return False
 
 
 def is_json_object(value: object) -> TypeIs[JsonObject]:
