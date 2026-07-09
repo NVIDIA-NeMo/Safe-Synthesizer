@@ -3536,6 +3536,8 @@
       
         
       
+        
+      
     
     
     
@@ -4078,6 +4080,34 @@
     
   
     stats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/nemo_safe_synthesizer/data_processing/timeseries_validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    timeseries_validation
   
 
     
@@ -10732,6 +10762,60 @@ check of its own.</p>
 <td>Timestamp column has nulls</td>
 </tr>
 <tr>
+<td><code>timestamp_format_mismatch</code></td>
+<td>error</td>
+<td><code>timeseries.shape</code></td>
+<td>Timestamp format could not be inferred or the configured format does not match the timestamp values</td>
+</tr>
+<tr>
+<td><code>timestamp_parse_failed</code></td>
+<td>error</td>
+<td><code>timeseries.shape</code></td>
+<td>One or more timestamp values could not be parsed with the inferred or configured timestamp format</td>
+</tr>
+<tr>
+<td><code>timestamp_elapsed_non_numeric</code></td>
+<td>error</td>
+<td><code>timeseries.shape</code></td>
+<td><code>timestamp_format='elapsed_seconds'</code> was configured for a non-numeric timestamp column</td>
+</tr>
+<tr>
+<td><code>timestamp_elapsed_invalid</code></td>
+<td>error</td>
+<td><code>timeseries.shape</code></td>
+<td><code>timestamp_format='elapsed_seconds'</code> was configured for boolean or infinite timestamp values</td>
+</tr>
+<tr>
+<td><code>timestamp_interval_mismatch</code></td>
+<td>error</td>
+<td><code>timeseries.shape</code></td>
+<td>Timestamp intervals are inconsistent within or across groups, or do not match <code>timestamp_interval_seconds</code></td>
+</tr>
+<tr>
+<td><code>timeseries_empty</code></td>
+<td>error</td>
+<td><code>timeseries.shape</code></td>
+<td>Time-series data contains no records to validate</td>
+</tr>
+<tr>
+<td><code>timeseries_group_length_mismatch</code></td>
+<td>error</td>
+<td><code>timeseries.shape</code></td>
+<td>Time-series groups do not contain the same number of records</td>
+</tr>
+<tr>
+<td><code>timeseries_start_mismatch</code></td>
+<td>error</td>
+<td><code>timeseries.shape</code></td>
+<td>Time-series groups do not share the same start timestamp</td>
+</tr>
+<tr>
+<td><code>timeseries_stop_mismatch</code></td>
+<td>error</td>
+<td><code>timeseries.shape</code></td>
+<td>Time-series groups do not share the same stop timestamp</td>
+</tr>
+<tr>
 <td><code>tokenizer_unavailable</code></td>
 <td>warning</td>
 <td><code>token_budget</code></td>
@@ -10849,8 +10933,12 @@ For configuration examples, see <a href="../configuration/#time-series">Configur
 <dt>Interval mismatch:</dt>
 <dd>
 <p>If <code>timestamp_interval_seconds</code> does not match the actual intervals in your
-  data, a warning is logged but the pipeline continues. Verify your interval
-  setting matches the data.</p>
+  data, pre-flight and training fail with <code>timestamp_interval_mismatch</code>.
+  Verify your interval setting matches the data and is a positive whole number
+  of seconds. Fractional/sub-second intervals are not supported; resample or
+  represent the data at whole-second resolution. Time-series synthesis is
+  experimental, and this validation is intentionally strict so mismatches are
+  caught before expensive pipeline stages.</p>
 </dd>
 <dt>Groups skipped during generation:</dt>
 <dd>
