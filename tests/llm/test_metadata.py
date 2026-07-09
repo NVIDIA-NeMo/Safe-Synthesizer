@@ -1038,6 +1038,24 @@ class TestModelMetadataKwargsPassthrough:
 
     @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
     @patch("nemo_safe_synthesizer.llm.metadata.load_fast_tokenizer")
+    def test_autoconfig_passthrough_when_prompt_config_is_derived(
+        self, mock_auto_tokenizer, mock_auto_config, mock_tokenizer, mock_autoconfig_obj
+    ):
+        """Preserve a caller-provided autoconfig while deriving the prompt config."""
+        loaded_autoconfig = PretrainedConfig()
+        loaded_autoconfig.max_position_embeddings = 4096
+        mock_auto_tokenizer.return_value = mock_tokenizer
+        mock_auto_config.from_pretrained.return_value = loaded_autoconfig
+
+        metadata = TinyLlama(
+            model_name_or_path="TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+            autoconfig=mock_autoconfig_obj,
+        )
+
+        assert metadata.autoconfig is mock_autoconfig_obj
+
+    @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
+    @patch("nemo_safe_synthesizer.llm.metadata.load_fast_tokenizer")
     def test_rope_scaling_factor_passthrough(
         self, mock_auto_tokenizer, mock_auto_config, mock_tokenizer, mock_autoconfig_obj
     ):

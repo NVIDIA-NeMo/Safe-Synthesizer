@@ -385,7 +385,10 @@ class ModelMetadata(BaseModel):
         if is_model_family:
             data.setdefault("rope_parameters_location", metadata_cls.rope_parameters_location_default)
         if is_model_family and prompt_config is None:
-            autoconfig, tokenizer = metadata_cls._load_config_and_tokenizer(model_name_or_path, tokenizer)
+            if autoconfig is None or tokenizer is None:
+                loaded_autoconfig, tokenizer = metadata_cls._load_config_and_tokenizer(model_name_or_path, tokenizer)
+                if autoconfig is None:
+                    autoconfig = loaded_autoconfig
             prompt_config = metadata_cls._prompt_config_from_tokenizer(model_name_or_path, tokenizer)
 
         if autoconfig is not None:
