@@ -10203,19 +10203,18 @@ configuration reference.</p>
 <h3 id="transformers-v5-vllm-version-selection">Transformers v5 + vLLM Version Selection<a class="headerlink" href="#transformers-v5-vllm-version-selection" title="Permanent link">&para;</a></h3>
 <p><code>uv sync</code> fails with an error mentioning incompatible <code>transformers</code> and
 <code>vllm</code> requirements.</p>
-<p>Safe Synthesizer requires <code>transformers&gt;=5.6,&lt;6</code>. vLLM 0.20.0 accepts
-transformers v5, but excludes several early 5.x releases that are not
-compatible with its runtime. Keep vLLM's exclusions intact and resolve to a
-newer transformers v5 release.</p>
+<p>Safe Synthesizer requires <code>transformers&gt;=5.12,&lt;5.12.1</code> with vLLM 0.24.0.
+Keep vLLM's constraints intact so the resolver selects the tested
+Transformers/vLLM pairing.</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[project]</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="s2">&quot;transformers&gt;=5.6,&lt;6&quot;</span><span class="p">,</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="s2">&quot;vllm==0.20.0&quot;</span><span class="p">,</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="s2">&quot;transformers&gt;=5.12,&lt;5.12.1&quot;</span><span class="p">,</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="s2">&quot;vllm==0.24.0&quot;</span><span class="p">,</span>
 </span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="p">]</span>
 </span></code></pre></div>
 <p>If you've vendored or copied parts of <code>pyproject.toml</code> into another project,
 avoid adding a broad <code>transformers&gt;=5.0,&lt;6</code> override for vLLM. That can erase
-vLLM's explicit exclusions and allow incompatible early v5 releases.</p>
+vLLM's explicit constraints and allow incompatible Transformers releases.</p>
 <h3 id="slow-tokenizer-warning">Slow Tokenizer Warning<a class="headerlink" href="#slow-tokenizer-warning" title="Permanent link">&para;</a></h3>
 <p>After upgrading to transformers v5 you may see a log line like:</p>
 <blockquote>
