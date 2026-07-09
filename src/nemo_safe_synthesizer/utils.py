@@ -13,7 +13,7 @@ import functools
 import json
 import os
 import time
-from collections.abc import Callable, Generator, Iterable
+from collections.abc import Callable, Generator, Iterable, Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -260,12 +260,12 @@ def debug_fmt(df: pd.DataFrame) -> str:
     return df.head(5).to_json(orient="records", date_format="iso")
 
 
-def merge_dicts(base: dict, new: dict) -> dict:
+def merge_dicts(base: Mapping[str, Any], new: Mapping[str, Any]) -> dict[str, Any]:
     """Deep-merge two dicts, preferring values from ``new`` on conflict."""
-    result = base.copy()
+    result = dict(base)
     for k, new_v in new.items():
         base_v = result.get(k)
-        if isinstance(base_v, dict) and isinstance(new_v, dict):
+        if isinstance(base_v, Mapping) and isinstance(new_v, Mapping):
             result[k] = merge_dicts(base_v, new_v)
         else:
             result[k] = new_v

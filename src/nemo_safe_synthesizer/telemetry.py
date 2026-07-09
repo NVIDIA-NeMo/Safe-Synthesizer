@@ -53,6 +53,7 @@ class DeploymentTypeEnum(str, Enum):
     NMP = "nmp"  # Deployed through NVIDIA NeMo Platform
     SLURM = "slurm"  # Deployed through SLURM
     SLURM_INTERNAL = "slurm-nvidia-internal"  # Deployed through SLURM internal (NVIDIA internal cluster)
+    NVIDIA_INTERNAL = "nvidia-internal"  # Deployed in NVIDIA internal environments
     UNDEFINED = "undefined"
 
 
@@ -165,7 +166,7 @@ def bucket_columns(n: int) -> str:
 
 class NSSTrainingAndGenerationEvent(BaseModel):
     _event_name: ClassVar[str] = "train_and_generation_event"
-    _schema_version: ClassVar[str] = "1.7"
+    _schema_version: ClassVar[str] = "1.9"
 
     nemo_source: NemoSourceEnum = Field(
         default=NemoSourceEnum.SAFE_SYNTHESIZER,

@@ -12,6 +12,7 @@ from nemo_safe_synthesizer.config.generate import (
     resolve_structured_generation_schema_method,
 )
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
+from nemo_safe_synthesizer.errors import ParameterError
 
 
 @pytest.mark.unit
@@ -179,6 +180,13 @@ class TestMixedInputMigration:
         )
         assert params.generation.structured_generation.enabled is True
         assert params.generation.structured_generation.schema_method == "json_schema"  # preserved
+
+    def test_from_params_legacy_alias_and_dotted_name_are_duplicate_paths(self) -> None:
+        with pytest.raises(ParameterError, match=r"generation\.structured_generation\.backend"):
+            SafeSynthesizerParameters.from_params(
+                structured_generation_backend="xgrammar",
+                **{"generation.structured_generation.backend": "outlines"},
+            )
 
     def test_nested_dict_with_no_legacy_keys_uses_dict_values(self) -> None:
         """When no legacy flat keys are present, nested dict values are used as-is."""

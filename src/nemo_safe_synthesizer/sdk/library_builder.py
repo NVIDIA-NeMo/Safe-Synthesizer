@@ -196,8 +196,8 @@ class SafeSynthesizer(ConfigBuilder):
     generator: GeneratorBackend
     """Generation backend instance, populated after ``generate()``."""
 
-    evaluator: Evaluator
-    """Evaluator instance, populated after ``evaluate()``."""
+    evaluator: Evaluator | None
+    """Evaluator instance, populated after ``evaluate()`` when evaluation is enabled."""
 
     results: SafeSynthesizerResults
     """Final pipeline results, populated after ``evaluate()`` or ``run()``."""
@@ -601,16 +601,24 @@ class SafeSynthesizer(ConfigBuilder):
                 assert self._pii_replacer_time is not None
                 assert self._column_statistics is not None
 
-        self.evaluator = Evaluator(
-            config=self._nss_config,
-            generate_results=self.generator.gen_results,
-            pii_replacer_time=self._pii_replacer_time,
-            column_statistics=self._column_statistics,
-            training_df=self._original_training_df,
-            test_df=self._test_df,
-            workdir=self._workdir,
-        )
-        self.evaluator.evaluate()
+        evaluation_time = None
+        report = None
+        if self._nss_config.evaluation.enabled:
+            self.evaluator = Evaluator(
+                config=self._nss_config,
+                generate_results=self.generator.gen_results,
+                pii_replacer_time=self._pii_replacer_time,
+                column_statistics=self._column_statistics,
+                training_df=self._original_training_df,
+                test_df=self._test_df,
+                workdir=self._workdir,
+            )
+            self.evaluator.evaluate()
+            evaluation_time = self.evaluator.evaluation_time
+            report = self.evaluator.report
+        else:
+            logger.info("Evaluation disabled; skipping evaluation.")
+            self.evaluator = None
 
         training_time = None
         if trainer := getattr(self, "trainer", {}):
@@ -625,8 +633,8 @@ class SafeSynthesizer(ConfigBuilder):
             total_time=time.monotonic() - self._total_start,
             training_time=training_time,
             generation_time=generation_time,
-            evaluation_time=self.evaluator.evaluation_time,
-            report=self.evaluator.report,
+            evaluation_time=evaluation_time,
+            report=report,
             generate_results=self.generator.gen_results,
         )
         return self

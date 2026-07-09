@@ -87,6 +87,97 @@ def test_gliner_batch_predict_config():
         entity_extractor._model.batch_predict_entities.assert_called()  # ty: ignore[call-non-callable, unresolved-attribute] -- mock object
 
 
+def test_gliner_entity_labels_are_indexable():
+    cfg = ClassifyConfig(
+        valid_entities={"email", "name"},
+        ner_threshold=0.8,
+        ner_regexps_enabled=False,
+        ner_entities={"email", "name"},
+        gliner_enabled=True,
+        gliner_batch_mode_enabled=True,
+        gliner_batch_mode_chunk_length=10,
+        gliner_batch_mode_batch_size=20,
+        gliner_model="nvidia/gliner-PII",
+    )
+
+    with patch("nemo_safe_synthesizer.pii_replacer.data_editor.detect.GLiNER") as mock_gliner:
+        model = mock_gliner.from_pretrained.return_value
+        model.predict_entities.return_value = []
+        model.batch_predict_entities.return_value = [[]]
+
+        entity_extractor = EntityExtractorGliner.get_entity_extractor(cfg)
+        entity_extractor.extract_ner_predictions("abc", {"name", "email"})
+        entity_extractor.batch_update_cache(["abc"], None)
+
+        assert model.predict_entities.call_args.args[1] == ["email", "name"]
+        assert model.batch_predict_entities.call_args.args[1] == ["email", "name"]
+
+
+def test_gliner_batch_cache_falls_back_to_predict_entities_api():
+    cfg = ClassifyConfig(
+        valid_entities={"email", "name"},
+        ner_threshold=0.8,
+        ner_regexps_enabled=False,
+        ner_entities={"email", "name"},
+        gliner_enabled=True,
+        gliner_batch_mode_enabled=True,
+        gliner_batch_mode_chunk_length=10,
+        gliner_batch_mode_batch_size=20,
+        gliner_model="nvidia/gliner-PII",
+    )
+
+    class FakeGLiNER:
+        def __init__(self):
+            self.calls = []
+
+        def predict_entities(self, text, labels, **kwargs):
+            self.calls.append((text, labels, kwargs))
+            return []
+
+    model = FakeGLiNER()
+    with patch("nemo_safe_synthesizer.pii_replacer.data_editor.detect.GLiNER") as mock_gliner:
+        mock_gliner.from_pretrained.return_value = model
+
+        entity_extractor = EntityExtractorGliner.get_entity_extractor(cfg)
+        entity_extractor.batch_update_cache(["abc"], None)
+
+        assert len(model.calls) == 1
+        assert model.calls[0][0] == "abc"
+        assert model.calls[0][1] == ["email", "name"]
+
+
+def test_gliner_single_prediction_falls_back_to_batch_api():
+    cfg = ClassifyConfig(
+        valid_entities={"email", "name"},
+        ner_threshold=0.8,
+        ner_regexps_enabled=False,
+        ner_entities={"email", "name"},
+        gliner_enabled=True,
+        gliner_batch_mode_enabled=False,
+        gliner_batch_mode_chunk_length=10,
+        gliner_batch_mode_batch_size=20,
+        gliner_model="nvidia/gliner-PII",
+    )
+
+    class FakeGLiNER:
+        def __init__(self):
+            self.calls = []
+
+        def batch_predict_entities(self, texts, labels, **kwargs):
+            self.calls.append((texts, labels, kwargs))
+            return [[]]
+
+    model = FakeGLiNER()
+    with patch("nemo_safe_synthesizer.pii_replacer.data_editor.detect.GLiNER") as mock_gliner:
+        mock_gliner.from_pretrained.return_value = model
+
+        entity_extractor = EntityExtractorGliner.get_entity_extractor(cfg)
+        entity_extractor.extract_ner_predictions("abc", {"name", "email"})
+
+        assert model.calls[0][0] == ["abc"]
+        assert model.calls[0][1] == ["email", "name"]
+
+
 @pytest.mark.parametrize("offline_var", ["HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE"])
 @pytest.mark.parametrize("env_value", ["1", "yes", "on"])
 def test_gliner_local_files_only_follows_hf_offline_env(env_value, offline_var, monkeypatch):

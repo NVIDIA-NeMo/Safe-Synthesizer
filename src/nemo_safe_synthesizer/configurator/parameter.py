@@ -48,7 +48,7 @@ class Parameter(Generic[DataT]):
     value: DataT | Sequence[DataT] | None = None
 
     @model_serializer
-    def ser_model(self) -> "dict[str, DataT] | DataT | Sequence[DataT] | Parameter[DataT] | None":
+    def ser_model(self) -> dict[str, DataT] | DataT | Sequence[DataT] | Parameter[DataT] | None:
         """Serialize to the bare value for Pydantic ``model_dump`` / ``model_dump_json``."""
         if hasattr(self, "value"):
             return self.value

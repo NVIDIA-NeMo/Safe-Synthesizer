@@ -96,6 +96,10 @@ class TestEnvHelpers:
         # Must not raise — telemetry must never block runtime over a misconfigured env var.
         assert _deployment_type() == DeploymentTypeEnum.UNDEFINED
 
+    def test_deployment_type_nvidia_internal(self, monkeypatch):
+        monkeypatch.setenv("NEMO_DEPLOYMENT_TYPE", DeploymentTypeEnum.NVIDIA_INTERNAL.value)
+        assert _deployment_type() == DeploymentTypeEnum.NVIDIA_INTERNAL
+
 
 # =============================================================================
 # Model telemetry sanitization
@@ -183,6 +187,9 @@ class TestNSSTrainingAndGenerationEvent:
 
     def test_event_name(self):
         assert NSSTrainingAndGenerationEvent._event_name == "train_and_generation_event"
+
+    def test_schema_version(self):
+        assert NSSTrainingAndGenerationEvent._schema_version == "1.9"
 
     def test_feature_flags(self):
         event = NSSTrainingAndGenerationEvent(

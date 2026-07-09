@@ -606,6 +606,47 @@ class EntityExtractorGliner(EntityExtractor):
         extractor._batch_size = clsfy_cfg.gliner_batch_mode_batch_size
         return extractor
 
+    def _predict_entities(self, text: str, entity_labels: list[str]) -> list[dict]:
+        predict_entities = getattr(self._model, "predict_entities", None)
+        if predict_entities is not None:
+            return predict_entities(
+                text,
+                entity_labels,
+                threshold=self._ner_threshold,
+                flat_ner=False,
+            )
+
+        return self._model.batch_predict_entities(
+            [text],
+            entity_labels,
+            threshold=self._ner_threshold,
+            flat_ner=False,
+        )[0]
+
+    def _batch_predict_entities(self, texts: list[str], entity_labels: list[str]) -> list[list[dict]]:
+        batch_predict_entities = getattr(self._model, "batch_predict_entities", None)
+        if batch_predict_entities is not None:
+            return batch_predict_entities(
+                texts,
+                entity_labels,
+                threshold=self._ner_threshold,
+                flat_ner=False,
+            )
+
+        predict_entities = getattr(self._model, "predict_entities", None)
+        if predict_entities is not None:
+            return [
+                predict_entities(
+                    text,
+                    entity_labels,
+                    threshold=self._ner_threshold,
+                    flat_ner=False,
+                )
+                for text in texts
+            ]
+
+        raise AttributeError("GLiNER model has neither batch_predict_entities nor predict_entities")
+
     def _detect_entities_chunked(
         self,
         text: str,
@@ -629,7 +670,8 @@ class EntityExtractorGliner(EntityExtractor):
 
         if entity_labels is None:
             return []
-        entities_key = tuple(sorted(entity_labels))
+        gliner_entity_labels = sorted(entity_labels)
+        entities_key = tuple(gliner_entity_labels)
         start = 0
         entities = []
         # Occasionally text interpreted as type other than string by jinja
@@ -646,12 +688,7 @@ class EntityExtractorGliner(EntityExtractor):
             temp_entities = self._entity_cache.get((hash(chunk), entities_key))
             if temp_entities is None:
                 n_cache_miss += 1
-                temp_entities = self._model.predict_entities(
-                    chunk,
-                    entity_labels,
-                    threshold=self._ner_threshold,
-                    flat_ner=False,
-                )
+                temp_entities = self._predict_entities(chunk, gliner_entity_labels)
             for idx in range(len(temp_entities)):
                 temp_entities[idx]["start"] += start
                 temp_entities[idx]["end"] += start
@@ -717,7 +754,8 @@ class EntityExtractorGliner(EntityExtractor):
             entity_labels = self._entity_types
         if entity_labels is None:
             return
-        entities_key = tuple(sorted(entity_labels))
+        gliner_entity_labels = sorted(entity_labels)
+        entities_key = tuple(gliner_entity_labels)
         for text in texts:
             text = str(text)
             start = 0
@@ -728,12 +766,7 @@ class EntityExtractorGliner(EntityExtractor):
         for batch_n, batch in enumerate(
             [chunks[t : t + self._batch_size] for t in range(0, len(chunks), self._batch_size)]
         ):
-            entities_lists = self._model.batch_predict_entities(
-                batch,
-                entity_labels,
-                threshold=self._ner_threshold,
-                flat_ner=False,
-            )
+            entities_lists = self._batch_predict_entities(batch, gliner_entity_labels)
             if monotonic() - last_log > 30:
                 logger.info(
                     f"NER batch #{batch_n + 1} of {batch_n_total} complete.",
