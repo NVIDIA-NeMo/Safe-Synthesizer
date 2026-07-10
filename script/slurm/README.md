@@ -35,6 +35,7 @@ cd $LUSTRE_DIR
 git clone git@github.com:NVIDIA-NeMo/Safe-Synthesizer.git
 cd Safe-Synthesizer
 ```
+
 #### Bootstrap the Slurm Python environment
 
 Do not use the general development bootstrap for Slurm. Slurm containers mount
@@ -94,6 +95,7 @@ curl -LsSf "https://astral.sh/uv/${uv_version}/install.sh" \
 - Passwordless login See https://confluence.nvidia.com/display/HWINFCSSUP/Setting+Up+Passwordless+SSH+Key+Authentication?src=contextnavpagetreemode
 - Env vars in `.bashrc`
   - This is optional for bootstrap, but avoids exporting the submission user in every shell.
+
 ```bash
 export USER_NAME="<your slurm user name>"
 export LUSTRE_DIR="/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/${USER_NAME}"

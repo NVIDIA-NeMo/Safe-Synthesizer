@@ -61,6 +61,11 @@ fi
 
 expected_python="$(readlink -f "${python_bin}")"
 readonly expected_python
+if [[ "${expected_python}" != "${lustre_real}/"* ]]; then
+  echo "Error: managed Python is not container-visible under Lustre: ${expected_python}" >&2
+  exit 1
+fi
+
 if [[ -e "${venv_path}" ]]; then
   current_python="$(readlink -f "${venv_path}/bin/python" 2>/dev/null || true)"
   if [[ "${current_python}" != "${expected_python}" ]]; then

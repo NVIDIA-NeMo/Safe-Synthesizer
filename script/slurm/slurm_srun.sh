@@ -18,6 +18,8 @@ export NEMO_DEPLOYMENT_TYPE="${NEMO_DEPLOYMENT_TYPE:-slurm-nvidia-internal}"
 # Pyxis gives variables baked into the container image precedence over the
 # Slurm step environment. Preserve the submitted job configuration explicitly
 # so a cached image created by another user cannot redirect paths or outputs.
+# Some Pyxis versions treat this as the complete container allowlist, so keep it
+# synchronized with job-critical variables consumed by the Slurm scripts.
 CONTAINER_ENV_VARS="${CONTAINER_ENV_VARS:-\
 USER_NAME,LUSTRE_DIR,NSS_SHARED_DIR,NSS_DIR,NSS_SLURM_DIR,CONFIG_DIR,\
 BASE_LOG_DIR,ADAPTER_PATH,NSS_ARTIFACTS_PATH,VLLM_CACHE_ROOT,HF_HOME,\
