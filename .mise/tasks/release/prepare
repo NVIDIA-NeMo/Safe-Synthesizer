@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#MISE description="Prepare the next rc0 release tag from local Git tags without creating, deleting, or pushing tags."
+
+set -euo pipefail
+source "${MISE_CONFIG_ROOT}/.mise/tasks/_lib.sh"
+
+tool_root="${MISE_CONFIG_ROOT:-$(git rev-parse --show-toplevel)}"
+python_version="$(resolve_python_version)"
+
+uv --no-config run --no-project --python "${python_version}" \
+  "${tool_root}/tools/release_version.py" "$@"

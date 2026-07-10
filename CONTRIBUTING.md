@@ -718,6 +718,13 @@ Examples:
 - Decide whether GHCR visibility or a separate nSpect or Pulse scan blocks the
   release. Those scans are not part of the GitHub release workflows.
 
+After fetching tags, preview the next release's initial `rc0` version and
+resolve its target commit without creating or pushing a tag:
+
+```bash
+mise run release:prepare -- --ref origin/main
+```
+
 #### Tag Trigger
 
 Create the candidate tag at the recorded SHA and push it. This automatically
