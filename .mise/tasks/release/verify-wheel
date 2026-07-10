@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#MISE description="Verify a built wheel with clean end-user CPU installation and CUDA dependency resolution."
+
+set -euo pipefail
+source "${MISE_CONFIG_ROOT}/.mise/tasks/_lib.sh"
+
+tool_root="${MISE_CONFIG_ROOT:-$(git rev-parse --show-toplevel)}"
+python_version="$(resolve_python_version)"
+
+if (( $# > 0 )); then
+  wheel="$1"
+  shift
+else
+  shopt -s nullglob
+  wheels=("${tool_root}"/dist/*.whl)
+  if (( ${#wheels[@]} != 1 )); then
+    echo "Error: expected exactly one wheel under ${tool_root}/dist, found ${#wheels[@]}" >&2
+    exit 1
+  fi
+  wheel="${wheels[0]}"
+fi
+
+uv --no-config run --no-project --python "${python_version}" \
+  "${tool_root}/tools/verify_wheel_install.py" \
+  "${wheel}" --python "${python_version}" "$@"
