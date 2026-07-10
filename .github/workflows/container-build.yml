@@ -85,8 +85,8 @@ jobs:
             type=raw,value=${{ matrix.variant }},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
             type=raw,value=latest-${{ matrix.variant }},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
             type=sha,prefix=sha-,suffix=-${{ matrix.variant }}
-            type=semver,pattern={{version}}-${{ matrix.variant }}
-            type=semver,pattern={{major}}.{{minor}}-${{ matrix.variant }}
+            type=pep440,pattern={{version}}-${{ matrix.variant }}
+            type=pep440,pattern={{major}}.{{minor}}-${{ matrix.variant }}
           labels: |
             org.opencontainers.image.version=${{ steps.package-version.outputs.version }}
             com.nvidia.nemo.safe-synthesizer.extra=${{ matrix.extra }}

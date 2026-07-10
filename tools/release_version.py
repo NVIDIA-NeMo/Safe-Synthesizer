@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run --no-project
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Prepare the next Safe-Synthesizer release-candidate tag name.
+"""Prepare the next Safe-Synthesizer release tag name.
 
 The tool inspects local Git tags only. It never creates, deletes, pushes, or
 publishes anything.
@@ -17,9 +17,12 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Self
 
-BUMP_CHOICES = ("major", "minor", "patch")
+BUMP_CHOICES = ("major", "minor", "patch", "post")
 STABLE_TAG_RE = re.compile(r"^v(?P<major>0|[1-9]\d*)\.(?P<minor>0|[1-9]\d*)\.(?P<patch>0|[1-9]\d*)$")
 RC_TAG_RE = re.compile(r"^v(?P<major>0|[1-9]\d*)\.(?P<minor>0|[1-9]\d*)\.(?P<patch>0|[1-9]\d*)rc(?P<rc>0|[1-9]\d*)$")
+POST_TAG_RE = re.compile(
+    r"^v(?P<major>0|[1-9]\d*)\.(?P<minor>0|[1-9]\d*)\.(?P<patch>0|[1-9]\d*)\.post(?P<post>0|[1-9]\d*)$"
+)
 HISTORICAL_DEV_TAG_RE = re.compile(r"^v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\+dev(?:0|[1-9]\d*)$")
 
 
@@ -45,6 +48,21 @@ class StableVersion:
             major=int(match.group("major")),
             minor=int(match.group("minor")),
             patch=int(match.group("patch")),
+        )
+
+    @classmethod
+    def from_post_tag(cls, tag: str) -> tuple[Self, int] | None:
+        """Parse a canonical post-release tag into its stable base and post number."""
+        match = POST_TAG_RE.fullmatch(tag)
+        if match is None:
+            return None
+        return (
+            cls(
+                major=int(match.group("major")),
+                minor=int(match.group("minor")),
+                patch=int(match.group("patch")),
+            ),
+            int(match.group("post")),
         )
 
     def bump(self, part: str) -> Self:
@@ -79,10 +97,18 @@ class StableVersion:
         """The Git tag for this release-candidate version."""
         return f"v{self.rc0_version}"
 
+    def post_version(self, number: int) -> str:
+        """Return a PEP 440 post-release version without a leading ``v``."""
+        return f"{self.version}.post{number}"
+
+    def post_tag(self, number: int) -> str:
+        """Return the Git tag for a PEP 440 post-release version."""
+        return f"v{self.post_version(number)}"
+
 
 @dataclass(frozen=True)
 class ReleasePlan:
-    """Computed release-candidate tag plan."""
+    """Computed release tag plan."""
 
     latest_stable_tag: str
     latest_stable_version: str
@@ -108,7 +134,7 @@ def _run_git(args: Sequence[str], *, cwd: Path) -> str:
 
 
 def _is_valid_release_tag(tag: str) -> bool:
-    return STABLE_TAG_RE.fullmatch(tag) is not None or RC_TAG_RE.fullmatch(tag) is not None
+    return any(pattern.fullmatch(tag) is not None for pattern in (STABLE_TAG_RE, RC_TAG_RE, POST_TAG_RE))
 
 
 def _find_latest_stable(tags: Sequence[str]) -> tuple[str, StableVersion]:
@@ -120,7 +146,8 @@ def _find_latest_stable(tags: Sequence[str]) -> tuple[str, StableVersion]:
     if malformed:
         formatted = ", ".join(malformed)
         raise ReleaseVersionError(
-            f"Malformed release tag(s): {formatted}. Expected vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCHrcN."
+            "Malformed release tag(s): "
+            f"{formatted}. Expected vMAJOR.MINOR.PATCH, vMAJOR.MINOR.PATCHrcN, or vMAJOR.MINOR.PATCH.postN."
         )
 
     stable_tags: list[tuple[StableVersion, str]] = []
@@ -131,6 +158,16 @@ def _find_latest_stable(tags: Sequence[str]) -> tuple[str, StableVersion]:
 
     if not stable_tags:
         raise ReleaseVersionError("No stable release tags found. Expected at least one vMAJOR.MINOR.PATCH tag.")
+
+    stable_versions = {version for version, _ in stable_tags}
+    dangling_posts: list[tuple[str, StableVersion]] = []
+    for tag in tags:
+        parsed = StableVersion.from_post_tag(tag)
+        if parsed is not None and parsed[0] not in stable_versions:
+            dangling_posts.append((tag, parsed[0]))
+    if dangling_posts:
+        tag, base = sorted(dangling_posts)[0]
+        raise ReleaseVersionError(f"Post-release tag {tag} is missing stable tag {base.stable_tag}.")
 
     latest_version, latest_tag = max(stable_tags, key=lambda item: item[0])
     return latest_tag, latest_version
@@ -147,28 +184,18 @@ def _resolve_commit(ref: str, *, cwd: Path) -> str:
     return _run_git(["rev-parse", "--verify", "--end-of-options", f"{ref}^{{commit}}"], cwd=cwd).strip()
 
 
-def plan_release(*, bump: str = "patch", ref: str = "HEAD", cwd: Path | None = None) -> ReleasePlan:
-    """Compute the next rc0 release tag from local Git tags.
+def _next_post_release(tags: Sequence[str], base: StableVersion) -> tuple[str, str]:
+    post_numbers: list[int] = []
+    for tag in tags:
+        parsed = StableVersion.from_post_tag(tag)
+        if parsed is not None and parsed[0] == base:
+            post_numbers.append(parsed[1])
+    next_post_number = max(post_numbers, default=0) + 1
+    return base.post_version(next_post_number), base.post_tag(next_post_number)
 
-    Args:
-        bump: Version part to increment: ``major``, ``minor``, or ``patch``.
-        ref: Git ref or commit to use as the candidate tag target.
-        cwd: Directory where Git commands should run.
 
-    Returns:
-        A release plan containing the latest stable tag, next rc0 tag, and
-        resolved candidate commit.
-
-    Raises:
-        ReleaseVersionError: If Git inspection fails, release tags are
-            malformed, no stable tag exists, or the candidate tag already
-            exists locally.
-    """
-    repo = cwd or Path.cwd()
-    tags = _list_local_tags(cwd=repo)
-    latest_tag, latest_version = _find_latest_stable(tags)
-    next_version = latest_version.bump(bump)
-    next_tag = next_version.rc0_tag
+def _next_release_candidate(tags: Sequence[str], base: StableVersion, bump: str) -> tuple[str, str]:
+    next_version = base.bump(bump)
     candidate_prefix = f"{next_version.stable_tag}rc"
     existing_candidates = sorted(
         tag for tag in tags if tag.startswith(candidate_prefix) and RC_TAG_RE.fullmatch(tag) is not None
@@ -178,6 +205,33 @@ def plan_release(*, bump: str = "patch", ref: str = "HEAD", cwd: Path | None = N
         raise ReleaseVersionError(
             f"Candidate tag(s) already exist for {next_version.version}: {formatted}; refusing to prepare rc0."
         )
+    return next_version.rc0_version, next_version.rc0_tag
+
+
+def plan_release(*, bump: str = "patch", ref: str = "HEAD", cwd: Path | None = None) -> ReleasePlan:
+    """Compute the next release tag from local Git tags.
+
+    Args:
+        bump: Version part to increment: ``major``, ``minor``, ``patch``, or ``post``.
+        ref: Git ref or commit to use as the candidate tag target.
+        cwd: Directory where Git commands should run.
+
+    Returns:
+        A release plan containing the latest stable tag, next release tag, and
+        resolved target commit.
+
+    Raises:
+        ReleaseVersionError: If Git inspection fails, release tags are
+            malformed, no stable tag exists, or the candidate tag already
+            exists locally.
+    """
+    repo = cwd or Path.cwd()
+    tags = _list_local_tags(cwd=repo)
+    latest_tag, latest_version = _find_latest_stable(tags)
+    if bump == "post":
+        next_version_text, next_tag = _next_post_release(tags, latest_version)
+    else:
+        next_version_text, next_tag = _next_release_candidate(tags, latest_version, bump)
 
     return ReleasePlan(
         latest_stable_tag=latest_tag,
@@ -185,21 +239,24 @@ def plan_release(*, bump: str = "patch", ref: str = "HEAD", cwd: Path | None = N
         bump=bump,
         candidate_ref=ref,
         candidate_commit=_resolve_commit(ref, cwd=repo),
-        next_version=next_version.rc0_version,
+        next_version=next_version_text,
         next_tag=next_tag,
     )
 
 
 def _format_human(plan: ReleasePlan) -> str:
+    is_post = plan.bump == "post"
+    heading = "Next Safe-Synthesizer post-release" if is_post else "Next Safe-Synthesizer release candidate"
+    tag_label = "Next post-release tag" if is_post else "Next rc0 tag"
     return "\n".join(
         [
-            "Next Safe-Synthesizer release candidate",
+            heading,
             f"Latest stable tag: {plan.latest_stable_tag}",
             f"Latest stable version: {plan.latest_stable_version}",
             f"Bump: {plan.bump}",
             f"Candidate ref: {plan.candidate_ref}",
             f"Candidate commit: {plan.candidate_commit}",
-            f"Next rc0 tag: {plan.next_tag}",
+            f"{tag_label}: {plan.next_tag}",
             f"Next PyPI version: {plan.next_version}",
             "",
             "No tag was created, deleted, or pushed.",
@@ -210,14 +267,12 @@ def _format_human(plan: ReleasePlan) -> str:
 
 
 def _parse_args(argv: Sequence[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Prepare the next rc0 release tag name from local Safe-Synthesizer Git tags."
-    )
+    parser = argparse.ArgumentParser(description="Prepare the next release tag from local Safe-Synthesizer Git tags.")
     parser.add_argument(
         "--bump",
         choices=BUMP_CHOICES,
         default="patch",
-        help="Version part to increment from the latest stable tag. Defaults to patch.",
+        help="Version part to increment from the latest stable tag, or post for its next post-release.",
     )
     parser.add_argument(
         "--ref",

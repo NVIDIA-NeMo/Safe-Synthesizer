@@ -85,6 +85,38 @@ class ReleaseVersionTest(unittest.TestCase):
                 plan = release_version.plan_release(bump=bump, cwd=self.repo)
                 self.assertEqual((plan.next_tag, plan.next_version), expected)
 
+    def test_post_bump_prepares_first_post_release(self) -> None:
+        self._tag("v1.5.0")
+        self._tag("v1.6.0")
+
+        plan = release_version.plan_release(bump="post", cwd=self.repo)
+
+        self.assertEqual(plan.latest_stable_tag, "v1.6.0")
+        self.assertEqual(plan.latest_stable_version, "1.6.0")
+        self.assertEqual(plan.bump, "post")
+        self.assertEqual(plan.next_tag, "v1.6.0.post1")
+        self.assertEqual(plan.next_version, "1.6.0.post1")
+
+    def test_post_bump_increments_highest_post_for_latest_stable(self) -> None:
+        self._tag("v1.5.0")
+        self._tag("v1.5.0.post7")
+        self._tag("v1.6.0")
+        self._tag("v1.6.0.post1")
+        self._tag("v1.6.0.post10")
+
+        plan = release_version.plan_release(bump="post", cwd=self.repo)
+
+        self.assertEqual(plan.next_tag, "v1.6.0.post11")
+
+    def test_regular_patch_accepts_post_tags_and_uses_stable_base(self) -> None:
+        self._tag("v1.6.0")
+        self._tag("v1.6.0.post1")
+
+        plan = release_version.plan_release(cwd=self.repo)
+
+        self.assertEqual(plan.latest_stable_tag, "v1.6.0")
+        self.assertEqual(plan.next_tag, "v1.6.1rc0")
+
     def test_json_cli_resolves_candidate_ref(self) -> None:
         self._tag("v0.1.0")
         first_commit = self._git("rev-parse", "HEAD")
@@ -109,6 +141,25 @@ class ReleaseVersionTest(unittest.TestCase):
         self.assertIn("Next rc0 tag: v3.4.6rc0", result.stdout)
         self.assertIn("No tag was created, deleted, or pushed.", result.stdout)
         self.assertEqual(self._git("tag", "--list"), tags_before)
+
+    def test_human_cli_describes_post_release_without_creating_tag(self) -> None:
+        self._tag("v1.6.0")
+        tags_before = self._git("tag", "--list")
+
+        result = self._run(sys.executable, str(TOOL_PATH), "--bump", "post")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Next Safe-Synthesizer post-release", result.stdout)
+        self.assertIn("Next post-release tag: v1.6.0.post1", result.stdout)
+        self.assertIn("No tag was created, deleted, or pushed.", result.stdout)
+        self.assertEqual(self._git("tag", "--list"), tags_before)
+
+    def test_post_release_without_matching_stable_tag_is_refused(self) -> None:
+        self._tag("v1.5.0")
+        self._tag("v1.6.0.post1")
+
+        with self.assertRaisesRegex(release_version.ReleaseVersionError, "missing stable tag v1.6.0"):
+            release_version.plan_release(bump="post", cwd=self.repo)
 
     def test_malformed_v_tag_is_an_explicit_error(self) -> None:
         self._tag("v0.1.0")

@@ -685,14 +685,14 @@ Before contributing, run `mise run format` and `mise run check`. See `AGENTS.md`
 
 Pushing a `v*` tag starts two workflows. [`release.yml`](.github/workflows/release.yml)
 publishes the wheel to Test PyPI and PyPI, creates a GitHub release, and
-publishes versioned documentation for stable releases.
+publishes versioned documentation for final releases, including post-releases.
 [`container-build.yml`](.github/workflows/container-build.yml) publishes the
 CUDA image to GitHub Container Registry (GHCR).
 
 Release versions follow [PEP 440](https://peps.python.org/pep-0440/) with major,
-minor, and patch release numbers. This project uses stable releases and release
-candidates only; prerelease versions append `rcN` without a dash. The GitHub tag
-always starts with a `v` prefix.
+minor, and patch release numbers. This project uses stable releases, release
+candidates, and post-releases. Prerelease versions append `rcN` without a dash;
+post-releases append `.postN`. The GitHub tag always starts with a `v` prefix.
 
 Examples:
 
@@ -702,9 +702,11 @@ Examples:
 | `v2.1.3`      | `2.1.3`      | ✅                                              |
 | `v0.0.5rc0`   | `0.0.5rc0`   | ✅                                              |
 | `v0.1.2rc5`   | `0.1.2rc5`   | ✅                                              |
+| `v0.1.6.post1` | `0.1.6.post1` | ✅                                              |
 | `1.0.0`       |              | ❌ No `v` prefix                                |
 | `release-1.0` |              | ❌ Wrong format                                 |
 | `v0.0.7-rc4`  |              | ❌ Dash before rc suffix                        |
+| `v0.1.6-post1` |               | ❌ Dash before post-release suffix              |
 | `v0.1.3a1`    |              | ❌ Alpha prereleases are not used; use rcN only |
 
 ### Release Checklist
@@ -713,8 +715,8 @@ Examples:
 
 - Fetch `origin/main` and tags, choose the exact release commit, and confirm its
   normal CI and manually dispatched GPU Tests run passed.
-- Choose unused candidate and stable tags, then record the candidate's exact
-  `origin/main` SHA.
+- Choose the unused tag or tags required for the release type, then record the
+  exact `origin/main` SHA.
 - Decide whether GHCR visibility or a separate nSpect or Pulse scan blocks the
   release. Those scans are not part of the GitHub release workflows.
 
@@ -785,21 +787,48 @@ git tag "${STABLE_TAG}" "${RELEASE_SHA}"
 git push origin "refs/tags/${STABLE_TAG}"
 ```
 
-#### After Publishing Stable
+#### Post-release
+
+Use a post-release for a packaging or release correction that does not warrant
+a new regular patch version. A post-release is final, so it does not use the
+release-candidate promotion sequence. Preview the next post-release tag and
+resolve its target commit without creating or pushing a tag:
+
+```bash
+mise run release:prepare -- --bump post --ref origin/main
+```
+
+After reviewing the output, create the proposed tag at the resolved commit and
+push it. For example:
+
+```bash
+POST_TAG=v0.1.6.post1
+RELEASE_SHA="$(git rev-parse 'origin/main^{commit}')"
+git tag "${POST_TAG}" "${RELEASE_SHA}"
+git push origin "refs/tags/${POST_TAG}"
+```
+
+The container workflow publishes `X.Y.Z.postN-cu129`, the immutable
+`sha-<short-sha>-cu129` tag, and the mutable `cu129` and `latest-cu129` aliases.
+PEP 440 post-releases do not move the shortened `X.Y-cu129` tag. Validate the
+post-release wheel and immutable container tag before announcing the release.
+
+#### After Publishing a Final Release
 
 After publishing:
 
 - Verify both tag-triggered workflows passed at the tested SHA.
-- Confirm Test PyPI and production PyPI contain the stable version.
+- Confirm Test PyPI and production PyPI contain the published version.
 - Confirm the GitHub release is not marked as a prerelease.
 - Confirm versioned documentation is available at
   `https://nvidia-nemo.github.io/Safe-Synthesizer/<version>/`.
-- Confirm GHCR exposes the stable `X.Y.Z-cu129` and `X.Y-cu129` tags with the
-  intended visibility.
+- Confirm GHCR exposes the expected tags with the intended visibility. Regular
+  stable releases publish `X.Y.Z-cu129` and `X.Y-cu129`; post-releases publish
+  `X.Y.Z.postN-cu129` without moving `X.Y-cu129`.
 - Coordinate a NeMo Platform package or container pin, documentation update,
   and downstream release when Platform should consume the new version. This is
   not currently automated by the Safe Synthesizer release workflow.
-- Announce the release only after artifacts and stable documentation pass
+- Announce the release only after artifacts and versioned documentation pass
   verification.
 
 ## NMP Integration
