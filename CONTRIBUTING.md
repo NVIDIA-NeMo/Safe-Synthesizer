@@ -683,13 +683,16 @@ Before contributing, run `mise run format` and `mise run check`. See `AGENTS.md`
 
 ## Releasing
 
-Releases are published to PyPI via the **Release NeMo Safe Synthesizer** GitHub Actions workflow. The workflow builds the wheel from a git tag, publishes to Test PyPI as a pre-flight check, publishes to the real PyPI, and creates a GitHub release.
+Pushing a `v*` tag starts two workflows. [`release.yml`](.github/workflows/release.yml)
+publishes the wheel to Test PyPI and PyPI, creates a GitHub release, and
+publishes versioned documentation for stable releases.
+[`container-build.yml`](.github/workflows/container-build.yml) publishes the
+CUDA image to GitHub Container Registry (GHCR).
 
-### 1. Create and push a tag
-
-Release versions follow [PEP440](https://peps.python.org/pep-0440/) with major, minor, and patch release numbers.
-This project uses stable releases and release candidates only; prerelease versions append the suffix rcN (no dash, as specified by PEP440).
-The GitHub tag always starts with a `v` prefix.
+Release versions follow [PEP 440](https://peps.python.org/pep-0440/) with major,
+minor, and patch release numbers. This project uses stable releases and release
+candidates only; prerelease versions append `rcN` without a dash. The GitHub tag
+always starts with a `v` prefix.
 
 Examples:
 
@@ -704,21 +707,93 @@ Examples:
 | `v0.0.7-rc4`  |              | ❌ Dash before rc suffix                        |
 | `v0.1.3a1`    |              | ❌ Alpha prereleases are not used; use rcN only |
 
-To create and push tags:
+### Release Checklist
+
+#### Before Publishing
+
+- Fetch `origin/main` and tags, choose the exact release commit, and confirm its
+  normal CI and manually dispatched GPU Tests run passed.
+- Choose unused candidate and stable tags, then record the candidate's exact
+  `origin/main` SHA.
+- Decide whether GHCR visibility or a separate nSpect or Pulse scan blocks the
+  release. Those scans are not part of the GitHub release workflows.
+
+#### Tag Trigger
+
+Create the candidate tag at the recorded SHA and push it. This automatically
+starts the package and container workflows described above.
 
 ```bash
-# Stable release
-git tag v0.1.0 <commit-sha>
-
-# Release candidate
-git tag v0.1.0rc1 <commit-sha>
-
-git push origin <tag>
+RC_TAG=v0.1.0rc0  # Replace with the intended candidate tag.
+RELEASE_SHA="$(git rev-parse 'origin/main^{commit}')"
+git tag "${RC_TAG}" "${RELEASE_SHA}"
+git push origin "refs/tags/${RC_TAG}"
 ```
 
-### 2. Monitor the workflow run
+Candidate tags also move the mutable GHCR `cu129` and `latest-cu129` aliases.
+During candidate validation, identify the image by its immutable
+`sha-<short-sha>-cu129` tag and do not treat those aliases as stable.
 
-The [workflow](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/actions/workflows/release.yml) to release is triggered automatically when a tag starting with `v` is pushed to GitHub.
+Never move a published tag. If code changes, create and validate the next
+`rcN`.
+
+#### Verify and Promote
+
+- Verify the candidate tag still resolves to the recorded SHA and both
+  workflows succeeded for that tag.
+- Confirm the candidate exists on Test PyPI, production PyPI, and GitHub
+  Releases, then pull its immutable GHCR SHA tag with the intended visibility.
+- Install the production-PyPI wheel outside the repository with uv project
+  configuration disabled. Check the dependency set, import, and CLI.
+
+Use the same auxiliary indexes documented in the installation guide for the
+clean CUDA install. Set `NSS_VERSION` to the candidate version:
+
+```bash
+SMOKE_DIR=/tmp/nss-release-smoke
+SMOKE_VENV="${SMOKE_DIR}/.venv"
+NSS_VERSION="${RC_TAG#v}"
+mkdir -p "${SMOKE_DIR}"
+cd "${SMOKE_DIR}"
+uv --no-config venv --clear --python 3.13 "${SMOKE_VENV}"
+uv --no-config pip install \
+  --python "${SMOKE_VENV}/bin/python" \
+  --default-index https://pypi.org/simple \
+  --index https://flashinfer.ai/whl/cu129 \
+  --index https://download.pytorch.org/whl/cu129 \
+  --index https://wheels.vllm.ai/ee0da84ab9e04ac7610e28580af62c365e898389/cu129 \
+  --index-strategy unsafe-best-match \
+  "nemo-safe-synthesizer[cu129,engine]==${NSS_VERSION}"
+uv --no-config pip check --python "${SMOKE_VENV}/bin/python"
+"${SMOKE_VENV}/bin/python" -c 'import nemo_safe_synthesizer'
+"${SMOKE_VENV}/bin/safe-synthesizer" --help
+```
+
+Promote only after every candidate check passes. The stable tag must point to
+the same tested SHA, not a later `main` commit.
+
+```bash
+STABLE_TAG="${RC_TAG%%rc*}"
+git tag "${STABLE_TAG}" "${RELEASE_SHA}"
+git push origin "refs/tags/${STABLE_TAG}"
+```
+
+#### After Publishing Stable
+
+After publishing:
+
+- Verify both tag-triggered workflows passed at the tested SHA.
+- Confirm Test PyPI and production PyPI contain the stable version.
+- Confirm the GitHub release is not marked as a prerelease.
+- Confirm versioned documentation is available at
+  `https://nvidia-nemo.github.io/Safe-Synthesizer/<version>/`.
+- Confirm GHCR exposes the stable `X.Y.Z-cu129` and `X.Y-cu129` tags with the
+  intended visibility.
+- Coordinate a NeMo Platform package or container pin, documentation update,
+  and downstream release when Platform should consume the new version. This is
+  not currently automated by the Safe Synthesizer release workflow.
+- Announce the release only after artifacts and stable documentation pass
+  verification.
 
 ## NMP Integration
 
@@ -732,7 +807,9 @@ The `publish:internal` mise task builds a wheel and uploads it to NVIDIA Artifac
 mise run publish:internal
 ```
 
-This requires `TWINE_REPOSITORY_URL`, `TWINE_USERNAME`, and `TWINE_PASSWORD` environment variables. CI handles this automatically on tagged releases.
+This requires `TWINE_REPOSITORY_URL`, `TWINE_USERNAME`, and `TWINE_PASSWORD`
+environment variables. This is a manual action; the tag-triggered release
+workflow does not publish to internal Artifactory.
 
 ### Local Development with NMP
 
