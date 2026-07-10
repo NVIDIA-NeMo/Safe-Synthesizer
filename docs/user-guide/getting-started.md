@@ -88,7 +88,8 @@ indexes outside PyPI. You must pass the extra index URLs shown below.
 
         ```bash
         uv pip install "nemo-safe-synthesizer[cpu,engine]" \
-          --index https://download.pytorch.org/whl/cpu
+          --index https://download.pytorch.org/whl/cpu \
+          --index-strategy unsafe-best-match
         ```
 
     !!! warning "Development use only"
