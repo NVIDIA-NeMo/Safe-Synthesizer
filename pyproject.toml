@@ -113,8 +113,8 @@ engine = [
 cpu = [
   "accelerate>=1.1.0",
   "bitsandbytes>=0.46.1",
-  "flashinfer-python==0.6.13; sys_platform=='linux'",
-  "flashinfer-cubin==0.6.13; sys_platform=='linux'",
+  "flashinfer-python==0.6.12; sys_platform=='linux'",
+  "flashinfer-cubin==0.6.12; sys_platform=='linux'",
   "gliner",
   "kernels>=0.12.1,<0.15",
   "peft>=0.18.0",
@@ -137,9 +137,9 @@ cpu = [
 cu129 = [
   "accelerate>=1.1.0",
   "bitsandbytes>=0.46.1",
-  "flashinfer-python==0.6.13; sys_platform == 'linux'",
-  "flashinfer-cubin==0.6.13; sys_platform == 'linux'",
-  "flashinfer-jit-cache==0.6.13+cu129; sys_platform == 'linux'",
+  "flashinfer-python==0.6.12; sys_platform == 'linux'",
+  "flashinfer-cubin==0.6.12; sys_platform == 'linux'",
+  "flashinfer-jit-cache==0.6.12+cu129; sys_platform == 'linux'",
   "gliner",
   "kernels>=0.12.1,<0.15",
   "nvidia-cublas-cu12; sys_platform == 'linux'",
@@ -178,11 +178,6 @@ conflicts = [
   ],
 ]
 
-
-override-dependencies = [
-    "flashinfer-python==0.6.13; sys_platform != 'darwin'",
-    "flashinfer-cubin==0.6.13; sys_platform != 'darwin'",
-]
 
 environments = [
     "sys_platform == 'linux' and platform_machine == 'x86_64'",
@@ -242,12 +237,6 @@ constraint-dependencies = [
   torchaudio = [
     { index = "pytorch-cpu", extra="cpu" },
     { index = "pytorch-cu129", extra="cu129"},
-  ]
-  flashinfer-python = [
-    { index = "flashinfer-jit-cache", marker = "sys_platform=='linux'", extra="cu129"},
-  ]
-  flashinfer-cubin = [
-    { index = "flashinfer-jit-cache", marker = "sys_platform=='linux'", extra="cu129"},
   ]
   flashinfer-jit-cache = [
     { index = "flashinfer-jit-cache", marker = "sys_platform=='linux'", extra="cu129"},
