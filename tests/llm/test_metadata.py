@@ -129,7 +129,7 @@ MODEL_INIT_SCENARIOS = [
         expected_add_bos=False,
         expected_add_eos=False,
         expected_bos_token="<s>",
-        expected_bos_token_id=10,
+        expected_bos_token_id=10,  # From mock_tokenizer, not the model's real token ID.
     ),
     ModelInitScenario(
         id="smollm2",
@@ -1074,14 +1074,27 @@ class TestModelMetadataKwargsPassthrough:
     @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
     @patch("nemo_safe_synthesizer.llm.metadata.load_fast_tokenizer")
     @pytest.mark.parametrize("model_class", [Mistral, SmolLM2, SmolLM3])
-    def test_unsupported_families_ignore_raw_rope_scaling(
-        self, mock_auto_tokenizer, mock_auto_config, mock_tokenizer, mock_autoconfig_obj, model_class
+    @pytest.mark.parametrize(
+        "scaling_kwargs",
+        [
+            pytest.param({"rope_scaling": 2}, id="raw-rope-scaling"),
+            pytest.param({"rope_scaling_factor": 2}, id="configured-rope-scaling-factor"),
+        ],
+    )
+    def test_unsupported_families_ignore_rope_scaling(
+        self,
+        mock_auto_tokenizer,
+        mock_auto_config,
+        mock_tokenizer,
+        mock_autoconfig_obj,
+        model_class,
+        scaling_kwargs,
     ):
-        """Raw rope_scaling kwargs should not bypass unsupported-family defaults."""
+        """RoPE scaling inputs should not bypass unsupported-family defaults."""
         mock_auto_tokenizer.return_value = mock_tokenizer
         mock_auto_config.from_pretrained.return_value = mock_autoconfig_obj
 
-        metadata = model_class(model_name_or_path=f"test-{model_class.__name__}", rope_scaling=2)
+        metadata = model_class(model_name_or_path=f"test-{model_class.__name__}", **scaling_kwargs)
 
         assert metadata.rope_scaling is None
         assert metadata.rope_scaling_factor == 1.0
