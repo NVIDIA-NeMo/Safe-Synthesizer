@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import importlib
 from pathlib import Path
-from typing import Any, ClassVar, Literal, cast
+from typing import Any, ClassVar, Literal
 
 from pydantic import (
     BaseModel,
