@@ -13,7 +13,7 @@
         <link rel="canonical" href="https://nvidia-nemo.github.io/Safe-Synthesizer/main/reference/nemo_safe_synthesizer/data_processing/records/value_path/">
       
       
-        <link rel="prev" href="../json_record/">
+        <link rel="prev" href="../json_types/">
       
       
         <link rel="next" href="../../stats/">
@@ -3355,6 +3355,8 @@
       
         
       
+        
+      
     
     
     
@@ -3471,6 +3473,34 @@
     
   
     json_record
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../json_types/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    json_types
   
 
     
@@ -9659,7 +9689,7 @@
       <tbody>
           <tr class="doc-section-item">
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="dict">dict</span> | <span title="list">list</span>]</code>
+                  <code><span title="typing.Optional">Optional</span>[<span title="dict">dict</span>[<span title="typing.Any">Any</span>, <span title="typing.Any">Any</span>] | <span title="list">list</span>[<span title="typing.Any">Any</span>]]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -9717,7 +9747,7 @@ expects a list where a dict already exists).</p>
 <span class="normal"><a href="#__codelineno-0-93">93</a></span>
 <span class="normal"><a href="#__codelineno-0-94">94</a></span>
 <span class="normal"><a href="#__codelineno-0-95">95</a></span>
-<span class="normal"><a href="#__codelineno-0-96">96</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-76"><a id="__codelineno-0-76" name="__codelineno-0-76"></a><span class="k">def</span><span class="w"> </span><span class="nf">unflatten</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">ValuePath</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">dict</span> <span class="o">|</span> <span class="nb">list</span><span class="p">]:</span>
+<span class="normal"><a href="#__codelineno-0-96">96</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-76"><a id="__codelineno-0-76" name="__codelineno-0-76"></a><span class="k">def</span><span class="w"> </span><span class="nf">unflatten</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">ValuePath</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="n">Any</span><span class="p">]]:</span>
 </span><span id="__span-0-77"><a id="__codelineno-0-77" name="__codelineno-0-77"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Reconstruct a nested dict/list from a flat ``{ValuePath: value}`` mapping.</span>
 </span><span id="__span-0-78"><a id="__codelineno-0-78" name="__codelineno-0-78"></a>
 </span><span id="__span-0-79"><a id="__codelineno-0-79" name="__codelineno-0-79"></a><span class="sd">    Args:</span>
@@ -9788,7 +9818,7 @@ expects a list where a dict already exists).</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../json_record/" class="md-footer__link md-footer__link--prev" aria-label="Previous: json_record">
+          <a href="../json_types/" class="md-footer__link md-footer__link--prev" aria-label="Previous: json_types">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -9798,7 +9828,7 @@ expects a list where a dict already exists).</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                json_record
+                json_types
               </div>
             </div>
           </a>
