@@ -7,21 +7,19 @@ set -euo pipefail
 source "${MISE_CONFIG_ROOT}/.mise/tasks/_lib.sh"
 
 tool_root="${MISE_CONFIG_ROOT:-$(git rev-parse --show-toplevel)}"
-python_version="$(resolve_python_version)"
+container_cmd="$(resolve_container_cmd)"
 
-if (( $# > 0 )); then
-  wheel="$1"
-  shift
-else
-  shopt -s nullglob
-  wheels=("${tool_root}"/dist/*.whl)
-  if (( ${#wheels[@]} != 1 )); then
-    echo "Error: expected exactly one wheel under ${tool_root}/dist, found ${#wheels[@]}" >&2
-    exit 1
-  fi
-  wheel="${wheels[0]}"
+shopt -s nullglob
+wheels=("${tool_root}"/dist/*.whl)
+if (( ${#wheels[@]} != 1 )); then
+  echo "Error: expected exactly one wheel under ${tool_root}/dist, found ${#wheels[@]}" >&2
+  exit 1
 fi
 
-uv --no-config run --no-project --python "${python_version}" \
-  "${tool_root}/tools/verify_wheel_install.py" \
-  "${wheel}" --python "${python_version}" "$@"
+"${container_cmd}" build \
+  --platform "${CONTAINER_TEST_PLATFORM:-linux/amd64}" \
+  --progress=plain \
+  --file "${CONTAINER_TEST_FILE:-containers/Dockerfile.test_ci}" \
+  --target wheel-install \
+  --tag "${CONTAINER_WHEEL_INSTALL_IMAGE:-nss-wheel-install:latest}" \
+  "${tool_root}"

@@ -85,5 +85,6 @@ runs:
             - '.github/actions/**'
             - '.mise.toml'
             - '.mise/tasks/**'
+            - '.dockerignore'
+            - 'containers/Dockerfile.test_ci'
             - 'tools/release_version.py'
-            - 'tools/verify_wheel_install.py'
