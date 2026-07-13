@@ -182,6 +182,12 @@ for the full override precedence rules.
 
 ## CLI Commands
 
+Print the installed version and exit:
+
+```bash
+safe-synthesizer --version
+```
+
 ```bash
 safe-synthesizer --help
 ```
