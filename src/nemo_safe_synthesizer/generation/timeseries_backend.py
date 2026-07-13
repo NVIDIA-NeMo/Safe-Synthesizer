@@ -931,6 +931,7 @@ class TimeseriesBackend(VllmBackend):
             target_num_records=num_records,
             patience=self.config.generation.patience,
             invalid_fraction_threshold=self.config.generation.invalid_fraction_threshold,
+            initial_probe_retries=self.config.generation.initial_probe_retries,
             data_actions_fn=data_actions_fn,
         )
 

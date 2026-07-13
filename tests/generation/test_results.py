@@ -18,6 +18,7 @@ from nemo_safe_synthesizer.generation.results import (
     NUM_PROMPT_BUFFER,
     GenerationBatches,
 )
+from nemo_safe_synthesizer.generation.utils import GenerationStatus
 
 
 @pytest.fixture
@@ -230,3 +231,61 @@ class TestAdaptiveMaxNumPromptsPerBatch:
         )
 
         assert batches.max_num_prompts_per_batch == explicit_value
+
+
+class TestInitialProbeRetries:
+    """``initial_probe_retries`` tolerates zero-valid probes before ``STOP_NO_RECORDS``."""
+
+    @staticmethod
+    def _stopping_batches(*, initial_probe_retries: int) -> GenerationBatches:
+        """Accumulator with production-like stop thresholds and a retry budget."""
+        return GenerationBatches(
+            target_num_records=10_000,
+            invalid_fraction_threshold=0.8,
+            patience=3,
+            initial_probe_retries=initial_probe_retries,
+        )
+
+    def test_default_zero_retries_stops_on_first_zero_valid_probe(self, fixture_processor):
+        """Default (``initial_probe_retries=0``) preserves fail-fast on the first probe."""
+        batches = self._stopping_batches(initial_probe_retries=0)
+        batches.add_batch(_make_batch(fixture_processor, num_prompts=INITIAL_PROBE_PROMPTS, num_valid=0, num_invalid=5))
+
+        assert batches.status == GenerationStatus.STOP_NO_RECORDS
+
+    def test_retry_tolerates_zero_valid_probe_and_keeps_probing_small(self, fixture_processor):
+        """A retry budget defers the bail and re-samples at probe size, not the full budget."""
+        batches = self._stopping_batches(initial_probe_retries=2)
+        batches.add_batch(_make_batch(fixture_processor, num_prompts=INITIAL_PROBE_PROMPTS, num_valid=0, num_invalid=5))
+
+        assert batches.status == GenerationStatus.IN_PROGRESS
+        # Target (10k) leaves the probe size as the binding minimum, so a retry
+        # re-samples at probe size instead of escalating to the full budget.
+        assert batches.get_next_num_prompts() == INITIAL_PROBE_PROMPTS
+
+    def test_retry_budget_exhausts_then_stops_no_records(self, fixture_processor):
+        """After ``initial_probe_retries`` tolerated probes, the next zero-valid probe stops."""
+        batches = self._stopping_batches(initial_probe_retries=2)
+        for _ in range(3):  # initial probe + 2 retries
+            assert batches.status == GenerationStatus.IN_PROGRESS
+            batches.add_batch(
+                _make_batch(fixture_processor, num_prompts=INITIAL_PROBE_PROMPTS, num_valid=0, num_invalid=5)
+            )
+
+        assert batches.status == GenerationStatus.STOP_NO_RECORDS
+
+    def test_valid_record_during_retries_returns_to_normal_sizing(self, fixture_processor):
+        """A valid record inside the retry window exits probe mode into ratio-based sizing."""
+        batches = self._stopping_batches(initial_probe_retries=2)
+        batches.add_batch(_make_batch(fixture_processor, num_prompts=INITIAL_PROBE_PROMPTS, num_valid=0, num_invalid=5))
+        batches.add_batch(_make_batch(fixture_processor, num_prompts=5, num_valid=5, num_invalid=0))
+
+        assert batches.status == GenerationStatus.IN_PROGRESS
+        assert batches.num_valid_records == 5
+        # Records-per-prompt is now known, so sizing follows the estimate (not the probe).
+        assert batches.get_next_num_prompts() > INITIAL_PROBE_PROMPTS
+
+    def test_negative_retries_rejected(self):
+        """A negative retry budget is a construction error."""
+        with pytest.raises(ValueError, match="initial_probe_retries"):
+            GenerationBatches(target_num_records=10, initial_probe_retries=-1)

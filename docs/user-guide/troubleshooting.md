@@ -371,7 +371,10 @@ Generation stopped prematurely due to no valid records
   `finish_reasons` dominated by `length`, generation reached `max_tokens`
   before producing valid records; inspect prompt size, schema size, and
   grouped/time-series prefill length before treating it as model quality
-  alone.
+  alone. If the first probe fails only intermittently (an unlucky or
+  malformed initial batch rather than a consistently broken model), set
+  `generation.initial_probe_retries` to `2`--`4` so the probe is re-sampled
+  a few times before the run aborts.
 
 ```text
 Generation stopped prematurely because the average fraction of invalid records was higher than...

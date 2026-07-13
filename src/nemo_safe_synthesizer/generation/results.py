@@ -182,6 +182,12 @@ class GenerationBatches:
             triggers stopping after ``patience`` consecutive batches.
         patience: Consecutive batch count before the threshold triggers
             a stop.
+        initial_probe_retries: Number of additional zero-valid probe
+            batches to tolerate (re-sampled at probe size) before the
+            first-batch ``STOP_NO_RECORDS`` bail fires. ``0`` preserves
+            the original fail-fast behavior. Only consulted while no
+            valid record has been produced yet; once any batch yields a
+            valid record the normal ``patience`` machinery governs.
         data_actions_fn: Optional function that post-processes and
             validates records from each batch.
 
@@ -200,8 +206,11 @@ class GenerationBatches:
         max_num_prompts_per_batch: int | None = None,
         invalid_fraction_threshold: float | None = None,
         patience: int | None = None,
+        initial_probe_retries: int = 0,
         data_actions_fn: DataActionsFn | None = None,
     ):
+        if initial_probe_retries < 0:
+            raise ValueError(f"initial_probe_retries must be >= 0, got {initial_probe_retries}.")
         self._batches = batches or []
         self._start_time = time.perf_counter()
         self.target_num_records = target_num_records
@@ -219,6 +228,11 @@ class GenerationBatches:
                 invalid_fraction_threshold=invalid_fraction_threshold,
                 patience=patience,
             )
+
+        self.initial_probe_retries = initial_probe_retries
+        # Count of zero-valid probe batches tolerated so far via the retry
+        # budget. Only advances while ``num_valid_records == 0``.
+        self._initial_probe_attempts = 0
 
         self.data_actions_fn = data_actions_fn
         self._batches_df: pd.DataFrame | None = None
@@ -375,11 +389,13 @@ class GenerationBatches:
 
         Stopping rules:
 
-        * The very first batch producing zero valid records normally
-          triggers ``STOP_NO_RECORDS``. A fully length-truncated probe is
-          the exception: every completion may have been cut off before it
-          could emit a complete record, so a patience-based
-          ``stop_condition`` gets to decide whether to continue.
+        * A zero-valid batch produced before any valid record normally
+          triggers ``STOP_NO_RECORDS``. Two exceptions defer the bail:
+          a fully length-truncated probe (every completion may have been
+          cut off before it could emit a complete record, so a
+          patience-based ``stop_condition`` decides), and any remaining
+          ``initial_probe_retries`` budget (the probe is re-sampled small
+          before giving up).
         * When a ``stop_condition`` is configured, subsequent batches
           with zero valid records are tolerated until the patience-based
           threshold is reached.
@@ -396,8 +412,15 @@ class GenerationBatches:
             if self._has_no_valid_records(batch):
                 self.status = GenerationStatus.STOP_NO_RECORDS
         else:
-            if self.num_batches == 0 and self._should_stop_after_first_zero_valid_batch(batch):
-                self.status = GenerationStatus.STOP_NO_RECORDS
+            # ``num_valid_records`` reflects prior batches only (this batch is
+            # appended below), so this branch covers every zero-valid batch
+            # seen before the first valid record -- not just batch index 0.
+            if self.num_valid_records == 0 and self._should_stop_after_first_zero_valid_batch(batch):
+                if self._initial_probe_attempts < self.initial_probe_retries:
+                    # Tolerate an unlucky/malformed zero-valid probe and retry.
+                    self._initial_probe_attempts += 1
+                else:
+                    self.status = GenerationStatus.STOP_NO_RECORDS
             elif self.stop_condition.has_been_reached(self.running_stopping_metric.mean):
                 self.status = GenerationStatus.STOP_METRIC_REACHED
 
@@ -414,8 +437,9 @@ class GenerationBatches:
           ratio can be measured before committing to a full batch.
         * Prompts sent but no valid records yet -- escalate to the full
           ``max_num_prompts_per_batch`` budget unless the latest batch
-          was fully length-truncated, in which case keep probing
-          conservatively instead of expanding GPU work.
+          was fully length-truncated or an ``initial_probe_retries`` retry
+          is pending, in which case keep probing conservatively instead of
+          expanding GPU work.
         * Have valid records -- size the next batch from the observed
           records-per-prompt ratio, plus ``NUM_PROMPT_BUFFER`` to absorb
           invalid completions.
@@ -429,6 +453,7 @@ class GenerationBatches:
         records_per_prompt_known = self.num_valid_records > 0 and self.num_prompts > 0
         is_first_batch = self.num_prompts == 0
         last_batch = self._batches[-1] if self._batches else None
+        retrying_initial_probe = self._initial_probe_attempts > 0 and self.num_valid_records == 0
 
         if records_per_prompt_known:
             valid_records_per_prompt = self.num_valid_records / self.num_prompts
@@ -438,7 +463,7 @@ class GenerationBatches:
         if is_first_batch:
             return min(num_prompts, INITIAL_PROBE_PROMPTS, num_records_remaining + NUM_PROMPT_BUFFER)
 
-        if last_batch is not None and self._is_inconclusive_zero_valid_batch(last_batch):
+        if retrying_initial_probe or (last_batch is not None and self._is_inconclusive_zero_valid_batch(last_batch)):
             return min(num_prompts, INITIAL_PROBE_PROMPTS, num_records_remaining + NUM_PROMPT_BUFFER)
 
         return min(num_prompts, num_records_remaining + NUM_PROMPT_BUFFER)

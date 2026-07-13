@@ -239,6 +239,22 @@ class GenerateParameters(Parameters, BaseModel):
         ),
     ] = 0.8
 
+    initial_probe_retries: Annotated[
+        int,
+        ValueValidator(value_func=lambda v: v >= 0),
+        Field(
+            title="initial_probe_retries",
+            description=(
+                "Number of additional small probe batches to attempt when the first probe "
+                "produces zero valid records before aborting with a no-valid-records error. "
+                "Each retry re-samples a fresh probe, so a single unlucky or malformed initial "
+                "batch does not abort the whole run. ``0`` (the default) keeps the original "
+                "fail-fast behavior. Retries that are fully length-truncated already fall back "
+                "to the ``patience`` machinery regardless of this value."
+            ),
+        ),
+    ] = 0
+
     structured_generation: StructuredGenerationParameters = Field(
         description="Structured generation parameters controlling schema-constrained output.",
         default_factory=StructuredGenerationParameters,
