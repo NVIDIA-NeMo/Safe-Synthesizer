@@ -7,6 +7,7 @@ import pytest
 # Skip all tests in this module if torch is not available
 torch = pytest.importorskip("torch", reason="torch is required for these tests (install with: uv sync --extra cpu)")
 
+from typing import TYPE_CHECKING, cast
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -29,6 +30,9 @@ from nemo_safe_synthesizer.pii_replacer.data_editor.detect import (
 )
 from nemo_safe_synthesizer.pii_replacer.data_editor.environment import redact_entities_fn
 from nemo_safe_synthesizer.pii_replacer.ner.ner import NERPrediction
+
+if TYPE_CHECKING:
+    from transformers import PreTrainedTokenizerBase
 
 
 class TestDefaultLLMConfigId:
@@ -420,7 +424,7 @@ def test_detect_types_local_hf_uses_shared_prompt_and_parser():
             assert eos_token_id == 1
             return torch.tensor([[10, 11, 12, 13]])
 
-    classifier._tokenizer = FakeTokenizer()
+    classifier._tokenizer = cast("PreTrainedTokenizerBase", FakeTokenizer())
     classifier._model = FakeModel()
 
     assert classifier.detect_types(df, DEFAULT_ENTITIES) == {
@@ -458,7 +462,7 @@ def test_detect_types_local_hf_falls_back_without_chat_template():
             assert input_ids.tolist() == [[20, 21]]
             return torch.tensor([[20, 21, 22]])
 
-    classifier._tokenizer = FakeTokenizer()
+    classifier._tokenizer = cast("PreTrainedTokenizerBase", FakeTokenizer())
     classifier._model = FakeModel()
 
     assert classifier.detect_types(df, DEFAULT_ENTITIES) == {"email": "email"}

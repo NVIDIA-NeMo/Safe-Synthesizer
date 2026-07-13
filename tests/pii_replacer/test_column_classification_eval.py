@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Mapping
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Literal
@@ -74,7 +75,7 @@ def _load_gold(path: Path) -> list[dict[str, Any]]:
     return json.loads(path.read_text())["cases"]
 
 
-def _column_accuracy(predicted: dict[str, str | None], expected: dict[str, str]) -> float:
+def _column_accuracy(predicted: Mapping[str, str | None], expected: Mapping[str, str]) -> float:
     if not expected:
         return 1.0
     _validate_prediction_columns(predicted, expected)
@@ -82,7 +83,7 @@ def _column_accuracy(predicted: dict[str, str | None], expected: dict[str, str])
     return correct / len(expected)
 
 
-def _positive_recall(predicted: dict[str, str | None], expected: dict[str, str]) -> float:
+def _positive_recall(predicted: Mapping[str, str | None], expected: Mapping[str, str]) -> float:
     _validate_prediction_columns(predicted, expected)
     positives = {column: label for column, label in expected.items() if label != UNKNOWN_ENTITY}
     if not positives:
@@ -91,7 +92,7 @@ def _positive_recall(predicted: dict[str, str | None], expected: dict[str, str])
     return correct / len(positives)
 
 
-def _validate_prediction_columns(predicted: dict[str, str | None], expected: dict[str, str]) -> None:
+def _validate_prediction_columns(predicted: Mapping[str, str | None], expected: Mapping[str, str]) -> None:
     missing = set(expected) - set(predicted)
     if missing:
         raise AssertionError(f"Classifier did not return predictions for columns: {sorted(missing)}")
