@@ -6,7 +6,9 @@ import re
 
 from click.testing import CliRunner
 
+from nemo_safe_synthesizer import __version__
 from nemo_safe_synthesizer.cli.cli import cli
+from nemo_safe_synthesizer.package_info import __version__ as package_info_version
 from nemo_safe_synthesizer.utils import merge_dicts
 
 
@@ -14,6 +16,17 @@ def strip_ansi_codes(text: str) -> str:
     """Remove ANSI escape codes from text."""
     ansi_escape = re.compile(r"\x1b\[[0-9;]*m")
     return ansi_escape.sub("", text)
+
+
+def test_version_option():
+    result = CliRunner().invoke(cli, ["--version"])
+
+    assert result.exit_code == 0
+    assert result.output == f"safe-synthesizer, version {__version__}\n"
+
+
+def test_version_is_exposed_from_package_root():
+    assert __version__ == package_info_version
 
 
 def test_merge_dicts():

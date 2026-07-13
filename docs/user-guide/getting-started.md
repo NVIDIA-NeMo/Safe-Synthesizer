@@ -139,6 +139,7 @@ indexes outside PyPI. You must pass the extra index URLs shown below.
 After installing, activate your Python virtual environment and confirm the CLI is available:
 
 ```bash
+safe-synthesizer --version
 safe-synthesizer --help
 ```
 
@@ -153,6 +154,7 @@ Usage: safe-synthesizer [OPTIONS] COMMAND [ARGS]...
   modify a config file.
 
 Options:
+  --version  Show the version and exit.
   --help  Show this message and exit.
 
 Commands:

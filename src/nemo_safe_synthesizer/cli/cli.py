@@ -11,12 +11,14 @@ from __future__ import annotations
 
 import click
 
+from ..package_info import __version__
 from .artifacts import artifacts
 from .config import config
 from .run import run
 
 
 @click.group()
+@click.version_option(version=__version__, prog_name="safe-synthesizer")
 def cli() -> None:
     """NeMo Safe Synthesizer command-line interface.
     This application is used to run the Safe Synthesizer pipeline.
