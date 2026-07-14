@@ -17,11 +17,14 @@ import sys
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Literal, Self
+from typing import Literal, Self, TypeAlias
 
 from packaging.version import InvalidVersion, Version
 
-BUMP_CHOICES = ("major", "minor", "patch", "post")
+StableBump: TypeAlias = Literal["major", "minor", "patch"]
+Bump: TypeAlias = Literal["major", "minor", "patch", "post"]
+
+BUMP_CHOICES: tuple[Bump, ...] = ("major", "minor", "patch", "post")
 
 
 class ReleaseVersionError(Exception):
@@ -36,7 +39,7 @@ class StableVersion:
     minor: int
     patch: int
 
-    def bump(self, part: str) -> Self:
+    def bump(self, part: StableBump) -> Self:
         """Return the next stable base version for the requested bump part."""
         match part:
             case "major":
@@ -78,12 +81,37 @@ class StableVersion:
 
 
 @dataclass(frozen=True)
-class ParsedReleaseTag:
+class ReleaseTag:
     """Canonical release tag classified according to project policy."""
 
     base: StableVersion
-    kind: Literal["stable", "rc", "post", "historical-dev"]
-    number: int | None = None
+
+
+@dataclass(frozen=True)
+class StableReleaseTag(ReleaseTag):
+    """A stable release tag."""
+
+
+@dataclass(frozen=True)
+class ReleaseCandidateTag(ReleaseTag):
+    """A release-candidate tag."""
+
+    number: int
+
+
+@dataclass(frozen=True)
+class PostReleaseTag(ReleaseTag):
+    """A post-release tag."""
+
+    number: int
+
+
+@dataclass(frozen=True)
+class HistoricalDevelopmentTag(ReleaseTag):
+    """A historical local-development tag accepted for compatibility."""
+
+
+ParsedReleaseTag: TypeAlias = StableReleaseTag | ReleaseCandidateTag | PostReleaseTag | HistoricalDevelopmentTag
 
 
 @dataclass(frozen=True)
@@ -92,7 +120,7 @@ class ReleasePlan:
 
     latest_stable_tag: str
     latest_stable_version: str
-    bump: str
+    bump: Bump
     candidate_ref: str
     candidate_commit: str
     next_version: str
@@ -124,27 +152,17 @@ def _parse_release_tag(tag: str) -> ParsedReleaseTag | None:
         return None
 
     base = StableVersion(*version.release)
-    if version.local is not None:
-        local = version.local
-        if (
-            version.pre is None
-            and version.post is None
-            and version.dev is None
-            and local.startswith("dev")
-            and local.removeprefix("dev").isdigit()
-        ):
-            return ParsedReleaseTag(base=base, kind="historical-dev")
-        return None
-    if version.dev is not None:
-        return None
-    if version.pre is not None:
-        pre_kind, pre_number = version.pre
-        if pre_kind == "rc" and version.post is None:
-            return ParsedReleaseTag(base=base, kind="rc", number=pre_number)
-        return None
-    if version.post is not None:
-        return ParsedReleaseTag(base=base, kind="post", number=version.post)
-    return ParsedReleaseTag(base=base, kind="stable")
+    match version.pre, version.post, version.dev, version.local:
+        case None, None, None, None:
+            return StableReleaseTag(base)
+        case ("rc", number), None, None, None:
+            return ReleaseCandidateTag(base, number)
+        case None, number, None, None:
+            return PostReleaseTag(base, number)
+        case None, None, None, local if local.startswith("dev") and local.removeprefix("dev").isdigit():
+            return HistoricalDevelopmentTag(base)
+        case _:
+            return None
 
 
 def _find_latest_stable(tags: Sequence[str]) -> tuple[str, StableVersion]:
@@ -157,7 +175,7 @@ def _find_latest_stable(tags: Sequence[str]) -> tuple[str, StableVersion]:
             f"{formatted}. Expected vMAJOR.MINOR.PATCH, vMAJOR.MINOR.PATCHrcN, or vMAJOR.MINOR.PATCH.postN."
         )
 
-    stable_tags = [(parsed.base, tag) for tag, parsed in parsed_tags if parsed is not None and parsed.kind == "stable"]
+    stable_tags = [(parsed.base, tag) for tag, parsed in parsed_tags if isinstance(parsed, StableReleaseTag)]
 
     if not stable_tags:
         raise ReleaseVersionError("No stable release tags found. Expected at least one vMAJOR.MINOR.PATCH tag.")
@@ -165,7 +183,7 @@ def _find_latest_stable(tags: Sequence[str]) -> tuple[str, StableVersion]:
     stable_versions = {version for version, _ in stable_tags}
     dangling_posts: list[tuple[str, StableVersion]] = []
     for tag, parsed in parsed_tags:
-        if parsed is not None and parsed.kind == "post" and parsed.base not in stable_versions:
+        if isinstance(parsed, PostReleaseTag) and parsed.base not in stable_versions:
             dangling_posts.append((tag, parsed.base))
     if dangling_posts:
         tag, base = sorted(dangling_posts)[0]
@@ -190,18 +208,18 @@ def _next_post_release(tags: Sequence[str], base: StableVersion) -> tuple[str, s
     post_numbers: list[int] = []
     for tag in tags:
         parsed = _parse_release_tag(tag)
-        if parsed is not None and parsed.kind == "post" and parsed.base == base and parsed.number is not None:
+        if isinstance(parsed, PostReleaseTag) and parsed.base == base:
             post_numbers.append(parsed.number)
     next_post_number = max(post_numbers, default=0) + 1
     return base.post_version(next_post_number), base.post_tag(next_post_number)
 
 
-def _next_release_candidate(tags: Sequence[str], base: StableVersion, bump: str) -> tuple[str, str]:
+def _next_release_candidate(tags: Sequence[str], base: StableVersion, bump: StableBump) -> tuple[str, str]:
     next_version = base.bump(bump)
     existing_candidates = sorted(
         tag
         for tag in tags
-        if (parsed := _parse_release_tag(tag)) is not None and parsed.kind == "rc" and parsed.base == next_version
+        if isinstance(parsed := _parse_release_tag(tag), ReleaseCandidateTag) and parsed.base == next_version
     )
     if existing_candidates:
         formatted = ", ".join(existing_candidates)
@@ -211,7 +229,7 @@ def _next_release_candidate(tags: Sequence[str], base: StableVersion, bump: str)
     return next_version.rc0_version, next_version.rc0_tag
 
 
-def plan_release(*, bump: str = "patch", ref: str = "HEAD", cwd: Path | None = None) -> ReleasePlan:
+def plan_release(*, bump: Bump = "patch", ref: str = "HEAD", cwd: Path | None = None) -> ReleasePlan:
     """Compute the next release tag from local Git tags.
 
     Args:
@@ -231,10 +249,13 @@ def plan_release(*, bump: str = "patch", ref: str = "HEAD", cwd: Path | None = N
     repo = cwd or Path.cwd()
     tags = _list_local_tags(cwd=repo)
     latest_tag, latest_version = _find_latest_stable(tags)
-    if bump == "post":
-        next_version_text, next_tag = _next_post_release(tags, latest_version)
-    else:
-        next_version_text, next_tag = _next_release_candidate(tags, latest_version, bump)
+    match bump:
+        case "post":
+            next_version_text, next_tag = _next_post_release(tags, latest_version)
+        case "major" | "minor" | "patch":
+            next_version_text, next_tag = _next_release_candidate(tags, latest_version, bump)
+        case _:
+            raise ReleaseVersionError(f"Unsupported bump part: {bump!r}. Use one of: {', '.join(BUMP_CHOICES)}.")
 
     return ReleasePlan(
         latest_stable_tag=latest_tag,

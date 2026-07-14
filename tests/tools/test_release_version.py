@@ -7,23 +7,46 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from types import ModuleType
+from typing import Literal, Protocol, cast
 
 import pytest
 
+Bump = Literal["major", "minor", "patch", "post"]
+StableBump = Literal["major", "minor", "patch"]
 
-def _load_tool(tool_path: Path) -> ModuleType:
+
+class ReleasePlan(Protocol):
+    """Typed view of a plan returned by the dynamically loaded tool."""
+
+    latest_stable_tag: str
+    latest_stable_version: str
+    bump: Bump
+    candidate_ref: str
+    candidate_commit: str
+    next_version: str
+    next_tag: str
+
+
+class ReleaseVersionTool(Protocol):
+    """Typed interface exposed by the dynamically loaded release tool."""
+
+    ReleaseVersionError: type[Exception]
+
+    def plan_release(self, *, bump: Bump = "patch", ref: str = "HEAD", cwd: Path | None = None) -> ReleasePlan: ...
+
+
+def _load_tool(tool_path: Path) -> ReleaseVersionTool:
     spec = importlib.util.spec_from_file_location("release_version", tool_path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"Could not load {tool_path}")
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
-    return module
+    return cast(ReleaseVersionTool, module)
 
 
 @pytest.fixture(scope="module")
-def release_tool(pytestconfig: pytest.Config) -> tuple[ModuleType, Path]:
+def release_tool(pytestconfig: pytest.Config) -> tuple[ReleaseVersionTool, Path]:
     """Load the release helper from pytest's discovered repository root."""
     tool_path = Path(pytestconfig.rootpath) / "tools" / "release_version.py"
     return _load_tool(tool_path), tool_path
@@ -31,7 +54,7 @@ def release_tool(pytestconfig: pytest.Config) -> tuple[ModuleType, Path]:
 
 class TestReleaseVersion:
     @pytest.fixture(autouse=True)
-    def _configure_release_tool(self, release_tool: tuple[ModuleType, Path]) -> None:
+    def _configure_release_tool(self, release_tool: tuple[ReleaseVersionTool, Path]) -> None:
         self.release_version, self.tool_path = release_tool
 
     def setup_method(self) -> None:
@@ -86,7 +109,7 @@ class TestReleaseVersion:
             ("patch", ("v2.3.5rc0", "2.3.5rc0")),
         ],
     )
-    def test_major_minor_and_patch_bumps_prepare_rc0(self, bump: str, expected: tuple[str, str]) -> None:
+    def test_major_minor_and_patch_bumps_prepare_rc0(self, bump: StableBump, expected: tuple[str, str]) -> None:
         self._tag("v2.3.4")
 
         plan = self.release_version.plan_release(bump=bump, cwd=self.repo)
