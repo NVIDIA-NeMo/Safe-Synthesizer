@@ -32,6 +32,7 @@ from .environment import (
     VRAMHeadroomCheck,
 )
 from .metadata import TokenBudgetCheck
+from .pii import PiiReplacementConfigCheck, PiiUniqueIdAdvisoryCheck
 
 __all__ = [
     "CUDAAvailabilityCheck",
@@ -43,6 +44,8 @@ __all__ = [
     "InferenceModelCheck",
     "OrderbyColumnCheck",
     "OversamplingCheck",
+    "PiiReplacementConfigCheck",
+    "PiiUniqueIdAdvisoryCheck",
     "PseudoColumnCheck",
     "TimeSeriesDataShapeCheck",
     "TimestampColumnCheck",
@@ -60,6 +63,7 @@ _CORE_CHECKS: tuple[PreflightCheck, ...] = (
     # CONFIG
     CUDAAvailabilityCheck(),
     InferenceModelCheck(),
+    PiiReplacementConfigCheck(),
     HFModelAvailabilityCheck(),
     # DATAFRAME
     DatasetSizeCheck(),
@@ -75,4 +79,5 @@ _CORE_CHECKS: tuple[PreflightCheck, ...] = (
     # ADVISORY
     SmallDatasetCheck(),
     OversamplingCheck(),
+    PiiUniqueIdAdvisoryCheck(),
 )

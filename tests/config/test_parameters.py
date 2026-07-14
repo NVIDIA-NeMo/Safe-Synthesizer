@@ -12,7 +12,7 @@ from pydantic import Field, ValidationError, model_validator
 
 from nemo_safe_synthesizer.config.generate import GenerateParameters, StructuredGenerationParameters
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
-from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig, StepDefinition
+from nemo_safe_synthesizer.config.pii_replacement import ReplacePiiConfig
 from nemo_safe_synthesizer.config.training import QuantizationScheme
 from nemo_safe_synthesizer.configurator.parameter_paths import (
     AmbiguousParameterName,
@@ -71,9 +71,9 @@ def test_emit_telemetry_from_yaml_uses_env_when_unset(monkeypatch):
     assert c.emit_telemetry is False
 
 
-def test_pii_replacer_default():
-    with pytest.raises(ValidationError):
-        PiiReplacerConfig()  # ty: ignore[missing-argument] -- intentionally testing validation error
+def test_replace_pii_default():
+    cfg = ReplacePiiConfig()
+    assert cfg.replacement.locale == "en_US"
 
 
 def test_quantization_scheme_from_alias_rejects_invalid_legacy_bit_alias() -> None:
@@ -227,7 +227,10 @@ def test_parameter_schema_reports_ambiguous_bare_names_with_candidates():
 
 
 def test_mapping_valued_step_vars_annotation_is_a_leaf():
-    annotation = StepDefinition.model_fields["vars"].annotation
+    class _StepLike(Parameters):
+        vars: dict[str, object] = Field(default_factory=dict)
+
+    annotation = _StepLike.model_fields["vars"].annotation
 
     assert classify_parameter_annotation(annotation) is ParameterFieldKind.LEAF
 

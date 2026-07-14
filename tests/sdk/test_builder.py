@@ -7,11 +7,7 @@ from unittest.mock import MagicMock
 import pandas as pd
 import pytest
 
-from nemo_safe_synthesizer.config import GenerateParameters, SafeSynthesizerParameters
-from nemo_safe_synthesizer.config.replace_pii import (
-    DEFAULT_PII_TRANSFORM_CONFIG,
-    PiiReplacerConfig,
-)
+from nemo_safe_synthesizer.config import GenerateParameters, ReplacePiiConfig, SafeSynthesizerParameters
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer, _emit_nss_telemetry
 from nemo_safe_synthesizer.telemetry import DeploymentTypeEnum, TaskStatusEnum
 
@@ -72,33 +68,24 @@ def fixture_base_builder() -> SafeSynthesizer:
 def test_pii_replacer_only_builder(fixture_base_builder: SafeSynthesizer):
     builder = fixture_base_builder.with_replace_pii(
         config={
-            "globals": {
-                "classify": {
-                    "enable_classify": True,
+            "llm_enhancement": False,
+            "replacement": {"locale": "en_US", "seed": 42},
+            "replacement_plan": {
+                "group_key": None,
+                "associated_column_sets": {
+                    "person": {
+                        "columns_to_replace": {
+                            "name": {"entity_type": "first_name"},
+                        }
+                    }
                 },
-                "locales": ["en_US"],
             },
-            "steps": [
-                {
-                    "vars": {
-                        "row_seed": "random.random()",
-                    },
-                    "rows": {
-                        "update": [
-                            {
-                                "condition": 'column.entity == "first_name" and not (this | isna)',
-                                "value": "fake.persona(row_index=vars.row_seed + index).first_name",
-                            }
-                        ]
-                    },
-                }
-            ],
         }
     ).resolve()
 
     assert builder._nss_config is not None
     assert builder._nss_config.replace_pii is not None
-    assert builder._nss_config.replace_pii.globals.classify.enable_classify is True
+    assert builder._nss_config.replace_pii.replacement.locale == "en_US"
 
 
 def test_all_builder():
@@ -107,27 +94,8 @@ def test_all_builder():
         .with_data_source(pd.DataFrame({"name": ["John", "Jane", "Jim"]}))
         .with_replace_pii(
             config={
-                "globals": {
-                    "classify": {
-                        "enable_classify": True,
-                    },
-                    "locales": ["en_US"],
-                },
-                "steps": [
-                    {
-                        "vars": {
-                            "row_seed": "random.random()",
-                        },
-                        "rows": {
-                            "update": [
-                                {
-                                    "condition": 'column.entity == "first_name" and not (this | isna)',
-                                    "value": "fake.persona(row_index=vars.row_seed + index).first_name",
-                                }
-                            ]
-                        },
-                    }
-                ],
+                "llm_enhancement": False,
+                "replacement": {"locale": "en_US"},
             }
         )
         .resolve()
@@ -194,8 +162,8 @@ def test_builder_change_generation_params_with_kwargs(fixture_base_builder):
 
 
 def test_pii_replacer_with_default_config_object(fixture_base_builder):
-    """Test PII replacer configuration using PiiReplacerConfig.get_default_config()"""
-    default_config = PiiReplacerConfig.get_default_config()
+    """Test PII replacer configuration using ReplacePiiConfig defaults."""
+    default_config = ReplacePiiConfig()
 
     builder = fixture_base_builder.with_replace_pii(config=default_config).resolve()
     assert builder._nss_config is not None
@@ -215,7 +183,7 @@ def test_builder_with_all_parameters_customized():
     builder = (
         SafeSynthesizer()
         .with_data_source(data)
-        .with_replace_pii(config=PiiReplacerConfig.get_default_config())
+        .with_replace_pii(config=ReplacePiiConfig())
         .with_train(
             batch_size=64,
             learning_rate=0.001,
@@ -259,26 +227,33 @@ def test_builder_with_all_parameters_customized():
 
 
 def test_pii_config_equality():
-    """Test that PiiReplacerConfig objects can be compared for equality"""
-    config1 = PiiReplacerConfig.get_default_config()
-    config2 = PiiReplacerConfig.get_default_config()
-    yaml_config = PiiReplacerConfig.from_yaml_str(DEFAULT_PII_TRANSFORM_CONFIG)
+    """Test that ReplacePiiConfig objects can be compared for equality."""
+    config1 = ReplacePiiConfig()
+    config2 = ReplacePiiConfig()
+    yaml_config = ReplacePiiConfig.model_validate(
+        {
+            "schema_version": 1,
+            "llm_enhancement": False,
+            "replacement_plan": "auto_discovery",
+        }
+    )
 
-    # Same configs should be equal
     assert config1.model_dump() == config2.model_dump()
     assert config1.model_dump() == yaml_config.model_dump()
 
-    # Modified config should not be equal
-    # Need to properly construct nested models to avoid serialization warnings
-    modified_globals = config1.globals.model_copy(deep=True)
-    modified_globals.classify.enable_classify = False
-    modified_config = config1.model_copy(update={"globals": modified_globals}, deep=True)
-    assert config1.model_dump() != modified_config.model_dump()
+    modified = config1.model_copy(update={"llm_enhancement": True}, deep=True)
+    assert config1.model_dump() != modified.model_dump()
 
 
 def test_pii_replacer_from_yaml_str(fixture_base_builder):
-    """Test creating PiiReplacerConfig directly from YAML string"""
-    config = PiiReplacerConfig.from_yaml_str(DEFAULT_PII_TRANSFORM_CONFIG)
+    """Test creating ReplacePiiConfig directly from YAML string."""
+    config = ReplacePiiConfig.from_yaml_str(
+        """
+        schema_version: 1
+        llm_enhancement: false
+        replacement_plan: auto_discovery
+        """
+    )
 
     builder = fixture_base_builder.with_replace_pii(config=config).resolve()
 

@@ -17,7 +17,7 @@
             {% if ctx.with_transform %}
                 <th>Entities (count)</th>
                 <th>Transformed</th>
-                <th class="last">Transform function</th>
+                <th class="last">Transform method</th>
             {% endif %}
         </tr>
         {% for column in ctx.column_distribution_stability.evaluation_fields %}
@@ -49,12 +49,14 @@
                 <td>
                     {% if column.column_statistics and column.column_statistics.detected_entity_counts %}
                     {% for entity, count in column.column_statistics.detected_entity_counts.items() %}
+                    {% if entity != "free_text" %}
                     <div class="entity_count">
                         <span class="score-label">
                             {{ entity }}
                         </span>
                         ({{ count }})
                     </div>
+                    {% endif %}
                     {% endfor %}
                     {% endif %}
                 </td>
@@ -66,8 +68,8 @@
                     {% endif %}
                 </td>
                 <td class="last">
-                    {% for transform_function in column.column_statistics.transform_functions %}
-                    {{ transform_function + ", " if not loop.last else transform_function }}
+                    {% for transform_method in column.column_statistics.transform_methods %}
+                    {{ transform_method + ", " if not loop.last else transform_method }}
                     {% endfor%}
                 </td>
             {% endif %}

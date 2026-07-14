@@ -19,7 +19,7 @@ from unittest.mock import MagicMock
 import pandas as pd
 import pytest
 
-from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
+from nemo_safe_synthesizer.config import ReplacePiiConfig
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
 
 MODULE = "nemo_safe_synthesizer.sdk.library_builder"
@@ -41,7 +41,7 @@ def _make_replaced_df() -> pd.DataFrame:
 
 
 def _patch_heavy_deps(monkeypatch, original_df: pd.DataFrame, replaced_df: pd.DataFrame) -> None:
-    """Patch Holdout, NemoPII, AutoConfigResolver, and ModelMetadata so
+    """Patch Holdout, TabularPiiReplacer, AutoConfigResolver, and ModelMetadata so
     ``process_data`` can run without GPUs or real models.
     """
     # Holdout: pass through without splitting; return original + empty test
@@ -52,14 +52,14 @@ def _patch_heavy_deps(monkeypatch, original_df: pd.DataFrame, replaced_df: pd.Da
     )
     monkeypatch.setattr(f"{MODULE}.Holdout", lambda config: mock_holdout_instance)
 
-    # NemoPII: simulate PII replacement producing a different DataFrame
+    # TabularPiiReplacer: simulate PII replacement producing a different DataFrame
     mock_pii = MagicMock()
     mock_pii.result = SimpleNamespace(
         transformed_df=replaced_df.copy(),
         column_statistics={"name": {}},
     )
     mock_pii.elapsed_time = 0.1
-    monkeypatch.setattr(f"{MODULE}.NemoPII", lambda config: mock_pii)
+    monkeypatch.setattr(f"{MODULE}.TabularPiiReplacer", lambda *args, **kwargs: mock_pii)
 
     # AutoConfigResolver: identity
     monkeypatch.setattr(f"{MODULE}.AutoConfigResolver", lambda df, config: lambda: config)
@@ -104,7 +104,7 @@ class TestProcessDataPreservesOriginalForEvaluation:
         builder = (
             SafeSynthesizer(save_path=tmp_path)
             .with_data_source(original)
-            .with_replace_pii(config=PiiReplacerConfig.get_default_config())
+            .with_replace_pii(config=ReplacePiiConfig())
             .resolve()
         )
         builder.process_data()
@@ -157,7 +157,7 @@ class TestLoadFromSavePathGuard:
         builder = (
             SafeSynthesizer(save_path=tmp_path)
             .with_data_source(original)
-            .with_replace_pii(config=PiiReplacerConfig.get_default_config())
+            .with_replace_pii(config=ReplacePiiConfig())
             .resolve()
         )
         # Run process_data to create the workdir artifacts

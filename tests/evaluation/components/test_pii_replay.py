@@ -50,7 +50,7 @@ def test_pii_replay_column_name_with_apostrophe():
             detected_entity_counts={"name": 4},
             detected_entity_values={"name": {"foo", "bar"}},
             is_transformed=True,
-            transform_functions={"fake"},
+            transform_methods={"fake"},
         )
     }
 

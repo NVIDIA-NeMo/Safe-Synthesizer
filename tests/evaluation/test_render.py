@@ -38,6 +38,8 @@ def test_render(
     assert "Dataset Statistics" in output
     assert "Synthetic Quality Score" in output
     assert "Training Data Columns" in output
+    assert "Transform method" in output
+    assert "Transform function" not in output
 
     # Dynamic values from Pydantic models made it into HTML (catch silent blanks
     # from Jinja variable typos -- default Undefined renders as empty string)

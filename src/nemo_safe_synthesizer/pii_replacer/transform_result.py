@@ -10,8 +10,8 @@ from pydantic import BaseModel, ConfigDict, Field
 class ColumnStatistics(BaseModel):
     """Metadata and statistics for transformations and detected entities in a column.
 
-    Tracks assigned type and entity from classification, NER-detected counts and
-    values per entity, and which transform functions were applied.
+    Tracks assigned type and entity from classification, detected entity counts,
+    and which transform methods were applied.
     """
 
     assigned_type: str | None = Field(
@@ -32,16 +32,16 @@ class ColumnStatistics(BaseModel):
         default=False,
         description="Whether the column was transformed.",
     )
-    transform_functions: set[str] = Field(
+    transform_methods: set[str] = Field(
         default_factory=set,
-        description="Names of transform functions applied to the column.",
+        description="Replacement methods applied to the column (e.g. locale + persona backend).",
     )
 
 
 class TransformResult(BaseModel):
     """Result of PII replacement: transformed data and per-column statistics.
 
-    Produced by ``NemoPII.transform_df`` and exposed as ``NemoPII.result``.
+    Produced by ``TabularPiiReplacer.transform_df`` and exposed as ``TabularPiiReplacer.result``.
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)

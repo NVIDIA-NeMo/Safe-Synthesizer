@@ -109,13 +109,13 @@ def _create_process_data_setup(
     builder._data_source = original_df
     assert builder._nss_config is not None
     if replace_pii:
-        from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
+        from nemo_safe_synthesizer.config import ReplacePiiConfig
 
-        builder._nss_config.replace_pii = PiiReplacerConfig.get_default_config()
+        builder._nss_config.replace_pii = ReplacePiiConfig()
     else:
         builder._nss_config.replace_pii = None
 
-    # Stub just enough of NemoPII's interface to satisfy process_data
+    # Stub just enough of TabularPiiReplacer's interface to satisfy process_data
     mock_replacer_instance = MagicMock()
     mock_replacer_instance.result.transformed_df = pii_replaced_df
     mock_replacer_instance.result.column_statistics = {
@@ -180,7 +180,7 @@ class TestProcessDataPiiSeparation:
         pd.testing.assert_frame_equal(builder._training_df, train_split)
 
     @patch("nemo_safe_synthesizer.sdk.library_builder.run_preflight", return_value=_EMPTY_PREFLIGHT)
-    @patch("nemo_safe_synthesizer.sdk.library_builder.NemoPII")
+    @patch("nemo_safe_synthesizer.sdk.library_builder.TabularPiiReplacer")
     @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
     @patch("nemo_safe_synthesizer.sdk.library_builder.AutoConfigResolver")
     @patch("nemo_safe_synthesizer.sdk.library_builder.Holdout")
@@ -207,7 +207,7 @@ class TestProcessDataPiiSeparation:
         pd.testing.assert_frame_equal(builder._original_training_df, train_split)
 
     @patch("nemo_safe_synthesizer.sdk.library_builder.run_preflight", return_value=_EMPTY_PREFLIGHT)
-    @patch("nemo_safe_synthesizer.sdk.library_builder.NemoPII")
+    @patch("nemo_safe_synthesizer.sdk.library_builder.TabularPiiReplacer")
     @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
     @patch("nemo_safe_synthesizer.sdk.library_builder.AutoConfigResolver")
     @patch("nemo_safe_synthesizer.sdk.library_builder.Holdout")

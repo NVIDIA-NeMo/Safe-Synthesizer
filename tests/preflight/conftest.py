@@ -10,6 +10,7 @@ import pandas as pd
 import pytest
 
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
+from nemo_safe_synthesizer.config.pii_replacement import ReplacePiiConfig
 from nemo_safe_synthesizer.llm.metadata import ModelMetadata
 from nemo_safe_synthesizer.preflight import PreflightContext
 
@@ -43,6 +44,15 @@ def ctx_factory():
 def default_config():
     """Default SafeSynthesizerParameters with all defaults."""
     return SafeSynthesizerParameters()
+
+
+@pytest.fixture
+def llm_pii_config(default_config):
+    """Config with LLM PII enhancement enabled (inference env checks apply)."""
+    return default_config.model_copy(
+        update={"replace_pii": ReplacePiiConfig(llm_enhancement=True)},
+        deep=True,
+    )
 
 
 @pytest.fixture

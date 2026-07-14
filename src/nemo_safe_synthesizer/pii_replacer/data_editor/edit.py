@@ -268,10 +268,12 @@ class Step:
             try:
                 foreach_itr = ast.literal_eval(foreach_str)
             except (ValueError, TypeError, SyntaxError):
-                try:
-                    foreach_itr = json.loads(foreach_str)
-                except (json.JSONDecodeError, TypeError):
-                    foreach_itr = None
+                pass
+
+            try:
+                foreach_itr = json.loads(foreach_str)
+            except (json.JSONDecodeError, TypeError):
+                pass
 
             try:
                 iter(foreach_itr)

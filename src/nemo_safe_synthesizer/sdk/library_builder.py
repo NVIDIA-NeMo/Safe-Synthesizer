@@ -29,7 +29,7 @@ from ..llm.metadata import ModelMetadata
 from ..llm.utils import get_device_name
 from ..observability import LogCategory, configure_logging_from_workdir, get_logger, initialize_observability, traced
 from ..package_info import __version__
-from ..pii_replacer.nemo_pii import NemoPII
+from ..pii_replacer import TabularPiiReplacer
 from ..preflight import PreflightReport, PreflightStage, run_preflight
 from ..results import SafeSynthesizerResults, make_nss_results
 from ..telemetry import (
@@ -418,7 +418,11 @@ class SafeSynthesizer(ConfigBuilder):
         # text can shift token lengths, so ``--validate`` is documented as
         # best-effort rather than a guarantee (see user-guide/running.md).
         if not check_only and self._nss_config.replace_pii is not None:
-            replacer = NemoPII(self._nss_config.replace_pii)
+            replacer = TabularPiiReplacer(
+                self._nss_config.replace_pii,
+                data_config=self._nss_config.data,
+                workdir=self._workdir.run_dir,
+            )
             replacer.transform_df(original_training_df)
             assert replacer.result is not None
             self._training_df = replacer.result.transformed_df

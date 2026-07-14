@@ -383,14 +383,19 @@ class TestVRAMHeadroomCheck:
 
 @pytest.mark.unit
 class TestInferenceModelCheck:
-    def test_empty_env_emits_key_warning(self, default_config):
+    def test_llm_enhancement_disabled_skips_checks(self, default_config):
         with patch.dict("os.environ", {}, clear=True):
             issues = InferenceModelCheck().run(make_ctx(config=default_config))
+        assert issues == []
+
+    def test_empty_env_emits_key_warning(self, llm_pii_config):
+        with patch.dict("os.environ", {}, clear=True):
+            issues = InferenceModelCheck().run(make_ctx(config=llm_pii_config))
         assert any(i.code == "inference_key_missing" and i.severity == "warning" for i in issues)
 
-    def test_inference_key_present_is_silent(self, default_config):
+    def test_inference_key_present_is_silent(self, llm_pii_config):
         with patch.dict("os.environ", {"NSS_INFERENCE_KEY": "test-key", "HF_TOKEN": "hf_xxx"}):
-            issues = InferenceModelCheck().run(make_ctx(config=default_config))
+            issues = InferenceModelCheck().run(make_ctx(config=llm_pii_config))
         assert not any(i.code == "inference_key_missing" for i in issues)
 
     def test_pii_disabled_skips_all_checks(self):
@@ -403,29 +408,29 @@ class TestInferenceModelCheck:
             issues = InferenceModelCheck().run(make_ctx(config=config))
         assert issues == []
 
-    def test_blank_model_emits_warning(self, default_config):
+    def test_blank_model_emits_warning(self, llm_pii_config):
         with patch.dict(
             "os.environ",
             {"NSS_INFERENCE_KEY": "test-key", "NSS_INFERENCE_MODEL": "   "},
         ):
-            issues = InferenceModelCheck().run(make_ctx(config=default_config))
+            issues = InferenceModelCheck().run(make_ctx(config=llm_pii_config))
         assert any(i.code == "inference_model_blank" and i.severity == "warning" for i in issues)
 
-    def test_unset_model_is_silent(self, default_config):
+    def test_unset_model_is_silent(self, llm_pii_config):
         with patch.dict("os.environ", {"NSS_INFERENCE_KEY": "test-key"}, clear=True):
-            issues = InferenceModelCheck().run(make_ctx(config=default_config))
+            issues = InferenceModelCheck().run(make_ctx(config=llm_pii_config))
         assert not any(i.code == "inference_model_blank" for i in issues)
 
-    def test_valid_model_is_silent(self, default_config):
+    def test_valid_model_is_silent(self, llm_pii_config):
         with patch.dict(
             "os.environ",
             {"NSS_INFERENCE_KEY": "test-key", "NSS_INFERENCE_MODEL": "qwen/qwen3-next-80b-a3b-instruct"},
         ):
-            issues = InferenceModelCheck().run(make_ctx(config=default_config))
+            issues = InferenceModelCheck().run(make_ctx(config=llm_pii_config))
         assert not any(i.code == "inference_model_blank" for i in issues)
 
     @pytest.mark.parametrize("endpoint", ["not-a-url", "ftp://example.com", "http://"])
-    def test_invalid_endpoint_emits_error(self, default_config, endpoint):
+    def test_invalid_endpoint_emits_error(self, llm_pii_config, endpoint):
         # An invalid endpoint cannot succeed, so it must fail preflight (error),
         # not merely warn -- otherwise --validate passes a config that fails on
         # the first classification request.
@@ -433,29 +438,29 @@ class TestInferenceModelCheck:
             "os.environ",
             {"NSS_INFERENCE_KEY": "test-key", "NSS_INFERENCE_ENDPOINT": endpoint},
         ):
-            issues = InferenceModelCheck().run(make_ctx(config=default_config))
+            issues = InferenceModelCheck().run(make_ctx(config=llm_pii_config))
         assert any(i.code == "inference_endpoint_invalid" and i.severity == "error" for i in issues)
 
-    def test_valid_endpoint_is_silent(self, default_config):
+    def test_valid_endpoint_is_silent(self, llm_pii_config):
         with patch.dict(
             "os.environ",
             {"NSS_INFERENCE_KEY": "test-key", "NSS_INFERENCE_ENDPOINT": "https://integrate.api.nvidia.com/v1"},
         ):
-            issues = InferenceModelCheck().run(make_ctx(config=default_config))
+            issues = InferenceModelCheck().run(make_ctx(config=llm_pii_config))
         assert not any(i.code == "inference_endpoint_invalid" for i in issues)
 
     @pytest.mark.parametrize("blank", ["", "   "])
-    def test_blank_endpoint_is_silent(self, default_config, blank):
+    def test_blank_endpoint_is_silent(self, llm_pii_config, blank):
         # A blank endpoint is treated as unset (falls back to the default base
         # URL), not as an invalid endpoint.
         with patch.dict(
             "os.environ",
             {"NSS_INFERENCE_KEY": "test-key", "NSS_INFERENCE_ENDPOINT": blank},
         ):
-            issues = InferenceModelCheck().run(make_ctx(config=default_config))
+            issues = InferenceModelCheck().run(make_ctx(config=llm_pii_config))
         assert not any(i.code == "inference_endpoint_invalid" for i in issues)
 
-    def test_invalid_endpoint_takes_priority_over_warnings(self, default_config):
+    def test_invalid_endpoint_takes_priority_over_warnings(self, llm_pii_config):
         # Single-dispatch match: the invalid-endpoint error is checked first, so
         # it wins over the missing-key and blank-model warnings.
         with patch.dict(
@@ -463,12 +468,12 @@ class TestInferenceModelCheck:
             {"NSS_INFERENCE_MODEL": "", "NSS_INFERENCE_ENDPOINT": "not-a-url"},
             clear=True,
         ):
-            issues = InferenceModelCheck().run(make_ctx(config=default_config))
+            issues = InferenceModelCheck().run(make_ctx(config=llm_pii_config))
         codes = {i.code for i in issues}
         assert codes == {"inference_endpoint_invalid"}
         assert all(i.severity == "error" for i in issues if i.code == "inference_endpoint_invalid")
 
-    def test_missing_key_takes_priority_over_blank_model(self, default_config):
+    def test_missing_key_takes_priority_over_blank_model(self, llm_pii_config):
         # With a valid endpoint, the missing-key warning outranks the blank-model
         # warning.
         with patch.dict(
@@ -476,7 +481,7 @@ class TestInferenceModelCheck:
             {"NSS_INFERENCE_MODEL": "   ", "NSS_INFERENCE_ENDPOINT": "https://integrate.api.nvidia.com/v1"},
             clear=True,
         ):
-            issues = InferenceModelCheck().run(make_ctx(config=default_config))
+            issues = InferenceModelCheck().run(make_ctx(config=llm_pii_config))
         codes = {i.code for i in issues}
         assert codes == {"inference_key_missing"}
 

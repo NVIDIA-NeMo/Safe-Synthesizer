@@ -490,7 +490,7 @@ class InferenceModelCheck(ConfigCheck):
     @override
     def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
         config = ctx.config
-        if config.replace_pii is None or config.replace_pii.globals.classify.enable_classify is False:
+        if config.replace_pii is None or not config.replace_pii.llm_enhancement:
             return
 
         model = os.environ.get("NSS_INFERENCE_MODEL")

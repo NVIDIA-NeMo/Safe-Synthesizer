@@ -14,11 +14,11 @@ from nemo_safe_synthesizer.config import (
     EvaluationParameters,
     GenerateParameters,
     PreflightParameters,
+    ReplacePiiConfig,
     SafeSynthesizerParameters,
     TimeSeriesParameters,
     TrainingHyperparams,
 )
-from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
 from nemo_safe_synthesizer.configurator.parameters import Parameters
 from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.sdk.config_builder import ConfigBuilder
@@ -145,52 +145,42 @@ def test_with_generate_rejects_duplicate_alias_keyword_path():
 
 
 def test_with_generate_rejects_wrong_typed_config_object():
-    wrong_config = cast(Any, PiiReplacerConfig.get_default_config())
+    wrong_config = cast(Any, ReplacePiiConfig())
 
     with pytest.raises(TypeError, match="Expected GenerateParameters"):
         ConfigBuilder().with_generate(config=wrong_config)
 
 
-def test_with_replace_pii_validates_default_config_with_kwargs():
-    with pytest.raises(ValidationError, match="Invalid locale"):
-        ConfigBuilder().with_replace_pii(globals={"locales": ["not-a-locale"]})
-
-
 def test_with_replace_pii_resolves_raw_config_with_kwargs():
     builder = ConfigBuilder().with_replace_pii(
-        config=PiiReplacerConfig.get_default_config().model_dump(),
-        globals={"classify": {"enable_classify": False}},
+        config={"replacement": {"locale": "en_GB"}},
     )
 
     assert builder._replace_pii_config is not None
-    assert builder._replace_pii_config.globals.classify.enable_classify is False
+    assert builder._replace_pii_config.replacement.locale == "en_GB"
 
 
 @pytest.mark.parametrize("as_mapping", [False, True])
 def test_with_replace_pii_deep_merges_nested_kwargs(as_mapping: bool):
-    config_model = PiiReplacerConfig.get_default_config()
-    config_model.globals.locales = ["en_US"]
+    config_model = ReplacePiiConfig()
+    config_model.replacement.locale = "en_GB"
     config = config_model.model_dump() if as_mapping else config_model
 
     builder = ConfigBuilder().with_replace_pii(
         config=config,
-        globals={"classify": {"enable_classify": False}},
+        person={"backend": "faker"},
     )
 
     assert builder._replace_pii_config is not None
-    assert builder._replace_pii_config.globals.locales == ["en_US"]
-    assert builder._replace_pii_config.globals.classify.enable_classify is False
-    assert builder._replace_pii_config.steps[0].vars == config_model.steps[0].vars
+    assert builder._replace_pii_config.replacement.locale == "en_GB"
+    assert builder._replace_pii_config.person.backend.value == "faker"
 
 
-def test_with_replace_pii_none_uses_defaults_and_preserves_step_vars_with_nested_kwargs():
-    default = PiiReplacerConfig.get_default_config()
-
-    builder = ConfigBuilder().with_replace_pii(globals={"classify": {"enable_classify": False}})
+def test_with_replace_pii_none_uses_defaults_with_nested_kwargs():
+    builder = ConfigBuilder().with_replace_pii(person={"backend": "faker"})
 
     assert builder._replace_pii_config is not None
-    assert builder._replace_pii_config.globals.locales == default.globals.locales
-    assert builder._replace_pii_config.steps[0].vars == default.steps[0].vars
+    assert builder._replace_pii_config.person.backend.value == "faker"
 
 
 def test_with_replace_pii_invalid_source_preserves_value_error_contract():
@@ -249,4 +239,4 @@ def test_direct_assembly_preserves_classify_model_provider_injection():
 
     assert builder._nss_config is not None
     assert builder._nss_config.replace_pii is not None
-    assert builder._nss_config.replace_pii.globals.classify.classify_model_provider == "test-provider"
+    assert builder._nss_config.replace_pii.llm.model_provider == "test-provider"
