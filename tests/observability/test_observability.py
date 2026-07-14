@@ -357,8 +357,8 @@ class TestRenderTableDataForConsole:
         assert "key1" in result["extra"]["ctx"]
         assert "value1" == result["extra"]["ctx"]["key1"]
 
-    def test_creates_filtered_extra_display(self, mock_logger):
-        """Test that _extra_display is created without table keys."""
+    def test_creates_filtered_extra_display_without_ctx(self, mock_logger):
+        """Plain output keeps ordinary extras without repeating structured context."""
         event_dict = {
             "event": "test",
             "extra": {
@@ -370,8 +370,8 @@ class TestRenderTableDataForConsole:
         result = _render_table_data_for_console(mock_logger, "info", event_dict)
 
         assert "_extra_display" in result
-        assert "other_key" in result["_extra_display"]
-        assert "count" not in result["_extra_display"]
+        assert result["_extra_display"] == {"other_key": "other_value"}
+        assert result["extra"]["ctx"] == {"count": 100}
 
     def test_handles_empty_event_dict(self, mock_logger):
         """Test handling of event dict without table data."""

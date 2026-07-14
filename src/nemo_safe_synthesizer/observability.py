@@ -256,8 +256,8 @@ def _convert_rich_table_to_string(rich_table: Table) -> str:
 def _render_table_data_for_console(logger: logging.Logger, method_name: str, event_dict: dict) -> dict:
     """Processor that renders table data keys as Rich tables for console output.
 
-    Looks for specific keys in the event_dict (defined in TABLE_DATA_KEYS).
-    For each found key, renders the data as a Rich ASCII table and appends to the message.
+    For each table found in structured context, renders the data as a Rich ASCII
+    table and appends it to the message.
     Creates a filtered copy of extra (without table keys) for console display,
     preserving the original extra dict for JSON logging.
 
@@ -288,11 +288,12 @@ def _render_table_data_for_console(logger: logging.Logger, method_name: str, eve
         # The original 'extra' dict (with ctx) is preserved for JSON logging
         return event_dict
 
-    # Create a filtered copy of extra for console display (excluding rendered table keys)
+    # Structured context is retained for JSON but not repeated in plain output.
+    # Other extra values remain available for the compact console suffix.
     # Keep the original extra intact for JSON logging
     extra = event_dict.get("extra", {})
     if extra:
-        filtered_extra = {k: v for k, v in extra.items() if k not in rendered_keys}
+        filtered_extra = {k: v for k, v in extra.items() if k != "ctx" and k not in rendered_keys}
         if filtered_extra:
             event_dict["_extra_display"] = filtered_extra
     return event_dict
