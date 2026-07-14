@@ -709,6 +709,22 @@ Examples:
 | `v0.1.6-post1` |               | ❌ Dash before post-release suffix              |
 | `v0.1.3a1`    |              | ❌ Alpha prereleases are not used; use rcN only |
 
+### Release Preparation Helper
+
+Run `mise run release:prepare -- [OPTIONS]` to compute a release tag before
+creating it. The helper reads local Git tags and resolves the requested target
+commit, but it does not create, delete, or push tags.
+
+- `--bump major`, `--bump minor`, and `--bump patch` propose the corresponding
+  next version's initial `rc0` tag. The default is `patch`.
+- `--bump post` proposes the next `.postN` tag for the latest stable version.
+- `--ref REF` selects the commit to tag and defaults to `HEAD`.
+- `--json` emits the computed release plan as machine-readable JSON.
+
+Fetch the tags you intend the helper to consider before running it. It rejects
+malformed release tags, post-release tags without their stable base tag, and an
+initial `rc0` proposal when an RC already exists for that version.
+
 ### Release Checklist
 
 #### Before Publishing

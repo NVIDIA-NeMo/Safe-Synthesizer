@@ -215,21 +215,27 @@ Scans PRs for accidentally committed secrets. False positives can be added to `.
 
 ## Release Workflow (Production)
 
-The production release workflow publishes to test PyPI and regular PyPI. It also creates release notes
+The production release workflow verifies and publishes the wheel to Test PyPI
+and PyPI, creates a GitHub release, and publishes versioned documentation for
+final releases.
 
 ### How to Release
 
-1. Push a tag to the repository (start with a release candidate like `v0.0.5rc0` for big changes)
-2. Monitor the release pipeline to see it makes its way to Test PyPI/PyPI.
+Follow the release preparation, candidate validation, promotion, and
+post-release procedures in the [contributor guide](../../CONTRIBUTING.md#releasing).
+The guide documents the read-only `release:prepare` helper and the supported
+tag formats.
 
 ### Release Process
 
 The workflow performs the following steps:
 
 1. Build wheel - Builds the production wheel
-2. Push to test PyPI
-3. Publish to PyPI - Uploads to PyPI
-4. Create GitHub release
+2. Verify the wheel installs in a clean end-user container
+3. Push to test PyPI
+4. Publish to PyPI - Uploads to PyPI
+5. Create GitHub release
+6. Publish versioned documentation for final releases
 
 ## Reusable Workflows
 
