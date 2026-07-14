@@ -30,10 +30,12 @@ concurrency:
 
 permissions:
   contents: read
+  # Used only for the GHCR BuildKit cache. Published images go to NVCR.
   packages: write
 
 env:
-  REGISTRY_IMAGE: ghcr.io/nvidia-nemo/safe-synthesizer
+  REGISTRY_IMAGE: nvcr.io/aire/safe-synth-dev/safe-synthesizer
+  CACHE_IMAGE: ghcr.io/nvidia-nemo/safe-synthesizer
 
 jobs:
   build:
@@ -45,7 +47,7 @@ jobs:
         include:
           - variant: cu129
             extra: cu129
-            platforms: linux/amd64
+            platforms: linux/amd64,linux/arm64
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -63,10 +65,34 @@ jobs:
           fi
           echo "version=${version}" >> "$GITHUB_OUTPUT"
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3 # v4.1.0
+        with:
+          platforms: arm64
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
 
-      - name: Log in to GHCR
+      - name: Check NVCR deploy key
+        if: github.event_name == 'push'
+        shell: bash -e -u -o pipefail {0}
+        env:
+          NVCR_TOKEN: ${{ secrets.NVCR_AIRE_SAFE_SYN_DEPLOY_KEY }}
+        run: |
+          if [[ -z "${NVCR_TOKEN}" ]]; then
+            echo "::error::Missing required secret NVCR_AIRE_SAFE_SYN_DEPLOY_KEY"
+            exit 1
+          fi
+
+      - name: Log in to NVCR
+        if: github.event_name == 'push'
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: nvcr.io
+          username: '$oauthtoken'
+          password: ${{ secrets.NVCR_AIRE_SAFE_SYN_DEPLOY_KEY }}
+
+      - name: Log in to GHCR cache registry
         if: github.event_name == 'push'
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
         with:
@@ -107,8 +133,8 @@ jobs:
             PACKAGE_VERSION=${{ steps.package-version.outputs.version }}
           labels: ${{ steps.meta.outputs.labels }}
           tags: ${{ steps.meta.outputs.tags }}
-          cache-from: type=registry,ref=${{ env.REGISTRY_IMAGE }}:buildcache-${{ matrix.variant }}
-          cache-to: type=registry,ref=${{ env.REGISTRY_IMAGE }}:buildcache-${{ matrix.variant }},mode=max,oci-mediatypes=true,image-manifest=true
+          cache-from: type=registry,ref=${{ env.CACHE_IMAGE }}:buildcache-${{ matrix.variant }}
+          cache-to: type=registry,ref=${{ env.CACHE_IMAGE }}:buildcache-${{ matrix.variant }},mode=max,oci-mediatypes=true,image-manifest=true
 
       - name: Build image
         if: github.event_name != 'push'

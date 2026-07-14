@@ -113,12 +113,12 @@ CONTAINER_GPU_PLATFORM=linux/arm64 mise run container:build:gpu
 Multi-platform manifests must be pushed to a registry:
 
 ```bash
-CONTAINER_GPU_REGISTRY=ghcr.io/nvidia-nemo mise run container:build:gpu-multiarch
+CONTAINER_GPU_REGISTRY=nvcr.io/aire/safe-synth-dev mise run container:build:gpu-multiarch
 ```
 
 This builds and pushes `$(CONTAINER_GPU_REGISTRY)/$(CONTAINER_GPU_IMAGE)`.
-Confirm the selected Python extra has wheels for every requested architecture
-before enabling a platform in CI.
+The release workflow uses this same multi-platform build for `linux/amd64` and
+`linux/arm64`.
 
 ## CPU Test Image
 

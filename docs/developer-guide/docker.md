@@ -187,7 +187,10 @@ Overridable variables:
 Manual dispatch works for branch validation after this workflow exists on the
 default branch. Manual runs build the image without pushing it.
 
-The workflow pushes images only for release tag `push` events.
+The workflow pushes images only for release tag `push` events. It builds a
+multi-platform manifest for `linux/amd64` and `linux/arm64`, logs in to
+`nvcr.io` with the repo secret `NVCR_AIRE_SAFE_SYN_DEPLOY_KEY`, and publishes
+under the `aire/safe-synth-dev` team.
 
 Build cache is exported to a dedicated GHCR registry cache tag,
 `buildcache-<variant>`, only for release tag events that can push packages. The
@@ -198,7 +201,7 @@ Actions cache quota and slow down cache export.
 Current image name:
 
 ```text
-ghcr.io/nvidia-nemo/safe-synthesizer
+nvcr.io/aire/safe-synth-dev/safe-synthesizer
 ```
 
 On release tags, current `cu129` tags include:
@@ -206,6 +209,9 @@ On release tags, current `cu129` tags include:
 - `cu129` and `latest-cu129`
 - `<version>-cu129` and `<major>.<minor>-cu129` on `v*` tags
 - `sha-<short-sha>-cu129` for traceability
+
+Each tag points to a multi-platform manifest with `linux/amd64` and
+`linux/arm64` images.
 
 The workflow passes `PACKAGE_VERSION` into the Docker build. On release tags,
 this is the tag without the leading `v`; on non-tag builds, it is
@@ -277,7 +283,7 @@ single tag. Clients pull the correct variant automatically. Because
 directly to a registry:
 
 ```bash
-CONTAINER_GPU_REGISTRY=ghcr.io/nvidia-nemo mise run container:build:gpu-multiarch
+CONTAINER_GPU_REGISTRY=nvcr.io/aire/safe-synth-dev mise run container:build:gpu-multiarch
 ```
 
 This runs:
@@ -285,7 +291,7 @@ This runs:
 ```bash
 docker buildx build \
   --platform linux/amd64,linux/arm64 \
-  --tag ghcr.io/nvidia-nemo/nss-gpu:latest \
+  --tag nvcr.io/aire/safe-synth-dev/nss-gpu:latest \
   --target runtime --push \
   -f containers/Dockerfile.cuda .
 ```
