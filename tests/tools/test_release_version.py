@@ -6,29 +6,35 @@ import json
 import subprocess
 import sys
 import tempfile
-import unittest
 from pathlib import Path
 from types import ModuleType
 
-REPO_ROOT = Path(__file__).parents[2]
-TOOL_PATH = REPO_ROOT / "tools" / "release_version.py"
+import pytest
 
 
-def _load_tool() -> ModuleType:
-    spec = importlib.util.spec_from_file_location("release_version", TOOL_PATH)
+def _load_tool(tool_path: Path) -> ModuleType:
+    spec = importlib.util.spec_from_file_location("release_version", tool_path)
     if spec is None or spec.loader is None:
-        raise RuntimeError(f"Could not load {TOOL_PATH}")
+        raise RuntimeError(f"Could not load {tool_path}")
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
 
 
-release_version = _load_tool()
+@pytest.fixture(scope="module")
+def release_tool(pytestconfig: pytest.Config) -> tuple[ModuleType, Path]:
+    """Load the release helper from pytest's discovered repository root."""
+    tool_path = Path(pytestconfig.rootpath) / "tools" / "release_version.py"
+    return _load_tool(tool_path), tool_path
 
 
-class ReleaseVersionTest(unittest.TestCase):
-    def setUp(self) -> None:
+class TestReleaseVersion:
+    @pytest.fixture(autouse=True)
+    def _configure_release_tool(self, release_tool: tuple[ModuleType, Path]) -> None:
+        self.release_version, self.tool_path = release_tool
+
+    def setup_method(self) -> None:
         self.tmpdir = tempfile.TemporaryDirectory()
         self.repo = Path(self.tmpdir.name)
         self._git("init")
@@ -36,7 +42,7 @@ class ReleaseVersionTest(unittest.TestCase):
         self._git("config", "user.name", "Test User")
         self._git("commit", "--allow-empty", "-m", "initial")
 
-    def tearDown(self) -> None:
+    def teardown_method(self) -> None:
         self.tmpdir.cleanup()
 
     def _run(self, *args: str) -> subprocess.CompletedProcess[str]:
@@ -44,7 +50,7 @@ class ReleaseVersionTest(unittest.TestCase):
 
     def _git(self, *args: str) -> str:
         result = self._run("git", *args)
-        self.assertEqual(result.returncode, 0, result.stderr)
+        assert result.returncode == 0, result.stderr
         return result.stdout.strip()
 
     def _tag(self, tag: str) -> None:
@@ -55,47 +61,49 @@ class ReleaseVersionTest(unittest.TestCase):
         self._tag("v1.10.0")
         self._tag("v1.11.0rc0")
 
-        plan = release_version.plan_release(cwd=self.repo)
+        plan = self.release_version.plan_release(cwd=self.repo)
 
-        self.assertEqual(plan.latest_stable_tag, "v1.10.0")
-        self.assertEqual(plan.latest_stable_version, "1.10.0")
-        self.assertEqual(plan.bump, "patch")
-        self.assertEqual(plan.next_tag, "v1.10.1rc0")
-        self.assertEqual(plan.next_version, "1.10.1rc0")
+        assert plan.latest_stable_tag == "v1.10.0"
+        assert plan.latest_stable_version == "1.10.0"
+        assert plan.bump == "patch"
+        assert plan.next_tag == "v1.10.1rc0"
+        assert plan.next_version == "1.10.1rc0"
 
     def test_historical_development_tag_is_ignored(self) -> None:
         self._tag("v0.0.0+dev5")
         self._tag("v1.2.3")
 
-        plan = release_version.plan_release(cwd=self.repo)
+        plan = self.release_version.plan_release(cwd=self.repo)
 
-        self.assertEqual(plan.latest_stable_tag, "v1.2.3")
-        self.assertEqual(plan.next_tag, "v1.2.4rc0")
+        assert plan.latest_stable_tag == "v1.2.3"
+        assert plan.next_tag == "v1.2.4rc0"
 
-    def test_major_minor_and_patch_bumps_prepare_rc0(self) -> None:
+    @pytest.mark.parametrize(
+        ("bump", "expected"),
+        [
+            ("major", ("v3.0.0rc0", "3.0.0rc0")),
+            ("minor", ("v2.4.0rc0", "2.4.0rc0")),
+            ("patch", ("v2.3.5rc0", "2.3.5rc0")),
+        ],
+    )
+    def test_major_minor_and_patch_bumps_prepare_rc0(self, bump: str, expected: tuple[str, str]) -> None:
         self._tag("v2.3.4")
 
-        cases = {
-            "major": ("v3.0.0rc0", "3.0.0rc0"),
-            "minor": ("v2.4.0rc0", "2.4.0rc0"),
-            "patch": ("v2.3.5rc0", "2.3.5rc0"),
-        }
-        for bump, expected in cases.items():
-            with self.subTest(bump=bump):
-                plan = release_version.plan_release(bump=bump, cwd=self.repo)
-                self.assertEqual((plan.next_tag, plan.next_version), expected)
+        plan = self.release_version.plan_release(bump=bump, cwd=self.repo)
+
+        assert (plan.next_tag, plan.next_version) == expected
 
     def test_post_bump_prepares_first_post_release(self) -> None:
         self._tag("v1.5.0")
         self._tag("v1.6.0")
 
-        plan = release_version.plan_release(bump="post", cwd=self.repo)
+        plan = self.release_version.plan_release(bump="post", cwd=self.repo)
 
-        self.assertEqual(plan.latest_stable_tag, "v1.6.0")
-        self.assertEqual(plan.latest_stable_version, "1.6.0")
-        self.assertEqual(plan.bump, "post")
-        self.assertEqual(plan.next_tag, "v1.6.0.post1")
-        self.assertEqual(plan.next_version, "1.6.0.post1")
+        assert plan.latest_stable_tag == "v1.6.0"
+        assert plan.latest_stable_version == "1.6.0"
+        assert plan.bump == "post"
+        assert plan.next_tag == "v1.6.0.post1"
+        assert plan.next_version == "1.6.0.post1"
 
     def test_post_bump_increments_highest_post_for_latest_stable(self) -> None:
         self._tag("v1.5.0")
@@ -104,93 +112,97 @@ class ReleaseVersionTest(unittest.TestCase):
         self._tag("v1.6.0.post1")
         self._tag("v1.6.0.post10")
 
-        plan = release_version.plan_release(bump="post", cwd=self.repo)
+        plan = self.release_version.plan_release(bump="post", cwd=self.repo)
 
-        self.assertEqual(plan.next_tag, "v1.6.0.post11")
+        assert plan.next_tag == "v1.6.0.post11"
 
     def test_regular_patch_accepts_post_tags_and_uses_stable_base(self) -> None:
         self._tag("v1.6.0")
         self._tag("v1.6.0.post1")
 
-        plan = release_version.plan_release(cwd=self.repo)
+        plan = self.release_version.plan_release(cwd=self.repo)
 
-        self.assertEqual(plan.latest_stable_tag, "v1.6.0")
-        self.assertEqual(plan.next_tag, "v1.6.1rc0")
+        assert plan.latest_stable_tag == "v1.6.0"
+        assert plan.next_tag == "v1.6.1rc0"
 
     def test_json_cli_resolves_candidate_ref(self) -> None:
         self._tag("v0.1.0")
         first_commit = self._git("rev-parse", "HEAD")
         self._git("commit", "--allow-empty", "-m", "second")
 
-        result = self._run(sys.executable, str(TOOL_PATH), "--json", "--ref", first_commit)
+        result = self._run(sys.executable, str(self.tool_path), "--json", "--ref", first_commit)
 
-        self.assertEqual(result.returncode, 0, result.stderr)
+        assert result.returncode == 0, result.stderr
         payload = json.loads(result.stdout)
-        self.assertEqual(payload["candidate_ref"], first_commit)
-        self.assertEqual(payload["candidate_commit"], first_commit)
-        self.assertEqual(payload["next_tag"], "v0.1.1rc0")
-        self.assertEqual(result.stderr, "")
+        assert payload["candidate_ref"] == first_commit
+        assert payload["candidate_commit"] == first_commit
+        assert payload["next_tag"] == "v0.1.1rc0"
+        assert result.stderr == ""
 
     def test_human_cli_does_not_create_candidate_tag(self) -> None:
         self._tag("v3.4.5")
         tags_before = self._git("tag", "--list")
 
-        result = self._run(sys.executable, str(TOOL_PATH))
+        result = self._run(sys.executable, str(self.tool_path))
 
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("Next rc0 tag: v3.4.6rc0", result.stdout)
-        self.assertIn("No tag was created, deleted, or pushed.", result.stdout)
-        self.assertEqual(self._git("tag", "--list"), tags_before)
+        assert result.returncode == 0, result.stderr
+        assert "Next rc0 tag: v3.4.6rc0" in result.stdout
+        assert "No tag was created, deleted, or pushed." in result.stdout
+        assert self._git("tag", "--list") == tags_before
 
     def test_human_cli_describes_post_release_without_creating_tag(self) -> None:
         self._tag("v1.6.0")
         tags_before = self._git("tag", "--list")
 
-        result = self._run(sys.executable, str(TOOL_PATH), "--bump", "post")
+        result = self._run(sys.executable, str(self.tool_path), "--bump", "post")
 
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("Next Safe-Synthesizer post-release", result.stdout)
-        self.assertIn("Next post-release tag: v1.6.0.post1", result.stdout)
-        self.assertIn("No tag was created, deleted, or pushed.", result.stdout)
-        self.assertEqual(self._git("tag", "--list"), tags_before)
+        assert result.returncode == 0, result.stderr
+        assert "Next Safe-Synthesizer post-release" in result.stdout
+        assert "Next post-release tag: v1.6.0.post1" in result.stdout
+        assert "No tag was created, deleted, or pushed." in result.stdout
+        assert self._git("tag", "--list") == tags_before
 
     def test_post_release_without_matching_stable_tag_is_refused(self) -> None:
         self._tag("v1.5.0")
         self._tag("v1.6.0.post1")
 
-        with self.assertRaisesRegex(release_version.ReleaseVersionError, "missing stable tag v1.6.0"):
-            release_version.plan_release(bump="post", cwd=self.repo)
+        with pytest.raises(self.release_version.ReleaseVersionError, match="missing stable tag v1.6.0"):
+            self.release_version.plan_release(bump="post", cwd=self.repo)
 
     def test_malformed_v_tag_is_an_explicit_error(self) -> None:
         self._tag("v0.1.0")
         self._tag("v0.2.0-rc0")
 
-        with self.assertRaisesRegex(release_version.ReleaseVersionError, "Malformed release tag"):
-            release_version.plan_release(cwd=self.repo)
+        with pytest.raises(self.release_version.ReleaseVersionError, match="Malformed release tag"):
+            self.release_version.plan_release(cwd=self.repo)
+
+    @pytest.mark.parametrize("tag", ["v1.2", "v01.2.3", "v1.2.3-post1", "v1.2.3a1"])
+    def test_noncanonical_or_unsupported_pep440_tag_is_refused(self, tag: str) -> None:
+        self._tag("v0.1.0")
+        self._tag(tag)
+
+        with pytest.raises(self.release_version.ReleaseVersionError, match="Malformed release tag"):
+            self.release_version.plan_release(cwd=self.repo)
 
     def test_missing_stable_tag_is_an_explicit_json_error(self) -> None:
         self._tag("v0.1.0rc0")
 
-        result = self._run(sys.executable, str(TOOL_PATH), "--json")
+        result = self._run(sys.executable, str(self.tool_path), "--json")
 
-        self.assertEqual(result.returncode, 2)
-        self.assertIn("No stable release tags found", json.loads(result.stdout)["error"])
-        self.assertEqual(result.stderr, "")
+        assert result.returncode == 2
+        assert "No stable release tags found" in json.loads(result.stdout)["error"]
+        assert result.stderr == ""
 
     def test_existing_candidate_tag_is_refused(self) -> None:
         self._tag("v1.2.3")
         self._tag("v1.2.4rc0")
 
-        with self.assertRaisesRegex(release_version.ReleaseVersionError, "already exist"):
-            release_version.plan_release(cwd=self.repo)
+        with pytest.raises(self.release_version.ReleaseVersionError, match="already exist"):
+            self.release_version.plan_release(cwd=self.repo)
 
     def test_existing_later_candidate_tag_is_refused(self) -> None:
         self._tag("v1.2.3")
         self._tag("v1.2.4rc1")
 
-        with self.assertRaisesRegex(release_version.ReleaseVersionError, "v1.2.4rc1"):
-            release_version.plan_release(cwd=self.repo)
-
-
-if __name__ == "__main__":
-    unittest.main()
+        with pytest.raises(self.release_version.ReleaseVersionError, match="v1.2.4rc1"):
+            self.release_version.plan_release(cwd=self.repo)

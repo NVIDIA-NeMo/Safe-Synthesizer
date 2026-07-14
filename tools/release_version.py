@@ -1,6 +1,9 @@
 #!/usr/bin/env -S uv run --no-project
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
+# /// script
+# dependencies = ["packaging>=25.0.0"]
+# ///
 """Prepare the next Safe-Synthesizer release tag name.
 
 The tool inspects local Git tags only. It never creates, deletes, pushes, or
@@ -9,21 +12,16 @@ publishes anything.
 
 import argparse
 import json
-import re
 import subprocess
 import sys
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Self
+from typing import Literal, Self
+
+from packaging.version import InvalidVersion, Version
 
 BUMP_CHOICES = ("major", "minor", "patch", "post")
-STABLE_TAG_RE = re.compile(r"^v(?P<major>0|[1-9]\d*)\.(?P<minor>0|[1-9]\d*)\.(?P<patch>0|[1-9]\d*)$")
-RC_TAG_RE = re.compile(r"^v(?P<major>0|[1-9]\d*)\.(?P<minor>0|[1-9]\d*)\.(?P<patch>0|[1-9]\d*)rc(?P<rc>0|[1-9]\d*)$")
-POST_TAG_RE = re.compile(
-    r"^v(?P<major>0|[1-9]\d*)\.(?P<minor>0|[1-9]\d*)\.(?P<patch>0|[1-9]\d*)\.post(?P<post>0|[1-9]\d*)$"
-)
-HISTORICAL_DEV_TAG_RE = re.compile(r"^v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\+dev(?:0|[1-9]\d*)$")
 
 
 class ReleaseVersionError(Exception):
@@ -37,33 +35,6 @@ class StableVersion:
     major: int
     minor: int
     patch: int
-
-    @classmethod
-    def from_tag(cls, tag: str) -> Self | None:
-        """Parse a stable release tag, returning ``None`` for non-stable tags."""
-        match = STABLE_TAG_RE.fullmatch(tag)
-        if match is None:
-            return None
-        return cls(
-            major=int(match.group("major")),
-            minor=int(match.group("minor")),
-            patch=int(match.group("patch")),
-        )
-
-    @classmethod
-    def from_post_tag(cls, tag: str) -> tuple[Self, int] | None:
-        """Parse a canonical post-release tag into its stable base and post number."""
-        match = POST_TAG_RE.fullmatch(tag)
-        if match is None:
-            return None
-        return (
-            cls(
-                major=int(match.group("major")),
-                minor=int(match.group("minor")),
-                patch=int(match.group("patch")),
-            ),
-            int(match.group("post")),
-        )
 
     def bump(self, part: str) -> Self:
         """Return the next stable base version for the requested bump part."""
@@ -107,6 +78,15 @@ class StableVersion:
 
 
 @dataclass(frozen=True)
+class ParsedReleaseTag:
+    """Canonical release tag classified according to project policy."""
+
+    base: StableVersion
+    kind: Literal["stable", "rc", "post", "historical-dev"]
+    number: int | None = None
+
+
+@dataclass(frozen=True)
 class ReleasePlan:
     """Computed release tag plan."""
 
@@ -133,16 +113,43 @@ def _run_git(args: Sequence[str], *, cwd: Path) -> str:
     return result.stdout
 
 
-def _is_valid_release_tag(tag: str) -> bool:
-    return any(pattern.fullmatch(tag) is not None for pattern in (STABLE_TAG_RE, RC_TAG_RE, POST_TAG_RE))
+def _parse_release_tag(tag: str) -> ParsedReleaseTag | None:
+    if not tag.startswith("v"):
+        return None
+    try:
+        version = Version(tag.removeprefix("v"))
+    except InvalidVersion:
+        return None
+    if version.epoch != 0 or len(version.release) != 3 or tag != f"v{version}":
+        return None
+
+    base = StableVersion(*version.release)
+    if version.local is not None:
+        local = version.local
+        if (
+            version.pre is None
+            and version.post is None
+            and version.dev is None
+            and local.startswith("dev")
+            and local.removeprefix("dev").isdigit()
+        ):
+            return ParsedReleaseTag(base=base, kind="historical-dev")
+        return None
+    if version.dev is not None:
+        return None
+    if version.pre is not None:
+        pre_kind, pre_number = version.pre
+        if pre_kind == "rc" and version.post is None:
+            return ParsedReleaseTag(base=base, kind="rc", number=pre_number)
+        return None
+    if version.post is not None:
+        return ParsedReleaseTag(base=base, kind="post", number=version.post)
+    return ParsedReleaseTag(base=base, kind="stable")
 
 
 def _find_latest_stable(tags: Sequence[str]) -> tuple[str, StableVersion]:
-    malformed = sorted(
-        tag
-        for tag in tags
-        if tag.startswith("v") and not _is_valid_release_tag(tag) and HISTORICAL_DEV_TAG_RE.fullmatch(tag) is None
-    )
+    parsed_tags = [(tag, _parse_release_tag(tag)) for tag in tags if tag.startswith("v")]
+    malformed = sorted(tag for tag, parsed in parsed_tags if parsed is None)
     if malformed:
         formatted = ", ".join(malformed)
         raise ReleaseVersionError(
@@ -150,21 +157,16 @@ def _find_latest_stable(tags: Sequence[str]) -> tuple[str, StableVersion]:
             f"{formatted}. Expected vMAJOR.MINOR.PATCH, vMAJOR.MINOR.PATCHrcN, or vMAJOR.MINOR.PATCH.postN."
         )
 
-    stable_tags: list[tuple[StableVersion, str]] = []
-    for tag in tags:
-        version = StableVersion.from_tag(tag)
-        if version is not None:
-            stable_tags.append((version, tag))
+    stable_tags = [(parsed.base, tag) for tag, parsed in parsed_tags if parsed is not None and parsed.kind == "stable"]
 
     if not stable_tags:
         raise ReleaseVersionError("No stable release tags found. Expected at least one vMAJOR.MINOR.PATCH tag.")
 
     stable_versions = {version for version, _ in stable_tags}
     dangling_posts: list[tuple[str, StableVersion]] = []
-    for tag in tags:
-        parsed = StableVersion.from_post_tag(tag)
-        if parsed is not None and parsed[0] not in stable_versions:
-            dangling_posts.append((tag, parsed[0]))
+    for tag, parsed in parsed_tags:
+        if parsed is not None and parsed.kind == "post" and parsed.base not in stable_versions:
+            dangling_posts.append((tag, parsed.base))
     if dangling_posts:
         tag, base = sorted(dangling_posts)[0]
         raise ReleaseVersionError(f"Post-release tag {tag} is missing stable tag {base.stable_tag}.")
@@ -187,18 +189,19 @@ def _resolve_commit(ref: str, *, cwd: Path) -> str:
 def _next_post_release(tags: Sequence[str], base: StableVersion) -> tuple[str, str]:
     post_numbers: list[int] = []
     for tag in tags:
-        parsed = StableVersion.from_post_tag(tag)
-        if parsed is not None and parsed[0] == base:
-            post_numbers.append(parsed[1])
+        parsed = _parse_release_tag(tag)
+        if parsed is not None and parsed.kind == "post" and parsed.base == base and parsed.number is not None:
+            post_numbers.append(parsed.number)
     next_post_number = max(post_numbers, default=0) + 1
     return base.post_version(next_post_number), base.post_tag(next_post_number)
 
 
 def _next_release_candidate(tags: Sequence[str], base: StableVersion, bump: str) -> tuple[str, str]:
     next_version = base.bump(bump)
-    candidate_prefix = f"{next_version.stable_tag}rc"
     existing_candidates = sorted(
-        tag for tag in tags if tag.startswith(candidate_prefix) and RC_TAG_RE.fullmatch(tag) is not None
+        tag
+        for tag in tags
+        if (parsed := _parse_release_tag(tag)) is not None and parsed.kind == "rc" and parsed.base == next_version
     )
     if existing_candidates:
         formatted = ", ".join(existing_candidates)
