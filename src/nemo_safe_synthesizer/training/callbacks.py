@@ -389,7 +389,7 @@ class SafeSynthesizerWorkerCallback(TrainerCallback):
                 log_to_user["step"] = user_step
                 log_to_user[which_loss] = round(logs[which_loss], 4)
 
-                epoch = f"{state.epoch:.2%}" if state.epoch is not None else "n/a"
+                epoch = f"{state.epoch:.2f}" if state.epoch is not None else "n/a"
                 loss_label = which_loss.replace("_", " ").title()
                 message = (
                     f"Training Progress | Progress: {complete_frac:.2%} | Epoch: {epoch} | "
