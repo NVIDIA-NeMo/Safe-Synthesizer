@@ -92,6 +92,7 @@ def make_nss_summary(
 def make_nss_results(
     generate_results: GenerateJobResults | pd.DataFrame,
     total_time: float | None = None,
+    pii_replacer_time: float | None = None,
     training_time: float | None = None,
     generation_time: float | None = None,
     evaluation_time: float | None = None,
@@ -106,6 +107,7 @@ def make_nss_results(
         generate_results: Generation output -- a ``GenerateJobResults`` or
             a raw ``DataFrame`` of synthetic records.
         total_time: Total wall-clock time in seconds.
+        pii_replacer_time: PII replacement phase time in seconds.
         training_time: Training phase time in seconds.
         generation_time: Generation phase time in seconds.
         evaluation_time: Evaluation phase time in seconds.
@@ -121,6 +123,7 @@ def make_nss_results(
     """
     timing = SafeSynthesizerTiming(
         total_time_sec=total_time,
+        pii_replacer_time_sec=pii_replacer_time,
         evaluation_time_sec=evaluation_time,
         training_time_sec=training_time,
         generation_time_sec=generation_time,
