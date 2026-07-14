@@ -95,7 +95,7 @@ def test_worker_callback_logs_compact_structured_progress(monkeypatch):
     )
 
     log_info.assert_called_once_with(
-        "Training Progress | Progress: 20.00% | Epoch: 20.00% | Step: 8 | Loss: 0.12",
+        "Training Progress | Progress: 20.00% | Epoch: 0.20 | Step: 8 | Loss: 0.12",
         extra={
             "ctx": {
                 "tabular_data": {"progress": 0.2, "epoch": 0.2, "step": 8, "loss": 0.1235},
