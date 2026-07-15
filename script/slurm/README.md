@@ -28,10 +28,14 @@ Pipeline entrypoints invoked from the prebuilt project virtualenv:
 - Weights & Biases API Key: W&B logging is enabled by default (`WANDB_MODE=online`). You will need a `WANDB_API_KEY` — request an account [here](https://confluence.nvidia.com/display/AIALGO/Weights+and+Biases+%28WandB%29+Enterprise+Account). Set `WANDB_MODE=disabled` in `env_variables.sh` to skip W&B.
 - Enroot Credentials: Follow https://confluence.nvidia.com/display/HWINFCSSUP/Using+Containers#UsingContainers-SettingupEnrootCredentials. You should add the lines for all 3 of `nvcr.io`, `authn.nvidia.com`, and `gitlab-master.nvidia.com`.
 - Clone Safe-Synthesizer
+
+The instructions below assume that Safe-Synthesizer is cloned directly under
+`LUSTRE_DIR` and that commands after cloning are run from the repository root.
+
 ```bash
 export USER_NAME="$USER" # Or hardcode username in slurm
 export LUSTRE_DIR="/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/${USER_NAME}"
-cd $LUSTRE_DIR
+cd "${LUSTRE_DIR}"
 git clone git@github.com:NVIDIA-NeMo/Safe-Synthesizer.git
 cd Safe-Synthesizer
 ```
@@ -47,10 +51,18 @@ From the repository root, install the repository-pinned mise tools and run the
 Slurm-specific bootstrap:
 
 ```bash
+make install-mise
+export PATH="${HOME}/.local/bin:${PATH}"
 export MISE_IGNORED_CONFIG_PATHS="${HOME}/.config/mise/config.toml"
 mise install --locked
 MISE_LOCKED=1 mise run bootstrap-nss-slurm cu129
 ```
+
+Existing Slurm checkouts should run this bootstrap once after pulling the
+change. Scheduled launch environments, including GitLab jobs, must also add
+`${HOME}/.local/bin` to `PATH` before invoking `submit_slurm_jobs.sh`. The task
+recreates the repo `.venv` if it points outside Lustre; old Python or uv
+installs under `/home` do not need to be removed.
 
 The task derives the Slurm username from `id -un`, uses mise's pinned `uv`,
 installs the pinned Python under the user's Lustre directory, and creates
