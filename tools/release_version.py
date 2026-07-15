@@ -10,6 +10,8 @@ The tool inspects local Git tags only. It never creates, deletes, pushes, or
 publishes anything.
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import subprocess

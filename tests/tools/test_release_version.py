@@ -1,8 +1,11 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+from __future__ import annotations
+
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -189,7 +192,10 @@ class TestReleaseVersion:
         self._tag("v1.5.0")
         self._tag("v1.6.0.post1")
 
-        with pytest.raises(self.release_version.ReleaseVersionError, match="missing stable tag v1.6.0"):
+        with pytest.raises(
+            self.release_version.ReleaseVersionError,
+            match=re.escape("missing stable tag v1.6.0"),
+        ):
             self.release_version.plan_release(bump="post", cwd=self.repo)
 
     def test_malformed_v_tag_is_an_explicit_error(self) -> None:
@@ -227,5 +233,5 @@ class TestReleaseVersion:
         self._tag("v1.2.3")
         self._tag("v1.2.4rc1")
 
-        with pytest.raises(self.release_version.ReleaseVersionError, match="v1.2.4rc1"):
+        with pytest.raises(self.release_version.ReleaseVersionError, match=re.escape("v1.2.4rc1")):
             self.release_version.plan_release(cwd=self.repo)
