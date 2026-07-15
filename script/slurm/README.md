@@ -83,8 +83,9 @@ readlink -f .venv/bin/python
 .venv/bin/safe-synthesizer --help >/dev/null
 ```
 
-The Python path must start with `/lustre/fsw/` or its canonical `/lustre/fs11/`
-equivalent. `cu129` and `cuda` select the same CUDA 12.9 dependency profile.
+The Python path must resolve beneath the canonical path reported by
+`readlink -f "${LUSTRE_DIR}"`. `cu129` and `cuda` select the same CUDA 12.9
+dependency profile.
 
 Repo mode, the default when `--nss-version` is omitted, does not require a
 separate uv installation under Lustre. PyPI mode uses uv inside the container
