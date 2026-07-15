@@ -10008,8 +10008,9 @@ evaluations.</p>
 
 
         <p>Trainer callback that emits structured progress logs at a fixed interval.</p>
-<p>Logs are written via the <code>logger.runtime</code> channel as rendered tables
-containing epoch, step, loss, and progress fraction.</p>
+<p>Logs are written via the <code>logger.runtime</code> channel as compact messages
+containing epoch, step, loss, and progress fraction. The corresponding raw
+values remain available as structured context for JSON logs.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -10056,13 +10057,13 @@ containing epoch, step, loss, and progress fraction.</p>
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>src/nemo_safe_synthesizer/training/callbacks.py</code></summary>
-                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-308">308</a></span>
-<span class="normal"><a href="#__codelineno-0-309">309</a></span>
+                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-309">309</a></span>
 <span class="normal"><a href="#__codelineno-0-310">310</a></span>
-<span class="normal"><a href="#__codelineno-0-311">311</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-308"><a id="__codelineno-0-308" name="__codelineno-0-308"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">log_interval</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">60.0</span><span class="p">):</span>
-</span><span id="__span-0-309"><a id="__codelineno-0-309" name="__codelineno-0-309"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_log_interval</span> <span class="o">=</span> <span class="n">log_interval</span>
-</span><span id="__span-0-310"><a id="__codelineno-0-310" name="__codelineno-0-310"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_last_log_ts</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span>
-</span><span id="__span-0-311"><a id="__codelineno-0-311" name="__codelineno-0-311"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_last_log_global_step</span> <span class="o">=</span> <span class="mi">0</span>
+<span class="normal"><a href="#__codelineno-0-311">311</a></span>
+<span class="normal"><a href="#__codelineno-0-312">312</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-309"><a id="__codelineno-0-309" name="__codelineno-0-309"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">log_interval</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">60.0</span><span class="p">):</span>
+</span><span id="__span-0-310"><a id="__codelineno-0-310" name="__codelineno-0-310"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_log_interval</span> <span class="o">=</span> <span class="n">log_interval</span>
+</span><span id="__span-0-311"><a id="__codelineno-0-311" name="__codelineno-0-311"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_last_log_ts</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span>
+</span><span id="__span-0-312"><a id="__codelineno-0-312" name="__codelineno-0-312"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_last_log_global_step</span> <span class="o">=</span> <span class="mi">0</span>
 </span></code></pre></div></td></tr></table></div>
                   </details>
 
