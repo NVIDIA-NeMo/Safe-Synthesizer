@@ -60,22 +60,20 @@ MISE_LOCKED=1 mise run bootstrap-nss-slurm cu129
 
 Existing Slurm checkouts should run this bootstrap once after pulling the
 change. Scheduled launch environments, including GitLab jobs, must also add
-`${HOME}/.local/bin` to `PATH` before invoking `submit_slurm_jobs.sh`. The task
-recreates the repo `.venv` if it points outside Lustre; old Python or uv
-installs under `/home` do not need to be removed.
+`${HOME}/.local/bin` to `PATH` before invoking `submit_slurm_jobs.sh`.
 
-The task derives the Slurm username from `id -un`, uses mise's pinned `uv`,
-installs the pinned Python under the user's Lustre directory, and creates
-`.venv` with that exact interpreter. If an existing `.venv` points outside
-Lustre, the task recreates it. Existing Python and uv installations under
-`/home` do not need to be removed.
+The task requires the exported `LUSTRE_DIR`, derives the Slurm username from
+`id -un`, uses mise's pinned `uv`, installs the pinned Python under that Lustre
+directory, and creates `.venv` with that exact interpreter. If an existing
+`.venv` points outside Lustre, the task recreates it. Existing Python and uv
+installations under `/home` do not need to be removed.
 
-Override the inferred user or Lustre directory only when the cluster account
-layout requires it:
+Override the inferred user or select a different Lustre project directory when
+the cluster account layout requires it:
 
 ```bash
 NSS_SLURM_USER="your_user" MISE_LOCKED=1 mise run bootstrap-nss-slurm cu129
-NSS_LUSTRE_DIR="/custom/lustre/path" MISE_LOCKED=1 mise run bootstrap-nss-slurm cu129
+LUSTRE_DIR="/custom/lustre/path" MISE_LOCKED=1 mise run bootstrap-nss-slurm cu129
 ```
 
 Verify the postcondition before submitting jobs:

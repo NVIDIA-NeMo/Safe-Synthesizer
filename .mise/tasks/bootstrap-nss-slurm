@@ -10,14 +10,19 @@ set -euo pipefail
 source "${MISE_CONFIG_ROOT}/.mise/tasks/_lib.sh"
 
 user_name="${NSS_SLURM_USER:-${USER_NAME:-$(id -un)}}"
-lustre_dir="${NSS_LUSTRE_DIR:-/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/${user_name}}"
+lustre_dir="${LUSTRE_DIR:-}"
+if [[ -z "${lustre_dir}" ]]; then
+  echo "Error: LUSTRE_DIR must be set to the user's container-visible project directory" >&2
+  exit 1
+fi
+
 python_version="${NSS_PYTHON_VERSION:-$(resolve_python_version)}"
 venv_path="$(resolve_venv_path)"
 uv_bin="$(mise which uv)"
 readonly user_name lustre_dir python_version venv_path uv_bin
 
 if [[ ! -d "${lustre_dir}" ]]; then
-  echo "Error: Lustre user directory does not exist: ${lustre_dir}" >&2
+  echo "Error: LUSTRE_DIR does not exist: ${lustre_dir}" >&2
   exit 1
 fi
 

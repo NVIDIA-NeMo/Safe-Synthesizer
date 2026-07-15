@@ -157,7 +157,6 @@ prebuild_repo_venv() {
     MISE_IGNORED_CONFIG_PATHS="${MISE_IGNORED_CONFIG_PATHS:-${HOME}/.config/mise/config.toml}" \
       MISE_LOCKED=1 \
       NSS_SLURM_USER="${USER_NAME}" \
-      NSS_LUSTRE_DIR="${LUSTRE_DIR}" \
       mise run bootstrap-nss-slurm cu129
   ) 200>"${lock_file}"
 
