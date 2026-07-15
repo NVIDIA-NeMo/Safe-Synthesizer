@@ -11,7 +11,8 @@ import torch
 from nemo_safe_synthesizer.data_processing.record_utils import ParsedRecord
 from nemo_safe_synthesizer.generation.processors import ParsedResponse, TabularDataProcessor
 from nemo_safe_synthesizer.llm.metadata import ModelMetadata
-from nemo_safe_synthesizer.training.callbacks import InferenceEvalCallback
+from nemo_safe_synthesizer.training import callbacks as callbacks_module
+from nemo_safe_synthesizer.training.callbacks import InferenceEvalCallback, SafeSynthesizerWorkerCallback
 
 
 @pytest.fixture
@@ -78,6 +79,30 @@ def _invoke_on_evaluate(
         tokenizer=tokenizer,
     )
     return state, control
+
+
+def test_worker_callback_logs_compact_structured_progress(monkeypatch):
+    """Training progress uses a compact message without flattening JSON metrics."""
+    log_info = MagicMock()
+    monkeypatch.setattr(callbacks_module.logger.runtime, "info", log_info)
+    state = MagicMock(is_local_process_zero=True, global_step=2, max_steps=10, epoch=0.2)
+
+    SafeSynthesizerWorkerCallback().on_log(
+        args=MagicMock(gradient_accumulation_steps=4),
+        state=state,
+        control=MagicMock(),
+        logs={"loss": 0.123456},
+    )
+
+    log_info.assert_called_once_with(
+        "Training Progress | Progress: 20.00% | Epoch: 0.20 | Step: 8 | Loss: 0.12",
+        extra={
+            "ctx": {
+                "tabular_data": {"progress": 0.2, "epoch": 0.2, "step": 8, "loss": 0.1235},
+                "title": "Training Progress",
+            }
+        },
+    )
 
 
 class TestInferenceEvalCallbackMaxNewTokens:
