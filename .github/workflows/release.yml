@@ -68,6 +68,9 @@ jobs:
           echo "is_prerelease=$IS_PRERELEASE" >> "$GITHUB_OUTPUT"
           echo "Built: $WHEEL (version $VERSION)"
 
+      - name: Verify clean end-user wheel install
+        run: mise run release:verify-wheel
+
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: nemo-safe-synthesizer-${{ steps.build.outputs.version }}
