@@ -359,6 +359,18 @@ class ModelMetadata(BaseModel):
     fine-tuned LoRAs that fail to emit EOS on short structured outputs do
     not decode wasted tokens to the full context-window cap."""
 
+    max_records_per_group: int | None = Field(
+        default=None,
+        description="Maximum number of records in any single group observed during training.",
+    )
+    """Populated by the training backend from the grouped assembler's
+    ``records_per_group`` running statistic. Consumed as the default bound on
+    per-group record repetition in structured generation for grouped data:
+    the grammar forces the group-closing ``eos_token`` after at most this many
+    records, so a fine-tuned model that fails to emit the delimiter terminates
+    and produces a parseable group instead of decoding to the token cap.
+    ``None`` for non-grouped training (the bound does not apply)."""
+
     tokenizer: PreTrainedTokenizerBase | None = Field(default=None, exclude=True, repr=False)
 
     @model_validator(mode="before")

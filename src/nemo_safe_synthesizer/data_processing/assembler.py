@@ -1566,6 +1566,7 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
                 "tokens_per_group": self.stats["tokens_per_group"],
                 "tokens_per_example": self.stats["tokens_per_example"],
                 "records_per_example": self.stats["records_per_example"],
+                "records_per_group": self.stats["records_per_group"],
                 "groups_per_example": self.stats["groups_per_example"],
             },
         )
