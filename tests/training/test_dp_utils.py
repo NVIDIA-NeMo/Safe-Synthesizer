@@ -30,6 +30,41 @@ def test_ghost_clipping_fails_when_model_ignores_logits_to_keep():
         trainer._compute_ghost_clipping_loss(LogitsModel(), {"labels": torch.tensor([[1, 2, 3]])})
 
 
+def test_ghost_clipping_forwards_ignored_targets_to_opacus_loss():
+    """Ghost clipping should leave ignore-index normalization to Opacus."""
+    logits = torch.randn(2, 3, 5)
+    captured_positions: list[torch.Tensor] = []
+    captured_logits: list[torch.Tensor] = []
+    captured_labels: list[torch.Tensor] = []
+    captured_shapes: list[torch.Size] = []
+
+    class LogitsModel:
+        def __call__(self, **model_inputs):
+            captured_positions.append(model_inputs["logits_to_keep"])
+            return SimpleNamespace(logits=logits)
+
+    expected_loss = torch.tensor(2.5)
+
+    def dp_loss(flat_logits, flat_labels, *, shape):
+        captured_logits.append(flat_logits)
+        captured_labels.append(flat_labels)
+        captured_shapes.append(shape)
+        return expected_loss
+
+    trainer = object.__new__(OpacusDPTrainer)
+    trainer.dp_loss = dp_loss
+    trainer.accelerator = SimpleNamespace(unwrap_model=lambda model, keep_fp32_wrapper=False: model)
+    labels = torch.tensor([[0, 1, -100, 3], [0, 1, 2, 3]])
+
+    actual = trainer._compute_ghost_clipping_loss(LogitsModel(), {"labels": labels})
+
+    assert actual is expected_loss
+    torch.testing.assert_close(captured_positions[0], torch.tensor([0, 1, 2]))
+    torch.testing.assert_close(captured_logits[0], logits.view(-1, 5))
+    torch.testing.assert_close(captured_labels[0], torch.tensor([1, -100, 3, 1, 2, 3]))
+    assert captured_shapes == [logits.shape]
+
+
 def test_chunked_cross_entropy_averages_per_sequence_means():
     """Chunked DP loss should keep each sequence as one privacy unit."""
     logits = torch.randn(3, 5, 7, requires_grad=True)
