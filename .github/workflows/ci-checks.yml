@@ -54,8 +54,7 @@ jobs:
       src: ${{ steps.changes.outputs.src }}
       tests: ${{ steps.changes.outputs.tests }}
       pytest_ini: ${{ steps.changes.outputs.pytest_ini }}
-      pyproject: ${{ steps.changes.outputs.pyproject }}
-      uv_lock: ${{ steps.changes.outputs.uv_lock }}
+      deps: ${{ steps.changes.outputs.deps }}
       docs_src: ${{ steps.changes.outputs.docs_src }}
       ci: ${{ steps.changes.outputs.ci }}
       any: ${{ steps.changes.outputs.any }}
@@ -129,8 +128,7 @@ jobs:
         (
           github.event_name == 'workflow_dispatch' ||
           needs.changes.outputs.src == 'true' ||
-          needs.changes.outputs.pyproject == 'true' ||
-          needs.changes.outputs.uv_lock == 'true' ||
+          needs.changes.outputs.deps == 'true' ||
           needs.changes.outputs.ci == 'true'
         )
       }}
@@ -226,8 +224,7 @@ jobs:
           needs.changes.outputs.src == 'true' ||
           needs.changes.outputs.tests == 'true' ||
           needs.changes.outputs.pytest_ini == 'true' ||
-          needs.changes.outputs.uv_lock == 'true' ||
-          needs.changes.outputs.pyproject == 'true'
+          needs.changes.outputs.deps == 'true'
         )
       }}
     runs-on: ubuntu-latest
