@@ -761,6 +761,7 @@ class HuggingFaceBackend(TrainingBackend):
             self.model_metadata.initial_prefill = assembler._get_initial_prefill()  # ty: ignore[unresolved-attribute]
 
         self._propagate_max_tokens_per_example()
+        self._propagate_max_records_per_group()
 
     def _propagate_max_tokens_per_example(self) -> None:
         """Copy the assembler's ``tokens_per_example.max`` onto ``ModelMetadata``.
@@ -776,6 +777,19 @@ class HuggingFaceBackend(TrainingBackend):
         tokens_per_example = self.training_examples.stats.get("tokens_per_example")
         if tokens_per_example is not None and tokens_per_example.count > 0:
             self.model_metadata.max_tokens_per_example = int(math.ceil(tokens_per_example.max))
+
+    def _propagate_max_records_per_group(self) -> None:
+        """Copy the grouped assembler's ``records_per_group.max`` onto ``ModelMetadata``.
+
+        Only grouped runs populate this stat. It becomes the default bound on
+        per-group record repetition in structured generation: the grammar forces
+        the group-closing delimiter after at most the largest trained group, so
+        completions terminate and parse instead of decoding to the token cap.
+        No-op when the stat is absent (non-grouped) or unpopulated.
+        """
+        records_per_group = self.training_examples.stats.get("records_per_group")
+        if records_per_group is not None and records_per_group.count > 0:
+            self.model_metadata.max_records_per_group = int(math.ceil(records_per_group.max))
 
     @utils.time_function
     def train(self, **training_args: Any) -> None:

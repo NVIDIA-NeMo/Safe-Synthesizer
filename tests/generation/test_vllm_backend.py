@@ -47,6 +47,7 @@ def mock_model_metadata(fixture_session_cache_dir):
     metadata.base_max_seq_length = 2048
     metadata.rope_scaling = None
     metadata.max_tokens_per_example = None
+    metadata.max_records_per_group = None
     metadata.generation_max_tokens_for.return_value = 2048
     return metadata
 
@@ -205,6 +206,7 @@ class TestBuildStructuredOutputParams:
                 params_with_structured_generation_regex,
                 bos_token=mock_model_metadata.prompt_config.bos_token,
                 eos_token=mock_model_metadata.prompt_config.eos_token,
+                default_max_records_per_group=mock_model_metadata.max_records_per_group,
             )
             assert result is not None
             assert result.regex == "test_regex_pattern"
@@ -254,6 +256,7 @@ class TestBuildStructuredOutputParams:
                 params_with_structured_generation_structural_tag,
                 bos_token=mock_model_metadata.prompt_config.bos_token,
                 eos_token=mock_model_metadata.prompt_config.eos_token,
+                default_max_records_per_group=mock_model_metadata.max_records_per_group,
             )
             assert result is not None
             assert result.structural_tag == '{"type":"structural_tag","format":{"type":"json_schema","json_schema":{}}}'
@@ -286,6 +289,7 @@ class TestBuildStructuredOutputParams:
                 params_with_structured_generation_auto,
                 bos_token=mock_model_metadata.prompt_config.bos_token,
                 eos_token=mock_model_metadata.prompt_config.eos_token,
+                default_max_records_per_group=mock_model_metadata.max_records_per_group,
             )
             assert result is not None
             assert result.structural_tag is not None
@@ -318,6 +322,7 @@ class TestBuildStructuredOutputParams:
                 params_with_structured_generation_auto,
                 bos_token=mock_model_metadata.prompt_config.bos_token,
                 eos_token=mock_model_metadata.prompt_config.eos_token,
+                default_max_records_per_group=mock_model_metadata.max_records_per_group,
             )
             assert result is not None
             assert result.regex == "test_regex_pattern"
