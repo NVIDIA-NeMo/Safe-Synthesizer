@@ -13,7 +13,7 @@ NeMo Safe Synthesizer is a comprehensive package for generating safe synthetic d
 
 ## High-Level Architecture
 
-<div class="architecture-diagram" markdown>
+<div class="architecture-diagram" role="region" aria-label="High-level architecture diagram" tabindex="0" markdown>
 
 ```mermaid
 %%{init: {"flowchart": {"useMaxWidth": false}}}%%

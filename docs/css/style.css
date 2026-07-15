@@ -64,8 +64,9 @@ div.output_subarea pre,
 
 /* Keep large architecture diagrams legible instead of shrinking them to the content column. */
 .architecture-diagram {
+    max-height: clamp(24rem, 70vh, 48rem);
     max-width: 100%;
-    overflow-x: auto;
+    overflow: auto;
 }
 
 .architecture-diagram .mermaid svg {
