@@ -62,17 +62,6 @@ div.output_subarea pre,
     max-width: 100% !important;
 }
 
-/* Keep large architecture diagrams legible instead of shrinking them to the content column. */
-.architecture-diagram {
-    max-height: clamp(24rem, 70vh, 48rem);
-    max-width: 100%;
-    overflow: auto;
-}
-
-.architecture-diagram .mermaid svg {
-    max-width: none !important;
-}
-
 /* NVIDIA green accent for links and highlights */
 :root {
     --md-primary-fg-color: #76b900;
