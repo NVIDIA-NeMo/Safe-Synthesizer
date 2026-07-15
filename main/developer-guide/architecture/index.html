@@ -9638,8 +9638,6 @@
         end
     end
 
-    CLI --&gt; ConfigBuilder
-    SDK --&gt; ConfigBuilder
     ConfigBuilder --&gt; SafeSynthesizerParams
     SafeSynthesizerParams --&gt; DataConfig
     SafeSynthesizerParams --&gt; TrainConfig
@@ -9652,7 +9650,6 @@
     Holdout --&gt; PIIReplacer
     PIIReplacer --&gt; DataActions
     DataActions --&gt; Assembler
-    Assembler --&gt; TrainingBackendBase
 
     TrainingBackendBase --&gt; HFBackend
     HFBackend --&gt; ModelLoader
@@ -9661,14 +9658,12 @@
     HFBackend --&gt; DPTrainer
     HFBackend --&gt; Callbacks
 
-    HFBackend --&gt; GenBackend
     GenBackend --&gt; VLLMBackend
     VLLMBackend --&gt; RegexManager
     VLLMBackend --&gt; BatchGen
     VLLMBackend --&gt; Processors
     VLLMBackend --&gt; Stopping
 
-    VLLMBackend --&gt; EvaluatorComp
     EvaluatorComp --&gt; DataPrivacy
     EvaluatorComp --&gt; PIIReplay
     EvaluatorComp --&gt; MembershipInf
@@ -9679,8 +9674,14 @@
     EvaluatorComp --&gt; StructureSimilarity
     EvaluatorComp --&gt; SQS
 
-    EvaluatorComp --&gt; ReportGen
-    ReportGen --&gt; HTMLReport</code></pre>
+    ReportGen --&gt; HTMLReport
+    evaluationComponents --&gt;|"results"| reporting
+
+    entryPoints --&gt;|"invocation"| configLayer
+    configLayer --&gt;|"configuration"| dataProcessing
+    dataProcessing --&gt;|"training examples"| trainingBackend
+    trainingBackend ----&gt;|"adapter"| generationBackend
+    generationBackend ----&gt;|"synthetic records"| evaluationSystem</code></pre>
 <hr />
 <h2 id="configuration-system">Configuration System<a class="headerlink" href="#configuration-system" title="Permanent link">&para;</a></h2>
 <p>Two paths produce a <code>SafeSynthesizerParameters</code> object: the CLI path (via Click
