@@ -595,7 +595,7 @@ class EntityExtractorGliner(EntityExtractor):
     _batch_mode_enabled: bool
 
     # Map (text sha hash, entity set) -> list of detected entities in GLiNER format
-    _entity_cache: dict[tuple, list]
+    _entity_cache: dict[tuple[int, tuple[str, ...]], list[dict[str, Any]]]
 
     @classmethod
     @override
@@ -633,8 +633,12 @@ class EntityExtractorGliner(EntityExtractor):
         extractor._batch_size = clsfy_config.gliner_batch_mode_batch_size
         return extractor
 
-    def _predict_entities(self, text: str, entity_labels: list[str]) -> list[dict]:
-        predict_entities = getattr(self._model, "predict_entities", None)
+    def _predict_entities(self, text: str, entity_labels: list[str]) -> list[dict[str, Any]]:
+        model = self._model
+        if model is None:
+            return []
+
+        predict_entities = getattr(model, "predict_entities", None)
         if predict_entities is not None:
             return predict_entities(
                 text,
@@ -643,14 +647,18 @@ class EntityExtractorGliner(EntityExtractor):
                 flat_ner=False,
             )
 
-        return self._model.batch_predict_entities(
-            [text],
-            entity_labels,
-            threshold=self._ner_threshold,
-            flat_ner=False,
-        )[0]
+        batch_predict_entities = getattr(model, "batch_predict_entities", None)
+        if batch_predict_entities is not None:
+            return batch_predict_entities(
+                [text],
+                entity_labels,
+                threshold=self._ner_threshold,
+                flat_ner=False,
+            )[0]
 
-    def _batch_predict_entities(self, texts: list[str], entity_labels: list[str]) -> list[list[dict]]:
+        raise AttributeError("GLiNER model has neither predict_entities nor batch_predict_entities")
+
+    def _batch_predict_entities(self, texts: list[str], entity_labels: list[str]) -> list[list[dict[str, Any]]]:
         batch_predict_entities = getattr(self._model, "batch_predict_entities", None)
         if batch_predict_entities is not None:
             return batch_predict_entities(
@@ -678,7 +686,7 @@ class EntityExtractorGliner(EntityExtractor):
         self,
         text: str,
         entity_labels: Optional[set[str]],
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Detect entities from text using GLiNER with chunking; update ``column_report``.
 
         Chunks text to stay within model context; merges overlapping chunks. Returns
@@ -810,8 +818,8 @@ class EntityExtractorGliner(EntityExtractor):
                     },
                 )
                 last_log = monotonic()
-            for idx, entities in enumerate(entities_lists):
-                self._entity_cache[(hash(batch[idx]), entities_key)] = entities
+            for idx, batch_entities in enumerate(entities_lists):
+                self._entity_cache[(hash(batch[idx]), entities_key)] = batch_entities
 
 
 class EntityExtractorMulti(EntityExtractor):
