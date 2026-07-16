@@ -439,7 +439,7 @@ h3 {
     display: inline-flex;
     margin-bottom: 14px;
     padding: 2px 12px;
-    border: 1px solid currentColor;
+    border: 1px solid currentcolor;
     border-radius: 999px;
     font-size: 12px;
     line-height: 18px;
@@ -504,6 +504,16 @@ h3 {
     width: 16px;
     height: 16px;
     color: var(--nvidia);
+}
+
+.memorization-status--warning {
+    border-color: #f59e0b;
+    background: #2a1c00;
+    color: #f59e0b;
+}
+
+.memorization-status--warning .icon {
+    color: #f59e0b;
 }
 
 .score-hero {
@@ -684,12 +694,14 @@ h3 {
 
 .metric-list {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 12px;
     padding: 19px 24px 24px;
 }
 
 .metric-card {
     position: relative;
+    min-width: 0;
     min-height: 110px;
     border: 1px solid var(--border);
     border-radius: 15px;
@@ -701,6 +713,7 @@ h3 {
 }
 
 .metric-card-summary {
+    position: relative;
     min-height: 108px;
     display: flex;
     gap: 16px;
@@ -709,6 +722,13 @@ h3 {
 }
 
 .metric-card-toggle {
+    position: absolute;
+    z-index: 1;
+    inset: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 15px;
+    background: transparent;
     cursor: pointer;
 }
 
@@ -728,7 +748,7 @@ h3 {
     transition: transform 160ms ease;
 }
 
-.metric-card-toggle[aria-expanded="true"] .metric-chevron,
+.metric-card.expanded .metric-chevron,
 .show-columns[aria-expanded="true"] .columns-chevron {
     transform: rotate(45deg);
 }
@@ -762,6 +782,8 @@ h3 {
 }
 
 .metric-info {
+    position: relative;
+    z-index: 2;
     width: 15px;
     height: 15px;
     display: inline-flex;
@@ -984,7 +1006,8 @@ tbody tr:hover td {
 
 .show-columns {
     min-height: 40px;
-    display: flex;
+    display: grid;
+    grid-template-columns: 7px auto 7px;
     gap: 10px;
     align-items: center;
     margin: 16px auto 0;
@@ -996,6 +1019,12 @@ tbody tr:hover td {
     cursor: pointer;
     font-size: 14px;
     font-weight: 700;
+}
+
+.show-columns::before {
+    width: 7px;
+    height: 7px;
+    content: "";
 }
 
 .pii-panel {
@@ -1064,8 +1093,52 @@ tbody tr:hover td {
 }
 
 @media (max-width: 720px) {
+    .report-title {
+        max-width: calc(100vw - 100px);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .report-sidebar {
+        inset: var(--header-height) 0 auto 0;
+        width: 100%;
+        height: 56px;
+        overflow-x: auto;
+        padding-top: 0;
+        border-right: 0;
+        border-bottom: 1px solid var(--border-soft);
+    }
+
+    .sidebar-label {
+        display: none;
+    }
+
+    .report-nav {
+        width: max-content;
+        min-width: 100%;
+        display: flex;
+    }
+
+    .report-nav a {
+        width: auto;
+        min-height: 56px;
+        flex: 0 0 auto;
+        margin-left: 0;
+        padding: 12px 16px;
+        border-bottom: 2px solid transparent;
+        border-left: 0;
+    }
+
+    .report-nav a.active {
+        border-bottom-color: var(--nvidia);
+        border-left-color: transparent;
+    }
+
     .report-main {
-        padding: 24px 20px;
+        inset: calc(var(--header-height) + 56px) 0 0 0;
+        width: 100%;
+        padding: 20px 16px;
     }
 
     .overview-score-card {

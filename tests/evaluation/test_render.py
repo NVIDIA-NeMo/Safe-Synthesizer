@@ -1,6 +1,10 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+from __future__ import annotations
+
+import re
+
 import pytest
 
 # Skip all tests in this module if sentence_transformers is not available
@@ -46,7 +50,7 @@ def test_render(
     # Dynamic values from Pydantic models made it into HTML (catch silent blanks
     # from Jinja variable typos -- default Undefined renders as empty string)
     assert f"{DEFAULT_RECORD_COUNT:,}" in output
-    assert "Missing" in output
+    assert re.search(r"<td>num_Int64</td>\s*<td>[\d,]+</td>\s*<td>9</td>", output)
     assert 'src="https://cdn.plot.ly/plotly-3.3.1.min.js"' in output
     assert "plotly.js v" not in output
     assert "fonts.googleapis.com" not in output

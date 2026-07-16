@@ -22,8 +22,9 @@
             </dl>
         </div>
     </div>
-    <div class="memorization-status">
-        {{ icon("check-circle") }}
-        Training rows duplicated in Synthetic Data: {{ ctx.dataset_statistics.memorized_lines }}
+    {% set memorized_lines = ctx.dataset_statistics.memorized_lines or 0 %}
+    <div class="memorization-status{% if memorized_lines > 0 %} memorization-status--warning{% endif %}">
+        {{ icon("warning" if memorized_lines > 0 else "check-circle") }}
+        Training rows duplicated in Synthetic Data: {{ memorized_lines }}
     </div>
 </section>

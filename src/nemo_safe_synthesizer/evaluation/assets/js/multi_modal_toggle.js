@@ -13,6 +13,36 @@ const HEATMAP_SCALES = [
     [[0, "#fff5e6"], [0.25, "#ffe0b3"], [0.5, "#ffcc80"], [0.75, "#ffa64d"], [1, "#e67300"]],
     [[0, "#0066cc"], [0.25, "#66b3ff"], [0.5, "#f5f5f5"], [0.75, "#ffa64d"], [1, "#e67300"]],
 ];
+const PLOTLY_ARRAY_TYPES = {
+    i1: Int8Array,
+    u1: Uint8Array,
+    i2: Int16Array,
+    u2: Uint16Array,
+    i4: Int32Array,
+    u4: Uint32Array,
+    f4: Float32Array,
+    f8: Float64Array,
+};
+
+function decodePlotlyArray(values) {
+    if (Array.isArray(values)) {
+        return values;
+    }
+    if (ArrayBuffer.isView(values)) {
+        return Array.from(values);
+    }
+    const ArrayType = PLOTLY_ARRAY_TYPES[values?.dtype];
+    if (!ArrayType || typeof values.bdata !== "string") {
+        return [];
+    }
+    const binary = window.atob(values.bdata);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) {
+        bytes[index] = binary.charCodeAt(index);
+    }
+    const length = Math.floor(bytes.byteLength / ArrayType.BYTES_PER_ELEMENT);
+    return Array.from(new ArrayType(bytes.buffer, 0, length));
+}
 
 function arcPoint(angle, centerX = 50, centerY = 55, radius = 38) {
     const radians = angle * Math.PI / 180;
@@ -140,6 +170,13 @@ function resizePlotlyCharts(container) {
     container.querySelectorAll(".js-plotly-plot").forEach((plot) => window.Plotly.Plots.resize(plot));
 }
 
+function makePlotResponsive(plot) {
+    const layout = {...(plot.layout || {}), autosize: true};
+    delete layout.width;
+    plot.style.width = "100%";
+    window.Plotly.react(plot, plot.data || [], layout, {displayModeBar: false, responsive: true});
+}
+
 function traceDataset(trace) {
     const name = String(trace.name || "").toLowerCase();
     if (name.includes("training") || name.includes("reference")) {
@@ -259,13 +296,13 @@ function themeQualityPlot(plot, cardId, card) {
 }
 
 function themeMembershipPlot(plot) {
-    const source = plot._fullData?.[0] || plot.data?.[0];
+    const source = plot.data?.[0];
     if (!source) {
         return;
     }
     const labels = ["Excellent", "Very Good", "Good", "Fair", "Poor"];
-    const sourceLabels = Array.from(source.labels || []);
-    const sourceValues = Array.from(source.values || []);
+    const sourceLabels = decodePlotlyArray(source.labels);
+    const sourceValues = decodePlotlyArray(source.values);
     const values = labels.map((label) => {
         const sourceLabel = label === "Fair" && sourceLabels.includes("Moderate") ? "Moderate" : label;
         const index = sourceLabels.indexOf(sourceLabel);
@@ -303,8 +340,7 @@ function themeMembershipPlot(plot) {
 function themeAttributePlot(plot) {
     const columns = new Set();
     (plot.data || []).forEach((trace, index) => {
-        const fullTrace = plot._fullData?.[index] || trace;
-        Array.from(fullTrace.y || []).forEach((column) => columns.add(column));
+        decodePlotlyArray(trace.y).forEach((column) => columns.add(column));
         if (trace.type === "scatter") {
             window.Plotly.restyle(plot, {visible: false}, [index]);
             return;
@@ -354,6 +390,7 @@ function themePlotlyCharts(container = document) {
         } else {
             themeQualityPlot(plot, card.id, card);
         }
+        makePlotResponsive(plot);
     });
 }
 
@@ -521,15 +558,7 @@ function toggleColumns(event) {
     }
 }
 
-document.querySelectorAll("[data-metric-toggle]").forEach((toggle) => {
-    toggle.addEventListener("click", toggleMetricCard);
-    toggle.addEventListener("keydown", (event) => {
-        if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            toggleMetricCard(event);
-        }
-    });
-});
+document.querySelectorAll("[data-metric-toggle]").forEach((toggle) => toggle.addEventListener("click", toggleMetricCard));
 document.querySelectorAll("[data-tooltip-toggle]").forEach((toggle) => toggle.addEventListener("click", toggleTooltip));
 document.querySelectorAll("[data-dismiss]").forEach((button) => {
     button.addEventListener("click", () => button.closest("[data-dismissible]")?.remove());

@@ -27,7 +27,7 @@
                 <td>{{ "{:,}".format(column.training_field_features.unique_count) }}</td>
                 <td>{{ column.training_field_features.missing_count }}</td>
                 <td>{{ column.training_field_features.avg_str_length | round(2) }}</td>
-                <td><span class="type-tag">{{ column.synthetic_field_features.type | capitalize }}</span></td>
+                <td><span class="type-tag">{{ column.training_field_features.type | capitalize }}</span></td>
                 {% if ctx.with_transform %}
                 <td>
                     {% if column.column_statistics and column.column_statistics.detected_entity_counts %}
