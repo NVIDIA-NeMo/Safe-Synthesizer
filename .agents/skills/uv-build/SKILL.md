@@ -72,7 +72,7 @@ uv add --group test <package>
 
 # Change CPU or CUDA runtime extras
 # Edit cuda_deps.toml, regenerate pyproject.toml, then lock.
-uv run --script tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml
+uv run --frozen tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml
 uv lock
 ```
 
@@ -140,5 +140,5 @@ Build backend: `hatchling` with wheel target `packages = ["src/nemo_safe_synthes
 2. Use `--frozen` in CI and Make targets to prevent lock updates
 3. Use `uv run` to run tools (pytest, mkdocs, etc.)
 4. uv version is pinned in `.mise.toml`.
-5. Edit extras manually in `pyproject.toml`, then `uv lock`
+5. Edit non-generated `pyproject.toml` sections directly (e.g. dependency groups); CPU/CUDA extras go through `cuda_deps.toml` instead, then `uv lock`
 6. Use `uv add` for base/group deps

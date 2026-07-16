@@ -29,6 +29,8 @@ uv sync --frozen --extra cu129 --extra engine --group dev
 
 Bare `uv sync --frozen` (without extras) installs an incomplete environment -- `ty`, import checks, and GPU tests will fail.
 
+The CPU/CUDA optional-dependency and `[tool.uv.sources]`/`[[tool.uv.index]]` sections of `pyproject.toml` are generated from `cuda_deps.toml` by `tools/gen_cuda_deps.py` -- never hand-edit the `# >>> BEGIN GENERATED ... <<<` blocks in `pyproject.toml`. To add or change a CUDA/CPU dependency, edit `cuda_deps.toml`, then run `uv run --frozen tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml` followed by `uv lock`. `mise run lock-check` verifies both are in sync with `cuda_deps.toml`.
+
 Feature branches off `main`. Branch names often include an issue number prefix (e.g., `<author>/123-short-name`).
 
 Do not commit unless the user asks for a commit or PR work. When committing, all commits require DCO sign-off and GPG signing. Always use `git commit --signoff --gpg-sign` (or `-s -S`) -- never write the `Signed-off-by` trailer manually, and never pass `--no-gpg-sign`.
