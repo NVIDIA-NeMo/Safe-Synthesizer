@@ -1,0 +1,109 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Source of truth for the CPU and CUDA runtime extras in pyproject.toml.
+# The engine extra remains independent because it is installable without Torch.
+base_runtime_deps = []
+
+torch_runtime_deps = [
+  "accelerate>=1.1.0",
+  "bitsandbytes>=0.46.1",
+  "flashinfer-python==0.6.12; sys_platform == 'linux'",
+  "flashinfer-cubin==0.6.12; sys_platform == 'linux'",
+  "gliner",
+  "kernels>=0.12.1,<0.15",
+  "opacus",
+  "peft>=0.18.0",
+  "sentence-transformers",
+  "trl>=0.23.0",
+  "xgrammar>=0.2.0; sys_platform == 'linux'",
+]
+
+cuda_runtime_deps = [
+  { name = "flashinfer-jit-cache", version = "0.6.12", local = "{torch_local_version}", sys_platform = "linux", source_kind = "flashinfer", source_marker = "sys_platform=='linux'" },
+  { name = "nvidia-cublas-{cuda_package_suffix}", sys_platform = "linux" },
+  "nvidia-ml-py; sys_platform == 'linux'",
+  "torch-c-dlpack-ext",
+  { name = "triton", specifier = ">=2.0.0", sys_platform = "linux", source_kind = "pytorch" },
+  { name = "transformers", specifier = ">=5.12,<5.12.1" },
+]
+
+torch_wheel_deps = [
+  { name = "torch", version = "2.11.0", local = "{torch_local_version}", sys_platform = "linux", source_kind = "pytorch" },
+  { name = "torchaudio", version = "2.11.0", local = "{torch_local_version}", sys_platform = "linux", source_kind = "pytorch" },
+  { name = "torchvision", version = "0.26.0", local = "{torch_local_version}", sys_platform = "linux", source_kind = "pytorch" },
+  { name = "torchao", version = "0.17.0", local = "{torch_local_version}", sys_platform = "linux", arch = "x86_64", source_kind = "pytorch" },
+]
+
+managed_extras = ["cpu", "cu129"]
+conflict_extras = ["cpu"]
+nvidia_cuda_libraries = [
+  "cublas",
+  "cuda-cupti",
+  "cuda-nvrtc",
+  "cuda-nvprof",
+  "cuda-runtime",
+  "cuda-nvml",
+  "cudnn",
+  "cusparse",
+  "cusparselt",
+  "nccl",
+  "nvjitlink",
+  "nvshmem",
+  "nvtx",
+]
+
+[cpu]
+dependencies = [
+  { name = "torch", version = "2.11.0", sys_platform = "darwin" },
+  { name = "torch", version = "2.11.0", local = "cpu", sys_platform = "linux", index = "pytorch-cpu", source_marker = "sys_platform=='linux'" },
+  { name = "torchaudio", version = "2.11.0", sys_platform = "darwin" },
+  { name = "torchaudio", version = "2.11.0", local = "cpu", sys_platform = "linux", index = "pytorch-cpu" },
+  { name = "torchvision", version = "0.26.0", sys_platform = "darwin" },
+  { name = "torchvision", version = "0.26.0", local = "cpu", sys_platform = "linux", index = "pytorch-cpu" },
+  "torchao==0.17.0",
+  "transformers==5.12.0",
+  "triton>=2.0.0; sys_platform=='linux'",
+  "vllm==0.24.0; sys_platform=='linux'",
+]
+
+[[indexes]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[indexes]]
+name = "nv-shared-pypi-local"
+url = "https://urm.nvidia.com/artifactory/api/pypi/nv-shared-pypi-local/simple"
+explicit = true
+
+[[indexes]]
+name = "nvidia-pypi-public"
+url = "https://pypi.nvidia.com"
+explicit = true
+
+[[indexes]]
+name = "vllm-v0-24-0-cu129"
+url = "https://wheels.vllm.ai/ee0da84ab9e04ac7610e28580af62c365e898389/cu129"
+explicit = true
+
+[cuda_indexes.pytorch]
+name = "pytorch-{extra}"
+url = "https://download.pytorch.org/whl/{extra}"
+explicit = true
+
+[cuda_indexes.flashinfer]
+name = "flashinfer-jit-cache"
+url = "https://flashinfer.ai/whl/{extra}"
+explicit = true
+
+[sources.cu129]
+vllm = [
+  { index = "vllm-v0-24-0-cu129", marker = "sys_platform == 'linux'", extra = "cu129" },
+]
+
+[variants.cu129]
+cuda_package_suffix = "cu12"
+dependencies = [
+  "vllm==0.24.0+{torch_local_version}; sys_platform == 'linux'",
+]

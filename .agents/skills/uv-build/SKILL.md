@@ -70,12 +70,15 @@ uv add <package>
 uv add --group dev <package>
 uv add --group test <package>
 
-# Add to an optional extra
-# (edit pyproject.toml manually, then lock)
+# Change CPU or CUDA runtime extras
+# Edit cuda_deps.toml, regenerate pyproject.toml, then lock.
+uv run --script tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml
 uv lock
 ```
 
 After any change: `uv lock` to regenerate `uv.lock`. Pre-commit verifies the lock is up to date.
+The generated CPU/CUDA sections of `pyproject.toml` must not be edited directly;
+`mise run lock-check` verifies that they match `cuda_deps.toml`.
 
 ## Dependency Groups
 

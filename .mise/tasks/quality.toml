@@ -21,8 +21,9 @@ description = "Run ty type checks through the repo wrapper. Requires Python depe
 run = "bash tools/codestyle/typecheck.sh"
 
 ["lock-check"]
-description = "Verify uv.lock matches pyproject.toml. Runs uv lock, then fails if uv.lock has a diff."
+description = "Verify generated CUDA metadata and uv.lock match their sources."
 run = [
+  "uv run --script tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml --check",
   "uv lock",
   "git diff --exit-code uv.lock",
 ]

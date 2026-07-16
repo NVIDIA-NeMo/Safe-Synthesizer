@@ -110,56 +110,62 @@ engine = [
 # it allows us to have a cpu and a cuda version of torch+deps
 # and allow explicit installation of the cpu depset on linux.
 
-cpu = [
-  "accelerate>=1.1.0",
-  "bitsandbytes>=0.46.1",
-  "flashinfer-python==0.6.12; sys_platform=='linux'",
-  "flashinfer-cubin==0.6.12; sys_platform=='linux'",
-  "gliner",
-  "kernels>=0.12.1,<0.15",
-  "peft>=0.18.0",
-  "opacus",
-  "sentence-transformers",
-  "torch==2.11.0; sys_platform == 'darwin'",
-  "torch==2.11.0+cpu; sys_platform == 'linux'",
-  "torchaudio==2.11.0; sys_platform == 'darwin'",
-  "torchaudio==2.11.0+cpu; sys_platform == 'linux'",
-  "torchvision==0.26.0; sys_platform == 'darwin'",
-  "torchvision==0.26.0+cpu; sys_platform == 'linux'",
-  "torchao==0.17.0",
-  "transformers==5.12.0",
-  "triton>=2.0.0; sys_platform=='linux'",
-  "trl>=0.23.0",
-  "vllm==0.24.0; sys_platform=='linux'",
-  "xgrammar>=0.2.0; sys_platform=='linux'",
-]
 
-cu129 = [
-  "accelerate>=1.1.0",
-  "bitsandbytes>=0.46.1",
-  "flashinfer-python==0.6.12; sys_platform == 'linux'",
-  "flashinfer-cubin==0.6.12; sys_platform == 'linux'",
-  "flashinfer-jit-cache==0.6.12+cu129; sys_platform == 'linux'",
-  "gliner",
-  "kernels>=0.12.1,<0.15",
-  "nvidia-cublas-cu12; sys_platform == 'linux'",
-  "nvidia-ml-py; sys_platform == 'linux'",
-  "opacus",
-  "peft>=0.18.0",
-  "sentence-transformers",
-  "torch==2.11.0+cu129; sys_platform == 'linux'",
-  "torch-c-dlpack-ext",
-  "torchaudio==2.11.0+cu129; sys_platform == 'linux'",
-  "torchvision==0.26.0+cu129; sys_platform == 'linux'",
-  "torchao==0.17.0+cu129; sys_platform == 'linux' and platform_machine == 'x86_64'",
-  "transformers>=5.12,<5.12.1",
-  "triton>=2.0.0; sys_platform == 'linux'",
-  "trl>=0.23.0",
-  "vllm==0.24.0+cu129; sys_platform == 'linux'",
-  "xgrammar>=0.2.0; sys_platform == 'linux'",
-]
 
 # at some point, do per-subpackage dependencies
+# >>> BEGIN GENERATED CUDA RUNTIME EXTRAS - DO NOT EDIT <<<
+# Source of truth: cuda_deps.toml.
+# Regenerate with: uv run --script tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml
+# Manual edits inside this block will be overwritten.
+# Generated extras in this block: cpu, cu129.
+cpu = [
+    "accelerate>=1.1.0",
+    "bitsandbytes>=0.46.1",
+    "flashinfer-python==0.6.12; sys_platform == 'linux'",
+    "flashinfer-cubin==0.6.12; sys_platform == 'linux'",
+    "gliner",
+    "kernels>=0.12.1,<0.15",
+    "opacus",
+    "peft>=0.18.0",
+    "sentence-transformers",
+    "trl>=0.23.0",
+    "xgrammar>=0.2.0; sys_platform == 'linux'",
+    "torch==2.11.0; sys_platform == 'darwin'",
+    "torch==2.11.0+cpu; sys_platform == 'linux'",
+    "torchaudio==2.11.0; sys_platform == 'darwin'",
+    "torchaudio==2.11.0+cpu; sys_platform == 'linux'",
+    "torchvision==0.26.0; sys_platform == 'darwin'",
+    "torchvision==0.26.0+cpu; sys_platform == 'linux'",
+    "torchao==0.17.0",
+    "transformers==5.12.0",
+    "triton>=2.0.0; sys_platform=='linux'",
+    "vllm==0.24.0; sys_platform=='linux'",
+]
+cu129 = [
+    "accelerate>=1.1.0",
+    "bitsandbytes>=0.46.1",
+    "flashinfer-python==0.6.12; sys_platform == 'linux'",
+    "flashinfer-cubin==0.6.12; sys_platform == 'linux'",
+    "gliner",
+    "kernels>=0.12.1,<0.15",
+    "opacus",
+    "peft>=0.18.0",
+    "sentence-transformers",
+    "trl>=0.23.0",
+    "xgrammar>=0.2.0; sys_platform == 'linux'",
+    "flashinfer-jit-cache==0.6.12+cu129; sys_platform == 'linux'",
+    "nvidia-cublas-cu12; sys_platform == 'linux'",
+    "nvidia-ml-py; sys_platform == 'linux'",
+    "torch-c-dlpack-ext",
+    "triton>=2.0.0; sys_platform == 'linux'",
+    "transformers>=5.12,<5.12.1",
+    "torch==2.11.0+cu129; sys_platform == 'linux'",
+    "torchaudio==2.11.0+cu129; sys_platform == 'linux'",
+    "torchvision==0.26.0+cu129; sys_platform == 'linux'",
+    "torchao==0.17.0+cu129; sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "vllm==0.24.0+cu129; sys_platform == 'linux'",
+]
+# <<< END GENERATED CUDA RUNTIME EXTRAS - DO NOT EDIT >>>
 
 [tool.uv]
 # Version pinned in .mise.toml but keep here as a fallback constraint
@@ -171,12 +177,18 @@ cache-keys = [
   { file = "pyproject.toml" }, { git = { commit = true, tags = true } },
   { file = "uv.lock" }
 ]
+# >>> BEGIN GENERATED CUDA UV CONFLICTS - DO NOT EDIT <<<
+# Source of truth: cuda_deps.toml.
+# Regenerate with: uv run --script tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml
+# Manual edits inside this block will be overwritten.
+# Generated uv section: tool.uv.conflicts.
 conflicts = [
-  [
-    { extra = "cpu" },
-    { extra = "cu129" },
-  ],
+    [
+    {extra = "cpu"},
+    {extra = "cu129"},
+],
 ]
+# <<< END GENERATED CUDA UV CONFLICTS - DO NOT EDIT >>>
 
 
 environments = [
@@ -219,82 +231,86 @@ constraint-dependencies = [
 
 
 
+# >>> BEGIN GENERATED CUDA UV SOURCES AND INDEXES - DO NOT EDIT <<<
+# Source of truth: cuda_deps.toml.
+# Regenerate with: uv run --script tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml
+# Manual edits inside this block will be overwritten.
+# Generated uv sections: tool.uv.sources and tool.uv.index.
 [tool.uv.sources]
-  # here we specifiy the dep's source from which UV should attempt to resolve
-  triton = { index = "pytorch-cu129", extra = "cu129" }
-  vllm = [
-    { index = "vllm-v0-24-0-cu129", marker = "sys_platform == 'linux'", extra = "cu129" },
-  ]
-# for torch - we have a "cpu" dep set and "cu129" dep set, specified in the optional dependencies above
-  torch = [
-    { index = "pytorch-cpu", extra="cpu", marker = "sys_platform=='linux'"},
-    { index = "pytorch-cu129", extra="cu129"},
-  ]
-  torchao = [
-    { index = "pytorch-cu129", extra="cu129"},
-  ]
-  torchvision = [
-    { index = "pytorch-cpu", extra="cpu" },
-    { index = "pytorch-cu129", extra="cu129"},
-  ]
-  torchaudio = [
-    { index = "pytorch-cpu", extra="cpu" },
-    { index = "pytorch-cu129", extra="cu129"},
-  ]
-  flashinfer-jit-cache = [
-    { index = "flashinfer-jit-cache", marker = "sys_platform=='linux'", extra="cu129"},
-  ]
-  nvidia-cublas-cu12 = [
-    { index = "pytorch-cu129" },
-  ]
-  nvidia-cuda-cupti-cu12 = [
-    { index = "pytorch-cu129" },
-  ]
-  nvidia-cuda-nvrtc-cu12 = [
-    { index = "pytorch-cu129" },
-  ]
-  nvidia-cuda-nvprof-cu12 = [
-    { index = "pytorch-cu129" },
-  ]
-
-  nvidia-cuda-runtime-cu12 = [
-    { index = "pytorch-cu129" },
-  ]
-
-  nvidia-cuda-nvml-cu12 = [
-    { index = "pytorch-cu129" },
-  ]
-
-
-  nvidia-cudnn-cu12 = [
-    { index = "pytorch-cu129" },
-  ]
-  nvidia-cusparse-cu12 = [
-    { index = "pytorch-cu129" },
-  ]
-  nvidia-cusparselt-cu12 = [
-    { index = "pytorch-cu129" },
-  ]
-  nvidia-nccl-cu12 = [
-    { index = "pytorch-cu129" },
-  ]
-  nvidia-nvjitlink-cu12 = [
-    { index = "pytorch-cu129" },
-  ]
-  nvidia-nvshmem-cu12 = [
-    { index = "pytorch-cu129" },
-  ]
-  nvidia-nvtx-cu12 = [
-    { index = "pytorch-cu129" },
-  ]
-
+vllm = [
+    {index = "vllm-v0-24-0-cu129", extra = "cu129", marker = "sys_platform == 'linux'"},
+]
+torch = [
+    {index = "pytorch-cpu", extra = "cpu", marker = "sys_platform=='linux'"},
+    {index = "pytorch-cu129", extra = "cu129"},
+]
+torchaudio = [
+    {index = "pytorch-cpu", extra = "cpu"},
+    {index = "pytorch-cu129", extra = "cu129"},
+]
+torchvision = [
+    {index = "pytorch-cpu", extra = "cpu"},
+    {index = "pytorch-cu129", extra = "cu129"},
+]
+flashinfer-jit-cache = [
+    {index = "flashinfer-jit-cache", extra = "cu129", marker = "sys_platform=='linux'"},
+]
+triton = [
+    {index = "pytorch-cu129", extra = "cu129"},
+]
+torchao = [
+    {index = "pytorch-cu129", extra = "cu129"},
+]
+nvidia-cublas-cu12 = [
+    {index = "pytorch-cu129"},
+]
+nvidia-cuda-cupti-cu12 = [
+    {index = "pytorch-cu129"},
+]
+nvidia-cuda-nvrtc-cu12 = [
+    {index = "pytorch-cu129"},
+]
+nvidia-cuda-nvprof-cu12 = [
+    {index = "pytorch-cu129"},
+]
+nvidia-cuda-runtime-cu12 = [
+    {index = "pytorch-cu129"},
+]
+nvidia-cuda-nvml-cu12 = [
+    {index = "pytorch-cu129"},
+]
+nvidia-cudnn-cu12 = [
+    {index = "pytorch-cu129"},
+]
+nvidia-cusparse-cu12 = [
+    {index = "pytorch-cu129"},
+]
+nvidia-cusparselt-cu12 = [
+    {index = "pytorch-cu129"},
+]
+nvidia-nccl-cu12 = [
+    {index = "pytorch-cu129"},
+]
+nvidia-nvjitlink-cu12 = [
+    {index = "pytorch-cu129"},
+]
+nvidia-nvshmem-cu12 = [
+    {index = "pytorch-cu129"},
+]
+nvidia-nvtx-cu12 = [
+    {index = "pytorch-cu129"},
+]
 
 [[tool.uv.index]]
 name = "pytorch-cu129"
 url = "https://download.pytorch.org/whl/cu129"
 explicit = true
 
-# required for linux cpu - it's got a `+cpu` on the version
+[[tool.uv.index]]
+name = "flashinfer-jit-cache"
+url = "https://flashinfer.ai/whl/cu129"
+explicit = true
+
 [[tool.uv.index]]
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
@@ -306,21 +322,15 @@ url = "https://urm.nvidia.com/artifactory/api/pypi/nv-shared-pypi-local/simple"
 explicit = true
 
 [[tool.uv.index]]
-name = "flashinfer-jit-cache"
-url = "https://flashinfer.ai/whl/cu129"
+name = "nvidia-pypi-public"
+url = "https://pypi.nvidia.com"
 explicit = true
 
 [[tool.uv.index]]
 name = "vllm-v0-24-0-cu129"
 url = "https://wheels.vllm.ai/ee0da84ab9e04ac7610e28580af62c365e898389/cu129"
 explicit = true
-
-[[tool.uv.index]]
-name = "nvidia-pypi-public"
-url = "https://pypi.nvidia.com"
-explicit = true
-
-
+# <<< END GENERATED CUDA UV SOURCES AND INDEXES - DO NOT EDIT >>>
 [build-system]
 requires = ["hatchling", "uv-dynamic-versioning"]
 build-backend = "hatchling.build"
