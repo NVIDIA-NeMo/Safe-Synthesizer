@@ -107,6 +107,17 @@ def test_model_validate_null_disables_pii():
     assert SafeSynthesizerParameters.model_validate({"replace_pii": None}).replace_pii is None
 
 
+def test_model_validate_accepts_an_existing_config():
+    config = SafeSynthesizerParameters(strict_config=False)
+
+    assert SafeSynthesizerParameters.model_validate(config) is config
+
+
+def test_model_validate_non_mapping_input_uses_default_strictness():
+    with pytest.raises(ValidationError, match="valid dictionary or object"):
+        SafeSynthesizerParameters.model_validate(None)
+
+
 def test_from_yaml_str_absent_key_enables_pii():
     c = SafeSynthesizerParameters.from_yaml_str("training:\n  batch_size: 4\n")
     assert c.replace_pii is not None
@@ -258,6 +269,16 @@ def test_from_config_source_keyword_strictness_takes_precedence_over_mapping():
         SafeSynthesizerParameters.from_config_source({"strict_config": False, "unknown": True}, strict_config=True)
 
 
+def test_from_config_source_preserves_strictness_from_an_existing_config():
+    source = SafeSynthesizerParameters(strict_config=False)
+
+    assert SafeSynthesizerParameters.from_config_source(source).strict_config is False
+
+
+def test_from_config_source_resolves_strictness_without_a_source_mapping():
+    assert SafeSynthesizerParameters.from_config_source(strict_config=False).strict_config is False
+
+
 @pytest.mark.parametrize(
     "patch",
     [
@@ -348,6 +369,10 @@ def test_service_job_config_preserves_dynamic_strictness():
     payload["config"] = {"strict_config": False, "training": {"epoch": 1}}
     job = SafeSynthesizerJobConfig.model_validate(payload)
     assert job.config.strict_config is False
+
+    config = SafeSynthesizerParameters(strict_config=False)
+    job = SafeSynthesizerJobConfig.model_validate({"data_source": "dataset", "config": config})
+    assert job.config is config
 
 
 def test_with_config_patch_keeps_validator_and_factory_defaults_implicit():
