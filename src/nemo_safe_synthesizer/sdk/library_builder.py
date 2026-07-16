@@ -12,7 +12,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pandas as pd
-
 from datasets import Dataset
 
 from ..cli.artifact_structure import Workdir
