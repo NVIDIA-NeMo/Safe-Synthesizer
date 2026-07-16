@@ -46,6 +46,9 @@ jobs:
           - variant: cu129
             extra: cu129
             platforms: linux/amd64
+          - variant: cu130
+            extra: cu130
+            platforms: linux/amd64
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
