@@ -17,7 +17,6 @@ class Grade(Enum):
 
     UNAVAILABLE = "Unavailable"
     POOR = "Poor"
-    VERY_POOR = "Poor"  # Backward-compatible alias for the previous quality scale.
     MODERATE = "Moderate"
     GOOD = "Good"
     VERY_GOOD = "Very Good"

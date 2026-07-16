@@ -81,7 +81,3 @@ def test_quality_and_privacy_grades_follow_documented_ranges(
 ) -> None:
     assert EvaluationScore.score_to_grade(score) is expected_quality
     assert EvaluationScore.score_to_grade(score, is_privacy=True) is expected_privacy
-
-
-def test_very_poor_remains_a_backward_compatible_alias() -> None:
-    assert Grade.VERY_POOR is Grade.POOR
