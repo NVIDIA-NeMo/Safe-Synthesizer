@@ -25,6 +25,19 @@ Read detailed usage below, or jump to the documentation with [Getting Started](h
 
 ### Installation
 
+`install_nss.sh` selects the required package indexes for each supported runtime:
+
+```bash
+# Run from a source checkout. CUDA 12.9 is the default.
+./install_nss.sh
+CUDA=130 ./install_nss.sh
+CUDA=cpu ./install_nss.sh
+```
+
+Use `DRY_RUN=1` to print the command before installing. The helper requires
+[uv](https://docs.astral.sh/uv/); use the manual commands below only when you
+need to customize the installation.
+
 ```bash
 # With uv (recommended):
 uv pip install "nemo-safe-synthesizer[cu129,engine]" \
