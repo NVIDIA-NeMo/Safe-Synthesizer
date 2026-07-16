@@ -20,7 +20,7 @@ torch_runtime_deps = [
 ]
 
 cuda_runtime_deps = [
-  { name = "flashinfer-jit-cache", version = "0.6.12", local = "{torch_local_version}", sys_platform = "linux", source_kind = "flashinfer", source_marker = "sys_platform=='linux'" },
+  { name = "flashinfer-jit-cache", version = "0.6.12", local = "{torch_local_version}", sys_platform = "linux", source_kind = "flashinfer" },
   { name = "nvidia-cublas-{cuda_package_suffix}", sys_platform = "linux" },
   "nvidia-ml-py; sys_platform == 'linux'",
   "torch-c-dlpack-ext",
@@ -56,7 +56,7 @@ nvidia_cuda_libraries = [
 [cpu]
 dependencies = [
   { name = "torch", version = "2.11.0", sys_platform = "darwin" },
-  { name = "torch", version = "2.11.0", local = "cpu", sys_platform = "linux", index = "pytorch-cpu", source_marker = "sys_platform=='linux'" },
+  { name = "torch", version = "2.11.0", local = "cpu", sys_platform = "linux", index = "pytorch-cpu" },
   { name = "torchaudio", version = "2.11.0", sys_platform = "darwin" },
   { name = "torchaudio", version = "2.11.0", local = "cpu", sys_platform = "linux", index = "pytorch-cpu" },
   { name = "torchvision", version = "0.26.0", sys_platform = "darwin" },

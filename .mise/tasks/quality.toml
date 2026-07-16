@@ -23,7 +23,7 @@ run = "bash tools/codestyle/typecheck.sh"
 ["lock-check"]
 description = "Verify generated CUDA metadata and uv.lock match their sources."
 run = [
-  "uv run --script tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml --check",
+  "uv run --offline --frozen tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml --check",
   "uv lock",
   "git diff --exit-code uv.lock",
 ]

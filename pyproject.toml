@@ -115,7 +115,7 @@ engine = [
 # at some point, do per-subpackage dependencies
 # >>> BEGIN GENERATED CUDA RUNTIME EXTRAS - DO NOT EDIT <<<
 # Source of truth: cuda_deps.toml.
-# Regenerate with: uv run --script tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml
+# Regenerate with: uv run --frozen tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml
 # Manual edits inside this block will be overwritten.
 # Generated extras in this block: cpu, cu129.
 cpu = [
@@ -179,7 +179,7 @@ cache-keys = [
 ]
 # >>> BEGIN GENERATED CUDA UV CONFLICTS - DO NOT EDIT <<<
 # Source of truth: cuda_deps.toml.
-# Regenerate with: uv run --script tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml
+# Regenerate with: uv run --frozen tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml
 # Manual edits inside this block will be overwritten.
 # Generated uv section: tool.uv.conflicts.
 conflicts = [
@@ -233,7 +233,7 @@ constraint-dependencies = [
 
 # >>> BEGIN GENERATED CUDA UV SOURCES AND INDEXES - DO NOT EDIT <<<
 # Source of truth: cuda_deps.toml.
-# Regenerate with: uv run --script tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml
+# Regenerate with: uv run --frozen tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml
 # Manual edits inside this block will be overwritten.
 # Generated uv sections: tool.uv.sources and tool.uv.index.
 [tool.uv.sources]
@@ -241,25 +241,25 @@ vllm = [
     {index = "vllm-v0-24-0-cu129", extra = "cu129", marker = "sys_platform == 'linux'"},
 ]
 torch = [
-    {index = "pytorch-cpu", extra = "cpu", marker = "sys_platform=='linux'"},
-    {index = "pytorch-cu129", extra = "cu129"},
+    {index = "pytorch-cpu", extra = "cpu", marker = "sys_platform == 'linux'"},
+    {index = "pytorch-cu129", extra = "cu129", marker = "sys_platform == 'linux'"},
 ]
 torchaudio = [
-    {index = "pytorch-cpu", extra = "cpu"},
-    {index = "pytorch-cu129", extra = "cu129"},
+    {index = "pytorch-cpu", extra = "cpu", marker = "sys_platform == 'linux'"},
+    {index = "pytorch-cu129", extra = "cu129", marker = "sys_platform == 'linux'"},
 ]
 torchvision = [
-    {index = "pytorch-cpu", extra = "cpu"},
-    {index = "pytorch-cu129", extra = "cu129"},
+    {index = "pytorch-cpu", extra = "cpu", marker = "sys_platform == 'linux'"},
+    {index = "pytorch-cu129", extra = "cu129", marker = "sys_platform == 'linux'"},
 ]
 flashinfer-jit-cache = [
-    {index = "flashinfer-jit-cache", extra = "cu129", marker = "sys_platform=='linux'"},
+    {index = "flashinfer-jit-cache", extra = "cu129", marker = "sys_platform == 'linux'"},
 ]
 triton = [
-    {index = "pytorch-cu129", extra = "cu129"},
+    {index = "pytorch-cu129", extra = "cu129", marker = "sys_platform == 'linux'"},
 ]
 torchao = [
-    {index = "pytorch-cu129", extra = "cu129"},
+    {index = "pytorch-cu129", extra = "cu129", marker = "sys_platform == 'linux' and platform_machine == 'x86_64'"},
 ]
 nvidia-cublas-cu12 = [
     {index = "pytorch-cu129"},

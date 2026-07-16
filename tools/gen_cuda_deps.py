@@ -1,16 +1,6 @@
-#!/usr/bin/env -S uv run --script
+#!/usr/bin/env -S uv run --frozen
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-# /// script
-# requires-python = ">=3.11"
-# dependencies = [
-#     "click>=8",
-#     "packaging>=24",
-#     "pydantic",
-#     "structlog",
-#     "tomlkit",
-# ]
-# ///
 """Generate CPU and CUDA dependency metadata in pyproject.toml."""
 
 import tomllib
@@ -42,7 +32,6 @@ class GenStatus(StrEnum):
 
     ok = "ok"
     changed = "changed"
-    error = "error"
 
 
 GENERATED_BEGIN_PREFIX = "# >>> BEGIN GENERATED CUDA "
@@ -50,13 +39,8 @@ GENERATED_END_PREFIX = "# <<< END GENERATED CUDA "
 GENERATED_MARKER_SUFFIX = " - DO NOT EDIT"
 GENERATED_MARKER_BODY = (
     "# Source of truth: cuda_deps.toml.",
-    "# Regenerate with: uv run --script tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml",
+    "# Regenerate with: uv run --frozen tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml",
     "# Manual edits inside this block will be overwritten.",
-)
-GENERATED_MARKER_COMMENT_PREFIXES = (
-    "# Generated extras in this block:",
-    "# Generated uv section:",
-    "# Generated uv sections:",
 )
 
 
@@ -77,29 +61,59 @@ class GeneratedBlocks:
     extras: Sequence[str]
 
     def __iter__(self) -> Iterator[GeneratedBlock]:
-        runtime_start = _find_assignment(self.lines, self.extras[0])
-        conflicts_start = _find_assignment(self.lines, "conflicts")
+        runtime_start = self._find_assignment(self.extras[0])
+        conflicts_start = self._find_assignment("conflicts")
         yield GeneratedBlock(
             label="RUNTIME EXTRAS",
             start=runtime_start,
-            end=_find_array_end(self.lines, _find_assignment(self.lines, self.extras[-1])),
+            end=self._find_array_end(self._find_assignment(self.extras[-1])),
             detail=f"# Generated extras in this block: {', '.join(self.extras)}.",
         )
         yield GeneratedBlock(
             label="UV CONFLICTS",
             start=conflicts_start,
-            end=_find_array_end(self.lines, conflicts_start),
+            end=self._find_array_end(conflicts_start),
             detail="# Generated uv section: tool.uv.conflicts.",
         )
         yield GeneratedBlock(
             label="UV SOURCES AND INDEXES",
-            start=_find_section(self.lines, "[tool.uv.sources]"),
-            end=_last_generated_index_line(self.lines),
+            start=self._find_section("[tool.uv.sources]"),
+            end=self._last_generated_index_line(),
             detail="# Generated uv sections: tool.uv.sources and tool.uv.index.",
         )
 
     def reversed(self) -> list[GeneratedBlock]:
         return sorted(self, key=lambda block: block.start, reverse=True)
+
+    def _find_assignment(self, key: str) -> int:
+        assignment = f"{key} = ["
+        for index, line in enumerate(self.lines):
+            if line == assignment:
+                return index
+        raise ValueError(f"pyproject.toml: missing generated assignment {assignment!r}")
+
+    def _find_section(self, section: str) -> int:
+        for index, line in enumerate(self.lines):
+            if line == section:
+                return index
+        raise ValueError(f"pyproject.toml: missing generated section {section!r}")
+
+    def _last_generated_index_line(self) -> int:
+        index_start = self._find_section("[[tool.uv.index]]")
+        next_section = self._find_next_non_index_section(index_start + 1)
+        return next_section - 1 if next_section is not None else len(self.lines) - 1
+
+    def _find_next_non_index_section(self, start_index: int) -> int | None:
+        for index in range(start_index, len(self.lines)):
+            if self.lines[index].startswith("[") and self.lines[index] != "[[tool.uv.index]]":
+                return index
+        return None
+
+    def _find_array_end(self, start_index: int) -> int:
+        for index in range(start_index + 1, len(self.lines)):
+            if self.lines[index] == "]":
+                return index
+        raise ValueError(f"pyproject.toml: missing closing bracket for generated assignment at line {start_index + 1}")
 
 
 # ---------------------------------------------------------------------------
@@ -154,7 +168,14 @@ class DependencySpec(StrictModel):
     arch: str | None = Field(default=None, description="Shortcut for platform_machine marker.")
     source_kind: SourceKind | None = Field(default=None, description="Symbolic uv source route for this dependency.")
     index: str | None = Field(default=None, description="Literal uv index name or template for this dependency.")
-    source_marker: str | None = Field(default=None, description="Marker for the generated uv source entry.")
+    source_marker: str | None = Field(
+        default=None,
+        description=(
+            "Marker for the generated uv source entry. Defaults to the requirement's own "
+            "marker/sys_platform/arch; set this only when the source route needs a condition "
+            "that differs from the requirement itself."
+        ),
+    )
     variants: list[str] | None = Field(
         default=None, description="CUDA variant extras that should include this dependency."
     )
@@ -182,14 +203,32 @@ class DependencySpec(StrictModel):
                 Marker(marker)
 
     def as_pepstr(self, renderer: "TemplateRenderer") -> str:
-        requirement = self.versioned_requirement(renderer)
-        marker = " and ".join(self.pep_markers(renderer))
-        pepstr = f"{requirement}; {marker}" if marker else requirement
-        self.validate_pepstr(pepstr, renderer)
+        name = renderer.template(self.name)
+        markers = list(self.pep_markers(renderer))
+        for marker in markers:
+            Marker(marker)
+        requirement = self._versioned_requirement(name, renderer)
+        pepstr = f"{requirement}; {' and '.join(markers)}" if markers else requirement
+        self._validate_pepstr(pepstr, name)
         return pepstr
 
-    def versioned_requirement(self, renderer: "TemplateRenderer") -> str:
-        name = renderer.template(self.name)
+    def pep_markers(self, renderer: "TemplateRenderer") -> Iterator[str]:
+        for marker in (
+            renderer.optional_template(self.marker),
+            _platform_marker("sys_platform", self.sys_platform),
+            _platform_marker("platform_machine", self.arch),
+        ):
+            if marker:
+                yield marker
+
+    def effective_source_marker(self, renderer: "TemplateRenderer") -> str | None:
+        """Marker for the generated uv source entry: an explicit override, else the requirement's own markers."""
+        if self.source_marker is not None:
+            return renderer.template(self.source_marker)
+        markers = list(self.pep_markers(renderer))
+        return " and ".join(markers) if markers else None
+
+    def _versioned_requirement(self, name: str, renderer: "TemplateRenderer") -> str:
         match self:
             case DependencySpec(version=str() as version, local=local):
                 rendered_version = f"{renderer.template(version)}{_local_suffix(renderer.optional_template(local))}"
@@ -201,29 +240,19 @@ class DependencySpec(StrictModel):
                 return f"{name}{rendered_specifier}"
         return name
 
-    def pep_markers(self, renderer: "TemplateRenderer") -> Iterator[str]:
-        for marker in (
-            renderer.optional_template(self.marker),
-            _platform_marker("sys_platform", self.sys_platform),
-            _platform_marker("platform_machine", self.arch),
-        ):
-            if marker:
-                yield marker
-
-    def validate_pepstr(self, pepstr: str, renderer: "TemplateRenderer") -> None:
-        for marker in self.pep_markers(renderer):
-            Marker(marker)
+    def _validate_pepstr(self, pepstr: str, name: str) -> None:
         requirement = Requirement(pepstr)
-        if canonicalize_name(requirement.name) != canonicalize_name(renderer.template(self.name)):
+        if canonicalize_name(requirement.name) != canonicalize_name(name):
             raise ValueError(f"Rendered requirement name changed unexpectedly: {pepstr!r}")
 
 
 DependencyEntry = str | DependencySpec
 
 
-@dataclass(frozen=True)
 class NvidiaCudaLibrarySpec(StrictModel):
     """NVIDIA CUDA package source routing metadata."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     name: str = Field(description="NVIDIA CUDA library package stem without the nvidia- prefix.")
     nvidia_package_suffix: str | None = Field(
@@ -351,7 +380,11 @@ class TemplateRenderer:
         return self.template(template) if template is not None else None
 
     def template(self, template: str) -> str:
-        return _render_template(template, self.context)
+        try:
+            return template.format_map(self.context)
+        except KeyError as exc:
+            key = str(exc).strip("'")
+            raise ValueError(f"Unknown template key {key!r} in dependency {template!r}") from exc
 
 
 class RequirementRenderer(TemplateRenderer):
@@ -411,9 +444,70 @@ class CudaVariantContext(TemplateRenderer):
             suffix = self.variant.cuda_package_suffix
         return _nvidia_package_suffix(suffix)
 
+    def dependency_index(self, dependency: DependencySpec) -> str | None:
+        match dependency:
+            case DependencySpec(source_kind=SourceKind() as source_kind):
+                return self.source_kind_index(source_kind)
+            case DependencySpec(index=str() as index):
+                return self.template(index)
+        return None
+
+    def nvidia_sources(self) -> Iterator[tuple[str, str]]:
+        for library in self.config.nvidia_cuda_libraries:
+            yield self.nvidia_package_name(library), self.nvidia_source_index(library)
+
+    def nvidia_package_name(self, library: NvidiaCudaLibraryEntry) -> str:
+        match library:
+            case str() as name:
+                return f"nvidia-{name}{self.nvidia_package_suffix}"
+            case NvidiaCudaLibrarySpec(name=name, nvidia_package_suffix=str() as suffix):
+                return f"nvidia-{name}{_nvidia_package_suffix(suffix)}"
+            case NvidiaCudaLibrarySpec(name=name):
+                return f"nvidia-{name}{self.nvidia_package_suffix}"
+        raise TypeError(f"Unsupported NVIDIA CUDA library entry {library!r}")
+
+    def nvidia_source_index(self, library: NvidiaCudaLibraryEntry) -> str:
+        match library:
+            case NvidiaCudaLibrarySpec(index=str() as index):
+                return self.template(index)
+        return self.pytorch_index.name
+
+    @property
+    def pytorch_index(self) -> IndexSpec:
+        return self.source_kind_index_spec(SourceKind.pytorch)
+
+    @property
+    def flashinfer_index(self) -> IndexSpec | None:
+        return self.optional_source_kind_index_spec(SourceKind.flashinfer)
+
+    def indexes(self) -> list[IndexSpec]:
+        return [index for source_kind in SourceKind if (index := self.optional_source_kind_index_spec(source_kind))]
+
+    def source_kind_index(self, source_kind: SourceKind) -> str:
+        return self.source_kind_index_spec(source_kind).name
+
+    def source_kind_index_spec(self, source_kind: SourceKind) -> IndexSpec:
+        index = self.optional_source_kind_index_spec(source_kind)
+        if index is None:
+            raise ValueError(f"CUDA source {source_kind.value!r} needs [cuda_indexes.{source_kind.value}]")
+        return index
+
+    def optional_source_kind_index_spec(self, source_kind: SourceKind) -> IndexSpec | None:
+        variant_index = getattr(self.variant, f"{source_kind.value}_index", None)
+        default_index = getattr(self.config.cuda_indexes, source_kind.value, None)
+        index = variant_index or default_index
+        return self.render_index(index) if index is not None else None
+
+    def render_index(self, index: IndexSpec) -> IndexSpec:
+        return IndexSpec(
+            name=self.template(index.name),
+            url=self.template(index.url),
+            explicit=index.explicit,
+        )
+
 
 class CudaVariantUvRouter:
-    """Materialize uv sources and indexes for one CUDA variant."""
+    """Populate a uv sources accumulator with one CUDA variant's dependency and NVIDIA library sources."""
 
     def __init__(self, context: CudaVariantContext) -> None:
         self.context = context
@@ -429,7 +523,7 @@ class CudaVariantUvRouter:
                     self.add_dependency_source(sources, spec)
 
     def add_dependency_source(self, sources: UvSourcesAccumulator, dependency: DependencySpec) -> None:
-        index = self.dependency_index(dependency)
+        index = self.context.dependency_index(dependency)
         if index is None:
             return
         sources.add(
@@ -437,74 +531,13 @@ class CudaVariantUvRouter:
             SourceSpec(
                 index=index,
                 extra=self.context.extra,
-                marker=self.context.optional_template(dependency.source_marker),
+                marker=dependency.effective_source_marker(self.context),
             ),
         )
 
     def add_nvidia_sources(self, sources: UvSourcesAccumulator) -> None:
-        for library in self.context.config.nvidia_cuda_libraries:
-            package = self.nvidia_package_name(library)
-            sources.add(
-                package,
-                SourceSpec(index=self.nvidia_source_index(library)),
-            )
-
-    def nvidia_package_name(self, library: NvidiaCudaLibraryEntry) -> str:
-        match library:
-            case str() as name:
-                return f"nvidia-{name}{self.context.nvidia_package_suffix}"
-            case NvidiaCudaLibrarySpec(name=name, nvidia_package_suffix=str() as suffix):
-                return f"nvidia-{name}{_nvidia_package_suffix(suffix)}"
-            case NvidiaCudaLibrarySpec(name=name):
-                return f"nvidia-{name}{self.context.nvidia_package_suffix}"
-        raise TypeError(f"Unsupported NVIDIA CUDA library entry {library!r}")
-
-    def nvidia_source_index(self, library: NvidiaCudaLibraryEntry) -> str:
-        match library:
-            case NvidiaCudaLibrarySpec(index=str() as index):
-                return self.context.template(index)
-        return self.pytorch_index.name
-
-    @property
-    def pytorch_index(self) -> IndexSpec:
-        return self.source_kind_index_spec(SourceKind.pytorch)
-
-    @property
-    def flashinfer_index(self) -> IndexSpec | None:
-        return self.optional_source_kind_index_spec(SourceKind.flashinfer)
-
-    def indexes(self) -> list[IndexSpec]:
-        return [index for source_kind in SourceKind if (index := self.optional_source_kind_index_spec(source_kind))]
-
-    def dependency_index(self, dependency: DependencySpec) -> str | None:
-        match dependency:
-            case DependencySpec(source_kind=SourceKind() as source_kind):
-                return self.source_kind_index(source_kind)
-            case DependencySpec(index=str() as index):
-                return self.context.template(index)
-        return None
-
-    def source_kind_index(self, source_kind: SourceKind) -> str:
-        return self.source_kind_index_spec(source_kind).name
-
-    def source_kind_index_spec(self, source_kind: SourceKind) -> IndexSpec:
-        index = self.optional_source_kind_index_spec(source_kind)
-        if index is None:
-            raise ValueError(f"CUDA source {source_kind.value!r} needs [cuda_indexes.{source_kind.value}]")
-        return index
-
-    def optional_source_kind_index_spec(self, source_kind: SourceKind) -> IndexSpec | None:
-        variant_index = getattr(self.context.variant, f"{source_kind.value}_index", None)
-        default_index = getattr(self.context.config.cuda_indexes, source_kind.value, None)
-        index = variant_index or default_index
-        return self.render_index(index) if index is not None else None
-
-    def render_index(self, index: IndexSpec) -> IndexSpec:
-        return IndexSpec(
-            name=self.context.template(index.name),
-            url=self.context.template(index.url),
-            explicit=index.explicit,
-        )
+        for package, index in self.context.nvidia_sources():
+            sources.add(package, SourceSpec(index=index))
 
 
 def _cuda_variant_contexts(config: CudaDepsConfig) -> Iterator[CudaVariantContext]:
@@ -667,60 +700,23 @@ def _insert_generated_marker(lines: list[str], block: GeneratedBlock) -> None:
 
 
 def _strip_generated_markers(lines: list[str]) -> list[str]:
+    # Header length is fixed by _insert_generated_marker (GENERATED_MARKER_BODY plus one
+    # detail line), so skip by position rather than matching comment text: matching text
+    # would silently miss stale headers left over from a previous version of that text.
+    header_length = len(GENERATED_MARKER_BODY) + 1
     stripped = []
-    in_marker_header = False
+    skip_remaining = 0
     for line in lines:
+        if skip_remaining:
+            skip_remaining -= 1
+            continue
         if line.startswith(GENERATED_BEGIN_PREFIX):
-            in_marker_header = True
+            skip_remaining = header_length
             continue
         if line.startswith(GENERATED_END_PREFIX):
             continue
-        if in_marker_header and _is_generated_marker_comment(line):
-            continue
-        in_marker_header = False
         stripped.append(line)
     return stripped
-
-
-def _is_generated_marker_comment(line: str) -> bool:
-    if line in GENERATED_MARKER_BODY:
-        return True
-    return line.startswith(GENERATED_MARKER_COMMENT_PREFIXES)
-
-
-def _find_assignment(lines: Sequence[str], key: str) -> int:
-    assignment = f"{key} = ["
-    for index, line in enumerate(lines):
-        if line == assignment:
-            return index
-    raise ValueError(f"pyproject.toml: missing generated assignment {assignment!r}")
-
-
-def _find_section(lines: Sequence[str], section: str) -> int:
-    for index, line in enumerate(lines):
-        if line == section:
-            return index
-    raise ValueError(f"pyproject.toml: missing generated section {section!r}")
-
-
-def _last_generated_index_line(lines: Sequence[str]) -> int:
-    index_start = _find_section(lines, "[[tool.uv.index]]")
-    next_section = _find_next_non_index_section(lines, index_start + 1)
-    return next_section - 1 if next_section is not None else len(lines) - 1
-
-
-def _find_next_non_index_section(lines: Sequence[str], start_index: int) -> int | None:
-    for index in range(start_index, len(lines)):
-        if lines[index].startswith("[") and lines[index] != "[[tool.uv.index]]":
-            return index
-    return None
-
-
-def _find_array_end(lines: Sequence[str], start_index: int) -> int:
-    for index in range(start_index + 1, len(lines)):
-        if lines[index] == "]":
-            return index
-    raise ValueError(f"pyproject.toml: missing closing bracket for generated assignment at line {start_index + 1}")
 
 
 def _required_table(
@@ -766,15 +762,13 @@ def _add_cpu_dependency_sources(sources: UvSourcesAccumulator, dependencies: Ite
     renderer = RequirementRenderer({}, extra="cpu")
     for dependency in dependencies:
         match dependency:
-            case DependencySpec(name=name, index=str() as index, source_marker=source_marker) as spec if (
-                renderer.applies(spec)
-            ):
+            case DependencySpec(index=str() as index) as spec if renderer.applies(spec):
                 sources.add(
-                    renderer.template(name),
+                    renderer.template(spec.name),
                     SourceSpec(
                         index=renderer.template(index),
                         extra="cpu",
-                        marker=renderer.optional_template(source_marker),
+                        marker=spec.effective_source_marker(renderer),
                     ),
                 )
 
@@ -782,7 +776,7 @@ def _add_cpu_dependency_sources(sources: UvSourcesAccumulator, dependencies: Ite
 def _collect_uv_indexes(config: CudaDepsConfig) -> list[IndexSpec]:
     indexes: dict[str, IndexSpec] = {}
     for context in _cuda_variant_contexts(config):
-        for index in context.uv_router.indexes():
+        for index in context.indexes():
             _add_index(indexes, index)
     for index in config.indexes:
         _add_index(indexes, index)
@@ -842,14 +836,6 @@ def _nvidia_package_suffix(suffix: str) -> str:
 
 def _platform_marker(name: str, value: str | None) -> str | None:
     return f"{name} == '{value}'" if value else None
-
-
-def _render_template(template: str, context: dict[str, str]) -> str:
-    try:
-        return template.format_map(context)
-    except KeyError as exc:
-        key = str(exc).strip("'")
-        raise ValueError(f"Unknown template key {key!r} in dependency {template!r}") from exc
 
 
 def _string_array(items: list[str]) -> Array:
@@ -917,7 +903,7 @@ def _update_pyproject(
 ) -> GenerationResult:
     current = pyproject_path.read_text(encoding="utf-8")
     updated = apply_cuda_fragment_to_pyproject(current, generated)
-    if check:
+    if check or current == updated:
         return _check_pyproject(pyproject_path, current, updated)
     pyproject_path.write_text(updated, encoding="utf-8")
     return GenerationResult(
@@ -943,11 +929,12 @@ def _check_pyproject(pyproject_path: Path, current: str, updated: str) -> Genera
 
 
 def _exit_code(result: GenerationResult) -> int:
-    if result.status is GenStatus.ok:
-        return 0
-    if result.status is GenStatus.changed:
-        return 1
-    return 125
+    match result.status:
+        case GenStatus.ok:
+            return 0
+        case GenStatus.changed:
+            return 1
+    raise AssertionError(f"Unsupported generation status: {result.status}")
 
 
 @click.command(help="Update generated CPU and CUDA dependency metadata in pyproject.toml.")
