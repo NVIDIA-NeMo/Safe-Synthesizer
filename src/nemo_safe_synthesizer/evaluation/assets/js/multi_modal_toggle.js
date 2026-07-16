@@ -4,7 +4,6 @@ const SCORE_TIER_COLORS = {
     Excellent: "#22c55e",
     "Very Good": "#84cc16",
     Good: "#eab308",
-    Fair: "#f97316",
     Moderate: "#f97316",
     Poor: "#ef4444",
 };
@@ -53,13 +52,22 @@ function arcPoint(angle, centerX = 50, centerY = 55, radius = 38) {
 }
 
 function scoreColor(score) {
+    if (!Number.isFinite(score)) {
+        return "#888888";
+    }
     if (score >= 8) {
-        return "#22c55e";
+        return SCORE_TIER_COLORS.Excellent;
     }
-    if (score >= 5) {
-        return "#eab308";
+    if (score >= 6) {
+        return SCORE_TIER_COLORS["Very Good"];
     }
-    return "#ef4444";
+    if (score >= 4) {
+        return SCORE_TIER_COLORS.Good;
+    }
+    if (score >= 2) {
+        return SCORE_TIER_COLORS.Moderate;
+    }
+    return SCORE_TIER_COLORS.Poor;
 }
 
 function initializeSimpleScoreRing(ring, score, available) {
@@ -160,6 +168,13 @@ function initializeScoreRings(container = document) {
             initializeGradientScoreRing(ring, score, available);
         }
         ring.dataset.initialized = "true";
+    });
+}
+
+function initializeScoreLabels(container = document) {
+    container.querySelectorAll("[data-score-label]").forEach((label) => {
+        const score = label.dataset.score === "" ? Number.NaN : Number(label.dataset.score);
+        label.style.setProperty("--score-color", scoreColor(score));
     });
 }
 
@@ -316,12 +331,11 @@ function themeMembershipPlot(plot) {
     if (!source) {
         return;
     }
-    const labels = ["Excellent", "Very Good", "Good", "Fair", "Poor"];
+    const labels = ["Excellent", "Very Good", "Good", "Moderate", "Poor"];
     const sourceLabels = decodePlotlyArray(source.labels);
     const sourceValues = decodePlotlyArray(source.values);
     const values = labels.map((label) => {
-        const sourceLabel = label === "Fair" && sourceLabels.includes("Moderate") ? "Moderate" : label;
-        const index = sourceLabels.indexOf(sourceLabel);
+        const index = sourceLabels.indexOf(label);
         return index >= 0 && Number.isFinite(Number(sourceValues[index])) ? Number(sourceValues[index]) : 0;
     });
     const data = [{
@@ -365,7 +379,7 @@ function themeAttributePlot(plot) {
         const color = SCORE_TIER_COLORS[originalName] || "#eab308";
         window.Plotly.restyle(plot, {
             "marker.color": color,
-            name: originalName === "Moderate" ? "Fair" : originalName,
+            name: originalName,
             width: 0.7,
         }, [index]);
     });
@@ -592,6 +606,7 @@ document.addEventListener("keydown", (event) => {
 });
 window.addEventListener("hashchange", activateReportView);
 initializeScoreRings();
+initializeScoreLabels();
 themePlotlyCharts();
 activateReportView();
 document.fonts?.ready.then(() => {

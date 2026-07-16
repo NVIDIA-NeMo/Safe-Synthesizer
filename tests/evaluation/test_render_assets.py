@@ -35,6 +35,12 @@ def test_evaluation_report_themes_charts_in_report_assets() -> None:
     assert "brand-assets.cne.ngc.nvidia.com/assets/fonts/nvidia-sans" in stylesheet
     assert "data-metric-toggle" in metric_card
     assert "initializeGradientScoreRing" in javascript
+    assert "initializeScoreLabels" in javascript
+    assert 'const labels = ["Excellent", "Very Good", "Good", "Moderate", "Poor"]' in javascript
+    assert 'Fair: "#f97316"' not in javascript
+    assert "if (score >= 6)" in javascript
+    assert "if (score >= 4)" in javascript
+    assert "if (score >= 2)" in javascript
     assert "themePlotlyCharts" in javascript
     assert "themeMembershipPlot" in javascript
     assert "themeDeepStructurePlot" in javascript
@@ -56,6 +62,7 @@ def test_evaluation_report_themes_charts_in_report_assets() -> None:
     assert "#dps-interpretation" in template
     assert 'aria-label="Report sections"' in template
     assert '<div class="sidebar-label">' not in template
+    assert template.count("data-score-label") == 2
     assert "grid-template-columns: minmax(0, 1fr)" in stylesheet
     assert ".show-columns::before" in stylesheet
     assert "inset: calc(var(--header-height) + 56px) 0 0 0" in stylesheet

@@ -76,7 +76,7 @@ def test_sqs_score_tabular(column_correlation_stability, deep_structure_stabilit
     assert sqs.name == "Synthetic Quality Score"
     assert sqs.score.raw_score == 5.627
     assert sqs.score.score == 5.6
-    assert sqs.score.grade == Grade.MODERATE
+    assert sqs.score.grade == Grade.GOOD
     assert sqs.score.notes is None
 
 
@@ -128,7 +128,7 @@ def test_sqs_score_from_everything(
     assert sqs.name == "Synthetic Quality Score"
     assert sqs.score.raw_score == 5.6486
     assert sqs.score.score == 5.6
-    assert sqs.score.grade == Grade.MODERATE
+    assert sqs.score.grade == Grade.GOOD
     assert sqs.score.notes is None
 
 

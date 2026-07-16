@@ -30,11 +30,11 @@ _GRAPH_BARGROUPGAP = 0.1  # gap between bars of the same location coordinates
 GRAPH_BACKGROUND_COLOR = "#EBEAF0"
 
 INFERENCE_ATTACK_VALUES_FOR_GRAPHS = {
-    "Poor": "rgb(203, 210, 252)",
-    "Moderate": "rgb(145, 156, 237)",
-    "Good": "rgb(102, 101, 222)",
-    "Very Good": "rgb(59, 46, 208)",
-    "Excellent": "rgb(12, 0, 117)",
+    "Poor": "#ef4444",
+    "Moderate": "#f97316",
+    "Good": "#eab308",
+    "Very Good": "#84cc16",
+    "Excellent": "#22c55e",
 }
 
 

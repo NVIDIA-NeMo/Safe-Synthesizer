@@ -3,7 +3,8 @@
     <a class="overview-score-card" href="#synthetic-quality">
         <div class="score-chart">{{ score_ring(ctx.synthetic_quality_score.score) }}</div>
         <div class="overview-score-copy">
-            <span class="score-label">{{ ctx.synthetic_quality_score.score.grade }}</span>
+            <span class="score-label" data-score-label
+                  data-score="{{ ctx.synthetic_quality_score.score.score if ctx.synthetic_quality_score.score.score is not none else '' }}">{{ ctx.synthetic_quality_score.score.grade }}</span>
             <h2>Synthetic Quality<br>Score</h2>
         </div>
     </a>
@@ -11,7 +12,8 @@
     <a class="overview-score-card" href="#data-privacy">
         <div class="score-chart">{{ score_ring(ctx.data_privacy_score.score) }}</div>
         <div class="overview-score-copy">
-            <span class="score-label">{{ ctx.data_privacy_score.score.grade }}</span>
+            <span class="score-label" data-score-label
+                  data-score="{{ ctx.data_privacy_score.score.score if ctx.data_privacy_score.score.score is not none else '' }}">{{ ctx.data_privacy_score.score.grade }}</span>
             <h2>Data Privacy Score</h2>
         </div>
     </a>

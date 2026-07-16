@@ -63,7 +63,8 @@
             <div class="score-hero component component--gradient">
                 <div class="score-hero-visual">
                     {{ score_ring(ctx.synthetic_quality_score.score) }}
-                    <span class="score-label">{{ ctx.synthetic_quality_score.score.grade }}</span>
+                    <span class="score-label" data-score-label
+                          data-score="{{ ctx.synthetic_quality_score.score.score if ctx.synthetic_quality_score.score.score is not none else '' }}">{{ ctx.synthetic_quality_score.score.grade }}</span>
                 </div>
                 <div class="score-hero-copy">
                     <h2>Synthetic Quality Score (SQS)</h2>
@@ -155,7 +156,8 @@
             <div class="score-hero component component--gradient">
                 <div class="score-hero-visual">
                     {{ score_ring(ctx.data_privacy_score.score) }}
-                    <span class="score-label">{{ ctx.data_privacy_score.score.grade }}</span>
+                    <span class="score-label" data-score-label
+                          data-score="{{ ctx.data_privacy_score.score.score if ctx.data_privacy_score.score.score is not none else '' }}">{{ ctx.data_privacy_score.score.grade }}</span>
                 </div>
                 <div class="score-hero-copy">
                     <h2>Data Privacy Score (DPS)</h2>

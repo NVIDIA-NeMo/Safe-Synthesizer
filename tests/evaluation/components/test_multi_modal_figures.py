@@ -57,7 +57,7 @@ class TestGaugeChart:
     """Tests for gauge_chart function."""
 
     def test_gauge_chart_with_score(self):
-        evaluation_score = EvaluationScore(score=7.5, grade=Grade.GOOD)
+        evaluation_score = EvaluationScore(score=7.5, grade=Grade.VERY_GOOD)
         fig = gauge_chart(evaluation_score)
 
         assert isinstance(fig, go.Figure)
@@ -74,7 +74,7 @@ class TestGaugeChart:
         assert any("--" in str(t.text) for t in text_traces)
 
     def test_gauge_chart_min_size(self):
-        evaluation_score = EvaluationScore(score=5.0, grade=Grade.MODERATE)
+        evaluation_score = EvaluationScore(score=5.0, grade=Grade.GOOD)
         fig = gauge_chart(evaluation_score, min=True)
 
         assert isinstance(fig, go.Figure)
@@ -83,7 +83,7 @@ class TestGaugeChart:
         assert fig.layout.height == 75
 
     def test_gauge_chart_regular_size(self):
-        evaluation_score = EvaluationScore(score=5.0, grade=Grade.MODERATE)
+        evaluation_score = EvaluationScore(score=5.0, grade=Grade.GOOD)
         fig = gauge_chart(evaluation_score, min=False)
 
         assert isinstance(fig, go.Figure)
@@ -98,7 +98,7 @@ class TestGaugeChart:
 
     def test_gauge_chart_extreme_scores(self):
         # Test score of 0
-        evaluation_score = EvaluationScore(score=0.0, grade=Grade.VERY_POOR)
+        evaluation_score = EvaluationScore(score=0.0, grade=Grade.POOR)
         fig = gauge_chart(evaluation_score)
         assert isinstance(fig, go.Figure)
 

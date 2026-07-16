@@ -392,6 +392,11 @@ h3 {
     white-space: nowrap;
 }
 
+.score-label {
+    border-color: var(--score-color, #9cdb28);
+    color: var(--score-color, #9cdb28);
+}
+
 .dataset-statistics {
     padding: 20px 24px 24px;
 }
