@@ -366,7 +366,7 @@ function themeMembershipPlot(plot) {
 function themeAttributePlot(plot) {
     const columns = new Set();
     (plot.data || []).forEach((trace, index) => {
-        decodePlotlyArray(trace.y).filter((column) => column != null).forEach((column) => columns.add(column));
+        decodePlotlyArray(trace.y).filter((column) => column != null && column !== "").forEach((column) => columns.add(column));
         if (trace.type === "scatter") {
             window.Plotly.restyle(plot, {visible: false}, [index]);
             return;

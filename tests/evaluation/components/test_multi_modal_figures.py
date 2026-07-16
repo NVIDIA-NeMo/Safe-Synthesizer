@@ -294,9 +294,12 @@ class TestGenerateAiaFigure:
 
         bars = [trace for trace in fig.data if isinstance(trace, go.Bar)]
         assert [trace.name for trace in bars] == [grade.value for grade in list(PrivacyGrade)[1:]]
-        assert all(list(trace.x) == [None] and list(trace.y) == [None] for trace in bars[:-1])
+        assert all(
+            list(trace.x) == [0] and list(trace.y) == [""] and trace.visible == "legendonly" for trace in bars[:-1]
+        )
         assert list(bars[-1].x) == [9.0]
         assert list(bars[-1].y) == ["age"]
+        assert bars[-1].visible is True
 
 
 class TestCorrelationHeatmap:
@@ -333,6 +336,8 @@ class TestGenerateCombinedCorrelationFigure:
         assert isinstance(fig.data[0], go.Heatmap)
         assert isinstance(fig.data[1], go.Heatmap)
         assert isinstance(fig.data[2], go.Heatmap)
+        assert fig.data[2].name == "Correlation Difference (Absolute)"
+        assert "Absolute correlation difference" in fig.data[2].text[0][0]
 
 
 class TestScatterPlot:

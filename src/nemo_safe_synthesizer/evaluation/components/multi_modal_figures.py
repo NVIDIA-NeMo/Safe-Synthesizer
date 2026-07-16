@@ -284,8 +284,9 @@ def generate_aia_figure(df: pd.DataFrame) -> go.Figure:
         if grade.value == "Unavailable":
             continue
         filtered_df = df.query(f"Protection == '{grade.value}'")
-        risk_values = filtered_df["Risk"].tolist() or [None]
-        column_values = filtered_df["Column"].tolist() or [None]
+        legend_only = filtered_df.empty
+        risk_values = filtered_df["Risk"].tolist() or [0]
+        column_values = filtered_df["Column"].tolist() or [""]
         bar = go.Bar(
             x=risk_values,
             y=column_values,
@@ -294,6 +295,7 @@ def generate_aia_figure(df: pd.DataFrame) -> go.Figure:
             width=0.3,
             showlegend=True,
             name=grade.value,
+            visible="legendonly" if legend_only else True,
         )
 
         scatter = go.Scatter(
@@ -385,7 +387,7 @@ def _generate_correlation_hovertext(
             corr_diff_value = corr_diff[x][y]
             text = "x: " + x + "<br>y: " + y + "<br>Training correlation: " + str(round(corr_training_value, 2))
             text = text + "<br>Synthetic correlation: " + str(round(corr_synthetic_value, 2))
-            text = text + "<br>Correlation difference: " + str(round(corr_diff_value, 2))
+            text = text + "<br>Absolute correlation difference: " + str(round(corr_diff_value, 2))
             next_ylist.append(text)
 
         # Append the ylist to the final hovertext list
@@ -414,7 +416,7 @@ def generate_combined_correlation_figure(
 
     training_correlation_figure = correlation_heatmap(training_correlation_df, "Training Correlations")
     synthetic_correlation_figure = correlation_heatmap(synthetic_correlation_df, "Synthetic Correlations")
-    correlation_difference_figure = correlation_heatmap(correlation_difference, "Difference of Correlations")
+    correlation_difference_figure = correlation_heatmap(correlation_difference, "Correlation Difference (Absolute)")
 
     fig = combine_subplots(
         figures=[
