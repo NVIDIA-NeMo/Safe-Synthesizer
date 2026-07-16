@@ -34,7 +34,11 @@ permissions:
   packages: write
 
 env:
+  # Release-tag pushes publish to the NVCR staging team. Promotion to the
+  # user-facing NVCR team is a separate release step.
   REGISTRY_IMAGE: nvcr.io/aire/safe-synth-dev/safe-synthesizer
+  # GHCR stores only BuildKit cache layers for GitHub-hosted builds. It is not
+  # used as a distribution registry for Safe-Synthesizer images.
   CACHE_IMAGE: ghcr.io/nvidia-nemo/safe-synthesizer
 
 jobs:
@@ -77,10 +81,12 @@ jobs:
         if: github.event_name == 'push'
         shell: bash -e -u -o pipefail {0}
         env:
-          NVCR_TOKEN: ${{ secrets.NVCR_AIRE_SAFE_SYN_DEPLOY_KEY }}
+          # Prefer the full project secret name; keep the legacy name as a
+          # temporary fallback until the repo secret is rotated.
+          NVCR_TOKEN: ${{ secrets.NVCR_AIRE_SAFE_SYNTHESIZER_DEPLOY_KEY || secrets.NVCR_AIRE_SAFE_SYN_DEPLOY_KEY }}
         run: |
           if [[ -z "${NVCR_TOKEN}" ]]; then
-            echo "::error::Missing required secret NVCR_AIRE_SAFE_SYN_DEPLOY_KEY"
+            echo "::error::Missing required secret NVCR_AIRE_SAFE_SYNTHESIZER_DEPLOY_KEY"
             exit 1
           fi
 
@@ -90,7 +96,7 @@ jobs:
         with:
           registry: nvcr.io
           username: '$oauthtoken'
-          password: ${{ secrets.NVCR_AIRE_SAFE_SYN_DEPLOY_KEY }}
+          password: ${{ secrets.NVCR_AIRE_SAFE_SYNTHESIZER_DEPLOY_KEY || secrets.NVCR_AIRE_SAFE_SYN_DEPLOY_KEY }}
 
       - name: Log in to GHCR cache registry
         if: github.event_name == 'push'

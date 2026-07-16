@@ -189,16 +189,22 @@ default branch. Manual runs build the image without pushing it.
 
 The workflow pushes images only for release tag `push` events. It builds a
 multi-platform manifest for `linux/amd64` and `linux/arm64`, logs in to
-`nvcr.io` with the repo secret `NVCR_AIRE_SAFE_SYN_DEPLOY_KEY`, and publishes
-under the `aire/safe-synth-dev` team.
+`nvcr.io` with the repo secret `NVCR_AIRE_SAFE_SYNTHESIZER_DEPLOY_KEY`, and
+publishes under the `aire/safe-synth-dev` team. The workflow also accepts the
+legacy `NVCR_AIRE_SAFE_SYN_DEPLOY_KEY` secret while the repository secret is
+rotated to the full project name. The `safe-synth-dev` team is the release
+workflow's staging namespace; promotion to the user-facing NVCR team is handled
+as a separate release step.
 
 Build cache is exported to a dedicated GHCR registry cache tag,
-`buildcache-<variant>`, only for release tag events that can push packages. The
-workflow does not use the GitHub Actions cache backend for Docker layers
-because the CUDA dependency layers are large enough to churn the default
-Actions cache quota and slow down cache export.
+`buildcache-<variant>`, only for release tag events that can push packages.
+GHCR is used only for BuildKit cache artifacts because this job runs in GitHub
+Actions; published runtime images go to NVCR. The workflow does not use the
+GitHub Actions cache backend for Docker layers because the CUDA dependency
+layers are large enough to churn the default Actions cache quota and slow down
+cache export.
 
-Current image name:
+Current workflow image name before promotion:
 
 ```text
 nvcr.io/aire/safe-synth-dev/safe-synthesizer
