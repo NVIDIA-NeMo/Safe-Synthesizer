@@ -695,7 +695,7 @@ def _runtime_nested_validation() -> SafeSynthesizerParameters:
 
 
 class TestWithRuntimeOverrides:
-    """Tests for resume-time generation/evaluation/telemetry override merging."""
+    """Tests for supported resume-time override merging."""
 
     @pytest.mark.parametrize(
         ("make_runtime", "expected"),
@@ -748,6 +748,11 @@ class TestWithRuntimeOverrides:
                 lambda: SafeSynthesizerParameters.model_validate({"emit_telemetry": True}),
                 {"emit_telemetry": True},
                 id="telemetry-set-applied",
+            ),
+            pytest.param(
+                lambda: SafeSynthesizerParameters.model_validate({"strict_config": False}),
+                {"strict_config": False},
+                id="strict-config-set-applied",
             ),
         ],
     )

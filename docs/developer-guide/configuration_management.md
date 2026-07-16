@@ -93,8 +93,9 @@ The shared `pydantic_model_config` sets `arbitrary_types_allowed`,
 `SafeSynthesizerParameters.strict_config` separately controls Pydantic's
 recursive unknown-field policy at raw-input boundaries. The default is to pass
 `extra="forbid"`; `strict_config: false` passes `extra="ignore"`. Sparse patch
-compilation and SDK raw-mapping builders must use the same effective setting so
-they do not discard unknown keys before top-level validation can inspect them.
+compilation and SDK raw-mapping builders must use the same effective setting.
+Strict mode preserves unknown keys until Pydantic rejects them; non-strict mode
+filters unknown keys while normalizing the input.
 
 ## Adding a Config Field
 

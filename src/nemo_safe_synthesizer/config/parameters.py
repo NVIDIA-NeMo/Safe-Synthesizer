@@ -133,9 +133,9 @@ class SafeSynthesizerParameters(Parameters):
             extra=type(self)._extra_behavior(data),
         )
 
-    # Preserve Pydantic's normal model-validation path: this initializer only
-    # selects the extras policy for direct ``Model(...)`` construction.
-    setattr(__init__, "__pydantic_base_init__", True)
+    # Pydantic marks its own BaseModel initializer this way so the model
+    # metaclass does not treat this equivalent initializer as a custom one.
+    cast(Any, __init__).__pydantic_base_init__ = True
 
     @classmethod
     @override
@@ -154,7 +154,7 @@ class SafeSynthesizerParameters(Parameters):
         return super().model_validate(
             obj,
             strict=strict,
-            extra=extra or cls._extra_behavior(obj),
+            extra=extra if extra is not None else cls._extra_behavior(obj),
             from_attributes=from_attributes,
             context=context,
             by_alias=by_alias,
@@ -321,13 +321,13 @@ class SafeSynthesizerParameters(Parameters):
         return base.combine(override).apply()
 
     def with_runtime_overrides(self, runtime: SafeSynthesizerParameters) -> "SafeSynthesizerParameters":
-        """Apply resume-time generation/evaluation/telemetry overrides onto a copy of self.
+        """Apply supported resume-time overrides onto a copy of self.
 
         ``self`` is the saved training-run config. Only explicitly-set
         ``generation`` and ``evaluation`` fields from ``runtime`` are merged in,
-        plus ``emit_telemetry`` when the caller set it. Training, data, privacy,
-        and other sections are preserved so training provenance survives a
-        generate-only resume.
+        plus ``emit_telemetry`` and ``strict_config`` when the caller set them.
+        Training, data, privacy, and other sections are preserved so training
+        provenance survives a generate-only resume.
 
         Args:
             runtime: Config carrying resume-time CLI/SDK overrides. Typically

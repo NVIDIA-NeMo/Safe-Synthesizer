@@ -147,10 +147,12 @@ an atomic leaf raise an error.
 ### Resume-Time Overrides
 
 When generation resumes from a saved training run, runtime configuration may
-override only `generation`, `evaluation`, and `emit_telemetry`. Telemetry is
-overridden only when the runtime input explicitly sets it. Saved `training`,
-`data`, `privacy`, PII replacement, time-series, and preflight settings remain
-unchanged.
+override only `generation`, `evaluation`, `emit_telemetry`, and `strict_config`.
+Telemetry and strictness are overridden only when the runtime input explicitly
+sets them. An explicit `strict_config: false` is applied while loading the saved
+configuration, allowing legacy fields to be ignored when client and service
+versions differ. Saved `training`, `data`, `privacy`, PII replacement,
+time-series, and preflight settings remain unchanged.
 
 ---
 

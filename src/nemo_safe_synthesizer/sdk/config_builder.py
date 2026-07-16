@@ -53,6 +53,7 @@ class ConfigBuilder:
 
     def __init__(self, config: SafeSynthesizerParameters | None = None) -> None:
         self._nss_config = config.model_copy(deep=True) if config is not None else None
+        self._strict_config_explicit = config is not None and "strict_config" in config.model_fields_set
         if self._nss_config is not None:
             self._strict_config = self._nss_config.strict_config
             self._emit_telemetry_config = self._nss_config.emit_telemetry
@@ -87,6 +88,7 @@ class ConfigBuilder:
     def with_strict_config(self, enabled: bool) -> Self:
         """Control whether SDK raw mapping inputs reject unknown keys."""
         self._strict_config = enabled
+        self._strict_config_explicit = True
         return self
 
     def with_data_source(self, df_source: DataSource) -> Self:

@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import time
 from collections.abc import Iterator
@@ -276,9 +277,11 @@ class SafeSynthesizer(ConfigBuilder):
         Loads the configuration from the source run directory's config file.
         When resuming from a trained model for generation, the source paths
         point to the parent workdir that contains the trained adapter.
-        Optional ``runtime_config`` values for generation and evaluation are
-        applied after loading the saved training-run config so resume-time CLI
-        overrides work without mutating the persisted train config.
+        Optional ``runtime_config`` values for generation, evaluation,
+        telemetry, and strict config validation are applied without mutating
+        the persisted train config. An explicitly set ``strict_config`` also
+        controls validation of the saved config itself so legacy fields can be
+        ignored for version-skew compatibility.
 
         Always prefers cached train/test splits from the training run to ensure
         evaluation metrics are consistent and privacy guarantees are maintained.
@@ -292,12 +295,22 @@ class SafeSynthesizer(ConfigBuilder):
         # Use source paths which point to parent workdir when resuming for generation
         config_file = self._workdir.source_config
 
-        saved_config = SafeSynthesizerParameters.from_json(config_file)
+        with config_file.open() as file:
+            saved_config_input = json.load(file)
+        strict_config_override: bool | None = None
+        if runtime_config is not None and "strict_config" in runtime_config.model_fields_set:
+            strict_config_override = runtime_config.strict_config
+        elif self._strict_config_explicit:
+            strict_config_override = self._strict_config
+        if strict_config_override is not None and isinstance(saved_config_input, dict):
+            saved_config_input["strict_config"] = strict_config_override
+        saved_config = SafeSynthesizerParameters.model_validate(saved_config_input)
         _warn_for_saved_default_drift(saved_config)
         if runtime_config is not None:
             saved_config = saved_config.with_runtime_overrides(runtime_config)
         self._nss_config = saved_config
         self._strict_config = self._nss_config.strict_config
+        self._strict_config_explicit = "strict_config" in self._nss_config.model_fields_set
         self._generation_config = self._nss_config.generation
         self._evaluation_config = self._nss_config.evaluation
         self._emit_telemetry_config = self._nss_config.emit_telemetry
