@@ -37,6 +37,9 @@ def test_evaluation_report_themes_charts_in_report_assets() -> None:
     assert "initializeGradientScoreRing" in javascript
     assert "initializeScoreLabels" in javascript
     assert 'const labels = ["Excellent", "Very Good", "Good", "Moderate", "Poor"]' in javascript
+    assert '[[0, "#ffffff"], [0.25, "#fee2e2"]' in javascript
+    assert "themedTrace.zmin = 0" in javascript
+    assert "themedTrace.zmin = difference ? -1 : 0" not in javascript
     assert 'Fair: "#f97316"' not in javascript
     assert "if (score >= 6)" in javascript
     assert "if (score >= 4)" in javascript

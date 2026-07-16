@@ -10,7 +10,7 @@ const SCORE_TIER_COLORS = {
 const HEATMAP_SCALES = [
     [[0, "#e6f2ff"], [0.25, "#b3d9ff"], [0.5, "#66b3ff"], [0.75, "#3399ff"], [1, "#0066cc"]],
     [[0, "#fff5e6"], [0.25, "#ffe0b3"], [0.5, "#ffcc80"], [0.75, "#ffa64d"], [1, "#e67300"]],
-    [[0, "#0066cc"], [0.25, "#66b3ff"], [0.5, "#f5f5f5"], [0.75, "#ffa64d"], [1, "#e67300"]],
+    [[0, "#ffffff"], [0.25, "#fee2e2"], [0.5, "#fca5a5"], [0.75, "#f87171"], [1, "#dc2626"]],
 ];
 const PLOTLY_ARRAY_TYPES = {
     i1: Int8Array,
@@ -250,12 +250,11 @@ function themeCorrelationPlot(plot) {
         if (trace.type !== "heatmap") {
             return trace;
         }
-        const difference = heatmapIndex === 2;
         const themedTrace = {...trace};
         delete themedTrace.coloraxis;
         delete themedTrace.zmid;
         themedTrace.colorscale = HEATMAP_SCALES[heatmapIndex];
-        themedTrace.zmin = difference ? -1 : 0;
+        themedTrace.zmin = 0;
         themedTrace.zmax = 1;
         themedTrace.showscale = true;
         themedTrace.colorbar = {
@@ -265,9 +264,6 @@ function themeCorrelationPlot(plot) {
             xpad: 2,
             tickfont: {size: 9},
         };
-        if (difference) {
-            themedTrace.zmid = 0;
-        }
         heatmapIndex += 1;
         return themedTrace;
     });
@@ -370,7 +366,7 @@ function themeMembershipPlot(plot) {
 function themeAttributePlot(plot) {
     const columns = new Set();
     (plot.data || []).forEach((trace, index) => {
-        decodePlotlyArray(trace.y).forEach((column) => columns.add(column));
+        decodePlotlyArray(trace.y).filter((column) => column != null).forEach((column) => columns.add(column));
         if (trace.type === "scatter") {
             window.Plotly.restyle(plot, {visible: false}, [index]);
             return;

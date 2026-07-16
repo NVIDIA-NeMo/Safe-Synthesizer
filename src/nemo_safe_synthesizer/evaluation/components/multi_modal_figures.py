@@ -284,11 +284,13 @@ def generate_aia_figure(df: pd.DataFrame) -> go.Figure:
         if grade.value == "Unavailable":
             continue
         filtered_df = df.query(f"Protection == '{grade.value}'")
+        risk_values = filtered_df["Risk"].tolist() or [None]
+        column_values = filtered_df["Column"].tolist() or [None]
         bar = go.Bar(
-            x=filtered_df["Risk"],
-            y=filtered_df["Column"],
+            x=risk_values,
+            y=column_values,
             orientation="h",
-            marker=dict(color=[INFERENCE_ATTACK_VALUES_FOR_GRAPHS[grade.value]] * filtered_df.shape[0]),
+            marker=dict(color=INFERENCE_ATTACK_VALUES_FOR_GRAPHS[grade.value]),
             width=0.3,
             showlegend=True,
             name=grade.value,

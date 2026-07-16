@@ -280,6 +280,24 @@ class TestGenerateAiaFigure:
 
         assert isinstance(fig, go.Figure)
 
+    def test_generate_aia_figure_keeps_empty_grades_in_legend(self):
+        df = pd.DataFrame(
+            {
+                "Column": ["age"],
+                "Risk": [9.0],
+                "Protection": [PrivacyGrade.EXCELLENT.value],
+                "Attack Percentage": [0.0],
+            }
+        )
+
+        fig = generate_aia_figure(df)
+
+        bars = [trace for trace in fig.data if isinstance(trace, go.Bar)]
+        assert [trace.name for trace in bars] == [grade.value for grade in list(PrivacyGrade)[1:]]
+        assert all(list(trace.x) == [None] and list(trace.y) == [None] for trace in bars[:-1])
+        assert list(bars[-1].x) == [9.0]
+        assert list(bars[-1].y) == ["age"]
+
 
 class TestCorrelationHeatmap:
     """Tests for correlation_heatmap function."""
