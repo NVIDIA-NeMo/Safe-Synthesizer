@@ -427,7 +427,7 @@ def generate_combined_correlation_figure(
         titles=[
             "Training Correlations",
             "Synthetic Correlations",
-            "Correlation Difference",
+            "Correlation Difference (Absolute)",
         ],
     )
 

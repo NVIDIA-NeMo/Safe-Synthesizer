@@ -338,6 +338,11 @@ class TestGenerateCombinedCorrelationFigure:
         assert isinstance(fig.data[2], go.Heatmap)
         assert fig.data[2].name == "Correlation Difference (Absolute)"
         assert "Absolute correlation difference" in fig.data[2].text[0][0]
+        assert [annotation.text for annotation in fig.layout.annotations] == [
+            "Training Correlations",
+            "Synthetic Correlations",
+            "Correlation Difference (Absolute)",
+        ]
 
 
 class TestScatterPlot:
