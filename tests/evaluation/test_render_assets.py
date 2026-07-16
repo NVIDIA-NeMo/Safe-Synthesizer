@@ -37,6 +37,9 @@ def test_evaluation_report_themes_charts_in_report_assets() -> None:
     assert "initializeGradientScoreRing" in javascript
     assert "themePlotlyCharts" in javascript
     assert "themeMembershipPlot" in javascript
+    assert "themeDeepStructurePlot" in javascript
+    assert "[TRAINING_COLOR, SYNTHETIC_COLOR]" in javascript
+    assert 'textfont: {color: "#0c0c0c", size: 12}' in javascript
     assert "rebuildDistributionCharts" in javascript
     assert "decodePlotlyArray" in javascript
     assert "makePlotResponsive" in javascript
@@ -51,6 +54,8 @@ def test_evaluation_report_themes_charts_in_report_assets() -> None:
     assert "column.training_field_features.type" in training_columns
     assert "column.synthetic_field_features.type" not in training_columns
     assert "#dps-interpretation" in template
+    assert 'aria-label="Report sections"' in template
+    assert '<div class="sidebar-label">' not in template
     assert "grid-template-columns: minmax(0, 1fr)" in stylesheet
     assert ".show-columns::before" in stylesheet
     assert "inset: calc(var(--header-height) + 56px) 0 0 0" in stylesheet

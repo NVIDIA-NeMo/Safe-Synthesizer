@@ -269,11 +269,27 @@ function themeCorrelationPlot(plot) {
     window.Plotly.react(plot, traces, layout, {displayModeBar: false, responsive: true});
 }
 
+function themeDeepStructurePlot(plot) {
+    [TRAINING_COLOR, SYNTHETIC_COLOR].forEach((color, index) => {
+        if (!plot.data?.[index]) {
+            return;
+        }
+        window.Plotly.restyle(plot, {
+            "marker.color": color,
+            "marker.opacity": 0.7,
+            "marker.size": 5,
+        }, [index]);
+    });
+}
+
 function themeQualityPlot(plot, cardId, card) {
     const figureCount = card.querySelectorAll(".js-plotly-plot").length;
     if (cardId === "correlation-stability") {
         themeCorrelationPlot(plot);
         return;
+    }
+    if (cardId === "structure-stability") {
+        themeDeepStructurePlot(plot);
     }
     const heights = {
         "structure-stability": 300,
@@ -315,7 +331,7 @@ function themeMembershipPlot(plot) {
         marker: {colors: labels.map((label) => SCORE_TIER_COLORS[label])},
         textinfo: "label+percent",
         textposition: "inside",
-        textfont: {color: "white", size: 12},
+        textfont: {color: "#0c0c0c", size: 12},
         hoverinfo: "label+percent+value",
         hole: 0,
         sort: false,

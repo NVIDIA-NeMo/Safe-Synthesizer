@@ -125,16 +125,6 @@ button {
     background: var(--background);
 }
 
-.sidebar-label {
-    margin: 0 16px 14px;
-    color: var(--subtle);
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    line-height: 12px;
-    text-transform: uppercase;
-}
-
 .report-nav {
     display: grid;
 }
@@ -1108,10 +1098,6 @@ tbody tr:hover td {
         padding-top: 0;
         border-right: 0;
         border-bottom: 1px solid var(--border-soft);
-    }
-
-    .sidebar-label {
-        display: none;
     }
 
     .report-nav {
