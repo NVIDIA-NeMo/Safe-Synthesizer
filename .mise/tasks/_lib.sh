@@ -51,6 +51,9 @@ sync_nss_dependencies() {
     cuda|cu129)
       "${sync_uv_bin}" sync --frozen --python "${python}" --extra cu129 --extra engine --group dev
       ;;
+    cu130)
+      "${sync_uv_bin}" sync --frozen --python "${python}" --extra cu130 --extra engine --group dev
+      ;;
     cpu)
       "${sync_uv_bin}" sync --frozen --python "${python}" --extra cpu --extra engine --group dev
       ;;
@@ -61,7 +64,7 @@ sync_nss_dependencies() {
       "${sync_uv_bin}" sync --frozen --python "${python}" --group dev
       ;;
     *)
-      echo "Error: Invalid extra '${extra}'. Use one of: dev engine cpu cuda cu129" >&2
+      echo "Error: Invalid extra '${extra}'. Use one of: dev engine cpu cuda cu129 cu130" >&2
       return 1
       ;;
   esac
