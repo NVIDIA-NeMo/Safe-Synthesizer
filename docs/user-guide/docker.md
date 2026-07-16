@@ -39,7 +39,7 @@ the CUDA dependency variant.
 - Docker with GPU support
 - [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
   installed and configured
-- An NVIDIA driver compatible with the selected image's CUDA libraries
+- An NVIDIA driver compatible with the image's CUDA 12.9 libraries
 - An NVIDIA GPU (A100 or larger recommended)
 
 Verify that Docker can expose the GPU before running the workload:

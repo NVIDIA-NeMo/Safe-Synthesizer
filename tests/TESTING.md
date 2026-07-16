@@ -81,7 +81,7 @@ mise run test-nss-mistral_dp-dow_jones_index-ci
 Details:
 
 - Driven by `tests/e2e/test_dataset_config.py` with YAML configs under `tests/e2e/required_configs/`
-- Each target bootstraps a supported CUDA extra (`cu129` or `cu130`), runs single-process (`-n 0`) with coverage
+- Each target bootstraps `cu129`, runs single-process (`-n 0`) with coverage
 - These are not part of `mise run test:e2e` -- they are standalone CI tasks
 
 ## SafeSynthesizer E2E Matrix

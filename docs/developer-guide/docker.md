@@ -53,7 +53,7 @@ The variant name is intentionally the same as the CUDA package extra.
 | Variant | Extra | Workflow status |
 |---------|-------|-----------------|
 | `cu129` | `cu129` | Enabled |
-| `cu130` | `cu130` | Enabled; allowed to fail while the CUDA 13 rollout is validated |
+| `cu130` | `cu130` | Manifest and GPU smoke-test coverage only; no published container image yet |
 
 Adding a new variant should be mechanical:
 

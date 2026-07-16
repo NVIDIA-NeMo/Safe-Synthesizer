@@ -124,8 +124,9 @@ cuda_package_suffix = "cu13"
 nvidia_package_suffix = ""
 nvidia_index = "nvidia-pypi-public"
 flashinfer_index = { name = "flashinfer-jit-cache-cu130", url = "https://flashinfer.ai/whl/cu130", explicit = true }
-# There is no CUDA-13-specific vLLM wheel route yet, so this resolves from the
-# default index. The cu130 CI lane remains allowed to fail while it is validated.
+# No [sources.cu130] vLLM route yet: unlike cu129, there is no CUDA-13-specific
+# wheel build to pin, so this resolves from the default index. Add one here
+# once that exists.
 dependencies = [
     "vllm==0.26.0; sys_platform == 'linux'",
 ]
