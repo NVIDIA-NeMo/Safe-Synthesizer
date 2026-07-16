@@ -7,27 +7,10 @@
 #USAGE }
 
 set -euo pipefail
+source "${MISE_CONFIG_ROOT}/.mise/tasks/_lib.sh"
 
 mise run venv
 
 echo "~~~~~~"
 echo "attempting to install nss package with primary extra: ${usage_extra?}"
-
-case "${usage_extra?}" in
-  cuda|cu129)
-    uv sync --frozen --extra cu129 --extra engine --group dev
-    ;;
-  cpu)
-    uv sync --frozen --extra cpu --extra engine --group dev
-    ;;
-  engine)
-    uv sync --frozen --extra engine --group dev
-    ;;
-  dev)
-    uv sync --frozen --group dev
-    ;;
-  *)
-    echo "Error: Invalid extra '${usage_extra?}'. Use one of: dev engine cpu cuda cu129" >&2
-    exit 1
-    ;;
-esac
+sync_nss_dependencies "${usage_extra?}"

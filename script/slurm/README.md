@@ -13,12 +13,13 @@ Jobs are submitted via `submit_slurm_jobs.sh`, which launches a containerized `s
 - `submit_slurm_jobs.sh`: Submits Slurm array jobs for each config and dataset. Supports two-stage TRAIN→GEN pipeline.
 - `slurm_nss_matrix.sh`: Picks dataset and config and launches the python entrypoint inside the container. Honors `NSS_PHASE=train|generate|end_to_end`.
 - `slurm_srun.sh`: Wraps `srun` with container image and mounts, mostly just a pass through, primary logic is in `submit_slurm_jobs.sh` and `slurm_nss_matrix.sh`.
+- `.mise/tasks/bootstrap-nss-slurm`: Installs a container-visible Python and project virtualenv under the current user's Lustre directory.
 - `configs/*.yaml`: Major configs we support. Use the config basenames from this directory in commands (for example, `smollm3-nodp`, `smollm3-dp`, etc.). The current set is the cross product of 3 pre-trained models and 2 DP settings (on or off).
 
-Pipeline entrypoints (invoked by Slurm scripts) via uv:
-- `uv run safe-synthesizer run --run-path <path>` (full end-to-end pipeline)
-- `uv run safe-synthesizer run train --run-path <path>` (PII replacement + training only)
-- `uv run safe-synthesizer run generate --run-path <path>` (generation + evaluation only)
+Pipeline entrypoints invoked from the prebuilt project virtualenv:
+- `.venv/bin/safe-synthesizer run --run-path <path>` (full end-to-end pipeline)
+- `.venv/bin/safe-synthesizer run train --run-path <path>` (PII replacement + training only)
+- `.venv/bin/safe-synthesizer run generate --run-path <path>` (generation + evaluation only)
 
 ### Prerequisites
 
@@ -27,59 +28,88 @@ Pipeline entrypoints (invoked by Slurm scripts) via uv:
 - Weights & Biases API Key: W&B logging is enabled by default (`WANDB_MODE=online`). You will need a `WANDB_API_KEY` — request an account [here](https://confluence.nvidia.com/display/AIALGO/Weights+and+Biases+%28WandB%29+Enterprise+Account). Set `WANDB_MODE=disabled` in `env_variables.sh` to skip W&B.
 - Enroot Credentials: Follow https://confluence.nvidia.com/display/HWINFCSSUP/Using+Containers#UsingContainers-SettingupEnrootCredentials. You should add the lines for all 3 of `nvcr.io`, `authn.nvidia.com`, and `gitlab-master.nvidia.com`.
 - Clone Safe-Synthesizer
+
+The instructions below assume that Safe-Synthesizer is cloned directly under
+`LUSTRE_DIR` and that commands after cloning are run from the repository root.
+
 ```bash
 export USER_NAME="$USER" # Or hardcode username in slurm
 export LUSTRE_DIR="/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/${USER_NAME}"
-cd $LUSTRE_DIR
+cd "${LUSTRE_DIR}"
 git clone git@github.com:NVIDIA-NeMo/Safe-Synthesizer.git
 cd Safe-Synthesizer
 ```
-- uv and python install in the slurm cluster
-  - DO NOT FOLLOW the general CONTRIBUTING.md or README.md instructions for installation and setup, unless you understand exactly what's being installed where and how that interacts with the distributed nature of a slurm cluster.
-  - The following setup is strongly recommended, but is not the only way to get things working.
-  - The key issues about working in slurm we need to address
-    - /home/$USER is quite small (10 GB) and not recommended for accessing data (easily filled up by uv cache)
-    - Slurm jobs may run in containers with different $HOME locations (and different users/uids)
-  - Thus we put uv and python in your user directory in /lustre and not in /home/$USER
+
+#### Bootstrap the Slurm Python environment
+
+Do not use the general development bootstrap for Slurm. Slurm containers mount
+`/lustre`, but may not have access to the login node's `/home` directory. The
+Python interpreter, project virtualenv, package caches, and model caches must
+therefore resolve under Lustre.
+
+From the repository root, install the repository-pinned mise tools and run the
+Slurm-specific bootstrap:
+
 ```bash
-export USER_NAME="$USER" # Or hardcode username in slurm
-export LUSTRE_DIR="/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/${USER_NAME}"
-# Install `uv` to your lustre directory
-curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="$LUSTRE_DIR/.uv/bin" sh
-# Set environment variables so `uv` uses $LUSTRE_DIR subdirectories for storage
-export UV_CACHE_DIR="${LUSTRE_DIR}/.cache/uv"
-export UV_PYTHON_INSTALL_DIR="${LUSTRE_DIR}/.local/share/uv/python"
-export UV_PYTHON_BIN_DIR="${LUSTRE_DIR}/.local/bin"
-export UV_TOOL_DIR="${LUSTRE_DIR}/.local/share/uv/tools"
-# With the above env vars, the usual mise task should work.
-# Note this may be quite slow the first time due to very slow network
-# connectivity on slurm to download from pypi, but subsequent executions
-# (such as startup for your jobs) should be much faster since uv will
-# pull cached wheels from UV_CACHE_DIR.
-# (Be sure to run from the root of the Safe-Synthesizer repo)
-mise run bootstrap-nss cu129
+make install-mise
+export PATH="${HOME}/.local/bin:${PATH}"
+export MISE_IGNORED_CONFIG_PATHS="${HOME}/.config/mise/config.toml"
+mise install --locked
+MISE_LOCKED=1 mise run bootstrap-nss-slurm cu129
 ```
 
-`cu129` and `cuda` select the same CUDA 12.9 dependency profile.
+Existing Slurm checkouts should run this bootstrap once after pulling the
+change. Scheduled launch environments, including GitLab jobs, must also add
+`${HOME}/.local/bin` to `PATH` before invoking `submit_slurm_jobs.sh`.
+
+The task requires the exported `LUSTRE_DIR`, derives the Slurm username from
+`id -un`, uses mise's pinned `uv`, installs the pinned Python under that Lustre
+directory, and creates `.venv` with that exact interpreter. If an existing
+`.venv` points outside Lustre, the task recreates it. Existing Python and uv
+installations under `/home` do not need to be removed.
+
+Override the inferred user or select a different Lustre project directory when
+the cluster account layout requires it:
+
+```bash
+NSS_SLURM_USER="your_user" MISE_LOCKED=1 mise run bootstrap-nss-slurm cu129
+LUSTRE_DIR="/custom/lustre/path" MISE_LOCKED=1 mise run bootstrap-nss-slurm cu129
+```
+
+Verify the postcondition before submitting jobs:
+
+```bash
+readlink -f .venv/bin/python
+.venv/bin/safe-synthesizer --help >/dev/null
+```
+
+The Python path must resolve beneath the canonical path reported by
+`readlink -f "${LUSTRE_DIR}"`. `cu129` and `cuda` select the same CUDA 12.9
+dependency profile.
+
+Repo mode, the default when `--nss-version` is omitted, does not require a
+separate uv installation under Lustre. PyPI mode uses uv inside the container
+and still requires `${LUSTRE_DIR}/.uv/bin/env`.
+
+For PyPI mode only, install the same uv version that mise has pinned:
+
+```bash
+export USER_NAME="${USER_NAME:-$(id -un)}"
+export LUSTRE_DIR="/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/${USER_NAME}"
+uv_version="$(mise exec -- uv --version | awk '{print $2}')"
+curl -LsSf "https://astral.sh/uv/${uv_version}/install.sh" \
+  | env UV_INSTALL_DIR="${LUSTRE_DIR}/.uv/bin" sh
+```
 
 #### Nice to have
 
 - Passwordless login See https://confluence.nvidia.com/display/HWINFCSSUP/Setting+Up+Passwordless+SSH+Key+Authentication?src=contextnavpagetreemode
-- Env vars in .bashrc
-  - Add `export VARIABLE=VALUE` to the end of `~/.bashrc` for commonly used environment variables, like `USER_NAME` and `LUSTRE_DIR`.
-  - Recommended snippet to have in `~/.bashrc` so uv and python work on login node and slurm jobs:
+- Env vars in `.bashrc`
+  - This is optional for bootstrap, but avoids exporting the submission user in every shell.
+
 ```bash
-export USER_NAME=<your slurm user name>
+export USER_NAME="<your slurm user name>"
 export LUSTRE_DIR="/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/${USER_NAME}"
-
-# (May be added automatically by uv)
-. "${LUSTRE_DIR}/.uv/bin/env"
-
-export UV_CACHE_DIR="${LUSTRE_DIR}/.cache/uv"
-export UV_PYTHON_INSTALL_DIR="${LUSTRE_DIR}/.local/share/uv/python"
-export UV_PYTHON_BIN_DIR="${LUSTRE_DIR}/.local/bin"
-export UV_TOOL_DIR="${LUSTRE_DIR}/.local/share/uv/tools"
-export HF_HOME="${LUSTRE_DIR}/.cache/huggingface"
 ```
 
 
@@ -255,6 +285,7 @@ W&B is enabled by default with `WANDB_MODE=online` in `env_variables.sh`. Make s
 - Missing token file/key: create `${LUSTRE_DIR}/.api_tokens.sh` with `NSS_INFERENCE_KEY` and `chmod 600`.
 - Missing config files: verify `CONFIGS` in `env_variables.sh` and files in `CONFIG_DIR`.
 - Permission errors: confirm your `/lustre/.../${USER_NAME}` paths and file perms.
+- Virtualenv Python under `/home`: run `MISE_LOCKED=1 mise run bootstrap-nss-slurm cu129`; the task recreates `.venv` with a Lustre-managed interpreter.
 
 #### cpu bind errors
 
