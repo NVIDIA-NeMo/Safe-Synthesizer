@@ -10,7 +10,7 @@
 
 # Single source of truth for the pinned mise version. `tools/install-mise.sh`
 # reads `min_version` from this file; an older mise on PATH fails fast here too.
-min_version = '2026.5.2'
+min_version = '2026.7.5'
 
 [tools]
 # Tools for working with JSON, Git, and other system utilities.

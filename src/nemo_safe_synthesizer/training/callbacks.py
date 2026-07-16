@@ -293,8 +293,9 @@ class ProgressBarCallback(TrainerCallback):
 class SafeSynthesizerWorkerCallback(TrainerCallback):
     """Trainer callback that emits structured progress logs at a fixed interval.
 
-    Logs are written via the ``logger.runtime`` channel as rendered tables
-    containing epoch, step, loss, and progress fraction.
+    Logs are written via the ``logger.runtime`` channel as compact messages
+    containing epoch, step, loss, and progress fraction. The corresponding raw
+    values remain available as structured context for JSON logs.
 
     Args:
         log_interval: Minimum seconds between successive log emissions.
@@ -388,11 +389,16 @@ class SafeSynthesizerWorkerCallback(TrainerCallback):
                 log_to_user["step"] = user_step
                 log_to_user[which_loss] = round(logs[which_loss], 4)
 
+                epoch = f"{state.epoch:.2f}" if state.epoch is not None else "n/a"
+                loss_label = which_loss.replace("_", " ").title()
+                message = (
+                    f"Training Progress | Progress: {complete_frac:.2%} | Epoch: {epoch} | "
+                    f"Step: {user_step} | {loss_label}: {logs[which_loss]:.2f}"
+                )
                 logger.runtime.info(
-                    "",
+                    message,
                     extra={
                         "ctx": {
-                            "render_table": True,
                             "tabular_data": log_to_user,
                             "title": "Training Progress",
                         }

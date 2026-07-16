@@ -24,7 +24,8 @@ __pycache__/
 .venv/
 
 # Build artifacts
-dist/
+dist/*
+!dist/*.whl
 htmlcov/
 coverage.json
 coverage.xml
