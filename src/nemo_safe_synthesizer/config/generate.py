@@ -114,6 +114,26 @@ class ValidationParameters(Parameters, BaseModel):
         ),
     ] = False
 
+    enforce_numeric_range: Annotated[
+        bool,
+        Field(
+            title="enforce_numeric_range",
+            description=(
+                "Whether generated floating-point values must fall within the "
+                "minimum/maximum observed in training. The schema records each numeric "
+                "column's exact observed range, but no structured-generation backend can "
+                "constrain a floating-point magnitude (integers and enums are enforced by "
+                "the grammar; floats are not), so these bounds act only as a post-generation "
+                "validation gate. On wide float tables the per-field rejections compound and "
+                "can invalidate nearly every otherwise well-formed record (rejected as "
+                "``Field value must be less/greater than ...``). Set to ``False`` to drop the "
+                "float range check so out-of-range floating-point values are accepted; integer "
+                "and enum constraints remain enforced. Leave ``True`` (the default) to preserve "
+                "strict range validation."
+            ),
+        ),
+    ] = True
+
 
 class StructuredGenerationParameters(Parameters, BaseModel):
     """Configuration for vLLM structured generation.
