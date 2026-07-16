@@ -146,6 +146,9 @@ jobs:
           checkout: "false"
           bootstrap-tools: "true"
 
+      - name: Verify installation helper dry runs
+        run: mise run test:installer
+
       - name: Build wheel
         run: mise run build-wheel
 
