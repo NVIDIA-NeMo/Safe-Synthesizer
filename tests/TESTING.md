@@ -81,7 +81,7 @@ mise run test-nss-mistral_dp-dow_jones_index-ci
 Details:
 
 - Driven by `tests/e2e/test_dataset_config.py` with YAML configs under `tests/e2e/required_configs/`
-- Each target bootstraps a supported CUDA extra (`cu129` or `cu130`), runs single-process (`-n 0`) with coverage
+- Each target bootstraps `cu129`, runs single-process (`-n 0`) with coverage
 - These are not part of `mise run test:e2e` -- they are standalone CI tasks
 
 ## SafeSynthesizer E2E Matrix
@@ -89,6 +89,8 @@ Details:
 `mise run test:e2e:default` and `mise run test:e2e:dp` run `tests/e2e/test_safe_synthesizer.py` against the same three model families used by the 6-config coverage strategy: Mistral 7B, SmolLM3 3B, and TinyLlama 1.1B. The default target covers the no-DP path and the DP target covers the same model set with differential privacy enabled.
 
 These tests are GPU-only and intentionally slow. Each model case has a 30-minute timeout, so budget up to 90 minutes for either `mise run test:e2e:default` or `mise run test:e2e:dp`, and up to 3 hours for the full `mise run test:e2e` target in cold-cache environments. Warm Hugging Face caches are expected to finish sooner.
+
+Each e2e target bootstraps `$NSS_GPU_CUDA_EXTRA` (default `cu129`) before running; set it to `cu130` to run against the CUDA 13 stack instead.
 
 ## Pytest Markers
 
