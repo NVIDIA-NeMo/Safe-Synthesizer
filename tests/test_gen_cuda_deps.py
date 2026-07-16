@@ -14,8 +14,8 @@ from packaging.requirements import InvalidRequirement
 pytestmark = pytest.mark.unit
 
 
-def _load_generator() -> ModuleType:
-    path = Path(__file__).parents[1] / "tools" / "gen_cuda_deps.py"
+def _load_generator(root_path: Path) -> ModuleType:
+    path = root_path / "tools" / "gen_cuda_deps.py"
     spec = importlib.util.spec_from_file_location("gen_cuda_deps", path)
     assert spec is not None
     assert spec.loader is not None
@@ -25,7 +25,9 @@ def _load_generator() -> ModuleType:
     return module
 
 
-GENERATOR = _load_generator()
+@pytest.fixture(scope="module")
+def generator(pytestconfig: pytest.Config) -> ModuleType:
+    return _load_generator(pytestconfig.rootpath)
 
 
 CUDA_DEPS = """
@@ -123,11 +125,11 @@ explicit = true
 """
 
 
-def test_build_cuda_pyproject_fragment_renders_cuda_variant_and_sources(tmp_path: Path) -> None:
+def test_build_cuda_pyproject_fragment_renders_cuda_variant_and_sources(tmp_path: Path, generator: ModuleType) -> None:
     config_path = tmp_path / "cuda_deps.toml"
     config_path.write_text(CUDA_DEPS, encoding="utf-8")
 
-    generated = GENERATOR.build_cuda_pyproject_fragment(GENERATOR.load_cuda_deps_config(config_path))
+    generated = generator.build_cuda_pyproject_fragment(generator.load_cuda_deps_config(config_path))
     parsed = tomllib.loads(generated.text)
 
     assert parsed["project"]["optional-dependencies"]["cu132"] == [
@@ -168,12 +170,12 @@ def test_build_cuda_pyproject_fragment_renders_cuda_variant_and_sources(tmp_path
     ]
 
 
-def test_apply_cuda_fragment_to_pyproject_splices_generated_sections(tmp_path: Path) -> None:
+def test_apply_cuda_fragment_to_pyproject_splices_generated_sections(tmp_path: Path, generator: ModuleType) -> None:
     config_path = tmp_path / "cuda_deps.toml"
     config_path.write_text(CUDA_DEPS, encoding="utf-8")
-    generated = GENERATOR.build_cuda_pyproject_fragment(GENERATOR.load_cuda_deps_config(config_path))
+    generated = generator.build_cuda_pyproject_fragment(generator.load_cuda_deps_config(config_path))
 
-    updated = GENERATOR.apply_cuda_fragment_to_pyproject(PYPROJECT, generated)
+    updated = generator.apply_cuda_fragment_to_pyproject(PYPROJECT, generated)
     parsed = tomllib.loads(updated)
 
     assert "# >>> BEGIN GENERATED CUDA RUNTIME EXTRAS - DO NOT EDIT <<<" in updated
@@ -199,100 +201,54 @@ def test_apply_cuda_fragment_to_pyproject_splices_generated_sections(tmp_path: P
     ]
 
 
-def test_apply_cuda_fragment_to_pyproject_is_idempotent(tmp_path: Path) -> None:
+def test_apply_cuda_fragment_to_pyproject_is_idempotent(tmp_path: Path, generator: ModuleType) -> None:
     config_path = tmp_path / "cuda_deps.toml"
     config_path.write_text(CUDA_DEPS, encoding="utf-8")
-    generated = GENERATOR.build_cuda_pyproject_fragment(GENERATOR.load_cuda_deps_config(config_path))
+    generated = generator.build_cuda_pyproject_fragment(generator.load_cuda_deps_config(config_path))
 
-    updated = GENERATOR.apply_cuda_fragment_to_pyproject(PYPROJECT, generated)
-    assert GENERATOR.apply_cuda_fragment_to_pyproject(updated, generated) == updated
-
-
-def test_run_generation_command_check_reports_drift(tmp_path: Path) -> None:
-    config_path = tmp_path / "cuda_deps.toml"
-    output_path = tmp_path / "generated.toml"
-    config_path.write_text(CUDA_DEPS, encoding="utf-8")
-    output_path.write_text("# stale\n", encoding="utf-8")
-
-    result = GENERATOR.run_generation_command(config_path, output_path, check=True)
-
-    assert result.status == GENERATOR.GenStatus.changed
-    assert "differ" in result.message
+    updated = generator.apply_cuda_fragment_to_pyproject(PYPROJECT, generated)
+    assert generator.apply_cuda_fragment_to_pyproject(updated, generated) == updated
 
 
-def test_run_generation_command_check_reports_ok(tmp_path: Path) -> None:
-    config_path = tmp_path / "cuda_deps.toml"
-    output_path = tmp_path / "generated.toml"
-    config_path.write_text(CUDA_DEPS, encoding="utf-8")
-    generated = GENERATOR.build_cuda_pyproject_fragment(GENERATOR.load_cuda_deps_config(config_path))
-    output_path.write_text(generated.text, encoding="utf-8")
-
-    result = GENERATOR.run_generation_command(config_path, output_path, check=True)
-
-    assert result.status == GENERATOR.GenStatus.ok
-    assert "up to date" in result.message
-
-
-def test_run_generation_command_check_reports_missing_output(tmp_path: Path) -> None:
-    config_path = tmp_path / "cuda_deps.toml"
-    output_path = tmp_path / "generated.toml"
-    config_path.write_text(CUDA_DEPS, encoding="utf-8")
-
-    result = GENERATOR.run_generation_command(config_path, output_path, check=True)
-
-    assert result.status == GENERATOR.GenStatus.changed
-    assert "does not exist" in result.message
-
-
-def test_run_generation_command_check_requires_output_or_pyproject(tmp_path: Path) -> None:
-    config_path = tmp_path / "cuda_deps.toml"
-    config_path.write_text(CUDA_DEPS, encoding="utf-8")
-
-    result = GENERATOR.run_generation_command(config_path, None, check=True)
-
-    assert result.status == GENERATOR.GenStatus.error
-    assert "requires --output" in result.message
-
-
-def test_run_generation_command_pyproject_check_reports_drift(tmp_path: Path) -> None:
+def test_run_generation_command_pyproject_check_reports_drift(tmp_path: Path, generator: ModuleType) -> None:
     config_path = tmp_path / "cuda_deps.toml"
     pyproject_path = tmp_path / "pyproject.toml"
     config_path.write_text(CUDA_DEPS, encoding="utf-8")
     pyproject_path.write_text(PYPROJECT, encoding="utf-8")
 
-    result = GENERATOR.run_generation_command(config_path, None, check=True, pyproject_path=pyproject_path)
+    result = generator.run_generation_command(config_path, pyproject_path, check=True)
 
-    assert result.status == GENERATOR.GenStatus.changed
+    assert result.status == generator.GenStatus.changed
     assert "pyproject.toml" in result.message
 
 
-def test_run_generation_command_pyproject_check_reports_ok(tmp_path: Path) -> None:
+def test_run_generation_command_pyproject_check_reports_ok(tmp_path: Path, generator: ModuleType) -> None:
     config_path = tmp_path / "cuda_deps.toml"
     pyproject_path = tmp_path / "pyproject.toml"
     config_path.write_text(CUDA_DEPS, encoding="utf-8")
-    generated = GENERATOR.build_cuda_pyproject_fragment(GENERATOR.load_cuda_deps_config(config_path))
-    pyproject_path.write_text(GENERATOR.apply_cuda_fragment_to_pyproject(PYPROJECT, generated), encoding="utf-8")
+    generated = generator.build_cuda_pyproject_fragment(generator.load_cuda_deps_config(config_path))
+    pyproject_path.write_text(generator.apply_cuda_fragment_to_pyproject(PYPROJECT, generated), encoding="utf-8")
 
-    result = GENERATOR.run_generation_command(config_path, None, check=True, pyproject_path=pyproject_path)
+    result = generator.run_generation_command(config_path, pyproject_path, check=True)
 
-    assert result.status == GENERATOR.GenStatus.ok
+    assert result.status == generator.GenStatus.ok
     assert "up to date" in result.message
 
 
-def test_click_cli_writes_parseable_output_and_checks_drift(tmp_path: Path) -> None:
+def test_click_cli_updates_pyproject_and_checks_drift(tmp_path: Path, generator: ModuleType) -> None:
     config_path = tmp_path / "cuda_deps.toml"
-    output_path = tmp_path / "generated.toml"
+    pyproject_path = tmp_path / "pyproject.toml"
     config_path.write_text(CUDA_DEPS, encoding="utf-8")
+    pyproject_path.write_text(PYPROJECT, encoding="utf-8")
 
-    stale_result = CliRunner().invoke(GENERATOR._cli, [str(config_path), "--output", str(output_path), "--check"])
+    stale_result = CliRunner().invoke(generator._cli, [str(config_path), "--pyproject", str(pyproject_path), "--check"])
 
     assert stale_result.exit_code == 1
-    assert not output_path.exists()
 
-    result = CliRunner().invoke(GENERATOR._cli, [str(config_path), "--output", str(output_path)])
+    result = CliRunner().invoke(generator._cli, [str(config_path), "--pyproject", str(pyproject_path)])
 
     assert result.exit_code == 0
-    parsed = tomllib.loads(output_path.read_text(encoding="utf-8"))
+    parsed = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
     assert parsed["project"]["optional-dependencies"]["cu132"] == [
         "faker",
         "accelerate",
@@ -307,38 +263,58 @@ def test_click_cli_writes_parseable_output_and_checks_drift(tmp_path: Path) -> N
         {"index": "pytorch-cu129", "extra": "cu129"},
     ]
 
-    current_result = CliRunner().invoke(GENERATOR._cli, [str(config_path), "--output", str(output_path), "--check"])
+    current_result = CliRunner().invoke(
+        generator._cli, [str(config_path), "--pyproject", str(pyproject_path), "--check"]
+    )
 
     assert current_result.exit_code == 0
 
 
-def test_load_cuda_deps_config_rejects_missing_managed_extra(tmp_path: Path) -> None:
+def test_load_cuda_deps_config_rejects_missing_managed_extra(tmp_path: Path, generator: ModuleType) -> None:
     config_path = tmp_path / "cuda_deps.toml"
     config_path.write_text(CUDA_DEPS.replace('"cpu", "gpu-old", "cu129", "cu132"', '"cpu"'), encoding="utf-8")
 
-    with pytest.raises(GENERATOR.ValidationError, match="managed_extras"):
-        GENERATOR.load_cuda_deps_config(config_path)
+    with pytest.raises(generator.ValidationError, match="managed_extras"):
+        generator.load_cuda_deps_config(config_path)
 
 
-def test_load_cuda_deps_config_rejects_invalid_structured_specifier(tmp_path: Path) -> None:
+def test_load_cuda_deps_config_rejects_mismatched_static_source_extra(tmp_path: Path, generator: ModuleType) -> None:
+    config_path = tmp_path / "cuda_deps.toml"
+    config_path.write_text(CUDA_DEPS.replace('extra = "cpu"', 'extra = "cu129"', 1), encoding="utf-8")
+
+    with pytest.raises(generator.ValidationError, match="does not match"):
+        generator.load_cuda_deps_config(config_path)
+
+
+def test_static_source_group_sets_its_extra(tmp_path: Path, generator: ModuleType) -> None:
+    config_path = tmp_path / "cuda_deps.toml"
+    config_path.write_text(CUDA_DEPS.replace(', extra = "cpu"', ""), encoding="utf-8")
+
+    generated = generator.build_cuda_pyproject_fragment(generator.load_cuda_deps_config(config_path))
+    parsed = tomllib.loads(generated.text)
+
+    assert parsed["tool"]["uv"]["sources"]["torch"][0]["extra"] == "cpu"
+
+
+def test_load_cuda_deps_config_rejects_invalid_structured_specifier(tmp_path: Path, generator: ModuleType) -> None:
     config_path = tmp_path / "cuda_deps.toml"
     config_path.write_text(
         CUDA_DEPS.replace('{ name = "accelerate" }', '{ name = "accelerate", specifier = "=>1" }'), encoding="utf-8"
     )
 
-    with pytest.raises(GENERATOR.ValidationError, match="Invalid specifier"):
-        GENERATOR.load_cuda_deps_config(config_path)
+    with pytest.raises(generator.ValidationError, match="Invalid specifier"):
+        generator.load_cuda_deps_config(config_path)
 
 
-def test_build_cuda_pyproject_fragment_rejects_invalid_raw_requirement(tmp_path: Path) -> None:
+def test_build_cuda_pyproject_fragment_rejects_invalid_raw_requirement(tmp_path: Path, generator: ModuleType) -> None:
     config_path = tmp_path / "cuda_deps.toml"
     config_path.write_text(CUDA_DEPS.replace('"faker"', '"not @@@ invalid"'), encoding="utf-8")
 
     with pytest.raises(InvalidRequirement):
-        GENERATOR.build_cuda_pyproject_fragment(GENERATOR.load_cuda_deps_config(config_path))
+        generator.build_cuda_pyproject_fragment(generator.load_cuda_deps_config(config_path))
 
 
-def test_collect_uv_indexes_rejects_conflicting_duplicate_index(tmp_path: Path) -> None:
+def test_collect_uv_indexes_rejects_conflicting_duplicate_index(tmp_path: Path, generator: ModuleType) -> None:
     config_path = tmp_path / "cuda_deps.toml"
     config_path.write_text(
         CUDA_DEPS
@@ -352,4 +328,12 @@ explicit = true
     )
 
     with pytest.raises(ValueError, match="Conflicting uv index definition"):
-        GENERATOR.build_cuda_pyproject_fragment(GENERATOR.load_cuda_deps_config(config_path))
+        generator.build_cuda_pyproject_fragment(generator.load_cuda_deps_config(config_path))
+
+
+def test_build_cuda_pyproject_fragment_rejects_unknown_source_index(tmp_path: Path, generator: ModuleType) -> None:
+    config_path = tmp_path / "cuda_deps.toml"
+    config_path.write_text(CUDA_DEPS.replace('index = "pytorch-cpu"', 'index = "missing-index"', 1), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="unknown indexes"):
+        generator.build_cuda_pyproject_fragment(generator.load_cuda_deps_config(config_path))

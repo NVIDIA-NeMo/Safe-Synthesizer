@@ -97,6 +97,8 @@ name = "flashinfer-jit-cache"
 url = "https://flashinfer.ai/whl/{extra}"
 explicit = true
 
+# Static source entries are grouped by the extra they activate. The generator
+# supplies that extra and rejects a conflicting explicit value.
 [sources.cu129]
 vllm = [
   { index = "vllm-v0-24-0-cu129", marker = "sys_platform == 'linux'", extra = "cu129" },

@@ -11,53 +11,16 @@
 #     "tomlkit",
 # ]
 # ///
-"""Generate CUDA-related pyproject.toml sections from cuda_deps.toml.
+"""Generate CPU and CUDA dependency metadata in pyproject.toml."""
 
-Developer orientation:
-
-This script has three intentionally readable layers.
-
-1. Command entrypoint and presentation
-   Click owns argument parsing, logging setup, stdout/stderr behavior, and exit
-   codes. It should delegate quickly to `run_generation_command()` and avoid
-   knowing TOML structure.
-
-2. High-level API
-   The stable spine is:
-   `load_cuda_deps_config()` ->
-   `build_cuda_pyproject_fragment()` ->
-   `apply_cuda_fragment_to_pyproject()` / command output handling.
-   These functions describe what the tool does in domain language and are the
-   first place future agents should read.
-
-3. Mid-level processing
-   The lower layer collects uv sources/indexes, builds the generated TOML
-   fragment, and splices that fragment into an existing pyproject. Keep
-   pyproject mutation and generated-marker mechanics separate from dependency
-   rendering.
-
-The CUDA variant object model also has a deliberate split:
-
-* `CudaVariantContext` owns one variant's template context and dependency stack.
-* `CudaVariantDependencyRenderer` renders PEP 508 dependency strings and package
-  names.
-* `CudaVariantUvRouter` materializes `[tool.uv.sources]` and `[[tool.uv.index]]`
-  routing for that variant.
-
-When changing this file, prefer preserving those boundaries over adding a single
-shortcut method to whichever class is nearby.
-"""
-
-import sys
 import tomllib
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Literal, NamedTuple, Self
+from typing import NamedTuple, Self
 
 import click
-import structlog
 import tomlkit
 from packaging.markers import Marker
 from packaging.requirements import Requirement
@@ -68,9 +31,6 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 from tomlkit import TOMLDocument
 from tomlkit.container import OutOfOrderTableProxy
 from tomlkit.items import AoT, Array, Table
-
-logger = structlog.get_logger(__name__)
-
 
 # ---------------------------------------------------------------------------
 # Generated pyproject marker model
@@ -262,20 +222,6 @@ DependencyEntry = str | DependencySpec
 
 
 @dataclass(frozen=True)
-class DependencyStack:
-    """Ordered dependency layers that render as one stream."""
-
-    groups: tuple[Sequence[DependencyEntry], ...]
-
-    @classmethod
-    def of(cls, *groups: Sequence[DependencyEntry]) -> Self:
-        return cls(groups=groups)
-
-    def __iter__(self) -> Iterator[DependencyEntry]:
-        for group in self.groups:
-            yield from group
-
-
 class NvidiaCudaLibrarySpec(StrictModel):
     """NVIDIA CUDA package source routing metadata."""
 
@@ -351,7 +297,7 @@ class CudaDepsConfig(StrictModel):
     cuda_indexes: CudaIndexTemplates = Field(description="CUDA index templates.")
     sources: dict[str, dict[str, list[SourceSpec]]] = Field(
         default_factory=dict,
-        description="Static source entries keyed by extra name, then package name.",
+        description="Static source entries keyed by owning extra, then package name.",
     )
     variants: dict[str, CudaVariant] = Field(description="CUDA variants keyed by extra name.")
 
@@ -360,7 +306,19 @@ class CudaDepsConfig(StrictModel):
         missing = [extra for extra in ["cpu", *self.variants] if extra not in self.managed_extras]
         if missing:
             raise ValueError(f"managed_extras is missing generated extras: {', '.join(missing)}")
+        self._validate_static_source_extras()
         return self
+
+    def _validate_static_source_extras(self) -> None:
+        known_extras = {"cpu", *self.variants}
+        unknown_extras = set(self.sources) - known_extras
+        if unknown_extras:
+            raise ValueError(f"sources has unknown extras: {', '.join(sorted(unknown_extras))}")
+        for extra, package_sources in self.sources.items():
+            for specs in package_sources.values():
+                for spec in specs:
+                    if spec.extra is not None and spec.extra != extra:
+                        raise ValueError(f"source extra {spec.extra!r} does not match [sources.{extra}]")
 
 
 # ---------------------------------------------------------------------------
@@ -378,11 +336,6 @@ class UvSourcesAccumulator:
         bucket = self._sources.setdefault(package, [])
         if spec not in bucket:
             bucket.append(spec)
-
-    def merge(self, package_sources: dict[str, list[SourceSpec]]) -> None:
-        for package, specs in package_sources.items():
-            for spec in specs:
-                self.add(package, spec)
 
     def as_dict(self) -> dict[str, list[SourceSpec]]:
         return self._sources
@@ -447,8 +400,8 @@ class CudaVariantContext(TemplateRenderer):
                 "torch_local_version": variant.torch_local_version or extra,
             }
         )
-        self.dependencies = _cuda_dependency_stack(config, variant)
-        self.dependency_renderer = CudaVariantDependencyRenderer(self)
+        self.dependencies = _cuda_dependencies(config, variant)
+        self.requirements = RequirementRenderer(self.context, extra=extra)
         self.uv_router = CudaVariantUvRouter(self)
 
     @property
@@ -457,17 +410,6 @@ class CudaVariantContext(TemplateRenderer):
         if suffix is None:
             suffix = self.variant.cuda_package_suffix
         return _nvidia_package_suffix(suffix)
-
-
-class CudaVariantDependencyRenderer:
-    """Render dependency strings and package names for one CUDA variant."""
-
-    def __init__(self, context: CudaVariantContext) -> None:
-        self.context = context
-        self.requirements = RequirementRenderer(context.context, extra=context.extra)
-
-    def render_dependencies(self, dependencies: Iterable[DependencyEntry]) -> list[str]:
-        return self.requirements.render_many(dependencies)
 
 
 class CudaVariantUvRouter:
@@ -483,7 +425,7 @@ class CudaVariantUvRouter:
     ) -> None:
         for dependency in dependencies:
             match dependency:
-                case DependencySpec() as spec if self.context.dependency_renderer.requirements.applies(spec):
+                case DependencySpec() as spec if self.context.requirements.applies(spec):
                     self.add_dependency_source(sources, spec)
 
     def add_dependency_source(self, sources: UvSourcesAccumulator, dependency: DependencySpec) -> None:
@@ -565,15 +507,9 @@ class CudaVariantUvRouter:
         )
 
 
-@dataclass(frozen=True)
-class CudaVariantContexts:
-    """Lazy iterable of CUDA variant materialization contexts."""
-
-    config: CudaDepsConfig
-
-    def __iter__(self) -> Iterator[CudaVariantContext]:
-        for extra, variant in self.config.variants.items():
-            yield CudaVariantContext(self.config, extra, variant)
+def _cuda_variant_contexts(config: CudaDepsConfig) -> Iterator[CudaVariantContext]:
+    for extra, variant in config.variants.items():
+        yield CudaVariantContext(config, extra, variant)
 
 
 # ---------------------------------------------------------------------------
@@ -589,18 +525,14 @@ class CudaPyprojectFragment(BaseModel):
     managed_extra_names: list[str] = Field(
         description="Optional dependency extras owned by the generator in pyproject.toml."
     )
-    indexes: list[str] = Field(description="Generated uv index names.")
-    source_packages: list[str] = Field(description="Generated uv source package names.")
 
 
-class CudaDepsCommandResult(BaseModel):
-    """Structured result returned by the command workflow."""
+@dataclass(frozen=True)
+class GenerationResult:
+    """Outcome of updating or checking generated metadata."""
 
-    status: GenStatus = Field(description="Command status.")
-    message: str = Field(description="Human-readable result.")
-    config: str = Field(description="Input cuda_deps.toml path.")
-    output: str | None = Field(default=None, description="Output path, when provided.")
-    generated: CudaPyprojectFragment | None = Field(default=None, description="Generated content summary.")
+    status: GenStatus
+    message: str
 
 
 # ---------------------------------------------------------------------------
@@ -619,39 +551,20 @@ def build_cuda_pyproject_fragment(config: CudaDepsConfig) -> CudaPyprojectFragme
     rendered_extra_names = ["cpu", *config.variants]
     sources = _collect_uv_sources(config)
     indexes = _collect_uv_indexes(config)
+    _validate_source_indexes(sources, indexes)
     doc = _build_cuda_fragment_document(config, sources, indexes)
     text = tomlkit.dumps(doc)
     return CudaPyprojectFragment(
         text=text,
         rendered_extra_names=rendered_extra_names,
         managed_extra_names=config.managed_extras,
-        indexes=[index.name for index in indexes],
-        source_packages=list(sources),
     )
 
 
-def run_generation_command(
-    config_path: Path,
-    output_path: Path | None,
-    check: bool,
-    pyproject_path: Path | None = None,
-) -> CudaDepsCommandResult:
-    """Load config, build the fragment, and route the requested output mode."""
+def run_generation_command(config_path: Path, pyproject_path: Path, check: bool) -> GenerationResult:
+    """Load config and update or check generated pyproject.toml metadata."""
     generated = build_cuda_pyproject_fragment(load_cuda_deps_config(config_path))
-    if pyproject_path is not None:
-        return _update_pyproject(config_path, pyproject_path, check, generated)
-    if check:
-        return _check_generated(config_path, output_path, generated)
-    if output_path is None:
-        return _stdout_result(config_path, generated)
-    output_path.write_text(generated.text, encoding="utf-8")
-    return CudaDepsCommandResult(
-        status=GenStatus.ok,
-        message=f"Generated CUDA dependency sections at {output_path}",
-        config=str(config_path),
-        output=str(output_path),
-        generated=generated,
-    )
+    return _update_pyproject(pyproject_path, check, generated)
 
 
 def apply_cuda_fragment_to_pyproject(pyproject_text: str, generated: CudaPyprojectFragment) -> str:
@@ -675,7 +588,7 @@ def _build_cuda_fragment_document(
 ) -> TOMLDocument:
     doc = tomlkit.document()
     doc.add(tomlkit.comment("Generated by tools/gen_cuda_deps.py from cuda_deps.toml."))
-    doc.add(tomlkit.comment("Copy these sections into pyproject.toml or write them with --output."))
+    doc.add(tomlkit.comment("The complete tool.uv.sources and tool.uv.index sections are generated here."))
     doc.add(tomlkit.nl())
     doc.add("project", _build_project_table(config))
     doc.add("tool", _build_tool_table(config, sources, indexes))
@@ -686,10 +599,10 @@ def _build_project_table(config: CudaDepsConfig) -> Table:
     project = tomlkit.table()
     optional = tomlkit.table()
     optional.add("cpu", _string_array(_render_cpu_extra_dependencies(config)))
-    for context in CudaVariantContexts(config):
+    for context in _cuda_variant_contexts(config):
         optional.add(
             context.extra,
-            _string_array(context.dependency_renderer.render_dependencies(context.dependencies)),
+            _string_array(context.requirements.render_many(context.dependencies)),
         )
     project.add("optional-dependencies", optional)
     return project
@@ -825,19 +738,28 @@ def _required_table(
 
 
 def _render_cpu_extra_dependencies(config: CudaDepsConfig) -> list[str]:
-    dependencies = DependencyStack.of(config.base_runtime_deps, config.torch_runtime_deps, config.cpu.dependencies)
+    dependencies = (*config.base_runtime_deps, *config.torch_runtime_deps, *config.cpu.dependencies)
     return RequirementRenderer({}).render_many(dependencies)
 
 
 def _collect_uv_sources(config: CudaDepsConfig) -> dict[str, list[SourceSpec]]:
     sources = UvSourcesAccumulator()
-    for package_sources in config.sources.values():
-        sources.merge(package_sources)
+    _add_static_sources(sources, config.sources)
     _add_cpu_dependency_sources(sources, config.cpu.dependencies)
-    for context in CudaVariantContexts(config):
+    for context in _cuda_variant_contexts(config):
         context.uv_router.add_dependency_sources(sources, context.dependencies)
         context.uv_router.add_nvidia_sources(sources)
     return sources.as_dict()
+
+
+def _add_static_sources(
+    sources: UvSourcesAccumulator,
+    source_groups: dict[str, dict[str, list[SourceSpec]]],
+) -> None:
+    for extra, package_sources in source_groups.items():
+        for package, specs in package_sources.items():
+            for spec in specs:
+                sources.add(package, spec.model_copy(update={"extra": extra}))
 
 
 def _add_cpu_dependency_sources(sources: UvSourcesAccumulator, dependencies: Iterable[DependencyEntry]) -> None:
@@ -859,7 +781,7 @@ def _add_cpu_dependency_sources(sources: UvSourcesAccumulator, dependencies: Ite
 
 def _collect_uv_indexes(config: CudaDepsConfig) -> list[IndexSpec]:
     indexes: dict[str, IndexSpec] = {}
-    for context in CudaVariantContexts(config):
+    for context in _cuda_variant_contexts(config):
         for index in context.uv_router.indexes():
             _add_index(indexes, index)
     for index in config.indexes:
@@ -877,13 +799,20 @@ def _add_index(indexes: dict[str, IndexSpec], index: IndexSpec) -> None:
     indexes[index.name] = index
 
 
-def _cuda_dependency_stack(config: CudaDepsConfig, variant: CudaVariant) -> DependencyStack:
-    return DependencyStack.of(
-        config.base_runtime_deps,
-        config.torch_runtime_deps,
-        config.cuda_runtime_deps,
-        config.torch_wheel_deps,
-        variant.dependencies,
+def _validate_source_indexes(sources: dict[str, list[SourceSpec]], indexes: Iterable[IndexSpec]) -> None:
+    known_indexes = {index.name for index in indexes}
+    unknown_indexes = {spec.index for specs in sources.values() for spec in specs if spec.index not in known_indexes}
+    if unknown_indexes:
+        raise ValueError(f"uv sources reference unknown indexes: {', '.join(sorted(unknown_indexes))}")
+
+
+def _cuda_dependencies(config: CudaDepsConfig, variant: CudaVariant) -> tuple[DependencyEntry, ...]:
+    return (
+        *config.base_runtime_deps,
+        *config.torch_runtime_deps,
+        *config.cuda_runtime_deps,
+        *config.torch_wheel_deps,
+        *variant.dependencies,
     )
 
 
@@ -977,118 +906,43 @@ def _index_aot(indexes: list[IndexSpec]) -> AoT:
 
 
 # ---------------------------------------------------------------------------
-# Command workflow helpers
+# Command workflow
 # ---------------------------------------------------------------------------
 
 
-def _check_generated(
-    config_path: Path,
-    output_path: Path | None,
-    generated: CudaPyprojectFragment,
-) -> CudaDepsCommandResult:
-    if output_path is None:
-        return CudaDepsCommandResult(
-            status=GenStatus.error,
-            message="--check requires --output",
-            config=str(config_path),
-            generated=generated,
-        )
-    if not output_path.exists():
-        return CudaDepsCommandResult(
-            status=GenStatus.changed,
-            message=f"{output_path} does not exist; run again without --check to generate it",
-            config=str(config_path),
-            output=str(output_path),
-            generated=generated,
-        )
-    current = output_path.read_text(encoding="utf-8")
-    status = GenStatus.ok if current == generated.text else GenStatus.changed
-    message = "Generated CUDA dependency sections are up to date"
-    if status is GenStatus.changed:
-        message = f"Generated CUDA dependency sections differ from {output_path}"
-    return CudaDepsCommandResult(
-        status=status,
-        message=message,
-        config=str(config_path),
-        output=str(output_path),
-        generated=generated,
-    )
-
-
 def _update_pyproject(
-    config_path: Path,
     pyproject_path: Path,
     check: bool,
     generated: CudaPyprojectFragment,
-) -> CudaDepsCommandResult:
+) -> GenerationResult:
     current = pyproject_path.read_text(encoding="utf-8")
     updated = apply_cuda_fragment_to_pyproject(current, generated)
     if check:
-        return _check_pyproject(config_path, pyproject_path, generated, current, updated)
+        return _check_pyproject(pyproject_path, current, updated)
     pyproject_path.write_text(updated, encoding="utf-8")
-    return CudaDepsCommandResult(
+    return GenerationResult(
         status=GenStatus.ok,
         message=f"Updated generated CUDA dependency sections in {pyproject_path}",
-        config=str(config_path),
-        output=str(pyproject_path),
-        generated=generated,
     )
 
 
-def _check_pyproject(
-    config_path: Path,
-    pyproject_path: Path,
-    generated: CudaPyprojectFragment,
-    current: str,
-    updated: str,
-) -> CudaDepsCommandResult:
+def _check_pyproject(pyproject_path: Path, current: str, updated: str) -> GenerationResult:
     status = GenStatus.ok if current == updated else GenStatus.changed
     message = "Generated CUDA dependency sections in pyproject.toml are up to date"
     if status is GenStatus.changed:
         message = f"Generated CUDA dependency sections differ from {pyproject_path}"
-    return CudaDepsCommandResult(
+    return GenerationResult(
         status=status,
         message=message,
-        config=str(config_path),
-        output=str(pyproject_path),
-        generated=generated,
-    )
-
-
-def _stdout_result(config_path: Path, generated: CudaPyprojectFragment) -> CudaDepsCommandResult:
-    return CudaDepsCommandResult(
-        status=GenStatus.ok,
-        message="Generated CUDA dependency sections",
-        config=str(config_path),
-        generated=generated,
     )
 
 
 # ---------------------------------------------------------------------------
-# Command entrypoint and presentation
+# Command entrypoint
 # ---------------------------------------------------------------------------
 
 
-def _configure_logging(log_format: Literal["plain", "json"]) -> None:
-    renderer = structlog.processors.JSONRenderer() if log_format == "json" else structlog.dev.ConsoleRenderer()
-    structlog.configure(
-        logger_factory=structlog.PrintLoggerFactory(file=sys.stderr),
-        processors=[renderer],
-    )
-
-
-def _emit_result(result: CudaDepsCommandResult, json_output: bool) -> None:
-    if json_output:
-        sys.stdout.write(result.model_dump_json(indent=2) + "\n")
-        return
-    if result.output is None and result.generated is not None and result.status is GenStatus.ok:
-        sys.stdout.write(result.generated.text)
-        return
-    logger.info(result.message)
-    return
-
-
-def _exit_code(result: CudaDepsCommandResult) -> int:
+def _exit_code(result: GenerationResult) -> int:
     if result.status is GenStatus.ok:
         return 0
     if result.status is GenStatus.changed:
@@ -1096,33 +950,28 @@ def _exit_code(result: CudaDepsCommandResult) -> int:
     return 125
 
 
-@click.command(help=__doc__)
+@click.command(help="Update generated CPU and CUDA dependency metadata in pyproject.toml.")
 @click.argument("config", required=False, type=click.Path(path_type=Path), default=Path("cuda_deps.toml"))
-@click.option("--output", type=click.Path(path_type=Path), default=None, help="Write generated TOML sections here.")
 @click.option(
-    "--pyproject", type=click.Path(path_type=Path), default=None, help="Update generated sections in pyproject.toml."
+    "--pyproject",
+    type=click.Path(path_type=Path),
+    default=Path("pyproject.toml"),
+    show_default=True,
+    help="pyproject.toml file to update or check.",
 )
 @click.option("--check", is_flag=True, help="Exit non-zero if generated output would change.")
-@click.option("--json", "json_output", is_flag=True, help="Emit a JSON command result.")
-@click.option("--log-format", type=click.Choice(["plain", "json"]), default="plain", show_default=True)
 def _cli(
     config: Path,
-    output: Path | None,
-    pyproject: Path | None,
+    pyproject: Path,
     check: bool,
-    json_output: bool,
-    log_format: Literal["plain", "json"],
 ) -> None:
-    """Generate CUDA dependency TOML sections."""
-    _configure_logging(log_format)
+    """Update generated CPU and CUDA dependency metadata."""
     try:
-        if output is not None and pyproject is not None:
-            raise ValueError("Use either --output or --pyproject, not both")
-        result = run_generation_command(config, output, check, pyproject)
+        result = run_generation_command(config, pyproject, check)
     except (OSError, ValueError, ValidationError, tomllib.TOMLDecodeError) as exc:
-        logger.error("Generation failed", error=str(exc))
+        click.echo(f"Generation failed: {exc}", err=True)
         raise click.exceptions.Exit(125) from exc
-    _emit_result(result, json_output)
+    click.echo(result.message, err=result.status is not GenStatus.ok)
     raise click.exceptions.Exit(_exit_code(result))
 
 
