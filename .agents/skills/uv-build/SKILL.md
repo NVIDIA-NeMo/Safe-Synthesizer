@@ -20,6 +20,7 @@ mise run setup && mise run bootstrap-nss cpu
 mise run bootstrap-nss dev       # dev tools only (no engine/torch)
 mise run bootstrap-nss cpu       # + engine + CPU PyTorch
 mise run bootstrap-nss cu129     # + engine + CUDA 12.9 PyTorch
+mise run bootstrap-nss cu130     # + engine + CUDA 13.0 PyTorch
 mise run bootstrap-nss cuda      # alias for cu129
 mise run bootstrap-nss engine    # + engine (no torch)
 
@@ -41,10 +42,11 @@ then runs the same frozen profile sync as `bootstrap-nss`.
 |-------|------------------|
 | `cpu` | PyTorch CPU, faiss-cpu, flashinfer (Linux only) |
 | `cu129` | PyTorch+CUDA 12.9, faiss-gpu, flashinfer-jit-cache |
+| `cu130` | PyTorch+CUDA 13.0, faiss-gpu, flashinfer-jit-cache |
 | `engine` | ML pipeline deps (outlines, wandb, tiktoken, etc.) -- no torch |
 | `microservices` | `nemo-microservices` from local path |
 
-`cpu` and `cu129` conflict -- you must pick one, never both. Enforced in `[tool.uv] conflicts`.
+`cpu`, `cu129`, and `cu130` conflict -- you must pick one, never both. Enforced in `[tool.uv] conflicts`.
 
 ## Index Management
 

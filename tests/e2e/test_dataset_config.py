@@ -15,13 +15,16 @@ from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
 logger = get_logger(__name__)
 
 llm = pytest.importorskip(
-    "vllm", reason="vllm with GPU support is required for these tests (install with: uv sync --extra cu129)"
+    "vllm",
+    reason="vllm with GPU support is required for these tests (install with: mise run bootstrap-nss cu129 or cu130)",
 )
 
 try:
     importlib.import_module("vllm")
 except ImportError:
-    skip_reason = "vllm with GPU support is required for these tests (install with: uv sync --extra cu129)"
+    skip_reason = (
+        "vllm with GPU support is required for these tests (install with: mise run bootstrap-nss cu129 or cu130)"
+    )
     pytest.skip(skip_reason, allow_module_level=True)  # ty: ignore[invalid-argument-type,too-many-positional-arguments]
 
 

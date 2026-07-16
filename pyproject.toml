@@ -113,7 +113,7 @@ engine = [
 # Source of truth: cuda_deps.toml.
 # Regenerate with: uv run --frozen tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml
 # Manual edits inside this block will be overwritten.
-# Generated extras in this block: cpu, cu129.
+# Generated extras in this block: cpu, cu129, cu130.
 cpu = [
     "accelerate>=1.1.0",
     "bitsandbytes>=0.46.1",
@@ -163,6 +163,31 @@ cu129 = [
     "torchao==0.17.0+cu129; sys_platform == 'linux' and platform_machine == 'x86_64'",
     "vllm==0.26.0+cu129; sys_platform == 'linux'",
 ]
+cu130 = [
+    "accelerate>=1.1.0",
+    "bitsandbytes>=0.46.1",
+    "flashinfer-python==0.6.14; sys_platform == 'linux'",
+    "flashinfer-cubin==0.6.14; sys_platform == 'linux'",
+    "gliner",
+    "kernels>=0.12.1,<0.15",
+    "opacus",
+    "peft>=0.18.0",
+    "sentence-transformers",
+    "openai>=2.25.0",
+    "trl>=0.23.0",
+    "xgrammar>=0.2.0; sys_platform == 'linux'",
+    "flashinfer-jit-cache==0.6.14+cu130; sys_platform == 'linux'",
+    "nvidia-cublas-cu13; sys_platform == 'linux'",
+    "nvidia-ml-py; sys_platform == 'linux'",
+    "torch-c-dlpack-ext",
+    "triton>=2.0.0; sys_platform == 'linux'",
+    "transformers>=5.12,<5.12.1",
+    "torch==2.11.0+cu130; sys_platform == 'linux'",
+    "torchaudio==2.11.0+cu130; sys_platform == 'linux'",
+    "torchvision==0.26.0+cu130; sys_platform == 'linux'",
+    "torchao==0.17.0+cu130; sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "vllm==0.26.0; sys_platform == 'linux'",
+]
 # <<< END GENERATED CUDA RUNTIME EXTRAS - DO NOT EDIT >>>
 
 [tool.uv]
@@ -184,6 +209,7 @@ conflicts = [
     [
         { extra = "cpu" },
         { extra = "cu129" },
+        { extra = "cu130" },
     ],
 ]
 # <<< END GENERATED CUDA UV CONFLICTS - DO NOT EDIT >>>
@@ -235,6 +261,7 @@ constraint-dependencies = [
 flashinfer-cubin = [
     { index = "flashinfer-cubin", extra = "cpu", marker = "sys_platform == 'linux'" },
     { index = "flashinfer-cubin", extra = "cu129", marker = "sys_platform == 'linux'" },
+    { index = "flashinfer-cubin", extra = "cu130", marker = "sys_platform == 'linux'" },
 ]
 vllm = [
     { index = "vllm-v0-26-0-cu129", extra = "cu129", marker = "sys_platform == 'linux'" },
@@ -242,23 +269,29 @@ vllm = [
 torch = [
     { index = "pytorch-cpu", extra = "cpu", marker = "sys_platform == 'linux'" },
     { index = "pytorch-cu129", extra = "cu129", marker = "sys_platform == 'linux'" },
+    { index = "pytorch-cu130", extra = "cu130", marker = "sys_platform == 'linux'" },
 ]
 torchaudio = [
     { index = "pytorch-cpu", extra = "cpu", marker = "sys_platform == 'linux'" },
     { index = "pytorch-cu129", extra = "cu129", marker = "sys_platform == 'linux'" },
+    { index = "pytorch-cu130", extra = "cu130", marker = "sys_platform == 'linux'" },
 ]
 torchvision = [
     { index = "pytorch-cpu", extra = "cpu", marker = "sys_platform == 'linux'" },
     { index = "pytorch-cu129", extra = "cu129", marker = "sys_platform == 'linux'" },
+    { index = "pytorch-cu130", extra = "cu130", marker = "sys_platform == 'linux'" },
 ]
 flashinfer-jit-cache = [
     { index = "flashinfer-jit-cache-cu129", extra = "cu129", marker = "sys_platform == 'linux'" },
+    { index = "flashinfer-jit-cache-cu130", extra = "cu130", marker = "sys_platform == 'linux'" },
 ]
 triton = [
     { index = "pytorch-cu129", extra = "cu129", marker = "sys_platform == 'linux'" },
+    { index = "pytorch-cu130", extra = "cu130", marker = "sys_platform == 'linux'" },
 ]
 torchao = [
     { index = "pytorch-cu129", extra = "cu129", marker = "sys_platform == 'linux' and platform_machine == 'x86_64'" },
+    { index = "pytorch-cu130", extra = "cu130", marker = "sys_platform == 'linux' and platform_machine == 'x86_64'" },
 ]
 nvidia-cublas-cu12 = [
     { index = "pytorch-cu129" },
@@ -299,6 +332,45 @@ nvidia-nvshmem-cu12 = [
 nvidia-nvtx-cu12 = [
     { index = "pytorch-cu129" },
 ]
+nvidia-cublas = [
+    { index = "nvidia-pypi-public" },
+]
+nvidia-cuda-cupti = [
+    { index = "nvidia-pypi-public" },
+]
+nvidia-cuda-nvrtc = [
+    { index = "nvidia-pypi-public" },
+]
+nvidia-cuda-nvprof = [
+    { index = "nvidia-pypi-public" },
+]
+nvidia-cuda-runtime = [
+    { index = "nvidia-pypi-public" },
+]
+nvidia-cuda-nvml = [
+    { index = "nvidia-pypi-public" },
+]
+nvidia-cudnn = [
+    { index = "nvidia-pypi-public" },
+]
+nvidia-cusparse = [
+    { index = "nvidia-pypi-public" },
+]
+nvidia-cusparselt = [
+    { index = "nvidia-pypi-public" },
+]
+nvidia-nccl = [
+    { index = "nvidia-pypi-public" },
+]
+nvidia-nvjitlink = [
+    { index = "nvidia-pypi-public" },
+]
+nvidia-nvshmem = [
+    { index = "nvidia-pypi-public" },
+]
+nvidia-nvtx = [
+    { index = "nvidia-pypi-public" },
+]
 
 [[tool.uv.index]]
 name = "pytorch-cu129"
@@ -308,6 +380,16 @@ explicit = true
 [[tool.uv.index]]
 name = "flashinfer-jit-cache-cu129"
 url = "https://flashinfer.ai/whl/cu129"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
+[[tool.uv.index]]
+name = "flashinfer-jit-cache-cu130"
+url = "https://flashinfer.ai/whl/cu130"
 explicit = true
 
 [[tool.uv.index]]

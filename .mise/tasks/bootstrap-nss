@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-#MISE description="Install project Python dependencies for a selected profile: dev, engine, cpu, cuda, or cu129. Modifies the project virtualenv."
+#MISE description="Install project Python dependencies for a selected profile: dev, engine, cpu, cuda, cu129, or cu130. Modifies the project virtualenv."
 #USAGE arg "<extra>" help="Python dependency profile" {
-#USAGE   choices "dev" "engine" "cpu" "cuda" "cu129"
+#USAGE   choices "dev" "engine" "cpu" "cuda" "cu129" "cu130"
 #USAGE }
 
 set -euo pipefail

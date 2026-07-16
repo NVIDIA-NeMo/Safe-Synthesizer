@@ -4,7 +4,7 @@
 # Multistage GPU Dockerfile for Safe-Synthesizer.
 #
 # CUDA support is selected through the project extras instead of a CUDA base
-# image. The current distributable variant is cu129; adding cu130 later should
+# image. Supported variants are cu129 and cu130; adding a future variant should
 # only require a matching pyproject extra plus another workflow matrix row.
 #
 # Build:

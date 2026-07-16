@@ -89,7 +89,7 @@ flowchart LR
     end
 
     subgraph containers [Container Build]
-        buildContainer[Build cu129 Image]
+        buildContainer[Build cu129/cu130 Images]
         publishGhcr[Publish GHCR Tags]
     end
 

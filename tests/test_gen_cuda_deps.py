@@ -89,6 +89,7 @@ torch = [
 [variants.cu132]
 cuda_package_suffix = "cu13"
 nvidia_package_suffix = ""
+nvidia_index = "nvidia-pypi-public"
 
 [variants.cu129]
 cuda_package_suffix = "cu12"
@@ -184,7 +185,7 @@ def test_build_cuda_pyproject_fragment_renders_cuda_variant_and_sources(tmp_path
         {"index": "flashinfer-cu129", "extra": "cu129", "marker": "sys_platform == 'linux'"},
     ]
     assert parsed["tool"]["uv"]["sources"]["nvidia-cublas"] == [{"index": "nvidia-pypi-public"}]
-    assert parsed["tool"]["uv"]["sources"]["nvidia-nvtx"] == [{"index": "pytorch-cu132"}]
+    assert parsed["tool"]["uv"]["sources"]["nvidia-nvtx"] == [{"index": "nvidia-pypi-public"}]
     assert parsed["tool"]["uv"]["sources"]["nvidia-nvtx-cu12"] == [{"index": "pytorch-cu129"}]
     assert [index["name"] for index in parsed["tool"]["uv"]["index"]] == [
         "pytorch-cu132",
