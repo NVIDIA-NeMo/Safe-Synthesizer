@@ -96,6 +96,8 @@ jobs:
             cuda-extra: cu129
             required: true
           - python-version: "3.13"
+            # Non-required while the CUDA 13 rollout is validated. Promote to
+            # required once cu130 has container-build coverage (see docs/developer-guide/docker.md).
             cuda-extra: cu130
             required: false
     steps:
@@ -166,6 +168,8 @@ jobs:
         include:
           - cuda-extra: cu129
             required: true
+          # Non-required while the CUDA 13 rollout is validated. Promote to
+          # required once cu130 has container-build coverage (see docs/developer-guide/docker.md).
           - cuda-extra: cu130
             required: false
     steps:
