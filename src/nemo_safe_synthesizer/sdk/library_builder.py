@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pandas as pd
+
 from datasets import Dataset
 
 from ..cli.artifact_structure import Workdir
@@ -297,6 +298,7 @@ class SafeSynthesizer(ConfigBuilder):
         if runtime_config is not None:
             saved_config = saved_config.with_runtime_overrides(runtime_config)
         self._nss_config = saved_config
+        self._strict_config = self._nss_config.strict_config
         self._generation_config = self._nss_config.generation
         self._evaluation_config = self._nss_config.evaluation
         self._emit_telemetry_config = self._nss_config.emit_telemetry

@@ -31,7 +31,7 @@ from pydantic import (
 from ..config.base import (
     pydantic_model_config,
 )
-from ..config.patch import CompiledConfigPatch, PatchAssignment
+from ..config.patch import CompiledConfigPatch, PatchAssignment, UnknownFieldBehavior
 from ..errors import ParameterError
 from .parameter import (
     DataT,
@@ -75,16 +75,22 @@ class Parameters(BaseModel, metaclass=ABCMeta):
         return patch.apply_to_full_model(self)
 
     @classmethod
-    def from_config_source(cls, source: Self | Mapping[str, object] | None = None, **kwargs: object) -> Self:
+    def from_config_source(
+        cls,
+        source: Self | Mapping[str, object] | None = None,
+        *,
+        unknown_fields: UnknownFieldBehavior = "ignore",
+        **kwargs: object,
+    ) -> Self:
         """Normalize one sparse config source plus higher-precedence keyword values.
 
         ``source`` may be ``None``, an instance of exactly ``cls``, or a raw
         mapping. Declared compatibility aliases are normalized for raw mappings
-        and keyword overrides. Unknown mapping keys retain Pydantic's
-        extra-ignore behavior. Keyword overrides accept top-level fields and
-        canonical dotted paths, but reject inferred bare nested names with an
-        actionable path suggestion. A different Pydantic model type is rejected
-        rather than adapted.
+        and keyword overrides. ``unknown_fields`` controls whether unknown raw
+        mapping keys are ignored or rejected. Keyword overrides accept top-level
+        fields and canonical dotted paths, but reject inferred bare nested names
+        with an actionable path suggestion. A different Pydantic model type is
+        rejected rather than adapted.
         """
         schema = ParameterSchema.from_model(cls)
         match source:
@@ -107,7 +113,7 @@ class Parameters(BaseModel, metaclass=ABCMeta):
                     schema.normalize_aliases(cast(Mapping[str, object], mapping)),
                     origin="mapping config",
                     precedence=0,
-                    unknown_fields="ignore",
+                    unknown_fields=unknown_fields,
                 )
             case _:
                 raise TypeError(f"Unsupported config type: {type(source)}")

@@ -11,6 +11,7 @@ import pytest
 from pydantic import Field, ValidationError, model_validator
 
 from nemo_safe_synthesizer.config.generate import GenerateParameters, StructuredGenerationParameters
+from nemo_safe_synthesizer.config.job import SafeSynthesizerJobConfig
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig, StepDefinition
 from nemo_safe_synthesizer.config.training import QuantizationScheme
@@ -116,11 +117,11 @@ def test_from_yaml_str_null_disables_pii():
     assert c.replace_pii is None
 
 
-def test_old_yaml_with_enable_replace_pii_loads_cleanly():
-    # Migration: configs written before this change had enable_replace_pii: true
-    # and no replace_pii key. The extra field must be silently ignored and
-    # default_factory must fire so PII stays on.
-    c = SafeSynthesizerParameters.model_validate({"enable_replace_pii": True})
+def test_old_yaml_with_enable_replace_pii_requires_non_strict_mode():
+    with pytest.raises(ValidationError, match="enable_replace_pii"):
+        SafeSynthesizerParameters.model_validate({"enable_replace_pii": True})
+
+    c = SafeSynthesizerParameters.model_validate({"strict_config": False, "enable_replace_pii": True})
     assert c.replace_pii is not None
 
 
@@ -247,25 +248,106 @@ def test_from_config_patch_validates_sparse_config():
     assert config.replace_pii is None
 
 
+def test_from_config_source_keyword_strictness_takes_precedence_over_mapping():
+    relaxed = SafeSynthesizerParameters.from_config_source(
+        {"strict_config": True, "unknown": True}, strict_config=False
+    )
+    assert relaxed.strict_config is False
+
+    with pytest.raises(ParameterError, match="unknown"):
+        SafeSynthesizerParameters.from_config_source({"strict_config": False, "unknown": True}, strict_config=True)
+
+
+@pytest.mark.parametrize(
+    "patch",
+    [
+        {"unknown": True},
+        {"generation": {"unknown": True}},
+    ],
+)
+def test_from_config_patch_rejects_unknown_mapping_keys_by_default(patch: dict[str, object]):
+    with pytest.raises(ParameterError, match="unknown"):
+        SafeSynthesizerParameters.from_config_patch(patch)
+
+
 @pytest.mark.parametrize(
     ("patch", "expected"),
     [
-        ({"unknown": True}, {}),
-        ({"generation": {"unknown": True}}, {"generation": {}}),
+        ({"strict_config": False, "unknown": True}, {"strict_config": False}),
+        (
+            {"strict_config": False, "generation": {"unknown": True}},
+            {"strict_config": False, "generation": {}},
+        ),
     ],
 )
-def test_from_config_patch_ignores_unknown_mapping_keys(patch: dict[str, object], expected: dict[str, object]):
+def test_from_config_patch_ignores_unknown_mapping_keys_when_non_strict(
+    patch: dict[str, object], expected: dict[str, object]
+):
     config = SafeSynthesizerParameters.from_config_patch(patch)
 
     assert config.model_dump(exclude_unset=True) == expected
 
 
 def test_with_config_patch_ignores_unknown_mapping_keys_and_preserves_sparse_base():
-    config = SafeSynthesizerParameters.model_validate({"generation": {"num_records": 77}})
+    config = SafeSynthesizerParameters.model_validate({"strict_config": False, "generation": {"num_records": 77}})
 
     merged = config.with_config_patch({"unknown": True, "generation": {"unknown": True, "temperature": 0.7}})
 
-    assert merged.model_dump(exclude_unset=True) == {"generation": {"num_records": 77, "temperature": 0.7}}
+    assert merged.model_dump(exclude_unset=True) == {
+        "generation": {"num_records": 77, "temperature": 0.7},
+        "strict_config": False,
+    }
+
+
+def test_with_config_patch_uses_patch_strictness_for_sibling_keys():
+    strict = SafeSynthesizerParameters()
+    relaxed = strict.with_config_patch({"strict_config": False, "unknown": True})
+    assert relaxed.strict_config is False
+
+    with pytest.raises(ParameterError, match="unknown"):
+        relaxed.with_config_patch({"strict_config": True, "unknown": True})
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"evaluate": {}},
+        {"training": {"epoch": 1}},
+    ],
+)
+def test_unknown_fields_are_rejected_recursively_by_default(data: dict[str, object]):
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        SafeSynthesizerParameters.model_validate(data)
+
+
+def test_unknown_fields_are_ignored_recursively_when_non_strict():
+    config = SafeSynthesizerParameters.model_validate(
+        {"strict_config": False, "evaluate": {}, "training": {"epoch": 1}}
+    )
+
+    assert config.strict_config is False
+
+
+def test_strict_config_reaches_models_inside_collections():
+    raw = SafeSynthesizerParameters().model_dump()
+    assert isinstance(raw["replace_pii"], dict)
+    raw["replace_pii"]["steps"][0]["unknown"] = True  # type: ignore[index]
+
+    with pytest.raises(ValidationError, match="unknown"):
+        SafeSynthesizerParameters.model_validate(raw)
+
+    raw["strict_config"] = False
+    assert SafeSynthesizerParameters.model_validate(raw).strict_config is False
+
+
+def test_service_job_config_preserves_dynamic_strictness():
+    payload: dict[str, object] = {"data_source": "dataset", "config": {"training": {"epoch": 1}}}
+    with pytest.raises(ValidationError, match="epoch"):
+        SafeSynthesizerJobConfig.model_validate(payload)
+
+    payload["config"] = {"strict_config": False, "training": {"epoch": 1}}
+    job = SafeSynthesizerJobConfig.model_validate(payload)
+    assert job.config.strict_config is False
 
 
 def test_with_config_patch_keeps_validator_and_factory_defaults_implicit():

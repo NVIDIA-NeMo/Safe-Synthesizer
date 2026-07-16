@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Mapping
-from typing import Self, TypeAlias
+from typing import Any, ClassVar, Literal, Self, TypeAlias, cast
 
-from pydantic import Field, model_validator
+from pydantic import Field, TypeAdapter, model_validator
 from typing_extensions import override
 
 from ..configurator.parameter_paths import (
@@ -35,6 +35,9 @@ __all__ = ["ConfigPatch", "SafeSynthesizerParameters"]
 
 
 logger = get_logger(__name__)
+
+
+_ExtraBehavior = Literal["ignore", "forbid"]
 
 
 class SafeSynthesizerParameters(Parameters):
@@ -92,6 +95,71 @@ class SafeSynthesizerParameters(Parameters):
             "Defaults from NEMO_TELEMETRY_ENABLED when unset."
         ),
     )
+
+    strict_config: bool = Field(
+        default=True,
+        description=(
+            "Whether unknown configuration keys are rejected recursively. "
+            "Disable only when compatibility across mismatched client and service versions is required."
+        ),
+    )
+
+    _strict_config_adapter: ClassVar[TypeAdapter[bool]] = TypeAdapter(bool)
+
+    @classmethod
+    def _strict_config_enabled(cls, value: object = True) -> bool:
+        """Validate and resolve the user-facing unknown-field policy flag."""
+        return cls._strict_config_adapter.validate_python(value)
+
+    @classmethod
+    def _strict_config_from_mapping(cls, source: Mapping[str, object], *, default: bool = True) -> bool:
+        return cls._strict_config_enabled(source.get("strict_config", default))
+
+    @classmethod
+    def _extra_behavior(cls, source: object, *, default: bool = True) -> _ExtraBehavior:
+        if isinstance(source, SafeSynthesizerParameters):
+            enabled = source.strict_config
+        elif isinstance(source, Mapping):
+            enabled = cls._strict_config_from_mapping(cast(Mapping[str, object], source), default=default)
+        else:
+            enabled = default
+        return "forbid" if enabled else "ignore"
+
+    def __init__(self, /, **data: Any) -> None:
+        """Validate constructor input with the input's recursive unknown-field policy."""
+        self.__pydantic_validator__.validate_python(
+            data,
+            self_instance=self,
+            extra=type(self)._extra_behavior(data),
+        )
+
+    # Preserve Pydantic's normal model-validation path: this initializer only
+    # selects the extras policy for direct ``Model(...)`` construction.
+    setattr(__init__, "__pydantic_base_init__", True)
+
+    @classmethod
+    @override
+    def model_validate(
+        cls,
+        obj: Any,
+        *,
+        strict: bool | None = None,
+        extra: Literal["allow", "ignore", "forbid"] | None = None,
+        from_attributes: bool | None = None,
+        context: Any | None = None,
+        by_alias: bool | None = None,
+        by_name: bool | None = None,
+    ) -> Self:
+        """Validate input using ``strict_config`` as the recursive extras policy."""
+        return super().model_validate(
+            obj,
+            strict=strict,
+            extra=extra or cls._extra_behavior(obj),
+            from_attributes=from_attributes,
+            context=context,
+            by_alias=by_alias,
+            by_name=by_name,
+        )
 
     @model_validator(mode="after")
     def _validate_and_resolve_data_params(self) -> Self:
@@ -194,11 +262,36 @@ class SafeSynthesizerParameters(Parameters):
         return CompiledConfigPatch.from_paths(cls, assignments).apply()
 
     @classmethod
+    @override
+    def from_config_source(
+        cls,
+        source: Parameters | Mapping[str, object] | None = None,
+        *,
+        unknown_fields: Literal["ignore", "reject"] | None = None,
+        **kwargs: object,
+    ) -> Self:
+        """Normalize a source using its effective ``strict_config`` policy."""
+        if unknown_fields is None:
+            if isinstance(source, Mapping):
+                enabled = (
+                    cls._strict_config_enabled(kwargs["strict_config"])
+                    if "strict_config" in kwargs
+                    else cls._strict_config_from_mapping(cast(Mapping[str, object], source))
+                )
+            elif isinstance(source, SafeSynthesizerParameters):
+                enabled = source.strict_config
+            else:
+                enabled = cls._strict_config_enabled(kwargs.get("strict_config", True))
+            unknown_fields = "reject" if enabled else "ignore"
+        return cast(Self, super().from_config_source(source, unknown_fields=unknown_fields, **kwargs))
+
+    @classmethod
     def from_config_patch(cls, patch: ConfigPatch) -> Self:
         """Validate a sparse top-level config patch as a full configuration."""
         normalized = ParameterSchema.from_model(cls).normalize_aliases(patch)
+        unknown_fields = "reject" if cls._strict_config_from_mapping(normalized) else "ignore"
         return CompiledConfigPatch.from_mapping(
-            cls, normalized, origin="config patch", precedence=0, unknown_fields="ignore"
+            cls, normalized, origin="config patch", precedence=0, unknown_fields=unknown_fields
         ).apply()
 
     def with_config_patch(self, patch: ConfigPatch) -> Self:
@@ -217,8 +310,13 @@ class SafeSynthesizerParameters(Parameters):
             unknown_fields="reject",
         )
         normalized = ParameterSchema.from_model(model_type).normalize_aliases(patch)
+        strict_config = model_type._strict_config_from_mapping(normalized, default=self.strict_config)
         override = CompiledConfigPatch.from_mapping(
-            model_type, normalized, origin="config patch", precedence=1, unknown_fields="ignore"
+            model_type,
+            normalized,
+            origin="config patch",
+            precedence=1,
+            unknown_fields="reject" if strict_config else "ignore",
         )
         return base.combine(override).apply()
 
@@ -251,6 +349,8 @@ class SafeSynthesizerParameters(Parameters):
         _add_section("evaluation", runtime.evaluation)
         if "emit_telemetry" in runtime.model_fields_set:
             updates["emit_telemetry"] = runtime.emit_telemetry
+        if "strict_config" in runtime.model_fields_set:
+            updates["strict_config"] = runtime.strict_config
         patch = CompiledConfigPatch.from_mapping(
             type(self),
             updates,

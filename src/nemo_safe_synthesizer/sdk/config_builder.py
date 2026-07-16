@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Self, TypeAlias
+from typing import Literal, Self, TypeAlias
 
 import pandas as pd
 
@@ -54,6 +54,7 @@ class ConfigBuilder:
     def __init__(self, config: SafeSynthesizerParameters | None = None) -> None:
         self._nss_config = config.model_copy(deep=True) if config is not None else None
         if self._nss_config is not None:
+            self._strict_config = self._nss_config.strict_config
             self._emit_telemetry_config = self._nss_config.emit_telemetry
             self._evaluation_config = self._nss_config.evaluation
             self._replace_pii_config = self._nss_config.replace_pii
@@ -64,6 +65,7 @@ class ConfigBuilder:
             self._data_config = self._nss_config.data
             self._time_series_config = self._nss_config.time_series
         else:
+            self._strict_config = True
             self._data_config: DataParameters = DataParameters()
             self._evaluation_config: EvaluationParameters = EvaluationParameters()
             self._generation_config: GenerateParameters = GenerateParameters()
@@ -77,6 +79,15 @@ class ConfigBuilder:
         self._data_source: DataSource | None = None
         self._classify_model_provider: str | None = None
         self._hf_token_secret: str | None = None
+
+    @property
+    def _unknown_fields(self) -> Literal["ignore", "reject"]:
+        return "reject" if self._strict_config else "ignore"
+
+    def with_strict_config(self, enabled: bool) -> Self:
+        """Control whether SDK raw mapping inputs reject unknown keys."""
+        self._strict_config = enabled
+        return self
 
     def with_data_source(self, df_source: DataSource) -> Self:
         """Set the data source for synthetic data generation.
@@ -100,7 +111,7 @@ class ConfigBuilder:
         Returns:
             This builder instance with data processing settings applied.
         """
-        self._data_config = DataParameters.from_config_source(config, **kwargs)
+        self._data_config = DataParameters.from_config_source(config, unknown_fields=self._unknown_fields, **kwargs)
         return self
 
     def with_train(self, config: TrainingHyperparams | RawConfig | None = None, **kwargs: object) -> Self:
@@ -113,7 +124,9 @@ class ConfigBuilder:
         Returns:
             This builder instance with training hyperparameters applied.
         """
-        self._training_config = TrainingHyperparams.from_config_source(config, **kwargs)
+        self._training_config = TrainingHyperparams.from_config_source(
+            config, unknown_fields=self._unknown_fields, **kwargs
+        )
         return self
 
     def with_generate(self, config: GenerateParameters | RawConfig | None = None, **kwargs: object) -> Self:
@@ -126,7 +139,9 @@ class ConfigBuilder:
         Returns:
             This builder instance with generation settings applied.
         """
-        self._generation_config = GenerateParameters.from_config_source(config, **kwargs)
+        self._generation_config = GenerateParameters.from_config_source(
+            config, unknown_fields=self._unknown_fields, **kwargs
+        )
         return self
 
     def with_time_series(self, config: TimeSeriesParameters | RawConfig | None = None, **kwargs: object) -> Self:
@@ -139,7 +154,9 @@ class ConfigBuilder:
         Returns:
             This builder instance with time-series synthesis settings applied.
         """
-        self._time_series_config = TimeSeriesParameters.from_config_source(config, **kwargs)
+        self._time_series_config = TimeSeriesParameters.from_config_source(
+            config, unknown_fields=self._unknown_fields, **kwargs
+        )
         return self
 
     def with_differential_privacy(
@@ -154,7 +171,9 @@ class ConfigBuilder:
         Returns:
             This builder instance with differential privacy settings applied.
         """
-        self._privacy_config = DifferentialPrivacyHyperparams.from_config_source(config, **kwargs)
+        self._privacy_config = DifferentialPrivacyHyperparams.from_config_source(
+            config, unknown_fields=self._unknown_fields, **kwargs
+        )
         return self
 
     def with_replace_pii(
@@ -200,9 +219,11 @@ class ConfigBuilder:
 
         match config:
             case PiiReplacerConfig() | Mapping() as values:
-                cfg = PiiReplacerConfig.from_config_source(values, **kwargs)
+                cfg = PiiReplacerConfig.from_config_source(values, unknown_fields=self._unknown_fields, **kwargs)
             case None:
-                cfg = PiiReplacerConfig.from_config_source(PiiReplacerConfig.get_default_config(), **kwargs)
+                cfg = PiiReplacerConfig.from_config_source(
+                    PiiReplacerConfig.get_default_config(), unknown_fields=self._unknown_fields, **kwargs
+                )
             case _:
                 raise ValueError(f"Config must be a PiiReplacerConfig, raw mapping, or None, got {config!r}")
 
@@ -219,7 +240,9 @@ class ConfigBuilder:
         Returns:
             This builder instance with evaluation settings applied.
         """
-        self._evaluation_config = EvaluationParameters.from_config_source(config, **kwargs)
+        self._evaluation_config = EvaluationParameters.from_config_source(
+            config, unknown_fields=self._unknown_fields, **kwargs
+        )
         return self
 
     def resolve(self) -> Self:
@@ -253,6 +276,7 @@ class ConfigBuilder:
             replace_pii=self._replace_pii_config,
             preflight=self._preflight_config,
             emit_telemetry=self._emit_telemetry_config,
+            strict_config=self._strict_config,
         )
 
         # Inject classify_model_provider into PII replacer config if set

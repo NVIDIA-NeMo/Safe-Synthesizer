@@ -90,6 +90,12 @@ The shared `pydantic_model_config` sets `arbitrary_types_allowed`,
 `validation_error_cause`, `from_attributes`, `validate_default`,
 `protected_namespaces=()`, and `json_schema_mode_override="validation"`.
 
+`SafeSynthesizerParameters.strict_config` separately controls Pydantic's
+recursive unknown-field policy at raw-input boundaries. The default is to pass
+`extra="forbid"`; `strict_config: false` passes `extra="ignore"`. Sparse patch
+compilation and SDK raw-mapping builders must use the same effective setting so
+they do not discard unknown keys before top-level validation can inspect them.
+
 ## Adding a Config Field
 
 Add the field to the relevant parameter model. The CLI option is generated

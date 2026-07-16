@@ -19,6 +19,27 @@ Exactly what avenues of configuration are available, and thus how precedence is 
 Each layer only overrides what it explicitly sets -- everything else falls
 through to the next layer.
 
+### Unknown Configuration Keys
+
+Safe Synthesizer rejects unknown configuration keys recursively by default.
+This catches misspelled sections and parameters before a run starts, for
+example `evaluate` instead of `evaluation` or `training.epoch` when no such
+training parameter exists.
+
+Set `strict_config: false` at the top level only when a configuration must pass
+between mismatched client and service versions that may not recognize the same
+fields:
+
+```yaml
+strict_config: false
+training:
+  batch_size: 4
+```
+
+The setting applies to the same configuration input in which it appears and is
+preserved in serialized configurations. It controls unknown keys only; normal
+Pydantic value validation and type coercion are unchanged.
+
 ### Examples
 
 Start from model defaults, override one field via CLI:
@@ -117,10 +138,11 @@ so an in-place mutation such as
 `source.validation.group_by_fix_unordered_records = True` is captured when that
 model is used as a patch input. Unrelated defaults remain implicit.
 
-Raw mapping sources retain the established behavior of ignoring unknown extra
-keys. After a name has been resolved to a canonical path, however, that path is
-strict: unknown paths and paths that descend through an atomic leaf raise an
-error.
+Raw mapping sources follow the effective top-level `strict_config` setting.
+They reject unknown extra keys by default and ignore them when strict config
+validation is disabled. After a name has been resolved to a canonical path,
+however, that path remains strict: unknown paths and paths that descend through
+an atomic leaf raise an error.
 
 ### Resume-Time Overrides
 

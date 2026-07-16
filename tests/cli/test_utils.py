@@ -375,11 +375,11 @@ generation:
     @pytest.mark.parametrize(
         ("config_contents", "overrides", "expected"),
         [
-            (None, {"unknown": True}, {}),
+            (None, {"strict_config": False, "unknown": True}, {"strict_config": False}),
             (
-                "generation:\n  num_records: 77\n",
+                "strict_config: false\ngeneration:\n  num_records: 77\n",
                 {"generation": {"unknown": True}},
-                {"generation": {"num_records": 77}},
+                {"generation": {"num_records": 77}, "strict_config": False},
             ),
         ],
     )

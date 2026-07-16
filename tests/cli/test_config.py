@@ -124,3 +124,21 @@ class TestConfigValidateErrorPathExitCodes:
         )
 
         assert result.exit_code == 0
+
+    def test_validate_rejects_unknown_keys_by_default(self, cli_runner: CliRunner, tmp_path: Path):
+        config_path = tmp_path / "unknown.yaml"
+        config_path.write_text("training:\n  epoch: 2\n")
+
+        result = cli_runner.invoke(config, ["validate", "--config", str(config_path)])
+
+        assert result.exit_code != 0
+        assert "epoch" in result.output
+
+    def test_validate_allows_unknown_keys_when_non_strict(self, cli_runner: CliRunner, tmp_path: Path):
+        config_path = tmp_path / "unknown.yaml"
+        config_path.write_text("strict_config: false\ntraining:\n  epoch: 2\n")
+
+        result = cli_runner.invoke(config, ["validate", "--config", str(config_path)])
+
+        assert result.exit_code == 0
+        assert '"strict_config": false' in result.output

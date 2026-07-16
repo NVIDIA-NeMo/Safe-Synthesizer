@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from .base import NSSBaseModel
 from .parameters import (
@@ -29,3 +29,11 @@ class SafeSynthesizerJobConfig(NSSBaseModel):
         description="Name of platform secret containing the HuggingFace token. "
         "Must exist in the same workspace as the job.",
     )
+
+    @field_validator("config", mode="before")
+    @classmethod
+    def _validate_config_with_its_unknown_field_policy(cls, value: object) -> object:
+        """Preserve dynamic strictness when parameters are nested in a service payload."""
+        if isinstance(value, SafeSynthesizerParameters):
+            return value
+        return SafeSynthesizerParameters.model_validate(value)

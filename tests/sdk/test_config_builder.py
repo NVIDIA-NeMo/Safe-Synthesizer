@@ -86,6 +86,25 @@ def test_builder_methods_reject_wrong_typed_model(method_name: str):
         getattr(ConfigBuilder(), method_name)(config=wrong)
 
 
+def test_builder_rejects_unknown_raw_mapping_keys_by_default():
+    with pytest.raises(ParameterError, match="epoch"):
+        ConfigBuilder().with_train({"epoch": 1})
+
+
+def test_builder_non_strict_mode_ignores_unknown_raw_mapping_keys():
+    builder = ConfigBuilder().with_strict_config(False).with_train({"epoch": 1})
+
+    assert builder._strict_config is False
+    assert builder._training_config == TrainingHyperparams()
+
+
+def test_builder_resolves_and_preserves_strict_config():
+    builder = ConfigBuilder().with_strict_config(False).with_data_source(pd.DataFrame({"value": [1]})).resolve()
+
+    assert builder._nss_config is not None
+    assert builder._nss_config.strict_config is False
+
+
 def test_with_generate_validates_raw_config_with_kwargs():
     with pytest.raises(ValidationError, match="patience"):
         ConfigBuilder().with_generate(config={"num_records": 10}, patience=0)
