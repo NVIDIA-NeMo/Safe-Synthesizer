@@ -1,26 +1,19 @@
-<div class="score-container">
-    <div class="score">
-        <a href="#synthetic-quality">
-            <div class="score-chart">
-                {{ ctx.synthetic_quality_score.figure_overview }}
-            </div>
-        </a>
-        <span class="score-label">
-            {{ ctx.synthetic_quality_score.score.grade }}
-        </span>
-        <span class="score-title">Synthetic Quality Score</span>
-    </div>
-    <div class="score">
-        {% if ctx.data_privacy_score %}
-            <a href="#data-privacy">
-                <div class="score-chart">
-                    {{ ctx.data_privacy_score.figure_overview }}
-                </div>
-            </a>
-            <span class="score-label">
-                {{ ctx.data_privacy_score.score.grade }}
-            </span>
-            <span class="score-title">Data Privacy Score</span>
-        {% endif %}
-    </div>
+{% from "jinja/components/score_gauge.j2" import score_ring %}
+<div class="overview-scores">
+    <a class="overview-score-card" href="#synthetic-quality">
+        <div class="score-chart">{{ score_ring(ctx.synthetic_quality_score.score) }}</div>
+        <div class="overview-score-copy">
+            <span class="score-label">{{ ctx.synthetic_quality_score.score.grade }}</span>
+            <h2>Synthetic Quality<br>Score</h2>
+        </div>
+    </a>
+    {% if ctx.data_privacy_score and ctx.with_data_privacy %}
+    <a class="overview-score-card" href="#data-privacy">
+        <div class="score-chart">{{ score_ring(ctx.data_privacy_score.score) }}</div>
+        <div class="overview-score-copy">
+            <span class="score-label">{{ ctx.data_privacy_score.score.grade }}</span>
+            <h2>Data Privacy Score</h2>
+        </div>
+    </a>
+    {% endif %}
 </div>

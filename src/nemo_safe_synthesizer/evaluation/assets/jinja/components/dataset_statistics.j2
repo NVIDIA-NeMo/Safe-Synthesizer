@@ -1,45 +1,29 @@
-<div class="component" id="dataset-statistics">
-    <div class="header">
-        Dataset Statistics
-        <span data-toggle data-for="dataset-statistics-info" class="info"></span>
+{% from "jinja/components/icon.j2" import icon %}
+<section class="dataset-statistics component" id="dataset-statistics">
+    <div class="component-heading">
+        <h2>Dataset Statistics</h2>
     </div>
-    <table>
-        <tr>
-            <th class="first"></th>
-            <th class="tnum">
-                Training
-            </th>
-            <th class="last tnum">
-                Synthetic
-            </th>
-        </tr>
-        <tr>
-            <td class="first">Row count</td>
-            <td class="tnum">{{ ctx.dataset_statistics.training_rows }}</td>
-            <td class="last tnum">{{ ctx.dataset_statistics.synthetic_rows }}</td>
-        </tr>
-        <tr>
-            <td class="first">Column count</td>
-            <td class="tnum">{{ ctx.dataset_statistics.training_cols }}</td>
-            <td class="last tnum">{{ ctx.dataset_statistics.synthetic_cols }}</td>
-        </tr>
-        <tr>
-            <td class="first">Missing %</td>
-            <td class="tnum">{{ ctx.dataset_statistics.training_missing }}%</td>
-            <td class="last tnum">{{ ctx.dataset_statistics.synthetic_missing }}%</td>
-        </tr>
-        <tr>
-            <td class="first">Training lines duplicated in Synthetic</td>
-            <td class="tnum">N/A</td>
-            <td class="last tnum">{{ ctx.dataset_statistics.memorized_lines }}</td>
-        </tr>
-    </table>
-    <div class="footer">
-        <div class="footer-main">
-            <button data-toggle data-for="dataset-statistics-info">What do these values mean</button>
+    <div class="dataset-comparison">
+        <div class="dataset-card training">
+            <span class="dataset-tag">Training Data</span>
+            <dl>
+                <div><dt>Rows</dt><dd>{{ "{:,}".format(ctx.dataset_statistics.training_rows) }}</dd></div>
+                <div><dt>Columns</dt><dd>{{ ctx.dataset_statistics.training_cols }}</dd></div>
+                <div><dt>Missing</dt><dd>{{ ctx.dataset_statistics.training_missing }}%</dd></div>
+            </dl>
         </div>
-        <div class="tooltips" id="dataset-statistics-info" hidden>
-            {{ ctx.tooltips.dataset_statistics_info }}
+        <span class="dataset-arrow">{{ icon("arrow-right") }}</span>
+        <div class="dataset-card synthetic">
+            <span class="dataset-tag">Synthetic Data</span>
+            <dl>
+                <div><dt>Rows</dt><dd>{{ "{:,}".format(ctx.dataset_statistics.synthetic_rows) }}</dd></div>
+                <div><dt>Columns</dt><dd>{{ ctx.dataset_statistics.synthetic_cols }}</dd></div>
+                <div><dt>Missing</dt><dd>{{ ctx.dataset_statistics.synthetic_missing }}%</dd></div>
+            </dl>
         </div>
     </div>
-</div>
+    <div class="memorization-status">
+        {{ icon("check-circle") }}
+        Training rows duplicated in Synthetic Data: {{ ctx.dataset_statistics.memorized_lines }}
+    </div>
+</section>

@@ -1,0 +1,25 @@
+{% macro score_ring(score, size="lg") -%}
+{% set value = score.score if score.score is not none else 0 %}
+<div class="score-ring score-ring--{{ size }}{% if score.score is none %} score-ring--unavailable{% endif %}"
+     data-score-ring data-score="{{ value }}" data-size="{{ size }}"
+     data-available="{{ 'true' if score.score is not none else 'false' }}"
+     role="img"
+     aria-label="Score: {{ score.score if score.score is not none else 'unavailable' }} out of 10">
+    {% if size == "sm" %}
+    <svg class="score-ring-simple" viewBox="0 0 100 100" aria-hidden="true">
+        <path class="score-ring-simple-track"></path>
+        <path class="score-ring-simple-progress"></path>
+    </svg>
+    {% else %}
+    <canvas class="score-ring-canvas" width="400" height="400" aria-hidden="true"></canvas>
+    <svg class="score-ring-marker" viewBox="0 0 100 100" aria-hidden="true">
+        <circle class="score-ring-marker-halo" r="8"></circle>
+        <circle class="score-ring-marker-dot" r="6"></circle>
+    </svg>
+    {% endif %}
+    <span class="score-ring-content">
+        <strong>{% if score.score is not none %}{{ value | round(1) }}{% else %}--{% endif %}</strong>
+        {% if size != "sm" %}<small>of 10</small>{% endif %}
+    </span>
+</div>
+{%- endmacro %}

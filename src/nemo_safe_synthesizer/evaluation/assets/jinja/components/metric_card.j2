@@ -1,0 +1,36 @@
+{% from "jinja/components/score_gauge.j2" import score_ring %}
+{% from "jinja/components/icon.j2" import icon %}
+
+{% macro metric_card(id, name, score, description, tooltip, expandable=true) -%}
+<article class="metric-card{% if expandable %} metric-card--expandable{% endif %}" id="{{ id }}" data-metric-card>
+    <div class="metric-card-summary{% if expandable %} metric-card-toggle{% endif %}"
+         {% if expandable %}data-metric-toggle role="button" tabindex="0"
+         aria-expanded="false" aria-controls="{{ id }}-details"{% endif %}>
+        {% if expandable %}
+            <span class="metric-chevron" aria-hidden="true"></span>
+        {% endif %}
+        <span class="metric-card-copy">
+            <span class="metric-card-title-row">
+                <span class="metric-card-title">{{ name }}</span>
+                {% if tooltip %}
+                <button class="metric-info" type="button" data-tooltip-toggle
+                        aria-expanded="false" aria-controls="{{ id }}-tooltip"
+                        aria-label="About {{ name }}">{{ icon("info") }}</button>
+                {% endif %}
+            </span>
+            <span class="metric-card-description">{{ description }}</span>
+        </span>
+        {{ score_ring(score, size="sm") }}
+    </div>
+
+    {% if tooltip %}
+    <div class="metric-tooltip" id="{{ id }}-tooltip" role="tooltip" hidden>{{ tooltip }}</div>
+    {% endif %}
+
+    {% if expandable %}
+    <div class="metric-card-details" id="{{ id }}-details" hidden>
+        {{ caller() }}
+    </div>
+    {% endif %}
+</article>
+{%- endmacro %}
