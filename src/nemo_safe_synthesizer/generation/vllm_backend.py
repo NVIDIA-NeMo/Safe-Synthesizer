@@ -738,7 +738,10 @@ class VllmBackend(GeneratorBackend):
             top_p=self.config.generation.top_p,
             top_k=FIXED_RUNTIME_GENERATE_ARGS["top_k"],
             min_p=FIXED_RUNTIME_GENERATE_ARGS["min_p"],
-            max_tokens=self.model_metadata.generation_max_tokens_for(self._get_prompt_token_count()),
+            max_tokens=self.model_metadata.generation_max_tokens_for(
+                self._get_prompt_token_count(),
+                multiplier=self.config.generation.max_tokens_multiplier,
+            ),
             skip_special_tokens=not need_special_token_outputs,
             include_stop_str_in_output=need_special_token_outputs,
             ignore_eos=False,

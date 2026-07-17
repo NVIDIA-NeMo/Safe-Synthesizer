@@ -1043,8 +1043,10 @@ class TestGenerationMaxTokensPlumbing:
         assert captured["max_tokens"] == 4_200
         # Engine is not initialized in this plumbing test, so the cached
         # prompt-token count falls back to 0; the helper is still called
-        # exactly once with that value.
-        mock_model_metadata.generation_max_tokens_for.assert_called_once_with(0)
+        # exactly once with that value plus the configured budget multiplier.
+        mock_model_metadata.generation_max_tokens_for.assert_called_once_with(
+            0, multiplier=base_params.generation.max_tokens_multiplier
+        )
 
     def test_passes_cached_prompt_token_count_when_engine_initialized(
         self, base_params, mock_model_metadata, mock_schema, mock_workdir
@@ -1074,7 +1076,9 @@ class TestGenerationMaxTokensPlumbing:
             backend.generate()
 
         assert captured["max_tokens"] == 4_096
-        mock_model_metadata.generation_max_tokens_for.assert_called_once_with(37)
+        mock_model_metadata.generation_max_tokens_for.assert_called_once_with(
+            37, multiplier=base_params.generation.max_tokens_multiplier
+        )
         # Cached: a second access does not retokenize.
         assert backend._get_prompt_token_count() == 37
         fake_tokenizer.encode.assert_called_once_with(backend.prompt)

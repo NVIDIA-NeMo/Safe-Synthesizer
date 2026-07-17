@@ -241,6 +241,28 @@ class GenerateParameters(Parameters, BaseModel):
         ),
     ] = 0.8
 
+    max_tokens_multiplier: Annotated[
+        float,
+        ValueValidator(value_func=lambda v: v > 0),
+        Field(
+            title="max_tokens_multiplier",
+            description=(
+                "Margin applied to the longest tokenized training example "
+                "(``max_tokens_per_example``) when sizing the per-sample generation "
+                "budget (``SamplingParams.max_tokens``). The effective budget is "
+                "``int(max_tokens_per_example * max_tokens_multiplier)``, still clamped "
+                "to the remaining context window. The default adds only a small jitter "
+                "margin, which suffices for most tables but is too tight for long, "
+                "unbounded free-text columns: a model that over-generates slightly past "
+                "the longest training example truncates mid-JSON and produces no "
+                "parseable record (``length``-dominated finish reasons, zero valid "
+                "records). Raise this (e.g. to 1.5-2.0) to give the model room to emit "
+                "the closing tokens on such datasets; there is no benefit to values that "
+                "push the budget past the context window. Must be > 0."
+            ),
+        ),
+    ] = 1.2  # mirrors llm.metadata.GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER (kept a literal to avoid a config->llm import cycle)
+
     structured_generation: StructuredGenerationParameters = Field(
         description="Structured generation parameters controlling schema-constrained output.",
         default_factory=StructuredGenerationParameters,

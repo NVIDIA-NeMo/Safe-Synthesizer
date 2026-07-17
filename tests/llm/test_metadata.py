@@ -689,6 +689,32 @@ class TestGenerationMaxTokensFor:
         # Beyond-context prompts still produce a safe value vLLM can accept.
         assert sample_model_metadata.generation_max_tokens_for(sample_model_metadata.max_seq_length + 64) == 0
 
+    def test_metadata_generation_max_tokens_for_none_multiplier_uses_default(self, sample_model_metadata):
+        """``multiplier=None`` reproduces the legacy safety-margin sizing."""
+        sample_model_metadata.max_tokens_per_example = 1000
+        expected = int(1000 * GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER)
+        assert sample_model_metadata.generation_max_tokens_for(10, multiplier=None) == expected
+        # Explicitly passing the default constant matches the None path.
+        assert (
+            sample_model_metadata.generation_max_tokens_for(10, multiplier=GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER)
+            == expected
+        )
+
+    def test_metadata_generation_max_tokens_for_custom_multiplier_widens_budget(self, sample_model_metadata):
+        """A larger multiplier widens the stat-derived budget (the long-text fix)."""
+        sample_model_metadata.max_tokens_per_example = 1000
+        # 1000 * 1.8 = 1800, still within the 2048 window given a small prompt.
+        assert sample_model_metadata.generation_max_tokens_for(10, multiplier=1.8) == 1800
+
+    def test_metadata_generation_max_tokens_for_custom_multiplier_still_clamped_to_window(self, sample_model_metadata):
+        """The prompt/window clamp still binds even with an aggressive multiplier."""
+        assert sample_model_metadata.max_seq_length == 2048
+        sample_model_metadata.max_tokens_per_example = 1500  # * 4.0 = 6000, far past the window
+        prompt_len = 48
+        assert sample_model_metadata.generation_max_tokens_for(prompt_len, multiplier=4.0) == (
+            sample_model_metadata.max_seq_length - prompt_len
+        )
+
     def test_metadata_max_tokens_per_example_round_trips_through_metadata_json(self, sample_model_metadata):
         """``max_tokens_per_example`` persists through save → load."""
         sample_model_metadata.max_tokens_per_example = 1500

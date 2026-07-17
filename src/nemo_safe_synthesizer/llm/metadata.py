@@ -450,13 +450,13 @@ class ModelMetadata(BaseModel):
             rsf = self.rope_scaling.factor
         return int((self.base_max_seq_length or DEFAULT_MAX_SEQ_LENGTH) * rsf)
 
-    def generation_max_tokens_for(self, prompt_len: int) -> int:
+    def generation_max_tokens_for(self, prompt_len: int, multiplier: float | None = None) -> int:
         """Per-sample ``max_tokens`` ceiling, prompt-aware.
 
         Returns the smaller of:
 
-        1. ``int(max_tokens_per_example * GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER)``
-           when the assembler stat is populated, else ``max_seq_length``.
+        1. ``int(max_tokens_per_example * multiplier)`` when the assembler stat
+           is populated, else ``max_seq_length``.
         2. ``max_seq_length - prompt_len`` -- vLLM raises when
            ``len(prompt) + max_tokens > max_model_len``
            (`vllm#33418 <https://github.com/vllm-project/vllm/issues/33418>`_).
@@ -468,15 +468,29 @@ class ModelMetadata(BaseModel):
         clamp is a defensive belt for legacy adapters where the assembler
         stat is missing and for prompts longer than those seen in training.
 
+        The default ``multiplier`` (``GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER``)
+        adds only a small jitter margin, which is enough for most tables but
+        too tight for long, unbounded free-text columns: a model that
+        over-generates slightly past the longest training example truncates
+        mid-JSON and yields no parseable record. Callers wire the user-facing
+        ``generation.max_tokens_multiplier`` knob through here to widen the
+        budget (bounded by the context window) for such datasets.
+
         Args:
             prompt_len: Tokenized length of the prompt this sample will
                 run against. Pass ``0`` to disable the prompt clamp.
+            multiplier: Margin applied to ``max_tokens_per_example``. Defaults
+                to ``GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER`` when ``None`` so
+                non-generation callers (e.g. the training eval callback) keep
+                the legacy sizing.
 
         Returns:
             Non-negative ``max_tokens`` value safe to feed to ``SamplingParams``.
         """
+        if multiplier is None:
+            multiplier = GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER
         if self.max_tokens_per_example and self.max_tokens_per_example > 0:
-            sized = int(self.max_tokens_per_example * GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER)
+            sized = int(self.max_tokens_per_example * multiplier)
         else:
             sized = self.max_seq_length
         return max(0, min(sized, self.max_seq_length - prompt_len))
