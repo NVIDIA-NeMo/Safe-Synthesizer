@@ -1,6 +1,10 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+from __future__ import annotations
+
+import pytest
+
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import EvaluationScore, Grade, PrivacyGrade
 
 
@@ -10,7 +14,7 @@ def test_raw_scores_are_rounded():
     assert score.raw_score == 1.2346
     assert score.score == 1.2
     # Why can't you be more like test_scores_are_clipped
-    assert score.grade == Grade.VERY_POOR
+    assert score.grade == Grade.POOR
     assert score.notes is None
 
 
@@ -53,3 +57,27 @@ def test_privacy_grade():
     assert score.score == 1.2
     # Still crappy but with more privacy.
     assert score.grade == PrivacyGrade.POOR
+
+
+@pytest.mark.parametrize(
+    ("score", "expected_quality", "expected_privacy"),
+    [
+        (0.0, Grade.POOR, PrivacyGrade.POOR),
+        (1.9, Grade.POOR, PrivacyGrade.POOR),
+        (2.0, Grade.MODERATE, PrivacyGrade.MODERATE),
+        (3.9, Grade.MODERATE, PrivacyGrade.MODERATE),
+        (4.0, Grade.GOOD, PrivacyGrade.GOOD),
+        (5.9, Grade.GOOD, PrivacyGrade.GOOD),
+        (6.0, Grade.VERY_GOOD, PrivacyGrade.VERY_GOOD),
+        (7.9, Grade.VERY_GOOD, PrivacyGrade.VERY_GOOD),
+        (8.0, Grade.EXCELLENT, PrivacyGrade.EXCELLENT),
+        (10.0, Grade.EXCELLENT, PrivacyGrade.EXCELLENT),
+    ],
+)
+def test_quality_and_privacy_grades_follow_documented_ranges(
+    score: float,
+    expected_quality: Grade,
+    expected_privacy: PrivacyGrade,
+) -> None:
+    assert EvaluationScore.score_to_grade(score) is expected_quality
+    assert EvaluationScore.score_to_grade(score, is_privacy=True) is expected_privacy

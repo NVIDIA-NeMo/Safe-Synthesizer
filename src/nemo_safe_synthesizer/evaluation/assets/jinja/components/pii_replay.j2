@@ -1,53 +1,42 @@
-<div class="component" id="pii-replay">
-    <div class="header">
-        PII Replay
-        <span data-toggle data-for="pii-replay-info" class="info"></span>
+{% from "jinja/components/icon.j2" import icon %}
+<section class="metric-panel pii-panel" id="pii-replay">
+    <header class="metric-panel-heading">
+        <span class="panel-icon">{{ icon("warning") }}</span>
+        <div>
+            <h2>PII Replay Analysis</h2>
+            <p>Identifies personally identifiable information replayed from training to synthetic data.</p>
+        </div>
+    </header>
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Column Name</th>
+                    <th>PII Type</th>
+                    <th>Training Total</th>
+                    <th>Training Unique</th>
+                    <th>Synthetic Total</th>
+                    <th>PII Replay</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for field in ctx.pii_replay.pii_replay_data %}
+                <tr>
+                    <td>{{ field.column_name }}</td>
+                    <td><span class="type-tag">{{ field.pii_type }}</span></td>
+                    <td class="tnum">{{ field.total_training_data }}</td>
+                    <td class="tnum">{{ field.unique_training_data }}</td>
+                    <td class="tnum">{{ field.total_synthetic_data }}</td>
+                    <td class="tnum">{{ field.unique_synthetic_data }}/{{ field.unique_training_data }}
+                        ({{ field.unique_synthetic_data_percentage }}%)</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
 
-    {% if ctx.pii_replay.pii_types %}
-        <div class="indented-block-text">
-        <b>PII Types included:</b>
-        {% for pii_type in ctx.pii_replay.pii_types %}
-            {{ pii_type + ", " if not loop.last else pii_type + "." }}
-        {% endfor %}
-        </div>
-    {% endif %}
-
-    <table>
-        <tr>
-            <th rowspan="2" scope="colgroup" class="first">Column Name</th>
-            <th rowspan="2" scope="colgroup">PII Type</th>
-            <th colspan="2" scope="colgroup" style="text-align:center">Training Data
-                ({{ ctx.pii_replay.training_total_records }} rows)</th>
-            <th colspan="2" scope="colgroup" style="text-align:center" class="last">Synthetic Data PII Replay
-                ({{ ctx.pii_replay.synthetic_total_records }}
-                rows)</th>
-        </tr>
-        <tr>
-            <th class="tnum">Total</th>
-            <th class="tnum">Unique</th>
-            <th class="tnum">Total</th>
-            <th class="last tnum">Unique</th>
-        </tr>
-        {% for field in ctx.pii_replay.pii_replay_data %}
-        <tr>
-            <td class="first">{{ field.column_name }}</td>
-            <td><span class="score-label">{{ field.pii_type }}</span></td>
-            <td class="tnum">{{ field.total_training_data }}</td>
-            <td class="tnum">{{ field.unique_training_data }}</td>
-            <td class="tnum">{{ field.total_synthetic_data }}</td>
-            <td class="last tnum">{{ field.unique_synthetic_data }}/{{ field.unique_training_data }} ({{
-                field.unique_synthetic_data_percentage }}%)</td>
-        </tr>
-        {% endfor %}
-    </table>
-
-    <div class="footer">
-        <div class="footer-main">
-            <button data-toggle data-for="pii-replay-info">What do these values mean</button>
-        </div>
-        <div class="tooltips" id="pii-replay-info" hidden>
-            {{ ctx.tooltips.pii_replay_info }}
-        </div>
-    </div>
-</div>
+    <footer class="panel-footer">{{ icon("info") }}
+        <span>Lower replay percentages indicate better privacy protection for unique PII values</span>
+    </footer>
+</section>

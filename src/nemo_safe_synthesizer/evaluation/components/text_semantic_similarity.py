@@ -81,16 +81,18 @@ class TextSemanticSimilarity(Component):
         ctx["anchor_link"] = "#semantic-similarity"
         ctx["figures"] = []
         if self.text_semantic_similarity_dict:
-            maybe_figs = [
-                figures.generate_text_semantic_similarity_figures(
+            maybe_figs = {
+                col: figures.generate_text_semantic_similarity_figures(
                     self.text_semantic_similarity_dict[col].training_pca.iloc[:, :2],
                     self.text_semantic_similarity_dict[col].synthetic_pca.iloc[:, :2],
-                    col,
                 )
                 for col in self.text_semantic_similarity_dict.keys()
+            }
+            ctx["figures"] = [
+                {"title": col, "html": fig.to_html(full_html=False, include_plotlyjs=False)}
+                for col, fig in maybe_figs.items()
+                if fig is not None
             ]
-            figs = [fig.to_html(full_html=False, include_plotlyjs=False) for fig in maybe_figs if fig is not None]
-            ctx["figures"] = figs
 
         return ctx
 

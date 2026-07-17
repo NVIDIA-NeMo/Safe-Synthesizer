@@ -16,10 +16,10 @@ class Grade(Enum):
     """Qualitative quality grade for a synthetic data metric."""
 
     UNAVAILABLE = "Unavailable"
-    VERY_POOR = "Very Poor"
     POOR = "Poor"
     MODERATE = "Moderate"
     GOOD = "Good"
+    VERY_GOOD = "Very Good"
     EXCELLENT = "Excellent"
 
 

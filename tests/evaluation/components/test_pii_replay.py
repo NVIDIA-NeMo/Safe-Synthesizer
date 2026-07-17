@@ -69,3 +69,25 @@ def test_pii_replay_column_name_with_apostrophe():
     assert datum.total_synthetic_data == 3
     assert datum.unique_synthetic_data == 2
     assert datum.unique_synthetic_data_percentage == 100.0
+
+
+def test_pii_replay_percentage_rounds_up_to_one_decimal_place():
+    training = pd.DataFrame({"name": ["Ada", "Grace", "Katherine"]})
+    synthetic = pd.DataFrame({"name": ["Ada", "Margaret"]})
+    column_statistics = {
+        "name": ColumnStatistics(
+            assigned_type="name",
+            assigned_entity="name",
+            detected_entity_counts={"name": 3},
+            detected_entity_values={"name": {"Ada", "Grace", "Katherine"}},
+            is_transformed=True,
+            transform_functions={"fake"},
+        )
+    }
+    evaluation_datasets = EvaluationDatasets.from_dataframes(
+        training, synthetic, column_statistics=column_statistics, enable_sampling=False
+    )
+
+    pii_replay = PIIReplay.from_evaluation_datasets(evaluation_datasets)
+
+    assert pii_replay.pii_replay_data[0].unique_synthetic_data_percentage == 33.4
