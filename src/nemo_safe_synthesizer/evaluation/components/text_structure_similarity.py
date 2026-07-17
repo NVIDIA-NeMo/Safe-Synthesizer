@@ -78,16 +78,16 @@ class TextStructureSimilarity(Component):
         d["anchor_link"] = "#structure-similarity"
         d["figures"] = []
         if self.training_statistics:
-            maybe_figs = [
-                figures.generate_text_structure_similarity_figures(
-                    self.training_statistics[col],
-                    self.synthetic_statistics[col],
-                    col,
+            maybe_figs = {
+                col: figures.generate_text_structure_similarity_figures(
+                    self.training_statistics[col], self.synthetic_statistics[col]
                 )
                 for col in self.training_statistics
-            ]
+            }
             d["figures"] = [
-                fig.to_html(full_html=False, include_plotlyjs=False) for fig in maybe_figs if fig is not None
+                {"title": col, "html": fig.to_html(full_html=False, include_plotlyjs=False)}
+                for col, fig in maybe_figs.items()
+                if fig is not None
             ]
 
         return d

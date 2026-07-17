@@ -672,7 +672,7 @@ class _TextStatsLike(Protocol):
 
 
 def generate_text_structure_similarity_figures(
-    training_statistics: _TextStatsLike, synthetic_statistics: _TextStatsLike, title: str
+    training_statistics: _TextStatsLike, synthetic_statistics: _TextStatsLike
 ) -> go.Figure | None:
     """Generate overlaid histograms of sentence/word/character distributions."""
     statistics_keys = [
@@ -701,7 +701,6 @@ def generate_text_structure_similarity_figures(
             "Characters Per Word",
         ],
         height=400,
-        general_title=title,
         shared_xaxes=False,
         shared_yaxes=False,
         margin=dict(l=0, r=0, t=64, b=0),

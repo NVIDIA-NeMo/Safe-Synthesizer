@@ -511,7 +511,7 @@ class TestGenerateTextStructureSimilarityFigures:
             {"per_record_statistics": pd.DataFrame()},
         )()
 
-        result = generate_text_structure_similarity_figures(training_stats, synthetic_stats, "Test Title")
+        result = generate_text_structure_similarity_figures(training_stats, synthetic_stats)
 
         assert result is None
 
@@ -532,9 +532,15 @@ class TestGenerateTextStructureSimilarityFigures:
             {"per_record_statistics": pd.DataFrame(data)},
         )()
 
-        result = generate_text_structure_similarity_figures(training_stats, synthetic_stats, "Text Structure")
+        result = generate_text_structure_similarity_figures(training_stats, synthetic_stats)
 
         assert isinstance(result, go.Figure)
+        assert result.layout.title.text is None
+        assert [annotation.text for annotation in result.layout.annotations] == [
+            "Sentence Count",
+            "Words Per Sentence",
+            "Characters Per Word",
+        ]
 
 
 class TestGenerateTextSemanticSimilarityFigures:

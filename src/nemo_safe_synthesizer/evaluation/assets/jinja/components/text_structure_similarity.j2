@@ -2,4 +2,9 @@
     <span><i class="legend-training"></i>Training Data</span>
     <span><i class="legend-synthetic"></i>Synthetic Data</span>
 </div>
-{% for row in ctx.text_structure_similarity.figures %}<figure>{{ row }}</figure>{% endfor %}
+{% for row in ctx.text_structure_similarity.figures %}
+<figure>
+    <h3 class="chart-subheading">{{ row.title }}</h3>
+    {{ row.html }}
+</figure>
+{% endfor %}
