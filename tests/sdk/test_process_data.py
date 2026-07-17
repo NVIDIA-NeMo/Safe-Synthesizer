@@ -505,34 +505,39 @@ class TestLoadFromSavePath:
         with pytest.raises(ValidationError, match="epoch"):
             builder.load_from_save_path()
 
-    @pytest.mark.parametrize("use_runtime_config", [False, True], ids=["builder-policy", "runtime-policy"])
+    @pytest.mark.parametrize("policy_source", ["saved", "builder", "runtime"])
     @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
     def test_load_can_ignore_unknown_legacy_saved_fields(
         self,
         mock_metadata_cls,
-        use_runtime_config,
+        policy_source,
         tmp_path,
         fixture_sample_patient_dataframe,
         fixture_sample_patient_redacted_dataframe,
     ):
-        """An explicit non-strict resume policy applies before saved-config validation."""
+        """A persisted or overriding non-strict policy applies during saved-config validation."""
         workdir, _, _ = self._prepare_workdir(
             tmp_path,
             fixture_sample_patient_dataframe,
             fixture_sample_patient_redacted_dataframe,
         )
         saved_config = SafeSynthesizerParameters().model_dump(mode="json")
-        saved_config.pop("strict_config")
+        if policy_source == "saved":
+            saved_config["strict_config"] = False
+        else:
+            saved_config.pop("strict_config")
         saved_config["training"]["epoch"] = 1
         workdir.config.write_text(json.dumps(saved_config))
         mock_metadata_cls.from_metadata_json.return_value = MagicMock()
 
-        runtime_config = SafeSynthesizerParameters.model_validate({"strict_config": False})
-        builder = SafeSynthesizer(config=runtime_config if use_runtime_config else None, workdir=workdir)
-        if not use_runtime_config:
+        runtime_config = (
+            SafeSynthesizerParameters.model_validate({"strict_config": False}) if policy_source == "runtime" else None
+        )
+        builder = SafeSynthesizer(config=runtime_config, workdir=workdir)
+        if policy_source == "builder":
             builder.with_strict_config(False)
 
-        builder.load_from_save_path(runtime_config=runtime_config if use_runtime_config else None)
+        builder.load_from_save_path(runtime_config=runtime_config)
 
         assert builder._nss_config is not None
         assert builder._nss_config.strict_config is False
