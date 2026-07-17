@@ -631,6 +631,7 @@ class SafeSynthesizer(ConfigBuilder):
 
         self.results = make_nss_results(
             total_time=time.monotonic() - self._total_start,
+            pii_replacer_time=self._pii_replacer_time,
             training_time=training_time,
             generation_time=generation_time,
             evaluation_time=evaluation_time,
