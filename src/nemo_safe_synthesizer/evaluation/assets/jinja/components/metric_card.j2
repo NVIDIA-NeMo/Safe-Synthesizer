@@ -27,7 +27,7 @@
     </div>
 
     {% if tooltip %}
-    <div class="metric-tooltip" id="{{ id }}-tooltip" role="tooltip" hidden>{{ tooltip }}</div>
+    <div class="metric-tooltip" id="{{ id }}-tooltip" role="tooltip" hidden>{{ tooltip | trim }}</div>
     {% endif %}
 
     {% if expandable %}

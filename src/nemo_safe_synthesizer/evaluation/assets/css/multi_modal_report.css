@@ -811,7 +811,7 @@ h3 {
     color: var(--text);
     font-size: 12px;
     line-height: 18px;
-    white-space: pre-line;
+    white-space: normal;
 }
 
 .metric-card-details {

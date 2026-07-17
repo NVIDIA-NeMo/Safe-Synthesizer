@@ -14,7 +14,7 @@
                 <th>Avg. Length</th>
                 <th>Type</th>
                 {% if ctx.with_transform %}
-                <th>Entities</th>
+                <th>Entities (Count)</th>
                 <th>Transformed</th>
                 <th>Transform function</th>
                 {% endif %}
@@ -33,7 +33,7 @@
                     {% if column.column_statistics and column.column_statistics.detected_entity_counts %}
                     <div class="entity-tags">
                         {% for entity, count in column.column_statistics.detected_entity_counts.items() %}
-                        <span class="type-tag">{{ entity }} {{ count }}</span>
+                        <span class="type-tag">{{ entity }} ({{ "{:,}".format(count) }})</span>
                         {% endfor %}
                     </div>
                     {% endif %}

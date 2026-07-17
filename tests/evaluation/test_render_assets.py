@@ -67,10 +67,15 @@ def test_evaluation_report_themes_charts_in_report_assets() -> None:
     assert "memorization-status--warning" in dataset_statistics
     assert 'class="metric-card-toggle" type="button"' in metric_card
     assert 'role="button"' not in metric_card
+    assert "{{ tooltip | trim }}" in metric_card
+    assert "white-space: normal" in stylesheet
+    assert "white-space: pre-line" not in stylesheet
     assert "column.training_field_features.type" in training_columns
     assert "column.synthetic_field_features.type" not in training_columns
     assert "columns-table--with-transform" in training_columns
     assert 'class="entity-tags"' in training_columns
+    assert "Entities (Count)" in training_columns
+    assert '{{ entity }} ({{ "{:,}".format(count) }})' in training_columns
     assert ".columns-table--with-transform" in stylesheet
     assert ".transform-function-cell" in stylesheet
     assert 'class="chart-subheading"' in text_semantic_similarity
