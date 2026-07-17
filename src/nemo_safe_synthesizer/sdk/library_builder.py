@@ -427,6 +427,24 @@ class SafeSynthesizer(ConfigBuilder):
             # We explicitly do not replace PII in the test set so that the
             # privacy metrics are valid.
 
+        # Persist the train/test splits now -- before the full preflight run
+        # below -- so that a preflight failure (e.g. group_exceeds_context)
+        # still leaves the processed datasets on disk for inspection. Skipped on
+        # the ``--validate`` path (``check_only``), which intentionally elides
+        # CSV writes.
+        if not check_only:
+            assert self._workdir is not None
+            self._workdir.ensure_directories()
+            # ``training.csv`` is the canonical persisted original training
+            # split -- reloaded by load_from_save_path and used for evaluation.
+            self._original_training_df.to_csv(self._workdir.dataset.training, index=False)
+            if not self._training_df.equals(self._original_training_df):
+                # The transformed (e.g. PII-replaced) training data is saved for
+                # inspection only -- we don't need it in generation or evaluation.
+                self._training_df.to_csv(self._workdir.dataset.transformed_training, index=False)
+            if self._test_df is not None:
+                self._test_df.to_csv(self._workdir.dataset.test, index=False)
+
         # Only create new metadata if not already loaded (e.g., from load_from_save_path)
         metadata_for_preflight = self._llm_metadata
         if metadata_for_preflight is None:
@@ -474,19 +492,6 @@ class SafeSynthesizer(ConfigBuilder):
             return self
 
         self._data_processed = True
-
-        # Always persist the original training split -- this is the version
-        # reloaded by load_from_save_path and used for evaluation metrics.
-        assert self._workdir is not None
-        self._workdir.ensure_directories()
-        # ``training.csv`` is the canonical persisted original training split.
-        self._original_training_df.to_csv(self._workdir.dataset.training, index=False)
-        if not self._training_df.equals(self._original_training_df):
-            # The transformed (e.g. PII-replaced) training data is saved for
-            # inspection only -- we don't need it in the generation or evaluation phase.
-            self._training_df.to_csv(self._workdir.dataset.transformed_training, index=False)
-        if self._test_df is not None:
-            self._test_df.to_csv(self._workdir.dataset.test, index=False)
         return self
 
     @traced("SafeSynthesizer.train", category=LogCategory.RUNTIME)
