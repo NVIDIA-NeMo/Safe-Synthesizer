@@ -36,11 +36,19 @@ def _row_to_persona(row: pd.Series) -> dict:
     return core._pgm_persona(row)
 
 
-def _faker_persona(fake: Any) -> dict:
+def _faker_persona(fake: Any, sex: str | None = None) -> dict:
+    # Condition the given name on sex so the synthetic name matches the source
+    # demographic; fall back to an unconditioned name when sex is unknown.
+    if sex == "Male":
+        first_name, resolved_sex = fake.first_name_male(), "Male"
+    elif sex == "Female":
+        first_name, resolved_sex = fake.first_name_female(), "Female"
+    else:
+        first_name, resolved_sex = fake.first_name(), fake.random_element(["Male", "Female"])
     return {
-        "first_name": fake.first_name(),
+        "first_name": first_name,
         "last_name": fake.last_name(),
-        "sex": fake.random_element(["Male", "Female"]),
+        "sex": resolved_sex,
         "ethnic_background": "white",
         "email_address": fake.email(),
         "phone_number": fake.phone_number(),
@@ -86,15 +94,37 @@ class PersonaEngine:
             if self.managed_df is None:
                 self.backend = "faker"
 
-    def _sample_managed(self, n: int, seed: int) -> list[dict]:
-        if self.managed_df is None or self.managed_df.empty:
+    def _sample_managed(
+        self, n: int, seed: int, sex: str | None = None, sfv: dict | None = None
+    ) -> list[dict]:
+        df = self.managed_df
+        if df is None or df.empty:
             return []
-        sample = self.managed_df.sample(n=n, replace=n > len(self.managed_df), random_state=seed)
+        eth = None
+        if sfv:
+            vals = sfv.get("ethnic_background")
+            if vals:
+                eth = {str(v).strip().lower() for v in vals}
+        # Prefer matching sex+ethnicity, then relax to sex-only, ethnicity-only, and
+        # finally the whole pool -- mirroring the PGM pool's matching (names are
+        # conditioned on sex + ethnic_background only).
+        sub = df
+        for use_sex, use_eth in ((True, True), (True, False), (False, True), (False, False)):
+            sub = df
+            if use_sex and sex and "sex" in sub.columns:
+                sub = sub[sub["sex"] == sex]
+            if use_eth and eth and "ethnic_background" in sub.columns:
+                sub = sub[sub["ethnic_background"].astype(str).str.strip().str.lower().isin(eth)]
+            if not sub.empty:
+                break
+        if sub.empty:
+            sub = df
+        sample = sub.sample(n=n, replace=n > len(sub), random_state=seed)
         return [_row_to_persona(row) for _, row in sample.iterrows()]
 
-    def _sample_faker(self, n: int, seed: int) -> list[dict]:
+    def _sample_faker(self, n: int, seed: int, sex: str | None = None) -> list[dict]:
         fake = core._seeded_faker(seed, self.runtime.locale)
-        return [_faker_persona(fake) for _ in range(n)]
+        return [_faker_persona(fake, sex) for _ in range(n)]
 
     def assign(self, instances: list[dict]) -> None:
         if not instances:
@@ -106,19 +136,23 @@ class PersonaEngine:
                 self.source_counts["pgm"] += 1
             return
 
+        # Bucket instances by their demographic constraint (sex, ethnicity) so every
+        # instance in a bucket is sampled from the matching sub-population.
         buckets: dict[Any, list[int]] = {}
         for idx, inst in enumerate(instances):
             buckets.setdefault(core._constraint_signature(inst), []).append(idx)
-        for b_idx, (_sig, idxs) in enumerate(buckets.items()):
+        for b_idx, (sig, idxs) in enumerate(buckets.items()):
+            sex, sfv_key = sig
+            sfv = {k: list(v) for k, v in sfv_key} or None
             seed = self.runtime.random_seed + b_idx
             if self.backend == "managed" and self.managed_df is not None:
-                personas = self._sample_managed(len(idxs), seed)
+                personas = self._sample_managed(len(idxs), seed, sex, sfv)
                 source = "managed"
             else:
-                personas = self._sample_faker(len(idxs), seed)
+                personas = self._sample_faker(len(idxs), seed, sex)
                 source = "faker"
             if len(personas) < len(idxs):
-                personas.extend(self._sample_faker(len(idxs) - len(personas), seed + 1))
+                personas.extend(self._sample_faker(len(idxs) - len(personas), seed + 1, sex))
                 source = "faker"
             self.source_counts[source] += len(idxs)
             for inst_idx, persona in zip(idxs, personas):

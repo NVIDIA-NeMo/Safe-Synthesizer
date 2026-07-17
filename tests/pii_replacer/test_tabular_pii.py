@@ -188,6 +188,49 @@ def test_column_statistics_dob_perturbation_and_unique_id_methods():
     assert record_id_stats.transform_methods == {"Faker"}
 
 
+def test_faker_persona_names_conditioned_on_sex():
+    """Regression: the persona engine must condition synthetic names on the source
+    ``sex`` demographic. A bug dropped the (sex, ethnicity) bucket signature so names
+    were drawn with a random gender, producing e.g. a female name for a Male row."""
+    from nemo_safe_synthesizer.pii_replacer.persona import PersonaEngine
+    from nemo_safe_synthesizer.pii_replacer.replacement import extract_instances
+
+    n = 40
+    df = pd.DataFrame(
+        {
+            "Name": [f"Person {i}" for i in range(n)],
+            "Gender": ["Male" if i % 2 else "Female" for i in range(n)],
+        }
+    )
+    runtime_plan = {
+        "group_key": None,
+        "roles": [
+            {
+                "role": "primary_person",
+                "fields": {"full_name": "Name"},
+                "field_meta": {},
+                "demographics": {"sex": "Gender", "race": None},
+            }
+        ],
+        "non_person": [],
+        "free_text_columns": [],
+    }
+    runtime = runtime_config_from_replace_pii(
+        ReplacePiiConfig(person={"backend": "faker"}, replacement={"locale": "en_US"})
+    )
+    from nemo_safe_synthesizer.pii_replacer.replacement import _core_config
+
+    instances = extract_instances(df, runtime_plan, _core_config(runtime))
+    assert len(instances) == n
+    engine = PersonaEngine(runtime, len(instances))
+    assert engine.backend == "faker"
+    engine.assign(instances)
+
+    # Every instance carries the source sex, and its sampled persona matches it.
+    assert all(inst["sex"] in ("Male", "Female") for inst in instances)
+    assert all(inst["persona"]["sex"] == inst["sex"] for inst in instances)
+
+
 def test_plan_column_counts():
     plan = PiiReplacementPlan(
         associated_column_sets={
