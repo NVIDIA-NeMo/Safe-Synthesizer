@@ -62,6 +62,10 @@ def test_evaluation_report_themes_charts_in_report_assets() -> None:
     assert 'role="button"' not in metric_card
     assert "column.training_field_features.type" in training_columns
     assert "column.synthetic_field_features.type" not in training_columns
+    assert "columns-table--with-transform" in training_columns
+    assert 'class="entity-tags"' in training_columns
+    assert ".columns-table--with-transform" in stylesheet
+    assert ".transform-function-cell" in stylesheet
     assert "#dps-interpretation" in template
     assert 'aria-label="Report sections"' in template
     assert '<div class="sidebar-label">' not in template

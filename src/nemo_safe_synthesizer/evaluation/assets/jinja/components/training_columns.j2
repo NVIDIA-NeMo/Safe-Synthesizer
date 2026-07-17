@@ -5,7 +5,7 @@
     </div>
 </div>
 <div class="table-wrap">
-    <table class="columns-table">
+    <table class="columns-table{% if ctx.with_transform %} columns-table--with-transform{% endif %}">
         <thead>
             <tr>
                 <th>Column Name</th>
@@ -29,15 +29,17 @@
                 <td>{{ column.training_field_features.avg_str_length | round(2) }}</td>
                 <td><span class="type-tag">{{ column.training_field_features.type | capitalize }}</span></td>
                 {% if ctx.with_transform %}
-                <td>
+                <td class="entities-cell">
                     {% if column.column_statistics and column.column_statistics.detected_entity_counts %}
-                    {% for entity, count in column.column_statistics.detected_entity_counts.items() %}
-                    <span class="type-tag">{{ entity }} {{ count }}</span>
-                    {% endfor %}
+                    <div class="entity-tags">
+                        {% for entity, count in column.column_statistics.detected_entity_counts.items() %}
+                        <span class="type-tag">{{ entity }} {{ count }}</span>
+                        {% endfor %}
+                    </div>
                     {% endif %}
                 </td>
                 <td>{{ column.column_statistics.is_transformed if column.column_statistics else False }}</td>
-                <td>
+                <td class="transform-function-cell">
                     {% if column.column_statistics %}
                     {{ column.column_statistics.transform_functions | join(", ") }}
                     {% endif %}

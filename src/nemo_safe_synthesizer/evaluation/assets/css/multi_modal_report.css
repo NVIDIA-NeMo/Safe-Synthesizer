@@ -999,6 +999,56 @@ tbody tr:hover td {
     width: 22%;
 }
 
+.columns-table--with-transform {
+    min-width: 960px;
+}
+
+.columns-table--with-transform th,
+.columns-table--with-transform td {
+    padding-right: 8px;
+    padding-left: 8px;
+}
+
+.columns-table--with-transform th:nth-child(1) {
+    width: 14%;
+}
+
+.columns-table--with-transform th:nth-child(2),
+.columns-table--with-transform th:nth-child(3) {
+    width: 8%;
+}
+
+.columns-table--with-transform th:nth-child(4) {
+    width: 10%;
+}
+
+.columns-table--with-transform th:nth-child(5) {
+    width: 10%;
+}
+
+.columns-table--with-transform th:nth-child(6) {
+    width: 24%;
+}
+
+.columns-table--with-transform th:nth-child(7) {
+    width: 11%;
+}
+
+.columns-table--with-transform th:nth-child(8) {
+    width: 15%;
+}
+
+.entity-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+}
+
+.transform-function-cell {
+    overflow-wrap: anywhere;
+}
+
 .show-columns {
     min-height: 40px;
     display: grid;
