@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -118,6 +119,19 @@ def load_plan_from_path(path: str) -> PiiReplacementPlan:
     if not isinstance(data, dict):
         raise ParameterError(f"plan file {path!r} must contain a mapping")
     return PiiReplacementPlan.model_validate(data)
+
+
+PII_REPLACEMENT_PLAN_FILENAME = "pii_replacement_plan.yaml"
+
+
+def save_plan_to_path(plan: PiiReplacementPlan, path: str | Path) -> Path:
+    """Write a replacement plan as YAML, omitting fields with null values."""
+    out = Path(path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    data = json.loads(plan.model_dump_json(exclude_none=True))
+    with out.open("w") as f:
+        yaml.safe_dump(data, f, sort_keys=False)
+    return out
 
 
 def plan_to_runtime(plan: PiiReplacementPlan) -> dict[str, Any]:

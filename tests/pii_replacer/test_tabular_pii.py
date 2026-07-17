@@ -283,6 +283,9 @@ def test_discovery_logs_temporal_and_free_text_gates(caplog):
     dominant_dates = [f"04/{(i % 28) + 1:02d}/2023" for i in range(95)]
     df = pd.DataFrame(
         {
+            # A structured (person) column so free-text scanning is not skipped:
+            # this test exercises the dtype/field-type free-text gate logging.
+            "first_name": [f"First{i}" for i in range(100)],
             "event_date": dominant_dates + ["08/2010"] * 4 + ["unknown"] * 1,
             "weight": [135.0] * 100,
             "notes": [f"Patient record {i} visited clinic for follow up care today" for i in range(100)],
@@ -298,6 +301,55 @@ def test_discovery_logs_temporal_and_free_text_gates(caplog):
     assert any("Identified temporal column 'event_date'" in message for message in messages)
     assert any("not scanned as free text for PII detection" in message and "weight" in message for message in messages)
     assert any("Column 'notes' scanned as free text for PII detection" in message for message in messages)
+
+
+def test_mvp_skips_free_text_scan_without_structured_columns(caplog):
+    import logging
+
+    from nemo_safe_synthesizer.pii_replacer.discovery import discover_plan
+
+    caplog.set_level(logging.INFO)
+    # No person columns and no replaceable non-person columns: only a generic
+    # (identify-only) date and a free-text column. In MVP mode there is nothing
+    # to propagate, so the free-text column must not be scanned/planned.
+    dominant_dates = [f"04/{(i % 28) + 1:02d}/2023" for i in range(100)]
+    df = pd.DataFrame(
+        {
+            "event_date": dominant_dates,
+            "notes": [f"Patient record {i} visited clinic for follow up care today" for i in range(100)],
+        }
+    )
+    plan = discover_plan(
+        df,
+        group_key=None,
+        runtime=runtime_config_from_replace_pii(ReplacePiiConfig()),
+        config=ReplacePiiConfig(),
+    )
+    assert "notes" not in plan.unassociated_columns_to_replace
+    for col_set in plan.associated_column_sets.values():
+        assert "notes" not in col_set.columns_to_replace
+    messages = [record.getMessage() for record in caplog.records]
+    assert any("skipping free-text scan" in message for message in messages)
+
+
+def test_llm_mode_still_scans_free_text_without_structured_columns():
+    from nemo_safe_synthesizer.pii_replacer.discovery import discover_plan
+
+    dominant_dates = [f"04/{(i % 28) + 1:02d}/2023" for i in range(100)]
+    df = pd.DataFrame(
+        {
+            "event_date": dominant_dates,
+            "notes": [f"Patient record {i} visited clinic for follow up care today" for i in range(100)],
+        }
+    )
+    plan = discover_plan(
+        df,
+        group_key=None,
+        runtime=runtime_config_from_replace_pii(ReplacePiiConfig(llm_enhancement=True)),
+        config=ReplacePiiConfig(llm_enhancement=True),
+    )
+    notes = plan.unassociated_columns_to_replace.get("notes")
+    assert notes is not None and notes.entity_type == PiiEntity.free_text
 
 
 def test_date_entity_not_replaced_passthrough():
@@ -390,6 +442,10 @@ def test_discover_temporal_columns_identified_not_replaced():
     n = 100
     df = pd.DataFrame(
         {
+            # A structured (person) column so free-text scanning is not skipped;
+            # this test verifies temporal columns are identified-but-not-replaced
+            # while genuine free text is still planned.
+            "first_name": [f"First{i}" for i in range(n)],
             "created_at": [f"2023-04-{(i % 28) + 1:02d} 14:30:00" for i in range(95)] + ["2023-05-01 09:00:00"] * 5,
             "shift_start": [f"{(i % 24):02d}:00:00" for i in range(95)] + ["09:15:00"] * 5,
             "wait_time": [f"PT{(i % 20) + 1}H30M" for i in range(95)] + ["45 min"] * 5,
@@ -607,12 +663,23 @@ def test_record_scoped_replacement_changes_per_row():
     assert providers[0] != providers[1]
 
 
-def test_auto_discovery_emits_plan_shape(patient_df: pd.DataFrame):
+def test_auto_discovery_emits_plan_shape():
+    n = 30
+    # A high-cardinality person column ensures structured detection fires, so the
+    # free-text column is scanned and planned (in MVP mode free text is only
+    # planned when there is structured PII to propagate).
+    df = pd.DataFrame(
+        {
+            "patient_id": [f"P{i:03d}" for i in range(n)],
+            "first_name": [f"First{i}" for i in range(n)],
+            "notes": [f"Patient record {i} visited the clinic for follow up care today" for i in range(n)],
+        }
+    )
     replacer = TabularPiiReplacer(
         ReplacePiiConfig(replacement_plan=AUTO_DISCOVERY, person={"backend": "faker"}),
         data_config=DataParameters(group_training_examples_by="patient_id"),
     )
-    replacer.transform_df(patient_df)
+    replacer.transform_df(df)
     assert replacer.resolved_plan is not None
     assert replacer.resolved_plan.group_key == "patient_id"
     notes = replacer.resolved_plan.unassociated_columns_to_replace.get("notes")
@@ -651,9 +718,9 @@ def test_llm_enhancement_not_implemented(patient_df: pd.DataFrame):
 
 
 def test_replacement_plan_artifact(tmp_path, patient_df: pd.DataFrame):
-    import json
+    import yaml
 
-    from nemo_safe_synthesizer.pii_replacer.plan import load_plan_from_path
+    from nemo_safe_synthesizer.pii_replacer.plan import PII_REPLACEMENT_PLAN_FILENAME, load_plan_from_path
 
     replacer = TabularPiiReplacer(
         ReplacePiiConfig(replacement_plan=AUTO_DISCOVERY, person={"backend": "faker"}),
@@ -661,9 +728,9 @@ def test_replacement_plan_artifact(tmp_path, patient_df: pd.DataFrame):
         workdir=tmp_path,
     )
     replacer.transform_df(patient_df)
-    plan_file = tmp_path / "pii_replacement_plan.json"
+    plan_file = tmp_path / PII_REPLACEMENT_PLAN_FILENAME
     assert plan_file.exists()
-    plan_data = json.loads(plan_file.read_text())
+    plan_data = yaml.safe_load(plan_file.read_text())
 
     def _contains_null(value: object) -> bool:
         if value is None:

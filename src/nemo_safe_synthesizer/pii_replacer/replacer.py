@@ -14,7 +14,7 @@ import pandas as pd
 from ..config.data import DataParameters
 from ..config.pii_replacement import PiiColumnPlan, PiiEntity, PiiReplacementPlan, ReplacePiiConfig
 from ..observability import get_logger
-from .plan import plan_to_runtime, resolve_plan, unique_id_advisories
+from .plan import PII_REPLACEMENT_PLAN_FILENAME, plan_to_runtime, resolve_plan, save_plan_to_path, unique_id_advisories
 from .replacement import run_replacement
 from .runtime_config import runtime_config_from_replace_pii
 from .transform_result import ColumnStatistics, TransformResult
@@ -140,10 +140,7 @@ class TabularPiiReplacer:
             logger.runtime.info(f"Wrote PII replacement plan to {plan_path}")
 
     def _emit_plan(self, plan: PiiReplacementPlan) -> Path:
-        out = self._workdir / "pii_replacement_plan.json"
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(plan.model_dump_json(indent=2, exclude_none=True))
-        return out
+        return save_plan_to_path(plan, self._workdir / PII_REPLACEMENT_PLAN_FILENAME)
 
     def _build_column_statistics(
         self,

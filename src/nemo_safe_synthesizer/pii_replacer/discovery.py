@@ -105,7 +105,7 @@ def _core_config(runtime: RuntimeConfig) -> core.Config:
     )
 
 
-def _detect_full_dataframe(df: pd.DataFrame, cfg: core.Config) -> dict:
+def _detect_full_dataframe(df: pd.DataFrame, cfg: core.Config, *, llm_enhancement: bool = False) -> dict:
     stats = core.column_stats(df)
     out = core._detect_subset_mvp(df, stats, cfg)
 
@@ -127,7 +127,27 @@ def _detect_full_dataframe(df: pd.DataFrame, cfg: core.Config) -> dict:
 
     exclude = _discovery_exclude_columns(out)
     exclude |= set(out.get("identified_not_replaced", []))
-    free_text_columns = _nss_free_text_columns(df, exclude)
+
+    # In MVP mode, free-text columns are only ever modified by propagating
+    # synthetic values from structured detections (person fields and replaced
+    # non-person columns). Temporal "identify-only" entities are never replaced,
+    # so they don't count. When nothing structured is replaceable there is
+    # nothing to propagate, so scanning free text is pointless. LLM mode detects
+    # entities directly, so it always scans.
+    has_person = any((role.get("fields") or {}) for role in roles)
+    has_replaceable_non_person = any(
+        e.get("entity") not in core.IDENTIFIED_NOT_REPLACED_ENTITIES for e in non_person
+    )
+    has_structured = has_person or has_replaceable_non_person
+
+    if llm_enhancement or has_structured:
+        free_text_columns = _nss_free_text_columns(df, exclude)
+    else:
+        free_text_columns = []
+        logger.runtime.info(
+            "[PII Replacement] No structured PII columns detected; skipping free-text scan "
+            "(nothing to propagate in non-LLM mode)"
+        )
 
     identified = out.get("identified_not_replaced", [])
     if identified:
@@ -156,7 +176,7 @@ def discover_plan(
     config: ReplacePiiConfig,
 ) -> PiiReplacementPlan:
     cfg = _core_config(runtime)
-    detected = _detect_full_dataframe(df, cfg)
+    detected = _detect_full_dataframe(df, cfg, llm_enhancement=config.llm_enhancement)
 
     plan = runtime_plan_to_pii_plan(detected, group_key=group_key)
 
