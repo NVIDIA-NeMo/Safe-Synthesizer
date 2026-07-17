@@ -11,7 +11,6 @@ from ..artifacts.analyzers.field_features import describe_field
 from ..artifacts.base.fields import FieldType
 
 from ..config.pii_replacement import (
-    AssociatedColumnSet,
     PiiColumnPlan,
     PiiEntity,
     PiiReplacementPlan,
@@ -105,8 +104,19 @@ def _core_config(runtime: RuntimeConfig) -> core.Config:
     )
 
 
-def _detect_full_dataframe(df: pd.DataFrame, cfg: core.Config, *, llm_enhancement: bool = False) -> dict:
-    stats = core.column_stats(df)
+def _detect_full_dataframe(
+    df: pd.DataFrame,
+    cfg: core.Config,
+    *,
+    group_key: str | None = None,
+    llm_enhancement: bool = False,
+) -> dict:
+    # When a group key is set, cardinality of per-group (group-constant) columns
+    # must be measured against the number of groups, not rows. Otherwise a
+    # per-group identifier (e.g. one MRN per patient) that repeats across every
+    # row of its group looks low-cardinality and fails the unique_identifier
+    # gate. ``scoped_column_stats`` recomputes ``unique_ratio`` per group.
+    stats = core.scoped_column_stats(df, group_key, cfg.group_constancy_threshold)
     out = core._detect_subset_mvp(df, stats, cfg)
 
     roles = []
@@ -176,33 +186,28 @@ def discover_plan(
     config: ReplacePiiConfig,
 ) -> PiiReplacementPlan:
     cfg = _core_config(runtime)
-    detected = _detect_full_dataframe(df, cfg, llm_enhancement=config.llm_enhancement)
+    detected = _detect_full_dataframe(df, cfg, group_key=group_key, llm_enhancement=config.llm_enhancement)
 
     plan = runtime_plan_to_pii_plan(detected, group_key=group_key)
 
     if config.discovery.replace_group_key and group_key and group_key in df.columns:
-        primary = "primary_person"
-        if primary not in plan.associated_column_sets:
-            plan.associated_column_sets[primary] = AssociatedColumnSet()
-        col_set = plan.associated_column_sets[primary]
-        if group_key not in col_set.columns_to_replace:
+        # The group key is replaced as a (non-person) unique_identifier; its
+        # replacement never depends on a persona, so it belongs in the
+        # unassociated section, not under a person role.
+        for col_set in plan.associated_column_sets.values():
+            col_set.columns_to_replace.pop(group_key, None)
+        if group_key not in plan.unassociated_columns_to_replace:
             pat = None
+            cov = None
             for ent in detected["non_person"]:
                 if ent.get("column") == group_key:
                     pat = ent.get("pattern")
+                    cov = ent.get("dominant_pattern_coverage")
                     break
-            col_set.columns_to_replace[group_key] = PiiColumnPlan(
+            plan.unassociated_columns_to_replace[group_key] = PiiColumnPlan(
                 entity_type=PiiEntity.unique_identifier,
                 pattern=pat,
-                dominant_pattern_coverage=next(
-                    (
-                        e.get("dominant_pattern_coverage")
-                        for e in detected["non_person"]
-                        if e.get("column") == group_key
-                    ),
-                    None,
-                ),
+                dominant_pattern_coverage=cov,
             )
-        plan.unassociated_columns_to_replace.pop(group_key, None)
 
     return plan

@@ -482,17 +482,101 @@ def test_discover_date_of_birth_gets_pattern_and_coverage():
         runtime=runtime_config_from_replace_pii(ReplacePiiConfig()),
         config=ReplacePiiConfig(),
     )
-    dob_spec = None
-    for col_set in plan.associated_column_sets.values():
-        if "date_of_birth" in col_set.columns_to_replace:
-            dob_spec = col_set.columns_to_replace["date_of_birth"]
+    # Birth dates are replaced independently of any persona, so they are placed
+    # in the unassociated section (not under a person role).
+    dob_spec = plan.unassociated_columns_to_replace.get("date_of_birth")
     assert dob_spec is not None
     assert dob_spec.entity_type == PiiEntity.date_of_birth
     assert dob_spec.pattern == "%m/%d/%Y"
     assert dob_spec.dominant_pattern_coverage == 100.0
+    for col_set in plan.associated_column_sets.values():
+        assert "date_of_birth" not in col_set.columns_to_replace
 
 
-def test_role_field_pattern_round_trips_through_runtime():
+def test_grouped_unique_id_and_dob_replaced_globally_unique_and_group_consistent():
+    """A group-key unique_identifier and a per-group birth date are replaced via
+    the unassociated (non-person) path: globally unique for ids, consistent
+    within each group, and age-preserving for DOB."""
+    from nemo_safe_synthesizer.pii_replacer.discovery import discover_plan
+
+    rows = []
+    for p in range(30):
+        for _ in range(3):
+            rows.append(
+                {
+                    "patient_id": f"pmc-{6 if p % 2 else 8}{p:05d}-{(p % 4) + 1}",
+                    "first_name": f"First{p}",
+                    "date_of_birth": f"{(p % 12) + 1:02d}/{(p % 28) + 1:02d}/19{60 + (p % 30):02d}",
+                    "sex": "Female" if p % 2 else "Male",
+                }
+            )
+    df = pd.DataFrame(rows)
+    config = ReplacePiiConfig(replacement_plan=AUTO_DISCOVERY, person={"backend": "faker"})
+    data_config = DataParameters(group_training_examples_by="patient_id")
+    plan = discover_plan(df, "patient_id", runtime_config_from_replace_pii(config), config)
+    assert plan.unassociated_columns_to_replace["patient_id"].entity_type == PiiEntity.unique_identifier
+    assert plan.unassociated_columns_to_replace["date_of_birth"].entity_type == PiiEntity.date_of_birth
+
+    replacer = TabularPiiReplacer(config, data_config=data_config)
+    replacer.transform_df(df)
+    out = replacer.result.transformed_df
+
+    # patient_id fully transformed, consistent within each group, and globally
+    # unique (identifiers get a hard cross-group uniqueness guarantee).
+    assert (out["patient_id"].values != df["patient_id"].values).all()
+    orig_to_new: dict[str, str] = {}
+    for o, n in zip(df["patient_id"], out["patient_id"]):
+        orig_to_new.setdefault(o, n)
+        assert orig_to_new[o] == n  # same original -> same synthetic within its group
+    synth_ids = list(orig_to_new.values())
+    assert len(set(synth_ids)) == len(synth_ids)  # no cross-group collisions
+    assert not (set(synth_ids) & set(df["patient_id"]))  # never reuse a real id
+
+    # DOB perturbed (changed) and consistent within each patient group.
+    assert (out["date_of_birth"].values != df["date_of_birth"].values).all()
+    for _pid, g in out.groupby(df["patient_id"].values):
+        assert g["date_of_birth"].nunique() == 1
+
+
+def test_per_group_unique_id_detected_when_group_key_set():
+    """A per-group identifier repeats across every row of its group, so its
+    per-row unique_ratio is far below the id_unique_ratio gate. When group_key
+    is set, cardinality must be measured against groups (deduped) so the column
+    is recognized as a unique_identifier rather than misread as free text."""
+    from nemo_safe_synthesizer.pii_replacer.discovery import _core_config, _detect_full_dataframe
+
+    rows = []
+    for p in range(40):
+        for i in range(3):
+            rows.append(
+                {
+                    "patient_id": f"pmc-{6 if p % 2 else 8}{p:05d}-{(p % 4) + 1}",
+                    "record_id": f"REC-{p:06d}",  # constant within a patient
+                    "event_id": f"{p * 3 + i:08d}",  # per-row unique
+                    "first_name": f"First{p}",
+                }
+            )
+    df = pd.DataFrame(rows)
+    cfg = _core_config(runtime_config_from_replace_pii(ReplacePiiConfig()))
+
+    # Without a group key the per-group ids look low-cardinality and are missed.
+    row_scoped = _detect_full_dataframe(df, cfg, group_key=None)
+    row_entities = {e["column"]: e["entity"] for e in row_scoped["non_person"]}
+    assert row_entities.get("record_id") != "unique_identifier"
+
+    # With the group key they are correctly detected with patterns.
+    grouped = _detect_full_dataframe(df, cfg, group_key="patient_id")
+    grouped_entities = {e["column"]: e for e in grouped["non_person"]}
+    for col in ("patient_id", "record_id", "event_id"):
+        assert grouped_entities[col]["entity"] == "unique_identifier"
+        assert grouped_entities[col]["pattern"]
+
+
+def test_entity_driven_column_under_persona_routes_to_non_person():
+    """Placement is irrelevant for entity-driven columns: a date_of_birth (or
+    unique_identifier) associated with a persona is still routed through the
+    non-person path, carrying its pattern/coverage, and round-trips as an
+    unassociated column."""
     plan = PiiReplacementPlan(
         associated_column_sets={
             "primary_person": AssociatedColumnSet(
@@ -508,16 +592,20 @@ def test_role_field_pattern_round_trips_through_runtime():
         }
     )
     runtime = plan_to_runtime(plan)
-    meta = runtime["roles"][0]["field_meta"]
-    assert meta["date_of_birth"] == {"pattern": "%m/%d/%Y", "dominant_pattern_coverage": 100.0}
-    assert "first_name" not in meta
+    # DOB is not a persona field; it is emitted as a non-person entity.
+    assert runtime["roles"][0]["fields"] == {"first_name": "first_name"}
+    dob_ent = next(e for e in runtime["non_person"] if e["column"] == "date_of_birth")
+    assert dob_ent["entity"] == "date_of_birth"
+    assert dob_ent["pattern"] == "%m/%d/%Y"
+    assert dob_ent["dominant_pattern_coverage"] == 100.0
 
     from nemo_safe_synthesizer.pii_replacer.plan import runtime_plan_to_pii_plan
 
     round_tripped = runtime_plan_to_pii_plan(runtime, group_key=None)
-    dob = round_tripped.associated_column_sets["primary_person"].columns_to_replace["date_of_birth"]
+    dob = round_tripped.unassociated_columns_to_replace["date_of_birth"]
     assert dob.pattern == "%m/%d/%Y"
     assert dob.dominant_pattern_coverage == 100.0
+    assert "date_of_birth" not in round_tripped.associated_column_sets["primary_person"].columns_to_replace
 
 
 def _dob_replacement(coverage: float, dates: list[str]) -> pd.Series:
@@ -530,12 +618,14 @@ def _dob_replacement(coverage: float, dates: list[str]) -> pd.Series:
         "roles": [
             {
                 "role": "primary_person",
-                "fields": {"date_of_birth": "date_of_birth", "first_name": "first_name"},
-                "field_meta": {"date_of_birth": {"pattern": "%m/%d/%Y", "dominant_pattern_coverage": coverage}},
+                "fields": {"first_name": "first_name"},
+                "field_meta": {},
                 "demographics": {"sex": None, "race": None},
             }
         ],
-        "non_person": [],
+        "non_person": [
+            {"column": "date_of_birth", "entity": "date_of_birth", "pattern": "%m/%d/%Y", "dominant_pattern_coverage": coverage}
+        ],
         "free_text_columns": [],
     }
     runtime = RuntimeConfig(

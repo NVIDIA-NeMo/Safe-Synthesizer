@@ -20,6 +20,7 @@ from ..config.pii_replacement import (
     ReplacePiiConfig,
 )
 from ..errors import ParameterError
+from . import core
 from .runtime_config import RuntimeConfig
 
 
@@ -38,6 +39,18 @@ def entity_from_engine_label(label: str | None) -> PiiEntity | None:
         return PiiEntity(label)
     except ValueError:
         return None
+
+
+def _unique_ratios(df: pd.DataFrame, plan: PiiReplacementPlan) -> dict[str, float]:
+    """Per-column ``unique_ratio`` used for unique_identifier gating.
+
+    When ``plan.group_key`` is set the cardinality of a per-group (group-constant)
+    column is measured against the number of groups rather than rows, matching the
+    detector's ``scoped_column_stats``. Otherwise a per-group identifier repeating
+    across every row of its group would appear low-cardinality.
+    """
+    stats = core.scoped_column_stats(df, plan.group_key)
+    return {c: s.get("unique_ratio", 0.0) for c, s in stats.items()}
 
 
 def _replacement_columns(plan: PiiReplacementPlan) -> list[str]:
@@ -86,10 +99,10 @@ def validate_plan(
                 raise ParameterError(f"conditioning column {col!r} not found in dataframe")
 
     if discovered and runtime is not None:
+        ratios = _unique_ratios(df, plan)
         for col, spec in plan.unassociated_columns_to_replace.items():
             if spec.entity_type == PiiEntity.unique_identifier:
-                nun = int(df[col].dropna().nunique())
-                ratio = nun / max(len(df), 1)
+                ratio = ratios.get(col, 0.0)
                 if ratio < runtime.id_unique_ratio:
                     raise ParameterError(
                         f"auto-discovered unique_id column {col!r} failed id_unique_ratio gate "
@@ -99,11 +112,11 @@ def validate_plan(
 
 def unique_id_advisories(df: pd.DataFrame, plan: PiiReplacementPlan, runtime: RuntimeConfig) -> list[str]:
     warnings: list[str] = []
+    ratios = _unique_ratios(df, plan)
     for col, spec in plan.unassociated_columns_to_replace.items():
         if spec.entity_type != PiiEntity.unique_identifier or col not in df.columns:
             continue
-        nun = int(df[col].dropna().nunique())
-        ratio = nun / max(len(df), 1)
+        ratio = ratios.get(col, 0.0)
         if ratio < runtime.id_unique_ratio:
             warnings.append(
                 f"unique_id column {col!r} has unique_ratio {ratio:.4f} "
@@ -134,23 +147,52 @@ def save_plan_to_path(plan: PiiReplacementPlan, path: str | Path) -> Path:
     return out
 
 
+# Entity-driven ("self-sourced") entities: their synthetic value is derived from
+# the original value via pattern/perturbation, independent of any persona. They
+# are always replaced through the non-person path regardless of where the plan
+# places them, so associating one with a persona never changes the output.
+ENTITY_DRIVEN_ENTITIES = frozenset(core.NON_PERSON_ENTITIES) | {PiiEntity.date_of_birth.value}
+
+
+def _non_person_entry(col: str, spec: Any) -> dict[str, Any]:
+    ent: dict[str, Any] = {"column": col, "entity": entity_to_engine_label(spec.entity_type)}
+    if spec.pattern:
+        ent["pattern"] = spec.pattern
+    if spec.dominant_pattern_coverage is not None:
+        ent["dominant_pattern_coverage"] = spec.dominant_pattern_coverage
+    return ent
+
+
 def plan_to_runtime(plan: PiiReplacementPlan) -> dict[str, Any]:
     """Convert declarative plan to the runtime dict consumed by the engine."""
     roles: list[dict[str, Any]] = []
+    non_person: list[dict[str, Any]] = []
+    free_text_columns: list[str] = []
     for role_name, col_set in plan.associated_column_sets.items():
         fields: dict[str, str] = {}
         field_meta: dict[str, dict[str, Any]] = {}
         for col, spec in col_set.columns_to_replace.items():
-            if spec.entity_type is None or spec.entity_type == PiiEntity.free_text:
+            if spec.entity_type is None:
+                continue
+            if spec.entity_type == PiiEntity.free_text:
+                free_text_columns.append(col)
                 continue
             label = entity_to_engine_label(spec.entity_type)
-            if label:
-                fields[label] = col
-                if spec.pattern is not None or spec.dominant_pattern_coverage is not None:
-                    field_meta[label] = {
-                        "pattern": spec.pattern,
-                        "dominant_pattern_coverage": spec.dominant_pattern_coverage,
-                    }
+            if not label:
+                continue
+            # Entity-driven columns (unique_identifier, date_of_birth, ...) are
+            # never persona-sourced, so they always take the non-person path even
+            # when the plan associates them with a persona. This makes placement
+            # (inside vs outside a persona) irrelevant to the replacement result.
+            if label in ENTITY_DRIVEN_ENTITIES:
+                non_person.append(_non_person_entry(col, spec))
+                continue
+            fields[label] = col
+            if spec.pattern is not None or spec.dominant_pattern_coverage is not None:
+                field_meta[label] = {
+                    "pattern": spec.pattern,
+                    "dominant_pattern_coverage": spec.dominant_pattern_coverage,
+                }
         demo: dict[str, str | None] = {"sex": None, "race": None}
         if col_set.conditioning_columns is not None:
             cond = col_set.conditioning_columns
@@ -168,25 +210,13 @@ def plan_to_runtime(plan: PiiReplacementPlan) -> dict[str, Any]:
                 }
             )
 
-    non_person: list[dict[str, Any]] = []
-    free_text_columns: list[str] = []
     for col, spec in plan.unassociated_columns_to_replace.items():
         if spec.entity_type == PiiEntity.free_text:
             free_text_columns.append(col)
             continue
         entity = entity_to_engine_label(spec.entity_type)
         if entity:
-            ent: dict[str, Any] = {"column": col, "entity": entity}
-            if spec.pattern:
-                ent["pattern"] = spec.pattern
-            if spec.dominant_pattern_coverage is not None:
-                ent["dominant_pattern_coverage"] = spec.dominant_pattern_coverage
-            non_person.append(ent)
-
-    for col_set in plan.associated_column_sets.values():
-        for col, spec in col_set.columns_to_replace.items():
-            if spec.entity_type == PiiEntity.free_text:
-                free_text_columns.append(col)
+            non_person.append(_non_person_entry(col, spec))
 
     return {
         "group_key": plan.group_key,

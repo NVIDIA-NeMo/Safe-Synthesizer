@@ -828,6 +828,28 @@ def _detect_subset_mvp(df_subset: pd.DataFrame, stats: dict, cfg: Config) -> dic
             )
             continue
 
+        # Birth dates are replaced by age-preserving perturbation that does not
+        # depend on which person they belong to, so they are emitted as a
+        # (non-person) structured column keyed by value/scope rather than a
+        # persona field. Detection is by column name; the concrete strftime
+        # pattern + coverage drive whole-column vs per-value formatting at apply.
+        if name_label == "date_of_birth" and high_card:
+            non_person.append(
+                {
+                    "column": col,
+                    "entity": "date_of_birth",
+                    "pattern": analysis["pattern"] if analysis["structured"] else None,
+                    "dominant_pattern_coverage": analysis["coverage"] if analysis["structured"] else None,
+                }
+            )
+            consumed.add(col)
+            logger.runtime.info(
+                f"[PII Replacement] Birth-date column {col!r} (entity=date_of_birth, "
+                f"pattern={analysis['pattern']}, coverage={analysis['coverage']}) — "
+                "perturbed per record/group (not persona-tied)"
+            )
+            continue
+
         # Demographics (preserved; used only to constrain persona sampling).
         if demo_label:
             role = _role_for_column(col)
@@ -910,8 +932,9 @@ def _attach_value_patterns(df: pd.DataFrame, non_person: list[dict], cfg: Config
     if not cfg.infer_value_patterns:
         return
     for ent in non_person:
-        # Temporal columns carry strftime/duration patterns, not Faker-style templates.
-        if ent.get("entity") in IDENTIFIED_NOT_REPLACED_ENTITIES:
+        # Temporal columns and birth dates carry strftime/duration patterns, not
+        # Faker-style bothify templates, so their pattern must not be overwritten.
+        if ent.get("entity") in IDENTIFIED_NOT_REPLACED_ENTITIES or ent.get("entity") == "date_of_birth":
             continue
         col = ent.get("column")
         if col not in df.columns:
@@ -1224,9 +1247,8 @@ def extract_age(row: pd.Series, demo: dict) -> int | None:
 
 
 def _instance_is_person(field_cols: dict, originals: dict) -> bool:
-    for label in ("full_name", "name", "provider_name"):
-        if label in field_cols and label in originals:
-            return looks_like_person_name(originals[label])
+    if "full_name" in field_cols and "full_name" in originals:
+        return looks_like_person_name(originals["full_name"])
     return True
 
 
@@ -1717,12 +1739,12 @@ def _synth_dob_programmatic(original: str, rng, fmt: str | None = None) -> str |
     return synth_date_value(original, fmt, rng)
 
 
-def synth_value(label: str, original: str, persona: dict, fake=None, date_format: str | None = None) -> str | None:
+def synth_value(label: str, original: str, persona: dict, fake=None) -> str | None:
     """Map a sampled persona (+ optional deterministic Faker) onto one field.
 
-    ``date_format`` is the dominant strftime format for date-like fields; it is
-    used directly when the column has 100% pattern coverage (whole-column
-    replacement) and is ``None`` otherwise (per-value format matching).
+    Only persona-sourced fields are handled here. Entity-driven columns
+    (unique_identifier, date_of_birth, ...) are replaced via the non-person path
+    and never reach this function.
     """
     p = persona or {}
     if label == "first_name":
@@ -1735,12 +1757,6 @@ def synth_value(label: str, original: str, persona: dict, fake=None, date_format
         return p.get("email_address") or (fake.email() if fake else None)
     if label == "phone_number":
         return p.get("phone_number") or (fake.phone_number() if fake else None)
-    if label == "city":
-        return p.get("city")
-    if label == "state":
-        return p.get("state")
-    if label == "zipcode":
-        return p.get("postcode")
     if label == "ssn":
         return p.get("ssn") or (fake.ssn() if fake else None)
     if label == "national_id":
@@ -1756,20 +1772,7 @@ def synth_value(label: str, original: str, persona: dict, fake=None, date_format
         if "," in str(original):
             return new_street + "," + str(original).split(",", 1)[1]
         return new_street
-    if label == "date_of_birth":
-        # Age-preserving programmatic DOB (decoupled from the persona). Needs the
-        # seeded Faker rng; fall back to the persona's birth_date only if no Faker.
-        if fake is not None:
-            return _synth_dob_programmatic(str(original), fake.random, fmt=date_format)
-        bd = p.get("birth_date")
-        if not bd:
-            return None
-        try:
-            iso = datetime.strptime(str(bd)[:10], "%Y-%m-%d").date()
-        except ValueError:
-            return None
-        return iso.strftime(date_format or detect_date_format(original))
-    if label in ("full_name", "name", "provider_name"):
+    if label == "full_name":
         title, _ = split_title(str(original))
         full = f"{p.get('first_name', '')} {p.get('last_name', '')}".strip()
         if not full:
@@ -1806,16 +1809,11 @@ def compute_instance_synthetics(instances: list[dict], cfg: Config) -> None:
         if persona:
             seed = cfg.random_seed ^ _stable_hash(str(_person_key(inst)))
             fake = _seeded_faker(seed, cfg.locale) if Faker is not None else None
-            field_meta = inst.get("field_meta") or {}
             for label, col in inst["field_cols"].items():
                 original = inst["originals"].get(label)
                 if original is None:
                     continue
-                # Whole-column replacement when the column is 100% one pattern: reuse the
-                # dominant strftime format. Otherwise leave it None for per-value matching.
-                meta = field_meta.get(label) or {}
-                date_format = meta["pattern"] if meta.get("dominant_pattern_coverage") == 100.0 else None
-                sv = synth_value(label, original, persona, fake, date_format=date_format)
+                sv = synth_value(label, original, persona, fake)
                 if sv is None or str(sv) == str(original):
                     continue
                 synthetic[label] = str(sv)
@@ -1830,8 +1828,6 @@ _TEXT_NAME_LABELS = (
     "last_name",
     "middle_name",
     "full_name",
-    "name",
-    "provider_name",
     "email",
     "phone_number",
     "ssn",
@@ -1854,7 +1850,7 @@ def instance_text_pairs(inst: dict, cfg: Config | None = None) -> list[tuple[str
     # >= freetext_alias_min_token_len letters are aliased so short common words aren't hit.
     if cfg is None or cfg.freetext_name_token_aliases:
         min_len = cfg.freetext_alias_min_token_len if cfg is not None else 3
-        for label in ("full_name", "name", "provider_name"):
+        for label in ("full_name",):
             if label not in syn or label not in orig:
                 continue
             _, o_rest = split_title(str(orig[label]))
@@ -1886,7 +1882,7 @@ def instance_text_pair_labels(inst: dict, cfg: Config | None = None) -> dict[str
         labels[f"{orig['first_name']} {orig['last_name']}"] = "full_name"
     if cfg is None or cfg.freetext_name_token_aliases:
         min_len = cfg.freetext_alias_min_token_len if cfg is not None else 3
-        for label in ("full_name", "name", "provider_name"):
+        for label in ("full_name",):
             if label not in syn or label not in orig:
                 continue
             _, o_rest = split_title(str(orig[label]))
