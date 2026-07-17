@@ -21,6 +21,7 @@ def test_evaluation_report_themes_charts_in_report_assets() -> None:
     metric_card = _get_template("jinja/components/metric_card.j2")
     stylesheet = _get_template("css/multi_modal_report.css")
     training_columns = _get_template("jinja/components/training_columns.j2")
+    text_semantic_similarity = _get_template("jinja/components/text_semantic_similarity.j2")
     text_structure_similarity = _get_template("jinja/components/text_structure_similarity.j2")
     javascript = _get_template("js/multi_modal_toggle.js")
 
@@ -30,6 +31,7 @@ def test_evaluation_report_themes_charts_in_report_assets() -> None:
     assert metric_card is not None
     assert stylesheet is not None
     assert training_columns is not None
+    assert text_semantic_similarity is not None
     assert text_structure_similarity is not None
     assert javascript is not None
     assert "score_ring(ctx.synthetic_quality_score.score)" in template
@@ -71,6 +73,9 @@ def test_evaluation_report_themes_charts_in_report_assets() -> None:
     assert 'class="entity-tags"' in training_columns
     assert ".columns-table--with-transform" in stylesheet
     assert ".transform-function-cell" in stylesheet
+    assert 'class="chart-subheading"' in text_semantic_similarity
+    assert "{{ row.title }}" in text_semantic_similarity
+    assert "{{ row.html }}" in text_semantic_similarity
     assert 'class="chart-subheading"' in text_structure_similarity
     assert "{{ row.title }}" in text_structure_similarity
     assert "{{ row.html }}" in text_structure_similarity

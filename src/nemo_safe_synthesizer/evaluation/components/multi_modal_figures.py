@@ -712,7 +712,7 @@ def generate_text_structure_similarity_figures(
 
 
 def generate_text_semantic_similarity_figures(
-    training_pca: pd.DataFrame, synthetic_pca: pd.DataFrame, title: str
+    training_pca: pd.DataFrame, synthetic_pca: pd.DataFrame
 ) -> go.Figure | None:
     """Generate a PCA scatter matrix for text embedding similarity."""
     figures = []
@@ -767,7 +767,6 @@ def generate_text_semantic_similarity_figures(
     result = combine_subplots(
         figures,
         height=400,
-        general_title=title,
         shared_xaxes=False,
         shared_yaxes=False,
         margin=dict(l=0, r=0, t=64, b=0),

@@ -550,7 +550,7 @@ class TestGenerateTextSemanticSimilarityFigures:
         training_pca = pd.DataFrame()
         synthetic_pca = pd.DataFrame()
 
-        result = generate_text_semantic_similarity_figures(training_pca, synthetic_pca, "Test Title")
+        result = generate_text_semantic_similarity_figures(training_pca, synthetic_pca)
 
         assert result is None
 
@@ -558,6 +558,7 @@ class TestGenerateTextSemanticSimilarityFigures:
         training_pca = pd.DataFrame({"pc1": np.random.randn(100), "pc2": np.random.randn(100)})
         synthetic_pca = pd.DataFrame({"pc1": np.random.randn(100), "pc2": np.random.randn(100)})
 
-        result = generate_text_semantic_similarity_figures(training_pca, synthetic_pca, "Semantic Similarity")
+        result = generate_text_semantic_similarity_figures(training_pca, synthetic_pca)
 
         assert isinstance(result, go.Figure)
+        assert result.layout.title.text is None
