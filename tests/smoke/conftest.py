@@ -15,7 +15,17 @@ from datasets import Dataset
 from transformers import AutoTokenizer, LlamaConfig, LlamaForCausalLM, PreTrainedTokenizerBase
 
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
+from nemo_safe_synthesizer.config import (
+    DataParameters,
+    GenerateParameters,
+    RemoteParameters,
+    StructuredGenerationParameters,
+    TrainingHyperparams,
+)
+from nemo_safe_synthesizer.config.generate import RemoteDialect, StructuredGenerationSchemaMethod
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
+from nemo_safe_synthesizer.defaults import DEFAULT_INSTRUCTION, PROMPT_TEMPLATE
+from nemo_safe_synthesizer.llm.metadata import LLMPromptConfig, ModelMetadata
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
 
 
@@ -185,6 +195,76 @@ def train_with_sdk(config: SafeSynthesizerParameters, data_df: pd.DataFrame, sav
     nss = SafeSynthesizer(config=config, save_path=save_path)
     nss.with_data_source(data_df).process_data().train()
     return nss
+
+
+def build_remote_metadata() -> ModelMetadata:
+    """Tokenizer-free ``ModelMetadata`` for remote-backend smoke tests.
+
+    The remote backend never loads a model, so this bypasses the HuggingFace
+    config/tokenizer load via ``model_construct`` and supplies only the fields
+    the backend reads: the instruction, the prompt template and BOS/EOS tokens
+    (for structured generation), and a context window for the ``max_tokens``
+    clamp. ``tokenizer=None`` mirrors the offline-remote path, so the
+    prompt-length clamp is disabled and no download is forced.
+    """
+    return ModelMetadata.model_construct(
+        model_name_or_path="remote-stub",
+        autoconfig=None,
+        base_max_seq_length=2048,
+        rope_scaling=None,
+        max_tokens_per_example=None,
+        tokenizer=None,
+        instruction=DEFAULT_INSTRUCTION,
+        prompt_config=LLMPromptConfig(
+            template=PROMPT_TEMPLATE,
+            add_bos_token_to_prompt=True,
+            add_eos_token_to_prompt=True,
+            bos_token="<s>",
+            bos_token_id=1,
+            eos_token="</s>",
+            eos_token_id=2,
+        ),
+    )
+
+
+def build_remote_config(
+    *,
+    endpoint_url: str,
+    model: str,
+    dialect: RemoteDialect = "vllm",
+    num_records: int = 5,
+    api_key_env: str | None = None,
+    max_retries: int = 4,
+    max_concurrency: int = 4,
+    use_structured_generation: bool = False,
+    structured_generation_schema_method: StructuredGenerationSchemaMethod = "auto",
+) -> SafeSynthesizerParameters:
+    """Minimal tabular ``SafeSynthesizerParameters`` with a configured remote endpoint.
+
+    No model is loaded at construction time, so ``pretrained_model`` is an
+    arbitrary placeholder. ``group_training_examples_by=None`` and the default
+    (non-time-series) ``time_series`` keep the backend on the plain tabular
+    processor path.
+    """
+    return SafeSynthesizerParameters(
+        data=DataParameters(group_training_examples_by=None, order_training_examples_by=None),
+        training=TrainingHyperparams(pretrained_model="remote-stub", lora_r=16),
+        generation=GenerateParameters(
+            num_records=num_records,
+            structured_generation=StructuredGenerationParameters(
+                enabled=use_structured_generation,
+                schema_method=structured_generation_schema_method,
+            ),
+            remote=RemoteParameters(
+                endpoint_url=endpoint_url,
+                model=model,
+                dialect=dialect,
+                api_key_env=api_key_env,
+                max_retries=max_retries,
+                max_concurrency=max_concurrency,
+            ),
+        ),
+    )
 
 
 @pytest.fixture(scope="session")

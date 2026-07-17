@@ -26,11 +26,14 @@ from ..errors import ParameterError
 StructuredGenerationSchemaMethod = Literal["auto", "regex", "json_schema", "structural_tag"]
 ResolvedStructuredGenerationSchemaMethod = Literal["regex", "json_schema", "structural_tag"]
 StructuredGenerationBackend = Literal["auto", "xgrammar", "guidance", "outlines", "lm-format-enforcer"]
+RemoteDialect = Literal["vllm", "openai"]
 
 STRUCTURAL_TAG_COMPATIBLE_BACKENDS = frozenset({"auto", "xgrammar"})
 
 __all__ = [
     "GenerateParameters",
+    "RemoteDialect",
+    "RemoteParameters",
     "ResolvedStructuredGenerationSchemaMethod",
     "StructuredGenerationParameters",
     "StructuredGenerationBackend",
@@ -176,6 +179,91 @@ class StructuredGenerationParameters(Parameters, BaseModel):
         return self
 
 
+class RemoteParameters(Parameters, BaseModel):
+    """Connection to an external vLLM OpenAI-compatible inference server.
+
+    When set on :class:`GenerateParameters`, generation issues HTTP requests
+    to this endpoint instead of loading a local vLLM engine. The server must
+    already serve the base model with the fine-tuned LoRA adapter attached,
+    registered under ``model``. No GPU is used locally.
+
+    Structured generation maps to vLLM's ``structured_outputs`` request field
+    (``regex`` / ``json`` / ``structural_tag``), so all schema methods are
+    supported against a vLLM 0.20+ server.
+    """
+
+    dialect: Annotated[
+        RemoteDialect,
+        Field(
+            title="dialect",
+            description=(
+                "Which request fields to send. 'vllm' (default) adds vLLM's sampling extensions "
+                "(repetition_penalty, top_k, min_p, skip_special_tokens, include_stop_str_in_output, "
+                "ignore_eos). 'openai' sends only the universal OpenAI fields, for stricter servers "
+                "(e.g. NIM / TensorRT-LLM) that reject those extensions."
+            ),
+        ),
+    ] = "vllm"
+
+    endpoint_url: Annotated[
+        str,
+        Field(
+            title="endpoint_url",
+            description="Base URL of the OpenAI-compatible server, e.g. 'http://localhost:8000/v1'.",
+        ),
+    ]
+
+    model: Annotated[
+        str,
+        Field(
+            title="model",
+            description="Model name as registered on the server (the served base model or LoRA adapter name).",
+        ),
+    ]
+
+    api_key_env: Annotated[
+        str | None,
+        Field(
+            title="api_key_env",
+            description=(
+                "Name of the environment variable holding the bearer token for the endpoint. "
+                "When unset, no Authorization header is sent."
+            ),
+        ),
+    ] = None
+
+    timeout_seconds: Annotated[
+        float,
+        ValueValidator(value_func=lambda v: v > 0),
+        Field(
+            title="timeout_seconds",
+            description="Per-request timeout in seconds. Must be > 0.",
+        ),
+    ] = 300.0
+
+    max_concurrency: Annotated[
+        int,
+        ValueValidator(value_func=lambda v: v >= 1),
+        Field(
+            title="max_concurrency",
+            description="Maximum number of concurrent in-flight requests per batch. Must be >= 1.",
+        ),
+    ] = 16
+
+    max_retries: Annotated[
+        int,
+        ValueValidator(value_func=lambda v: v >= 0),
+        Field(
+            title="max_retries",
+            description=(
+                "Number of retry attempts per request for transient failures (connection drops, "
+                "timeouts, and HTTP 408/409/425/429/500/502/503/504), using exponential backoff with "
+                "full jitter and honoring a Retry-After header. 0 disables retries. Must be >= 0."
+            ),
+        ),
+    ] = 4
+
+
 class GenerateParameters(Parameters, BaseModel):
     """Configuration parameters for synthetic data generation.
 
@@ -259,6 +347,18 @@ class GenerateParameters(Parameters, BaseModel):
         description="Validation parameters controlling validation logic and automatic fixes when parsing LLM output and converting to tabular data.",
         default_factory=ValidationParameters,
     )
+
+    remote: Annotated[
+        RemoteParameters | None,
+        Field(
+            title="remote",
+            description=(
+                "When set, generate by calling an external vLLM OpenAI-compatible server instead of "
+                "loading a local vLLM engine. The server must already serve the trained LoRA adapter. "
+                "Not supported for time-series generation."
+            ),
+        ),
+    ] = None
 
     attention_backend: Annotated[
         str | None,

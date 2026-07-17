@@ -9,7 +9,6 @@ import contextlib
 import logging
 import os
 import tempfile
-import time
 from functools import partial
 from pathlib import Path
 from typing import Any, cast
@@ -31,13 +30,13 @@ from ..config.generate import (
     resolve_structured_generation_schema_method,
     structural_tag_backend_error_message,
 )
-from ..defaults import DEFAULT_SAMPLING_PARAMETERS, FIXED_RUNTIME_GENERATE_ARGS
+from ..defaults import DEFAULT_SAMPLING_PARAMETERS
 from ..errors import InternalError, ParameterError
 from ..generation.backend import GeneratorBackend
 from ..generation.batch import Batch
 from ..generation.processors import EncodeOnlyTokenizer, Processor, TabularDataProcessor, create_processor
 from ..generation.regex_manager import build_json_based_regex, build_json_structural_tag
-from ..generation.results import GenerateJobResults, GenerationBatches, GenerationStatus
+from ..generation.results import GenerateJobResults
 from ..generation.vllm_observability import (
     GenerationObservability,
     NvmlPeakSampler,
@@ -46,6 +45,7 @@ from ..generation.vllm_observability import (
     read_vllm_runtime_metrics,
 )
 from ..llm.metadata import ModelMetadata
+from ..llm.model_host import ModelHost
 from ..llm.utils import ModelRef, cleanup_memory, get_max_vram
 from ..observability import get_logger, heartbeat
 from ..utils import all_equal_type, load_json
@@ -216,7 +216,7 @@ def _install_noop_remote_cache_backends() -> None:
 _install_noop_remote_cache_backends()
 
 
-class VllmBackend(GeneratorBackend):
+class VllmBackend(GeneratorBackend, ModelHost[vLLM, PreTrainedTokenizerBase]):
     """Generation backend using vLLM for high-throughput inference.
 
     Loads the base model with a LoRA adapter via vLLM and generates
@@ -274,6 +274,20 @@ class VllmBackend(GeneratorBackend):
         adapter_path = self.workdir.adapter_path if self.workdir.adapter_path else self.model_metadata.adapter_path
         self.lora_req = LoRARequest("lora", 1, str(adapter_path)) if adapter_path else None
         self._torn_down = False
+
+    @property
+    def model(self) -> vLLM | None:
+        """Return the locally hosted vLLM engine."""
+        return self.llm
+
+    @property
+    def tokenizer(self) -> PreTrainedTokenizerBase | None:
+        """Return the tokenizer owned by the locally hosted engine."""
+        if self.llm is None:
+            return None
+        # vLLM declares a wider tokenizer union, but supported NSS engines
+        # expose a Hugging Face tokenizer implementing this interface.
+        return cast(PreTrainedTokenizerBase, self.llm.get_tokenizer())
 
     def teardown(self) -> None:
         """Release GPU memory and distributed resources. Idempotent -- safe to call multiple times."""
@@ -351,7 +365,9 @@ class VllmBackend(GeneratorBackend):
         # asked for.
         self._engine_runtime_config = probe_engine_runtime_config(self.llm)
 
-        tokenizer: EncodeOnlyTokenizer = self.llm.get_tokenizer()
+        tokenizer = self.tokenizer
+        if tokenizer is None:
+            raise InternalError("VllmBackend.initialize() did not create a tokenizer.")
         self.processor = create_processor(
             self.schema,
             self.model_metadata,
@@ -369,9 +385,9 @@ class VllmBackend(GeneratorBackend):
         """
         if self._prompt_token_count is not None:
             return self._prompt_token_count
-        if self.llm is None:
+        tokenizer = self.tokenizer
+        if tokenizer is None:
             return 0
-        tokenizer = self.llm.get_tokenizer()
         self._prompt_token_count = len(tokenizer.encode(self.prompt))
         return self._prompt_token_count
 
@@ -639,68 +655,22 @@ class VllmBackend(GeneratorBackend):
 
         return batch
 
-    def _log_batch_timing_and_progress(
-        self,
-        batch: Batch,
-        duration: float,
-        num_records: int,
-        num_valid_records: int,
-        batches: GenerationBatches,
-    ) -> None:
-        """Log batch timing and progress as a structured Rich table.
-
-        Emits structured data via ``logger.user.info`` that is rendered
-        as a Rich ASCII table on the console and as key/value pairs in
-        JSON logs.
-        """
-        records_per_second = 0 if duration == 0 else batch.num_valid_records / duration
-
-        # Build structured data - processor renders as table for console
-        progress_data: dict[str, int | float] = {
-            "records_per_second": round(records_per_second, 2),
-            "duration_seconds": round(duration, 2),
-            "valid_records_generated": batches.num_valid_records,
-            "target_records": self.config.generation.num_records,
-            "progress_fraction": round(batches.num_valid_records / self.config.generation.num_records, 4),
-        }
-        if batch.total_completion_tokens > 0 and duration > 0:
-            progress_data["tokens_per_second"] = round(batch.total_completion_tokens / duration, 1)
-            progress_data["valid_tokens_per_second"] = round(batch.total_valid_record_tokens / duration, 1)
-
-        # Pass structured data - processor renders for console, JSON keeps as-is
-        logger.user.info(
-            "",
-            extra={
-                "ctx": {
-                    "render_table": True,
-                    "tabular_data": progress_data,
-                    "title": "Batch Progress",
-                }
-            },
-        )
-
     def generate(
         self,
         data_actions_fn: utils.DataActionsFn | None = None,
     ) -> GenerateJobResults:
-        """Generate synthetic tabular data in batches until the target count is reached.
+        """Generate synthetic tabular data, bracketed with vLLM observability.
 
-        Iterates over generation batches, applying the processor to each
-        LLM output, until the configured ``num_records`` target is met or
-        a stopping condition fires.
-
-        Non-tabular processors need BOS/EOS delimiters in the raw text, so
-        generation keeps special tokens for those processors and strips them
-        only for ``TabularDataProcessor``. Native EOS stopping remains enabled
-        through ``ignore_eos=False``.
-
-        Wrapped in an :class:`NvmlPeakSampler` context so a
-        generation-complete observability event is emitted at end of
-        the call carrying peak device VRAM, host loadavg pre/post, vLLM's
-        kv_cache_usage_perc / prefix_cache_hit_rate / spec_accept_rate
-        (read at end-of-generation), and the engine's effective runtime
-        config probed at engine-init time. Sampler is degraded-mode when
-        NVML is unavailable; the event still emits with ``peak_vram_gb=None``.
+        Delegates the batch loop to
+        [`GeneratorBackend.generate`][nemo_safe_synthesizer.generation.backend.GeneratorBackend.generate]
+        (the shared template method that owns batching, stopping conditions, and
+        result aggregation) and wraps it in an :class:`NvmlPeakSampler` context
+        so a generation-complete observability event is emitted at end
+        of the call carrying peak device VRAM, host loadavg pre/post, vLLM's
+        kv_cache_usage_perc / prefix_cache_hit_rate / spec_accept_rate (read at
+        end-of-generation), and the engine's effective runtime config probed at
+        engine-init time. The sampler degrades when NVML is unavailable; the
+        event still emits with ``peak_vram_gb=None``.
 
         Args:
             data_actions_fn: Optional post-processing / validation function
@@ -713,7 +683,7 @@ class VllmBackend(GeneratorBackend):
         sampler = NvmlPeakSampler()
         try:
             with sampler:
-                self._run_generation(data_actions_fn)
+                super().generate(data_actions_fn)
         finally:
             # Emit regardless of success: the sampler thread has been joined
             # by ``with`` exit, so ``sampler.peak_gb`` is the final peak, and
@@ -722,88 +692,6 @@ class VllmBackend(GeneratorBackend):
             self._emit_generation_observability(sampler, loadavg_pre)
 
         return self.gen_results
-
-    def _run_generation(self, data_actions_fn: utils.DataActionsFn | None) -> None:
-        """Run the batch-generation loop until the target or a stop condition fires.
-
-        Populates ``self.gen_results`` and ``self.elapsed_time``. Extracted
-        from :meth:`generate` so that method stays a thin observability
-        bracket around the loop.
-        """
-        generation_start = time.monotonic()
-        need_special_token_outputs = not isinstance(self.processor, TabularDataProcessor)
-        sampling_kwargs = dict(
-            temperature=self.config.generation.temperature,
-            repetition_penalty=self.config.generation.repetition_penalty,
-            top_p=self.config.generation.top_p,
-            top_k=FIXED_RUNTIME_GENERATE_ARGS["top_k"],
-            min_p=FIXED_RUNTIME_GENERATE_ARGS["min_p"],
-            max_tokens=self.model_metadata.generation_max_tokens_for(self._get_prompt_token_count()),
-            skip_special_tokens=not need_special_token_outputs,
-            include_stop_str_in_output=need_special_token_outputs,
-            ignore_eos=False,
-        )
-
-        self.prepare_params(**sampling_kwargs)
-
-        # The batches object collects batches and keeps track of the stopping condition.
-        batches = GenerationBatches(
-            target_num_records=self.config.generation.num_records,
-            invalid_fraction_threshold=self.config.generation.invalid_fraction_threshold,
-            patience=self.config.generation.patience,
-            data_actions_fn=data_actions_fn,
-        )
-
-        with heartbeat(
-            "Generation",
-            logger_name=__name__,
-            target_records=self.config.generation.num_records,
-            progress_note=("Long stretches with no new records are normal."),
-        ):
-            while batches.num_valid_records < self.config.generation.num_records:
-                # Generate a batch from prompts and process the responses.
-                num_prompts = batches.get_next_num_prompts()
-                start_time = time.perf_counter()
-                batch: Batch = self._generate_batch(
-                    num_prompts_per_batch=num_prompts,
-                    batch=Batch(processor=self.processor),
-                    **sampling_kwargs,
-                )
-                duration = time.perf_counter() - start_time
-                batches.add_batch(batch)
-
-                # Log generation summary and progress.
-                batch.log_summary(detailed_errors=self.use_detailed_logs)
-                self._log_batch_timing_and_progress(
-                    batch=batch,
-                    duration=duration,
-                    num_records=self.config.generation.num_records,
-                    num_valid_records=batches.num_valid_records,
-                    batches=batches,
-                )
-                # Check if the generation job should stop.
-                if batches.status in [
-                    GenerationStatus.STOP_NO_RECORDS,
-                    GenerationStatus.STOP_METRIC_REACHED,
-                ]:
-                    break
-
-        batches.job_complete()
-        batches.log_status()
-
-        max_num_records = (
-            self.config.generation.num_records
-            if self.config.data.group_training_examples_by is None and batches.status == GenerationStatus.COMPLETE
-            else None
-        )
-
-        self.elapsed_time = time.monotonic() - generation_start
-        self.gen_results = GenerateJobResults.from_batches(
-            batches=batches,
-            columns=self.columns,
-            max_num_records=max_num_records,
-            elapsed_time=self.elapsed_time,
-        )
 
     def _emit_generation_observability(
         self, sampler: NvmlPeakSampler, loadavg_pre: tuple[float, float, float] | None
