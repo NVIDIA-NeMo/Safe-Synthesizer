@@ -14,14 +14,20 @@ import yaml
 
 from ..config.data import DataParameters
 from ..config.pii_replacement import (
-    AssociatedColumnSet,
+    PiiColumnPlan,
     PiiEntity,
+    PiiPersona,
     PiiReplacementPlan,
     ReplacePiiConfig,
+    is_person_entity,
 )
 from ..errors import ParameterError
 from . import core
 from .runtime_config import RuntimeConfig
+
+# Implicit role for person-sourced columns that name no persona. It never carries
+# demographic conditioning; it only groups such columns for consistent replacement.
+_PERSONALESS_ROLE = "_personaless"
 
 
 def entity_to_engine_label(entity: PiiEntity | str | None) -> str | None:
@@ -54,11 +60,56 @@ def _unique_ratios(df: pd.DataFrame, plan: PiiReplacementPlan) -> dict[str, floa
 
 
 def _replacement_columns(plan: PiiReplacementPlan) -> list[str]:
-    cols: list[str] = []
-    for col_set in plan.associated_column_sets.values():
-        cols.extend(col_set.columns_to_replace)
-    cols.extend(plan.unassociated_columns_to_replace)
-    return cols
+    return list(plan.columns)
+
+
+def _field_meta(spec: PiiColumnPlan) -> dict[str, Any] | None:
+    if spec.pattern is None and spec.dominant_pattern_coverage is None:
+        return None
+    return {"pattern": spec.pattern, "dominant_pattern_coverage": spec.dominant_pattern_coverage}
+
+
+def _build_role(
+    role_name: str,
+    columns: dict[str, PiiColumnPlan],
+    *,
+    persona: PiiPersona | None,
+) -> dict[str, Any] | None:
+    """Assemble one engine role from a persona's person-sourced columns.
+
+    Only person-sourced fields (names, email, phone, ssn, address) belong here;
+    entity-driven columns are routed to the non-person path before this is called.
+    """
+    fields: dict[str, str] = {}
+    field_meta: dict[str, dict[str, Any]] = {}
+    for col, spec in columns.items():
+        if spec.entity_type is None or spec.entity_type == PiiEntity.free_text:
+            continue
+        if not is_person_entity(spec.entity_type):
+            continue
+        label = entity_to_engine_label(spec.entity_type)
+        if not label:
+            continue
+        fields[label] = col
+        meta = _field_meta(spec)
+        if meta:
+            field_meta[label] = meta
+
+    demo: dict[str, str | None] = {"sex": None, "race": None}
+    if persona is not None:
+        if persona.gender:
+            demo["sex"] = persona.gender
+        if persona.ethnic_background:
+            demo["race"] = persona.ethnic_background
+
+    if not fields and not any(demo.values()):
+        return None
+    return {
+        "role": role_name,
+        "fields": fields,
+        "field_meta": field_meta,
+        "demographics": demo,
+    }
 
 
 def validate_plan(
@@ -89,18 +140,25 @@ def validate_plan(
             raise ParameterError(f"column {col!r} appears more than once in replacement plan")
         seen.add(col)
 
-    for col_set in plan.associated_column_sets.values():
-        cond = col_set.conditioning_columns
-        if cond is None:
+    for col, spec in plan.columns.items():
+        if spec.persona and spec.persona not in plan.identified_personas:
+            raise ParameterError(
+                f"column {col!r} references unknown persona {spec.persona!r}; add it to identified_personas"
+            )
+
+    for persona_name, persona in plan.identified_personas.items():
+        if persona is None:
             continue
         for attr in ("gender", "ethnic_background"):
-            col = getattr(cond, attr)
+            col = getattr(persona, attr)
             if col and col not in df_cols:
-                raise ParameterError(f"conditioning column {col!r} not found in dataframe")
+                raise ParameterError(
+                    f"persona {persona_name!r} conditioning column {col!r} not found in dataframe"
+                )
 
     if discovered and runtime is not None:
         ratios = _unique_ratios(df, plan)
-        for col, spec in plan.unassociated_columns_to_replace.items():
+        for col, spec in plan.columns.items():
             if spec.entity_type == PiiEntity.unique_identifier:
                 ratio = ratios.get(col, 0.0)
                 if ratio < runtime.id_unique_ratio:
@@ -113,7 +171,7 @@ def validate_plan(
 def unique_id_advisories(df: pd.DataFrame, plan: PiiReplacementPlan, runtime: RuntimeConfig) -> list[str]:
     warnings: list[str] = []
     ratios = _unique_ratios(df, plan)
-    for col, spec in plan.unassociated_columns_to_replace.items():
+    for col, spec in plan.columns.items():
         if spec.entity_type != PiiEntity.unique_identifier or col not in df.columns:
             continue
         ratio = ratios.get(col, 0.0)
@@ -154,7 +212,7 @@ def save_plan_to_path(plan: PiiReplacementPlan, path: str | Path) -> Path:
 ENTITY_DRIVEN_ENTITIES = frozenset(core.NON_PERSON_ENTITIES) | {PiiEntity.date_of_birth.value}
 
 
-def _non_person_entry(col: str, spec: Any) -> dict[str, Any]:
+def _non_person_entry(col: str, spec: PiiColumnPlan) -> dict[str, Any]:
     ent: dict[str, Any] = {"column": col, "entity": entity_to_engine_label(spec.entity_type)}
     if spec.pattern:
         ent["pattern"] = spec.pattern
@@ -168,55 +226,51 @@ def plan_to_runtime(plan: PiiReplacementPlan) -> dict[str, Any]:
     roles: list[dict[str, Any]] = []
     non_person: list[dict[str, Any]] = []
     free_text_columns: list[str] = []
-    for role_name, col_set in plan.associated_column_sets.items():
-        fields: dict[str, str] = {}
-        field_meta: dict[str, dict[str, Any]] = {}
-        for col, spec in col_set.columns_to_replace.items():
-            if spec.entity_type is None:
-                continue
-            if spec.entity_type == PiiEntity.free_text:
-                free_text_columns.append(col)
-                continue
-            label = entity_to_engine_label(spec.entity_type)
-            if not label:
-                continue
-            # Entity-driven columns (unique_identifier, date_of_birth, ...) are
-            # never persona-sourced, so they always take the non-person path even
-            # when the plan associates them with a persona. This makes placement
-            # (inside vs outside a persona) irrelevant to the replacement result.
-            if label in ENTITY_DRIVEN_ENTITIES:
-                non_person.append(_non_person_entry(col, spec))
-                continue
-            fields[label] = col
-            if spec.pattern is not None or spec.dominant_pattern_coverage is not None:
-                field_meta[label] = {
-                    "pattern": spec.pattern,
-                    "dominant_pattern_coverage": spec.dominant_pattern_coverage,
-                }
-        demo: dict[str, str | None] = {"sex": None, "race": None}
-        if col_set.conditioning_columns is not None:
-            cond = col_set.conditioning_columns
-            if cond.gender:
-                demo["sex"] = cond.gender
-            if cond.ethnic_background:
-                demo["race"] = cond.ethnic_background
-        if fields or any(demo.values()):
-            roles.append(
-                {
-                    "role": role_name,
-                    "fields": fields,
-                    "field_meta": field_meta,
-                    "demographics": demo,
-                }
-            )
 
-    for col, spec in plan.unassociated_columns_to_replace.items():
+    persona_columns: dict[str, dict[str, PiiColumnPlan]] = {}
+    personaless_person: dict[str, PiiColumnPlan] = {}
+
+    for col, spec in plan.columns.items():
+        if spec.entity_type is None:
+            continue
         if spec.entity_type == PiiEntity.free_text:
             free_text_columns.append(col)
             continue
-        entity = entity_to_engine_label(spec.entity_type)
-        if entity:
+        label = entity_to_engine_label(spec.entity_type)
+        if not label:
+            continue
+        # Entity-driven columns (unique_identifier, date_of_birth, ...) and
+        # identify-only temporal columns are never persona-sourced, so they always
+        # take the non-person path even when a persona is named. This makes persona
+        # association irrelevant to their replacement result.
+        if label in ENTITY_DRIVEN_ENTITIES or not is_person_entity(spec.entity_type):
             non_person.append(_non_person_entry(col, spec))
+            continue
+        if spec.persona:
+            persona_columns.setdefault(spec.persona, {})[col] = spec
+        else:
+            personaless_person[col] = spec
+
+    # Declared personas first (conditioning applies even before columns are seen),
+    # then personas referenced only by a column, then the implicit personaless role.
+    for persona_name in plan.identified_personas:
+        role = _build_role(
+            persona_name,
+            persona_columns.get(persona_name, {}),
+            persona=plan.identified_personas.get(persona_name),
+        )
+        if role:
+            roles.append(role)
+    for persona_name, cols in persona_columns.items():
+        if persona_name in plan.identified_personas:
+            continue
+        role = _build_role(persona_name, cols, persona=None)
+        if role:
+            roles.append(role)
+    if personaless_person:
+        role = _build_role(_PERSONALESS_ROLE, personaless_person, persona=None)
+        if role:
+            roles.append(role)
 
     return {
         "group_key": plan.group_key,
@@ -231,53 +285,64 @@ def runtime_plan_to_pii_plan(
     *,
     group_key: str | None,
 ) -> PiiReplacementPlan:
-    associated: dict[str, AssociatedColumnSet] = {}
-    for role in runtime_plan.get("roles", []):
-        from ..config.pii_replacement import PiiColumnPlan, PiiConditioningColumns
+    identified_personas: dict[str, PiiPersona | None] = {}
+    columns: dict[str, PiiColumnPlan] = {}
 
-        cols: dict[str, PiiColumnPlan] = {}
+    for role in runtime_plan.get("roles", []):
+        role_name = role["role"]
         field_meta = role.get("field_meta") or {}
-        for label, col in (role.get("fields") or {}).items():
-            entity = entity_from_engine_label(label)
-            if entity is not None:
+
+        if role_name == _PERSONALESS_ROLE:
+            for label, col in (role.get("fields") or {}).items():
+                entity = entity_from_engine_label(label)
+                if entity is None:
+                    continue
                 meta = field_meta.get(label) or {}
-                cols[col] = PiiColumnPlan(
+                columns[col] = PiiColumnPlan(
                     entity_type=entity,
                     pattern=meta.get("pattern"),
                     dominant_pattern_coverage=meta.get("dominant_pattern_coverage"),
                 )
+            continue
+
         demo = role.get("demographics") or {}
-        conditioning = None
         if demo.get("sex") or demo.get("race"):
-            conditioning = PiiConditioningColumns(
+            identified_personas[role_name] = PiiPersona(
                 gender=demo.get("sex"),
                 ethnic_background=demo.get("race"),
             )
-        if cols or conditioning is not None:
-            associated[role["role"]] = AssociatedColumnSet(
-                columns_to_replace=cols,
-                conditioning_columns=conditioning,
+        else:
+            identified_personas.setdefault(role_name, None)
+
+        for label, col in (role.get("fields") or {}).items():
+            entity = entity_from_engine_label(label)
+            if entity is None:
+                continue
+            meta = field_meta.get(label) or {}
+            columns[col] = PiiColumnPlan(
+                entity_type=entity,
+                persona=role_name,
+                pattern=meta.get("pattern"),
+                dominant_pattern_coverage=meta.get("dominant_pattern_coverage"),
             )
 
-    from ..config.pii_replacement import PiiColumnPlan
-
-    unassociated: dict[str, PiiColumnPlan] = {}
     for ent in runtime_plan.get("non_person", []):
         col = ent.get("column")
         entity = entity_from_engine_label(ent.get("entity"))
         if col and entity is not None:
-            unassociated[col] = PiiColumnPlan(
+            columns[col] = PiiColumnPlan(
                 entity_type=entity,
                 pattern=ent.get("pattern"),
                 dominant_pattern_coverage=ent.get("dominant_pattern_coverage"),
             )
+
     for col in runtime_plan.get("free_text_columns", []):
-        unassociated[col] = PiiColumnPlan(entity_type=PiiEntity.free_text)
+        columns[col] = PiiColumnPlan(entity_type=PiiEntity.free_text)
 
     return PiiReplacementPlan(
         group_key=group_key,
-        associated_column_sets=associated,
-        unassociated_columns_to_replace=unassociated,
+        identified_personas=identified_personas,
+        columns=columns,
     )
 
 

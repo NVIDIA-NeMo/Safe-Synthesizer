@@ -9,7 +9,6 @@ import pandas as pd
 
 from nemo_safe_synthesizer.config.data import DataParameters
 from nemo_safe_synthesizer.config.pii_replacement import (
-    AssociatedColumnSet,
     PiiColumnPlan,
     PiiEntity,
     PiiReplacementPlan,
@@ -28,14 +27,9 @@ def test_tabular_pii_replacement_cpu_smoke():
     )
     plan = PiiReplacementPlan(
         group_key="patient_id",
-        associated_column_sets={
-            "patient": AssociatedColumnSet(
-                columns_to_replace={
-                    "first_name": PiiColumnPlan(entity_type=PiiEntity.first_name),
-                }
-            )
-        },
-        unassociated_columns_to_replace={
+        identified_personas={"patient": None},
+        columns={
+            "first_name": PiiColumnPlan(entity_type=PiiEntity.first_name, persona="patient"),
             "notes": PiiColumnPlan(entity_type=PiiEntity.free_text),
         },
     )

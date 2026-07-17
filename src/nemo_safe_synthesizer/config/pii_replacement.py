@@ -4,9 +4,8 @@
 """Dataset-specific PII detection/replacement plan.
 
 This is the declarative, column-oriented plan a user (or an upstream detector)
-provides to describe *how* to replace PII in a dataset: which columns belong to
-which role/identity, how names are conditioned on demographics, and how
-standalone (unassociated) columns are treated.
+provides to describe *how* to replace PII in a dataset: which personas exist,
+how their names are conditioned on demographics, and how each column is treated.
 """
 
 from __future__ import annotations
@@ -23,21 +22,35 @@ from .base import NSSBaseModel
 __all__ = [
     "AUTO_DISCOVERY",
     "LLMConfig",
+    "NON_PERSON_ENTITIES",
     "PiiDiscoveryConfig",
     "PiiEntity",
-    "PiiConditioningColumns",
     "PiiColumnPlan",
-    "AssociatedColumnSet",
+    "PiiPersona",
     "PiiPersonBackend",
     "PiiPersonConfig",
     "PiiReplacementPlan",
     "PiiReplacementSettings",
     "ReplacePiiConfig",
+    "is_person_entity",
 ]
 
 # Sentinel value for ``ReplacePiiConfig.replacement_plan`` requesting automatic
 # entity discovery instead of an explicit plan.
 AUTO_DISCOVERY = "auto_discovery"
+
+# Entities replaced via the non-person Faker/pattern path (mirrors core.NON_PERSON_ENTITIES).
+NON_PERSON_ENTITIES = frozenset(
+    {
+        "credit_debit_card",
+        "api_key",
+        "ipv4",
+        "ipv6",
+        "unique_identifier",
+    }
+)
+
+_IDENTIFY_ONLY_ENTITIES = frozenset({"date"})
 
 
 class PiiEntity(StrEnum):
@@ -59,7 +72,7 @@ class PiiEntity(StrEnum):
     unique_identifier = "unique_identifier"
 
     # Special: generic date column (not a birth date). Used only to mark a column as
-    # Special: structured (so it is not treated as free text); generic dates and other
+    # structured (so it is not treated as free text); generic dates and other
     # temporal types (datetime/time/duration) are NOT replaced and are excluded
     # from the replacement plan.
     date = "date"
@@ -68,12 +81,21 @@ class PiiEntity(StrEnum):
     free_text = "free_text"
 
 
-class PiiConditioningColumns(NSSBaseModel):
-    """Columns whose values condition synthetic-name generation for a set.
+def is_person_entity(entity: PiiEntity | str | None) -> bool:
+    """Return whether ``entity`` is replaced via the person/synth_value path."""
+    if entity is None:
+        return False
+    label = entity.value if isinstance(entity, PiiEntity) else entity
+    if label in NON_PERSON_ENTITIES or label in _IDENTIFY_ONLY_ENTITIES or label == PiiEntity.free_text.value:
+        return False
+    return True
 
-    Each field is the name of a dataframe column to condition on, or ``None``
-    when no such column exists. Whether the LLM infers missing demographics is
-    controlled by ``llm_enhancement`` on the enclosing ``ReplacePiiConfig``.
+
+class PiiPersona(NSSBaseModel):
+    """Demographic conditioning for a named persona's synthetic-name generation.
+
+    A persona entry in ``identified_personas`` may be ``null`` when the role has
+    no conditioning columns (e.g. ``doctor: null``).
     """
 
     gender: str | None = None
@@ -81,14 +103,15 @@ class PiiConditioningColumns(NSSBaseModel):
 
 
 class PiiColumnPlan(NSSBaseModel):
-    """Replacement spec for one column (keyed by column name).
+    """Replacement spec for one column (keyed by column name in ``columns``).
 
-    Used for both associated (role) and unassociated columns. Set
-    ``entity_type: free_text`` for columns handled by a second entity-detection
-    pass rather than replaced as a single structured value.
+    Set ``persona`` to tie a column to a named identity for consistent
+    replacement across related rows. Set ``entity_type: free_text`` for columns
+    handled by propagation rather than structured replacement.
     """
 
     entity_type: PiiEntity | None = None
+    persona: str | None = None
     pattern: str | None = None  # dominant concrete format/template (e.g. %m/%d/%Y)
     dominant_pattern_coverage: float | None = Field(
         default=None,
@@ -96,25 +119,12 @@ class PiiColumnPlan(NSSBaseModel):
     )
 
 
-class AssociatedColumnSet(NSSBaseModel):
-    """A set of columns tied to one identity/role (keyed by role name).
-
-    Groups the columns belonging to a single synthetic identity (e.g. patient,
-    doctor, emergency_contact) together with the columns used to condition their
-    generated names.
-    """
-
-    columns_to_replace: dict[str, PiiColumnPlan] = Field(default_factory=dict)
-    conditioning_columns: PiiConditioningColumns | None = None
-
-
 class PiiReplacementPlan(Parameters):
     """Dataset-specific detection/replacement plan (column-oriented)."""
 
     group_key: str | None = None
-    # role name -> its associated columns; arbitrary number of roles.
-    associated_column_sets: dict[str, AssociatedColumnSet] = Field(default_factory=dict)
-    unassociated_columns_to_replace: dict[str, PiiColumnPlan] = Field(default_factory=dict)
+    identified_personas: dict[str, PiiPersona | None] = Field(default_factory=dict)
+    columns: dict[str, PiiColumnPlan] = Field(default_factory=dict)
 
 
 class LLMConfig(NSSBaseModel):

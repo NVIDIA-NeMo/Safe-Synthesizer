@@ -14,9 +14,9 @@ from nemo_safe_synthesizer.config.data import DataParameters
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.pii_replacement import (
     AUTO_DISCOVERY,
-    AssociatedColumnSet,
     PiiColumnPlan,
     PiiEntity,
+    PiiPersona,
     PiiPersonBackend,
     PiiPersonConfig,
     PiiReplacementPlan,
@@ -87,12 +87,9 @@ def test_managed_backend_smoke(patient_df: pd.DataFrame):
 
     plan = PiiReplacementPlan(
         group_key="patient_id",
-        associated_column_sets={
-            "patient": AssociatedColumnSet(
-                columns_to_replace={
-                    "first_name": PiiColumnPlan(entity_type=PiiEntity.first_name),
-                }
-            ),
+        identified_personas={"patient": None},
+        columns={
+            "first_name": PiiColumnPlan(entity_type=PiiEntity.first_name, persona="patient"),
         },
     )
     replacer = TabularPiiReplacer(
@@ -118,14 +115,9 @@ def test_person_transform_method_labels():
 def test_column_statistics_transform_methods_and_entity_counts(patient_df: pd.DataFrame):
     plan = PiiReplacementPlan(
         group_key="patient_id",
-        associated_column_sets={
-            "patient": AssociatedColumnSet(
-                columns_to_replace={
-                    "first_name": PiiColumnPlan(entity_type=PiiEntity.first_name),
-                }
-            ),
-        },
-        unassociated_columns_to_replace={
+        identified_personas={"patient": None},
+        columns={
+            "first_name": PiiColumnPlan(entity_type=PiiEntity.first_name, persona="patient"),
             "notes": PiiColumnPlan(entity_type=PiiEntity.free_text),
         },
     )
@@ -156,18 +148,12 @@ def test_column_statistics_dob_perturbation_and_unique_id_methods():
     )
     plan = PiiReplacementPlan(
         group_key="patient_id",
-        associated_column_sets={
-            "patient": AssociatedColumnSet(
-                columns_to_replace={
-                    "date_of_birth": PiiColumnPlan(
-                        entity_type=PiiEntity.date_of_birth,
-                        pattern="%m/%d/%Y",
-                        dominant_pattern_coverage=100.0,
-                    ),
-                }
+        columns={
+            "date_of_birth": PiiColumnPlan(
+                entity_type=PiiEntity.date_of_birth,
+                pattern="%m/%d/%Y",
+                dominant_pattern_coverage=100.0,
             ),
-        },
-        unassociated_columns_to_replace={
             "record_id": PiiColumnPlan(entity_type=PiiEntity.unique_identifier),
         },
     )
@@ -233,15 +219,10 @@ def test_faker_persona_names_conditioned_on_sex():
 
 def test_plan_column_counts():
     plan = PiiReplacementPlan(
-        associated_column_sets={
-            "patient": AssociatedColumnSet(
-                columns_to_replace={
-                    "first_name": PiiColumnPlan(entity_type=PiiEntity.first_name),
-                    "last_name": PiiColumnPlan(entity_type=PiiEntity.last_name),
-                }
-            ),
-        },
-        unassociated_columns_to_replace={
+        identified_personas={"patient": None},
+        columns={
+            "first_name": PiiColumnPlan(entity_type=PiiEntity.first_name, persona="patient"),
+            "last_name": PiiColumnPlan(entity_type=PiiEntity.last_name, persona="patient"),
             "notes": PiiColumnPlan(entity_type=PiiEntity.free_text),
         },
     )
@@ -312,9 +293,7 @@ def test_discover_event_date_identified_not_replaced():
     )
     # A generic date column is identified as structured only to keep it out of the
     # free-text path; it is excluded from the replacement plan entirely.
-    assert "event_date" not in plan.unassociated_columns_to_replace
-    for col_set in plan.associated_column_sets.values():
-        assert "event_date" not in col_set.columns_to_replace
+    assert "event_date" not in plan.columns
 
 
 def test_discovery_logs_temporal_and_free_text_gates(caplog):
@@ -368,9 +347,7 @@ def test_mvp_skips_free_text_scan_without_structured_columns(caplog):
         runtime=runtime_config_from_replace_pii(ReplacePiiConfig()),
         config=ReplacePiiConfig(),
     )
-    assert "notes" not in plan.unassociated_columns_to_replace
-    for col_set in plan.associated_column_sets.values():
-        assert "notes" not in col_set.columns_to_replace
+    assert "notes" not in plan.columns
     messages = [record.getMessage() for record in caplog.records]
     assert any("skipping free-text scan" in message for message in messages)
 
@@ -391,7 +368,7 @@ def test_llm_mode_still_scans_free_text_without_structured_columns():
         runtime=runtime_config_from_replace_pii(ReplacePiiConfig(llm_enhancement=True)),
         config=ReplacePiiConfig(llm_enhancement=True),
     )
-    notes = plan.unassociated_columns_to_replace.get("notes")
+    notes = plan.columns.get("notes")
     assert notes is not None and notes.entity_type == PiiEntity.free_text
 
 
@@ -502,10 +479,8 @@ def test_discover_temporal_columns_identified_not_replaced():
         config=ReplacePiiConfig(),
     )
     for col in ("created_at", "shift_start", "wait_time"):
-        assert col not in plan.unassociated_columns_to_replace
-        for col_set in plan.associated_column_sets.values():
-            assert col not in col_set.columns_to_replace
-    assert "notes" in plan.unassociated_columns_to_replace
+        assert col not in plan.columns
+    assert "notes" in plan.columns
 
 
 def test_discover_date_of_birth_gets_pattern_and_coverage():
@@ -525,15 +500,14 @@ def test_discover_date_of_birth_gets_pattern_and_coverage():
         runtime=runtime_config_from_replace_pii(ReplacePiiConfig()),
         config=ReplacePiiConfig(),
     )
-    # Birth dates are replaced independently of any persona, so they are placed
-    # in the unassociated section (not under a person role).
-    dob_spec = plan.unassociated_columns_to_replace.get("date_of_birth")
+    # Birth dates are replaced independently of any persona, so they are a plain
+    # column with no persona reference (not associated with a person).
+    dob_spec = plan.columns.get("date_of_birth")
     assert dob_spec is not None
     assert dob_spec.entity_type == PiiEntity.date_of_birth
     assert dob_spec.pattern == "%m/%d/%Y"
     assert dob_spec.dominant_pattern_coverage == 100.0
-    for col_set in plan.associated_column_sets.values():
-        assert "date_of_birth" not in col_set.columns_to_replace
+    assert dob_spec.persona is None
 
 
 def test_grouped_unique_id_and_dob_replaced_globally_unique_and_group_consistent():
@@ -557,8 +531,10 @@ def test_grouped_unique_id_and_dob_replaced_globally_unique_and_group_consistent
     config = ReplacePiiConfig(replacement_plan=AUTO_DISCOVERY, person={"backend": "faker"})
     data_config = DataParameters(group_training_examples_by="patient_id")
     plan = discover_plan(df, "patient_id", runtime_config_from_replace_pii(config), config)
-    assert plan.unassociated_columns_to_replace["patient_id"].entity_type == PiiEntity.unique_identifier
-    assert plan.unassociated_columns_to_replace["date_of_birth"].entity_type == PiiEntity.date_of_birth
+    assert plan.columns["patient_id"].entity_type == PiiEntity.unique_identifier
+    assert plan.columns["patient_id"].persona is None
+    assert plan.columns["date_of_birth"].entity_type == PiiEntity.date_of_birth
+    assert plan.columns["date_of_birth"].persona is None
 
     replacer = TabularPiiReplacer(config, data_config=data_config)
     replacer.transform_df(df)
@@ -621,18 +597,16 @@ def test_entity_driven_column_under_persona_routes_to_non_person():
     non-person path, carrying its pattern/coverage, and round-trips as an
     unassociated column."""
     plan = PiiReplacementPlan(
-        associated_column_sets={
-            "primary_person": AssociatedColumnSet(
-                columns_to_replace={
-                    "first_name": PiiColumnPlan(entity_type=PiiEntity.first_name),
-                    "date_of_birth": PiiColumnPlan(
-                        entity_type=PiiEntity.date_of_birth,
-                        pattern="%m/%d/%Y",
-                        dominant_pattern_coverage=100.0,
-                    ),
-                }
-            )
-        }
+        identified_personas={"primary_person": None},
+        columns={
+            "first_name": PiiColumnPlan(entity_type=PiiEntity.first_name, persona="primary_person"),
+            "date_of_birth": PiiColumnPlan(
+                entity_type=PiiEntity.date_of_birth,
+                persona="primary_person",
+                pattern="%m/%d/%Y",
+                dominant_pattern_coverage=100.0,
+            ),
+        },
     )
     runtime = plan_to_runtime(plan)
     # DOB is not a persona field; it is emitted as a non-person entity.
@@ -645,10 +619,11 @@ def test_entity_driven_column_under_persona_routes_to_non_person():
     from nemo_safe_synthesizer.pii_replacer.plan import runtime_plan_to_pii_plan
 
     round_tripped = runtime_plan_to_pii_plan(runtime, group_key=None)
-    dob = round_tripped.unassociated_columns_to_replace["date_of_birth"]
+    dob = round_tripped.columns["date_of_birth"]
     assert dob.pattern == "%m/%d/%Y"
     assert dob.dominant_pattern_coverage == 100.0
-    assert "date_of_birth" not in round_tripped.associated_column_sets["primary_person"].columns_to_replace
+    # DOB round-trips as a plain column with no persona (never persona-associated).
+    assert round_tripped.columns["date_of_birth"].persona is None
 
 
 def _dob_replacement(coverage: float, dates: list[str]) -> pd.Series:
@@ -704,12 +679,12 @@ def test_dob_replacement_per_value_preserves_minority_format():
 
 def test_conditioning_only_sex_and_race_in_plan():
     plan = PiiReplacementPlan(
-        associated_column_sets={
-            "primary_person": AssociatedColumnSet(
-                columns_to_replace={"first_name": PiiColumnPlan(entity_type=PiiEntity.first_name)},
-                conditioning_columns={"gender": "sex", "ethnic_background": "race"},
-            )
-        }
+        identified_personas={
+            "primary_person": PiiPersona(gender="sex", ethnic_background="race"),
+        },
+        columns={
+            "first_name": PiiColumnPlan(entity_type=PiiEntity.first_name, persona="primary_person"),
+        },
     )
     runtime = plan_to_runtime(plan)
     demo = runtime["roles"][0]["demographics"]
@@ -727,19 +702,10 @@ def test_validate_plan_group_key_mismatch(patient_df: pd.DataFrame):
 def test_grouped_replacement_distinct_doctors_within_group(patient_df: pd.DataFrame):
     plan = PiiReplacementPlan(
         group_key="patient_id",
-        associated_column_sets={
-            "patient": AssociatedColumnSet(
-                columns_to_replace={
-                    "first_name": PiiColumnPlan(entity_type=PiiEntity.first_name),
-                }
-            ),
-            "doctor": AssociatedColumnSet(
-                columns_to_replace={
-                    "provider_name": PiiColumnPlan(entity_type=PiiEntity.full_name),
-                }
-            ),
-        },
-        unassociated_columns_to_replace={
+        identified_personas={"patient": None, "doctor": None},
+        columns={
+            "first_name": PiiColumnPlan(entity_type=PiiEntity.first_name, persona="patient"),
+            "provider_name": PiiColumnPlan(entity_type=PiiEntity.full_name, persona="doctor"),
             "notes": PiiColumnPlan(entity_type=PiiEntity.free_text),
         },
     )
@@ -773,14 +739,11 @@ def test_record_scoped_replacement_changes_per_row():
         }
     )
     plan = PiiReplacementPlan(
-        associated_column_sets={
-            "person": AssociatedColumnSet(
-                columns_to_replace={
-                    "first_name": PiiColumnPlan(entity_type=PiiEntity.first_name),
-                    "provider_name": PiiColumnPlan(entity_type=PiiEntity.full_name),
-                }
-            )
-        }
+        identified_personas={"person": None},
+        columns={
+            "first_name": PiiColumnPlan(entity_type=PiiEntity.first_name, persona="person"),
+            "provider_name": PiiColumnPlan(entity_type=PiiEntity.full_name, persona="person"),
+        },
     )
     replacer = TabularPiiReplacer(
         ReplacePiiConfig(replacement_plan=plan, person={"backend": "faker"}),
@@ -815,7 +778,7 @@ def test_auto_discovery_emits_plan_shape():
     replacer.transform_df(df)
     assert replacer.resolved_plan is not None
     assert replacer.resolved_plan.group_key == "patient_id"
-    notes = replacer.resolved_plan.unassociated_columns_to_replace.get("notes")
+    notes = replacer.resolved_plan.columns.get("notes")
     assert notes is not None
     assert notes.entity_type == PiiEntity.free_text
 
@@ -833,7 +796,7 @@ def test_nss_free_text_detection_matches_describe_field():
 
 def test_plan_to_runtime_maps_unique_id_entity():
     plan = PiiReplacementPlan(
-        unassociated_columns_to_replace={
+        columns={
             "event_id": PiiColumnPlan(entity_type=PiiEntity.unique_identifier),
         }
     )
@@ -880,7 +843,7 @@ def test_replacement_plan_artifact(tmp_path, patient_df: pd.DataFrame):
 
 def test_unique_id_advisory_for_user_plan(patient_df: pd.DataFrame):
     plan = PiiReplacementPlan(
-        unassociated_columns_to_replace={
+        columns={
             "patient_id": PiiColumnPlan(entity_type=PiiEntity.unique_identifier),
         }
     )
@@ -902,7 +865,7 @@ def test_preflight_faker_locale_error():
 def test_preflight_unique_id_advisory():
     df = pd.DataFrame({"category": ["A", "B", "C", "A", "B"]})
     plan = PiiReplacementPlan(
-        unassociated_columns_to_replace={
+        columns={
             "category": PiiColumnPlan(entity_type=PiiEntity.unique_identifier),
         }
     )
@@ -911,3 +874,59 @@ def test_preflight_unique_id_advisory():
     )
     issues = PiiUniqueIdAdvisoryCheck().run(PreflightContext(config=config, data=df, metadata=MagicMock()))
     assert any(i.code == "pii_unique_id_low_cardinality" for i in issues)
+
+
+def test_plan_yaml_round_trip_new_shape(tmp_path):
+    from nemo_safe_synthesizer.pii_replacer.plan import load_plan_from_path, save_plan_to_path
+
+    plan = PiiReplacementPlan(
+        group_key="patient_id",
+        identified_personas={
+            "patient": PiiPersona(gender="gender", ethnic_background="race"),
+            "doctor": None,
+            "emergency_contact": None,
+        },
+        columns={
+            "first_name": PiiColumnPlan(entity_type=PiiEntity.first_name, persona="patient"),
+            "provider_name": PiiColumnPlan(entity_type=PiiEntity.full_name, persona="doctor"),
+            "date_of_birth": PiiColumnPlan(entity_type=PiiEntity.date_of_birth, pattern="%Y-%m-%d"),
+            "patient_id": PiiColumnPlan(entity_type=PiiEntity.unique_identifier),
+            "notes": PiiColumnPlan(entity_type=PiiEntity.free_text),
+        },
+    )
+    path = tmp_path / "plan.yaml"
+    save_plan_to_path(plan, path)
+    loaded = load_plan_from_path(str(path))
+    assert loaded.group_key == "patient_id"
+    assert loaded.identified_personas["doctor"] is None
+    assert loaded.columns["first_name"].persona == "patient"
+    assert loaded.columns["date_of_birth"].persona is None
+
+
+def test_personaless_dob_and_ssn_use_entity_correct_replacement():
+    df = pd.DataFrame(
+        {
+            "date_of_birth": ["01/02/1980", "03/04/1975"],
+            "ssn": ["123-45-6789", "987-65-4321"],
+        }
+    )
+    plan = PiiReplacementPlan(
+        columns={
+            "date_of_birth": PiiColumnPlan(
+                entity_type=PiiEntity.date_of_birth,
+                pattern="%m/%d/%Y",
+                dominant_pattern_coverage=100.0,
+            ),
+            "ssn": PiiColumnPlan(entity_type=PiiEntity.ssn),
+        },
+    )
+    replacer = TabularPiiReplacer(
+        ReplacePiiConfig(replacement_plan=plan, person={"backend": "faker"}),
+        data_config=DataParameters(),
+    )
+    replacer.transform_df(df)
+    assert replacer.result is not None
+    out = replacer.result.transformed_df
+    assert re.fullmatch(r"\d{2}/\d{2}/\d{4}", str(out["date_of_birth"].iloc[0]))
+    assert out["date_of_birth"].iloc[0] != df["date_of_birth"].iloc[0]
+    assert out["ssn"].iloc[0] != df["ssn"].iloc[0]

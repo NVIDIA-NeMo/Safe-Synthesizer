@@ -72,12 +72,9 @@ def test_pii_replacer_only_builder(fixture_base_builder: SafeSynthesizer):
             "replacement": {"locale": "en_US", "seed": 42},
             "replacement_plan": {
                 "group_key": None,
-                "associated_column_sets": {
-                    "person": {
-                        "columns_to_replace": {
-                            "name": {"entity_type": "first_name"},
-                        }
-                    }
+                "identified_personas": {"person": None},
+                "columns": {
+                    "name": {"entity_type": "first_name", "persona": "person"},
                 },
             },
         }

@@ -12,7 +12,7 @@ from typing import Any
 import pandas as pd
 
 from ..config.data import DataParameters
-from ..config.pii_replacement import PiiColumnPlan, PiiEntity, PiiReplacementPlan, ReplacePiiConfig
+from ..config.pii_replacement import PiiColumnPlan, PiiEntity, PiiReplacementPlan, ReplacePiiConfig, is_person_entity
 from ..observability import get_logger
 from .plan import PII_REPLACEMENT_PLAN_FILENAME, plan_to_runtime, resolve_plan, save_plan_to_path, unique_id_advisories
 from .replacement import run_replacement
@@ -23,10 +23,12 @@ logger = get_logger(__name__)
 
 
 def _plan_column_counts(plan: PiiReplacementPlan) -> tuple[int, int, int]:
-    """Return (role_count, structured_column_count, free_text_column_count)."""
-    structured = sum(len(role.columns_to_replace) for role in plan.associated_column_sets.values())
-    free_text = len(plan.unassociated_columns_to_replace)
-    return len(plan.associated_column_sets), structured, free_text
+    """Return (persona_count, structured_column_count, free_text_column_count)."""
+    structured = sum(
+        1 for spec in plan.columns.values() if spec.entity_type and spec.entity_type != PiiEntity.free_text
+    )
+    free_text = sum(1 for spec in plan.columns.values() if spec.entity_type == PiiEntity.free_text)
+    return len(plan.identified_personas), structured, free_text
 
 
 def _replacement_plan_source(config: ReplacePiiConfig) -> str:
@@ -180,7 +182,7 @@ class TabularPiiReplacer:
                 transform_methods=methods,
             )
 
-        def _method_for(spec: PiiColumnPlan, *, person: bool) -> str:
+        def _method_for(spec: PiiColumnPlan) -> str:
             """Human-readable transform method matching how the value is generated."""
             if spec.entity_type == PiiEntity.free_text:
                 return "propagation"
@@ -188,21 +190,15 @@ class TabularPiiReplacer:
             # persona/Faker draws (see core._synth_dob_programmatic).
             if spec.entity_type == PiiEntity.date_of_birth:
                 return "perturbation"
-            if person:
+            if spec.persona or is_person_entity(spec.entity_type):
                 return person_method
             # Non-person entities use the inferred pattern template when available and
             # otherwise fall back to Faker (see core.build_non_person_maps).
             return "pattern" if spec.pattern else "Faker"
 
-        for role_set in plan.associated_column_sets.values():
-            for col, spec in role_set.columns_to_replace.items():
-                entity = spec.entity_type.value if spec.entity_type else None
-                methods = {_method_for(spec, person=True)} if changed.get(col, 0) > 0 else set()
-                _add(col, entity, transformed=changed.get(col, 0) > 0, transform_methods=methods)
-
-        for col, spec in plan.unassociated_columns_to_replace.items():
+        for col, spec in plan.columns.items():
             entity = spec.entity_type.value if spec.entity_type else None
-            methods = {_method_for(spec, person=False)} if changed.get(col, 0) > 0 else set()
+            methods = {_method_for(spec)} if changed.get(col, 0) > 0 else set()
             _add(col, entity, transformed=changed.get(col, 0) > 0, transform_methods=methods)
 
         for ent in details.get("free_text_entities", []):

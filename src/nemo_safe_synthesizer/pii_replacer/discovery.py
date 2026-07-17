@@ -131,8 +131,6 @@ def _detect_full_dataframe(
         )
 
     non_person = list(out["non_person"])
-    if cfg.replace_group_key and cfg.replace_group_key is not False:
-        pass
     core._attach_value_patterns(df, non_person, cfg)
 
     exclude = _discovery_exclude_columns(out)
@@ -192,22 +190,25 @@ def discover_plan(
 
     if config.discovery.replace_group_key and group_key and group_key in df.columns:
         # The group key is replaced as a (non-person) unique_identifier; its
-        # replacement never depends on a persona, so it belongs in the
-        # unassociated section, not under a person role.
-        for col_set in plan.associated_column_sets.values():
-            col_set.columns_to_replace.pop(group_key, None)
-        if group_key not in plan.unassociated_columns_to_replace:
-            pat = None
-            cov = None
-            for ent in detected["non_person"]:
-                if ent.get("column") == group_key:
-                    pat = ent.get("pattern")
-                    cov = ent.get("dominant_pattern_coverage")
-                    break
-            plan.unassociated_columns_to_replace[group_key] = PiiColumnPlan(
+        # replacement never depends on a persona, so it is a plain column with no
+        # ``persona`` reference rather than a persona-associated field.
+        pat = None
+        cov = None
+        for ent in detected["non_person"]:
+            if ent.get("column") == group_key:
+                pat = ent.get("pattern")
+                cov = ent.get("dominant_pattern_coverage")
+                break
+        existing = plan.columns.get(group_key)
+        if existing is None or existing.entity_type != PiiEntity.unique_identifier:
+            plan.columns[group_key] = PiiColumnPlan(
                 entity_type=PiiEntity.unique_identifier,
                 pattern=pat,
                 dominant_pattern_coverage=cov,
+            )
+        elif pat and existing.pattern is None:
+            plan.columns[group_key] = existing.model_copy(
+                update={"pattern": pat, "dominant_pattern_coverage": cov}
             )
 
     return plan
