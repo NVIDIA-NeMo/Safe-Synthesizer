@@ -87,6 +87,9 @@
                     <p>Low scores suggest you should
                        <a href="https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/evaluating-data/#low-sqs-scores"
                        target="_blank" rel="noopener noreferrer">adjust your configuration</a> to improve model learning.</p>
+                    {% with kind="quality", grade=ctx.synthetic_quality_score.score.grade %}
+                        {% include "jinja/components/score_guidance.j2" %}
+                    {% endwith %}
                 </div>
                 <button type="button" data-dismiss aria-label="Dismiss quality score guidance">{{ icon("close") }}</button>
             </aside>
@@ -185,7 +188,11 @@
                    uncertainty for attackers.</p>
                 <p>Low scores suggest you should
                    <a href="https://nvidia-nemo.github.io/Safe-Synthesizer/product-overview/evaluation/#dps-interpretation"
-                   target="_blank" rel="noopener noreferrer">adjust your configuration</a> to improve privacy protection.</p></div>
+                   target="_blank" rel="noopener noreferrer">adjust your configuration</a> to improve privacy protection.</p>
+                {% with kind="privacy", grade=ctx.data_privacy_score.score.grade %}
+                    {% include "jinja/components/score_guidance.j2" %}
+                {% endwith %}
+                </div>
                 <button type="button" data-dismiss aria-label="Dismiss privacy score guidance">{{ icon("close") }}</button>
             </aside>
 

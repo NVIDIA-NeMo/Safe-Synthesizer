@@ -635,6 +635,41 @@ h3 {
     margin-bottom: 0;
 }
 
+.guidance-use-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px 16px;
+    margin: 12px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.guidance-use-list li {
+    display: flex;
+    gap: 7px;
+    align-items: baseline;
+    color: var(--text);
+    font-size: 12px;
+    line-height: 18px;
+}
+
+.guidance-use-status {
+    flex: 0 0 auto;
+    color: var(--nvidia);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+
+.guidance-use-list .guidance-use--not-recommended {
+    color: var(--muted);
+}
+
+.guidance-use--not-recommended .guidance-use-status {
+    color: var(--warning);
+}
+
 .guidance-notification > button {
     width: 20px;
     height: 20px;
@@ -984,6 +1019,18 @@ tbody tr:hover td {
     font-weight: 600;
 }
 
+.column-name-link {
+    color: var(--text);
+    text-decoration: underline;
+    text-decoration-color: var(--muted);
+    text-underline-offset: 2px;
+}
+
+.column-name-link:hover {
+    color: var(--nvidia);
+    text-decoration-color: var(--nvidia);
+}
+
 .columns-table th:nth-child(1) {
     width: 25%;
 }
@@ -1002,6 +1049,28 @@ tbody tr:hover td {
 
 .columns-table th:nth-child(5) {
     width: 22%;
+}
+
+.columns-table--with-distribution {
+    min-width: 720px;
+}
+
+.columns-table--with-distribution th:nth-child(1) {
+    width: 22%;
+}
+
+.columns-table--with-distribution th:nth-child(2),
+.columns-table--with-distribution th:nth-child(3) {
+    width: 12%;
+}
+
+.columns-table--with-distribution th:nth-child(4) {
+    width: 16%;
+}
+
+.columns-table--with-distribution th:nth-child(5),
+.columns-table--with-distribution th:nth-child(6) {
+    width: 19%;
 }
 
 .columns-table--with-transform {
@@ -1040,6 +1109,37 @@ tbody tr:hover td {
 }
 
 .columns-table--with-transform th:nth-child(8) {
+    width: 15%;
+}
+
+.columns-table--with-distribution.columns-table--with-transform {
+    min-width: 1080px;
+}
+
+.columns-table--with-distribution.columns-table--with-transform th:nth-child(1) {
+    width: 14%;
+}
+
+.columns-table--with-distribution.columns-table--with-transform th:nth-child(2),
+.columns-table--with-distribution.columns-table--with-transform th:nth-child(3) {
+    width: 7%;
+}
+
+.columns-table--with-distribution.columns-table--with-transform th:nth-child(4),
+.columns-table--with-distribution.columns-table--with-transform th:nth-child(5) {
+    width: 9%;
+}
+
+.columns-table--with-distribution.columns-table--with-transform th:nth-child(6),
+.columns-table--with-distribution.columns-table--with-transform th:nth-child(8) {
+    width: 10%;
+}
+
+.columns-table--with-distribution.columns-table--with-transform th:nth-child(7) {
+    width: 19%;
+}
+
+.columns-table--with-distribution.columns-table--with-transform th:nth-child(9) {
     width: 15%;
 }
 

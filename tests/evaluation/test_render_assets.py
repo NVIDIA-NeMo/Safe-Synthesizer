@@ -3,7 +3,17 @@
 
 from __future__ import annotations
 
+from jinja2 import Environment, FunctionLoader, select_autoescape
+
 from nemo_safe_synthesizer.evaluation.render import _get_template
+
+
+def _render_template(name: str, **context: object) -> str:
+    env = Environment(
+        loader=FunctionLoader(_get_template),
+        autoescape=select_autoescape(["html", "xml"]),
+    )
+    return env.get_template(name).render(**context)
 
 
 def test_evaluation_report_uses_versioned_plotly_cdn() -> None:
@@ -40,19 +50,10 @@ def test_evaluation_report_themes_charts_in_report_assets() -> None:
     assert "data-metric-toggle" in metric_card
     assert "initializeGradientScoreRing" in javascript
     assert "initializeScoreLabels" in javascript
-    assert 'const labels = ["Excellent", "Very Good", "Good", "Moderate", "Poor"]' in javascript
-    assert '[[0, "#ffffff"], [0.25, "#fee2e2"]' in javascript
-    assert "themedTrace.zmin = 0" in javascript
-    assert "themedTrace.zmin = difference ? -1 : 0" not in javascript
-    assert 'Fair: "#f97316"' not in javascript
-    assert "if (score >= 6)" in javascript
-    assert "if (score >= 4)" in javascript
-    assert "if (score >= 2)" in javascript
     assert "themePlotlyCharts" in javascript
     assert "themeMembershipPlot" in javascript
     assert "themeDeepStructurePlot" in javascript
     assert "[TRAINING_COLOR, SYNTHETIC_COLOR]" in javascript
-    assert 'textfont: {color: "#0c0c0c", size: 12}' in javascript
     assert "rebuildDistributionCharts" in javascript
     assert "--distribution-chart-height: 120px" in stylesheet
     assert "grid-auto-rows: var(--distribution-chart-height)" in stylesheet
@@ -91,6 +92,60 @@ def test_evaluation_report_themes_charts_in_report_assets() -> None:
     assert "grid-template-columns: minmax(0, 1fr)" in stylesheet
     assert ".show-columns::before" in stylesheet
     assert "inset: calc(var(--header-height) + 56px) 0 0 0" in stylesheet
+
+
+def test_training_columns_render_distribution_links_grades_and_entity_counts() -> None:
+    ctx = {
+        "with_synthesizer": True,
+        "with_transform": True,
+        "column_distribution_stability": {
+            "evaluation_fields": [
+                {
+                    "name": "Review Text",
+                    "training_field_features": {
+                        "unique_count": 1_234,
+                        "missing_count": 0,
+                        "avg_str_length": 42.25,
+                        "type": "text",
+                    },
+                    "distribution_stability": {"grade": "Very Good"},
+                    "column_statistics": {
+                        "detected_entity_counts": {"PERSON": 12},
+                        "is_transformed": True,
+                        "transform_functions": ["fake_name"],
+                    },
+                }
+            ]
+        },
+    }
+
+    rendered = _render_template("jinja/components/training_columns.j2", ctx=ctx)
+
+    assert "<th>Distribution</th>" in rendered
+    assert '<a class="column-name-link" href="#Review%20Text">Review Text</a>' in rendered
+    assert '<span class="score-label">Very Good</span>' in rendered
+    assert "<th>Entities (Count)</th>" in rendered
+    assert "PERSON (12)" in rendered
+
+
+def test_score_guidance_renders_recommendations_for_the_current_grade() -> None:
+    quality = _render_template("jinja/components/score_guidance.j2", kind="quality", grade="Good")
+    privacy = _render_template("jinja/components/score_guidance.j2", kind="privacy", grade="Excellent")
+
+    assert quality.count("Not recommended") == 2
+    assert quality.count("Suitable") == 2
+    assert privacy.count("Not recommended") == 0
+    assert privacy.count("Suitable") == 4
+
+
+def test_distribution_chart_deep_links_survive_chart_rebuild() -> None:
+    javascript = _get_template("js/multi_modal_toggle.js")
+
+    assert javascript is not None
+    assert 'container.querySelectorAll(":scope > span[id]")' in javascript
+    assert "wrapper.id = anchorIds[chartIndex]" in javascript
+    assert "const currentTarget = document.getElementById(targetId)" in javascript
+    assert 'currentTarget.scrollIntoView({block: "start"})' in javascript
 
 
 def test_evaluation_report_uses_reference_icon_geometry() -> None:

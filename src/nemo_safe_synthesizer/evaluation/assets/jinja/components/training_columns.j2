@@ -5,7 +5,7 @@
     </div>
 </div>
 <div class="table-wrap">
-    <table class="columns-table{% if ctx.with_transform %} columns-table--with-transform{% endif %}">
+    <table class="columns-table{% if ctx.with_synthesizer %} columns-table--with-distribution{% endif %}{% if ctx.with_transform %} columns-table--with-transform{% endif %}">
         <thead>
             <tr>
                 <th>Column Name</th>
@@ -13,6 +13,9 @@
                 <th>Missing</th>
                 <th>Avg. Length</th>
                 <th>Type</th>
+                {% if ctx.with_synthesizer %}
+                <th>Distribution</th>
+                {% endif %}
                 {% if ctx.with_transform %}
                 <th>Entities (Count)</th>
                 <th>Transformed</th>
@@ -23,11 +26,26 @@
         <tbody>
             {% for column in ctx.column_distribution_stability.evaluation_fields %}
             <tr {% if loop.index > 10 %}class="additional-column" hidden{% endif %}>
-                <td>{{ column.name }}</td>
+                <td>
+                    {% if column.distribution_stability %}
+                    <a class="column-name-link" href="#{{ column.name | urlencode }}">{{ column.name }}</a>
+                    {% else %}
+                    {{ column.name }}
+                    {% endif %}
+                </td>
                 <td>{{ "{:,}".format(column.training_field_features.unique_count) }}</td>
                 <td>{{ column.training_field_features.missing_count }}</td>
                 <td>{{ column.training_field_features.avg_str_length | round(2) }}</td>
                 <td><span class="type-tag">{{ column.training_field_features.type | capitalize }}</span></td>
+                {% if ctx.with_synthesizer %}
+                <td>
+                    {% if column.distribution_stability %}
+                    <span class="score-label">{{ column.distribution_stability.grade }}</span>
+                    {% else %}
+                    N/A
+                    {% endif %}
+                </td>
+                {% endif %}
                 {% if ctx.with_transform %}
                 <td class="entities-cell">
                     {% if column.column_statistics and column.column_statistics.detected_entity_counts %}

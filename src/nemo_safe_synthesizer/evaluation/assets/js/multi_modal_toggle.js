@@ -431,6 +431,7 @@ function rebuildDistributionCharts(container) {
         return;
     }
     const sourcePlots = Array.from(container.querySelectorAll(".js-plotly-plot"));
+    const anchorIds = Array.from(container.querySelectorAll(":scope > span[id]"), (anchor) => anchor.id);
     if (!sourcePlots.length) {
         return;
     }
@@ -464,9 +465,12 @@ function rebuildDistributionCharts(container) {
     sourcePlots.forEach((plot) => window.Plotly.purge(plot));
     container.replaceChildren();
     container.dataset.rebuilt = "true";
-    charts.forEach((chart) => {
+    charts.forEach((chart, chartIndex) => {
         const wrapper = document.createElement("div");
         wrapper.className = "distribution-chart";
+        if (anchorIds[chartIndex]) {
+            wrapper.id = anchorIds[chartIndex];
+        }
         const yLabel = document.createElement("span");
         yLabel.className = "distribution-chart-y-label";
         yLabel.textContent = "Percentage";
@@ -547,7 +551,8 @@ function reportViewForTarget(target) {
 }
 
 function activateReportView() {
-    const target = document.getElementById(window.location.hash.slice(1));
+    const targetId = window.location.hash.slice(1);
+    const target = document.getElementById(targetId);
     const view = reportViewForTarget(target);
     if (!view) {
         return;
@@ -565,8 +570,9 @@ function activateReportView() {
     window.requestAnimationFrame(() => {
         themePlotlyCharts(view);
         resizePlotlyCharts(view);
-        if (target && target !== view) {
-            target.scrollIntoView({block: "start"});
+        const currentTarget = document.getElementById(targetId);
+        if (currentTarget && currentTarget !== view) {
+            currentTarget.scrollIntoView({block: "start"});
         } else {
             document.querySelector(".report-main")?.scrollTo({top: 0});
         }
