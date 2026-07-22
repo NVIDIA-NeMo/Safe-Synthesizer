@@ -171,18 +171,8 @@ class StructuredGenerationParameters(Parameters, BaseModel):
         Field(
             title="max_records_per_sequence",
             description=(
-                "Upper bound on the number of records emitted per group (sequence) when "
-                "structured generation is enabled for grouped data (``group_training_examples_by``). "
-                "The grouped constraint otherwise allows unbounded record repetition inside a "
-                "group, so a model that does not voluntarily emit the closing ``eos_token`` "
-                "delimiter decodes to ``max_tokens`` and produces no parseable group -- every "
-                "completion is length-truncated and rejected as ``Group BOS and/or EOS tokens "
-                "missing``. Bounding the repetition forces the closing delimiter after at most "
-                "this many records, guaranteeing a closeable group. Leave as ``None`` (the "
-                "default) to use the largest group size observed during training "
-                "(``ModelMetadata.max_records_per_group``), which covers every trained group "
-                "with no truncation; set an explicit value only to override that. Enforced by "
-                "both the ``regex`` and ``structural_tag`` schema methods."
+                "Max records per grouped sequence under structured generation. "
+                "None uses the largest training group size. Must be None or >= 1."
             ),
         ),
     ] = None
