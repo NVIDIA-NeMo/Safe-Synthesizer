@@ -423,7 +423,7 @@ def run(
     )
 
     try:
-        run_logger.warning("Nemo Safe Synthesizer starting")
+        run_logger.info("Nemo Safe Synthesizer starting")
         run_logger.debug("running with: ", extra={"config": config.model_dump()})
 
         with traced_user("SafeSynthesizer"):

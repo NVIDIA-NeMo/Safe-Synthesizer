@@ -188,7 +188,7 @@ class TextSemanticSimilarity(Component):
                     ) = (EvaluationScore(notes=warning_message),) * 3
 
                 if warning_message:
-                    logger.info(warning_message)
+                    logger.warning(warning_message)
 
                 # I'm PCA I've got nothing to prove pay attention my intention is to bust a move.
                 training_pca, synthetic_pca = TextSemanticSimilarity._get_pca(

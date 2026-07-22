@@ -10,6 +10,7 @@ pytest.importorskip("torch", reason="torch is required for these tests (install 
 
 import re
 from unittest import TestCase
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -311,3 +312,20 @@ class TestProgressLog(TestCase):
             progress.log_throttled(force=True)
             progress.log_throttled(force=True)
         self.assertEqual(len(logs.output), 5)
+
+    def test_reset_timing_excludes_preprocessing_from_row_speed(self):
+        with patch(
+            "nemo_safe_synthesizer.pii_replacer.data_editor.edit.monotonic",
+            side_effect=[10.0, 10.0, 310.0, 312.0, 313.0],
+        ):
+            progress = ProgressLog(30)
+            progress.status.row_n = 20
+            progress.reset_timing()
+            with self.assertLogs() as logs:
+                progress.log_throttled(force=True)
+
+        ctx = getattr(logs.records[0], "ctx")
+        assert progress.start_time == 310.0
+        assert progress.last_log == 313.0
+        assert ctx["tabular_data"]["transform_time"] == "2.0 seconds"
+        assert ctx["tabular_data"]["speed"] == "🐇 10.0 rows per second."

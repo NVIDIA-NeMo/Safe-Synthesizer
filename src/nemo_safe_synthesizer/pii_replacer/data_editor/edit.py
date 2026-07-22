@@ -155,6 +155,11 @@ class ProgressLog:
 
             self.last_log = monotonic()
 
+    def reset_timing(self) -> None:
+        """Start a new row-rendering timing phase after preprocessing work."""
+        self.start_time = monotonic()
+        self.last_log = self.start_time
+
 
 class Step:
     """Single transformation step: applies column/row add/drop/rename/update rules to a DataFrame.
@@ -556,6 +561,7 @@ class Step:
                     continue
                 if fns & self._env.ner_cacheable_filters:
                     self.update_ner_cache(df.loc[rows, column_name])
+                    progress.reset_timing()
                 df.loc[rows, column_name] = df.loc[rows].apply(
                     self._render_cell,
                     args=(
@@ -715,7 +721,7 @@ class Editor:
         for stepn, step_config in enumerate(self.config["steps"]):
             progress.status.step_n = stepn
             logger.user.info(
-                f"Executing transform step : {stepn} / {len(self.config['steps'])}",
+                f"Executing transform step: {stepn + 1} of {len(self.config['steps'])}",
             )
             df = Step.execute(df, entities, column_types, step_config, self._env, progress, fnreport)
         return df

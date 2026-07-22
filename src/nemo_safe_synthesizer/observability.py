@@ -57,7 +57,6 @@ from pydantic_settings import BaseSettings
 from rich import box
 from rich.console import Console
 from rich.table import Table
-from structlog.processors import JSONRenderer
 from structlog.typing import EventDict
 
 P = ParamSpec("P")
@@ -209,7 +208,9 @@ def _move_category_for_column(logger: logging.Logger, method_name: str, event_di
 def _format_table_value(key: str, value: object) -> str:
     """Format values for user-facing Rich tables."""
     if isinstance(value, float):
-        is_fraction = 0 < value < 1 and key not in ("loss", "eval_loss") and not key.endswith(("_sec", "_seconds"))
+        is_fraction = key.endswith("_fraction") or (
+            0 < value < 1 and key not in ("loss", "eval_loss") and not key.endswith(("_sec", "_seconds"))
+        )
         return f"{value:.2%}" if is_fraction else f"{value:.2f}"
     if isinstance(value, Mapping):
         return ", ".join(f"{mapping_key}: {value[mapping_key]}" for mapping_key in sorted(value))
@@ -253,7 +254,7 @@ def _convert_rich_table_to_string(rich_table: Table) -> str:
     return string_io.getvalue()
 
 
-def _render_table_data_for_console(logger: logging.Logger, method_name: str, event_dict: dict) -> dict:
+def _render_table_data_for_console(logger: logging.Logger, method_name: str, event_dict: EventDict) -> EventDict:
     """Processor that renders table data keys as Rich tables for console output.
 
     For each table found in structured context, renders the data as a Rich ASCII
@@ -265,9 +266,7 @@ def _render_table_data_for_console(logger: logging.Logger, method_name: str, eve
     """
     tables_to_render = []
     rendered_keys: list[str] = list()
-    # Check both locations: ExtraAdder flattens to event_dict["ctx"] for foreign loggers,
-    # but native structlog loggers may have it in event_dict["extra"]["ctx"]
-    ctx = event_dict.get("ctx") or event_dict.get("extra", {}).get("ctx", {})
+    ctx = event_dict.get("context", {})
 
     match ctx:
         case {"rich_table": rich_table, **__} if isinstance(rich_table, Table):
@@ -299,6 +298,35 @@ def _render_table_data_for_console(logger: logging.Logger, method_name: str, eve
     return event_dict
 
 
+def _canonicalize_log_event(logger: logging.Logger, method_name: str, event_dict: EventDict) -> EventDict:
+    """Give native and foreign records the same structured context field."""
+    extra = event_dict.get("extra")
+    context = event_dict.pop("ctx", None)
+    if context is None and isinstance(extra, Mapping):
+        context = extra.get("ctx")
+    if context is not None:
+        event_dict["context"] = context
+    if isinstance(extra, Mapping) and "ctx" in extra:
+        remaining_extra = {key: value for key, value in extra.items() if key != "ctx"}
+        if remaining_extra:
+            event_dict["extra"] = remaining_extra
+        else:
+            event_dict.pop("extra", None)
+    return event_dict
+
+
+def _ensure_log_schema(logger: logging.Logger, method_name: str, event_dict: EventDict) -> EventDict:
+    """Populate the canonical JSON fields when a source omits optional metadata."""
+    event_dict.setdefault("timestamp", datetime.now().isoformat(timespec="milliseconds"))
+    event_dict.setdefault("category", LogCategory.RUNTIME.value)
+    event_dict.setdefault("context", {})
+    event_dict.setdefault("logger", getattr(logger, "name", None))
+    event_dict.setdefault("filename", None)
+    event_dict.setdefault("lineno", None)
+    event_dict.setdefault("qual_name", None)
+    return event_dict
+
+
 class DiscardSensitiveMessages(logging.Filter):
     """Discards messages marked as sensitive via the `sensitive` flag."""
 
@@ -320,47 +348,15 @@ class CategoryFilter(logging.Filter):
         return category in {c.value for c in self.include_categories}
 
 
-def _prepare_json_logging() -> tuple[
-    JSONRenderer, structlog.processors.TimeStamper, list[structlog.processors.CallsiteParameterAdder | Callable]
-]:
-    """Prepare JSON file logging."""
-    # TODO: add info context to the json logging
-    # todo: add force ascii to decode unicode to ascii
-    json_renderer = structlog.processors.JSONRenderer()
-    json_timestamp_processor = structlog.processors.TimeStamper(fmt="iso")
-    json_env_processors: list[structlog.processors.CallsiteParameterAdder | Callable] = [
-        structlog.processors.CallsiteParameterAdder(
-            {
-                structlog.processors.CallsiteParameter.FILENAME,
-                structlog.processors.CallsiteParameter.LINENO,
-            }
-        ),
-        _category_log_processor,
-    ]
-
-    return json_renderer, json_timestamp_processor, json_env_processors
-
-
-def _prepare_file_logging() -> logging.Handler | None:
+def _prepare_file_logging(shared_processors: list[Processor]) -> logging.Handler | None:
     """Prepare file logging for JSON logs."""
     if SETTINGS and SETTINGS.nss_log_file:
-        json_renderer, json_timestamp_processor, json_env_processors = _prepare_json_logging()
-        json_foreign_pre_chain = [
-            structlog.stdlib.add_log_level,
-            structlog.stdlib.add_logger_name,
-            structlog.stdlib.ExtraAdder(),
-            json_timestamp_processor,
-            structlog.processors.StackInfoRenderer(),
-            # structlog.processors.format_exc_info,
-            structlog.processors.UnicodeDecoder(),
-            *json_env_processors,
-            structlog.processors.EventRenamer(to="message"),
-        ]
         file_formatter = structlog.stdlib.ProcessorFormatter(
-            foreign_pre_chain=json_foreign_pre_chain,
+            foreign_pre_chain=shared_processors,
             processors=[
                 structlog.stdlib.ProcessorFormatter.remove_processors_meta,
-                json_renderer,
+                structlog.processors.EventRenamer(to="message"),
+                structlog.processors.JSONRenderer(),
             ],
         )
         Path(SETTINGS.nss_log_file).parent.mkdir(parents=True, exist_ok=True)
@@ -468,9 +464,10 @@ def _get_console_columns() -> list:
             prefix=dim_white + ": ",
         ),
     )
-    # Suppress "ctx" - table data is rendered separately by _render_table_data_for_console
-    ctx_suppress_column = structlog.dev.Column(
-        "ctx",
+    # Suppress structured context. Table data is rendered separately by
+    # _render_table_data_for_console.
+    context_suppress_column = structlog.dev.Column(
+        "context",
         structlog.dev.KeyValueColumnFormatter(
             key_style=None,
             value_style="",
@@ -507,15 +504,13 @@ def _get_console_columns() -> list:
         lineno_column,
         message_column,
         extra_display_column,
-        ctx_suppress_column,
+        context_suppress_column,
         extra_suppress_column,
         default_column,
     ]
 
 
-def _remove_category_before_render(
-    logger: logging.Logger, method_name: str, event_dict: MutableMapping[str, Any]
-) -> MutableMapping[str, Any]:
+def _remove_category_before_render(logger: logging.Logger, method_name: str, event_dict: EventDict) -> EventDict:
     """Remove category from event_dict right before rendering to prevent duplicate display."""
     event_dict.pop("category", None)
     return event_dict
@@ -533,7 +528,14 @@ def _prepare_console_logging(
         structlog.stdlib.ProcessorFormatter.remove_processors_meta,
     ]
     if is_plain:
-        final_processors.append(_remove_category_before_render)
+        final_processors.extend(
+            [
+                _render_table_data_for_console,
+                _move_category_for_column,
+                _remove_category_before_render,
+            ]
+        )
+    final_processors.append(structlog.processors.EventRenamer(to="message"))
     final_processors.append(renderer)
 
     console_formatter = structlog.stdlib.ProcessorFormatter(
@@ -549,12 +551,10 @@ def _prepare_console_logging(
 
 
 def _prepare_common_processors() -> tuple[list, Any]:
-    json_renderer, json_timestamp_processor, json_env_processors = _prepare_json_logging()
     global SETTINGS
     if SETTINGS and SETTINGS.nss_log_format == "json":
-        renderer = json_renderer
-        timestamp_processor = json_timestamp_processor
-        env_processors = json_env_processors
+        renderer = structlog.processors.JSONRenderer()
+        timestamp_processor: Processor = structlog.processors.TimeStamper(fmt="iso")
     else:
         renderer = structlog.dev.ConsoleRenderer(
             columns=_get_console_columns(),
@@ -566,12 +566,13 @@ def _prepare_common_processors() -> tuple[list, Any]:
 
         timestamp_processor = structlog.processors.TimeStamper()
         timestamp_processor._stamper = _stamper
-        # For console output: render table data as Rich tables, then handle categories
-        env_processors = [_category_log_processor, _render_table_data_for_console, _move_category_for_column]
 
-    # Shared processors for both native structlog and foreign loggers
+    # Shared processors enrich native and foreign events without changing their
+    # representation for a particular handler. Handler renderers own display-only
+    # transformations such as Rich tables and category columns.
     shared_processors = [
         structlog.stdlib.add_log_level,
+        structlog.stdlib.add_logger_name,
         structlog.processors.CallsiteParameterAdder(
             {
                 structlog.processors.CallsiteParameter.FILENAME,
@@ -583,11 +584,13 @@ def _prepare_common_processors() -> tuple[list, Any]:
             additional_ignores=["nemo_safe_synthesizer.observability"],
         ),
         structlog.stdlib.ExtraAdder(),
-        *env_processors,
+        structlog.stdlib.PositionalArgumentsFormatter(),
+        _category_log_processor,
+        _canonicalize_log_event,
         timestamp_processor,
+        _ensure_log_schema,
         structlog.processors.StackInfoRenderer(),
         structlog.processors.UnicodeDecoder(),
-        structlog.processors.EventRenamer(to="message"),
     ]
 
     return shared_processors, renderer
@@ -676,7 +679,7 @@ def _initialize_logging() -> None:
     # Attach handlers to root logger so ALL loggers use the configured formatters
     root_logger = logging.getLogger()
     root_logger.addHandler(console_handler)
-    file_handler = _prepare_file_logging()
+    file_handler = _prepare_file_logging(shared_processors)
     if file_handler:
         root_logger.addHandler(file_handler)
 

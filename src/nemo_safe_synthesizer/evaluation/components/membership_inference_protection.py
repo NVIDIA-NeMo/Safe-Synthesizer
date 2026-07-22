@@ -542,22 +542,23 @@ class MembershipInferenceProtection(Component):
                 scores.append(score)
                 attack_sum_values = attack_sum_values + attack_sum
 
-            values = {}
+            attack_counts = {}
             for grade in PrivacyGrade:
-                values[grade.value] = 0
+                attack_counts[grade.value] = 0
 
-            total = 0
             for value in attack_sum_values:
-                total += 1
-                values[value] += 1
+                attack_counts[value] += 1
 
-            for i in values:
-                values[i] = int((values[i] / total) * 100)
+            total = sum(attack_counts.values())
+            attack_percentages = {
+                grade: (count / total) * 100 if total else 0.0 for grade, count in attack_counts.items()
+            }
 
             attack_sum_df = pd.DataFrame(
                 {
-                    "Protection": values.keys(),
-                    "Attack Percentage": values.values(),
+                    "Protection": attack_counts.keys(),
+                    "Attack Count": attack_counts.values(),
+                    "Attack Percentage": attack_percentages.values(),
                 }
             )
 
