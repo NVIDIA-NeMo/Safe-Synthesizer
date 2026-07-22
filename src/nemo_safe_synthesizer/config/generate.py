@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import math
 import warnings
 from collections.abc import Mapping
 from typing import Annotated, Any, ClassVar, Literal, Self
@@ -243,12 +244,12 @@ class GenerateParameters(Parameters, BaseModel):
 
     max_tokens_multiplier: Annotated[
         float,
-        ValueValidator(value_func=lambda v: v > 0),
+        ValueValidator(value_func=lambda v: math.isfinite(v) and v > 0),
         Field(
             title="max_tokens_multiplier",
             description=(
                 "Multiplier on the longest training example when sizing per-sample "
-                "max_tokens. Must be > 0. Default 1.2."
+                "max_tokens. Must be a finite value > 0. Default 1.2."
             ),
         ),
     ] = 1.2  # mirrors llm.metadata.GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER (kept a literal to avoid a config->llm import cycle)

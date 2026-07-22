@@ -231,8 +231,8 @@ class TestMaxTokensMultiplier:
         """Users can widen the budget for long free-text datasets."""
         assert GenerateParameters(max_tokens_multiplier=1.8).max_tokens_multiplier == 1.8
 
-    @pytest.mark.parametrize("value", [0, -0.5])
+    @pytest.mark.parametrize("value", [0, -0.5, float("inf"), float("-inf"), float("nan")])
     def test_rejects_non_positive(self, value: float) -> None:
-        """Non-positive multipliers are rejected by the validator."""
+        """Non-positive and non-finite multipliers are rejected by the validator."""
         with pytest.raises(ValidationError):
             GenerateParameters(max_tokens_multiplier=value)
