@@ -9,6 +9,8 @@ including run initialization, configuration logging, and failure reporting.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
@@ -17,11 +19,13 @@ import wandb
 from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings
 
-from ..config import SafeSynthesizerParameters
+from ..config import SafeSynthesizerParameters, SafeSynthesizerSummary
 from ..observability import get_logger
 from .artifact_structure import Workdir
 
 logger = get_logger(__name__)
+
+_EVALUATION_PUBLICATION_FINGERPRINT_KEY = "_nss_evaluation_publication_fingerprint"
 
 
 def resolve_wandb_run_id(id_or_path: str) -> str:
@@ -123,16 +127,125 @@ def log_failure_to_wandb(error: Exception, phase: str) -> None:
     """
     try:
         if wandb.run is not None:
-            wandb.log(
+            wandb.run.summary.update(
                 {
                     "eval/success": 0,
                     f"{phase}/error_type": type(error).__name__,
                     f"{phase}/error_message": str(error),
                 }
             )
-            logger.info(f"Logged failure to wandb for {phase} phase")
+            logger.info(f"Updated wandb failure summary for {phase} phase")
     except Exception as e:
         logger.warning(f"Failed to log error to wandb: {e}")
+
+
+def publish_evaluation_report(
+    workdir: Workdir,
+    summary: SafeSynthesizerSummary,
+    upload_report: bool,
+) -> None:
+    """Best-effort publish final evaluation media for a CLI-managed run.
+
+    The scorecard is always sent when W&B is active. HTML and files leave the
+    local machine only when ``upload_report`` is explicitly enabled.
+
+    Args:
+        workdir: Run artifact paths containing the saved report and metrics.
+        summary: Final pipeline summary used to construct the scorecard.
+        upload_report: Whether report HTML and artifact egress is permitted.
+    """
+    run = wandb.run
+    if run is None:
+        return
+    eval_metrics = {key: value for key, value in summary._wandb_metrics().items() if key.startswith("eval/")}
+    report_path = workdir.evaluation_report
+    metrics_path = workdir.evaluation_metrics
+    report_bytes = _read_optional_file(report_path, "report") if upload_report else None
+    metrics_bytes = _read_optional_file(metrics_path, "metrics") if upload_report else None
+    fingerprint = _evaluation_publication_fingerprint(eval_metrics, upload_report, report_bytes, metrics_bytes)
+
+    try:
+        if run.summary.get(_EVALUATION_PUBLICATION_FINGERPRINT_KEY) == fingerprint:
+            return
+    except Exception as exc:  # noqa: BLE001 -- publication remains best-effort
+        logger.warning(f"Failed to read W&B evaluation publication marker: {exc}")
+
+    publication_succeeded = True
+    try:
+        run.log(
+            {
+                "evaluation/scorecard": wandb.Table(
+                    columns=["metric", "value"],
+                    data=[[key, value] for key, value in eval_metrics.items()],
+                )
+            }
+        )
+    except Exception as exc:  # noqa: BLE001 -- W&B publication is optional
+        logger.warning(f"Failed to publish W&B evaluation scorecard: {exc}")
+        publication_succeeded = False
+
+    report_sha256: str | None = None
+    report_uploaded = False
+    if upload_report and report_bytes is not None:
+        try:
+            report_html = report_bytes.decode("utf-8")
+            run.log({"evaluation/report": wandb.Html(report_html, inject=False)})
+            report_sha256 = hashlib.sha256(report_bytes).hexdigest()
+            report_uploaded = True
+        except Exception as exc:  # noqa: BLE001 -- W&B publication is optional
+            logger.warning(f"Failed to publish W&B evaluation report: {exc}")
+            publication_succeeded = False
+
+    if upload_report and (report_bytes is not None or metrics_bytes is not None):
+        try:
+            artifact = wandb.Artifact(f"safe-synthesizer-evaluation-report-{run.id}", type="evaluation-report")
+            if report_bytes is not None:
+                artifact.add_file(str(report_path), name="evaluation_report.html")
+            if metrics_bytes is not None:
+                artifact.add_file(str(metrics_path), name="evaluation_metrics.json")
+            run.log_artifact(artifact)
+        except Exception as exc:  # noqa: BLE001 -- W&B publication is optional
+            logger.warning(f"Failed to publish W&B evaluation report artifact: {exc}")
+            publication_succeeded = False
+
+    try:
+        publication_summary = {
+            "evaluation/report_uploaded_post_run": report_uploaded,
+            "evaluation/report_sha256": report_sha256,
+        }
+        if publication_succeeded:
+            publication_summary[_EVALUATION_PUBLICATION_FINGERPRINT_KEY] = fingerprint
+        run.summary.update(publication_summary)
+    except Exception as exc:  # noqa: BLE001 -- W&B publication is optional
+        logger.warning(f"Failed to update W&B evaluation publication summary: {exc}")
+
+
+def _read_optional_file(path: Path, file_description: str) -> bytes | None:
+    """Read an opted-in evaluation file, warning instead of failing the run."""
+    try:
+        if not path.is_file():
+            logger.warning(f"W&B evaluation {file_description} upload requested but file is missing: {path}")
+            return None
+        return path.read_bytes()
+    except Exception as exc:  # noqa: BLE001 -- local output inspection is optional
+        logger.warning(f"Failed to read W&B evaluation {file_description}: {exc}")
+        return None
+
+
+def _evaluation_publication_fingerprint(
+    eval_metrics: dict[str, float | int | None],
+    upload_report: bool,
+    report_bytes: bytes | None,
+    metrics_bytes: bytes | None,
+) -> str:
+    """Return a stable marker for the exact CLI evaluation publication payload."""
+    payload = {
+        "eval_metrics": eval_metrics,
+        "upload_report": upload_report,
+        "report_sha256": hashlib.sha256(report_bytes).hexdigest() if report_bytes is not None else None,
+        "metrics_sha256": hashlib.sha256(metrics_bytes).hexdigest() if metrics_bytes is not None else None,
+    }
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 def update_wandb_config(
@@ -282,9 +395,9 @@ class WandbLoggable(Protocol):
 def log_observability_event(event: WandbLoggable, prefix: str) -> None:
     """Log an observability event to the currently active wandb run.
 
-    Generic sink shared by the training and generation observability paths.
+    Generic sink shared by final training and generation observability paths.
     No-op when no wandb run is active (``WANDB_MODE=disabled`` or the pipeline
-    hasn't called :func:`initialize_wandb_run`). Errors during ``wandb.log`` are
+    hasn't called :func:`initialize_wandb_run`). Errors during summary updates are
     swallowed at warning level -- observability is best-effort and a wandb
     failure must not break the run.
 
@@ -297,6 +410,6 @@ def log_observability_event(event: WandbLoggable, prefix: str) -> None:
     if wandb.run is None:
         return
     try:
-        wandb.log(event.to_wandb_payload(prefix=prefix))
+        wandb.run.summary.update(event.to_wandb_payload(prefix=prefix))
     except Exception as exc:  # noqa: BLE001 -- degraded mode
         logger.warning(f"failed to log observability event ({prefix!r}) to wandb: {exc}")

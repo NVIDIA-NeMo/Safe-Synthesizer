@@ -28,6 +28,7 @@ from .utils import (
     PathT,
     common_setup,
 )
+from .wandb_setup import publish_evaluation_report
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -57,6 +58,14 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
             required=False,
             help="Dataset name, URL, or path to CSV dataset. "
             "For 'run generate', this is optional if a cached dataset exists in the workdir.",
+        )
+    )
+    options.append(
+        click.option(
+            "--wandb-upload-evaluation-report/--no-wandb-upload-evaluation-report",
+            default=None,
+            help="Upload the final evaluation HTML report and artifact to WandB. "
+            "Can also be set via NSS_WANDB_UPLOAD_EVALUATION_REPORT. [default: no-wandb-upload-evaluation-report]",
         )
     )
     options.append(
@@ -445,6 +454,7 @@ def run(
                 nss.results.summary.log_summary(run_logger)
                 nss.results.summary.timing.log_timing(run_logger)
                 nss.results.summary.log_wandb()
+                publish_evaluation_report(workdir, nss.results.summary, settings.wandb_upload_evaluation_report)
             finally:
                 if hasattr(nss, "generator") and nss.generator is not None:
                     nss.generator.teardown()
@@ -583,6 +593,7 @@ def run_generate(
             nss.results.summary.timing.log_timing(run_logger)
             run_logger.info(f"Generation complete. Results saved to: {final_output_file}")
             nss.results.summary.log_wandb()
+            publish_evaluation_report(workdir, nss.results.summary, settings.wandb_upload_evaluation_report)
         except KeyboardInterrupt:
             _emit_nss_telemetry(nss, TaskStatusEnum.CANCELED)
             raise

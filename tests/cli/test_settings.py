@@ -297,6 +297,11 @@ class TestCLISettingsIntegration:
         assert settings.wandb.wandb_mode == WandbMode.OFFLINE
         assert settings.wandb.wandb_project == "test-project"
 
+    def test_wandb_upload_evaluation_report_env_var(self, monkeypatch):
+        """NSS_WANDB_UPLOAD_EVALUATION_REPORT enables CLI-only report publishing."""
+        monkeypatch.setenv("NSS_WANDB_UPLOAD_EVALUATION_REPORT", "true")
+        assert CLISettings().wandb_upload_evaluation_report is True
+
     def test_extra_env_vars_ignored(self, monkeypatch):
         """Test that unknown env vars are ignored (extra='ignore')."""
         monkeypatch.setenv("NSS_UNKNOWN_SETTING", "value")

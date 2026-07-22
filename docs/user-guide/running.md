@@ -218,6 +218,7 @@ all others have defaults or are optional.
 | `--log-color` / `--no-log-color` | `NSS_LOG_COLOR` | auto | Colorize console output (auto-detected from TTY) |
 | `--wandb-mode` | `NSS_WANDB_MODE` | `disabled` | WandB mode (`online`, `offline`, `disabled`) |
 | `--wandb-project` | `NSS_WANDB_PROJECT` | -- | WandB project name |
+| `--wandb-upload-evaluation-report` | `NSS_WANDB_UPLOAD_EVALUATION_REPORT` | `false` | Opt in to uploading evaluation HTML and artifact |
 | `--dataset-registry` | `NSS_DATASET_REGISTRY` | -- | Dataset registry YAML path/URL |
 | `-v` / `-vv` | -- | -- | Verbose logging (`-v` debug, `-vv` debug + dependencies) |
 
@@ -1351,6 +1352,28 @@ config file.
 
     These environment variables are read by the CLI only. SDK users must
     call `wandb.init(...)` explicitly.
+
+#### Evaluation scorecard and report upload
+
+For CLI-managed runs, final scalar `eval/*`, `gen/*`, timing, failure, and
+vLLM-completion values update the W&B run summary rather than creating history
+points. Existing training curves remain W&B history. After results are saved,
+the CLI publishes an `evaluation/scorecard` table panel containing final
+`eval/*` values.
+
+The HTML evaluation report can disclose distribution labels and other details
+derived from your source data. It is therefore not uploaded by default. To opt
+in to the `evaluation/report` panel and the `evaluation-report` artifact, pass:
+
+```bash
+safe-synthesizer run --wandb-mode online --wandb-upload-evaluation-report ...
+```
+
+or set `NSS_WANDB_UPLOAD_EVALUATION_REPORT=true`. When enabled, the artifact
+is named `safe-synthesizer-evaluation-report-<run-id>` and may contain
+`evaluation_report.html` and `evaluation_metrics.json` when those files are
+available. SDK callers retain scalar `log_wandb()` behavior and do not upload
+evaluation media automatically.
 
 For parameter precedence (CLI flags vs environment variables vs YAML), see
 [Environment Variables -- Precedence](environment.md#precedence).

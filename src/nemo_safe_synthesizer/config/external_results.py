@@ -10,9 +10,12 @@ from typing import TYPE_CHECKING
 
 from pydantic import Field
 
+from ..observability import get_logger
 from .base import NSSBaseModel
 
 __all__ = ["SafeSynthesizerTiming", "SafeSynthesizerSummary"]
+
+logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     import wandb
@@ -39,21 +42,24 @@ class SafeSynthesizerTiming(NSSBaseModel):
         )
 
     def log_wandb(self, run: wandb.Run | None = None) -> None:
-        """Log timing metrics to an active Weights & Biases run.
+        """Update final timing metrics on an active Weights & Biases run.
 
         Args:
             run: W&B run instance. No-op when ``None``.
         """
         if run is not None:
-            run.log(
-                {
-                    "total_time_sec": self.total_time_sec,
-                    "pii_replacer_time_sec": self.pii_replacer_time_sec,
-                    "training_time_sec": self.training_time_sec,
-                    "generation_time_sec": self.generation_time_sec,
-                    "evaluation_time_sec": self.evaluation_time_sec if self.evaluation_time_sec else 0,
-                }
-            )
+            try:
+                run.summary.update(
+                    {
+                        "total_time_sec": self.total_time_sec,
+                        "pii_replacer_time_sec": self.pii_replacer_time_sec,
+                        "training_time_sec": self.training_time_sec,
+                        "generation_time_sec": self.generation_time_sec,
+                        "evaluation_time_sec": self.evaluation_time_sec,
+                    }
+                )
+            except Exception as exc:  # noqa: BLE001 -- observability is best-effort
+                logger.runtime.warning("Failed to update W&B timing summary: %s", exc)
 
 
 class SafeSynthesizerSummary(NSSBaseModel):
@@ -167,47 +173,52 @@ class SafeSynthesizerSummary(NSSBaseModel):
             extra={"ctx": {"render_table": True, "tabular_data": self.model_dump(), "title": "Quality Metrics"}},
         )
 
+    def _wandb_metrics(self) -> dict[str, float | int | None]:
+        """Return the stable final W&B metric payload, including ``None`` values."""
+        return {
+            "gen/generation_time_sec": self.timing.generation_time_sec,
+            "gen/evaluation_time_sec": self.timing.evaluation_time_sec,
+            "eval/total_time_sec": self.timing.total_time_sec,
+            "train/pii_replacer_time_sec": self.timing.pii_replacer_time_sec,
+            "train/training_time_sec": self.timing.training_time_sec,
+            "gen/num_valid_records": self.num_valid_records,
+            "gen/num_invalid_records": self.num_invalid_records,
+            "gen/num_prompts": self.num_prompts,
+            "gen/valid_record_fraction": self.valid_record_fraction,
+            "gen/num_completion_tokens": self.num_completion_tokens,
+            "gen/num_valid_record_tokens": self.num_valid_record_tokens,
+            "gen/num_invalid_record_tokens": self.num_invalid_record_tokens,
+            "gen/num_non_record_tokens": self.num_non_record_tokens,
+            "gen/valid_record_token_fraction": self.valid_record_token_fraction,
+            "gen/tokens_per_prompt": self.tokens_per_prompt,
+            "gen/tokens_per_second": self.tokens_per_second,
+            "gen/valid_tokens_per_second": self.valid_tokens_per_second,
+            "gen/tokenization_overhead_sec": self.tokenization_overhead_sec,
+            "eval/data_privacy_score": self.data_privacy_score,
+            "eval/membership_inference_protection_score": self.membership_inference_protection_score,
+            "eval/attribute_inference_protection_score": self.attribute_inference_protection_score,
+            "eval/synthetic_data_quality_score": self.synthetic_data_quality_score,
+            "eval/column_correlation_stability_score": self.column_correlation_stability_score,
+            "eval/deep_structure_stability_score": self.deep_structure_stability_score,
+            "eval/column_distribution_stability_score": self.column_distribution_stability_score,
+            "eval/text_semantic_similarity_score": self.text_semantic_similarity_score,
+            "eval/text_structure_similarity_score": self.text_structure_similarity_score,
+            "eval/success": 1
+            if self.data_privacy_score is not None
+            and self.synthetic_data_quality_score is not None
+            and self.synthetic_data_quality_score > 0
+            else 0,
+        }
+
     def log_wandb(self) -> None:
-        """Log all summary and timing metrics to the active W&B run."""
+        """Update all final summary and timing metrics on the active W&B run."""
         import wandb
 
         if wandb.run is not None:
-            metrics: dict[str, float | int | None] = {
-                "gen/generation_time_sec": self.timing.generation_time_sec,
-                "gen/evaluation_time_sec": self.timing.evaluation_time_sec,
-                "eval/total_time_sec": self.timing.total_time_sec,
-                "train/pii_replacer_time_sec": self.timing.pii_replacer_time_sec,
-                "train/training_time_sec": self.timing.training_time_sec,
-                "gen/num_valid_records": self.num_valid_records,
-                "gen/num_invalid_records": self.num_invalid_records,
-                "gen/num_prompts": self.num_prompts,
-                "gen/valid_record_fraction": self.valid_record_fraction,
-                "gen/num_completion_tokens": self.num_completion_tokens,
-                "gen/num_valid_record_tokens": self.num_valid_record_tokens,
-                "gen/num_invalid_record_tokens": self.num_invalid_record_tokens,
-                "gen/num_non_record_tokens": self.num_non_record_tokens,
-                "gen/valid_record_token_fraction": self.valid_record_token_fraction,
-                "gen/tokens_per_prompt": self.tokens_per_prompt,
-                "gen/tokens_per_second": self.tokens_per_second,
-                "gen/valid_tokens_per_second": self.valid_tokens_per_second,
-                "gen/tokenization_overhead_sec": self.tokenization_overhead_sec,
-                "eval/data_privacy_score": self.data_privacy_score,
-                "eval/membership_inference_protection_score": self.membership_inference_protection_score,
-                "eval/attribute_inference_protection_score": self.attribute_inference_protection_score,
-                "eval/synthetic_data_quality_score": self.synthetic_data_quality_score,
-                "eval/column_correlation_stability_score": self.column_correlation_stability_score,
-                "eval/deep_structure_stability_score": self.deep_structure_stability_score,
-                "eval/column_distribution_stability_score": self.column_distribution_stability_score,
-                "eval/text_semantic_similarity_score": self.text_semantic_similarity_score,
-                "eval/text_structure_similarity_score": self.text_structure_similarity_score,
-                "eval/success": 1
-                if self.data_privacy_score is not None
-                and self.synthetic_data_quality_score is not None
-                and self.synthetic_data_quality_score > 0
-                else 0,
-            }
-            # Log ``None`` values too (rather than filtering them out) so that
-            # dashboard comparisons clearly show when a stage was skipped or a
-            # metric was not collected for a given run, instead of the metric
-            # silently carrying its last-logged value on the W&B chart.
-            wandb.log(metrics)
+            # Keep ``None`` values so dashboard comparisons show skipped or
+            # uncollected metrics rather than silently retaining stale summary
+            # values from an earlier update to a resumed W&B run.
+            try:
+                wandb.run.summary.update(self._wandb_metrics())
+            except Exception as exc:  # noqa: BLE001 -- observability is best-effort
+                logger.runtime.warning("Failed to update W&B final summary: %s", exc)

@@ -102,8 +102,9 @@ class TestSafeSynthesizerSummaryLogWandb:
         with patch.dict(sys.modules, {"wandb": mock_wandb}):
             summary.log_wandb()
 
-        assert mock_wandb.log.call_count == 1
-        logged = mock_wandb.log.call_args[0][0]
+        mock_wandb.log.assert_not_called()
+        mock_wandb.run.summary.update.assert_called_once()
+        logged = mock_wandb.run.summary.update.call_args.args[0]
 
         assert logged["gen/num_completion_tokens"] == 1000
         assert logged["gen/num_valid_record_tokens"] == 700
@@ -126,8 +127,8 @@ class TestSafeSynthesizerSummaryLogWandb:
         with patch.dict(sys.modules, {"wandb": mock_wandb}):
             summary.log_wandb()
 
-        assert mock_wandb.log.call_count == 1
-        logged = mock_wandb.log.call_args[0][0]
+        mock_wandb.log.assert_not_called()
+        logged = mock_wandb.run.summary.update.call_args.args[0]
         assert logged["gen/num_completion_tokens"] is None
         assert logged["gen/tokens_per_second"] is None
 
