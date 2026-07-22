@@ -373,6 +373,14 @@ class ModelMetadata(BaseModel):
 
     tokenizer: PreTrainedTokenizerBase | None = Field(default=None, exclude=True, repr=False)
 
+    @field_validator("max_records_per_group", mode="after")
+    @classmethod
+    def validate_max_records_per_group(cls, v: int | None) -> int | None:
+        """Reject non-positive persisted bounds (``None`` or ``>= 1`` only)."""
+        if v is not None and v < 1:
+            raise ValueError("max_records_per_group must be None or >= 1")
+        return v
+
     @model_validator(mode="before")
     @classmethod
     def populate_derived_fields(cls, data: dict) -> dict:
