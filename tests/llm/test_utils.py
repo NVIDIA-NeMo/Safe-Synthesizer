@@ -102,6 +102,22 @@ def test_vram_helpers_use_reclaimable_memory_on_integrated_gpus() -> None:
         assert get_max_memory_map(max_vram_fraction=0.8) == {0: 58 * gib}
 
 
+def test_vram_helpers_cap_reclaimable_memory_at_device_total() -> None:
+    gib = 1024**3
+    integrated_gpu = MagicMock(is_integrated=True)
+    with (
+        patch("torch.cuda.is_available", return_value=True),
+        patch("torch.cuda.device_count", return_value=1),
+        patch("torch.cuda.mem_get_info", return_value=(2 * gib, 120 * gib)),
+        patch("torch.cuda.get_device_properties", return_value=integrated_gpu),
+        # MemAvailable exceeds device total; must be capped so the 2 GiB buffer survives.
+        patch("nemo_safe_synthesizer.llm.utils._reclaimable_available_bytes", return_value=200 * gib),
+    ):
+        # free -> 120 GiB (capped), safe_free -> 118 GiB, utilization -> 118/120.
+        assert get_max_vram(max_vram_fraction=1.0) == {0: pytest.approx(118 / 120)}
+        assert get_max_memory_map(max_vram_fraction=1.0) == {0: 118 * gib}
+
+
 def test_vram_helpers_fall_back_to_cuda_free_when_meminfo_unreadable() -> None:
     gib = 1024**3
     integrated_gpu = MagicMock(is_integrated=True)

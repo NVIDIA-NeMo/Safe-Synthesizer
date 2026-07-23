@@ -480,12 +480,12 @@ def _get_vram_allocations(max_vram_fraction: float | None = None) -> dict[int, _
 
     if torch.cuda.is_available():
         num_gpus = torch.cuda.device_count()
+        # System-wide value; read once rather than per device.
+        reclaimable = _reclaimable_available_bytes()
         for i in range(num_gpus):
             free, total = torch.cuda.mem_get_info(device=i)
-            if getattr(torch.cuda.get_device_properties(i), "is_integrated", False):
-                available = _reclaimable_available_bytes()
-                if available is not None:
-                    free = min(max(free, available), total)
+            if getattr(torch.cuda.get_device_properties(i), "is_integrated", False) and reclaimable is not None:
+                free = min(max(free, reclaimable), total)
             safe_free = max(free - (2 * 1024**3), 0)
             gpu_memory_utilization = min(max_vram_fraction, safe_free / total) if total > 0 else 0.0
             memory_bytes = int(gpu_memory_utilization * total)
