@@ -436,11 +436,34 @@ class _VRAMAllocation:
     memory_bytes: int
 
 
+def _reclaimable_available_bytes() -> int | None:
+    """Return kernel-reclaimable system memory (``MemAvailable``) in bytes.
+
+    ``MemAvailable`` in ``/proc/meminfo`` accounts for reclaimable page cache, so
+    it reflects what the kernel can actually hand out. Returns ``None`` when it
+    cannot be read (for example on non-Linux hosts, where ``/proc/meminfo`` is
+    absent).
+    """
+    try:
+        with open("/proc/meminfo", encoding="utf-8") as meminfo:
+            for line in meminfo:
+                if line.startswith("MemAvailable:"):
+                    return int(line.split()[1]) * 1024  # reported in kibibytes
+    except (OSError, ValueError, IndexError):
+        return None
+    return None
+
+
 def _get_vram_allocations(max_vram_fraction: float | None = None) -> dict[int, _VRAMAllocation]:
     """Calculate maximum memory allocation for each available GPU.
 
     Reserves a 2 GiB safety buffer on each device, then applies
     ``max_vram_fraction`` to the remaining free memory.
+
+    On systems with integrated GPUs (e.g. DGX Spark) GPU memory *is* system memory,
+    so ``torch.cuda.mem_get_info`` reports only unallocated pages and ignores the
+    reclaimable page cache -- badly under-reporting real headroom. There we use
+    the kernel's ``MemAvailable`` (capped at device total) instead.
 
     Args:
         max_vram_fraction: Fraction of total GPU memory to allocate.
@@ -459,6 +482,10 @@ def _get_vram_allocations(max_vram_fraction: float | None = None) -> dict[int, _
         num_gpus = torch.cuda.device_count()
         for i in range(num_gpus):
             free, total = torch.cuda.mem_get_info(device=i)
+            if getattr(torch.cuda.get_device_properties(i), "is_integrated", False):
+                available = _reclaimable_available_bytes()
+                if available is not None:
+                    free = min(max(free, available), total)
             safe_free = max(free - (2 * 1024**3), 0)
             gpu_memory_utilization = min(max_vram_fraction, safe_free / total) if total > 0 else 0.0
             memory_bytes = int(gpu_memory_utilization * total)

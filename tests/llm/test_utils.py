@@ -4,12 +4,13 @@
 """Unit tests for llm.utils helpers."""
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 
 from nemo_safe_synthesizer.llm.utils import (
     ModelRef,
+    _reclaimable_available_bytes,
     get_max_memory_map,
     get_max_vram,
     get_quantization_config,
@@ -73,13 +74,56 @@ def test_trust_remote_code_for_model_requires_configured_cache_root(tmp_path: Pa
 
 def test_vram_helpers_return_fraction_and_hf_memory_map() -> None:
     gib = 1024**3
+    discrete_gpu = MagicMock(is_integrated=False)
     with (
         patch("torch.cuda.is_available", return_value=True),
         patch("torch.cuda.device_count", return_value=1),
         patch("torch.cuda.mem_get_info", return_value=(10 * gib, 16 * gib)),
+        patch("torch.cuda.get_device_properties", return_value=discrete_gpu),
     ):
         assert get_max_vram(max_vram_fraction=0.8) == {0: 0.5}
         assert get_max_memory_map(max_vram_fraction=0.8) == {0: 8 * gib}
+
+
+def test_vram_helpers_use_reclaimable_memory_on_integrated_gpus() -> None:
+    gib = 1024**3
+    integrated_gpu = MagicMock(is_integrated=True)
+    with (
+        patch("torch.cuda.is_available", return_value=True),
+        patch("torch.cuda.device_count", return_value=1),
+        # Unified memory: mem_get_info under-reports free (2 GiB) ...
+        patch("torch.cuda.mem_get_info", return_value=(2 * gib, 120 * gib)),
+        patch("torch.cuda.get_device_properties", return_value=integrated_gpu),
+        # ... but 60 GiB is reclaimable/available per the kernel.
+        patch("nemo_safe_synthesizer.llm.utils._reclaimable_available_bytes", return_value=60 * gib),
+    ):
+        # free -> 60 GiB, safe_free -> 58 GiB, utilization -> 58/120.
+        assert get_max_vram(max_vram_fraction=0.8) == {0: pytest.approx(58 / 120)}
+        assert get_max_memory_map(max_vram_fraction=0.8) == {0: 58 * gib}
+
+
+def test_vram_helpers_fall_back_to_cuda_free_when_meminfo_unreadable() -> None:
+    gib = 1024**3
+    integrated_gpu = MagicMock(is_integrated=True)
+    with (
+        patch("torch.cuda.is_available", return_value=True),
+        patch("torch.cuda.device_count", return_value=1),
+        patch("torch.cuda.mem_get_info", return_value=(10 * gib, 16 * gib)),
+        patch("torch.cuda.get_device_properties", return_value=integrated_gpu),
+        patch("nemo_safe_synthesizer.llm.utils._reclaimable_available_bytes", return_value=None),
+    ):
+        assert get_max_vram(max_vram_fraction=0.8) == {0: 0.5}
+
+
+def test_reclaimable_available_bytes_parses_meminfo() -> None:
+    meminfo = "MemTotal:       127603160 kB\nMemFree:             204 kB\nMemAvailable:   68157440 kB\n"
+    with patch("builtins.open", mock_open(read_data=meminfo)):
+        assert _reclaimable_available_bytes() == 68157440 * 1024
+
+
+def test_reclaimable_available_bytes_returns_none_when_absent() -> None:
+    with patch("builtins.open", side_effect=FileNotFoundError):
+        assert _reclaimable_available_bytes() is None
 
 
 def test_model_ref_trusts_snapshot_under_configured_cache_root(tmp_path: Path, hf_cached_snapshot_factory) -> None:
