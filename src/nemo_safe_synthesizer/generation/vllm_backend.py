@@ -47,6 +47,7 @@ from ..generation.vllm_observability import (
     read_vllm_runtime_metrics,
 )
 from ..llm.metadata import ModelMetadata
+from ..llm.model_policy import model_policy_for_reference
 from ..llm.utils import ModelRef, cleanup_memory, get_max_vram
 from ..observability import get_logger, heartbeat
 from ..utils import all_equal_type, load_json
@@ -256,11 +257,7 @@ class VllmBackend(GeneratorBackend):
             # and enum constraints (which the grammar enforces) are unaffected.
             self.schema = relax_numeric_bounds(self.schema)
         self.columns = list(self.schema["properties"].keys())
-        self.prompt = utils.create_schema_prompt(
-            self.columns,
-            instruction=self.model_metadata.instruction,
-            prompt_template=self.model_metadata.prompt_config.template,
-        )
+        self.prompt = self.model_metadata.render_prompt(self.columns)
         self.llm: vLLM | None = None
         self._prompt_token_count: int | None = None
         # Populated in ``initialize()`` after engine build; pre-declared
@@ -335,6 +332,8 @@ class VllmBackend(GeneratorBackend):
             backend=self.config.generation.structured_generation.backend,
         )
         model_ref = ModelRef.parse(self.config.training.pretrained_model)
+        model_policy = model_policy_for_reference(model_ref.repo_id, model_ref.local_path)
+        model_specific_kwargs = model_policy.engine_kwargs() if model_policy is not None else {}
         hf_overrides = _build_rope_hf_overrides(self.model_metadata)
 
         with heartbeat("Model loading", logger_name=__name__, model=self.config.training.pretrained_model):
@@ -348,6 +347,7 @@ class VllmBackend(GeneratorBackend):
                 attention_config=attention_config,
                 trust_remote_code=model_ref.trust_remote_code,
                 hf_overrides=hf_overrides,
+                **model_specific_kwargs,  # ty: ignore[invalid-argument-type] -- model policy keys are validated vLLM kwargs.
             )
 
         # Cache the engine's *effective* runtime config once at init. Read by

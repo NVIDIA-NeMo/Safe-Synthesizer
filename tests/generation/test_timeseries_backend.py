@@ -22,8 +22,9 @@ from nemo_safe_synthesizer.config import (
     TimeSeriesParameters,
     TrainingHyperparams,
 )
-from nemo_safe_synthesizer.data_processing.record_utils import ParsedRecord
+from nemo_safe_synthesizer.data_processing.record_utils import ParsedRecord, ParsedResponse
 from nemo_safe_synthesizer.defaults import DEFAULT_MAX_SEQ_LENGTH, PSEUDO_GROUP_COLUMN
+from nemo_safe_synthesizer.generation.batch import Batch
 from nemo_safe_synthesizer.generation.processors import TimeSeriesDataProcessor
 from nemo_safe_synthesizer.generation.results import GenerationBatches
 from nemo_safe_synthesizer.generation.timeseries_backend import (
@@ -276,6 +277,16 @@ class TestComputeExpectedRecordsPerGroup:
         result = backend._compute_expected_records_per_group()
         assert result == 4
 
+    def test_group_state_counts_only_records_after_the_prefill(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
+
+        state = backend._init_group_state("group_A")
+
+        assert state.expected_records == 3
+        assert backend._compute_total_expected_records() == 6
+
     def test_with_elapsed_time(self, timeseries_elapsed_params, timeseries_model_metadata, mock_workdir):
         """Test calculation with elapsed time format."""
         backend = create_timeseries_backend(timeseries_elapsed_params, timeseries_model_metadata, mock_workdir)
@@ -428,6 +439,56 @@ class TestUpdateGroupState:
         backend._update_group_state(state, records)
 
         assert state.last_timestamp_seconds == backend._parse_timestamp_seconds(timestamp)
+
+
+class TestStopTimestampTruncation:
+    def test_invalidates_records_after_stop_and_retains_the_stop_record(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
+        batch = Batch(processor=backend.processor)
+        response = ParsedResponse(
+            records=[
+                ParsedRecord(text="one", parsed={"timestamp": "2024-01-01 02:00:00", "value": 1}),
+                ParsedRecord(text="stop", parsed={"timestamp": "2024-01-01 03:00:00", "value": 2}),
+                ParsedRecord(text="past", parsed={"timestamp": "2024-01-01 04:00:00", "value": 3}),
+            ]
+        )
+        batch._responses = [response]
+
+        records = backend._truncate_records_after_stop(batch)
+
+        assert [record.parsed["timestamp"] for record in records if record.parsed is not None] == [
+            "2024-01-01 02:00:00",
+            "2024-01-01 03:00:00",
+        ]
+        assert response.records[-1].error == ("Timestamp exceeds configured stop time", "TimeSeries")
+
+    def test_crossing_stop_completes_even_when_truncation_exceeds_invalid_threshold(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
+        batch = Batch(processor=backend.processor)
+        response = ParsedResponse(
+            records=[
+                ParsedRecord(text="before", parsed={"timestamp": "2024-01-01 02:00:00", "value": 1}),
+                ParsedRecord(text="past-1", parsed={"timestamp": "2024-01-01 04:00:00", "value": 2}),
+                ParsedRecord(text="past-2", parsed={"timestamp": "2024-01-01 05:00:00", "value": 3}),
+            ]
+        )
+        batch._responses = [response]
+        state = GroupState(group_id="group_A", initial_prefill="", current_prefill="", expected_records=3)
+
+        result = backend._process_group_result(state, batch, invalid_fraction_threshold=0.5)
+
+        assert result is GroupProcessingResult.COMPLETED
+        assert state.completed is True
+        assert state.failed is False
+        assert state.low_valid_fraction_count == 0
+        assert state.total_invalid_records == 0
+        assert [record.parsed["timestamp"] for record in state.recent_records if record.parsed is not None] == [
+            "2024-01-01 02:00:00"
+        ]
 
 
 class TestGetTimestampFromPrefill:

@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import copy
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -97,8 +98,12 @@ def param_count_from_empty_model(autoconfig: PretrainedConfig) -> int | None:
     except ImportError:
         return None
     try:
+        inspection_config = autoconfig
+        if getattr(autoconfig, "model_type", None) == "nemotron_h":
+            inspection_config = copy.deepcopy(autoconfig)
+            inspection_config.use_mamba_kernels = False
         with init_empty_weights():
-            model = AutoModelForCausalLM.from_config(autoconfig)
+            model = AutoModelForCausalLM.from_config(inspection_config)
         return sum(p.numel() for p in model.parameters())
     except Exception as exc:
         logger.runtime.debug(

@@ -1064,6 +1064,23 @@ class TestTokenBudgetCheck:
 
         assert not any(i.code == "group_exceeds_context" for i in issues)
 
+    def test_timeseries_skips_whole_group_budget_because_training_splits_long_histories(self):
+        config = SafeSynthesizerParameters(
+            data=DataParameters(group_training_examples_by="device"),
+            time_series=TimeSeriesParameters(is_timeseries=True, timestamp_interval_seconds=60),
+        )
+        df = pd.DataFrame({"device": ["A"] * 20, "value": ["long-value"] * 20})
+        tokenizer = MagicMock()
+        tokenizer.encode.return_value = list(range(20))
+        metadata = self._metadata(tokenizer, max_seq_length=40)
+        check = TokenBudgetCheck()
+        check.token_sample_size = 0
+        check.top_groups_to_check = 1
+
+        issues = check.run(make_ctx(config=config, data=df, metadata=metadata))
+
+        assert not any(i.code == "group_exceeds_context" for i in issues)
+
 
 @pytest.mark.unit
 class TestDatasetSizeCheck:

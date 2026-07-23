@@ -35,7 +35,6 @@ from ..generation.results import (
 )
 from ..llm.metadata import ModelMetadata
 from ..observability import get_logger
-from ..utils import create_schema_prompt
 
 logger = get_logger(__name__)
 
@@ -75,11 +74,7 @@ class InferenceEvalCallback(TrainerCallback):
     ):
         self.schema = schema
         self.metadata = metadata
-        self.templated_prompt = create_schema_prompt(
-            list(schema["properties"].keys()),
-            instruction=self.metadata.instruction,
-            prompt_template=self.metadata.prompt_config.template,
-        )
+        self.templated_prompt = self.metadata.render_prompt(list(schema["properties"].keys()))
         self.num_prompts_per_batch = num_prompts_per_batch
 
         self.is_tabular_processor = isinstance(processor, TabularDataProcessor)

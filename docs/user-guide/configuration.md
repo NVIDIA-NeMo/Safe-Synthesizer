@@ -200,7 +200,8 @@ Safe Synthesizer has explicit support (prompt templates, RoPE scaling,
 tokenizer handling) for the model families listed below. Models outside this
 list will raise a `ValueError` at startup.
 
-We have extensively tested the following models for synthetic data use in NSS, and encourage you to start with `SmolLM3-3B` (the default).
+The following model families have explicit prompt and runtime support. Start
+with `SmolLM3-3B`, the default, unless your workload requires another family.
 
 
 | Family | HuggingFace ID |
@@ -208,6 +209,20 @@ We have extensively tested the following models for synthetic data use in NSS, a
 | SmolLM3 (default) | `HuggingFaceTB/SmolLM3-3B` |
 | TinyLlama | `TinyLlama/TinyLlama-1.1B-Chat-v1.0` |
 | Mistral | `mistralai/Mistral-7B-Instruct-v0.3` |
+| Nemotron 3 Nano BF16 | `nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16` |
+
+Nemotron 3 Nano support is specific to the BF16 checkpoint above. It requires
+an Ampere-class GPU with BF16 support, such as an A100, and currently supports
+non-DP LoRA training and generation, including grouped and ungrouped time
+series. Safe Synthesizer selects the model's seven LoRA projection families,
+uses its native no-position-embedding configuration, and disables reasoning in
+the chat template. FP8 and DP training remain unsupported for this model. Run
+`mise run bootstrap-nemotron-kernels` from a source checkout before training.
+The bootstrap packages are intentionally external to the standard CUDA extra
+because they compile against the active PyTorch and CUDA toolchain.
+Review the model card and
+[NVIDIA Open Model License](https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16)
+before use.
 
 Benchmarking data for additional models will be added as they are
 validated. To understand the trade-offs with model selection, see [Training](running.md#training).

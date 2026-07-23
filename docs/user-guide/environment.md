@@ -168,6 +168,24 @@ and the vLLM base model.
 See [Running in Offline Environments](running.md#running-in-offline-environments)
 for the full pre-cache checklist.
 
+### Nemotron 3 Nano fused kernels
+
+The BF16 Nemotron 3 Nano checkpoint requires `causal-conv1d` and `mamba-ssm`
+CUDA extensions for training. A source checkout provides a bootstrap task that
+builds pinned package versions against the project's PyTorch CUDA 12.9
+environment:
+
+```bash
+mise run bootstrap-nemotron-kernels
+```
+
+The CUDA 12.9 compiler must already be installed. The task modifies only the
+project virtual environment and leaves the external packages out of the shared
+`cu129` dependency set. It builds upstream's CUDA architecture set, which
+includes A100 `sm_80` kernels. Set `CUDA_HOME` to another CUDA 12.9 toolkit path
+or `MAX_JOBS` to control compile parallelism. Prebuild these packages before
+entering an offline environment.
+
 ---
 
 ## PII, NER, and column classification

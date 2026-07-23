@@ -664,13 +664,14 @@ Training uses the HuggingFace backend -- LoRA fine-tuning via PEFT with
 4-bit/8-bit quantization support and optional differential privacy (DP-SGD)
 via [Opacus](https://opacus.ai/).
 
-Three models have been extensively tested:
+Supported model families include:
 
 | Family | HuggingFace ID |
 |--------|----------------|
 | SmolLM3 (default) | `HuggingFaceTB/SmolLM3-3B` |
 | Mistral | `mistralai/Mistral-7B-Instruct-v0.3` |
 | TinyLlama | `TinyLlama/TinyLlama-1.1B-Chat-v1.0` |
+| Nemotron 3 Nano BF16 | `nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16` |
 
 We recommend you start with the default, `HuggingFaceTB/SmolLM3-3B`. However, depending on your use case, you may find a different model to be a better fit.
 

@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#MISE description="Tune vLLM 0.24.0 Mamba selective-state-update for Nemotron 3 Nano BF16 on an A100 SXM4 80GB."
+
+set -euo pipefail
+
+uv run --frozen python tools/nemotron/tune_vllm_ssu.py tune "$@"

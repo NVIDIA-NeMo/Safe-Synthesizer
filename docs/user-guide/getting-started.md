@@ -279,7 +279,7 @@ entity types, LLM classification setup, and SDK customization.
 Fine-tunes a base LLM using LoRA (Low-Rank Adaptation). One backend is available
 (HuggingFace) see [Running -- Training](running.md#training).
 
-The default model is `HuggingFaceTB/SmolLM3-3B`. Safe Synthesizer has tested support for `HuggingFaceTB/SmolLM3-3B`, `TinyLlama/TinyLlama-1.1B-Chat-v1.0`, and `mistralai/Mistral-7B-Instruct-v0.3` (see [Configuration -- Training](configuration.md#training) for details on how to change the model or hyperparameters).
+The default model is `HuggingFaceTB/SmolLM3-3B`. Safe Synthesizer has explicit support for `HuggingFaceTB/SmolLM3-3B`, `TinyLlama/TinyLlama-1.1B-Chat-v1.0`, `mistralai/Mistral-7B-Instruct-v0.3`, and the non-DP BF16 checkpoint `nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16` on A100-class GPUs. See [Configuration -- Training](configuration.md#training) for model-specific setup and limitations.
 
 Training requires 1 NVIDIA GPU (A100 or larger) to run. Multi-GPU training is not supported.
 

@@ -50,13 +50,18 @@ the HuggingFace backend with PEFT. Differential privacy (DP-SGD via Opacus) is
 optionally available. See [Running -- Training](../user-guide/running.md#training)
 for details.
 
-Three models have been extensively tested:
+Supported model families include:
 
 | Family | HuggingFace ID |
 |--------|----------------|
 | SmolLM3 (default) | `HuggingFaceTB/SmolLM3-3B` |
 | TinyLlama | `TinyLlama/TinyLlama-1.1B-Chat-v1.0` |
 | Mistral | `mistralai/Mistral-7B-Instruct-v0.3` |
+| Nemotron 3 Nano BF16 | `nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16` |
+
+Nemotron support currently targets non-DP BF16 LoRA on A100-class GPUs. See
+[Configuration](../user-guide/configuration.md#training) for its kernel setup
+and unsupported modes.
 
 ### 5. Generation
 

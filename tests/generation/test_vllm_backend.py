@@ -3,6 +3,7 @@
 
 """Unit tests for the VllmBackend class private methods and module-level side effects."""
 
+import json
 import os
 from functools import partial
 from unittest.mock import MagicMock, patch
@@ -372,6 +373,69 @@ class TestBuildStructuredOutputParams:
 
 class TestInitializeModelRef:
     """Tests intentionally tied to HF cache layout through ``ModelRef``."""
+
+    def test_initialize_applies_nemotron3_bf16_mamba_cache_dtype(
+        self,
+        base_params,
+        mock_model_metadata,
+        mock_schema,
+        mock_workdir,
+    ):
+        base_params.training.pretrained_model = "nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16"
+        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
+        mock_llm = MagicMock()
+        mock_llm.get_tokenizer.return_value = MagicMock()
+
+        with (
+            patch("nemo_safe_synthesizer.generation.vllm_backend.vLLM", return_value=mock_llm) as mock_vllm,
+            patch("nemo_safe_synthesizer.generation.vllm_backend.get_max_vram", return_value={0: 0.8}),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.create_processor", return_value=MagicMock()),
+        ):
+            backend.initialize()
+
+        assert mock_vllm.call_args.kwargs["mamba_ssm_cache_dtype"] == "float32"
+        assert mock_vllm.call_args.kwargs["max_num_seqs"] == 8
+        assert mock_vllm.call_args.kwargs["trust_remote_code"] is False
+
+    def test_initialize_applies_nemotron_policy_to_fingerprinted_local_checkpoint(
+        self,
+        tmp_path,
+        base_params,
+        mock_model_metadata,
+        mock_schema,
+        mock_workdir,
+    ):
+        model_path = tmp_path / "renamed-local-checkpoint"
+        model_path.mkdir()
+        (model_path / "config.json").write_text(
+            json.dumps(
+                {
+                    "architectures": ["NemotronHForCausalLM"],
+                    "hidden_size": 3136,
+                    "mamba_head_dim": 80,
+                    "mamba_num_heads": 96,
+                    "model_type": "nemotron_h",
+                    "num_hidden_layers": 42,
+                    "ssm_state_size": 128,
+                    "torch_dtype": "bfloat16",
+                    "vocab_size": 131072,
+                }
+            )
+        )
+        base_params.training.pretrained_model = str(model_path)
+        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
+        mock_llm = MagicMock()
+        mock_llm.get_tokenizer.return_value = MagicMock()
+
+        with (
+            patch("nemo_safe_synthesizer.generation.vllm_backend.vLLM", return_value=mock_llm) as mock_vllm,
+            patch("nemo_safe_synthesizer.generation.vllm_backend.get_max_vram", return_value={0: 0.8}),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.create_processor", return_value=MagicMock()),
+        ):
+            backend.initialize()
+
+        assert mock_vllm.call_args.kwargs["mamba_ssm_cache_dtype"] == "float32"
+        assert mock_vllm.call_args.kwargs["max_num_seqs"] == 8
 
     def test_initialize_passes_cached_snapshot_target_and_trust_to_vllm(
         self,

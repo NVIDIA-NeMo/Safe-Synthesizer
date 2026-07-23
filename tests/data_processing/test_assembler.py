@@ -820,6 +820,31 @@ def test_sequential_assembler_initial_prefill(
     assert prefill["B"] == ' {"group":"B","time":1,"value":100}\n{"group":"B","time":2,"value":200}\n'
 
 
+def test_sequential_assembler_initial_prefill_normalizes_numeric_group_keys(
+    fixture_tokenizer: PreTrainedTokenizer,
+    fixture_session_cache_dir: str,
+    fixture_sequential_metadata: ModelMetadata,
+):
+    """Numeric group IDs remain valid after metadata JSON serialization."""
+    dataset = Dataset.from_pandas(pd.DataFrame({"group": [0, 0], "time": [1, 2], "value": [10, 20]}))
+    assembler = SequentialExampleAssembler(
+        dataset=dataset,
+        tokenizer=fixture_tokenizer,
+        metadata=fixture_sequential_metadata,
+        group_training_examples_by="group",
+        order_training_examples_by="time",
+        cache_file_path=fixture_session_cache_dir,
+        seed=42,
+    )
+
+    prefill = assembler._get_initial_prefill()
+
+    assert list(prefill) == ["0"]
+    fixture_sequential_metadata.initial_prefill = prefill
+    restored = ModelMetadata.model_validate_json(fixture_sequential_metadata.model_dump_json())
+    assert restored.initial_prefill == prefill
+
+
 def test_should_flush_example_boundary_conditions():
     """Test _should_flush_example returns correct values for boundary conditions.
 

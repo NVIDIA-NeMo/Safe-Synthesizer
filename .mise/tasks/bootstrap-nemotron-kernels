@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#MISE description="Build the external Nemotron fused-kernel packages for an A100 in the project virtualenv."
+
+set -euo pipefail
+source "${MISE_CONFIG_ROOT}/.mise/tasks/_lib.sh"
+
+cuda_home="${CUDA_HOME:-/usr/local/cuda-12.9}"
+
+if [[ "$(uname -s)" != "Linux" ]]; then
+  echo "Error: Nemotron fused-kernel bootstrap currently supports Linux only" >&2
+  exit 1
+fi
+
+if [[ ! -x "${cuda_home}/bin/nvcc" ]]; then
+  echo "Error: ${cuda_home}/bin/nvcc is missing; install the CUDA 12.9 compiler before running this task" >&2
+  exit 1
+fi
+
+nvcc_release="$(${cuda_home}/bin/nvcc --version | sed -n 's/.*release \([0-9][0-9.]*\).*/\1/p' | tail -1)"
+if [[ "${nvcc_release}" != 12.9* ]]; then
+  echo "Error: expected CUDA 12.9 at ${cuda_home}, found '${nvcc_release:-unknown}'" >&2
+  exit 1
+fi
+
+mise run venv
+
+echo "Synchronizing the standard CUDA development environment"
+sync_nss_dependencies cu129
+
+echo "Building the pinned external Nemotron fused-kernel packages"
+echo "CUDA_HOME=${cuda_home}"
+CUDA_HOME="${cuda_home}" \
+  MAX_JOBS="${MAX_JOBS:-4}" \
+  uv pip install --python "$(resolve_venv_path)/bin/python" --no-build-isolation \
+    "causal-conv1d==1.6.2.post1" \
+    "mamba-ssm==2.2.6.post3"
+
+echo "Nemotron fused-kernel environment is ready"

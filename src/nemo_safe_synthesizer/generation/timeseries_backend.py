@@ -23,6 +23,7 @@ from ..data_processing.record_utils import (
     extract_records_from_jsonl_string,
 )
 from ..defaults import FIXED_RUNTIME_GENERATE_ARGS, LOG_DASHES, PSEUDO_GROUP_COLUMN
+from ..errors import InternalError
 from ..generation.batch import Batch
 from ..generation.results import GenerateJobResults, GenerationBatches, GenerationStatus
 from ..generation.vllm_backend import VllmBackend
@@ -357,11 +358,8 @@ class TimeseriesBackend(VllmBackend):
 
     def _format_prompt(self, prefill: str) -> str:
         """Format a generation prompt using the model's template and the given prefill."""
-        return self.model_metadata.prompt_config.template.format(
-            instruction=self.model_metadata.instruction,
-            schema=self._schema_fragment,
-            prefill=prefill,
-        )
+        columns = list(self.schema["properties"])
+        return self.model_metadata.render_prompt(columns, prefill=prefill)
 
     def _parse_timestamp_seconds(self, timestamp_value: object) -> int | None:
         """Parse a timestamp value to seconds, returning None on failure.
@@ -418,6 +416,17 @@ class TimeseriesBackend(VllmBackend):
         )
         # Parse the last timestamp from the prefill
         state.last_timestamp_seconds = self._get_timestamp_from_prefill(initial_prefill)
+        stop_ts = self._parse_timestamp_seconds(self._stop_timestamp_value)
+        if (
+            state.last_timestamp_seconds is not None
+            and stop_ts is not None
+            and self._timestamp_interval_seconds is not None
+            and self._timestamp_interval_seconds > 0
+        ):
+            state.expected_records = max(
+                0,
+                (stop_ts - state.last_timestamp_seconds) // self._timestamp_interval_seconds,
+            )
         return state
 
     def _compute_expected_records_per_group(self) -> int:
@@ -441,10 +450,9 @@ class TimeseriesBackend(VllmBackend):
         """Compute total expected records across all groups.
 
         Returns:
-            Total expected records (expected_per_group * num_groups).
+            Total records remaining after each group's initial prefill.
         """
-        expected_per_group = self._compute_expected_records_per_group()
-        return expected_per_group * len(self._groups)
+        return sum(self._init_group_state(group_id).expected_records for group_id in self._groups)
 
     def _get_timestamp_from_prefill(self, prefill: str) -> int | None:
         """Parse prefill string to extract the timestamp of the last record.
@@ -635,7 +643,18 @@ class TimeseriesBackend(VllmBackend):
 
         retained_records = self._retain_single_valid_response(batch)
         reached_stop = self._has_reached_stop_time([r.parsed for r in retained_records if r.parsed is not None])
+        invalid_records_before_stop_truncation = batch.num_invalid_records
+        retained_records = self._truncate_records_after_stop(batch)
         self._update_group_state(state, retained_records)
+
+        # Reaching or crossing the requested boundary completes the group. Records
+        # after the boundary are expected truncation, so they must not consume
+        # invalid-fraction patience or turn a successful final batch into failure.
+        if reached_stop:
+            state.total_valid_records += batch.num_valid_records
+            state.total_invalid_records += invalid_records_before_stop_truncation
+            state.completed = True
+            return GroupProcessingResult.COMPLETED
 
         # Check if batch has high invalid fraction
         invalid_fraction = 1.0 - batch.valid_record_fraction
@@ -672,11 +691,27 @@ class TimeseriesBackend(VllmBackend):
         state.total_valid_records += batch.num_valid_records
         state.total_invalid_records += batch.num_invalid_records
 
-        if reached_stop:
-            state.completed = True
-            return GroupProcessingResult.COMPLETED
-
         return GroupProcessingResult.IN_PROGRESS
+
+    def _truncate_records_after_stop(self, batch: Batch) -> list[ParsedRecord]:
+        """Invalidate retained records strictly beyond the configured stop time."""
+        stop_ts = self._parse_timestamp_seconds(self._stop_timestamp_value)
+        if stop_ts is None:
+            return [record for response in batch._responses for record in response.valid_records]
+
+        error = ("Timestamp exceeds configured stop time", "TimeSeries")
+        time_column = self._time_column
+        if time_column is None:
+            raise InternalError("Time-series generation reached stop handling without a timestamp column")
+        for response in batch._responses:
+            for record in response.records:
+                if not record.is_valid or record.parsed is None:
+                    continue
+                timestamp = self._parse_timestamp_seconds(record.parsed.get(time_column))
+                if timestamp is not None and timestamp > stop_ts:
+                    record.invalidate(error)
+
+        return [record for response in batch._responses for record in response.valid_records]
 
     def _log_parallel_batch_summary(
         self,

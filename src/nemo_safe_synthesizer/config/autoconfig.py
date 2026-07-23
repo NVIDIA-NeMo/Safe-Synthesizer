@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 import pandas as pd
 
 from ..defaults import DEFAULT_MAX_SEQ_LENGTH, MAX_ROPE_SCALING_FACTOR
+from ..errors import ParameterError
 from ..llm.metadata import ModelMetadata
 from ..observability import get_logger
 from .parameters import ConfigPatch, SafeSynthesizerParameters
@@ -174,7 +175,17 @@ class AutoConfigResolver:
         Returns:
             Dict with rope_scaling_factor if auto-determined, empty dict otherwise.
         """
-        if self._config.get("rope_scaling_factor") != AUTO_STR:
+        model_class = ModelMetadata._resolve_model_class(self._config.training.pretrained_model)
+        configured_factor = self._config.get("rope_scaling_factor")
+        if not model_class.uses_rope:
+            if configured_factor not in (AUTO_STR, None, 1, 1.0):
+                raise ParameterError(
+                    f"{self._config.training.pretrained_model} does not use RoPE; rope_scaling_factor must be 1"
+                )
+            self._rope_scaling_factor = 1
+            return {"rope_scaling_factor": 1}
+
+        if configured_factor != AUTO_STR:
             return {}
 
         # this is separated into two functions
@@ -188,6 +199,23 @@ class AutoConfigResolver:
             f"the lengths of each training record and the column names."
         )
         return {"rope_scaling_factor": self._rope_scaling_factor}
+
+    def _determine_lora_target_modules(self) -> dict[str, list[str]]:
+        """Resolve model-family LoRA targets unless the user set them explicitly."""
+        if "lora_target_modules" in self._config.training.model_fields_set:
+            return {}
+        model_class = ModelMetadata._resolve_model_class(self._config.training.pretrained_model)
+        return {"lora_target_modules": list(model_class.automatic_lora_targets)}
+
+    def _validate_model_capabilities(self) -> None:
+        """Reject explicitly unsupported modes for model-specific policies."""
+        model_class = ModelMetadata._resolve_model_class(self._config.training.pretrained_model)
+        if model_class.__name__ != "Nemotron3Nano":
+            return
+        if self._config.training.quantize_model:
+            raise ParameterError("Nemotron 3 Nano BF16 does not support quantized training")
+        if self._dp_enabled:
+            raise ParameterError("Nemotron 3 Nano BF16 does not support differential-privacy training")
 
     def _determine_num_input_records_to_sample(self) -> dict[str, int]:
         """Determine the number of input records to sample if set to auto.
@@ -322,9 +350,12 @@ class AutoConfigResolver:
         Returns:
             A new ``SafeSynthesizerParameters`` with all ``"auto"`` values resolved.
         """
+        self._validate_model_capabilities()
+
         # Determine training params (order matters: rope_scaling_factor first)
         training_params: dict[str, Any] = {}
         training_params.update(self._determine_rope_scaling_factor())
+        training_params.update(self._determine_lora_target_modules())
         training_params.update(self._determine_num_input_records_to_sample())
         training_params.update(self._determine_learning_rate())
 

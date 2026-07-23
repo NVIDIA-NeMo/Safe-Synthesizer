@@ -88,6 +88,22 @@ We average the first two to provide an overall DPS. We do not factor PII Replay 
 
 This score measures resistance to membership inference attacks -- whether an attacker can tell if a specific record was in the training set. We simulate 360 attacks using a 5% holdout test set from the input data. The score reflects whether an attacker could infer membership above random chance by exploiting differences in the model's responses to training data versus unseen data. Low scores indicate potential memorization risk.
 
+For grouped time-series data, interpret this record-level score alongside the
+schema and generated rows. Repeated group identifiers, fixed panel structure,
+and rows whose non-key fields are all missing can make train-group membership
+easy to distinguish without demonstrating replay of behavioral values. Run a
+sensitivity check that excludes identifiers and structurally empty rows before
+attributing a low score to content memorization. This diagnostic does not
+replace the reported score or a privacy review.
+
+For a reproducible sensitivity check, keep the evaluator seed and holdout
+unchanged. Apply the same transformation to training, test, and synthetic
+tables, first removing the declared group and direct-identity columns, then in
+a separate run removing rows where every non-key payload field is missing.
+Report the full-schema score and both ablations together, including the exact
+column list and empty-row predicate. Do not substitute an ablated score for the
+full-schema privacy result.
+
 ### Attribute Inference Protection
 
 This score measures resistance to attribute inference attacks -- whether sensitive attributes can be predicted based on other attributes in the synthetic data. For a given attribute, a high score indicates that even when other attributes are known, the target attribute is difficult to predict.

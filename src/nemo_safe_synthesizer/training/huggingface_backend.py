@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING, Any, cast
 import numpy as np
 import pandas as pd
 import torch
-import wandb
 from datasets import Dataset
 from peft import LoftQConfig, LoraConfig, TaskType, prepare_model_for_kbit_training
 from peft import get_peft_model as get_peft_model_hf
@@ -37,6 +36,8 @@ from transformers import (
 from transformers.trainer_pt_utils import get_model_param_count
 from transformers.utils.quantization_config import QuantizationConfigMixin
 
+import wandb
+
 from .. import utils
 from ..cli.artifact_structure import BoundDir
 from ..config.autoconfig import AutoConfigResolver
@@ -50,6 +51,7 @@ from ..defaults import (
 )
 from ..errors import DataError, ParameterError
 from ..generation.processors import create_processor
+from ..llm.model_policy import configure_local_training_kernels, validate_lora_targets
 from ..llm.utils import (
     ModelRef,
     add_bos_eos_tokens_to_tokenizer,
@@ -373,6 +375,8 @@ class HuggingFaceBackend(TrainingBackend):
 
     def maybe_quantize(self, **quant_params: dict) -> None:
         """Apply LoRA wrapping (and optional k-bit quantization) to the model."""
+        target_counts = validate_lora_targets(self.model, self.params.training.lora_target_modules)
+        logger.info(f"Resolved LoRA target modules: {target_counts}")
         self._prepare_quantize_base(**quant_params)
         lora_config = LoraConfig(**self.quant_params)
         if not self.params.training.quantize_model:
@@ -400,6 +404,7 @@ class HuggingFaceBackend(TrainingBackend):
                 passed directly to ``AutoModelForCausalLM.from_pretrained()``.
         """
         logger.info(f"loading pretrained model: {self.params.training.pretrained_model}")
+        configure_local_training_kernels(self.model_ref.repo_id, self.model_ref.local_path)
         self.prepare_config(**model_args)
         self._load_pretrained_model(**model_args)
         self.maybe_quantize(**model_args)
