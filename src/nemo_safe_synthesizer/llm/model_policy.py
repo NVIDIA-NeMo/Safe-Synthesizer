@@ -61,15 +61,58 @@ NEMOTRON3_NANO_POLICY = ModelPolicy(
 
 _POLICIES = (NEMOTRON3_NANO_POLICY,)
 
+NEMOTRON3_NANO_LAYER_BLOCK_TYPES = (
+    "mamba",
+    "mlp",
+    "mamba",
+    "mlp",
+    "mamba",
+    "mlp",
+    "mamba",
+    "mamba",
+    "mlp",
+    "mamba",
+    "mlp",
+    "mamba",
+    "attention",
+    "mlp",
+    "mamba",
+    "mlp",
+    "mamba",
+    "attention",
+    "mlp",
+    "mamba",
+    "mlp",
+    "mamba",
+    "mlp",
+    "mamba",
+    "attention",
+    "mlp",
+    "mamba",
+    "mlp",
+    "mamba",
+    "mlp",
+    "mamba",
+    "mamba",
+    "attention",
+    "mlp",
+    "mamba",
+    "mamba",
+    "mamba",
+    "mlp",
+    "mamba",
+    "mlp",
+    "mamba",
+    "mlp",
+)
+
 _NEMOTRON3_NANO_CONFIG_SIGNATURE = {
     "architectures": ["NemotronHForCausalLM"],
     "hidden_size": 3136,
     "mamba_head_dim": 80,
     "mamba_num_heads": 96,
     "model_type": "nemotron_h",
-    "num_hidden_layers": 42,
     "ssm_state_size": 128,
-    "torch_dtype": "bfloat16",
     "vocab_size": 131072,
 }
 
@@ -90,7 +133,18 @@ def model_policy_for_local_path(model_path: Path | None) -> ModelPolicy | None:
         return None
     if config.get("quantization_config") is not None:
         return None
-    if all(config.get(key) == value for key, value in _NEMOTRON3_NANO_CONFIG_SIGNATURE.items()):
+    dtype = config.get("dtype", config.get("torch_dtype"))
+    layer_types = config.get("layers_block_type")
+    layer_layout_matches = (
+        tuple(layer_types) == NEMOTRON3_NANO_LAYER_BLOCK_TYPES
+        if isinstance(layer_types, list)
+        else config.get("num_hidden_layers") == len(NEMOTRON3_NANO_LAYER_BLOCK_TYPES)
+    )
+    if (
+        dtype == "bfloat16"
+        and layer_layout_matches
+        and all(config.get(key) == value for key, value in _NEMOTRON3_NANO_CONFIG_SIGNATURE.items())
+    ):
         return NEMOTRON3_NANO_POLICY
     return None
 
@@ -110,14 +164,16 @@ def configure_local_training_kernels(repo_id: str | None, local_path: Path | Non
         return
 
     try:
-        import causal_conv1d
         from transformers.integrations import hub_kernels
+
+        causal_conv1d = importlib.import_module("causal_conv1d")
     except ImportError as exc:
         raise ParameterError(
             "Nemotron 3 Nano BF16 training requires the compiled causal-conv1d and mamba-ssm packages; "
             "run `mise run bootstrap-nemotron-kernels`"
         ) from exc
 
+    previous_mamba_ssm = sys.modules.get("mamba_ssm")
     try:
         package_root = importlib.metadata.distribution("mamba-ssm").locate_file("mamba_ssm")
         mamba_ssm = ModuleType("mamba_ssm")
@@ -130,6 +186,10 @@ def configure_local_training_kernels(repo_id: str | None, local_path: Path | Non
         setattr(mamba_ssm, "mamba_chunk_scan_combined", ssd_combined.mamba_chunk_scan_combined)
         setattr(mamba_ssm, "mamba_split_conv1d_scan_combined", ssd_combined.mamba_split_conv1d_scan_combined)
     except (ImportError, importlib.metadata.PackageNotFoundError) as exc:
+        if previous_mamba_ssm is None:
+            sys.modules.pop("mamba_ssm", None)
+        else:
+            sys.modules["mamba_ssm"] = previous_mamba_ssm
         raise ParameterError(
             "Nemotron 3 Nano BF16 training could not import the compiled mamba-ssm runtime; "
             "run `mise run bootstrap-nemotron-kernels`"

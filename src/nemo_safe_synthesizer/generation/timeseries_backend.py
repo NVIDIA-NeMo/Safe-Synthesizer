@@ -188,8 +188,6 @@ class TimeseriesBackend(VllmBackend):
         returns False, and the final generation status reflects partial completion.
 
     Attributes:
-        _schema_fragment (str): JSON schema template with column placeholders,
-            e.g., '"col1":<unk>,"col2":<unk>'. Used in prompt formatting.
         _samples_per_prompt (int): Number of completion samples to generate per
             prompt. Multiple samples increase chances of getting valid records.
             Default: 5.
@@ -217,7 +215,6 @@ class TimeseriesBackend(VllmBackend):
     def __init__(self, config: SafeSynthesizerParameters, model_metadata: ModelMetadata, **kwargs):
         super().__init__(config, model_metadata, **kwargs)
 
-        self._schema_fragment = ",".join([f'"{c}":<unk>' for c in self.columns])
         self._samples_per_prompt = 5  # num of samples per prompt
         self._max_prompts_per_batch = 100  # max prompts per batch for parallel group generation
         self._prefill_context_size = 3  # number of records to prefill
@@ -699,17 +696,20 @@ class TimeseriesBackend(VllmBackend):
         if stop_ts is None:
             return [record for response in batch._responses for record in response.valid_records]
 
-        error = ("Timestamp exceeds configured stop time", "TimeSeries")
         time_column = self._time_column
         if time_column is None:
             raise InternalError("Time-series generation reached stop handling without a timestamp column")
         for response in batch._responses:
-            for record in response.records:
-                if not record.is_valid or record.parsed is None:
-                    continue
-                timestamp = self._parse_timestamp_seconds(record.parsed.get(time_column))
-                if timestamp is not None and timestamp > stop_ts:
-                    record.invalidate(error)
+            response.records = [
+                record
+                for record in response.records
+                if not (
+                    record.is_valid
+                    and record.parsed is not None
+                    and (timestamp := self._parse_timestamp_seconds(record.parsed.get(time_column))) is not None
+                    and timestamp > stop_ts
+                )
+            ]
 
         return [record for response in batch._responses for record in response.valid_records]
 

@@ -4,37 +4,42 @@
 """Contracts for NVIDIA Nemotron 3 Nano 4B BF16 support."""
 
 import json
+import re
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
 import torch
-from transformers import PretrainedConfig, PreTrainedTokenizerBase
+from transformers import NemotronHConfig, PretrainedConfig, PreTrainedTokenizerBase
 
 from nemo_safe_synthesizer.config.autoconfig import AutoConfigResolver
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.data_processing.assembler import Example
 from nemo_safe_synthesizer.data_processing.budget import compute_max_new_tokens
+from nemo_safe_synthesizer.generation.processors import create_processor
+from nemo_safe_synthesizer.generation.regex_manager import build_json_based_regex
 from nemo_safe_synthesizer.generation.timeseries_backend import TimeseriesBackend
 from nemo_safe_synthesizer.llm import model_policy
 from nemo_safe_synthesizer.llm.metadata import ModelMetadata
+from nemo_safe_synthesizer.llm.model_policy import NEMOTRON3_NANO_LAYER_BLOCK_TYPES
 from nemo_safe_synthesizer.llm.utils import ModelRef
 from nemo_safe_synthesizer.preflight.checks.environment import param_count_from_empty_model
 
 MODEL_ID = "nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16"
+LAYER_TYPES = list(NEMOTRON3_NANO_LAYER_BLOCK_TYPES)
 
 
 def _write_local_model_config(path: Path, **overrides) -> Path:
     config = {
         "architectures": ["NemotronHForCausalLM"],
         "hidden_size": 3136,
+        "layers_block_type": LAYER_TYPES,
         "mamba_head_dim": 80,
         "mamba_num_heads": 96,
         "model_type": "nemotron_h",
-        "num_hidden_layers": 42,
         "ssm_state_size": 128,
-        "torch_dtype": "bfloat16",
+        "dtype": "bfloat16",
         "vocab_size": 131072,
         **overrides,
     }
@@ -119,6 +124,36 @@ def test_local_bf16_checkpoint_config_resolves_native_nemotron3_policy(tmp_path:
     assert model_policy.model_policy_for_local_path(model_path) is model_policy.NEMOTRON3_NANO_POLICY
 
 
+def test_transformers_saved_local_checkpoint_resolves_native_nemotron3_policy(tmp_path: Path) -> None:
+    model_path = tmp_path / "transformers-saved-checkpoint"
+    config = NemotronHConfig(
+        architectures=["NemotronHForCausalLM"],
+        hidden_size=3136,
+        layers_block_type=LAYER_TYPES,
+        mamba_head_dim=80,
+        mamba_num_heads=96,
+        ssm_state_size=128,
+        dtype="bfloat16",
+        vocab_size=131072,
+    )
+
+    config.save_pretrained(model_path)
+
+    assert model_policy.model_policy_for_local_path(model_path) is model_policy.NEMOTRON3_NANO_POLICY
+    assert ModelMetadata._resolve_model_class(model_path).__name__ == "Nemotron3Nano"
+
+
+def test_legacy_local_checkpoint_schema_resolves_native_nemotron3_policy(tmp_path: Path) -> None:
+    model_path = _write_local_model_config(tmp_path / "legacy-checkpoint")
+    config_path = model_path / "config.json"
+    config = json.loads(config_path.read_text())
+    config["num_hidden_layers"] = len(config.pop("layers_block_type"))
+    config["torch_dtype"] = config.pop("dtype")
+    config_path.write_text(json.dumps(config))
+
+    assert model_policy.model_policy_for_local_path(model_path) is model_policy.NEMOTRON3_NANO_POLICY
+
+
 def test_local_quantized_checkpoint_does_not_match_bf16_policy(tmp_path: Path) -> None:
     model_path = _write_local_model_config(
         tmp_path / "quantized-local-checkpoint",
@@ -137,6 +172,20 @@ def test_reasoning_off_prompt_places_timeseries_prefill_inside_assistant_turn() 
     assert "</think><s>" not in prompt
     assert metadata.response_prefix_ids[-2:] == [12, 13]
     assert metadata.response_suffix_ids == [11, 1010]
+
+
+def test_chat_prompt_renderer_caches_a_reloaded_tokenizer() -> None:
+    metadata = _metadata()
+    tokenizer = metadata.tokenizer
+    assert tokenizer is not None
+    metadata.tokenizer = None
+
+    with patch("nemo_safe_synthesizer.llm.metadata.load_fast_tokenizer", return_value=tokenizer) as load:
+        metadata.render_prompt(["device"])
+        metadata.render_prompt(["device"], prefill='{"device":"A"')
+
+    load.assert_called_once()
+    assert metadata.tokenizer is tokenizer
 
 
 def test_nemotron3_autoconfig_disables_rope_and_selects_hybrid_lora_targets() -> None:
@@ -226,6 +275,43 @@ def test_grouped_training_reopens_an_assistant_turn_between_sequences() -> None:
     assert example.labels == [-100] * len(prompt_ids) + expected_response
 
 
+def test_grouped_generation_uses_the_same_chat_boundaries_as_training() -> None:
+    metadata = _metadata()
+    framing = metadata.response_framing
+    schema = {
+        "type": "object",
+        "properties": {
+            "device": {"type": "string"},
+            "value": {"type": "integer"},
+        },
+        "required": ["device", "value"],
+    }
+    config = SafeSynthesizerParameters.from_params(
+        group_training_examples_by="device",
+        max_sequences_per_example=2,
+    )
+    completion = (
+        f'{{"device":"A","value":1}}\n{framing.suffix}'
+        f'{framing.subsequent_prefix}{{"device":"B","value":2}}\n{framing.suffix}'
+    )
+
+    regex = build_json_based_regex(
+        schema,
+        config,
+        bos_token=metadata.prompt_config.bos_token,
+        eos_token=metadata.prompt_config.eos_token,
+        response_framing=framing,
+    )
+    response = create_processor(schema, metadata, config)(0, completion)
+
+    assert re.fullmatch(regex, completion) is not None
+    assert response.invalid_records == []
+    assert response.valid_records == [
+        {"device": "A", "value": 1},
+        {"device": "B", "value": 2},
+    ]
+
+
 def test_token_budget_uses_chat_response_suffix_instead_of_four_generic_tokens() -> None:
     metadata = _metadata()
     prompt_ids = list(range(100))
@@ -238,7 +324,6 @@ def test_timeseries_backend_uses_model_renderer_for_sliding_prefill() -> None:
     backend = object.__new__(TimeseriesBackend)
     backend.model_metadata = metadata
     backend.schema = {"properties": {"device": {}, "timestamp": {}, "value": {}}}
-    backend._schema_fragment = '"device":<unk>,"timestamp":<unk>,"value":<unk>'
 
     prompt = backend._format_prompt('{"device":"A","timestamp":120')
 

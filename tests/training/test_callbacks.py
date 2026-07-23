@@ -22,6 +22,10 @@ def fixture_mock_metadata():
     metadata.instruction = "Generate a record."
     metadata.prompt_config = MagicMock()
     metadata.prompt_config.template = "{instruction} {schema} {prefill}"
+    metadata.prompt_config.add_bos_token_to_prompt = False
+    metadata.prompt_config.add_eos_token_to_prompt = False
+    metadata.prompt_config.bos_token_id = 1
+    metadata.prompt_config.eos_token_id = 2
     return metadata
 
 
@@ -131,6 +135,40 @@ class TestInferenceEvalCallbackMaxNewTokens:
 
         assert fixture_mock_model.generate.call_args.kwargs["max_new_tokens"] == 500
         fixture_mock_metadata.generation_max_tokens_for.assert_called_once_with(len(prompt_token_ids))
+        tokenizer.assert_called_once_with(
+            [callback.templated_prompt],
+            add_special_tokens=False,
+            return_tensors="pt",
+        )
+
+    def test_callback_applies_only_metadata_owned_prompt_boundaries(
+        self,
+        fixture_mock_metadata,
+        fixture_mock_processor,
+        fixture_mock_model,
+    ):
+        """Callback prompt IDs match assembly instead of tokenizer-global defaults."""
+        fixture_mock_metadata.prompt_config.add_bos_token_to_prompt = True
+        fixture_mock_metadata.prompt_config.add_eos_token_to_prompt = True
+        fixture_mock_metadata.prompt_config.bos_token_id = 101
+        fixture_mock_metadata.prompt_config.eos_token_id = 102
+        fixture_mock_metadata.generation_max_tokens_for.return_value = 20
+        tokenizer = _build_tokenizer(model_max_length=100, prompt_token_ids=[7, 8])
+
+        callback = InferenceEvalCallback(
+            schema={"properties": {"col_a": {"type": "string"}}},
+            metadata=fixture_mock_metadata,
+            processor=fixture_mock_processor,
+            num_prompts_per_batch=1,
+            num_batches=1,
+        )
+
+        _invoke_on_evaluate(callback, fixture_mock_model, tokenizer)
+
+        generate_kwargs = fixture_mock_model.generate.call_args.kwargs
+        assert generate_kwargs["input_ids"].tolist() == [[101, 7, 8, 102]]
+        assert generate_kwargs["attention_mask"].tolist() == [[1, 1, 1, 1]]
+        fixture_mock_metadata.generation_max_tokens_for.assert_called_once_with(4)
 
     def test_callback_uses_helper_remaining_context_when_stat_unset(
         self,

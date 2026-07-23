@@ -22,7 +22,8 @@ from nemo_safe_synthesizer.defaults import DEFAULT_SAMPLING_PARAMETERS
 from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.generation.processors import TabularDataProcessor
 from nemo_safe_synthesizer.generation.vllm_observability import GenerationObservability
-from nemo_safe_synthesizer.llm.metadata import ModelMetadata, RopeScaling
+from nemo_safe_synthesizer.llm.metadata import ModelMetadata, ResponseFraming, RopeScaling
+from nemo_safe_synthesizer.llm.model_policy import NEMOTRON3_NANO_LAYER_BLOCK_TYPES
 
 
 @pytest.fixture
@@ -41,6 +42,7 @@ def mock_model_metadata(fixture_session_cache_dir):
     metadata.prompt_config.template = "[INST] {instruction} {schema} [/INST]"
     metadata.prompt_config.bos_token = "<s>"
     metadata.prompt_config.eos_token = "</s>"
+    metadata.response_framing = ResponseFraming(first_prefix="<s>", subsequent_prefix="<s>", suffix="</s>")
     # Default: generation uses the full context window (mirrors the real
     # helper's fallback when ``max_tokens_per_example`` is unset).
     # Individual tests override per-prompt return values where needed.
@@ -208,6 +210,7 @@ class TestBuildStructuredOutputParams:
                 bos_token=mock_model_metadata.prompt_config.bos_token,
                 eos_token=mock_model_metadata.prompt_config.eos_token,
                 default_max_records_per_group=mock_model_metadata.max_records_per_group,
+                response_framing=mock_model_metadata.response_framing,
             )
             assert result is not None
             assert result.regex == "test_regex_pattern"
@@ -258,6 +261,7 @@ class TestBuildStructuredOutputParams:
                 bos_token=mock_model_metadata.prompt_config.bos_token,
                 eos_token=mock_model_metadata.prompt_config.eos_token,
                 default_max_records_per_group=mock_model_metadata.max_records_per_group,
+                response_framing=mock_model_metadata.response_framing,
             )
             assert result is not None
             assert result.structural_tag == '{"type":"structural_tag","format":{"type":"json_schema","json_schema":{}}}'
@@ -291,6 +295,7 @@ class TestBuildStructuredOutputParams:
                 bos_token=mock_model_metadata.prompt_config.bos_token,
                 eos_token=mock_model_metadata.prompt_config.eos_token,
                 default_max_records_per_group=mock_model_metadata.max_records_per_group,
+                response_framing=mock_model_metadata.response_framing,
             )
             assert result is not None
             assert result.structural_tag is not None
@@ -324,6 +329,7 @@ class TestBuildStructuredOutputParams:
                 bos_token=mock_model_metadata.prompt_config.bos_token,
                 eos_token=mock_model_metadata.prompt_config.eos_token,
                 default_max_records_per_group=mock_model_metadata.max_records_per_group,
+                response_framing=mock_model_metadata.response_framing,
             )
             assert result is not None
             assert result.regex == "test_regex_pattern"
@@ -415,9 +421,9 @@ class TestInitializeModelRef:
                     "mamba_head_dim": 80,
                     "mamba_num_heads": 96,
                     "model_type": "nemotron_h",
-                    "num_hidden_layers": 42,
+                    "layers_block_type": list(NEMOTRON3_NANO_LAYER_BLOCK_TYPES),
                     "ssm_state_size": 128,
-                    "torch_dtype": "bfloat16",
+                    "dtype": "bfloat16",
                     "vocab_size": 131072,
                 }
             )

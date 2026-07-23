@@ -26,6 +26,7 @@ from outlines_core._json_schema import (  # noqa: F401  # ty:ignore[unresolved-i
 )
 from range_regex import bounded_regex_for_range
 
+from ..llm.metadata import ResponseFraming
 from ..observability import get_logger
 
 if TYPE_CHECKING:
@@ -342,6 +343,7 @@ def build_json_based_regex(
     eos_token: str,
     whitespace_pattern: str | None = None,
     default_max_records_per_group: int | None = None,
+    response_framing: ResponseFraming | None = None,
 ) -> str:
     """Build a regex that constrains LLM output to valid JSONL records.
 
@@ -363,6 +365,9 @@ def build_json_based_regex(
         default_max_records_per_group: Training-derived per-group record
             bound used when ``structured_generation.max_records_per_sequence``
             is unset. Typically ``ModelMetadata.max_records_per_group``.
+        response_framing: Model-owned boundaries for grouped completions.
+            When omitted, ``bos_token`` and ``eos_token`` preserve the
+            legacy framing.
 
     Returns:
         Compiled regex string suitable for vLLM's structured-output
@@ -373,24 +378,35 @@ def build_json_based_regex(
     record_regex = _build_regex(schema, whitespace_pattern)
     max_records = _resolve_max_records_per_sequence(config, default_max_records_per_group)
 
-    if config.data.group_training_examples_by is not None:
+    is_grouped = config.data.group_training_examples_by is not None
+    framing = response_framing or ResponseFraming(
+        first_prefix=bos_token,
+        subsequent_prefix=bos_token,
+        suffix=eos_token,
+    )
+
+    if is_grouped:
         # Bounding the per-group record repetition forces the closing ``eos_token`` after at
         # most ``max_records`` records. Without it the ``+`` lets a model that never emits the
         # delimiter decode to ``max_tokens``, yielding a length-truncated, unparseable group.
-        record_repeat = rf"({record_regex}\n){{1,{max_records}}}" if max_records else rf"({record_regex}\n)+"
-        sequence_regex = rf"{re.escape(bos_token)}{record_repeat}{re.escape(eos_token)}"
+        record_lines = rf"({record_regex}\n){{1,{max_records}}}" if max_records else rf"({record_regex}\n)+"
+        first_sequence_regex = f"{re.escape(framing.first_prefix)}{record_lines}{re.escape(framing.suffix)}"
+        subsequent_sequence_regex = f"{re.escape(framing.subsequent_prefix)}{record_lines}{re.escape(framing.suffix)}"
     else:
         # Without grouping, the "sequence" is a single record.
-        sequence_regex = record_regex
+        first_sequence_regex = record_regex
+        subsequent_sequence_regex = record_regex
 
-    if config.data.group_training_examples_by is not None and max_records:
+    if is_grouped and max_records:
         # Grouped generation produces one group per completion; a bounded single sequence
         # (no outer repetition) guarantees a terminable, parseable group.
-        regex = sequence_regex
+        regex = first_sequence_regex
     elif config.generation.structured_generation.use_single_sequence and config.data.max_sequences_per_example == 1:
-        regex = sequence_regex
+        regex = first_sequence_regex
+    elif is_grouped and response_framing is not None:
+        regex = rf"{first_sequence_regex}({subsequent_sequence_regex})*"
     else:
-        regex = rf"({sequence_regex}\n)+"
+        regex = rf"({first_sequence_regex}\n)+"
 
     return regex
 
@@ -418,12 +434,18 @@ def _repeat_format(content: dict[str, Any], min_count: int, max_count: int) -> d
     return {"type": "repeat", "min": min_count, "max": max_count, "content": content}
 
 
+def _star_format(content: dict[str, Any]) -> dict[str, Any]:
+    """Return an XGrammar zero-or-more repetition format."""
+    return {"type": "star", "content": content}
+
+
 def build_json_structural_tag(
     schema: dict[str, Any],
     config: SafeSynthesizerParameters,
     bos_token: str,
     eos_token: str,
     default_max_records_per_group: int | None = None,
+    response_framing: ResponseFraming | None = None,
 ) -> str:
     """Build an XGrammar Structural Tag for schema-constrained JSONL records.
 
@@ -441,6 +463,9 @@ def build_json_structural_tag(
         default_max_records_per_group: Training-derived per-group record
             bound used when ``structured_generation.max_records_per_sequence``
             is unset. Typically ``ModelMetadata.max_records_per_group``.
+        response_framing: Model-owned boundaries for grouped completions.
+            When omitted, ``bos_token`` and ``eos_token`` preserve the
+            legacy framing.
 
     Returns:
         JSON string suitable for ``StructuredOutputsParams(structural_tag=...)``.
@@ -452,31 +477,53 @@ def build_json_structural_tag(
     record_line_format = _sequence_format([record_format, _const_string_format("\n")])
     max_records = _resolve_max_records_per_sequence(config, default_max_records_per_group)
 
-    if config.data.group_training_examples_by is not None:
+    is_grouped = config.data.group_training_examples_by is not None
+    framing = response_framing or ResponseFraming(
+        first_prefix=bos_token,
+        subsequent_prefix=bos_token,
+        suffix=eos_token,
+    )
+
+    if is_grouped:
         # Bounding the per-group record repetition forces the closing eos_token after at most
         # max_records records. The unbounded plus otherwise lets a model that never emits the
         # delimiter decode to max_tokens, yielding a length-truncated, unparseable group.
         record_repetition = (
             _repeat_format(record_line_format, 1, max_records) if max_records else _plus_format(record_line_format)
         )
-        sequence_format = _sequence_format(
+        first_sequence_format = _sequence_format(
             [
-                _const_string_format(bos_token),
+                _const_string_format(framing.first_prefix),
                 record_repetition,
-                _const_string_format(eos_token),
+                _const_string_format(framing.suffix),
+            ]
+        )
+        subsequent_sequence_format = _sequence_format(
+            [
+                _const_string_format(framing.subsequent_prefix),
+                record_repetition,
+                _const_string_format(framing.suffix),
             ]
         )
     else:
-        sequence_format = record_format
+        first_sequence_format = record_format
+        subsequent_sequence_format = record_format
 
-    if config.data.group_training_examples_by is not None and max_records:
+    if is_grouped and max_records:
         # Grouped generation produces one group per completion; a bounded single sequence
         # (no outer repetition) guarantees a terminable, parseable group.
-        output_format = sequence_format
+        output_format = first_sequence_format
     elif config.generation.structured_generation.use_single_sequence and config.data.max_sequences_per_example == 1:
-        output_format = sequence_format
-    elif config.data.group_training_examples_by is not None:
-        output_format = _plus_format(_sequence_format([sequence_format, _const_string_format("\n")]))
+        output_format = first_sequence_format
+    elif is_grouped and response_framing is not None:
+        output_format = _sequence_format(
+            [
+                first_sequence_format,
+                _star_format(subsequent_sequence_format),
+            ]
+        )
+    elif is_grouped:
+        output_format = _plus_format(_sequence_format([first_sequence_format, _const_string_format("\n")]))
     else:
         output_format = _plus_format(record_line_format)
 

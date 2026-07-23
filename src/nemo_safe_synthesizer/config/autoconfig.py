@@ -20,6 +20,8 @@ import pandas as pd
 from ..defaults import DEFAULT_MAX_SEQ_LENGTH, MAX_ROPE_SCALING_FACTOR
 from ..errors import ParameterError
 from ..llm.metadata import ModelMetadata
+from ..llm.model_policy import NEMOTRON3_NANO_POLICY, model_policy_for_reference
+from ..llm.utils import ModelRef
 from ..observability import get_logger
 from .parameters import ConfigPatch, SafeSynthesizerParameters
 from .types import AUTO_STR
@@ -209,8 +211,9 @@ class AutoConfigResolver:
 
     def _validate_model_capabilities(self) -> None:
         """Reject explicitly unsupported modes for model-specific policies."""
-        model_class = ModelMetadata._resolve_model_class(self._config.training.pretrained_model)
-        if model_class.__name__ != "Nemotron3Nano":
+        model_ref = ModelRef.parse(self._config.training.pretrained_model)
+        policy = model_policy_for_reference(model_ref.repo_id, model_ref.local_path)
+        if policy is not NEMOTRON3_NANO_POLICY:
             return
         if self._config.training.quantize_model:
             raise ParameterError("Nemotron 3 Nano BF16 does not support quantized training")

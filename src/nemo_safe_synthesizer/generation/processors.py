@@ -237,12 +237,14 @@ class GroupedDataProcessor(Processor):
         group_by: str,
         order_by: str | None = None,
         tokenizer: EncodeOnlyTokenizer | None = None,
+        first_group_without_bos: bool = False,
     ):
         super().__init__(schema=schema, config=config, tokenizer=tokenizer)
         self.group_by: list[str] = [group_by]
         self.order_by = order_by
         self.bos_token = bos_token
         self.eos_token = eos_token
+        self.first_group_without_bos = first_group_without_bos
 
     def _process_text_generation(self, text: str) -> ParsedResponse:
         """Process the output from the fine-tuned model.
@@ -267,7 +269,12 @@ class GroupedDataProcessor(Processor):
         Returns:
             Parsed response object that contains the extracted records.
         """
-        groups = extract_groups_from_jsonl_string(text, self.bos_token, self.eos_token)
+        groups = extract_groups_from_jsonl_string(
+            text,
+            self.bos_token,
+            self.eos_token,
+            first_group_without_bos=self.first_group_without_bos,
+        )
         groupby_validator = "groupby"
 
         if len(groups) == 0 and self.config.group_by_accept_no_delineator:
@@ -407,14 +414,16 @@ def create_processor(
             tokenizer=tokenizer,
         )
     elif config.data.group_training_examples_by:
+        framing = metadata.response_framing
         processor = GroupedDataProcessor(
             schema,
             config=config.generation.validation,
             group_by=config.data.group_training_examples_by,
             order_by=config.data.order_training_examples_by,
-            bos_token=metadata.prompt_config.bos_token,
-            eos_token=metadata.prompt_config.eos_token,
+            bos_token=framing.subsequent_prefix,
+            eos_token=framing.suffix,
             tokenizer=tokenizer,
+            first_group_without_bos=framing.first_prefix == "",
         )
     else:
         processor = TabularDataProcessor(schema, config=config.generation.validation, tokenizer=tokenizer)

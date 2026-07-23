@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import cast
 
 VLLM_VERSION = "0.24.0"
-VLLM_REVISION = "ee0da84ab9e04ac7610e28580af62c365e898389"
+VLLM_REVISION = "ee0da84ab9e04ac7610e28580af62c365e898389"  # pragma: allowlist secret
 VLLM_TAG = "v0.24.0"
 VLLM_REMOTE = "https://github.com/vllm-project/vllm.git"
 DEVICE_NAME = "NVIDIA_A100-SXM4-80GB"

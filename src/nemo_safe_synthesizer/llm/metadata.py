@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import importlib
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, ClassVar, Literal
 
@@ -89,6 +90,12 @@ class LLMPromptConfig(BaseModel):
     response_suffix_ids: list[int] = Field(default_factory=list)
     """Tokens inserted immediately after response content."""
 
+    response_prefix: str = ""
+    """Text inserted before a subsequent response sequence."""
+
+    response_suffix: str = ""
+    """Text inserted after each response sequence."""
+
     @classmethod
     def from_tokenizer(cls, name: str, tokenizer: PreTrainedTokenizerBase | None = None, **kwargs) -> LLMPromptConfig:
         """Create a prompt config by reading from settings of a tokenizer.
@@ -132,9 +139,20 @@ class LLMPromptConfig(BaseModel):
             "use_chat_template": kwargs.get("use_chat_template", False),
             "response_prefix_ids": kwargs.get("response_prefix_ids", []),
             "response_suffix_ids": kwargs.get("response_suffix_ids", []),
+            "response_prefix": kwargs.get("response_prefix", ""),
+            "response_suffix": kwargs.get("response_suffix", ""),
         }
 
         return cls(**pc)
+
+
+@dataclass(frozen=True)
+class ResponseFraming:
+    """Text boundaries generated around grouped response sequences."""
+
+    first_prefix: str
+    subsequent_prefix: str
+    suffix: str
 
 
 def resolve_rope_scaling_factor(
@@ -410,6 +428,31 @@ class ModelMetadata(BaseModel):
             return list(self.prompt_config.response_suffix_ids)
         return [self.prompt_config.eos_token_id]
 
+    @property
+    def response_framing(self) -> ResponseFraming:
+        """Return the generated-text framing used for grouped sequences."""
+        if self.prompt_config.use_chat_template:
+            return ResponseFraming(
+                first_prefix="",
+                subsequent_prefix=self.prompt_config.response_prefix,
+                suffix=self.prompt_config.response_suffix,
+            )
+        return ResponseFraming(
+            first_prefix=self.prompt_config.bos_token,
+            subsequent_prefix=self.prompt_config.bos_token,
+            suffix=self.prompt_config.eos_token,
+        )
+
+    def _get_tokenizer(self) -> PreTrainedTokenizerBase:
+        """Return the metadata tokenizer, loading and caching it when needed."""
+        if self.tokenizer is None:
+            model_ref = ModelRef.parse(self.model_name_or_path)
+            self.tokenizer = load_fast_tokenizer(
+                model_ref.target(),
+                trust_remote_code=model_ref.trust_remote_code,
+            )
+        return self.tokenizer
+
     def render_prompt(
         self,
         columns: list[str],
@@ -429,13 +472,7 @@ class ModelMetadata(BaseModel):
                 exclude_columns=exclude_columns,
             )
 
-        tokenizer = self.tokenizer
-        if tokenizer is None:
-            model_ref = ModelRef.parse(self.model_name_or_path)
-            tokenizer = load_fast_tokenizer(
-                model_ref.target(),
-                trust_remote_code=model_ref.trust_remote_code,
-            )
+        tokenizer = self._get_tokenizer()
         excluded = set(exclude_columns or [])
         schema = ",".join(f'"{column}":<unk>' for column in columns if column not in excluded)
         messages = [
@@ -644,14 +681,13 @@ class ModelMetadata(BaseModel):
             ValueError: If no registered subclass matches.
         """
         model_name = str(model_name_or_path)
-        if model_policy_for(model_name) is NEMOTRON3_NANO_POLICY:
-            return Nemotron3Nano
-
         model_path = Path(model_name_or_path)
         if model_path.exists():
             model_ref = ModelRef.parse(model_path)
             if model_policy_for_reference(model_ref.repo_id, model_ref.local_path) is NEMOTRON3_NANO_POLICY:
                 return Nemotron3Nano
+        elif model_policy_for(model_name) is NEMOTRON3_NANO_POLICY:
+            return Nemotron3Nano
 
         classes = TinyLlama, Qwen, Llama32, SmolLM2, SmolLM3, Mistral, Nemotron, Granite
         for class_ in classes:
@@ -947,7 +983,7 @@ class Nemotron(ModelMetadata):
 class Nemotron3Nano(ModelMetadata):
     """Metadata for the official NVIDIA Nemotron 3 Nano 4B BF16 checkpoint."""
 
-    uses_rope: ClassVar[bool] = False
+    uses_rope: ClassVar[bool] = NEMOTRON3_NANO_POLICY.uses_rope
     automatic_lora_targets: ClassVar[tuple[str, ...]] = NEMOTRON3_NANO_POLICY.automatic_lora_targets
 
     def __init__(
@@ -982,10 +1018,17 @@ class Nemotron3Nano(ModelMetadata):
             add_generation_prompt=False,
             enable_thinking=False,
         )
+        if not isinstance(dialogue, str) or not isinstance(prefix, str) or not isinstance(full, str):
+            raise ParameterError("Nemotron 3 chat template did not render text")
         dialogue_ids = tokenizer.encode(dialogue, add_special_tokens=False)
         prefix_ids = tokenizer.encode(prefix, add_special_tokens=False)
         full_ids = tokenizer.encode(full, add_special_tokens=False)
-        if prefix_ids[: len(dialogue_ids)] != dialogue_ids or full_ids[: len(prefix_ids)] != prefix_ids:
+        if (
+            not prefix.startswith(dialogue)
+            or not full.startswith(prefix)
+            or prefix_ids[: len(dialogue_ids)] != dialogue_ids
+            or full_ids[: len(prefix_ids)] != prefix_ids
+        ):
             raise ParameterError("Nemotron 3 chat-template prefix is not token-boundary stable")
 
         super().__init__(
@@ -1000,6 +1043,8 @@ class Nemotron3Nano(ModelMetadata):
                 use_chat_template=True,
                 response_prefix_ids=prefix_ids[len(dialogue_ids) :],
                 response_suffix_ids=full_ids[len(prefix_ids) :],
+                response_prefix=prefix[len(dialogue) :],
+                response_suffix=full[len(prefix) :],
             ),
             model_name_or_path=model_name_or_path,
             rope_scaling=None,

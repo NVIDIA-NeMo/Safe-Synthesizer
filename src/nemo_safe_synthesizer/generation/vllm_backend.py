@@ -405,6 +405,7 @@ class VllmBackend(GeneratorBackend):
                 bos_token=pc.bos_token,
                 eos_token=pc.eos_token,
                 default_max_records_per_group=self.model_metadata.max_records_per_group,
+                response_framing=self.model_metadata.response_framing,
             )
             params["regex"] = regex
         elif schema_method == "json_schema":
@@ -421,6 +422,7 @@ class VllmBackend(GeneratorBackend):
                 bos_token=pc.bos_token,
                 eos_token=pc.eos_token,
                 default_max_records_per_group=self.model_metadata.max_records_per_group,
+                response_framing=self.model_metadata.response_framing,
             )
 
         return StructuredOutputsParams(**params)
