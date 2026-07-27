@@ -218,7 +218,7 @@ all others have defaults or are optional.
 | `--log-color` / `--no-log-color` | `NSS_LOG_COLOR` | auto | Colorize console output (auto-detected from TTY) |
 | `--wandb-mode` | `NSS_WANDB_MODE` | `disabled` | WandB mode (`online`, `offline`, `disabled`) |
 | `--wandb-project` | `NSS_WANDB_PROJECT` | -- | WandB project name |
-| `--wandb-upload-evaluation-report` | `NSS_WANDB_UPLOAD_EVALUATION_REPORT` | `false` | Opt in to uploading evaluation HTML and artifact |
+| `--wandb-upload-evaluation-report` / `--no-wandb-upload-evaluation-report` | `NSS_WANDB_UPLOAD_EVALUATION_REPORT` | `true` | Control evaluation HTML and artifact publication |
 | `--dataset-registry` | `NSS_DATASET_REGISTRY` | -- | Dataset registry YAML path/URL |
 | `-v` / `-vv` | -- | -- | Verbose logging (`-v` debug, `-vv` debug + dependencies) |
 
@@ -1361,15 +1361,17 @@ points. Existing training curves remain W&B history. After results are saved,
 the CLI publishes an `evaluation/scorecard` table panel containing final
 `eval/*` values.
 
-The HTML evaluation report can disclose distribution labels and other details
-derived from your source data. It is therefore not uploaded by default. To opt
-in to the `evaluation/report` panel and the `evaluation-report` artifact, pass:
+When W&B is active, the CLI publishes the HTML evaluation report to the
+user-configured project as the `evaluation/report` panel and the
+`evaluation-report` artifact. To retain only scalar W&B output, pass:
 
-```bash
-safe-synthesizer run --wandb-mode online --wandb-upload-evaluation-report ...
-```
+    safe-synthesizer run \
+      --config config.yaml \
+      --data-source data.csv \
+      --wandb-mode online \
+      --no-wandb-upload-evaluation-report
 
-or set `NSS_WANDB_UPLOAD_EVALUATION_REPORT=true`. When enabled, the artifact
+or set `NSS_WANDB_UPLOAD_EVALUATION_REPORT=false`. When enabled, the artifact
 is named `safe-synthesizer-evaluation-report-<run-id>` and may contain
 `evaluation_report.html` and `evaluation_metrics.json` when those files are
 available. SDK callers retain scalar `log_wandb()` behavior and do not upload

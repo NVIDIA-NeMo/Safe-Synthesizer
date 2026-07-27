@@ -47,6 +47,8 @@ def test_mia_tabular_unit_returns_threshold_counts():
     assert attack_sum_df["Attack Count"].sum() == 360
     assert attack_sum_df["Attack Percentage"].sum() == pytest.approx(100.0)
     assert not all(float(value).is_integer() for value in attack_sum_df["Attack Percentage"])
+    expected_percentages = attack_sum_df["Attack Count"] / attack_sum_df["Attack Count"].sum() * 100
+    assert attack_sum_df["Attack Percentage"].tolist() == pytest.approx(expected_percentages.tolist())
     assert set(tps_values) == {0.1, 0.2, 0.3, 0.4}
     assert set(fps_values) == {0.1, 0.2, 0.3, 0.4}
 

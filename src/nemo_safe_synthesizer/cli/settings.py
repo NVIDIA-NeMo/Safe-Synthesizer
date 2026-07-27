@@ -149,7 +149,7 @@ class CLISettings(BaseSettings):
     """WandB project name override."""
 
     wandb_upload_evaluation_report: bool = Field(
-        default=False,
+        default=True,
         validation_alias=AliasChoices("wandb_upload_evaluation_report", "NSS_WANDB_UPLOAD_EVALUATION_REPORT"),
         description="Whether the CLI uploads the final evaluation HTML report and artifact to WandB.",
     )

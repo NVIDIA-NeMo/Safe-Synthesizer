@@ -137,9 +137,9 @@ def log_failure_to_wandb(error: Exception, phase: str) -> None:
                     f"{phase}/error_message": str(error),
                 }
             )
-            logger.info(f"Updated wandb failure summary for {phase} phase")
-    except Exception as e:
-        logger.warning(f"Failed to log error to wandb: {e}")
+            logger.runtime.info("Updated wandb failure summary for %s phase", phase)
+    except Exception as exc:  # noqa: BLE001 -- observability is best-effort
+        logger.runtime.warning("Failed to log error to wandb: %s", exc)
 
 
 def publish_evaluation_report(
@@ -188,7 +188,7 @@ def publish_evaluation_report(
                 scorecard_fingerprint,
             )
         except Exception as exc:  # noqa: BLE001 -- W&B publication is optional
-            logger.warning(f"Failed to publish W&B evaluation scorecard: {exc}")
+            logger.runtime.warning("Failed to publish W&B evaluation scorecard: %s", exc)
             publication_succeeded = False
 
     report_sha256 = hashlib.sha256(report_bytes).hexdigest() if report_bytes is not None else None
@@ -208,7 +208,7 @@ def publish_evaluation_report(
                     report_fingerprint,
                 )
             except Exception as exc:  # noqa: BLE001 -- W&B publication is optional
-                logger.warning(f"Failed to publish W&B evaluation report: {exc}")
+                logger.runtime.warning("Failed to publish W&B evaluation report: %s", exc)
                 publication_succeeded = False
 
     if upload_report and (report_bytes is not None or metrics_bytes is not None):
@@ -232,7 +232,7 @@ def publish_evaluation_report(
                     artifact_fingerprint,
                 )
             except Exception as exc:  # noqa: BLE001 -- W&B publication is optional
-                logger.warning(f"Failed to publish W&B evaluation report artifact: {exc}")
+                logger.runtime.warning("Failed to publish W&B evaluation report artifact: %s", exc)
                 publication_succeeded = False
 
     try:
@@ -244,18 +244,22 @@ def publish_evaluation_report(
             publication_summary[_EVALUATION_PUBLICATION_FINGERPRINT_KEY] = fingerprint
         run.summary.update(publication_summary)
     except Exception as exc:  # noqa: BLE001 -- W&B publication is optional
-        logger.warning(f"Failed to update W&B evaluation publication summary: {exc}")
+        logger.runtime.warning("Failed to update W&B evaluation publication summary: %s", exc)
 
 
 def _read_optional_file(path: Path, file_description: str) -> bytes | None:
     """Read an opted-in evaluation file, warning instead of failing the run."""
     try:
         if not path.is_file():
-            logger.warning(f"W&B evaluation {file_description} upload requested but file is missing: {path}")
+            logger.runtime.warning(
+                "W&B evaluation %s upload requested but file is missing: %s",
+                file_description,
+                path,
+            )
             return None
         return path.read_bytes()
     except Exception as exc:  # noqa: BLE001 -- local output inspection is optional
-        logger.warning(f"Failed to read W&B evaluation {file_description}: {exc}")
+        logger.runtime.warning("Failed to read W&B evaluation %s: %s", file_description, exc)
         return None
 
 
@@ -286,7 +290,7 @@ def _publication_marker_matches(summary: Any, key: str, fingerprint: str) -> boo
     try:
         return summary.get(key) == fingerprint
     except Exception as exc:  # noqa: BLE001 -- publication remains best-effort
-        logger.warning(f"Failed to read W&B evaluation publication marker {key}: {exc}")
+        logger.runtime.warning("Failed to read W&B evaluation publication marker %s: %s", key, exc)
         return False
 
 
@@ -296,7 +300,7 @@ def _record_publication_marker(summary: Any, key: str, fingerprint: str) -> bool
         summary.update({key: fingerprint})
         return True
     except Exception as exc:  # noqa: BLE001 -- publication remains best-effort
-        logger.warning(f"Failed to update W&B evaluation publication marker {key}: {exc}")
+        logger.runtime.warning("Failed to update W&B evaluation publication marker %s: %s", key, exc)
         return False
 
 

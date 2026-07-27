@@ -176,9 +176,9 @@ class SafeSynthesizerSummary(NSSBaseModel):
     def _wandb_metrics(self) -> dict[str, float | int | None]:
         """Return the stable final W&B metric payload, including ``None`` values."""
         return {
+            "total_time_sec": self.timing.total_time_sec,
             "gen/generation_time_sec": self.timing.generation_time_sec,
-            "gen/evaluation_time_sec": self.timing.evaluation_time_sec,
-            "eval/total_time_sec": self.timing.total_time_sec,
+            "eval/evaluation_time_sec": self.timing.evaluation_time_sec,
             "train/pii_replacer_time_sec": self.timing.pii_replacer_time_sec,
             "train/training_time_sec": self.timing.training_time_sec,
             "gen/num_valid_records": self.num_valid_records,

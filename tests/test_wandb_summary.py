@@ -29,6 +29,25 @@ def test_summary_log_wandb_updates_run_summary_without_history() -> None:
     assert payload["gen/num_completion_tokens"] is None
 
 
+def test_summary_wandb_timing_metrics_use_stage_appropriate_namespaces() -> None:
+    """Timing metrics use evaluation, generation, or run-level names consistently."""
+    summary = SafeSynthesizerSummary(
+        timing=SafeSynthesizerTiming(
+            total_time_sec=12.0,
+            generation_time_sec=4.0,
+            evaluation_time_sec=3.0,
+        )
+    )
+
+    payload = summary._wandb_metrics()
+
+    assert payload["total_time_sec"] == 12.0
+    assert payload["gen/generation_time_sec"] == 4.0
+    assert payload["eval/evaluation_time_sec"] == 3.0
+    assert "eval/total_time_sec" not in payload
+    assert "gen/evaluation_time_sec" not in payload
+
+
 def test_timing_log_wandb_updates_summary_and_preserves_none() -> None:
     """Timing-only W&B output also avoids history and does not coerce ``None``."""
     timing = SafeSynthesizerTiming(evaluation_time_sec=None)
