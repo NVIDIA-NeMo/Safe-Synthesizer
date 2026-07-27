@@ -143,7 +143,6 @@ def test_opt_out_then_opt_in_publishes_report_after_scorecard(tmp_path: Path) ->
         wandb_setup.publish_evaluation_report(workdir, _summary(), upload_report=True)
     assert [set(call.args[0]) for call in run.log.call_args_list] == [
         {"evaluation/scorecard"},
-        {"evaluation/scorecard"},
         {"evaluation/report"},
     ]
 
@@ -157,6 +156,34 @@ def test_failure_then_retry_is_not_suppressed(tmp_path: Path) -> None:
         assert wandb_setup._EVALUATION_PUBLICATION_FINGERPRINT_KEY not in run.summary
         wandb_setup.publish_evaluation_report(workdir, _summary(), upload_report=False)
     assert run.log.call_count == 2
+
+
+def test_artifact_failure_then_retry_does_not_republish_successful_media(tmp_path: Path) -> None:
+    """Retry only the failed artifact operation after scorecard and report succeed."""
+    workdir, run = _workdir(tmp_path), _run()
+    artifact_attempts = 0
+
+    def make_artifact(name: str, type: str) -> FakeArtifact:  # noqa: A002 - W&B API spelling
+        nonlocal artifact_attempts
+        artifact_attempts += 1
+        if artifact_attempts == 1:
+            raise RuntimeError("down")
+        return FakeArtifact(name, type)
+
+    with (
+        patch.object(wandb_setup.wandb, "run", run),
+        patch.object(wandb_setup.wandb, "Artifact", side_effect=make_artifact),
+    ):
+        wandb_setup.publish_evaluation_report(workdir, _summary(), upload_report=True)
+        wandb_setup.publish_evaluation_report(workdir, _summary(), upload_report=True)
+
+    assert [set(call.args[0]) for call in run.log.call_args_list] == [
+        {"evaluation/scorecard"},
+        {"evaluation/report"},
+    ]
+    run.log_artifact.assert_called_once()
+    assert run.summary["evaluation/report_uploaded_post_run"] is True
+    assert run.summary["evaluation/report_sha256"] == hashlib.sha256(workdir.evaluation_report.read_bytes()).hexdigest()
 
 
 def test_missing_report_and_metrics_warn_without_raising(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
