@@ -2564,6 +2564,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.config.generate.ValidationParameters.enforce_numeric_range" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;enforce_numeric_range
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -9438,6 +9449,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.config.generate.ValidationParameters.enforce_numeric_range" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;enforce_numeric_range
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -10047,6 +10069,14 @@ from LLM output to tabular data.</p>
    (nemo_safe_synthesizer.config.generate.ValidationParameters.group_by_fix_unordered_records)" href="#nemo_safe_synthesizer.config.generate.ValidationParameters.group_by_fix_unordered_records">group_by_fix_unordered_records</a></code>
                 (<code><span title="bool">bool</span></code>)
             </li>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            enforce_numeric_range
+
+  
+      pydantic-field
+   (nemo_safe_synthesizer.config.generate.ValidationParameters.enforce_numeric_range)" href="#nemo_safe_synthesizer.config.generate.ValidationParameters.enforce_numeric_range">enforce_numeric_range</a></code>
+                (<code><span title="bool">bool</span></code>)
+            </li>
         </ul>
 
 
@@ -10143,6 +10173,28 @@ from LLM output to tabular data.</p>
     <div class="doc doc-contents ">
 
         <p>Whether to automatically fix unordered records in a sequence by sorting the records.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="nemo_safe_synthesizer.config.generate.ValidationParameters.enforce_numeric_range" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">enforce_numeric_range</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
+  </span>
+
+<a href="#nemo_safe_synthesizer.config.generate.ValidationParameters.enforce_numeric_range" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>When True, reject floats outside the training-observed min/max. Set False to skip float range checks (integers/enums still enforced).</p>
 
     </div>
 
