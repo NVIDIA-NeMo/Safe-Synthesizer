@@ -167,6 +167,49 @@ def make_json_schema(df: pd.DataFrame, string_length_multiple: float = STRING_LE
     return schema
 
 
+def relax_numeric_bounds(schema: dict) -> dict:
+    """Return a copy of ``schema`` with float (``number``) range bounds removed.
+
+    ``make_json_schema`` records each numeric column's exact observed
+    ``minimum``/``maximum``. Neither structured-generation backend can enforce a
+    floating-point range (XGrammar and the regex builder bound integers and
+    enums but emit an unconstrained token stream for ``number``), so those bounds
+    act purely as a post-generation validation gate. On wide float tables the
+    per-field rejections compound and can reject nearly every record even though
+    the values are otherwise well-formed. Dropping the ``number`` bounds turns
+    that hard rejection into acceptance while leaving integer and enum
+    constraints -- which the grammar does enforce -- untouched.
+
+    Only ``number``-typed properties are relaxed; a property whose type list
+    includes ``integer`` keeps its (grammar-enforced, whole-number) bounds so the
+    XGrammar constraint stays valid.
+
+    Args:
+        schema: A JSON schema as produced by ``make_json_schema``.
+
+    Returns:
+        A deep-ish copy of ``schema`` with ``minimum``/``maximum`` stripped from
+        pure ``number`` properties. The input is not mutated.
+    """
+    relaxed = dict(schema)
+    properties = relaxed.get("properties")
+    if not isinstance(properties, dict):
+        return relaxed
+
+    new_properties: dict = {}
+    for name, prop in properties.items():
+        if isinstance(prop, dict):
+            types = prop.get("type")
+            types = types if isinstance(types, list) else [types]
+            # Relax only pure floats; keep integer bounds (grammar-enforced and
+            # required to be whole numbers) and enum constraints intact.
+            if "number" in types and "integer" not in types:
+                prop = {k: v for k, v in prop.items() if k not in ("minimum", "maximum")}
+        new_properties[name] = prop
+    relaxed["properties"] = new_properties
+    return relaxed
+
+
 def normalize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     """Ensure DataFrame meets standards for use in Safe Synthesizer models.
 

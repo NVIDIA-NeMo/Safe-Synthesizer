@@ -31,6 +31,7 @@ from ..config.generate import (
     resolve_structured_generation_schema_method,
     structural_tag_backend_error_message,
 )
+from ..data_processing.dataset import relax_numeric_bounds
 from ..defaults import DEFAULT_SAMPLING_PARAMETERS, FIXED_RUNTIME_GENERATE_ARGS
 from ..errors import InternalError, ParameterError
 from ..generation.backend import GeneratorBackend
@@ -249,6 +250,11 @@ class VllmBackend(GeneratorBackend):
         self.remote = False
         self.workdir = workdir
         self.schema = load_json(self.workdir.schema_file)
+        if not self.config.generation.validation.enforce_numeric_range:
+            # Drop float range bounds so out-of-range floating-point values are
+            # accepted instead of rejected in post-generation validation. Integer
+            # and enum constraints (which the grammar enforces) are unaffected.
+            self.schema = relax_numeric_bounds(self.schema)
         self.columns = list(self.schema["properties"].keys())
         self.prompt = utils.create_schema_prompt(
             self.columns,

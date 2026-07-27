@@ -114,6 +114,17 @@ class ValidationParameters(Parameters, BaseModel):
         ),
     ] = False
 
+    enforce_numeric_range: Annotated[
+        bool,
+        Field(
+            title="enforce_numeric_range",
+            description=(
+                "When True, reject floats outside the training-observed min/max. "
+                "Set False to skip float range checks (integers/enums still enforced)."
+            ),
+        ),
+    ] = True
+
 
 class StructuredGenerationParameters(Parameters, BaseModel):
     """Configuration for vLLM structured generation.
