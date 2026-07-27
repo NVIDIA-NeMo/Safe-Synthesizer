@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Focused W&B evaluation publication contracts."""
+"""Focused W&B evaluation publishing contracts."""
 
 from __future__ import annotations
 
@@ -133,7 +133,7 @@ def test_changed_evaluation_output_publishes_a_new_report(tmp_path: Path) -> Non
 
 
 def test_opt_out_then_opt_in_publishes_report_after_scorecard(tmp_path: Path) -> None:
-    """Opting in later changes the fingerprint and permits report publication."""
+    """Opting in later changes the fingerprint and permits report publishing."""
     workdir, run = _workdir(tmp_path), _run()
     with (
         patch.object(wandb_setup.wandb, "run", run),
@@ -153,7 +153,7 @@ def test_failure_then_retry_is_not_suppressed(tmp_path: Path) -> None:
     run.log.side_effect = [RuntimeError("down"), None]
     with patch.object(wandb_setup.wandb, "run", run):
         wandb_setup.publish_evaluation_report(workdir, _summary(), upload_report=False)
-        assert wandb_setup._EVALUATION_PUBLICATION_FINGERPRINT_KEY not in run.summary
+        assert wandb_setup._EVALUATION_PUBLISHING_FINGERPRINT_KEY not in run.summary
         wandb_setup.publish_evaluation_report(workdir, _summary(), upload_report=False)
     assert run.log.call_count == 2
 
@@ -196,7 +196,7 @@ def test_missing_report_and_metrics_warn_without_raising(tmp_path: Path, caplog:
 
 
 @pytest.mark.parametrize("failure", ["media", "artifact", "summary"])
-def test_publication_operation_failures_never_escape(tmp_path: Path, failure: str) -> None:
+def test_publishing_operation_failures_never_escape(tmp_path: Path, failure: str) -> None:
     """Media, artifact, and final-summary W&B failures preserve synthesis success."""
     workdir, run = _workdir(tmp_path), _run()
     if failure == "summary":

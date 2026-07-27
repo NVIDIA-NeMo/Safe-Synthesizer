@@ -25,7 +25,7 @@ from .artifact_structure import Workdir
 
 logger = get_logger(__name__)
 
-_EVALUATION_PUBLICATION_FINGERPRINT_KEY = "_nss_evaluation_publication_fingerprint"
+_EVALUATION_PUBLISHING_FINGERPRINT_KEY = "_nss_evaluation_publishing_fingerprint"
 _EVALUATION_SCORECARD_FINGERPRINT_KEY = "_nss_evaluation_scorecard_fingerprint"
 _EVALUATION_REPORT_FINGERPRINT_KEY = "_nss_evaluation_report_fingerprint"
 _EVALUATION_ARTIFACT_FINGERPRINT_KEY = "_nss_evaluation_artifact_fingerprint"
@@ -165,14 +165,14 @@ def publish_evaluation_report(
     metrics_path = workdir.evaluation_metrics
     report_bytes = _read_optional_file(report_path, "report") if upload_report else None
     metrics_bytes = _read_optional_file(metrics_path, "metrics") if upload_report else None
-    fingerprint = _evaluation_publication_fingerprint(eval_metrics, upload_report, report_bytes, metrics_bytes)
+    fingerprint = _evaluation_publishing_fingerprint(eval_metrics, upload_report, report_bytes, metrics_bytes)
 
-    if _publication_marker_matches(run.summary, _EVALUATION_PUBLICATION_FINGERPRINT_KEY, fingerprint):
+    if _publishing_marker_matches(run.summary, _EVALUATION_PUBLISHING_FINGERPRINT_KEY, fingerprint):
         return
 
-    publication_succeeded = True
+    publishing_succeeded = True
     scorecard_fingerprint = _fingerprint_payload({"eval_metrics": eval_metrics})
-    if not _publication_marker_matches(run.summary, _EVALUATION_SCORECARD_FINGERPRINT_KEY, scorecard_fingerprint):
+    if not _publishing_marker_matches(run.summary, _EVALUATION_SCORECARD_FINGERPRINT_KEY, scorecard_fingerprint):
         try:
             run.log(
                 {
@@ -182,34 +182,34 @@ def publish_evaluation_report(
                     )
                 }
             )
-            publication_succeeded &= _record_publication_marker(
+            publishing_succeeded &= _record_publishing_marker(
                 run.summary,
                 _EVALUATION_SCORECARD_FINGERPRINT_KEY,
                 scorecard_fingerprint,
             )
-        except Exception as exc:  # noqa: BLE001 -- W&B publication is optional
+        except Exception as exc:  # noqa: BLE001 -- W&B publishing is optional
             logger.runtime.warning("Failed to publish W&B evaluation scorecard: %s", exc)
-            publication_succeeded = False
+            publishing_succeeded = False
 
     report_sha256 = hashlib.sha256(report_bytes).hexdigest() if report_bytes is not None else None
     report_uploaded = False
     if upload_report and report_bytes is not None:
         report_fingerprint = _fingerprint_payload({"report_sha256": report_sha256})
-        if _publication_marker_matches(run.summary, _EVALUATION_REPORT_FINGERPRINT_KEY, report_fingerprint):
+        if _publishing_marker_matches(run.summary, _EVALUATION_REPORT_FINGERPRINT_KEY, report_fingerprint):
             report_uploaded = True
         else:
             try:
                 report_html = report_bytes.decode("utf-8")
                 run.log({"evaluation/report": wandb.Html(report_html, inject=False)})
                 report_uploaded = True
-                publication_succeeded &= _record_publication_marker(
+                publishing_succeeded &= _record_publishing_marker(
                     run.summary,
                     _EVALUATION_REPORT_FINGERPRINT_KEY,
                     report_fingerprint,
                 )
-            except Exception as exc:  # noqa: BLE001 -- W&B publication is optional
+            except Exception as exc:  # noqa: BLE001 -- W&B publishing is optional
                 logger.runtime.warning("Failed to publish W&B evaluation report: %s", exc)
-                publication_succeeded = False
+                publishing_succeeded = False
 
     if upload_report and (report_bytes is not None or metrics_bytes is not None):
         artifact_fingerprint = _fingerprint_payload(
@@ -218,7 +218,7 @@ def publish_evaluation_report(
                 "metrics_sha256": hashlib.sha256(metrics_bytes).hexdigest() if metrics_bytes is not None else None,
             }
         )
-        if not _publication_marker_matches(run.summary, _EVALUATION_ARTIFACT_FINGERPRINT_KEY, artifact_fingerprint):
+        if not _publishing_marker_matches(run.summary, _EVALUATION_ARTIFACT_FINGERPRINT_KEY, artifact_fingerprint):
             try:
                 artifact = wandb.Artifact(f"safe-synthesizer-evaluation-report-{run.id}", type="evaluation-report")
                 if report_bytes is not None:
@@ -226,25 +226,25 @@ def publish_evaluation_report(
                 if metrics_bytes is not None:
                     artifact.add_file(str(metrics_path), name="evaluation_metrics.json")
                 run.log_artifact(artifact)
-                publication_succeeded &= _record_publication_marker(
+                publishing_succeeded &= _record_publishing_marker(
                     run.summary,
                     _EVALUATION_ARTIFACT_FINGERPRINT_KEY,
                     artifact_fingerprint,
                 )
-            except Exception as exc:  # noqa: BLE001 -- W&B publication is optional
+            except Exception as exc:  # noqa: BLE001 -- W&B publishing is optional
                 logger.runtime.warning("Failed to publish W&B evaluation report artifact: %s", exc)
-                publication_succeeded = False
+                publishing_succeeded = False
 
     try:
-        publication_summary = {
+        publishing_summary = {
             "evaluation/report_uploaded_post_run": report_uploaded,
             "evaluation/report_sha256": report_sha256,
         }
-        if publication_succeeded:
-            publication_summary[_EVALUATION_PUBLICATION_FINGERPRINT_KEY] = fingerprint
-        run.summary.update(publication_summary)
-    except Exception as exc:  # noqa: BLE001 -- W&B publication is optional
-        logger.runtime.warning("Failed to update W&B evaluation publication summary: %s", exc)
+        if publishing_succeeded:
+            publishing_summary[_EVALUATION_PUBLISHING_FINGERPRINT_KEY] = fingerprint
+        run.summary.update(publishing_summary)
+    except Exception as exc:  # noqa: BLE001 -- W&B publishing is optional
+        logger.runtime.warning("Failed to update W&B evaluation publishing summary: %s", exc)
 
 
 def _read_optional_file(path: Path, file_description: str) -> bytes | None:
@@ -263,13 +263,13 @@ def _read_optional_file(path: Path, file_description: str) -> bytes | None:
         return None
 
 
-def _evaluation_publication_fingerprint(
+def _evaluation_publishing_fingerprint(
     eval_metrics: dict[str, float | int | None],
     upload_report: bool,
     report_bytes: bytes | None,
     metrics_bytes: bytes | None,
 ) -> str:
-    """Return a stable marker for the exact CLI evaluation publication payload."""
+    """Return a stable marker for the exact CLI evaluation publishing payload."""
     return _fingerprint_payload(
         {
             "eval_metrics": eval_metrics,
@@ -285,22 +285,22 @@ def _fingerprint_payload(payload: dict[str, object]) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
-def _publication_marker_matches(summary: Any, key: str, fingerprint: str) -> bool:
-    """Return whether a best-effort W&B publication marker matches."""
+def _publishing_marker_matches(summary: Any, key: str, fingerprint: str) -> bool:
+    """Return whether a best-effort W&B publishing marker matches."""
     try:
         return summary.get(key) == fingerprint
-    except Exception as exc:  # noqa: BLE001 -- publication remains best-effort
-        logger.runtime.warning("Failed to read W&B evaluation publication marker %s: %s", key, exc)
+    except Exception as exc:  # noqa: BLE001 -- publishing remains best-effort
+        logger.runtime.warning("Failed to read W&B evaluation publishing marker %s: %s", key, exc)
         return False
 
 
-def _record_publication_marker(summary: Any, key: str, fingerprint: str) -> bool:
-    """Persist a best-effort W&B publication marker after an operation succeeds."""
+def _record_publishing_marker(summary: Any, key: str, fingerprint: str) -> bool:
+    """Persist a best-effort W&B publishing marker after an operation succeeds."""
     try:
         summary.update({key: fingerprint})
         return True
-    except Exception as exc:  # noqa: BLE001 -- publication remains best-effort
-        logger.runtime.warning("Failed to update W&B evaluation publication marker %s: %s", key, exc)
+    except Exception as exc:  # noqa: BLE001 -- publishing remains best-effort
+        logger.runtime.warning("Failed to update W&B evaluation publishing marker %s: %s", key, exc)
         return False
 
 

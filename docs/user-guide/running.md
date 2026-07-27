@@ -218,7 +218,7 @@ all others have defaults or are optional.
 | `--log-color` / `--no-log-color` | `NSS_LOG_COLOR` | auto | Colorize console output (auto-detected from TTY) |
 | `--wandb-mode` | `NSS_WANDB_MODE` | `disabled` | WandB mode (`online`, `offline`, `disabled`) |
 | `--wandb-project` | `NSS_WANDB_PROJECT` | -- | WandB project name |
-| `--wandb-upload-evaluation-report` / `--no-wandb-upload-evaluation-report` | `NSS_WANDB_UPLOAD_EVALUATION_REPORT` | `true` | Control evaluation HTML and artifact publication |
+| `--wandb-upload-evaluation-report` / `--no-wandb-upload-evaluation-report` | `NSS_WANDB_UPLOAD_EVALUATION_REPORT` | `true` | Control evaluation HTML and artifact publishing |
 | `--dataset-registry` | `NSS_DATASET_REGISTRY` | -- | Dataset registry YAML path/URL |
 | `-v` / `-vv` | -- | -- | Verbose logging (`-v` debug, `-vv` debug + dependencies) |
 
@@ -1363,7 +1363,8 @@ the CLI publishes an `evaluation/scorecard` table panel containing final
 
 When W&B is active, the CLI publishes the HTML evaluation report to the
 user-configured project as the `evaluation/report` panel and the
-`evaluation-report` artifact. To retain only scalar W&B output, pass:
+`evaluation-report` artifact. To skip the HTML report panel and evaluation-report
+artifact while retaining summary metrics and the evaluation scorecard, pass:
 
     safe-synthesizer run \
       --config config.yaml \

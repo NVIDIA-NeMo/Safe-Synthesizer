@@ -141,6 +141,14 @@ class TestRunCommandOptions:
         assert result.exit_code == 0
         assert "--emit_telemetry" in result.output
 
+    def test_run_help_explains_wandb_report_opt_out(self, cli_runner: CliRunner):
+        """The W&B report opt-out describes the output that remains enabled."""
+        result = cli_runner.invoke(run, ["--help"])
+
+        assert result.exit_code == 0
+        assert "--no-wandb-upload-evaluation-report" in result.output
+        assert "summary metrics and the evaluation scorecard" in " ".join(result.output.split())
+
     @pytest.mark.parametrize(
         ("upload_args", "expected_upload"),
         [
@@ -159,7 +167,7 @@ class TestRunCommandOptions:
         patched_run_dependencies: dict,
         monkeypatch: pytest.MonkeyPatch,
     ):
-        """Evaluation report publication defaults on and supports explicit opt-out."""
+        """Evaluation report publishing defaults on and supports explicit opt-out."""
         monkeypatch.delenv("NSS_WANDB_UPLOAD_EVALUATION_REPORT", raising=False)
 
         with patch("nemo_safe_synthesizer.cli.run.publish_evaluation_report") as mock_publish:
