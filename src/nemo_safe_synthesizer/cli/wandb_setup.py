@@ -17,10 +17,9 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
 
+import wandb
 from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings
-
-import wandb
 
 from ..config import SafeSynthesizerParameters, SafeSynthesizerSummary
 from ..observability import get_logger
