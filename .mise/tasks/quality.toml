@@ -2,11 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 [format]
-description = "Format TOML and Python files with dprint and ruff, then fix SPDX copyright headers. Modifies files in place; run before committing."
+description = "Format all tracked source files with ruff and SPDX copyright fixer. Modifies files in place; run before committing."
 run = [
-    "dprint fmt --incremental=false",
-    "bash tools/codestyle/format.sh",
-    "uv run --script tools/codestyle/copyright_fixer.py .",
+  "bash tools/codestyle/format.sh",
+  "uv run --script tools/codestyle/copyright_fixer.py .",
 ]
 
 ["check:format"]
@@ -27,7 +26,7 @@ run = "bash tools/codestyle/typecheck.sh"
 ["check:lock"]
 description = "Verify generated CUDA metadata and uv.lock match their sources without modifying tracked files."
 run = [
-    "uv run --offline --frozen tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml --check",
+    "uv run --offline --frozen tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml --installer install_nss.sh --check",
     "uv lock --check",
 ]
 
