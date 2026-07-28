@@ -100,7 +100,7 @@ Defined in `pytest.ini` (`--strict-markers` is enabled):
 | `slow`         | Long-running tests                                                                               |
 | `smoke`        | Quick smoke tests (training/generation hot paths, tiny models)                                   |
 | `e2e`          | End-to-end pipeline tests (requires CUDA)                                                        |
-| `requires_gpu` | Test needs CUDA hardware (modifier, stacks on any category: `unit`/`smoke`/`e2e`)                |
+| `requires_gpu` | Test needs CUDA hardware and is automatically skipped when CUDA is unavailable                  |
 | `vllm`         | Tests using vLLM generation backend (each file runs in its own process for GPU memory isolation) |
 | `smollm2`      | SmolLM2 Hub download tests (mise tasks use for process isolation)                                |
 | `noautouse`    | Skip autouse fixtures for specific tests                                                         |
@@ -117,6 +117,10 @@ The other markers modify the 3 categories, indicating when they should be run (`
 - No match -> `unit`
 
 Markers are only added if none of the 3 category markers (`unit`, `smoke`, `e2e`) are already present on the test item.
+
+When at least one collected test has `requires_gpu`, the same hook checks `torch.cuda.is_available()`. If CUDA is unavailable,
+those tests are skipped automatically. PyTorch is not imported and CUDA is not probed when the collected tests do not use the
+marker.
 
 ## Test Data Locations
 
