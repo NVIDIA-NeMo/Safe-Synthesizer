@@ -239,8 +239,10 @@ def test_opt_out_after_upload_preserves_uploaded_summary(tmp_path: Path) -> None
     ):
         wandb_setup.publish_evaluation_report(workdir, _summary(), upload_report=True)
         uploaded_sha = run.summary["evaluation/report_sha256"]
+        run.log_artifact.reset_mock()
         wandb_setup.publish_evaluation_report(workdir, _summary(), upload_report=False)
 
+    run.log_artifact.assert_not_called()
     assert run.summary["evaluation/report_uploaded_post_run"] is True
     assert run.summary["evaluation/report_sha256"] == uploaded_sha
 
