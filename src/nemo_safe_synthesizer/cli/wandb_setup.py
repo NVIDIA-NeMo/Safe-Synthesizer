@@ -11,13 +11,16 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Callable
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
 
-import wandb
 from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings
+
+import wandb
 
 from ..config import SafeSynthesizerParameters, SafeSynthesizerSummary
 from ..observability import get_logger
@@ -29,6 +32,36 @@ _EVALUATION_PUBLISHING_FINGERPRINT_KEY = "_nss_evaluation_publishing_fingerprint
 _EVALUATION_SCORECARD_FINGERPRINT_KEY = "_nss_evaluation_scorecard_fingerprint"
 _EVALUATION_REPORT_FINGERPRINT_KEY = "_nss_evaluation_report_fingerprint"
 _EVALUATION_ARTIFACT_FINGERPRINT_KEY = "_nss_evaluation_artifact_fingerprint"
+
+
+@dataclass(frozen=True)
+class _PublishingOutcome:
+    """Result of one idempotent W&B publishing operation."""
+
+    published: bool
+    recorded: bool
+
+
+@dataclass(frozen=True)
+class _EvaluationPublishingPayload:
+    """Local evaluation data prepared for W&B publishing."""
+
+    eval_metrics: dict[str, float | int | None]
+    report_path: Path
+    metrics_path: Path
+    report_bytes: bytes | None
+    metrics_bytes: bytes | None
+    report_sha256: str | None
+    metrics_sha256: str | None
+    fingerprint: str
+
+
+@dataclass(frozen=True)
+class _PublishedReportState:
+    """Durable state of the latest report known to exist in W&B."""
+
+    uploaded: bool
+    sha256: str | None
 
 
 def resolve_wandb_run_id(id_or_path: str) -> str:
@@ -160,91 +193,202 @@ def publish_evaluation_report(
     run = wandb.run
     if run is None:
         return
+    payload = _prepare_evaluation_publishing_payload(workdir, summary, upload_report)
+
+    if _publishing_marker_matches(run.summary, _EVALUATION_PUBLISHING_FINGERPRINT_KEY, payload.fingerprint):
+        return
+
+    previous_report_state = _read_published_report_state(run.summary)
+    scorecard_outcome = _publish_evaluation_scorecard(run, payload.eval_metrics)
+    report_outcome = _publish_evaluation_report_panel(run, payload)
+    artifact_outcome = _publish_evaluation_artifact(run, payload)
+    report_state = _updated_report_state(previous_report_state, report_outcome, payload.report_sha256)
+    publishing_recorded = all(outcome.recorded for outcome in (scorecard_outcome, report_outcome, artifact_outcome))
+    _update_evaluation_publishing_summary(
+        run.summary,
+        report_state=report_state,
+        publishing_fingerprint=payload.fingerprint if publishing_recorded else None,
+    )
+
+
+def _prepare_evaluation_publishing_payload(
+    workdir: Workdir,
+    summary: SafeSynthesizerSummary,
+    upload_report: bool,
+) -> _EvaluationPublishingPayload:
+    """Read and fingerprint the local evaluation data selected for publishing."""
     eval_metrics = {key: value for key, value in summary._wandb_metrics().items() if key.startswith("eval/")}
     report_path = workdir.evaluation_report
     metrics_path = workdir.evaluation_metrics
     report_bytes = _read_optional_file(report_path, "report") if upload_report else None
     metrics_bytes = _read_optional_file(metrics_path, "metrics") if upload_report else None
-    fingerprint = _evaluation_publishing_fingerprint(eval_metrics, upload_report, report_bytes, metrics_bytes)
+    report_sha256 = _optional_sha256(report_bytes)
+    metrics_sha256 = _optional_sha256(metrics_bytes)
+    fingerprint = _fingerprint_payload(
+        {
+            "eval_metrics": eval_metrics,
+            "upload_report": upload_report,
+            "report_sha256": report_sha256,
+            "metrics_sha256": metrics_sha256,
+        }
+    )
+    return _EvaluationPublishingPayload(
+        eval_metrics=eval_metrics,
+        report_path=report_path,
+        metrics_path=metrics_path,
+        report_bytes=report_bytes,
+        metrics_bytes=metrics_bytes,
+        report_sha256=report_sha256,
+        metrics_sha256=metrics_sha256,
+        fingerprint=fingerprint,
+    )
 
-    if _publishing_marker_matches(run.summary, _EVALUATION_PUBLISHING_FINGERPRINT_KEY, fingerprint):
-        return
 
-    publishing_succeeded = True
-    scorecard_fingerprint = _fingerprint_payload({"eval_metrics": eval_metrics})
-    if not _publishing_marker_matches(run.summary, _EVALUATION_SCORECARD_FINGERPRINT_KEY, scorecard_fingerprint):
-        try:
-            run.log(
-                {
-                    "evaluation/scorecard": wandb.Table(
-                        columns=["metric", "value"],
-                        data=[[key, value] for key, value in eval_metrics.items()],
-                    )
-                }
+def _publish_evaluation_scorecard(
+    run: Any,
+    eval_metrics: dict[str, float | int | None],
+) -> _PublishingOutcome:
+    """Publish the scorecard once for the current evaluation metrics."""
+    fingerprint = _fingerprint_payload({"eval_metrics": eval_metrics})
+    return _publish_once(
+        run.summary,
+        _EVALUATION_SCORECARD_FINGERPRINT_KEY,
+        fingerprint,
+        "scorecard",
+        lambda: _log_evaluation_scorecard(run, eval_metrics),
+    )
+
+
+def _publish_evaluation_report_panel(run: Any, payload: _EvaluationPublishingPayload) -> _PublishingOutcome:
+    """Publish the HTML report panel when report bytes are available."""
+    report_bytes = payload.report_bytes
+    if report_bytes is None or payload.report_sha256 is None:
+        return _PublishingOutcome(published=False, recorded=True)
+    fingerprint = _fingerprint_payload({"report_sha256": payload.report_sha256})
+    return _publish_once(
+        run.summary,
+        _EVALUATION_REPORT_FINGERPRINT_KEY,
+        fingerprint,
+        "report",
+        lambda: _log_evaluation_report(run, report_bytes),
+    )
+
+
+def _publish_evaluation_artifact(run: Any, payload: _EvaluationPublishingPayload) -> _PublishingOutcome:
+    """Publish an artifact when at least one evaluation file is available."""
+    if payload.report_bytes is None and payload.metrics_bytes is None:
+        return _PublishingOutcome(published=False, recorded=True)
+    fingerprint = _fingerprint_payload(
+        {
+            "report_sha256": payload.report_sha256,
+            "metrics_sha256": payload.metrics_sha256,
+        }
+    )
+    return _publish_once(
+        run.summary,
+        _EVALUATION_ARTIFACT_FINGERPRINT_KEY,
+        fingerprint,
+        "report artifact",
+        lambda: _log_evaluation_artifact(run, payload),
+    )
+
+
+def _publish_once(
+    summary: Any,
+    marker_key: str,
+    fingerprint: str,
+    description: str,
+    publish: Callable[[], None],
+) -> _PublishingOutcome:
+    """Publish one W&B object unless its durable marker already matches."""
+    if _publishing_marker_matches(summary, marker_key, fingerprint):
+        return _PublishingOutcome(published=True, recorded=True)
+    try:
+        publish()
+    except Exception as exc:  # noqa: BLE001 -- W&B publishing is optional
+        logger.runtime.warning("Failed to publish W&B evaluation %s: %s", description, exc)
+        return _PublishingOutcome(published=False, recorded=False)
+    return _PublishingOutcome(
+        published=True,
+        recorded=_record_publishing_marker(summary, marker_key, fingerprint),
+    )
+
+
+def _log_evaluation_scorecard(run: Any, eval_metrics: dict[str, float | int | None]) -> None:
+    """Log the final evaluation metrics as a W&B table panel."""
+    run.log(
+        {
+            "evaluation/scorecard": wandb.Table(
+                columns=["metric", "value"],
+                data=[[key, value] for key, value in eval_metrics.items()],
             )
-            publishing_succeeded &= _record_publishing_marker(
-                run.summary,
-                _EVALUATION_SCORECARD_FINGERPRINT_KEY,
-                scorecard_fingerprint,
-            )
-        except Exception as exc:  # noqa: BLE001 -- W&B publishing is optional
-            logger.runtime.warning("Failed to publish W&B evaluation scorecard: %s", exc)
-            publishing_succeeded = False
+        }
+    )
 
-    report_sha256 = hashlib.sha256(report_bytes).hexdigest() if report_bytes is not None else None
-    report_uploaded = False
-    if upload_report and report_bytes is not None:
-        report_fingerprint = _fingerprint_payload({"report_sha256": report_sha256})
-        if _publishing_marker_matches(run.summary, _EVALUATION_REPORT_FINGERPRINT_KEY, report_fingerprint):
-            report_uploaded = True
-        else:
-            try:
-                report_html = report_bytes.decode("utf-8")
-                run.log({"evaluation/report": wandb.Html(report_html, inject=False)})
-                report_uploaded = True
-                publishing_succeeded &= _record_publishing_marker(
-                    run.summary,
-                    _EVALUATION_REPORT_FINGERPRINT_KEY,
-                    report_fingerprint,
-                )
-            except Exception as exc:  # noqa: BLE001 -- W&B publishing is optional
-                logger.runtime.warning("Failed to publish W&B evaluation report: %s", exc)
-                publishing_succeeded = False
 
-    if upload_report and (report_bytes is not None or metrics_bytes is not None):
-        artifact_fingerprint = _fingerprint_payload(
-            {
-                "report_sha256": report_sha256,
-                "metrics_sha256": hashlib.sha256(metrics_bytes).hexdigest() if metrics_bytes is not None else None,
-            }
-        )
-        if not _publishing_marker_matches(run.summary, _EVALUATION_ARTIFACT_FINGERPRINT_KEY, artifact_fingerprint):
-            try:
-                artifact = wandb.Artifact(f"safe-synthesizer-evaluation-report-{run.id}", type="evaluation-report")
-                if report_bytes is not None:
-                    artifact.add_file(str(report_path), name="evaluation_report.html")
-                if metrics_bytes is not None:
-                    artifact.add_file(str(metrics_path), name="evaluation_metrics.json")
-                run.log_artifact(artifact)
-                publishing_succeeded &= _record_publishing_marker(
-                    run.summary,
-                    _EVALUATION_ARTIFACT_FINGERPRINT_KEY,
-                    artifact_fingerprint,
-                )
-            except Exception as exc:  # noqa: BLE001 -- W&B publishing is optional
-                logger.runtime.warning("Failed to publish W&B evaluation report artifact: %s", exc)
-                publishing_succeeded = False
+def _log_evaluation_report(run: Any, report_bytes: bytes) -> None:
+    """Log the saved evaluation report as a W&B HTML panel."""
+    run.log({"evaluation/report": wandb.Html(report_bytes.decode("utf-8"), inject=False)})
 
+
+def _log_evaluation_artifact(run: Any, payload: _EvaluationPublishingPayload) -> None:
+    """Log the available evaluation files as a W&B artifact."""
+    artifact = wandb.Artifact(f"safe-synthesizer-evaluation-report-{run.id}", type="evaluation-report")
+    if payload.report_bytes is not None:
+        artifact.add_file(str(payload.report_path), name="evaluation_report.html")
+    if payload.metrics_bytes is not None:
+        artifact.add_file(str(payload.metrics_path), name="evaluation_metrics.json")
+    run.log_artifact(artifact)
+
+
+def _update_evaluation_publishing_summary(
+    summary: Any,
+    *,
+    report_state: _PublishedReportState,
+    publishing_fingerprint: str | None,
+) -> None:
+    """Record durable evaluation publishing state without failing the pipeline."""
     try:
         publishing_summary = {
-            "evaluation/report_uploaded_post_run": report_uploaded,
-            "evaluation/report_sha256": report_sha256,
+            "evaluation/report_uploaded_post_run": report_state.uploaded,
+            "evaluation/report_sha256": report_state.sha256,
         }
-        if publishing_succeeded:
-            publishing_summary[_EVALUATION_PUBLISHING_FINGERPRINT_KEY] = fingerprint
-        run.summary.update(publishing_summary)
+        if publishing_fingerprint is not None:
+            publishing_summary[_EVALUATION_PUBLISHING_FINGERPRINT_KEY] = publishing_fingerprint
+        summary.update(publishing_summary)
     except Exception as exc:  # noqa: BLE001 -- W&B publishing is optional
         logger.runtime.warning("Failed to update W&B evaluation publishing summary: %s", exc)
+
+
+def _read_published_report_state(summary: Any) -> _PublishedReportState:
+    """Read the report state already persisted in the W&B summary."""
+    uploaded = _read_publishing_summary_value(summary, "evaluation/report_uploaded_post_run", False)
+    sha256 = _read_publishing_summary_value(summary, "evaluation/report_sha256", None)
+    return _PublishedReportState(
+        uploaded=uploaded is True,
+        sha256=sha256 if isinstance(sha256, str) else None,
+    )
+
+
+def _updated_report_state(
+    previous: _PublishedReportState,
+    outcome: _PublishingOutcome,
+    report_sha256: str | None,
+) -> _PublishedReportState:
+    """Return the latest report state known to have reached W&B."""
+    if outcome.published and report_sha256 is not None:
+        return _PublishedReportState(uploaded=True, sha256=report_sha256)
+    return previous
+
+
+def _read_publishing_summary_value(summary: Any, key: str, default: object) -> object:
+    """Read a durable W&B publishing value without failing the pipeline."""
+    try:
+        value = summary.get(key)
+    except Exception as exc:  # noqa: BLE001 -- publishing remains best-effort
+        logger.runtime.warning("Failed to read W&B evaluation publishing value %s: %s", key, exc)
+        return default
+    return default if value is None else value
 
 
 def _read_optional_file(path: Path, file_description: str) -> bytes | None:
@@ -263,21 +407,9 @@ def _read_optional_file(path: Path, file_description: str) -> bytes | None:
         return None
 
 
-def _evaluation_publishing_fingerprint(
-    eval_metrics: dict[str, float | int | None],
-    upload_report: bool,
-    report_bytes: bytes | None,
-    metrics_bytes: bytes | None,
-) -> str:
-    """Return a stable marker for the exact CLI evaluation publishing payload."""
-    return _fingerprint_payload(
-        {
-            "eval_metrics": eval_metrics,
-            "upload_report": upload_report,
-            "report_sha256": hashlib.sha256(report_bytes).hexdigest() if report_bytes is not None else None,
-            "metrics_sha256": hashlib.sha256(metrics_bytes).hexdigest() if metrics_bytes is not None else None,
-        }
-    )
+def _optional_sha256(content: bytes | None) -> str | None:
+    """Hash optional evaluation content."""
+    return hashlib.sha256(content).hexdigest() if content is not None else None
 
 
 def _fingerprint_payload(payload: dict[str, object]) -> str:

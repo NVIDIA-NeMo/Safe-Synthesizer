@@ -109,6 +109,7 @@ def test_publish_opt_in_has_hermetic_scorecard_media_artifact_and_sha(tmp_path: 
             ],
         )
     ]
+    run.log_artifact.assert_called_once_with(fake_artifacts[0])
     assert run.summary["evaluation/report_sha256"] == hashlib.sha256(workdir.evaluation_report.read_bytes()).hexdigest()
 
 
@@ -120,6 +121,24 @@ def test_identical_resume_in_a_fresh_process_is_suppressed(tmp_path: Path) -> No
         run.log.reset_mock()  # Simulate a fresh process retaining only W&B summary state.
         wandb_setup.publish_evaluation_report(workdir, _summary(), upload_report=False)
     run.log.assert_not_called()
+
+
+def test_identical_opt_in_resume_does_not_duplicate_media_or_artifact(tmp_path: Path) -> None:
+    """A completed opt-in publication is suppressed by its persisted marker."""
+    workdir, run = _workdir(tmp_path), _run()
+    with (
+        patch.object(wandb_setup.wandb, "run", run),
+        patch.object(wandb_setup.wandb, "Table", return_value=MagicMock()),
+        patch.object(wandb_setup.wandb, "Html", return_value=MagicMock()),
+        patch.object(wandb_setup.wandb, "Artifact", side_effect=FakeArtifact),
+    ):
+        wandb_setup.publish_evaluation_report(workdir, _summary(), upload_report=True)
+        run.log.reset_mock()
+        run.log_artifact.reset_mock()
+        wandb_setup.publish_evaluation_report(workdir, _summary(), upload_report=True)
+
+    run.log.assert_not_called()
+    run.log_artifact.assert_not_called()
 
 
 def test_changed_evaluation_output_publishes_a_new_report(tmp_path: Path) -> None:
@@ -193,6 +212,37 @@ def test_missing_report_and_metrics_warn_without_raising(tmp_path: Path, caplog:
         wandb_setup.publish_evaluation_report(workdir, _summary(), upload_report=True)
     assert "report upload requested but file is missing" in caplog.text
     assert "metrics upload requested but file is missing" in caplog.text
+
+
+def test_missing_local_report_on_resume_preserves_uploaded_summary(tmp_path: Path) -> None:
+    """A missing local file does not erase the durable state of an earlier upload."""
+    workdir, run = _workdir(tmp_path), _run()
+    with (
+        patch.object(wandb_setup.wandb, "run", run),
+        patch.object(wandb_setup.wandb, "Artifact", side_effect=FakeArtifact),
+    ):
+        wandb_setup.publish_evaluation_report(workdir, _summary(), upload_report=True)
+        uploaded_sha = run.summary["evaluation/report_sha256"]
+        workdir.evaluation_report.unlink()
+        wandb_setup.publish_evaluation_report(workdir, _summary(), upload_report=True)
+
+    assert run.summary["evaluation/report_uploaded_post_run"] is True
+    assert run.summary["evaluation/report_sha256"] == uploaded_sha
+
+
+def test_opt_out_after_upload_preserves_uploaded_summary(tmp_path: Path) -> None:
+    """Opting out later does not erase the durable state of an earlier upload."""
+    workdir, run = _workdir(tmp_path), _run()
+    with (
+        patch.object(wandb_setup.wandb, "run", run),
+        patch.object(wandb_setup.wandb, "Artifact", side_effect=FakeArtifact),
+    ):
+        wandb_setup.publish_evaluation_report(workdir, _summary(), upload_report=True)
+        uploaded_sha = run.summary["evaluation/report_sha256"]
+        wandb_setup.publish_evaluation_report(workdir, _summary(), upload_report=False)
+
+    assert run.summary["evaluation/report_uploaded_post_run"] is True
+    assert run.summary["evaluation/report_sha256"] == uploaded_sha
 
 
 @pytest.mark.parametrize("failure", ["media", "artifact", "summary"])
