@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import importlib
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import (
     TYPE_CHECKING,
@@ -33,7 +34,9 @@ if TYPE_CHECKING:
 
 __all__ = [
     "QuantizationScheme",
+    "ResolvedTrainingBatching",
     "TrainingHyperparams",
+    "TrainingMemoryControls",
 ]
 
 
@@ -151,6 +154,82 @@ class QuantizationScheme(StrEnum):
 ValueGTZero = ValueValidator(lambda p: range_validator(p, lambda v: v >= 0))
 
 
+@dataclass(frozen=True)
+class ResolvedTrainingBatching:
+    """Trainer batch arguments resolved from configured logical batch semantics."""
+
+    per_device_train_batch_size: int
+    gradient_accumulation_steps: int
+    effective_batch_size: int
+
+
+def _largest_divisor_at_most(value: int, limit: int) -> int:
+    """Return the largest positive divisor of ``value`` that is no larger than ``limit``."""
+    for candidate in range(min(value, limit), 0, -1):
+        if value % candidate == 0:
+            return candidate
+    return 1
+
+
+class TrainingMemoryControls(Parameters):
+    """Advanced memory/OOM controls for the differentially private training path.
+
+    These knobs trade speed or extra logging for lower peak VRAM and only take
+    effect when differential privacy is enabled (the controls live on the DP
+    ``OpacusDPTrainer`` loss path). Defaults reproduce the standard
+    (non-chunked, bf16-autocast) behavior, so leaving the group untouched
+    changes nothing.
+    """
+
+    disable_dp_bf16: Annotated[
+        bool,
+        Field(
+            title="disable_dp_bf16",
+            description=(
+                "Disable the Trainer's bf16 autocast during DP training so model outputs stay "
+                "in their original dtype. Mitigates the fp32 logits-upcast memory spike at the "
+                "cost of speed. Only applies when differential privacy is enabled."
+            ),
+        ),
+    ] = False
+
+    chunked_causal_lm_loss: Annotated[
+        bool,
+        Field(
+            title="chunked_causal_lm_loss",
+            description=(
+                "Compute causal-LM cross entropy in token chunks instead of upcasting all "
+                "logits to fp32 at once, reducing peak VRAM at a small speed cost. Only applies "
+                "to DP training."
+            ),
+        ),
+    ] = False
+
+    chunked_causal_lm_loss_tokens: Annotated[
+        int,
+        ValueValidator(value_func=lambda v: v >= 1),
+        Field(
+            title="chunked_causal_lm_loss_tokens",
+            description=(
+                "Token chunk size used when chunked_causal_lm_loss is enabled. Smaller values "
+                "use less memory per chunk. Must be >= 1."
+            ),
+        ),
+    ] = 1024
+
+    debug_loss_memory: Annotated[
+        bool,
+        Field(
+            title="debug_loss_memory",
+            description=(
+                "Log coarse CUDA memory buckets around the causal-LM fp32 logits upcast for diagnostics. "
+                "Logging only -- does not change training behavior. Only applies to DP training. "
+                "Treat these diagnostics as internal debugging output, not as a released DP artifact."
+            ),
+        ),
+    ] = False
+
+
 class TrainingHyperparams(Parameters):
     """Hyperparameters that control the training process behavior.
 
@@ -185,18 +264,43 @@ class TrainingHyperparams(Parameters):
         ),
     ] = 1
 
+    max_physical_batch_size: Annotated[
+        OptionalAutoInt,
+        ValueValidator(value_func=lambda v: v == AUTO_STR or v is None or v >= 1),
+        Field(
+            title="max_physical_batch_size",
+            description=(
+                "Optional cap for the physical per-device microbatch sent to the Trainer. "
+                "Set to 'auto' or None to leave physical batching unchanged. "
+                "When set below batch_size, the configured logical batch "
+                "is preserved by increasing gradient_accumulation_steps."
+            ),
+        ),
+    ] = AUTO_STR
+
     gradient_accumulation_steps: Annotated[
-        int,
-        ValueValidator(value_func=lambda v: v >= 1),
+        AutoIntParam,
+        ValueValidator(value_func=lambda v: v == AUTO_STR or v >= 1),
         Field(
             title="gradient_accumulation_steps",
             description=(
                 "Number of update steps to accumulate the gradients for, before "
                 "performing a backward/update pass. This technique increases "
-                "the effective batch size that will fit into GPU memory. Must be >= 1."
+                "the effective batch size that will fit into GPU memory. Must be >= 1 "
+                "or 'auto'. When set to 'auto', batch_size is treated as the logical "
+                "per-device batch target and accumulation is derived from max_physical_batch_size."
             ),
         ),
     ] = 8
+
+    memory: TrainingMemoryControls = Field(
+        title="memory",
+        description=(
+            "Advanced memory/OOM controls applied during differentially private training "
+            "(chunked loss, bf16 autocast disable, loss-memory diagnostics)."
+        ),
+        default_factory=TrainingMemoryControls,
+    )
 
     weight_decay: Annotated[
         float,
@@ -360,6 +464,13 @@ class TrainingHyperparams(Parameters):
         ),
     ] = None
 
+    def resolve_quantization_scheme(self) -> QuantizationScheme:
+        """Return the effective quantization scheme, including legacy bit aliases."""
+        if self.quantization_scheme is not None:
+            return self.quantization_scheme
+        legacy_bits = self.__dict__.get("quantization_bits", 8)
+        return QuantizationScheme.from_alias(legacy_bits)
+
     peft_implementation: Annotated[
         str,
         Field(
@@ -396,11 +507,40 @@ class TrainingHyperparams(Parameters):
 
     @property
     def effective_batch_size(self) -> int:
-        """Effective batch size = ``batch_size * gradient_accumulation_steps``.
+        """Effective per-device batch size after resolving accumulation semantics.
 
         This is the number of examples that contribute to each optimizer
         update (the "global" batch seen by the loss curve). Canonical
         source for any caller that needs this product -- used by preflight
         checks and logged by the training callbacks.
         """
+        if self.gradient_accumulation_steps == AUTO_STR:
+            return self.batch_size
         return self.batch_size * self.gradient_accumulation_steps
+
+    def resolve_batching(self) -> ResolvedTrainingBatching:
+        """Resolve Trainer batch args while preserving configured logical batch size.
+
+        ``batch_size`` and ``gradient_accumulation_steps`` define the logical
+        batch used for optimizer updates and DP accounting. When
+        ``gradient_accumulation_steps`` is ``"auto"``, ``batch_size`` is the
+        logical target and accumulation is derived. ``max_physical_batch_size``
+        only caps the physical microbatch passed to the Trainer.
+        """
+        effective_batch_size = self.effective_batch_size
+        max_physical_batch_size = self.max_physical_batch_size
+        if max_physical_batch_size in (AUTO_STR, None):
+            physical_batch_size = self.batch_size
+        elif self.batch_size <= max_physical_batch_size:
+            physical_batch_size = self.batch_size
+        else:
+            physical_batch_size = _largest_divisor_at_most(
+                value=effective_batch_size,
+                limit=max_physical_batch_size,
+            )
+
+        return ResolvedTrainingBatching(
+            per_device_train_batch_size=physical_batch_size,
+            gradient_accumulation_steps=effective_batch_size // physical_batch_size,
+            effective_batch_size=effective_batch_size,
+        )

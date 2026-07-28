@@ -142,8 +142,13 @@ for the full field list.
 | Field | Default | Description | Guidance |
 |-------|---------|-------------|----------|
 | `training.learning_rate` | `"auto"` | Initial learning rate for the `AdamW` optimizer. `"auto"` selects a model-specific default (Mistral: 1e-4, others: 5e-4) | Leave at `"auto"` for most cases; override with a float in (0, 1) to tune manually |
-| `training.batch_size` | `1` | Per-device batch size | Leave at 1; increase `gradient_accumulation_steps` for a larger effective batch |
-| `training.gradient_accumulation_steps` | `8` | Steps to accumulate before a backward pass; effective batch size = `batch_size` x this value | 8--32 typical |
+| `training.batch_size` | `1` | Per-device batch target. With integer `gradient_accumulation_steps`, effective batch size is `batch_size` x `gradient_accumulation_steps`; with `"auto"` accumulation, `batch_size` is the logical target | Leave at 1 for memory-constrained runs; increase only when VRAM headroom is available |
+| `training.max_physical_batch_size` | `"auto"` | Optional cap on the physical per-device microbatch sent to the Trainer. A numeric cap preserves the logical effective batch by increasing accumulation when possible | Use 1--4 to recover from activation OOMs while preserving the configured logical batch; leave `"auto"` otherwise |
+| `training.gradient_accumulation_steps` | `8` | Steps to accumulate before a backward pass; accepts an integer or `"auto"`. `"auto"` derives accumulation from `batch_size` and `max_physical_batch_size` | 8--32 typical for integer values; use `"auto"` with `max_physical_batch_size` for OOM triage |
+| `training.memory.disable_dp_bf16` | `false` | Disable the Trainer's bf16 autocast during DP training so model outputs stay in their original dtype. Only applies when DP is enabled | Enable to mitigate the fp32 logits-upcast memory spike at a speed cost |
+| `training.memory.chunked_causal_lm_loss` | `false` | Compute causal-LM cross entropy in token chunks instead of upcasting all logits to fp32 at once. DP path only | Enable for large-vocab OOMs at the loss upcast; small speed cost |
+| `training.memory.chunked_causal_lm_loss_tokens` | `1024` | Token chunk size used when `chunked_causal_lm_loss` is enabled (must be >= 1) | Lower (e.g. 256--512) for more memory savings per chunk |
+| `training.memory.debug_loss_memory` | `false` | Log coarse CUDA memory buckets around the causal-LM fp32 logits upcast for diagnostics. Logging only -- does not change training behavior. DP path only. Treat as internal debugging output, not a released DP artifact | Enable when diagnosing where DP training OOMs |
 | `training.num_input_records_to_sample` | `"auto"` | Records the model sees during training -- proxy for training time (`"auto"` or int) | First knob to increase if quality is low |
 | `training.lora_r` | `32` | LoRA rank; lower values produce fewer trainable parameters | 16--64 typical; 32 is a reasonable default |
 | `training.lora_alpha_over_r` | `1.0` | LoRA scaling ratio (alpha / rank) | Leave at 1.0 |
@@ -155,6 +160,23 @@ for the full field list.
 | `training.rope_scaling_factor` | `"auto"` | Scale the base model's context window via RoPE (`"auto"` or int) | Leave at `"auto"` |
 | `training.validation_ratio` | `0.0` | Fraction of training data held out for validation loss monitoring | Leave at 0.0 unless you specifically want to monitor validation loss |
 | `training.max_vram_fraction` | `0.8` | Fraction of total GPU VRAM to allocate for training. Must be in [0, 1] | Lower if other GPU consumers are active on the same device |
+
+Pass `memory` as a nested dictionary when configuring these controls through
+the Python SDK. A canonical dotted keyword is also accepted through `**`
+expansion. Bare memory-control fields are not direct `with_train()` keyword
+arguments; an attempted bare field reports the accepted nested path.
+
+```python
+from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+
+synthesizer = SafeSynthesizer().with_train(
+    memory={"chunked_causal_lm_loss": True, "chunked_causal_lm_loss_tokens": 256}
+)
+
+synthesizer = SafeSynthesizer().with_train(
+    **{"memory.chunked_causal_lm_loss": True}
+)
+```
 
 !!! note "validation_ratio vs holdout"
     `training.validation_ratio` splits the training data to monitor
@@ -288,6 +310,7 @@ learn about any individual record. Safe Synthesizer implements DP-SGD
 | `privacy.epsilon` | `8.0` | Privacy budget -- lower values give stronger privacy | 4.0--12.0 typical; values below 4.0 may make convergence difficult |
 | `privacy.delta` | `"auto"` | Privacy failure probability (`"auto"` or float) | Leave at `"auto"` |
 | `privacy.per_sample_max_grad_norm` | `1.0` | Max L2 norm for per-sample gradients | Leave at 1.0 |
+| `privacy.grad_sample_mode` | `"hooks"` | Opacus per-sample gradient mode: `"hooks"` for standard GradSampleModule behavior, `"ghost"` for Fast/Ghost Gradient Clipping | Use `"ghost"` when DP training OOMs from per-sample gradient memory on supported layers |
 
 Compatibility constraints:
 

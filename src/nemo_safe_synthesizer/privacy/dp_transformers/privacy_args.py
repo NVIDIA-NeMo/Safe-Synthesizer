@@ -24,7 +24,7 @@ from typing import Literal, cast
 import numpy as np
 from opacus.accountants import RDPAccountant
 from opacus.accountants.utils import get_noise_multiplier as opacus_get_noise_multiplier
-from prv_accountant import Accountant as PRVAccountant
+from prv_accountant import PoissonSubsampledGaussianMechanism, PRVAccountant
 from scipy import optimize
 
 from ...observability import get_logger
@@ -72,11 +72,15 @@ def _create_prv_accountant(
         with warnings.catch_warnings(), np.errstate(over="raise", invalid="raise"):
             warnings.filterwarnings("error", message="overflow", category=RuntimeWarning)
             return PRVAccountant(
-                noise_multiplier=noise_multiplier,
-                sampling_probability=sampling_probability,
-                delta=delta,
-                max_compositions=max_compositions,
+                [
+                    PoissonSubsampledGaussianMechanism(
+                        sampling_probability=sampling_probability,
+                        noise_multiplier=noise_multiplier,
+                    )
+                ],
                 eps_error=eps_error,
+                delta_error=delta / 1000,
+                max_self_compositions=[max_compositions],
             )
     except (FloatingPointError, RuntimeWarning, OverflowError) as exc:
         raise RuntimeError(
@@ -146,7 +150,7 @@ class SafeSynthesizerAccountant:
             # gradient-accumulation batch at the end of an epoch.
             steps = min(steps, self.max_compositions)
             acct = cast(PRVAccountant, self.accountant)
-            return acct.compute_epsilon(steps)[2]
+            return acct.compute_epsilon(self.delta, [steps])[2]
         else:
             acct = cast(RDPAccountant, self.accountant)
             return acct.get_epsilon(self.delta)
@@ -300,7 +304,7 @@ def prv_find_noise_multiplier(
             max_compositions=num_steps + 1,
             eps_error=eps_error / 4,
         )
-        return acc.compute_epsilon(num_steps)
+        return acc.compute_epsilon(target_delta, [num_steps])
 
     mu_max = 100.0
 

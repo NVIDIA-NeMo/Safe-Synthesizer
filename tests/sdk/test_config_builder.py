@@ -96,6 +96,23 @@ def test_with_generate_validates_typed_config_with_kwargs():
         ConfigBuilder().with_generate(config=GenerateParameters(num_records=10), patience=0)
 
 
+def test_with_train_accepts_dotted_memory_override():
+    builder = ConfigBuilder().with_train(
+        **{"memory.chunked_causal_lm_loss": True}  # ty: ignore[invalid-argument-type] -- dotted names require dynamic keywords
+    )
+
+    assert builder._training_config.memory.chunked_causal_lm_loss is True
+    assert builder._training_config.model_dump(exclude_unset=True) == {"memory": {"chunked_causal_lm_loss": True}}
+
+
+def test_with_train_rejects_inferred_bare_memory_leaf():
+    with pytest.raises(
+        ParameterError,
+        match=r"Nested parameter name 'chunked_causal_lm_loss'.*memory\.chunked_causal_lm_loss.*memory",
+    ):
+        ConfigBuilder().with_train(chunked_causal_lm_loss=True)
+
+
 def test_with_generate_preserves_sparse_typed_config_fields():
     builder = ConfigBuilder().with_generate(config=GenerateParameters(num_records=10))
 

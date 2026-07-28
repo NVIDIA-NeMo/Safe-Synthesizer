@@ -191,7 +191,7 @@ def estimate_base_model_params(autoconfig: PretrainedConfig) -> tuple[int, Liter
 
 
 def bytes_per_base_weight(training_cfg: TrainingHyperparams) -> float:
-    r"""Return expected bytes/param for the base model load mode.
+    r"""Return expected bytes/param for the base model.
 
     NSS always trains via LoRA-style adapters, so the base model's storage
     precision dominates VRAM (LoRA adapter params, gradients, and
@@ -217,15 +217,11 @@ def bytes_per_base_weight(training_cfg: TrainingHyperparams) -> float:
           scales; the \(+0.1\) term accounts for these scales and the
           dequant workspace. <https://arxiv.org/abs/2305.14314>
     """
-    if training_cfg.quantize_model:
-        # Prefer the explicit scheme if set; otherwise fall back to the legacy
-        # bits-based field. Both routes yield bits/param for memory estimation.
-        if training_cfg.quantization_scheme is not None:
-            bits = training_cfg.quantization_scheme.effective_bits
-        else:
-            bits = training_cfg.quantization_bits
-        return bits / 8 + 0.1
-    return 2.0
+    if not training_cfg.quantize_model:
+        return 2.0
+
+    bits = training_cfg.resolve_quantization_scheme().effective_bits
+    return bits / 8 + 0.1
 
 
 _VRAM_LEGACY_OVERHEAD_GIB = 2.0
@@ -274,9 +270,9 @@ def activation_memory_gib(
 ) -> float:
     r"""Rough activation VRAM on one device given micro-batch geometry.
 
-    Uses ``training.batch_size`` (HF ``per_device_train_batch_size``), not
-    ``gradient_accumulation_steps``. Matches bf16-ish training tensors at
-    2 bytes/element:
+    Uses the resolved physical microbatch (HF
+    ``per_device_train_batch_size``), not the logical batch or accumulation
+    count. Matches bf16-ish training tensors at 2 bytes/element:
 
     \[
         M_\text{act} \approx B \cdot S \cdot H \cdot L \cdot 2\text{ bytes}
@@ -388,24 +384,26 @@ class VRAMHeadroomCheck(MetadataCheck):
         model_name = getattr(autoconfig, "_name_or_path", None) or getattr(autoconfig, "model_type", "model")
         if method == "exact":
             logger.info(
-                "VRAM estimate: counted %.2fB parameters for %s via meta-tensor instantiation",
+                "VRAM estimate: counted %.2f billion parameters for %s via meta-tensor instantiation.",
                 n_params / 1e9,
                 model_name,
             )
         else:
             logger.info(
                 "VRAM estimate: meta-tensor instantiation unavailable for %s; falling back to shape "
-                "heuristic (~%.2fB parameters). This estimate is approximate; actual VRAM usage may "
+                "heuristic (~%.2f billion parameters). This estimate is approximate; actual VRAM usage may "
                 "differ by 20-30%% or more for non-standard architectures (e.g. Nemotron, Mamba hybrids).",
                 model_name,
                 n_params / 1e9,
             )
 
+        batching = config.training.resolve_batching()
+        per_device_batch_size = batching.per_device_train_batch_size
         seq_len = getattr(ctx.metadata, "max_seq_length", None)
         comp = estimate_training_vram_components(
             n_params=n_params,
             training_cfg=config.training,
-            batch_size=config.training.batch_size,
+            batch_size=per_device_batch_size,
             seq_len=seq_len,
             hidden_size=getattr(autoconfig, "hidden_size", None),
             num_hidden_layers=getattr(autoconfig, "num_hidden_layers", None),
@@ -433,7 +431,7 @@ class VRAMHeadroomCheck(MetadataCheck):
                         f"~{comp.overhead_gib:.1f} GiB reserved){qualifier} "
                         f"exceeds available ~{max_free_gib:.1f} GiB "
                         f"(training.max_vram_fraction={config.training.max_vram_fraction:.2g}). "
-                        f"Per-device batch_size={config.training.batch_size}. {oom_risk}. "
+                        f"Per-device batch_size={per_device_batch_size}. {oom_risk}. "
                         "This remains an estimate -- attention blocks, adapters, optimizer state, and "
                         "checkpointing materially affect real usage."
                     ),

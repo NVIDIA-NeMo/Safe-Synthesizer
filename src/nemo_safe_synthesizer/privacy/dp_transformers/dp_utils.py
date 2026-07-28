@@ -16,10 +16,14 @@ wrapper with ``no_sync`` support.
 
 from __future__ import annotations
 
+import math
 import os
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
-from typing import Any, cast
+from importlib import import_module
+from importlib.metadata import PackageNotFoundError, version
+from types import MethodType
+from typing import Any, Literal, cast
 
 import opacus
 import pandas as pd
@@ -28,8 +32,10 @@ import torch
 from accelerate.optimizer import AcceleratedOptimizer
 from datasets import Dataset
 from opacus.accountants import RDPAccountant
+from packaging.version import InvalidVersion, Version
 from peft import PeftModel
 from torch import nn
+from torch.nn import functional as F
 from torch.utils.data import DataLoader
 from torch.utils.data import Dataset as TorchDataset
 from transformers import (
@@ -46,7 +52,9 @@ from transformers import (
 )
 from transformers.trainer import TRAINING_ARGS_NAME
 
-from ...observability import get_logger
+from ...config.training import TrainingMemoryControls
+from ...observability import NvmlPeakSampler, get_logger
+from ...training.training_observability import TRAINING_COMPLETE_EVENT, TrainingObservability
 from . import linear  # imported for side effects  # noqa
 from .privacy_args import (
     PrivacyArguments,
@@ -58,6 +66,115 @@ from .sampler import (
 )
 
 logger = get_logger(__name__)
+
+GradSampleMode = Literal["hooks", "ghost"]
+_MIN_GHOST_CLIPPING_OPACUS_VERSION = Version("1.6.0")
+
+
+def _gib_upper_bound_bucket(nbytes: int | float | None) -> float | None:
+    """Return a coarse power-of-two GiB upper bound for diagnostic memory values."""
+    if nbytes is None or nbytes <= 0:
+        return None
+    gib = nbytes / 1024**3
+    if gib <= 0.125:
+        return 0.125
+    return float(2 ** math.ceil(math.log2(gib)))
+
+
+def _log_cuda_loss_memory(stage: str, logits: torch.Tensor, *, enabled: bool) -> None:
+    """Log CUDA memory around the causal-LM fp32 logits upcast (no-op when disabled)."""
+    if not enabled:
+        return
+    if not torch.cuda.is_available() or not logits.is_cuda:
+        return
+
+    device = logits.device
+    free_bytes, total_bytes = torch.cuda.mem_get_info(device)
+    allocated_bytes = torch.cuda.memory_allocated(device)
+    reserved_bytes = torch.cuda.memory_reserved(device)
+    logger.warning(
+        f"CausalLM loss memory probe {stage}: "
+        f"logits_rank={logits.ndim} "
+        f"logits_dtype={logits.dtype} "
+        f"logits_gib_bucket_le={_gib_upper_bound_bucket(logits.numel() * logits.element_size())} "
+        f"allocated_gib_bucket_le={_gib_upper_bound_bucket(allocated_bytes)} "
+        f"reserved_gib_bucket_le={_gib_upper_bound_bucket(reserved_bytes)} "
+        f"reserved_unallocated_gib_bucket_le={_gib_upper_bound_bucket(reserved_bytes - allocated_bytes)} "
+        f"free_gib_bucket_le={_gib_upper_bound_bucket(free_bytes)} "
+        f"total_gib_bucket_le={_gib_upper_bound_bucket(total_bytes)}"
+    )
+
+
+class _ChunkedCrossEntropyFunction(torch.autograd.Function):
+    """Cross entropy that retains no full-vocabulary fp32 tensors for backward."""
+
+    @staticmethod
+    def forward(
+        ctx: Any,
+        logits: torch.Tensor,
+        shift_labels: torch.Tensor,
+        ignore_index: int,
+        chunk_size: int,
+    ) -> torch.Tensor:
+        ctx.save_for_backward(logits, shift_labels)
+        ctx.ignore_index = ignore_index
+        ctx.chunk_size = chunk_size
+
+        sequence_losses = []
+        for sequence_logits, sequence_labels in zip(logits, shift_labels, strict=True):
+            loss_sum = sequence_logits.reshape(-1)[0].float() * 0
+            valid_token_count = (sequence_labels != ignore_index).sum()
+            for start in range(0, sequence_logits.shape[0], chunk_size):
+                end = min(start + chunk_size, sequence_logits.shape[0])
+                loss_sum = loss_sum + F.cross_entropy(
+                    sequence_logits[start:end].float(),
+                    sequence_labels[start:end],
+                    ignore_index=ignore_index,
+                    reduction="sum",
+                )
+            sequence_losses.append(loss_sum / valid_token_count.clamp_min(1))
+        return torch.stack(sequence_losses).mean()
+
+    @staticmethod
+    def backward(ctx: Any, *grad_outputs: Any) -> tuple[torch.Tensor, None, None, None]:
+        grad_output = cast(torch.Tensor, grad_outputs[0])
+        logits, shift_labels = ctx.saved_tensors
+        grad_logits = torch.zeros_like(logits)
+        batch_size = logits.shape[0]
+        for sequence_index, sequence_labels in enumerate(shift_labels):
+            valid_token_count = (sequence_labels != ctx.ignore_index).sum().clamp_min(1)
+            for start in range(0, logits.shape[1], ctx.chunk_size):
+                end = min(start + ctx.chunk_size, logits.shape[1])
+                chunk_labels = sequence_labels[start:end]
+                keep = chunk_labels != ctx.ignore_index
+                chunk_grad = F.softmax(logits[sequence_index, start:end].float(), dim=-1)
+                safe_labels = chunk_labels.masked_fill(~keep, 0)
+                chunk_grad[torch.arange(chunk_grad.shape[0], device=logits.device), safe_labels] -= keep.to(
+                    chunk_grad.dtype
+                )
+                chunk_grad *= keep.unsqueeze(-1)
+                chunk_grad *= grad_output.float() / (batch_size * valid_token_count)
+                grad_logits[sequence_index, start:end] = chunk_grad.to(logits.dtype)
+        return grad_logits, None, None, None
+
+
+def _chunked_cross_entropy(
+    logits: torch.Tensor,
+    shift_labels: torch.Tensor,
+    *,
+    vocab_size: int,
+    ignore_index: int,
+    chunk_size: int,
+) -> torch.Tensor:
+    """Return the batch mean of per-sequence valid-token cross entropy."""
+    if logits.ndim != 3 or logits.shape[-1] != vocab_size or shift_labels.shape != logits.shape[:2]:
+        raise RuntimeError(
+            "DP causal-LM loss expected logits shaped [batch, tokens, vocab] "
+            f"and matching labels, got {tuple(logits.shape)} and {tuple(shift_labels.shape)}."
+        )
+    if not torch.any(shift_labels != ignore_index):
+        raise RuntimeError("DP causal-LM training requires at least one non-ignored label.")
+    return _ChunkedCrossEntropyFunction.apply(logits, shift_labels.to(logits.device), ignore_index, chunk_size)
 
 
 class DPCallback(TrainerCallback):
@@ -325,6 +442,45 @@ class GradSampleModule(opacus.GradSampleModule):
         yield
 
 
+@contextmanager
+def _no_sync_context(_model: nn.Module) -> Iterator[None]:
+    """Context manager that does nothing; required by Trainer's expected API."""
+    yield
+
+
+def _get_opacus_version() -> Version:
+    """Return the installed Opacus package version."""
+    try:
+        return Version(version("opacus"))
+    except PackageNotFoundError as err:
+        raise RuntimeError("Could not determine installed Opacus version.") from err
+    except InvalidVersion as err:
+        raise RuntimeError("Could not parse installed Opacus version.") from err
+
+
+def _load_ghost_clipping_classes() -> tuple[type[Any], type[Any], type[Any]]:
+    """Load Opacus Fast/Ghost Gradient Clipping classes after version gating."""
+    installed = _get_opacus_version()
+    if installed < _MIN_GHOST_CLIPPING_OPACUS_VERSION:
+        raise RuntimeError(
+            "DP grad_sample_mode='ghost' requires opacus>=1.6.0 because causal-LM "
+            f"ignore_index masking is required; found opacus=={installed}."
+        )
+
+    try:
+        grad_sample_module = import_module("opacus.grad_sample.grad_sample_module_fast_gradient_clipping")
+        optimizer_module = import_module("opacus.optimizers.optimizer_fast_gradient_clipping")
+        loss_module = import_module("opacus.utils.fast_gradient_clipping_utils")
+    except ImportError as err:
+        raise RuntimeError("Could not import Opacus Fast/Ghost Gradient Clipping classes.") from err
+
+    return (
+        grad_sample_module.GradSampleModuleFastGradientClipping,
+        optimizer_module.DPOptimizerFastGradientClipping,
+        loss_module.DPLossFastGradientClipping,
+    )
+
+
 def create_entity_mapping(entity_column_values: list) -> Sequence[Sequence[int]]:
     """Build a mapping from each entity to its dataset indices.
 
@@ -363,6 +519,9 @@ class OpacusDPTrainer(Trainer):
         model: Base model (will be wrapped with GradSampleModule).
         args: Training arguments (e.g. ``TrainingArguments``).
         privacy_args: DP parameters (epsilon, delta, noise, clipping). Required.
+        grad_sample_mode: Opacus per-sample gradient mode (``"hooks"`` or ``"ghost"``).
+        memory_controls: Advanced memory/OOM controls (chunked loss, bf16 disable,
+            loss-memory diagnostics). Defaults to all-off when omitted.
         data_fraction: If set, scales effective number of epochs for privacy math.
         true_dataset_size: Override number of entities/records for privacy accounting.
         entity_column_values: If set, entity-level DP; each value is the entity ID
@@ -383,6 +542,8 @@ class OpacusDPTrainer(Trainer):
         model: modeling_utils.PreTrainedModel | torch.nn.Module,
         args: training_args.TrainingArguments | None = None,
         privacy_args: PrivacyArguments | None = None,
+        grad_sample_mode: GradSampleMode = "hooks",
+        memory_controls: TrainingMemoryControls | None = None,
         data_fraction: float | None = None,
         true_dataset_size: int | None = None,
         entity_column_values: list | None = None,
@@ -396,6 +557,15 @@ class OpacusDPTrainer(Trainer):
             raise ValueError("PrivacyArguments is required for OpacusDPTrainer")
         self.train_args = args
         self.privacy_args = privacy_args
+        self.grad_sample_mode = grad_sample_mode
+        self.memory_controls = memory_controls or TrainingMemoryControls()
+        self._warn_if_ghost_memory_controls_ignored()
+        self._peak_loss_logits_bytes = 0
+        #: Last training-complete event, set by :meth:`train`; the backend forwards it to wandb.
+        self.last_training_observability: TrainingObservability | None = None
+        self.dp_loss: Any | None = None
+        self._ghost_optimizer_cls: type[Any] | None = None
+        self._ghost_loss_cls: type[Any] | None = None
         self.secure_mode = secure_mode
 
         if entity_column_values is None:
@@ -432,7 +602,19 @@ class OpacusDPTrainer(Trainer):
         assert pa.use_prv is not None
         assert pa.noise_multiplier is not None
 
-        model = GradSampleModule(model)
+        if grad_sample_mode == "hooks":
+            self._validate_hooks_model_loss_configuration(model)
+            model = GradSampleModule(model)
+        elif grad_sample_mode == "ghost":
+            grad_sample_cls, self._ghost_optimizer_cls, self._ghost_loss_cls = _load_ghost_clipping_classes()
+            model = grad_sample_cls(
+                model,
+                max_grad_norm=pa.per_sample_max_grad_norm,
+                loss_reduction="mean",
+            )
+            model.no_sync = MethodType(_no_sync_context, model)
+        else:
+            raise ValueError(f"Unsupported DP grad_sample_mode: {grad_sample_mode!r}")
 
         super().__init__(
             model=model,
@@ -441,6 +623,7 @@ class OpacusDPTrainer(Trainer):
             callbacks=callbacks,
             **kwargs,
         )
+        self._validate_hooks_loss_configuration()
         self.accountant = SafeSynthesizerAccountant(
             use_prv=pa.use_prv,
             noise_multiplier=pa.noise_multiplier,
@@ -524,23 +707,133 @@ class OpacusDPTrainer(Trainer):
             def param_groups(self, param_groups: list) -> None:
                 self.original_optimizer.param_groups = param_groups
 
-        optimizer_generator = DPOptimizer
-
         # TODO: explore better mitigation for precision based attacks on finite
         # precision devices
         # https://tpdp.journalprivacyconfidentiality.org/2022/papers/HaneyDHSH22.pdf
         pa = self.privacy_args
         assert pa is not None and pa.per_sample_max_grad_norm is not None and pa.noise_multiplier is not None
         assert self.optimizer is not None
-        self.optimizer = optimizer_generator(
+        optimizer_cls = self._make_ghost_optimizer_cls() if self.grad_sample_mode == "ghost" else DPOptimizer
+        optimizer_kwargs: dict[str, Any] = {}
+        if self.grad_sample_mode == "ghost":
+            optimizer_kwargs["loss_reduction"] = "mean"
+
+        self.optimizer = optimizer_cls(
             optimizer=self.optimizer,
             noise_multiplier=pa.noise_multiplier,
             max_grad_norm=pa.per_sample_max_grad_norm,
             expected_batch_size=self.args.per_device_train_batch_size * self.args.gradient_accumulation_steps,
             secure_mode=self.secure_mode,
+            **optimizer_kwargs,
         )
+        if self.grad_sample_mode == "ghost":
+            if self._ghost_loss_cls is None:
+                raise RuntimeError("Ghost clipping loss class is not initialized.")
+            criterion = nn.CrossEntropyLoss(ignore_index=-100, reduction="mean")
+            self.dp_loss = self._ghost_loss_cls(
+                self.model,
+                self.optimizer,
+                criterion,
+                loss_reduction="mean",
+            )
 
         return self.optimizer
+
+    def _make_ghost_optimizer_cls(self) -> type[Any]:
+        """Create a Fast/Ghost clipping optimizer class with Trainer-compatible param groups."""
+        if self._ghost_optimizer_cls is None:
+            raise RuntimeError("Ghost clipping optimizer class is not initialized.")
+        base_cls = self._ghost_optimizer_cls
+
+        class DPOptimizerGhostClipping(base_cls):
+            """Fast/Ghost clipping optimizer with Trainer-compatible param groups."""
+
+            @property
+            def param_groups(self) -> list:
+                return self.original_optimizer.param_groups
+
+            @param_groups.setter
+            def param_groups(self, param_groups: list) -> None:
+                self.original_optimizer.param_groups = param_groups
+
+        return DPOptimizerGhostClipping
+
+    def _record_peak_loss_logits(self, nbytes: int) -> None:
+        """Track the largest fp32 logits tensor seen by the loss for bucketed observability."""
+        if nbytes > self._peak_loss_logits_bytes:
+            self._peak_loss_logits_bytes = nbytes
+
+    def _validate_hooks_loss_configuration(self) -> None:
+        """Reject loss customizations that cannot preserve per-sequence clipping semantics."""
+        if self.grad_sample_mode != "hooks":
+            return
+        if self.compute_loss_func is not None:
+            raise ValueError("DP hooks mode does not support Trainer compute_loss_func overrides.")
+        if self.label_smoother is not None:
+            raise ValueError("DP hooks mode does not support Trainer label smoothing.")
+
+    def _validate_hooks_model_loss_configuration(self, model: nn.Module) -> None:
+        """Reject model-level loss overrides before wrapping the model with Opacus."""
+        if self.grad_sample_mode != "hooks":
+            return
+        if getattr(model, "_loss_function", None) is not None:
+            raise ValueError("DP hooks mode does not support model loss_function overrides.")
+        loss_type = getattr(model, "loss_type", None)
+        if loss_type not in (None, "ForCausalLM"):
+            raise ValueError(f"DP hooks mode supports only the default causal-LM loss, got loss_type={loss_type!r}.")
+
+    def _warn_if_ghost_memory_controls_ignored(self) -> None:
+        """Warn when hooks-only causal-LM memory controls are configured for ghost clipping."""
+        memory = self.memory_controls
+        if self.grad_sample_mode == "ghost" and (memory.debug_loss_memory or memory.chunked_causal_lm_loss):
+            logger.warning(
+                "DP memory controls debug_loss_memory and chunked_causal_lm_loss are "
+                "ignored for grad_sample_mode='ghost' because ghost clipping uses "
+                "Opacus' loss wrapper."
+            )
+
+    def train(self, *args: Any, **kwargs: Any) -> Any:
+        """Run training, sampling peak VRAM and emitting a ``training.complete`` event.
+
+        Wraps ``Trainer.train`` in an :class:`NvmlPeakSampler` and emits one
+        :class:`TrainingObservability` event even when training raises.
+        """
+        self._peak_loss_logits_bytes = 0
+        sampler = NvmlPeakSampler()
+        try:
+            with sampler:
+                return super().train(*args, **kwargs)
+        finally:
+            self._emit_training_observability(sampler.peak_gb)
+
+    def _emit_training_observability(self, peak_vram_gb: float | None) -> None:
+        """Assemble the ``training.complete`` event, log it, and stash it.
+
+        Writes the structured log line and stores the event on
+        :attr:`last_training_observability` for the backend to mirror to wandb;
+        this layer does not depend on the CLI/wandb module. Best-effort: any
+        failure here is logged and swallowed so observability never masks a
+        training error propagating through :meth:`train`'s ``finally``.
+        """
+        try:
+            per_device = getattr(self.args, "per_device_train_batch_size", None)
+            grad_accum = getattr(self.args, "gradient_accumulation_steps", None)
+            effective = per_device * grad_accum if per_device is not None and grad_accum is not None else None
+            event = TrainingObservability(
+                peak_vram_gb=peak_vram_gb,
+                peak_loss_logits_gb_bucket_le=_gib_upper_bound_bucket(self._peak_loss_logits_bytes),
+                per_device_train_batch_size=per_device,
+                gradient_accumulation_steps=grad_accum,
+                effective_batch_size=effective,
+                grad_sample_mode=self.grad_sample_mode,
+            )
+            self.last_training_observability = event
+            logger.runtime.info(TRAINING_COMPLETE_EVENT, extra={"ctx": event.model_dump()})
+        except Exception as exc:  # noqa: BLE001 -- observability must never break training
+            try:
+                logger.warning(f"failed to emit training observability: {exc}")
+            except Exception:  # noqa: BLE001 -- a faulty log handler must not raise from finally
+                pass
 
     def training_step(
         self,
@@ -569,19 +862,128 @@ class OpacusDPTrainer(Trainer):
         model.train()
         getattr(self.optimizer, "train", lambda: None)()
 
-        # Pass `num_items_in_batch=None` so the HF Trainer skips its built-in
-        # per-token scaling; Opacus already applies per-sample gradient scaling
-        # and we divide the logged loss by gradient_accumulation_steps below.
+        # Compute the hooks loss here so every sequence remains an independent
+        # privacy unit. Opacus applies clipping and accumulation scaling.
         inputs = self._prepare_inputs(inputs)
+        if self.grad_sample_mode == "ghost":
+            return self._ghost_clipping_training_step(model, inputs)
+
         with self.compute_loss_context_manager():
-            loss = self.compute_loss(model, inputs, num_items_in_batch=None)
-        if isinstance(loss, tuple):
-            loss = loss[0]
+            loss = self._compute_hooks_causal_lm_loss(model, inputs)
         del inputs
 
         loss.backward()
 
         return loss.detach() / self.args.gradient_accumulation_steps
+
+    def _compute_hooks_causal_lm_loss(self, model: nn.Module, inputs: dict[str, Any]) -> torch.Tensor:
+        """Compute a privacy-unit-separable causal-LM loss for hooks mode."""
+        labels = inputs.get("labels")
+        if labels is None:
+            raise RuntimeError("Hooks DP training requires labels in the batch.")
+
+        model_inputs = dict(inputs)
+        labels = model_inputs.pop("labels")
+        outputs = model(**model_inputs)
+        logits = getattr(outputs, "logits", None)
+        if logits is None and isinstance(outputs, dict):
+            logits = outputs.get("logits")
+        if logits is None and isinstance(outputs, tuple) and outputs:
+            tuple_logits = outputs[0]
+            if not torch.is_tensor(tuple_logits) or tuple_logits.ndim != 3:
+                raise RuntimeError(
+                    "DP hooks mode requires tuple model outputs to place 3D logits first; "
+                    "tuple outputs containing auxiliary losses are not supported."
+                )
+            logits = tuple_logits
+        if logits is None:
+            raise RuntimeError("Hooks DP training requires model outputs with logits.")
+        for auxiliary_loss_name in ("aux_loss", "router_aux_loss"):
+            auxiliary_loss = (
+                outputs.get(auxiliary_loss_name)
+                if isinstance(outputs, dict)
+                else getattr(outputs, auxiliary_loss_name, None)
+            )
+            if auxiliary_loss is not None:
+                raise RuntimeError(
+                    f"DP hooks mode does not support model-provided auxiliary loss {auxiliary_loss_name}; "
+                    "the loss must remain separable by sequence before clipping."
+                )
+
+        shift_labels = F.pad(labels, (0, 1), value=-100)[..., 1:].contiguous()
+        memory = self.memory_controls
+        if memory.debug_loss_memory:
+            self._record_peak_loss_logits(logits.numel() * 4)
+        _log_cuda_loss_memory("before_logits_float", logits, enabled=memory.debug_loss_memory)
+        if memory.chunked_causal_lm_loss:
+            return _chunked_cross_entropy(
+                logits,
+                shift_labels,
+                vocab_size=logits.shape[-1],
+                ignore_index=-100,
+                chunk_size=memory.chunked_causal_lm_loss_tokens,
+            )
+
+        logits = logits.float()
+        _log_cuda_loss_memory("after_logits_float", logits, enabled=memory.debug_loss_memory)
+        return _chunked_cross_entropy(
+            logits,
+            shift_labels,
+            vocab_size=logits.shape[-1],
+            ignore_index=-100,
+            chunk_size=logits.shape[1],
+        )
+
+    def _ghost_clipping_training_step(self, model: nn.Module, inputs: dict[str, Any]) -> torch.Tensor:
+        """Run one Fast/Ghost Gradient Clipping training step."""
+        with self.compute_loss_context_manager():
+            loss = self._compute_ghost_clipping_loss(model, inputs)
+        del inputs
+
+        loss.backward()
+        loss_value = torch.as_tensor(loss.item(), device=self.args.device)
+        return loss_value / self.args.gradient_accumulation_steps
+
+    def _compute_ghost_clipping_loss(
+        self,
+        model: nn.Module,
+        inputs: dict[str, Any],
+    ) -> Any:
+        """Compute per-sequence causal-LM loss for Opacus ghost clipping."""
+        if self.dp_loss is None:
+            raise RuntimeError("Ghost clipping loss wrapper is not initialized.")
+        labels = inputs.get("labels")
+        if labels is None:
+            raise RuntimeError("Ghost clipping DP training requires labels in the batch.")
+
+        model_inputs = dict(inputs)
+        labels = model_inputs.pop("labels")
+        shift_labels = labels[..., 1:].contiguous()
+        valid_positions = torch.nonzero((shift_labels != -100).any(dim=0), as_tuple=False).flatten()
+        if valid_positions.numel() == 0:
+            raise RuntimeError("Ghost clipping DP training requires at least one non-ignored label.")
+        model_inputs.setdefault("logits_to_keep", valid_positions.to(labels.device))
+
+        forward_model = self.accelerator.unwrap_model(model, keep_fp32_wrapper=False)
+        outputs = forward_model(**model_inputs)
+        logits = getattr(outputs, "logits", None)
+        if logits is None and isinstance(outputs, dict):
+            logits = outputs.get("logits")
+        if logits is None:
+            raise RuntimeError("Ghost clipping DP training requires model outputs with logits.")
+        if logits.ndim != 3 or logits.shape[1] != valid_positions.numel():
+            raise RuntimeError(
+                "Ghost clipping DP training expected the model to honor logits_to_keep "
+                f"with {valid_positions.numel()} kept positions, got logits shape {tuple(logits.shape)}."
+            )
+
+        shift_logits = logits.contiguous()
+        shift_labels = shift_labels.index_select(1, valid_positions.to(shift_labels.device)).to(shift_logits.device)
+        return self.dp_loss(
+            shift_logits.view(-1, shift_logits.shape[-1]),
+            shift_labels.view(-1),
+            shape=shift_logits.shape,
+        )
 
     def _get_train_sampler(self, train_dataset: Dataset | None = None) -> torch.utils.data.Sampler | None:  # ty: ignore[invalid-method-override] -- HF Trainer stub imprecision
         """Return the entity-level (or record-level) sampler for training."""
@@ -626,9 +1028,13 @@ class OpacusDPTrainer(Trainer):
 
         Overrides Trainer._save so that when the model is wrapped with
         GradSampleModule we save the inner PEFT model, not the wrapper.
+        Both grad-sample modes wrap the PEFT model and expose it as ``_module``
+        (hooks -> ``GradSampleModule``, ghost ->
+        ``GradSampleModuleFastGradientClipping``), so unwrap whenever that
+        attribute is present.
         TODO: When updating transformers, check for changes to this function.
         """
-        if isinstance(self.model, GradSampleModule) and hasattr(self.model, "_module"):
+        if hasattr(self.model, "_module"):
             model_to_save = self.model._module
             if not isinstance(model_to_save, PeftModel):
                 raise ValueError(f"Error saving model with type {type(model_to_save)}. Expected PeftModel.")

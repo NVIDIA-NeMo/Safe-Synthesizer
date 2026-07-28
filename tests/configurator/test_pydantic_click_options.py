@@ -486,6 +486,37 @@ def test_deep_nested_override_end_to_end_via_click_runner():
     assert captured["replace_pii"]["globals"]["seed"] == 42
 
 
+def test_training_memory_nested_flags_on_nss_params():
+    """The training.memory sub-config must surface as flattened CLI flags."""
+
+    @pydantic_options(SafeSynthesizerParameters, field_separator="__")
+    @click.command()
+    def cmd(**kwargs):
+        pass
+
+    param_names = {p.name for p in cmd.params}
+    assert {
+        "training__memory__disable_dp_bf16",
+        "training__memory__chunked_causal_lm_loss",
+        "training__memory__chunked_causal_lm_loss_tokens",
+        "training__memory__debug_loss_memory",
+    } <= param_names
+
+
+def test_training_memory_override_end_to_end_via_click_runner():
+    """training.memory leaves flow through decorator + parse_overrides into nested dict."""
+    captured: dict = {}
+
+    @pydantic_options(SafeSynthesizerParameters, field_separator="__")
+    @click.command()
+    def cmd(**kwargs):
+        captured.update(parse_overrides(kwargs))
+
+    result = CliRunner().invoke(cmd, ["--training__memory__chunked_causal_lm_loss_tokens", "256"])
+    assert result.exit_code == 0, result.output
+    assert captured["training"]["memory"]["chunked_causal_lm_loss_tokens"] == 256
+
+
 def test_structured_generation_nested_option_end_to_end_via_click_runner():
     """The canonical nested structured-generation option flows through Click parsing."""
     captured: dict = {}

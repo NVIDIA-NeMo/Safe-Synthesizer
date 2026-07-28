@@ -14,6 +14,7 @@ Each test case explicitly defines the SafeSynthesizerParameters config (input to
 and the Expected values (what AutoConfigResolver should produce)his makes it explicit what config is being tested and what we expect from it.
 """
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -346,6 +347,19 @@ class TestAutoConfigResolver:
             assert result.training.learning_rate == expected.learning_rate
             assert result.data.max_sequences_per_example == expected.max_seq
             assert result.privacy and result.privacy.delta == expected.delta
+
+    def test_resolve_logs_queryable_config_context(self, sample_data, caplog):
+        """Auto-resolved values should be queryable as structured debug fields."""
+        config = AUTO_NO_DP.get_config().model_copy(deep=True)
+        caplog.set_level(logging.DEBUG, logger="nemo_safe_synthesizer.config.autoconfig")
+
+        result = AutoConfigResolver(sample_data, config)()
+
+        patch_record = next(record for record in caplog.records if record.getMessage() == "params to update")
+        resolved_record = next(record for record in caplog.records if record.getMessage() == "auto-updated config")
+        assert patch_record.ctx["training"]["learning_rate"] == result.training.learning_rate
+        assert resolved_record.ctx["training"]["learning_rate"] == result.training.learning_rate
+        assert resolved_record.ctx["data"]["max_sequences_per_example"] == result.data.max_sequences_per_example
 
     def test_resolve_with_variable_data_sizes(self, variable_data, config, expected):
         """Resolution should handle various data sizes correctly."""

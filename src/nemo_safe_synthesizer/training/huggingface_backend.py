@@ -39,6 +39,7 @@ from transformers.utils.quantization_config import QuantizationConfigMixin
 
 from .. import utils
 from ..cli.artifact_structure import BoundDir
+from ..cli.wandb_setup import log_observability_event
 from ..config.autoconfig import AutoConfigResolver
 from ..data_processing.assembler import TrainingExampleAssembler
 from ..data_processing.dataset import make_json_schema
@@ -233,12 +234,7 @@ class HuggingFaceBackend(TrainingBackend):
         Prefers the explicit ``quantization_scheme`` field; falls back to
         the legacy ``quantization_bits`` alias when unset.
         """
-        from ..config.training import QuantizationScheme
-
-        cfg = self.params.training
-        if cfg.quantization_scheme is not None:
-            return cfg.quantization_scheme
-        return QuantizationScheme.BNB_4BIT if cfg.quantization_bits == 4 else QuantizationScheme.BNB_8BIT
+        return self.params.training.resolve_quantization_scheme()
 
     def _get_quantization_config_if_enabled(self) -> QuantizationConfigMixin | None:
         """Build the v5 quantization config for the configured scheme, or None.
@@ -413,10 +409,11 @@ class HuggingFaceBackend(TrainingBackend):
         evaluation_strategy = (
             IntervalStrategy.STEPS if self.params.training.validation_ratio > 0 else IntervalStrategy.NO
         )
+        batching = self.params.training.resolve_batching()
         return dict(
             output_dir=Path(self.workdir.train.cache),
-            per_device_train_batch_size=self.params.training.batch_size,
-            gradient_accumulation_steps=self.params.training.gradient_accumulation_steps,
+            per_device_train_batch_size=batching.per_device_train_batch_size,
+            gradient_accumulation_steps=batching.gradient_accumulation_steps,
             lr_scheduler_type=self.params.training.lr_scheduler,
             learning_rate=self.params.training.learning_rate,
             eval_strategy=evaluation_strategy,
@@ -472,9 +469,16 @@ class HuggingFaceBackend(TrainingBackend):
 
         data_collator = DataCollatorForPrivateTokenClassification(tokenizer=self.tokenizer)
 
+        memory_controls = self.params.training.memory
         training_args["remove_unused_columns"] = False  # required for DP data processing
         training_args["max_grad_norm"] = 0.0  # required for opacus optimizer
         _ = training_args.pop("gradient_checkpointing", None)
+        if memory_controls.disable_dp_bf16:
+            training_args["bf16"] = False
+            logger.warning(
+                "Disabled Trainer bf16/autocast for DP because training.memory.disable_dp_bf16=true "
+                "requires model outputs to stay in their original dtype."
+            )
 
         if hasattr(self, "model"):
             model = self.model
@@ -497,6 +501,8 @@ class HuggingFaceBackend(TrainingBackend):
         self.trainer_type = partial(  # ty: ignore[invalid-assignment] -- partial is assignable at runtime
             OpacusDPTrainer,
             privacy_args=privacy_args,
+            grad_sample_mode=privacy.grad_sample_mode,
+            memory_controls=memory_controls,
             true_dataset_size=self.true_dataset_size,
             data_fraction=self.data_fraction,
         )
@@ -787,7 +793,13 @@ class HuggingFaceBackend(TrainingBackend):
         training_start = time.monotonic()
         self.prepare_training_data()
         self.prepare_params(**training_args)
-        self.trainer.train()
+        try:
+            self.trainer.train()
+        finally:
+            # The DP trainer emits this event from its own finally; mirror it even when training raises.
+            event = getattr(self.trainer, "last_training_observability", None)
+            if event is not None:
+                log_observability_event(event, prefix="training")
         training_time_sec = time.monotonic() - training_start
 
         # Capture log_history before teardown deletes the trainer.

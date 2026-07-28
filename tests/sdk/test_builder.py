@@ -6,8 +6,9 @@ from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
+from pydantic import ValidationError
 
-from nemo_safe_synthesizer.config import GenerateParameters, SafeSynthesizerParameters
+from nemo_safe_synthesizer.config import DifferentialPrivacyHyperparams, GenerateParameters, SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.replace_pii import (
     DEFAULT_PII_TRANSFORM_CONFIG,
     PiiReplacerConfig,
@@ -167,6 +168,19 @@ def test_builder_change_training_params_with_kwargs():
     assert builder._nss_config.training.num_input_records_to_sample == 5000
 
 
+def test_builder_change_training_memory_with_nested_kwargs():
+    builder = (
+        SafeSynthesizer()
+        .with_data_source(pd.DataFrame(data={"name": ["John", "Jane", "Jim"]}))
+        .with_train(memory={"chunked_causal_lm_loss": True, "chunked_causal_lm_loss_tokens": 256})
+        .resolve()
+    )
+
+    assert builder._nss_config is not None
+    assert builder._nss_config.training.memory.chunked_causal_lm_loss is True
+    assert builder._nss_config.training.memory.chunked_causal_lm_loss_tokens == 256
+
+
 def test_builder_change_generation_params_with_object(fixture_base_builder: SafeSynthesizer):
     builder = (
         fixture_base_builder.with_data_source(pd.DataFrame(data={"name": ["John", "Jane", "Jim"]}))
@@ -191,6 +205,19 @@ def test_builder_change_generation_params_with_kwargs(fixture_base_builder):
     assert builder._nss_config.generation.patience == 42
     assert builder._nss_config.training.num_input_records_to_sample == "auto"
     assert builder._nss_config.generation.num_records == 10000
+
+
+def test_builder_validates_privacy_kwargs_applied_to_dict_config(fixture_base_builder):
+    with pytest.raises(ValidationError):
+        fixture_base_builder.with_differential_privacy({}, grad_sample_mode="invalid")
+
+
+def test_builder_validates_privacy_kwargs_applied_to_model_config(fixture_base_builder):
+    with pytest.raises(ValidationError):
+        fixture_base_builder.with_differential_privacy(
+            DifferentialPrivacyHyperparams(),
+            grad_sample_mode="invalid",
+        )
 
 
 def test_pii_replacer_with_default_config_object(fixture_base_builder):

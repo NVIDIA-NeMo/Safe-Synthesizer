@@ -127,7 +127,12 @@ class TestVRAMHeadroomCheck:
         return md
 
     @staticmethod
-    def _estimated_vram_gib(config: SafeSynthesizerParameters, autoconfig: PretrainedConfig) -> float:
+    def _estimated_vram_gib(
+        config: SafeSynthesizerParameters,
+        autoconfig: PretrainedConfig,
+        *,
+        batch_size: int | None = None,
+    ) -> float:
         from nemo_safe_synthesizer.preflight.checks.environment import (
             estimate_base_model_params,
             estimate_training_vram_components,
@@ -139,7 +144,7 @@ class TestVRAMHeadroomCheck:
         comp = estimate_training_vram_components(
             n_params=n_params,
             training_cfg=config.training,
-            batch_size=config.training.batch_size,
+            batch_size=batch_size if batch_size is not None else config.training.batch_size,
             seq_len=DEFAULT_MAX_SEQ_LENGTH,
             hidden_size=getattr(autoconfig, "hidden_size", None),
             num_hidden_layers=getattr(autoconfig, "num_hidden_layers", None),
@@ -175,6 +180,49 @@ class TestVRAMHeadroomCheck:
             issues = VRAMHeadroomCheck().run(make_ctx(config=default_config, metadata=metadata))
         assert not any(i.code == "low_vram" for i in issues)
         assert not any(i.code == "vram_exceeds_capacity" for i in issues)
+
+    def test_automatic_accumulation_uses_physical_batch_for_vram_estimate(self, default_config):
+        """A physical microbatch cap prevents a false VRAM issue for the logical batch."""
+        config = default_config.model_copy(deep=True)
+        config.training.batch_size = 8
+        config.training.gradient_accumulation_steps = "auto"
+        config.training.max_physical_batch_size = 4
+        autoconfig = self._autoconfig()
+        metadata = self._metadata(autoconfig=autoconfig)
+        batch_4_gib = self._estimated_vram_gib(config, autoconfig, batch_size=4)
+        batch_8_gib = self._estimated_vram_gib(config, autoconfig, batch_size=8)
+        available_gib = (batch_4_gib + batch_8_gib) / 2
+        fake_props = MagicMock(total_memory=100 * 1024**3)
+
+        with (
+            patch("torch.cuda.is_available", return_value=True),
+            patch("nemo_safe_synthesizer.llm.utils.get_max_vram", return_value={0: available_gib / 100}),
+            patch("torch.cuda.get_device_properties", return_value=fake_props),
+        ):
+            issues = VRAMHeadroomCheck().run(make_ctx(config=config, metadata=metadata))
+
+        assert not any(issue.code in {"low_vram", "vram_exceeds_capacity"} for issue in issues)
+
+    def test_automatic_accumulation_reports_physical_batch_when_vram_is_low(self, default_config):
+        """The VRAM diagnostic reports the capped physical per-device batch."""
+        config = default_config.model_copy(deep=True)
+        config.training.batch_size = 8
+        config.training.gradient_accumulation_steps = "auto"
+        config.training.max_physical_batch_size = 4
+        autoconfig = self._autoconfig()
+        metadata = self._metadata(autoconfig=autoconfig)
+        batch_4_gib = self._estimated_vram_gib(config, autoconfig, batch_size=4)
+        fake_props = MagicMock(total_memory=100 * 1024**3)
+
+        with (
+            patch("torch.cuda.is_available", return_value=True),
+            patch("nemo_safe_synthesizer.llm.utils.get_max_vram", return_value={0: batch_4_gib / 200}),
+            patch("torch.cuda.get_device_properties", return_value=fake_props),
+        ):
+            issues = VRAMHeadroomCheck().run(make_ctx(config=config, metadata=metadata))
+
+        issue = next(issue for issue in issues if issue.code in {"low_vram", "vram_exceeds_capacity"})
+        assert "Per-device batch_size=4" in issue.message
 
     def test_absurd_batch_errors(self, default_config):
         """Per-device batch_size far too large must fail preflight."""
@@ -257,6 +305,29 @@ class TestVRAMHeadroomCheck:
         ):
             VRAMHeadroomCheck().run(make_ctx(config=default_config, metadata=metadata))
         mock_gmv.assert_called_once_with(max_vram_fraction=fraction)
+
+    def test_qlora_without_quantize_model_uses_unquantized_vram(self, default_config):
+        """QLoRA should reduce the estimate only when model quantization is enabled."""
+        metadata = self._metadata(autoconfig=self._autoconfig())
+        fake_props = MagicMock(total_memory=8 * 1024**3)
+
+        def run_check(*, quantize_model: bool) -> list[PreflightIssue]:
+            config = default_config.model_copy(deep=True)
+            config.training.peft_implementation = "QLORA"
+            config.training.quantize_model = quantize_model
+            config.training.quantization_bits = 4
+            with (
+                patch("torch.cuda.is_available", return_value=True),
+                patch("nemo_safe_synthesizer.llm.utils.get_max_vram", return_value={0: 1.0}),
+                patch("torch.cuda.get_device_properties", return_value=fake_props),
+            ):
+                return VRAMHeadroomCheck().run(make_ctx(config=config, metadata=metadata))
+
+        unquantized_issues = run_check(quantize_model=False)
+        quantized_issues = run_check(quantize_model=True)
+
+        assert any(i.code in {"low_vram", "vram_exceeds_capacity"} for i in unquantized_issues)
+        assert not any(i.code in {"low_vram", "vram_exceeds_capacity"} for i in quantized_issues)
 
     def test_stub_metadata_skips_silently(self, default_config):
         """Stubbed metadata (autoconfig=None) must skip without raising."""

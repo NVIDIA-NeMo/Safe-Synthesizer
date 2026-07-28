@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -18,7 +19,10 @@ from nemo_safe_synthesizer.config import (
     SafeSynthesizerParameters,
     TrainingHyperparams,
 )
+from nemo_safe_synthesizer.config.training import ResolvedTrainingBatching
+from nemo_safe_synthesizer.config.types import AUTO_STR
 from nemo_safe_synthesizer.errors import ParameterError
+from nemo_safe_synthesizer.privacy.dp_transformers.dp_utils import OpacusDPTrainer
 from nemo_safe_synthesizer.training.callbacks import ProgressBarCallback, SafeSynthesizerWorkerCallback
 from nemo_safe_synthesizer.training.huggingface_backend import (
     HuggingFaceBackend,
@@ -623,6 +627,32 @@ class TestBuildBaseTrainingArgs:
         assert result["eval_strategy"] == IntervalStrategy.STEPS
         assert result["do_eval"] is True
 
+    def test_forwards_resolved_batching_to_trainer_args(self, backend):
+        """Trainer arguments should use the batching resolver output."""
+        resolved = ResolvedTrainingBatching(
+            per_device_train_batch_size=3,
+            gradient_accumulation_steps=5,
+            effective_batch_size=15,
+        )
+
+        with patch.object(TrainingHyperparams, "resolve_batching", return_value=resolved) as resolve_batching:
+            result = backend._build_base_training_args()
+
+        assert result["per_device_train_batch_size"] == 3
+        assert result["gradient_accumulation_steps"] == 5
+        resolve_batching.assert_called_once_with()
+
+    def test_dp_training_args_use_resolved_batching(self, backend_with_dp):
+        """DP Trainer args should preserve the logical batch when a cap is applied."""
+        backend_with_dp.params.training.batch_size = 8
+        backend_with_dp.params.training.gradient_accumulation_steps = AUTO_STR
+        backend_with_dp.params.training.max_physical_batch_size = 4
+
+        result = backend_with_dp._build_base_training_args()
+
+        assert result["per_device_train_batch_size"] == 4
+        assert result["gradient_accumulation_steps"] == 2
+
 
 # =============================================================================
 # Tests for _apply_eval_dataset_overrides
@@ -667,6 +697,29 @@ class TestConfigureDpTraining:
         assert training_args["max_grad_norm"] == 0.0
         assert "gradient_checkpointing" not in training_args
 
+    def test_sampling_probability_uses_effective_batch_size(self):
+        """DP sampling probability should use physical batch x accumulation steps."""
+        trainer = object.__new__(OpacusDPTrainer)
+        trainer.train_args = SimpleNamespace(per_device_train_batch_size=4, gradient_accumulation_steps=4)
+        trainer.true_dataset_size = 100
+
+        assert trainer.sampling_probability == pytest.approx(0.16)
+
+    def test_passes_grad_sample_mode_to_dp_trainer(self, backend_with_dp):
+        """Test that DP grad_sample_mode is passed to the Opacus trainer."""
+        backend_with_dp.params.privacy.grad_sample_mode = "ghost"
+        training_args = {}
+
+        with patch("nemo_safe_synthesizer.training.huggingface_backend.OpacusDPTrainer") as trainer_cls:
+            backend_with_dp._configure_dp_training(training_args)
+            backend_with_dp.trainer_type(
+                model=MagicMock(),
+                args=MagicMock(),
+                train_dataset=MagicMock(),
+            )
+
+        assert trainer_cls.call_args.kwargs["grad_sample_mode"] == "ghost"
+
     def test_disables_model_gradient_checkpointing(self, backend_with_dp):
         """Test that DP training disables model-level gradient checkpointing."""
         model = MagicMock()
@@ -694,6 +747,31 @@ class TestConfigureDpTraining:
 
         with pytest.raises(ParameterError, match="data_fraction and true_dataset_size"):
             backend_with_dp._configure_dp_training(training_args)
+
+
+def test_train_mirrors_training_observability_when_trainer_raises(monkeypatch):
+    """Failed DP runs should still forward the trainer's observability event to wandb."""
+    from nemo_safe_synthesizer.training.training_observability import TrainingObservability
+
+    backend = object.__new__(HuggingFaceBackend)
+    backend.prepare_training_data = MagicMock()
+    backend.prepare_params = MagicMock()
+
+    event = TrainingObservability(peak_vram_gb=1.0)
+    backend.trainer = MagicMock()
+    backend.trainer.last_training_observability = event
+    backend.trainer.train.side_effect = RuntimeError("boom")
+
+    logged: list[tuple[TrainingObservability, str]] = []
+    monkeypatch.setattr(
+        "nemo_safe_synthesizer.training.huggingface_backend.log_observability_event",
+        lambda observed, prefix: logged.append((observed, prefix)),
+    )
+
+    with pytest.raises(RuntimeError, match="boom"):
+        backend.train()
+
+    assert logged == [(event, "training")]
 
 
 class TestConfigureStandardTraining:

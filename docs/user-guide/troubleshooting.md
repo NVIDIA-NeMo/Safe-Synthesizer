@@ -153,12 +153,29 @@ stack traces. If you see `torch.cuda.OutOfMemoryError`:
    how to lower `training.rope_scaling_factor`, truncate records, or simplify
    grouped examples. Longer sequences require more activation memory even with
    gradient checkpointing enabled
-3. Verify `training.batch_size` is `1` (the default). The effective batch
-   size is `batch_size * gradient_accumulation_steps` (default 1 x 8 = 8).
-   Peak memory is set by the forward/backward pass on one micro-batch --
+3. Verify `training.batch_size` is `1` (the default). With integer
+   `gradient_accumulation_steps`, the effective batch size is
+   `batch_size * gradient_accumulation_steps` (default 1 x 8 = 8). Peak memory
+   is set by the forward/backward pass on one micro-batch --
    `gradient_accumulation_steps` controls how many micro-batches accumulate
    before each optimizer step but does not affect peak memory
-4. Lower `training.max_vram_fraction` (default `0.8`) to leave headroom for
+4. Cap the physical microbatch with `training.max_physical_batch_size` if you
+   need to preserve a larger logical batch. For example, `batch_size: 8`,
+   `gradient_accumulation_steps: auto`, and `max_physical_batch_size: 4`
+   trains with physical microbatches of 4 and two accumulation steps
+5. For DP runs, set `privacy.grad_sample_mode: ghost` to use Opacus
+   Fast/Ghost Gradient Clipping, which reduces per-sample gradient memory for
+   supported layers
+6. For DP runs that OOM at the loss step on large-vocab models, set
+   `training.memory.chunked_causal_lm_loss: true` (tune
+   `training.memory.chunked_causal_lm_loss_tokens`, default `1024`) to compute
+   cross entropy in token chunks instead of upcasting all logits to fp32 at
+   once, and/or `training.memory.disable_dp_bf16: true` to keep model outputs
+   in their original dtype through the loss. Set
+   `training.memory.debug_loss_memory: true` to log coarse CUDA memory buckets
+   around the logits upcast while diagnosing. Keep those diagnostics internal;
+   do not release them as part of a claimed-DP artifact
+7. Lower `training.max_vram_fraction` (default `0.8`) to leave headroom for
    other GPU consumers on the same device
 
 GPU memory during LoRA SFT breaks down into three components:
@@ -419,7 +436,8 @@ Several defaults may not match your expectations:
 
 | Parameter | Default | Notes |
 |-----------|---------|-------|
-| `training.batch_size` | `1` | Effective batch = `batch_size` x `gradient_accumulation_steps` (8) |
+| `training.batch_size` | `1` | Effective batch = `batch_size` x `gradient_accumulation_steps` (8) when accumulation is an integer |
+| `training.max_physical_batch_size` | `"auto"` | Leaves physical batching unchanged unless set to a numeric cap |
 | `training.validation_ratio` | `0.0` | No validation split by default |
 | `data.holdout` | `0.05` | 5% of records held out for evaluation; capped by `data.max_holdout` (2000) |
 | `data.random_state` | `None` | Auto-generates a random seed -- set this value explicitly if you need reproducibility |
@@ -427,9 +445,11 @@ Several defaults may not match your expectations:
 
 ### Auto-Resolved Parameters
 
-Many parameters accept `"auto"` and are resolved at runtime by the
-[`AutoConfigResolver`][nemo_safe_synthesizer.config.autoconfig.AutoConfigResolver].
-See [Configuration Reference](configuration.md) for the full list.
+Many parameters accept `"auto"` and are resolved at runtime. Most are resolved
+by the
+[`AutoConfigResolver`][nemo_safe_synthesizer.config.autoconfig.AutoConfigResolver];
+training batching values resolve when Trainer arguments are built. See
+[Configuration Reference](configuration.md) for the full list.
 
 - `training.rope_scaling_factor` -- auto-estimated from dataset token counts;
   see [Context Length and Record Fitting](#context-length-and-record-fitting)
@@ -437,6 +457,12 @@ See [Configuration Reference](configuration.md) for the full list.
 - `training.num_input_records_to_sample` -- derived from `rope_scaling_factor * 25000`
 - `training.learning_rate` -- model-specific default from `ModelMetadata`:
   Mistral uses 0.0001, all other supported model families use 0.0005
+- `training.max_physical_batch_size` -- leaves physical batching unchanged
+  when `"auto"`; a numeric value caps the Trainer microbatch and preserves the
+  logical batch by increasing accumulation when possible
+- `training.gradient_accumulation_steps` -- derives accumulation from
+  `training.batch_size` and `training.max_physical_batch_size` when set to
+  `"auto"`
 - `data.max_sequences_per_example` -- resolves to `1` when differential
   privacy is enabled (required to limit per-example gradient contribution),
   `10` otherwise for best performance

@@ -13,7 +13,12 @@ from pydantic import Field, ValidationError, model_validator
 from nemo_safe_synthesizer.config.generate import GenerateParameters, StructuredGenerationParameters
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig, StepDefinition
-from nemo_safe_synthesizer.config.training import QuantizationScheme
+from nemo_safe_synthesizer.config.training import (
+    QuantizationScheme,
+    TrainingHyperparams,
+    TrainingMemoryControls,
+)
+from nemo_safe_synthesizer.config.types import AUTO_STR
 from nemo_safe_synthesizer.configurator.parameter_paths import (
     AmbiguousParameterName,
     ParameterFieldKind,
@@ -27,6 +32,25 @@ from nemo_safe_synthesizer.configurator.parameters import Parameters
 from nemo_safe_synthesizer.errors import ParameterError
 
 
+def _assert_resolved_batching(
+    training: TrainingHyperparams,
+    *,
+    physical_batch_size: int,
+    accumulation_steps: int,
+) -> None:
+    resolved = training.resolve_batching()
+
+    assert resolved.per_device_train_batch_size == physical_batch_size
+    assert resolved.gradient_accumulation_steps == accumulation_steps
+    assert resolved.effective_batch_size == training.effective_batch_size
+
+
+def _assert_largest_divisor_at_most(value: int, *, limit: int, divisor: int) -> None:
+    assert value % divisor == 0
+    assert divisor <= limit
+    assert not any(value % candidate == 0 for candidate in range(divisor + 1, limit + 1))
+
+
 def test_safe_synthesizer_parameters(monkeypatch):
     monkeypatch.delenv("NEMO_TELEMETRY_ENABLED", raising=False)
     config = SafeSynthesizerParameters(
@@ -34,7 +58,207 @@ def test_safe_synthesizer_parameters(monkeypatch):
     )
     assert config.replace_pii is None
     assert config.training.batch_size == 1
+    assert config.training.max_physical_batch_size == AUTO_STR
     assert config.emit_telemetry is True
+
+
+@pytest.mark.parametrize("invalid_value", [0, -1])
+def test_max_physical_batch_size_must_be_positive_when_set(invalid_value):
+    with pytest.raises(ValidationError):
+        TrainingHyperparams(max_physical_batch_size=invalid_value)
+
+
+@pytest.mark.parametrize("invalid_value", [0, -1])
+def test_max_physical_batch_size_from_params_must_be_positive_when_set(invalid_value):
+    with pytest.raises(ValidationError):
+        SafeSynthesizerParameters.from_params(max_physical_batch_size=invalid_value)
+
+
+@pytest.mark.parametrize("invalid_value", [0, -1])
+def test_gradient_accumulation_steps_must_be_positive_or_auto(invalid_value):
+    with pytest.raises(ValidationError):
+        TrainingHyperparams(gradient_accumulation_steps=invalid_value)
+
+
+def test_grad_sample_mode_from_params_accepts_supported_values():
+    params = SafeSynthesizerParameters.from_params(grad_sample_mode="ghost")
+
+    assert params.privacy is not None
+    assert params.privacy.grad_sample_mode == "ghost"
+
+
+def test_grad_sample_mode_from_params_rejects_invalid_value():
+    with pytest.raises(ValidationError):
+        SafeSynthesizerParameters.from_params(grad_sample_mode="invalid")
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"top_p": 2},
+        {"order_training_examples_by": "timestamp"},
+        {"is_timeseries": True},
+        {
+            "use_structured_generation": True,
+            "structured_generation_schema_method": "structural_tag",
+            "structured_generation_backend": "outlines",
+        },
+    ],
+)
+def test_from_params_validates_all_nested_submodels(kwargs):
+    with pytest.raises(ValidationError):
+        SafeSynthesizerParameters.from_params(**kwargs)
+
+
+def test_grad_sample_mode_from_yaml_rejects_invalid_value():
+    with pytest.raises(ValidationError):
+        SafeSynthesizerParameters.from_yaml_str("privacy:\n  grad_sample_mode: invalid\n")
+
+
+def test_training_memory_controls_defaults_are_all_off():
+    memory = TrainingHyperparams().memory
+    assert memory.disable_dp_bf16 is False
+    assert memory.chunked_causal_lm_loss is False
+    assert memory.chunked_causal_lm_loss_tokens == 1024
+    assert memory.debug_loss_memory is False
+
+
+@pytest.mark.parametrize("invalid_value", [0, -1])
+def test_training_memory_chunk_tokens_must_be_positive(invalid_value):
+    with pytest.raises(ValidationError):
+        TrainingMemoryControls(chunked_causal_lm_loss_tokens=invalid_value)
+
+
+def test_training_memory_controls_from_yaml_round_trip():
+    params = SafeSynthesizerParameters.from_yaml_str(
+        "training:\n"
+        "  memory:\n"
+        "    disable_dp_bf16: true\n"
+        "    chunked_causal_lm_loss: true\n"
+        "    chunked_causal_lm_loss_tokens: 256\n"
+        "    debug_loss_memory: true\n"
+    )
+    memory = params.training.memory
+    assert memory.disable_dp_bf16 is True
+    assert memory.chunked_causal_lm_loss is True
+    assert memory.chunked_causal_lm_loss_tokens == 256
+    assert memory.debug_loss_memory is True
+
+
+def test_training_memory_controls_from_params_shortcut():
+    params = SafeSynthesizerParameters.from_params(
+        memory={"chunked_causal_lm_loss": True, "chunked_causal_lm_loss_tokens": 256}
+    )
+
+    assert params.training.memory.chunked_causal_lm_loss is True
+    assert params.training.memory.chunked_causal_lm_loss_tokens == 256
+
+
+def test_training_memory_controls_from_nested_training_section():
+    params = SafeSynthesizerParameters.from_params(
+        training={"memory": {"disable_dp_bf16": True, "debug_loss_memory": True}}
+    )
+
+    assert params.training.memory.disable_dp_bf16 is True
+    assert params.training.memory.debug_loss_memory is True
+
+
+@pytest.mark.parametrize("max_physical_batch_size", [AUTO_STR, None])
+def test_max_physical_batch_size_absent_value_is_noop(max_physical_batch_size):
+    training = TrainingHyperparams(
+        batch_size=8,
+        gradient_accumulation_steps=2,
+        max_physical_batch_size=max_physical_batch_size,
+    )
+
+    _assert_resolved_batching(training, physical_batch_size=8, accumulation_steps=2)
+
+
+@pytest.mark.parametrize("max_physical_batch_size", [AUTO_STR, None])
+def test_auto_gradient_accumulation_without_physical_cap_uses_one_step(max_physical_batch_size):
+    training = TrainingHyperparams(
+        batch_size=8,
+        gradient_accumulation_steps=AUTO_STR,
+        max_physical_batch_size=max_physical_batch_size,
+    )
+
+    assert training.effective_batch_size == 8
+    _assert_resolved_batching(training, physical_batch_size=8, accumulation_steps=1)
+
+
+def test_auto_gradient_accumulation_with_physical_cap_preserves_batch_size_target():
+    training = TrainingHyperparams(
+        batch_size=8,
+        gradient_accumulation_steps=AUTO_STR,
+        max_physical_batch_size=4,
+    )
+
+    assert training.effective_batch_size == 8
+    _assert_resolved_batching(training, physical_batch_size=4, accumulation_steps=2)
+
+
+def test_auto_gradient_accumulation_with_non_divisible_physical_cap_uses_largest_divisor():
+    training = TrainingHyperparams(
+        batch_size=9,
+        gradient_accumulation_steps=AUTO_STR,
+        max_physical_batch_size=5,
+    )
+
+    assert training.effective_batch_size == 9
+    _assert_resolved_batching(training, physical_batch_size=3, accumulation_steps=3)
+    _assert_largest_divisor_at_most(training.effective_batch_size, limit=5, divisor=3)
+
+
+@pytest.mark.parametrize("max_physical_batch_size", [8, 12])
+def test_max_physical_batch_size_at_or_above_batch_size_is_noop(max_physical_batch_size):
+    training = TrainingHyperparams(
+        batch_size=8,
+        gradient_accumulation_steps=2,
+        max_physical_batch_size=max_physical_batch_size,
+    )
+
+    _assert_resolved_batching(training, physical_batch_size=8, accumulation_steps=2)
+
+
+def test_max_physical_batch_size_resolver_preserves_effective_batch_size():
+    training = TrainingHyperparams(
+        batch_size=8,
+        gradient_accumulation_steps=2,
+        max_physical_batch_size=4,
+    )
+
+    assert training.effective_batch_size == 16
+    _assert_resolved_batching(training, physical_batch_size=4, accumulation_steps=4)
+
+
+def test_max_physical_batch_size_uses_largest_divisor_under_cap():
+    training = TrainingHyperparams(
+        batch_size=9,
+        gradient_accumulation_steps=2,
+        max_physical_batch_size=5,
+    )
+
+    assert training.effective_batch_size == 18
+    _assert_resolved_batching(training, physical_batch_size=3, accumulation_steps=6)
+    _assert_largest_divisor_at_most(training.effective_batch_size, limit=5, divisor=3)
+
+
+@pytest.mark.parametrize(
+    ("field_name", "raw_value", "expected"),
+    [
+        ("max_physical_batch_size", "auto", AUTO_STR),
+        ("max_physical_batch_size", "4", 4),
+        ("max_physical_batch_size", "null", None),
+        ("gradient_accumulation_steps", "auto", AUTO_STR),
+        ("gradient_accumulation_steps", "4", 4),
+    ],
+)
+def test_batching_auto_parameters_from_yaml(field_name, raw_value, expected):
+    params = SafeSynthesizerParameters.from_yaml_str(
+        f"training:\n  batch_size: 8\n  gradient_accumulation_steps: 2\n  {field_name}: {raw_value}\n"
+    )
+
+    assert getattr(params.training, field_name) == expected
 
 
 def test_emit_telemetry_can_be_disabled_from_yaml():
