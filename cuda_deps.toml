@@ -8,19 +8,20 @@ base_runtime_deps = []
 torch_runtime_deps = [
     "accelerate>=1.1.0",
     "bitsandbytes>=0.46.1",
-    "flashinfer-python==0.6.12; sys_platform == 'linux'",
-    "flashinfer-cubin==0.6.12; sys_platform == 'linux'",
+    "flashinfer-python==0.6.14; sys_platform == 'linux'",
+    "flashinfer-cubin==0.6.14; sys_platform == 'linux'",
     "gliner",
     "kernels>=0.12.1,<0.15",
     "opacus",
     "peft>=0.18.0",
     "sentence-transformers",
+    "openai>=2.25.0",
     "trl>=0.23.0",
     "xgrammar>=0.2.0; sys_platform == 'linux'",
 ]
 
 cuda_runtime_deps = [
-    { name = "flashinfer-jit-cache", version = "0.6.12", local = "{torch_local_version}", sys_platform = "linux", source_kind = "flashinfer" },
+    { name = "flashinfer-jit-cache", version = "0.6.14", local = "{torch_local_version}", sys_platform = "linux", source_kind = "flashinfer" },
     { name = "nvidia-cublas-{cuda_package_suffix}", sys_platform = "linux" },
     "nvidia-ml-py; sys_platform == 'linux'",
     "torch-c-dlpack-ext",
@@ -64,7 +65,7 @@ dependencies = [
     "torchao==0.17.0",
     "transformers==5.12.0",
     "triton>=2.0.0; sys_platform=='linux'",
-    "vllm==0.24.0; sys_platform=='linux'",
+    "vllm==0.26.0; sys_platform=='linux'",
 ]
 
 [[indexes]]
@@ -83,8 +84,13 @@ url = "https://pypi.nvidia.com"
 explicit = true
 
 [[indexes]]
-name = "vllm-v0-24-0-cu129"
-url = "https://wheels.vllm.ai/ee0da84ab9e04ac7610e28580af62c365e898389/cu129"
+name = "flashinfer-cubin"
+url = "https://flashinfer.ai/whl/"
+explicit = true
+
+[[indexes]]
+name = "vllm-v0-26-0-cu129"
+url = "https://wheels.vllm.ai/0.26.0/cu129"
 explicit = true
 
 [cuda_indexes.pytorch]
@@ -99,13 +105,21 @@ explicit = true
 
 # Static source entries are grouped by the extra they activate. The generator
 # supplies that extra and rejects a conflicting explicit value.
+[sources.cpu]
+flashinfer-cubin = [
+    { index = "flashinfer-cubin", marker = "sys_platform == 'linux'" },
+]
+
 [sources.cu129]
+flashinfer-cubin = [
+    { index = "flashinfer-cubin", marker = "sys_platform == 'linux'" },
+]
 vllm = [
-    { index = "vllm-v0-24-0-cu129", marker = "sys_platform == 'linux'", extra = "cu129" },
+    { index = "vllm-v0-26-0-cu129", marker = "sys_platform == 'linux'", extra = "cu129" },
 ]
 
 [variants.cu129]
 cuda_package_suffix = "cu12"
 dependencies = [
-    "vllm==0.24.0+{torch_local_version}; sys_platform == 'linux'",
+    "vllm==0.26.0+{torch_local_version}; sys_platform == 'linux'",
 ]

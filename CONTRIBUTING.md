@@ -786,8 +786,9 @@ uv --no-config pip install \
   --python "${SMOKE_VENV}/bin/python" \
   --default-index https://pypi.org/simple \
   --index https://flashinfer.ai/whl/cu129 \
+  --index https://flashinfer.ai/whl/ \
   --index https://download.pytorch.org/whl/cu129 \
-  --index https://wheels.vllm.ai/ee0da84ab9e04ac7610e28580af62c365e898389/cu129 \
+  --index https://wheels.vllm.ai/0.26.0/cu129 \
   --index-strategy unsafe-best-match \
   "nemo-safe-synthesizer[cu129,engine]==${NSS_VERSION}"
 uv --no-config pip check --python "${SMOKE_VENV}/bin/python"
