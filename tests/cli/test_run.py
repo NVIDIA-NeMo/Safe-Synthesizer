@@ -148,6 +148,7 @@ class TestRunCommandOptions:
         assert result.exit_code == 0
         assert "--no-wandb-upload-evaluation-report" in result.output
         assert "summary metrics and the evaluation scorecard" in " ".join(result.output.split())
+        assert "[default: --wandb-upload-evaluation-report]" in " ".join(result.output.split())
 
     @pytest.mark.parametrize(
         ("upload_args", "expected_upload"),

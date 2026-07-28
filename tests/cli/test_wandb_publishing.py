@@ -204,11 +204,19 @@ def test_publishing_operation_failures_never_escape(tmp_path: Path, failure: str
 
     with patch.object(wandb_setup.wandb, "run", run):
         if failure == "media":
-            with patch.object(wandb_setup.wandb, "Html", side_effect=RuntimeError("media down")):
+            with patch.object(wandb_setup.wandb, "Html", side_effect=RuntimeError("media down")) as mock_html:
                 wandb_setup.publish_evaluation_report(workdir, _summary(), upload_report=True)
+            mock_html.assert_called_once_with("<h1>report</h1>", inject=False)
         elif failure == "artifact":
-            with patch.object(wandb_setup.wandb, "Artifact", side_effect=RuntimeError("artifact down")):
+            with patch.object(
+                wandb_setup.wandb, "Artifact", side_effect=RuntimeError("artifact down")
+            ) as mock_artifact:
                 wandb_setup.publish_evaluation_report(workdir, _summary(), upload_report=True)
+            mock_artifact.assert_called_once_with(
+                "safe-synthesizer-evaluation-report-run-123",
+                type="evaluation-report",
+            )
         else:
             with patch.object(wandb_setup.wandb, "Artifact", side_effect=FakeArtifact):
                 wandb_setup.publish_evaluation_report(workdir, _summary(), upload_report=True)
+            run.summary.update.assert_called()

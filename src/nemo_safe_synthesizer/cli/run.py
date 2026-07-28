@@ -67,7 +67,7 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
             help="Upload the final evaluation HTML report and artifact to WandB. "
             "Use --no-wandb-upload-evaluation-report to skip report HTML and artifact publishing while retaining "
             "summary metrics and the evaluation scorecard. "
-            "Can also be set via NSS_WANDB_UPLOAD_EVALUATION_REPORT. [default: wandb-upload-evaluation-report]",
+            "Can also be set via NSS_WANDB_UPLOAD_EVALUATION_REPORT. [default: --wandb-upload-evaluation-report]",
         )
     )
     options.append(
