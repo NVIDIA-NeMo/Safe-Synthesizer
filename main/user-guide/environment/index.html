@@ -9892,7 +9892,7 @@ For output quality and evaluation metrics, see
 <td>nss</td>
 <td><code>--inference-model-id</code></td>
 <td>PII column classifier</td>
-<td><code>qwen/qwen3-next-80b-a3b-instruct</code></td>
+<td><code>nvidia/nemotron-3-ultra-550b-a55b</code></td>
 <td>Model ID sent to the inference endpoint</td>
 <td><a href="#pii-ner-and-column-classification">PII appendix</a></td>
 </tr>
@@ -10127,7 +10127,7 @@ defaults to <code>https://integrate.api.nvidia.com/v1</code> when unset.</p>
 See <a href="../configuration/#replacing-pii">Configuration Reference -- Replacing PII</a>.</p>
 <h3 id="nss_inference_model"><code>NSS_INFERENCE_MODEL</code><a class="headerlink" href="#nss_inference_model" title="Permanent link">&para;</a></h3>
 <p>Model ID sent to the inference endpoint. Defaults to
-<code>qwen/qwen3-next-80b-a3b-instruct</code>. Override with <code>--inference-model-id</code>.</p>
+<code>nvidia/nemotron-3-ultra-550b-a55b</code>. Override with <code>--inference-model-id</code>.</p>
 <h3 id="nss_pii_replacer_cpu_count"><code>NSS_PII_REPLACER_CPU_COUNT</code><a class="headerlink" href="#nss_pii_replacer_cpu_count" title="Permanent link">&para;</a></h3>
 <p>Number of CPU worker processes for NER. Override with <code>--cpu-count</code>. Defaults
 to <code>max(1, cpu_count - 1)</code>, capped so each worker handles at least 1,000
