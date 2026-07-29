@@ -72,6 +72,34 @@ def test_requires_gpu_is_skipped_without_cuda(
     cuda_is_available.assert_called_once_with()
 
 
+def test_requires_gpu_runs_with_cuda(
+    pytester: pytest.Pytester,
+    pytestconfig: pytest.Config,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cuda_is_available = Mock(return_value=True)
+    monkeypatch.setitem(sys.modules, "torch", SimpleNamespace(cuda=SimpleNamespace(is_available=cuda_is_available)))
+    _make_pytest_ini(pytester)
+    pytester.makepyfile(
+        """
+        import pytest
+
+        @pytest.mark.requires_gpu
+        def test_gpu():
+            pass
+        """
+    )
+
+    result = pytester.runpytest_inprocess(
+        "-p",
+        "no:cov",
+        plugins=[_root_conftest_module(pytestconfig)],
+    )
+
+    result.assert_outcomes(passed=1)
+    cuda_is_available.assert_called_once_with()
+
+
 def test_cuda_is_not_probed_without_gpu_tests(
     pytester: pytest.Pytester,
     pytestconfig: pytest.Config,
