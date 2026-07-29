@@ -187,7 +187,7 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
             default=None,
             help="Model ID sent to the inference endpoint for PII column classification. "
             "Can also be set via NSS_INFERENCE_MODEL env var. "
-            "[default: qwen/qwen3-next-80b-a3b-instruct]",
+            "[default: nvidia/nemotron-3-ultra-550b-a55b]",
         )
     )
     options.append(
