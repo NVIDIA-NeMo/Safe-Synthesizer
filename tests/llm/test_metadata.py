@@ -32,6 +32,7 @@ from nemo_safe_synthesizer.llm.metadata import (
     DEFAULT_MAX_SEQ_LENGTH,
     GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER,
     GLOBAL_MAX_SEQ_LENGTH,
+    Granite,
     Llama32,
     LLMPromptConfig,
     Mistral,
@@ -90,11 +91,12 @@ class RopeScalingScenario:
 MODEL_DETECTION_SCENARIOS = [
     ModelDetectionScenario("tinyllama", "TinyLlama/TinyLlama-1.1B-Chat-v1.0", TinyLlama),
     ModelDetectionScenario("qwen", "Qwen/Qwen2-0.5B", Qwen),
-    ModelDetectionScenario("llama32", "meta-llama/Llama32-1B", Llama32),
+    ModelDetectionScenario("llama32", "meta-llama/Llama-3.2-1B-Instruct", Llama32),
     ModelDetectionScenario("smollm2", "HuggingFaceTB/SmolLM2-135M", SmolLM2),
     ModelDetectionScenario("smollm3", "HuggingFaceTB/SmolLM3-3B", SmolLM3),
     ModelDetectionScenario("mistral", "mistralai/Mistral-7B-Instruct-v0.3", Mistral),
     ModelDetectionScenario("nemotron", "nvidia/Nemotron-4-340B", Nemotron),
+    ModelDetectionScenario("granite", "ibm-granite/granite-3.0-2b-instruct", Granite),
 ]
 
 # Model initialization scenarios - tests each model's specific configuration
@@ -122,12 +124,12 @@ MODEL_INIT_SCENARIOS = [
     ModelInitScenario(
         id="llama32",
         model_class=Llama32,
-        model_path="meta-llama/Llama32-1B",
+        model_path="meta-llama/Llama-3.2-1B-Instruct",
         expected_template="user\n {instruction} {schema} \n assistant\n{prefill}",
         expected_add_bos=False,
         expected_add_eos=False,
-        expected_bos_token="<|im_start|>",
-        expected_bos_token_id=151644,
+        expected_bos_token="<s>",
+        expected_bos_token_id=10,  # From mock_tokenizer, not the model's real token ID.
     ),
     ModelInitScenario(
         id="smollm2",
@@ -148,8 +150,18 @@ MODEL_INIT_SCENARIOS = [
         expected_add_bos=True,
         expected_add_eos=False,
         expected_bos_token="<|im_start|>",
-        expected_bos_token_id=128011,
+        expected_bos_token_id=1,
         use_global_max_seq=True,
+    ),
+    ModelInitScenario(
+        id="granite",
+        model_class=Granite,
+        model_path="ibm-granite/granite-3.0-2b-instruct",
+        expected_template="user\n {instruction} {schema} \n assistant\n{prefill}",
+        expected_add_bos=False,
+        expected_add_eos=True,
+        expected_bos_token=None,
+        expected_bos_token_id=None,
     ),
     ModelInitScenario(
         id="mistral",
@@ -297,7 +309,7 @@ def mock_tokenizer():
     """Create a mock tokenizer for testing."""
     tokenizer = MagicMock(spec=PreTrainedTokenizerBase)
     tokenizer.bos_token = "<s>"
-    tokenizer.bos_token_id = 1
+    tokenizer.bos_token_id = 10
     tokenizer.eos_token = "</s>"
     tokenizer.eos_token_id = 2
     _token_ids = {"<|im_start|>": 1, "<|im_end|>": 2}
@@ -790,6 +802,25 @@ class TestResolveModelClass:
         assert ModelMetadata._resolve_model_class("mistralai/Mistral-7B-v0.3") is Mistral
         assert ModelMetadata._resolve_model_class("TinyLlama/TinyLlama-1.1B-Chat-v1.0") is TinyLlama
 
+    def test_resolve_model_class_accepts_canonical_llama32_id(self):
+        """Canonical Hugging Face Llama 3.2 IDs resolve despite punctuation in the family name."""
+        assert ModelMetadata._resolve_model_class("meta-llama/Llama-3.2-1B-Instruct") is Llama32
+
+
+class TestRequiredBosToken:
+    """Tests for model families that require a specific BOS token."""
+
+    @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
+    def test_unknown_required_bos_token_is_rejected(self, mock_auto_config, mock_tokenizer, mock_autoconfig_obj):
+        """Do not silently use the tokenizer's unknown-token ID as a required BOS token."""
+        mock_auto_config.from_pretrained.return_value = mock_autoconfig_obj
+        mock_tokenizer.unk_token = "<unk>"
+        mock_tokenizer.unk_token_id = 0
+        mock_tokenizer.convert_tokens_to_ids = lambda _token: 0
+
+        with pytest.raises(ValueError, match="did not resolve required BOS token"):
+            SmolLM3(model_name_or_path="HuggingFaceTB/SmolLM3-3B", tokenizer=mock_tokenizer)
+
 
 class TestModelDetection:
     """Tests for ModelMetadata.from_str_or_path model detection."""
@@ -1007,6 +1038,24 @@ class TestModelMetadataKwargsPassthrough:
 
     @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
     @patch("nemo_safe_synthesizer.llm.metadata.load_fast_tokenizer")
+    def test_autoconfig_passthrough_when_prompt_config_is_derived(
+        self, mock_auto_tokenizer, mock_auto_config, mock_tokenizer, mock_autoconfig_obj
+    ):
+        """Preserve a caller-provided autoconfig while deriving the prompt config."""
+        loaded_autoconfig = PretrainedConfig()
+        loaded_autoconfig.max_position_embeddings = 4096
+        mock_auto_tokenizer.return_value = mock_tokenizer
+        mock_auto_config.from_pretrained.return_value = loaded_autoconfig
+
+        metadata = TinyLlama(
+            model_name_or_path="TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+            autoconfig=mock_autoconfig_obj,
+        )
+
+        assert metadata.autoconfig is mock_autoconfig_obj
+
+    @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
+    @patch("nemo_safe_synthesizer.llm.metadata.load_fast_tokenizer")
     def test_rope_scaling_factor_passthrough(
         self, mock_auto_tokenizer, mock_auto_config, mock_tokenizer, mock_autoconfig_obj
     ):
@@ -1021,6 +1070,34 @@ class TestModelMetadataKwargsPassthrough:
         assert metadata.rope_scaling.factor == 4
         assert metadata.rope_scaling_factor == 4
         assert metadata.max_seq_length == 4 * DEFAULT_MAX_SEQ_LENGTH
+
+    @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
+    @patch("nemo_safe_synthesizer.llm.metadata.load_fast_tokenizer")
+    @pytest.mark.parametrize("model_class", [Mistral, SmolLM2, SmolLM3])
+    @pytest.mark.parametrize(
+        "scaling_kwargs",
+        [
+            pytest.param({"rope_scaling": 2}, id="raw-rope-scaling"),
+            pytest.param({"rope_scaling_factor": 2}, id="configured-rope-scaling-factor"),
+        ],
+    )
+    def test_unsupported_families_ignore_rope_scaling(
+        self,
+        mock_auto_tokenizer,
+        mock_auto_config,
+        mock_tokenizer,
+        mock_autoconfig_obj,
+        model_class,
+        scaling_kwargs,
+    ):
+        """RoPE scaling inputs should not bypass unsupported-family defaults."""
+        mock_auto_tokenizer.return_value = mock_tokenizer
+        mock_auto_config.from_pretrained.return_value = mock_autoconfig_obj
+
+        metadata = model_class(model_name_or_path=f"test-{model_class.__name__}", **scaling_kwargs)
+
+        assert metadata.rope_scaling is None
+        assert metadata.rope_scaling_factor == 1.0
 
 
 class TestTinyLlamaWithTokenizer:

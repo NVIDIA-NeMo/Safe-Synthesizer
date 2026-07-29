@@ -291,14 +291,21 @@ class ModelMetadata(BaseModel):
     or [`from_metadata_json`][nemo_safe_synthesizer.llm.metadata.ModelMetadata.from_metadata_json]
     to construct instances rather than calling the constructor directly.
 
-    To add a model family, define a ``ModelMetadata`` subclass, configure its
-    ``LLMPromptConfig`` from the tokenizer, override ``default_learning_rate``
+    To add a model family, define a ``ModelMetadata`` subclass, set the
+    class-level prompt/RoPE attributes below, override ``default_learning_rate``
     if needed, and add the subclass to ``_resolve_model_class`` in the intended
     match order.
     """
 
     # Learning rate when training.learning_rate is "auto". Override in subclasses.
     default_learning_rate: ClassVar[float] = 0.0005
+    prompt_template: ClassVar[str] = PROMPT_TEMPLATE
+    add_bos_token_to_prompt: ClassVar[bool] = True
+    add_eos_token_to_prompt: ClassVar[bool] = True
+    bos_token: ClassVar[str | None] = None
+    supports_rope_scaling: ClassVar[bool] = True
+    rope_parameters_location_default: ClassVar[Literal["autoconfig", "automodel"]] = "autoconfig"
+    model_name_markers: ClassVar[tuple[str, ...]] = ()
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -360,6 +367,88 @@ class ModelMetadata(BaseModel):
     not decode wasted tokens to the full context-window cap."""
 
     tokenizer: PreTrainedTokenizerBase | None = Field(default=None, exclude=True, repr=False)
+
+    def __init__(
+        self,
+        *,
+        model_name_or_path: str,
+        prompt_config: LLMPromptConfig | dict[str, object] | None = None,
+        autoconfig: PretrainedConfig | None = None,
+        tokenizer: PreTrainedTokenizerBase | None = None,
+        rope_scaling_factor: float | int | None = None,
+        **data: object,
+    ) -> None:
+        """Initialize base metadata or a declarative model-family subclass."""
+        metadata_cls = type(self)
+        is_model_family = metadata_cls is not ModelMetadata
+
+        if is_model_family:
+            data.setdefault("rope_parameters_location", metadata_cls.rope_parameters_location_default)
+        if is_model_family and prompt_config is None:
+            if autoconfig is None or tokenizer is None:
+                loaded_autoconfig, tokenizer = metadata_cls._load_config_and_tokenizer(model_name_or_path, tokenizer)
+                if autoconfig is None:
+                    autoconfig = loaded_autoconfig
+            prompt_config = metadata_cls._prompt_config_from_tokenizer(model_name_or_path, tokenizer)
+
+        if autoconfig is not None:
+            data["autoconfig"] = autoconfig
+        if tokenizer is not None:
+            data["tokenizer"] = tokenizer
+        if is_model_family and not metadata_cls.supports_rope_scaling and data.get("rope_scaling") is not None:
+            logger.warning(
+                f"Rope scaling {data['rope_scaling']} is not supported for {metadata_cls.__name__} "
+                "due to longer default context lengths. Ignoring."
+            )
+            data["rope_scaling"] = None
+        if rope_scaling_factor is not None and "rope_scaling" not in data:
+            data["rope_scaling"] = metadata_cls._rope_scaling_from_factor(rope_scaling_factor)
+
+        super().__init__(model_name_or_path=model_name_or_path, prompt_config=prompt_config, **data)
+
+    @classmethod
+    def _prompt_config_from_tokenizer(
+        cls,
+        model_name_or_path: str,
+        tokenizer: PreTrainedTokenizerBase,
+    ) -> LLMPromptConfig:
+        """Build this model family's prompt config from a loaded tokenizer."""
+        prompt_kwargs: dict[str, object] = {
+            "template": cls.prompt_template,
+            "add_bos_token_to_prompt": cls.add_bos_token_to_prompt,
+            "add_eos_token_to_prompt": cls.add_eos_token_to_prompt,
+        }
+        match cls.bos_token:
+            case str() as bos_token:
+                bos_token_id = tokenizer.convert_tokens_to_ids(bos_token)
+                unk_token_id = getattr(tokenizer, "unk_token_id", None)
+                resolved_to_unk = isinstance(unk_token_id, int) and bos_token_id == unk_token_id
+                if not isinstance(bos_token_id, int) or resolved_to_unk:
+                    raise ValueError(f"Tokenizer did not resolve required BOS token {bos_token!r}")
+                prompt_kwargs["bos_token"] = bos_token
+                prompt_kwargs["bos_token_id"] = bos_token_id
+            case None:
+                pass
+        return LLMPromptConfig.from_tokenizer(
+            name=model_name_or_path,
+            tokenizer=tokenizer,
+            **prompt_kwargs,
+        )
+
+    @classmethod
+    def _rope_scaling_from_factor(cls, rope_scaling_factor: float | int) -> float | int | None:
+        """Return the RoPE scaling value to pass into validation for this family."""
+        match cls.supports_rope_scaling, rope_scaling_factor:
+            case True, _:
+                return rope_scaling_factor
+            case False, 0 | 0.0:
+                pass
+            case False, _:
+                logger.warning(
+                    f"Rope scaling factor {rope_scaling_factor} is not supported for {cls.__name__} "
+                    "due to longer default context lengths. Ignoring."
+                )
+        return None
 
     @model_validator(mode="before")
     @classmethod
@@ -502,10 +591,9 @@ class ModelMetadata(BaseModel):
     ) -> tuple[PretrainedConfig, PreTrainedTokenizerBase]:
         """Load ``PretrainedConfig`` and (optionally) ``AutoTokenizer`` for a model.
 
-        Centralises the repeated boilerplate present in every subclass
-        ``__init__``: loading the HuggingFace config and, when no
-        pre-loaded tokenizer is supplied, fetching one via
-        ``AutoTokenizer.from_pretrained``.
+        Centralises the shared HuggingFace loading path for declarative
+        model-family subclasses: loading the config and, when no pre-loaded
+        tokenizer is supplied, fetching one via ``AutoTokenizer.from_pretrained``.
 
         Args:
             model_name_or_path: HuggingFace model identifier or local path.
@@ -533,16 +621,19 @@ class ModelMetadata(BaseModel):
     def _resolve_model_class(cls: type["ModelMetadata"], model_name_or_path: Path | str) -> type["ModelMetadata"]:
         """Resolve model name or path to the matching metadata subclass.
 
-        Uses case-insensitive substring matching over the registered subclass
-        names. The returned class is not instantiated; callers such as
-        ``AutoConfigResolver`` use it to inspect class-level metadata.
+        Uses case-insensitive substring matching over each family's declared
+        name markers, falling back to its class name. The returned class is not
+        instantiated; callers such as ``AutoConfigResolver`` use it to inspect
+        class-level metadata.
 
         Raises:
             ValueError: If no registered subclass matches.
         """
         classes = TinyLlama, Qwen, Llama32, SmolLM2, SmolLM3, Mistral, Nemotron, Granite
+        normalized_name = str(model_name_or_path).casefold()
         for class_ in classes:
-            if class_.__name__.lower() in str(model_name_or_path).lower():
+            markers = class_.model_name_markers or (class_.__name__,)
+            if any(marker.casefold() in normalized_name for marker in markers):
                 return class_
         raise ValueError(f"Unknown model name or path: {model_name_or_path}")
 
@@ -668,7 +759,25 @@ def get_base_max_seq_length(config: AutoConfig) -> int:
     return DEFAULT_MAX_SEQ_LENGTH
 
 
-class Granite(ModelMetadata):
+class ModelFamilyMetadata(ModelMetadata):
+    """Base class for declarative model-family metadata subclasses."""
+
+    def __init__(
+        self,
+        model_name_or_path: str,
+        tokenizer: PreTrainedTokenizerBase | None = None,
+        rope_scaling_factor: float | int | None = None,
+        **data,
+    ) -> None:
+        super().__init__(
+            model_name_or_path=model_name_or_path,
+            tokenizer=tokenizer,
+            rope_scaling_factor=rope_scaling_factor,
+            **data,
+        )
+
+
+class Granite(ModelFamilyMetadata):
     """Metadata for IBM Granite model family.
 
     Args:
@@ -678,38 +787,24 @@ class Granite(ModelMetadata):
         **kwargs: Forwarded to [`ModelMetadata`][nemo_safe_synthesizer.llm.metadata.ModelMetadata].
     """
 
+    prompt_template: ClassVar[str] = "user\n {instruction} {schema} \n assistant\n{prefill}"
+    add_bos_token_to_prompt: ClassVar[bool] = False
+
     def __init__(
         self,
         model_name_or_path: str,
-        tokenizer=None,
-        rope_scaling_factor: float | None = None,
+        tokenizer: PreTrainedTokenizerBase | None = None,
+        rope_scaling_factor: float | int | None = None,
         **kwargs,
     ) -> None:
-        config, tokenizer = ModelMetadata._load_config_and_tokenizer(model_name_or_path, tokenizer)
-
-        super().__init__(
-            autoconfig=config,
-            instruction=DEFAULT_INSTRUCTION,
-            prompt_config=LLMPromptConfig.from_tokenizer(
-                name=model_name_or_path,
-                tokenizer=tokenizer,
-                template="user\n {instruction} {schema} \n assistant\n{prefill}",
-                add_bos_token_to_prompt=False,
-                add_eos_token_to_prompt=True,
-            ),
-            model_name_or_path=model_name_or_path,
-            rope_scaling=rope_scaling_factor,  # ty: ignore[invalid-argument-type] -- third-party stub
-            rope_parameters_location="autoconfig",
-            tokenizer=tokenizer,
-            **kwargs,
-        )
+        super().__init__(model_name_or_path, tokenizer=tokenizer, rope_scaling_factor=rope_scaling_factor, **kwargs)
 
 
-class Llama32(ModelMetadata):
+class Llama32(ModelFamilyMetadata):
     """Metadata for Meta Llama 3.2 model family.
 
-    Uses ``<|im_start|>`` (id 151644) as the BOS token and disables
-    automatic BOS/EOS injection in prompts.
+    Uses the tokenizer's native BOS token and disables automatic BOS/EOS
+    injection in prompts.
 
     Args:
         model_name_or_path: HuggingFace model identifier or local path.
@@ -718,36 +813,22 @@ class Llama32(ModelMetadata):
         **kwargs: Forwarded to [`ModelMetadata`][nemo_safe_synthesizer.llm.metadata.ModelMetadata].
     """
 
+    prompt_template: ClassVar[str] = "user\n {instruction} {schema} \n assistant\n{prefill}"
+    add_bos_token_to_prompt: ClassVar[bool] = False
+    add_eos_token_to_prompt: ClassVar[bool] = False
+    model_name_markers: ClassVar[tuple[str, ...]] = ("llama32", "llama-3.2")
+
     def __init__(
         self,
         model_name_or_path: str,
-        tokenizer=None,
-        rope_scaling_factor: float | None = None,
+        tokenizer: PreTrainedTokenizerBase | None = None,
+        rope_scaling_factor: float | int | None = None,
         **kwargs,
     ) -> None:
-        config, tokenizer = ModelMetadata._load_config_and_tokenizer(model_name_or_path, tokenizer)
-
-        super().__init__(
-            autoconfig=config,
-            instruction=DEFAULT_INSTRUCTION,
-            prompt_config=LLMPromptConfig.from_tokenizer(
-                name=model_name_or_path,
-                tokenizer=tokenizer,
-                template="user\n {instruction} {schema} \n assistant\n{prefill}",
-                bos_token="<|im_start|>",
-                bos_token_id=151644,
-                add_bos_token_to_prompt=False,
-                add_eos_token_to_prompt=False,
-            ),
-            model_name_or_path=model_name_or_path,
-            rope_scaling=rope_scaling_factor,  # ty: ignore[invalid-argument-type] -- third-party stub
-            rope_parameters_location="autoconfig",
-            tokenizer=tokenizer,
-            **kwargs,
-        )
+        super().__init__(model_name_or_path, tokenizer=tokenizer, rope_scaling_factor=rope_scaling_factor, **kwargs)
 
 
-class Mistral(ModelMetadata):
+class Mistral(ModelFamilyMetadata):
     """Metadata for Mistral AI model family.
 
     RoPE scaling is not supported for Mistral models. Any supplied
@@ -761,40 +842,20 @@ class Mistral(ModelMetadata):
     """
 
     default_learning_rate: ClassVar[float] = 0.0001
+    prompt_template: ClassVar[str] = "[INST] {instruction} \n\n {schema} [/INST]{prefill}"
+    supports_rope_scaling: ClassVar[bool] = False
 
     def __init__(
         self,
         model_name_or_path: str,
         tokenizer: PreTrainedTokenizerBase | None = None,
-        rope_scaling_factor: float | None = None,
+        rope_scaling_factor: float | int | None = None,
         **kwargs,
     ) -> None:
-        config, tokenizer = ModelMetadata._load_config_and_tokenizer(model_name_or_path, tokenizer)
-        if rope_scaling_factor:
-            logger.warning(
-                f"Rope scaling factor {rope_scaling_factor} is not supported for Mistral due to longer default context lengths. Ignoring."
-            )
-
-        template = "[INST] {instruction} \n\n {schema} [/INST]{prefill}"
-        super().__init__(
-            autoconfig=config,
-            instruction=DEFAULT_INSTRUCTION,
-            prompt_config=LLMPromptConfig.from_tokenizer(
-                name=model_name_or_path,
-                tokenizer=tokenizer,
-                template=template,
-                add_bos_token_to_prompt=True,
-                add_eos_token_to_prompt=True,
-            ),
-            model_name_or_path=model_name_or_path,
-            rope_scaling=None,
-            rope_parameters_location="autoconfig",
-            tokenizer=tokenizer,  # ty: ignore[invalid-argument-type] -- re-annotated local shadows param type
-            **kwargs,
-        )
+        super().__init__(model_name_or_path, tokenizer=tokenizer, rope_scaling_factor=rope_scaling_factor, **kwargs)
 
 
-class Nemotron(ModelMetadata):
+class Nemotron(ModelFamilyMetadata):
     """Metadata for NVIDIA Nemotron model family.
 
     Args:
@@ -804,34 +865,19 @@ class Nemotron(ModelMetadata):
         **kwargs: Forwarded to [`ModelMetadata`][nemo_safe_synthesizer.llm.metadata.ModelMetadata].
     """
 
+    prompt_template: ClassVar[str] = "[INST] {instruction} \n\n {schema} [/INST]{prefill}"
+
     def __init__(
         self,
         model_name_or_path: str,
-        tokenizer=None,
-        rope_scaling_factor: float | None = None,
+        tokenizer: PreTrainedTokenizerBase | None = None,
+        rope_scaling_factor: float | int | None = None,
         **kwargs,
     ) -> None:
-        config, tokenizer = ModelMetadata._load_config_and_tokenizer(model_name_or_path, tokenizer)
-
-        super().__init__(
-            autoconfig=config,
-            instruction=DEFAULT_INSTRUCTION,
-            prompt_config=LLMPromptConfig.from_tokenizer(
-                template="[INST] {instruction} \n\n {schema} [/INST]{prefill}",
-                add_bos_token_to_prompt=True,
-                add_eos_token_to_prompt=True,
-                tokenizer=tokenizer,
-                name=model_name_or_path,
-            ),
-            model_name_or_path=model_name_or_path,
-            rope_scaling=rope_scaling_factor,  # ty: ignore[invalid-argument-type] -- third-party stub
-            rope_parameters_location="autoconfig",
-            tokenizer=tokenizer,
-            **kwargs,
-        )
+        super().__init__(model_name_or_path, tokenizer=tokenizer, rope_scaling_factor=rope_scaling_factor, **kwargs)
 
 
-class Qwen(ModelMetadata):
+class Qwen(ModelFamilyMetadata):
     """Metadata for Alibaba Qwen model family.
 
     Args:
@@ -841,35 +887,21 @@ class Qwen(ModelMetadata):
         **kwargs: Forwarded to [`ModelMetadata`][nemo_safe_synthesizer.llm.metadata.ModelMetadata].
     """
 
+    # Matched with vllm prompt 2024-12-18
+    prompt_template: ClassVar[str] = "user\n {instruction} {schema} \n assistant\n{prefill}"
+    add_eos_token_to_prompt: ClassVar[bool] = False
+
     def __init__(
         self,
         model_name_or_path: str,
-        tokenizer=None,
-        rope_scaling_factor: float | None = None,
+        tokenizer: PreTrainedTokenizerBase | None = None,
+        rope_scaling_factor: float | int | None = None,
         **kwargs,
     ) -> None:
-        config, tokenizer = ModelMetadata._load_config_and_tokenizer(model_name_or_path, tokenizer)
-
-        super().__init__(
-            autoconfig=config,
-            instruction=DEFAULT_INSTRUCTION,
-            # Matched with vllm prompt 2024-12-18
-            prompt_config=LLMPromptConfig.from_tokenizer(
-                template="user\n {instruction} {schema} \n assistant\n{prefill}",
-                add_bos_token_to_prompt=True,
-                add_eos_token_to_prompt=False,
-                tokenizer=tokenizer,
-                name=model_name_or_path,
-            ),
-            model_name_or_path=model_name_or_path,
-            rope_scaling=rope_scaling_factor,  # ty: ignore[invalid-argument-type] -- third-party stub
-            rope_parameters_location="autoconfig",
-            tokenizer=tokenizer,
-            **kwargs,
-        )
+        super().__init__(model_name_or_path, tokenizer=tokenizer, rope_scaling_factor=rope_scaling_factor, **kwargs)
 
 
-class SmolLM2(ModelMetadata):
+class SmolLM2(ModelFamilyMetadata):
     """Metadata for HuggingFace SmolLM2 model family (e.g. ``SmolLM2-135M``).
 
     RoPE scaling is not supported and any supplied ``rope_scaling_factor``
@@ -882,46 +914,28 @@ class SmolLM2(ModelMetadata):
         **kwargs: Forwarded to [`ModelMetadata`][nemo_safe_synthesizer.llm.metadata.ModelMetadata].
     """
 
+    prompt_template: ClassVar[str] = "user\n {instruction} {schema} \n assistant\n{prefill}"
+    add_bos_token_to_prompt: ClassVar[bool] = False
+    add_eos_token_to_prompt: ClassVar[bool] = False
+    bos_token: ClassVar[str | None] = "<|im_start|>"
+    supports_rope_scaling: ClassVar[bool] = False
+
     def __init__(
         self,
         model_name_or_path: str,
-        tokenizer=None,
-        rope_scaling_factor: float | None = None,
+        tokenizer: PreTrainedTokenizerBase | None = None,
+        rope_scaling_factor: float | int | None = None,
         **kwargs,
     ) -> None:
-        config, tokenizer = ModelMetadata._load_config_and_tokenizer(model_name_or_path, tokenizer)
-        if rope_scaling_factor:
-            logger.warning(
-                f"Rope scaling factor {rope_scaling_factor} is not supported for SmolLM2 due to longer default context lengths. Ignoring."
-            )
-
-        im_start_id = tokenizer.convert_tokens_to_ids("<|im_start|>")  # ty: ignore[unresolved-attribute] -- third-party stub
-        super().__init__(
-            autoconfig=config,
-            instruction=DEFAULT_INSTRUCTION,
-            prompt_config=LLMPromptConfig.from_tokenizer(
-                template="user\n {instruction} {schema} \n assistant\n{prefill}",
-                add_bos_token_to_prompt=False,
-                add_eos_token_to_prompt=False,
-                tokenizer=tokenizer,
-                bos_token="<|im_start|>",
-                bos_token_id=im_start_id,
-                name=model_name_or_path,
-            ),
-            model_name_or_path=model_name_or_path,
-            rope_scaling=None,
-            rope_parameters_location="autoconfig",
-            tokenizer=tokenizer,
-            **kwargs,
-        )
+        super().__init__(model_name_or_path, tokenizer=tokenizer, rope_scaling_factor=rope_scaling_factor, **kwargs)
 
 
-class SmolLM3(ModelMetadata):
+class SmolLM3(ModelFamilyMetadata):
     """Metadata for HuggingFace SmolLM3 model family.
 
-    Uses ``<|im_start|>`` (id 128011) as the BOS token.  RoPE scaling
-    is not supported. Any supplied ``rope_scaling_factor`` will be
-    ignored with a warning.
+    Uses ``<|im_start|>`` as the BOS token.  RoPE scaling is not
+    supported. Any supplied ``rope_scaling_factor`` will be ignored
+    with a warning.
 
     Args:
         model_name_or_path: HuggingFace model identifier or local path.
@@ -930,47 +944,23 @@ class SmolLM3(ModelMetadata):
         **kwargs: Forwarded to [`ModelMetadata`][nemo_safe_synthesizer.llm.metadata.ModelMetadata].
     """
 
+    prompt_template: ClassVar[str] = "user\n {instruction} {schema} <|im_end|> \n assistant\n{prefill}"
+    add_eos_token_to_prompt: ClassVar[bool] = False
+    # Group-by SFT assumes a BOS token at the start of the prompt.
+    bos_token: ClassVar[str | None] = "<|im_start|>"
+    supports_rope_scaling: ClassVar[bool] = False
+
     def __init__(
         self,
         model_name_or_path: str,
-        tokenizer=None,
-        rope_scaling_factor: float | None = None,
+        tokenizer: PreTrainedTokenizerBase | None = None,
+        rope_scaling_factor: float | int | None = None,
         **kwargs,
     ) -> None:
-        config, tokenizer = ModelMetadata._load_config_and_tokenizer(model_name_or_path, tokenizer)
-
-        # we use the bos token here explicitly for support during group-by SFT.
-        # the groupby assumes there is a bos token at the start of the prompt.
-        bos_token = "<|im_start|>"
-        bos_token_id = 128011
-
-        # SmolLM3 uses high theta values (1.5M-5M) so it's important to read from config
-        if rope_scaling_factor:
-            logger.warning(
-                f"Rope scaling factor {rope_scaling_factor} is not supported for SmolLM3 due to longer default context lengths. Ignoring."
-            )
-
-        super().__init__(
-            autoconfig=config,
-            instruction=DEFAULT_INSTRUCTION,
-            prompt_config=LLMPromptConfig.from_tokenizer(
-                template="user\n {instruction} {schema} <|im_end|> \n assistant\n{prefill}",
-                add_bos_token_to_prompt=True,
-                add_eos_token_to_prompt=False,
-                tokenizer=tokenizer,
-                name=model_name_or_path,
-                bos_token=bos_token,
-                bos_token_id=bos_token_id,
-            ),
-            model_name_or_path=model_name_or_path,
-            rope_scaling=None,
-            rope_parameters_location="autoconfig",
-            tokenizer=tokenizer,
-            **kwargs,
-        )
+        super().__init__(model_name_or_path, tokenizer=tokenizer, rope_scaling_factor=rope_scaling_factor, **kwargs)
 
 
-class TinyLlama(ModelMetadata):
+class TinyLlama(ModelFamilyMetadata):
     """Metadata for the TinyLlama model family.
 
     Args:
@@ -983,28 +973,11 @@ class TinyLlama(ModelMetadata):
     def __init__(
         self,
         model_name_or_path: str,
-        tokenizer=None,
-        rope_scaling_factor: float | None = None,
+        tokenizer: PreTrainedTokenizerBase | None = None,
+        rope_scaling_factor: float | int | None = None,
         **kwargs,
     ) -> None:
-        config, tokenizer = ModelMetadata._load_config_and_tokenizer(model_name_or_path, tokenizer)
-
-        super().__init__(
-            autoconfig=config,
-            instruction=DEFAULT_INSTRUCTION,
-            prompt_config=LLMPromptConfig.from_tokenizer(
-                template=PROMPT_TEMPLATE,
-                add_bos_token_to_prompt=True,
-                add_eos_token_to_prompt=True,
-                tokenizer=tokenizer,
-                name=model_name_or_path,
-            ),
-            model_name_or_path=model_name_or_path,
-            rope_scaling=rope_scaling_factor,  # ty: ignore[invalid-argument-type] -- third-party stub
-            rope_parameters_location="autoconfig",
-            tokenizer=tokenizer,
-            **kwargs,
-        )
+        super().__init__(model_name_or_path, tokenizer=tokenizer, rope_scaling_factor=rope_scaling_factor, **kwargs)
 
 
 # Pydantic 2.12 + transformers v5 + `from __future__ import annotations` interact
