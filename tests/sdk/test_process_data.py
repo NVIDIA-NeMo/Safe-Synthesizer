@@ -495,7 +495,7 @@ class TestLoadFromSavePath:
             fixture_sample_patient_redacted_dataframe,
         )
         saved_config = SafeSynthesizerParameters().model_dump(mode="json")
-        saved_config.pop("strict_config")
+        saved_config.pop("unknown_fields")
         saved_config["training"]["epoch"] = 1
         workdir.config.write_text(json.dumps(saved_config))
         mock_metadata_cls.from_metadata_json.return_value = MagicMock()
@@ -515,7 +515,7 @@ class TestLoadFromSavePath:
         fixture_sample_patient_dataframe,
         fixture_sample_patient_redacted_dataframe,
     ):
-        """A persisted or overriding non-strict policy applies during saved-config validation."""
+        """A persisted or overriding ignore policy applies during saved-config validation."""
         workdir, _, _ = self._prepare_workdir(
             tmp_path,
             fixture_sample_patient_dataframe,
@@ -523,24 +523,28 @@ class TestLoadFromSavePath:
         )
         saved_config = SafeSynthesizerParameters().model_dump(mode="json")
         if policy_source == "saved":
-            saved_config["strict_config"] = False
+            saved_config["unknown_fields"] = "ignore"
         else:
-            saved_config.pop("strict_config")
+            saved_config.pop("unknown_fields")
         saved_config["training"]["epoch"] = 1
         workdir.config.write_text(json.dumps(saved_config))
         mock_metadata_cls.from_metadata_json.return_value = MagicMock()
 
         runtime_config = (
-            SafeSynthesizerParameters.model_validate({"strict_config": False}) if policy_source == "runtime" else None
+            SafeSynthesizerParameters.model_validate({"unknown_fields": "ignore"})
+            if policy_source == "runtime"
+            else None
         )
-        builder = SafeSynthesizer(config=runtime_config, workdir=workdir)
-        if policy_source == "builder":
-            builder.with_strict_config(False)
+        builder = SafeSynthesizer(
+            config=runtime_config,
+            workdir=workdir,
+            unknown_fields="ignore" if policy_source == "builder" else None,
+        )
 
         builder.load_from_save_path(runtime_config=runtime_config)
 
         assert builder._nss_config is not None
-        assert builder._nss_config.strict_config is False
+        assert builder._nss_config.unknown_fields == "ignore"
         assert not hasattr(builder._nss_config.training, "epoch")
 
     @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")

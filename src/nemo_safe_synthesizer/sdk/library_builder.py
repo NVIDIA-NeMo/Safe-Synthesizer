@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import os
 import time
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -20,6 +20,7 @@ from ..config import (
     SafeSynthesizerParameters,
 )
 from ..config.autoconfig import AutoConfigResolver
+from ..config.unknown_fields import UnknownFieldBehavior, normalize_unknown_fields
 from ..configurator.parameters import Parameters
 from ..errors import ParameterError
 from ..evaluation.evaluator import Evaluator
@@ -213,8 +214,9 @@ class SafeSynthesizer(ConfigBuilder):
         save_path: Path | str | None = None,
         emit_telemetry: bool | None = None,
         deployment_type: DeploymentTypeEnum | None = None,
+        unknown_fields: UnknownFieldBehavior | None = None,
     ):
-        super().__init__(config=config)
+        super().__init__(config=config, unknown_fields=unknown_fields)
         self._workdir = workdir
         if self._workdir is None:
             # Create a default workdir when none provided
@@ -278,10 +280,10 @@ class SafeSynthesizer(ConfigBuilder):
         When resuming from a trained model for generation, the source paths
         point to the parent workdir that contains the trained adapter.
         Optional ``runtime_config`` values for generation, evaluation,
-        telemetry, and strict config validation are applied without mutating
-        the persisted train config. An explicitly set ``strict_config`` also
-        controls validation of the saved config itself so legacy fields can be
-        ignored for version-skew compatibility.
+        telemetry, and the unknown-field policy are applied without mutating
+        the persisted train config. An explicitly set ``unknown_fields`` policy
+        also controls validation of the saved config itself so legacy fields
+        can be ignored for version-skew compatibility.
 
         Always prefers cached train/test splits from the training run to ensure
         evaluation metrics are consistent and privacy guarantees are maintained.
@@ -297,20 +299,28 @@ class SafeSynthesizer(ConfigBuilder):
 
         with config_file.open() as file:
             saved_config_input = json.load(file)
-        strict_config_override: bool | None = None
-        if runtime_config is not None and "strict_config" in runtime_config.model_fields_set:
-            strict_config_override = runtime_config.strict_config
-        elif self._strict_config_explicit:
-            strict_config_override = self._strict_config
-        if strict_config_override is not None and isinstance(saved_config_input, dict):
-            saved_config_input["strict_config"] = strict_config_override
-        saved_config = SafeSynthesizerParameters.model_validate(saved_config_input)
+        unknown_fields_override = self._unknown_fields_override
+        if runtime_config is not None and "unknown_fields" in runtime_config.model_fields_set:
+            unknown_fields_override = runtime_config.unknown_fields
+        if unknown_fields_override is None:
+            saved_config = SafeSynthesizerParameters.model_validate(saved_config_input)
+        else:
+            normalized_input = (
+                normalize_unknown_fields(
+                    SafeSynthesizerParameters,
+                    saved_config_input,
+                    unknown_fields_override,
+                )
+                if isinstance(saved_config_input, Mapping)
+                else saved_config_input
+            )
+            saved_config = SafeSynthesizerParameters.model_validate(normalized_input)
+            saved_config = saved_config.with_config_patch({"unknown_fields": unknown_fields_override})
         _warn_for_saved_default_drift(saved_config)
         if runtime_config is not None:
             saved_config = saved_config.with_runtime_overrides(runtime_config)
         self._nss_config = saved_config
-        self._strict_config = self._nss_config.strict_config
-        self._strict_config_explicit = "strict_config" in self._nss_config.model_fields_set
+        self._unknown_fields_override = None
         self._generation_config = self._nss_config.generation
         self._evaluation_config = self._nss_config.evaluation
         self._emit_telemetry_config = self._nss_config.emit_telemetry

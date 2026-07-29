@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Mapping
-from typing import Any, ClassVar, Literal, Self, TypeAlias, cast
+from typing import Self, TypeAlias, cast
 
-from pydantic import Field, TypeAdapter, model_validator
+from pydantic import Field, model_validator
 from typing_extensions import override
 
 from ..configurator.parameter_paths import (
@@ -28,6 +28,12 @@ from .replace_pii import PiiReplacerConfig
 from .time_series import TimeSeriesParameters
 from .training import TrainingHyperparams
 from .types import AUTO_STR
+from .unknown_fields import (
+    DEFAULT_UNKNOWN_FIELDS,
+    UnknownFieldBehavior,
+    normalize_unknown_fields,
+    validate_unknown_fields,
+)
 
 ConfigPatch: TypeAlias = Mapping[str, object]
 
@@ -35,9 +41,6 @@ __all__ = ["ConfigPatch", "SafeSynthesizerParameters"]
 
 
 logger = get_logger(__name__)
-
-
-_ExtraBehavior = Literal["ignore", "forbid"]
 
 
 class SafeSynthesizerParameters(Parameters):
@@ -96,70 +99,33 @@ class SafeSynthesizerParameters(Parameters):
         ),
     )
 
-    strict_config: bool = Field(
-        default=True,
+    unknown_fields: UnknownFieldBehavior = Field(
+        default=DEFAULT_UNKNOWN_FIELDS,
         description=(
-            "Whether unknown configuration keys are rejected recursively. "
-            "Disable only when compatibility across mismatched client and service versions is required."
+            "How unknown configuration keys are handled recursively. "
+            "Use 'ignore' only for compatibility across mismatched client and service versions."
         ),
     )
 
-    _strict_config_adapter: ClassVar[TypeAdapter[bool]] = TypeAdapter(bool)
-
     @classmethod
-    def _strict_config_enabled(cls, value: object = True) -> bool:
-        """Validate and resolve the user-facing unknown-field policy flag."""
-        return cls._strict_config_adapter.validate_python(value)
+    def _unknown_fields_from_input(cls, source: object) -> UnknownFieldBehavior:
+        """Resolve the policy declared by a complete configuration input."""
+        if isinstance(source, cls):
+            return source.unknown_fields
+        if isinstance(source, Mapping):
+            mapping = cast(Mapping[str, object], source)
+            return validate_unknown_fields(mapping.get("unknown_fields", DEFAULT_UNKNOWN_FIELDS))
+        return DEFAULT_UNKNOWN_FIELDS
 
+    @model_validator(mode="before")
     @classmethod
-    def _strict_config_from_mapping(cls, source: Mapping[str, object], *, default: bool = True) -> bool:
-        return cls._strict_config_enabled(source.get("strict_config", default))
-
-    @classmethod
-    def _extra_behavior(cls, source: object, *, default: bool = True) -> _ExtraBehavior:
-        if isinstance(source, SafeSynthesizerParameters):
-            enabled = source.strict_config
-        elif isinstance(source, Mapping):
-            enabled = cls._strict_config_from_mapping(cast(Mapping[str, object], source), default=default)
-        else:
-            enabled = default
-        return "forbid" if enabled else "ignore"
-
-    def __init__(self, /, **data: Any) -> None:
-        """Validate constructor input with the input's recursive unknown-field policy."""
-        self.__pydantic_validator__.validate_python(
-            data,
-            self_instance=self,
-            extra=type(self)._extra_behavior(data),
-        )
-
-    # Pydantic marks its own BaseModel initializer this way so the model
-    # metaclass does not treat this equivalent initializer as a custom one.
-    cast(Any, __init__).__pydantic_base_init__ = True
-
-    @classmethod
-    @override
-    def model_validate(
-        cls,
-        obj: Any,
-        *,
-        strict: bool | None = None,
-        extra: Literal["allow", "ignore", "forbid"] | None = None,
-        from_attributes: bool | None = None,
-        context: Any | None = None,
-        by_alias: bool | None = None,
-        by_name: bool | None = None,
-    ) -> Self:
-        """Validate input using ``strict_config`` as the recursive extras policy."""
-        return super().model_validate(
-            obj,
-            strict=strict,
-            extra=extra if extra is not None else cls._extra_behavior(obj),
-            from_attributes=from_attributes,
-            context=context,
-            by_alias=by_alias,
-            by_name=by_name,
-        )
+    def _normalize_unknown_field_policy(cls, value: object) -> object:
+        """Apply the declared policy before the model tree is validated."""
+        if not isinstance(value, Mapping):
+            return value
+        mapping = cast(Mapping[str, object], value)
+        unknown_fields = cls._unknown_fields_from_input(mapping)
+        return normalize_unknown_fields(cls, mapping, unknown_fields)
 
     @model_validator(mode="after")
     def _validate_and_resolve_data_params(self) -> Self:
@@ -266,30 +232,27 @@ class SafeSynthesizerParameters(Parameters):
     def from_config_source(
         cls,
         source: Parameters | Mapping[str, object] | None = None,
-        *,
-        unknown_fields: Literal["ignore", "reject"] | None = None,
         **kwargs: object,
     ) -> Self:
-        """Normalize a source using its effective ``strict_config`` policy."""
-        if unknown_fields is None:
-            if isinstance(source, Mapping):
-                enabled = (
-                    cls._strict_config_enabled(kwargs["strict_config"])
-                    if "strict_config" in kwargs
-                    else cls._strict_config_from_mapping(cast(Mapping[str, object], source))
-                )
-            elif isinstance(source, SafeSynthesizerParameters):
-                enabled = source.strict_config
-            else:
-                enabled = cls._strict_config_enabled(kwargs.get("strict_config", True))
-            unknown_fields = "reject" if enabled else "ignore"
-        return cast(Self, super().from_config_source(source, unknown_fields=unknown_fields, **kwargs))
+        """Normalize a source using its effective unknown-field policy."""
+        if "unknown_fields" in kwargs:
+            unknown_field_behavior = validate_unknown_fields(kwargs["unknown_fields"])
+        else:
+            unknown_field_behavior = cls._unknown_fields_from_input(source)
+        return cast(
+            Self,
+            super().from_config_source(
+                source,
+                unknown_field_behavior=unknown_field_behavior,
+                **kwargs,
+            ),
+        )
 
     @classmethod
     def from_config_patch(cls, patch: ConfigPatch) -> Self:
         """Validate a sparse top-level config patch as a full configuration."""
         normalized = ParameterSchema.from_model(cls).normalize_aliases(patch)
-        unknown_fields = "reject" if cls._strict_config_from_mapping(normalized) else "ignore"
+        unknown_fields = cls._unknown_fields_from_input(normalized)
         return CompiledConfigPatch.from_mapping(
             cls, normalized, origin="config patch", precedence=0, unknown_fields=unknown_fields
         ).apply()
@@ -310,13 +273,17 @@ class SafeSynthesizerParameters(Parameters):
             unknown_fields="reject",
         )
         normalized = ParameterSchema.from_model(model_type).normalize_aliases(patch)
-        strict_config = model_type._strict_config_from_mapping(normalized, default=self.strict_config)
+        unknown_fields = (
+            validate_unknown_fields(normalized["unknown_fields"])
+            if "unknown_fields" in normalized
+            else self.unknown_fields
+        )
         override = CompiledConfigPatch.from_mapping(
             model_type,
             normalized,
             origin="config patch",
             precedence=1,
-            unknown_fields="reject" if strict_config else "ignore",
+            unknown_fields=unknown_fields,
         )
         return base.combine(override).apply()
 
@@ -325,7 +292,7 @@ class SafeSynthesizerParameters(Parameters):
 
         ``self`` is the saved training-run config. Only explicitly-set
         ``generation`` and ``evaluation`` fields from ``runtime`` are merged in,
-        plus ``emit_telemetry`` and ``strict_config`` when the caller set them.
+        plus ``emit_telemetry`` and ``unknown_fields`` when the caller set them.
         Training, data, privacy, and other sections are preserved so training
         provenance survives a generate-only resume.
 
@@ -349,8 +316,8 @@ class SafeSynthesizerParameters(Parameters):
         _add_section("evaluation", runtime.evaluation)
         if "emit_telemetry" in runtime.model_fields_set:
             updates["emit_telemetry"] = runtime.emit_telemetry
-        if "strict_config" in runtime.model_fields_set:
-            updates["strict_config"] = runtime.strict_config
+        if "unknown_fields" in runtime.model_fields_set:
+            updates["unknown_fields"] = runtime.unknown_fields
         patch = CompiledConfigPatch.from_mapping(
             type(self),
             updates,

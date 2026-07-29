@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Literal, Self, TypeAlias
+from typing import Self, TypeAlias
 
 import pandas as pd
 
@@ -20,6 +20,11 @@ from ..config import (
     SafeSynthesizerParameters,
     TimeSeriesParameters,
     TrainingHyperparams,
+)
+from ..config.unknown_fields import (
+    DEFAULT_UNKNOWN_FIELDS,
+    UnknownFieldBehavior,
+    validate_unknown_fields,
 )
 from ..observability import get_logger
 from ..telemetry import _telemetry_enabled
@@ -49,13 +54,19 @@ class ConfigBuilder:
         config: Optional pre-built parameters.  When supplied, the
             individual ``_*_config`` attributes are seeded from its
             sections.
+        unknown_fields: Optional SDK-wide override for raw mapping validation.
+            Set it at construction time so every section uses the same policy.
     """
 
-    def __init__(self, config: SafeSynthesizerParameters | None = None) -> None:
+    def __init__(
+        self,
+        config: SafeSynthesizerParameters | None = None,
+        *,
+        unknown_fields: UnknownFieldBehavior | None = None,
+    ) -> None:
         self._nss_config = config.model_copy(deep=True) if config is not None else None
-        self._strict_config_explicit = config is not None and "strict_config" in config.model_fields_set
+        self._unknown_fields_override = validate_unknown_fields(unknown_fields) if unknown_fields is not None else None
         if self._nss_config is not None:
-            self._strict_config = self._nss_config.strict_config
             self._emit_telemetry_config = self._nss_config.emit_telemetry
             self._evaluation_config = self._nss_config.evaluation
             self._replace_pii_config = self._nss_config.replace_pii
@@ -66,7 +77,6 @@ class ConfigBuilder:
             self._data_config = self._nss_config.data
             self._time_series_config = self._nss_config.time_series
         else:
-            self._strict_config = True
             self._data_config: DataParameters = DataParameters()
             self._evaluation_config: EvaluationParameters = EvaluationParameters()
             self._generation_config: GenerateParameters = GenerateParameters()
@@ -82,14 +92,12 @@ class ConfigBuilder:
         self._hf_token_secret: str | None = None
 
     @property
-    def _unknown_fields(self) -> Literal["ignore", "reject"]:
-        return "reject" if self._strict_config else "ignore"
-
-    def with_strict_config(self, enabled: bool) -> Self:
-        """Control whether SDK raw mapping inputs reject unknown keys."""
-        self._strict_config = enabled
-        self._strict_config_explicit = True
-        return self
+    def _effective_unknown_fields(self) -> UnknownFieldBehavior:
+        if self._unknown_fields_override is not None:
+            return self._unknown_fields_override
+        if self._nss_config is not None:
+            return self._nss_config.unknown_fields
+        return DEFAULT_UNKNOWN_FIELDS
 
     def with_data_source(self, df_source: DataSource) -> Self:
         """Set the data source for synthetic data generation.
@@ -113,7 +121,11 @@ class ConfigBuilder:
         Returns:
             This builder instance with data processing settings applied.
         """
-        self._data_config = DataParameters.from_config_source(config, unknown_fields=self._unknown_fields, **kwargs)
+        self._data_config = DataParameters.from_config_source(
+            config,
+            unknown_field_behavior=self._effective_unknown_fields,
+            **kwargs,
+        )
         return self
 
     def with_train(self, config: TrainingHyperparams | RawConfig | None = None, **kwargs: object) -> Self:
@@ -127,7 +139,9 @@ class ConfigBuilder:
             This builder instance with training hyperparameters applied.
         """
         self._training_config = TrainingHyperparams.from_config_source(
-            config, unknown_fields=self._unknown_fields, **kwargs
+            config,
+            unknown_field_behavior=self._effective_unknown_fields,
+            **kwargs,
         )
         return self
 
@@ -142,7 +156,9 @@ class ConfigBuilder:
             This builder instance with generation settings applied.
         """
         self._generation_config = GenerateParameters.from_config_source(
-            config, unknown_fields=self._unknown_fields, **kwargs
+            config,
+            unknown_field_behavior=self._effective_unknown_fields,
+            **kwargs,
         )
         return self
 
@@ -157,7 +173,9 @@ class ConfigBuilder:
             This builder instance with time-series synthesis settings applied.
         """
         self._time_series_config = TimeSeriesParameters.from_config_source(
-            config, unknown_fields=self._unknown_fields, **kwargs
+            config,
+            unknown_field_behavior=self._effective_unknown_fields,
+            **kwargs,
         )
         return self
 
@@ -174,7 +192,9 @@ class ConfigBuilder:
             This builder instance with differential privacy settings applied.
         """
         self._privacy_config = DifferentialPrivacyHyperparams.from_config_source(
-            config, unknown_fields=self._unknown_fields, **kwargs
+            config,
+            unknown_field_behavior=self._effective_unknown_fields,
+            **kwargs,
         )
         return self
 
@@ -221,10 +241,16 @@ class ConfigBuilder:
 
         match config:
             case PiiReplacerConfig() | Mapping() as values:
-                cfg = PiiReplacerConfig.from_config_source(values, unknown_fields=self._unknown_fields, **kwargs)
+                cfg = PiiReplacerConfig.from_config_source(
+                    values,
+                    unknown_field_behavior=self._effective_unknown_fields,
+                    **kwargs,
+                )
             case None:
                 cfg = PiiReplacerConfig.from_config_source(
-                    PiiReplacerConfig.get_default_config(), unknown_fields=self._unknown_fields, **kwargs
+                    PiiReplacerConfig.get_default_config(),
+                    unknown_field_behavior=self._effective_unknown_fields,
+                    **kwargs,
                 )
             case _:
                 raise ValueError(f"Config must be a PiiReplacerConfig, raw mapping, or None, got {config!r}")
@@ -243,7 +269,9 @@ class ConfigBuilder:
             This builder instance with evaluation settings applied.
         """
         self._evaluation_config = EvaluationParameters.from_config_source(
-            config, unknown_fields=self._unknown_fields, **kwargs
+            config,
+            unknown_field_behavior=self._effective_unknown_fields,
+            **kwargs,
         )
         return self
 
@@ -268,18 +296,19 @@ class ConfigBuilder:
         then injects ``_classify_model_provider`` into PII configuration when
         requested.
         """
-        self._nss_config = SafeSynthesizerParameters(
-            data=self._data_config,
-            evaluation=self._evaluation_config,
-            training=self._training_config,
-            generation=self._generation_config,
-            privacy=self._privacy_config,
-            time_series=self._time_series_config,
-            replace_pii=self._replace_pii_config,
-            preflight=self._preflight_config,
-            emit_telemetry=self._emit_telemetry_config,
-            strict_config=self._strict_config,
-        )
+        config_values: dict[str, object] = {
+            "data": self._data_config,
+            "evaluation": self._evaluation_config,
+            "training": self._training_config,
+            "generation": self._generation_config,
+            "privacy": self._privacy_config,
+            "time_series": self._time_series_config,
+            "replace_pii": self._replace_pii_config,
+            "preflight": self._preflight_config,
+            "emit_telemetry": self._emit_telemetry_config,
+            "unknown_fields": self._effective_unknown_fields,
+        }
+        self._nss_config = SafeSynthesizerParameters.model_validate(config_values)
 
         # Inject classify_model_provider into PII replacer config if set
         if self._classify_model_provider and self._nss_config.replace_pii:
