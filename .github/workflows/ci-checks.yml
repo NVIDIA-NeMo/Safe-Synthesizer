@@ -150,6 +150,8 @@ jobs:
         run: mise run build-wheel
 
       - name: Verify clean end-user wheel install
+        env:
+          CONTAINER_CMD: docker
         run: mise run release:verify-wheel
 
   unit-test:
