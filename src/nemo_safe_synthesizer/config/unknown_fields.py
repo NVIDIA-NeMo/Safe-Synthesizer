@@ -98,8 +98,7 @@ def _normalize_annotation(
 
     if origin in (dict, Mapping) and len(args) == 2 and isinstance(value, Mapping):
         return {
-            key: _normalize_annotation(args[1], item, unknown_fields, (*path, str(key)))
-            for key, item in value.items()
+            key: _normalize_annotation(args[1], item, unknown_fields, (*path, str(key))) for key, item in value.items()
         }
 
     return value
