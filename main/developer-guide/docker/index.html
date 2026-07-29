@@ -9574,8 +9574,8 @@ image.</p>
 </table>
 <p>Adding a new variant should be mechanical:</p>
 <ol>
-<li>Add the extra and source indexes to <code>pyproject.toml</code>.</li>
-<li>Regenerate <code>uv.lock</code>.</li>
+<li>Add the variant and source indexes to <code>cuda_deps.toml</code>.</li>
+<li>Regenerate <code>pyproject.toml</code> with <code>tools/gen_cuda_deps.py</code>, then regenerate <code>uv.lock</code>.</li>
 <li>Add a matrix row to <code>.github/workflows/container-build.yml</code>.</li>
 <li>Build locally with <code>CONTAINER_GPU_EXTRA=&lt;extra&gt; CONTAINER_GPU_VARIANT=&lt;variant&gt;</code>.</li>
 </ol>
