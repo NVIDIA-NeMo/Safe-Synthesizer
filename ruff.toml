@@ -27,7 +27,7 @@ exclude = [
     "site-packages",
     "venv",
     "**/*.ipynb",
-    ]
+]
 
 # Lint floor = minimum supported Python (requires-python >=3.11), not the
 # 3.13 dev default. Keeps pyupgrade (UP006/UP007/UP035) from rewriting code
@@ -39,9 +39,9 @@ indent-width = 4
 [lint]
 select = [
     # pycodestyle
-    "E4",   # import errors
-    "E7",   # statement errors
-    "E9",   # runtime errors
+    "E4", # import errors
+    "E7", # statement errors
+    "E9", # runtime errors
     # pyflakes
     "F",
     # whitespace
@@ -58,22 +58,22 @@ select = [
     # flake8-future-annotations
     "FA100", # missing `from __future__ import annotations`
     # flake8-bugbear
-    "B006",  # mutable default argument
+    "B006", # mutable default argument
     # flake8-print
-    "T201",  # print() found
+    "T201", # print() found
     # pydocstyle -- docstring formatting (convention=google below)
-    "D200",  # single-line docstring should fit on one line
-    "D201",  # no blank line before docstring
-    "D202",  # no blank line after docstring
-    "D209",  # closing quotes on separate line
-    "D210",  # no whitespace surrounding docstring text
-    "D300",  # use triple double quotes
-    "D301",  # use r"" for backslashes
-    "D403",  # capitalize first word
-    "D410",  # blank line after section
-    "D411",  # blank line before section
-    "D414",  # empty docstring section
-    "D419",  # empty docstring
+    "D200", # single-line docstring should fit on one line
+    "D201", # no blank line before docstring
+    "D202", # no blank line after docstring
+    "D209", # closing quotes on separate line
+    "D210", # no whitespace surrounding docstring text
+    "D300", # use triple double quotes
+    "D301", # use r"" for backslashes
+    "D403", # capitalize first word
+    "D410", # blank line after section
+    "D411", # blank line before section
+    "D414", # empty docstring section
+    "D419", # empty docstring
 ]
 ignore = []
 
@@ -88,9 +88,9 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 convention = "google"
 
 [lint.per-file-ignores]
-"tests/**" = ["T201"]    # print() is fine in tests
-"tools/**" = ["T201"]    # print() is fine in tooling scripts
-"script/**" = ["T201"]   # print() is fine in standalone scripts
+"tests/**" = ["T201"] # print() is fine in tests
+"tools/**" = ["T201"] # print() is fine in tooling scripts
+"script/**" = ["T201"] # print() is fine in standalone scripts
 
 [format]
 # Like Black, use double quotes for strings.

@@ -1,0 +1,11 @@
+{
+  "incremental": false,
+  "includes": ["**/*.toml"],
+  "toml": {
+    "indentWidth": 4,
+    "lineWidth": 120
+  },
+  "plugins": [
+    "https://plugins.dprint.dev/toml-0.7.0.wasm@0126c8112691542d30b52a639076ecc83e07bace877638cee7c6915fd36b8629"
+  ]
+}

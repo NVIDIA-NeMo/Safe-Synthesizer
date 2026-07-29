@@ -40,7 +40,7 @@ make setup # installs pinned mise, pinned tools from mise.lock, and .venv
 mise run bootstrap-nss cuda
 ```
 
-Development tools (`ruff`, `ty`, `yq`, `gh`, etc.) are managed via [mise](https://mise.jdx.dev/). Tool versions are declared in `.mise.toml` and locked in `mise.lock` (committed). mise also manages environment variables -- place project-local secrets or overrides in `.env` or `.env.local` (both git-ignored, auto-loaded by mise).
+Development tools (`dprint`, `ruff`, `ty`, `yq`, `gh`, etc.) are managed via [mise](https://mise.jdx.dev/). Tool versions are declared in `.mise.toml` and locked in `mise.lock` (committed). mise also manages environment variables -- place project-local secrets or overrides in `.env` or `.env.local` (both git-ignored, auto-loaded by mise).
 
 Project commands run through mise tasks under `.mise/tasks/`: `*.toml` files for declarative tasks, executable scripts for bash-heavy logic.
 

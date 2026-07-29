@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+from __future__ import annotations
+
 import importlib.util
 import sys
 import tomllib
@@ -9,6 +11,7 @@ from types import ModuleType
 
 import pytest
 from click.testing import CliRunner
+from packaging.markers import InvalidMarker
 from packaging.requirements import InvalidRequirement
 
 pytestmark = pytest.mark.unit
@@ -89,6 +92,9 @@ nvidia_package_suffix = ""
 
 [variants.cu129]
 cuda_package_suffix = "cu12"
+dependencies = [
+  { name = "variant-only", version = "1.0.0", local = "{torch_local_version}", sys_platform = "linux", source_kind = "pytorch" },
+]
 """
 
 
@@ -156,6 +162,9 @@ def test_build_cuda_pyproject_fragment_renders_cuda_variant_and_sources(tmp_path
     parsed = tomllib.loads(generated.text)
 
     assert parsed["project"]["optional-dependencies"]["cu132"] == EXPECTED_CU132_DEPS
+    assert parsed["project"]["optional-dependencies"]["cu129"][-1] == (
+        "variant-only==1.0.0+cu129; sys_platform == 'linux'"
+    )
     assert parsed["project"]["optional-dependencies"]["cpu"] == [
         "faker",
         "accelerate",
@@ -163,7 +172,26 @@ def test_build_cuda_pyproject_fragment_renders_cuda_variant_and_sources(tmp_path
         "torch==2.10.0+cpu; sys_platform == 'linux'",
     ]
     assert parsed["tool"]["uv"]["conflicts"] == [[{"extra": "cpu"}, {"extra": "cu132"}, {"extra": "cu129"}]]
+    expected_conflicts = """conflicts = [
+    [
+        { extra = "cpu" },
+        { extra = "cu132" },
+        { extra = "cu129" },
+    ],
+]
+"""
+    assert expected_conflicts in generated.text
+    expected_torch_sources = """torch = [
+    { index = "pytorch-cpu", extra = "cpu", marker = "sys_platform=='linux'" },
+    { index = "pytorch-cu132", extra = "cu132", marker = "sys_platform == 'linux'" },
+    { index = "pytorch-cu129", extra = "cu129", marker = "sys_platform == 'linux'" },
+]
+"""
+    assert expected_torch_sources in generated.text
     assert parsed["tool"]["uv"]["sources"]["torch"] == EXPECTED_CU132_TORCH_SOURCES
+    assert parsed["tool"]["uv"]["sources"]["variant-only"] == [
+        {"index": "pytorch-cu129", "extra": "cu129", "marker": "sys_platform == 'linux'"}
+    ]
     assert parsed["tool"]["uv"]["sources"]["flashinfer-python"] == [
         {"index": "flashinfer-cu132", "extra": "cu132", "marker": "sys_platform == 'linux'"},
         {"index": "flashinfer-cu129", "extra": "cu129", "marker": "sys_platform == 'linux'"},
@@ -204,6 +232,37 @@ def test_apply_cuda_fragment_to_pyproject_splices_generated_sections(tmp_path: P
     assert parsed["tool"]["uv"]["sources"]["torch"] == EXPECTED_CU132_TORCH_SOURCES
 
 
+def test_apply_cuda_fragment_to_pyproject_scopes_assignment_markers_to_owner_tables(
+    tmp_path: Path, generator: ModuleType
+) -> None:
+    config_path = tmp_path / "cuda_deps.toml"
+    config_path.write_text(CUDA_DEPS, encoding="utf-8")
+    generated = generator.build_cuda_pyproject_fragment(generator.load_cuda_deps_config(config_path))
+    colliding_pyproject = (
+        """
+cpu = [
+  "manual-cpu",
+]
+conflicts = [
+  "manual-conflict",
+]
+"""
+        + PYPROJECT
+    )
+
+    updated = generator.apply_cuda_fragment_to_pyproject(colliding_pyproject, generated)
+    parsed = tomllib.loads(updated)
+
+    assert parsed["cpu"] == ["manual-cpu"]
+    assert parsed["conflicts"] == ["manual-conflict"]
+    optional_dependencies = updated.index("[project.optional-dependencies]")
+    runtime_marker = updated.index("# >>> BEGIN GENERATED CUDA RUNTIME EXTRAS")
+    tool_uv = updated.index("[tool.uv]")
+    conflicts_marker = updated.index("# >>> BEGIN GENERATED CUDA UV CONFLICTS")
+    assert optional_dependencies < runtime_marker
+    assert tool_uv < conflicts_marker
+
+
 def test_apply_cuda_fragment_to_pyproject_is_idempotent(tmp_path: Path, generator: ModuleType) -> None:
     config_path = tmp_path / "cuda_deps.toml"
     config_path.write_text(CUDA_DEPS, encoding="utf-8")
@@ -222,7 +281,10 @@ def test_apply_cuda_fragment_to_pyproject_replaces_stale_marker_text(tmp_path: P
 
     stale = updated.replace(
         "# Regenerate with: uv run --frozen tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml",
-        "# Regenerate with: uv run --script tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml",
+        (
+            "# Historical header detail that no longer exists.\n"
+            "# Regenerate with: uv run --script tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml"
+        ),
     )
     assert stale != updated
 
@@ -237,11 +299,13 @@ def test_run_generation_command_pyproject_check_reports_drift(tmp_path: Path, ge
     pyproject_path = tmp_path / "pyproject.toml"
     config_path.write_text(CUDA_DEPS, encoding="utf-8")
     pyproject_path.write_text(PYPROJECT, encoding="utf-8")
+    original = pyproject_path.read_bytes()
 
     result = generator.run_generation_command(config_path, pyproject_path, check=True)
 
     assert result.status == generator.GenStatus.changed
     assert "pyproject.toml" in result.message
+    assert pyproject_path.read_bytes() == original
 
 
 def test_run_generation_command_pyproject_check_reports_ok(tmp_path: Path, generator: ModuleType) -> None:
@@ -285,6 +349,17 @@ def test_cpu_pytorch_wheel_sources_are_linux_only(pytestconfig: pytest.Config, g
     for package in ("torch", "torchaudio", "torchvision"):
         cpu_source = next(source for source in sources[package] if source["extra"] == "cpu")
         assert cpu_source == {"index": "pytorch-cpu", "extra": "cpu", "marker": "sys_platform == 'linux'"}
+
+
+def test_repository_cu129_variant_dependency_and_source(pytestconfig: pytest.Config, generator: ModuleType) -> None:
+    config_path = pytestconfig.rootpath / "cuda_deps.toml"
+    generated = generator.build_cuda_pyproject_fragment(generator.load_cuda_deps_config(config_path))
+    parsed = tomllib.loads(generated.text)
+
+    assert "vllm==0.24.0+cu129; sys_platform == 'linux'" in parsed["project"]["optional-dependencies"]["cu129"]
+    assert parsed["tool"]["uv"]["sources"]["vllm"] == [
+        {"index": "vllm-v0-24-0-cu129", "marker": "sys_platform == 'linux'", "extra": "cu129"}
+    ]
 
 
 def test_click_cli_updates_pyproject_and_checks_drift(tmp_path: Path, generator: ModuleType) -> None:
@@ -351,6 +426,14 @@ def test_build_cuda_pyproject_fragment_rejects_invalid_raw_requirement(generator
 
     with pytest.raises(InvalidRequirement):
         generator.build_cuda_pyproject_fragment(generator.CudaDepsConfig.model_validate(data))
+
+
+def test_effective_source_marker_rejects_invalid_rendered_template(generator: ModuleType) -> None:
+    dependency = generator.DependencySpec(name="torch", source_marker="sys_platform = '{platform}'")
+    renderer = generator.TemplateRenderer({"platform": "linux"})
+
+    with pytest.raises(InvalidMarker):
+        dependency.effective_source_marker(renderer)
 
 
 def test_collect_uv_indexes_rejects_conflicting_duplicate_index(generator: ModuleType) -> None:

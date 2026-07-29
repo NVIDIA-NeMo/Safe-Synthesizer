@@ -4,10 +4,10 @@
 [setup]
 description = "Install pinned mise-managed tools and create the project virtualenv. Modifies the mise tool cache and .venv or UV_PROJECT_ENVIRONMENT."
 run = [
-  "MISE_YES=1 mise trust",
-  "MISE_YES=1 mise install",
-  { task = "venv" },
-  "echo 'tools and virtual environment installed successfully via mise'",
+    "MISE_YES=1 mise trust",
+    "MISE_YES=1 mise install",
+    { task = "venv" },
+    "echo 'tools and virtual environment installed successfully via mise'",
 ]
 
 ["bootstrap-tools"]

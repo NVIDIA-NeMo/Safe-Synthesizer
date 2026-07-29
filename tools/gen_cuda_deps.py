@@ -3,6 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """Generate CPU and CUDA dependency metadata in pyproject.toml."""
 
+from __future__ import annotations
+
 import tomllib
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
@@ -61,12 +63,14 @@ class GeneratedBlocks:
     extras: Sequence[str]
 
     def __iter__(self) -> Iterator[GeneratedBlock]:
-        runtime_start = self._find_assignment(self.extras[0])
-        conflicts_start = self._find_assignment("conflicts")
+        optional_dependencies = "[project.optional-dependencies]"
+        tool_uv = "[tool.uv]"
+        runtime_start = self._find_assignment(self.extras[0], optional_dependencies)
+        conflicts_start = self._find_assignment("conflicts", tool_uv)
         yield GeneratedBlock(
             label="RUNTIME EXTRAS",
             start=runtime_start,
-            end=self._find_array_end(self._find_assignment(self.extras[-1])),
+            end=self._find_array_end(self._find_assignment(self.extras[-1], optional_dependencies)),
             detail=f"# Generated extras in this block: {', '.join(self.extras)}.",
         )
         yield GeneratedBlock(
@@ -85,12 +89,16 @@ class GeneratedBlocks:
     def reversed(self) -> list[GeneratedBlock]:
         return sorted(self, key=lambda block: block.start, reverse=True)
 
-    def _find_assignment(self, key: str) -> int:
+    def _find_assignment(self, key: str, section: str) -> int:
         assignment = f"{key} = ["
-        for index, line in enumerate(self.lines):
+        section_start = self._find_section(section)
+        for index in range(section_start + 1, len(self.lines)):
+            line = self.lines[index]
+            if line.startswith("["):
+                break
             if line == assignment:
                 return index
-        raise ValueError(f"pyproject.toml: missing generated assignment {assignment!r}")
+        raise ValueError(f"pyproject.toml: missing generated assignment {assignment!r} in {section}")
 
     def _find_section(self, section: str) -> int:
         for index, line in enumerate(self.lines):
@@ -224,7 +232,9 @@ class DependencySpec(StrictModel):
     def effective_source_marker(self, renderer: "TemplateRenderer") -> str | None:
         """Marker for the generated uv source entry: an explicit override, else the requirement's own markers."""
         if self.source_marker is not None:
-            return renderer.template(self.source_marker)
+            marker = renderer.template(self.source_marker)
+            Marker(marker)
+            return marker
         markers = list(self.pep_markers(renderer))
         return " and ".join(markers) if markers else None
 
@@ -700,22 +710,20 @@ def _insert_generated_marker(lines: list[str], block: GeneratedBlock) -> None:
 
 
 def _strip_generated_markers(lines: list[str]) -> list[str]:
-    # Header length is fixed by _insert_generated_marker (GENERATED_MARKER_BODY plus one
-    # detail line), so skip by position rather than matching comment text: matching text
-    # would silently miss stale headers left over from a previous version of that text.
-    header_length = len(GENERATED_MARKER_BODY) + 1
     stripped = []
-    skip_remaining = 0
-    for line in lines:
-        if skip_remaining:
-            skip_remaining -= 1
-            continue
+    index = 0
+    while index < len(lines):
+        line = lines[index]
         if line.startswith(GENERATED_BEGIN_PREFIX):
-            skip_remaining = header_length
+            index += 1
+            while index < len(lines) and lines[index].startswith("#"):
+                index += 1
             continue
         if line.startswith(GENERATED_END_PREFIX):
+            index += 1
             continue
         stripped.append(line)
+        index += 1
     return stripped
 
 
@@ -849,9 +857,12 @@ def _string_array(items: list[str]) -> Array:
 def _conflicts_array(extras: list[str]) -> Array:
     group = tomlkit.array()
     group.multiline(True)
+    group.indent(4)
     for extra in extras:
         table = tomlkit.inline_table()
+        table.append(None, tomlkit.ws(" "))
         table.add("extra", extra)
+        table.append(None, tomlkit.ws(" "))
         group.append(table)
     outer = tomlkit.array()
     outer.multiline(True)
@@ -871,11 +882,13 @@ def _source_array(specs: list[SourceSpec]) -> Array:
     array.multiline(True)
     for spec in specs:
         table = tomlkit.inline_table()
+        table.append(None, tomlkit.ws(" "))
         table.add("index", spec.index)
         if spec.extra is not None:
             table.add("extra", spec.extra)
         if spec.marker is not None:
             table.add("marker", spec.marker)
+        table.append(None, tomlkit.ws(" "))
         array.append(table)
     return array
 

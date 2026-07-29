@@ -2,18 +2,20 @@
 # SPDX-License-Identifier: Apache-2.0
 
 [format]
-description = "Format all tracked source files with ruff and SPDX copyright fixer. Modifies files in place; run before committing."
+description = "Format TOML and Python files with dprint and ruff, then fix SPDX copyright headers. Modifies files in place; run before committing."
 run = [
-  "bash tools/codestyle/format.sh",
-  "uv run --script tools/codestyle/copyright_fixer.py .",
+    "dprint fmt --incremental=false",
+    "bash tools/codestyle/format.sh",
+    "uv run --script tools/codestyle/copyright_fixer.py .",
 ]
 
 ["format-check"]
-description = "Check ruff formatting, lint rules, and SPDX copyright headers without modifying files. Safe for CI and local pre-review checks."
+description = "Check TOML and Python formatting, lint rules, and SPDX copyright headers without modifying source files. Safe for CI and local pre-review checks."
 run = [
-  "bash tools/codestyle/format.sh --check",
-  "bash tools/codestyle/ruff_check.sh",
-  "uv run --script tools/codestyle/copyright_fixer.py --check .",
+    "dprint check --incremental=false",
+    "bash tools/codestyle/format.sh --check",
+    "bash tools/codestyle/ruff_check.sh",
+    "uv run --script tools/codestyle/copyright_fixer.py --check .",
 ]
 
 [typecheck]
@@ -23,9 +25,9 @@ run = "bash tools/codestyle/typecheck.sh"
 ["lock-check"]
 description = "Verify generated CUDA metadata and uv.lock match their sources."
 run = [
-  "uv run --offline --frozen tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml --check",
-  "uv lock",
-  "git diff --exit-code uv.lock",
+    "uv run --offline --frozen tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml --check",
+    "uv lock",
+    "git diff --exit-code uv.lock",
 ]
 
 [check]
@@ -37,8 +39,8 @@ run = "echo 'quality checks passed'"
 description = "Run the standard pre-PR validation suite: check, lock-check, then CI unit tests."
 alias = "ci"
 run = [
-  { task = "check" },
-  { task = "lock-check" },
-  { task = "test:ci" },
-  "echo 'validation passed'",
+    { task = "check" },
+    { task = "lock-check" },
+    { task = "test:ci" },
+    "echo 'validation passed'",
 ]
