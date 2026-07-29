@@ -57,8 +57,8 @@ The variant name is intentionally the same as the CUDA package extra.
 
 Adding a new variant should be mechanical:
 
-1. Add the extra and source indexes to `pyproject.toml`.
-2. Regenerate `uv.lock`.
+1. Add the variant and source indexes to `cuda_deps.toml`.
+2. Regenerate `pyproject.toml` with `tools/gen_cuda_deps.py`, then regenerate `uv.lock`.
 3. Add a matrix row to `.github/workflows/container-build.yml`.
 4. Build locally with `CONTAINER_GPU_EXTRA=<extra> CONTAINER_GPU_VARIANT=<variant>`.
 

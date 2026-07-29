@@ -30,7 +30,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 - Python 3.11–3.13 (project supports Python 3.11, 3.12, and 3.13; `.python-version` pins 3.13 for bootstrapping at the repo root. Python 3.14+ is not supported — see [Troubleshooting](docs/user-guide/troubleshooting.md#python-314-is-not-supported))
 - Git 2.34+ (minimum required for SSH commit signing)
 
-> Note: Other tools like [uv](https://docs.astral.sh/uv/), [ruff](https://docs.astral.sh/ruff/), [ty](https://github.com/astral-sh/ty), and [gh](https://cli.github.com/) are installed automatically by `make setup` (via [mise](https://mise.jdx.dev/)). Tool versions are declared in `.mise.toml` and locked in `mise.lock` (committed), ensuring reproducible toolchains across developer systems and CI. These should not interfere with locally installed tools.
+> Note: Other tools like [uv](https://docs.astral.sh/uv/), [dprint](https://dprint.dev/), [ruff](https://docs.astral.sh/ruff/), [ty](https://github.com/astral-sh/ty), and [gh](https://cli.github.com/) are installed automatically by `make setup` (via [mise](https://mise.jdx.dev/)). Tool versions are declared in `.mise.toml` and locked in `mise.lock` (committed), ensuring reproducible toolchains across developer systems and CI. These should not interfere with locally installed tools.
 
 > Note on mise itself: the mise version is pinned in `.mise.toml` (`min_version`). The first run of `make setup` installs exactly that version via `tools/install-mise.sh`, preferring the GPG-verified installer when the full toolchain (`gpg`, `gpg-agent`, and `dirmngr`) is available and falling back to `https://mise.run` otherwise (with a warning). If you already have a different mise version on `PATH`, `make setup` will stop and tell you -- either run `mise self-update <pinned>` or uninstall the existing mise and rerun. It will not silently replace your install.
 
@@ -557,14 +557,14 @@ Although the default development/runtime interpreter is Python 3.13, source code
 Use mise tasks instead of running `ruff` or `ty` directly. The tasks use pinned tool versions from `.mise.[toml|lock]` (installed via `make setup`) and check all tracked files.
 
 ```bash
-mise run format   # auto-fix: ruff format + import sorting + copyright headers
+mise run format   # auto-fix: dprint TOML + ruff format/import sorting + copyright headers
 mise run check    # read-only local quality checks (format + lint + typecheck + copyright)
 mise run test     # unit tests
 # or just
 mise run format && mise run check && mise run test
 ```
 
-We use `ruff` and `ty` for the majority of this work, wrapped with settings for consistency.
+We use `dprint` for TOML, `ruff` for Python formatting and linting, and `ty` for type checking, wrapped with settings for consistency.
 
 CI calls the same tools through atomic read-only mise tasks. Declarative tasks live in `.mise/tasks/*.toml`; bash-heavy tasks are executable file tasks under `.mise/tasks/`. Shared shell helpers live in `.mise/tasks/_lib.sh`, which is sourced by file tasks but is not executable and does not appear in `mise tasks`. `mise run check` replicates format-check + typecheck locally; `mise run validate` runs the broader pre-PR graph (`check`, `lock-check`, and `test:ci`). Pre-commit hooks (`pre-commit install`) provide faster feedback by checking only staged files, but are not a substitute for the mise tasks.
 
@@ -590,10 +590,11 @@ All mise tasks check the entire project. Pre-commit scopes checks to staged file
 
 | Check | CI task | `mise run format` / `mise run check` | Pre-commit |
 |---|---|---|---|
+| dprint TOML format | `mise run format-check` | `format`: auto-fix; `check`: read-only | not run |
 | ruff format + lint | `mise run format-check` | `format`: auto-fix; `check`: read-only | staged files (auto-fix) |
 | ty typecheck | `mise run typecheck` | read-only | all files |
 | copyright headers | `mise run format-check` | `format`: auto-fix; `check`: read-only | staged files (auto-fix) |
-| uv lock drift | `mise run lock-check` | not checked | on `pyproject.toml` changes |
+| generated CUDA metadata and uv lock drift | `mise run lock-check` | not checked | on `pyproject.toml` or `cuda_deps.toml` changes |
 | DCO signoff | branch protection | not checked | commit-msg hook |
 
 ## Documentation
