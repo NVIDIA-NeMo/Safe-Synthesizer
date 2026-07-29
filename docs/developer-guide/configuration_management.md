@@ -91,14 +91,19 @@ The shared `pydantic_model_config` sets `arbitrary_types_allowed`,
 `protected_namespaces=()`, and `json_schema_mode_override="validation"`.
 
 `SafeSynthesizerParameters.unknown_fields` controls Pydantic's recursive
-unknown-field policy at raw-input boundaries. The default, `"reject"`, maps to
-`extra="forbid"`; `"ignore"` maps to `extra="ignore"` for version-skew
-compatibility. Sparse patch compilation and SDK raw-mapping builders use the
-same effective setting. Complete inputs use the field default when it is
-omitted; partial patches inherit the existing configuration's policy. Reject
-mode preserves unknown keys until Pydantic reports them, while ignore mode
-filters them during normalization. Retaining undeclared fields with
-`extra="allow"` is unsupported because Safe Synthesizer cannot act on them.
+unknown-field policy at raw-input boundaries:
+
+- `"reject"` is the default and maps to `extra="forbid"`. Normalization
+  preserves unknown keys until Pydantic reports them.
+- `"ignore"` maps to `extra="ignore"` for compatibility with stale
+  configurations and notebooks or mismatched client and service versions.
+  Normalization filters unknown keys.
+- `extra="allow"` is unsupported because Safe Synthesizer cannot act on
+  undeclared fields.
+
+Sparse patch compilation and SDK raw-mapping builders use the same effective
+setting. Complete inputs use the field default when it is omitted; partial
+patches inherit the existing configuration's policy.
 
 ## Adding a Config Field
 

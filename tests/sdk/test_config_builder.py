@@ -92,10 +92,10 @@ def test_builder_rejects_unknown_raw_mapping_keys_by_default():
 
 
 def test_builder_ignore_policy_ignores_unknown_raw_mapping_keys():
-    builder = ConfigBuilder(unknown_fields="ignore").with_train({"epoch": 1})
+    builder = ConfigBuilder(unknown_fields="ignore").with_train({"batch_size": 32, "epoch": 1})
 
     assert builder._effective_unknown_fields == "ignore"
-    assert builder._training_config == TrainingHyperparams()
+    assert builder._training_config == TrainingHyperparams(batch_size=32)
 
 
 def test_builder_resolves_and_preserves_unknown_field_policy():

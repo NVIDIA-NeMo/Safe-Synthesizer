@@ -103,7 +103,8 @@ class SafeSynthesizerParameters(Parameters):
         default=DEFAULT_UNKNOWN_FIELDS,
         description=(
             "How unknown configuration keys are handled recursively. "
-            "Use 'ignore' only for compatibility across mismatched client and service versions."
+            "Use 'ignore' only for compatibility with stale configurations and notebooks "
+            "or mismatched client and service versions."
         ),
     )
 

@@ -114,8 +114,10 @@ def test_model_validate_accepts_an_existing_config():
 
 
 def test_model_validate_non_mapping_input_uses_default_unknown_field_policy():
-    with pytest.raises(ValidationError, match="valid dictionary or object"):
+    with pytest.raises(ValidationError) as exc_info:
         SafeSynthesizerParameters.model_validate(None)
+
+    assert exc_info.value.errors()[0]["type"] == "model_attributes_type"
 
 
 def test_from_yaml_str_absent_key_enables_pii():

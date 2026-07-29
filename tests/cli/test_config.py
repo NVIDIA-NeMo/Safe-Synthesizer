@@ -142,3 +142,4 @@ class TestConfigValidateErrorPathExitCodes:
 
         assert result.exit_code == 0
         assert '"unknown_fields": "ignore"' in result.output
+        assert '"epoch"' not in result.output
