@@ -951,10 +951,17 @@ def _exit_code(result: GenerationResult) -> int:
 
 
 @click.command(help="Update generated CPU and CUDA dependency metadata in pyproject.toml.")
-@click.argument("config", required=False, type=click.Path(path_type=Path), default=Path("cuda_deps.toml"))
+@click.argument(
+    "config",
+    required=False,
+    # click-stubs omits pathlib.Path from this runtime-supported argument.
+    type=click.Path(path_type=Path),  # ty: ignore[invalid-argument-type]
+    default=Path("cuda_deps.toml"),
+)
 @click.option(
     "--pyproject",
-    type=click.Path(path_type=Path),
+    # click-stubs omits pathlib.Path from this runtime-supported argument.
+    type=click.Path(path_type=Path),  # ty: ignore[invalid-argument-type]
     default=Path("pyproject.toml"),
     show_default=True,
     help="pyproject.toml file to update or check.",

@@ -93,7 +93,7 @@ url = "https://download.pytorch.org/whl/{extra}"
 explicit = true
 
 [cuda_indexes.flashinfer]
-name = "flashinfer-jit-cache"
+name = "flashinfer-jit-cache-{extra}"
 url = "https://flashinfer.ai/whl/{extra}"
 explicit = true
 

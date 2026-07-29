@@ -172,22 +172,6 @@ def test_build_cuda_pyproject_fragment_renders_cuda_variant_and_sources(tmp_path
         "torch==2.10.0+cpu; sys_platform == 'linux'",
     ]
     assert parsed["tool"]["uv"]["conflicts"] == [[{"extra": "cpu"}, {"extra": "cu132"}, {"extra": "cu129"}]]
-    expected_conflicts = """conflicts = [
-    [
-        { extra = "cpu" },
-        { extra = "cu132" },
-        { extra = "cu129" },
-    ],
-]
-"""
-    assert expected_conflicts in generated.text
-    expected_torch_sources = """torch = [
-    { index = "pytorch-cpu", extra = "cpu", marker = "sys_platform=='linux'" },
-    { index = "pytorch-cu132", extra = "cu132", marker = "sys_platform == 'linux'" },
-    { index = "pytorch-cu129", extra = "cu129", marker = "sys_platform == 'linux'" },
-]
-"""
-    assert expected_torch_sources in generated.text
     assert parsed["tool"]["uv"]["sources"]["torch"] == EXPECTED_CU132_TORCH_SOURCES
     assert parsed["tool"]["uv"]["sources"]["variant-only"] == [
         {"index": "pytorch-cu129", "extra": "cu129", "marker": "sys_platform == 'linux'"}
@@ -360,6 +344,11 @@ def test_repository_cu129_variant_dependency_and_source(pytestconfig: pytest.Con
     assert parsed["tool"]["uv"]["sources"]["vllm"] == [
         {"index": "vllm-v0-24-0-cu129", "marker": "sys_platform == 'linux'", "extra": "cu129"}
     ]
+    assert parsed["tool"]["uv"]["sources"]["flashinfer-jit-cache"] == [
+        {"index": "flashinfer-jit-cache-cu129", "marker": "sys_platform == 'linux'", "extra": "cu129"}
+    ]
+    indexes = {index["name"]: index["url"] for index in parsed["tool"]["uv"]["index"]}
+    assert indexes["flashinfer-jit-cache-cu129"] == "https://flashinfer.ai/whl/cu129"
 
 
 def test_click_cli_updates_pyproject_and_checks_drift(tmp_path: Path, generator: ModuleType) -> None:

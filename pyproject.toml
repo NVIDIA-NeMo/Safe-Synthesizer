@@ -245,7 +245,7 @@ torchvision = [
     { index = "pytorch-cu129", extra = "cu129", marker = "sys_platform == 'linux'" },
 ]
 flashinfer-jit-cache = [
-    { index = "flashinfer-jit-cache", extra = "cu129", marker = "sys_platform == 'linux'" },
+    { index = "flashinfer-jit-cache-cu129", extra = "cu129", marker = "sys_platform == 'linux'" },
 ]
 triton = [
     { index = "pytorch-cu129", extra = "cu129", marker = "sys_platform == 'linux'" },
@@ -299,7 +299,7 @@ url = "https://download.pytorch.org/whl/cu129"
 explicit = true
 
 [[tool.uv.index]]
-name = "flashinfer-jit-cache"
+name = "flashinfer-jit-cache-cu129"
 url = "https://flashinfer.ai/whl/cu129"
 explicit = true
 
@@ -362,4 +362,5 @@ exclude = [
     "./docs/**/*.ipynb",
     "./src/nemo_safe_synthesizer/pii_replacer/",
     "./tools/*.py",
+    "!./tools/gen_cuda_deps.py",
 ]
