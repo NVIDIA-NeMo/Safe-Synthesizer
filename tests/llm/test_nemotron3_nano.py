@@ -5,7 +5,9 @@
 
 import json
 import re
+import sys
 from pathlib import Path
+from types import ModuleType
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
@@ -115,6 +117,15 @@ def test_exact_bf16_id_resolves_native_nemotron3_policy() -> None:
     assert metadata.uses_rope is False
     assert metadata.base_max_seq_length == 12_288
     assert ModelRef.parse(MODEL_ID).trust_remote_code is False
+
+
+def test_model_policy_matches_exact_id_case_insensitively_without_substrings() -> None:
+    policy = model_policy.NEMOTRON3_NANO_POLICY
+
+    assert model_policy.model_policy_for(MODEL_ID.upper()) is policy
+    assert model_policy.model_policy_for(f"mirror/{MODEL_ID}") is None
+    assert model_policy.model_policy_for(f"{MODEL_ID}-FP8") is None
+    assert model_policy.model_policy_for(None) is None
 
 
 def test_local_bf16_checkpoint_config_resolves_native_nemotron3_policy(tmp_path: Path) -> None:
@@ -339,6 +350,51 @@ def test_lora_target_validation_reports_every_suffix_and_rejects_missing_targets
     assert validate(model, ["in_proj", "q_proj"]) == {"in_proj": 1, "q_proj": 1}
     with pytest.raises(ValueError, match="gate_proj"):
         validate(model, ["in_proj", "gate_proj"])
+
+
+def test_training_kernel_setup_reports_bootstrap_command_when_extensions_are_missing() -> None:
+    with (
+        patch("nemo_safe_synthesizer.llm.model_policy.importlib.import_module", side_effect=ImportError),
+        pytest.raises(ValueError, match="mise run bootstrap-nemotron-kernels"),
+    ):
+        model_policy.configure_local_training_kernels(MODEL_ID)
+
+
+def test_training_kernel_setup_registers_compiled_modules_with_transformers(tmp_path: Path) -> None:
+    from transformers.integrations import hub_kernels
+
+    causal_conv1d = ModuleType("causal_conv1d")
+    selective_state_update = ModuleType("mamba_ssm.ops.triton.selective_state_update")
+    selective_state_update_fn = object()
+    setattr(selective_state_update, "selective_state_update", selective_state_update_fn)
+    ssd_combined = ModuleType("mamba_ssm.ops.triton.ssd_combined")
+    mamba_chunk_scan_combined = object()
+    mamba_split_conv1d_scan_combined = object()
+    setattr(ssd_combined, "mamba_chunk_scan_combined", mamba_chunk_scan_combined)
+    setattr(ssd_combined, "mamba_split_conv1d_scan_combined", mamba_split_conv1d_scan_combined)
+    imported_modules = {
+        "causal_conv1d": causal_conv1d,
+        "mamba_ssm.ops.triton.selective_state_update": selective_state_update,
+        "mamba_ssm.ops.triton.ssd_combined": ssd_combined,
+    }
+    distribution = MagicMock()
+    distribution.locate_file.return_value = tmp_path / "mamba_ssm"
+
+    with (
+        patch.dict(hub_kernels._KERNEL_MODULE_MAPPING, {}, clear=True),
+        patch.dict(sys.modules, {}, clear=False),
+        patch.object(model_policy.importlib.metadata, "distribution", return_value=distribution),
+        patch.object(model_policy.importlib, "import_module", side_effect=imported_modules.__getitem__),
+    ):
+        model_policy.configure_local_training_kernels(MODEL_ID)
+
+        registered_mamba = hub_kernels._KERNEL_MODULE_MAPPING["mamba-ssm"]
+        assert hub_kernels._KERNEL_MODULE_MAPPING["causal-conv1d"] is causal_conv1d
+        assert isinstance(registered_mamba, ModuleType)
+        assert getattr(registered_mamba, "selective_state_update") is selective_state_update_fn
+        assert getattr(registered_mamba, "mamba_chunk_scan_combined") is mamba_chunk_scan_combined
+        assert getattr(registered_mamba, "mamba_split_conv1d_scan_combined") is mamba_split_conv1d_scan_combined
+        assert getattr(registered_mamba, "__path__") == [str(tmp_path / "mamba_ssm")]
 
 
 def test_meta_parameter_count_disables_mamba_kernels_on_a_config_copy() -> None:

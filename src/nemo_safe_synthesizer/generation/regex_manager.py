@@ -391,11 +391,9 @@ def build_json_based_regex(
         # delimiter decode to ``max_tokens``, yielding a length-truncated, unparseable group.
         record_lines = rf"({record_regex}\n){{1,{max_records}}}" if max_records else rf"({record_regex}\n)+"
         first_sequence_regex = f"{re.escape(framing.first_prefix)}{record_lines}{re.escape(framing.suffix)}"
-        subsequent_sequence_regex = f"{re.escape(framing.subsequent_prefix)}{record_lines}{re.escape(framing.suffix)}"
     else:
         # Without grouping, the "sequence" is a single record.
         first_sequence_regex = record_regex
-        subsequent_sequence_regex = record_regex
 
     if is_grouped and max_records:
         # Grouped generation produces one group per completion; a bounded single sequence
@@ -404,6 +402,7 @@ def build_json_based_regex(
     elif config.generation.structured_generation.use_single_sequence and config.data.max_sequences_per_example == 1:
         regex = first_sequence_regex
     elif is_grouped and response_framing is not None:
+        subsequent_sequence_regex = f"{re.escape(framing.subsequent_prefix)}{record_lines}{re.escape(framing.suffix)}"
         regex = rf"{first_sequence_regex}({subsequent_sequence_regex})*"
     else:
         regex = rf"({first_sequence_regex}\n)+"
@@ -498,16 +497,8 @@ def build_json_structural_tag(
                 _const_string_format(framing.suffix),
             ]
         )
-        subsequent_sequence_format = _sequence_format(
-            [
-                _const_string_format(framing.subsequent_prefix),
-                record_repetition,
-                _const_string_format(framing.suffix),
-            ]
-        )
     else:
         first_sequence_format = record_format
-        subsequent_sequence_format = record_format
 
     if is_grouped and max_records:
         # Grouped generation produces one group per completion; a bounded single sequence
@@ -516,6 +507,13 @@ def build_json_structural_tag(
     elif config.generation.structured_generation.use_single_sequence and config.data.max_sequences_per_example == 1:
         output_format = first_sequence_format
     elif is_grouped and response_framing is not None:
+        subsequent_sequence_format = _sequence_format(
+            [
+                _const_string_format(framing.subsequent_prefix),
+                record_repetition,
+                _const_string_format(framing.suffix),
+            ]
+        )
         output_format = _sequence_format(
             [
                 first_sequence_format,
