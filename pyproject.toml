@@ -134,7 +134,7 @@ cpu = [
     "torchao==0.17.0",
     "transformers==5.12.0",
     "triton>=2.0.0; sys_platform=='linux'",
-    "vllm==0.24.0; sys_platform=='linux'",
+    "vllm==0.26.0; sys_platform=='linux'",
 ]
 cu129 = [
     "accelerate>=1.1.0",
@@ -158,7 +158,7 @@ cu129 = [
     "torchaudio==2.11.0+cu129; sys_platform == 'linux'",
     "torchvision==0.26.0+cu129; sys_platform == 'linux'",
     "torchao==0.17.0+cu129; sys_platform == 'linux' and platform_machine == 'x86_64'",
-    "vllm==0.24.0+cu129; sys_platform == 'linux'",
+    "vllm==0.26.0; sys_platform == 'linux'",
 ]
 # <<< END GENERATED CUDA RUNTIME EXTRAS - DO NOT EDIT >>>
 
