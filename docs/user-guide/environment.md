@@ -49,7 +49,7 @@ Grouped by the `Category` column -- `nss`-native settings first, then
 | `NSS_WANDB_PROJECT` | nss | `--wandb-project` | WandB | -- | WandB project name | Alias for `WANDB_PROJECT` |
 | `NSS_INFERENCE_ENDPOINT` | nss | `--inference-endpoint-url` | PII column classifier | NVIDIA integrate URL | OpenAI-compatible endpoint for column classification | [PII appendix](#pii-ner-and-column-classification) |
 | `NSS_INFERENCE_KEY` | nss | `--inference-api-key` | PII column classifier | -- | API key for `NSS_INFERENCE_ENDPOINT` | Required for LLM column classification |
-| `NSS_INFERENCE_MODEL` | nss | `--inference-model-id` | PII column classifier | `qwen/qwen3-next-80b-a3b-instruct` | Model ID sent to the inference endpoint | [PII appendix](#pii-ner-and-column-classification) |
+| `NSS_INFERENCE_MODEL` | nss | `--inference-model-id` | PII column classifier | `nvidia/nemotron-3-ultra-550b-a55b` | Model ID sent to the inference endpoint | [PII appendix](#pii-ner-and-column-classification) |
 | `NSS_PII_REPLACER_CPU_COUNT` | nss | `--cpu-count` | NER worker pool | `max(1, cpu_count - 1)` | CPU processes for PII NER | [PII appendix](#pii-ner-and-column-classification) |
 | `NEMO_TELEMETRY_ENABLED` | telemetry | `--emit_telemetry` | telemetry | `true` | Enable anonymous usage telemetry | Also `emit_telemetry` in YAML; see [Telemetry](#telemetry) |
 | `HF_HOME` | third-party | -- | Hugging Face Hub | platform cache dir | Root directory for HF downloads | [HF appendix](#hugging-face-cache-and-offline) |
@@ -195,7 +195,7 @@ See [Configuration Reference -- Replacing PII](configuration.md#replacing-pii).
 ### `NSS_INFERENCE_MODEL`
 
 Model ID sent to the inference endpoint. Defaults to
-`qwen/qwen3-next-80b-a3b-instruct`. Override with `--inference-model-id`.
+`nvidia/nemotron-3-ultra-550b-a55b`. Override with `--inference-model-id`.
 
 ### `NSS_PII_REPLACER_CPU_COUNT`
 

@@ -419,7 +419,7 @@ class TestInferenceModelCheck:
     def test_valid_model_is_silent(self, default_config):
         with patch.dict(
             "os.environ",
-            {"NSS_INFERENCE_KEY": "test-key", "NSS_INFERENCE_MODEL": "qwen/qwen3-next-80b-a3b-instruct"},
+            {"NSS_INFERENCE_KEY": "test-key", "NSS_INFERENCE_MODEL": "nvidia/nemotron-3-ultra-550b-a55b"},
         ):
             issues = InferenceModelCheck().run(make_ctx(config=default_config))
         assert not any(i.code == "inference_model_blank" for i in issues)
