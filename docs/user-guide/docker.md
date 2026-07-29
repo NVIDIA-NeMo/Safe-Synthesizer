@@ -144,13 +144,16 @@ Mount a host directory to persist downloads across container runs:
 ```bash
 docker run --gpus all \
   -v ~/.cache/huggingface:/workspace/.hf_cache \
-  -e HF_HOME=/workspace/.hf_cache \
   ...
 ```
 
 | Host path | Container path | Env var | Purpose |
 |-----------|---------------|---------|---------|
 | `~/.cache/huggingface` | `/workspace/.hf_cache` | `HF_HOME` | Model weights, tokenizers, configs |
+
+The image sets `HF_HOME=/workspace/.hf_cache`, so mounting the cache there is
+enough -- passing `-e HF_HOME=/workspace/.hf_cache` is redundant but harmless.
+Override the variable only to point at a different container path.
 
 Without this mount, models are downloaded into the container's ephemeral
 filesystem and lost when it exits.
@@ -208,7 +211,8 @@ Generation-only runs are typically fine without it.
 The container runs as `appuser` (uid 1000). When bind-mounting host
 directories, Docker preserves host ownership. If your host user has a
 different uid, writes to the mounted directory (artifacts, outputs) will
-fail with "Permission denied".
+fail with "Permission denied". A mounted Hugging Face cache is affected the
+same way: already-cached models still load, but downloading a new one fails.
 
 Fix by matching the container user to your host uid:
 

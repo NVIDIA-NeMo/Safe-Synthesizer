@@ -14,11 +14,13 @@
 #     --target runtime -t nss-gpu:latest .
 #   docker build -f containers/Dockerfile.cuda --target dev -t nss-gpu-dev:latest .
 #
-# Run with your data:
+# Run with your data. HF_HOME already points at /workspace/.hf_cache, so
+# mounting a host cache there is enough; --user keeps the container uid aligned
+# with the owner of that cache so model downloads can be written.
 #   docker run --gpus all --shm-size=1g \
+#     --user $(id -u):$(id -g) \
 #     -v $(pwd)/my_data:/workspace/data \
-#     -v ~/.cache/huggingface:/workspace/.hf_cache \
-#     -e HF_HOME=/workspace/.hf_cache \
+#     -v $HOME/.cache/huggingface:/workspace/.hf_cache \
 #     nss-gpu:latest \
 #     run --data-source /workspace/data/input.csv
 #
@@ -53,8 +55,15 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
         bash \
         ca-certificates \
+        gcc \
+        libc6-dev \
         libgomp1 \
         tini
+
+# gcc and libc6-dev are runtime dependencies, not build dependencies: Triton
+# JIT-compiles its CUDA driver shim (driver.c) the first time vLLM touches a
+# GPU, so without a C compiler in the final image every generation run dies
+# with "Failed to find C compiler".
 
 # uv settings for reproducible container builds.
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
@@ -138,6 +147,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         --no-group dev
 
 ENV PATH="/opt/venv/bin:${PATH}" \
+    HF_HOME=/workspace/.hf_cache \
     NSS_CONTAINER_EXTRA=${CONTAINER_EXTRA} \
     NSS_CONTAINER_VARIANT=${CONTAINER_VARIANT} \
     NVIDIA_VISIBLE_DEVICES=all \
@@ -152,10 +162,18 @@ LABEL org.opencontainers.image.title="Safe Synthesizer" \
       org.opencontainers.image.base.name="python:${PYTHON_VERSION}-slim-bookworm" \
       com.nvidia.nemo.safe-synthesizer.extra="${CONTAINER_EXTRA}" \
       com.nvidia.nemo.safe-synthesizer.variant="${CONTAINER_VARIANT}" \
-      org.opencontainers.image.usage="docker run --gpus all --shm-size=1g -v /path/to/data:/workspace/data -v ~/.cache/huggingface:/workspace/.hf_cache -e HF_HOME=/workspace/.hf_cache nss-gpu:latest run --config /workspace/data/config.yaml --data-source /workspace/data/input.csv"
+      org.opencontainers.image.usage="docker run --gpus all --shm-size=1g --user \$(id -u):\$(id -g) -v /path/to/data:/workspace/data -v \$HOME/.cache/huggingface:/workspace/.hf_cache ghcr.io/nvidia-nemo/safe-synthesizer:${CONTAINER_VARIANT} run --config /workspace/data/config.yaml --data-source /workspace/data/input.csv"
 
 RUN groupadd -r -g 1000 appuser && \
     useradd -r -u 1000 -g appuser -m appuser
+
+# /workspace is the default HF_HOME parent and the usual bind-mount point.
+# World-writable so the image also works under an arbitrary `--user`, which is
+# how callers match the container uid to the owner of a mounted model cache.
+# Bind mounts keep their host ownership and are unaffected by these modes.
+RUN mkdir -p /workspace/.hf_cache && \
+    chown appuser:appuser /workspace /workspace/.hf_cache && \
+    chmod 777 /workspace /workspace/.hf_cache
 
 COPY --chmod=755 containers/entrypoint.sh /usr/local/bin/entrypoint.sh
 
