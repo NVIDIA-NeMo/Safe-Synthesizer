@@ -132,7 +132,7 @@ fi
 # Checked separately from the package install: if this step is what failed, a
 # rerun would otherwise see a working safe-synthesizer, skip the whole block,
 # and leave a registered kernel that cannot start.
-if ! "${VENV_DIR}/bin/python" -c "import ipykernel" 2>/dev/null; then
+if ! "${VENV_DIR}/bin/python" -c "import ipykernel, ipywidgets" 2>/dev/null; then
   log "installing notebook support"
   VIRTUAL_ENV="${VENV_DIR}" uv pip install ipykernel ipywidgets
 fi
