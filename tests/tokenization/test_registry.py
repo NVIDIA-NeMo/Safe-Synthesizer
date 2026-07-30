@@ -400,7 +400,7 @@ def test_local_source_accepts_opaque_fixture_revision(tokenizers_dir) -> None:
 
 def test_remote_source_accepts_resolved_immutable_revision(tokenizers_dir) -> None:
     registry, tokenizer = _make_tokenizer(tokenizers_dir)
-    revision = "0123456789abcdef0123456789abcdef01234567"
+    revision = "0123456789abcdef0123456789abcdef01234567"  # pragma: allowlist secret
 
     remote = registry.create(
         tokenizer.spec.key,
