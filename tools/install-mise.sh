@@ -99,17 +99,12 @@ curl_fetch() {
         "$@"
 }
 
+# Retries live only in curl_fetch -- do not wrap this in another retry loop
+# (curl's --max-time resets per attempt, so nested retries can stretch for
+# many minutes before the unsigned fallback).
 gpg_import_release_key() {
-    local attempt
-    for attempt in $(seq 1 "$CURL_RETRIES"); do
-        if curl_fetch "${MISE_GPG_KEY_URL}/${MISE_GPG_KEY}" \
-            | gpg --batch --no-tty --import; then
-            return 0
-        fi
-        echo "WARNING: failed to fetch/import mise release key (attempt ${attempt}/${CURL_RETRIES})" >&2
-        sleep "$CURL_RETRY_DELAY"
-    done
-    return 1
+    curl_fetch "${MISE_GPG_KEY_URL}/${MISE_GPG_KEY}" \
+        | gpg --batch --no-tty --import
 }
 
 unsigned_install_or_fail() {
