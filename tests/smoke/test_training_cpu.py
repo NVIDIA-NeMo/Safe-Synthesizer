@@ -59,6 +59,7 @@ class _StubPromptConfig:
 class _StubModelMetadata:
     """Minimal picklable model metadata for assembler tests."""
 
+    model_name_or_path: str
     instruction: str = DEFAULT_INSTRUCTION
     max_seq_length: int = 128
     rope_scaling_factor: float = 1.0
@@ -127,7 +128,7 @@ def test_dp_training_one_step(
     assert len(trainer.state.log_history) > 0
 
 
-def test_training_example_assembler(fixture_iris_df, fixture_stub_tokenizer, tmp_path):
+def test_training_example_assembler(fixture_iris_df, fixture_stub_tokenizer, fixture_stub_tokenizer_path, tmp_path):
     """Exercises: NSS data preparation pipeline (TrainingExampleAssembler)."""
     from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 
@@ -137,7 +138,7 @@ def test_training_example_assembler(fixture_iris_df, fixture_stub_tokenizer, tmp
     hf_dataset = Dataset.from_pandas(fixture_iris_df, preserve_index=False)
 
     # Build a minimal picklable metadata stub (MagicMock can't be pickled by datasets).
-    stub_metadata = _StubModelMetadata()
+    stub_metadata = _StubModelMetadata(model_name_or_path=fixture_stub_tokenizer_path)
 
     assembler = TrainingExampleAssembler.from_data(
         dataset=hf_dataset,
