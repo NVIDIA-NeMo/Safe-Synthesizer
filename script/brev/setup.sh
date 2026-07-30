@@ -31,7 +31,7 @@ readonly REPO_URL="https://github.com/NVIDIA-NeMo/Safe-Synthesizer"
 
 # $HOME is the JupyterLab file browser root, so anything visible there is part
 # of the first impression. Only tutorials/ and README.md are; everything
-# operational is a dotfile, which the browser hides by default. Customers pick
+# operational is a dotfile, which the browser hides by default. Users pick
 # their own location for data -- the script does not create a folder for it.
 readonly TUTORIALS_DIR="${HOME}/tutorials"
 readonly README_FILE="${HOME}/README.md"
@@ -75,8 +75,30 @@ fi
 
 if [[ "$(uv --version 2>/dev/null | awk '{print $2}')" != "${UV_VERSION}" ]]; then
   log "installing uv ${UV_VERSION} into ${BIN_DIR}"
-  curl -LsSf "https://astral.sh/uv/${UV_VERSION}/install.sh" \
-    | env UV_INSTALL_DIR="${BIN_DIR}" INSTALLER_NO_MODIFY_PATH=1 sh
+  # Fetch the release tarball and verify its published SHA-256 rather than
+  # piping astral.sh/install.sh into a shell -- that installer logs "no
+  # checksums to verify", so nothing validates what it downloads. Mirrors the
+  # GPG-verified mise install in tools/install-mise.sh.
+  case "$(uname -m)" in
+    x86_64) uv_target="x86_64-unknown-linux-gnu" ;;
+    aarch64 | arm64) uv_target="aarch64-unknown-linux-gnu" ;;
+    *)
+      log "ERROR: unsupported architecture $(uname -m)"
+      exit 1
+      ;;
+  esac
+  uv_dir="$(mktemp -d)"
+  uv_url="https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-${uv_target}.tar.gz"
+  curl -fsSL "${uv_url}" -o "${uv_dir}/uv.tar.gz"
+  uv_want="$(curl -fsSL "${uv_url}.sha256" | awk '{print $1}')"
+  uv_got="$(sha256sum "${uv_dir}/uv.tar.gz" | awk '{print $1}')"
+  if [[ "${uv_want}" != "${uv_got}" ]]; then
+    log "ERROR: uv checksum mismatch (want ${uv_want}, got ${uv_got})"
+    exit 1
+  fi
+  tar -xzf "${uv_dir}/uv.tar.gz" -C "${uv_dir}" --strip-components=1
+  install -m 0755 "${uv_dir}/uv" "${uv_dir}/uvx" "${BIN_DIR}/"
+  rm -rf "${uv_dir}"
 else
   log "uv ${UV_VERSION} already present"
 fi
@@ -105,7 +127,12 @@ else
     --index "${INDEX_TORCH}" \
     --index "${INDEX_VLLM}" \
     --index-strategy unsafe-best-match
+fi
 
+# Checked separately from the package install: if this step is what failed, a
+# rerun would otherwise see a working safe-synthesizer, skip the whole block,
+# and leave a registered kernel that cannot start.
+if ! "${VENV_DIR}/bin/python" -c "import ipykernel" 2>/dev/null; then
   log "installing notebook support"
   VIRTUAL_ENV="${VENV_DIR}" uv pip install ipykernel ipywidgets
 fi
@@ -123,9 +150,12 @@ else
     'from importlib.metadata import version; print(version("nemo-safe-synthesizer"))')"
   log "fetching tutorials for version ${NSS_VERSION}"
 
-  mkdir -p "${TUTORIALS_DIR}"
-  tarball_dir="$(mktemp -d)"
+  # Staged under $HOME so the final move is a rename on the same filesystem,
+  # and so a half-written extract never becomes the visible tutorials/ -- the
+  # ".ipynb exists" check above would otherwise treat a partial result as done.
+  tarball_dir="$(mktemp -d "${HOME}/.nss-fetch.XXXXXX")"
   tarball="${tarball_dir}/src.tar.gz"
+  stage="${tarball_dir}/stage"
   fetched=0
 
   for ref in "refs/tags/v${NSS_VERSION}" "refs/heads/main"; do
@@ -139,8 +169,12 @@ else
     # documented in README.md. `%%/*` yields the archive's top-level directory.
     listing="$(tar -tzf "${tarball}")"
     top="${listing%%/*}"
-    if tar -xzf "${tarball}" -C "${TUTORIALS_DIR}" --strip-components=3 \
+    rm -rf "${stage}"
+    mkdir -p "${stage}"
+    if tar -xzf "${tarball}" -C "${stage}" --strip-components=3 \
       "${top}/docs/tutorials"; then
+      rm -rf "${TUTORIALS_DIR}"
+      mv "${stage}" "${TUTORIALS_DIR}"
       log "tutorials extracted from ${ref}"
       fetched=1
       break
@@ -251,12 +285,22 @@ fi
 # kernelspec that never gets consulted and only confuses `kernelspec list`.
 registered=0
 for target in "${kernel_targets[@]}"; do
-  mkdir -p "${target}" 2>/dev/null || { log "WARNING: cannot write ${target}"; continue; }
+  # `mkdir -p` succeeds on an existing directory even without write permission,
+  # so test writability separately -- otherwise an unwritable first target
+  # reaches `cp`, and `set -e` aborts the run instead of trying the next one.
+  mkdir -p "${target}" 2>/dev/null || { log "WARNING: cannot create ${target}"; continue; }
+  if [[ ! -w "${target}" ]]; then
+    log "WARNING: ${target} is not writable"
+    continue
+  fi
   # Keep whatever was there, once, so the original kernel stays recoverable.
   if [[ -f "${target}/kernel.json" && ! -f "${target}/kernel.json.orig" ]]; then
-    cp "${target}/kernel.json" "${target}/kernel.json.orig"
+    cp "${target}/kernel.json" "${target}/kernel.json.orig" 2>/dev/null || true
   fi
-  cp "${KERNEL_JSON}" "${target}/kernel.json"
+  cp "${KERNEL_JSON}" "${target}/kernel.json" 2>/dev/null || {
+    log "WARNING: cannot write ${target}/kernel.json"
+    continue
+  }
   chmod 0600 "${target}/kernel.json"
   log "registered kernel at ${target}"
   registered=1
