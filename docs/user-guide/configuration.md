@@ -210,14 +210,20 @@ with `SmolLM3-3B`, the default, unless your workload requires another family.
 | TinyLlama | `TinyLlama/TinyLlama-1.1B-Chat-v1.0` |
 | Mistral | `mistralai/Mistral-7B-Instruct-v0.3` |
 | Nemotron 3 Nano BF16 | `nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16` |
+| Nemotron 3 Nano FP8 (experimental) | `nvidia/NVIDIA-Nemotron-3-Nano-4B-FP8` |
 
-Nemotron 3 Nano training uses the BF16 checkpoint above. It requires an
-Ampere-class GPU with BF16 support, such as an A100, and supports non-DP LoRA
-training and generation, including grouped and ungrouped time series. Safe
-Synthesizer selects the model's seven LoRA projection families, uses its native
-no-position-embedding configuration, and disables reasoning in the chat
-template. All dynamic quantized training modes and DP training are unsupported
-for this model. Run
+Nemotron 3 Nano supports non-DP LoRA training and generation, including grouped
+and ungrouped time series. The BF16 checkpoint requires an Ampere-class GPU
+with BF16 support, such as an A100. The experimental FP8 checkpoint requires
+compute capability 8.9 or newer. It keeps the frozen base weights in ModelOpt
+FP8 storage, dequantizes one linear layer at a time for BF16 autograd compute,
+and trains FP32 LoRA adapters with PEFT. Adapter merging into the FP8 base is
+unsupported.
+
+Safe Synthesizer selects the model's seven LoRA projection families, uses its
+native no-position-embedding configuration, and disables reasoning in the chat
+template. Dynamic quantization of the BF16 checkpoint, re-quantization of the
+FP8 checkpoint, and DP training are unsupported. Run
 `mise run bootstrap-nemotron-kernels` from a source checkout before training.
 The bootstrap packages are intentionally external to the standard CUDA extra
 because they compile against the active PyTorch and CUDA toolchain.
@@ -261,9 +267,11 @@ If `quantization_scheme` is unset, Safe Synthesizer falls back to
 
 !!! warning "Nemotron 3 Nano training"
     Nemotron 3 Nano BF16 rejects every dynamic training quantization scheme,
-    including `bnb-4bit`, `bnb-8bit`, `fp8`, `nvfp4`, and `mxfp4`. The official
-    Nemotron FP8 checkpoint is a separate generation base. It is not selected
-    by `training.quantization_scheme`.
+    including `bnb-4bit`, `bnb-8bit`, `fp8`, `nvfp4`, and `mxfp4`. To train
+    over NVIDIA's official ModelOpt FP8 base, set `training.pretrained_model`
+    to `nvidia/NVIDIA-Nemotron-3-Nano-4B-FP8` and leave
+    `training.quantize_model: false`. The checkpoint is already quantized and
+    is not selected by `training.quantization_scheme`.
 
 !!! note "LoftQ + non-BNB schemes"
     `peft_implementation: loftq` is incompatible with `fp8`, `nvfp4`, and
@@ -296,25 +304,24 @@ for the full API reference.
 | `generation.enforce_timeseries_fidelity` | `false` | Enforce time series order, intervals, and timestamps | Enable for time series data |
 | `generation.attention_backend` | `"auto"` | vLLM attention backend | Leave at `"auto"` |
 
-The experimental Nemotron FP8 path trains the adapter against the BF16
-checkpoint and loads NVIDIA's official FP8 sibling for generation:
+The experimental Nemotron FP8 path can use the official FP8 checkpoint for
+both training and generation:
 
 ```yaml
 training:
-  pretrained_model: nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16
-generation:
   pretrained_model: nvidia/NVIDIA-Nemotron-3-Nano-4B-FP8
+  quantize_model: false
 ```
 
-Safe Synthesizer accepts this exact sibling pair, configures the required
-float32 Mamba state cache and FP8 KV cache, and rejects the FP8 generation
-base on GPUs older than compute capability 8.9. Direct training from the
-official FP8 checkpoint remains unsupported.
+You can instead train against BF16 and set
+`generation.pretrained_model: nvidia/NVIDIA-Nemotron-3-Nano-4B-FP8`.
+Safe Synthesizer accepts this exact sibling pair. Both paths configure the
+required float32 Mamba state cache and FP8 KV cache for generation and reject
+the FP8 checkpoint on GPUs older than compute capability 8.9.
 
-!!! warning "Experimental FP8 generation"
-    This opt-in path requires a real SM89-or-newer validation run with the
-    trained adapter before it can be treated as a supported production
-    configuration.
+!!! warning "Experimental FP8 path"
+    Validate adapter training, save and reload, and generation on the target
+    SM89-or-newer GPU before treating this as a production configuration.
 
 Advanced group-by validation knobs live under `generation.validation`:
 

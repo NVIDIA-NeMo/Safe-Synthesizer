@@ -108,13 +108,26 @@ class NemotronTrainingCapabilityCheck(ConfigCheck):
         config = ctx.config
         model_ref = ModelRef.parse(config.training.pretrained_model)
         policy = model_policy_for_reference(model_ref.repo_id, model_ref.local_path)
-        if policy is NEMOTRON3_NANO_FP8_POLICY and not policy.training_supported:
+        if policy is NEMOTRON3_NANO_FP8_POLICY and config.training.quantize_model:
             collector.error(
-                "nemotron_fp8_training_unsupported",
-                "The official Nemotron 3 Nano FP8 checkpoint is generation-only. "
-                "Train with nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16 and set "
-                "generation.pretrained_model to the FP8 sibling.",
+                "nemotron_fp8_requantization_unsupported",
+                "The official Nemotron 3 Nano FP8 checkpoint is already quantized. "
+                "Set training.quantize_model to false.",
             )
+        if policy is NEMOTRON3_NANO_FP8_POLICY:
+            import torch
+
+            minimum_capability = policy.minimum_training_compute_capability
+            if torch.cuda.is_available() and minimum_capability is not None:
+                capability = torch.cuda.get_device_capability()
+                if capability < minimum_capability:
+                    required = ".".join(str(part) for part in minimum_capability)
+                    actual = ".".join(str(part) for part in capability)
+                    collector.error(
+                        "nemotron_fp8_hardware_unsupported",
+                        f"Direct Nemotron 3 Nano FP8 training requires compute capability "
+                        f"{required} or newer; detected {actual}.",
+                    )
         if policy is NEMOTRON3_NANO_POLICY and config.training.quantize_model:
             scheme = config.training.quantization_scheme
             scheme_name = scheme.value if scheme is not None else f"bnb-{config.training.quantization_bits}bit"

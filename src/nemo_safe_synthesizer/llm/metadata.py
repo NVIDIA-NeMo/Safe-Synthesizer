@@ -30,7 +30,12 @@ from ..defaults import (
 from ..errors import ParameterError
 from ..observability import get_logger
 from ..utils import load_json, write_json
-from .model_policy import NEMOTRON3_NANO_POLICY, model_policy_for, model_policy_for_reference
+from .model_policy import (
+    NEMOTRON3_NANO_FP8_POLICY,
+    NEMOTRON3_NANO_POLICY,
+    model_policy_for,
+    model_policy_for_reference,
+)
 from .utils import ModelRef, load_fast_tokenizer
 
 logger = get_logger(__name__)
@@ -684,9 +689,12 @@ class ModelMetadata(BaseModel):
         model_path = Path(model_name_or_path)
         if model_path.exists():
             model_ref = ModelRef.parse(model_path)
-            if model_policy_for_reference(model_ref.repo_id, model_ref.local_path) is NEMOTRON3_NANO_POLICY:
+            if model_policy_for_reference(model_ref.repo_id, model_ref.local_path) in (
+                NEMOTRON3_NANO_POLICY,
+                NEMOTRON3_NANO_FP8_POLICY,
+            ):
                 return Nemotron3Nano
-        elif model_policy_for(model_name) is NEMOTRON3_NANO_POLICY:
+        elif model_policy_for(model_name) in (NEMOTRON3_NANO_POLICY, NEMOTRON3_NANO_FP8_POLICY):
             return Nemotron3Nano
 
         classes = TinyLlama, Qwen, Llama32, SmolLM2, SmolLM3, Mistral, Nemotron, Granite

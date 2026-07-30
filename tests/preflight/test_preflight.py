@@ -124,16 +124,47 @@ class TestNemotronTrainingCapabilityCheck:
         assert issue.severity == "error"
         assert scheme in issue.message
 
-    def test_official_fp8_checkpoint_is_generation_only(self):
+    def test_official_fp8_checkpoint_accepts_direct_lora_training(self):
         config = SafeSynthesizerParameters.from_params(
             **{"training.pretrained_model": "nvidia/NVIDIA-Nemotron-3-Nano-4B-FP8"},
         )
 
+        with (
+            patch("torch.cuda.is_available", return_value=True),
+            patch("torch.cuda.get_device_capability", return_value=(8, 9)),
+        ):
+            issues = self._check().run(make_ctx(config=config))
+
+        assert issues == []
+
+    def test_official_fp8_checkpoint_rejects_unsupported_training_gpu(self):
+        config = SafeSynthesizerParameters.from_params(
+            **{"training.pretrained_model": "nvidia/NVIDIA-Nemotron-3-Nano-4B-FP8"},
+        )
+
+        with (
+            patch("torch.cuda.is_available", return_value=True),
+            patch("torch.cuda.get_device_capability", return_value=(8, 0)),
+        ):
+            issues = self._check().run(make_ctx(config=config))
+
+        issue = _issue_by_code(issues, "nemotron_fp8_hardware_unsupported")
+        assert issue.severity == "error"
+        assert "8.9" in issue.message
+        assert "8.0" in issue.message
+
+    def test_official_fp8_checkpoint_rejects_a_second_quantization_pass(self):
+        config = SafeSynthesizerParameters.from_params(
+            **{"training.pretrained_model": "nvidia/NVIDIA-Nemotron-3-Nano-4B-FP8"},
+            quantize_model=True,
+            quantization_scheme="fp8",
+        )
+
         issues = self._check().run(make_ctx(config=config))
 
-        issue = _issue_by_code(issues, "nemotron_fp8_training_unsupported")
+        issue = _issue_by_code(issues, "nemotron_fp8_requantization_unsupported")
         assert issue.severity == "error"
-        assert "generation.pretrained_model" in issue.message
+        assert "already quantized" in issue.message
 
     def test_nemotron_dp_training_is_rejected(self):
         config = SafeSynthesizerParameters.from_params(

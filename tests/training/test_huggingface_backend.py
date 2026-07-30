@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import torch
-from transformers import EvalPrediction, IntervalStrategy
+from transformers import EvalPrediction, IntervalStrategy, PretrainedConfig, PreTrainedModel
 
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
 from nemo_safe_synthesizer.config import (
@@ -19,6 +19,11 @@ from nemo_safe_synthesizer.config import (
     TrainingHyperparams,
 )
 from nemo_safe_synthesizer.errors import ParameterError
+from nemo_safe_synthesizer.llm.modelopt_fp8 import (
+    MODELOPT_FP8_TRAINING_METHOD,
+    ModelOptFP8TrainingConfig,
+)
+from nemo_safe_synthesizer.llm.utils import ModelRef
 from nemo_safe_synthesizer.training.callbacks import ProgressBarCallback, SafeSynthesizerWorkerCallback
 from nemo_safe_synthesizer.training.huggingface_backend import (
     HuggingFaceBackend,
@@ -493,6 +498,63 @@ class TestGetQuantizationConfigIfEnabled:
         backend_with_quantization._get_quantization_config_if_enabled()
 
         mock_get_config.assert_called_once_with(QuantizationScheme.NVFP4)
+
+
+def test_huggingface_backend_exposes_prequantized_base_configuration() -> None:
+    assert hasattr(HuggingFaceBackend, "_configure_prequantized_base")
+
+
+def test_huggingface_backend_configures_modelopt_fp8_without_requantizing(backend) -> None:
+    model_id = "nvidia/NVIDIA-Nemotron-3-Nano-4B-FP8"
+    backend.params.training.pretrained_model = model_id
+    backend.params.training.quantize_model = False
+    backend.model_ref = ModelRef.parse(model_id)
+    backend.autoconfig = PretrainedConfig()
+    quant_config = ModelOptFP8TrainingConfig(
+        exclude_modules=["lm_head"],
+        producer_version="0.29.0",
+    )
+
+    with patch(
+        "nemo_safe_synthesizer.training.huggingface_backend.load_modelopt_fp8_training_config",
+        return_value=quant_config,
+    ) as load_quant_config:
+        backend._configure_prequantized_base()
+
+    load_quant_config.assert_called_once_with(backend.model_ref)
+    assert backend.autoconfig.quantization_config["quant_method"] == MODELOPT_FP8_TRAINING_METHOD
+    assert backend.autoconfig.quantization_config["exclude_modules"] == ["lm_head"]
+
+
+def test_prequantized_fp8_base_uses_standard_lora_preparation(backend) -> None:
+    model = MagicMock(spec=PreTrainedModel)
+    model.config = PretrainedConfig()
+    backend.model = model
+    backend.params.training.pretrained_model = "nvidia/NVIDIA-Nemotron-3-Nano-4B-FP8"
+    backend.params.training.quantize_model = False
+
+    with (
+        patch(
+            "nemo_safe_synthesizer.training.huggingface_backend.validate_lora_targets",
+            return_value={"q_proj": 1, "v_proj": 1},
+        ),
+        patch("nemo_safe_synthesizer.training.huggingface_backend.prepare_model_for_kbit_training") as prepare_kbit,
+        patch(
+            "nemo_safe_synthesizer.training.huggingface_backend.get_peft_model_hf",
+            return_value=model,
+        ) as get_peft_model,
+        patch(
+            "nemo_safe_synthesizer.training.huggingface_backend.get_model_param_count",
+            return_value=0,
+        ),
+    ):
+        backend.maybe_quantize()
+
+    prepare_kbit.assert_not_called()
+    model.gradient_checkpointing_enable.assert_called_once_with()
+    model.enable_input_require_grads.assert_called_once_with()
+    assert model.config.use_cache is False
+    get_peft_model.assert_called_once()
 
 
 class TestPrepareQuantizeBase:

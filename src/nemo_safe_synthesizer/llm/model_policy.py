@@ -28,7 +28,7 @@ class ModelPolicy:
     automatic_lora_targets: tuple[str, ...] = ("q_proj", "k_proj", "v_proj", "o_proj")
     vllm_kwargs: tuple[tuple[str, object], ...] = ()
     force_native_transformers: bool = False
-    training_supported: bool = True
+    minimum_training_compute_capability: tuple[int, int] | None = None
     minimum_generation_compute_capability: tuple[int, int] | None = None
 
     def matches(self, repo_id: str | None) -> bool:
@@ -73,7 +73,7 @@ NEMOTRON3_NANO_FP8_POLICY = ModelPolicy(
         ("kv_cache_dtype", "fp8"),
     ),
     force_native_transformers=True,
-    training_supported=False,
+    minimum_training_compute_capability=(8, 9),
     minimum_generation_compute_capability=(8, 9),
 )
 
@@ -167,6 +167,22 @@ def model_policy_for_local_path(model_path: Path | None) -> ModelPolicy | None:
         and layer_layout_matches
         and all(config.get(key) == value for key, value in _NEMOTRON3_NANO_CONFIG_SIGNATURE.items())
     ):
+        quant_config_path = model_path / "hf_quant_config.json"
+        if quant_config_path.exists():
+            try:
+                quant_config = json.loads(quant_config_path.read_text())
+            except (OSError, json.JSONDecodeError):
+                return None
+            producer = quant_config.get("producer", {})
+            quantization = quant_config.get("quantization", {})
+            if (
+                not isinstance(producer, dict)
+                or producer.get("name", "").casefold() != "modelopt"
+                or not isinstance(quantization, dict)
+                or quantization.get("quant_algo", "").casefold() != "fp8"
+            ):
+                return None
+            return NEMOTRON3_NANO_FP8_POLICY
         return NEMOTRON3_NANO_POLICY
     return None
 
@@ -209,7 +225,7 @@ def _load_local_mamba_runtime() -> ModuleType:
         setattr(mamba_ssm, "mamba_split_conv1d_scan_combined", ssd_combined.mamba_split_conv1d_scan_combined)
     except Exception as exc:
         raise ParameterError(
-            "Nemotron 3 Nano BF16 training could not import the compiled mamba-ssm runtime; "
+            "Nemotron 3 Nano training could not import the compiled mamba-ssm runtime; "
             "run `mise run bootstrap-nemotron-kernels`"
         ) from exc
     finally:
@@ -227,7 +243,10 @@ def configure_local_training_kernels(repo_id: str | None, local_path: Path | Non
     Transformers otherwise prefers Kernel Hub whenever its ``kernels`` package
     is installed, even when compatible local modules are available.
     """
-    if model_policy_for_reference(repo_id, local_path) is not NEMOTRON3_NANO_POLICY:
+    if model_policy_for_reference(repo_id, local_path) not in (
+        NEMOTRON3_NANO_POLICY,
+        NEMOTRON3_NANO_FP8_POLICY,
+    ):
         return
 
     try:
@@ -236,7 +255,7 @@ def configure_local_training_kernels(repo_id: str | None, local_path: Path | Non
         causal_conv1d = importlib.import_module("causal_conv1d")
     except ImportError as exc:
         raise ParameterError(
-            "Nemotron 3 Nano BF16 training requires the compiled causal-conv1d and mamba-ssm packages; "
+            "Nemotron 3 Nano training requires the compiled causal-conv1d and mamba-ssm packages; "
             "run `mise run bootstrap-nemotron-kernels`"
         ) from exc
     mamba_ssm = _load_local_mamba_runtime()

@@ -170,10 +170,11 @@ for the full pre-cache checklist.
 
 ### Nemotron 3 Nano fused kernels
 
-The BF16 Nemotron 3 Nano checkpoint requires `causal-conv1d` and `mamba-ssm`
-CUDA extensions for training. A source checkout provides a bootstrap task that
-builds pinned package versions against the project's PyTorch CUDA 12.9
-environment:
+The BF16 and FP8 Nemotron 3 Nano checkpoints require `causal-conv1d` and
+`mamba-ssm` CUDA extensions for training. Direct FP8 training additionally
+requires compute capability 8.9 or newer. A source checkout provides a
+bootstrap task that builds pinned package versions against the project's
+PyTorch CUDA 12.9 environment:
 
 ```bash
 mise run bootstrap-nemotron-kernels

@@ -58,10 +58,12 @@ Supported model families include:
 | TinyLlama | `TinyLlama/TinyLlama-1.1B-Chat-v1.0` |
 | Mistral | `mistralai/Mistral-7B-Instruct-v0.3` |
 | Nemotron 3 Nano BF16 | `nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16` |
+| Nemotron 3 Nano FP8 (experimental) | `nvidia/NVIDIA-Nemotron-3-Nano-4B-FP8` |
 
-Nemotron support currently targets non-DP BF16 LoRA on A100-class GPUs. See
-[Configuration](../user-guide/configuration.md#training) for its kernel setup
-and unsupported modes.
+Nemotron supports non-DP BF16 LoRA on A100-class GPUs and experimental LoRA
+over the official ModelOpt FP8 base on compute capability 8.9 or newer. See
+[Configuration](../user-guide/configuration.md#training) for kernel setup and
+unsupported modes.
 
 ### 5. Generation
 

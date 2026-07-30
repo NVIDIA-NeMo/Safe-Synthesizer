@@ -87,6 +87,9 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 [lint.pydocstyle]
 convention = "google"
 
+[lint.isort]
+known-third-party = ["wandb"]
+
 [lint.per-file-ignores]
 "tests/**" = ["T201"] # print() is fine in tests
 "tools/**" = ["T201"] # print() is fine in tooling scripts

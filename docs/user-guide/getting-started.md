@@ -279,9 +279,11 @@ entity types, LLM classification setup, and SDK customization.
 Fine-tunes a base LLM using LoRA (Low-Rank Adaptation). One backend is available
 (HuggingFace) see [Running -- Training](running.md#training).
 
-The default model is `HuggingFaceTB/SmolLM3-3B`. Safe Synthesizer has explicit support for `HuggingFaceTB/SmolLM3-3B`, `TinyLlama/TinyLlama-1.1B-Chat-v1.0`, `mistralai/Mistral-7B-Instruct-v0.3`, and the non-DP BF16 checkpoint `nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16` on A100-class GPUs. See [Configuration -- Training](configuration.md#training) for model-specific setup and limitations.
+The default model is `HuggingFaceTB/SmolLM3-3B`. Safe Synthesizer has explicit support for `HuggingFaceTB/SmolLM3-3B`, `TinyLlama/TinyLlama-1.1B-Chat-v1.0`, `mistralai/Mistral-7B-Instruct-v0.3`, and non-DP Nemotron 3 Nano BF16 or experimental FP8 checkpoints. The FP8 training path requires compute capability 8.9 or newer. See [Configuration -- Training](configuration.md#training) for model-specific setup and limitations.
 
-Training requires 1 NVIDIA GPU (A100 or larger) to run. Multi-GPU training is not supported.
+Training requires one supported NVIDIA GPU. The Nemotron BF16 path requires
+an A100-class GPU, while its FP8 path requires compute capability 8.9 or newer.
+Multi-GPU training is not supported.
 
 !!! tip "Differential privacy"
     For formal privacy guarantees, enable Differentially Private Stochastic Gradient Descent (DP-SGD) when fine-tuning via `privacy.dp_enabled: true`. See [Configuration -- Differential Privacy](configuration.md#differential-privacy).

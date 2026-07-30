@@ -215,12 +215,11 @@ class AutoConfigResolver:
         policy = model_policy_for_reference(model_ref.repo_id, model_ref.local_path)
         if policy not in (NEMOTRON3_NANO_POLICY, NEMOTRON3_NANO_FP8_POLICY):
             return
-        if not policy.training_supported:
-            raise ParameterError(
-                "The official Nemotron 3 Nano FP8 checkpoint is generation-only; "
-                "train with the BF16 checkpoint and use generation.pretrained_model"
-            )
-        if policy is NEMOTRON3_NANO_POLICY and self._config.training.quantize_model:
+        if self._config.training.quantize_model:
+            if policy is NEMOTRON3_NANO_FP8_POLICY:
+                raise ParameterError(
+                    "The official Nemotron 3 Nano FP8 checkpoint is already quantized and cannot be quantized again"
+                )
             raise ParameterError("Nemotron 3 Nano BF16 does not support dynamic quantized training")
         if self._dp_enabled:
             raise ParameterError("Nemotron 3 Nano does not support differential-privacy training")

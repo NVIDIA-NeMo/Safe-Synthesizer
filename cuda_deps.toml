@@ -13,7 +13,7 @@ torch_runtime_deps = [
     "gliner",
     "kernels>=0.12.1,<0.15",
     "opacus",
-    "peft>=0.18.0",
+    "peft>=0.19.1",
     "sentence-transformers",
     "openai>=2.25.0",
     "trl>=0.23.0",
