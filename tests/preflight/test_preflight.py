@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
@@ -13,13 +14,14 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 import pytest
 from rich.console import Console
-from transformers import PretrainedConfig, PreTrainedTokenizerBase
+from transformers import AutoTokenizer, PretrainedConfig, PreTrainedTokenizerBase
 
 from nemo_safe_synthesizer.config.data import DataParameters
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
 from nemo_safe_synthesizer.config.training import TrainingHyperparams
 from nemo_safe_synthesizer.defaults import DEFAULT_MAX_SEQ_LENGTH, PSEUDO_GROUP_COLUMN
+from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.llm.metadata import ModelMetadata
 from nemo_safe_synthesizer.llm.utils import ModelRef
 from nemo_safe_synthesizer.preflight import (
@@ -47,6 +49,7 @@ from nemo_safe_synthesizer.preflight import (
     get_registry,
     run_preflight,
 )
+from nemo_safe_synthesizer.tokenization import NssTokenizer, WorkloadKind, create_runtime_nss_tokenizer
 from nemo_safe_synthesizer.tooling import PreflightRenderContext, render_preflight_report
 
 from .conftest import make_ctx
@@ -66,6 +69,28 @@ class _PseudoColumnSensitiveTokenizer(PreTrainedTokenizerBase):
     def __call__(self, texts: list[str], *, add_special_tokens: bool) -> dict[str, list[list[int]]]:
         assert add_special_tokens is False
         return {"input_ids": [[0] * (100 if PSEUDO_GROUP_COLUMN in text else 1) for text in texts]}
+
+
+class _NssRecordAdapter:
+    """Minimal NSS-shaped adapter for isolated preflight policy tests."""
+
+    def __init__(self, native) -> None:
+        self.native = native
+
+    def encode_records(self, records, *, exclude_columns=()):
+        excluded = frozenset(exclude_columns)
+        texts = [
+            json.dumps(
+                {key: value for key, value in record.items() if key not in excluded},
+                ensure_ascii=False,
+                separators=(",", ":"),
+                allow_nan=False,
+            )
+            + "\n"
+            for record in records
+        ]
+        result = self.native(texts, add_special_tokens=False)
+        return SimpleNamespace(input_ids=tuple(tuple(row) for row in result["input_ids"]))
 
 
 # ---------------------------------------------------------------------------
@@ -999,10 +1024,19 @@ class TestTokenBudgetCheck:
         metadata.prompt_config = SimpleNamespace(template="{instruction}{schema}{prefill}")
         return metadata
 
+    @staticmethod
+    def _run(config, data, metadata):
+        record_tokenizer = _NssRecordAdapter(metadata.tokenizer) if metadata.tokenizer is not None else None
+        with patch(
+            "nemo_safe_synthesizer.preflight.checks.metadata.create_runtime_nss_tokenizer",
+            return_value=record_tokenizer,
+        ):
+            return TokenBudgetCheck().run(make_ctx(config=config, data=data, metadata=metadata))
+
     def test_tokenizer_unavailable(self, sample_df, default_config):
         metadata = MagicMock(spec=ModelMetadata)
         metadata.tokenizer = None
-        issues = TokenBudgetCheck().run(make_ctx(config=default_config, data=sample_df, metadata=metadata))
+        issues = self._run(default_config, sample_df, metadata)
         assert any(i.code == "tokenizer_unavailable" for i in issues)
 
     def test_happy_path(self, sample_df, default_config):
@@ -1011,9 +1045,112 @@ class TestTokenBudgetCheck:
         # attach the nested mock explicitly before configuring it.
         tokenizer = MagicMock()
         tokenizer.encode.return_value = list(range(50))
+        tokenizer.side_effect = lambda texts, **_: {"input_ids": [list(range(50)) for _text in texts]}
         metadata = self._metadata(tokenizer, max_seq_length=2048)
-        issues = TokenBudgetCheck().run(make_ctx(config=default_config, data=sample_df, metadata=metadata))
+        issues = self._run(default_config, sample_df, metadata)
         assert not any(i.severity == "error" for i in issues)
+
+    def test_local_provenance_uses_registered_contract_without_mocking(
+        self,
+        sample_df,
+        default_config,
+        fixture_tokenizer,
+        fixture_smollm3_tokenizer,
+    ):
+        metadata = ModelMetadata.from_str_or_path(
+            model_name_or_path=fixture_smollm3_tokenizer,
+            tokenizer=fixture_tokenizer,
+        )
+        expected = create_runtime_nss_tokenizer(
+            fixture_tokenizer,
+            metadata,
+            workload_kind=WorkloadKind.TABULAR,
+        )
+
+        issues = TokenBudgetCheck().run(make_ctx(config=default_config, data=sample_df, metadata=metadata))
+
+        assert not any(issue.code == "tokenizer_unavailable" for issue in issues)
+        assert metadata.tokenizer is not None
+        actual = create_runtime_nss_tokenizer(
+            metadata.tokenizer,
+            metadata,
+            workload_kind=WorkloadKind.TABULAR,
+        )
+        assert actual.spec == expected.spec
+
+    def test_cached_snapshot_provenance_runs_through_token_budget_check(
+        self,
+        sample_df,
+        default_config,
+        fixture_smollm3_tokenizer,
+        hf_cached_snapshot_factory,
+        monkeypatch,
+    ):
+        repo_id = "HuggingFaceTB/SmolLM3-3B"
+        commit = "1" * 40
+        cache_root, snapshot = hf_cached_snapshot_factory(repo_id, commit=commit)
+        shutil.copytree(fixture_smollm3_tokenizer, snapshot, dirs_exist_ok=True)
+        monkeypatch.setattr(ModelRef, "_default_hf_cache_root", staticmethod(lambda: cache_root))
+        native = AutoTokenizer.from_pretrained(snapshot)
+        assert isinstance(native, PreTrainedTokenizerBase)
+        metadata = ModelMetadata.from_str_or_path(model_name_or_path=repo_id, tokenizer=native)
+
+        issues = TokenBudgetCheck().run(make_ctx(config=default_config, data=sample_df, metadata=metadata))
+
+        assert not any(issue.severity == "error" for issue in issues)
+        tokenizer = create_runtime_nss_tokenizer(
+            native,
+            metadata,
+            workload_kind=WorkloadKind.TABULAR,
+        )
+        assert tokenizer.spec.native_source == repo_id
+        assert tokenizer.spec.native_revision == commit
+
+    def test_immutable_remote_provenance_runs_through_token_budget_check(
+        self,
+        sample_df,
+        default_config,
+        fixture_smollm3_tokenizer,
+    ):
+        native = AutoTokenizer.from_pretrained(fixture_smollm3_tokenizer)
+        assert isinstance(native, PreTrainedTokenizerBase)
+        setattr(native, "name_or_path", "example-org/immutable-budget-model")
+        setattr(native, "_commit_hash", "2" * 40)
+        metadata = ModelMetadata.from_str_or_path(
+            model_name_or_path=fixture_smollm3_tokenizer,
+            tokenizer=native,
+        )
+        metadata.model_name_or_path = native.name_or_path
+
+        issues = TokenBudgetCheck().run(make_ctx(config=default_config, data=sample_df, metadata=metadata))
+
+        assert not any(issue.severity == "error" for issue in issues)
+
+    def test_unresolved_remote_provenance_fails_before_preflight_record_encoding(
+        self,
+        sample_df,
+        default_config,
+        fixture_smollm3_tokenizer,
+        monkeypatch,
+    ):
+        native = AutoTokenizer.from_pretrained(fixture_smollm3_tokenizer)
+        assert isinstance(native, PreTrainedTokenizerBase)
+        setattr(native, "name_or_path", "example-org/unresolved-budget-model")
+        setattr(native, "_commit_hash", None)
+        native.init_kwargs.pop("_commit_hash", None)
+        metadata = ModelMetadata.from_str_or_path(
+            model_name_or_path=fixture_smollm3_tokenizer,
+            tokenizer=native,
+        )
+        metadata.model_name_or_path = native.name_or_path
+
+        def unexpected_record_encoding(*_args, **_kwargs):
+            pytest.fail("record encoding ran before immutable native provenance was established")
+
+        monkeypatch.setattr(NssTokenizer, "encode_records", unexpected_record_encoding)
+
+        with pytest.raises(ParameterError, match="no trustworthy immutable commit"):
+            TokenBudgetCheck().run(make_ctx(config=default_config, data=sample_df, metadata=metadata))
 
     def test_does_not_require_columns_groupby(self):
         # Regression: ``requires = ("columns.groupby",)`` used to cause
@@ -1040,7 +1177,7 @@ class TestTokenBudgetCheck:
         tokenizer.return_value = {"input_ids": [list(range(100))]}
         metadata = self._metadata(tokenizer, max_seq_length=60)
 
-        issues = TokenBudgetCheck().run(make_ctx(config=default_config, data=df, metadata=metadata))
+        issues = self._run(default_config, df, metadata)
 
         assert any(i.code == "record_exceeds_context" and i.severity == "error" for i in issues)
 
@@ -1048,7 +1185,7 @@ class TestTokenBudgetCheck:
         df = pd.DataFrame({PSEUDO_GROUP_COLUMN: ["synthetic-group"], "value": ["visible"]})
         metadata = self._metadata(_PseudoColumnSensitiveTokenizer(), max_seq_length=10)
 
-        issues = TokenBudgetCheck().run(make_ctx(config=default_config, data=df, metadata=metadata))
+        issues = self._run(default_config, df, metadata)
 
         assert not any(i.code == "record_exceeds_context" for i in issues)
 
@@ -1060,7 +1197,12 @@ class TestTokenBudgetCheck:
         check.token_sample_size = 0
         check.top_groups_to_check = 1
 
-        issues = check.run(make_ctx(config=config, data=df, metadata=metadata))
+        record_tokenizer = _NssRecordAdapter(metadata.tokenizer)
+        with patch(
+            "nemo_safe_synthesizer.preflight.checks.metadata.create_runtime_nss_tokenizer",
+            return_value=record_tokenizer,
+        ):
+            issues = check.run(make_ctx(config=config, data=df, metadata=metadata))
 
         assert not any(i.code == "group_exceeds_context" for i in issues)
 
@@ -1124,10 +1266,17 @@ class TestRunPreflight:
         metadata = MagicMock(spec=ModelMetadata)
         metadata.tokenizer = MagicMock()
         metadata.tokenizer.encode.return_value = list(range(50))
+        metadata.tokenizer.side_effect = lambda texts, **_: {"input_ids": [list(range(50)) for _text in texts]}
         metadata.max_seq_length = 2048
         metadata.instruction = "Generate: "
         metadata.prompt_config = SimpleNamespace(template="{instruction}{schema}{prefill}")
-        with patch("torch.cuda.is_available", return_value=True):
+        with (
+            patch("torch.cuda.is_available", return_value=True),
+            patch(
+                "nemo_safe_synthesizer.preflight.checks.metadata.create_runtime_nss_tokenizer",
+                return_value=_NssRecordAdapter(metadata.tokenizer),
+            ),
+        ):
             with patch.dict("os.environ", {"NSS_INFERENCE_KEY": "test", "HF_TOKEN": "hf_xxx"}):
                 report = run_preflight(sample_df, resolved_config, metadata)
         assert len(report.errors) == 0

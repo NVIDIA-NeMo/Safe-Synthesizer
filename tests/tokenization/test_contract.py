@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import replace
 from typing import cast
 
@@ -24,6 +25,7 @@ from nemo_safe_synthesizer.tokenization import (
     builtin_registry,
 )
 from nemo_safe_synthesizer.tokenization.base import native_snapshot
+from nemo_safe_synthesizer.tokenization.records import columnar_batch_to_records
 
 
 def _native_and_policy(tokenizers_dir, fixture_name: str):
@@ -106,6 +108,182 @@ def test_shared_builtins_contract_on_three_checked_fixtures(checked_native, impl
     assert tokenizer.capabilities.prompt_encoding is True
     assert tokenizer.capabilities.record_jsonl is True
     assert tokenizer.capabilities.rolling_prefill is (implementation is TimeSeriesNssTokenizer)
+
+
+def test_encode_records_preserves_order_excludes_without_mutation(
+    checked_native, implementation, tokenizers_dir
+) -> None:
+    fixture_name, native, policy = checked_native
+    tokenizer = builtin_registry().create(
+        (1, implementation.IMPLEMENTATION_ID, "1"),
+        native,
+        framing=policy,
+        native_source=str(tokenizers_dir / fixture_name),
+        native_revision="fixture-v1",
+    )
+    records = [{"z": "line\n\u0085\u2028\u2029", "drop": 2, "a": 1}, {"drop": 3, "a": "é"}]
+    before = [record.copy() for record in records]
+
+    encoded = tokenizer.encode_records(
+        records,
+        exclude_columns=("drop", "unknown", "drop"),
+    )
+
+    assert tuple(record.utf8 for record in encoded.records) == (
+        b'{"z":"line\\n\xc2\x85\xe2\x80\xa8\xe2\x80\xa9","a":1}\n',
+        b'{"a":"\xc3\xa9"}\n',
+    )
+    assert records == before
+    assert encoded.attention_mask == tuple(tuple(1 for _ in ids) for ids in encoded.input_ids)
+
+
+def test_encode_records_uses_one_native_batch_call(checked_native, implementation, tokenizers_dir, monkeypatch) -> None:
+    fixture_name, native, policy = checked_native
+    tokenizer = builtin_registry().create(
+        (1, implementation.IMPLEMENTATION_ID, "1"),
+        native,
+        framing=policy,
+        native_source=str(tokenizers_dir / fixture_name),
+        native_revision="fixture-v1",
+    )
+    native_type = type(native)
+    original_call = native_type.__call__
+    calls: list[list[str]] = []
+
+    def recording_call(self, texts, *, add_special_tokens):
+        calls.append(list(texts))
+        return original_call(self, texts, add_special_tokens=add_special_tokens)
+
+    monkeypatch.setattr(native_type, "__call__", recording_call)
+
+    batch = tokenizer.encode_records([{"a": "x"}, {"a": "longer"}, {}])
+
+    assert calls == [[record.utf8.decode() for record in batch.records]]
+    assert len({len(row) for row in batch.input_ids}) > 1
+
+
+def test_encode_records_empty_and_all_columns_excluded(
+    checked_native, implementation, tokenizers_dir, monkeypatch
+) -> None:
+    fixture_name, native, policy = checked_native
+    tokenizer = builtin_registry().create(
+        (1, implementation.IMPLEMENTATION_ID, "1"),
+        native,
+        framing=policy,
+        native_source=str(tokenizers_dir / fixture_name),
+        native_revision="fixture-v1",
+    )
+    native_type = type(native)
+    original_call = native_type.__call__
+    calls = 0
+
+    def recording_call(self, texts, *, add_special_tokens):
+        nonlocal calls
+        calls += 1
+        return original_call(self, texts, add_special_tokens=add_special_tokens)
+
+    monkeypatch.setattr(native_type, "__call__", recording_call)
+
+    assert tokenizer.encode_records([]).records == ()
+    batch = tokenizer.encode_records([{"a": 1}, {"a": 2}], exclude_columns=("a",))
+
+    assert tuple(record.utf8 for record in batch.records) == (b"{}\n", b"{}\n")
+    assert calls == 1
+
+
+@pytest.mark.parametrize(
+    "malformed",
+    [
+        None,
+        {},
+        {"input_ids": [[1]]},
+        {"input_ids": [1, 2]},
+        {"input_ids": [[1], ["bad"]]},
+        {"input_ids": [[True], [2]]},
+    ],
+)
+def test_encode_records_rejects_malformed_native_batches(
+    checked_native, implementation, tokenizers_dir, monkeypatch, malformed
+) -> None:
+    fixture_name, native, policy = checked_native
+    tokenizer = builtin_registry().create(
+        (1, implementation.IMPLEMENTATION_ID, "1"),
+        native,
+        framing=policy,
+        native_source=str(tokenizers_dir / fixture_name),
+        native_revision="fixture-v1",
+    )
+
+    def malformed_call(_self, _texts, *, add_special_tokens):
+        assert add_special_tokens is False
+        return malformed
+
+    monkeypatch.setattr(type(native), "__call__", malformed_call)
+
+    with pytest.raises(ParameterError, match="native tokenizer batch"):
+        tokenizer.encode_records([{"a": 1}, {"a": 2}])
+
+
+@pytest.mark.parametrize(
+    "bad_records",
+    [
+        [{"a": float("nan")}],
+        [{"a": float("inf")}],
+        [{"a": object()}],
+        [{"a": (1, 2)}],
+        [{"a": {1: "coerced"}}],
+    ],
+)
+def test_encode_records_rejects_non_json_values(checked_native, implementation, tokenizers_dir, bad_records) -> None:
+    fixture_name, native, policy = checked_native
+    tokenizer = builtin_registry().create(
+        (1, implementation.IMPLEMENTATION_ID, "1"),
+        native,
+        framing=policy,
+        native_source=str(tokenizers_dir / fixture_name),
+        native_revision="fixture-v1",
+    )
+
+    with pytest.raises(ParameterError, match="JSON"):
+        tokenizer.encode_records(bad_records)
+
+
+def test_encode_records_rejects_invalid_exclusions(checked_native, implementation, tokenizers_dir) -> None:
+    fixture_name, native, policy = checked_native
+    tokenizer = builtin_registry().create(
+        (1, implementation.IMPLEMENTATION_ID, "1"),
+        native,
+        framing=policy,
+        native_source=str(tokenizers_dir / fixture_name),
+        native_revision="fixture-v1",
+    )
+
+    with pytest.raises(ParameterError, match="exclusions"):
+        tokenizer.encode_records([{"a": 1}], exclude_columns=cast(tuple[str, ...], (1,)))
+    with pytest.raises(ParameterError, match="exclusions"):
+        tokenizer.encode_records([{"a": 1}], exclude_columns=cast(tuple[str, ...], {"a"}))
+    with pytest.raises(ParameterError, match="exclusions"):
+        tokenizer.encode_records([], exclude_columns=cast(tuple[str, ...], {"a": 1}))
+
+
+def test_columnar_batch_adapter_preserves_order_and_validates_lengths() -> None:
+    columns: Mapping[str, list[object]] = {"b": [1, 2], "a": ["x", "y"]}
+
+    rows = columnar_batch_to_records(columns)
+
+    assert rows == ({"b": 1, "a": "x"}, {"b": 2, "a": "y"})
+    assert tuple(rows[0]) == ("b", "a")
+    assert columns == {"b": [1, 2], "a": ["x", "y"]}
+
+    with pytest.raises(ParameterError, match="equal lengths"):
+        columnar_batch_to_records({"a": [1], "b": [2, 3]})
+    with pytest.raises(ParameterError, match="column names"):
+        columnar_batch_to_records(cast(Mapping[str, list[object]], {1: [1]}))
+
+
+def test_columnar_batch_adapter_represents_positive_zero_column_rows() -> None:
+    assert columnar_batch_to_records({}, row_count=2) == ({}, {})
+    assert columnar_batch_to_records({}) == ()
 
 
 def test_prompt_special_flag_combinations_are_explicit(tokenizers_dir) -> None:

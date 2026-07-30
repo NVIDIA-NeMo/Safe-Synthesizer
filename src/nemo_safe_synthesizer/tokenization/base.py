@@ -16,6 +16,7 @@ from typing import Generic, Protocol, TypeVar, cast, final
 from transformers import PreTrainedTokenizerBase
 
 from ..errors import ParameterError
+from .records import validate_json_value
 from .spec import NssTokenizerSpec, PolicyEpochs
 from .types import (
     FramingPolicy,
@@ -278,19 +279,68 @@ class NssTokenizer(ABC, Generic[ContextT]):
         return PromptEncoding(text=text, input_ids=ids, attention_mask=tuple(1 for _ in ids))
 
     @final
-    def encode_records(self, records: Sequence[Mapping[str, JsonValue]]) -> RecordBatch:
-        """Serialize ordered mappings as JSONL and encode each record separately."""
-        encoded: list[RecordEncoding] = []
+    def encode_records(
+        self,
+        records: Sequence[Mapping[str, JsonValue]],
+        *,
+        exclude_columns: Sequence[str] = (),
+    ) -> RecordBatch:
+        """Serialize and batch-encode ordered terminal-LF JSONL records."""
+        if (
+            not isinstance(exclude_columns, Sequence)
+            or isinstance(exclude_columns, (str, bytes))
+            or not all(isinstance(column, str) for column in exclude_columns)
+        ):
+            raise ParameterError("Record exclusions must be a sequence of column-name strings.")
+        if not records:
+            return RecordBatch(())
+        excluded = frozenset(exclude_columns)
+        texts: list[str] = []
+        payloads: list[bytes] = []
         for record in records:
-            payload = self._record_payload(record)
+            if not isinstance(record, Mapping) or not all(isinstance(key, str) for key in record):
+                raise ParameterError("Records must be mappings with string column names.")
+            filtered = {key: validate_json_value(value) for key, value in record.items() if key not in excluded}
+            payload = self._record_payload(filtered)
             try:
                 text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), allow_nan=False) + "\n"
             except (TypeError, ValueError) as exc:
                 raise ParameterError("Records must contain finite JSON values.") from exc
-            utf8 = text.encode()
-            ids = self.encode_no_special(text)
-            encoded.append(RecordEncoding(utf8=utf8, input_ids=ids, attention_mask=tuple(1 for _ in ids)))
-        return RecordBatch(tuple(encoded))
+            texts.append(text)
+            payloads.append(text.encode())
+        try:
+            native_batch = self._native(texts, add_special_tokens=False)
+        except Exception as exc:
+            raise ParameterError("The native tokenizer batch operation failed for ordered records.") from exc
+        rows = self._validated_native_record_ids(native_batch, len(texts))
+        return RecordBatch(
+            tuple(
+                RecordEncoding(
+                    utf8=utf8,
+                    input_ids=input_ids,
+                    attention_mask=tuple(1 for _ in input_ids),
+                )
+                for utf8, input_ids in zip(payloads, rows, strict=True)
+            )
+        )
+
+    @staticmethod
+    def _validated_native_record_ids(value: object, row_count: int) -> tuple[tuple[int, ...], ...]:
+        if not isinstance(value, Mapping):
+            raise ParameterError("Malformed native tokenizer batch: expected a Mapping result.")
+        input_ids = next((item for key, item in value.items() if key == "input_ids"), None)
+        if not isinstance(input_ids, Sequence) or isinstance(input_ids, (str, bytes, bytearray)):
+            raise ParameterError("Malformed native tokenizer batch: input_ids must be a nested sequence.")
+        if len(input_ids) != row_count:
+            raise ParameterError("Malformed native tokenizer batch: row count does not match input records.")
+        rows: list[tuple[int, ...]] = []
+        for row in input_ids:
+            if not isinstance(row, Sequence) or isinstance(row, (str, bytes, bytearray)):
+                raise ParameterError("Malformed native tokenizer batch: every input_ids row must be a sequence.")
+            if not all(isinstance(token_id, int) and not isinstance(token_id, bool) for token_id in row):
+                raise ParameterError("Malformed native tokenizer batch: token IDs must be integers.")
+            rows.append(tuple(cast(int, token_id) for token_id in row))
+        return tuple(rows)
 
     @final
     def frame_training(

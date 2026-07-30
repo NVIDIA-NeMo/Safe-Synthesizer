@@ -5,6 +5,7 @@
 
 from .base import EngineParity, NssTokenizer
 from .registry import NssTokenizerRegistry, RegistryEntry, builtin_registry
+from .runtime import create_runtime_nss_tokenizer, resolve_native_provenance
 from .spec import NssTokenizerSpec, PolicyEpochs
 from .tabular import TabularNssTokenizer
 from .timeseries import TimeSeriesNssTokenizer
@@ -47,4 +48,6 @@ __all__ = [
     "WorkloadContext",
     "WorkloadKind",
     "builtin_registry",
+    "create_runtime_nss_tokenizer",
+    "resolve_native_provenance",
 ]

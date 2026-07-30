@@ -2,13 +2,14 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+import shutil
 from pathlib import Path
 from typing import cast
 
 import pandas as pd
 import pytest
 from datasets import Dataset
-from transformers import PretrainedConfig, PreTrainedTokenizer
+from transformers import AutoTokenizer, PretrainedConfig, PreTrainedTokenizer
 
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 from nemo_safe_synthesizer.data_processing.assembler import (
@@ -26,9 +27,17 @@ from nemo_safe_synthesizer.data_processing.record_utils import (
 from nemo_safe_synthesizer.defaults import PROMPT_TEMPLATE, PSEUDO_GROUP_COLUMN
 from nemo_safe_synthesizer.errors import GenerationError, ParameterError
 from nemo_safe_synthesizer.llm.metadata import DEFAULT_MAX_SEQ_LENGTH, LLMPromptConfig, ModelMetadata
+from nemo_safe_synthesizer.llm.utils import ModelRef
+from nemo_safe_synthesizer.tokenization import NssTokenizer, WorkloadKind, create_runtime_nss_tokenizer
+from nemo_safe_synthesizer.tokenization.cache import TokenCachePartition
 
 STUB_PROMPT = "Test prompt"
 STUB_SEQUENCE = dict(input_ids=[66, 67], attention_mask=[1, 1])
+
+
+def _record_tokenizer(native: PreTrainedTokenizer, metadata: ModelMetadata, *, time_series: bool = False):
+    workload = WorkloadKind.TIME_SERIES if time_series else WorkloadKind.TABULAR
+    return create_runtime_nss_tokenizer(native, metadata, workload_kind=workload)
 
 
 # Purpose: Session-scoped assembler config pointing at a local SmolLM3 tokenizer directory
@@ -121,6 +130,7 @@ def test_example_assembler_test_set_size_exception(
         _ = TabularDataExampleAssembler(
             dataset=fixture_iris_dataset,
             tokenizer=fixture_tokenizer,
+            record_tokenizer=_record_tokenizer(fixture_tokenizer, fixture_llm_metadata),
             metadata=fixture_llm_metadata,
             test_size=100,
             cache_file_path=fixture_session_cache_dir,
@@ -132,14 +142,15 @@ def test_tabular_data_assembler(
     fixture_iris_dataset: Dataset,
     fixture_tokenizer: PreTrainedTokenizer,
     fixture_assembler_config: SafeSynthesizerParameters,
-    fixture_session_cache_dir: str,
+    tmp_path: Path,
 ):
     metadata = ModelMetadata.from_str_or_path(model_name_or_path=fixture_assembler_config.training.pretrained_model)
     assembler = TabularDataExampleAssembler(
         dataset=fixture_iris_dataset,
         tokenizer=fixture_tokenizer,
+        record_tokenizer=_record_tokenizer(fixture_tokenizer, metadata),
         metadata=metadata,
-        cache_file_path=fixture_session_cache_dir,
+        cache_file_path=tmp_path,
         seed=1,
     )
     assert assembler.num_records_total == 150
@@ -149,6 +160,279 @@ def test_tabular_data_assembler(
     examples = assembler.assemble_training_examples()
     assert examples.train.num_rows == 1
     assert examples.test is None
+
+
+def test_tabular_token_cache_hit_avoids_reencoding_and_replays_capacity_guard(
+    fixture_iris_dataset: Dataset,
+    fixture_tokenizer: PreTrainedTokenizer,
+    fixture_assembler_config: SafeSynthesizerParameters,
+    tmp_path: Path,
+    monkeypatch,
+):
+    metadata = ModelMetadata.from_str_or_path(model_name_or_path=fixture_assembler_config.training.pretrained_model)
+    original_encode = NssTokenizer.encode_records
+    encode_calls = 0
+
+    def recording_encode(self, records, *, exclude_columns=()):
+        nonlocal encode_calls
+        encode_calls += 1
+        return original_encode(self, records, exclude_columns=exclude_columns)
+
+    monkeypatch.setattr(NssTokenizer, "encode_records", recording_encode)
+    first = TrainingExampleAssembler.from_data(
+        dataset=fixture_iris_dataset,
+        tokenizer=fixture_tokenizer,
+        metadata=metadata,
+        config=fixture_assembler_config,
+        cache_file_path=tmp_path,
+        seed=1,
+    )
+    assert encode_calls > 0
+
+    encode_calls = 0
+    original_guard = TrainingExampleAssembler._validate_record_capacity
+    guard_calls = 0
+
+    def recording_guard(self, input_ids):
+        nonlocal guard_calls
+        guard_calls += 1
+        return original_guard(self, input_ids)
+
+    monkeypatch.setattr(TrainingExampleAssembler, "_validate_record_capacity", recording_guard)
+    second = TrainingExampleAssembler.from_data(
+        dataset=fixture_iris_dataset,
+        tokenizer=fixture_tokenizer,
+        metadata=metadata,
+        config=fixture_assembler_config,
+        cache_file_path=tmp_path,
+        seed=1,
+    )
+
+    assert encode_calls == 0
+    assert guard_calls == 1
+    assert second.tokenized_records.to_dict() == first.tokenized_records.to_dict()
+    assert second.stats["tokens_per_record"].mean == first.stats["tokens_per_record"].mean
+
+
+def test_record_mapping_is_invariant_to_dataset_batch_boundaries(
+    fixture_iris_dataset: Dataset,
+    fixture_tokenizer: PreTrainedTokenizer,
+    fixture_assembler_config: SafeSynthesizerParameters,
+    tmp_path: Path,
+) -> None:
+    metadata = ModelMetadata.from_str_or_path(model_name_or_path=fixture_assembler_config.training.pretrained_model)
+    assembler = TrainingExampleAssembler.from_data(
+        dataset=fixture_iris_dataset,
+        tokenizer=fixture_tokenizer,
+        metadata=metadata,
+        config=fixture_assembler_config,
+        cache_file_path=tmp_path,
+        seed=1,
+    )
+    source = fixture_iris_dataset.select(range(7))
+
+    single = source.map(
+        assembler._tokenize_records,
+        batched=True,
+        batch_size=1,
+        remove_columns=source.column_names,
+        load_from_cache_file=False,
+        new_fingerprint="single-record-batches",
+    )
+    multi = source.map(
+        assembler._tokenize_records,
+        batched=True,
+        batch_size=4,
+        remove_columns=source.column_names,
+        load_from_cache_file=False,
+        new_fingerprint="multi-record-batches",
+    )
+
+    assert single.to_dict() == multi.to_dict()
+    assert single.to_dict() == assembler.tokenized_records.select(range(7)).to_dict()
+
+
+def test_dataset_content_fingerprint_changes_production_cache_key(
+    fixture_iris_dataset: Dataset,
+    fixture_tokenizer: PreTrainedTokenizer,
+    fixture_assembler_config: SafeSynthesizerParameters,
+    tmp_path: Path,
+) -> None:
+    metadata = ModelMetadata.from_str_or_path(model_name_or_path=fixture_assembler_config.training.pretrained_model)
+    assembler = TrainingExampleAssembler.from_data(
+        dataset=fixture_iris_dataset,
+        tokenizer=fixture_tokenizer,
+        metadata=metadata,
+        config=fixture_assembler_config,
+        cache_file_path=tmp_path,
+        seed=1,
+    )
+    changed = fixture_iris_dataset.map(
+        lambda row: {**row, "sepal.length": row["sepal.length"] + 1},
+        load_from_cache_file=False,
+    )
+
+    original_key = assembler._token_cache_key(fixture_iris_dataset, (), TokenCachePartition.TRAIN)
+    changed_key = assembler._token_cache_key(changed, (), TokenCachePartition.TRAIN)
+
+    assert original_key.dataset_fingerprint != changed_key.dataset_fingerprint
+    assert original_key.digest != changed_key.digest
+
+
+def test_grouped_and_sequential_production_cache_namespaces_do_not_collide(
+    fixture_tokenizer: PreTrainedTokenizer,
+    fixture_assembler_config: SafeSynthesizerParameters,
+    tmp_path: Path,
+) -> None:
+    dataset = Dataset.from_dict(
+        {
+            "group": ["a", "a", "b", "b"],
+            "order": [1, 2, 1, 2],
+            "value": [10, 11, 20, 21],
+        }
+    )
+    grouped_metadata = ModelMetadata.from_str_or_path(
+        model_name_or_path=fixture_assembler_config.training.pretrained_model
+    )
+    sequential_metadata = ModelMetadata.from_str_or_path(
+        model_name_or_path=fixture_assembler_config.training.pretrained_model
+    )
+
+    grouped = GroupedDataExampleAssembler(
+        group_training_examples_by="group",
+        order_training_examples_by="order",
+        dataset=dataset,
+        tokenizer=fixture_tokenizer,
+        record_tokenizer=_record_tokenizer(fixture_tokenizer, grouped_metadata),
+        metadata=grouped_metadata,
+        cache_file_path=tmp_path,
+        seed=1,
+    )
+    sequential = SequentialExampleAssembler(
+        group_training_examples_by="group",
+        order_training_examples_by="order",
+        dataset=dataset,
+        tokenizer=fixture_tokenizer,
+        record_tokenizer=_record_tokenizer(fixture_tokenizer, sequential_metadata, time_series=True),
+        metadata=sequential_metadata,
+        cache_file_path=tmp_path,
+        seed=1,
+    )
+
+    namespaces = tuple(path for path in (tmp_path / "nss-token-cache" / "v1").iterdir() if path.is_dir())
+    assert len(namespaces) == 2
+    assert grouped.tokenized_records.column_names == ["group", "order", "text", "input_ids", "attention_mask"]
+    assert sequential.tokenized_records.column_names == ["group", "order", "text", "input_ids", "attention_mask"]
+    expected_text = [
+        '{"group":"a","order":1,"value":10}\n',
+        '{"group":"a","order":2,"value":11}\n',
+        '{"group":"b","order":1,"value":20}\n',
+        '{"group":"b","order":2,"value":21}\n',
+    ]
+    expected_ids = fixture_tokenizer(expected_text, add_special_tokens=False)["input_ids"]
+    expected_masks = [[1] * len(row) for row in expected_ids]
+    for assembler in (grouped, sequential):
+        assert assembler.tokenized_records.to_dict() == {
+            "group": ["a", "a", "b", "b"],
+            "order": [1, 2, 1, 2],
+            "text": expected_text,
+            "input_ids": expected_ids,
+            "attention_mask": expected_masks,
+        }
+        assert assembler.stats["tokens_per_record"].mean == sum(map(len, expected_ids)) / len(expected_ids)
+
+
+def test_from_data_accepts_native_bound_immutable_remote_commit(
+    fixture_iris_dataset: Dataset,
+    fixture_smollm3_tokenizer: str,
+    fixture_assembler_config: SafeSynthesizerParameters,
+    tmp_path: Path,
+) -> None:
+    native = cast(PreTrainedTokenizer, AutoTokenizer.from_pretrained(fixture_smollm3_tokenizer))
+    setattr(native, "name_or_path", "example-org/immutable-model")
+    setattr(native, "_commit_hash", "d" * 40)
+    metadata = ModelMetadata.from_str_or_path(
+        model_name_or_path=fixture_smollm3_tokenizer,
+        tokenizer=native,
+    )
+    metadata.model_name_or_path = native.name_or_path
+
+    assembler = TrainingExampleAssembler.from_data(
+        dataset=fixture_iris_dataset,
+        tokenizer=native,
+        metadata=metadata,
+        config=fixture_assembler_config,
+        cache_file_path=tmp_path,
+        seed=1,
+    )
+
+    assert assembler.record_tokenizer.spec.native_source == native.name_or_path
+    assert assembler.record_tokenizer.spec.native_revision == "d" * 40
+
+
+def test_from_data_unresolved_remote_fails_before_cache_selection(
+    fixture_iris_dataset: Dataset,
+    fixture_smollm3_tokenizer: str,
+    fixture_assembler_config: SafeSynthesizerParameters,
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    native = cast(PreTrainedTokenizer, AutoTokenizer.from_pretrained(fixture_smollm3_tokenizer))
+    setattr(native, "name_or_path", "example-org/unresolved-model")
+    setattr(native, "_commit_hash", None)
+    native.init_kwargs.pop("_commit_hash", None)
+    metadata = ModelMetadata.from_str_or_path(
+        model_name_or_path=fixture_smollm3_tokenizer,
+        tokenizer=native,
+    )
+    metadata.model_name_or_path = native.name_or_path
+
+    def unexpected_cache_selection(*_args, **_kwargs):
+        pytest.fail("cache selection ran before immutable native provenance was established")
+
+    monkeypatch.setattr(
+        "nemo_safe_synthesizer.data_processing.assembler.token_cache_paths",
+        unexpected_cache_selection,
+    )
+
+    with pytest.raises(ParameterError, match="no trustworthy immutable commit"):
+        TrainingExampleAssembler.from_data(
+            dataset=fixture_iris_dataset,
+            tokenizer=native,
+            metadata=metadata,
+            config=fixture_assembler_config,
+            cache_file_path=tmp_path,
+            seed=1,
+        )
+
+
+def test_from_data_accepts_declared_remote_with_native_cached_snapshot(
+    fixture_iris_dataset: Dataset,
+    fixture_smollm3_tokenizer: str,
+    fixture_assembler_config: SafeSynthesizerParameters,
+    hf_cached_snapshot_factory,
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    repo_id = "HuggingFaceTB/SmolLM3-3B"
+    commit = "f" * 40
+    cache_root, snapshot = hf_cached_snapshot_factory(repo_id, commit=commit)
+    shutil.copytree(fixture_smollm3_tokenizer, snapshot, dirs_exist_ok=True)
+    monkeypatch.setattr(ModelRef, "_default_hf_cache_root", staticmethod(lambda: cache_root))
+    native = cast(PreTrainedTokenizer, AutoTokenizer.from_pretrained(snapshot))
+    metadata = ModelMetadata.from_str_or_path(model_name_or_path=repo_id, tokenizer=native)
+
+    assembler = TrainingExampleAssembler.from_data(
+        dataset=fixture_iris_dataset.select(range(3)),
+        tokenizer=native,
+        metadata=metadata,
+        config=fixture_assembler_config,
+        cache_file_path=tmp_path,
+        seed=1,
+    )
+
+    assert assembler.record_tokenizer.spec.native_source == repo_id
+    assert assembler.record_tokenizer.spec.native_revision == commit
 
 
 def test_tabular_data_assembler_shorter_context_with_test_split(
@@ -162,6 +446,7 @@ def test_tabular_data_assembler_shorter_context_with_test_split(
     assembler = TabularDataExampleAssembler(
         dataset=fixture_iris_dataset,
         tokenizer=fixture_tokenizer,
+        record_tokenizer=_record_tokenizer(fixture_tokenizer, fixture_llm_metadata),
         metadata=fixture_llm_metadata,
         test_size=0.20,
         cache_file_path=fixture_session_cache_dir,
@@ -188,6 +473,7 @@ def test_tabular_data_assembler_dp(
     assembler = TabularDataExampleAssembler(
         dataset=fixture_iris_dataset,
         tokenizer=fixture_tokenizer,
+        record_tokenizer=_record_tokenizer(fixture_tokenizer, fixture_llm_metadata),
         metadata=fixture_llm_metadata,
         cache_file_path=fixture_session_cache_dir,
         seed=1,
@@ -236,6 +522,7 @@ def test_assembler_max_new_token_tokenization_exception(
             dataset=fixture_iris_dataset,
             metadata=fixture_llm_metadata,
             tokenizer=fixture_tokenizer,
+            record_tokenizer=_record_tokenizer(fixture_tokenizer, fixture_llm_metadata),
             cache_file_path=fixture_session_cache_dir,
             seed=1,
         )
@@ -662,6 +949,7 @@ def test_sequential_assembler_reorders_columns(
     assembler = SequentialExampleAssembler(
         dataset=fixture_chickweight_dataset,
         tokenizer=fixture_tokenizer,
+        record_tokenizer=_record_tokenizer(fixture_tokenizer, fixture_sequential_metadata, time_series=True),
         metadata=fixture_sequential_metadata,
         group_training_examples_by="Chick",
         order_training_examples_by="Time",
@@ -692,6 +980,7 @@ def test_sequential_assembler_raises_parameter_error_for_missing_required_column
         SequentialExampleAssembler(
             dataset=fixture_chickweight_dataset,
             tokenizer=fixture_tokenizer,
+            record_tokenizer=_record_tokenizer(fixture_tokenizer, fixture_sequential_metadata, time_series=True),
             metadata=fixture_sequential_metadata,
             group_training_examples_by=group_by,
             order_training_examples_by=order_by,
@@ -714,6 +1003,7 @@ def test_sequential_assembler_excludes_pseudo_group_from_schema(
     assembler = SequentialExampleAssembler(
         dataset=dataset_with_pseudo,
         tokenizer=fixture_tokenizer,
+        record_tokenizer=_record_tokenizer(fixture_tokenizer, fixture_sequential_metadata, time_series=True),
         metadata=fixture_sequential_metadata,
         group_training_examples_by=PSEUDO_GROUP_COLUMN,
         order_training_examples_by="sepal.length",
@@ -733,6 +1023,7 @@ def test_sequential_assembler_sorts_records_by_group_and_order(
     assembler = SequentialExampleAssembler(
         dataset=fixture_chickweight_dataset,
         tokenizer=fixture_tokenizer,
+        record_tokenizer=_record_tokenizer(fixture_tokenizer, fixture_sequential_metadata, time_series=True),
         metadata=fixture_sequential_metadata,
         group_training_examples_by="Chick",
         order_training_examples_by="Time",
@@ -759,6 +1050,7 @@ def test_sequential_assembler_token_budget(
     assembler = SequentialExampleAssembler(
         dataset=fixture_chickweight_dataset,
         tokenizer=fixture_tokenizer,
+        record_tokenizer=_record_tokenizer(fixture_tokenizer, fixture_sequential_metadata, time_series=True),
         metadata=fixture_sequential_metadata,
         group_training_examples_by="Chick",
         order_training_examples_by="Time",
@@ -795,6 +1087,7 @@ def test_sequential_assembler_initial_prefill(
     assembler = SequentialExampleAssembler(
         dataset=dataset,
         tokenizer=fixture_tokenizer,
+        record_tokenizer=_record_tokenizer(fixture_tokenizer, fixture_sequential_metadata, time_series=True),
         metadata=fixture_sequential_metadata,
         group_training_examples_by="group",
         order_training_examples_by="time",
@@ -1013,6 +1306,7 @@ def test_sequential_assembler_single_group_with_pseudo_column(
     assembler = SequentialExampleAssembler(
         dataset=dataset_with_pseudo,
         tokenizer=fixture_tokenizer,
+        record_tokenizer=_record_tokenizer(fixture_tokenizer, llm_metadata, time_series=True),
         metadata=llm_metadata,
         group_training_examples_by=PSEUDO_GROUP_COLUMN,
         order_training_examples_by="timestamp",

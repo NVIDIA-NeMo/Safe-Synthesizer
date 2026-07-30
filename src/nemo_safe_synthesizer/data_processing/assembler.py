@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import math
-import os
 import uuid
 from abc import ABC, abstractmethod
 from collections import defaultdict
@@ -43,6 +42,19 @@ from ..errors import (
 from ..holdout.holdout import grouped_train_test_split, naive_train_test_split
 from ..llm.metadata import ModelMetadata
 from ..observability import get_logger
+from ..tokenization import NssTokenizer, WorkloadKind, create_runtime_nss_tokenizer
+from ..tokenization.cache import (
+    TokenCacheKey,
+    TokenCacheLock,
+    TokenCachePartition,
+    dataset_fingerprint,
+    expected_token_cache_feature_types,
+    load_valid_token_cache,
+    publish_token_cache_manifest,
+    schema_prompt_ids_digest,
+    token_cache_paths,
+)
+from ..tokenization.records import columnar_batch_to_records
 from .budget import NUM_SPECIAL_TOKENS, compute_max_new_tokens
 
 logger = get_logger(__name__)
@@ -250,7 +262,10 @@ class TrainingExampleAssembler(ABC):
 
     Args:
         dataset: Dataset to be processed.
-        tokenizer: Tokenizer used for tokenizing the dataset records.
+        tokenizer: Native tokenizer retained for T3-owned schema-prompt
+            encoding and T4-owned framework operations.
+        record_tokenizer: Required NSS tokenizer owning ordered record
+            encoding and token-cache identity.
         metadata: Internal training configuration, e.g., prompt template,
             bos/eos tokens, and where to use them.
         keep_columns: List of columns to keep in the tokenized dataset. This is useful
@@ -265,6 +280,7 @@ class TrainingExampleAssembler(ABC):
         self,
         dataset: Dataset,
         tokenizer: PreTrainedTokenizer,
+        record_tokenizer: NssTokenizer,
         metadata: ModelMetadata,
         keep_columns: list[str] | None = None,
         test_size: int | None = None,
@@ -284,11 +300,15 @@ class TrainingExampleAssembler(ABC):
 
         self.metadata = metadata
         self.tokenizer = tokenizer
+        if not isinstance(record_tokenizer, NssTokenizer):
+            raise ParameterError("TrainingExampleAssembler requires an NSS record tokenizer.")
+        self.record_tokenizer = record_tokenizer
         self.stats = defaultdict(RunningStatistics)
         self.stats_val = defaultdict(RunningStatistics)
         # adding this extra instead of "" due to hf datasets being weird about the cache path parent dirs -
         # it's erroring out when we pass an empty string, with a 'filenotfound' error.
         fp = Path(cache_file_path) if cache_file_path else Path.cwd()
+        self.token_cache_root = fp
         self.cache_file_path = fp / f"{DEFAULT_CACHE_PREFIX}_{uuid.uuid4().hex[:5]}"
         self.test_size = test_size
         self.keep_columns = keep_columns or []
@@ -368,7 +388,8 @@ class TrainingExampleAssembler(ABC):
         Args:
             dataset: A HuggingFace ``datasets.Dataset`` of tabular records to
                 assemble training examples from.
-            tokenizer: Tokenizer used for encoding records.
+            tokenizer: Native tokenizer retained for schema-prompt encoding
+                and deferred framework compatibility.
             metadata: Model metadata (prompt config, sequence lengths, etc.).
             config: Full pipeline configuration used to determine the assembler type.
             test_size: Fraction of the dataset to reserve for validation (0 <= test_size < 1).
@@ -388,11 +409,17 @@ class TrainingExampleAssembler(ABC):
             if group_by is None or order_by is None:  # for type checking
                 raise RuntimeError("Internal error: group_by and order_by should be set by timeseries preprocessing")
 
+            record_tokenizer = create_runtime_nss_tokenizer(
+                tokenizer,
+                metadata,
+                workload_kind=WorkloadKind.TIME_SERIES,
+            )
             return SequentialExampleAssembler(
                 group_training_examples_by=group_by,
                 order_training_examples_by=order_by,
                 dataset=dataset,
                 tokenizer=tokenizer,
+                record_tokenizer=record_tokenizer,
                 metadata=metadata,
                 config=config,
                 test_size=config.training.validation_ratio,
@@ -402,12 +429,18 @@ class TrainingExampleAssembler(ABC):
                 **kwargs,
             )
 
+        record_tokenizer = create_runtime_nss_tokenizer(
+            tokenizer,
+            metadata,
+            workload_kind=WorkloadKind.TABULAR,
+        )
         if config.data.group_training_examples_by is not None:
             return GroupedDataExampleAssembler(
                 group_training_examples_by=config.data.group_training_examples_by,
                 order_training_examples_by=config.data.order_training_examples_by,
                 dataset=dataset,
                 tokenizer=tokenizer,
+                record_tokenizer=record_tokenizer,
                 metadata=metadata,
                 test_size=config.training.validation_ratio,
                 seed=seed,
@@ -419,6 +452,7 @@ class TrainingExampleAssembler(ABC):
             return TabularDataExampleAssembler(
                 dataset=dataset,
                 tokenizer=tokenizer,
+                record_tokenizer=record_tokenizer,
                 metadata=metadata,
                 test_size=config.training.validation_ratio,
                 seed=seed,
@@ -470,23 +504,35 @@ class TrainingExampleAssembler(ABC):
 
     def _tokenize_records(self, records: dict[str, list]) -> dict[str, list]:
         """Tokenize the records in the dataset and return as a dict of lists."""
-        if len(self.schema_prompt_ids) > self.metadata.max_seq_length:
-            max_tokens_action = _get_max_tokens_action(self.metadata.rope_scaling_factor)
-            msg = (
-                "The dataset schema requires more tokens than the max length of the model. "
-                "This likely means that the table is too wide to be used with this model. "
-                f"{max_tokens_action}"
-            )
-            raise GenerationError(msg)
-        # Exclude pseudo-group column from JSONL so the model never sees it
-        record_jsonl = self._convert_records_to_jsonl(
-            dict(records),
+        self._validate_schema_capacity()
+        rows = columnar_batch_to_records(records)
+        encoded = self.record_tokenizer.encode_records(
+            rows,
             exclude_columns=DEFAULT_EXCLUDE_COLUMNS,
         )
-        tokenized = self.tokenizer(record_jsonl["text"], add_special_tokens=False)
+        input_ids = [list(row) for row in encoded.input_ids]
+        attention_mask = [list(row) for row in encoded.attention_mask]
+        self._validate_record_capacity(input_ids)
+        return {
+            "text": [record.utf8.decode() for record in encoded.records],
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+        }
 
+    def _validate_schema_capacity(self) -> None:
+        if len(self.schema_prompt_ids) <= self.metadata.max_seq_length:
+            return
+        max_tokens_action = _get_max_tokens_action(self.metadata.rope_scaling_factor)
+        msg = (
+            "The dataset schema requires more tokens than the max length of the model. "
+            "This likely means that the table is too wide to be used with this model. "
+            f"{max_tokens_action}"
+        )
+        raise GenerationError(msg)
+
+    def _validate_record_capacity(self, input_ids: Sequence[Sequence[int]]) -> None:
         max_new_tokens = compute_max_new_tokens(self.schema_prompt_ids, self.metadata.max_seq_length)
-        for ids in tokenized["input_ids"]:
+        for ids in input_ids:
             if len(ids) > max_new_tokens:
                 max_tokens_action = _get_max_tokens_action(self.metadata.rope_scaling_factor)
                 msg = (
@@ -495,8 +541,29 @@ class TrainingExampleAssembler(ABC):
                 )
                 raise GenerationError(msg)
             self.stats["tokens_per_record"].update(len(ids))
-        tokenized.update({"text": record_jsonl["text"]})
-        return tokenized
+
+    def _token_cache_key(
+        self,
+        dataset: Dataset,
+        keep_columns: Sequence[str],
+        partition: TokenCachePartition,
+    ) -> TokenCacheKey:
+        input_columns = tuple(dataset.column_names)
+        exclusions = frozenset(DEFAULT_EXCLUDE_COLUMNS)
+        effective_exclusions = tuple(column for column in input_columns if column in exclusions)
+        retained = tuple(column for column in input_columns if column in keep_columns)
+        return TokenCacheKey(
+            producer_kind=f"{type(self).__module__}.{type(self).__qualname__}",
+            tokenizer_fragment=self.record_tokenizer.spec.cache_identity_fragment,
+            dataset_fingerprint=dataset_fingerprint(dataset),
+            input_columns=input_columns,
+            effective_exclusions=effective_exclusions,
+            serialized_columns=tuple(column for column in input_columns if column not in exclusions),
+            retained_columns=retained,
+            schema_prompt_ids_digest=schema_prompt_ids_digest(self.schema_prompt_ids),
+            max_seq_length=self.metadata.max_seq_length,
+            partition=partition,
+        )
 
     def _tokenize_dataset(self, dataset: Dataset, keep_columns: list[str] | None = None) -> Dataset:
         """Tokenize the records in the dataset.
@@ -511,23 +578,44 @@ class TrainingExampleAssembler(ABC):
         """
         keep_columns = keep_columns or []
         logger.info("Tokenizing records")
-
-        # Ensure the cache directory exists, which apparently is required
-        # for datasets>=3 ?
-        cache_dir = self.cache_file_path.parent
-        if "is_val" in dataset.info.description:
-            cache_file = str(self.cache_file_path.with_suffix(".val.tokens.arrow"))
-        else:
-            cache_file = str(self.cache_file_path.with_suffix(".tokens.arrow"))
-        os.makedirs(cache_dir, exist_ok=True)
-
-        return dataset.map(
-            self._tokenize_records,
-            batched=True,
-            desc="Tokenizing records",
-            cache_file_name=cache_file,
-            remove_columns=[c for c in dataset.column_names if c not in keep_columns],
-        )
+        self._validate_schema_capacity()
+        description = dataset.info.description or ""
+        partition = TokenCachePartition.VALIDATION if "is_val" in description else TokenCachePartition.TRAIN
+        key = self._token_cache_key(dataset, keep_columns, partition)
+        paths = token_cache_paths(self.token_cache_root, key)
+        retained = tuple(column for column in dataset.column_names if column in keep_columns)
+        expected_columns = (*retained, "text", "input_ids", "attention_mask")
+        expected_feature_types = expected_token_cache_feature_types(dataset, retained)
+        with TokenCacheLock(paths.lock):
+            cached = load_valid_token_cache(
+                paths,
+                key,
+                expected_columns=expected_columns,
+                expected_feature_types=expected_feature_types,
+                expected_row_count=len(dataset),
+            )
+            if cached is not None:
+                self._validate_record_capacity(cached["input_ids"])
+                return cached
+            paths.directory.mkdir(parents=True, exist_ok=True)
+            tokenized = dataset.map(
+                self._tokenize_records,
+                batched=True,
+                desc="Tokenizing records",
+                cache_file_name=str(paths.arrow),
+                load_from_cache_file=False,
+                new_fingerprint=key.digest,
+                remove_columns=[column for column in dataset.column_names if column not in keep_columns],
+            )
+            if tuple(tokenized.column_names) != expected_columns or len(tokenized) != len(dataset):
+                raise GenerationError("Token cache map produced an unexpected Arrow schema or row count.")
+            publish_token_cache_manifest(
+                paths,
+                key,
+                tokenized,
+                expected_feature_types=expected_feature_types,
+            )
+            return tokenized
 
     def _run_example_generation(self, generator: Callable, dataset: Dataset) -> Dataset:
         """Run a generator function to produce a dataset of training examples.
@@ -779,7 +867,10 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
         dataset: A HuggingFace ``datasets.Dataset`` of tabular records.
             Must contain the columns specified by ``group_training_examples_by``
             and ``order_training_examples_by``.
-        tokenizer: Tokenizer used for encoding records.
+        tokenizer: Native tokenizer retained for prompt and deferred framework
+            operations.
+        record_tokenizer: Required NSS tokenizer used for record encoding and
+            cache identity.
         metadata: Model metadata containing prompt config, sequence lengths, etc.
         group_training_examples_by: Column to group training examples by.
             For time series without explicit grouping, this is set to
@@ -829,6 +920,7 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
         self,
         dataset: Dataset,
         tokenizer: PreTrainedTokenizer,
+        record_tokenizer: NssTokenizer,
         metadata: ModelMetadata,
         *,
         group_training_examples_by: str,
@@ -845,6 +937,7 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
         super().__init__(
             dataset=dataset,
             tokenizer=tokenizer,
+            record_tokenizer=record_tokenizer,
             metadata=metadata,
             keep_columns=keep_columns,
             **kwargs,
@@ -1267,7 +1360,10 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
         group_training_examples_by: Column to group training examples by.
         order_training_examples_by: Column to order training examples by.
         dataset: Dataset to be processed.
-        tokenizer: Tokenizer used for tokenizing the dataset records.
+        tokenizer: Native tokenizer retained for prompt and deferred framework
+            operations.
+        record_tokenizer: Required NSS tokenizer used for record encoding and
+            cache identity.
         metadata: training configuration, e.g., group by, order by, prompt
             template, bos/eos tokens and where to use them.
         test_size: Fraction of the dataset to use for testing. If None, there will
@@ -1282,6 +1378,7 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
         order_training_examples_by: str | None,
         dataset: Dataset,
         tokenizer: PreTrainedTokenizer,
+        record_tokenizer: NssTokenizer,
         metadata: ModelMetadata,
         test_size: int | float | None = None,
         cache_file_path: str | Path | None = None,
@@ -1327,6 +1424,7 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
         super().__init__(
             dataset=train_raw,
             tokenizer=tokenizer,
+            record_tokenizer=record_tokenizer,
             metadata=metadata,
             keep_columns=required_columns,
             test_size=None,  # we already did the split
