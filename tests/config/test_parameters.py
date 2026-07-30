@@ -38,6 +38,17 @@ def test_safe_synthesizer_parameters(monkeypatch):
     assert config.emit_telemetry is True
 
 
+def test_effective_generation_model_defaults_to_training_model_and_allows_override():
+    config = SafeSynthesizerParameters.from_params(pretrained_model="training-model")
+
+    assert config.effective_generation_model == "training-model"
+
+    config.generation.pretrained_model = "generation-model"
+
+    assert config.effective_generation_model == "generation-model"
+    assert config.training.pretrained_model == "training-model"
+
+
 def test_emit_telemetry_can_be_disabled_from_yaml():
     c = SafeSynthesizerParameters.from_yaml_str("emit_telemetry: false\n")
     assert c.emit_telemetry is False

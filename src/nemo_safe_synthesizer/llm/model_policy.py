@@ -12,11 +12,11 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
-from typing import Any
 
 from ..errors import ParameterError
 
 NEMOTRON3_NANO_4B_BF16 = "nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16"
+NEMOTRON3_NANO_4B_FP8 = "nvidia/NVIDIA-Nemotron-3-Nano-4B-FP8"
 
 
 @dataclass(frozen=True)
@@ -28,6 +28,8 @@ class ModelPolicy:
     automatic_lora_targets: tuple[str, ...] = ("q_proj", "k_proj", "v_proj", "o_proj")
     vllm_kwargs: tuple[tuple[str, object], ...] = ()
     force_native_transformers: bool = False
+    training_supported: bool = True
+    minimum_generation_compute_capability: tuple[int, int] | None = None
 
     def matches(self, repo_id: str | None) -> bool:
         """Return whether ``repo_id`` is one of this policy's exact identifiers."""
@@ -40,18 +42,20 @@ class ModelPolicy:
         return dict(self.vllm_kwargs)
 
 
+_NEMOTRON3_NANO_LORA_TARGETS = (
+    "in_proj",
+    "up_proj",
+    "down_proj",
+    "q_proj",
+    "k_proj",
+    "v_proj",
+    "o_proj",
+)
+
 NEMOTRON3_NANO_POLICY = ModelPolicy(
     canonical_ids=frozenset({NEMOTRON3_NANO_4B_BF16}),
     uses_rope=False,
-    automatic_lora_targets=(
-        "in_proj",
-        "up_proj",
-        "down_proj",
-        "q_proj",
-        "k_proj",
-        "v_proj",
-        "o_proj",
-    ),
+    automatic_lora_targets=_NEMOTRON3_NANO_LORA_TARGETS,
     vllm_kwargs=(
         ("mamba_ssm_cache_dtype", "float32"),
         ("max_num_seqs", 8),
@@ -59,7 +63,21 @@ NEMOTRON3_NANO_POLICY = ModelPolicy(
     force_native_transformers=True,
 )
 
-_POLICIES = (NEMOTRON3_NANO_POLICY,)
+NEMOTRON3_NANO_FP8_POLICY = ModelPolicy(
+    canonical_ids=frozenset({NEMOTRON3_NANO_4B_FP8}),
+    uses_rope=False,
+    automatic_lora_targets=_NEMOTRON3_NANO_LORA_TARGETS,
+    vllm_kwargs=(
+        ("mamba_ssm_cache_dtype", "float32"),
+        ("max_num_seqs", 8),
+        ("kv_cache_dtype", "fp8"),
+    ),
+    force_native_transformers=True,
+    training_supported=False,
+    minimum_generation_compute_capability=(8, 9),
+)
+
+_POLICIES = (NEMOTRON3_NANO_POLICY, NEMOTRON3_NANO_FP8_POLICY)
 
 NEMOTRON3_NANO_LAYER_BLOCK_TYPES = (
     "mamba",
@@ -106,6 +124,8 @@ NEMOTRON3_NANO_LAYER_BLOCK_TYPES = (
     "mlp",
 )
 
+NEMOTRON3_NANO_HYBRID_OVERRIDE_PATTERN = "M-M-M-MM-M-M*-M-M*-M-M-M*-M-M-MM*-MMM-M-M-"
+
 _NEMOTRON3_NANO_CONFIG_SIGNATURE = {
     "architectures": ["NemotronHForCausalLM"],
     "hidden_size": 3136,
@@ -135,11 +155,13 @@ def model_policy_for_local_path(model_path: Path | None) -> ModelPolicy | None:
         return None
     dtype = config.get("dtype", config.get("torch_dtype"))
     layer_types = config.get("layers_block_type")
-    layer_layout_matches = (
-        tuple(layer_types) == NEMOTRON3_NANO_LAYER_BLOCK_TYPES
-        if isinstance(layer_types, list)
-        else config.get("num_hidden_layers") == len(NEMOTRON3_NANO_LAYER_BLOCK_TYPES)
-    )
+    if isinstance(layer_types, list):
+        layer_layout_matches = tuple(layer_types) == NEMOTRON3_NANO_LAYER_BLOCK_TYPES
+    else:
+        layer_layout_matches = (
+            config.get("num_hidden_layers") == len(NEMOTRON3_NANO_LAYER_BLOCK_TYPES)
+            and config.get("hybrid_override_pattern") == NEMOTRON3_NANO_HYBRID_OVERRIDE_PATTERN
+        )
     if (
         dtype == "bfloat16"
         and layer_layout_matches
@@ -152,6 +174,51 @@ def model_policy_for_local_path(model_path: Path | None) -> ModelPolicy | None:
 def model_policy_for_reference(repo_id: str | None, local_path: Path | None) -> ModelPolicy | None:
     """Resolve an exact Hub/cache policy or a fingerprinted local checkpoint policy."""
     return model_policy_for(repo_id) or model_policy_for_local_path(local_path)
+
+
+def validate_generation_model_pair(
+    training_repo_id: str | None,
+    generation_repo_id: str | None,
+) -> None:
+    """Reject a generation override outside an explicitly compatible repository pair."""
+    if training_repo_id is None or generation_repo_id is None:
+        raise ParameterError("The requested generation base is not compatible with the adapter's training model")
+
+    pair = (training_repo_id.casefold(), generation_repo_id.casefold())
+    if pair[0] == pair[1]:
+        return
+    if pair == (NEMOTRON3_NANO_4B_BF16.casefold(), NEMOTRON3_NANO_4B_FP8.casefold()):
+        return
+    raise ParameterError("The requested generation base is not compatible with the adapter's training model")
+
+
+def _load_local_mamba_runtime() -> ModuleType:
+    """Load local Mamba kernels without leaking a temporary package module."""
+    had_previous_mamba_ssm = "mamba_ssm" in sys.modules
+    previous_mamba_ssm = sys.modules.get("mamba_ssm")
+    try:
+        package_root = importlib.metadata.distribution("mamba-ssm").locate_file("mamba_ssm")
+        mamba_ssm = ModuleType("mamba_ssm")
+        mamba_ssm.__path__ = [str(package_root)]
+        mamba_ssm.__package__ = "mamba_ssm"
+        sys.modules["mamba_ssm"] = mamba_ssm
+        selective_state_update = importlib.import_module("mamba_ssm.ops.triton.selective_state_update")
+        ssd_combined = importlib.import_module("mamba_ssm.ops.triton.ssd_combined")
+        setattr(mamba_ssm, "selective_state_update", selective_state_update.selective_state_update)
+        setattr(mamba_ssm, "mamba_chunk_scan_combined", ssd_combined.mamba_chunk_scan_combined)
+        setattr(mamba_ssm, "mamba_split_conv1d_scan_combined", ssd_combined.mamba_split_conv1d_scan_combined)
+    except Exception as exc:
+        raise ParameterError(
+            "Nemotron 3 Nano BF16 training could not import the compiled mamba-ssm runtime; "
+            "run `mise run bootstrap-nemotron-kernels`"
+        ) from exc
+    finally:
+        if had_previous_mamba_ssm:
+            assert previous_mamba_ssm is not None
+            sys.modules["mamba_ssm"] = previous_mamba_ssm
+        else:
+            sys.modules.pop("mamba_ssm", None)
+    return mamba_ssm
 
 
 def configure_local_training_kernels(repo_id: str | None, local_path: Path | None = None) -> None:
@@ -172,28 +239,7 @@ def configure_local_training_kernels(repo_id: str | None, local_path: Path | Non
             "Nemotron 3 Nano BF16 training requires the compiled causal-conv1d and mamba-ssm packages; "
             "run `mise run bootstrap-nemotron-kernels`"
         ) from exc
-
-    previous_mamba_ssm = sys.modules.get("mamba_ssm")
-    try:
-        package_root = importlib.metadata.distribution("mamba-ssm").locate_file("mamba_ssm")
-        mamba_ssm = ModuleType("mamba_ssm")
-        mamba_ssm.__path__ = [str(package_root)]
-        mamba_ssm.__package__ = "mamba_ssm"
-        sys.modules["mamba_ssm"] = mamba_ssm
-        selective_state_update = importlib.import_module("mamba_ssm.ops.triton.selective_state_update")
-        ssd_combined = importlib.import_module("mamba_ssm.ops.triton.ssd_combined")
-        setattr(mamba_ssm, "selective_state_update", selective_state_update.selective_state_update)
-        setattr(mamba_ssm, "mamba_chunk_scan_combined", ssd_combined.mamba_chunk_scan_combined)
-        setattr(mamba_ssm, "mamba_split_conv1d_scan_combined", ssd_combined.mamba_split_conv1d_scan_combined)
-    except (ImportError, importlib.metadata.PackageNotFoundError) as exc:
-        if previous_mamba_ssm is None:
-            sys.modules.pop("mamba_ssm", None)
-        else:
-            sys.modules["mamba_ssm"] = previous_mamba_ssm
-        raise ParameterError(
-            "Nemotron 3 Nano BF16 training could not import the compiled mamba-ssm runtime; "
-            "run `mise run bootstrap-nemotron-kernels`"
-        ) from exc
+    mamba_ssm = _load_local_mamba_runtime()
 
     # Transformers 5.12 exposes no public local-kernel registration API.
     # Populate its loader cache so native Nemotron-H resolves the installed
@@ -201,15 +247,3 @@ def configure_local_training_kernels(repo_id: str | None, local_path: Path | Non
     hub_kernels._KERNEL_MODULE_MAPPING.update(  # noqa: SLF001
         {"causal-conv1d": causal_conv1d, "mamba-ssm": mamba_ssm}
     )
-
-
-def validate_lora_targets(model: Any, target_suffixes: list[str]) -> dict[str, int]:
-    """Return per-suffix module counts or reject a partially unmatched target set."""
-    counts = {
-        suffix: sum(1 for name, _module in model.named_modules() if name == suffix or name.endswith(f".{suffix}"))
-        for suffix in target_suffixes
-    }
-    missing = [suffix for suffix, count in counts.items() if count == 0]
-    if missing:
-        raise ParameterError(f"LoRA target modules did not match the loaded model: {', '.join(missing)}")
-    return counts

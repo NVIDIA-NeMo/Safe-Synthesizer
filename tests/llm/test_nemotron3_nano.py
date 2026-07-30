@@ -19,6 +19,7 @@ from nemo_safe_synthesizer.config.autoconfig import AutoConfigResolver
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.data_processing.assembler import Example
 from nemo_safe_synthesizer.data_processing.budget import compute_max_new_tokens
+from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.generation.processors import create_processor
 from nemo_safe_synthesizer.generation.regex_manager import build_json_based_regex
 from nemo_safe_synthesizer.generation.timeseries_backend import TimeseriesBackend
@@ -27,8 +28,11 @@ from nemo_safe_synthesizer.llm.metadata import ModelMetadata
 from nemo_safe_synthesizer.llm.model_policy import NEMOTRON3_NANO_LAYER_BLOCK_TYPES
 from nemo_safe_synthesizer.llm.utils import ModelRef
 from nemo_safe_synthesizer.preflight.checks.environment import param_count_from_empty_model
+from nemo_safe_synthesizer.training import huggingface_backend
 
 MODEL_ID = "nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16"
+FP8_MODEL_ID = "nvidia/NVIDIA-Nemotron-3-Nano-4B-FP8"
+LEGACY_HYBRID_PATTERN = "M-M-M-MM-M-M*-M-M*-M-M-M*-M-M-MM*-MMM-M-M-"
 LAYER_TYPES = list(NEMOTRON3_NANO_LAYER_BLOCK_TYPES)
 
 
@@ -119,12 +123,25 @@ def test_exact_bf16_id_resolves_native_nemotron3_policy() -> None:
     assert ModelRef.parse(MODEL_ID).trust_remote_code is False
 
 
+def test_slurm_fp8_config_keeps_bf16_training_and_selects_official_generation_sibling() -> None:
+    repo_root = Path(__file__).parents[2]
+    config = SafeSynthesizerParameters.from_yaml(repo_root / "script/slurm/configs/nemotron3-nano-bf16-fp8-nodp.yaml")
+
+    assert config.training.pretrained_model == MODEL_ID
+    assert config.effective_generation_model == FP8_MODEL_ID
+    assert config.training.quantize_model is False
+    assert config.privacy is not None
+    assert config.privacy.dp_enabled is False
+
+
 def test_model_policy_matches_exact_id_case_insensitively_without_substrings() -> None:
     policy = model_policy.NEMOTRON3_NANO_POLICY
+    fp8_policy = model_policy.NEMOTRON3_NANO_FP8_POLICY
 
     assert model_policy.model_policy_for(MODEL_ID.upper()) is policy
+    assert model_policy.model_policy_for(FP8_MODEL_ID.upper()) is fp8_policy
     assert model_policy.model_policy_for(f"mirror/{MODEL_ID}") is None
-    assert model_policy.model_policy_for(f"{MODEL_ID}-FP8") is None
+    assert model_policy.model_policy_for(f"mirror/{FP8_MODEL_ID}") is None
     assert model_policy.model_policy_for(None) is None
 
 
@@ -159,10 +176,23 @@ def test_legacy_local_checkpoint_schema_resolves_native_nemotron3_policy(tmp_pat
     config_path = model_path / "config.json"
     config = json.loads(config_path.read_text())
     config["num_hidden_layers"] = len(config.pop("layers_block_type"))
+    config["hybrid_override_pattern"] = LEGACY_HYBRID_PATTERN
     config["torch_dtype"] = config.pop("dtype")
     config_path.write_text(json.dumps(config))
 
     assert model_policy.model_policy_for_local_path(model_path) is model_policy.NEMOTRON3_NANO_POLICY
+
+
+def test_legacy_local_checkpoint_requires_exact_hybrid_pattern(tmp_path: Path) -> None:
+    model_path = _write_local_model_config(tmp_path / "wrong-legacy-checkpoint")
+    config_path = model_path / "config.json"
+    config = json.loads(config_path.read_text())
+    config.pop("layers_block_type")
+    config["num_hidden_layers"] = 42
+    config["hybrid_override_pattern"] = f"X{LEGACY_HYBRID_PATTERN[1:]}"
+    config_path.write_text(json.dumps(config))
+
+    assert model_policy.model_policy_for_local_path(model_path) is None
 
 
 def test_local_quantized_checkpoint_does_not_match_bf16_policy(tmp_path: Path) -> None:
@@ -228,7 +258,6 @@ def test_nemotron3_rejects_explicit_rope_scaling() -> None:
 @pytest.mark.parametrize(
     ("parameters", "message"),
     [
-        ({"quantize_model": True}, "does not support quantized training"),
         ({"privacy.dp_enabled": True}, "does not support differential-privacy training"),
     ],
 )
@@ -345,7 +374,7 @@ def test_lora_target_validation_reports_every_suffix_and_rejects_missing_targets
     model = torch.nn.Module()
     model.in_proj = torch.nn.Linear(4, 8, bias=False)
     model.q_proj = torch.nn.Linear(4, 4, bias=False)
-    validate = getattr(model_policy, "validate_lora_targets")
+    validate = huggingface_backend.validate_lora_targets
 
     assert validate(model, ["in_proj", "q_proj"]) == {"in_proj": 1, "q_proj": 1}
     with pytest.raises(ValueError, match="gate_proj"):
@@ -395,6 +424,29 @@ def test_training_kernel_setup_registers_compiled_modules_with_transformers(tmp_
         assert getattr(registered_mamba, "mamba_chunk_scan_combined") is mamba_chunk_scan_combined
         assert getattr(registered_mamba, "mamba_split_conv1d_scan_combined") is mamba_split_conv1d_scan_combined
         assert getattr(registered_mamba, "__path__") == [str(tmp_path / "mamba_ssm")]
+
+
+def test_training_kernel_setup_restores_mamba_module_after_attribute_failure(tmp_path: Path) -> None:
+    causal_conv1d = ModuleType("causal_conv1d")
+    selective_state_update = ModuleType("mamba_ssm.ops.triton.selective_state_update")
+    ssd_combined = ModuleType("mamba_ssm.ops.triton.ssd_combined")
+    previous_mamba = ModuleType("mamba_ssm")
+    imported_modules = {
+        "causal_conv1d": causal_conv1d,
+        "mamba_ssm.ops.triton.selective_state_update": selective_state_update,
+        "mamba_ssm.ops.triton.ssd_combined": ssd_combined,
+    }
+    distribution = MagicMock()
+    distribution.locate_file.return_value = tmp_path / "mamba_ssm"
+
+    with patch.dict(sys.modules, {"mamba_ssm": previous_mamba}, clear=False):
+        with (
+            patch.object(model_policy.importlib.metadata, "distribution", return_value=distribution),
+            patch.object(model_policy.importlib, "import_module", side_effect=imported_modules.__getitem__),
+            pytest.raises(ParameterError, match="could not import the compiled mamba-ssm runtime"),
+        ):
+            model_policy.configure_local_training_kernels(MODEL_ID)
+        assert sys.modules["mamba_ssm"] is previous_mamba
 
 
 def test_meta_parameter_count_disables_mamba_kernels_on_a_config_copy() -> None:

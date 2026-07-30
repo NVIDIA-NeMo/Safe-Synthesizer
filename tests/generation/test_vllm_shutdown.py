@@ -3,10 +3,12 @@
 
 """Tests for the VllmBackend teardown lifecycle."""
 
+import gc
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 from nemo_safe_synthesizer.generation import vllm_backend as vllm_backend_mod
 from nemo_safe_synthesizer.generation.vllm_backend import VllmBackend
 
@@ -31,10 +33,7 @@ def backend(_mock_vllm_cleanup, fixture_session_cache_dir):
     mock_metadata.prompt_config.template = "{instruction} {schema}"
     mock_metadata.rope_scaling = None
 
-    mock_config = MagicMock()
-    # Pin branching fields so create_processor() selects TabularDataProcessor deterministically.
-    mock_config.time_series.is_timeseries = False
-    mock_config.data.group_training_examples_by = None
+    mock_config = SafeSynthesizerParameters()
     # Pin to a valid literal so StructuredOutputsConfig Pydantic validation passes in initialize().
     mock_config.generation.structured_generation.backend = "xgrammar"
     mock_config.generation.attention_backend = None
@@ -45,7 +44,11 @@ def backend(_mock_vllm_cleanup, fixture_session_cache_dir):
     mock_workdir.schema_file.write_text('{"properties": {"col_a": {"type": "string"}}}')
     mock_workdir.adapter_path = None
 
-    return VllmBackend(config=mock_config, model_metadata=mock_metadata, workdir=mock_workdir)
+    result = VllmBackend(config=mock_config, model_metadata=mock_metadata, workdir=mock_workdir)
+    gc.collect()
+    for cleanup_mock in _mock_vllm_cleanup:
+        cleanup_mock.reset_mock()
+    return result
 
 
 class TestTeardownIdempotency:

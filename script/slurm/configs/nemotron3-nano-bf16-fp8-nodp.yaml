@@ -1,0 +1,15 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+# Experimental: requires a compute-capability 8.9 or newer generation node.
+
+training:
+  pretrained_model: nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16
+  batch_size: 1
+  gradient_accumulation_steps: 8
+  lora_r: 8
+  lora_alpha_over_r: 2.0
+generation:
+  pretrained_model: nvidia/NVIDIA-Nemotron-3-Nano-4B-FP8
+  structured_generation:
+    enabled: true
+  num_records: 3000

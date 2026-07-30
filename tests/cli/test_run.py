@@ -15,6 +15,7 @@ import nemo_safe_synthesizer.sdk.library_builder  # noqa: F401 - ensure submodul
 from nemo_safe_synthesizer.cli.run import run
 from nemo_safe_synthesizer.cli.settings import CLISettings
 from nemo_safe_synthesizer.cli.utils import merge_overrides
+from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.telemetry import DeploymentTypeEnum, TaskStatusEnum
 from nemo_safe_synthesizer.tooling import PreflightRenderContext
 
@@ -638,6 +639,33 @@ class TestValidateMode:
         assert render_context.config_path == mock_ss._preflight_config_path
         assert render_context.data_source == str(dummy_csv)
         assert render_context.artifact_dir == mock_workdir.run_dir
+
+    def test_validate_renders_structured_error_report_before_nonzero_exit(
+        self,
+        cli_runner: CliRunner,
+        dummy_csv: Path,
+        mock_config: MagicMock,
+        mock_dataframe: MagicMock,
+        patched_run_dependencies: dict,
+    ):
+        mock_config.training.pretrained_model = "stub-model"
+        mock_dataframe.columns = ["col1", "col2"]
+        mock_dataframe.__len__.return_value = 2
+        mock_ss = patched_run_dependencies["safe_synthesizer"]
+        report = MagicMock()
+        mock_ss.preflight_report = report
+        mock_ss.process_data.side_effect = ParameterError("model capability failed")
+
+        with patch("nemo_safe_synthesizer.cli.run.render_preflight_report") as mock_render:
+            result = cli_runner.invoke(
+                run,
+                ["--validate", "--data-source", str(dummy_csv)],
+            )
+
+        assert result.exit_code == 1
+        mock_render.assert_called_once()
+        assert mock_render.call_args.args[0] is report
+        mock_ss.run.assert_not_called()
 
 
 class TestRunGenerateOptions:

@@ -51,7 +51,7 @@ from ..defaults import (
 )
 from ..errors import DataError, ParameterError
 from ..generation.processors import create_processor
-from ..llm.model_policy import configure_local_training_kernels, validate_lora_targets
+from ..llm.model_policy import configure_local_training_kernels
 from ..llm.utils import (
     ModelRef,
     add_bos_eos_tokens_to_tokenizer,
@@ -103,6 +103,19 @@ Training duration is controlled by ``num_input_records_to_sample`` and the
 assembled ``data_fraction``, not by epochs. These values keep the HuggingFace
 Trainer behavior stable across CLI and SDK entry points.
 """
+
+
+def validate_lora_targets(model: Any, target_suffixes: list[str]) -> dict[str, int]:
+    """Return per-suffix module counts or reject a partially unmatched target set."""
+    counts = dict.fromkeys(target_suffixes, 0)
+    for name, _module in model.named_modules():
+        for suffix in counts:
+            if name == suffix or name.endswith(f".{suffix}"):
+                counts[suffix] += 1
+    missing = [suffix for suffix, count in counts.items() if count == 0]
+    if missing:
+        raise ParameterError(f"LoRA target modules did not match the loaded model: {', '.join(missing)}")
+    return counts
 
 
 class HuggingFaceBackend(TrainingBackend):

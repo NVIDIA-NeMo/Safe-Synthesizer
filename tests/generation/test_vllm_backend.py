@@ -25,6 +25,9 @@ from nemo_safe_synthesizer.generation.vllm_observability import GenerationObserv
 from nemo_safe_synthesizer.llm.metadata import ModelMetadata, ResponseFraming, RopeScaling
 from nemo_safe_synthesizer.llm.model_policy import NEMOTRON3_NANO_LAYER_BLOCK_TYPES
 
+NEMOTRON_BF16_MODEL_ID = "nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16"
+NEMOTRON_FP8_MODEL_ID = "nvidia/NVIDIA-Nemotron-3-Nano-4B-FP8"
+
 
 @pytest.fixture
 def fixture_cached_nvidia_snapshot(hf_cached_snapshot_factory):
@@ -387,7 +390,7 @@ class TestInitializeModelRef:
         mock_schema,
         mock_workdir,
     ):
-        base_params.training.pretrained_model = "nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16"
+        base_params.training.pretrained_model = NEMOTRON_BF16_MODEL_ID
         backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
         mock_llm = MagicMock()
         mock_llm.get_tokenizer.return_value = MagicMock()
@@ -402,6 +405,95 @@ class TestInitializeModelRef:
         assert mock_vllm.call_args.kwargs["mamba_ssm_cache_dtype"] == "float32"
         assert mock_vllm.call_args.kwargs["max_num_seqs"] == 8
         assert mock_vllm.call_args.kwargs["trust_remote_code"] is False
+
+    def test_initialize_uses_exact_fp8_generation_sibling_with_required_cache_dtypes(
+        self,
+        base_params,
+        mock_model_metadata,
+        mock_schema,
+        mock_workdir,
+    ):
+        base_params.training.pretrained_model = NEMOTRON_BF16_MODEL_ID
+        base_params.generation.pretrained_model = NEMOTRON_FP8_MODEL_ID
+        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
+        mock_llm = MagicMock()
+        mock_llm.get_tokenizer.return_value = MagicMock()
+
+        with (
+            patch(
+                "nemo_safe_synthesizer.generation.vllm_backend.torch.cuda.get_device_capability", return_value=(8, 9)
+            ),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.vLLM", return_value=mock_llm) as mock_vllm,
+            patch("nemo_safe_synthesizer.generation.vllm_backend.get_max_vram", return_value={0: 0.8}),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.create_processor", return_value=MagicMock()),
+        ):
+            backend.initialize()
+
+        assert mock_vllm.call_args.kwargs["model"] == NEMOTRON_FP8_MODEL_ID
+        assert mock_vllm.call_args.kwargs["mamba_ssm_cache_dtype"] == "float32"
+        assert mock_vllm.call_args.kwargs["kv_cache_dtype"] == "fp8"
+        assert mock_vllm.call_args.kwargs["trust_remote_code"] is False
+        assert base_params.training.pretrained_model == NEMOTRON_BF16_MODEL_ID
+
+    def test_initialize_rejects_fp8_generation_below_sm89_before_vllm(
+        self,
+        base_params,
+        mock_model_metadata,
+        mock_schema,
+        mock_workdir,
+    ):
+        base_params.training.pretrained_model = NEMOTRON_BF16_MODEL_ID
+        base_params.generation.pretrained_model = NEMOTRON_FP8_MODEL_ID
+        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
+
+        with (
+            patch(
+                "nemo_safe_synthesizer.generation.vllm_backend.torch.cuda.get_device_capability", return_value=(8, 0)
+            ),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.vLLM") as mock_vllm,
+            pytest.raises(ParameterError, match="compute capability 8.9"),
+        ):
+            backend.initialize()
+
+        mock_vllm.assert_not_called()
+
+    def test_initialize_rejects_incompatible_generation_override_before_vllm(
+        self,
+        base_params,
+        mock_model_metadata,
+        mock_schema,
+        mock_workdir,
+    ):
+        base_params.training.pretrained_model = NEMOTRON_BF16_MODEL_ID
+        base_params.generation.pretrained_model = "unrelated/model"
+        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
+
+        with (
+            patch("nemo_safe_synthesizer.generation.vllm_backend.vLLM") as mock_vllm,
+            pytest.raises(ParameterError, match="not compatible"),
+        ):
+            backend.initialize()
+
+        mock_vllm.assert_not_called()
+
+    def test_initialize_rejects_unrelated_unrecognized_model_pair_before_vllm(
+        self,
+        base_params,
+        mock_model_metadata,
+        mock_schema,
+        mock_workdir,
+    ):
+        base_params.training.pretrained_model = "example/training-model"
+        base_params.generation.pretrained_model = "example/generation-model"
+        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
+
+        with (
+            patch("nemo_safe_synthesizer.generation.vllm_backend.vLLM") as mock_vllm,
+            pytest.raises(ParameterError, match="not compatible"),
+        ):
+            backend.initialize()
+
+        mock_vllm.assert_not_called()
 
     def test_initialize_applies_nemotron_policy_to_fingerprinted_local_checkpoint(
         self,

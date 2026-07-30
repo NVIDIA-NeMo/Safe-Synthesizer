@@ -289,6 +289,8 @@ execute in order (`config` → `dataframe` → `metadata` → `advisory`).
 | Check name | Stage | What it validates |
 |-------|-------|-------------------|
 | `gpu.cuda` | config | PyTorch is importable and a CUDA GPU is visible |
+| `generation.model_compatibility` | config | An explicit generation base is compatible with the base used to train the adapter |
+| `training.nemotron_capabilities` | config | Nemotron training uses the BF16 checkpoint without dynamic quantization or differential privacy |
 | `env.inference` | config | Inference config for PII classification: `NSS_INFERENCE_KEY` is set, `NSS_INFERENCE_MODEL` is non-empty, and `NSS_INFERENCE_ENDPOINT` is a valid http(s) URL (warnings only) |
 | `env.hf_model_availability` | config | The pretrained model reference is usable locally or can be fetched from Hugging Face; warns about a missing HF token only when online HF access may be needed |
 | `dataset.size` | dataframe | Training split meets the hard minimum row count |
@@ -660,9 +662,9 @@ model. Only the adapter is updated during training, which keeps VRAM
 requirements low and produces a compact artifact that can be reused for
 generation without re-training.
 
-Training uses the HuggingFace backend -- LoRA fine-tuning via PEFT with
-4-bit/8-bit quantization support and optional differential privacy (DP-SGD)
-via [Opacus](https://opacus.ai/).
+Training uses the HuggingFace backend. Model-dependent options include
+quantized LoRA fine-tuning via PEFT and differential privacy (DP-SGD) via
+[Opacus](https://opacus.ai/).
 
 Supported model families include:
 
@@ -672,6 +674,19 @@ Supported model families include:
 | Mistral | `mistralai/Mistral-7B-Instruct-v0.3` |
 | TinyLlama | `TinyLlama/TinyLlama-1.1B-Chat-v1.0` |
 | Nemotron 3 Nano BF16 | `nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16` |
+
+Nemotron 3 Nano supports BF16 LoRA training without dynamic quantization or
+differential privacy. Experimental generation may use the exact official
+`nvidia/NVIDIA-Nemotron-3-Nano-4B-FP8` sibling by setting
+`generation.pretrained_model`. This FP8 generation path requires compute
+capability 8.9 or newer.
+
+```yaml
+training:
+  pretrained_model: nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16
+generation:
+  pretrained_model: nvidia/NVIDIA-Nemotron-3-Nano-4B-FP8
+```
 
 We recommend you start with the default, `HuggingFaceTB/SmolLM3-3B`. However, depending on your use case, you may find a different model to be a better fit.
 
@@ -717,7 +732,8 @@ Based on testing, some trade-offs identified compared to SmolLM3 on average:
 
 Enabling quantization reduces VRAM consumption at the cost of some numerical
 precision. Set `training.quantize_model` to `true` and choose a bit width with
-`training.quantization_bits`.
+`training.quantization_bits`. Support varies by model. Nemotron 3 Nano rejects
+all dynamic training quantization schemes.
 
 | Setting | VRAM | Precision | Speed | Notes |
 |---------|------|-----------|-------|-------|
