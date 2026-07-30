@@ -2354,6 +2354,8 @@
       
         
       
+        
+      
     
     
     
@@ -2836,6 +2838,34 @@
     
   
     types
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/nemo_safe_synthesizer/config/unknown_fields/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    unknown_fields
   
 
     
@@ -9354,6 +9384,20 @@ or result models that do not need <code>Parameters</code> tree behavior.</p>
 <p>The shared <code>pydantic_model_config</code> sets <code>arbitrary_types_allowed</code>,
 <code>validation_error_cause</code>, <code>from_attributes</code>, <code>validate_default</code>,
 <code>protected_namespaces=()</code>, and <code>json_schema_mode_override="validation"</code>.</p>
+<p><code>SafeSynthesizerParameters.unknown_fields</code> controls Pydantic's recursive
+unknown-field policy at raw-input boundaries:</p>
+<ul>
+<li><code>"reject"</code> is the default and maps to <code>extra="forbid"</code>. Normalization
+  preserves unknown keys until Pydantic reports them.</li>
+<li><code>"ignore"</code> maps to <code>extra="ignore"</code> for compatibility with stale
+  configurations and notebooks or mismatched client and service versions.
+  Normalization filters unknown keys.</li>
+<li><code>extra="allow"</code> is unsupported because Safe Synthesizer cannot act on
+  undeclared fields.</li>
+</ul>
+<p>Sparse patch compilation and SDK raw-mapping builders use the same effective
+setting. Complete inputs use the field default when it is omitted; partial
+patches inherit the existing configuration's policy.</p>
 <h2 id="adding-a-config-field">Adding a Config Field<a class="headerlink" href="#adding-a-config-field" title="Permanent link">&para;</a></h2>
 <p>Add the field to the relevant parameter model. The CLI option is generated
 automatically:</p>
