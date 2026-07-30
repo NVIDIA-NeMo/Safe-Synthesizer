@@ -67,8 +67,14 @@ class GroupState:
     current_prefill: str
     """Current prefill string, updated as generation progresses to include recently generated records."""
 
-    recent_records: list[dict] = field(default_factory=list)
-    """Sliding window of recently generated records used to build the next prompt context."""
+    recent_records: list[ParsedRecord] = field(default_factory=list)
+    """Sliding window of recently generated records used to build the next prompt context.
+
+    Holds ``ParsedRecord`` so the next prompt context can reuse the exact
+    bytes the model emitted (``.text``): re-serializing the parsed dicts
+    would drift the prompt into a JSON dialect the model was not trained
+    on (spacing, slash escaping, float formatting).
+    """
 
     expected_records: int = 0
     """Target record count, calculated from ``(stop_timestamp - start_timestamp) / interval_seconds``."""
@@ -513,12 +519,18 @@ class TimeseriesBackend(VllmBackend):
                 if record.is_valid:
                     record.invalidate(error)
 
-    def _update_group_state(self, group_state: GroupState, records: list[dict]) -> None:
-        """Update a group's state with new records.
+    def _update_group_state(self, group_state: GroupState, records: list[ParsedRecord]) -> None:
+        """Update a group's state with new valid records.
+
+        The rebuilt prefill reuses each record's original ``text`` (the
+        bytes the model emitted, which match the training serialization)
+        and mirrors the initial prefill's shape from
+        ``SequentialExampleAssembler._get_initial_prefill``: a leading
+        space, then newline-terminated records.
 
         Args:
             group_state: The group state to update.
-            records: The new valid records.
+            records: The new valid records (``parsed`` is set on each).
         """
         if not records:
             return
@@ -529,12 +541,12 @@ class TimeseriesBackend(VllmBackend):
 
         # Update prefill
         tail = group_state.recent_records[-self._prefill_context_size :]
-        lines = [json.dumps(record, ensure_ascii=False) for record in tail]
-        group_state.current_prefill = "\n".join(lines) + "\n"
+        group_state.current_prefill = " " + "".join(f"{record.text}\n" for record in tail)
 
         # Update last timestamp
-        last_record = records[-1]
-        timestamp_seconds = self._parse_timestamp_seconds(last_record.get(self._time_column))
+        last_parsed = records[-1].parsed or {}
+        timestamp_value = last_parsed.get(self._time_column) if self._time_column else None
+        timestamp_seconds = self._parse_timestamp_seconds(timestamp_value)
         if timestamp_seconds is not None:
             group_state.last_timestamp_seconds = timestamp_seconds
 
@@ -621,9 +633,9 @@ class TimeseriesBackend(VllmBackend):
         if self.config.time_series.timestamp_interval_seconds is not None:
             self._check_chronological_for_group(batch, state)
 
-        batch_records = self._retain_single_valid_response(batch)
-        reached_stop = self._has_reached_stop_time(batch_records)
-        self._update_group_state(state, batch_records)
+        retained_records = self._retain_single_valid_response(batch)
+        reached_stop = self._has_reached_stop_time([r.parsed for r in retained_records if r.parsed is not None])
+        self._update_group_state(state, retained_records)
 
         # Check if batch has high invalid fraction
         invalid_fraction = 1.0 - batch.valid_record_fraction
@@ -852,7 +864,7 @@ class TimeseriesBackend(VllmBackend):
 
         return all_groups_succeeded
 
-    def _retain_single_valid_response(self, batch: Batch) -> list[dict]:
+    def _retain_single_valid_response(self, batch: Batch) -> list[ParsedRecord]:
         """Retain the response with the most valid records, discarding all others.
 
         For time-series sliding window generation, only one response can be used
@@ -865,9 +877,11 @@ class TimeseriesBackend(VllmBackend):
             batch: The batch to retain the response from.
 
         Returns:
-            List of valid records from the retained response.
+            The retained response's valid ``ParsedRecord`` objects, keeping
+            both the parsed dicts and the original emitted text (the latter
+            feeds the next prompt context).
         """
-        final_records: list[dict] = []
+        final_records: list[ParsedRecord] = []
 
         # Find the index of the response with the most valid records.
         max_valid_idx = None
@@ -886,7 +900,7 @@ class TimeseriesBackend(VllmBackend):
                 # error statistics without carrying stale text/token counts.
                 response.records = [ParsedRecord(text="", error=trim_error)]
             else:
-                final_records.extend(response.valid_records)
+                final_records.extend(r for r in response.records if r.is_valid and r.parsed is not None)
 
         return final_records
 

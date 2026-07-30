@@ -809,21 +809,15 @@ def test_sequential_assembler_initial_prefill(
     assert "A" in prefill
     assert "B" in prefill
 
-    # Each prefill should contain up to 3 records as JSONL (newline-separated)
-    # Group A has 3 records, Group B has 2 records
-    # Filter out empty lines that may appear between records
-    prefill_a_lines = [line for line in prefill["A"].strip().split("\n") if line]
-    prefill_b_lines = [line for line in prefill["B"].strip().split("\n") if line]
-
-    assert len(prefill_a_lines) == 3  # All 3 records from group A
-    assert len(prefill_b_lines) == 2  # Both records from group B
-
-    # Verify the records contain expected values (order should be by time)
-    assert '"value": 10' in prefill_a_lines[0] or '"value":10' in prefill_a_lines[0]
-    assert '"value": 20' in prefill_a_lines[1] or '"value":20' in prefill_a_lines[1]
-    assert '"value": 30' in prefill_a_lines[2] or '"value":30' in prefill_a_lines[2]
-    assert '"value": 100' in prefill_b_lines[0] or '"value":100' in prefill_b_lines[0]
-    assert '"value": 200' in prefill_b_lines[1] or '"value":200' in prefill_b_lines[1]
+    # Pin the exact byte shape: a leading space, then newline-terminated
+    # training-dialect (pandas to_json) records with single newlines between
+    # them -- the same shape training examples use. Blank lines or Python
+    # json.dumps spacing here would put the generation prompt in a dialect
+    # the model never saw in training.
+    assert prefill["A"] == (
+        ' {"group":"A","time":1,"value":10}\n{"group":"A","time":2,"value":20}\n{"group":"A","time":3,"value":30}\n'
+    )
+    assert prefill["B"] == ' {"group":"B","time":1,"value":100}\n{"group":"B","time":2,"value":200}\n'
 
 
 def test_should_flush_example_boundary_conditions():
