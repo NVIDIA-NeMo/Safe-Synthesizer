@@ -148,6 +148,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 ENV PATH="/opt/venv/bin:${PATH}" \
     HF_HOME=/workspace/.hf_cache \
+    TRITON_CACHE_DIR=/workspace/.triton_cache \
     NSS_CONTAINER_EXTRA=${CONTAINER_EXTRA} \
     NSS_CONTAINER_VARIANT=${CONTAINER_VARIANT} \
     NVIDIA_VISIBLE_DEVICES=all \
