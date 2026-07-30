@@ -8,16 +8,16 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Generic, Literal, TypeAlias, TypeVar, cast
+from typing import Generic, TypeVar, cast
 
 from pydantic import BaseModel
 
 from ..configurator.parameter_paths import ParameterPath, format_parameter_path
 from ..configurator.pydantic_compat import nested_model_type
 from ..errors import ParameterError
+from .unknown_fields import UnknownFieldBehavior
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
-UnknownFieldBehavior: TypeAlias = Literal["ignore", "reject"]
 
 
 @dataclass(frozen=True, slots=True)

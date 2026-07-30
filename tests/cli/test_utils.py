@@ -375,11 +375,11 @@ generation:
     @pytest.mark.parametrize(
         ("config_contents", "overrides", "expected"),
         [
-            (None, {"unknown": True}, {}),
+            (None, {"unknown_fields": "ignore", "unknown": True}, {"unknown_fields": "ignore"}),
             (
-                "generation:\n  num_records: 77\n",
+                "unknown_fields: ignore\ngeneration:\n  num_records: 77\n",
                 {"generation": {"unknown": True}},
-                {"generation": {"num_records": 77}},
+                {"generation": {"num_records": 77}, "unknown_fields": "ignore"},
             ),
         ],
     )

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Mapping
-from typing import Self, TypeAlias
+from typing import Self, TypeAlias, cast
 
 from pydantic import Field, model_validator
 from typing_extensions import override
@@ -28,6 +28,12 @@ from .replace_pii import PiiReplacerConfig
 from .time_series import TimeSeriesParameters
 from .training import TrainingHyperparams
 from .types import AUTO_STR
+from .unknown_fields import (
+    DEFAULT_UNKNOWN_FIELDS,
+    UnknownFieldBehavior,
+    normalize_unknown_fields,
+    validate_unknown_fields,
+)
 
 ConfigPatch: TypeAlias = Mapping[str, object]
 
@@ -92,6 +98,35 @@ class SafeSynthesizerParameters(Parameters):
             "Defaults from NEMO_TELEMETRY_ENABLED when unset."
         ),
     )
+
+    unknown_fields: UnknownFieldBehavior = Field(
+        default=DEFAULT_UNKNOWN_FIELDS,
+        description=(
+            "How unknown configuration keys are handled recursively. "
+            "Use 'ignore' only for compatibility with stale configurations and notebooks "
+            "or mismatched client and service versions."
+        ),
+    )
+
+    @classmethod
+    def _unknown_fields_from_input(cls, source: object) -> UnknownFieldBehavior:
+        """Resolve the policy declared by a complete configuration input."""
+        if isinstance(source, cls):
+            return source.unknown_fields
+        if isinstance(source, Mapping):
+            mapping = cast(Mapping[str, object], source)
+            return validate_unknown_fields(mapping.get("unknown_fields", DEFAULT_UNKNOWN_FIELDS))
+        return DEFAULT_UNKNOWN_FIELDS
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_unknown_field_policy(cls, value: object) -> object:
+        """Apply the declared policy before the model tree is validated."""
+        if not isinstance(value, Mapping):
+            return value
+        mapping = cast(Mapping[str, object], value)
+        unknown_fields = cls._unknown_fields_from_input(mapping)
+        return normalize_unknown_fields(cls, mapping, unknown_fields)
 
     @model_validator(mode="after")
     def _validate_and_resolve_data_params(self) -> Self:
@@ -194,11 +229,33 @@ class SafeSynthesizerParameters(Parameters):
         return CompiledConfigPatch.from_paths(cls, assignments).apply()
 
     @classmethod
+    @override
+    def from_config_source(
+        cls,
+        source: Parameters | Mapping[str, object] | None = None,
+        **kwargs: object,
+    ) -> Self:
+        """Normalize a source using its effective unknown-field policy."""
+        if "unknown_fields" in kwargs:
+            unknown_field_behavior = validate_unknown_fields(kwargs["unknown_fields"])
+        else:
+            unknown_field_behavior = cls._unknown_fields_from_input(source)
+        return cast(
+            Self,
+            super().from_config_source(
+                source,
+                unknown_field_behavior=unknown_field_behavior,
+                **kwargs,
+            ),
+        )
+
+    @classmethod
     def from_config_patch(cls, patch: ConfigPatch) -> Self:
         """Validate a sparse top-level config patch as a full configuration."""
         normalized = ParameterSchema.from_model(cls).normalize_aliases(patch)
+        unknown_fields = cls._unknown_fields_from_input(normalized)
         return CompiledConfigPatch.from_mapping(
-            cls, normalized, origin="config patch", precedence=0, unknown_fields="ignore"
+            cls, normalized, origin="config patch", precedence=0, unknown_fields=unknown_fields
         ).apply()
 
     def with_config_patch(self, patch: ConfigPatch) -> Self:
@@ -217,19 +274,28 @@ class SafeSynthesizerParameters(Parameters):
             unknown_fields="reject",
         )
         normalized = ParameterSchema.from_model(model_type).normalize_aliases(patch)
+        unknown_fields = (
+            validate_unknown_fields(normalized["unknown_fields"])
+            if "unknown_fields" in normalized
+            else self.unknown_fields
+        )
         override = CompiledConfigPatch.from_mapping(
-            model_type, normalized, origin="config patch", precedence=1, unknown_fields="ignore"
+            model_type,
+            normalized,
+            origin="config patch",
+            precedence=1,
+            unknown_fields=unknown_fields,
         )
         return base.combine(override).apply()
 
     def with_runtime_overrides(self, runtime: SafeSynthesizerParameters) -> "SafeSynthesizerParameters":
-        """Apply resume-time generation/evaluation/telemetry overrides onto a copy of self.
+        """Apply supported resume-time overrides onto a copy of self.
 
         ``self`` is the saved training-run config. Only explicitly-set
         ``generation`` and ``evaluation`` fields from ``runtime`` are merged in,
-        plus ``emit_telemetry`` when the caller set it. Training, data, privacy,
-        and other sections are preserved so training provenance survives a
-        generate-only resume.
+        plus ``emit_telemetry`` and ``unknown_fields`` when the caller set them.
+        Training, data, privacy, and other sections are preserved so training
+        provenance survives a generate-only resume.
 
         Args:
             runtime: Config carrying resume-time CLI/SDK overrides. Typically
@@ -251,6 +317,8 @@ class SafeSynthesizerParameters(Parameters):
         _add_section("evaluation", runtime.evaluation)
         if "emit_telemetry" in runtime.model_fields_set:
             updates["emit_telemetry"] = runtime.emit_telemetry
+        if "unknown_fields" in runtime.model_fields_set:
+            updates["unknown_fields"] = runtime.unknown_fields
         patch = CompiledConfigPatch.from_mapping(
             type(self),
             updates,

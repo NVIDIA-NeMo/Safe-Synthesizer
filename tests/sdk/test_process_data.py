@@ -12,11 +12,13 @@ tests verify the separation, persistence, and round-trip through
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
+from pydantic import ValidationError
 
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
@@ -477,6 +479,73 @@ class TestLoadFromSavePath:
         assert builder._training_df is None  # generation-evaluation resume path doesn't need the transformed df
         assert builder._original_training_df is not None
         pd.testing.assert_frame_equal(builder._original_training_df, train_split)
+
+    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    def test_load_rejects_unknown_legacy_saved_fields_by_default(
+        self,
+        mock_metadata_cls,
+        tmp_path,
+        fixture_sample_patient_dataframe,
+        fixture_sample_patient_redacted_dataframe,
+    ):
+        """Saved configs retain strict validation when no resume opt-out is set."""
+        workdir, _, _ = self._prepare_workdir(
+            tmp_path,
+            fixture_sample_patient_dataframe,
+            fixture_sample_patient_redacted_dataframe,
+        )
+        saved_config = SafeSynthesizerParameters().model_dump(mode="json")
+        saved_config.pop("unknown_fields")
+        saved_config["training"]["epoch"] = 1
+        workdir.config.write_text(json.dumps(saved_config))
+        mock_metadata_cls.from_metadata_json.return_value = MagicMock()
+
+        builder = SafeSynthesizer(config=SafeSynthesizerParameters(), workdir=workdir)
+
+        with pytest.raises(ValidationError, match="epoch"):
+            builder.load_from_save_path()
+
+    @pytest.mark.parametrize("policy_source", ["saved", "builder", "runtime"])
+    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    def test_load_can_ignore_unknown_legacy_saved_fields(
+        self,
+        mock_metadata_cls,
+        policy_source,
+        tmp_path,
+        fixture_sample_patient_dataframe,
+        fixture_sample_patient_redacted_dataframe,
+    ):
+        """A persisted or overriding ignore policy applies during saved-config validation."""
+        workdir, _, _ = self._prepare_workdir(
+            tmp_path,
+            fixture_sample_patient_dataframe,
+            fixture_sample_patient_redacted_dataframe,
+        )
+        saved_config = SafeSynthesizerParameters().model_dump(mode="json")
+        if policy_source == "saved":
+            saved_config["unknown_fields"] = "ignore"
+        else:
+            saved_config.pop("unknown_fields")
+        saved_config["training"]["epoch"] = 1
+        workdir.config.write_text(json.dumps(saved_config))
+        mock_metadata_cls.from_metadata_json.return_value = MagicMock()
+
+        runtime_config = (
+            SafeSynthesizerParameters.model_validate({"unknown_fields": "ignore"})
+            if policy_source == "runtime"
+            else None
+        )
+        builder = SafeSynthesizer(
+            config=runtime_config,
+            workdir=workdir,
+            unknown_fields="ignore" if policy_source == "builder" else None,
+        )
+
+        builder.load_from_save_path(runtime_config=runtime_config)
+
+        assert builder._nss_config is not None
+        assert builder._nss_config.unknown_fields == "ignore"
+        assert not hasattr(builder._nss_config.training, "epoch")
 
     @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
     def test_load_applies_runtime_generation_and_evaluation_config(

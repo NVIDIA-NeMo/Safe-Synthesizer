@@ -86,6 +86,32 @@ def test_builder_methods_reject_wrong_typed_model(method_name: str):
         getattr(ConfigBuilder(), method_name)(config=wrong)
 
 
+def test_builder_rejects_unknown_raw_mapping_keys_by_default():
+    with pytest.raises(ParameterError, match="epoch"):
+        ConfigBuilder().with_train({"epoch": 1})
+
+
+def test_builder_ignore_policy_ignores_unknown_raw_mapping_keys():
+    builder = ConfigBuilder(unknown_fields="ignore").with_train({"batch_size": 32, "epoch": 1})
+
+    assert builder._effective_unknown_fields == "ignore"
+    assert builder._training_config == TrainingHyperparams(batch_size=32)
+
+
+def test_builder_resolves_and_preserves_unknown_field_policy():
+    builder = ConfigBuilder(unknown_fields="ignore").with_data_source(pd.DataFrame({"value": [1]})).resolve()
+
+    assert builder._nss_config is not None
+    assert builder._nss_config.unknown_fields == "ignore"
+
+
+def test_builder_constructor_policy_overrides_seed_config_for_raw_mappings():
+    seed = SafeSynthesizerParameters(unknown_fields="ignore")
+
+    with pytest.raises(ParameterError, match="epoch"):
+        ConfigBuilder(seed, unknown_fields="reject").with_train({"epoch": 1})
+
+
 def test_with_generate_validates_raw_config_with_kwargs():
     with pytest.raises(ValidationError, match="patience"):
         ConfigBuilder().with_generate(config={"num_records": 10}, patience=0)
