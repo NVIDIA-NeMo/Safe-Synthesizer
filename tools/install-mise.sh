@@ -27,11 +27,14 @@
 #     MISE_VERBOSE=1 and the binary path (broken/partial install).
 #   - If mise is already on PATH at a different version, abort with an
 #     actionable message (we don't silently clobber the user's install).
-#   - If the full gpg toolchain (gpg + gpg-agent + dirmngr) is available,
-#     fetch install.sh.sig, verify its GPG signature against a temporary
+#   - If gpg is available, fetch the release signing key over HTTPS
+#     (keys.openpgp.org VKS, not gpg --recv-keys / dirmngr -- dirmngr's
+#     bundled DNS resolver hangs indefinitely on some corporate networks
+#     and GnuPG 2.x ignores legacy keyserver timeout options), fetch
+#     install.sh.sig, verify its GPG signature against a temporary
 #     GNUPGHOME (so we don't mutate the user's keyring), and run the
-#     embedded install script. Keyserver recv and curl fetch are bounded
-#     by timeouts and retried a few times on failure.
+#     embedded install script. All HTTP fetches are bounded by timeouts
+#     and retried a few times on failure.
 #   - If any of the above fails and MISE_REQUIRE_SIGNED_INSTALL != 1, fall
 #     back to https://mise.run (no signature verification; warn loudly).
 #   - In either install path, pass the pinned version through to the installer
@@ -70,16 +73,14 @@ MISE_VERSION="${MISE_VERSION:-$(read_pinned_mise_version)}"
 
 readonly MISE_SIG_URL="https://mise.jdx.dev/install.sh.sig"
 readonly MISE_RUN_URL="https://mise.run"
-readonly KEYSERVER="hkps://keys.openpgp.org"
+readonly MISE_GPG_KEY_URL="https://keys.openpgp.org/vks/v1/by-fingerprint"
 
-# Network knobs, applied to every keyserver/HTTP call so a flaky keyserver
-# or CDN doesn't wedge `make setup` indefinitely in CI/container contexts.
+# Network knobs, applied to every HTTP call so a flaky CDN doesn't wedge
+# `make setup` indefinitely in CI/container contexts.
 readonly CURL_CONNECT_TIMEOUT=10
 readonly CURL_MAX_TIME=60
 readonly CURL_RETRIES=3
 readonly CURL_RETRY_DELAY=2
-readonly GPG_RECV_TIMEOUT=30
-readonly GPG_RECV_RETRIES=3
 
 # Set MISE_REQUIRE_SIGNED_INSTALL=1 to fail hard when the signed path can't
 # be completed (missing toolchain or network failure fetching the key /
@@ -98,25 +99,14 @@ curl_fetch() {
         "$@"
 }
 
-# `timeout(1)` is GNU coreutils; not in the default macOS/BSD userland.
-# When absent, rely on gpg's own `keyserver-options timeout=N` so we still
-# get a bounded wait.
-if command -v timeout >/dev/null 2>&1; then
-    gpg_timeout() { timeout "$GPG_RECV_TIMEOUT" "$@"; }
-else
-    gpg_timeout() { "$@"; }
-fi
-
-gpg_recv_key() {
+gpg_import_release_key() {
     local attempt
-    for attempt in $(seq 1 "$GPG_RECV_RETRIES"); do
-        if gpg_timeout gpg --batch --no-tty \
-                --keyserver "$KEYSERVER" \
-                --keyserver-options "timeout=${GPG_RECV_TIMEOUT}" \
-                --recv-keys "$MISE_GPG_KEY"; then
+    for attempt in $(seq 1 "$CURL_RETRIES"); do
+        if curl_fetch "${MISE_GPG_KEY_URL}/${MISE_GPG_KEY}" \
+            | gpg --batch --no-tty --import; then
             return 0
         fi
-        echo "WARNING: gpg --recv-keys attempt ${attempt}/${GPG_RECV_RETRIES} failed" >&2
+        echo "WARNING: failed to fetch/import mise release key (attempt ${attempt}/${CURL_RETRIES})" >&2
         sleep "$CURL_RETRY_DELAY"
     done
     return 1
@@ -189,19 +179,7 @@ fi
 
 echo "mise not found -- installing ${MISE_VERSION}..."
 
-# gpg's keyserver + decrypt flow needs all three of gpg, gpg-agent, and
-# dirmngr. Slim container images (e.g. debian:*-slim with
-# --no-install-recommends) commonly ship only a subset, so require the full
-# set before taking the signed path instead of tripping over a partial
-# toolchain mid-run.
-have_gpg_toolchain=false
-if command -v gpg >/dev/null 2>&1 \
-    && command -v gpg-agent >/dev/null 2>&1 \
-    && command -v dirmngr >/dev/null 2>&1; then
-    have_gpg_toolchain=true
-fi
-
-if [[ "$have_gpg_toolchain" == true ]]; then
+if command -v gpg >/dev/null 2>&1; then
     echo "Verifying installer signature..."
 
     # Isolate verification in an ephemeral GNUPGHOME so we don't mutate the
@@ -220,15 +198,15 @@ if [[ "$have_gpg_toolchain" == true ]]; then
     chmod 700 "$gnupg_home"
     export GNUPGHOME="$gnupg_home"
 
-    if ! gpg_recv_key; then
-        unsigned_install_or_fail "gpg --recv-keys from ${KEYSERVER} failed after ${GPG_RECV_RETRIES} attempts"
+    if ! gpg_import_release_key; then
+        unsigned_install_or_fail "failed to fetch/import mise release key from ${MISE_GPG_KEY_URL}"
     elif ! curl_fetch "$MISE_SIG_URL" | gpg --batch --no-tty --decrypt >"$tmpscript"; then
         unsigned_install_or_fail "failed to fetch/verify ${MISE_SIG_URL}"
     else
         MISE_VERSION="$MISE_VERSION" sh "$tmpscript"
     fi
 else
-    unsigned_install_or_fail "full gpg toolchain (gpg + gpg-agent + dirmngr) not available"
+    unsigned_install_or_fail "gpg not available"
 fi
 
 # Make the freshly-installed binary discoverable to this script's own
