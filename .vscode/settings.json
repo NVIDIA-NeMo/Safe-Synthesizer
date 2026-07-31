@@ -1,6 +1,0 @@
-{
-    "terminal.integrated.env.linux": {
-        "PATH": "${env:HOME}/.local/share/mise/shims:${env:HOME}/.local/bin:${env:PATH}"
-    },
-    "python.defaultInterpreterPath": "${workspaceFolder}/.venv"
-}
