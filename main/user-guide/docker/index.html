@@ -9563,8 +9563,7 @@ file automatically.</p>
 Mount a host directory to persist downloads across container runs:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>docker<span class="w"> </span>run<span class="w"> </span>--gpus<span class="w"> </span>all<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span>-v<span class="w"> </span>~/.cache/huggingface:/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span>-e<span class="w"> </span><span class="nv">HF_HOME</span><span class="o">=</span>/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">  </span>...
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span>...
 </span></code></pre></div>
 <table>
 <thead>
@@ -9584,6 +9583,9 @@ Mount a host directory to persist downloads across container runs:</p>
 </tr>
 </tbody>
 </table>
+<p>The image sets <code>HF_HOME=/workspace/.hf_cache</code>, so mounting the cache there is
+enough -- passing <code>-e HF_HOME=/workspace/.hf_cache</code> is redundant but harmless.
+Override the variable only to point at a different container path.</p>
 <p>Without this mount, models are downloaded into the container's ephemeral
 filesystem and lost when it exits.</p>
 <p>For shared environments (team servers, CI), point at a shared cache:</p>
@@ -9620,7 +9622,8 @@ Generation-only runs are typically fine without it.</p>
 <p>The container runs as <code>appuser</code> (uid 1000). When bind-mounting host
 directories, Docker preserves host ownership. If your host user has a
 different uid, writes to the mounted directory (artifacts, outputs) will
-fail with "Permission denied".</p>
+fail with "Permission denied". A mounted Hugging Face cache is affected the
+same way: already-cached models still load, but downloading a new one fails.</p>
 <p>Fix by matching the container user to your host uid:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>docker<span class="w"> </span>run<span class="w"> </span>--gpus<span class="w"> </span>all<span class="w"> </span>--user<span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>id<span class="w"> </span>-u<span class="k">)</span><span class="s2">:</span><span class="k">$(</span>id<span class="w"> </span>-g<span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span>-v<span class="w"> </span>/path/to/data:/workspace/data<span class="w"> </span><span class="se">\</span>
