@@ -69,36 +69,18 @@ runs:
         uv --no-config venv --clear --python "${PYTHON_VERSION}" "${venv_path}"
         python_bin="${venv_path}/bin/python"
 
+        cuda_index_output="$(
+          "${python_bin}" "${GITHUB_WORKSPACE}/tools/discover_cuda_indexes.py" \
+            "${GITHUB_WORKSPACE}/pyproject.toml" "${CUDA_EXTRA}" 3
+        )"
+        mapfile -t cuda_indexes <<< "${cuda_index_output}"
+
         index_args=()
-        index_count=0
-        while IFS= read -r url; do
+        for url in "${cuda_indexes[@]}"; do
           [[ -n "${url}" ]] || continue
           index_args+=(--index "${url}")
-          index_count=$((index_count + 1))
           echo "CUDA index: ${url}"
-        done < <("${python_bin}" - "${GITHUB_WORKSPACE}/pyproject.toml" "${CUDA_EXTRA}" <<'PY'
-        import sys
-        import tomllib
-
-        with open(sys.argv[1], "rb") as handle:
-            indexes = tomllib.load(handle)["tool"]["uv"]["index"]
-
-        cuda_extra = sys.argv[2]
-        print(
-            "\n".join(
-                index["url"]
-                for index in indexes
-                if index["name"].endswith(f"-{cuda_extra}")
-                or f"/{cuda_extra}" in index["url"]
-            )
-        )
-        PY
-        )
-
-        if (( index_count < 3 )); then
-          echo "Error: expected 3+ ${CUDA_EXTRA} indexes in pyproject.toml, found ${index_count}" >&2
-          exit 1
-        fi
+        done
 
         uv --no-config pip install \
           --python "${python_bin}" \

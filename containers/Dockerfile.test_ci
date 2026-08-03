@@ -27,13 +27,19 @@ RUN MISE_GPG_KEY=24853EC9F655CE80B48E6C3A8B81C9D17413A06D \
 FROM setup AS wheel-install
 
 ENV UV_LINK_MODE=copy
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 COPY dist/*.whl /tmp/dist/
+COPY pyproject.toml tools/discover_cuda_indexes.py /tmp/
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     wheel_count="$(find /tmp/dist -maxdepth 1 -type f -name '*.whl' | wc -l)" && \
     test "${wheel_count}" -eq 1 && \
     wheel="$(find /tmp/dist -maxdepth 1 -type f -name '*.whl')" && \
+    cuda_index_output="$(python /tmp/discover_cuda_indexes.py /tmp/pyproject.toml cu129 3)" && \
+    mapfile -t cuda_indexes <<< "${cuda_index_output}" && \
+    cuda_index_args=() && \
+    for cuda_index in "${cuda_indexes[@]}"; do cuda_index_args+=(--index "${cuda_index}"); done && \
     uv --no-config venv --clear --python /usr/local/bin/python /opt/wheel-cpu && \
     uv --no-config pip install \
         --python /opt/wheel-cpu/bin/python \
@@ -52,9 +58,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         --no-sources \
         --dry-run \
         --default-index https://pypi.org/simple \
-        --index https://flashinfer.ai/whl/cu129 \
-        --index https://download.pytorch.org/whl/cu129 \
-        --index https://wheels.vllm.ai/ee0da84ab9e04ac7610e28580af62c365e898389/cu129 \
+        "${cuda_index_args[@]}" \
         --index-strategy unsafe-best-match \
         "nemo-safe-synthesizer[cu129,engine] @ file://${wheel}" && \
     rm -rf /opt/wheel-cpu /opt/wheel-cu129
