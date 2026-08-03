@@ -546,10 +546,6 @@ class AttributeInferenceProtection(Component):
                         # Compare synthetic and training embeddings
                         # if all embeddings were nan, then synth_val is an int with value 0
                         if not isinstance(synth_val, int):
-                            # ``encode`` returns a batch, so this is (1, dim); take the
-                            # single row. Without it ``np.dot`` yields a one-element
-                            # array rather than a scalar, and ``float()`` on that raises
-                            # under NumPy >= 2.4 (deprecated since 1.25).
                             train_val_vector = train_val_embedding[0]
                             denom = np.linalg.norm(train_val_vector) * np.linalg.norm(synth_val)
                             if denom == 0:
