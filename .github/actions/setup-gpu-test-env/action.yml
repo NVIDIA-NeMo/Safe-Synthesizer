@@ -89,13 +89,14 @@ runs:
                 index["url"]
                 for index in indexes
                 if index["name"].endswith(f"-{cuda_extra}")
+                or f"/{cuda_extra}" in index["url"]
             )
         )
         PY
         )
 
-        if (( index_count == 0 )); then
-          echo "Error: no indexes found for ${CUDA_EXTRA} in pyproject.toml" >&2
+        if (( index_count < 3 )); then
+          echo "Error: expected 3+ ${CUDA_EXTRA} indexes in pyproject.toml, found ${index_count}" >&2
           exit 1
         fi
 
