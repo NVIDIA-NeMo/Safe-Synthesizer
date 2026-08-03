@@ -166,10 +166,11 @@ PY
   )
   rm -f "${pyproject}"
 
-  # The parse runs in a process substitution, so it cannot fail the script.
-  # The count is what actually validates it.
-  if [[ "${index_count}" -ne 3 ]]; then
-    log "ERROR: expected 3 ${CUDA_EXTRA} indexes in v${NSS_VERSION}, got ${index_count}"
+  # The parse runs in a process substitution, so it cannot fail the script; the
+  # count is what validates it. A floor rather than equality: pyproject may
+  # gain indexes, but dropping below three means a rename slipped past.
+  if [[ "${index_count}" -lt 3 ]]; then
+    log "ERROR: expected 3+ ${CUDA_EXTRA} indexes in v${NSS_VERSION}, got ${index_count}"
     exit 1
   fi
 
