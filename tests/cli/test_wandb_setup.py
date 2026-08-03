@@ -4,7 +4,9 @@
 """Tests for the wandb_setup module."""
 
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
+from nemo_safe_synthesizer.cli import wandb_setup
 from nemo_safe_synthesizer.cli.wandb_setup import resolve_wandb_run_id
 
 
@@ -51,3 +53,17 @@ class TestResolveWandbRunId:
         result = resolve_wandb_run_id(str(dir_path))
         # Since it's a directory, not a file, it's returned as-is
         assert result == str(dir_path)
+
+
+def test_failure_reporting_updates_summary_without_history() -> None:
+    """Failure status is final run state, not an additional W&B history point."""
+    fake_run = MagicMock()
+    with patch.object(wandb_setup.wandb, "run", fake_run), patch.object(wandb_setup.wandb, "log") as mock_log:
+        wandb_setup.log_failure_to_wandb(ValueError("bad input"), "generate")
+
+    mock_log.assert_not_called()
+    assert fake_run.summary.update.call_args.args[0] == {
+        "eval/success": 0,
+        "generate/error_type": "ValueError",
+        "generate/error_message": "bad input",
+    }

@@ -141,6 +141,56 @@ class TestRunCommandOptions:
         assert result.exit_code == 0
         assert "--emit_telemetry" in result.output
 
+    def test_run_help_explains_wandb_report_opt_out(self, cli_runner: CliRunner):
+        """The W&B report opt-out describes the output that remains enabled."""
+        result = cli_runner.invoke(run, ["--help"])
+
+        assert result.exit_code == 0
+        assert "--no-wandb-upload-evaluation-report" in result.output
+        assert "summary metrics and the evaluation scorecard" in " ".join(result.output.split())
+        assert "[default: --wandb-upload-evaluation-report]" in " ".join(result.output.split())
+
+    @pytest.mark.parametrize(
+        ("upload_args", "expected_upload"),
+        [
+            ([], True),
+            (["--no-wandb-upload-evaluation-report"], False),
+        ],
+    )
+    def test_run_evaluation_report_upload_default_and_opt_out(
+        self,
+        upload_args: list[str],
+        expected_upload: bool,
+        cli_runner: CliRunner,
+        dummy_csv: Path,
+        fixture_session_cache_dir: Path,
+        mock_workdir: MagicMock,
+        patched_run_dependencies: dict,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        """Evaluation report publishing defaults on and supports explicit opt-out."""
+        monkeypatch.delenv("NSS_WANDB_UPLOAD_EVALUATION_REPORT", raising=False)
+
+        with patch("nemo_safe_synthesizer.cli.run.publish_evaluation_report") as mock_publish:
+            result = cli_runner.invoke(
+                run,
+                [
+                    "--data-source",
+                    str(dummy_csv),
+                    "--artifact-path",
+                    str(fixture_session_cache_dir),
+                    *upload_args,
+                ],
+                catch_exceptions=False,
+            )
+
+        assert result.exit_code == 0
+        mock_publish.assert_called_once_with(
+            mock_workdir,
+            patched_run_dependencies["safe_synthesizer"].results.summary,
+            expected_upload,
+        )
+
     def test_run_defaults_to_emit_telemetry(
         self,
         cli_runner: CliRunner,

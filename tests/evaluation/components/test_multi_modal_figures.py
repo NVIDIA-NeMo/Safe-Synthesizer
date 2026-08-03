@@ -270,6 +270,35 @@ class TestGenerateMiaFigure:
 
         assert isinstance(fig, go.Figure)
 
+    def test_generate_mia_figure_uses_counts_without_renormalizing_percentages(self):
+        df = pd.DataFrame(
+            {
+                "Protection": ["Excellent", "Good", "Poor"],
+                "Attack Count": [120, 120, 120],
+                "Attack Percentage": [100 / 3, 100 / 3, 100 / 3],
+            }
+        )
+
+        fig = generate_mia_figure(df)
+
+        assert list(fig.data[0].values) == [120, 120, 120]
+        assert "360 attack evaluations" in fig.layout.title.text
+
+    def test_generate_mia_figure_excludes_unavailable_label_and_value(self):
+        df = pd.DataFrame(
+            {
+                "Protection": ["Excellent", "Good", "Unavailable"],
+                "Attack Count": [120, 120, 120],
+                "Attack Percentage": [100 / 3, 100 / 3, 100 / 3],
+            }
+        )
+
+        fig = generate_mia_figure(df)
+
+        assert list(fig.data[0].labels) == ["Excellent", "Good"]
+        assert list(fig.data[0].values) == [120, 120]
+        assert "240 attack evaluations" in fig.layout.title.text
+
 
 class TestGenerateAiaFigure:
     """Tests for generate_aia_figure function."""

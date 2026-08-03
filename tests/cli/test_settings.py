@@ -26,6 +26,7 @@ class TestCLISettings:
         assert settings.run_path is None
         assert settings.output_file is None
         assert settings.verbose == 0
+        assert settings.wandb_upload_evaluation_report is True
         assert settings.synthesis_overrides == {}
 
     def test_env_var_loading_artifact_path(self, monkeypatch):
@@ -296,6 +297,11 @@ class TestCLISettingsIntegration:
         settings = CLISettings()
         assert settings.wandb.wandb_mode == WandbMode.OFFLINE
         assert settings.wandb.wandb_project == "test-project"
+
+    def test_wandb_upload_evaluation_report_env_var(self, monkeypatch):
+        """NSS_WANDB_UPLOAD_EVALUATION_REPORT can disable default report publishing."""
+        monkeypatch.setenv("NSS_WANDB_UPLOAD_EVALUATION_REPORT", "false")
+        assert CLISettings().wandb_upload_evaluation_report is False
 
     def test_extra_env_vars_ignored(self, monkeypatch):
         """Test that unknown env vars are ignored (extra='ignore')."""

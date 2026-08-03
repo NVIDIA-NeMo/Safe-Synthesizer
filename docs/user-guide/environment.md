@@ -47,6 +47,7 @@ Grouped by the `Category` column -- `nss`-native settings first, then
 | `NSS_DATASET_REGISTRY` | nss | `--dataset-registry` | CLI | -- | Dataset registry YAML path or URL | [Running -- Dataset Registry](running.md#dataset-registry) |
 | `NSS_WANDB_MODE` | nss | `--wandb-mode` | WandB | `disabled` | WandB run mode | Alias for `WANDB_MODE` |
 | `NSS_WANDB_PROJECT` | nss | `--wandb-project` | WandB | -- | WandB project name | Alias for `WANDB_PROJECT` |
+| `NSS_WANDB_UPLOAD_EVALUATION_REPORT` | nss | `--wandb-upload-evaluation-report` / `--no-wandb-upload-evaluation-report` | WandB | `true` | Upload final evaluation HTML and artifact | Set to `false` to skip HTML and artifact publishing; summary metrics and the scorecard remain enabled |
 | `NSS_INFERENCE_ENDPOINT` | nss | `--inference-endpoint-url` | PII column classifier | NVIDIA integrate URL | OpenAI-compatible endpoint for column classification | [PII appendix](#pii-ner-and-column-classification) |
 | `NSS_INFERENCE_KEY` | nss | `--inference-api-key` | PII column classifier | -- | API key for `NSS_INFERENCE_ENDPOINT` | Required for LLM column classification |
 | `NSS_INFERENCE_MODEL` | nss | `--inference-model-id` | PII column classifier | `nvidia/nemotron-3-ultra-550b-a55b` | Model ID sent to the inference endpoint | [PII appendix](#pii-ner-and-column-classification) |

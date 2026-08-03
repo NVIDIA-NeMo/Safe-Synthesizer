@@ -218,6 +218,7 @@ all others have defaults or are optional.
 | `--log-color` / `--no-log-color` | `NSS_LOG_COLOR` | auto | Colorize console output (auto-detected from TTY) |
 | `--wandb-mode` | `NSS_WANDB_MODE` | `disabled` | WandB mode (`online`, `offline`, `disabled`) |
 | `--wandb-project` | `NSS_WANDB_PROJECT` | -- | WandB project name |
+| `--wandb-upload-evaluation-report` / `--no-wandb-upload-evaluation-report` | `NSS_WANDB_UPLOAD_EVALUATION_REPORT` | `true` | Control evaluation HTML and artifact publishing |
 | `--dataset-registry` | `NSS_DATASET_REGISTRY` | -- | Dataset registry YAML path/URL |
 | `-v` / `-vv` | -- | -- | Verbose logging (`-v` debug, `-vv` debug + dependencies) |
 
@@ -1351,6 +1352,31 @@ config file.
 
     These environment variables are read by the CLI only. SDK users must
     call `wandb.init(...)` explicitly.
+
+#### Evaluation scorecard and report upload
+
+For CLI-managed runs, final scalar `eval/*`, `gen/*`, timing, failure, and
+vLLM-completion values update the W&B run summary rather than creating history
+points. Existing training curves remain W&B history. After results are saved,
+the CLI publishes an `evaluation/scorecard` table panel containing final
+`eval/*` values.
+
+When W&B is active, the CLI publishes the HTML evaluation report to the
+user-configured project as the `evaluation/report` panel and the
+`evaluation-report` artifact. To skip the HTML report panel and evaluation-report
+artifact while retaining summary metrics and the evaluation scorecard, pass:
+
+    safe-synthesizer run \
+      --config config.yaml \
+      --data-source data.csv \
+      --wandb-mode online \
+      --no-wandb-upload-evaluation-report
+
+or set `NSS_WANDB_UPLOAD_EVALUATION_REPORT=false`. When enabled, the artifact
+is named `safe-synthesizer-evaluation-report-<run-id>` and may contain
+`evaluation_report.html` and `evaluation_metrics.json` when those files are
+available. SDK callers retain scalar `log_wandb()` behavior and do not upload
+evaluation media automatically.
 
 For parameter precedence (CLI flags vs environment variables vs YAML), see
 [Environment Variables -- Precedence](environment.md#precedence).

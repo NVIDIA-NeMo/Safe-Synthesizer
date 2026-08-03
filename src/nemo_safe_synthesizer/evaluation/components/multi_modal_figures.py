@@ -264,12 +264,18 @@ def generate_mia_figure(df: pd.DataFrame) -> go.Figure:
     )
     df.sort_values(by=PROTECTION_COLUMN, inplace=True, ascending=False)
 
+    chart_df = df.loc[df[PROTECTION_COLUMN].notna()]
+    value_column = "Attack Count" if "Attack Count" in df else "Attack Percentage"
     fig = pie(
-        labels=df[PROTECTION_COLUMN].dropna().astype(str).tolist(),
-        values=df["Attack Percentage"].replace({0: np.nan}),
+        labels=chart_df[PROTECTION_COLUMN].astype(str).tolist(),
+        values=chart_df[value_column].replace({0: np.nan}),
         sort=False,
     )
+    title = "Membership inference attack outcomes"
+    if value_column == "Attack Count":
+        title += f" ({chart_df[value_column].sum()} attack evaluations graded)"
     fig.update_layout(
+        title=title,
         margin=dict(l=0, r=0, t=24, b=0),
     )
 
