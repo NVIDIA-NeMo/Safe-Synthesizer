@@ -112,6 +112,21 @@ def test_shared_builtins_contract_on_three_checked_fixtures(checked_native, impl
     assert tokenizer.capabilities.rolling_prefill is (implementation is TimeSeriesNssTokenizer)
 
 
+def test_prompt_encoding_reserves_optional_segment_offsets() -> None:
+    """Keep future segment metadata opt-in and value-compatible."""
+    legacy = PromptEncoding("prompt", (1, 2), (1, 1))
+    segmented = PromptEncoding("prompt", (1, 2), (1, 1), (("body", 0), ("suffix", 2)))
+
+    assert legacy.segment_offsets == ()
+    assert segmented.segment_offsets == (("body", 0), ("suffix", 2))
+
+
+@pytest.mark.parametrize("segments", [(("", 0),), (("body", -1),), (("body", 3),)])
+def test_prompt_encoding_rejects_invalid_segment_offsets(segments) -> None:
+    with pytest.raises(ParameterError, match="segment offsets"):
+        PromptEncoding("prompt", (1, 2), (1, 1), segments)
+
+
 def test_encode_records_preserves_order_excludes_without_mutation(
     checked_native, implementation, tokenizers_dir
 ) -> None:

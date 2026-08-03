@@ -24,7 +24,7 @@ from nemo_safe_synthesizer.generation.batch import Batch
 from nemo_safe_synthesizer.generation.processors import TabularDataProcessor
 from nemo_safe_synthesizer.generation.vllm_observability import GenerationObservability
 from nemo_safe_synthesizer.llm.metadata import ModelMetadata, RopeScaling
-from nemo_safe_synthesizer.tokenization import PromptEncoding, TabularContext
+from nemo_safe_synthesizer.tokenization import EngineParity, PromptEncoding, TabularContext
 
 
 @pytest.fixture
@@ -408,6 +408,30 @@ class TestInitializeModelRef:
         assert mock_vllm.call_args.kwargs["max_model_len"] == mock_model_metadata.max_seq_length
         assert mock_vllm.call_args.kwargs["hf_overrides"] is None
         assert mock_vllm.call_args.kwargs["trust_remote_code"] is True
+
+    def test_initialize_rejects_nss_engine_parity_before_processor_attachment(
+        self, base_params, mock_model_metadata, mock_schema, mock_workdir, fixture_cached_nvidia_snapshot
+    ):
+        cache_root, _ = fixture_cached_nvidia_snapshot
+        base_params.training.pretrained_model = "nvidia/Nemotron-Mini-4B-Instruct"
+        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
+        mock_model_metadata.nss_tokenizer = MagicMock()
+        mock_model_metadata.nss_tokenizer.compare_engine.return_value = EngineParity(False, ("vocab_size",))
+        mock_llm = MagicMock()
+        mock_llm.get_tokenizer.return_value = MagicMock()
+
+        with (
+            patch(
+                "nemo_safe_synthesizer.generation.vllm_backend.ModelRef._default_hf_cache_root", return_value=cache_root
+            ),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.vLLM", return_value=mock_llm),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.get_max_vram", return_value={0: 0.8}),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.create_processor") as create_processor_mock,
+            pytest.raises(GenerationError, match="vocab_size"),
+        ):
+            backend.initialize()
+
+        create_processor_mock.assert_not_called()
 
     def test_initialize_passes_rope_hf_overrides_for_extended_context(
         self,

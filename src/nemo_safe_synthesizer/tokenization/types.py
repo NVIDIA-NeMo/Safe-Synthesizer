@@ -207,6 +207,19 @@ class PromptEncoding:
     text: str
     input_ids: tuple[int, ...]
     attention_mask: tuple[int, ...]
+    segment_offsets: tuple[tuple[str, int], ...] = ()
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.segment_offsets, tuple) or any(
+            not isinstance(name, str)
+            or not name
+            or not isinstance(offset, int)
+            or isinstance(offset, bool)
+            or offset < 0
+            or offset > len(self.input_ids)
+            for name, offset in self.segment_offsets
+        ):
+            raise ParameterError("Prompt segment offsets must name positions within the prompt IDs.")
 
 
 @dataclass(frozen=True, slots=True)

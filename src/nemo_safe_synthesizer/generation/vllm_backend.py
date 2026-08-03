@@ -46,6 +46,7 @@ from ..generation.vllm_observability import (
     read_loadavg,
     read_vllm_runtime_metrics,
 )
+from ..generation.vllm_tokenizer import VllmTokenizerProbe
 from ..llm.metadata import ModelMetadata
 from ..llm.utils import ModelRef, cleanup_memory, get_max_vram
 from ..observability import get_logger, heartbeat
@@ -361,6 +362,12 @@ class VllmBackend(GeneratorBackend):
         self._engine_runtime_config = probe_engine_runtime_config(self.llm)
 
         tokenizer: EncodeOnlyTokenizer = self.llm.get_tokenizer()
+        nss_tokenizer = self.model_metadata.nss_tokenizer
+        if nss_tokenizer is not None:
+            parity = nss_tokenizer.compare_engine(VllmTokenizerProbe(tokenizer))
+            if not parity.matches:
+                categories = ", ".join(parity.mismatches)
+                raise GenerationError(f"The vLLM tokenizer does not match the persisted NSS tokenizer ({categories}).")
         self.processor = create_processor(
             self.schema,
             self.model_metadata,
