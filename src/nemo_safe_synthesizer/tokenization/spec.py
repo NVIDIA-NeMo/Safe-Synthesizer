@@ -19,11 +19,14 @@ from ..errors import ParameterError
 from .types import JsonObject, JsonValue, TokenizerProbe, canonical_json_bytes
 
 _IMMUTABLE_REMOTE_REVISION = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})")
+_IMMUTABLE_LOCAL_REVISION = re.compile(r"local-path-[0-9a-f]{64}")
 
 
 def validate_native_revision(source: str, revision: str) -> None:
     """Require resolved commit provenance for remote tokenizer sources."""
     if Path(source).exists():
+        return
+    if Path(source).is_absolute() and _IMMUTABLE_LOCAL_REVISION.fullmatch(revision) is not None:
         return
     if _IMMUTABLE_REMOTE_REVISION.fullmatch(revision) is None:
         raise ParameterError("Remote native tokenizer sources require a resolved immutable revision.")

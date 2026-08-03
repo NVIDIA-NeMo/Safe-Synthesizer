@@ -28,6 +28,8 @@ from ..defaults import (
 )
 from ..errors import ParameterError
 from ..observability import get_logger
+from ..tokenization.base import NssTokenizer
+from ..tokenization.persistence import NSS_TOKENIZER_MANIFEST, load_nss_tokenizer, save_nss_tokenizer
 from ..utils import load_json, write_json
 from .utils import ModelRef, load_fast_tokenizer
 
@@ -373,6 +375,13 @@ class ModelMetadata(BaseModel):
 
     tokenizer: PreTrainedTokenizerBase | None = Field(default=None, exclude=True, repr=False)
 
+    nss_tokenizer: NssTokenizer | None = Field(default=None, exclude=True, repr=False)
+
+    nss_tokenizer_manifest: Literal["nss_tokenizer.json"] | None = Field(
+        default=None,
+        description="Fixed NSS tokenizer manifest claimed by this artifact.",
+    )
+
     @field_validator("max_records_per_group", mode="after")
     @classmethod
     def validate_max_records_per_group(cls, v: int | None) -> int | None:
@@ -523,11 +532,62 @@ class ModelMetadata(BaseModel):
         """
         if self.workdir is None:
             raise ValueError("Cannot save metadata: workdir is not set")
+        if self.nss_tokenizer is not None:
+            # Publish the manifest before metadata: once metadata for a new
+            # artifact is visible, manifest absence can only mean legacy.
+            save_nss_tokenizer(self.nss_tokenizer, self.adapter_path)
+        metadata_payload = self.model_dump(mode="json")
+        if self.nss_tokenizer is not None:
+            metadata_payload["nss_tokenizer_manifest"] = NSS_TOKENIZER_MANIFEST
         write_json(
-            self.model_dump(mode="json"),
+            metadata_payload,
             path=self.workdir.train.adapter.metadata,
             indent=4,
         )
+
+    @staticmethod
+    def _validate_nss_tokenizer_metadata_input(value: dict[str, Any], tokenizer: NssTokenizer) -> None:
+        """Reject raw metadata drift before any metadata-directed model load."""
+        framing, _ = type(tokenizer).policies_from_spec(tokenizer.spec)
+        prompt_config = value.get("prompt_config")
+        if not isinstance(prompt_config, dict):
+            raise ParameterError("Model metadata prompt policy drifted from nss_tokenizer.json.")
+        prompt_policy = (
+            prompt_config.get("template"),
+            prompt_config.get("add_bos_token_to_prompt"),
+            prompt_config.get("add_eos_token_to_prompt"),
+            prompt_config.get("bos_token"),
+            prompt_config.get("bos_token_id"),
+            prompt_config.get("eos_token"),
+            prompt_config.get("eos_token_id"),
+        )
+        persisted_policy = (
+            framing.prompt_template,
+            framing.add_bos_token_to_prompt,
+            framing.add_eos_token_to_prompt,
+            framing.bos_token,
+            framing.bos_token_id,
+            framing.eos_token,
+            framing.eos_token_id,
+        )
+        if prompt_policy != persisted_policy:
+            raise ParameterError("Model metadata prompt policy drifted from nss_tokenizer.json.")
+
+        declared_source = value.get("model_name_or_path")
+        if not isinstance(declared_source, str):
+            raise ParameterError("Model metadata source drifted from nss_tokenizer.json.")
+        declared = Path(declared_source)
+        persisted = Path(tokenizer.spec.native_source)
+        if declared_source == tokenizer.spec.native_source:
+            sources_match = True
+        elif declared.exists() and persisted.exists():
+            sources_match = declared.resolve() == persisted.resolve()
+        else:
+            declared_ref = ModelRef.parse(declared_source)
+            persisted_ref = ModelRef.parse(tokenizer.spec.native_source)
+            sources_match = declared_ref.repo_id is not None and declared_ref.repo_id == persisted_ref.repo_id
+        if not sources_match:
+            raise ParameterError("Model metadata source drifted from nss_tokenizer.json.")
 
     @staticmethod
     def _load_config_and_tokenizer(
@@ -659,18 +719,32 @@ class ModelMetadata(BaseModel):
         cls: type["ModelMetadata"],
         path: Path | str,
         workdir: Workdir | None = None,
+        *,
+        admit_remote_code: bool = False,
     ) -> ModelMetadata:
         """Load ModelMetadata from a saved JSON file.
 
         Args:
             path: Path to the metadata JSON file.
             workdir: Workdir instance for artifact paths. If not provided, will be None.
+            admit_remote_code: Explicitly admit a manifest whose native
+                tokenizer requires remote code.
 
         Returns:
             ModelMetadata instance with the loaded configuration.
         """
         path = Path(path).resolve()
         kwargs = load_json(path)
+        manifest_claim = kwargs.get("nss_tokenizer_manifest")
+        nss_tokenizer = load_nss_tokenizer(
+            path.parent,
+            allow_legacy=manifest_claim is None,
+            admit_remote_code=admit_remote_code,
+        )
+        if nss_tokenizer is not None:
+            cls._validate_nss_tokenizer_metadata_input(kwargs, nss_tokenizer)
+            kwargs["nss_tokenizer"] = nss_tokenizer
+            kwargs["tokenizer"] = nss_tokenizer.for_hf()
         if workdir is not None:
             kwargs["workdir"] = workdir
         return cls(**kwargs)

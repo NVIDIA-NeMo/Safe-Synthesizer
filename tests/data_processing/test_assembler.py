@@ -40,6 +40,11 @@ def _record_tokenizer(native: PreTrainedTokenizer, metadata: ModelMetadata, *, t
     return create_runtime_nss_tokenizer(native, metadata, workload_kind=workload)
 
 
+def _example(native: PreTrainedTokenizer, metadata: ModelMetadata) -> Example:
+    tokenizer = _record_tokenizer(native, metadata)
+    return Example(prompt=tokenizer.encode_prompt_text(STUB_PROMPT), tokenizer=tokenizer, metadata=metadata)
+
+
 # Purpose: Session-scoped assembler config pointing at a local SmolLM3 tokenizer directory
 # to avoid HuggingFace Hub downloads during tests.
 @pytest.fixture(scope="session")
@@ -70,7 +75,7 @@ def test_example_with_special_tokens_in_prompt(
 ):
     fixture_llm_metadata.prompt_config.add_bos_token_to_prompt = True
     fixture_llm_metadata.prompt_config.add_eos_token_to_prompt = True
-    example = Example(prompt=STUB_PROMPT, tokenizer=fixture_tokenizer, metadata=fixture_llm_metadata)
+    example = _example(fixture_tokenizer, fixture_llm_metadata)
     example.add_sequence(STUB_SEQUENCE, add_special_tokens=True)
     assert example.num_tokens == 8
     assert example.input_ids == [128011, 2323, 10137, 128012, 128011, 66, 67, 128012]
@@ -91,7 +96,7 @@ def test_example_without_special_tokens_in_prompt(
 ):
     fixture_llm_metadata.prompt_config.add_bos_token_to_prompt = False
     fixture_llm_metadata.prompt_config.add_eos_token_to_prompt = False
-    example = Example(prompt=STUB_PROMPT, tokenizer=fixture_tokenizer, metadata=fixture_llm_metadata)
+    example = _example(fixture_tokenizer, fixture_llm_metadata)
 
     example.add_sequence(STUB_SEQUENCE, add_special_tokens=True)
     assert example.num_tokens == 6
@@ -106,9 +111,21 @@ def test_example_without_special_tokens_in_prompt(
     assert example.labels == [-100, -100, 128011, 66, 67, 128012, 66, 67]
 
 
+def test_example_preserves_nontrivial_sequence_attention_mask(
+    fixture_llm_metadata: ModelMetadata, fixture_tokenizer: PreTrainedTokenizer
+) -> None:
+    fixture_llm_metadata.prompt_config.add_bos_token_to_prompt = False
+    fixture_llm_metadata.prompt_config.add_eos_token_to_prompt = False
+    example = _example(fixture_tokenizer, fixture_llm_metadata)
+
+    example.add_sequence({"input_ids": [66, 67], "attention_mask": [0, 1]})
+
+    assert example.attention_mask == [1, 1, 1, 0, 1, 1]
+
+
 def test_add_sequence_raising_exception(fixture_llm_metadata: ModelMetadata, fixture_tokenizer: PreTrainedTokenizer):
     fixture_llm_metadata.base_max_seq_length = 1
-    example = Example(prompt=STUB_PROMPT, tokenizer=fixture_tokenizer, metadata=fixture_llm_metadata)
+    example = _example(fixture_tokenizer, fixture_llm_metadata)
 
     with pytest.raises(
         GenerationError,
@@ -156,6 +173,8 @@ def test_tabular_data_assembler(
     assert assembler.num_records_total == 150
     assert assembler.num_records_train == 150
     assert assembler.num_records_validation == 0
+    assert assembler.nss_tokenizer is assembler.record_tokenizer
+    assert not hasattr(assembler, "tokenizer")
 
     examples = assembler.assemble_training_examples()
     assert examples.train.num_rows == 1
@@ -573,13 +592,14 @@ def test_grouped_data_assembler(
     assert assembler.num_records_validation == 0
 
     examples = assembler.assemble_training_examples()
-    assert examples.train.num_rows == 7
+    assert examples.train.num_rows == 6
+    assert all(len(input_ids) <= llm_metadata.max_seq_length for input_ids in examples.train["input_ids"])
     assert examples.test is None
     assert round(examples.stats["tokens_per_record"].mean, 4) == 19.0
     assert round(examples.stats["tokens_per_group"].mean, 4) == 219.64
-    assert round(examples.stats["tokens_per_example"].mean, 4) == 1628.1429
-    assert round(examples.stats["records_per_example"].mean, 4) == 82.5714
-    assert round(examples.stats["groups_per_example"].mean, 4) == 7.1429
+    assert round(examples.stats["tokens_per_example"].mean, 4) == 1892.0
+    assert round(examples.stats["records_per_example"].mean, 4) == 96.3333
+    assert round(examples.stats["groups_per_example"].mean, 4) == 8.3333
 
 
 def test_grouped_data_assembler_training_examples_low_decimal(
@@ -737,14 +757,16 @@ def test_grouped_data_assembler_shorter_context_with_test_split(
 
     examples = assembler.assemble_training_examples()
 
-    assert examples.train.num_rows == 37
+    assert examples.train.num_rows == 20
     assert examples.test is not None
-    assert examples.test.num_rows == 9
+    assert examples.test.num_rows == 5
+    assert all(len(input_ids) <= llm_metadata.max_seq_length for input_ids in examples.train["input_ids"])
+    assert all(len(input_ids) <= llm_metadata.max_seq_length for input_ids in examples.test["input_ids"])
     assert round(examples.stats["tokens_per_record"].mean, 4) == 19.0
-    assert round(examples.stats["tokens_per_group"].mean, 4) == 219.925
-    assert round(examples.stats["tokens_per_example"].mean, 4) == 284.9189
-    assert round(examples.stats["records_per_example"].mean, 4) == 12.5135
-    assert round(examples.stats["groups_per_example"].mean, 4) == 1.0811
+    assert round(examples.stats["tokens_per_group"].mean, 4) == 219.64
+    assert round(examples.stats["tokens_per_example"].mean, 4) == 488.85
+    assert round(examples.stats["records_per_example"].mean, 4) == 23.15
+    assert round(examples.stats["groups_per_example"].mean, 4) == 2.0
     # Holdout groups must not inflate the training-derived generation bound.
     assert examples.stats["records_per_group"].count == assembler.num_groups_train
     assert assembler.stats_val["records_per_group"].count == assembler.num_groups_validation

@@ -71,6 +71,14 @@ def test_spec_round_trip_canonical_schema_and_cache_identity(tokenizers_dir) -> 
     assert restored.cache_identity_fragment == tokenizer.spec.cache_identity_fragment
 
 
+def test_builtin_reconstruction_rejects_prior_prompt_policy_epoch(tokenizers_dir) -> None:
+    registry, tokenizer = _make_tokenizer(tokenizers_dir)
+    prior = replace(tokenizer.spec, policy_epochs=replace(tokenizer.spec.policy_epochs, prompt=0))
+
+    with pytest.raises(ParameterError, match="policy epoch"):
+        registry.reconstruct(prior)
+
+
 @pytest.mark.parametrize("implementation", [TabularNssTokenizer, TimeSeriesNssTokenizer])
 def test_spawned_worker_reconstruction(tokenizers_dir, tmp_path, implementation) -> None:
     _, tokenizer = _make_tokenizer(tokenizers_dir, implementation)
@@ -223,6 +231,25 @@ def test_external_implementation_uses_typed_hooks_and_base_owned_invariants(toke
         assert getattr(getattr(NssTokenizer, method_name), "__final__", False) is True
     assert NssTokenizer.spec.fget is not None
     assert getattr(NssTokenizer.spec.fget, "__final__", False) is True
+
+
+def test_external_training_prompt_requires_explicit_capability(tokenizers_dir) -> None:
+    registry, tokenizer = _make_tokenizer(tokenizers_dir)
+    external_registry = registry.register(
+        RegistryEntry((1, _DirectExternal.IMPLEMENTATION_ID, "1"), "example-extension", "1", _DirectExternal),
+        admit_external=True,
+    )
+    external = external_registry.create(
+        (1, _DirectExternal.IMPLEMENTATION_ID, "1"),
+        tokenizer.for_hf(),
+        framing=tokenizer._framing,
+        native_source=str(tokenizers_dir / "tinyllama"),
+        native_revision="fixture-v1",
+    )
+
+    assert external.capabilities.training_prompt is False
+    with pytest.raises(ParameterError, match="training prompt capability"):
+        external.render_training_prompt(("a",), "generate")
 
 
 def test_duplicate_unknown_version_and_external_admission_fail_closed() -> None:

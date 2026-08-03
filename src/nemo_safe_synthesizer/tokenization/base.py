@@ -15,7 +15,7 @@ from typing import Generic, Protocol, TypeVar, cast, final
 
 from transformers import PreTrainedTokenizerBase
 
-from ..errors import ParameterError
+from ..errors import GenerationError, ParameterError
 from .records import validate_json_value
 from .spec import NssTokenizerSpec, PolicyEpochs
 from .types import (
@@ -30,6 +30,7 @@ from .types import (
     TokenBatch,
     TokenizerCapabilities,
     TokenizerProbe,
+    TrainingCapacity,
     TrainingEncoding,
     WorkloadContext,
     WorkloadKind,
@@ -39,6 +40,30 @@ from .types import (
 _BASE_PROBE_TEXTS = ("", "NSS tokenizer probe", '{"line":"a\\nb","unicode":"\u0085\u2028\u2029"}\n')
 _IGNORE_LABEL = -100
 ContextT = TypeVar("ContextT", bound=WorkloadContext)
+
+
+def _max_tokens_action(rope_scaling_factor: float | None) -> str:
+    """Return the stable user guidance for context-capacity failures."""
+    factor = rope_scaling_factor if rope_scaling_factor is not None else 1
+    if factor <= 5:
+        return (
+            "Training this model will require modifying your dataset and/or the model "
+            "configuration. Consider increasing the rope_scaling_factor parameter "
+            f"(currently set to {factor}, you could start by increasing "
+            f"to {factor + 1} (must be an integer value between 1 and 6)), "
+            "reducing the number of columns in your dataset, shortening the "
+            "column names, filtering out rows with long text values, and/or "
+            "reducing the number of rows per sequence if you are using the "
+            "group_training_examples_by parameter."
+        )
+    return (
+        "Training this model will require modifying your dataset. "
+        "The rope_scaling_factor is currently set to 6, which cannot be increased further. "
+        "Consider reducing the number of columns in your dataset, shortening the "
+        "column names, filtering out rows with long text values, and/or "
+        "reducing the number of rows per sequence if you are using the "
+        "group_training_examples_by parameter."
+    )
 
 
 class EngineTokenizerProbe(Protocol):
@@ -182,6 +207,7 @@ class NssTokenizer(ABC, Generic[ContextT]):
     IMPLEMENTATION_ID: str
     IMPLEMENTATION_VERSION = "1"
     WORKLOAD_KIND: WorkloadKind
+    POLICY_EPOCHS = PolicyEpochs()
 
     @final
     def __init__(
@@ -221,7 +247,7 @@ class NssTokenizer(ABC, Generic[ContextT]):
             native_fingerprint=snapshot.fingerprint,
             native_probes=snapshot.probes,
             registry_digest=registry_digest,
-            policy_epochs=policy_epochs or PolicyEpochs(),
+            policy_epochs=policy_epochs if policy_epochs is not None else self.POLICY_EPOCHS,
         )
         if persisted_spec is not None and candidate != persisted_spec:
             raise ParameterError("Native tokenizer or NSS policy does not match the persisted tokenizer specification.")
@@ -270,6 +296,13 @@ class NssTokenizer(ABC, Generic[ContextT]):
             schema=schema,
             prefill=prefill,
         )
+        return self.encode_prompt_text(text)
+
+    @final
+    def encode_prompt_text(self, text: str) -> PromptEncoding:
+        """Encode exact workload-rendered prompt text with NSS framing policy."""
+        if not isinstance(text, str):
+            raise ParameterError("Prompt text must be a string.")
         input_ids = list(self.encode_no_special(text))
         if self._framing.add_bos_token_to_prompt:
             input_ids.insert(0, cast(int, self._framing.bos_token_id))
@@ -277,6 +310,160 @@ class NssTokenizer(ABC, Generic[ContextT]):
             input_ids.append(cast(int, self._framing.eos_token_id))
         ids = tuple(input_ids)
         return PromptEncoding(text=text, input_ids=ids, attention_mask=tuple(1 for _ in ids))
+
+    @final
+    def render_training_prompt(
+        self,
+        ordered_columns: Sequence[str],
+        instruction: str,
+        *,
+        current_prefill: str = "",
+    ) -> PromptEncoding:
+        """Render the workload's exact training prompt from immutable inputs."""
+        if (
+            not isinstance(ordered_columns, Sequence)
+            or isinstance(ordered_columns, (str, bytes))
+            or not all(isinstance(column, str) for column in ordered_columns)
+        ):
+            raise ParameterError("Training prompt columns must be an ordered sequence of strings.")
+        if not isinstance(instruction, str) or not isinstance(current_prefill, str):
+            raise ParameterError("Training prompt instruction and prefill must be strings.")
+        if not self.capabilities.training_prompt:
+            raise ParameterError("The selected NSS tokenizer does not declare training prompt capability.")
+        context = self._training_context(tuple(ordered_columns), instruction, current_prefill)
+        return self.render_prompt(context)
+
+    def _validate_prompt_encoding(self, prompt: PromptEncoding) -> None:
+        if not isinstance(prompt, PromptEncoding):
+            raise ParameterError("Training framing requires a PromptEncoding.")
+        expected = self.encode_prompt_text(prompt.text)
+        if prompt != expected:
+            raise ParameterError("PromptEncoding does not match this NSS tokenizer and framing policy.")
+
+    @staticmethod
+    def _delimiter_flags(
+        sequence_count: int,
+        add_sequence_delimiters: bool | Sequence[bool],
+    ) -> tuple[bool, ...]:
+        if isinstance(add_sequence_delimiters, bool):
+            return (add_sequence_delimiters,) * sequence_count
+        if (
+            isinstance(add_sequence_delimiters, Sequence)
+            and not isinstance(add_sequence_delimiters, (str, bytes))
+            and len(add_sequence_delimiters) == sequence_count
+            and all(isinstance(value, bool) for value in add_sequence_delimiters)
+        ):
+            return tuple(add_sequence_delimiters)
+        raise ParameterError("Sequence delimiter flags must be one boolean or one boolean per sequence.")
+
+    @final
+    def capacity_for(
+        self,
+        prompt: PromptEncoding,
+        *,
+        context_limit: int,
+        sequence_count: int,
+        maximum_sequence_count: int | None = None,
+        add_sequence_delimiters: bool | Sequence[bool] = True,
+        rope_scaling_factor: float | None = None,
+    ) -> TrainingCapacity:
+        """Return exact record capacity after prompt and sequence delimiters."""
+        self._validate_prompt_encoding(prompt)
+        if not isinstance(context_limit, int) or isinstance(context_limit, bool) or context_limit <= 0:
+            raise ParameterError("Training context limit must be a positive integer.")
+        if not isinstance(sequence_count, int) or isinstance(sequence_count, bool) or sequence_count < 0:
+            raise ParameterError("Training sequence count must be a non-negative integer.")
+        if maximum_sequence_count is not None:
+            if (
+                not isinstance(maximum_sequence_count, int)
+                or isinstance(maximum_sequence_count, bool)
+                or maximum_sequence_count <= 0
+            ):
+                raise ParameterError("Training maximum sequence count must be a positive integer or None.")
+            if sequence_count > maximum_sequence_count:
+                raise ParameterError(
+                    f"Training sequence count {sequence_count} exceeds maximum sequence count {maximum_sequence_count}."
+                )
+        if len(prompt.input_ids) > context_limit:
+            action = _max_tokens_action(rope_scaling_factor)
+            raise GenerationError(
+                "The dataset schema requires more tokens than the max length of the model. "
+                "This likely means that the table is too wide to be used with this model. "
+                f"{action}"
+            )
+        delimiter_flags = self._delimiter_flags(sequence_count, add_sequence_delimiters)
+        delimiter_tokens = 2 * sum(delimiter_flags)
+        record_capacity = context_limit - len(prompt.input_ids) - delimiter_tokens
+        return TrainingCapacity(
+            context_limit=context_limit,
+            prompt_tokens=len(prompt.input_ids),
+            sequence_count=sequence_count,
+            delimiter_tokens_per_sequence=2,
+            delimiter_tokens=delimiter_tokens,
+            record_token_capacity=record_capacity,
+        )
+
+    @final
+    def validate_prompt_capacity(
+        self,
+        prompt: PromptEncoding,
+        *,
+        context_limit: int,
+        rope_scaling_factor: float | None,
+    ) -> None:
+        """Raise the stable schema-overflow error when a prompt cannot fit."""
+        self.capacity_for(
+            prompt,
+            context_limit=context_limit,
+            sequence_count=0,
+            rope_scaling_factor=rope_scaling_factor,
+        )
+
+    @final
+    def validate_record_capacity(
+        self,
+        prompt: PromptEncoding,
+        *,
+        record_token_count: int,
+        context_limit: int,
+        rope_scaling_factor: float | None,
+    ) -> None:
+        """Raise the stable record-overflow error for one framed sequence."""
+        if not isinstance(record_token_count, int) or isinstance(record_token_count, bool) or record_token_count < 0:
+            raise ParameterError("Record token count must be a non-negative integer.")
+        capacity = self.capacity_for(
+            prompt,
+            context_limit=context_limit,
+            sequence_count=1,
+            rope_scaling_factor=rope_scaling_factor,
+        )
+        if record_token_count <= capacity.record_token_capacity:
+            return
+        action = _max_tokens_action(rope_scaling_factor)
+        raise GenerationError(
+            f"At least one record requires more tokens than fit in the available context length. {action}"
+        )
+
+    @final
+    def can_append_sequence(
+        self,
+        prompt: PromptEncoding,
+        sequences: Sequence[Sequence[int]],
+        candidate: Sequence[int],
+        *,
+        context_limit: int,
+        maximum_sequence_count: int | None = None,
+    ) -> bool:
+        """Return whether the exact future delimiter-framed sequences fit."""
+        sequence_count = len(sequences) + 1
+        capacity = self.capacity_for(
+            prompt,
+            context_limit=context_limit,
+            sequence_count=sequence_count,
+            maximum_sequence_count=maximum_sequence_count,
+        )
+        record_tokens = sum(len(sequence) for sequence in sequences) + len(candidate)
+        return record_tokens <= capacity.record_token_capacity
 
     @final
     def encode_records(
@@ -348,22 +535,51 @@ class NssTokenizer(ABC, Generic[ContextT]):
         prompt: PromptEncoding,
         sequences: Sequence[Sequence[int]],
         *,
-        add_sequence_delimiters: bool = True,
+        add_sequence_delimiters: bool | Sequence[bool] = True,
+        sequence_attention_masks: Sequence[Sequence[int]] | None = None,
+        context_limit: int | None = None,
+        maximum_sequence_count: int | None = None,
+        rope_scaling_factor: float | None = None,
     ) -> TrainingEncoding:
         """Frame prompt and sequence IDs with stable masks and labels."""
+        self._validate_prompt_encoding(prompt)
+        delimiters = self._delimiter_flags(len(sequences), add_sequence_delimiters)
+        if sequence_attention_masks is None:
+            masks = tuple(tuple(1 for _ in sequence) for sequence in sequences)
+        elif (
+            isinstance(sequence_attention_masks, Sequence)
+            and not isinstance(sequence_attention_masks, (str, bytes))
+            and len(sequence_attention_masks) == len(sequences)
+        ):
+            masks = tuple(tuple(mask) for mask in sequence_attention_masks)
+        else:
+            raise ParameterError("Sequence attention masks must contain one mask per sequence.")
+        if maximum_sequence_count is not None and len(sequences) > maximum_sequence_count:
+            raise ParameterError(
+                f"Training sequence count {len(sequences)} exceeds maximum sequence count {maximum_sequence_count}."
+            )
         input_ids = list(prompt.input_ids)
+        attention_mask = list(prompt.attention_mask)
         labels = [_IGNORE_LABEL] * len(input_ids)
-        for sequence in sequences:
+        for sequence, mask, add_delimiters in zip(sequences, masks, delimiters, strict=True):
+            if len(mask) != len(sequence) or any(value not in (0, 1) for value in mask):
+                raise ParameterError("Each sequence attention mask must match its IDs and contain only zero or one.")
             framed = list(sequence)
-            if add_sequence_delimiters:
+            framed_mask = list(mask)
+            if add_delimiters:
                 if self._framing.bos_token_id is None:
                     raise ParameterError("A BOS token ID is required for sequence delimiters.")
                 framed = [self._framing.bos_token_id, *framed, cast(int, self._framing.eos_token_id)]
+                framed_mask = [1, *framed_mask, 1]
             input_ids.extend(framed)
+            attention_mask.extend(framed_mask)
             labels.extend(framed)
+        if context_limit is not None and len(input_ids) > context_limit:
+            action = _max_tokens_action(rope_scaling_factor)
+            raise GenerationError(f"The number of tokens in an example exceeds the available context length. {action}")
         return TrainingEncoding(
             input_ids=tuple(input_ids),
-            attention_mask=tuple(1 for _ in input_ids),
+            attention_mask=tuple(attention_mask),
             labels=tuple(labels),
         )
 
@@ -462,6 +678,17 @@ class NssTokenizer(ABC, Generic[ContextT]):
     @abstractmethod
     def _prompt_parts(self, context: ContextT) -> tuple[str, str, str]:
         """Return validated instruction, schema fragment, and prefill."""
+
+    def _training_context(
+        self,
+        ordered_columns: tuple[str, ...],
+        instruction: str,
+        current_prefill: str,
+    ) -> ContextT:
+        """Create the workload's immutable training context."""
+        raise ParameterError(
+            f"Tokenizer implementation {self.IMPLEMENTATION_ID!r} does not declare training-prompt construction."
+        )
 
     @classmethod
     @abstractmethod

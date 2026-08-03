@@ -64,7 +64,7 @@ class TokenBudgetCheck(MetadataCheck):
             workload_kind=workload_kind,
         )
 
-        max_new_tokens = check_schema_prompt_budget(collector, list(data.columns), metadata)
+        max_new_tokens = check_schema_prompt_budget(collector, list(data.columns), metadata, record_tokenizer)
         if max_new_tokens is None:
             return
 

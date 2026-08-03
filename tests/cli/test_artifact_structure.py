@@ -324,6 +324,7 @@ class TestWorkdir:
         """Adapter directory contains expected files."""
         adapter = workdir.train.adapter
         assert adapter.adapter_config == adapter.path / "adapter_config.json"
+        assert adapter.nss_tokenizer == adapter.path / "nss_tokenizer.json"
         assert adapter.metadata == adapter.path / "metadata_v2.json"
         assert adapter.schema == adapter.path / "dataset_schema.json"
 

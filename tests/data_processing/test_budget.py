@@ -15,6 +15,7 @@ import pytest
 from datasets import Dataset
 from transformers import BatchEncoding, PreTrainedTokenizerBase
 
+from nemo_safe_synthesizer.data_processing import budget as budget_module
 from nemo_safe_synthesizer.data_processing.assembler import TabularDataExampleAssembler
 from nemo_safe_synthesizer.data_processing.budget import (
     compute_max_new_tokens,
@@ -24,7 +25,7 @@ from nemo_safe_synthesizer.data_processing.budget import (
 from nemo_safe_synthesizer.defaults import DEFAULT_EXCLUDE_COLUMNS, PSEUDO_GROUP_COLUMN
 from nemo_safe_synthesizer.llm.metadata import ModelMetadata
 from nemo_safe_synthesizer.preflight.checks._helpers import check_sampled_record_budget
-from nemo_safe_synthesizer.tokenization import NssTokenizer, WorkloadKind, create_runtime_nss_tokenizer
+from nemo_safe_synthesizer.tokenization import NssTokenizer, PromptEncoding, WorkloadKind, create_runtime_nss_tokenizer
 
 
 class _RecordingTokenizer(PreTrainedTokenizerBase):
@@ -67,17 +68,22 @@ class _NssRecordAdapter:
 
 @pytest.mark.unit
 def test_compute_max_new_tokens_subtracts_schema_and_special_tokens():
-    """Budget = context - schema - 2 * NUM_SPECIAL_TOKENS.
+    tokenizer = MagicMock()
+    tokenizer.capacity_for.return_value = SimpleNamespace(record_token_capacity=1944)
+    prompt = PromptEncoding("prompt", tuple(range(102)), (1,) * 102)
 
-    With NUM_SPECIAL_TOKENS=2: 2048 - 100 - 4 = 1944.
-    """
-    assert compute_max_new_tokens(list(range(100)), 2048) == 1944
+    assert compute_max_new_tokens(prompt, 2048, cast(NssTokenizer, tokenizer)) == 1944
+    tokenizer.capacity_for.assert_called_once_with(prompt, context_limit=2048, sequence_count=1)
 
 
 @pytest.mark.unit
 def test_compute_max_new_tokens_negative_when_schema_exceeds_context():
-    """A schema larger than the context window produces a negative budget."""
-    assert compute_max_new_tokens(list(range(2050)), 2048) < 0
+    tokenizer = MagicMock()
+    tokenizer.capacity_for.return_value = SimpleNamespace(record_token_capacity=-4)
+
+    prompt = PromptEncoding("prompt", (), ())
+
+    assert compute_max_new_tokens(prompt, 2048, cast(NssTokenizer, tokenizer)) < 0
 
 
 @pytest.mark.unit
@@ -235,17 +241,71 @@ def test_assembler_budget_and_preflight_share_exact_ordered_record_encoding(
 
 @pytest.mark.unit
 def test_compute_schema_prompt_ids_excludes_columns():
-    tokenizer = _RecordingTokenizer()
+    tokenizer = MagicMock()
+    tokenizer.render_training_prompt.return_value = SimpleNamespace(text='Generate: "value":<unk>')
+    tokenizer.encode_no_special.return_value = (1, 2, 3)
     metadata = cast(
         ModelMetadata,
         SimpleNamespace(
-            tokenizer=tokenizer,
             instruction="Generate: ",
             prompt_config=SimpleNamespace(template="{instruction}{schema}{prefill}"),
         ),
     )
 
-    compute_schema_prompt_ids(["value", PSEUDO_GROUP_COLUMN], metadata, exclude_columns=(PSEUDO_GROUP_COLUMN,))
+    result = compute_schema_prompt_ids(
+        ["value", PSEUDO_GROUP_COLUMN],
+        metadata,
+        tokenizer,
+        exclude_columns=(PSEUDO_GROUP_COLUMN,),
+    )
 
-    assert '"value":<unk>' in tokenizer.encoded_text
-    assert PSEUDO_GROUP_COLUMN not in tokenizer.encoded_text
+    assert result == [1, 2, 3]
+    tokenizer.render_training_prompt.assert_called_once_with(("value",), "Generate: ")
+    tokenizer.encode_no_special.assert_called_once_with('Generate: "value":<unk>')
+
+
+def test_prompt_budget_uses_authoritative_nss_prompt(fixture_tokenizer, fixture_smollm3_tokenizer) -> None:
+    metadata = ModelMetadata.from_str_or_path(
+        model_name_or_path=fixture_smollm3_tokenizer,
+        tokenizer=fixture_tokenizer,
+    )
+    nss_tokenizer = create_runtime_nss_tokenizer(
+        fixture_tokenizer,
+        metadata,
+        workload_kind=WorkloadKind.TABULAR,
+    )
+
+    prompt = budget_module.compute_prompt_encoding(
+        ["b", PSEUDO_GROUP_COLUMN, "a"],
+        metadata,
+        nss_tokenizer,
+        exclude_columns=DEFAULT_EXCLUDE_COLUMNS,
+    )
+
+    assert prompt == nss_tokenizer.render_training_prompt(("b", "a"), metadata.instruction)
+
+
+def test_legacy_budget_helpers_delegate_to_nss_capacity(fixture_tokenizer, fixture_smollm3_tokenizer) -> None:
+    metadata = ModelMetadata.from_str_or_path(
+        model_name_or_path=fixture_smollm3_tokenizer,
+        tokenizer=fixture_tokenizer,
+    )
+    nss_tokenizer = create_runtime_nss_tokenizer(
+        fixture_tokenizer,
+        metadata,
+        workload_kind=WorkloadKind.TABULAR,
+    )
+    prompt = nss_tokenizer.render_training_prompt(("value",), metadata.instruction)
+
+    prompt_ids = compute_schema_prompt_ids(["value"], metadata, nss_tokenizer)
+    budget = compute_max_new_tokens(prompt, metadata.max_seq_length, nss_tokenizer)
+
+    assert prompt_ids == list(nss_tokenizer.encode_no_special(prompt.text))
+    assert (
+        budget
+        == nss_tokenizer.capacity_for(
+            prompt,
+            context_limit=metadata.max_seq_length,
+            sequence_count=1,
+        ).record_token_capacity
+    )

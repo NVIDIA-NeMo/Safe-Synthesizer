@@ -12,11 +12,12 @@ from typing import cast
 import pytest
 from transformers import AutoTokenizer, PreTrainedTokenizerBase
 
-from nemo_safe_synthesizer.errors import ParameterError
+from nemo_safe_synthesizer.errors import GenerationError, ParameterError
 from nemo_safe_synthesizer.tokenization import (
     FramingPolicy,
     FrozenJsonObject,
     PaddedTokenBatch,
+    PromptEncoding,
     TabularContext,
     TabularNssTokenizer,
     TimeSeriesContext,
@@ -106,6 +107,7 @@ def test_shared_builtins_contract_on_three_checked_fixtures(checked_native, impl
     assert tokenizer.spec.registry_digest == registry.digest
     assert tokenizer.capabilities.no_special_encoding is True
     assert tokenizer.capabilities.prompt_encoding is True
+    assert tokenizer.capabilities.training_prompt is True
     assert tokenizer.capabilities.record_jsonl is True
     assert tokenizer.capabilities.rolling_prefill is (implementation is TimeSeriesNssTokenizer)
 
@@ -305,6 +307,160 @@ def test_prompt_special_flag_combinations_are_explicit(tokenizers_dir) -> None:
         )
         expected = ([policy.bos_token_id] if add_bos else []) + bare + ([policy.eos_token_id] if add_eos else [])
         assert tokenizer.render_prompt(TabularContext(("a",), "generate")).input_ids == tuple(expected)
+
+
+def test_training_prompt_and_capacity_are_base_owned(tokenizers_dir) -> None:
+    native, policy = _native_and_policy(tokenizers_dir, "tinyllama")
+    tokenizer = builtin_registry().create(
+        (1, TabularNssTokenizer.IMPLEMENTATION_ID, "1"),
+        native,
+        framing=policy,
+        native_source=str(tokenizers_dir / "tinyllama"),
+        native_revision="fixture-v1",
+    )
+
+    prompt = tokenizer.render_training_prompt(("a",), "generate")
+    expected = tokenizer.render_prompt(TabularContext(("a",), "generate"))
+    capacity = tokenizer.capacity_for(
+        prompt,
+        context_limit=len(prompt.input_ids) + 10,
+        sequence_count=2,
+        maximum_sequence_count=2,
+    )
+
+    assert prompt == expected
+    assert type(capacity).__name__ == "TrainingCapacity"
+    assert capacity.context_limit == len(prompt.input_ids) + 10
+    assert capacity.prompt_tokens == len(prompt.input_ids)
+    assert capacity.sequence_count == 2
+    assert capacity.delimiter_tokens_per_sequence == 2
+    assert capacity.record_token_capacity == 6
+    assert (
+        tokenizer.capacity_for(prompt, context_limit=len(prompt.input_ids), sequence_count=0).record_token_capacity == 0
+    )
+
+
+def test_training_prompt_preserves_literal_unusual_column_bytes(tokenizers_dir) -> None:
+    native, policy = _native_and_policy(tokenizers_dir, "tinyllama")
+    tokenizer = builtin_registry().create(
+        (1, TabularNssTokenizer.IMPLEMENTATION_ID, "1"),
+        native,
+        framing=policy,
+        native_source=str(tokenizers_dir / "tinyllama"),
+        native_revision="fixture-v1",
+    )
+    columns = ('quote"column', "back\\slash", "line\nbreak")
+    schema = ",".join(f'"{column}":<unk>' for column in columns)
+    expected_text = policy.prompt_template.format(instruction="generate", schema=schema, prefill="")
+
+    prompt = tokenizer.render_training_prompt(columns, "generate")
+
+    assert prompt.text == expected_text
+    assert prompt.input_ids == (
+        policy.bos_token_id,
+        *native.encode(expected_text, add_special_tokens=False),
+        policy.eos_token_id,
+    )
+
+
+def test_capacity_and_append_use_exact_future_delimiter_policy(tokenizers_dir) -> None:
+    native, policy = _native_and_policy(tokenizers_dir, "tinyllama")
+    tokenizer = builtin_registry().create(
+        (1, TabularNssTokenizer.IMPLEMENTATION_ID, "1"),
+        native,
+        framing=policy,
+        native_source=str(tokenizers_dir / "tinyllama"),
+        native_revision="fixture-v1",
+    )
+    prompt = tokenizer.render_training_prompt(("a",), "generate")
+    exact_limit = len(prompt.input_ids) + 7
+
+    capacity = tokenizer.capacity_for(
+        prompt,
+        context_limit=len(prompt.input_ids) + 10,
+        sequence_count=2,
+        add_sequence_delimiters=(True, False),
+    )
+
+    assert capacity.record_token_capacity == 8
+    assert tokenizer.can_append_sequence(prompt, ((1,),), (2, 3), context_limit=exact_limit)
+    assert not tokenizer.can_append_sequence(prompt, ((1,),), (2, 3), context_limit=exact_limit - 1)
+
+
+def test_training_framing_preserves_sequence_attention_masks(tokenizers_dir) -> None:
+    native, policy = _native_and_policy(tokenizers_dir, "tinyllama")
+    tokenizer = builtin_registry().create(
+        (1, TabularNssTokenizer.IMPLEMENTATION_ID, "1"),
+        native,
+        framing=policy,
+        native_source=str(tokenizers_dir / "tinyllama"),
+        native_revision="fixture-v1",
+    )
+    prompt = tokenizer.render_training_prompt(("a",), "generate")
+
+    framed = tokenizer.frame_training(
+        prompt,
+        ((10, 11),),
+        sequence_attention_masks=((0, 1),),
+    )
+
+    assert framed.attention_mask == (*prompt.attention_mask, 1, 0, 1, 1)
+    with pytest.raises(ParameterError, match="attention mask"):
+        tokenizer.frame_training(prompt, ((10, 11),), sequence_attention_masks=((1,),))
+
+
+def test_capacity_rejects_inconsistent_or_overflowing_prompt(tokenizers_dir) -> None:
+    native, policy = _native_and_policy(tokenizers_dir, "tinyllama")
+    tokenizer = builtin_registry().create(
+        (1, TabularNssTokenizer.IMPLEMENTATION_ID, "1"),
+        native,
+        framing=policy,
+        native_source=str(tokenizers_dir / "tinyllama"),
+        native_revision="fixture-v1",
+    )
+    prompt = tokenizer.render_training_prompt(("a",), "generate")
+    inconsistent = PromptEncoding(prompt.text, (999,), (0,))
+
+    with pytest.raises(ParameterError, match="PromptEncoding"):
+        tokenizer.capacity_for(inconsistent, context_limit=10, sequence_count=0)
+    with pytest.raises(GenerationError, match="dataset schema requires more tokens"):
+        tokenizer.capacity_for(prompt, context_limit=len(prompt.input_ids) - 1, sequence_count=0)
+
+
+def test_capacity_and_framing_fail_closed_on_invalid_or_overflowing_inputs(tokenizers_dir) -> None:
+    native, policy = _native_and_policy(tokenizers_dir, "tinyllama")
+    tokenizer = builtin_registry().create(
+        (1, TabularNssTokenizer.IMPLEMENTATION_ID, "1"),
+        native,
+        framing=policy,
+        native_source=str(tokenizers_dir / "tinyllama"),
+        native_revision="fixture-v1",
+    )
+    prompt = tokenizer.render_training_prompt(("a",), "generate")
+
+    with pytest.raises(ParameterError, match="maximum sequence count"):
+        tokenizer.capacity_for(
+            prompt,
+            context_limit=100,
+            sequence_count=2,
+            maximum_sequence_count=1,
+        )
+    with pytest.raises(GenerationError, match="dataset schema requires more tokens"):
+        tokenizer.validate_prompt_capacity(prompt, context_limit=len(prompt.input_ids) - 1, rope_scaling_factor=1)
+    with pytest.raises(GenerationError, match="At least one record requires more tokens"):
+        tokenizer.validate_record_capacity(
+            prompt,
+            record_token_count=3,
+            context_limit=len(prompt.input_ids) + 4,
+            rope_scaling_factor=1,
+        )
+    with pytest.raises(GenerationError, match="number of tokens in an example exceeds"):
+        tokenizer.frame_training(
+            prompt,
+            ((1, 2, 3),),
+            context_limit=len(prompt.input_ids) + 4,
+            rope_scaling_factor=1,
+        )
 
 
 def test_wrong_context_fails_without_subclass_leakage(checked_native, implementation, tokenizers_dir) -> None:

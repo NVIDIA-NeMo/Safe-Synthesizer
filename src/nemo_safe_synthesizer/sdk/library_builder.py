@@ -273,7 +273,12 @@ class SafeSynthesizer(ConfigBuilder):
         initialize_observability()
 
     @traced("SafeSynthesizer.load_from_save_path", category=LogCategory.RUNTIME)
-    def load_from_save_path(self, runtime_config: SafeSynthesizerParameters | None = None) -> SafeSynthesizer:
+    def load_from_save_path(
+        self,
+        runtime_config: SafeSynthesizerParameters | None = None,
+        *,
+        admit_remote_code: bool = False,
+    ) -> SafeSynthesizer:
         """Load the Safe Synthesizer configuration from the save path.
 
         Loads the configuration from the source run directory's config file.
@@ -288,6 +293,11 @@ class SafeSynthesizer(ConfigBuilder):
         Always prefers cached train/test splits from the training run to ensure
         evaluation metrics are consistent and privacy guarantees are maintained.
         Falls back to with_data_source() data only if cached files are missing.
+
+        Args:
+            runtime_config: Resume-time generation and evaluation overrides.
+            admit_remote_code: Explicitly admit a persisted tokenizer whose
+                immutable provenance requires remote code.
 
         Returns:
             Self for method chaining.
@@ -331,7 +341,12 @@ class SafeSynthesizer(ConfigBuilder):
         if not metadata_file.exists():
             raise FileNotFoundError(f"Metadata file not found: {metadata_file}")
         logger.info(f"Loading model metadata from: {metadata_file}")
-        self._llm_metadata = ModelMetadata.from_metadata_json(metadata_file, workdir=self._workdir)
+        metadata_kwargs = {"admit_remote_code": True} if admit_remote_code else {}
+        self._llm_metadata = ModelMetadata.from_metadata_json(
+            metadata_file,
+            workdir=self._workdir,
+            **metadata_kwargs,
+        )
 
         # Always prefer cached train/test splits to preserve the exact split from training.
         # This ensures evaluation metrics are consistent and privacy guarantees are maintained.

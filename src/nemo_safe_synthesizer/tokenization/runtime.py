@@ -184,6 +184,7 @@ def create_runtime_nss_tokenizer(
         native_source=source,
         native_revision=revision,
         native_trust_remote_code=trust_remote_code,
+        policy_epochs=None,
     )
     if not tokenizer.capabilities.record_jsonl:
         raise ParameterError("Selected NSS tokenizer does not declare ordered record JSONL capability.")

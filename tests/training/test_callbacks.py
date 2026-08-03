@@ -50,7 +50,7 @@ def _build_tokenizer(model_max_length: int, prompt_token_ids: list[int]) -> Magi
     """Build a tokenizer stub that returns ``prompt_token_ids`` for any prompt."""
     tokenizer = MagicMock()
     tokenizer.model_max_length = model_max_length
-    tokenizer.return_value = {
+    tokenizer.pad.return_value = {
         "input_ids": torch.tensor([prompt_token_ids]),
         "attention_mask": torch.ones((1, len(prompt_token_ids)), dtype=torch.long),
     }
@@ -58,6 +58,18 @@ def _build_tokenizer(model_max_length: int, prompt_token_ids: list[int]) -> Magi
     # ``None`` routes the post-generate completion-token counter through the
     # shape-based fallback, which works with the integer-tensor stub above.
     tokenizer.pad_token_id = None
+    return tokenizer
+
+
+def _build_nss_tokenizer(prompt_token_ids: list[int], capacity: int = 10_000) -> MagicMock:
+    """Build an NSS tokenizer stub with exact prompt and capacity outputs."""
+    tokenizer = MagicMock()
+    tokenizer.render_training_prompt.return_value = MagicMock(
+        text="nss prompt",
+        input_ids=tuple(prompt_token_ids),
+        attention_mask=(1,) * len(prompt_token_ids),
+    )
+    tokenizer.capacity_for.return_value = MagicMock(record_token_capacity=capacity)
     return tokenizer
 
 
@@ -76,7 +88,7 @@ def _invoke_on_evaluate(
         state=state,
         control=control,
         model=model,
-        tokenizer=tokenizer,
+        processing_class=tokenizer,
     )
     return state, control
 
@@ -105,8 +117,61 @@ def test_worker_callback_logs_compact_structured_progress(monkeypatch):
     )
 
 
+def test_inference_callback_requires_nss_prompt_authority(fixture_mock_metadata, fixture_mock_processor) -> None:
+    nss_tokenizer = MagicMock()
+    nss_tokenizer.render_training_prompt.return_value = MagicMock(
+        text="nss prompt",
+        input_ids=(1, 2, 3),
+        attention_mask=(1, 1, 1),
+    )
+
+    callback = InferenceEvalCallback(
+        schema={"properties": {"col_a": {"type": "string"}}},
+        metadata=fixture_mock_metadata,
+        processor=fixture_mock_processor,
+        nss_tokenizer=nss_tokenizer,
+        prompt_encoding=nss_tokenizer.render_training_prompt.return_value,
+        num_prompts_per_batch=1,
+        num_batches=1,
+    )
+
+    assert callback.prompt_encoding.input_ids == (1, 2, 3)
+    nss_tokenizer.render_training_prompt.assert_not_called()
+
+
 class TestInferenceEvalCallbackMaxNewTokens:
     """Ensure ``max_new_tokens`` is derived from ``metadata.generation_max_tokens_for``."""
+
+    def test_callback_clamps_generation_to_nss_capacity(
+        self,
+        fixture_mock_metadata,
+        fixture_mock_processor,
+        fixture_mock_model,
+    ):
+        """The authoritative NSS context contract can tighten metadata's legacy ceiling."""
+        fixture_mock_metadata.max_seq_length = 512
+        fixture_mock_metadata.generation_max_tokens_for.return_value = 500
+        prompt_token_ids = list(range(10))
+        tokenizer = _build_tokenizer(model_max_length=512, prompt_token_ids=prompt_token_ids)
+        nss_tokenizer = _build_nss_tokenizer(prompt_token_ids, capacity=37)
+        callback = InferenceEvalCallback(
+            schema={"properties": {"col_a": {"type": "string"}}},
+            metadata=fixture_mock_metadata,
+            processor=fixture_mock_processor,
+            nss_tokenizer=nss_tokenizer,
+            prompt_encoding=nss_tokenizer.render_training_prompt.return_value,
+            num_prompts_per_batch=1,
+            num_batches=1,
+        )
+
+        _invoke_on_evaluate(callback, fixture_mock_model, tokenizer)
+
+        assert fixture_mock_model.generate.call_args.kwargs["max_new_tokens"] == 37
+        nss_tokenizer.capacity_for.assert_called_once_with(
+            callback.prompt_encoding,
+            context_limit=512,
+            sequence_count=0,
+        )
 
     def test_callback_uses_generation_max_tokens_for_when_helper_is_tighter(
         self,
@@ -118,11 +183,14 @@ class TestInferenceEvalCallbackMaxNewTokens:
         fixture_mock_metadata.generation_max_tokens_for.return_value = 500
         prompt_token_ids = list(range(10))
         tokenizer = _build_tokenizer(model_max_length=5000, prompt_token_ids=prompt_token_ids)
+        nss_tokenizer = _build_nss_tokenizer(prompt_token_ids)
 
         callback = InferenceEvalCallback(
             schema={"properties": {"col_a": {"type": "string"}}},
             metadata=fixture_mock_metadata,
             processor=fixture_mock_processor,
+            nss_tokenizer=nss_tokenizer,
+            prompt_encoding=nss_tokenizer.render_training_prompt.return_value,
             num_prompts_per_batch=1,
             num_batches=1,
         )
@@ -144,11 +212,14 @@ class TestInferenceEvalCallbackMaxNewTokens:
         remaining = 500 - len(prompt_token_ids)
         fixture_mock_metadata.generation_max_tokens_for.return_value = remaining
         tokenizer = _build_tokenizer(model_max_length=500, prompt_token_ids=prompt_token_ids)
+        nss_tokenizer = _build_nss_tokenizer(prompt_token_ids)
 
         callback = InferenceEvalCallback(
             schema={"properties": {"col_a": {"type": "string"}}},
             metadata=fixture_mock_metadata,
             processor=fixture_mock_processor,
+            nss_tokenizer=nss_tokenizer,
+            prompt_encoding=nss_tokenizer.render_training_prompt.return_value,
             num_prompts_per_batch=1,
             num_batches=1,
         )
@@ -173,11 +244,14 @@ class TestInferenceEvalCallbackMaxNewTokens:
             model_max_length=model_max_length,
             prompt_token_ids=list(range(prompt_length)),
         )
+        nss_tokenizer = _build_nss_tokenizer(list(range(prompt_length)))
 
         callback = InferenceEvalCallback(
             schema={"properties": {"col_a": {"type": "string"}}},
             metadata=fixture_mock_metadata,
             processor=fixture_mock_processor,
+            nss_tokenizer=nss_tokenizer,
+            prompt_encoding=nss_tokenizer.render_training_prompt.return_value,
             num_prompts_per_batch=1,
             num_batches=1,
         )
@@ -201,11 +275,14 @@ class TestInferenceEvalCallbackTerminalStatus:
         fixture_mock_processor.return_value = ParsedResponse(records=[], prompt_number=0)
         fixture_mock_metadata.generation_max_tokens_for.return_value = 500
         tokenizer = _build_tokenizer(model_max_length=5000, prompt_token_ids=list(range(10)))
+        nss_tokenizer = _build_nss_tokenizer(list(range(10)))
 
         callback = InferenceEvalCallback(
             schema={"properties": {"col_a": {"type": "string"}}},
             metadata=fixture_mock_metadata,
             processor=fixture_mock_processor,
+            nss_tokenizer=nss_tokenizer,
+            prompt_encoding=nss_tokenizer.render_training_prompt.return_value,
             num_prompts_per_batch=1,
             num_batches=3,
         )

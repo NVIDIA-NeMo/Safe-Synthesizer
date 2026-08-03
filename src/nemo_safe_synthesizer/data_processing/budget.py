@@ -11,19 +11,31 @@ from typing import TYPE_CHECKING, cast
 import pandas as pd
 
 from ..errors import ParameterError
-from ..tokenization import NssTokenizer
+from ..tokenization import NssTokenizer, PromptEncoding
 from ..tokenization.records import columnar_batch_to_records
 from ..tokenization.types import JsonValue
 
 if TYPE_CHECKING:
     from ..llm.metadata import ModelMetadata
 
-NUM_SPECIAL_TOKENS = 2
+
+def compute_prompt_encoding(
+    columns: Sequence[str],
+    metadata: ModelMetadata,
+    tokenizer: NssTokenizer,
+    *,
+    exclude_columns: Sequence[str] = (),
+) -> PromptEncoding:
+    """Render the exact NSS training prompt for budget and preflight use."""
+    excluded = frozenset(exclude_columns)
+    ordered_columns = tuple(column for column in columns if column not in excluded)
+    return tokenizer.render_training_prompt(ordered_columns, metadata.instruction)
 
 
 def compute_schema_prompt_ids(
     columns: list[str],
     metadata: ModelMetadata,
+    tokenizer: NssTokenizer,
     *,
     exclude_columns: Sequence[str] = (),
 ) -> list[int]:
@@ -37,29 +49,26 @@ def compute_schema_prompt_ids(
     Returns:
         Token IDs for the schema prompt (no special tokens).
     """
-    from ..utils import create_schema_prompt
-
-    if metadata.tokenizer is None:
-        raise RuntimeError("compute_schema_prompt_ids requires a loaded tokenizer on ModelMetadata")
-    schema_prompt = create_schema_prompt(
+    prompt = compute_prompt_encoding(
         columns,
-        instruction=metadata.instruction,
-        prompt_template=metadata.prompt_config.template,
-        exclude_columns=list(exclude_columns),
+        metadata,
+        tokenizer,
+        exclude_columns=exclude_columns,
     )
-    return metadata.tokenizer.encode(schema_prompt, add_special_tokens=False)
+    return list(tokenizer.encode_no_special(prompt.text))
 
 
 def compute_max_new_tokens(
-    schema_prompt_ids: list[int],
+    prompt: PromptEncoding,
     max_seq_length: int,
+    tokenizer: NssTokenizer,
 ) -> int:
-    """Max tokens available for record content after schema and special tokens.
-
-    Uses the same formula as assembler._tokenize_records:
-    ``max_seq_length - len(schema_prompt_ids) - 2 * NUM_SPECIAL_TOKENS``.
-    """
-    return max_seq_length - len(schema_prompt_ids) - 2 * NUM_SPECIAL_TOKENS
+    """Return exact one-sequence record capacity from the NSS contract."""
+    return tokenizer.capacity_for(
+        prompt,
+        context_limit=max_seq_length,
+        sequence_count=1,
+    ).record_token_capacity
 
 
 def tokenize_record(row: pd.Series, tokenizer: NssTokenizer) -> list[int]:

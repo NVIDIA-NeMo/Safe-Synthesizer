@@ -10,8 +10,9 @@ from typing import TYPE_CHECKING, Protocol
 import numpy as np
 import pandas as pd
 
-from ...data_processing.budget import compute_max_new_tokens, compute_schema_prompt_ids, tokenize_records
+from ...data_processing.budget import compute_prompt_encoding, tokenize_records
 from ...defaults import DEFAULT_EXCLUDE_COLUMNS
+from ...errors import GenerationError
 from ...tokenization import NssTokenizer
 from ..base import IssueCollector
 
@@ -41,23 +42,34 @@ def check_schema_prompt_budget(
     collector: IssueCollector,
     columns: list[str],
     metadata: ModelMetadata,
+    record_tokenizer: NssTokenizer,
 ) -> int | None:
     """Validate schema prompt against context length; return token budget.
 
     Delegates to ``data_processing.budget`` for parity with the assembler.
     """
-    schema_prompt_ids = compute_schema_prompt_ids(columns, metadata, exclude_columns=DEFAULT_EXCLUDE_COLUMNS)
-    max_new_tokens = compute_max_new_tokens(schema_prompt_ids, metadata.max_seq_length)
-    if max_new_tokens <= 0:
+    prompt = compute_prompt_encoding(
+        columns,
+        metadata,
+        record_tokenizer,
+        exclude_columns=DEFAULT_EXCLUDE_COLUMNS,
+    )
+    try:
+        capacity = record_tokenizer.capacity_for(
+            prompt,
+            context_limit=metadata.max_seq_length,
+            sequence_count=1,
+        )
+    except GenerationError:
         collector.error(
             "schema_exceeds_context",
             (
-                f"Schema prompt ({len(schema_prompt_ids)} tokens) "
+                f"Schema prompt ({len(prompt.input_ids)} tokens) "
                 f"exceeds model context window ({metadata.max_seq_length})."
             ),
         )
         return None
-    return max_new_tokens
+    return capacity.record_token_capacity
 
 
 def check_sampled_record_budget(

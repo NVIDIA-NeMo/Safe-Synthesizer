@@ -15,7 +15,7 @@ from transformers import AutoTokenizer, PreTrainedTokenizerBase
 from ..errors import ParameterError
 from ..package_info import __version__
 from .base import NssTokenizer
-from .spec import NssTokenizerSpec, validate_native_revision
+from .spec import NssTokenizerSpec, PolicyEpochs, validate_native_revision
 from .tabular import TabularNssTokenizer
 from .timeseries import TimeSeriesNssTokenizer
 from .types import FramingPolicy, JsonValue, canonical_json_bytes
@@ -135,6 +135,7 @@ class NssTokenizerRegistry:
         native_source: str,
         native_revision: str,
         native_trust_remote_code: bool = False,
+        policy_epochs: PolicyEpochs | None = None,
         workload_payload: object | None = None,
     ) -> NssTokenizer:
         """Construct a registered tokenizer with this immutable snapshot."""
@@ -146,6 +147,7 @@ class NssTokenizerRegistry:
             native_revision=native_revision,
             native_trust_remote_code=native_trust_remote_code,
             registry_digest=self.digest,
+            policy_epochs=policy_epochs,
             workload_payload=workload_payload,
         )
 
@@ -163,6 +165,8 @@ class NssTokenizerRegistry:
         if spec.native_trust_remote_code and not admit_remote_code:
             raise ParameterError("Remote tokenizer code requires explicit reconstruction-time admission.")
         entry = self.resolve(spec.key)
+        if spec.policy_epochs != entry.factory.POLICY_EPOCHS:
+            raise ParameterError("Unsupported tokenizer policy epoch for the installed implementation.")
         if spec.workload_kind != entry.factory.WORKLOAD_KIND:
             raise ParameterError("Persisted workload kind does not match the tokenizer implementation.")
         framing, workload_payload = entry.factory.policies_from_spec(spec)

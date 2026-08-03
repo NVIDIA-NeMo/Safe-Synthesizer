@@ -18,7 +18,7 @@ import pandas as pd
 from datasets import Dataset, concatenate_datasets
 from datasets.exceptions import DatasetGenerationError
 from tqdm.auto import tqdm
-from transformers import PreTrainedTokenizer
+from transformers import PreTrainedTokenizerBase
 
 from .. import utils
 from ..config.parameters import SafeSynthesizerParameters
@@ -42,7 +42,7 @@ from ..errors import (
 from ..holdout.holdout import grouped_train_test_split, naive_train_test_split
 from ..llm.metadata import ModelMetadata
 from ..observability import get_logger
-from ..tokenization import NssTokenizer, WorkloadKind, create_runtime_nss_tokenizer
+from ..tokenization import NssTokenizer, PromptEncoding, WorkloadKind, create_runtime_nss_tokenizer
 from ..tokenization.cache import (
     TokenCacheKey,
     TokenCacheLock,
@@ -55,52 +55,11 @@ from ..tokenization.cache import (
     token_cache_paths,
 )
 from ..tokenization.records import columnar_batch_to_records
-from .budget import NUM_SPECIAL_TOKENS, compute_max_new_tokens
 
 logger = get_logger(__name__)
 
 
 GeneratorType = Generator[dict[str, list], None, None]
-
-
-def _get_max_tokens_action(rope_scaling_factor: float | None) -> str:
-    """Build a user-facing suggestion message for resolving token-budget overflows.
-
-    Returns different advice depending on whether the RoPE scaling factor
-    can still be increased (<=5) or is already at maximum (6).
-
-    Args:
-        rope_scaling_factor: Current RoPE scaling factor, or None (treated as 1).
-
-    Returns:
-        Human-readable remediation string describing available options.
-    """
-    rsf = rope_scaling_factor if rope_scaling_factor is not None else 1
-    if rsf <= 5:
-        max_tokens_action = (
-            "Training this model will require modifying your dataset and/or the model "
-            "configuration. Consider increasing the rope_scaling_factor parameter "
-            "(currently set to {rsf}, you could start by increasing "
-            "to {rsf_plus_1} (must be an integer value between 1 and 6)), "
-            "reducing the number of columns in your dataset, shortening the "
-            "column names, filtering out rows with long text values, and/or "
-            "reducing the number of rows per sequence if you are using the "
-            "group_training_examples_by parameter."
-        )
-        return max_tokens_action.format(
-            rsf=rsf,
-            rsf_plus_1=rsf + 1,
-        )
-    else:
-        max_tokens_action = (
-            "Training this model will require modifying your dataset. "
-            "The rope_scaling_factor is currently set to 6, which cannot be increased further. "
-            "Consider reducing the number of columns in your dataset, shortening the "
-            "column names, filtering out rows with long text values, and/or "
-            "reducing the number of rows per sequence if you are using the "
-            "group_training_examples_by parameter."
-        )
-        return max_tokens_action
 
 
 def _maybe_add_row_indices(dataset: Dataset | None, column: str) -> Dataset | None:
@@ -167,33 +126,41 @@ class Example:
     with label ``-100`` so they are ignored during loss computation.
 
     Args:
-        prompt: Schema prompt text prepended to every example.
-        tokenizer: Tokenizer used to encode the prompt.
+        prompt: Authoritative encoded schema prompt prepended to every example.
+        tokenizer: NSS tokenizer owning framing, labels, masks, and capacity.
         metadata: Model metadata controlling special-token placement.
     """
 
     def __init__(
         self,
-        prompt: str,
-        tokenizer: PreTrainedTokenizer,
+        prompt: PromptEncoding,
+        tokenizer: NssTokenizer,
         metadata: ModelMetadata,
     ):
+        if not isinstance(prompt, PromptEncoding) or not isinstance(tokenizer, NssTokenizer):
+            raise ParameterError("Example requires an NSS tokenizer and its PromptEncoding.")
         self.prompt = prompt
-        self.tokenizer = tokenizer
+        self.nss_tokenizer = tokenizer
         self.metadata = metadata
-
-        self.input_ids = self.tokenizer.encode(prompt, add_special_tokens=False)
-
-        if self.metadata.prompt_config.add_bos_token_to_prompt:
-            self.input_ids = [self.metadata.prompt_config.bos_token_id] + self.input_ids
-        if self.metadata.prompt_config.add_eos_token_to_prompt:
-            self.input_ids = self.input_ids + [self.metadata.prompt_config.eos_token_id]
-
-        # We use -100 to ignore the prompt tokens when calculating the loss.
-        self.labels = [-100] * len(self.input_ids)
-        self.attention_mask = [1] * len(self.input_ids)
-
+        self._sequences: list[tuple[int, ...]] = []
+        self._sequence_attention_masks: list[tuple[int, ...]] = []
+        self._sequence_delimiters: list[bool] = []
         self.num_sequences = 0
+        self._refresh()
+
+    def _refresh(self) -> None:
+        framed = self.nss_tokenizer.frame_training(
+            self.prompt,
+            self._sequences,
+            add_sequence_delimiters=self._sequence_delimiters,
+            sequence_attention_masks=self._sequence_attention_masks,
+            context_limit=self.metadata.max_seq_length if self._sequences else None,
+            maximum_sequence_count=getattr(self.metadata, "max_sequences_per_example", None),
+            rope_scaling_factor=self.metadata.rope_scaling_factor,
+        )
+        self.input_ids = list(framed.input_ids)
+        self.attention_mask = list(framed.attention_mask)
+        self.labels = list(framed.labels)
 
     @property
     def num_tokens(self) -> int:
@@ -210,21 +177,11 @@ class Example:
         Raises:
             GenerationError: If the number of tokens in the example exceeds the context length.
         """
-        input_ids = (
-            [self.metadata.prompt_config.bos_token_id] + seq["input_ids"] + [self.metadata.prompt_config.eos_token_id]
-            if add_special_tokens
-            else seq["input_ids"]
-        )
-        attention_mask = [1] + seq["attention_mask"] + [1] if add_special_tokens else seq["attention_mask"]
-        self.input_ids.extend(input_ids)
-        self.attention_mask.extend(attention_mask)
-        self.labels.extend(input_ids)
+        self._sequences.append(tuple(seq["input_ids"]))
+        self._sequence_attention_masks.append(tuple(seq["attention_mask"]))
+        self._sequence_delimiters.append(add_special_tokens)
         self.num_sequences += 1
-
-        if self.num_tokens > self.metadata.max_seq_length:
-            max_tokens_action = _get_max_tokens_action(self.metadata.rope_scaling_factor)
-            msg = f"The number of tokens in an example exceeds the available context length. {max_tokens_action}"
-            raise GenerationError(msg)
+        self._refresh()
 
     def to_dict(self) -> dict[str, list]:
         """Convert the example to a dictionary format suitable for training.
@@ -262,8 +219,8 @@ class TrainingExampleAssembler(ABC):
 
     Args:
         dataset: Dataset to be processed.
-        tokenizer: Native tokenizer retained for T3-owned schema-prompt
-            encoding and T4-owned framework operations.
+        tokenizer: Compatibility construction input. The assembler does not
+            retain or call it after the NSS tokenizer is supplied.
         record_tokenizer: Required NSS tokenizer owning ordered record
             encoding and token-cache identity.
         metadata: Internal training configuration, e.g., prompt template,
@@ -279,7 +236,7 @@ class TrainingExampleAssembler(ABC):
     def __init__(
         self,
         dataset: Dataset,
-        tokenizer: PreTrainedTokenizer,
+        tokenizer: PreTrainedTokenizerBase | None,
         record_tokenizer: NssTokenizer,
         metadata: ModelMetadata,
         keep_columns: list[str] | None = None,
@@ -299,9 +256,12 @@ class TrainingExampleAssembler(ABC):
             raise ParameterError(msg)
 
         self.metadata = metadata
-        self.tokenizer = tokenizer
         if not isinstance(record_tokenizer, NssTokenizer):
             raise ParameterError("TrainingExampleAssembler requires an NSS record tokenizer.")
+        if not record_tokenizer.capabilities.training_prompt:
+            raise ParameterError("TrainingExampleAssembler requires NSS training prompt capability.")
+        del tokenizer
+        self.nss_tokenizer = record_tokenizer
         self.record_tokenizer = record_tokenizer
         self.stats = defaultdict(RunningStatistics)
         self.stats_val = defaultdict(RunningStatistics)
@@ -315,14 +275,14 @@ class TrainingExampleAssembler(ABC):
         self.seed = seed
         self._window_rng = None
 
-        self.schema_prompt = utils.create_schema_prompt(
-            dataset.column_names,
-            instruction=metadata.instruction,
-            prompt_template=metadata.prompt_config.template,
+        prompt_columns = tuple(
+            column for column in dataset.column_names if column not in frozenset(DEFAULT_EXCLUDE_COLUMNS)
         )
-
-        # The prompt IDs attribute does *not* include special tokens.
-        self.schema_prompt_ids: list[int] = tokenizer(self.schema_prompt, add_special_tokens=False)["input_ids"]
+        self.prompt_encoding = self.nss_tokenizer.render_training_prompt(prompt_columns, metadata.instruction)
+        self.schema_prompt = self.prompt_encoding.text
+        # Retained compatibility value: no-special IDs, while framing and
+        # capacity use the authoritative full PromptEncoding.
+        self.schema_prompt_ids = list(self.nss_tokenizer.encode_no_special(self.schema_prompt))
 
         self.tokenized_records = self._tokenize_dataset(dataset, keep_columns)
         processed_dataset = self._preprocess_before_splitting(self.tokenized_records)
@@ -370,13 +330,14 @@ class TrainingExampleAssembler(ABC):
     def from_data(
         cls,
         dataset: Dataset,
-        tokenizer: PreTrainedTokenizer,
+        tokenizer: PreTrainedTokenizerBase | None,
         metadata: ModelMetadata,
         config: SafeSynthesizerParameters,
         test_size: int | None = None,
         seed: int | None = None,
         cache_file_path: str | Path | None = None,
         keep_columns: list[str] | None = None,
+        nss_tokenizer: NssTokenizer | None = None,
         **kwargs,
     ) -> GroupedDataExampleAssembler | TabularDataExampleAssembler | SequentialExampleAssembler:
         """Select and construct the appropriate assembler subclass from config.
@@ -388,19 +349,32 @@ class TrainingExampleAssembler(ABC):
         Args:
             dataset: A HuggingFace ``datasets.Dataset`` of tabular records to
                 assemble training examples from.
-            tokenizer: Native tokenizer retained for schema-prompt encoding
-                and deferred framework compatibility.
+            tokenizer: Compatibility construction input used only to create the
+                authoritative NSS tokenizer.
             metadata: Model metadata (prompt config, sequence lengths, etc.).
             config: Full pipeline configuration used to determine the assembler type.
             test_size: Fraction of the dataset to reserve for validation (0 <= test_size < 1).
             seed: Random seed for reproducibility.
             cache_file_path: Path for caching intermediate datasets.
             keep_columns: Columns to preserve through tokenization.
+            nss_tokenizer: Authoritative tokenizer supplied by the training
+                backend. Legacy callers may omit it and construct from the
+                compatibility native input.
             **kwargs: Forwarded to the chosen assembler constructor.
 
         Returns:
             An assembler instance appropriate for the data type described by ``config``.
         """
+        workload_kind = WorkloadKind.TIME_SERIES if config.time_series.is_timeseries else WorkloadKind.TABULAR
+        if nss_tokenizer is not None and nss_tokenizer.spec.workload_kind != workload_kind:
+            raise ParameterError("Supplied NSS tokenizer workload does not match the assembler workload.")
+        if nss_tokenizer is None:
+            if tokenizer is None:
+                raise ParameterError("Assembler construction requires an NSS tokenizer or compatibility native input.")
+            record_tokenizer = create_runtime_nss_tokenizer(tokenizer, metadata, workload_kind=workload_kind)
+        else:
+            record_tokenizer = nss_tokenizer
+
         if config.time_series.is_timeseries:
             # group_by and order_by should be set by timeseries preprocessing
             # (adds pseudo-group if needed, sets order_by to timestamp column)
@@ -409,11 +383,6 @@ class TrainingExampleAssembler(ABC):
             if group_by is None or order_by is None:  # for type checking
                 raise RuntimeError("Internal error: group_by and order_by should be set by timeseries preprocessing")
 
-            record_tokenizer = create_runtime_nss_tokenizer(
-                tokenizer,
-                metadata,
-                workload_kind=WorkloadKind.TIME_SERIES,
-            )
             return SequentialExampleAssembler(
                 group_training_examples_by=group_by,
                 order_training_examples_by=order_by,
@@ -429,11 +398,6 @@ class TrainingExampleAssembler(ABC):
                 **kwargs,
             )
 
-        record_tokenizer = create_runtime_nss_tokenizer(
-            tokenizer,
-            metadata,
-            workload_kind=WorkloadKind.TABULAR,
-        )
         if config.data.group_training_examples_by is not None:
             return GroupedDataExampleAssembler(
                 group_training_examples_by=config.data.group_training_examples_by,
@@ -520,26 +484,20 @@ class TrainingExampleAssembler(ABC):
         }
 
     def _validate_schema_capacity(self) -> None:
-        if len(self.schema_prompt_ids) <= self.metadata.max_seq_length:
-            return
-        max_tokens_action = _get_max_tokens_action(self.metadata.rope_scaling_factor)
-        msg = (
-            "The dataset schema requires more tokens than the max length of the model. "
-            "This likely means that the table is too wide to be used with this model. "
-            f"{max_tokens_action}"
+        self.nss_tokenizer.validate_prompt_capacity(
+            self.prompt_encoding,
+            context_limit=self.metadata.max_seq_length,
+            rope_scaling_factor=self.metadata.rope_scaling_factor,
         )
-        raise GenerationError(msg)
 
     def _validate_record_capacity(self, input_ids: Sequence[Sequence[int]]) -> None:
-        max_new_tokens = compute_max_new_tokens(self.schema_prompt_ids, self.metadata.max_seq_length)
         for ids in input_ids:
-            if len(ids) > max_new_tokens:
-                max_tokens_action = _get_max_tokens_action(self.metadata.rope_scaling_factor)
-                msg = (
-                    "At least one record requires more tokens than fit in the "
-                    f"available context length. {max_tokens_action}"
-                )
-                raise GenerationError(msg)
+            self.nss_tokenizer.validate_record_capacity(
+                self.prompt_encoding,
+                record_token_count=len(ids),
+                context_limit=self.metadata.max_seq_length,
+                rope_scaling_factor=self.metadata.rope_scaling_factor,
+            )
             self.stats["tokens_per_record"].update(len(ids))
 
     def _token_cache_key(
@@ -560,7 +518,7 @@ class TrainingExampleAssembler(ABC):
             effective_exclusions=effective_exclusions,
             serialized_columns=tuple(column for column in input_columns if column not in exclusions),
             retained_columns=retained,
-            schema_prompt_ids_digest=schema_prompt_ids_digest(self.schema_prompt_ids),
+            schema_prompt_ids_digest=schema_prompt_ids_digest(list(self.prompt_encoding.input_ids)),
             max_seq_length=self.metadata.max_seq_length,
             partition=partition,
         )
@@ -681,10 +639,11 @@ class TabularDataExampleAssembler(TrainingExampleAssembler):
             for one training example.
         """
         num_rows = len(dataset)
-        max_new_tokens = self.metadata.max_seq_length - len(self.schema_prompt_ids)
-        # Both the prompt and the records are enclosed by special tokens.
-        # TODO: 2 * num_special_tokens may not be a valid assumption
-        max_new_tokens -= 2 * NUM_SPECIAL_TOKENS
+        max_new_tokens = self.nss_tokenizer.capacity_for(
+            self.prompt_encoding,
+            context_limit=self.metadata.max_seq_length,
+            sequence_count=1,
+        ).record_token_capacity
         num_sequences = 0
 
         i = 0
@@ -708,8 +667,8 @@ class TabularDataExampleAssembler(TrainingExampleAssembler):
             ):
                 # Each example will fill the entire available context window.
                 example = Example(
-                    prompt=self.schema_prompt,
-                    tokenizer=self.tokenizer,
+                    prompt=self.prompt_encoding,
+                    tokenizer=self.nss_tokenizer,
                     metadata=self.metadata,
                 )
                 input_ids = dataset[i:j]["input_ids"]
@@ -867,8 +826,8 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
         dataset: A HuggingFace ``datasets.Dataset`` of tabular records.
             Must contain the columns specified by ``group_training_examples_by``
             and ``order_training_examples_by``.
-        tokenizer: Native tokenizer retained for prompt and deferred framework
-            operations.
+        tokenizer: Compatibility construction input used only to create the
+            authoritative NSS tokenizer.
         record_tokenizer: Required NSS tokenizer used for record encoding and
             cache identity.
         metadata: Model metadata containing prompt config, sequence lengths, etc.
@@ -919,7 +878,7 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
     def __init__(
         self,
         dataset: Dataset,
-        tokenizer: PreTrainedTokenizer,
+        tokenizer: PreTrainedTokenizerBase | None,
         record_tokenizer: NssTokenizer,
         metadata: ModelMetadata,
         *,
@@ -942,8 +901,6 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
             keep_columns=keep_columns,
             **kwargs,
         )
-
-        self._build_schema_prompt_excluding_pseudo_group(dataset, metadata, tokenizer)
 
     def _reorder_columns(self, dataset: Dataset) -> Dataset:
         """Reorder columns: group_by first, order_by second, then the rest.
@@ -989,26 +946,6 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
         if self.order_by_column not in keep_columns:
             keep_columns.append(self.order_by_column)
         return keep_columns
-
-    def _build_schema_prompt_excluding_pseudo_group(
-        self, dataset: Dataset, metadata: ModelMetadata, tokenizer: PreTrainedTokenizer
-    ) -> None:
-        """Override schema_prompt to exclude PSEUDO_GROUP_COLUMN from the schema.
-
-        Must be called after super().__init__ which sets the initial schema_prompt.
-
-        Args:
-            dataset: The dataset with column names.
-            metadata: Model metadata with instruction and prompt config.
-            tokenizer: Tokenizer for computing prompt IDs.
-        """
-        self.schema_prompt = utils.create_schema_prompt(
-            dataset.column_names,
-            instruction=metadata.instruction,
-            prompt_template=metadata.prompt_config.template,
-            exclude_columns=list(DEFAULT_EXCLUDE_COLUMNS),
-        )
-        self.schema_prompt_ids = tokenizer(self.schema_prompt, add_special_tokens=False)["input_ids"]
 
     def _preprocess_before_splitting(self, tokenized_records: Dataset) -> Dataset:
         """No preprocessing needed - sorting is done after split in _apply_grouped_train_test_split."""
@@ -1232,8 +1169,8 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
         if start == end:
             return None
         example = Example(
-            prompt=self.schema_prompt,
-            tokenizer=self.tokenizer,
+            prompt=self.prompt_encoding,
+            tokenizer=self.nss_tokenizer,
             metadata=self.metadata,
         )
         input_ids = dataset[start:end]["input_ids"]
@@ -1267,7 +1204,11 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
         if len(dataset) == 0:
             return
 
-        max_new_tokens = self.metadata.max_seq_length - len(self.schema_prompt_ids) - 2 * NUM_SPECIAL_TOKENS
+        max_new_tokens = self.nss_tokenizer.capacity_for(
+            self.prompt_encoding,
+            context_limit=self.metadata.max_seq_length,
+            sequence_count=1,
+        ).record_token_capacity
         is_val = "is_val" in dataset.info.description
         stats_target = self.stats_val if is_val else self.stats
         max_sequences = self.metadata.max_sequences_per_example or math.inf
@@ -1360,8 +1301,8 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
         group_training_examples_by: Column to group training examples by.
         order_training_examples_by: Column to order training examples by.
         dataset: Dataset to be processed.
-        tokenizer: Native tokenizer retained for prompt and deferred framework
-            operations.
+        tokenizer: Compatibility construction input used only to create the
+            authoritative NSS tokenizer.
         record_tokenizer: Required NSS tokenizer used for record encoding and
             cache identity.
         metadata: training configuration, e.g., group by, order by, prompt
@@ -1377,7 +1318,7 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
         group_training_examples_by: str,
         order_training_examples_by: str | None,
         dataset: Dataset,
-        tokenizer: PreTrainedTokenizer,
+        tokenizer: PreTrainedTokenizerBase | None,
         record_tokenizer: NssTokenizer,
         metadata: ModelMetadata,
         test_size: int | float | None = None,
@@ -1536,15 +1477,13 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
         num_sequences = 0
 
         num_groups = len(dataset)
-        max_new_tokens = self.metadata.max_seq_length - len(self.schema_prompt_ids)
-        # The prompt is enclosed by special tokens.
-        max_new_tokens -= NUM_SPECIAL_TOKENS
         update_interval = max(min(100, num_groups // 10), 1)
         # Create example for the first group.
         num_records = 0
+        packed_sequences: list[tuple[int, ...]] = []
         example = Example(
-            prompt=self.schema_prompt,
-            tokenizer=self.tokenizer,
+            prompt=self.prompt_encoding,
+            tokenizer=self.nss_tokenizer,
             metadata=self.metadata,
         )
 
@@ -1553,6 +1492,7 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
                 logger.info(f"Assembling examples: {i}/{num_groups} groups")
             num_sequences += 1
             example.add_sequence(dataset[i])
+            packed_sequences.append(tuple(dataset[i]["input_ids"]))
             num_records += dataset[i]["num_records"]
             # If 1) this is the last group or 2) we have already added
             # max_sequences_per_example groups to the example or 3) adding
@@ -1562,8 +1502,13 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
                 i == len(dataset) - 1
                 or num_sequences == self.metadata.max_sequences_per_example
                 or (
-                    # TODO: is this accurate in including special tokens properly?
-                    example.num_tokens + len(dataset[i + 1]["input_ids"]) > max_new_tokens
+                    not self.nss_tokenizer.can_append_sequence(
+                        self.prompt_encoding,
+                        packed_sequences,
+                        dataset[i + 1]["input_ids"],
+                        context_limit=self.metadata.max_seq_length,
+                        maximum_sequence_count=self.metadata.max_sequences_per_example,
+                    )
                 )
             ):
                 yield example.to_dict()
@@ -1582,9 +1527,10 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
 
                 # Create new example for the next group.
                 num_records = 0
+                packed_sequences = []
                 example = Example(
-                    prompt=self.schema_prompt,
-                    tokenizer=self.tokenizer,
+                    prompt=self.prompt_encoding,
+                    tokenizer=self.nss_tokenizer,
                     metadata=self.metadata,
                 )
 

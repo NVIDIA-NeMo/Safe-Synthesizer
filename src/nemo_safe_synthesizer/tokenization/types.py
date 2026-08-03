@@ -131,6 +131,7 @@ class TokenizerCapabilities:
     prompt_encoding: bool
     rolling_prefill: bool
     no_special_encoding: bool = True
+    training_prompt: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -248,6 +249,18 @@ class TrainingEncoding:
     input_ids: tuple[int, ...]
     attention_mask: tuple[int, ...]
     labels: tuple[int, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class TrainingCapacity:
+    """Exact record-token capacity for one immutable training frame."""
+
+    context_limit: int
+    prompt_tokens: int
+    sequence_count: int
+    delimiter_tokens_per_sequence: int
+    delimiter_tokens: int
+    record_token_capacity: int
 
 
 @dataclass(frozen=True, slots=True)

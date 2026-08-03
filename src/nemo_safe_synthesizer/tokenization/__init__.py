@@ -4,6 +4,7 @@
 """Safe Synthesizer tokenizer contracts."""
 
 from .base import EngineParity, NssTokenizer
+from .persistence import NSS_TOKENIZER_MANIFEST, load_nss_tokenizer, save_nss_tokenizer
 from .registry import NssTokenizerRegistry, RegistryEntry, builtin_registry
 from .runtime import create_runtime_nss_tokenizer, resolve_native_provenance
 from .spec import NssTokenizerSpec, PolicyEpochs
@@ -20,6 +21,7 @@ from .types import (
     TimeSeriesContext,
     TokenBatch,
     TokenizerCapabilities,
+    TrainingCapacity,
     TrainingEncoding,
     WorkloadContext,
     WorkloadKind,
@@ -30,6 +32,7 @@ __all__ = [
     "FramingPolicy",
     "FrozenJsonObject",
     "NssTokenizer",
+    "NSS_TOKENIZER_MANIFEST",
     "NssTokenizerRegistry",
     "NssTokenizerSpec",
     "PaddedTokenBatch",
@@ -43,11 +46,14 @@ __all__ = [
     "TimeSeriesContext",
     "TimeSeriesNssTokenizer",
     "TokenizerCapabilities",
+    "TrainingCapacity",
     "TokenBatch",
     "TrainingEncoding",
     "WorkloadContext",
     "WorkloadKind",
     "builtin_registry",
     "create_runtime_nss_tokenizer",
+    "load_nss_tokenizer",
     "resolve_native_provenance",
+    "save_nss_tokenizer",
 ]

@@ -49,6 +49,7 @@ from nemo_safe_synthesizer.preflight import (
     get_registry,
     run_preflight,
 )
+from nemo_safe_synthesizer.preflight.checks._helpers import check_schema_prompt_budget
 from nemo_safe_synthesizer.tokenization import NssTokenizer, WorkloadKind, create_runtime_nss_tokenizer
 from nemo_safe_synthesizer.tooling import PreflightRenderContext, render_preflight_report
 
@@ -91,6 +92,33 @@ class _NssRecordAdapter:
         ]
         result = self.native(texts, add_special_tokens=False)
         return SimpleNamespace(input_ids=tuple(tuple(row) for row in result["input_ids"]))
+
+    def render_training_prompt(self, ordered_columns, instruction):
+        input_ids = tuple(self.native.encode("prompt", add_special_tokens=False))
+        return SimpleNamespace(text="prompt", input_ids=input_ids, attention_mask=(1,) * len(input_ids))
+
+    def capacity_for(self, prompt, *, context_limit, sequence_count):
+        return SimpleNamespace(record_token_capacity=max(0, context_limit - len(prompt.input_ids) - 2 * sequence_count))
+
+
+def test_empty_input_exact_prompt_fit_is_not_a_schema_error() -> None:
+    collector = MagicMock()
+    native = MagicMock()
+    native.encode.return_value = list(range(10))
+    metadata = cast(
+        ModelMetadata,
+        SimpleNamespace(instruction="generate", max_seq_length=10),
+    )
+
+    budget = check_schema_prompt_budget(
+        collector,
+        ["a"],
+        metadata,
+        cast(NssTokenizer, _NssRecordAdapter(native)),
+    )
+
+    assert budget == 0
+    collector.error.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -1162,8 +1190,7 @@ class TestTokenBudgetCheck:
     def test_batch_tokenizer_flags_oversized_record(self, default_config):
         """Batch-tokenizer path is exercised: an oversized record trips record_exceeds_context.
 
-        Budget = max_seq_length - len(schema_prompt) - 2*NUM_SPECIAL_TOKENS
-               = 60 - 20 - 4 = 36 tokens per record.
+        The NSS one-sequence capacity leaves fewer than 100 record tokens.
 
         The batch ``tokenizer(...)`` call returns a single 100-token record, so
         the budget must flag it. If the batch path were skipped, fallback

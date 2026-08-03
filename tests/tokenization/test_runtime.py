@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import shutil
+from dataclasses import replace
 
 import pytest
 from transformers import AutoTokenizer, PreTrainedTokenizerBase
@@ -13,7 +14,12 @@ from transformers import AutoTokenizer, PreTrainedTokenizerBase
 from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.llm.metadata import ModelMetadata
 from nemo_safe_synthesizer.llm.utils import ModelRef
-from nemo_safe_synthesizer.tokenization import WorkloadKind, create_runtime_nss_tokenizer, resolve_native_provenance
+from nemo_safe_synthesizer.tokenization import (
+    PolicyEpochs,
+    WorkloadKind,
+    create_runtime_nss_tokenizer,
+    resolve_native_provenance,
+)
 
 
 def test_local_provenance_is_absolute_and_deterministic(tmp_path) -> None:
@@ -69,6 +75,13 @@ def test_runtime_factory_binds_local_native_to_declared_source(fixture_tokenizer
     )
 
     assert tokenizer.spec.native_source == str(fixture_smollm3_tokenizer)
+    assert tokenizer.spec.policy_epochs.prompt == 1
+    assert tokenizer.spec.policy_epochs.delimiter == 0
+    assert tokenizer.spec.policy_epochs.padding == 0
+    assert tokenizer.spec.policy_epochs.cache == 1
+
+    prior = replace(tokenizer.spec, policy_epochs=PolicyEpochs(prompt=0, cache=0))
+    assert prior.cache_identity_fragment != tokenizer.spec.cache_identity_fragment
 
 
 def test_runtime_factory_rejects_native_and_declared_local_source_mismatch(

@@ -38,6 +38,30 @@ def _load_native(path) -> PreTrainedTokenizerBase:
     return cast(PreTrainedTokenizerBase, AutoTokenizer.from_pretrained(path, local_files_only=True))
 
 
+def _example(native: PreTrainedTokenizerBase, metadata: ModelMetadata, native_path, prompt: str) -> Example:
+    if native.pad_token_id is None:
+        native.pad_token = native.eos_token
+    policy = FramingPolicy(
+        prompt_template="{instruction}{schema}{prefill}",
+        add_bos_token_to_prompt=metadata.prompt_config.add_bos_token_to_prompt,
+        add_eos_token_to_prompt=metadata.prompt_config.add_eos_token_to_prompt,
+        bos_token_id=native.bos_token_id,
+        eos_token_id=native.eos_token_id,
+        pad_token_id=native.pad_token_id,
+        bos_token=cast(str, native.bos_token),
+        eos_token=cast(str, native.eos_token),
+        pad_token=cast(str, native.pad_token),
+    )
+    tokenizer = builtin_registry().create(
+        (1, TabularNssTokenizer.IMPLEMENTATION_ID, "1"),
+        native,
+        framing=policy,
+        native_source=str(native_path),
+        native_revision="fixture-v1",
+    )
+    return Example(tokenizer.encode_prompt_text(prompt), tokenizer, metadata)
+
+
 def test_legacy_jsonl_bytes_and_unicode_contract() -> None:
     frame = pd.DataFrame([{"second": "x\ny\u0085z\u2028q\u2029", "first": 1}])
 
@@ -71,7 +95,12 @@ def test_legacy_prompt_flag_combinations_exact_ids(
 ) -> None:
     tokenizer = cast(PreTrainedTokenizer, _load_native(tokenizers_dir / "tinyllama"))
 
-    example = Example("prompt", tokenizer, _metadata(add_bos=add_bos, add_eos=add_eos))
+    example = _example(
+        tokenizer,
+        _metadata(add_bos=add_bos, add_eos=add_eos),
+        tokenizers_dir / "tinyllama",
+        "prompt",
+    )
 
     assert example.input_ids == expected
     assert example.attention_mask == [1] * len(expected)
@@ -81,7 +110,12 @@ def test_legacy_prompt_flag_combinations_exact_ids(
 def test_legacy_exact_record_delimiter_input_mask_and_label_ids(tokenizers_dir) -> None:
     tokenizer = cast(PreTrainedTokenizer, _load_native(tokenizers_dir / "tinyllama"))
     record_ids = [8853, 29874, 1115, 29896, 29913, 13]
-    example = Example("prompt", tokenizer, _metadata(add_bos=True, add_eos=True))
+    example = _example(
+        tokenizer,
+        _metadata(add_bos=True, add_eos=True),
+        tokenizers_dir / "tinyllama",
+        "prompt",
+    )
 
     example.add_sequence({"input_ids": record_ids, "attention_mask": [1] * len(record_ids)})
 
