@@ -19,6 +19,7 @@ All mise test tasks, grouped by scope:
 ```bash
 mise run test                              # Unit (excludes slow, e2e, and smoke)
 mise run test:unit-slow                    # Unit tests including slow (excludes e2e and smoke)
+mise run test:unit:gpu                     # GPU-marked unit tests outside smoke and e2e
 mise run test:smoke                        # CPU smoke tests (~few min, no GPU required)
 mise run test:smoke:gpu                    # All staged GPU smoke tests (requires CUDA)
 mise run test:smoke:gpu:train-only
@@ -28,6 +29,7 @@ mise run test:smoke:gpu:structured-generation
 mise run test:smoke:gpu:timeseries
 mise run test:smoke:gpu:smollm2
 mise run test:e2e                          # All e2e (requires CUDA) -- runs default + dp
+mise run test:e2e:prepared                 # All e2e without dependency bootstrap
 mise run test:e2e:default                  # e2e default (no-DP) tests only
 mise run test:e2e:dp                       # e2e DP tests only
 mise run test:ci                           # CI unit tests with coverage (excludes slow, e2e, gpu, smoke)
