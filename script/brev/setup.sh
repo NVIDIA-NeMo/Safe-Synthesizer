@@ -194,7 +194,7 @@ fi
 # wheel so the notebooks cannot outrun the package. See README.md.
 # ---------------------------------------------------------------------------
 
-if compgen -G "${TUTORIALS_DIR}/*.ipynb" >/dev/null 2>&1; then
+if [[ -f "${TUTORIALS_DIR}/.fetched" ]]; then
   log "tutorials already present"
 else
   # Set above if this run installed; read off the package if the install ran previously.
@@ -227,6 +227,9 @@ else
       "${top}/docs/tutorials"; then
       rm -rf "${TUTORIALS_DIR}"
       mv "${stage}" "${TUTORIALS_DIR}"
+      # Written last: the guard above keys on this, not on "a notebook
+      # exists", so a partial directory left by any earlier run is redone.
+      : >"${TUTORIALS_DIR}/.fetched"
       log "tutorials extracted from ${ref}"
       # Same tarball, so the welcome text matches the tutorials. Staged
       # hidden, moved into place at the end. Non-fatal -- see README.

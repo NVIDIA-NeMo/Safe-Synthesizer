@@ -11,6 +11,11 @@ Interactive Jupyter notebook tutorials for NeMo Safe Synthesizer.
 These notebooks need a Linux machine with an NVIDIA GPU. The launchable above provides
 one with Safe Synthesizer and all three notebooks already installed.
 
+!!! warning "The instance bills continuously"
+    Most GPU providers on Brev do not support stopping an instance. Billing runs from
+    creation until deletion, so delete the instance when you are finished and download
+    anything you want to keep first.
+
 ## Available Tutorials
 
 - [Safe Synthesizer 101](safe-synthesizer-101.ipynb) -- learn the fundamentals

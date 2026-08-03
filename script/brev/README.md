@@ -35,7 +35,7 @@ Launchable with these settings.
 | Software | Image ID | Leave blank |
 | Source | Code source | No code files (`setup.sh` downloads the tutorials itself) |
 | Hardware | GPU | 1× 80 GiB VRAM, single GPU |
-| Hardware | Disk | 200 GiB or more -- **not resizable after creation** |
+| Hardware | Disk | 200 GiB or more -- not resizable after creation |
 | Network | Ports | 8888, named `jupyter` |
 | Access | Visibility | Anyone with the link |
 
