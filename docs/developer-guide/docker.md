@@ -277,7 +277,9 @@ single tag. Clients pull the correct variant automatically. Because
 directly to a registry:
 
 ```bash
-CONTAINER_GPU_REGISTRY=ghcr.io/nvidia-nemo mise run container:build:gpu-multiarch
+CONTAINER_GPU_REGISTRY=registry.example.com/team \
+CONTAINER_GPU_IMAGE=safe-synthesizer:custom-cu129 \
+  mise run container:build:gpu-multiarch
 ```
 
 This runs:
@@ -285,7 +287,7 @@ This runs:
 ```bash
 docker buildx build \
   --platform linux/amd64,linux/arm64 \
-  --tag ghcr.io/nvidia-nemo/nss-gpu:latest \
+  --tag registry.example.com/team/safe-synthesizer:custom-cu129 \
   --target runtime --push \
   -f containers/Dockerfile.cuda .
 ```

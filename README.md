@@ -40,6 +40,11 @@ make setup # installs pinned mise, pinned tools from mise.lock, and .venv
 mise run bootstrap-nss cuda
 ```
 
+### Run the public container
+
+The published GPU runtime is available from [GitHub Container Registry](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/pkgs/container/safe-synthesizer) at `ghcr.io/nvidia-nemo/safe-synthesizer`.
+It runs the CLI without a local Python installation; see the [Docker guide](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/docker/) for image tags, mounts, GPU access, and configuration.
+
 Development tools (`dprint`, `ruff`, `ty`, `yq`, `gh`, etc.) are managed via [mise](https://mise.jdx.dev/). Tool versions are declared in `.mise.toml` and locked in `mise.lock` (committed). mise also manages environment variables -- place project-local secrets or overrides in `.env` or `.env.local` (both git-ignored, auto-loaded by mise).
 
 For IDEs to discover mise-managed tools, [add mise shims to the `PATH` in your default shell profile](https://mise.jdx.dev/ide-integration.html#adding-shims-to-path-in-your-default-shell).

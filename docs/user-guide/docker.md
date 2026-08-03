@@ -10,7 +10,7 @@ configuration. Supply those at runtime.
 
 ## Select an image tag
 
-The public image is:
+The public image is available from [GitHub Container Registry (GHCR)](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/pkgs/container/safe-synthesizer):
 
 ```text
 ghcr.io/nvidia-nemo/safe-synthesizer
