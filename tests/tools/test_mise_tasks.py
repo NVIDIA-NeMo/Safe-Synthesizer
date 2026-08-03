@@ -45,7 +45,7 @@ def _sync_dependencies(
     return result.stdout.splitlines()
 
 
-@pytest.mark.parametrize("python_version", ["3.11", "3.12", "3.14"])
+@pytest.mark.parametrize("python_version", ["3.11", "3.12", "3.13"])
 def test_sync_dependencies_passes_requested_python(
     pytestconfig: pytest.Config, fake_uv: Path, python_version: str
 ) -> None:
