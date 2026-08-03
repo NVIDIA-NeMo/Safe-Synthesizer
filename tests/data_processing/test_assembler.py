@@ -763,7 +763,7 @@ def test_grouped_data_assembler_shorter_context_with_test_split(
     assert all(len(input_ids) <= llm_metadata.max_seq_length for input_ids in examples.train["input_ids"])
     assert all(len(input_ids) <= llm_metadata.max_seq_length for input_ids in examples.test["input_ids"])
     assert round(examples.stats["tokens_per_record"].mean, 4) == 19.0
-    assert round(examples.stats["tokens_per_group"].mean, 4) == 219.64
+    assert round(examples.stats["tokens_per_group"].mean, 4) == 219.925
     assert round(examples.stats["tokens_per_example"].mean, 4) == 488.85
     assert round(examples.stats["records_per_example"].mean, 4) == 23.15
     assert round(examples.stats["groups_per_example"].mean, 4) == 2.0

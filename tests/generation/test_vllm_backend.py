@@ -863,9 +863,7 @@ class TestGenerateDispatch:
         nss_tokenizer.render_prompt.return_value = prompt
         nss_tokenizer.capacity_for.return_value = SimpleNamespace(record_token_capacity=2045)
         mock_model_metadata.nss_tokenizer = nss_tokenizer
-        mock_model_metadata.generation_max_tokens_for.side_effect = (
-            lambda prompt_len, *, multiplier: prompt_len + 397
-        )
+        mock_model_metadata.generation_max_tokens_for.side_effect = lambda prompt_len, *, multiplier: prompt_len + 397
         backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
         captured = {}
 

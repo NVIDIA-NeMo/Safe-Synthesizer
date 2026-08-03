@@ -681,11 +681,15 @@ def test_timeseries_initial_and_rolling_prefill_exact_contract(checked_native, t
     )
     schema = FrozenJsonObject.from_value({"type": "object", "properties": {"b": {}, "a": {}}})
 
-    initial = tokenizer.render_prompt(TimeSeriesContext(schema, "generate", ' {"b":0,"a":1}'))
-    rolling = tokenizer.render_prompt(TimeSeriesContext(schema, "generate", '{"b":2,"a":3}\n'))
+    initial_prefill = ' {"b":0,"a":1}\n'
+    rolling_prefill = ' {"b":2,"a":3}\n'
+    initial = tokenizer.render_prompt(TimeSeriesContext(schema, "generate", initial_prefill))
+    rolling = tokenizer.render_prompt(TimeSeriesContext(schema, "generate", rolling_prefill))
 
-    assert initial.text == 'I:generate|S:"b":<unk>,"a":<unk>|P: {"b":0,"a":1}'
-    assert rolling.text == 'I:generate|S:"b":<unk>,"a":<unk>|P:{"b":2,"a":3}\n'
+    assert initial_prefill[:1] == rolling_prefill[:1] == " "
+    assert initial_prefill[-1:] == rolling_prefill[-1:] == "\n"
+    assert initial.text == 'I:generate|S:"b":<unk>,"a":<unk>|P: {"b":0,"a":1}\n'
+    assert rolling.text == 'I:generate|S:"b":<unk>,"a":<unk>|P: {"b":2,"a":3}\n'
     for rendered in (initial, rolling):
         expected = (
             cast(int, policy.bos_token_id),

@@ -110,7 +110,16 @@ class TabularContext(WorkloadContext):
 
 @dataclass(frozen=True, slots=True)
 class TimeSeriesContext(WorkloadContext):
-    """Immutable time-series prompt inputs copied from backend state."""
+    """Immutable time-series prompt inputs copied from backend state.
+
+    ``current_prefill`` is opaque caller-owned text that the tokenizer inserts
+    verbatim. Non-empty initial and rolling prefills share one shape: a leading
+    space followed by newline-terminated records. Rolling producers reuse the
+    model's emitted record text, or canonical serializer output when emitted
+    text is unavailable; they never reserialize parsed values ad hoc. This
+    value has no record-count or length bound here because consumers compute
+    capacity from the complete rendered prompt.
+    """
 
     schema: FrozenJsonObject
     instruction: str
