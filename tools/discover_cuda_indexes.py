@@ -30,9 +30,7 @@ def discover_cuda_index_urls(pyproject_path: Path, cuda_extra: str, minimum: int
             seen_urls.add(url)
 
     if len(urls) < minimum:
-        raise ValueError(
-            f"expected at least {minimum} {cuda_extra} indexes in {pyproject_path}, found {len(urls)}"
-        )
+        raise ValueError(f"expected at least {minimum} {cuda_extra} indexes in {pyproject_path}, found {len(urls)}")
     return urls
 
 

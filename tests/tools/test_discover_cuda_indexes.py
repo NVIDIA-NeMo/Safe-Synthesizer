@@ -28,9 +28,7 @@ def discovery_tool(pytestconfig: pytest.Config) -> ModuleType:
 
 
 def _write_pyproject(tmp_path: Path, indexes: list[tuple[str, str]]) -> Path:
-    blocks = "\n".join(
-        f'[[tool.uv.index]]\nname = "{name}"\nurl = "{url}"\nexplicit = true\n' for name, url in indexes
-    )
+    blocks = "\n".join(f'[[tool.uv.index]]\nname = "{name}"\nurl = "{url}"\nexplicit = true\n' for name, url in indexes)
     path = tmp_path / "pyproject.toml"
     path.write_text(blocks, encoding="utf-8")
     return path
@@ -45,9 +43,7 @@ def test_discovers_name_only_match(discovery_tool: ModuleType, tmp_path: Path) -
 def test_discovers_url_only_match(discovery_tool: ModuleType, tmp_path: Path) -> None:
     path = _write_pyproject(tmp_path, [("pytorch-nightly", "https://example.invalid/whl/cu129")])
 
-    assert discovery_tool.discover_cuda_index_urls(path, "cu129", 1) == [
-        "https://example.invalid/whl/cu129"
-    ]
+    assert discovery_tool.discover_cuda_index_urls(path, "cu129", 1) == ["https://example.invalid/whl/cu129"]
 
 
 def test_deduplicates_matches(discovery_tool: ModuleType, tmp_path: Path) -> None:
