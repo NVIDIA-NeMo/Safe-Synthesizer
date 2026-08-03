@@ -705,6 +705,41 @@ class TestGenerationMaxTokensFor:
         # prompt_len=0 reproduces the old prompt-agnostic budget for round-trip parity.
         assert reloaded.generation_max_tokens_for(0) == int(1500 * GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER)
 
+    def test_metadata_max_records_per_group_accepts_none_or_positive(
+        self, sample_prompt_config, mock_autoconfig_obj, sample_workdir
+    ):
+        """``None`` and values ``>= 1`` are valid persisted bounds."""
+        none_meta = ModelMetadata(
+            model_name_or_path="test-model",
+            prompt_config=sample_prompt_config,
+            autoconfig=mock_autoconfig_obj,
+            workdir=sample_workdir,
+            max_records_per_group=None,
+        )
+        assert none_meta.max_records_per_group is None
+        positive_meta = ModelMetadata(
+            model_name_or_path="test-model",
+            prompt_config=sample_prompt_config,
+            autoconfig=mock_autoconfig_obj,
+            workdir=sample_workdir,
+            max_records_per_group=3,
+        )
+        assert positive_meta.max_records_per_group == 3
+
+    @pytest.mark.parametrize("value", [0, -1])
+    def test_metadata_max_records_per_group_rejects_non_positive(
+        self, sample_prompt_config, mock_autoconfig_obj, sample_workdir, value
+    ):
+        """Non-positive persisted bounds fail validation."""
+        with pytest.raises(ValidationError, match="max_records_per_group"):
+            ModelMetadata(
+                model_name_or_path="test-model",
+                prompt_config=sample_prompt_config,
+                autoconfig=mock_autoconfig_obj,
+                workdir=sample_workdir,
+                max_records_per_group=value,
+            )
+
     def test_qwen2_rope_parameters_round_trip_through_metadata_json(self, sample_prompt_config, sample_workdir):
         """Native Qwen2 RoPE parameters survive the saved artifact metadata."""
         autoconfig = Qwen2Config()

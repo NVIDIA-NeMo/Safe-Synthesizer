@@ -454,10 +454,13 @@ def test_grouped_data_assembler_shorter_context_with_test_split(
     assert examples.test is not None
     assert examples.test.num_rows == 9
     assert round(examples.stats["tokens_per_record"].mean, 4) == 19.0
-    assert round(examples.stats["tokens_per_group"].mean, 4) == 219.64
+    assert round(examples.stats["tokens_per_group"].mean, 4) == 219.925
     assert round(examples.stats["tokens_per_example"].mean, 4) == 284.9189
     assert round(examples.stats["records_per_example"].mean, 4) == 12.5135
     assert round(examples.stats["groups_per_example"].mean, 4) == 1.0811
+    # Holdout groups must not inflate the training-derived generation bound.
+    assert examples.stats["records_per_group"].count == assembler.num_groups_train
+    assert assembler.stats_val["records_per_group"].count == assembler.num_groups_validation
 
 
 def test_grouped_data_assembler_dp(

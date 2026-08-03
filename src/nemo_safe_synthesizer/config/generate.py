@@ -176,6 +176,18 @@ class StructuredGenerationParameters(Parameters, BaseModel):
         ),
     ] = False
 
+    max_records_per_sequence: Annotated[
+        int | None,
+        ValueValidator(value_func=lambda v: v is None or v >= 1),
+        Field(
+            title="max_records_per_sequence",
+            description=(
+                "Max records per grouped sequence under structured generation. "
+                "None uses the largest training group size. Must be None or >= 1."
+            ),
+        ),
+    ] = None
+
     @model_validator(mode="after")
     def _validate_structural_tag_backend(self) -> Self:
         if not self.enabled:
