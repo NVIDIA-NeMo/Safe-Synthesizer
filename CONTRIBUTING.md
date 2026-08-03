@@ -27,7 +27,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 
 ### Prerequisites
 
-- Python 3.11–3.13 (project supports Python 3.11, 3.12, and 3.13; `.python-version` pins 3.13 for bootstrapping at the repo root. Python 3.14+ is not supported — see [Troubleshooting](docs/user-guide/troubleshooting.md#python-314-is-not-supported))
+- Python 3.11–3.14 (project supports Python 3.11, 3.12, 3.13, and 3.14; `.python-version` pins 3.13 for bootstrapping at the repo root)
 - Git 2.34+ (minimum required for SSH commit signing)
 
 > Note: Other tools like [uv](https://docs.astral.sh/uv/), [dprint](https://dprint.dev/), [ruff](https://docs.astral.sh/ruff/), [ty](https://github.com/astral-sh/ty), and [gh](https://cli.github.com/) are installed automatically by `make setup` (via [mise](https://mise.jdx.dev/)). Tool versions are declared in `.mise.toml` and locked in `mise.lock` (committed), ensuring reproducible toolchains across developer systems and CI. These should not interfere with locally installed tools.
