@@ -123,7 +123,8 @@ else
   NSS_VERSION="$(curl -fsSL https://pypi.org/pypi/nemo-safe-synthesizer/json \
     | "${VENV_DIR}/bin/python" -c 'import json, sys; print(json.load(sys.stdin)["info"]["version"])')"
 
-  # Indexes come from the installed release's pyproject, keyed on URL not name.
+  # Indexes come from the installed release's pyproject. Match both generated
+  # names and URLs because static index names do not enforce the CUDA suffix.
   pyproject="$(mktemp)"
   curl -fsSL "${REPO_URL}/raw/v${NSS_VERSION}/pyproject.toml" -o "${pyproject}"
   index_args=()
@@ -140,7 +141,16 @@ import tomllib
 
 with open(sys.argv[1], "rb") as handle:
     indexes = tomllib.load(handle)["tool"]["uv"]["index"]
-print("\n".join(i["url"] for i in indexes if os.environ["CUDA_EXTRA"] in i["url"]))
+
+cuda_extra = os.environ["CUDA_EXTRA"]
+print(
+    "\n".join(
+        index["url"]
+        for index in indexes
+        if index["name"].endswith(f"-{cuda_extra}")
+        or f"/{cuda_extra}" in index["url"]
+    )
+)
 PY
   )
   rm -f "${pyproject}"
