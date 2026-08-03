@@ -50,7 +50,7 @@ from ..generation.vllm_tokenizer import VllmTokenizerProbe
 from ..llm.metadata import ModelMetadata
 from ..llm.utils import ModelRef, cleanup_memory, get_max_vram
 from ..observability import get_logger, heartbeat
-from ..tokenization import PromptEncoding, TabularContext
+from ..tokenization import PromptEncoding, TabularContext, as_tabular_renderer
 from ..utils import all_equal_type, load_json
 
 logger = get_logger(__name__)
@@ -359,7 +359,7 @@ class VllmBackend(GeneratorBackend):
         hf_overrides = _build_rope_hf_overrides(self.model_metadata)
 
         with heartbeat("Model loading", logger_name=__name__, model=self.config.training.pretrained_model):
-            self.llm = vLLM(
+            llm = vLLM(
                 model=model_ref.target(),
                 gpu_memory_utilization=max_vram,
                 max_model_len=self.model_metadata.max_seq_length,
@@ -370,34 +370,37 @@ class VllmBackend(GeneratorBackend):
                 trust_remote_code=model_ref.trust_remote_code,
                 hf_overrides=hf_overrides,
             )
+        self.llm = llm
 
-        # Cache the engine's *effective* runtime config once at init. Read by
-        # ``generate()`` to populate the generation-complete observability
-        # event; used by the benchmark harness (and any other intent-comparing
-        # caller) to detect "flag didn't engage" mismatches against what was
-        # asked for.
-        self._engine_runtime_config = probe_engine_runtime_config(self.llm)
+        initialization_complete = False
+        try:
+            # Cache the engine's *effective* runtime config once at init. Read by
+            # ``generate()`` to populate the generation-complete observability
+            # event; used by the benchmark harness (and any other intent-comparing
+            # caller) to detect "flag didn't engage" mismatches against what was
+            # asked for.
+            self._engine_runtime_config = probe_engine_runtime_config(llm)
 
-        tokenizer: EncodeOnlyTokenizer = self.llm.get_tokenizer()
-        nss_tokenizer = self.model_metadata.nss_tokenizer
-        if nss_tokenizer is not None:
-            try:
+            tokenizer: EncodeOnlyTokenizer = llm.get_tokenizer()
+            nss_tokenizer = self.model_metadata.nss_tokenizer
+            if nss_tokenizer is not None:
                 parity = nss_tokenizer.compare_engine(VllmTokenizerProbe(tokenizer))
                 if not parity.matches:
                     categories = ", ".join(parity.mismatches)
                     raise GenerationError(
                         f"The vLLM tokenizer does not match the persisted NSS tokenizer ({categories})."
                     )
-                _validate_nss_embedding_range(nss_tokenizer, self.llm)
-            except GenerationError:
+                _validate_nss_embedding_range(nss_tokenizer, llm)
+            self.processor = create_processor(
+                self.schema,
+                self.model_metadata,
+                self.config,
+                tokenizer=tokenizer,
+            )
+            initialization_complete = True
+        finally:
+            if not initialization_complete:
                 self.teardown()
-                raise
-        self.processor = create_processor(
-            self.schema,
-            self.model_metadata,
-            self.config,
-            tokenizer=tokenizer,
-        )
 
     def _render_nss_prompt(self, current_prefill: str) -> PromptEncoding | None:
         """Render one canonical NSS prompt, or preserve legacy text generation."""
@@ -406,7 +409,7 @@ class VllmBackend(GeneratorBackend):
             return None
         if current_prefill:
             raise InternalError("Static tabular generation cannot render a rolling prefill.")
-        return nss_tokenizer.render_prompt(
+        return as_tabular_renderer(nss_tokenizer).render_prompt(
             TabularContext(
                 ordered_columns=tuple(self.columns),
                 instruction=self.model_metadata.instruction,

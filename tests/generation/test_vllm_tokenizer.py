@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import pytest
 
 from nemo_safe_synthesizer.errors import GenerationError
@@ -36,6 +38,28 @@ class _Tokenizer:
         return "".join(chr(token_id) for token_id in input_ids)
 
 
+class _FailingTokenizer:
+    @property
+    def vocab_size(self) -> int:
+        raise RuntimeError("provider failure")
+
+    @property
+    def bos_token_id(self) -> int:
+        raise RuntimeError("provider failure")
+
+    def __len__(self) -> int:
+        raise RuntimeError("provider failure")
+
+    def get_added_vocab(self):
+        raise RuntimeError("provider failure")
+
+    def encode(self, text, *, add_special_tokens):
+        raise RuntimeError("provider failure")
+
+    def decode(self, input_ids):
+        raise RuntimeError("provider failure")
+
+
 def test_vllm_tokenizer_probe_normalizes_public_capabilities() -> None:
     probe = VllmTokenizerProbe(_Tokenizer())
 
@@ -50,3 +74,26 @@ def test_vllm_tokenizer_probe_normalizes_public_capabilities() -> None:
 def test_vllm_tokenizer_probe_rejects_missing_capabilities() -> None:
     with pytest.raises(GenerationError, match="total vocabulary size"):
         _ = VllmTokenizerProbe(object()).total_size
+
+
+@pytest.mark.parametrize(
+    ("read_capability", "message"),
+    [
+        (lambda probe: probe.vocab_size, "vocab_size"),
+        (lambda probe: probe.total_size, "total vocabulary size"),
+        (lambda probe: probe.added_vocabulary, "added vocabulary"),
+        (lambda probe: probe.special_token_ids, "special token IDs"),
+        (lambda probe: probe.encode_no_special("probe"), "cannot encode"),
+        (lambda probe: probe.decode((1,)), "cannot decode"),
+    ],
+)
+def test_vllm_tokenizer_probe_normalizes_unexpected_provider_failures(
+    read_capability: Callable[[VllmTokenizerProbe], object],
+    message: str,
+) -> None:
+    probe = VllmTokenizerProbe(_FailingTokenizer())
+
+    with pytest.raises(GenerationError, match=message) as exc_info:
+        read_capability(probe)
+
+    assert isinstance(exc_info.value.__cause__, RuntimeError)

@@ -40,6 +40,130 @@ from .types import (
 _BASE_PROBE_TEXTS = ("", "NSS tokenizer probe", '{"line":"a\\nb","unicode":"\u0085\u2028\u2029"}\n')
 _IGNORE_LABEL = -100
 ContextT = TypeVar("ContextT", bound=WorkloadContext)
+RendererContextT = TypeVar("RendererContextT", bound=WorkloadContext, contravariant=True)
+
+
+class PromptRenderer(Protocol[RendererContextT]):
+    """Render a prompt for one workload context without exposing persistence internals."""
+
+    def render_prompt(self, context: RendererContextT) -> PromptEncoding:
+        """Render the exact NSS prompt for ``context``."""
+
+
+class NssTokenizerCore(ABC):
+    """Context-free tokenizer contract for persistence and record consumers.
+
+    Prompt rendering remains deliberately generic on :class:`NssTokenizer`.
+    This base lets registries, metadata, and artifact boundaries avoid erasing a
+    workload context to ``object`` merely to save or reconstruct a tokenizer.
+    """
+
+    @property
+    @abstractmethod
+    def spec(self) -> NssTokenizerSpec:
+        """Return the immutable persistent specification."""
+
+    @property
+    @abstractmethod
+    def capabilities(self) -> TokenizerCapabilities:
+        """Declare context-free tokenizer capabilities."""
+
+    @abstractmethod
+    def for_hf(self) -> PreTrainedTokenizerBase:
+        """Return the native tokenizer at a framework boundary."""
+
+    @abstractmethod
+    def encode_no_special(self, text: str) -> tuple[int, ...]:
+        """Encode text with special-token insertion disabled."""
+
+    @abstractmethod
+    def batch_encode_no_special(self, texts: Sequence[str], *, padding: bool = False) -> TokenBatch | PaddedTokenBatch:
+        """Encode a batch without special-token insertion."""
+
+    @abstractmethod
+    def encode_records(
+        self, records: Sequence[Mapping[str, JsonValue]], *, exclude_columns: Sequence[str] = ()
+    ) -> RecordBatch:
+        """Encode ordered JSONL records."""
+
+    @abstractmethod
+    def render_training_prompt(
+        self,
+        ordered_columns: Sequence[str],
+        instruction: str,
+        *,
+        current_prefill: str = "",
+    ) -> PromptEncoding:
+        """Render the workload's training prompt from context-free inputs."""
+
+    @abstractmethod
+    def capacity_for(
+        self,
+        prompt: PromptEncoding,
+        *,
+        context_limit: int,
+        sequence_count: int,
+        maximum_sequence_count: int | None = None,
+        add_sequence_delimiters: bool | Sequence[bool] = True,
+        rope_scaling_factor: float | None = None,
+    ) -> TrainingCapacity:
+        """Return capacity for a validated prompt."""
+
+    @abstractmethod
+    def frame_training(
+        self,
+        prompt: PromptEncoding,
+        sequences: Sequence[Sequence[int]],
+        *,
+        add_sequence_delimiters: bool | Sequence[bool] = True,
+        sequence_attention_masks: Sequence[Sequence[int]] | None = None,
+        context_limit: int | None = None,
+        maximum_sequence_count: int | None = None,
+        rope_scaling_factor: float | None = None,
+    ) -> TrainingEncoding:
+        """Frame training sequences around a validated prompt."""
+
+    @abstractmethod
+    def validate_prompt_capacity(
+        self,
+        prompt: PromptEncoding,
+        *,
+        context_limit: int,
+        rope_scaling_factor: float | None,
+    ) -> None:
+        """Validate that a prompt fits within the training context."""
+
+    @abstractmethod
+    def validate_record_capacity(
+        self,
+        prompt: PromptEncoding,
+        *,
+        record_token_count: int,
+        context_limit: int,
+        rope_scaling_factor: float | None,
+    ) -> None:
+        """Validate that one record fits beside the framed prompt."""
+
+    @abstractmethod
+    def can_append_sequence(
+        self,
+        prompt: PromptEncoding,
+        sequences: Sequence[Sequence[int]],
+        candidate: Sequence[int],
+        *,
+        context_limit: int,
+        maximum_sequence_count: int | None = None,
+    ) -> bool:
+        """Return whether one more sequence fits within the training context."""
+
+    @abstractmethod
+    def compare_engine(self, engine: EngineTokenizerProbe) -> EngineParity:
+        """Compare the native tokenizer with an engine probe."""
+
+    @classmethod
+    @abstractmethod
+    def policies_from_spec(cls, spec: NssTokenizerSpec) -> tuple[FramingPolicy, JsonObject]:
+        """Recover shared policy from a compatible persistent specification."""
 
 
 def _max_tokens_action(rope_scaling_factor: float | None) -> str:
@@ -90,8 +214,12 @@ class EngineTokenizerProbe(Protocol):
 class EngineParity:
     """Result of a pure native-versus-engine tokenizer comparison."""
 
-    matches: bool
-    mismatches: tuple[str, ...]
+    mismatches: tuple[str, ...] = ()
+
+    @property
+    def matches(self) -> bool:
+        """Whether every engine observation matches the native tokenizer."""
+        return not self.mismatches
 
 
 def _token_id_value(value: object) -> int | tuple[int, ...] | None:
@@ -199,7 +327,7 @@ def _native_pipeline_digest(native: PreTrainedTokenizerBase) -> str:
     return hashlib.sha256(b"\0".join(pipeline_parts)).hexdigest()
 
 
-class NssTokenizer(ABC, Generic[ContextT]):
+class NssTokenizer(NssTokenizerCore, ABC, Generic[ContextT]):
     """Compose one native tokenizer while owning immutable NSS framing policy."""
 
     API_VERSION = 1
@@ -606,7 +734,7 @@ class NssTokenizer(ABC, Generic[ContextT]):
                 mismatches.append(f"probe[{index}].input_ids")
             elif engine.decode(engine_ids) != probe.decoded:
                 mismatches.append(f"probe[{index}].decoded")
-        return EngineParity(matches=not mismatches, mismatches=tuple(mismatches))
+        return EngineParity(mismatches=tuple(mismatches))
 
     @final
     def _validate_binding(self) -> None:

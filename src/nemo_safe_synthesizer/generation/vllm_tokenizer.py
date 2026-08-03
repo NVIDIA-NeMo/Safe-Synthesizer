@@ -36,7 +36,7 @@ class VllmTokenizerProbe:
     def total_size(self) -> int:
         try:
             size = len(cast(Any, self._tokenizer))
-        except (TypeError, ValueError) as exc:
+        except Exception as exc:
             raise GenerationError("The vLLM tokenizer does not expose a total vocabulary size.") from exc
         if isinstance(size, bool) or not isinstance(size, int) or size < 0:
             raise GenerationError("The vLLM tokenizer exposed an invalid total vocabulary size.")
@@ -44,39 +44,53 @@ class VllmTokenizerProbe:
 
     @property
     def added_vocabulary(self) -> Sequence[tuple[str, int]]:
-        method = getattr(self._tokenizer, "get_added_vocab", None)
-        if not callable(method):
-            raise GenerationError("The vLLM tokenizer does not expose added vocabulary.")
         try:
+            method = getattr(self._tokenizer, "get_added_vocab", None)
+            if not callable(method):
+                raise GenerationError("The vLLM tokenizer does not expose added vocabulary.")
             vocabulary = method()
             return tuple(sorted((str(token), self._integer(token_id)) for token, token_id in vocabulary.items()))
-        except (AttributeError, TypeError, ValueError) as exc:
+        except GenerationError:
+            raise
+        except Exception as exc:
             raise GenerationError("The vLLM tokenizer exposed invalid added vocabulary.") from exc
 
     @property
     def special_token_ids(self) -> Sequence[tuple[str, int | tuple[int, ...] | None]]:
-        return tuple(
-            (name, self._special_value(getattr(self._tokenizer, name, None))) for name in _SPECIAL_TOKEN_FIELDS
-        )
+        try:
+            return tuple(
+                (name, self._special_value(getattr(self._tokenizer, name, None))) for name in _SPECIAL_TOKEN_FIELDS
+            )
+        except GenerationError:
+            raise
+        except Exception as exc:
+            raise GenerationError("The vLLM tokenizer exposed invalid special token IDs.") from exc
 
     def encode_no_special(self, text: str) -> Sequence[int]:
         try:
             ids = cast(Any, self._tokenizer).encode(text, add_special_tokens=False)
             return tuple(self._integer(token_id) for token_id in ids)
-        except (AttributeError, TypeError, ValueError) as exc:
+        except GenerationError:
+            raise
+        except Exception as exc:
             raise GenerationError("The vLLM tokenizer cannot encode NSS parity probes without special tokens.") from exc
 
     def decode(self, input_ids: Sequence[int]) -> str:
         try:
             decoded = cast(Any, self._tokenizer).decode(list(input_ids))
-        except (AttributeError, TypeError, ValueError) as exc:
+        except Exception as exc:
             raise GenerationError("The vLLM tokenizer cannot decode NSS parity probes.") from exc
         if not isinstance(decoded, str):
             raise GenerationError("The vLLM tokenizer returned a non-text decode result.")
         return decoded
 
     def _integer_attribute(self, name: str) -> int:
-        return self._integer(getattr(self._tokenizer, name, None))
+        try:
+            return self._integer(getattr(self._tokenizer, name, None))
+        except GenerationError:
+            raise
+        except Exception as exc:
+            raise GenerationError(f"The vLLM tokenizer cannot expose {name}.") from exc
 
     @staticmethod
     def _integer(value: object) -> int:

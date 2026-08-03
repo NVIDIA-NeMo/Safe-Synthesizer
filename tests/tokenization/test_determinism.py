@@ -14,6 +14,7 @@ from nemo_safe_synthesizer.tokenization import (
     FramingPolicy,
     TabularContext,
     TabularNssTokenizer,
+    as_tabular_renderer,
     builtin_registry,
     load_nss_tokenizer,
     save_nss_tokenizer,
@@ -72,5 +73,5 @@ def test_independent_and_persisted_tokenizers_render_identically(tokenizers_dir,
     save_nss_tokenizer(first, artifact)
     restored = load_nss_tokenizer(artifact)
     assert restored is not None
-    assert restored.render_prompt(context) == first_prompt
+    assert as_tabular_renderer(restored).render_prompt(context) == first_prompt
     assert restored.encode_records(records) == first_records

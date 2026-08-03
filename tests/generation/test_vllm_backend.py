@@ -416,7 +416,7 @@ class TestInitializeModelRef:
         base_params.training.pretrained_model = "nvidia/Nemotron-Mini-4B-Instruct"
         backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
         mock_model_metadata.nss_tokenizer = MagicMock()
-        mock_model_metadata.nss_tokenizer.compare_engine.return_value = EngineParity(False, ("vocab_size",))
+        mock_model_metadata.nss_tokenizer.compare_engine.return_value = EngineParity(("vocab_size",))
         mock_llm = MagicMock()
         mock_llm.get_tokenizer.return_value = MagicMock()
 
@@ -434,6 +434,51 @@ class TestInitializeModelRef:
         create_processor_mock.assert_not_called()
         assert backend.llm is None
 
+    @pytest.mark.parametrize("failure_point", ["runtime_config", "tokenizer", "processor"])
+    def test_initialize_tears_down_after_any_post_engine_failure(
+        self,
+        base_params,
+        mock_model_metadata,
+        mock_schema,
+        mock_workdir,
+        fixture_cached_nvidia_snapshot,
+        failure_point,
+    ):
+        cache_root, _ = fixture_cached_nvidia_snapshot
+        base_params.training.pretrained_model = "nvidia/Nemotron-Mini-4B-Instruct"
+        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
+        mock_llm = MagicMock()
+        if failure_point == "tokenizer":
+            mock_llm.get_tokenizer.side_effect = RuntimeError("provider failure")
+        else:
+            mock_llm.get_tokenizer.return_value = MagicMock()
+
+        runtime_config_error = RuntimeError("provider failure") if failure_point == "runtime_config" else None
+        processor_error = RuntimeError("provider failure") if failure_point == "processor" else None
+        with (
+            patch(
+                "nemo_safe_synthesizer.generation.vllm_backend.ModelRef._default_hf_cache_root",
+                return_value=cache_root,
+            ),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.vLLM", return_value=mock_llm),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.get_max_vram", return_value={0: 0.8}),
+            patch(
+                "nemo_safe_synthesizer.generation.vllm_backend.probe_engine_runtime_config",
+                return_value={},
+                side_effect=runtime_config_error,
+            ),
+            patch(
+                "nemo_safe_synthesizer.generation.vllm_backend.create_processor",
+                return_value=MagicMock(),
+                side_effect=processor_error,
+            ),
+            pytest.raises(RuntimeError, match="provider failure"),
+        ):
+            backend.initialize()
+
+        assert backend.llm is None
+        assert backend._torn_down is True
+
     def test_initialize_rejects_nss_tokens_outside_model_embedding_range(
         self, base_params, mock_model_metadata, mock_schema, mock_workdir, fixture_cached_nvidia_snapshot
     ):
@@ -441,7 +486,7 @@ class TestInitializeModelRef:
         base_params.training.pretrained_model = "nvidia/Nemotron-Mini-4B-Instruct"
         backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
         mock_model_metadata.nss_tokenizer = MagicMock()
-        mock_model_metadata.nss_tokenizer.compare_engine.return_value = EngineParity(True, ())
+        mock_model_metadata.nss_tokenizer.compare_engine.return_value = EngineParity()
         mock_model_metadata.nss_tokenizer.for_hf().get_vocab.return_value = {"token": 8}
         mock_llm = MagicMock()
         mock_llm.get_tokenizer.return_value = MagicMock()

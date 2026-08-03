@@ -27,6 +27,7 @@ from nemo_safe_synthesizer.generation.results import GenerateJobResults
 from nemo_safe_synthesizer.generation.utils import GenerationStatus
 from nemo_safe_synthesizer.preflight import PreflightReport, PreflightStage
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+from nemo_safe_synthesizer.tokenization import NssTokenizerRegistry
 
 _EMPTY_PREFLIGHT = PreflightReport(checks=[])
 
@@ -569,6 +570,33 @@ class TestLoadFromSavePath:
             workdir.metadata_file,
             workdir=workdir,
             admit_remote_code=True,
+            tokenizer_registry=None,
+        )
+
+    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    def test_load_forwards_tokenizer_registry(
+        self,
+        mock_metadata_cls,
+        tmp_path,
+        fixture_sample_patient_dataframe,
+        fixture_sample_patient_redacted_dataframe,
+    ):
+        workdir, _, _ = self._prepare_workdir(
+            tmp_path,
+            fixture_sample_patient_dataframe,
+            fixture_sample_patient_redacted_dataframe,
+        )
+        mock_metadata_cls.from_metadata_json.return_value = MagicMock()
+        registry = NssTokenizerRegistry()
+        builder = SafeSynthesizer(config=SafeSynthesizerParameters(), workdir=workdir)
+
+        builder.load_from_save_path(tokenizer_registry=registry)
+
+        mock_metadata_cls.from_metadata_json.assert_called_once_with(
+            workdir.metadata_file,
+            workdir=workdir,
+            admit_remote_code=False,
+            tokenizer_registry=registry,
         )
 
     @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")

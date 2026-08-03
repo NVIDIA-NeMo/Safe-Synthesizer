@@ -29,7 +29,7 @@ from ..generation.results import GenerateJobResults, GenerationBatches, Generati
 from ..generation.vllm_backend import VllmBackend, _tokens_prompt
 from ..llm.metadata import ModelMetadata
 from ..observability import get_logger
-from ..tokenization import FrozenJsonObject, PromptEncoding, TimeSeriesContext
+from ..tokenization import FrozenJsonObject, PromptEncoding, TimeSeriesContext, as_timeseries_renderer
 
 logger = get_logger(__name__)
 
@@ -285,7 +285,7 @@ class TimeseriesBackend(VllmBackend):
             return None
         if self._frozen_schema is None:
             raise InternalError("Time-series NSS generation requires an immutable schema snapshot.")
-        return nss_tokenizer.render_prompt(
+        return as_timeseries_renderer(nss_tokenizer).render_prompt(
             TimeSeriesContext(
                 schema=self._frozen_schema,
                 instruction=self.model_metadata.instruction,

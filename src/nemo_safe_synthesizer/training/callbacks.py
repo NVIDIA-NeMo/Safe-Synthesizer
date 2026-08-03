@@ -35,7 +35,7 @@ from ..generation.results import (
 )
 from ..llm.metadata import ModelMetadata
 from ..observability import get_logger
-from ..tokenization import NssTokenizer, PromptEncoding
+from ..tokenization import NssTokenizerCore, PromptEncoding
 
 logger = get_logger(__name__)
 
@@ -67,7 +67,7 @@ class InferenceEvalCallback(TrainerCallback):
         schema: dict[str, Any],
         metadata: ModelMetadata,
         processor: Processor,
-        nss_tokenizer: NssTokenizer,
+        nss_tokenizer: NssTokenizerCore,
         prompt_encoding: PromptEncoding,
         num_prompts_per_batch: int = 16,
         num_batches: int | None = None,

@@ -3,13 +3,13 @@
 
 """Safe Synthesizer tokenizer contracts."""
 
-from .base import EngineParity, NssTokenizer
+from .base import EngineParity, NssTokenizer, NssTokenizerCore, PromptRenderer
 from .persistence import NSS_TOKENIZER_MANIFEST, load_nss_tokenizer, save_nss_tokenizer
 from .registry import NssTokenizerRegistry, RegistryEntry, builtin_registry
 from .runtime import create_runtime_nss_tokenizer, resolve_native_provenance
 from .spec import NssTokenizerSpec, PolicyEpochs
-from .tabular import TabularNssTokenizer
-from .timeseries import TimeSeriesNssTokenizer
+from .tabular import TabularNssTokenizer, as_tabular_renderer
+from .timeseries import TimeSeriesNssTokenizer, as_timeseries_renderer
 from .types import (
     FramingPolicy,
     FrozenJsonObject,
@@ -32,11 +32,13 @@ __all__ = [
     "FramingPolicy",
     "FrozenJsonObject",
     "NssTokenizer",
+    "NssTokenizerCore",
     "NSS_TOKENIZER_MANIFEST",
     "NssTokenizerRegistry",
     "NssTokenizerSpec",
     "PaddedTokenBatch",
     "PolicyEpochs",
+    "PromptRenderer",
     "PromptEncoding",
     "RecordBatch",
     "RecordEncoding",
@@ -52,6 +54,8 @@ __all__ = [
     "WorkloadContext",
     "WorkloadKind",
     "builtin_registry",
+    "as_tabular_renderer",
+    "as_timeseries_renderer",
     "create_runtime_nss_tokenizer",
     "load_nss_tokenizer",
     "resolve_native_provenance",

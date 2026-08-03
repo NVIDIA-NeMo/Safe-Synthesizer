@@ -16,7 +16,7 @@ from typing import cast
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from ..errors import ParameterError
-from .types import JsonObject, JsonValue, TokenizerProbe, canonical_json_bytes
+from .types import JsonObject, JsonValue, TokenizerProbe, WorkloadKind, canonical_json_bytes
 
 _IMMUTABLE_REMOTE_REVISION = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})")
 _IMMUTABLE_LOCAL_REVISION = re.compile(r"local-path-[0-9a-f]{64}")
@@ -93,7 +93,7 @@ class NssTokenizerSpec:
 
     spec_version: int
     api_version: int
-    workload_kind: str
+    workload_kind: WorkloadKind
     implementation_id: str
     implementation_version: str
     implementation_payload: str
@@ -111,12 +111,10 @@ class NssTokenizerSpec:
             raise ParameterError(f"Unsupported NSS tokenizer spec version: {self.spec_version}.")
         if not isinstance(self.api_version, int) or isinstance(self.api_version, bool) or self.api_version != 1:
             raise ParameterError(f"Unsupported NSS tokenizer API version: {self.api_version}.")
-        if (
-            not isinstance(self.workload_kind, str)
-            or not isinstance(self.implementation_id, str)
-            or not isinstance(self.implementation_version, str)
-        ):
-            raise ParameterError("Tokenizer workload and implementation identities must be strings.")
+        if not isinstance(self.workload_kind, WorkloadKind):
+            raise ParameterError("Tokenizer workload kind must be a supported WorkloadKind.")
+        if not isinstance(self.implementation_id, str) or not isinstance(self.implementation_version, str):
+            raise ParameterError("Tokenizer implementation identities must be strings.")
         if ":" not in self.implementation_id:
             raise ParameterError("Tokenizer implementation IDs must be namespaced.")
         if (
@@ -161,7 +159,7 @@ class NssTokenizerSpec:
         return {
             "spec_version": self.spec_version,
             "api_version": self.api_version,
-            "workload_kind": self.workload_kind,
+            "workload_kind": self.workload_kind.value,
             "implementation_id": self.implementation_id,
             "implementation_version": self.implementation_version,
             "implementation_payload": cast(JsonValue, json.loads(self.implementation_payload)),
@@ -206,7 +204,7 @@ class NssTokenizerSpec:
             return cls(
                 spec_version=parsed.spec_version,
                 api_version=parsed.api_version,
-                workload_kind=parsed.workload_kind,
+                workload_kind=WorkloadKind(parsed.workload_kind),
                 implementation_id=parsed.implementation_id,
                 implementation_version=parsed.implementation_version,
                 implementation_payload=canonical_json_bytes(cast(JsonValue, parsed.implementation_payload)).decode(),

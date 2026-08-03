@@ -28,8 +28,9 @@ from ..defaults import (
 )
 from ..errors import ParameterError
 from ..observability import get_logger
-from ..tokenization.base import NssTokenizer
+from ..tokenization.base import NssTokenizerCore
 from ..tokenization.persistence import NSS_TOKENIZER_MANIFEST, load_nss_tokenizer, save_nss_tokenizer
+from ..tokenization.registry import NssTokenizerRegistry
 from ..utils import load_json, write_json
 from .utils import ModelRef, load_fast_tokenizer
 
@@ -375,7 +376,7 @@ class ModelMetadata(BaseModel):
 
     tokenizer: PreTrainedTokenizerBase | None = Field(default=None, exclude=True, repr=False)
 
-    nss_tokenizer: NssTokenizer | None = Field(default=None, exclude=True, repr=False)
+    nss_tokenizer: NssTokenizerCore | None = Field(default=None, exclude=True, repr=False)
 
     nss_tokenizer_manifest: Literal["nss_tokenizer.json"] | None = Field(
         default=None,
@@ -546,7 +547,7 @@ class ModelMetadata(BaseModel):
         )
 
     @staticmethod
-    def _validate_nss_tokenizer_metadata_input(value: dict[str, Any], tokenizer: NssTokenizer) -> None:
+    def _validate_nss_tokenizer_metadata_input(value: dict[str, Any], tokenizer: NssTokenizerCore) -> None:
         """Reject raw metadata drift before any metadata-directed model load."""
         framing, _ = type(tokenizer).policies_from_spec(tokenizer.spec)
         prompt_config = value.get("prompt_config")
@@ -721,6 +722,7 @@ class ModelMetadata(BaseModel):
         workdir: Workdir | None = None,
         *,
         admit_remote_code: bool = False,
+        tokenizer_registry: NssTokenizerRegistry | None = None,
     ) -> ModelMetadata:
         """Load ModelMetadata from a saved JSON file.
 
@@ -729,6 +731,8 @@ class ModelMetadata(BaseModel):
             workdir: Workdir instance for artifact paths. If not provided, will be None.
             admit_remote_code: Explicitly admit a manifest whose native
                 tokenizer requires remote code.
+            tokenizer_registry: Registry snapshot used to reconstruct an
+                explicitly admitted tokenizer implementation.
 
         Returns:
             ModelMetadata instance with the loaded configuration.
@@ -740,6 +744,7 @@ class ModelMetadata(BaseModel):
             path.parent,
             allow_legacy=manifest_claim is None,
             admit_remote_code=admit_remote_code,
+            registry=tokenizer_registry,
         )
         if nss_tokenizer is not None:
             cls._validate_nss_tokenizer_metadata_input(kwargs, nss_tokenizer)

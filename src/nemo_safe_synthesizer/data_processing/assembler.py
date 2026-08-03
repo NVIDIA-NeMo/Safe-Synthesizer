@@ -42,7 +42,7 @@ from ..errors import (
 from ..holdout.holdout import grouped_train_test_split, naive_train_test_split
 from ..llm.metadata import ModelMetadata
 from ..observability import get_logger
-from ..tokenization import NssTokenizer, PromptEncoding, WorkloadKind, create_runtime_nss_tokenizer
+from ..tokenization import NssTokenizerCore, PromptEncoding, WorkloadKind, create_runtime_nss_tokenizer
 from ..tokenization.cache import (
     TokenCacheKey,
     TokenCacheLock,
@@ -134,10 +134,10 @@ class Example:
     def __init__(
         self,
         prompt: PromptEncoding,
-        tokenizer: NssTokenizer,
+        tokenizer: NssTokenizerCore,
         metadata: ModelMetadata,
     ):
-        if not isinstance(prompt, PromptEncoding) or not isinstance(tokenizer, NssTokenizer):
+        if not isinstance(prompt, PromptEncoding) or not isinstance(tokenizer, NssTokenizerCore):
             raise ParameterError("Example requires an NSS tokenizer and its PromptEncoding.")
         self.prompt = prompt
         self.nss_tokenizer = tokenizer
@@ -237,7 +237,7 @@ class TrainingExampleAssembler(ABC):
         self,
         dataset: Dataset,
         tokenizer: PreTrainedTokenizerBase | None,
-        record_tokenizer: NssTokenizer,
+        record_tokenizer: NssTokenizerCore,
         metadata: ModelMetadata,
         keep_columns: list[str] | None = None,
         test_size: int | None = None,
@@ -256,7 +256,7 @@ class TrainingExampleAssembler(ABC):
             raise ParameterError(msg)
 
         self.metadata = metadata
-        if not isinstance(record_tokenizer, NssTokenizer):
+        if not isinstance(record_tokenizer, NssTokenizerCore):
             raise ParameterError("TrainingExampleAssembler requires an NSS record tokenizer.")
         if not record_tokenizer.capabilities.training_prompt:
             raise ParameterError("TrainingExampleAssembler requires NSS training prompt capability.")
@@ -337,7 +337,7 @@ class TrainingExampleAssembler(ABC):
         seed: int | None = None,
         cache_file_path: str | Path | None = None,
         keep_columns: list[str] | None = None,
-        nss_tokenizer: NssTokenizer | None = None,
+        nss_tokenizer: NssTokenizerCore | None = None,
         **kwargs,
     ) -> GroupedDataExampleAssembler | TabularDataExampleAssembler | SequentialExampleAssembler:
         """Select and construct the appropriate assembler subclass from config.
@@ -371,7 +371,11 @@ class TrainingExampleAssembler(ABC):
         if nss_tokenizer is None:
             if tokenizer is None:
                 raise ParameterError("Assembler construction requires an NSS tokenizer or compatibility native input.")
-            record_tokenizer = create_runtime_nss_tokenizer(tokenizer, metadata, workload_kind=workload_kind)
+            record_tokenizer: NssTokenizerCore = create_runtime_nss_tokenizer(
+                tokenizer,
+                metadata,
+                workload_kind=workload_kind,
+            )
         else:
             record_tokenizer = nss_tokenizer
 
@@ -879,7 +883,7 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
         self,
         dataset: Dataset,
         tokenizer: PreTrainedTokenizerBase | None,
-        record_tokenizer: NssTokenizer,
+        record_tokenizer: NssTokenizerCore,
         metadata: ModelMetadata,
         *,
         group_training_examples_by: str,
@@ -1319,7 +1323,7 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
         order_training_examples_by: str | None,
         dataset: Dataset,
         tokenizer: PreTrainedTokenizerBase | None,
-        record_tokenizer: NssTokenizer,
+        record_tokenizer: NssTokenizerCore,
         metadata: ModelMetadata,
         test_size: int | float | None = None,
         cache_file_path: str | Path | None = None,

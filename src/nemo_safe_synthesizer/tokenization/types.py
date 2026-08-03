@@ -205,9 +205,16 @@ class PromptEncoding:
     """Stable rendered prompt output."""
 
     text: str
+    """Rendered prompt text before token dispatch."""
+
     input_ids: tuple[int, ...]
+    """Canonical token IDs for the rendered prompt."""
+
     attention_mask: tuple[int, ...]
+    """Attention values aligned one-to-one with ``input_ids``."""
+
     segment_offsets: tuple[tuple[str, int], ...] = ()
+    """Named token offsets; ``len(input_ids)`` is valid as a terminal offset."""
 
     def __post_init__(self) -> None:
         if not isinstance(self.segment_offsets, tuple) or any(

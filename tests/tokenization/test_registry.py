@@ -14,21 +14,28 @@ from typing import cast, get_type_hints
 import pytest
 from transformers import AutoTokenizer, PreTrainedTokenizerBase
 
+from nemo_safe_synthesizer.cli.artifact_structure import Workdir
 from nemo_safe_synthesizer.errors import ParameterError
+from nemo_safe_synthesizer.llm.metadata import LLMPromptConfig, ModelMetadata
 from nemo_safe_synthesizer.tokenization import (
     FramingPolicy,
+    FrozenJsonObject,
     NssTokenizer,
     NssTokenizerRegistry,
     NssTokenizerSpec,
     RegistryEntry,
     TabularContext,
     TabularNssTokenizer,
+    TimeSeriesContext,
     TimeSeriesNssTokenizer,
     TokenizerCapabilities,
     WorkloadKind,
+    as_tabular_renderer,
+    as_timeseries_renderer,
     builtin_registry,
 )
 from nemo_safe_synthesizer.tokenization.base import native_snapshot
+from nemo_safe_synthesizer.tokenization.persistence import load_nss_tokenizer, save_nss_tokenizer
 from nemo_safe_synthesizer.tokenization.types import JsonObject, canonical_json_bytes
 
 
@@ -69,6 +76,22 @@ def test_spec_round_trip_canonical_schema_and_cache_identity(tokenizers_dir) -> 
     assert restored.canonical_bytes() == manifest
     assert canonical_json_bytes(restored.to_dict()) == manifest
     assert restored.cache_identity_fragment == tokenizer.spec.cache_identity_fragment
+    assert restored.workload_kind is WorkloadKind.TABULAR
+
+
+def test_workload_renderer_narrowing_checks_manifest_kind(tokenizers_dir) -> None:
+    """Prompt consumers narrow the context-free contract at the workload boundary."""
+    _, tabular = _make_tokenizer(tokenizers_dir, TabularNssTokenizer)
+    _, timeseries = _make_tokenizer(tokenizers_dir, TimeSeriesNssTokenizer)
+
+    assert as_tabular_renderer(tabular).render_prompt(TabularContext(("a",), "generate"))
+    assert as_timeseries_renderer(timeseries).render_prompt(
+        TimeSeriesContext(FrozenJsonObject.from_value({"properties": {"a": {}}}), "generate", "")
+    )
+    with pytest.raises(ParameterError, match="tabular prompt"):
+        as_tabular_renderer(timeseries)
+    with pytest.raises(ParameterError, match="time-series prompt"):
+        as_timeseries_renderer(tabular)
 
 
 def test_builtin_reconstruction_rejects_prior_prompt_policy_epoch(tokenizers_dir) -> None:
@@ -100,17 +123,38 @@ def test_spawned_worker_reconstruction(tokenizers_dir, tmp_path, implementation)
     assert result_path.read_text() == f"{tokenizer.spec.cache_identity_fragment}|{implementation.__name__}"
 
 
-class _ExternalA(TabularNssTokenizer):
+class _ExternalTabular(NssTokenizer[TabularContext]):
+    WORKLOAD_KIND = WorkloadKind.TABULAR
+
+    @property
+    def capabilities(self) -> TokenizerCapabilities:
+        return TokenizerCapabilities(record_jsonl=True, prompt_encoding=True, rolling_prefill=False)
+
+    def _prompt_parts(self, context: TabularContext) -> tuple[str, str, str]:
+        return context.instruction, ",".join(context.ordered_columns), ""
+
+    @classmethod
+    def _default_workload_payload(cls) -> JsonObject:
+        return {"payload_version": 1}
+
+    @classmethod
+    def _validate_workload_payload(cls, payload: object) -> JsonObject:
+        if payload != {"payload_version": 1}:
+            raise ParameterError("Invalid external workload payload.")
+        return {"payload_version": 1}
+
+
+class _ExternalA(_ExternalTabular):
     IMPLEMENTATION_ID = "example.org:a"
     IMPLEMENTATION_VERSION = "1"
 
 
-class _ExternalZ(TabularNssTokenizer):
+class _ExternalZ(_ExternalTabular):
     IMPLEMENTATION_ID = "example.org:z"
     IMPLEMENTATION_VERSION = "2"
 
 
-class _ConfigurableExternal(TabularNssTokenizer):
+class _ConfigurableExternal(_ExternalTabular):
     IMPLEMENTATION_ID = "example.org:configurable"
 
     @classmethod
@@ -252,6 +296,75 @@ def test_external_training_prompt_requires_explicit_capability(tokenizers_dir) -
         external.render_training_prompt(("a",), "generate")
 
 
+def test_external_registered_tokenizer_persistence_round_trip_uses_injected_registry(tokenizers_dir, tmp_path) -> None:
+    """Artifact loading accepts explicitly admitted extension registrations."""
+    registry, tokenizer = _make_tokenizer(tokenizers_dir)
+    external_registry = registry.register(
+        RegistryEntry((1, _DirectExternal.IMPLEMENTATION_ID, "1"), "example-extension", "1", _DirectExternal),
+        admit_external=True,
+    )
+    external = external_registry.create(
+        (1, _DirectExternal.IMPLEMENTATION_ID, "1"),
+        tokenizer.for_hf(),
+        framing=tokenizer._framing,
+        native_source=str(tokenizers_dir / "tinyllama"),
+        native_revision="fixture-v1",
+    )
+
+    save_nss_tokenizer(external, tmp_path)
+    with pytest.raises(ParameterError, match="registry drift"):
+        load_nss_tokenizer(tmp_path)
+
+    restored = load_nss_tokenizer(tmp_path, registry=external_registry)
+    assert restored is not None
+    assert restored.spec == external.spec
+
+
+def test_model_metadata_load_uses_injected_external_tokenizer_registry(tokenizers_dir, tmp_path) -> None:
+    """Metadata loading preserves explicit extension admission during reconstruction."""
+    registry, tokenizer = _make_tokenizer(tokenizers_dir)
+    external_registry = registry.register(
+        RegistryEntry((1, _DirectExternal.IMPLEMENTATION_ID, "1"), "example-extension", "1", _DirectExternal),
+        admit_external=True,
+    )
+    external = external_registry.create(
+        (1, _DirectExternal.IMPLEMENTATION_ID, "1"),
+        tokenizer.for_hf(),
+        framing=tokenizer._framing,
+        native_source=str(tokenizers_dir / "tinyllama"),
+        native_revision="fixture-v1",
+    )
+    framing, _ = type(external).policies_from_spec(external.spec)
+    workdir = Workdir(tmp_path, "config", "dataset", "run")
+    workdir.ensure_directories()
+    metadata = ModelMetadata.from_str_or_path(
+        tokenizers_dir / "tinyllama",
+        tokenizer=external.for_hf(),
+        workdir=workdir,
+    )
+    metadata.prompt_config = LLMPromptConfig(
+        template=framing.prompt_template,
+        add_bos_token_to_prompt=framing.add_bos_token_to_prompt,
+        add_eos_token_to_prompt=framing.add_eos_token_to_prompt,
+        bos_token=framing.bos_token,
+        bos_token_id=framing.bos_token_id,
+        eos_token=framing.eos_token,
+        eos_token_id=framing.eos_token_id,
+    )
+    metadata.nss_tokenizer = external
+    metadata.tokenizer = external.for_hf()
+    metadata.save_metadata()
+
+    restored = ModelMetadata.from_metadata_json(
+        workdir.train.adapter.metadata,
+        workdir=workdir,
+        tokenizer_registry=external_registry,
+    )
+
+    assert restored.nss_tokenizer is not None
+    assert restored.nss_tokenizer.spec == external.spec
+
+
 def test_duplicate_unknown_version_and_external_admission_fail_closed() -> None:
     registry = builtin_registry()
     duplicate = registry.entries[0]
@@ -338,7 +451,7 @@ def test_remote_code_manifest_requires_runtime_admission_before_loading(tokenize
 
 def test_workload_kind_mismatch_fails_before_native_loading(tokenizers_dir) -> None:
     registry, tokenizer = _make_tokenizer(tokenizers_dir)
-    mismatched = replace(tokenizer.spec, workload_kind="time-series")
+    mismatched = replace(tokenizer.spec, workload_kind=WorkloadKind.TIME_SERIES)
     called = False
 
     def loader(_source: str, _revision: str, _trust_remote_code: bool):
@@ -370,8 +483,19 @@ def test_manifest_schema_is_strict_and_canonical_json_rejects_nonfinite(tokenize
     malformed["native"]["fingerprint"] = "z" * 64
     with pytest.raises(ParameterError, match="schema"):
         NssTokenizerSpec.from_dict(malformed)
+    malformed = copy.deepcopy(manifest)
+    malformed["workload_kind"] = "unsupported"
+    with pytest.raises(ParameterError, match="schema"):
+        NssTokenizerSpec.from_dict(malformed)
     with pytest.raises(ParameterError, match="finite JSON"):
         canonical_json_bytes({"value": float("nan")})
+
+
+def test_spec_direct_construction_requires_owned_workload_kind(tokenizers_dir) -> None:
+    _, tokenizer = _make_tokenizer(tokenizers_dir)
+
+    with pytest.raises(ParameterError, match="WorkloadKind"):
+        replace(tokenizer.spec, workload_kind="tabular")
 
 
 def test_direct_construction_rejects_mutable_remote_revision(tokenizers_dir) -> None:

@@ -12,8 +12,8 @@ from pathlib import Path
 from transformers import AutoTokenizer, PreTrainedTokenizerBase
 
 from ..errors import ParameterError
-from .base import NssTokenizer
-from .registry import builtin_registry
+from .base import NssTokenizerCore
+from .registry import NssTokenizerRegistry, builtin_registry
 from .spec import NssTokenizerSpec
 
 NSS_TOKENIZER_MANIFEST = "nss_tokenizer.json"
@@ -63,7 +63,7 @@ def _validate_artifact_tree(directory: Path) -> None:
             raise ParameterError(f"Persisted tokenizer artifact entry must be a regular file or directory: {entry}.")
 
 
-def save_nss_tokenizer(tokenizer: NssTokenizer, directory: Path) -> None:
+def save_nss_tokenizer(tokenizer: NssTokenizerCore, directory: Path) -> None:
     """Persist native assets and the canonical NSS manifest."""
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
@@ -96,7 +96,8 @@ def load_nss_tokenizer(
     *,
     allow_legacy: bool = False,
     admit_remote_code: bool = False,
-) -> NssTokenizer | None:
+    registry: NssTokenizerRegistry | None = None,
+) -> NssTokenizerCore | None:
     """Reconstruct a persisted NSS tokenizer or explicitly admit legacy absence."""
     directory = Path(directory)
     manifest = _manifest_path(directory)
@@ -151,7 +152,8 @@ def load_nss_tokenizer(
             raise ParameterError("Persisted native tokenizer assets resolved to an unsupported object.")
         return native
 
-    return builtin_registry().reconstruct(
+    active_registry = builtin_registry() if registry is None else registry
+    return active_registry.reconstruct(
         spec,
         native_loader=load_local_native,
         admit_remote_code=admit_remote_code,
