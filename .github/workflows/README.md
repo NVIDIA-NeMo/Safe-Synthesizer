@@ -146,7 +146,7 @@ All jobs run on `ubuntu-latest` (GitHub-hosted).
 The `gpu-tests.yml` workflow runs nightly at 02:00 UTC, and can also be triggered manually via `workflow_dispatch`. Manual dispatch includes a `suite` dropdown with `all`, `smoke`, and `e2e` options. The `push` trigger for `pull-request/*` branches is currently commented out due to internal blockers, so PRs do not automatically produce GPU status checks. We expect to re-enable that path as soon as those blockers are resolved. There are several key jobs:
 
 - GPU Smoke Tests: runs GPU-marked unit tests, followed by staged train-only, generation, resume, structured generation, timeseries, and SmolLM2 smoke tests. Required for merge when the workflow is part of branch protection.
-- GPU E2E Tests: End-to-end tests on a gpu runner with a 60-minute job timeout and 45-minute step timeout. Informational -- failures produce a warning but don't block merge.
+- GPU E2E Tests: End-to-end tests on a gpu runner with a 210-minute job timeout and 190-minute step timeout. Informational -- failures produce a warning but don't block merge.
 - GPU CI Status: Aggregation job for the GPU workflow. It is not currently a live branch-protection requirement while PR GPU runs are disabled; when re-enabled, it is intended to be the required GPU check. It fails if smoke tests fail and warns if E2E tests fail.
 
 The `changes` (Detect Changes) job is skipped on `workflow_dispatch`. GPU jobs use `always()` in their job conditions so manual runs can bypass the skipped dependency and run the selected suite. On scheduled runs, `changes` gates GPU jobs with the `src_test_deps` output, which is true for source, test, `pytest.ini`, dependency, or CI workflow/action changes.
