@@ -26,6 +26,14 @@ does at each stage.
 
 ### Install the Package
 
+!!! tip "Skip installation entirely"
+    [![Launch on Brev](https://brev-assets.s3.us-west-1.amazonaws.com/nv-lb-dark.svg#only-light)](https://brev.nvidia.com/launchable/deploy/now?launchableID=env-3HBtA2NKQaBukL2TyDphWUcvQ17)
+    [![Launch on Brev](https://brev-assets.s3.us-west-1.amazonaws.com/nv-lb-light.svg#only-dark)](https://brev.nvidia.com/launchable/deploy/now?launchableID=env-3HBtA2NKQaBukL2TyDphWUcvQ17)
+
+    Deploys a GPU instance with everything below already done, plus the tutorial
+    notebooks. Useful for evaluating Safe Synthesizer without a local NVIDIA GPU. The
+    instance bills continuously and cannot be paused -- delete it when you are finished.
+
 The CUDA and CPU extras depend on packages (PyTorch, FlashInfer) hosted on
 indexes outside PyPI. You must pass the extra index URLs shown below.
 

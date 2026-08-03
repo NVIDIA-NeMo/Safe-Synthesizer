@@ -5,6 +5,12 @@
 
 Interactive Jupyter notebook tutorials for NeMo Safe Synthesizer.
 
+[![Launch on Brev](https://brev-assets.s3.us-west-1.amazonaws.com/nv-lb-dark.svg#only-light)](https://brev.nvidia.com/launchable/deploy/now?launchableID=env-3HBtA2NKQaBukL2TyDphWUcvQ17)
+[![Launch on Brev](https://brev-assets.s3.us-west-1.amazonaws.com/nv-lb-light.svg#only-dark)](https://brev.nvidia.com/launchable/deploy/now?launchableID=env-3HBtA2NKQaBukL2TyDphWUcvQ17)
+
+These notebooks need a Linux machine with an NVIDIA GPU. The launchable above provides
+one with Safe Synthesizer and all three notebooks already installed.
+
 ## Available Tutorials
 
 - [Safe Synthesizer 101](safe-synthesizer-101.ipynb) -- learn the fundamentals
