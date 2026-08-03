@@ -127,6 +127,34 @@ GPU, CPU, memory, and shared-memory requirements vary with the model, dataset,
 and configuration. See [Program Runtime](troubleshooting.md) for GPU, OOM,
 permissions, cache, and offline failures.
 
+## Debug the runtime image
+
+For an interactive inspection session, override the entrypoint and start a
+shell in the published runtime image. Mount the same input, configuration,
+artifact, and cache directories you use for a normal run:
+
+```bash
+docker run --rm -it --gpus all --shm-size=1g \
+  --user "$(id -u):$(id -g)" \
+  --mount type=bind,src="$(pwd)/input",dst=/workspace/input,readonly \
+  --mount type=bind,src="$(pwd)/config",dst=/workspace/config,readonly \
+  --mount type=bind,src="$(pwd)/artifacts",dst=/workspace/artifacts \
+  --mount type=bind,src="$HOME/.cache/huggingface",dst=/workspace/.hf_cache \
+  --entrypoint /bin/bash \
+  ghcr.io/nvidia-nemo/safe-synthesizer:latest-cu129
+```
+
+Inside the shell, inspect GPU visibility or validate a configuration without
+starting a synthesis run:
+
+```bash
+nvidia-smi
+safe-synthesizer config validate --config /workspace/config/config.yaml
+```
+
+Overriding the entrypoint bypasses its startup diagnostics. Use the normal
+`docker run` command for actual pipeline runs.
+
 ## Offline and Air-Gapped Environments
 
 Populate a persistent model cache in an approved connected environment, move
