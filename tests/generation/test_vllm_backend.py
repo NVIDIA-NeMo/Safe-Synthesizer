@@ -5,6 +5,7 @@
 
 import os
 from functools import partial
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -18,10 +19,12 @@ from nemo_safe_synthesizer.config import (
 )
 from nemo_safe_synthesizer.config.generate import ValidationParameters
 from nemo_safe_synthesizer.defaults import DEFAULT_SAMPLING_PARAMETERS
-from nemo_safe_synthesizer.errors import ParameterError
+from nemo_safe_synthesizer.errors import GenerationError, ParameterError
+from nemo_safe_synthesizer.generation.batch import Batch
 from nemo_safe_synthesizer.generation.processors import TabularDataProcessor
 from nemo_safe_synthesizer.generation.vllm_observability import GenerationObservability
 from nemo_safe_synthesizer.llm.metadata import ModelMetadata, RopeScaling
+from nemo_safe_synthesizer.tokenization import PromptEncoding, TabularContext
 
 
 @pytest.fixture
@@ -48,6 +51,7 @@ def mock_model_metadata(fixture_session_cache_dir):
     metadata.rope_scaling = None
     metadata.max_tokens_per_example = None
     metadata.max_records_per_group = None
+    metadata.nss_tokenizer = None
     metadata.generation_max_tokens_for.return_value = 2048
     return metadata
 
@@ -822,6 +826,79 @@ class TestGenerateDispatch:
         assert backend._generate(input_ids=[[1, 2], [3, 4]]) == ["ok"]
         assert captured["prompts"] == [{"prompt_token_ids": [1, 2]}, {"prompt_token_ids": [3, 4]}]
         assert "prompt_token_ids" not in captured
+
+    def test_generate_batch_uses_canonical_nss_token_prompts(
+        self, base_params, mock_model_metadata, mock_schema, mock_workdir
+    ):
+        """NSS-backed static generation sends canonical IDs instead of prompt text."""
+        prompt = PromptEncoding(text="canonical prompt", input_ids=(101, 102, 103), attention_mask=(1, 1, 1))
+        nss_tokenizer = MagicMock()
+        nss_tokenizer.render_prompt.return_value = prompt
+        nss_tokenizer.capacity_for.return_value = SimpleNamespace(record_token_capacity=2045)
+        mock_model_metadata.nss_tokenizer = nss_tokenizer
+        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
+        captured = {}
+
+        def fake_generate(**kwargs):
+            captured.update(kwargs)
+            return []
+
+        backend._gen_method = partial(fake_generate, sampling_params=object())
+
+        batch = Batch(processor=backend.processor)
+        assert backend._generate_batch(num_prompts_per_batch=2, batch=batch) is batch
+        assert captured["prompts"] == [
+            {"prompt_token_ids": [101, 102, 103]},
+            {"prompt_token_ids": [101, 102, 103]},
+        ]
+        context = nss_tokenizer.render_prompt.call_args.args[0]
+        assert context == TabularContext(("name", "age"), "Generate data")
+
+    def test_nss_prompt_capacity_uses_canonical_ids_without_engine_tokenization(
+        self, base_params, mock_model_metadata, mock_schema, mock_workdir
+    ):
+        """Static capacity is derived from the exact canonical prompt sent to vLLM."""
+        prompt = PromptEncoding(text="canonical prompt", input_ids=(7, 8, 9), attention_mask=(1, 1, 1))
+        nss_tokenizer = MagicMock()
+        nss_tokenizer.render_prompt.return_value = prompt
+        nss_tokenizer.capacity_for.return_value = SimpleNamespace(record_token_capacity=2045)
+        mock_model_metadata.nss_tokenizer = nss_tokenizer
+        mock_model_metadata.generation_max_tokens_for.side_effect = (
+            lambda prompt_len, *, multiplier: prompt_len + 397
+        )
+        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
+        captured = {}
+
+        def capture_and_stop(**kwargs):
+            captured.update(kwargs)
+            raise StopIteration("short-circuit")
+
+        backend.prepare_params = capture_and_stop
+
+        with pytest.raises(StopIteration):
+            backend.generate()
+
+        assert captured["max_tokens"] == 400
+
+    def test_nss_prompt_with_no_live_capacity_fails_before_dispatch(
+        self, base_params, mock_model_metadata, mock_schema, mock_workdir
+    ):
+        """A full-context canonical prompt fails with an NSS error before vLLM dispatch."""
+        prompt = PromptEncoding(text="full prompt", input_ids=tuple(range(2048)), attention_mask=(1,) * 2048)
+        nss_tokenizer = MagicMock()
+        nss_tokenizer.render_prompt.return_value = prompt
+        nss_tokenizer.capacity_for.return_value = SimpleNamespace(record_token_capacity=0)
+        mock_model_metadata.nss_tokenizer = nss_tokenizer
+        mock_model_metadata.generation_max_tokens_for.return_value = 0
+        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
+        backend.prepare_params = MagicMock()
+        backend._generate_batch = MagicMock()
+
+        with pytest.raises(GenerationError, match="no room for generated tokens"):
+            backend.generate()
+
+        backend.prepare_params.assert_not_called()
+        backend._generate_batch.assert_not_called()
 
 
 class TestNoopRemoteCacheBackend:

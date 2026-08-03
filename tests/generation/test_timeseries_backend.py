@@ -11,7 +11,6 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 import pytest
 from transformers import PretrainedConfig
-from vllm.exceptions import VLLMValidationError
 from vllm.sampling_params import SamplingParams
 
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
@@ -24,8 +23,9 @@ from nemo_safe_synthesizer.config import (
 )
 from nemo_safe_synthesizer.data_processing.record_utils import ParsedRecord
 from nemo_safe_synthesizer.defaults import DEFAULT_MAX_SEQ_LENGTH, PSEUDO_GROUP_COLUMN
+from nemo_safe_synthesizer.errors import GenerationError
 from nemo_safe_synthesizer.generation.processors import TimeSeriesDataProcessor
-from nemo_safe_synthesizer.generation.results import GenerationBatches
+from nemo_safe_synthesizer.generation.results import GenerationBatches, GenerationStatus
 from nemo_safe_synthesizer.generation.timeseries_backend import (
     GroupProcessingResult,
     GroupState,
@@ -36,6 +36,7 @@ from nemo_safe_synthesizer.llm.metadata import (
     LLMPromptConfig,
     ModelMetadata,
 )
+from nemo_safe_synthesizer.tokenization import PromptEncoding
 
 PROMPT_TEMPLATE = "[INST] {instruction} {schema} [/INST]"
 
@@ -539,6 +540,84 @@ class TestGenerateParallelGroups:
         assert captured["batch"].finish_reasons["length"] == 1
         assert batches.num_length_truncated_completions == 1
 
+    def test_dispatches_canonical_rolling_ids_with_live_capacity(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        """Each rolling dispatch rebuilds NSS IDs and clamps to its live prompt."""
+        timeseries_model_metadata.base_max_seq_length = 8
+        nss_tokenizer = MagicMock()
+
+        def render_prompt(context):
+            ids = (1, 2, 3) if context.current_prefill != "rolling\n" else (1, 2, 3, 4, 5, 6)
+            return PromptEncoding(
+                text=f"prompt:{context.current_prefill}", input_ids=ids, attention_mask=(1,) * len(ids)
+            )
+
+        nss_tokenizer.render_prompt.side_effect = render_prompt
+        nss_tokenizer.capacity_for.side_effect = lambda prompt, **_: SimpleNamespace(
+            record_token_capacity=8 - len(prompt.input_ids)
+        )
+        timeseries_model_metadata.nss_tokenizer = nss_tokenizer
+        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
+        backend._groups = ["group_A"]
+        backend.llm = MagicMock()
+        dispatches = []
+
+        def generate(**kwargs):
+            dispatches.append(kwargs)
+            return [SimpleNamespace(outputs=[])]
+
+        backend.llm.generate.side_effect = generate
+        backend._log_parallel_batch_summary = MagicMock()
+        backend._maybe_save_progress_snapshots = MagicMock()
+        attempts = 0
+
+        def process_result(state, batch, invalid_fraction_threshold):  # noqa: ARG001
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                state.current_prefill = "rolling\n"
+                return GroupProcessingResult.IN_PROGRESS
+            return GroupProcessingResult.COMPLETED
+
+        backend._process_group_result = process_result
+        batches = MagicMock()
+        batches.status = GenerationStatus.IN_PROGRESS
+        batches.num_valid_records = 0
+
+        assert backend._generate_parallel_groups(batches, SamplingParams(max_tokens=5), [])
+        assert [call["prompts"] for call in dispatches] == [
+            [{"prompt_token_ids": [1, 2, 3]}],
+            [{"prompt_token_ids": [1, 2, 3, 4, 5, 6]}],
+        ]
+        assert [call["sampling_params"].max_tokens for call in dispatches] == [5, 2]
+        contexts = [call.args[0] for call in nss_tokenizer.render_prompt.call_args_list]
+        assert [context.current_prefill for context in contexts] == [
+            timeseries_model_metadata.initial_prefill["group_A"],
+            "rolling\n",
+        ]
+        assert all(context.schema.property_order == ("timestamp", "value") for context in contexts)
+        assert all(context.instruction == timeseries_model_metadata.instruction for context in contexts)
+
+    def test_full_live_rolling_prompt_fails_before_vllm_dispatch(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        """A rolling prompt that fills the context fails before reaching vLLM."""
+        timeseries_model_metadata.base_max_seq_length = 8
+        nss_tokenizer = MagicMock()
+        prompt = PromptEncoding(text="full prompt", input_ids=tuple(range(8)), attention_mask=(1,) * 8)
+        nss_tokenizer.render_prompt.return_value = prompt
+        nss_tokenizer.capacity_for.return_value = SimpleNamespace(record_token_capacity=0)
+        timeseries_model_metadata.nss_tokenizer = nss_tokenizer
+        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
+        backend._groups = ["group_A"]
+        backend.llm = MagicMock()
+
+        with pytest.raises(GenerationError, match="no room for generated tokens"):
+            backend._generate_parallel_groups(MagicMock(), SamplingParams(max_tokens=1), [])
+
+        backend.llm.generate.assert_not_called()
+
 
 class TestGenerationMaxTokensPlumbing:
     """``SamplingParams.max_tokens`` is sourced from ``metadata.generation_max_tokens_for``."""
@@ -647,5 +726,5 @@ class TestGenerationMaxTokensPlumbing:
 
         assert prompt_len >= timeseries_model_metadata.max_seq_length
         assert timeseries_model_metadata.generation_max_tokens_for(prompt_len) == 0
-        with pytest.raises(VLLMValidationError, match="max_tokens must be at least 1"):
+        with pytest.raises(GenerationError, match="no room for generated tokens"):
             backend.generate()

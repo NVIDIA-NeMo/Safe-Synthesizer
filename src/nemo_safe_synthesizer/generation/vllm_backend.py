@@ -33,7 +33,7 @@ from ..config.generate import (
 )
 from ..data_processing.dataset import relax_numeric_bounds
 from ..defaults import DEFAULT_SAMPLING_PARAMETERS, FIXED_RUNTIME_GENERATE_ARGS
-from ..errors import InternalError, ParameterError
+from ..errors import GenerationError, InternalError, ParameterError
 from ..generation.backend import GeneratorBackend
 from ..generation.batch import Batch
 from ..generation.processors import EncodeOnlyTokenizer, Processor, TabularDataProcessor, create_processor
@@ -49,6 +49,7 @@ from ..generation.vllm_observability import (
 from ..llm.metadata import ModelMetadata
 from ..llm.utils import ModelRef, cleanup_memory, get_max_vram
 from ..observability import get_logger, heartbeat
+from ..tokenization import PromptEncoding, TabularContext
 from ..utils import all_equal_type, load_json
 
 logger = get_logger(__name__)
@@ -261,6 +262,8 @@ class VllmBackend(GeneratorBackend):
             instruction=self.model_metadata.instruction,
             prompt_template=self.model_metadata.prompt_config.template,
         )
+        self._static_prompt_encoding: PromptEncoding | None = None
+        self._static_prompt_encoding_resolved = False
         self.llm: vLLM | None = None
         self._prompt_token_count: int | None = None
         # Populated in ``initialize()`` after engine build; pre-declared
@@ -365,14 +368,37 @@ class VllmBackend(GeneratorBackend):
             tokenizer=tokenizer,
         )
 
-    def _get_prompt_token_count(self) -> int:
-        """Return the templated prompt's tokenized length, cached after first call.
+    def _render_nss_prompt(self, current_prefill: str) -> PromptEncoding | None:
+        """Render one canonical NSS prompt, or preserve legacy text generation."""
+        nss_tokenizer = self.model_metadata.nss_tokenizer
+        if nss_tokenizer is None:
+            return None
+        if current_prefill:
+            raise InternalError("Static tabular generation cannot render a rolling prefill.")
+        return nss_tokenizer.render_prompt(
+            TabularContext(
+                ordered_columns=tuple(self.columns),
+                instruction=self.model_metadata.instruction,
+            )
+        )
 
-        Uses the loaded vLLM tokenizer so encoding matches what the engine
-        will see at runtime. Returns ``0`` when the engine has not yet been
-        initialized -- callers fall back to a prompt-agnostic ceiling in
-        that case.
+    def _get_static_prompt_encoding(self) -> PromptEncoding | None:
+        """Return the canonical static prompt once for this backend instance."""
+        if not self._static_prompt_encoding_resolved:
+            self._static_prompt_encoding = self._render_nss_prompt("")
+            self._static_prompt_encoding_resolved = True
+        return self._static_prompt_encoding
+
+    def _get_prompt_token_count(self) -> int:
+        """Return the exact prompt length, cached after first legacy encoding.
+
+        NSS-backed artifacts use the canonical IDs that will be dispatched.
+        Legacy artifacts retain engine-tokenizer counting and return ``0``
+        before engine initialization.
         """
+        prompt_encoding = self._get_static_prompt_encoding()
+        if prompt_encoding is not None:
+            return len(prompt_encoding.input_ids)
         if self._prompt_token_count is not None:
             return self._prompt_token_count
         if self.llm is None:
@@ -380,6 +406,49 @@ class VllmBackend(GeneratorBackend):
         tokenizer = self.llm.get_tokenizer()
         self._prompt_token_count = len(tokenizer.encode(self.prompt))
         return self._prompt_token_count
+
+    def _max_tokens_for_prompt_length(self, prompt_len: int, *, available_capacity: int | None = None) -> int:
+        """Return a positive live output budget before constructing vLLM inputs."""
+        max_tokens = self.model_metadata.generation_max_tokens_for(
+            prompt_len,
+            multiplier=self.config.generation.max_tokens_multiplier,
+        )
+        if available_capacity is not None:
+            max_tokens = min(max_tokens, available_capacity)
+        if max_tokens <= 0:
+            raise GenerationError(
+                f"The generation prompt uses {prompt_len} tokens and leaves no room for generated tokens "
+                f"within the model context length of {self.model_metadata.max_seq_length}."
+            )
+        return max_tokens
+
+    def _generation_max_tokens(self, prompt: PromptEncoding | str | None = None) -> int:
+        """Validate one live prompt and return its safe vLLM output budget."""
+        if prompt is None:
+            prompt = self._get_static_prompt_encoding()
+            if prompt is None:
+                return self._max_tokens_for_prompt_length(self._get_prompt_token_count())
+
+        if isinstance(prompt, PromptEncoding):
+            nss_tokenizer = self.model_metadata.nss_tokenizer
+            if nss_tokenizer is None:
+                raise InternalError("Canonical prompt generation requires an NSS tokenizer.")
+            capacity = nss_tokenizer.capacity_for(
+                prompt,
+                context_limit=self.model_metadata.max_seq_length,
+                sequence_count=0,
+                rope_scaling_factor=self.model_metadata.rope_scaling_factor,
+            )
+            return self._max_tokens_for_prompt_length(
+                len(prompt.input_ids),
+                available_capacity=capacity.record_token_capacity,
+            )
+
+        if self.llm is None:
+            prompt_len = 0
+        else:
+            prompt_len = len(self.llm.get_tokenizer().encode(prompt))
+        return self._max_tokens_for_prompt_length(prompt_len)
 
     def _build_structured_output_params(self) -> StructuredOutputsParams | None:
         """Build structured output parameters based on generation config.
@@ -625,14 +694,21 @@ class VllmBackend(GeneratorBackend):
         Returns:
             Batch object that contains the generated records and associated statistics.
         """
-        logger.debug(f"generation prompt ({len(self.prompt)} chars):\n{self.prompt}")
-        prompt_list = [self.prompt] * num_prompts_per_batch
+        prompt_encoding = self._get_static_prompt_encoding()
+        prompt_text = prompt_encoding.text if prompt_encoding is not None else self.prompt
+        logger.debug(f"generation prompt ({len(prompt_text)} chars):\n{prompt_text}")
 
         # `n` is the number of output sequences per prompt.
         # Subsequent processing assumes `n=1`, so we hardcode it here.
         sampling_kwargs.update({"n": 1})
 
-        outputs = self._generate(prompts=prompt_list, **sampling_kwargs)
+        if prompt_encoding is None:
+            outputs = self._generate(prompts=[self.prompt] * num_prompts_per_batch, **sampling_kwargs)
+        else:
+            outputs = self._generate(
+                input_ids=[list(prompt_encoding.input_ids) for _ in range(num_prompts_per_batch)],
+                **sampling_kwargs,
+            )
 
         for idx, output in enumerate(outputs):
             out = output.outputs[0]
@@ -746,10 +822,7 @@ class VllmBackend(GeneratorBackend):
             top_p=self.config.generation.top_p,
             top_k=FIXED_RUNTIME_GENERATE_ARGS["top_k"],
             min_p=FIXED_RUNTIME_GENERATE_ARGS["min_p"],
-            max_tokens=self.model_metadata.generation_max_tokens_for(
-                self._get_prompt_token_count(),
-                multiplier=self.config.generation.max_tokens_multiplier,
-            ),
+            max_tokens=self._generation_max_tokens(),
             skip_special_tokens=not need_special_token_outputs,
             include_stop_str_in_output=need_special_token_outputs,
             ignore_eos=False,
