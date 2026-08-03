@@ -1482,6 +1482,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="WandB Integration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#evaluation-scorecard-and-report-upload" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Evaluation scorecard and report upload
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
       </ul>
@@ -10160,6 +10177,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="WandB Integration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#evaluation-scorecard-and-report-upload" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Evaluation scorecard and report upload
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
       </ul>
@@ -10474,6 +10508,12 @@ all others have defaults or are optional.</p>
 <td><code>NSS_WANDB_PROJECT</code></td>
 <td>--</td>
 <td>WandB project name</td>
+</tr>
+<tr>
+<td><code>--wandb-upload-evaluation-report</code> / <code>--no-wandb-upload-evaluation-report</code></td>
+<td><code>NSS_WANDB_UPLOAD_EVALUATION_REPORT</code></td>
+<td><code>true</code></td>
+<td>Control evaluation HTML and artifact publishing</td>
 </tr>
 <tr>
 <td><code>--dataset-registry</code></td>
@@ -11630,6 +11670,27 @@ call <code>wandb.init(...)</code> explicitly.</p>
 </div>
 </div>
 </div>
+<h4 id="evaluation-scorecard-and-report-upload">Evaluation scorecard and report upload<a class="headerlink" href="#evaluation-scorecard-and-report-upload" title="Permanent link">&para;</a></h4>
+<p>For CLI-managed runs, final scalar <code>eval/*</code>, <code>gen/*</code>, timing, failure, and
+vLLM-completion values update the W&amp;B run summary rather than creating history
+points. Existing training curves remain W&amp;B history. After results are saved,
+the CLI publishes an <code>evaluation/scorecard</code> table panel containing final
+<code>eval/*</code> values.</p>
+<p>When W&amp;B is active, the CLI publishes the HTML evaluation report to the
+user-configured project as the <code>evaluation/report</code> panel and the
+<code>evaluation-report</code> artifact. To skip the HTML report panel and evaluation-report
+artifact while retaining summary metrics and the evaluation scorecard, pass:</p>
+<div class="language-text highlight"><pre><span></span><code>safe-synthesizer run \
+  --config config.yaml \
+  --data-source data.csv \
+  --wandb-mode online \
+  --no-wandb-upload-evaluation-report
+</code></pre></div>
+<p>or set <code>NSS_WANDB_UPLOAD_EVALUATION_REPORT=false</code>. When enabled, the artifact
+is named <code>safe-synthesizer-evaluation-report-&lt;run-id&gt;</code> and may contain
+<code>evaluation_report.html</code> and <code>evaluation_metrics.json</code> when those files are
+available. SDK callers retain scalar <code>log_wandb()</code> behavior and do not upload
+evaluation media automatically.</p>
 <p>For parameter precedence (CLI flags vs environment variables vs YAML), see
 <a href="../environment/#precedence">Environment Variables -- Precedence</a>.</p>
 
