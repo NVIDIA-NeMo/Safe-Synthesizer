@@ -30,22 +30,25 @@ def _create(tokenizers_dir, fixture_name: str) -> TabularNssTokenizer:
     bos_token = "<|im_start|>" if fixture_name == "smollm3b" else cast(str, native.bos_token)
     bos_token_id = native.convert_tokens_to_ids(bos_token)
     assert isinstance(bos_token_id, int)
-    return builtin_registry().create(
-        (1, TabularNssTokenizer.IMPLEMENTATION_ID, "1"),
-        native,
-        framing=FramingPolicy(
-            prompt_template="I:{instruction}|S:{schema}|P:{prefill}",
-            add_bos_token_to_prompt=True,
-            add_eos_token_to_prompt=True,
-            bos_token_id=bos_token_id,
-            eos_token_id=native.eos_token_id,
-            pad_token_id=native.pad_token_id,
-            bos_token=bos_token,
-            eos_token=cast(str, native.eos_token),
-            pad_token=cast(str, native.pad_token),
+    return cast(
+        TabularNssTokenizer,
+        builtin_registry().create(
+            (1, TabularNssTokenizer.IMPLEMENTATION_ID, "1"),
+            native,
+            framing=FramingPolicy(
+                prompt_template="I:{instruction}|S:{schema}|P:{prefill}",
+                add_bos_token_to_prompt=True,
+                add_eos_token_to_prompt=True,
+                bos_token_id=bos_token_id,
+                eos_token_id=native.eos_token_id,
+                pad_token_id=native.pad_token_id,
+                bos_token=bos_token,
+                eos_token=cast(str, native.eos_token),
+                pad_token=cast(str, native.pad_token),
+            ),
+            native_source=str(tokenizers_dir / fixture_name),
+            native_revision="fixture-v1",
         ),
-        native_source=str(tokenizers_dir / fixture_name),
-        native_revision="fixture-v1",
     )
 
 

@@ -337,7 +337,11 @@ class NssTokenizer(ABC, Generic[ContextT]):
         if not isinstance(prompt, PromptEncoding):
             raise ParameterError("Training framing requires a PromptEncoding.")
         expected = self.encode_prompt_text(prompt.text)
-        if prompt != expected:
+        if (prompt.text, prompt.input_ids, prompt.attention_mask) != (
+            expected.text,
+            expected.input_ids,
+            expected.attention_mask,
+        ):
             raise ParameterError("PromptEncoding does not match this NSS tokenizer and framing policy.")
 
     @staticmethod

@@ -121,7 +121,7 @@ def test_prompt_encoding_reserves_optional_segment_offsets() -> None:
     assert segmented.segment_offsets == (("body", 0), ("suffix", 2))
 
 
-@pytest.mark.parametrize("segments", [(("", 0),), (("body", -1),), (("body", 3),)])
+@pytest.mark.parametrize("segments", [(None,), (("body",),), (("", 0),), (("body", -1),), (("body", 3),)])
 def test_prompt_encoding_rejects_invalid_segment_offsets(segments) -> None:
     with pytest.raises(ParameterError, match="segment offsets"):
         PromptEncoding("prompt", (1, 2), (1, 1), segments)

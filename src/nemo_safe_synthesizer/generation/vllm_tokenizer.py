@@ -55,7 +55,9 @@ class VllmTokenizerProbe:
 
     @property
     def special_token_ids(self) -> Sequence[tuple[str, int | tuple[int, ...] | None]]:
-        return tuple((name, self._special_value(getattr(self._tokenizer, name, None))) for name in _SPECIAL_TOKEN_FIELDS)
+        return tuple(
+            (name, self._special_value(getattr(self._tokenizer, name, None))) for name in _SPECIAL_TOKEN_FIELDS
+        )
 
     def encode_no_special(self, text: str) -> Sequence[int]:
         try:

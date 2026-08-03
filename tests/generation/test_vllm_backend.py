@@ -432,6 +432,34 @@ class TestInitializeModelRef:
             backend.initialize()
 
         create_processor_mock.assert_not_called()
+        assert backend.llm is None
+
+    def test_initialize_rejects_nss_tokens_outside_model_embedding_range(
+        self, base_params, mock_model_metadata, mock_schema, mock_workdir, fixture_cached_nvidia_snapshot
+    ):
+        cache_root, _ = fixture_cached_nvidia_snapshot
+        base_params.training.pretrained_model = "nvidia/Nemotron-Mini-4B-Instruct"
+        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
+        mock_model_metadata.nss_tokenizer = MagicMock()
+        mock_model_metadata.nss_tokenizer.compare_engine.return_value = EngineParity(True, ())
+        mock_model_metadata.nss_tokenizer.for_hf().get_vocab.return_value = {"token": 8}
+        mock_llm = MagicMock()
+        mock_llm.get_tokenizer.return_value = MagicMock()
+        mock_llm.llm_engine.model_config.get_vocab_size.return_value = 8
+
+        with (
+            patch(
+                "nemo_safe_synthesizer.generation.vllm_backend.ModelRef._default_hf_cache_root", return_value=cache_root
+            ),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.vLLM", return_value=mock_llm),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.get_max_vram", return_value={0: 0.8}),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.create_processor") as create_processor_mock,
+            pytest.raises(GenerationError, match="embedding vocabulary range"),
+        ):
+            backend.initialize()
+
+        create_processor_mock.assert_not_called()
+        assert backend.llm is None
 
     def test_initialize_passes_rope_hf_overrides_for_extended_context(
         self,

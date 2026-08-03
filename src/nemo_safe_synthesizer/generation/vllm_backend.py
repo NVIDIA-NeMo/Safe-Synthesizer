@@ -111,6 +111,23 @@ def _tokens_prompt(prompt_token_ids: list[int]) -> TokensPrompt:
     return TokensPrompt(prompt_token_ids=prompt_token_ids)
 
 
+def _validate_nss_embedding_range(nss_tokenizer, llm: vLLM) -> None:
+    """Reject canonical NSS IDs that the loaded model cannot embed."""
+    try:
+        vocabulary_size = llm.llm_engine.model_config.get_vocab_size()
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise GenerationError("Could not determine the vLLM model embedding vocabulary size.") from exc
+    if isinstance(vocabulary_size, bool) or not isinstance(vocabulary_size, int) or vocabulary_size <= 0:
+        raise GenerationError("The vLLM model exposed an invalid embedding vocabulary size.")
+    native_vocabulary = nss_tokenizer.for_hf().get_vocab()
+    try:
+        highest_token_id = max(native_vocabulary.values(), default=-1)
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise GenerationError("The persisted NSS tokenizer exposed an invalid vocabulary.") from exc
+    if highest_token_id >= vocabulary_size:
+        raise GenerationError("The persisted NSS tokenizer exceeds the vLLM model embedding vocabulary range.")
+
+
 def _secure_outlines_cache_dir() -> None:
     """Pin ``OUTLINES_CACHE_DIR`` to a per-user path and tighten permissions.
 
@@ -364,10 +381,17 @@ class VllmBackend(GeneratorBackend):
         tokenizer: EncodeOnlyTokenizer = self.llm.get_tokenizer()
         nss_tokenizer = self.model_metadata.nss_tokenizer
         if nss_tokenizer is not None:
-            parity = nss_tokenizer.compare_engine(VllmTokenizerProbe(tokenizer))
-            if not parity.matches:
-                categories = ", ".join(parity.mismatches)
-                raise GenerationError(f"The vLLM tokenizer does not match the persisted NSS tokenizer ({categories}).")
+            try:
+                parity = nss_tokenizer.compare_engine(VllmTokenizerProbe(tokenizer))
+                if not parity.matches:
+                    categories = ", ".join(parity.mismatches)
+                    raise GenerationError(
+                        f"The vLLM tokenizer does not match the persisted NSS tokenizer ({categories})."
+                    )
+                _validate_nss_embedding_range(nss_tokenizer, self.llm)
+            except GenerationError:
+                self.teardown()
+                raise
         self.processor = create_processor(
             self.schema,
             self.model_metadata,

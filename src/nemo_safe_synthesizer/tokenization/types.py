@@ -211,6 +211,10 @@ class PromptEncoding:
 
     def __post_init__(self) -> None:
         if not isinstance(self.segment_offsets, tuple) or any(
+            not isinstance(segment, tuple) or len(segment) != 2 for segment in self.segment_offsets
+        ):
+            raise ParameterError("Prompt segment offsets must name positions within the prompt IDs.")
+        if any(
             not isinstance(name, str)
             or not name
             or not isinstance(offset, int)
