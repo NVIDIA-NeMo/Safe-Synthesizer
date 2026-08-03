@@ -3,23 +3,15 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # setup.sh -- provision a Brev VM-Mode Launchable for NeMo Safe Synthesizer.
+# Paste into the Launchable's Setup Script field. Runs once, unprivileged,
+# after Jupyter is installed; everything lands under $HOME. Idempotent.
 #
-# Brev runs this once as the unprivileged instance user (the account name
-# varies by provider), after the VM is created and Jupyter is installed. It
-# installs the CUDA build of Safe Synthesizer into a dedicated venv, registers
-# it as the default Jupyter kernel, and drops the tutorials in $HOME.
+# Launch parameters, passed by Brev as environment variables:
+#   NSS_INFERENCE_KEY  NIM key for column classification (degraded without it)
+#   HF_TOKEN           only for gated Hugging Face models
 #
-# Everything lands under $HOME; the script never requires root. Paste it into
-# the Launchable's Setup Script field. See README.md in this directory for the
-# console settings and the reasoning behind the non-obvious steps below.
-#
-# Launch parameters (Brev exposes them as environment variables):
-#   NSS_INFERENCE_KEY  Optional. NVIDIA NIM key for column classification.
-#                      Without it, classification runs in degraded mode.
-#   HF_TOKEN           Optional. Needed only for gated Hugging Face models.
-#
-# The script is idempotent: rerunning it is safe and skips completed stages.
-
+# script/brev/README.md explains every non-obvious step below. Each one exists
+# because a deploy failed without it -- read it before simplifying anything.
 set -euo pipefail
 
 readonly UV_VERSION="0.9.30"
@@ -29,9 +21,7 @@ readonly REPO_URL="https://github.com/NVIDIA-NeMo/Safe-Synthesizer"
 
 : "${HOME:?HOME is not set}"
 
-# $HOME is the JupyterLab file browser root, so only tutorials/ and README.md
-# are visible there; everything operational is a dotfile. No data folder is
-# created -- users keep their files wherever they like.
+# $HOME is the file browser root: only tutorials/ and README.md are visible.
 readonly TUTORIALS_DIR="${HOME}/tutorials"
 readonly README_FILE="${HOME}/README.md"
 readonly WAIT_FILE="${HOME}/SETUP-IN-PROGRESS.md"
@@ -51,7 +41,7 @@ exec > >(tee -a "${LOG_FILE}") 2>&1
 log() { printf '\n=== [nss-setup] %s\n' "$*"; }
 fail() {
   printf '\n!!! [nss-setup] FAILED at line %s\n' "$1" >&2
-  # Leave the waiting user something truthful rather than "please wait" forever.
+  # Truthful, rather than leaving the wait notice up forever.
   cat >"${WAIT_FILE}" <<EOF
 # Setup failed
 
@@ -63,8 +53,7 @@ EOF
 }
 trap 'fail "${LINENO}"' ERR
 
-# Written before any slow work: JupyterLab accepts connections well before
-# this script finishes, and an empty home looks like a broken Launchable.
+# Before any slow work: JupyterLab is reachable long before this finishes.
 cat >"${WAIT_FILE}" <<'EOF'
 # Setting up -- please wait
 
@@ -79,9 +68,7 @@ export PATH="${BIN_DIR}:${PATH}"
 
 log "user=$(id -un) home=${HOME}"
 
-# ---------------------------------------------------------------------------
 # Preflight: this Launchable only makes sense on an NVIDIA GPU instance.
-# ---------------------------------------------------------------------------
 
 if command -v nvidia-smi >/dev/null 2>&1; then
   nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader || true
@@ -89,14 +76,11 @@ else
   log "WARNING: nvidia-smi not found. Training and generation will not work."
 fi
 
-# ---------------------------------------------------------------------------
 # uv -- installed into ~/.local/bin, which needs no privileges.
-# ---------------------------------------------------------------------------
 
 if [[ "$(uv --version 2>/dev/null | awk '{print $2}')" != "${UV_VERSION}" ]]; then
   log "installing uv ${UV_VERSION} into ${BIN_DIR}"
-  # Verify the published SHA-256 rather than piping astral.sh/install.sh into
-  # a shell -- that installer logs "no checksums to verify". See README.
+  # Verify the published SHA-256; astral's installer verifies nothing.
   case "$(uname -m)" in
     x86_64) uv_target="x86_64-unknown-linux-gnu" ;;
     aarch64 | arm64) uv_target="aarch64-unknown-linux-gnu" ;;
@@ -124,10 +108,7 @@ fi
 # The cu129 wheels are large and their indexes are not always fast.
 export UV_HTTP_TIMEOUT=300
 
-# ---------------------------------------------------------------------------
-# Virtual environment -- deliberately separate from the one Jupyter runs on, so
-# a failed cu129 install cannot take the notebook server down with it.
-# ---------------------------------------------------------------------------
+# Venv kept separate from Jupyter's, so a failed install cannot break it.
 
 if [[ ! -x "${VENV_DIR}/bin/python" ]]; then
   log "creating venv at ${VENV_DIR} (python ${PYTHON_VERSION})"
@@ -142,9 +123,7 @@ else
   NSS_VERSION="$(curl -fsSL https://pypi.org/pypi/nemo-safe-synthesizer/json \
     | "${VENV_DIR}/bin/python" -c 'import json, sys; print(json.load(sys.stdin)["info"]["version"])')"
 
-  # Index URLs are install-time config, not wheel metadata, so they must match
-  # the release being installed rather than this repo's main. Read them from
-  # that release's own pyproject.toml, keyed on URL not index name. See README.
+  # Indexes come from the installed release's pyproject, keyed on URL not name.
   pyproject="$(mktemp)"
   curl -fsSL "${REPO_URL}/raw/v${NSS_VERSION}/pyproject.toml" -o "${pyproject}"
   index_args=()
@@ -166,9 +145,7 @@ PY
   )
   rm -f "${pyproject}"
 
-  # The parse runs in a process substitution, so it cannot fail the script; the
-  # count is what validates it. A floor rather than equality: pyproject may
-  # gain indexes, but dropping below three means a rename slipped past.
+  # The parse cannot fail the script from a process substitution; count validates.
   if [[ "${index_count}" -lt 3 ]]; then
     log "ERROR: expected 3+ ${CUDA_EXTRA} indexes in v${NSS_VERSION}, got ${index_count}"
     exit 1
@@ -181,19 +158,13 @@ PY
     --index-strategy unsafe-best-match
 fi
 
-# Checked separately from the package install: if this step is what failed, a
-# rerun would otherwise see a working safe-synthesizer, skip the whole block,
-# and leave a registered kernel that cannot start.
+# Checked separately, or a rerun skips it and the kernel cannot start.
 if ! "${VENV_DIR}/bin/python" -c "import ipykernel, ipywidgets" 2>/dev/null; then
   log "installing notebook support"
   VIRTUAL_ENV="${VENV_DIR}" uv pip install ipykernel ipywidgets
 fi
 
-# ---------------------------------------------------------------------------
-# Tutorial notebooks. Tarball extract rather than a clone, so they land flat in
-# tutorials/ and git is not required. Pinned to the tag matching the installed
-# wheel so the notebooks cannot outrun the package. See README.md.
-# ---------------------------------------------------------------------------
+# Tutorials: tarball extract pinned to the installed release. See README.
 
 if [[ -f "${TUTORIALS_DIR}/.fetched" ]]; then
   log "tutorials already present"
@@ -203,9 +174,7 @@ else
     'from importlib.metadata import version; print(version("nemo-safe-synthesizer"))')}"
   log "fetching tutorials for version ${NSS_VERSION}"
 
-  # Staged under $HOME so the final move is a rename on the same filesystem,
-  # and so a half-written extract never becomes the visible tutorials/ -- the
-  # ".ipynb exists" check above would otherwise treat a partial result as done.
+  # Staged under $HOME: same-filesystem rename, and never half-visible.
   tarball_dir="$(mktemp -d "${HOME}/.nss-fetch.XXXXXX")"
   tarball="${tarball_dir}/src.tar.gz"
   stage="${tarball_dir}/stage"
@@ -217,9 +186,7 @@ else
       continue
     fi
 
-    # Exact member path, not a glob, and the listing read into a variable
-    # rather than piped to `head` -- both are GNU/BSD tar portability traps
-    # documented in README.md. `%%/*` yields the archive's top-level directory.
+    # Exact member path, and no pipe to head: GNU/BSD tar traps. See README.
     listing="$(tar -tzf "${tarball}")"
     top="${listing%%/*}"
     rm -rf "${stage}"
@@ -228,12 +195,10 @@ else
       "${top}/docs/tutorials"; then
       rm -rf "${TUTORIALS_DIR}"
       mv "${stage}" "${TUTORIALS_DIR}"
-      # Written last: the guard above keys on this, not on "a notebook
-      # exists", so a partial directory left by any earlier run is redone.
+      # Written last; the guard keys on this, so partial runs are redone.
       : >"${TUTORIALS_DIR}/.fetched"
       log "tutorials extracted from ${ref}"
-      # Same tarball, so the welcome text matches the tutorials. Staged
-      # hidden, moved into place at the end. Non-fatal -- see README.
+      # Same tarball as the tutorials. Non-fatal -- see README.
       if tar -xzf "${tarball}" -C "${tarball_dir}" --strip-components=3 \
         "${top}/script/brev/welcome.md" 2>/dev/null; then
         mv "${tarball_dir}/welcome.md" "${WELCOME_STAGED}"
@@ -253,10 +218,7 @@ else
   fi
 fi
 
-# ---------------------------------------------------------------------------
-# Environment. Set in two places: this file for terminals, and the kernelspec
-# below for notebooks, since the Jupyter server never reads shell rc files.
-# ---------------------------------------------------------------------------
+# Environment for terminals; the kernelspec below covers notebooks.
 
 log "writing ${ENV_FILE}"
 {
@@ -278,16 +240,12 @@ if ! grep -qF "${ENV_FILE}" "${HOME}/.bashrc" 2>/dev/null; then
   printf '\n[ -f %s ] && . %s\n' "${ENV_FILE}" "${ENV_FILE}" >>"${HOME}/.bashrc"
 fi
 
-# ---------------------------------------------------------------------------
-# Jupyter kernel. Registered as `python3` -- the name the notebooks declare --
-# so nobody has to switch kernels. Which directory wins is not obvious, and the
-# user one usually loses; see README.md. Ask the server rather than guess.
-# ---------------------------------------------------------------------------
+# Kernel registered as `python3` (the name the notebooks declare), in the
+# directory the server actually consults -- not the user one. See README.
 
 log "building kernelspec"
 KERNEL_JSON="$(mktemp)"
-# `env` rather than a command-prefix assignment: bash rejects prefix
-# assignments to readonly variables, and these three are readonly.
+# `env`, because bash rejects prefix assignments to readonly variables.
 env VENV_DIR="${VENV_DIR}" BIN_DIR="${BIN_DIR}" \
   "${VENV_DIR}/bin/python" - "${KERNEL_JSON}" <<'PY'
 import json
@@ -375,18 +333,14 @@ if [[ "${registered}" -ne 1 ]]; then
   log "WARNING: kernel not registered; notebooks may open on the wrong Python"
 fi
 
-# ---------------------------------------------------------------------------
 # Smoke check -- fail provisioning loudly rather than handing over a broken VM.
-# ---------------------------------------------------------------------------
 
 log "verifying install"
 "${VENV_DIR}/bin/safe-synthesizer" --version
 "${VENV_DIR}/bin/python" \
   -c "import torch; print('cuda available:', torch.cuda.is_available())"
 
-# ---------------------------------------------------------------------------
 # Hand over: swap the "please wait" file for the welcome text.
-# ---------------------------------------------------------------------------
 
 if [[ -f "${WELCOME_STAGED}" ]]; then
   mv "${WELCOME_STAGED}" "${README_FILE}"
