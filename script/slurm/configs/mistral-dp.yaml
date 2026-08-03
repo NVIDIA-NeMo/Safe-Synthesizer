@@ -8,5 +8,6 @@ training:
 privacy:
   dp_enabled: true
 generation:
-  use_structured_generation: true
+  structured_generation:
+    enabled: true
   num_records: 3000

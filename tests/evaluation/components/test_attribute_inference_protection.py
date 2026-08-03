@@ -3,6 +3,7 @@
 
 # ruff: noqa: E402
 import logging
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -164,3 +165,58 @@ def test_attribute_inference_protection_text_only(
 
     # Verify the protection score was computed
     assert attribute_inference_protection.score is not None
+
+
+def test_aia_text_column_similarity_returns_scalar(monkeypatch: pytest.MonkeyPatch):
+    """Text-column similarity must not rely on array-to-scalar conversion.
+
+    ``SentenceTransformer.encode`` returns a batch, so encoding one string yields a
+    ``(1, dim)`` array. Taking ``np.dot`` of that against the ``(dim,)`` synthetic
+    vector produces a one-element array, and ``float()`` on it is deprecated in
+    NumPy 1.25 and an error from 2.4 on. Warnings are escalated so this fails on
+    the pinned NumPy in CI as well as on newer releases.
+    """
+    training_df = pd.DataFrame(
+        {
+            "quasi": [1, 2, 3, 4],
+            "text": [
+                "reserve a table for two at eight",
+                "cancel my reservation for friday",
+                "what is the weather in denver",
+                "add milk to my shopping list",
+            ],
+        }
+    )
+    synthetic_df = training_df.copy()
+
+    class StubEmbedder:
+        """Minimal stand-in that mirrors the real batch-shaped return value."""
+
+        def encode(self, sentences, **_kwargs):
+            return np.ones((len(list(sentences)), 8), dtype=np.float32)
+
+    monkeypatch.setattr(
+        "nemo_safe_synthesizer.evaluation.components.attribute_inference_protection.SentenceTransformer",
+        lambda *_args, **_kwargs: StubEmbedder(),
+    )
+    monkeypatch.setattr(
+        "nemo_safe_synthesizer.evaluation.components.attribute_inference_protection.find_text_fields",
+        lambda df: [column for column in df.columns if column == "text"],
+    )
+    monkeypatch.setattr(
+        AttributeInferenceProtection,
+        "_get_synth_nn",
+        staticmethod(lambda *_args, **_kwargs: synthetic_df.head(2)),
+    )
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        score, col_accuracy_df = AttributeInferenceProtection._aia(
+            training_df=training_df,
+            synthetic_df=synthetic_df,
+            quasi_identifier_count=1,
+        )
+
+    assert score.score is not None
+    assert col_accuracy_df is not None
+    assert "text" in list(col_accuracy_df["Column"])

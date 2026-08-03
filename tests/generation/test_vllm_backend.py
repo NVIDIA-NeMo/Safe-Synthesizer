@@ -47,6 +47,7 @@ def mock_model_metadata(fixture_session_cache_dir):
     metadata.base_max_seq_length = 2048
     metadata.rope_scaling = None
     metadata.max_tokens_per_example = None
+    metadata.max_records_per_group = None
     metadata.generation_max_tokens_for.return_value = 2048
     return metadata
 
@@ -205,6 +206,7 @@ class TestBuildStructuredOutputParams:
                 params_with_structured_generation_regex,
                 bos_token=mock_model_metadata.prompt_config.bos_token,
                 eos_token=mock_model_metadata.prompt_config.eos_token,
+                default_max_records_per_group=mock_model_metadata.max_records_per_group,
             )
             assert result is not None
             assert result.regex == "test_regex_pattern"
@@ -254,6 +256,7 @@ class TestBuildStructuredOutputParams:
                 params_with_structured_generation_structural_tag,
                 bos_token=mock_model_metadata.prompt_config.bos_token,
                 eos_token=mock_model_metadata.prompt_config.eos_token,
+                default_max_records_per_group=mock_model_metadata.max_records_per_group,
             )
             assert result is not None
             assert result.structural_tag == '{"type":"structural_tag","format":{"type":"json_schema","json_schema":{}}}'
@@ -286,6 +289,7 @@ class TestBuildStructuredOutputParams:
                 params_with_structured_generation_auto,
                 bos_token=mock_model_metadata.prompt_config.bos_token,
                 eos_token=mock_model_metadata.prompt_config.eos_token,
+                default_max_records_per_group=mock_model_metadata.max_records_per_group,
             )
             assert result is not None
             assert result.structural_tag is not None
@@ -318,6 +322,7 @@ class TestBuildStructuredOutputParams:
                 params_with_structured_generation_auto,
                 bos_token=mock_model_metadata.prompt_config.bos_token,
                 eos_token=mock_model_metadata.prompt_config.eos_token,
+                default_max_records_per_group=mock_model_metadata.max_records_per_group,
             )
             assert result is not None
             assert result.regex == "test_regex_pattern"
@@ -1043,8 +1048,10 @@ class TestGenerationMaxTokensPlumbing:
         assert captured["max_tokens"] == 4_200
         # Engine is not initialized in this plumbing test, so the cached
         # prompt-token count falls back to 0; the helper is still called
-        # exactly once with that value.
-        mock_model_metadata.generation_max_tokens_for.assert_called_once_with(0)
+        # exactly once with that value plus the configured budget multiplier.
+        mock_model_metadata.generation_max_tokens_for.assert_called_once_with(
+            0, multiplier=base_params.generation.max_tokens_multiplier
+        )
 
     def test_passes_cached_prompt_token_count_when_engine_initialized(
         self, base_params, mock_model_metadata, mock_schema, mock_workdir
@@ -1074,7 +1081,9 @@ class TestGenerationMaxTokensPlumbing:
             backend.generate()
 
         assert captured["max_tokens"] == 4_096
-        mock_model_metadata.generation_max_tokens_for.assert_called_once_with(37)
+        mock_model_metadata.generation_max_tokens_for.assert_called_once_with(
+            37, multiplier=base_params.generation.max_tokens_multiplier
+        )
         # Cached: a second access does not retokenize.
         assert backend._get_prompt_token_count() == 37
         fake_tokenizer.encode.assert_called_once_with(backend.prompt)

@@ -8,9 +8,10 @@ from typing import ClassVar, cast
 from unittest.mock import MagicMock, patch
 
 import pytest
-from pydantic import Field, ValidationError, model_validator
+from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from nemo_safe_synthesizer.config.generate import GenerateParameters, StructuredGenerationParameters
+from nemo_safe_synthesizer.config.job import SafeSynthesizerJobConfig
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig, StepDefinition
 from nemo_safe_synthesizer.config.training import QuantizationScheme
@@ -106,6 +107,19 @@ def test_model_validate_null_disables_pii():
     assert SafeSynthesizerParameters.model_validate({"replace_pii": None}).replace_pii is None
 
 
+def test_model_validate_accepts_an_existing_config():
+    config = SafeSynthesizerParameters(unknown_fields="ignore")
+
+    assert SafeSynthesizerParameters.model_validate(config) is config
+
+
+def test_model_validate_non_mapping_input_uses_default_unknown_field_policy():
+    with pytest.raises(ValidationError) as exc_info:
+        SafeSynthesizerParameters.model_validate(None)
+
+    assert exc_info.value.errors()[0]["type"] == "model_attributes_type"
+
+
 def test_from_yaml_str_absent_key_enables_pii():
     c = SafeSynthesizerParameters.from_yaml_str("training:\n  batch_size: 4\n")
     assert c.replace_pii is not None
@@ -116,11 +130,11 @@ def test_from_yaml_str_null_disables_pii():
     assert c.replace_pii is None
 
 
-def test_old_yaml_with_enable_replace_pii_loads_cleanly():
-    # Migration: configs written before this change had enable_replace_pii: true
-    # and no replace_pii key. The extra field must be silently ignored and
-    # default_factory must fire so PII stays on.
-    c = SafeSynthesizerParameters.model_validate({"enable_replace_pii": True})
+def test_old_yaml_with_enable_replace_pii_requires_ignore_policy():
+    with pytest.raises(ValidationError, match="enable_replace_pii"):
+        SafeSynthesizerParameters.model_validate({"enable_replace_pii": True})
+
+    c = SafeSynthesizerParameters.model_validate({"unknown_fields": "ignore", "enable_replace_pii": True})
     assert c.replace_pii is not None
 
 
@@ -247,25 +261,158 @@ def test_from_config_patch_validates_sparse_config():
     assert config.replace_pii is None
 
 
+def test_from_config_source_keyword_policy_takes_precedence_over_mapping():
+    relaxed = SafeSynthesizerParameters.from_config_source(
+        {"unknown_fields": "reject", "unknown": True},
+        unknown_fields="ignore",
+    )
+    assert relaxed.unknown_fields == "ignore"
+
+    with pytest.raises(ParameterError, match="unknown"):
+        SafeSynthesizerParameters.from_config_source(
+            {"unknown_fields": "ignore", "unknown": True},
+            unknown_fields="reject",
+        )
+
+
+def test_from_config_source_preserves_policy_from_an_existing_config():
+    source = SafeSynthesizerParameters(unknown_fields="ignore")
+
+    assert SafeSynthesizerParameters.from_config_source(source).unknown_fields == "ignore"
+
+
+def test_from_config_source_resolves_policy_without_a_source_mapping():
+    assert SafeSynthesizerParameters.from_config_source(unknown_fields="ignore").unknown_fields == "ignore"
+
+
+@pytest.mark.parametrize(
+    "patch",
+    [
+        {"unknown": True},
+        {"generation": {"unknown": True}},
+    ],
+)
+def test_from_config_patch_rejects_unknown_mapping_keys_by_default(patch: dict[str, object]):
+    with pytest.raises(ParameterError, match="unknown"):
+        SafeSynthesizerParameters.from_config_patch(patch)
+
+
 @pytest.mark.parametrize(
     ("patch", "expected"),
     [
-        ({"unknown": True}, {}),
-        ({"generation": {"unknown": True}}, {"generation": {}}),
+        ({"unknown_fields": "ignore", "unknown": True}, {"unknown_fields": "ignore"}),
+        (
+            {"unknown_fields": "ignore", "generation": {"unknown": True}},
+            {"unknown_fields": "ignore", "generation": {}},
+        ),
     ],
 )
-def test_from_config_patch_ignores_unknown_mapping_keys(patch: dict[str, object], expected: dict[str, object]):
+def test_from_config_patch_ignores_unknown_mapping_keys_when_non_strict(
+    patch: dict[str, object], expected: dict[str, object]
+):
     config = SafeSynthesizerParameters.from_config_patch(patch)
 
     assert config.model_dump(exclude_unset=True) == expected
 
 
 def test_with_config_patch_ignores_unknown_mapping_keys_and_preserves_sparse_base():
-    config = SafeSynthesizerParameters.model_validate({"generation": {"num_records": 77}})
+    config = SafeSynthesizerParameters.model_validate({"unknown_fields": "ignore", "generation": {"num_records": 77}})
 
     merged = config.with_config_patch({"unknown": True, "generation": {"unknown": True, "temperature": 0.7}})
 
-    assert merged.model_dump(exclude_unset=True) == {"generation": {"num_records": 77, "temperature": 0.7}}
+    assert merged.model_dump(exclude_unset=True) == {
+        "generation": {"num_records": 77, "temperature": 0.7},
+        "unknown_fields": "ignore",
+    }
+
+
+def test_with_config_patch_uses_patch_policy_for_sibling_keys():
+    strict = SafeSynthesizerParameters()
+    relaxed = strict.with_config_patch({"unknown_fields": "ignore", "unknown": True})
+    assert relaxed.unknown_fields == "ignore"
+
+    with pytest.raises(ParameterError, match="unknown"):
+        relaxed.with_config_patch({"unknown_fields": "reject", "unknown": True})
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"evaluate": {}},
+        {"training": {"epoch": 1}},
+    ],
+)
+def test_unknown_fields_are_rejected_recursively_by_default(data: dict[str, object]):
+    with pytest.raises(ValidationError, match="Unknown configuration field"):
+        SafeSynthesizerParameters.model_validate(data)
+
+
+def test_unknown_fields_are_ignored_recursively_with_ignore_policy():
+    config = SafeSynthesizerParameters.model_validate(
+        {"unknown_fields": "ignore", "evaluate": {}, "training": {"epoch": 1}}
+    )
+
+    assert config.unknown_fields == "ignore"
+
+
+def test_constructor_applies_unknown_field_policy_recursively():
+    with pytest.raises(ValidationError, match="training.epoch"):
+        SafeSynthesizerParameters(training={"epoch": 1})  # ty: ignore[invalid-argument-type]
+
+    config = SafeSynthesizerParameters(
+        unknown_fields="ignore",
+        training={"epoch": 1},  # ty: ignore[invalid-argument-type]
+    )
+    assert config.unknown_fields == "ignore"
+    assert not hasattr(config.training, "epoch")
+
+
+def test_unknown_field_policy_reaches_models_inside_collections():
+    raw = SafeSynthesizerParameters().model_dump()
+    assert isinstance(raw["replace_pii"], dict)
+    raw["replace_pii"]["steps"][0]["unknown"] = True  # type: ignore[index]
+
+    with pytest.raises(ValidationError, match="unknown"):
+        SafeSynthesizerParameters.model_validate(raw)
+
+    raw["unknown_fields"] = "ignore"
+    assert SafeSynthesizerParameters.model_validate(raw).unknown_fields == "ignore"
+
+
+def test_service_job_config_preserves_dynamic_unknown_field_policy():
+    payload: dict[str, object] = {"data_source": "dataset", "config": {"training": {"epoch": 1}}}
+    with pytest.raises(ValidationError, match="epoch"):
+        SafeSynthesizerJobConfig.model_validate(payload)
+
+    payload["config"] = {"unknown_fields": "ignore", "training": {"epoch": 1}}
+    job = SafeSynthesizerJobConfig.model_validate(payload)
+    assert job.config.unknown_fields == "ignore"
+
+    config = SafeSynthesizerParameters(unknown_fields="ignore")
+    job = SafeSynthesizerJobConfig.model_validate({"data_source": "dataset", "config": config})
+    assert job.config is config
+
+
+def test_arbitrary_wrapper_preserves_dynamic_unknown_field_policy():
+    class Wrapper(BaseModel):
+        config: SafeSynthesizerParameters
+
+    with pytest.raises(ValidationError, match="epoch"):
+        Wrapper.model_validate({"config": {"training": {"epoch": 1}}})
+
+    wrapped = Wrapper.model_validate({"config": {"unknown_fields": "ignore", "training": {"epoch": 1}}})
+    assert wrapped.config.unknown_fields == "ignore"
+    assert not hasattr(wrapped.config.training, "epoch")
+
+
+def test_model_validate_does_not_allow_a_third_unknown_field_policy():
+    with pytest.raises(ValidationError, match="unknown"):
+        SafeSynthesizerParameters.model_validate({"unknown": 1}, extra="allow")
+
+
+def test_unknown_field_policy_rejects_unsupported_value():
+    with pytest.raises(ValidationError, match="Input should be 'ignore' or 'reject'"):
+        SafeSynthesizerParameters.model_validate({"unknown_fields": "allow"})
 
 
 def test_with_config_patch_keeps_validator_and_factory_defaults_implicit():
@@ -588,7 +735,7 @@ def _runtime_nested_validation() -> SafeSynthesizerParameters:
 
 
 class TestWithRuntimeOverrides:
-    """Tests for resume-time generation/evaluation/telemetry override merging."""
+    """Tests for supported resume-time override merging."""
 
     @pytest.mark.parametrize(
         ("make_runtime", "expected"),
@@ -641,6 +788,11 @@ class TestWithRuntimeOverrides:
                 lambda: SafeSynthesizerParameters.model_validate({"emit_telemetry": True}),
                 {"emit_telemetry": True},
                 id="telemetry-set-applied",
+            ),
+            pytest.param(
+                lambda: SafeSynthesizerParameters.model_validate({"unknown_fields": "ignore"}),
+                {"unknown_fields": "ignore"},
+                id="unknown-fields-set-applied",
             ),
         ],
     )

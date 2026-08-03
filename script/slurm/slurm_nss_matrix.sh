@@ -150,7 +150,7 @@ echo "[NSS SLURM] nemo-safe-synthesizer version: $(python -c 'from nemo_safe_syn
 
 # for column classification
 export NSS_INFERENCE_ENDPOINT=https://integrate.api.nvidia.com/v1
-export NSS_INFERENCE_MODEL=qwen/qwen3-next-80b-a3b-instruct
+export NSS_INFERENCE_MODEL=nvidia/nemotron-3-ultra-550b-a55b
 
 # Extract dataset name for path construction (handles both full paths and simple names)
 # e.g., "/path/to/adult.csv" -> "adult", "/path/to/data.parquet" -> "data", "adult" -> "adult"

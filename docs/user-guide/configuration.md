@@ -19,6 +19,29 @@ Exactly what avenues of configuration are available, and thus how precedence is 
 Each layer only overrides what it explicitly sets -- everything else falls
 through to the next layer.
 
+### Unknown Configuration Keys
+
+Safe Synthesizer rejects unknown configuration keys recursively by default.
+This catches misspelled sections and parameters before a run starts, for
+example `evaluate` instead of `evaluation` or `training.epoch` when no such
+training parameter exists.
+
+Set `unknown_fields: ignore` at the top level only when a configuration must
+pass between mismatched client and service versions that may not recognize the
+same fields:
+
+```yaml
+unknown_fields: ignore
+training:
+  batch_size: 4
+```
+
+The default is `unknown_fields: reject`. The setting applies to the same
+configuration input in which it appears and is preserved in serialized
+configurations. It controls unknown keys only; normal Pydantic value validation
+and type coercion are unchanged. Undeclared fields cannot be retained because
+Safe Synthesizer would not act on them.
+
 ### Examples
 
 Start from model defaults, override one field via CLI:
@@ -107,6 +130,13 @@ retain the current lower-precedence configuration values:
 synthesizer.with_generate({"temperature": 0.8}, num_records=2000)
 ```
 
+Set an SDK-wide compatibility policy when constructing the builder so it
+applies before any raw section mapping is validated:
+
+```python
+synthesizer = SafeSynthesizer(unknown_fields="ignore")
+```
+
 A mapping is a branch only when its schema field is another Pydantic model.
 Mapping-valued leaf fields, such as free-form dictionaries, are replaced as one
 atomic value rather than recursively merged.
@@ -117,18 +147,22 @@ so an in-place mutation such as
 `source.validation.group_by_fix_unordered_records = True` is captured when that
 model is used as a patch input. Unrelated defaults remain implicit.
 
-Raw mapping sources retain the established behavior of ignoring unknown extra
-keys. After a name has been resolved to a canonical path, however, that path is
-strict: unknown paths and paths that descend through an atomic leaf raise an
-error.
+Raw mapping sources follow the effective top-level `unknown_fields` setting.
+They reject unknown extra keys by default and discard them when the policy is
+`ignore`. After a name has been resolved to a canonical path,
+however, that path remains strict: unknown paths and paths that descend through
+an atomic leaf raise an error.
 
 ### Resume-Time Overrides
 
 When generation resumes from a saved training run, runtime configuration may
-override only `generation`, `evaluation`, and `emit_telemetry`. Telemetry is
-overridden only when the runtime input explicitly sets it. Saved `training`,
-`data`, `privacy`, PII replacement, time-series, and preflight settings remain
-unchanged.
+override only `generation`, `evaluation`, `emit_telemetry`, and
+`unknown_fields`. Telemetry and the unknown-field policy are overridden only
+when the runtime input explicitly sets them. An explicit
+`unknown_fields: ignore` is applied while loading the saved configuration,
+allowing legacy fields to be discarded when client and service versions differ.
+Saved `training`, `data`, `privacy`, PII replacement, time-series, and preflight
+settings remain unchanged.
 
 ---
 

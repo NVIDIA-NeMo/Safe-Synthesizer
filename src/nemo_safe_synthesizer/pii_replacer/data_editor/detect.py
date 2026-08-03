@@ -45,7 +45,7 @@ class DefaultLLMConfig:
             Lower values give more deterministic output.
     """
 
-    DEFAULT_CONFIG_ID = "qwen/qwen3-next-80b-a3b-instruct"
+    DEFAULT_CONFIG_ID = "nvidia/nemotron-3-ultra-550b-a55b"
     SYSTEM_PROMPT = "You are a helpful AI that annotates columns in datasets with their respective types. "
     MAX_OUTPUT_TOKENS = 2048
     TEMPERATURE = 0.2

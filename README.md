@@ -44,6 +44,8 @@ mise run bootstrap-nss cuda
 
 Development tools (`dprint`, `ruff`, `ty`, `yq`, `gh`, etc.) are managed via [mise](https://mise.jdx.dev/). Tool versions are declared in `.mise.toml` and locked in `mise.lock` (committed). mise also manages environment variables -- place project-local secrets or overrides in `.env` or `.env.local` (both git-ignored, auto-loaded by mise).
 
+For IDEs to discover mise-managed tools, [add mise shims to the `PATH` in your default shell profile](https://mise.jdx.dev/ide-integration.html#adding-shims-to-path-in-your-default-shell).
+
 Project commands run through mise tasks under `.mise/tasks/`: `*.toml` files for declarative tasks, executable scripts for bash-heavy logic.
 
 ```bash

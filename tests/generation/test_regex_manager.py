@@ -199,6 +199,70 @@ def test_build_json_structural_tag_with_groupby_single_sequence(fixture_safe_syn
     }
 
 
+def test_build_json_structural_tag_groupby_max_records_per_sequence(fixture_safe_synthesizer_config):
+    """max_records_per_sequence emits a single bounded (repeat 1..N) BOS/EOS group."""
+    fixture_safe_synthesizer_config.data.group_training_examples_by = "id"
+    fixture_safe_synthesizer_config.generation.structured_generation.max_records_per_sequence = 2
+    schema = {"type": "object", "properties": {"name": {"type": "string"}}}
+
+    structural_tag = json.loads(
+        build_json_structural_tag(
+            schema,
+            config=fixture_safe_synthesizer_config,
+            bos_token=BOS_TOKEN,
+            eos_token=EOS_TOKEN,
+        )
+    )
+
+    assert structural_tag["format"] == {
+        "type": "sequence",
+        "elements": [
+            {"type": "const_string", "value": BOS_TOKEN},
+            {
+                "type": "repeat",
+                "min": 1,
+                "max": 2,
+                "content": {
+                    "type": "sequence",
+                    "elements": [
+                        {"type": "json_schema", "json_schema": schema},
+                        {"type": "const_string", "value": "\n"},
+                    ],
+                },
+            },
+            {"type": "const_string", "value": EOS_TOKEN},
+        ],
+    }
+
+
+# Purpose: XGrammar round-trip for the bounded grouped Structural Tag: accepts 1..N-record
+# groups, rejects an (N+1)-record group and multi-group text (the bound forces termination).
+def test_structural_tag_groupby_max_records_per_sequence_round_trip(fixture_safe_synthesizer_config, fixture_tokenizer):
+    fixture_safe_synthesizer_config.data.group_training_examples_by = "id"
+    fixture_safe_synthesizer_config.generation.structured_generation.max_records_per_sequence = 2
+    schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}},
+        "required": ["name"],
+    }
+    structural_tag = build_json_structural_tag(
+        schema,
+        config=fixture_safe_synthesizer_config,
+        bos_token=BOS_TOKEN,
+        eos_token=EOS_TOKEN,
+    )
+
+    one = '<s>{"name":"alice"}\n</s>'
+    two = '<s>{"name":"alice"}\n{"name":"bob"}\n</s>'
+    three = '<s>{"name":"alice"}\n{"name":"bob"}\n{"name":"carol"}\n</s>'
+    two_groups = '<s>{"name":"alice"}\n</s>\n<s>{"name":"bob"}\n</s>'
+
+    assert structural_tag_accepts_text(one, structural_tag, fixture_tokenizer) is True
+    assert structural_tag_accepts_text(two, structural_tag, fixture_tokenizer) is True
+    assert structural_tag_accepts_text(three, structural_tag, fixture_tokenizer) is False
+    assert structural_tag_accepts_text(two_groups, structural_tag, fixture_tokenizer) is False
+
+
 # Purpose: Ensures keys with special chars (e.g., '.') are escaped and string length bounds enforced.
 # Data: Object with required key 'full.name', minLength=3, maxLength=10.
 # Asserts: Equality against expected regex and behavioral matches via re.fullmatch for valid/invalid cases.
@@ -372,6 +436,108 @@ def test_build_json_based_regex_with_groupby(fixture_safe_synthesizer_config):
 
     grouped_missing_eos = '<s>{"foo":"a"}\n'
     assert re.fullmatch(regex, grouped_missing_eos) is None
+
+
+# Purpose: max_records_per_sequence bounds grouped generation to a single, terminable group.
+# Data: enum schema, group_by="id", structured_generation.max_records_per_sequence=2.
+# Asserts: regex is a single BOS..EOS group with a {1,2}-bounded record repetition (no outer
+# repetition), accepts groups of 1-2 records, and rejects a 3-record group and multi-group text.
+def test_build_json_based_regex_groupby_max_records_per_sequence(fixture_safe_synthesizer_config):
+    fixture_safe_synthesizer_config.data.group_training_examples_by = "id"
+    fixture_safe_synthesizer_config.generation.structured_generation.max_records_per_sequence = 2
+
+    schema = {
+        "type": "object",
+        "properties": {
+            "foo": {"enum": ["a", "b", "c"]},
+        },
+        "required": ["foo"],
+    }
+
+    regex = build_json_based_regex(
+        schema, config=fixture_safe_synthesizer_config, bos_token=BOS_TOKEN, eos_token=EOS_TOKEN
+    )
+
+    assert regex == '<s>(\\{"foo":("a"|"b"|"c")\\}\\n){1,2}</s>'
+
+    one_record = '<s>{"foo":"a"}\n</s>'
+    assert re.fullmatch(regex, one_record) is not None
+
+    two_records = '<s>{"foo":"a"}\n{"foo":"b"}\n</s>'
+    assert re.fullmatch(regex, two_records) is not None
+
+    # Bound forces the closing EOS after at most 2 records.
+    three_records = '<s>{"foo":"a"}\n{"foo":"b"}\n{"foo":"c"}\n</s>'
+    assert re.fullmatch(regex, three_records) is None
+
+    # A single group per completion: no trailing/outer repetition of groups.
+    two_groups = '<s>{"foo":"a"}\n</s>\n<s>{"foo":"b"}\n</s>'
+    assert re.fullmatch(regex, two_groups) is None
+
+
+# Purpose: default_max_records_per_group (training-derived) applies when the config
+# override is unset; an explicit override takes precedence over the default.
+def test_build_json_based_regex_groupby_default_max_records_per_group(fixture_safe_synthesizer_config):
+    fixture_safe_synthesizer_config.data.group_training_examples_by = "id"
+    schema = {"type": "object", "properties": {"foo": {"enum": ["a", "b", "c"]}}, "required": ["foo"]}
+
+    # Config override unset -> training-derived default is used.
+    regex_default = build_json_based_regex(
+        schema,
+        config=fixture_safe_synthesizer_config,
+        bos_token=BOS_TOKEN,
+        eos_token=EOS_TOKEN,
+        default_max_records_per_group=3,
+    )
+    assert regex_default == '<s>(\\{"foo":("a"|"b"|"c")\\}\\n){1,3}</s>'
+
+    # Explicit override wins over the training-derived default.
+    fixture_safe_synthesizer_config.generation.structured_generation.max_records_per_sequence = 2
+    regex_override = build_json_based_regex(
+        schema,
+        config=fixture_safe_synthesizer_config,
+        bos_token=BOS_TOKEN,
+        eos_token=EOS_TOKEN,
+        default_max_records_per_group=3,
+    )
+    assert regex_override == '<s>(\\{"foo":("a"|"b"|"c")\\}\\n){1,2}</s>'
+
+
+# Purpose: structural_tag default_max_records_per_group applies when the config override
+# is unset, emitting a single bounded (repeat 1..default) BOS/EOS group.
+def test_build_json_structural_tag_groupby_default_max_records_per_group(fixture_safe_synthesizer_config):
+    fixture_safe_synthesizer_config.data.group_training_examples_by = "id"
+    schema = {"type": "object", "properties": {"name": {"type": "string"}}}
+
+    structural_tag = json.loads(
+        build_json_structural_tag(
+            schema,
+            config=fixture_safe_synthesizer_config,
+            bos_token=BOS_TOKEN,
+            eos_token=EOS_TOKEN,
+            default_max_records_per_group=3,
+        )
+    )
+
+    assert structural_tag["format"] == {
+        "type": "sequence",
+        "elements": [
+            {"type": "const_string", "value": BOS_TOKEN},
+            {
+                "type": "repeat",
+                "min": 1,
+                "max": 3,
+                "content": {
+                    "type": "sequence",
+                    "elements": [
+                        {"type": "json_schema", "json_schema": schema},
+                        {"type": "const_string", "value": "\n"},
+                    ],
+                },
+            },
+            {"type": "const_string", "value": EOS_TOKEN},
+        ],
+    }
 
 
 # Purpose: Validates integer range inference and sign handling across mixed and all-negative datasets.
