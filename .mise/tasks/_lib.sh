@@ -40,8 +40,12 @@ resolve_venv_path() {
 
 sync_nss_dependencies() {
   local extra="${1:?Python dependency profile is required}"
-  local python="${2:-$(resolve_python_version)}"
+  local python="${2:-}"
   local sync_uv_bin="${NSS_UV_BIN:-uv}"
+
+  if [[ -z "${python}" ]]; then
+    python="$(resolve_python_version)" || return
+  fi
 
   case "${extra}" in
     cuda|cu129)

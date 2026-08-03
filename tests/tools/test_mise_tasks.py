@@ -84,8 +84,21 @@ def test_sync_dependencies_accepts_explicit_python_override(pytestconfig: pytest
     assert args == ["sync", "--frozen", "--python", "/lustre/python3.12", "--group", "dev"]
 
 
-def test_ci_setup_exports_requested_python_to_uv(pytestconfig: pytest.Config) -> None:
-    action = Path(pytestconfig.rootpath, ".github/actions/setup-python-env/action.yml").read_text()
+def test_sync_dependencies_propagates_python_resolution_failure(
+    pytestconfig: pytest.Config, fake_uv: Path, tmp_path: Path
+) -> None:
+    repo_root = Path(pytestconfig.rootpath)
+    env = os.environ | {"MISE_CONFIG_ROOT": str(tmp_path), "NSS_UV_BIN": str(fake_uv)}
+    env.pop("PYTHON_VERSION", None)
 
-    assert 'echo "PYTHON_VERSION=${python_version}" >> "$GITHUB_ENV"' in action
-    assert 'echo "UV_PYTHON=${python_version}" >> "$GITHUB_ENV"' in action
+    result = subprocess.run(
+        ["bash", "-c", 'source "$1"; sync_nss_dependencies dev', "bash", str(repo_root / ".mise/tasks/_lib.sh")],
+        check=False,
+        capture_output=True,
+        env=env,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "PYTHON_VERSION is unset" in result.stderr
+    assert result.stdout == ""
