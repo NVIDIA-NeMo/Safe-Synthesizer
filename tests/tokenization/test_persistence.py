@@ -12,8 +12,8 @@ from unittest.mock import patch
 import pytest
 from transformers import AutoTokenizer, PreTrainedTokenizerBase
 
-from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
+from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.llm.metadata import ModelMetadata
 from nemo_safe_synthesizer.tokenization import WorkloadKind, create_runtime_nss_tokenizer
 from nemo_safe_synthesizer.tokenization.base import native_snapshot

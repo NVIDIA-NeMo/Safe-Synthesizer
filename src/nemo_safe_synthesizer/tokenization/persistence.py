@@ -105,7 +105,9 @@ def load_nss_tokenizer(
         raise ParameterError(f"{NSS_TOKENIZER_MANIFEST} must be a regular file and not a symlink.")
     if not manifest_entry_exists:
         if any(_entry_exists(directory / name) for name in _NATIVE_ASSET_MARKERS):
-            raise ParameterError(f"NSS tokenizer manifest is missing beside persisted native tokenizer assets: {manifest}.")
+            raise ParameterError(
+                f"NSS tokenizer manifest is missing beside persisted native tokenizer assets: {manifest}."
+            )
         if allow_legacy:
             return None
         raise ParameterError(f"NSS tokenizer manifest is missing: {manifest}.")
