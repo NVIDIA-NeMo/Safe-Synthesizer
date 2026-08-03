@@ -409,6 +409,26 @@ class TestUpdateGroupState:
         )
         assert state.last_timestamp_seconds is not None
 
+    def test_updates_timestamp_for_empty_string_column_name(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        """Test that an empty-string timestamp column name remains valid."""
+        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
+        backend._time_column = ""
+        state = GroupState(
+            group_id="test",
+            initial_prefill="",
+            current_prefill="",
+            expected_records=10,
+            last_timestamp_seconds=0,
+        )
+        timestamp = "2024-01-01 01:00:00"
+        records = [ParsedRecord(text='{"":"2024-01-01 01:00:00"}', parsed={"": timestamp})]
+
+        backend._update_group_state(state, records)
+
+        assert state.last_timestamp_seconds == backend._parse_timestamp_seconds(timestamp)
+
 
 class TestGetTimestampFromPrefill:
     """Tests for the _get_timestamp_from_prefill method."""

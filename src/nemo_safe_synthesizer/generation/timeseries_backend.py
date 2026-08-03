@@ -545,7 +545,7 @@ class TimeseriesBackend(VllmBackend):
 
         # Update last timestamp
         last_parsed = records[-1].parsed or {}
-        timestamp_value = last_parsed.get(self._time_column) if self._time_column else None
+        timestamp_value = last_parsed.get(self._time_column) if self._time_column is not None else None
         timestamp_seconds = self._parse_timestamp_seconds(timestamp_value)
         if timestamp_seconds is not None:
             group_state.last_timestamp_seconds = timestamp_seconds
