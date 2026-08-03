@@ -18,6 +18,9 @@ contents into the console for the change to take effect.
 - `setup.sh`: Pasted into the Launchable's Setup Script field. Installs the CUDA
   build of Safe Synthesizer into a dedicated venv, registers it as the default Jupyter
   kernel, and drops the tutorial notebooks in `$HOME`.
+- `welcome.md`: Becomes the customer's `$HOME/README.md`. Fetched at provisioning
+  time from the same tarball as the tutorials, not baked into `setup.sh` -- it would
+  otherwise consume a tenth of the 16 KiB script budget.
 
 ### Console configuration
 
@@ -65,6 +68,7 @@ there. Everything operational is a dotfile, which the browser hides by default.
 $HOME/
   tutorials/                    the three tutorial notebooks and their datasets
   README.md                     where to start, rendered on double-click
+                                (SETUP-IN-PROGRESS.md until setup finishes)
 
   .nss-venv/                    cu129 venv, registered as the default kernel
   .cache/huggingface/           model cache (Hugging Face's default location)
@@ -98,6 +102,16 @@ hard way on a real instance.
   it downloaded. The script fetches the pinned release tarball, compares it against the
   published `.sha256`, and installs the binaries -- matching the GPG-verified mise
   install in `tools/install-mise.sh`.
+- A placeholder file marks the home directory while setup runs. JupyterLab
+  accepts connections well before this script finishes, so a user who opens it early
+  would otherwise see an empty or half-populated file browser and assume the Launchable
+  is broken. `SETUP-IN-PROGRESS.md` is written before any slow work, rewritten by the
+  `ERR` trap if provisioning fails, and replaced by `README.md` on success.
+- The welcome text lives in `welcome.md`, not a heredoc. It is pulled from the
+  same tarball as the tutorials, so the two always match, and it is staged as a dotfile
+  until the final step so it never appears while setup is still running. The fetch is
+  non-fatal: `script/brev/` exists in no released tag, so it resolves only from the
+  `main` fallback until a release includes it.
 - The setup script has a 16 KiB limit. Brev rejects anything larger, which is why
   the script carries short comments pointing here rather than full explanations. Check
   `wc -c script/brev/setup.sh` before pasting.
