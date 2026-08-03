@@ -109,6 +109,7 @@ runs:
           python_version="$(tr -d '[:space:]' < .python-version)"
         fi
         echo "PYTHON_VERSION=${python_version}" >> "$GITHUB_ENV"
+        echo "UV_PYTHON=${python_version}" >> "$GITHUB_ENV"
 
     - name: Install mise and dev tools (uv, ruff, ty, etc.)
       if: inputs.bootstrap-tools == 'true'

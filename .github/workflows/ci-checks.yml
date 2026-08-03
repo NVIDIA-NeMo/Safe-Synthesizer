@@ -193,6 +193,20 @@ jobs:
       - name: Bootstrap
         run: mise run bootstrap-nss cpu
 
+      - name: Verify matrix Python version
+        env:
+          EXPECTED_PYTHON_VERSION: ${{ matrix.python-version }}
+        run: |
+          actual_python_version="$(.venv/bin/python --version 2>&1)"
+          echo "Using ${actual_python_version}"
+          case "${actual_python_version}" in
+            "Python ${EXPECTED_PYTHON_VERSION}."*) ;;
+            *)
+              echo "::error::Expected Python ${EXPECTED_PYTHON_VERSION}.x, got ${actual_python_version}"
+              exit 1
+              ;;
+          esac
+
       - name: Run unit tests with coverage
         run: mise run test:ci
 

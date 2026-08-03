@@ -82,3 +82,10 @@ def test_sync_dependencies_accepts_explicit_python_override(pytestconfig: pytest
     )
 
     assert args == ["sync", "--frozen", "--python", "/lustre/python3.12", "--group", "dev"]
+
+
+def test_ci_setup_exports_requested_python_to_uv(pytestconfig: pytest.Config) -> None:
+    action = Path(pytestconfig.rootpath, ".github/actions/setup-python-env/action.yml").read_text()
+
+    assert 'echo "PYTHON_VERSION=${python_version}" >> "$GITHUB_ENV"' in action
+    assert 'echo "UV_PYTHON=${python_version}" >> "$GITHUB_ENV"' in action
