@@ -217,3 +217,22 @@ class TestMixedInputMigration:
         assert params.structured_generation.backend == "xgrammar"
         assert params.structured_generation.schema_method == "structural_tag"
         assert params.structured_generation.use_single_sequence is True
+
+
+@pytest.mark.unit
+class TestMaxTokensMultiplier:
+    def test_default_matches_metadata_constant(self) -> None:
+        """The config default mirrors the metadata safety-margin constant."""
+        from nemo_safe_synthesizer.llm.metadata import GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER
+
+        assert GenerateParameters().max_tokens_multiplier == GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER
+
+    def test_accepts_widened_value(self) -> None:
+        """Users can widen the budget for long free-text datasets."""
+        assert GenerateParameters(max_tokens_multiplier=1.8).max_tokens_multiplier == 1.8
+
+    @pytest.mark.parametrize("value", [0, -0.5, float("inf"), float("-inf"), float("nan")])
+    def test_rejects_non_positive(self, value: float) -> None:
+        """Non-positive and non-finite multipliers are rejected by the validator."""
+        with pytest.raises(ValidationError):
+            GenerateParameters(max_tokens_multiplier=value)
