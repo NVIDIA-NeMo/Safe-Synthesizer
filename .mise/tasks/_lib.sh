@@ -40,20 +40,21 @@ resolve_venv_path() {
 
 sync_nss_dependencies() {
   local extra="${1:?Python dependency profile is required}"
+  local python="${2:-$(resolve_python_version)}"
   local sync_uv_bin="${NSS_UV_BIN:-uv}"
 
   case "${extra}" in
     cuda|cu129)
-      "${sync_uv_bin}" sync --frozen --extra cu129 --extra engine --group dev
+      "${sync_uv_bin}" sync --frozen --python "${python}" --extra cu129 --extra engine --group dev
       ;;
     cpu)
-      "${sync_uv_bin}" sync --frozen --extra cpu --extra engine --group dev
+      "${sync_uv_bin}" sync --frozen --python "${python}" --extra cpu --extra engine --group dev
       ;;
     engine)
-      "${sync_uv_bin}" sync --frozen --extra engine --group dev
+      "${sync_uv_bin}" sync --frozen --python "${python}" --extra engine --group dev
       ;;
     dev)
-      "${sync_uv_bin}" sync --frozen --group dev
+      "${sync_uv_bin}" sync --frozen --python "${python}" --group dev
       ;;
     *)
       echo "Error: Invalid extra '${extra}'. Use one of: dev engine cpu cuda cu129" >&2

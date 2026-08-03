@@ -82,7 +82,7 @@ fi
 "${uv_bin}" venv --seed --allow-existing --python "${python_bin}" "${venv_path}"
 
 echo "[slurm-bootstrap] syncing NSS dependencies with profile ${usage_extra?}"
-sync_nss_dependencies "${usage_extra?}"
+sync_nss_dependencies "${usage_extra?}" "${python_bin}"
 
 venv_python="$(readlink -f "${venv_path}/bin/python")"
 readonly venv_python
