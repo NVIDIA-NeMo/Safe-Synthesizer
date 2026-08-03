@@ -29,10 +29,9 @@ readonly REPO_URL="https://github.com/NVIDIA-NeMo/Safe-Synthesizer"
 
 : "${HOME:?HOME is not set}"
 
-# $HOME is the JupyterLab file browser root, so anything visible there is part
-# of the first impression. Only tutorials/ and README.md are; everything
-# operational is a dotfile, which the browser hides by default. Users pick
-# their own location for data -- the script does not create a folder for it.
+# $HOME is the JupyterLab file browser root, so only tutorials/ and README.md
+# are visible there; everything operational is a dotfile. No data folder is
+# created -- users keep their files wherever they like.
 readonly TUTORIALS_DIR="${HOME}/tutorials"
 readonly README_FILE="${HOME}/README.md"
 
@@ -42,11 +41,7 @@ readonly USER_KERNEL_DIR="${HOME}/.local/share/jupyter/kernels/python3"
 readonly ENV_FILE="${HOME}/.nss-env.sh"
 readonly LOG_FILE="${HOME}/.nss-setup.log"
 
-# vLLM publishes cu129 wheels from a pinned commit rather than a release index.
-# Keep these three in sync with the install command in docs/user-guide/getting-started.md.
-readonly INDEX_FLASHINFER="https://flashinfer.ai/whl/cu129"
-readonly INDEX_TORCH="https://download.pytorch.org/whl/cu129"
-readonly INDEX_VLLM="https://wheels.vllm.ai/ee0da84ab9e04ac7610e28580af62c365e898389/cu129"
+readonly CUDA_EXTRA="cu129"
 
 mkdir -p "${BIN_DIR}"
 exec > >(tee -a "${LOG_FILE}") 2>&1
@@ -75,10 +70,8 @@ fi
 
 if [[ "$(uv --version 2>/dev/null | awk '{print $2}')" != "${UV_VERSION}" ]]; then
   log "installing uv ${UV_VERSION} into ${BIN_DIR}"
-  # Fetch the release tarball and verify its published SHA-256 rather than
-  # piping astral.sh/install.sh into a shell -- that installer logs "no
-  # checksums to verify", so nothing validates what it downloads. Mirrors the
-  # GPG-verified mise install in tools/install-mise.sh.
+  # Verify the published SHA-256 rather than piping astral.sh/install.sh into
+  # a shell -- that installer logs "no checksums to verify". See README.
   case "$(uname -m)" in
     x86_64) uv_target="x86_64-unknown-linux-gnu" ;;
     aarch64 | arm64) uv_target="aarch64-unknown-linux-gnu" ;;
@@ -121,11 +114,44 @@ fi
 if "${VENV_DIR}/bin/safe-synthesizer" --version >/dev/null 2>&1; then
   log "safe-synthesizer already installed; skipping package install"
 else
-  log "installing nemo-safe-synthesizer[cu129,engine] -- this takes several minutes"
-  VIRTUAL_ENV="${VENV_DIR}" uv pip install "nemo-safe-synthesizer[cu129,engine]" \
-    --index "${INDEX_FLASHINFER}" \
-    --index "${INDEX_TORCH}" \
-    --index "${INDEX_VLLM}" \
+  NSS_VERSION="$(curl -fsSL https://pypi.org/pypi/nemo-safe-synthesizer/json \
+    | "${VENV_DIR}/bin/python" -c 'import json, sys; print(json.load(sys.stdin)["info"]["version"])')"
+
+  # Index URLs are install-time config, not wheel metadata, so they must match
+  # the release being installed rather than this repo's main. Read them from
+  # that release's own pyproject.toml, keyed on URL not index name. See README.
+  pyproject="$(mktemp)"
+  curl -fsSL "${REPO_URL}/raw/v${NSS_VERSION}/pyproject.toml" -o "${pyproject}"
+  index_args=()
+  index_count=0
+  while IFS= read -r url; do
+    [[ -n "${url}" ]] || continue
+    index_args+=(--index "${url}")
+    index_count=$((index_count + 1))
+    log "index: ${url}"
+  done < <(env CUDA_EXTRA="${CUDA_EXTRA}" "${VENV_DIR}/bin/python" - "${pyproject}" <<'PY'
+import os
+import sys
+import tomllib
+
+with open(sys.argv[1], "rb") as handle:
+    indexes = tomllib.load(handle)["tool"]["uv"]["index"]
+print("\n".join(i["url"] for i in indexes if os.environ["CUDA_EXTRA"] in i["url"]))
+PY
+  )
+  rm -f "${pyproject}"
+
+  # The parse runs in a process substitution, so it cannot fail the script.
+  # The count is what actually validates it.
+  if [[ "${index_count}" -ne 3 ]]; then
+    log "ERROR: expected 3 ${CUDA_EXTRA} indexes in v${NSS_VERSION}, got ${index_count}"
+    exit 1
+  fi
+
+  log "installing nemo-safe-synthesizer ${NSS_VERSION} -- this takes several minutes"
+  VIRTUAL_ENV="${VENV_DIR}" uv pip install \
+    "nemo-safe-synthesizer[${CUDA_EXTRA},engine]==${NSS_VERSION}" \
+    "${index_args[@]}" \
     --index-strategy unsafe-best-match
 fi
 
@@ -146,8 +172,9 @@ fi
 if compgen -G "${TUTORIALS_DIR}/*.ipynb" >/dev/null 2>&1; then
   log "tutorials already present"
 else
-  NSS_VERSION="$("${VENV_DIR}/bin/python" -c \
-    'from importlib.metadata import version; print(version("nemo-safe-synthesizer"))')"
+  # Set above if this run installed; read off the package if the install ran previously.
+  NSS_VERSION="${NSS_VERSION:-$("${VENV_DIR}/bin/python" -c \
+    'from importlib.metadata import version; print(version("nemo-safe-synthesizer"))')}"
   log "fetching tutorials for version ${NSS_VERSION}"
 
   # Staged under $HOME so the final move is a rename on the same filesystem,

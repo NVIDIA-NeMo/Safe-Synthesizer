@@ -82,6 +82,22 @@ options, in rough order of convenience: drag and drop into the JupyterLab file b
 These are the non-obvious constraints the script works around. They were each found the
 hard way on a real instance.
 
+- Package indexes are derived at runtime, not hardcoded. Index URLs are
+  install-time configuration rather than wheel metadata, so the installer must supply
+  them -- and they have to match the release being installed, not this repo's `main`.
+  The script resolves the latest version from the PyPI JSON API, fetches that tag's
+  `pyproject.toml`, and reads the CUDA index URLs out of it, then pins the install to
+  that exact version so the two cannot drift. Selection is keyed on the URL containing
+  `cu129`, not on the index name: the flashinfer entry was renamed
+  `flashinfer-jit-cache` → `flashinfer-jit-cache-cu129` between 0.1.8 and 0.1.9, so
+  names are not stable across releases. The parse runs inside a process substitution and
+  therefore cannot fail the script, so the count of discovered indexes is what validates
+  it.
+- uv is installed from a checksum-verified tarball, not `curl | sh`. The
+  `astral.sh/install.sh` path logs `no checksums to verify`, so nothing validated what
+  it downloaded. The script fetches the pinned release tarball, compares it against the
+  published `.sha256`, and installs the binaries -- matching the GPG-verified mise
+  install in `tools/install-mise.sh`.
 - The setup script has a 16 KiB limit. Brev rejects anything larger, which is why
   the script carries short comments pointing here rather than full explanations. Check
   `wc -c script/brev/setup.sh` before pasting.
