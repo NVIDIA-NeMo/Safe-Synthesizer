@@ -10,6 +10,11 @@ description = "Run all unit tests including slow tests, excluding e2e and smoke.
 alias = "test-unit-slow"
 run = 'uv run --frozen pytest -n auto --dist loadscope -vv tests -m "unit"'
 
+["test:unit:gpu"]
+description = "Run non-slow GPU-marked unit tests outside the smoke and e2e suites. Requires CUDA and GPU dependencies."
+alias = "test-unit-gpu"
+run = 'uv run --frozen pytest --dist loadscope -vv -n 0 tests -m "requires_gpu and not slow and not smoke and not e2e"'
+
 ["test:ci"]
 description = "Run CI unit tests with coverage, excluding slow, e2e, GPU, and smoke tests. Produces coverage.json."
 alias = "test-ci"
@@ -81,21 +86,33 @@ description = "Run all GPU e2e tests: default then DP. Requires CUDA; stages are
 alias = "test-e2e"
 run = [{ task = "test:e2e:default" }, { task = "test:e2e:dp" }]
 
+["test:e2e:prepared"]
+description = "Run all GPU e2e tests without bootstrapping dependencies. Requires a prepared CUDA environment."
+run = [{ task = "test:e2e:default:run" }, { task = "test:e2e:dp:run" }]
+
 ["test:e2e:default"]
 description = "Run default e2e tests (requires CUDA)"
 alias = "test-e2e-default"
 run = [
     { task = "bootstrap-nss", args = ["cu129"] },
-    "uv run --frozen pytest --dist loadscope -vv -n 0 tests/e2e/test_safe_synthesizer.py -k default",
+    { task = "test:e2e:default:run" },
 ]
+
+["test:e2e:default:run"]
+hide = true
+run = "uv run --frozen --no-sync pytest --dist loadscope -vv -n 0 tests/e2e/test_safe_synthesizer.py -k default"
 
 ["test:e2e:dp"]
 description = "Run dp e2e tests (requires CUDA)"
 alias = "test-e2e-dp"
 run = [
     { task = "bootstrap-nss", args = ["cu129"] },
-    "uv run --frozen pytest --dist loadscope -vv -n 0 tests/e2e/test_safe_synthesizer.py -k dp",
+    { task = "test:e2e:dp:run" },
 ]
+
+["test:e2e:dp:run"]
+hide = true
+run = "uv run --frozen --no-sync pytest --dist loadscope -vv -n 0 tests/e2e/test_safe_synthesizer.py -k dp"
 
 ["test:e2e:collect"]
 description = "Dry-run e2e and GPU selectors with pytest collection only. Does not run tests; useful before changing task selectors."
