@@ -74,7 +74,6 @@ keep writable artifact and cache mounts external:
 
 ```bash
 docker run --rm --gpus all --shm-size=1g \
-  --user "$(id -u):$(id -g)" \
   -v /path/to/artifacts:/workspace/artifacts \
   -v /path/to/hf-cache:/workspace/.hf_cache \
   registry.example.com/team/safe-synthesizer-workload@sha256:<derived-digest> \
@@ -83,10 +82,28 @@ docker run --rm --gpus all --shm-size=1g \
   --artifact-path /workspace/artifacts
 ```
 
+Do not add the canonical command's `--user` override here: the embedded files
+are readable by the inherited `appuser` (uid/gid 1000), not arbitrary host
+identities. Provision the artifact and cache directories so uid/gid 1000 can
+write to them.
+
 For Kubernetes, replace `image` in the [Job template](kubernetes.md#portable-job-template)
 with the derived digest. If the approved snapshot supplies both files, remove
-only the input/config volume mounts and volumes; retain writable artifact and
-HF-cache PVCs, runtime Secrets, GPU limit, `/dev/shm`, and security contexts.
+only the input/config volume mounts and volumes, then replace `args` with:
+
+```yaml
+args:
+  - run
+  - --config
+  - /workspace/workload/config.yaml
+  - --data-source
+  - /workspace/workload/input.csv
+  - --artifact-path
+  - /workspace/artifacts
+```
+
+Retain writable artifact and HF-cache PVCs, runtime Secrets, GPU limit,
+`/dev/shm`, and security contexts.
 
 The CLI workflow and outputs do not change. Use
 [Running Safe Synthesizer](running.md) for execution and artifacts,
