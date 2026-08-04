@@ -136,9 +136,8 @@ def parse_packages(content: str) -> dict[str, Package]:
         content: Raw UTF-8 text of the lockfile.
 
     Returns:
-        A dict keyed by package name (or ``name@source`` when a name
-        appears more than once with different sources).  Values are
-        :class:`Package` instances.
+        A dict keyed by package name (or ``name@source@version`` when a name
+        appears more than once). Values are :class:`Package` instances.
     """
     data = tomllib.loads(content)
 
@@ -156,8 +155,10 @@ def parse_packages(content: str) -> dict[str, Package]:
             continue
         source = _extract_source(pkg)
 
-        # Disambiguate packages that appear under multiple sources
-        key = f"{name}@{source}" if name_counts.get(name, 1) > 1 else name
+        # uv.lock may contain several versions of a package from one source.
+        # Keep every variant instead of letting later entries overwrite earlier
+        # entries in this mapping.
+        key = f"{name}@{source}@{version}" if name_counts.get(name, 1) > 1 else name
         packages[key] = Package(name=name, version=Version(version), source=source)
 
     return packages
