@@ -40,6 +40,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         --no-sources \
         --default-index https://pypi.org/simple \
         --index https://download.pytorch.org/whl/cpu \
+        --index https://flashinfer.ai/whl/ \
         --index-strategy unsafe-best-match \
         "nemo-safe-synthesizer[cpu,engine] @ file://${wheel}" && \
     uv --no-config pip check --python /opt/wheel-cpu/bin/python && \
@@ -53,8 +54,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         --dry-run \
         --default-index https://pypi.org/simple \
         --index https://flashinfer.ai/whl/cu129 \
+        --index https://flashinfer.ai/whl/ \
         --index https://download.pytorch.org/whl/cu129 \
-        --index https://wheels.vllm.ai/ee0da84ab9e04ac7610e28580af62c365e898389/cu129 \
+        --index https://wheels.vllm.ai/0.26.0/cu129 \
         --index-strategy unsafe-best-match \
         "nemo-safe-synthesizer[cu129,engine] @ file://${wheel}" && \
     rm -rf /opt/wheel-cpu /opt/wheel-cu129

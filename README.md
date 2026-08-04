@@ -18,7 +18,7 @@ Read detailed usage below, or jump to the documentation with [Getting Started](h
 
 ### Prerequisites
 
-- Python 3.11–3.13 (`.python-version` pins 3.13 for local/dev bootstrap; any 3.11, 3.12, or 3.13 interpreter works. Python 3.14+ is NOT supported because vLLM currently declares `<3.14` support while upstream resolves Python 3.14 wheel compatibility across its dependency stack)
+- Python 3.11–3.14 (`.python-version` pins 3.13 for local/dev bootstrap; any 3.11, 3.12, 3.13, or 3.14 interpreter works)
 - [uv](https://docs.astral.sh/uv/) (recommended) or pip -- Python package manager
 - NVIDIA GPU (A100 or larger) for training and generation
 - Linux only -- macOS, Windows, and Apple Silicon are not supported for training or generation. A CPU-only install is available for development and configuration validation.
@@ -29,15 +29,17 @@ Read detailed usage below, or jump to the documentation with [Getting Started](h
 # With uv (recommended):
 uv pip install "nemo-safe-synthesizer[cu129,engine]" \
   --index https://flashinfer.ai/whl/cu129 \
+  --index https://flashinfer.ai/whl/ \
   --index https://download.pytorch.org/whl/cu129 \
-  --index https://wheels.vllm.ai/ee0da84ab9e04ac7610e28580af62c365e898389/cu129 \
+  --index https://wheels.vllm.ai/0.26.0/cu129 \
   --index-strategy unsafe-best-match
 
 # With pip:
 pip install "nemo-safe-synthesizer[cu129,engine]" \
   --extra-index-url https://download.pytorch.org/whl/cu129 \
   --extra-index-url https://flashinfer.ai/whl/cu129 \
-  --extra-index-url https://wheels.vllm.ai/ee0da84ab9e04ac7610e28580af62c365e898389/cu129
+  --extra-index-url https://flashinfer.ai/whl/ \
+  --extra-index-url https://wheels.vllm.ai/0.26.0/cu129
 ```
 
 Or install from source:

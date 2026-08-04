@@ -116,7 +116,7 @@ How to write clear, testable Python -- independent of which library primitives y
 
 ### Type hints
 
-The codebase targets Python 3.11–3.13 and uses native typing syntax throughout. Expect 3.11 as the minimum for the foreseeable future; the upper bound tracks dependency availability (currently vLLM declares `<3.14` support while its dependency stack gains full `cp314` wheel coverage).
+The codebase targets Python 3.11–3.14 and uses native typing syntax throughout. Expect 3.11 as the minimum for the foreseeable future; the upper bound tracks dependency availability (`requires-python` is currently `<3.15`).
 
 Even though `.python-version` pins Python 3.13 for local development and CI defaults, shared package code must stay Python 3.11 syntax-compatible until the NMP platform moves its base Python version to 3.12. Do not use Python 3.12-only syntax yet, including PEP 695 `type` statements or bracketed generic class/function parameters. Prefer `TypeAlias`, `TypeVar`, and `typing_extensions` backports when newer typing features are useful before the minimum runtime moves.
 

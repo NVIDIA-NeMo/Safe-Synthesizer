@@ -14,7 +14,7 @@ configuration, and NER parallelism, see [Environment Variables](environment.md).
 
 | Symptom | Likely Cause | Fix |
 |---------|-------------|-----|
-| Install fails on Python 3.14 | vLLM and dependency wheels are not ready | [Use Python 3.11–3.13](#python-314-is-not-supported) |
+| Install fails on Python 3.15+ | Outside `requires-python` upper bound | [Use Python 3.11–3.14](#unsupported-python-versions) |
 | "kernels package not installed" | Optional Kernels Hub backend selected without `kernels` installed | Set `training.attn_implementation: sdpa` |
 | `ConnectionError` during startup | No internet / model not cached | [Pre-cache models](environment.md#pre-caching-models) |
 | OOM in training | VRAM exhausted | [Reduce batch size, quantize](#out-of-memory-during-training) |
@@ -71,7 +71,7 @@ configuration reference.
 `uv sync` fails with an error mentioning incompatible `transformers` and
 `vllm` requirements.
 
-Safe Synthesizer requires `transformers>=5.12,<5.12.1` with vLLM 0.24.0.
+Safe Synthesizer requires `transformers>=5.12,<5.12.1` with vLLM 0.26.0.
 Keep vLLM's constraints intact so the resolver selects the tested
 Transformers/vLLM pairing.
 
@@ -79,7 +79,7 @@ Transformers/vLLM pairing.
 [project]
 dependencies = [
   "transformers>=5.12,<5.12.1",
-  "vllm==0.24.0",
+  "vllm==0.26.0",
 ]
 ```
 
@@ -108,12 +108,10 @@ The warning is informational. To suppress it, switch to a model with a
 fast tokenizer (most popular models do; check
 `AutoTokenizer.from_pretrained(model).is_fast`).
 
-### Python 3.14 Is Not Supported
+### Unsupported Python Versions
 
-Safe Synthesizer requires **Python 3.11, 3.12, or 3.13**. Python 3.14+ is not
-supported because vLLM currently declares `<3.14` support while upstream
-resolves Python 3.14 wheel compatibility across its dependency stack. Attempting
-to install on Python 3.14 fails with an unresolvable dependency error during
+Safe Synthesizer supports Python 3.11, 3.12, 3.13, and 3.14. Python 3.15+ is
+not supported. Attempting to install on an unsupported interpreter fails during
 `pip install` or `uv pip install`.
 
 To fix, create a virtual environment with a supported interpreter:
@@ -123,9 +121,8 @@ uv venv --python 3.13
 source .venv/bin/activate
 ```
 
-The project's `pyproject.toml` enforces `requires-python = ">=3.11, <3.14"`, so
-package managers will reject the install on unsupported versions. This upper
-bound will be raised once all transitive dependencies ship `cp314` wheels.
+The project's `pyproject.toml` enforces `requires-python = ">=3.11, <3.15"`, so
+package managers will reject the install on unsupported versions.
 
 ---
 

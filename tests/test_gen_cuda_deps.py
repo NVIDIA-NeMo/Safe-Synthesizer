@@ -340,9 +340,9 @@ def test_repository_cu129_variant_dependency_and_source(pytestconfig: pytest.Con
     generated = generator.build_cuda_pyproject_fragment(generator.load_cuda_deps_config(config_path))
     parsed = tomllib.loads(generated.text)
 
-    assert "vllm==0.24.0+cu129; sys_platform == 'linux'" in parsed["project"]["optional-dependencies"]["cu129"]
+    assert "vllm==0.26.0+cu129; sys_platform == 'linux'" in parsed["project"]["optional-dependencies"]["cu129"]
     assert parsed["tool"]["uv"]["sources"]["vllm"] == [
-        {"index": "vllm-v0-24-0-cu129", "marker": "sys_platform == 'linux'", "extra": "cu129"}
+        {"index": "vllm-v0-26-0-cu129", "marker": "sys_platform == 'linux'", "extra": "cu129"}
     ]
     assert parsed["tool"]["uv"]["sources"]["flashinfer-jit-cache"] == [
         {"index": "flashinfer-jit-cache-cu129", "marker": "sys_platform == 'linux'", "extra": "cu129"}
