@@ -101,7 +101,9 @@ def test_prompt_capacity_producer_and_split_do_not_pollute_key() -> None:
 
 
 def test_key_digest_is_stable() -> None:
-    assert _key().digest == "975fb6970bcc3d8c50b1d8f927a3b5fe0b94c6e600ff640a67632035df6a4fc8"
+    assert _key().digest == (
+        "975fb6970bcc3d8c50b1d8f927a3b5fe0b94c6e600ff640a67632035df6a4fc8"  # pragma: allowlist secret
+    )
 
 
 def test_invalid_dataset_fingerprint_fails() -> None:
