@@ -4,6 +4,15 @@ NVIDIA NeMo Safe Synthesizer creates private, safe versions of sensitive tabular
 
 ## Quick Start
 
+<a href="https://brev.nvidia.com/launchable/deploy/now?launchableID=env-3HBtA2NKQaBukL2TyDphWUcvQ17">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://brev-assets.s3.us-west-1.amazonaws.com/nv-lb-light.svg">
+    <img alt="Launch on Brev" src="https://brev-assets.s3.us-west-1.amazonaws.com/nv-lb-dark.svg">
+  </picture>
+</a>
+
+Try it without installing anything: the launchable above deploys a GPU instance with NeMo Safe Synthesizer and the tutorial notebooks preinstalled. Note that the instance bills continuously and cannot be paused -- delete it when you are finished.
+
 Read detailed usage below, or jump to the documentation with [Getting Started](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/getting-started/) or the [Safe Synthesizer 101](https://nvidia-nemo.github.io/Safe-Synthesizer/tutorials/safe-synthesizer-101/) notebook.
 
 
