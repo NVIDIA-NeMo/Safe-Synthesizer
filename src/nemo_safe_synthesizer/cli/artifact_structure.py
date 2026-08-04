@@ -341,8 +341,8 @@ class _AdapterDir(BoundDir):
     if TYPE_CHECKING:
         adapter_config: Path
         metadata: Path
-        nss_tokenizer: Path
         schema: Path
+        tokenizer: BoundDir
 
 
 class _TrainDir(BoundDir):
@@ -392,7 +392,7 @@ class Workdir:
             - adapter_config.json
             - adapter_model.safetensors
             - metadata_v2.json
-            - nss_tokenizer.json
+            - tokenizer/                 (saved Hugging Face tokenizer assets)
             - dataset_schema.json
         - generate/
           - logs.jsonl                   (generate-only workflow)
@@ -457,8 +457,8 @@ class Workdir:
             "adapter",
             adapter_config=FileNode("adapter_config.json"),
             metadata=FileNode("metadata_v2.json"),
-            nss_tokenizer=FileNode("nss_tokenizer.json"),
             schema=FileNode("dataset_schema.json"),
+            tokenizer=DirNode("tokenizer"),
         ),
     )
     """Location and contents of train directory structure."""

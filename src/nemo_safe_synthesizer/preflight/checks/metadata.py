@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing_extensions import override
 
-from ...tokenization import WorkloadKind, create_runtime_nss_tokenizer
+from ...tokenization import WorkloadKind, bind_tokenizer
 from ..base import IssueCollector, MetadataCheck
 from ..types import MetadataView
 from ._helpers import check_group_budget, check_sampled_record_budget, check_schema_prompt_budget
@@ -58,13 +58,13 @@ class TokenBudgetCheck(MetadataCheck):
             )
             return
         workload_kind = WorkloadKind.TIME_SERIES if config.time_series.is_timeseries else WorkloadKind.TABULAR
-        record_tokenizer = create_runtime_nss_tokenizer(
+        tokenization = bind_tokenizer(
             metadata.tokenizer,
             metadata,
             workload_kind=workload_kind,
         )
 
-        max_new_tokens = check_schema_prompt_budget(collector, list(data.columns), metadata, record_tokenizer)
+        max_new_tokens = check_schema_prompt_budget(collector, list(data.columns), metadata, tokenization)
         if max_new_tokens is None:
             return
 
@@ -72,7 +72,7 @@ class TokenBudgetCheck(MetadataCheck):
             collector,
             data,
             metadata,
-            record_tokenizer,
+            tokenization,
             max_new_tokens,
             sample_size_limit=self.token_sample_size,
         )
@@ -88,7 +88,7 @@ class TokenBudgetCheck(MetadataCheck):
                 data,
                 group_col,
                 metadata,
-                record_tokenizer,
+                tokenization,
                 max_new_tokens,
                 top_n=self.top_groups_to_check,
             )

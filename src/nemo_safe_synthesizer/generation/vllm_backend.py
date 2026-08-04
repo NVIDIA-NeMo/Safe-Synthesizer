@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import torch
+from transformers import PreTrainedTokenizerBase
 from vllm import LLM as vLLM
 from vllm import RequestOutput
 from vllm.config import AttentionConfig, StructuredOutputsConfig
@@ -46,11 +47,12 @@ from ..generation.vllm_observability import (
     read_loadavg,
     read_vllm_runtime_metrics,
 )
-from ..generation.vllm_tokenizer import VllmTokenizerProbe
 from ..llm.metadata import ModelMetadata
 from ..llm.utils import ModelRef, cleanup_memory, get_max_vram
 from ..observability import get_logger, heartbeat
-from ..tokenization import PromptEncoding, TabularContext, as_tabular_renderer
+from ..tokenization import PromptEncoding
+from ..tokenization.core import _BoundTokenization
+from ..tokenization.persistence import TOKENIZER_ASSET_DIRECTORY
 from ..utils import all_equal_type, load_json
 
 logger = get_logger(__name__)
@@ -111,21 +113,34 @@ def _tokens_prompt(prompt_token_ids: list[int]) -> TokensPrompt:
     return TokensPrompt(prompt_token_ids=prompt_token_ids)
 
 
-def _validate_nss_embedding_range(nss_tokenizer, llm: vLLM) -> None:
-    """Reject canonical NSS IDs that the loaded model cannot embed."""
+def _validate_embedding_range(input_ids: tuple[int, ...], llm: vLLM) -> None:
+    """Reject dispatched IDs that the loaded model cannot embed."""
     try:
         vocabulary_size = llm.llm_engine.model_config.get_vocab_size()
     except (AttributeError, TypeError, ValueError) as exc:
         raise GenerationError("Could not determine the vLLM model embedding vocabulary size.") from exc
     if isinstance(vocabulary_size, bool) or not isinstance(vocabulary_size, int) or vocabulary_size <= 0:
         raise GenerationError("The vLLM model exposed an invalid embedding vocabulary size.")
-    native_vocabulary = nss_tokenizer.for_hf().get_vocab()
+    if any(token_id < 0 or token_id >= vocabulary_size for token_id in input_ids):
+        raise GenerationError("The dispatched tokenizer IDs exceed the vLLM model embedding vocabulary range.")
+
+
+def _validate_engine_tokenizer(tokenization: _BoundTokenization, engine: PreTrainedTokenizerBase) -> None:
+    """Compare required special IDs and one no-special encode/decode probe."""
+    native = tokenization.native
+    for name in ("bos_token_id", "eos_token_id", "pad_token_id"):
+        if getattr(engine, name, None) != getattr(native, name, None):
+            raise GenerationError(f"The vLLM tokenizer disagrees on required {name}.")
+    text = 'NSS tokenizer probe: {"unicode":"λ"}\n'
+    native_ids = tuple(native.encode(text, add_special_tokens=False))
     try:
-        highest_token_id = max(native_vocabulary.values(), default=-1)
+        engine_ids = tuple(engine.encode(text, add_special_tokens=False))
+        native_decoded = native.decode(list(native_ids), skip_special_tokens=False)
+        engine_decoded = engine.decode(list(engine_ids), skip_special_tokens=False)
     except (AttributeError, TypeError, ValueError) as exc:
-        raise GenerationError("The persisted NSS tokenizer exposed an invalid vocabulary.") from exc
-    if highest_token_id >= vocabulary_size:
-        raise GenerationError("The persisted NSS tokenizer exceeds the vLLM model embedding vocabulary range.")
+        raise GenerationError("Could not validate the vLLM tokenizer probe.") from exc
+    if engine_ids != native_ids or engine_decoded != native_decoded:
+        raise GenerationError("The vLLM tokenizer does not match the saved tokenizer assets.")
 
 
 def _secure_outlines_cache_dir() -> None:
@@ -299,6 +314,7 @@ class VllmBackend(GeneratorBackend):
         # at the cost of token counts being zero until the tokenizer is attached.
         self.processor: Processor = create_processor(self.schema, self.model_metadata, self.config)
         adapter_path = self.workdir.adapter_path if self.workdir.adapter_path else self.model_metadata.adapter_path
+        self._adapter_path = Path(adapter_path) if adapter_path else None
         self.lora_req = LoRARequest("lora", 1, str(adapter_path)) if adapter_path else None
         self._torn_down = False
 
@@ -358,6 +374,11 @@ class VllmBackend(GeneratorBackend):
         model_ref = ModelRef.parse(self.config.training.pretrained_model)
         hf_overrides = _build_rope_hf_overrides(self.model_metadata)
 
+        llm_kwargs: dict[str, Any] = {}
+        if self.model_metadata.tokenizer_representation is not None:
+            if self._adapter_path is None:
+                raise GenerationError("Saved tokenizer assets require a resolved adapter path.")
+            llm_kwargs["tokenizer"] = str((self._adapter_path / TOKENIZER_ASSET_DIRECTORY).resolve())
         with heartbeat("Model loading", logger_name=__name__, model=self.config.training.pretrained_model):
             llm = vLLM(
                 model=model_ref.target(),
@@ -369,6 +390,7 @@ class VllmBackend(GeneratorBackend):
                 attention_config=attention_config,
                 trust_remote_code=model_ref.trust_remote_code,
                 hf_overrides=hf_overrides,
+                **llm_kwargs,
             )
         self.llm = llm
 
@@ -382,15 +404,9 @@ class VllmBackend(GeneratorBackend):
             self._engine_runtime_config = probe_engine_runtime_config(llm)
 
             tokenizer: EncodeOnlyTokenizer = llm.get_tokenizer()
-            nss_tokenizer = self.model_metadata.nss_tokenizer
-            if nss_tokenizer is not None:
-                parity = nss_tokenizer.compare_engine(VllmTokenizerProbe(tokenizer))
-                if not parity.matches:
-                    categories = ", ".join(parity.mismatches)
-                    raise GenerationError(
-                        f"The vLLM tokenizer does not match the persisted NSS tokenizer ({categories})."
-                    )
-                _validate_nss_embedding_range(nss_tokenizer, llm)
+            tokenization = self.model_metadata.tokenization
+            if tokenization is not None:
+                _validate_engine_tokenizer(tokenization, cast(PreTrainedTokenizerBase, tokenizer))
             self.processor = create_processor(
                 self.schema,
                 self.model_metadata,
@@ -402,24 +418,22 @@ class VllmBackend(GeneratorBackend):
             if not initialization_complete:
                 self.teardown()
 
-    def _render_nss_prompt(self, current_prefill: str) -> PromptEncoding | None:
-        """Render one canonical NSS prompt, or preserve legacy text generation."""
-        nss_tokenizer = self.model_metadata.nss_tokenizer
-        if nss_tokenizer is None:
+    def _render_token_prompt(self, current_prefill: str) -> PromptEncoding | None:
+        """Render one canonical token prompt, or preserve legacy text generation."""
+        tokenization = self.model_metadata.tokenization
+        if tokenization is None:
             return None
         if current_prefill:
             raise InternalError("Static tabular generation cannot render a rolling prefill.")
-        return as_tabular_renderer(nss_tokenizer).render_prompt(
-            TabularContext(
-                ordered_columns=tuple(self.columns),
-                instruction=self.model_metadata.instruction,
-            )
+        return tokenization.render_prompt(
+            tuple(self.columns),
+            self.model_metadata.instruction,
         )
 
     def _get_static_prompt_encoding(self) -> PromptEncoding | None:
         """Return the canonical static prompt once for this backend instance."""
         if not self._static_prompt_encoding_resolved:
-            self._static_prompt_encoding = self._render_nss_prompt("")
+            self._static_prompt_encoding = self._render_token_prompt("")
             self._static_prompt_encoding_resolved = True
         return self._static_prompt_encoding
 
@@ -464,10 +478,12 @@ class VllmBackend(GeneratorBackend):
                 return self._max_tokens_for_prompt_length(self._get_prompt_token_count())
 
         if isinstance(prompt, PromptEncoding):
-            nss_tokenizer = self.model_metadata.nss_tokenizer
-            if nss_tokenizer is None:
-                raise InternalError("Canonical prompt generation requires an NSS tokenizer.")
-            capacity = nss_tokenizer.capacity_for(
+            tokenization = self.model_metadata.tokenization
+            if tokenization is None:
+                raise InternalError("Canonical prompt generation requires bound tokenization.")
+            if self.llm is not None:
+                _validate_embedding_range(prompt.input_ids, self.llm)
+            capacity = tokenization.capacity_for(
                 prompt,
                 context_limit=self.model_metadata.max_seq_length,
                 sequence_count=0,

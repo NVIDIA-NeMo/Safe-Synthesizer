@@ -11,7 +11,6 @@ import math
 import time
 from collections.abc import Callable
 from contextlib import redirect_stdout
-from copy import deepcopy
 from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -66,7 +65,7 @@ from ..privacy.dp_transformers.dp_utils import (
     OpacusDPTrainer,
 )
 from ..privacy.dp_transformers.privacy_args import PrivacyArguments
-from ..tokenization import WorkloadKind, create_runtime_nss_tokenizer
+from ..tokenization import WorkloadKind, bind_tokenizer
 from ..training.backend import (
     NSSTrainerResult,
     TrainingBackend,
@@ -139,11 +138,11 @@ class HuggingFaceBackend(TrainingBackend):
         self.model = self.model_loader_type.from_pretrained(**self.framework_load_params, config=self.autoconfig)
 
         workload_kind = WorkloadKind.TIME_SERIES if self.params.time_series.is_timeseries else WorkloadKind.TABULAR
-        persisted_nss = self.model_metadata.nss_tokenizer
-        if persisted_nss is not None:
-            if persisted_nss.spec.workload_kind != workload_kind:
-                raise ParameterError("Persisted NSS tokenizer workload does not match the training workload.")
-            self.nss_tokenizer = persisted_nss
+        persisted = self.model_metadata.tokenization
+        if persisted is not None:
+            if persisted.workload_kind != workload_kind:
+                raise ParameterError("Persisted tokenizer workload does not match the training workload.")
+            self.tokenization = persisted
         else:
             admitted_native = self.model_metadata.tokenizer
             if not isinstance(admitted_native, PreTrainedTokenizerBase):
@@ -152,17 +151,16 @@ class HuggingFaceBackend(TrainingBackend):
                     trust_remote_code=self.model_ref.trust_remote_code,
                     model_max_length=model_args.get("max_seq_length", None),
                 )
-            private_native = deepcopy(admitted_native)
             if model_max_length := model_args.get("max_seq_length"):
-                private_native.model_max_length = model_max_length
+                admitted_native.model_max_length = model_max_length
 
-            self.nss_tokenizer = create_runtime_nss_tokenizer(
-                private_native,
+            self.tokenization = bind_tokenizer(
+                admitted_native,
                 self.model_metadata,
                 workload_kind=workload_kind,
             )
-        self.tokenizer = cast(PreTrainedTokenizer, self.nss_tokenizer.for_hf())
-        self.model_metadata.nss_tokenizer = self.nss_tokenizer
+        self.tokenizer = cast(PreTrainedTokenizer, self.tokenization.native)
+        self.model_metadata.tokenization = self.tokenization
         self.model_metadata.tokenizer = self.tokenizer
 
     # Constants for filtering trainer-specific kwargs
@@ -492,7 +490,7 @@ class HuggingFaceBackend(TrainingBackend):
         )
 
         data_collator = DataCollatorForPrivateTokenClassification(
-            tokenizer=cast(PreTrainedTokenizer, self.nss_tokenizer.for_hf())
+            tokenizer=cast(PreTrainedTokenizer, self.tokenization.native)
         )
 
         training_args["remove_unused_columns"] = False  # required for DP data processing
@@ -538,7 +536,7 @@ class HuggingFaceBackend(TrainingBackend):
         # The 🤗 classification collator pads both the inputs and labels.
         data_collator = training_args.pop(
             "data_collator",
-            DataCollatorForTokenClassification(tokenizer=self.nss_tokenizer.for_hf()),
+            DataCollatorForTokenClassification(tokenizer=self.tokenization.native),
         )
         # Gradient checkpointing is not working correctly with Opacus optimizer as it 'wraps' the model in a GradSampleModule.
         # can fix this by enabling gradient checkpointing directly on the model but will defer that for now.
@@ -563,7 +561,7 @@ class HuggingFaceBackend(TrainingBackend):
         factory = cast(Callable[..., Trainer], self.trainer_type)
         trainer = factory(
             model=self.model,
-            processing_class=self.nss_tokenizer.for_hf(),
+            processing_class=self.tokenization.native,
             args=training_args,
             train_dataset=self.training_examples.train,
             eval_dataset=self.training_examples.test,
@@ -618,9 +616,9 @@ class HuggingFaceBackend(TrainingBackend):
                     config=self.params,
                     schema=self.dataset_schema,
                     metadata=self.model_metadata,
-                    tokenizer=self.nss_tokenizer.for_hf(),
+                    tokenizer=self.tokenization.native,
                 ),
-                nss_tokenizer=self.nss_tokenizer,
+                tokenization=self.tokenization,
                 prompt_encoding=self.training_prompt_encoding,
                 num_prompts_per_batch=DEFAULT_VALID_RECORD_EVAL_BATCH_SIZE,
                 **training_args["inference_eval_kwargs"],
@@ -701,7 +699,7 @@ class HuggingFaceBackend(TrainingBackend):
             metadata=self.model_metadata,
             dataset=hf_dataset,
             tokenizer=None,
-            nss_tokenizer=self.nss_tokenizer,
+            tokenization=self.tokenization,
             cache_file_path=self.training_output_dir,
             is_timeseries=self.params.time_series.is_timeseries,
             timestamp_column=self.params.time_series.timestamp_column,

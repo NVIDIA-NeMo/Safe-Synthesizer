@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import math
-import uuid
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from collections.abc import Callable, Generator, Sequence
@@ -42,18 +41,15 @@ from ..errors import (
 from ..holdout.holdout import grouped_train_test_split, naive_train_test_split
 from ..llm.metadata import ModelMetadata
 from ..observability import get_logger
-from ..tokenization import NssTokenizerCore, PromptEncoding, WorkloadKind, create_runtime_nss_tokenizer
+from ..tokenization import PromptEncoding, WorkloadKind, bind_tokenizer
 from ..tokenization.cache import (
     TokenCacheKey,
-    TokenCacheLock,
-    TokenCachePartition,
     dataset_fingerprint,
-    expected_token_cache_feature_types,
-    load_valid_token_cache,
-    publish_token_cache_manifest,
-    schema_prompt_ids_digest,
-    token_cache_paths,
+    token_cache_features,
+    token_cache_file,
+    validate_token_cache,
 )
+from ..tokenization.core import _EMPTY_PROMPT, _BoundTokenization
 from ..tokenization.records import columnar_batch_to_records
 
 logger = get_logger(__name__)
@@ -134,33 +130,18 @@ class Example:
     def __init__(
         self,
         prompt: PromptEncoding,
-        tokenizer: NssTokenizerCore,
+        tokenization: _BoundTokenization,
         metadata: ModelMetadata,
     ):
-        if not isinstance(prompt, PromptEncoding) or not isinstance(tokenizer, NssTokenizerCore):
-            raise ParameterError("Example requires an NSS tokenizer and its PromptEncoding.")
+        if not isinstance(prompt, PromptEncoding) or not isinstance(tokenization, _BoundTokenization):
+            raise ParameterError("Example requires bound tokenization and its PromptEncoding.")
         self.prompt = prompt
-        self.nss_tokenizer = tokenizer
+        self.tokenization = tokenization
         self.metadata = metadata
-        self._sequences: list[tuple[int, ...]] = []
-        self._sequence_attention_masks: list[tuple[int, ...]] = []
-        self._sequence_delimiters: list[bool] = []
         self.num_sequences = 0
-        self._refresh()
-
-    def _refresh(self) -> None:
-        framed = self.nss_tokenizer.frame_training(
-            self.prompt,
-            self._sequences,
-            add_sequence_delimiters=self._sequence_delimiters,
-            sequence_attention_masks=self._sequence_attention_masks,
-            context_limit=self.metadata.max_seq_length if self._sequences else None,
-            maximum_sequence_count=getattr(self.metadata, "max_sequences_per_example", None),
-            rope_scaling_factor=self.metadata.rope_scaling_factor,
-        )
-        self.input_ids = list(framed.input_ids)
-        self.attention_mask = list(framed.attention_mask)
-        self.labels = list(framed.labels)
+        self.input_ids = list(prompt.input_ids)
+        self.attention_mask = list(prompt.attention_mask)
+        self.labels = [-100] * len(prompt.input_ids)
 
     @property
     def num_tokens(self) -> int:
@@ -177,11 +158,30 @@ class Example:
         Raises:
             GenerationError: If the number of tokens in the example exceeds the context length.
         """
-        self._sequences.append(tuple(seq["input_ids"]))
-        self._sequence_attention_masks.append(tuple(seq["attention_mask"]))
-        self._sequence_delimiters.append(add_special_tokens)
+        input_ids = seq["input_ids"]
+        attention_mask = seq["attention_mask"]
+        if len(input_ids) != len(attention_mask) or any(value not in (0, 1) for value in attention_mask):
+            raise ParameterError("Each sequence attention mask must match its IDs and contain only zero or one.")
+        maximum = getattr(self.metadata, "max_sequences_per_example", None)
+        if maximum is not None and self.num_sequences + 1 > maximum:
+            raise ParameterError(
+                f"Training sequence count {self.num_sequences + 1} exceeds maximum sequence count {maximum}."
+            )
+        framed = self.tokenization.frame_training(
+            _EMPTY_PROMPT,
+            [input_ids],
+            add_sequence_delimiters=add_special_tokens,
+            sequence_attention_masks=[attention_mask],
+        )
+        self.tokenization.validate_training_length(
+            len(self.input_ids) + len(framed.input_ids),
+            context_limit=self.metadata.max_seq_length,
+            rope_scaling_factor=self.metadata.rope_scaling_factor,
+        )
+        self.input_ids.extend(framed.input_ids)
+        self.attention_mask.extend(framed.attention_mask)
+        self.labels.extend(framed.labels)
         self.num_sequences += 1
-        self._refresh()
 
     def to_dict(self) -> dict[str, list]:
         """Convert the example to a dictionary format suitable for training.
@@ -219,10 +219,7 @@ class TrainingExampleAssembler(ABC):
 
     Args:
         dataset: Dataset to be processed.
-        tokenizer: Compatibility construction input. The assembler does not
-            retain or call it after the NSS tokenizer is supplied.
-        record_tokenizer: Required NSS tokenizer owning ordered record
-            encoding and token-cache identity.
+        tokenization: Validated native tokenizer and prompt-policy binding.
         metadata: Internal training configuration, e.g., prompt template,
             bos/eos tokens, and where to use them.
         keep_columns: List of columns to keep in the tokenized dataset. This is useful
@@ -236,8 +233,7 @@ class TrainingExampleAssembler(ABC):
     def __init__(
         self,
         dataset: Dataset,
-        tokenizer: PreTrainedTokenizerBase | None,
-        record_tokenizer: NssTokenizerCore,
+        tokenization: _BoundTokenization,
         metadata: ModelMetadata,
         keep_columns: list[str] | None = None,
         test_size: int | None = None,
@@ -256,20 +252,16 @@ class TrainingExampleAssembler(ABC):
             raise ParameterError(msg)
 
         self.metadata = metadata
-        if not isinstance(record_tokenizer, NssTokenizerCore):
-            raise ParameterError("TrainingExampleAssembler requires an NSS record tokenizer.")
-        if not record_tokenizer.capabilities.training_prompt:
-            raise ParameterError("TrainingExampleAssembler requires NSS training prompt capability.")
-        del tokenizer
-        self.nss_tokenizer = record_tokenizer
-        self.record_tokenizer = record_tokenizer
+        if not isinstance(tokenization, _BoundTokenization):
+            raise ParameterError("TrainingExampleAssembler requires bound native tokenization.")
+        self.tokenization = tokenization
         self.stats = defaultdict(RunningStatistics)
         self.stats_val = defaultdict(RunningStatistics)
         # adding this extra instead of "" due to hf datasets being weird about the cache path parent dirs -
         # it's erroring out when we pass an empty string, with a 'filenotfound' error.
         fp = Path(cache_file_path) if cache_file_path else Path.cwd()
         self.token_cache_root = fp
-        self.cache_file_path = fp / f"{DEFAULT_CACHE_PREFIX}_{uuid.uuid4().hex[:5]}"
+        self.cache_file_path = fp / DEFAULT_CACHE_PREFIX
         self.test_size = test_size
         self.keep_columns = keep_columns or []
         self.seed = seed
@@ -278,11 +270,8 @@ class TrainingExampleAssembler(ABC):
         prompt_columns = tuple(
             column for column in dataset.column_names if column not in frozenset(DEFAULT_EXCLUDE_COLUMNS)
         )
-        self.prompt_encoding = self.nss_tokenizer.render_training_prompt(prompt_columns, metadata.instruction)
+        self.prompt_encoding = self.tokenization.render_prompt(prompt_columns, metadata.instruction)
         self.schema_prompt = self.prompt_encoding.text
-        # Retained compatibility value: no-special IDs, while framing and
-        # capacity use the authoritative full PromptEncoding.
-        self.schema_prompt_ids = list(self.nss_tokenizer.encode_no_special(self.schema_prompt))
 
         self.tokenized_records = self._tokenize_dataset(dataset, keep_columns)
         processed_dataset = self._preprocess_before_splitting(self.tokenized_records)
@@ -337,7 +326,7 @@ class TrainingExampleAssembler(ABC):
         seed: int | None = None,
         cache_file_path: str | Path | None = None,
         keep_columns: list[str] | None = None,
-        nss_tokenizer: NssTokenizerCore | None = None,
+        tokenization: _BoundTokenization | None = None,
         **kwargs,
     ) -> GroupedDataExampleAssembler | TabularDataExampleAssembler | SequentialExampleAssembler:
         """Select and construct the appropriate assembler subclass from config.
@@ -357,27 +346,23 @@ class TrainingExampleAssembler(ABC):
             seed: Random seed for reproducibility.
             cache_file_path: Path for caching intermediate datasets.
             keep_columns: Columns to preserve through tokenization.
-            nss_tokenizer: Authoritative tokenizer supplied by the training
-                backend. Legacy callers may omit it and construct from the
-                compatibility native input.
+            tokenization: Optional existing native tokenizer/prompt binding.
             **kwargs: Forwarded to the chosen assembler constructor.
 
         Returns:
             An assembler instance appropriate for the data type described by ``config``.
         """
         workload_kind = WorkloadKind.TIME_SERIES if config.time_series.is_timeseries else WorkloadKind.TABULAR
-        if nss_tokenizer is not None and nss_tokenizer.spec.workload_kind != workload_kind:
-            raise ParameterError("Supplied NSS tokenizer workload does not match the assembler workload.")
-        if nss_tokenizer is None:
+        if tokenization is not None and tokenization.workload_kind != workload_kind:
+            raise ParameterError("Supplied tokenization workload does not match the assembler workload.")
+        if tokenization is None:
             if tokenizer is None:
-                raise ParameterError("Assembler construction requires an NSS tokenizer or compatibility native input.")
-            record_tokenizer: NssTokenizerCore = create_runtime_nss_tokenizer(
+                raise ParameterError("Assembler construction requires a native tokenizer or bound tokenization.")
+            tokenization = bind_tokenizer(
                 tokenizer,
                 metadata,
                 workload_kind=workload_kind,
             )
-        else:
-            record_tokenizer = nss_tokenizer
 
         if config.time_series.is_timeseries:
             # group_by and order_by should be set by timeseries preprocessing
@@ -391,8 +376,7 @@ class TrainingExampleAssembler(ABC):
                 group_training_examples_by=group_by,
                 order_training_examples_by=order_by,
                 dataset=dataset,
-                tokenizer=tokenizer,
-                record_tokenizer=record_tokenizer,
+                tokenization=tokenization,
                 metadata=metadata,
                 config=config,
                 test_size=config.training.validation_ratio,
@@ -407,8 +391,7 @@ class TrainingExampleAssembler(ABC):
                 group_training_examples_by=config.data.group_training_examples_by,
                 order_training_examples_by=config.data.order_training_examples_by,
                 dataset=dataset,
-                tokenizer=tokenizer,
-                record_tokenizer=record_tokenizer,
+                tokenization=tokenization,
                 metadata=metadata,
                 test_size=config.training.validation_ratio,
                 seed=seed,
@@ -419,8 +402,7 @@ class TrainingExampleAssembler(ABC):
         else:
             return TabularDataExampleAssembler(
                 dataset=dataset,
-                tokenizer=tokenizer,
-                record_tokenizer=record_tokenizer,
+                tokenization=tokenization,
                 metadata=metadata,
                 test_size=config.training.validation_ratio,
                 seed=seed,
@@ -472,15 +454,13 @@ class TrainingExampleAssembler(ABC):
 
     def _tokenize_records(self, records: dict[str, list]) -> dict[str, list]:
         """Tokenize the records in the dataset and return as a dict of lists."""
-        self._validate_schema_capacity()
         rows = columnar_batch_to_records(records)
-        encoded = self.record_tokenizer.encode_records(
+        encoded = self.tokenization.encode_records(
             rows,
             exclude_columns=DEFAULT_EXCLUDE_COLUMNS,
         )
         input_ids = [list(row) for row in encoded.input_ids]
         attention_mask = [list(row) for row in encoded.attention_mask]
-        self._validate_record_capacity(input_ids)
         return {
             "text": [record.utf8.decode() for record in encoded.records],
             "input_ids": input_ids,
@@ -488,7 +468,7 @@ class TrainingExampleAssembler(ABC):
         }
 
     def _validate_schema_capacity(self) -> None:
-        self.nss_tokenizer.validate_prompt_capacity(
+        self.tokenization.validate_prompt_capacity(
             self.prompt_encoding,
             context_limit=self.metadata.max_seq_length,
             rope_scaling_factor=self.metadata.rope_scaling_factor,
@@ -496,7 +476,7 @@ class TrainingExampleAssembler(ABC):
 
     def _validate_record_capacity(self, input_ids: Sequence[Sequence[int]]) -> None:
         for ids in input_ids:
-            self.nss_tokenizer.validate_record_capacity(
+            self.tokenization.validate_record_capacity(
                 self.prompt_encoding,
                 record_token_count=len(ids),
                 context_limit=self.metadata.max_seq_length,
@@ -508,23 +488,17 @@ class TrainingExampleAssembler(ABC):
         self,
         dataset: Dataset,
         keep_columns: Sequence[str],
-        partition: TokenCachePartition,
     ) -> TokenCacheKey:
         input_columns = tuple(dataset.column_names)
         exclusions = frozenset(DEFAULT_EXCLUDE_COLUMNS)
         effective_exclusions = tuple(column for column in input_columns if column in exclusions)
         retained = tuple(column for column in input_columns if column in keep_columns)
         return TokenCacheKey(
-            producer_kind=f"{type(self).__module__}.{type(self).__qualname__}",
-            tokenizer_fragment=self.record_tokenizer.spec.cache_identity_fragment,
             dataset_fingerprint=dataset_fingerprint(dataset),
-            input_columns=input_columns,
-            effective_exclusions=effective_exclusions,
+            tokenizer_digest=self.tokenization.cache_digest,
             serialized_columns=tuple(column for column in input_columns if column not in exclusions),
+            excluded_columns=effective_exclusions,
             retained_columns=retained,
-            schema_prompt_ids_digest=schema_prompt_ids_digest(list(self.prompt_encoding.input_ids)),
-            max_seq_length=self.metadata.max_seq_length,
-            partition=partition,
         )
 
     def _tokenize_dataset(self, dataset: Dataset, keep_columns: list[str] | None = None) -> Dataset:
@@ -541,43 +515,31 @@ class TrainingExampleAssembler(ABC):
         keep_columns = keep_columns or []
         logger.info("Tokenizing records")
         self._validate_schema_capacity()
-        description = dataset.info.description or ""
-        partition = TokenCachePartition.VALIDATION if "is_val" in description else TokenCachePartition.TRAIN
-        key = self._token_cache_key(dataset, keep_columns, partition)
-        paths = token_cache_paths(self.token_cache_root, key)
+        key = self._token_cache_key(dataset, keep_columns)
+        cache_file = token_cache_file(self.token_cache_root, key)
+        cache_file.parent.mkdir(parents=True, exist_ok=True)
         retained = tuple(column for column in dataset.column_names if column in keep_columns)
         expected_columns = (*retained, "text", "input_ids", "attention_mask")
-        expected_feature_types = expected_token_cache_feature_types(dataset, retained)
-        with TokenCacheLock(paths.lock):
-            cached = load_valid_token_cache(
-                paths,
-                key,
-                expected_columns=expected_columns,
-                expected_feature_types=expected_feature_types,
-                expected_row_count=len(dataset),
-            )
-            if cached is not None:
-                self._validate_record_capacity(cached["input_ids"])
-                return cached
-            paths.directory.mkdir(parents=True, exist_ok=True)
-            tokenized = dataset.map(
-                self._tokenize_records,
-                batched=True,
-                desc="Tokenizing records",
-                cache_file_name=str(paths.arrow),
-                load_from_cache_file=False,
-                new_fingerprint=key.digest,
-                remove_columns=[column for column in dataset.column_names if column not in keep_columns],
-            )
-            if tuple(tokenized.column_names) != expected_columns or len(tokenized) != len(dataset):
-                raise GenerationError("Token cache map produced an unexpected Arrow schema or row count.")
-            publish_token_cache_manifest(
-                paths,
-                key,
-                tokenized,
-                expected_feature_types=expected_feature_types,
-            )
-            return tokenized
+        features = token_cache_features(dataset, retained)
+        tokenized = dataset.map(
+            self._tokenize_records,
+            batched=True,
+            desc="Tokenizing records",
+            cache_file_name=str(cache_file),
+            load_from_cache_file=True,
+            new_fingerprint=key.digest,
+            remove_columns=[column for column in dataset.column_names if column not in keep_columns],
+            features=features,
+        )
+        validate_token_cache(
+            tokenized,
+            expected_features=features,
+            expected_columns=expected_columns,
+            expected_row_count=len(dataset),
+        )
+        # Cache hits deliberately replay current capacity and statistics.
+        self._validate_record_capacity(tokenized["input_ids"])
+        return tokenized
 
     def _run_example_generation(self, generator: Callable, dataset: Dataset) -> Dataset:
         """Run a generator function to produce a dataset of training examples.
@@ -643,7 +605,7 @@ class TabularDataExampleAssembler(TrainingExampleAssembler):
             for one training example.
         """
         num_rows = len(dataset)
-        max_new_tokens = self.nss_tokenizer.capacity_for(
+        max_new_tokens = self.tokenization.capacity_for(
             self.prompt_encoding,
             context_limit=self.metadata.max_seq_length,
             sequence_count=1,
@@ -672,7 +634,7 @@ class TabularDataExampleAssembler(TrainingExampleAssembler):
                 # Each example will fill the entire available context window.
                 example = Example(
                     prompt=self.prompt_encoding,
-                    tokenizer=self.nss_tokenizer,
+                    tokenization=self.tokenization,
                     metadata=self.metadata,
                 )
                 input_ids = dataset[i:j]["input_ids"]
@@ -830,10 +792,7 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
         dataset: A HuggingFace ``datasets.Dataset`` of tabular records.
             Must contain the columns specified by ``group_training_examples_by``
             and ``order_training_examples_by``.
-        tokenizer: Compatibility construction input used only to create the
-            authoritative NSS tokenizer.
-        record_tokenizer: Required NSS tokenizer used for record encoding and
-            cache identity.
+        tokenization: Validated native tokenizer and prompt-policy binding.
         metadata: Model metadata containing prompt config, sequence lengths, etc.
         group_training_examples_by: Column to group training examples by.
             For time series without explicit grouping, this is set to
@@ -882,8 +841,7 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
     def __init__(
         self,
         dataset: Dataset,
-        tokenizer: PreTrainedTokenizerBase | None,
-        record_tokenizer: NssTokenizerCore,
+        tokenization: _BoundTokenization,
         metadata: ModelMetadata,
         *,
         group_training_examples_by: str,
@@ -899,8 +857,7 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
 
         super().__init__(
             dataset=dataset,
-            tokenizer=tokenizer,
-            record_tokenizer=record_tokenizer,
+            tokenization=tokenization,
             metadata=metadata,
             keep_columns=keep_columns,
             **kwargs,
@@ -1174,7 +1131,7 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
             return None
         example = Example(
             prompt=self.prompt_encoding,
-            tokenizer=self.nss_tokenizer,
+            tokenization=self.tokenization,
             metadata=self.metadata,
         )
         input_ids = dataset[start:end]["input_ids"]
@@ -1208,7 +1165,7 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
         if len(dataset) == 0:
             return
 
-        max_new_tokens = self.nss_tokenizer.capacity_for(
+        max_new_tokens = self.tokenization.capacity_for(
             self.prompt_encoding,
             context_limit=self.metadata.max_seq_length,
             sequence_count=1,
@@ -1305,10 +1262,7 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
         group_training_examples_by: Column to group training examples by.
         order_training_examples_by: Column to order training examples by.
         dataset: Dataset to be processed.
-        tokenizer: Compatibility construction input used only to create the
-            authoritative NSS tokenizer.
-        record_tokenizer: Required NSS tokenizer used for record encoding and
-            cache identity.
+        tokenization: Validated native tokenizer and prompt-policy binding.
         metadata: training configuration, e.g., group by, order by, prompt
             template, bos/eos tokens and where to use them.
         test_size: Fraction of the dataset to use for testing. If None, there will
@@ -1322,8 +1276,7 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
         group_training_examples_by: str,
         order_training_examples_by: str | None,
         dataset: Dataset,
-        tokenizer: PreTrainedTokenizerBase | None,
-        record_tokenizer: NssTokenizerCore,
+        tokenization: _BoundTokenization,
         metadata: ModelMetadata,
         test_size: int | float | None = None,
         cache_file_path: str | Path | None = None,
@@ -1368,8 +1321,7 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
 
         super().__init__(
             dataset=train_raw,
-            tokenizer=tokenizer,
-            record_tokenizer=record_tokenizer,
+            tokenization=tokenization,
             metadata=metadata,
             keep_columns=required_columns,
             test_size=None,  # we already did the split
@@ -1414,6 +1366,14 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
 
         grouped_dataset = self._run_example_generation(self._group_tokenized_records_generator, tokenized_records)
 
+        # ``Dataset.from_generator`` may reuse its own Arrow cache without
+        # executing the generator. Replay statistics from the materialized
+        # result so cache hits and misses have identical observable state.
+        stats = self.stats_val if "is_val" in tokenized_records.info.description else self.stats
+        for num_records, input_ids in zip(grouped_dataset["num_records"], grouped_dataset["input_ids"], strict=True):
+            stats["records_per_group"].update(num_records)
+            stats["tokens_per_group"].update(len(input_ids))
+
         return grouped_dataset
 
     def _group_tokenized_records_generator(self, dataset: Dataset) -> GeneratorType:
@@ -1451,13 +1411,8 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
             group_indices = group_data.index.to_list()
             group = dataset.select(group_indices).remove_columns(group_by).to_dict()
             num_records = len(group["input_ids"])
-            # Keep train/val group-size stats separate so generation bounds derived
-            # from ``records_per_group`` never incorporate holdout groups.
-            stats = self.stats_val if "is_val" in dataset.info.description else self.stats
-            stats["records_per_group"].update(num_records)
             group["input_ids"] = list(chain(*group["input_ids"]))
             group["attention_mask"] = list(chain(*group["attention_mask"]))
-            stats["tokens_per_group"].update(len(group["input_ids"]))
             group.update({"num_records": num_records})
             yield group
 
@@ -1484,10 +1439,10 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
         update_interval = max(min(100, num_groups // 10), 1)
         # Create example for the first group.
         num_records = 0
-        packed_sequences: list[tuple[int, ...]] = []
+        packed_record_tokens = 0
         example = Example(
             prompt=self.prompt_encoding,
-            tokenizer=self.nss_tokenizer,
+            tokenization=self.tokenization,
             metadata=self.metadata,
         )
 
@@ -1496,7 +1451,7 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
                 logger.info(f"Assembling examples: {i}/{num_groups} groups")
             num_sequences += 1
             example.add_sequence(dataset[i])
-            packed_sequences.append(tuple(dataset[i]["input_ids"]))
+            packed_record_tokens += len(dataset[i]["input_ids"])
             num_records += dataset[i]["num_records"]
             # If 1) this is the last group or 2) we have already added
             # max_sequences_per_example groups to the example or 3) adding
@@ -1506,10 +1461,11 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
                 i == len(dataset) - 1
                 or num_sequences == self.metadata.max_sequences_per_example
                 or (
-                    not self.nss_tokenizer.can_append_sequence(
+                    not self.tokenization.can_append_sequence(
                         self.prompt_encoding,
-                        packed_sequences,
-                        dataset[i + 1]["input_ids"],
+                        current_record_tokens=packed_record_tokens,
+                        candidate_record_tokens=len(dataset[i + 1]["input_ids"]),
+                        current_sequence_count=num_sequences,
                         context_limit=self.metadata.max_seq_length,
                         maximum_sequence_count=self.metadata.max_sequences_per_example,
                     )
@@ -1531,10 +1487,10 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
 
                 # Create new example for the next group.
                 num_records = 0
-                packed_sequences = []
+                packed_record_tokens = 0
                 example = Example(
                     prompt=self.prompt_encoding,
-                    tokenizer=self.nss_tokenizer,
+                    tokenization=self.tokenization,
                     metadata=self.metadata,
                 )
 

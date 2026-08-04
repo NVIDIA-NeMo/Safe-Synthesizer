@@ -545,22 +545,21 @@ class TestGenerateParallelGroups:
     ):
         """Each rolling dispatch rebuilds NSS IDs and clamps to its live prompt."""
         timeseries_model_metadata.base_max_seq_length = 8
-        nss_tokenizer = MagicMock()
+        tokenization = MagicMock()
 
-        def render_prompt(context):
-            ids = (1, 2, 3) if context.current_prefill != "rolling\n" else (1, 2, 3, 4, 5, 6)
-            return PromptEncoding(
-                text=f"prompt:{context.current_prefill}", input_ids=ids, attention_mask=(1,) * len(ids)
-            )
+        def render_prompt(columns, instruction, *, current_prefill):  # noqa: ARG001
+            ids = (1, 2, 3) if current_prefill != "rolling\n" else (1, 2, 3, 4, 5, 6)
+            return PromptEncoding(text=f"prompt:{current_prefill}", input_ids=ids, attention_mask=(1,) * len(ids))
 
-        nss_tokenizer.render_prompt.side_effect = render_prompt
-        nss_tokenizer.capacity_for.side_effect = lambda prompt, **_: SimpleNamespace(
+        tokenization.render_prompt.side_effect = render_prompt
+        tokenization.capacity_for.side_effect = lambda prompt, **_: SimpleNamespace(
             record_token_capacity=8 - len(prompt.input_ids)
         )
-        timeseries_model_metadata.nss_tokenizer = nss_tokenizer
+        timeseries_model_metadata.tokenization = tokenization
         backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
         backend._groups = ["group_A"]
         backend.llm = MagicMock()
+        backend.llm.llm_engine.model_config.get_vocab_size.return_value = 100
         dispatches = []
 
         def generate(**kwargs):
@@ -591,27 +590,27 @@ class TestGenerateParallelGroups:
             [{"prompt_token_ids": [1, 2, 3, 4, 5, 6]}],
         ]
         assert [call["sampling_params"].max_tokens for call in dispatches] == [5, 2]
-        contexts = [call.args[0] for call in nss_tokenizer.render_prompt.call_args_list]
-        assert [context.current_prefill for context in contexts] == [
+        calls = tokenization.render_prompt.call_args_list
+        assert [call.kwargs["current_prefill"] for call in calls] == [
             timeseries_model_metadata.initial_prefill["group_A"],
             "rolling\n",
         ]
-        assert all(context.schema.property_order == ("timestamp", "value") for context in contexts)
-        assert all(context.instruction == timeseries_model_metadata.instruction for context in contexts)
+        assert all(call.args == (("timestamp", "value"), timeseries_model_metadata.instruction) for call in calls)
 
     def test_full_live_rolling_prompt_fails_before_vllm_dispatch(
         self, timeseries_base_params, timeseries_model_metadata, mock_workdir
     ):
         """A rolling prompt that fills the context fails before reaching vLLM."""
         timeseries_model_metadata.base_max_seq_length = 8
-        nss_tokenizer = MagicMock()
+        tokenization = MagicMock()
         prompt = PromptEncoding(text="full prompt", input_ids=tuple(range(8)), attention_mask=(1,) * 8)
-        nss_tokenizer.render_prompt.return_value = prompt
-        nss_tokenizer.capacity_for.return_value = SimpleNamespace(record_token_capacity=0)
-        timeseries_model_metadata.nss_tokenizer = nss_tokenizer
+        tokenization.render_prompt.return_value = prompt
+        tokenization.capacity_for.return_value = SimpleNamespace(record_token_capacity=0)
+        timeseries_model_metadata.tokenization = tokenization
         backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
         backend._groups = ["group_A"]
         backend.llm = MagicMock()
+        backend.llm.llm_engine.model_config.get_vocab_size.return_value = 100
 
         with pytest.raises(GenerationError, match="no room for generated tokens"):
             backend._generate_parallel_groups(MagicMock(), SamplingParams(max_tokens=1), [])

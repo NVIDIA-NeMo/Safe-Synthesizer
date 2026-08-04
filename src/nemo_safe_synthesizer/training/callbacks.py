@@ -35,7 +35,8 @@ from ..generation.results import (
 )
 from ..llm.metadata import ModelMetadata
 from ..observability import get_logger
-from ..tokenization import NssTokenizerCore, PromptEncoding
+from ..tokenization import PromptEncoding
+from ..tokenization.core import _BoundTokenization
 
 logger = get_logger(__name__)
 
@@ -67,7 +68,7 @@ class InferenceEvalCallback(TrainerCallback):
         schema: dict[str, Any],
         metadata: ModelMetadata,
         processor: Processor,
-        nss_tokenizer: NssTokenizerCore,
+        tokenization: _BoundTokenization,
         prompt_encoding: PromptEncoding,
         num_prompts_per_batch: int = 16,
         num_batches: int | None = None,
@@ -77,7 +78,7 @@ class InferenceEvalCallback(TrainerCallback):
     ):
         self.schema = schema
         self.metadata = metadata
-        self.nss_tokenizer = nss_tokenizer
+        self.tokenization = tokenization
         self.prompt_encoding = prompt_encoding
         self.num_prompts_per_batch = num_prompts_per_batch
 
@@ -135,7 +136,7 @@ class InferenceEvalCallback(TrainerCallback):
             input_ids = prompt_tokens["input_ids"].to(model.device)
             attention_mask = prompt_tokens["attention_mask"].to(model.device)
 
-            nss_capacity = self.nss_tokenizer.capacity_for(
+            nss_capacity = self.tokenization.capacity_for(
                 self.prompt_encoding,
                 context_limit=self.metadata.max_seq_length,
                 sequence_count=0,

@@ -13,7 +13,7 @@ import pandas as pd
 from ...data_processing.budget import compute_prompt_encoding, tokenize_records
 from ...defaults import DEFAULT_EXCLUDE_COLUMNS
 from ...errors import GenerationError
-from ...tokenization import NssTokenizer
+from ...tokenization.core import _BoundTokenization
 from ..base import IssueCollector
 
 if TYPE_CHECKING:
@@ -42,7 +42,7 @@ def check_schema_prompt_budget(
     collector: IssueCollector,
     columns: list[str],
     metadata: ModelMetadata,
-    record_tokenizer: NssTokenizer,
+    tokenization: _BoundTokenization,
 ) -> int | None:
     """Validate schema prompt against context length; return token budget.
 
@@ -51,11 +51,11 @@ def check_schema_prompt_budget(
     prompt = compute_prompt_encoding(
         columns,
         metadata,
-        record_tokenizer,
+        tokenization,
         exclude_columns=DEFAULT_EXCLUDE_COLUMNS,
     )
     try:
-        capacity = record_tokenizer.capacity_for(
+        capacity = tokenization.capacity_for(
             prompt,
             context_limit=metadata.max_seq_length,
             sequence_count=1,
@@ -76,7 +76,7 @@ def check_sampled_record_budget(
     collector: IssueCollector,
     data: pd.DataFrame,
     metadata: ModelMetadata,
-    record_tokenizer: NssTokenizer,
+    tokenization: _BoundTokenization,
     max_new_tokens: int,
     *,
     sample_size_limit: int,
@@ -84,7 +84,7 @@ def check_sampled_record_budget(
     """Validate sampled records against token budget."""
     sample_size = min(len(data), sample_size_limit)
     sample = data.sample(n=sample_size, random_state=42) if sample_size < len(data) else data
-    tokenized_records = tokenize_records(sample, record_tokenizer, exclude_columns=DEFAULT_EXCLUDE_COLUMNS)
+    tokenized_records = tokenize_records(sample, tokenization, exclude_columns=DEFAULT_EXCLUDE_COLUMNS)
     exceeded = sum(1 for token_ids in tokenized_records if len(token_ids) > max_new_tokens)
     if exceeded:
         collector.error(
@@ -98,7 +98,7 @@ def check_group_budget(
     data: pd.DataFrame,
     group_col: str,
     metadata: ModelMetadata,
-    record_tokenizer: NssTokenizer,
+    tokenization: _BoundTokenization,
     max_new_tokens: int,
     *,
     top_n: int,
@@ -118,7 +118,7 @@ def check_group_budget(
         running_tokens = 0
         for start in range(0, positions.size, chunk_size):
             chunk = data.iloc[positions[start : start + chunk_size]]
-            chunk_token_ids = tokenize_records(chunk, record_tokenizer, exclude_columns=DEFAULT_EXCLUDE_COLUMNS)
+            chunk_token_ids = tokenize_records(chunk, tokenization, exclude_columns=DEFAULT_EXCLUDE_COLUMNS)
             running_tokens += sum(len(token_ids) for token_ids in chunk_token_ids)
             if running_tokens > max_new_tokens:
                 return True

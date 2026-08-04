@@ -199,11 +199,11 @@ def test_cpu_sdk_training_artifact_round_trip(
 
     assert trained._workdir is not None
     adapter = trained._workdir.train.adapter
-    assert adapter.nss_tokenizer.is_file()
-    assert (adapter.path / "tokenizer_config.json").is_file()
+    assert adapter.tokenizer.path.is_dir()
+    assert (adapter.tokenizer.path / "tokenizer_config.json").is_file()
     restored = ModelMetadata.from_metadata_json(adapter.metadata, workdir=trained._workdir)
-    assert restored.nss_tokenizer is not None
+    assert restored.tokenization is not None
     resumed = SafeSynthesizer(config=None, workdir=trained._workdir).load_from_save_path()
     assert resumed._llm_metadata is not None
-    assert resumed._llm_metadata.nss_tokenizer is not None
-    assert resumed._llm_metadata.nss_tokenizer.spec == restored.nss_tokenizer.spec
+    assert resumed._llm_metadata.tokenization is not None
+    assert resumed._llm_metadata.tokenizer_representation == restored.tokenizer_representation

@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -29,8 +30,8 @@ from nemo_safe_synthesizer.training.huggingface_backend import (
 )
 
 
-def test_example_assembler_reuses_backend_authoritative_nss_tokenizer(backend) -> None:
-    backend.nss_tokenizer = MagicMock()
+def test_example_assembler_reuses_backend_bound_tokenization(backend) -> None:
+    backend.tokenization = MagicMock()
     backend.tokenizer = MagicMock()
     expected = MagicMock()
 
@@ -38,7 +39,7 @@ def test_example_assembler_reuses_backend_authoritative_nss_tokenizer(backend) -
         actual = backend._create_example_assembler(Dataset.from_dict({"a": [1]}))
 
     assert actual is expected
-    assert factory.call_args.kwargs["nss_tokenizer"] is backend.nss_tokenizer
+    assert factory.call_args.kwargs["tokenization"] is backend.tokenization
 
 
 def test_inference_callback_reuses_exact_assembler_prompt_encoding(backend) -> None:
@@ -78,7 +79,7 @@ def mock_model_metadata(mock_workdir):
     metadata.metadata_path = mock_workdir.train.adapter.metadata
     metadata.rope_parameters_location = "autoconfig"
     metadata.tokenizer = None
-    metadata.nss_tokenizer = None
+    metadata.tokenization = None
     return metadata
 
 
@@ -92,7 +93,7 @@ def mock_model_metadata_with_rope_automodel(mock_workdir):
     metadata.metadata_path = mock_workdir.train.adapter.metadata
     metadata.rope_parameters_location = "automodel"
     metadata.tokenizer = None
-    metadata.nss_tokenizer = None
+    metadata.tokenization = None
     return metadata
 
 
@@ -165,14 +166,14 @@ def params_with_orderby(base_params):
 @pytest.fixture
 def backend(base_params, mock_model_metadata, mock_workdir):
     """Create a HuggingFaceBackend instance for testing."""
-    backend = HuggingFaceBackend(
+    backend: Any = HuggingFaceBackend(
         params=base_params,
         model_metadata=mock_model_metadata,
         workdir=mock_workdir,
     )
     backend.tokenizer = MagicMock()
-    backend.nss_tokenizer = MagicMock()
-    backend.nss_tokenizer.for_hf.return_value = backend.tokenizer
+    backend.tokenization = MagicMock()
+    backend.tokenization.native = backend.tokenizer
     return backend
 
 
@@ -189,14 +190,14 @@ def backend_with_validation(params_with_validation, mock_model_metadata, mock_wo
 @pytest.fixture
 def backend_with_dp(params_with_dp, mock_model_metadata, mock_workdir):
     """Create a HuggingFaceBackend instance with DP enabled."""
-    backend = HuggingFaceBackend(
+    backend: Any = HuggingFaceBackend(
         params=params_with_dp,
         model_metadata=mock_model_metadata,
         workdir=mock_workdir,
     )
     backend.tokenizer = MagicMock()
-    backend.nss_tokenizer = MagicMock()
-    backend.nss_tokenizer.for_hf.return_value = backend.tokenizer
+    backend.tokenization = MagicMock()
+    backend.tokenization.native = backend.tokenizer
     backend.true_dataset_size = 100
     backend.data_fraction = 0.5
     return backend
@@ -433,8 +434,8 @@ class TestResolvedModelLoading:
         model_ref.target.return_value = cached_target
         model_ref.trust_remote_code = True
         tokenizer = MagicMock()
-        nss_tokenizer = MagicMock()
-        nss_tokenizer.for_hf.return_value = tokenizer
+        tokenization = MagicMock()
+        tokenization.native = tokenizer
         backend.model_ref = model_ref
         backend.framework_load_params = {
             "pretrained_model_name_or_path": cached_target,
@@ -450,8 +451,8 @@ class TestResolvedModelLoading:
                 return_value=tokenizer,
             ) as load_tok,
             patch(
-                "nemo_safe_synthesizer.training.huggingface_backend.create_runtime_nss_tokenizer",
-                return_value=nss_tokenizer,
+                "nemo_safe_synthesizer.training.huggingface_backend.bind_tokenizer",
+                return_value=tokenization,
             ),
         ):
             backend._load_pretrained_model()
@@ -462,13 +463,13 @@ class TestResolvedModelLoading:
             model_max_length=None,
         )
 
-    def test_load_pretrained_model_reuses_manifest_reconstructed_nss_authority(self, backend):
-        """A reconstructed artifact tokenizer is not loaded or reconstructed a second time."""
+    def test_load_pretrained_model_reuses_saved_bound_tokenization(self, backend):
+        """A loaded artifact tokenizer is not loaded or bound a second time."""
         persisted = MagicMock()
-        persisted.spec.workload_kind = "tabular"
+        persisted.workload_kind = "tabular"
         native = MagicMock()
-        persisted.for_hf.return_value = native
-        backend.model_metadata.nss_tokenizer = persisted
+        persisted.native = native
+        backend.model_metadata.tokenization = persisted
         backend.model_loader_type = MagicMock()
         backend.model_loader_type.from_pretrained.return_value = MagicMock()
         backend.framework_load_params = {}
@@ -476,11 +477,11 @@ class TestResolvedModelLoading:
 
         with (
             patch("nemo_safe_synthesizer.training.huggingface_backend.load_fast_tokenizer") as load_native,
-            patch("nemo_safe_synthesizer.training.huggingface_backend.create_runtime_nss_tokenizer") as create_runtime,
+            patch("nemo_safe_synthesizer.training.huggingface_backend.bind_tokenizer") as create_runtime,
         ):
             backend._load_pretrained_model()
 
-        assert backend.nss_tokenizer is persisted
+        assert backend.tokenization is persisted
         assert backend.tokenizer is native
         load_native.assert_not_called()
         create_runtime.assert_not_called()

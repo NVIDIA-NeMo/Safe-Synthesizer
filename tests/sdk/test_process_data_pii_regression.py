@@ -180,7 +180,7 @@ class TestLoadFromSavePathGuard:
                 (),
                 {
                     "from_config": staticmethod(lambda c, workdir: None),
-                    "from_metadata_json": staticmethod(lambda f, workdir: None),
+                    "from_metadata_json": staticmethod(lambda f, workdir, *, admit_remote_code=False: None),
                     "stub": staticmethod(lambda c: None),
                 },
             ),

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -61,7 +62,7 @@ def _build_tokenizer(model_max_length: int, prompt_token_ids: list[int]) -> Magi
     return tokenizer
 
 
-def _build_nss_tokenizer(prompt_token_ids: list[int], capacity: int = 10_000) -> MagicMock:
+def _build_nss_tokenizer(prompt_token_ids: list[int], capacity: int = 10_000) -> Any:
     """Build an NSS tokenizer stub with exact prompt and capacity outputs."""
     tokenizer = MagicMock()
     tokenizer.render_training_prompt.return_value = MagicMock(
@@ -118,7 +119,7 @@ def test_worker_callback_logs_compact_structured_progress(monkeypatch):
 
 
 def test_inference_callback_requires_nss_prompt_authority(fixture_mock_metadata, fixture_mock_processor) -> None:
-    nss_tokenizer = MagicMock()
+    nss_tokenizer: Any = MagicMock()
     nss_tokenizer.render_training_prompt.return_value = MagicMock(
         text="nss prompt",
         input_ids=(1, 2, 3),
@@ -129,7 +130,7 @@ def test_inference_callback_requires_nss_prompt_authority(fixture_mock_metadata,
         schema={"properties": {"col_a": {"type": "string"}}},
         metadata=fixture_mock_metadata,
         processor=fixture_mock_processor,
-        nss_tokenizer=nss_tokenizer,
+        tokenization=nss_tokenizer,
         prompt_encoding=nss_tokenizer.render_training_prompt.return_value,
         num_prompts_per_batch=1,
         num_batches=1,
@@ -158,7 +159,7 @@ class TestInferenceEvalCallbackMaxNewTokens:
             schema={"properties": {"col_a": {"type": "string"}}},
             metadata=fixture_mock_metadata,
             processor=fixture_mock_processor,
-            nss_tokenizer=nss_tokenizer,
+            tokenization=nss_tokenizer,
             prompt_encoding=nss_tokenizer.render_training_prompt.return_value,
             num_prompts_per_batch=1,
             num_batches=1,
@@ -189,7 +190,7 @@ class TestInferenceEvalCallbackMaxNewTokens:
             schema={"properties": {"col_a": {"type": "string"}}},
             metadata=fixture_mock_metadata,
             processor=fixture_mock_processor,
-            nss_tokenizer=nss_tokenizer,
+            tokenization=nss_tokenizer,
             prompt_encoding=nss_tokenizer.render_training_prompt.return_value,
             num_prompts_per_batch=1,
             num_batches=1,
@@ -218,7 +219,7 @@ class TestInferenceEvalCallbackMaxNewTokens:
             schema={"properties": {"col_a": {"type": "string"}}},
             metadata=fixture_mock_metadata,
             processor=fixture_mock_processor,
-            nss_tokenizer=nss_tokenizer,
+            tokenization=nss_tokenizer,
             prompt_encoding=nss_tokenizer.render_training_prompt.return_value,
             num_prompts_per_batch=1,
             num_batches=1,
@@ -250,7 +251,7 @@ class TestInferenceEvalCallbackMaxNewTokens:
             schema={"properties": {"col_a": {"type": "string"}}},
             metadata=fixture_mock_metadata,
             processor=fixture_mock_processor,
-            nss_tokenizer=nss_tokenizer,
+            tokenization=nss_tokenizer,
             prompt_encoding=nss_tokenizer.render_training_prompt.return_value,
             num_prompts_per_batch=1,
             num_batches=1,
@@ -281,7 +282,7 @@ class TestInferenceEvalCallbackTerminalStatus:
             schema={"properties": {"col_a": {"type": "string"}}},
             metadata=fixture_mock_metadata,
             processor=fixture_mock_processor,
-            nss_tokenizer=nss_tokenizer,
+            tokenization=nss_tokenizer,
             prompt_encoding=nss_tokenizer.render_training_prompt.return_value,
             num_prompts_per_batch=1,
             num_batches=3,

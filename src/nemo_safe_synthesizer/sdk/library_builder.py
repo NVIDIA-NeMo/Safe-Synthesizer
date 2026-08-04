@@ -52,7 +52,6 @@ logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from ..generation.backend import GeneratorBackend
-    from ..tokenization import NssTokenizerRegistry
     from ..training.backend import TrainingBackend
 
 
@@ -279,7 +278,6 @@ class SafeSynthesizer(ConfigBuilder):
         runtime_config: SafeSynthesizerParameters | None = None,
         *,
         admit_remote_code: bool = False,
-        tokenizer_registry: NssTokenizerRegistry | None = None,
     ) -> SafeSynthesizer:
         """Load the Safe Synthesizer configuration from the save path.
 
@@ -300,8 +298,6 @@ class SafeSynthesizer(ConfigBuilder):
             runtime_config: Resume-time generation and evaluation overrides.
             admit_remote_code: Explicitly admit a persisted tokenizer whose
                 immutable provenance requires remote code.
-            tokenizer_registry: Registry snapshot containing any explicitly
-                admitted tokenizer implementation required by the artifact.
 
         Returns:
             Self for method chaining.
@@ -349,7 +345,6 @@ class SafeSynthesizer(ConfigBuilder):
             metadata_file,
             workdir=self._workdir,
             admit_remote_code=admit_remote_code,
-            tokenizer_registry=tokenizer_registry,
         )
 
         # Always prefer cached train/test splits to preserve the exact split from training.

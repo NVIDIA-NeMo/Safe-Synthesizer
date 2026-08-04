@@ -23,13 +23,12 @@ from ..data_processing.record_utils import (
     extract_records_from_jsonl_string,
 )
 from ..defaults import FIXED_RUNTIME_GENERATE_ARGS, LOG_DASHES, PSEUDO_GROUP_COLUMN
-from ..errors import InternalError
 from ..generation.batch import Batch
 from ..generation.results import GenerateJobResults, GenerationBatches, GenerationStatus
 from ..generation.vllm_backend import VllmBackend, _tokens_prompt
 from ..llm.metadata import ModelMetadata
 from ..observability import get_logger
-from ..tokenization import FrozenJsonObject, PromptEncoding, TimeSeriesContext, as_timeseries_renderer
+from ..tokenization import PromptEncoding
 
 logger = get_logger(__name__)
 
@@ -218,9 +217,6 @@ class TimeseriesBackend(VllmBackend):
     def __init__(self, config: SafeSynthesizerParameters, model_metadata: ModelMetadata, **kwargs):
         super().__init__(config, model_metadata, **kwargs)
 
-        self._frozen_schema = (
-            FrozenJsonObject.from_value(self.schema) if self.model_metadata.nss_tokenizer is not None else None
-        )
         self._schema_fragment = ",".join([f'"{c}":<unk>' for c in self.columns])
         self._samples_per_prompt = 5  # num of samples per prompt
         self._max_prompts_per_batch = 100  # max prompts per batch for parallel group generation
@@ -260,12 +256,12 @@ class TimeseriesBackend(VllmBackend):
         engine has not yet been initialized or no group prefills are
         populated.
         """
-        if self.model_metadata.nss_tokenizer is not None:
+        if self.model_metadata.tokenization is not None:
             prefills = tuple(self._group_prefills.values()) or ("",)
             return max(
                 len(prompt.input_ids)
                 for prefill in prefills
-                if (prompt := self._render_nss_prompt(prefill)) is not None
+                if (prompt := self._render_token_prompt(prefill)) is not None
             )
 
         base = super()._get_prompt_token_count()
@@ -278,27 +274,23 @@ class TimeseriesBackend(VllmBackend):
         )
         return base + longest_prefill_tokens
 
-    def _render_nss_prompt(self, current_prefill: str) -> PromptEncoding | None:
-        """Render an immutable time-series snapshot through the NSS tokenizer."""
-        nss_tokenizer = self.model_metadata.nss_tokenizer
-        if nss_tokenizer is None:
+    def _render_token_prompt(self, current_prefill: str) -> PromptEncoding | None:
+        """Render a time-series token prompt with the live prefill."""
+        tokenization = self.model_metadata.tokenization
+        if tokenization is None:
             return None
-        if self._frozen_schema is None:
-            raise InternalError("Time-series NSS generation requires an immutable schema snapshot.")
-        return as_timeseries_renderer(nss_tokenizer).render_prompt(
-            TimeSeriesContext(
-                schema=self._frozen_schema,
-                instruction=self.model_metadata.instruction,
-                current_prefill=current_prefill,
-            )
+        return tokenization.render_prompt(
+            tuple(self.columns),
+            self.model_metadata.instruction,
+            current_prefill=current_prefill,
         )
 
     def _initial_generation_max_tokens(self) -> int:
         """Return the safe initial budget before creating base sampling params."""
-        if self.model_metadata.nss_tokenizer is None:
+        if self.model_metadata.tokenization is None:
             return self._max_tokens_for_prompt_length(self._get_prompt_token_count())
         prefills = tuple(self._group_prefills.values()) or ("",)
-        prompts = [self._render_nss_prompt(prefill) for prefill in prefills]
+        prompts = [self._render_token_prompt(prefill) for prefill in prefills]
         return min(self._generation_max_tokens(prompt) for prompt in prompts if prompt is not None)
 
     def _build_progress_snapshots(self, total: int, is_group_based: bool = False) -> list[ProgressSnapshot]:
@@ -823,7 +815,7 @@ class TimeseriesBackend(VllmBackend):
             start_time = time.perf_counter()
 
             # Build prompts and batches for all active groups
-            prompt_encodings = [self._render_nss_prompt(state.current_prefill) for state in active_states]
+            prompt_encodings = [self._render_token_prompt(state.current_prefill) for state in active_states]
             if all(prompt is not None for prompt in prompt_encodings):
                 canonical_prompts = [prompt for prompt in prompt_encodings if prompt is not None]
                 prompts = [_tokens_prompt(list(prompt.input_ids)) for prompt in canonical_prompts]

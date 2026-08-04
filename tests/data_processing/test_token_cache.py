@@ -1,367 +1,321 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""T2 complete token-cache identity, integrity, and publication tests."""
+"""Datasets-owned semantic record-token cache contracts."""
 
 from __future__ import annotations
 
-import hashlib
-import json
-import multiprocessing
-import threading
-import time
-from concurrent.futures import ThreadPoolExecutor
-from dataclasses import replace
+from pathlib import Path
+from typing import Any, cast
 
 import pytest
-from datasets import Dataset
+from datasets import Dataset, Features, List, Value
+from transformers import AutoTokenizer, PreTrainedTokenizerBase
 
-from nemo_safe_synthesizer.errors import GenerationError
+from nemo_safe_synthesizer.data_processing.assembler import TabularDataExampleAssembler
+from nemo_safe_synthesizer.errors import GenerationError, ParameterError
+from nemo_safe_synthesizer.llm.metadata import ModelMetadata
+from nemo_safe_synthesizer.tokenization import WorkloadKind, bind_tokenizer
 from nemo_safe_synthesizer.tokenization.cache import (
-    ARROW_SCHEMA_ABI,
-    RECORD_ENCODING_ABI,
+    RECORD_FORMAT_VERSION,
+    TOKENIZATION_TRANSFORM_VERSION,
     TokenCacheKey,
-    TokenCacheLock,
-    TokenCacheManifest,
-    TokenCachePartition,
-    expected_token_cache_feature_types,
-    load_valid_token_cache,
-    publish_token_cache_manifest,
-    token_cache_paths,
+    dataset_fingerprint,
+    token_cache_features,
+    token_cache_file,
+    validate_token_cache,
 )
-from nemo_safe_synthesizer.tokenization.types import canonical_json_bytes
+from nemo_safe_synthesizer.tokenization.core import _BoundTokenization
 
 
-def _key() -> TokenCacheKey:
-    return TokenCacheKey(
-        producer_kind="training-example-assembler",
-        tokenizer_fragment="a" * 64,
-        dataset_fingerprint="dataset-fingerprint",
-        input_columns=("b", "hidden", "a"),
-        effective_exclusions=("hidden",),
-        serialized_columns=("b", "a"),
-        retained_columns=("hidden",),
-        schema_prompt_ids_digest="b" * 64,
-        max_seq_length=2048,
-        partition=TokenCachePartition.TRAIN,
+def _key(**overrides: Any) -> TokenCacheKey:
+    values: dict[str, Any] = {
+        "dataset_fingerprint": "source-123",
+        "tokenizer_digest": "a" * 64,
+        "serialized_columns": ("a", "b"),
+        "excluded_columns": ("internal",),
+        "retained_columns": ("group",),
+    }
+    values.update(overrides)
+    return TokenCacheKey(**values)
+
+
+def _assembler(
+    tokenizers_dir: Path,
+    dataset: Dataset,
+    cache_root: Path,
+) -> tuple[TabularDataExampleAssembler, _BoundTokenization, ModelMetadata]:
+    source = tokenizers_dir / "smollm3b"
+    native = cast(PreTrainedTokenizerBase, AutoTokenizer.from_pretrained(source))
+    metadata = ModelMetadata.from_str_or_path(source, tokenizer=native)
+    tokenization = bind_tokenizer(native, metadata, workload_kind=WorkloadKind.TABULAR)
+    assembler = TabularDataExampleAssembler(
+        dataset=dataset,
+        tokenization=tokenization,
+        metadata=metadata,
+        cache_file_path=cache_root,
+        seed=1,
     )
+    return assembler, tokenization, metadata
 
 
-def test_legacy_uuid_cache_behavior_is_characterized_before_replacement(tmp_path):
-    legacy_base = tmp_path / "safe-synthesizer-dataset-cache_abcde"
-
-    assert legacy_base.with_suffix(".tokens.arrow").name == "safe-synthesizer-dataset-cache_abcde.tokens.arrow"
-    assert legacy_base.with_suffix(".val.tokens.arrow").name == "safe-synthesizer-dataset-cache_abcde.val.tokens.arrow"
-
-    legacy_base.with_suffix(".tokens.arrow").write_bytes(b"poisoned legacy cache")
-    paths, _mapped = _write_valid_cache(tmp_path)
-
-    assert paths.arrow != legacy_base.with_suffix(".tokens.arrow")
-    assert _load(paths, _key()) is not None
-
-
-def test_complete_cache_key_is_deterministic_and_root_independent(tmp_path) -> None:
+def test_key_contains_only_semantic_transform_inputs() -> None:
     key = _key()
 
-    first = token_cache_paths(tmp_path / "one", key)
-    second = token_cache_paths(tmp_path / "two", key)
-
-    assert key.record_encoding_abi == RECORD_ENCODING_ABI
-    assert key.arrow_schema_abi == ARROW_SCHEMA_ABI
-    assert first.digest == second.digest == key.digest
-    assert first.directory.relative_to(tmp_path / "one").parts == ("nss-token-cache", "v1", key.digest)
-    assert second.directory.relative_to(tmp_path / "two").parts == ("nss-token-cache", "v1", key.digest)
-    assert first.arrow.name == "records.tokens.arrow"
-    assert first.manifest.name == "manifest.json"
-    assert all(
-        raw not in str(first.directory) for raw in ("training-example-assembler", "hidden", "dataset-fingerprint")
-    )
+    assert set(key.__dataclass_fields__) == {
+        "dataset_fingerprint",
+        "tokenizer_digest",
+        "serialized_columns",
+        "excluded_columns",
+        "retained_columns",
+        "record_format_version",
+        "transform_version",
+    }
+    assert key.record_format_version == RECORD_FORMAT_VERSION
+    assert key.transform_version == TOKENIZATION_TRANSFORM_VERSION
 
 
-def test_every_complete_identity_component_invalidates_cache() -> None:
-    base = _key()
-    variants = (
-        replace(base, producer_kind="other"),
-        replace(base, record_encoding_abi="record-v2"),
-        replace(base, arrow_schema_abi="arrow-v2"),
-        replace(base, tokenizer_fragment="c" * 64),
-        replace(base, dataset_fingerprint="other-dataset"),
-        replace(base, input_columns=("a", "hidden", "b")),
-        replace(base, effective_exclusions=()),
-        replace(base, serialized_columns=("a", "b")),
-        replace(base, retained_columns=("a",)),
-        replace(base, record_framing_operation="record-frame-v2"),
-        replace(base, native_batch_operation="native-batch-v2"),
-        replace(base, schema_prompt_ids_digest="d" * 64),
-        replace(base, max_seq_length=4096),
-        replace(base, partition=TokenCachePartition.VALIDATION),
-    )
-
-    assert len({base.digest, *(variant.digest for variant in variants)}) == len(variants) + 1
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("dataset_fingerprint", "different-source"),
+        ("tokenizer_digest", "b" * 64),
+        ("serialized_columns", ("b", "a")),
+        ("excluded_columns", ("other",)),
+        ("retained_columns", ("order",)),
+    ],
+)
+def test_every_semantic_input_invalidates_digest(field: str, value: object) -> None:
+    assert _key().digest != _key(**{field: value}).digest
 
 
-def _write_valid_cache(tmp_path, key: TokenCacheKey | None = None):
-    key = key or _key()
-    paths = token_cache_paths(tmp_path, key)
-    paths.directory.mkdir(parents=True, exist_ok=True)
-    source = Dataset.from_dict({"a": [1, 2]})
-    mapped = source.map(
-        lambda batch: {
-            "text": [f'{{"a":{value}}}\n' for value in batch["a"]],
-            "input_ids": [[value] for value in batch["a"]],
-            "attention_mask": [[1] for _value in batch["a"]],
-        },
-        batched=True,
-        remove_columns=["a"],
-        cache_file_name=str(paths.arrow),
-        load_from_cache_file=False,
-        new_fingerprint=key.digest,
-    )
-    expected_types = expected_token_cache_feature_types(source, ())
-    publish_token_cache_manifest(paths, key, mapped, expected_feature_types=expected_types)
-    return paths, mapped
+def test_prompt_capacity_producer_and_split_do_not_pollute_key() -> None:
+    fields = set(_key().__dataclass_fields__)
+
+    assert "prompt" not in " ".join(fields)
+    assert "capacity" not in " ".join(fields)
+    assert "producer" not in " ".join(fields)
+    assert "partition" not in fields
+    assert "registry" not in " ".join(fields)
 
 
-def _load(paths, key: TokenCacheKey):
-    return load_valid_token_cache(
-        paths,
-        key,
-        expected_columns=("text", "input_ids", "attention_mask"),
-        expected_feature_types=(
-            ("text", "Value('string')"),
-            ("input_ids", "List(Value('int32'))"),
-            ("attention_mask", "List(Value('int8'))"),
-        ),
-        expected_row_count=2,
-    )
+def test_key_digest_is_stable() -> None:
+    assert _key().digest == "975fb6970bcc3d8c50b1d8f927a3b5fe0b94c6e600ff640a67632035df6a4fc8"
 
 
-def _process_partial_writer(cache_root, key, partial_ready, finish_write, result_queue) -> None:
-    paths = token_cache_paths(cache_root, key)
-    with TokenCacheLock(paths.lock):
-        paths.directory.mkdir(parents=True, exist_ok=True)
-        paths.arrow.write_bytes(b"partial")
-        partial_ready.set()
-        if not finish_write.wait(10):
-            result_queue.put("writer-timeout")
-            return
-        source = Dataset.from_dict({"a": [1, 2]})
-        mapped = source.map(
-            lambda batch: {
-                "text": [f'{{"a":{value}}}\n' for value in batch["a"]],
-                "input_ids": [[value] for value in batch["a"]],
-                "attention_mask": [[1] for _value in batch["a"]],
-            },
-            batched=True,
-            remove_columns=["a"],
-            cache_file_name=str(paths.arrow),
-            load_from_cache_file=False,
-            new_fingerprint=key.digest,
-        )
-        publish_token_cache_manifest(
-            paths,
-            key,
-            mapped,
-            expected_feature_types=expected_token_cache_feature_types(source, ()),
-        )
-    result_queue.put("writer-published")
+def test_invalid_dataset_fingerprint_fails() -> None:
+    with pytest.raises(ParameterError, match="fingerprint"):
+        _key(dataset_fingerprint="spaces are invalid")
 
 
-def _process_cache_reader(cache_root, key, result_queue) -> None:
-    paths = token_cache_paths(cache_root, key)
-    with TokenCacheLock(paths.lock):
-        cached = _load(paths, key)
-    result_queue.put(None if cached is None else cached.to_dict())
+def test_invalid_tokenizer_digest_fails() -> None:
+    with pytest.raises(ParameterError, match="SHA-256"):
+        _key(tokenizer_digest="short")
 
 
-def test_valid_manifest_hit_loads_without_mapping(tmp_path) -> None:
-    key = _key()
-    paths, mapped = _write_valid_cache(tmp_path, key)
-
-    cached = _load(paths, key)
-
-    assert cached is not None
-    assert cached.to_dict() == mapped.to_dict()
+def test_old_record_format_version_cannot_be_reused() -> None:
+    with pytest.raises(ParameterError, match="record format version"):
+        _key(record_format_version=0)
 
 
-def test_missing_malformed_and_partial_manifest_states_are_misses(tmp_path) -> None:
-    key = _key()
-    paths, _mapped = _write_valid_cache(tmp_path / "missing", key)
-    paths.manifest.unlink()
-    assert _load(paths, key) is None
-
-    paths, _mapped = _write_valid_cache(tmp_path / "malformed", key)
-    paths.manifest.write_bytes(b"{")
-    assert _load(paths, key) is None
-
-    paths, _mapped = _write_valid_cache(tmp_path / "partial", key)
-    paths.arrow.unlink()
-    assert _load(paths, key) is None
+def test_old_transform_version_cannot_be_reused() -> None:
+    with pytest.raises(ParameterError, match="transform version"):
+        _key(transform_version=1)
 
 
-def test_truncated_wrong_hash_schema_and_row_count_are_misses(tmp_path) -> None:
-    key = _key()
-    paths, _mapped = _write_valid_cache(tmp_path / "truncated", key)
-    paths.arrow.write_bytes(paths.arrow.read_bytes()[:32])
-    assert _load(paths, key) is None
+def test_new_cache_namespace_has_one_arrow_file(tmp_path: Path) -> None:
+    path = token_cache_file(tmp_path, _key())
 
-    paths, _mapped = _write_valid_cache(tmp_path / "hash", key)
-    manifest = json.loads(paths.manifest.read_bytes())
-    manifest["arrow_sha256"] = "0" * 64
-    paths.manifest.write_bytes(canonical_json_bytes(manifest))
-    assert _load(paths, key) is None
-
-    paths, _mapped = _write_valid_cache(tmp_path / "schema", key)
-    manifest = json.loads(paths.manifest.read_bytes())
-    manifest["output_columns"] = ["wrong"]
-    paths.manifest.write_bytes(canonical_json_bytes(manifest))
-    assert _load(paths, key) is None
-
-    paths, _mapped = _write_valid_cache(tmp_path / "rows", key)
-    manifest = json.loads(paths.manifest.read_bytes())
-    manifest["row_count"] = 3
-    paths.manifest.write_bytes(canonical_json_bytes(manifest))
-    assert _load(paths, key) is None
+    assert path.parent.parent.name == "nss-record-tokens"
+    assert path.parent.name == "v2"
+    assert path.name == f"{_key().digest}.arrow"
+    assert "manifest" not in str(path)
+    assert "lock" not in str(path)
 
 
-def test_internally_consistent_wrong_arrow_types_are_a_miss(tmp_path) -> None:
-    key = _key()
-    paths = token_cache_paths(tmp_path, key)
-    paths.directory.mkdir(parents=True)
-    wrong = Dataset.from_dict(
+def test_dataset_fingerprint_is_authoritative() -> None:
+    dataset = Dataset.from_dict({"a": [1, 2]})
+
+    assert dataset_fingerprint(dataset) == dataset._fingerprint
+
+
+def test_missing_dataset_fingerprint_fails() -> None:
+    dataset = Dataset.from_dict({"a": [1]})
+    dataset._fingerprint = "invalid fingerprint"
+
+    with pytest.raises(ParameterError, match="fingerprint"):
+        dataset_fingerprint(dataset)
+
+
+def test_explicit_features_preserve_retained_types_and_token_types() -> None:
+    source = Dataset.from_dict({"group": [1], "value": [2.0]})
+
+    features = token_cache_features(source, ("group",))
+
+    assert features == Features(
         {
-            "text": ['{"a":1}\n', '{"a":2}\n'],
-            "input_ids": [["1"], ["2"]],
-            "attention_mask": [[1], [1]],
+            "group": source.features["group"],
+            "text": Value("string"),
+            "input_ids": List(Value("int32")),
+            "attention_mask": List(Value("int8")),
         }
     )
-    wrong = wrong.map(
-        lambda batch: batch,
-        batched=True,
-        cache_file_name=str(paths.arrow),
-        load_from_cache_file=False,
-        new_fingerprint=key.digest,
+
+
+def test_unknown_retained_column_fails() -> None:
+    source = Dataset.from_dict({"value": [1]})
+
+    with pytest.raises(ParameterError, match="Retained"):
+        token_cache_features(source, ("missing",))
+
+
+def test_duplicate_retained_column_fails() -> None:
+    source = Dataset.from_dict({"value": [1]})
+
+    with pytest.raises(ParameterError, match="Retained"):
+        token_cache_features(source, ("value", "value"))
+
+
+def test_cache_validation_checks_columns_features_and_rows() -> None:
+    dataset = Dataset.from_dict(
+        {"text": ['{"x":1}\n'], "input_ids": [[1]], "attention_mask": [[1]]},
+        features=Features(
+            {
+                "text": Value("string"),
+                "input_ids": List(Value("int32")),
+                "attention_mask": List(Value("int8")),
+            }
+        ),
     )
 
-    wrong_types = tuple((name, repr(wrong.features[name])) for name in wrong.column_names)
-    manifest = TokenCacheManifest(
-        key=key,
-        key_digest=key.digest,
-        output_columns=tuple(wrong.column_names),
-        feature_types=wrong_types,
-        row_count=len(wrong),
-        arrow_sha256=hashlib.sha256(paths.arrow.read_bytes()).hexdigest(),
+    validate_token_cache(
+        dataset,
+        expected_features=dataset.features,
+        expected_columns=("text", "input_ids", "attention_mask"),
+        expected_row_count=1,
     )
-    paths.manifest.write_bytes(canonical_json_bytes(manifest.to_dict()))
-
-    assert _load(paths, key) is None
 
 
-def test_requested_partition_mismatch_is_a_miss(tmp_path) -> None:
-    key = _key()
-    paths, _mapped = _write_valid_cache(tmp_path, key)
-    validation_key = replace(key, partition=TokenCachePartition.VALIDATION)
+@pytest.mark.parametrize("mismatch", ["columns", "features", "rows"])
+def test_cache_validation_rejects_mismatch(mismatch: str) -> None:
+    dataset = Dataset.from_dict({"text": ["x"], "input_ids": [[1]], "attention_mask": [[1]]})
+    expected_features = dataset.features
+    expected_columns = tuple(dataset.column_names)
+    expected_rows = 1
+    if mismatch == "columns":
+        expected_columns = ("input_ids", "text", "attention_mask")
+    elif mismatch == "features":
+        expected_features = Features({"text": Value("string")})
+    else:
+        expected_rows = 2
 
-    assert _load(paths, validation_key) is None
-
-
-def test_concurrent_same_key_publishers_produce_one_valid_cache(tmp_path) -> None:
-    key = _key()
-    paths = token_cache_paths(tmp_path, key)
-    map_calls = 0
-
-    def get_or_create():
-        nonlocal map_calls
-        with TokenCacheLock(paths.lock):
-            if cached := _load(paths, key):
-                return cached
-            map_calls += 1
-            _paths, mapped = _write_valid_cache(tmp_path, key)
-            return mapped
-
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        results = list(executor.map(lambda _index: get_or_create(), range(2)))
-
-    assert map_calls == 1
-    assert results[0].to_dict() == results[1].to_dict()
-    assert _load(paths, key) is not None
+    with pytest.raises(GenerationError, match="Arrow schema or row count"):
+        validate_token_cache(
+            dataset,
+            expected_features=expected_features,
+            expected_columns=expected_columns,
+            expected_row_count=expected_rows,
+        )
 
 
-def test_active_old_lock_is_not_stolen_and_times_out(tmp_path) -> None:
-    path = tmp_path / "key.lock"
-    owner = TokenCacheLock(path, timeout_seconds=0.05)
-    with owner:
-        with pytest.raises(GenerationError, match="Timed out"):
-            with TokenCacheLock(path, timeout_seconds=0.01):
-                pass
-        assert path.is_file()
+def test_datasets_cache_hit_avoids_record_reencoding(
+    tokenizers_dir: Path,
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    dataset = Dataset.from_dict({"x": [1, 2, 3]})
+    source = tokenizers_dir / "smollm3b"
+    native = cast(PreTrainedTokenizerBase, AutoTokenizer.from_pretrained(source))
+    metadata = ModelMetadata.from_str_or_path(source, tokenizer=native)
+    tokenization = bind_tokenizer(native, metadata, workload_kind=WorkloadKind.TABULAR)
+    calls = 0
+    original = _BoundTokenization.encode_records
 
+    def recording_encode(self, records, **kwargs):
+        nonlocal calls
+        calls += 1
+        return original(self, records, **kwargs)
 
-def test_lock_release_preserves_the_stable_lock_inode(tmp_path) -> None:
-    path = tmp_path / "key.lock"
-    with TokenCacheLock(path):
-        inode = path.stat().st_ino
-
-    assert path.stat().st_ino == inode
-    with TokenCacheLock(path):
-        assert path.stat().st_ino == inode
-
-
-def test_malformed_persistent_lock_file_does_not_require_recovery(tmp_path) -> None:
-    malformed = tmp_path / "malformed.lock"
-    malformed.write_bytes(b"{")
-    with TokenCacheLock(malformed, timeout_seconds=0.1):
-        assert malformed.is_file()
-    assert malformed.read_bytes() == b"{"
-
-
-def test_two_contenders_for_unowned_lock_remain_mutually_exclusive(tmp_path) -> None:
-    path = tmp_path / "persistent.lock"
-    path.touch()
-    barrier = threading.Barrier(2)
-    active = 0
-    maximum_active = 0
-
-    def contend() -> None:
-        nonlocal active, maximum_active
-        barrier.wait()
-        with TokenCacheLock(path):
-            active += 1
-            maximum_active = max(maximum_active, active)
-            time.sleep(0.05)
-            active -= 1
-
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        tuple(executor.map(lambda _index: contend(), range(2)))
-
-    assert maximum_active == 1
-
-
-def test_process_reader_never_accepts_partial_same_key_publication(tmp_path) -> None:
-    context = multiprocessing.get_context("fork")
-    key = _key()
-    partial_ready = context.Event()
-    finish_write = context.Event()
-    result_queue = context.Queue()
-    writer = context.Process(
-        target=_process_partial_writer,
-        args=(tmp_path, key, partial_ready, finish_write, result_queue),
+    monkeypatch.setattr(_BoundTokenization, "encode_records", recording_encode)
+    first = TabularDataExampleAssembler(
+        dataset=dataset,
+        tokenization=tokenization,
+        metadata=metadata,
+        cache_file_path=tmp_path,
     )
-    reader = context.Process(target=_process_cache_reader, args=(tmp_path, key, result_queue))
+    first_calls = calls
+    second = TabularDataExampleAssembler(
+        dataset=dataset,
+        tokenization=tokenization,
+        metadata=metadata,
+        cache_file_path=tmp_path,
+    )
 
-    writer.start()
-    assert partial_ready.wait(5)
-    reader.start()
-    time.sleep(0.1)
-    assert reader.is_alive()
-    finish_write.set()
-    writer.join(10)
-    reader.join(10)
+    assert first_calls == 1
+    assert calls == first_calls
+    assert second.tokenized_records["input_ids"] == first.tokenized_records["input_ids"]
 
-    assert writer.exitcode == 0
-    assert reader.exitcode == 0
-    first = result_queue.get(timeout=1)
-    second = result_queue.get(timeout=1)
-    assert "writer-published" in (first, second)
-    cached = second if first == "writer-published" else first
-    assert cached is not None
+
+def test_cache_hit_replays_statistics(tokenizers_dir: Path, tmp_path: Path) -> None:
+    dataset = Dataset.from_dict({"x": [1, 20, 300]})
+    first, tokenization, metadata = _assembler(tokenizers_dir, dataset, tmp_path)
+
+    second = TabularDataExampleAssembler(
+        dataset=dataset,
+        tokenization=tokenization,
+        metadata=metadata,
+        cache_file_path=tmp_path,
+    )
+
+    assert second.stats["tokens_per_record"].count == len(dataset)
+    assert second.stats["tokens_per_record"].mean == first.stats["tokens_per_record"].mean
+
+
+def test_cache_hit_replays_current_capacity_without_reencoding(
+    tokenizers_dir: Path,
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    dataset = Dataset.from_dict({"x": ["a moderately long record"]})
+    first, tokenization, metadata = _assembler(tokenizers_dir, dataset, tmp_path)
+    record_length = len(first.tokenized_records[0]["input_ids"])
+    metadata.base_max_seq_length = len(first.prompt_encoding.input_ids) + 2 + record_length - 1
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("cache hit must not encode records")
+
+    monkeypatch.setattr(_BoundTokenization, "encode_records", forbidden)
+
+    with pytest.raises(GenerationError, match="At least one record"):
+        TabularDataExampleAssembler(
+            dataset=dataset,
+            tokenization=tokenization,
+            metadata=metadata,
+            cache_file_path=tmp_path,
+        )
+
+
+def test_changed_source_dataset_uses_a_distinct_cache_file(tokenizers_dir: Path, tmp_path: Path) -> None:
+    first_data = Dataset.from_dict({"x": [1, 2]})
+    second_data = Dataset.from_dict({"x": [1, 3]})
+    _assembler(tokenizers_dir, first_data, tmp_path)
+    _assembler(tokenizers_dir, second_data, tmp_path)
+
+    assert len(list((tmp_path / "nss-record-tokens" / "v2").glob("*.arrow"))) == 2
+
+
+def test_changed_column_order_uses_a_distinct_cache_file(tokenizers_dir: Path, tmp_path: Path) -> None:
+    first_data = Dataset.from_dict({"a": [1], "b": [2]})
+    second_data = first_data.select_columns(["b", "a"])
+    _assembler(tokenizers_dir, first_data, tmp_path)
+    _assembler(tokenizers_dir, second_data, tmp_path)
+
+    assert len(list((tmp_path / "nss-record-tokens" / "v2").glob("*.arrow"))) == 2
+
+
+def test_cache_directory_contains_no_nss_manifest_or_lock(tokenizers_dir: Path, tmp_path: Path) -> None:
+    _assembler(tokenizers_dir, Dataset.from_dict({"x": [1]}), tmp_path)
+    names = {path.name for path in tmp_path.rglob("*")}
+
+    assert "manifest.json" not in names
+    assert not any(name.endswith(".lock") for name in names)
