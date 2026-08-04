@@ -11,9 +11,9 @@ alias = "test-unit-slow"
 run = 'uv run --frozen pytest -n auto --dist loadscope -vv tests -m "unit"'
 
 ["test:unit:gpu"]
-description = "Run GPU-marked unit tests outside the smoke and e2e suites. Requires CUDA and GPU dependencies."
+description = "Run non-slow GPU-marked unit tests outside the smoke and e2e suites. Requires CUDA and GPU dependencies."
 alias = "test-unit-gpu"
-run = 'uv run --frozen pytest --dist loadscope -vv -n 0 tests -m "requires_gpu and not smoke and not e2e"'
+run = 'uv run --frozen pytest --dist loadscope -vv -n 0 tests -m "requires_gpu and not slow and not smoke and not e2e"'
 
 ["test:ci"]
 description = "Run CI unit tests with coverage, excluding slow, e2e, GPU, and smoke tests. Produces coverage.json."
