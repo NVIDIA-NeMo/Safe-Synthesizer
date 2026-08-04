@@ -302,7 +302,9 @@ class _TrainingSequence:
 
     @classmethod
     def _parse(cls, input_ids: Sequence[int], attention_mask: tuple[int, ...], add_delimiters: bool) -> Self:
-        if len(attention_mask) != len(input_ids) or any(value not in (0, 1) for value in attention_mask):
+        if len(attention_mask) != len(input_ids):
+            raise ParameterError("Each sequence attention mask must match its IDs and contain only zero or one.")
+        if any(value not in (0, 1) for value in attention_mask):
             raise ParameterError("Each sequence attention mask must match its IDs and contain only zero or one.")
         return cls(tuple(input_ids), attention_mask, add_delimiters)
 

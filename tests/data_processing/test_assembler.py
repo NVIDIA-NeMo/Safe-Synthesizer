@@ -122,6 +122,51 @@ def test_example_preserves_nontrivial_sequence_attention_mask(
     assert example.attention_mask == [1, 1, 1, 0, 1, 1]
 
 
+@pytest.mark.parametrize("attention_mask", [[1], [1, 2]])
+def test_example_rejects_malformed_attention_mask_without_mutation(
+    fixture_llm_metadata: ModelMetadata,
+    fixture_tokenizer: PreTrainedTokenizer,
+    attention_mask: list[int],
+) -> None:
+    example = _example(fixture_tokenizer, fixture_llm_metadata)
+    num_sequences = example.num_sequences
+    input_ids = list(example.input_ids)
+    original_attention_mask = list(example.attention_mask)
+    labels = list(example.labels)
+
+    with pytest.raises(ParameterError) as error:
+        example.add_sequence({"input_ids": [66, 67], "attention_mask": attention_mask})
+
+    assert str(error.value) == "Each sequence attention mask must match its IDs and contain only zero or one."
+    assert example.num_sequences == num_sequences
+    assert example.input_ids == input_ids
+    assert example.attention_mask == original_attention_mask
+    assert example.labels == labels
+
+
+def test_example_validates_malformed_attention_mask_before_sequence_count(
+    fixture_llm_metadata: ModelMetadata,
+    fixture_tokenizer: PreTrainedTokenizer,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(fixture_llm_metadata, "max_sequences_per_example", 1)
+    example = _example(fixture_tokenizer, fixture_llm_metadata)
+    example.add_sequence(STUB_SEQUENCE)
+    num_sequences = example.num_sequences
+    input_ids = list(example.input_ids)
+    attention_mask = list(example.attention_mask)
+    labels = list(example.labels)
+
+    with pytest.raises(ParameterError) as error:
+        example.add_sequence({"input_ids": [66, 67], "attention_mask": [1]})
+
+    assert str(error.value) == "Each sequence attention mask must match its IDs and contain only zero or one."
+    assert example.num_sequences == num_sequences
+    assert example.input_ids == input_ids
+    assert example.attention_mask == attention_mask
+    assert example.labels == labels
+
+
 def test_add_sequence_raising_exception(fixture_llm_metadata: ModelMetadata, fixture_tokenizer: PreTrainedTokenizer):
     fixture_llm_metadata.base_max_seq_length = 1
     example = _example(fixture_tokenizer, fixture_llm_metadata)

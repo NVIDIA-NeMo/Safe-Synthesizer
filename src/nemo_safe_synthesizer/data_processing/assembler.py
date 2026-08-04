@@ -157,19 +157,17 @@ class Example:
         """
         input_ids = seq["input_ids"]
         attention_mask = seq["attention_mask"]
-        if len(input_ids) != len(attention_mask) or any(value not in (0, 1) for value in attention_mask):
-            raise ParameterError("Each sequence attention mask must match its IDs and contain only zero or one.")
-        maximum = getattr(self.metadata, "max_sequences_per_example", None)
-        if maximum is not None and self.num_sequences + 1 > maximum:
-            raise ParameterError(
-                f"Training sequence count {self.num_sequences + 1} exceeds maximum sequence count {maximum}."
-            )
         framed = self.tokenization.frame_training(
             _EMPTY_PROMPT,
             [input_ids],
             add_sequence_delimiters=add_special_tokens,
             sequence_attention_masks=[attention_mask],
         )
+        maximum = getattr(self.metadata, "max_sequences_per_example", None)
+        if maximum is not None and self.num_sequences + 1 > maximum:
+            raise ParameterError(
+                f"Training sequence count {self.num_sequences + 1} exceeds maximum sequence count {maximum}."
+            )
         self.tokenization.validate_training_length(
             len(self.input_ids) + len(framed.input_ids),
             context_limit=self.metadata.max_seq_length,
