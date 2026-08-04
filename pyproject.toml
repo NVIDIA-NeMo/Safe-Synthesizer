@@ -134,7 +134,7 @@ cpu = [
     "torchvision==0.26.0; sys_platform == 'darwin'",
     "torchvision==0.26.0+cpu; sys_platform == 'linux'",
     "torchao==0.17.0",
-    "transformers==5.12.0",
+    "transformers==5.14.1",
     "triton>=2.0.0; sys_platform=='linux'",
     "vllm==0.26.0; sys_platform=='linux'",
 ]
@@ -156,7 +156,7 @@ cu129 = [
     "nvidia-ml-py; sys_platform == 'linux'",
     "torch-c-dlpack-ext",
     "triton>=2.0.0; sys_platform == 'linux'",
-    "transformers>=5.12,<5.12.1",
+    "transformers>=5.12,<5.14.2",
     "torch==2.11.0+cu129; sys_platform == 'linux'",
     "torchaudio==2.11.0+cu129; sys_platform == 'linux'",
     "torchvision==0.26.0+cu129; sys_platform == 'linux'",
