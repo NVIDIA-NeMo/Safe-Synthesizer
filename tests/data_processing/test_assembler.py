@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 from typing import cast
 
+import numpy as np
 import pandas as pd
 import pytest
 from datasets import Dataset
@@ -502,7 +503,7 @@ def test_grouped_data_assembler(
 def test_grouped_data_assembler_training_examples_low_decimal(
     fixture_sample_patient_dataset: Dataset,
     fixture_tokenizer: PreTrainedTokenizer,
-    fixture_session_cache_dir: str,
+    tmp_path: Path,
     fixture_autoconfig: PretrainedConfig,
 ):
     config = SafeSynthesizerParameters.from_params(
@@ -534,7 +535,7 @@ def test_grouped_data_assembler_training_examples_low_decimal(
         tokenizer=fixture_tokenizer,
         metadata=llm_metadata,
         config=config,
-        cache_file_path=fixture_session_cache_dir,
+        cache_file_path=tmp_path,
         seed=1,
     )
     assert assembler.num_records_total == 200
@@ -551,10 +552,10 @@ def test_grouped_data_assembler_training_examples_low_decimal(
     assert round(examples.stats["groups_per_example"].mean, 4) == 4.3333
 
 
-def test_grouped_data_assembler_training_examples_high_decimal(
+def test_grouped_data_assembler_training_examples_high_decimal_with_warm_shuffle_cache(
     fixture_sample_patient_dataset: Dataset,
     fixture_tokenizer: PreTrainedTokenizer,
-    fixture_session_cache_dir: str,
+    tmp_path: Path,
     fixture_autoconfig: PretrainedConfig,
 ):
     config = SafeSynthesizerParameters.from_params(
@@ -585,9 +586,12 @@ def test_grouped_data_assembler_training_examples_high_decimal(
         metadata=llm_metadata,
         tokenizer=fixture_tokenizer,
         config=config,
-        cache_file_path=fixture_session_cache_dir,
+        cache_file_path=tmp_path,
         seed=1,
     )
+    # Warm the datasets-owned shuffle cache explicitly. A cache hit returns
+    # before consuming the generator, so all three passes reuse one group order.
+    _ = assembler.training_dataset.shuffle(generator=np.random.default_rng(assembler.seed))
     assert assembler.num_records_total == 200
     assert assembler.num_records_train == 200
     assert assembler.num_records_validation == 0
