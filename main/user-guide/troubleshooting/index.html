@@ -1148,10 +1148,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#python-314-is-not-supported" class="md-nav__link">
+  <a href="#unsupported-python-versions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Python 3.14 Is Not Supported
+        Unsupported Python Versions
       
     </span>
   </a>
@@ -9629,10 +9629,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#python-314-is-not-supported" class="md-nav__link">
+  <a href="#unsupported-python-versions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Python 3.14 Is Not Supported
+        Unsupported Python Versions
       
     </span>
   </a>
@@ -10173,9 +10173,9 @@ configuration, and NER parallelism, see <a href="../environment/">Environment Va
 </thead>
 <tbody>
 <tr>
-<td>Install fails on Python 3.14</td>
-<td>vLLM and dependency wheels are not ready</td>
-<td><a href="#python-314-is-not-supported">Use Python 3.11–3.13</a></td>
+<td>Install fails on Python 3.15+</td>
+<td>Outside <code>requires-python</code> upper bound</td>
+<td><a href="#unsupported-python-versions">Use Python 3.11–3.14</a></td>
 </tr>
 <tr>
 <td>"kernels package not installed"</td>
@@ -10293,13 +10293,13 @@ configuration reference.</p>
 <h3 id="transformers-v5-vllm-version-selection">Transformers v5 + vLLM Version Selection<a class="headerlink" href="#transformers-v5-vllm-version-selection" title="Permanent link">&para;</a></h3>
 <p><code>uv sync</code> fails with an error mentioning incompatible <code>transformers</code> and
 <code>vllm</code> requirements.</p>
-<p>Safe Synthesizer requires <code>transformers&gt;=5.12,&lt;5.12.1</code> with vLLM 0.24.0.
+<p>Safe Synthesizer requires <code>transformers&gt;=5.12,&lt;5.12.1</code> with vLLM 0.26.0.
 Keep vLLM's constraints intact so the resolver selects the tested
 Transformers/vLLM pairing.</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[project]</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="s2">&quot;transformers&gt;=5.12,&lt;5.12.1&quot;</span><span class="p">,</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="s2">&quot;vllm==0.24.0&quot;</span><span class="p">,</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="s2">&quot;vllm==0.26.0&quot;</span><span class="p">,</span>
 </span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="p">]</span>
 </span></code></pre></div>
 <p>If you've vendored or copied parts of <code>pyproject.toml</code> into another project,
@@ -10324,19 +10324,16 @@ path. Common causes:</p>
 <p>The warning is informational. To suppress it, switch to a model with a
 fast tokenizer (most popular models do; check
 <code>AutoTokenizer.from_pretrained(model).is_fast</code>).</p>
-<h3 id="python-314-is-not-supported">Python 3.14 Is Not Supported<a class="headerlink" href="#python-314-is-not-supported" title="Permanent link">&para;</a></h3>
-<p>Safe Synthesizer requires <strong>Python 3.11, 3.12, or 3.13</strong>. Python 3.14+ is not
-supported because vLLM currently declares <code>&lt;3.14</code> support while upstream
-resolves Python 3.14 wheel compatibility across its dependency stack. Attempting
-to install on Python 3.14 fails with an unresolvable dependency error during
+<h3 id="unsupported-python-versions">Unsupported Python Versions<a class="headerlink" href="#unsupported-python-versions" title="Permanent link">&para;</a></h3>
+<p>Safe Synthesizer supports Python 3.11, 3.12, 3.13, and 3.14. Python 3.15+ is
+not supported. Attempting to install on an unsupported interpreter fails during
 <code>pip install</code> or <code>uv pip install</code>.</p>
 <p>To fix, create a virtual environment with a supported interpreter:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>uv<span class="w"> </span>venv<span class="w"> </span>--python<span class="w"> </span><span class="m">3</span>.13
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nb">source</span><span class="w"> </span>.venv/bin/activate
 </span></code></pre></div>
-<p>The project's <code>pyproject.toml</code> enforces <code>requires-python = "&gt;=3.11, &lt;3.14"</code>, so
-package managers will reject the install on unsupported versions. This upper
-bound will be raised once all transitive dependencies ship <code>cp314</code> wheels.</p>
+<p>The project's <code>pyproject.toml</code> enforces <code>requires-python = "&gt;=3.11, &lt;3.15"</code>, so
+package managers will reject the install on unsupported versions.</p>
 <hr />
 <h2 id="training">Training<a class="headerlink" href="#training" title="Permanent link">&para;</a></h2>
 <p>GPU memory, context length, and backend issues during fine-tuning.</p>
