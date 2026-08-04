@@ -104,12 +104,19 @@ volume. Use an absolute host path or expand one with `$(pwd)`.
 
 ## Secrets
 
-Inject credentials only at runtime. For example, export an approved value in
-the calling shell and pass its name without putting the value in shell history:
+Inject credentials only at runtime. Prefer your organization's approved
+credential handler or secret manager when one is available. Follow its existing
+standards for secret storage, access, rotation, audit, and runtime injection.
+
+If an approved local workflow requires an environment variable, read it without
+echoing it or placing the value in shell history:
 
 ```bash
-export HF_TOKEN="<token>"
+read -r -s -p "Hugging Face token: " HF_TOKEN
+printf '\n'
+export HF_TOKEN
 docker run --rm --gpus all --env HF_TOKEN ...
+unset HF_TOKEN
 ```
 
 Other workflows can require `NSS_INFERENCE_KEY` or `WANDB_API_KEY`. Do not bake
