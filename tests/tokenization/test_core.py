@@ -349,6 +349,17 @@ def test_training_framing_labels_masks_and_delimiters(tokenizers_dir: Path) -> N
     assert framed.labels == (*([-100] * len(prompt.input_ids)), bos_token_id, 7, 8, native.eos_token_id, 9)
 
 
+def test_training_framing_resolves_shared_delimiter_flag_and_default_mask(tokenizers_dir: Path) -> None:
+    _, tokenization = _bound(tokenizers_dir, add_bos=False, add_eos=False)
+    prompt = tokenization.encode_prompt_text("hello")
+
+    framed = tokenization.frame_training(prompt, [[7, 8], [9]], add_sequence_delimiters=False)
+
+    assert framed.input_ids == (*prompt.input_ids, 7, 8, 9)
+    assert framed.attention_mask == (*prompt.attention_mask, 1, 1, 1)
+    assert framed.labels == (*([-100] * len(prompt.input_ids)), 7, 8, 9)
+
+
 def test_training_framing_rejects_bad_attention_mask(tokenizers_dir: Path) -> None:
     _, tokenization = _bound(tokenizers_dir)
     prompt = tokenization.encode_prompt_text("hello")

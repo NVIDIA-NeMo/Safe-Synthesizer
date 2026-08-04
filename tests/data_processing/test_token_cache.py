@@ -20,6 +20,7 @@ from nemo_safe_synthesizer.tokenization.cache import (
     RECORD_FORMAT_VERSION,
     TOKENIZATION_TRANSFORM_VERSION,
     TokenCacheKey,
+    TokenCacheSpec,
     dataset_fingerprint,
     token_cache_features,
     token_cache_file,
@@ -160,6 +161,26 @@ def test_explicit_features_preserve_retained_types_and_token_types() -> None:
             "attention_mask": List(Value("int8")),
         }
     )
+
+
+def test_cache_spec_owns_identity_path_and_expected_shape(tmp_path: Path) -> None:
+    source = Dataset.from_dict({"group": [1, 2], "value": [3, 4], "internal": [5, 6]})
+
+    spec = TokenCacheSpec.from_dataset(
+        source,
+        cache_root=tmp_path,
+        tokenizer_digest="a" * 64,
+        excluded_columns=("internal",),
+        retained_columns=("group",),
+    )
+
+    assert spec.key.serialized_columns == ("group", "value")
+    assert spec.key.excluded_columns == ("internal",)
+    assert spec.key.retained_columns == ("group",)
+    assert spec.path == token_cache_file(tmp_path, spec.key)
+    assert spec.expectation.columns == ("group", "text", "input_ids", "attention_mask")
+    assert spec.expectation.row_count == len(source)
+    assert spec.expectation.features == token_cache_features(source, ("group",))
 
 
 def test_unknown_retained_column_fails() -> None:

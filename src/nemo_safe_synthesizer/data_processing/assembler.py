@@ -44,10 +44,7 @@ from ..observability import get_logger
 from ..tokenization import PromptEncoding, WorkloadKind, bind_tokenizer
 from ..tokenization.cache import (
     TokenCacheKey,
-    dataset_fingerprint,
-    token_cache_features,
-    token_cache_file,
-    validate_token_cache,
+    TokenCacheSpec,
 )
 from ..tokenization.core import _EMPTY_PROMPT, _BoundTokenization
 from ..tokenization.records import columnar_batch_to_records
@@ -489,16 +486,21 @@ class TrainingExampleAssembler(ABC):
         dataset: Dataset,
         keep_columns: Sequence[str],
     ) -> TokenCacheKey:
-        input_columns = tuple(dataset.column_names)
-        exclusions = frozenset(DEFAULT_EXCLUDE_COLUMNS)
-        effective_exclusions = tuple(column for column in input_columns if column in exclusions)
-        retained = tuple(column for column in input_columns if column in keep_columns)
-        return TokenCacheKey(
-            dataset_fingerprint=dataset_fingerprint(dataset),
+        """Return the semantic key from the complete cache specification."""
+        return self._token_cache_spec(dataset, keep_columns).key
+
+    def _token_cache_spec(
+        self,
+        dataset: Dataset,
+        keep_columns: Sequence[str],
+    ) -> TokenCacheSpec:
+        """Build one cache identity, path, and publication expectation."""
+        return TokenCacheSpec.from_dataset(
+            dataset,
+            cache_root=self.token_cache_root,
             tokenizer_digest=self.tokenization.cache_digest,
-            serialized_columns=tuple(column for column in input_columns if column not in exclusions),
-            excluded_columns=effective_exclusions,
-            retained_columns=retained,
+            excluded_columns=DEFAULT_EXCLUDE_COLUMNS,
+            retained_columns=keep_columns,
         )
 
     def _tokenize_dataset(self, dataset: Dataset, keep_columns: list[str] | None = None) -> Dataset:
@@ -515,28 +517,19 @@ class TrainingExampleAssembler(ABC):
         keep_columns = keep_columns or []
         logger.info("Tokenizing records")
         self._validate_schema_capacity()
-        key = self._token_cache_key(dataset, keep_columns)
-        cache_file = token_cache_file(self.token_cache_root, key)
-        cache_file.parent.mkdir(parents=True, exist_ok=True)
-        retained = tuple(column for column in dataset.column_names if column in keep_columns)
-        expected_columns = (*retained, "text", "input_ids", "attention_mask")
-        features = token_cache_features(dataset, retained)
+        cache = self._token_cache_spec(dataset, keep_columns)
+        cache.path.parent.mkdir(parents=True, exist_ok=True)
         tokenized = dataset.map(
             self._tokenize_records,
             batched=True,
             desc="Tokenizing records",
-            cache_file_name=str(cache_file),
+            cache_file_name=str(cache.path),
             load_from_cache_file=True,
-            new_fingerprint=key.digest,
+            new_fingerprint=cache.key.digest,
             remove_columns=[column for column in dataset.column_names if column not in keep_columns],
-            features=features,
+            features=cache.expectation.features,
         )
-        validate_token_cache(
-            tokenized,
-            expected_features=features,
-            expected_columns=expected_columns,
-            expected_row_count=len(dataset),
-        )
+        cache.validate(tokenized)
         # Cache hits deliberately replay current capacity and statistics.
         self._validate_record_capacity(tokenized["input_ids"])
         return tokenized

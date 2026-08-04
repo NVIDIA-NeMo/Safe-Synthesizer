@@ -8,8 +8,10 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Self
 
 from datasets import Dataset, Features, List, Value
 
@@ -91,6 +93,75 @@ def token_cache_features(source: Dataset, retained_columns: tuple[str, ...]) -> 
     )
 
 
+@dataclass(frozen=True, slots=True)
+class TokenCacheExpectation:
+    """Expected Arrow schema, column order, and row count for a cache publication."""
+
+    features: Features
+    columns: tuple[str, ...]
+    row_count: int
+
+    def validate(self, dataset: Dataset) -> None:
+        """Reject an unexpected cache hit or transform publication."""
+        if (
+            tuple(dataset.column_names) != self.columns
+            or dataset.features != self.features
+            or len(dataset) != self.row_count
+        ):
+            raise GenerationError("Token cache produced an unexpected Arrow schema or row count.")
+
+
+@dataclass(frozen=True, slots=True)
+class TokenCacheSpec:
+    """Semantic cache identity, storage path, and publication expectation."""
+
+    key: TokenCacheKey
+    path: Path
+    expectation: TokenCacheExpectation
+
+    @classmethod
+    def from_dataset(
+        cls,
+        source: Dataset,
+        *,
+        cache_root: str | Path,
+        tokenizer_digest: str,
+        excluded_columns: Sequence[str],
+        retained_columns: Sequence[str],
+    ) -> Self:
+        """Build the complete cache contract for one source Dataset."""
+        if isinstance(excluded_columns, (str, bytes)) or not all(
+            isinstance(column, str) for column in excluded_columns
+        ):
+            raise ParameterError("Excluded token cache columns must be a sequence of strings.")
+        if isinstance(retained_columns, (str, bytes)) or not all(
+            isinstance(column, str) for column in retained_columns
+        ):
+            raise ParameterError("Retained token cache columns must be a sequence of strings.")
+        input_columns = tuple(source.column_names)
+        exclusions = frozenset(excluded_columns)
+        retained_names = frozenset(retained_columns)
+        effective_exclusions = tuple(column for column in input_columns if column in exclusions)
+        retained = tuple(column for column in input_columns if column in retained_names)
+        key = TokenCacheKey(
+            dataset_fingerprint=dataset_fingerprint(source),
+            tokenizer_digest=tokenizer_digest,
+            serialized_columns=tuple(column for column in input_columns if column not in exclusions),
+            excluded_columns=effective_exclusions,
+            retained_columns=retained,
+        )
+        expectation = TokenCacheExpectation(
+            features=token_cache_features(source, retained),
+            columns=(*retained, "text", "input_ids", "attention_mask"),
+            row_count=len(source),
+        )
+        return cls(key, token_cache_file(cache_root, key), expectation)
+
+    def validate(self, dataset: Dataset) -> None:
+        """Validate a cache hit or transform publication against this specification."""
+        self.expectation.validate(dataset)
+
+
 def validate_token_cache(
     dataset: Dataset,
     *,
@@ -99,9 +170,4 @@ def validate_token_cache(
     expected_row_count: int,
 ) -> None:
     """Reject an unexpected cache hit or transform publication."""
-    if (
-        tuple(dataset.column_names) != expected_columns
-        or dataset.features != expected_features
-        or len(dataset) != expected_row_count
-    ):
-        raise GenerationError("Token cache produced an unexpected Arrow schema or row count.")
+    TokenCacheExpectation(expected_features, expected_columns, expected_row_count).validate(dataset)

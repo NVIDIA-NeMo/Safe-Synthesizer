@@ -14,7 +14,7 @@ import pytest
 from transformers import AutoTokenizer, PreTrainedTokenizerBase
 
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
-from nemo_safe_synthesizer.errors import ParameterError
+from nemo_safe_synthesizer.errors import ArtifactError, ParameterError
 from nemo_safe_synthesizer.llm.metadata import ModelMetadata, TokenizerRepresentation
 from nemo_safe_synthesizer.tokenization import WorkloadKind, bind_tokenizer
 from nemo_safe_synthesizer.tokenization.persistence import (
@@ -169,7 +169,7 @@ def test_symlinked_asset_is_rejected(tokenizers_dir: Path, tmp_path: Path) -> No
     config.unlink()
     config.symlink_to(target)
 
-    with pytest.raises(ParameterError, match="regular entries"):
+    with pytest.raises(ArtifactError, match="regular entries"):
         load_tokenizer_assets(adapter, expected_digest=digest, trust_remote_code=False)
 
 

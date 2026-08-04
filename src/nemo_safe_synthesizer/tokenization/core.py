@@ -9,7 +9,7 @@ import hashlib
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Protocol, cast, final
+from typing import Protocol, Self, cast, final
 
 import pandas as pd
 from transformers import PreTrainedTokenizerBase
@@ -103,6 +103,52 @@ class TrainingCapacity:
     delimiter_tokens: int
     record_token_capacity: int
 
+    @classmethod
+    def from_prompt(
+        cls,
+        prompt: PromptEncoding,
+        *,
+        context_limit: int,
+        sequence_count: int,
+        maximum_sequence_count: int | None = None,
+        add_sequence_delimiters: bool | Sequence[bool] = True,
+        rope_scaling_factor: float | None = None,
+    ) -> Self:
+        """Calculate capacity from an already encoded prompt."""
+        if not isinstance(prompt, PromptEncoding):
+            raise ParameterError("Training framing requires a PromptEncoding.")
+        if not isinstance(context_limit, int) or isinstance(context_limit, bool) or context_limit <= 0:
+            raise ParameterError("Training context limit must be a positive integer.")
+        if not isinstance(sequence_count, int) or isinstance(sequence_count, bool) or sequence_count < 0:
+            raise ParameterError("Training sequence count must be a non-negative integer.")
+        match maximum_sequence_count:
+            case None:
+                pass
+            case int() as maximum if not isinstance(maximum, bool) and maximum > 0:
+                if sequence_count > maximum:
+                    raise ParameterError(
+                        f"Training sequence count {sequence_count} exceeds maximum sequence count {maximum}."
+                    )
+            case _:
+                raise ParameterError("Training maximum sequence count must be a positive integer or None.")
+        if len(prompt.input_ids) > context_limit:
+            raise GenerationError(
+                "The dataset schema requires more tokens than the max length of the model. "
+                "This likely means that the table is too wide to be used with this model. "
+                f"{_max_tokens_action(rope_scaling_factor)}"
+            )
+        delimiter_policy = _DelimiterPolicy.parse(sequence_count, add_sequence_delimiters)
+        delimiter_tokens_per_sequence = 2
+        delimiter_tokens = delimiter_tokens_per_sequence * sum(delimiter_policy.flags)
+        return cls(
+            context_limit,
+            len(prompt.input_ids),
+            sequence_count,
+            delimiter_tokens_per_sequence,
+            delimiter_tokens,
+            context_limit - len(prompt.input_ids) - delimiter_tokens,
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class TrainingEncoding:
@@ -159,35 +205,115 @@ def _ordered_record_texts(
     return texts
 
 
-def _native_batch_ids(value: object, row_count: int) -> tuple[tuple[int, ...], ...]:
-    if not isinstance(value, Mapping):
-        raise ParameterError("Malformed native tokenizer batch: expected a Mapping result.")
-    input_ids = cast(Mapping[str, object], value).get("input_ids")
-    if not isinstance(input_ids, Sequence) or isinstance(input_ids, (str, bytes, bytearray)):
-        raise ParameterError("Malformed native tokenizer batch: input_ids must be a nested sequence.")
-    if len(input_ids) != row_count:
-        raise ParameterError("Malformed native tokenizer batch: row count does not match input records.")
-    rows: list[tuple[int, ...]] = []
-    for row in input_ids:
-        if not isinstance(row, Sequence) or isinstance(row, (str, bytes, bytearray)):
-            raise ParameterError("Malformed native tokenizer batch: every input_ids row must be a sequence.")
+@dataclass(frozen=True, slots=True)
+class _NativeBatch:
+    """Trusted token ID rows returned by the native tokenizer boundary."""
+
+    input_ids: tuple[tuple[int, ...], ...]
+
+    @classmethod
+    def parse(cls, value: object, row_count: int) -> Self:
+        """Validate the supported Hugging Face batch result shape."""
+        match value:
+            case Mapping() as batch:
+                input_ids = batch.get("input_ids")
+            case _:
+                raise ParameterError("Malformed native tokenizer batch: expected a Mapping result.")
+        match input_ids:
+            case Sequence() as rows if not isinstance(rows, (str, bytes, bytearray)):
+                pass
+            case _:
+                raise ParameterError("Malformed native tokenizer batch: input_ids must be a nested sequence.")
+        if len(rows) != row_count:
+            raise ParameterError("Malformed native tokenizer batch: row count does not match input records.")
+        return cls(tuple(cls._parse_row(row) for row in rows))
+
+    @staticmethod
+    def _parse_row(value: object) -> tuple[int, ...]:
+        match value:
+            case Sequence() as row if not isinstance(row, (str, bytes, bytearray)):
+                pass
+            case _:
+                raise ParameterError("Malformed native tokenizer batch: every input_ids row must be a sequence.")
         if not all(isinstance(token_id, int) and not isinstance(token_id, bool) for token_id in row):
             raise ParameterError("Malformed native tokenizer batch: token IDs must be integers.")
-        rows.append(tuple(cast(int, token_id) for token_id in row))
-    return tuple(rows)
+        return tuple(cast(int, token_id) for token_id in row)
 
 
-def _delimiter_flags(sequence_count: int, value: bool | Sequence[bool]) -> tuple[bool, ...]:
-    if isinstance(value, bool):
-        return (value,) * sequence_count
-    if (
-        isinstance(value, Sequence)
-        and not isinstance(value, (str, bytes))
-        and len(value) == sequence_count
-        and all(isinstance(flag, bool) for flag in value)
-    ):
-        return tuple(value)
-    raise ParameterError("Sequence delimiter flags must be one boolean or one boolean per sequence.")
+@dataclass(frozen=True, slots=True)
+class _DelimiterPolicy:
+    """Resolved per-sequence delimiter decisions."""
+
+    flags: tuple[bool, ...]
+
+    @classmethod
+    def parse(cls, sequence_count: int, value: bool | Sequence[bool]) -> Self:
+        """Resolve one shared flag or one flag per sequence."""
+        match value:
+            case bool() as shared:
+                return cls((shared,) * sequence_count)
+            case Sequence() as flags if not isinstance(flags, (str, bytes)):
+                if len(flags) == sequence_count and all(isinstance(flag, bool) for flag in flags):
+                    return cls(tuple(flags))
+            case _:
+                pass
+        raise ParameterError("Sequence delimiter flags must be one boolean or one boolean per sequence.")
+
+
+@dataclass(frozen=True, slots=True)
+class _TrainingSequence:
+    """One sequence with an aligned, validated attention mask and framing policy."""
+
+    input_ids: tuple[int, ...]
+    attention_mask: tuple[int, ...]
+    add_delimiters: bool
+
+    @staticmethod
+    def resolve_masks(
+        sequences: Sequence[Sequence[int]],
+        attention_masks: Sequence[Sequence[int]] | None,
+    ) -> tuple[tuple[int, ...], ...]:
+        """Resolve optional masks while preserving sequence alignment."""
+        match attention_masks:
+            case None:
+                return tuple(tuple(1 for _ in sequence) for sequence in sequences)
+            case Sequence() as supplied if len(supplied) == len(sequences):
+                return tuple(tuple(mask) for mask in supplied)
+            case _:
+                raise ParameterError("Sequence attention masks must contain one mask per sequence.")
+
+    @classmethod
+    def parse_many(
+        cls,
+        sequences: Sequence[Sequence[int]],
+        attention_masks: Sequence[tuple[int, ...]],
+        delimiter_policy: _DelimiterPolicy,
+    ) -> tuple[Self, ...]:
+        """Validate aligned sequences, masks, and delimiter flags."""
+        return tuple(
+            cls._parse(sequence, mask, add_delimiters)
+            for sequence, mask, add_delimiters in zip(
+                sequences,
+                attention_masks,
+                delimiter_policy.flags,
+                strict=True,
+            )
+        )
+
+    @classmethod
+    def _parse(cls, input_ids: Sequence[int], attention_mask: tuple[int, ...], add_delimiters: bool) -> Self:
+        if len(attention_mask) != len(input_ids) or any(value not in (0, 1) for value in attention_mask):
+            raise ParameterError("Each sequence attention mask must match its IDs and contain only zero or one.")
+        return cls(tuple(input_ids), attention_mask, add_delimiters)
+
+    def frame(self, bos_token_id: int, eos_token_id: int) -> tuple[tuple[int, ...], tuple[int, ...]]:
+        """Apply this sequence's explicit BOS/EOS delimiter policy."""
+        if self.add_delimiters:
+            return (
+                (bos_token_id, *self.input_ids, eos_token_id),
+                (1, *self.attention_mask, 1),
+            )
+        return self.input_ids, self.attention_mask
 
 
 @final
@@ -334,10 +460,11 @@ class _BoundTokenization:
             native_batch = self._native(texts, add_special_tokens=False)
         except Exception as exc:
             raise ParameterError("The native tokenizer batch operation failed for ordered records.") from exc
-        rows = _native_batch_ids(native_batch, len(texts))
+        batch = _NativeBatch.parse(native_batch, len(texts))
         return RecordBatch(
             tuple(
-                RecordEncoding(text.encode(), ids, tuple(1 for _ in ids)) for text, ids in zip(texts, rows, strict=True)
+                RecordEncoding(text.encode(), ids, tuple(1 for _ in ids))
+                for text, ids in zip(texts, batch.input_ids, strict=True)
             )
         )
 
@@ -352,37 +479,13 @@ class _BoundTokenization:
         rope_scaling_factor: float | None = None,
     ) -> TrainingCapacity:
         """Calculate capacity without re-encoding the bound prompt."""
-        if not isinstance(prompt, PromptEncoding):
-            raise ParameterError("Training framing requires a PromptEncoding.")
-        if not isinstance(context_limit, int) or isinstance(context_limit, bool) or context_limit <= 0:
-            raise ParameterError("Training context limit must be a positive integer.")
-        if not isinstance(sequence_count, int) or isinstance(sequence_count, bool) or sequence_count < 0:
-            raise ParameterError("Training sequence count must be a non-negative integer.")
-        if maximum_sequence_count is not None:
-            if (
-                not isinstance(maximum_sequence_count, int)
-                or isinstance(maximum_sequence_count, bool)
-                or maximum_sequence_count <= 0
-            ):
-                raise ParameterError("Training maximum sequence count must be a positive integer or None.")
-            if sequence_count > maximum_sequence_count:
-                raise ParameterError(
-                    f"Training sequence count {sequence_count} exceeds maximum sequence count {maximum_sequence_count}."
-                )
-        if len(prompt.input_ids) > context_limit:
-            raise GenerationError(
-                "The dataset schema requires more tokens than the max length of the model. "
-                "This likely means that the table is too wide to be used with this model. "
-                f"{_max_tokens_action(rope_scaling_factor)}"
-            )
-        delimiters = 2 * sum(_delimiter_flags(sequence_count, add_sequence_delimiters))
-        return TrainingCapacity(
-            context_limit,
-            len(prompt.input_ids),
-            sequence_count,
-            2,
-            delimiters,
-            context_limit - len(prompt.input_ids) - delimiters,
+        return TrainingCapacity.from_prompt(
+            prompt,
+            context_limit=context_limit,
+            sequence_count=sequence_count,
+            maximum_sequence_count=maximum_sequence_count,
+            add_sequence_delimiters=add_sequence_delimiters,
+            rope_scaling_factor=rope_scaling_factor,
         )
 
     def validate_prompt_capacity(
@@ -458,31 +561,21 @@ class _BoundTokenization:
         """Frame training sequences with stable masks and labels."""
         if not isinstance(prompt, PromptEncoding):
             raise ParameterError("Training framing requires a PromptEncoding.")
-        delimiters = _delimiter_flags(len(sequences), add_sequence_delimiters)
-        if sequence_attention_masks is None:
-            masks = tuple(tuple(1 for _ in sequence) for sequence in sequences)
-        elif len(sequence_attention_masks) == len(sequences):
-            masks = tuple(tuple(mask) for mask in sequence_attention_masks)
-        else:
-            raise ParameterError("Sequence attention masks must contain one mask per sequence.")
+        delimiter_policy = _DelimiterPolicy.parse(len(sequences), add_sequence_delimiters)
+        masks = _TrainingSequence.resolve_masks(sequences, sequence_attention_masks)
         if maximum_sequence_count is not None and len(sequences) > maximum_sequence_count:
             raise ParameterError(
                 f"Training sequence count {len(sequences)} exceeds maximum sequence count {maximum_sequence_count}."
             )
+        parsed_sequences = _TrainingSequence.parse_many(sequences, masks, delimiter_policy)
         input_ids = list(prompt.input_ids)
         attention_mask = list(prompt.attention_mask)
         labels = [_IGNORE_LABEL] * len(input_ids)
-        for sequence, mask, add_delimiters in zip(sequences, masks, delimiters, strict=True):
-            if len(mask) != len(sequence) or any(value not in (0, 1) for value in mask):
-                raise ParameterError("Each sequence attention mask must match its IDs and contain only zero or one.")
-            framed = list(sequence)
-            framed_mask = list(mask)
-            if add_delimiters:
-                framed = [self._bos_token_id, *framed, self._eos_token_id]
-                framed_mask = [1, *framed_mask, 1]
-            input_ids.extend(framed)
+        for sequence in parsed_sequences:
+            framed_ids, framed_mask = sequence.frame(self._bos_token_id, self._eos_token_id)
+            input_ids.extend(framed_ids)
             attention_mask.extend(framed_mask)
-            labels.extend(framed)
+            labels.extend(framed_ids)
         if context_limit is not None and len(input_ids) > context_limit:
             raise GenerationError(
                 "The number of tokens in an example exceeds the available context length. "

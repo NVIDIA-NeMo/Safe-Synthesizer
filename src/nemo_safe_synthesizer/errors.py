@@ -14,6 +14,7 @@ Classes:
     InternalError: Library bug (equivalent to HTTP 5xx).
     DataError: Problems with training data (NaNs, unsupported types).
     ParameterError: Invalid config or parameter input.
+    ArtifactError: Missing, unreadable, or corrupt persisted artifacts.
     GenerationError: Sampling/generation failures.
 """
 
@@ -55,6 +56,10 @@ class ParameterError(UserError, ValueError):
     Examples: config references a column not present in the data, invalid
     combination of parameters.
     """
+
+
+class ArtifactError(ParameterError):
+    """Missing, unreadable, or corrupt persisted model artifacts."""
 
 
 class GenerationError(UserError, RuntimeError):
