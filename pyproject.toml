@@ -99,7 +99,7 @@ engine = [
     "tenacity==9.1.4",
     "tldextract",
     "tqdm>=4.67.1",
-    "wandb==0.28.0",
+    "wandb==0.28.1",
 ]
 
 # the following are deps that have Torch as a dep. We keep them separated out from the engine deps
