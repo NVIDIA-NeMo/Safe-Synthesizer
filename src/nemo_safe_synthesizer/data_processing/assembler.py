@@ -986,8 +986,11 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
             if len(seen_groups[group_value]) < 3:
                 seen_groups[group_value].append(record["text"])
 
-        # Convert lists to joined strings
-        return {group: " " + "\n".join(samples) for group, samples in seen_groups.items()}
+        # Each sample line is already newline-terminated (see
+        # _convert_records_to_jsonl), so concatenate directly: joining with
+        # "\n" would insert blank lines between records, a shape that never
+        # occurs in training examples.
+        return {group: " " + "".join(samples) for group, samples in seen_groups.items()}
 
     def _apply_train_test_split(self, dataset: Dataset) -> None:
         """Override split logic to preserve record order and split along group boundaries."""
