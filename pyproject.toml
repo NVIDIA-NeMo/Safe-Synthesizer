@@ -111,7 +111,7 @@ engine = [
 # at some point, do per-subpackage dependencies
 # >>> BEGIN GENERATED CUDA RUNTIME EXTRAS - DO NOT EDIT <<<
 # Source of truth: cuda_deps.toml.
-# Regenerate with: uv run --frozen tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml
+# Regenerate with: uv run --frozen tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml --installer install_nss.sh
 # Manual edits inside this block will be overwritten.
 # Generated extras in this block: cpu, cu129, cu130.
 cpu = [
@@ -202,7 +202,7 @@ cache-keys = [
 ]
 # >>> BEGIN GENERATED CUDA UV CONFLICTS - DO NOT EDIT <<<
 # Source of truth: cuda_deps.toml.
-# Regenerate with: uv run --frozen tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml
+# Regenerate with: uv run --frozen tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml --installer install_nss.sh
 # Manual edits inside this block will be overwritten.
 # Generated uv section: tool.uv.conflicts.
 conflicts = [
@@ -254,7 +254,7 @@ constraint-dependencies = [
 
 # >>> BEGIN GENERATED CUDA UV SOURCES AND INDEXES - DO NOT EDIT <<<
 # Source of truth: cuda_deps.toml.
-# Regenerate with: uv run --frozen tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml
+# Regenerate with: uv run --frozen tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml --installer install_nss.sh
 # Manual edits inside this block will be overwritten.
 # Generated uv sections: tool.uv.sources and tool.uv.index.
 [tool.uv.sources]
