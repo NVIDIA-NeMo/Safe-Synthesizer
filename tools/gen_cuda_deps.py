@@ -42,7 +42,8 @@ GENERATED_END_PREFIX = "# <<< END GENERATED CUDA "
 GENERATED_MARKER_SUFFIX = " - DO NOT EDIT"
 GENERATED_MARKER_BODY = (
     "# Source of truth: cuda_deps.toml.",
-    "# Regenerate with: uv run --frozen tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml",
+    "# Regenerate with: uv run --frozen tools/gen_cuda_deps.py cuda_deps.toml "
+    "--pyproject pyproject.toml --installer install_nss.sh",
     "# Manual edits inside this block will be overwritten.",
 )
 INSTALLER_INDEXES_BEGIN = "# >>> BEGIN GENERATED CUDA INSTALLER INDEXES - DO NOT EDIT <<<"
