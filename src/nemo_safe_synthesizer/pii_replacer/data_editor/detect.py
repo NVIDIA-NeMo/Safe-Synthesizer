@@ -39,15 +39,19 @@ class DefaultLLMConfig:
     Attributes:
         SYSTEM_PROMPT: System message describing the column-type annotation task
             sent to the LLM.
-        MAX_OUTPUT_TOKENS: Maximum number of tokens allowed in the LLM response
-            (default 2048).
         TEMPERATURE: Sampling temperature for LLM generation (default 0.2).
             Lower values give more deterministic output.
+
+    Note:
+        No ``max_tokens`` is sent with the request. The default classifier is a
+        reasoning model, and ``max_tokens`` budgets reasoning and visible output
+        together, so any cap large enough for the reasoning trace on a wide
+        frame is not a meaningful guard anyway. Truncation is instead detected
+        from ``finish_reason`` in ``classify_columns``.
     """
 
     DEFAULT_CONFIG_ID = "nvidia/nemotron-3-ultra-550b-a55b"
     SYSTEM_PROMPT = "You are a helpful AI that annotates columns in datasets with their respective types. "
-    MAX_OUTPUT_TOKENS = 2048
     TEMPERATURE = 0.2
 
     @classmethod
@@ -268,9 +272,9 @@ def classify_columns(
             {"role": "user", "content": formatted_prompt},
         ],
         temperature=DefaultLLMConfig.TEMPERATURE,
-        max_tokens=DefaultLLMConfig.MAX_OUTPUT_TOKENS,
     )
-    entities_str = response.choices[0].message.content
+    choice = response.choices[0]
+    entities_str = choice.message.content
     llm_elapsed = timer() - llm_start
     logger.info(
         f"LLM column classification took {llm_elapsed} seconds.",
@@ -280,6 +284,24 @@ def classify_columns(
             },
         },
     )
+
+    # A truncated response often still repairs into well-formed JSON covering
+    # only the columns emitted before the cut, which would silently classify
+    # part of the frame and leave the rest unclassified with no error. Treat it
+    # as a failure so the caller falls back instead of trusting partial output.
+    if choice.finish_reason == "length":
+        logger.error(
+            "Classification response from the LLM was truncated before it finished "
+            "(finish_reason='length'); discarding the partial result.",
+            extra={
+                "ctx": {
+                    "num_columns": len(df.columns),
+                    "completion_tokens": getattr(response.usage, "completion_tokens", None),
+                },
+            },
+        )
+        on_validation_error()
+        return {}
 
     col_entities = _try_extract_entities(entities_str, on_validation_error)
     return {col: ent if ent in entities else UNKNOWN_ENTITY for col, ent in col_entities.items()}
@@ -403,7 +425,8 @@ class ColumnClassifierLLM(ColumnClassifier):
     def _on_validation_error(self) -> None:
         raise RuntimeError(
             "There was an error performing classification: "
-            "the classifier LLM failed to return valid JSON. "
+            "the classifier LLM did not return usable JSON (the response was either "
+            "malformed or truncated before it finished). "
             "Please reach out to support if the error recurs."
         )
 
