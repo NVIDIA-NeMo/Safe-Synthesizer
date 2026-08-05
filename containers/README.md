@@ -113,7 +113,9 @@ CONTAINER_GPU_PLATFORM=linux/arm64 mise run container:build:gpu
 Multi-platform manifests must be pushed to a registry:
 
 ```bash
-CONTAINER_GPU_REGISTRY=ghcr.io/nvidia-nemo mise run container:build:gpu-multiarch
+CONTAINER_GPU_REGISTRY=registry.example.com/team \
+CONTAINER_GPU_IMAGE=safe-synthesizer:custom-cu129 \
+  mise run container:build:gpu-multiarch
 ```
 
 This builds and pushes `$(CONTAINER_GPU_REGISTRY)/$(CONTAINER_GPU_IMAGE)`.

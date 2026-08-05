@@ -110,17 +110,23 @@ indexes outside PyPI. You must pass the extra index URLs shown below.
 === "Docker (Linux with NVIDIA GPU)"
 
     ```bash
-    mise run container:build:gpu
-
-    docker run --gpus all --shm-size=1g \
-      -v $(pwd):/workspace \
-      -v ~/.cache/huggingface:/workspace/.hf_cache \
-      -e HF_HOME=/workspace/.hf_cache \
-      nss-gpu:latest run --config /workspace/config.yaml --data-source /workspace/data.csv
+    docker run --rm --gpus all --shm-size=1g \
+      --user "$(id -u):$(id -g)" \
+      -v /path/to/input:/workspace/input:ro \
+      -v /path/to/config:/workspace/config:ro \
+      -v /path/to/artifacts:/workspace/artifacts \
+      -v /path/to/hf-cache:/workspace/.hf_cache \
+      ghcr.io/nvidia-nemo/safe-synthesizer:latest-cu129 \
+      run --config /workspace/config/config.yaml \
+      --data-source /workspace/input/input.csv \
+      --artifact-path /workspace/artifacts
     ```
 
-    No local Python install needed. See [Docker](docker.md) for full
-    setup, volume mounts, and offline usage.
+    The public image contains the runtime, not input data or configuration.
+    `latest-cu129` is suitable for evaluation; select an approved versioned
+    `cu129` tag or digest for reproducible workloads. No local Python install
+    or source build is needed. See [Docker](docker.md) for tag selection,
+    directory preparation, secrets, mounts, and offline usage.
 
 === "Bare package for config definitions"
 
