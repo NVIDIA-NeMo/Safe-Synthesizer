@@ -187,7 +187,7 @@ jobs:
       - name: Run GPU E2E tests
         id: e2e_tests
         continue-on-error: ${{ !matrix.required }}
-        run: mise -E gpu-ci run test:e2e:prepared
+        run: mise run test:e2e:prepared
         timeout-minutes: 190
 
       - name: Record GPU E2E result
