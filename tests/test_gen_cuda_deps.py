@@ -316,7 +316,13 @@ def test_build_cuda_installer_fragment_renders_runtime_index_arrays(
 
     generated = generator.build_cuda_installer_fragment(config)
 
-    assert "readonly -a CUDA_INDEXES_CPU=(https://download.pytorch.org/whl/cpu)" in generated.text
+    assert (
+        """readonly -a CUDA_INDEXES_CPU=(
+    https://flashinfer.ai/whl/
+    https://download.pytorch.org/whl/cpu
+)"""
+        in generated.text
+    )
     assert "readonly -a CUDA_INDEXES_CU129=(" in generated.text
     assert vllm_url in generated.text
     assert "readonly -a CUDA_INDEXES_CU130=(" in generated.text
