@@ -16,7 +16,7 @@
         <link rel="prev" href="../running/">
       
       
-        <link rel="next" href="../evaluating-data/">
+        <link rel="next" href="../kubernetes/">
       
       
         
@@ -802,6 +802,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -973,6 +977,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#select-an-image-tag" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Select an image tag
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#prerequisites" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -987,7 +1002,7 @@
   <a href="#quick-start" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Quick Start
+        Quick start
       
     </span>
   </a>
@@ -995,10 +1010,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#mounting-your-data" class="md-nav__link">
+  <a href="#runtime-mounts-and-persistence" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Mounting Your Data
+        Runtime mounts and persistence
       
     </span>
   </a>
@@ -1006,21 +1021,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#secrets-and-api-keys" class="md-nav__link">
+  <a href="#secrets" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Secrets and API Keys
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#hugging-face-model-cache" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Hugging Face Model Cache
+        Secrets
       
     </span>
   </a>
@@ -1039,21 +1043,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#shared-memory-shm-size" class="md-nav__link">
+  <a href="#debug-the-runtime-image" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Shared Memory (--shm-size)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#file-permissions" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        File Permissions
+        Debug the runtime image
       
     </span>
   </a>
@@ -1072,10 +1065,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#building-from-source" class="md-nav__link">
+  <a href="#building-the-project-image-from-source" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Building from Source
+        Building the project image from source
       
     </span>
   </a>
@@ -1083,32 +1076,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#interactive-shell" class="md-nav__link">
+  <a href="#other-deployment-paths" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Interactive Shell
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#mise-container-tasks" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Mise Container Tasks
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#what-to-read-next" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What to Read Next
+        Other deployment paths
       
     </span>
   </a>
@@ -1119,6 +1090,62 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kubernetes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kubernetes Job
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../private-workload-images/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Private Workload Images
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -1155,10 +1182,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_4" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_6" >
         
           
-          <label class="md-nav__link" for="__nav_4_4" id="__nav_4_4_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4_6" id="__nav_4_6_label" tabindex="">
             
   
   
@@ -1176,8 +1203,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4_4">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_6">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1282,10 +1309,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_5" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_7" >
         
           
-          <label class="md-nav__link" for="__nav_4_5" id="__nav_4_5_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4_7" id="__nav_4_7_label" tabindex="">
             
   
   
@@ -1303,8 +1330,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4_5">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -9221,6 +9248,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#select-an-image-tag" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Select an image tag
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#prerequisites" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -9235,7 +9273,7 @@
   <a href="#quick-start" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Quick Start
+        Quick start
       
     </span>
   </a>
@@ -9243,10 +9281,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#mounting-your-data" class="md-nav__link">
+  <a href="#runtime-mounts-and-persistence" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Mounting Your Data
+        Runtime mounts and persistence
       
     </span>
   </a>
@@ -9254,21 +9292,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#secrets-and-api-keys" class="md-nav__link">
+  <a href="#secrets" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Secrets and API Keys
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#hugging-face-model-cache" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Hugging Face Model Cache
+        Secrets
       
     </span>
   </a>
@@ -9287,21 +9314,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#shared-memory-shm-size" class="md-nav__link">
+  <a href="#debug-the-runtime-image" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Shared Memory (--shm-size)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#file-permissions" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        File Permissions
+        Debug the runtime image
       
     </span>
   </a>
@@ -9320,10 +9336,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#building-from-source" class="md-nav__link">
+  <a href="#building-the-project-image-from-source" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Building from Source
+        Building the project image from source
       
     </span>
   </a>
@@ -9331,32 +9347,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#interactive-shell" class="md-nav__link">
+  <a href="#other-deployment-paths" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Interactive Shell
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#mise-container-tasks" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Mise Container Tasks
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#what-to-read-next" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What to Read Next
+        Other deployment paths
       
     </span>
   </a>
@@ -9435,300 +9429,180 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
 <h1 id="running-in-docker">Running in Docker<a class="headerlink" href="#running-in-docker" title="Permanent link">&para;</a></h1>
-<p>Run the full Safe Synthesizer pipeline in a container with GPU access.
-No local Python install required -- the container ships everything needed
-for training, generation, and evaluation.</p>
-<hr />
+<p>Run the Safe Synthesizer CLI from the published GPU runtime image. You do not
+need a source checkout or local Python installation. The image contains the
+installed runtime; it does <strong>not</strong> contain input data or a workload
+configuration. Supply those at runtime.</p>
+<h2 id="select-an-image-tag">Select an image tag<a class="headerlink" href="#select-an-image-tag" title="Permanent link">&para;</a></h2>
+<p>The public image is available from <a href="https://github.com/NVIDIA-NeMo/Safe-Synthesizer/pkgs/container/safe-synthesizer">GitHub Container Registry (GHCR)</a>:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>ghcr.io/nvidia-nemo/safe-synthesizer
+</span></code></pre></div>
+<p>Use <code>latest-cu129</code> to evaluate the current CUDA 12.9 release:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>docker<span class="w"> </span>pull<span class="w"> </span>ghcr.io/nvidia-nemo/safe-synthesizer:latest-cu129
+</span></code></pre></div>
+<p>For a reproducible workload, replace that tag with an approved versioned
+<code>&lt;version&gt;-cu129</code> tag or, preferably, pin the resolved manifest digest:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>ghcr.io/nvidia-nemo/safe-synthesizer:&lt;version&gt;-cu129
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>ghcr.io/nvidia-nemo/safe-synthesizer@sha256:&lt;digest&gt;
+</span></code></pre></div>
+<p>Release tags can be easier to audit; a digest identifies immutable image
+content. Keep the <code>cu129</code> suffix when selecting a version tag because it names
+the CUDA dependency variant.</p>
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Docker 20.10+ (BuildKit enabled by default in 23.0+)</li>
-<li><a href="https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html">NVIDIA Container Toolkit</a> installed and configured</li>
-<li>NVIDIA driver compatible with the CUDA libraries installed by the image
-  variant (<code>cu129</code> today)</li>
-<li>NVIDIA GPU (A100 or better recommended)</li>
+<li>Docker with GPU support</li>
+<li><a href="https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html">NVIDIA Container Toolkit</a>
+  installed and configured</li>
+<li>An NVIDIA driver compatible with the image's CUDA 12.9 libraries</li>
+<li>An NVIDIA GPU (A100 or larger recommended)</li>
 </ul>
-<p>Verify GPU access works:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>--gpus<span class="w"> </span>all<span class="w"> </span>nvidia/cuda:12.9.1-base-ubuntu22.04<span class="w"> </span>nvidia-smi
+<p>Verify that Docker can expose the GPU before running the workload:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>--gpus<span class="w"> </span>all<span class="w"> </span>nvidia/cuda:12.9.1-base-ubuntu22.04<span class="w"> </span>nvidia-smi
 </span></code></pre></div>
-<hr />
-<h2 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
-<p>The container wraps the <code>safe-synthesizer</code> CLI. Mount your data and
-Hugging Face cache, then pass CLI arguments after the image name:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>docker<span class="w"> </span>run<span class="w"> </span>--gpus<span class="w"> </span>all<span class="w"> </span>--shm-size<span class="o">=</span>1g<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>-v<span class="w"> </span>/path/to/your/data:/workspace/data<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span>-v<span class="w"> </span>~/.cache/huggingface:/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span>-e<span class="w"> </span><span class="nv">HF_HOME</span><span class="o">=</span>/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span>nss-gpu:latest<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">  </span>run<span class="w"> </span>--config<span class="w"> </span>/workspace/data/config.yaml<span class="w"> </span>--data-source<span class="w"> </span>/workspace/data/input.csv
+<h2 id="quick-start">Quick start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
+<p>Create host directories for artifacts and the Hugging Face cache, ensure the
+user running Docker can write to them, and use absolute mount paths:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>mkdir<span class="w"> </span>-p<span class="w"> </span>/path/to/artifacts<span class="w"> </span>/path/to/hf-cache
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>--gpus<span class="w"> </span>all<span class="w"> </span>--shm-size<span class="o">=</span>1g<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span>--user<span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>id<span class="w"> </span>-u<span class="k">)</span><span class="s2">:</span><span class="k">$(</span>id<span class="w"> </span>-g<span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span>-v<span class="w"> </span>/path/to/input:/workspace/input:ro<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">  </span>-v<span class="w"> </span>/path/to/config:/workspace/config:ro<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">  </span>-v<span class="w"> </span>/path/to/artifacts:/workspace/artifacts<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">  </span>-v<span class="w"> </span>/path/to/hf-cache:/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">  </span>--env<span class="w"> </span>HF_TOKEN<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">  </span>ghcr.io/nvidia-nemo/safe-synthesizer:latest-cu129<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">  </span>run<span class="w"> </span>--config<span class="w"> </span>/workspace/config/config.yaml<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">  </span>--data-source<span class="w"> </span>/workspace/input/input.csv<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="w">  </span>--artifact-path<span class="w"> </span>/workspace/artifacts
 </span></code></pre></div>
-<p>The entrypoint prints helpful warnings if it detects common mistakes
-(empty <code>/workspace</code>, missing <code>HF_HOME</code>, no GPU access).</p>
-<p>More examples:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Train only</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>docker<span class="w"> </span>run<span class="w"> </span>--gpus<span class="w"> </span>all<span class="w"> </span>--shm-size<span class="o">=</span>1g<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span>-v<span class="w"> </span>/path/to/data:/workspace/data<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span>-v<span class="w"> </span>~/.cache/huggingface:/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span>-e<span class="w"> </span><span class="nv">HF_HOME</span><span class="o">=</span>/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">  </span>nss-gpu:latest<span class="w"> </span>run<span class="w"> </span>train<span class="w"> </span>--data-source<span class="w"> </span>/workspace/data/input.csv
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="c1"># Generate from a trained adapter</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>docker<span class="w"> </span>run<span class="w"> </span>--gpus<span class="w"> </span>all<span class="w"> </span>--shm-size<span class="o">=</span>1g<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">  </span>-v<span class="w"> </span>/path/to/data:/workspace/data<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="w">  </span>-v<span class="w"> </span>~/.cache/huggingface:/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">  </span>-e<span class="w"> </span><span class="nv">HF_HOME</span><span class="o">=</span>/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="w">  </span>nss-gpu:latest<span class="w"> </span>run<span class="w"> </span>generate<span class="w"> </span>--data-source<span class="w"> </span>/workspace/data/input.csv<span class="w"> </span>--auto-discover-adapter
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>
-</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="c1"># Validate a config file (no GPU needed)</span>
-</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>docker<span class="w"> </span>run<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="w">  </span>-v<span class="w"> </span>/path/to/data:/workspace/data<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="w">  </span>nss-gpu:latest<span class="w"> </span>config<span class="w"> </span>validate<span class="w"> </span>--config<span class="w"> </span>/workspace/data/config.yaml
-</span></code></pre></div>
-<hr />
-<h2 id="mounting-your-data">Mounting Your Data<a class="headerlink" href="#mounting-your-data" title="Permanent link">&para;</a></h2>
-<p>The container starts with an empty <code>/workspace</code>. You bring your own data
-by bind-mounting host directories with <code>-v</code>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>docker<span class="w"> </span>run<span class="w"> </span>--gpus<span class="w"> </span>all<span class="w"> </span>--shm-size<span class="o">=</span>1g<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span>-v<span class="w"> </span>/home/user/project:/workspace/data<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>...
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span>nss-gpu:latest<span class="w"> </span>run<span class="w"> </span>--data-source<span class="w"> </span>/workspace/data/input.csv
-</span></code></pre></div>
-<p>Docker requires absolute paths for bind mounts. Relative paths like
-<code>-v data:/workspace/data</code> are silently interpreted as named volumes --
-Docker won't error, but you'll get an empty mount instead of your host
-directory. Use <code>$(pwd)</code> to expand relative paths:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>-v<span class="w"> </span><span class="k">$(</span><span class="nb">pwd</span><span class="k">)</span>/my_data:/workspace/data<span class="w">    </span><span class="c1"># correct</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>-v<span class="w"> </span>my_data:/workspace/data<span class="w">           </span><span class="c1"># wrong -- Docker treats this as a named volume</span>
-</span></code></pre></div>
-<p>You can mount multiple directories at different paths:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>docker<span class="w"> </span>run<span class="w"> </span>--gpus<span class="w"> </span>all<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span>-v<span class="w"> </span>/data/inputs:/workspace/inputs<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span>-v<span class="w"> </span>/data/configs:/workspace/configs<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span>-v<span class="w"> </span>/data/output:/workspace/output<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span>-e<span class="w"> </span><span class="nv">NSS_ARTIFACTS_PATH</span><span class="o">=</span>/workspace/output<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">  </span>...
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">  </span>nss-gpu:latest<span class="w"> </span>run<span class="w"> </span>--config<span class="w"> </span>/workspace/configs/my_config.yaml<span class="w"> </span>--data-source<span class="w"> </span>/workspace/inputs/data.csv
-</span></code></pre></div>
-<p>Artifacts are written to <code>/workspace/safe-synthesizer-artifacts/</code> by default
-(override with <code>NSS_ARTIFACTS_PATH</code>). Make sure to mount a host directory
-there if you want to retrieve results after the container exits.</p>
-<hr />
-<h2 id="secrets-and-api-keys">Secrets and API Keys<a class="headerlink" href="#secrets-and-api-keys" title="Permanent link">&para;</a></h2>
-<p>Pass secrets as environment variables at runtime -- never bake them into the
-image. The most common ones:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>docker<span class="w"> </span>run<span class="w"> </span>--gpus<span class="w"> </span>all<span class="w"> </span>--shm-size<span class="o">=</span>1g<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span>-v<span class="w"> </span>/path/to/data:/workspace/data<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span>-v<span class="w"> </span>~/.cache/huggingface:/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span>-e<span class="w"> </span><span class="nv">HF_HOME</span><span class="o">=</span>/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">  </span>-e<span class="w"> </span><span class="nv">HF_TOKEN</span><span class="o">=</span><span class="s2">&quot;hf_...&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">  </span>nss-gpu:latest<span class="w"> </span>run<span class="w"> </span>--data-source<span class="w"> </span>/workspace/data/input.csv
-</span></code></pre></div>
+<p>Replace the paths and filenames with your own. Omit <code>--env HF_TOKEN</code> when the
+selected models do not require it or when an approved token already exists in
+the mounted Hugging Face cache. The inherited entrypoint passes everything
+after the image reference to <code>safe-synthesizer</code> and warns about common mount,
+cache, GPU, token, and shared-memory problems.</p>
+<p>See <a href="../running/">Running Safe Synthesizer</a> for other stages and CLI options and
+<a href="../configuration/">Configuration</a> for the YAML schema and override precedence.</p>
+<h2 id="runtime-mounts-and-persistence">Runtime mounts and persistence<a class="headerlink" href="#runtime-mounts-and-persistence" title="Permanent link">&para;</a></h2>
+<p>Docker bind mounts preserve host ownership. The image normally runs as
+<code>appuser</code> with uid and gid 1000; the quick start uses <code>--user</code> to match the
+host owner of writable mounts. In managed environments, you can instead
+provision artifact and cache directories writable by uid/gid 1000.</p>
 <table>
 <thead>
 <tr>
-<th>Variable</th>
-<th>Required</th>
-<th>Purpose</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>HF_TOKEN</code></td>
-<td>For gated models</td>
-<td>Hugging Face token for downloading gated models (Llama, Mistral, etc.). Get one at <a href="https://huggingface.co/settings/tokens">hf.co/settings/tokens</a></td>
-</tr>
-<tr>
-<td><code>NSS_INFERENCE_KEY</code></td>
-<td>For PII classification</td>
-<td>API key for <code>NSS_INFERENCE_ENDPOINT</code>. Set when using the CLI/SDK for column classification</td>
-</tr>
-<tr>
-<td><code>NSS_INFERENCE_ENDPOINT</code></td>
-<td>For PII classification</td>
-<td>NIM/OpenAI-compatible endpoint URL (default: <code>https://integrate.api.nvidia.com/v1</code>). Override for a custom endpoint</td>
-</tr>
-<tr>
-<td><code>WANDB_API_KEY</code></td>
-<td>For experiment tracking</td>
-<td>WandB API key. Only needed when <code>--wandb-mode online</code> is used</td>
-</tr>
-</tbody>
-</table>
-<p>If <code>HF_TOKEN</code> is already stored in your HF cache (<code>~/.cache/huggingface/token</code>),
-mounting the cache directory is sufficient -- the Hub library reads the token
-file automatically.</p>
-<p>See <a href="../environment/">Environment Variables</a> for the full reference.</p>
-<hr />
-<h2 id="hugging-face-model-cache">Hugging Face Model Cache<a class="headerlink" href="#hugging-face-model-cache" title="Permanent link">&para;</a></h2>
-<p>Safe Synthesizer downloads models from Hugging Face Hub on first use.
-Mount a host directory to persist downloads across container runs:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>docker<span class="w"> </span>run<span class="w"> </span>--gpus<span class="w"> </span>all<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span>-v<span class="w"> </span>~/.cache/huggingface:/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span>...
-</span></code></pre></div>
-<table>
-<thead>
-<tr>
-<th>Host path</th>
+<th>Content</th>
 <th>Container path</th>
-<th>Env var</th>
-<th>Purpose</th>
+<th>Access</th>
+<th>Lifecycle</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>~/.cache/huggingface</code></td>
+<td>Input data</td>
+<td><code>/workspace/input</code></td>
+<td>Read-only</td>
+<td>Supplied by the user; never shipped in the image or repository</td>
+</tr>
+<tr>
+<td>YAML configuration</td>
+<td><code>/workspace/config</code></td>
+<td>Read-only</td>
+<td>Supplied by the user</td>
+</tr>
+<tr>
+<td>Run artifacts</td>
+<td><code>/workspace/artifacts</code></td>
+<td>Read-write</td>
+<td>Persist to retain adapters, generated data, reports, and logs</td>
+</tr>
+<tr>
+<td>Hugging Face cache</td>
 <td><code>/workspace/.hf_cache</code></td>
-<td><code>HF_HOME</code></td>
-<td>Model weights, tokenizers, configs</td>
+<td>Read-write</td>
+<td>Persist to reuse downloaded models</td>
 </tr>
 </tbody>
 </table>
-<p>The image sets <code>HF_HOME=/workspace/.hf_cache</code>, so mounting the cache there is
-enough -- passing <code>-e HF_HOME=/workspace/.hf_cache</code> is redundant but harmless.
-Override the variable only to point at a different container path.</p>
-<p>Without this mount, models are downloaded into the container's ephemeral
-filesystem and lost when it exits.</p>
-<p>For shared environments (team servers, CI), point at a shared cache:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>-v<span class="w"> </span>/shared/hf_cache:/workspace/.hf_cache<span class="w"> </span>-e<span class="w"> </span><span class="nv">HF_HOME</span><span class="o">=</span>/workspace/.hf_cache
+<p>The image sets <code>HF_HOME=/workspace/.hf_cache</code>. It also starts in <code>/workspace</code>
+and defaults artifacts to a relative <code>safe-synthesizer-artifacts</code> directory,
+so pass the explicit <code>/workspace/artifacts</code> path whenever you mount a dedicated
+artifact volume. See <a href="../running/#artifacts-and-output">Running -- Artifacts and Output</a>
+for the output tree and <a href="../environment/">Environment Variables</a> for cache,
+offline, logging, endpoint, and artifact settings.</p>
+<p>Docker treats a relative source such as <code>-v data:/workspace/input</code> as a named
+volume. Use an absolute host path or expand one with <code>$(pwd)</code>.</p>
+<h2 id="secrets">Secrets<a class="headerlink" href="#secrets" title="Permanent link">&para;</a></h2>
+<p>Inject credentials only at runtime. Prefer your organization's approved
+credential handler or secret manager when one is available. Follow its existing
+standards for secret storage, access, rotation, audit, and runtime injection.</p>
+<p>If an approved local workflow requires an environment variable, read it without
+echoing it or placing the value in shell history:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nb">read</span><span class="w"> </span>-r<span class="w"> </span>-s<span class="w"> </span>-p<span class="w"> </span><span class="s2">&quot;Hugging Face token: &quot;</span><span class="w"> </span>HF_TOKEN
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nb">printf</span><span class="w"> </span><span class="s1">&#39;\n&#39;</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="nb">export</span><span class="w"> </span>HF_TOKEN
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>--gpus<span class="w"> </span>all<span class="w"> </span>--env<span class="w"> </span>HF_TOKEN<span class="w"> </span>...
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="nb">unset</span><span class="w"> </span>HF_TOKEN
 </span></code></pre></div>
-<hr />
+<p>Other workflows can require <code>NSS_INFERENCE_KEY</code> or <code>WANDB_API_KEY</code>. Do not bake
+credentials into an image. The complete variables and their purposes are in
+<a href="../environment/">Environment Variables</a>.</p>
 <h2 id="gpu-access">GPU Access<a class="headerlink" href="#gpu-access" title="Permanent link">&para;</a></h2>
-<p>The image declares <code>NVIDIA_VISIBLE_DEVICES=all</code> and
-<code>NVIDIA_DRIVER_CAPABILITIES=compute,utility</code>, so the NVIDIA Container Toolkit
-knows it needs GPU access. You still need <code>--gpus</code> to tell Docker to inject
-the GPU devices:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># All GPUs</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>docker<span class="w"> </span>run<span class="w"> </span>--gpus<span class="w"> </span>all<span class="w"> </span>...
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># Specific GPUs</span>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>docker<span class="w"> </span>run<span class="w"> </span>--gpus<span class="w"> </span><span class="s1">&#39;&quot;device=0,1&quot;&#39;</span><span class="w"> </span>...
+<p>The image declares NVIDIA runtime visibility and compute capabilities, but
+Docker still needs <code>--gpus all</code> (or an explicit device selection). Training
+uses <code>/dev/shm</code> for worker communication; use <code>--shm-size=1g</code> as a starting
+point and size it for your workload. The entrypoint warns below 256 MiB.</p>
+<p>GPU, CPU, memory, and shared-memory requirements vary with the model, dataset,
+and configuration. See <a href="../troubleshooting/">Program Runtime</a> for GPU, OOM,
+permissions, cache, and offline failures.</p>
+<h2 id="debug-the-runtime-image">Debug the runtime image<a class="headerlink" href="#debug-the-runtime-image" title="Permanent link">&para;</a></h2>
+<p>For an interactive inspection session, override the entrypoint and start a
+shell in the published runtime image. Mount the same input, configuration,
+artifact, and cache directories you use for a normal run:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>-it<span class="w"> </span>--gpus<span class="w"> </span>all<span class="w"> </span>--shm-size<span class="o">=</span>1g<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span>--user<span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>id<span class="w"> </span>-u<span class="k">)</span><span class="s2">:</span><span class="k">$(</span>id<span class="w"> </span>-g<span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span>--mount<span class="w"> </span><span class="nv">type</span><span class="o">=</span>bind,src<span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span><span class="nb">pwd</span><span class="k">)</span><span class="s2">/input&quot;</span>,dst<span class="o">=</span>/workspace/input,readonly<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span>--mount<span class="w"> </span><span class="nv">type</span><span class="o">=</span>bind,src<span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span><span class="nb">pwd</span><span class="k">)</span><span class="s2">/config&quot;</span>,dst<span class="o">=</span>/workspace/config,readonly<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">  </span>--mount<span class="w"> </span><span class="nv">type</span><span class="o">=</span>bind,src<span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span><span class="nb">pwd</span><span class="k">)</span><span class="s2">/artifacts&quot;</span>,dst<span class="o">=</span>/workspace/artifacts<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">  </span>--mount<span class="w"> </span><span class="nv">type</span><span class="o">=</span>bind,src<span class="o">=</span><span class="s2">&quot;</span><span class="nv">$HOME</span><span class="s2">/.cache/huggingface&quot;</span>,dst<span class="o">=</span>/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">  </span>--entrypoint<span class="w"> </span>/bin/bash<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">  </span>ghcr.io/nvidia-nemo/safe-synthesizer:latest-cu129
 </span></code></pre></div>
-<p>To restrict which GPUs are visible inside the container, override the
-environment variable:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>docker<span class="w"> </span>run<span class="w"> </span>--gpus<span class="w"> </span>all<span class="w"> </span>-e<span class="w"> </span><span class="nv">NVIDIA_VISIBLE_DEVICES</span><span class="o">=</span><span class="m">0</span>,1<span class="w"> </span>...
+<p>Inside the shell, inspect GPU visibility or validate a configuration without
+starting a synthesis run:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>nvidia-smi
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>safe-synthesizer<span class="w"> </span>config<span class="w"> </span>validate<span class="w"> </span>--config<span class="w"> </span>/workspace/config/config.yaml
 </span></code></pre></div>
-<hr />
-<h2 id="shared-memory-shm-size">Shared Memory (<code>--shm-size</code>)<a class="headerlink" href="#shared-memory-shm-size" title="Permanent link">&para;</a></h2>
-<p>PyTorch uses <code>/dev/shm</code> for inter-process communication during training
-(multi-worker data loading). Docker defaults to 64 MB, which causes
-"Bus error" crashes. Always pass <code>--shm-size=1g</code> (or <code>--ipc=host</code>) when
-running training workloads:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>docker<span class="w"> </span>run<span class="w"> </span>--gpus<span class="w"> </span>all<span class="w"> </span>--shm-size<span class="o">=</span>1g<span class="w"> </span>...
-</span></code></pre></div>
-<p>The entrypoint script warns if <code>/dev/shm</code> is below 256 MB.
-Generation-only runs are typically fine without it.</p>
-<hr />
-<h2 id="file-permissions">File Permissions<a class="headerlink" href="#file-permissions" title="Permanent link">&para;</a></h2>
-<p>The container runs as <code>appuser</code> (uid 1000). When bind-mounting host
-directories, Docker preserves host ownership. If your host user has a
-different uid, writes to the mounted directory (artifacts, outputs) will
-fail with "Permission denied". A mounted Hugging Face cache is affected the
-same way: already-cached models still load, but downloading a new one fails.</p>
-<p>Fix by matching the container user to your host uid:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>docker<span class="w"> </span>run<span class="w"> </span>--gpus<span class="w"> </span>all<span class="w"> </span>--user<span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>id<span class="w"> </span>-u<span class="k">)</span><span class="s2">:</span><span class="k">$(</span>id<span class="w"> </span>-g<span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span>-v<span class="w"> </span>/path/to/data:/workspace/data<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">  </span>...
-</span></code></pre></div>
-<p>This overrides <code>appuser</code> with your host identity. The <code>--user</code> flag also
-works with the dev image and interactive shells.</p>
-<hr />
+<p>Overriding the entrypoint bypasses its startup diagnostics. Use the normal
+<code>docker run</code> command for actual pipeline runs.</p>
 <h2 id="offline-and-air-gapped-environments">Offline and Air-Gapped Environments<a class="headerlink" href="#offline-and-air-gapped-environments" title="Permanent link">&para;</a></h2>
-<p>Pre-cache models by running the pipeline once with internet access, then
-reuse the populated cache in the target environment:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Step 1: populate cache (internet required)</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>docker<span class="w"> </span>run<span class="w"> </span>--gpus<span class="w"> </span>all<span class="w"> </span>--shm-size<span class="o">=</span>1g<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">  </span>-v<span class="w"> </span>/path/to/data:/workspace/data<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">  </span>-v<span class="w"> </span>~/.cache/huggingface:/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="w">  </span>-e<span class="w"> </span><span class="nv">HF_HOME</span><span class="o">=</span>/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="w">  </span>nss-gpu:latest<span class="w"> </span>run<span class="w"> </span>--config<span class="w"> </span>/workspace/data/config.yaml<span class="w"> </span>--data-source<span class="w"> </span>/workspace/data/input.csv
-</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>
-</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="c1"># Step 2: use in offline environment</span>
-</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a>docker<span class="w"> </span>run<span class="w"> </span>--gpus<span class="w"> </span>all<span class="w"> </span>--shm-size<span class="o">=</span>1g<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="w">  </span>-v<span class="w"> </span>/path/to/data:/workspace/data<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="w">  </span>-v<span class="w"> </span>/shared/hf_cache:/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a><span class="w">  </span>-e<span class="w"> </span><span class="nv">HF_HOME</span><span class="o">=</span>/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="w">  </span>-e<span class="w"> </span><span class="nv">HF_HUB_OFFLINE</span><span class="o">=</span><span class="m">1</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a><span class="w">  </span>nss-gpu:latest<span class="w"> </span>run<span class="w"> </span>--config<span class="w"> </span>/workspace/data/config.yaml<span class="w"> </span>--data-source<span class="w"> </span>/workspace/data/input.csv
+<p>Populate a persistent model cache in an approved connected environment, move
+or attach it according to organizational policy, and mount it at
+<code>/workspace/.hf_cache</code>. Then add <code>--env HF_HUB_OFFLINE=1</code>. Required models must
+already exist in the cache. See
+<a href="../environment/#hugging-face-cache-and-offline">Environment -- Hugging Face cache and offline</a>
+for the complete offline contract.</p>
+<h2 id="building-the-project-image-from-source">Building the project image from source<a class="headerlink" href="#building-the-project-image-from-source" title="Permanent link">&para;</a></h2>
+<p>Consuming the public image above is the normal user path. Building the project
+image is a separate developer workflow that requires a source checkout and
+produces local tags rather than pulling the published runtime:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>mise<span class="w"> </span>run<span class="w"> </span>container:build:gpu
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>mise<span class="w"> </span>run<span class="w"> </span>container:build:gpu-dev
 </span></code></pre></div>
-<p>See <a href="../environment/#hugging-face-cache-and-offline">Environment Variables -- Hugging Face cache and offline</a>
-for details on <code>HF_HOME</code>, <code>HF_HUB_OFFLINE</code>, and <code>VLLM_CACHE_ROOT</code>.</p>
-<hr />
-<h2 id="building-from-source">Building from Source<a class="headerlink" href="#building-from-source" title="Permanent link">&para;</a></h2>
-<p>If pulling a pre-built image is not available, build locally:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>mise<span class="w"> </span>run<span class="w"> </span>container:build:gpu<span class="w">       </span><span class="c1"># runtime image</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>mise<span class="w"> </span>run<span class="w"> </span>container:build:gpu-dev<span class="w">   </span><span class="c1"># dev image with test tooling</span>
-</span></code></pre></div>
-<p>Override build arguments for a different package extra, image variant, or
-Python slim base version:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>docker<span class="w"> </span>build<span class="w"> </span>-f<span class="w"> </span>containers/Dockerfile.cuda<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="w">  </span>--build-arg<span class="w"> </span><span class="nv">CONTAINER_EXTRA</span><span class="o">=</span>cu129<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">  </span>--build-arg<span class="w"> </span><span class="nv">CONTAINER_VARIANT</span><span class="o">=</span>cu129<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="w">  </span>--build-arg<span class="w"> </span><span class="nv">PYTHON_VERSION</span><span class="o">=</span><span class="m">3</span>.12<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="w">  </span>--target<span class="w"> </span>runtime<span class="w"> </span>-t<span class="w"> </span>nss-gpu:custom<span class="w"> </span>.
-</span></code></pre></div>
-<p>See <a href="../../developer-guide/docker/">Developer Guide -- Docker</a> for
-build stages, ARG reference, and customization details.</p>
-<hr />
-<h2 id="interactive-shell">Interactive Shell<a class="headerlink" href="#interactive-shell" title="Permanent link">&para;</a></h2>
-<p>To explore the container or debug issues, override the entrypoint to get
-a bash shell. Mount your data the same way as a normal run:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>docker<span class="w"> </span>run<span class="w"> </span>-it<span class="w"> </span>--gpus<span class="w"> </span>all<span class="w"> </span>--shm-size<span class="o">=</span>1g<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="w">  </span>-v<span class="w"> </span><span class="k">$(</span><span class="nb">pwd</span><span class="k">)</span>/my_data:/workspace/data<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">  </span>-v<span class="w"> </span>~/.cache/huggingface:/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="w">  </span>-e<span class="w"> </span><span class="nv">HF_HOME</span><span class="o">=</span>/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="w">  </span>--entrypoint<span class="w"> </span>/bin/bash<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="w">  </span>nss-gpu:latest
-</span></code></pre></div>
-<p>Inside the container you can run <code>safe-synthesizer</code> commands directly:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>appuser@container:/workspace$<span class="w"> </span>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--data-source<span class="w"> </span>/workspace/data/input.csv
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>appuser@container:/workspace$<span class="w"> </span>safe-synthesizer<span class="w"> </span>config<span class="w"> </span>validate<span class="w"> </span>--config<span class="w"> </span>/workspace/data/config.yaml
-</span></code></pre></div>
-<hr />
-<h2 id="mise-container-tasks">Mise Container Tasks<a class="headerlink" href="#mise-container-tasks" title="Permanent link">&para;</a></h2>
-<p>For developers with the repo checked out, mise provides convenience tasks
-that handle GPU flags, HF cache mounts, and workspace bind mounts:</p>
-<table>
-<thead>
-<tr>
-<th>Command</th>
-<th>What it does</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>mise run container:build:gpu</code></td>
-<td>Build the runtime image</td>
-</tr>
-<tr>
-<td><code>CMD="run --config ..." mise run container:run:gpu</code></td>
-<td>Run a pipeline command</td>
-</tr>
-<tr>
-<td><code>mise run container:build:gpu-dev</code></td>
-<td>Build the dev image</td>
-</tr>
-<tr>
-<td><code>CMD="mise run test" mise run container:run:gpu-dev</code></td>
-<td>Run a command in the dev container</td>
-</tr>
-</tbody>
-</table>
-<p>Override variables as needed:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="nv">CONTAINER_HF_CACHE</span><span class="o">=</span>/shared/hf_cache<span class="w"> </span><span class="nv">CMD</span><span class="o">=</span><span class="s2">&quot;run --data-source /workspace/data.csv&quot;</span><span class="w"> </span>mise<span class="w"> </span>run<span class="w"> </span>container:run:gpu
-</span></code></pre></div>
-<p>Mount data from outside the repo tree with <code>CONTAINER_EXTRA_MOUNTS</code>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="nv">CONTAINER_EXTRA_MOUNTS</span><span class="o">=</span><span class="s2">&quot;-v /data/sensitive:/workspace/data&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="w">  </span><span class="nv">CMD</span><span class="o">=</span><span class="s2">&quot;run --data-source /workspace/data/customers.csv&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="w">  </span>mise<span class="w"> </span>run<span class="w"> </span>container:run:gpu
-</span></code></pre></div>
-<hr />
-<h2 id="what-to-read-next">What to Read Next<a class="headerlink" href="#what-to-read-next" title="Permanent link">&para;</a></h2>
+<p>See <a href="../../developer-guide/docker/">Developer Guide -- Docker</a> for build stages,
+arguments, and developer-image behavior. Those internals do not change the
+public-image consumption contract on this page.</p>
+<h2 id="other-deployment-paths">Other deployment paths<a class="headerlink" href="#other-deployment-paths" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="../running/">Running Safe Synthesizer</a> -- pipeline execution, CLI commands</li>
-<li><a href="../configuration/">Configuration Reference</a> -- parameter tables</li>
-<li><a href="../environment/">Environment Variables</a> -- <code>HF_HOME</code>, <code>NSS_ARTIFACTS_PATH</code>, logging</li>
-<li><a href="../troubleshooting/">Troubleshooting</a> -- OOM fixes, offline errors</li>
+<li><a href="../kubernetes/">Kubernetes Job</a> translates this workflow to a portable
+  <code>batch/v1</code> Job.</li>
+<li><a href="../private-workload-images/">Private Workload Images</a> explains how to derive
+  a governed image from an immutable public base while keeping sensitive data,
+  artifacts, and caches external by default.</li>
 </ul>
+<p>For the shared runtime contract, continue with
+<a href="../running/">Running Safe Synthesizer</a>, <a href="../configuration/">Configuration</a>,
+<a href="../environment/">Environment Variables</a>, or <a href="../troubleshooting/">Program Runtime</a>.</p>
 
 
 
@@ -9783,13 +9657,13 @@ that handle GPU flags, HF cache mounts, and workspace bind mounts:</p>
         
         
           
-          <a href="../evaluating-data/" class="md-footer__link md-footer__link--next" aria-label="Next: Synthetic Data Quality">
+          <a href="../kubernetes/" class="md-footer__link md-footer__link--next" aria-label="Next: Kubernetes Job">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Synthetic Data Quality
+                Kubernetes Job
               </div>
             </div>
             <div class="md-footer__button md-icon">
