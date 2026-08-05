@@ -180,7 +180,7 @@ jobs:
           cuda-extra: ${{ matrix.cuda-extra }}
 
       - name: Run GPU E2E tests
-        run: mise -E gpu-ci run test:e2e:prepared
+        run: mise run test:e2e:prepared
         timeout-minutes: 190
 
   # ---------------------------------------------------------------------------
