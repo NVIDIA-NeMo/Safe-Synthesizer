@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import subprocess
 import tomllib
+from collections.abc import Iterable
 from enum import Enum
 from typing import Annotated, Any, Optional
 
@@ -186,27 +187,60 @@ def diff_packages(
         differing package.
     """
     changes: list[PackageChange] = []
-    all_keys = sorted(set(base) | set(head))
+    base_by_name = _group_packages_by_name(base.values())
+    head_by_name = _group_packages_by_name(head.values())
 
-    for key in all_keys:
-        base_pkg = base.get(key)
-        head_pkg = head.get(key)
+    for name in sorted(set(base_by_name) | set(head_by_name)):
+        base_variants = list(base_by_name.get(name, []))
+        head_variants = list(head_by_name.get(name, []))
 
-        if base_pkg is None and head_pkg is not None:
-            changes.append(
-                PackageChange(name=head_pkg.name, change=ChangeType.added, new=head_pkg, ref=ref),
-            )
-        elif head_pkg is None and base_pkg is not None:
-            changes.append(
-                PackageChange(name=base_pkg.name, change=ChangeType.removed, old=base_pkg, ref=ref),
-            )
-        elif base_pkg is not None and head_pkg is not None and base_pkg.version != head_pkg.version:
-            direction = ChangeType.upgraded if head_pkg.version > base_pkg.version else ChangeType.downgraded
-            changes.append(
-                PackageChange(name=base_pkg.name, change=direction, old=base_pkg, new=head_pkg, ref=ref),
-            )
+        # A package moved between indexes without a version change is a no-op.
+        # Remove those exact matches before comparing variants from each source.
+        for base_pkg in tuple(base_variants):
+            for index, head_pkg in enumerate(head_variants):
+                if base_pkg.version == head_pkg.version:
+                    base_variants.remove(base_pkg)
+                    head_variants.pop(index)
+                    break
+
+        base_by_source = _group_packages_by_source(base_variants)
+        head_by_source = _group_packages_by_source(head_variants)
+        for source in sorted(set(base_by_source) | set(head_by_source)):
+            base_source_variants = sorted(base_by_source.get(source, []), key=lambda package: package.version)
+            head_source_variants = sorted(head_by_source.get(source, []), key=lambda package: package.version)
+
+            for base_pkg, head_pkg in zip(base_source_variants, head_source_variants, strict=False):
+                direction = ChangeType.upgraded if head_pkg.version > base_pkg.version else ChangeType.downgraded
+                changes.append(
+                    PackageChange(name=name, change=direction, old=base_pkg, new=head_pkg, ref=ref),
+                )
+
+            for base_pkg in base_source_variants[len(head_source_variants) :]:
+                changes.append(
+                    PackageChange(name=name, change=ChangeType.removed, old=base_pkg, ref=ref),
+                )
+            for head_pkg in head_source_variants[len(base_source_variants) :]:
+                changes.append(
+                    PackageChange(name=name, change=ChangeType.added, new=head_pkg, ref=ref),
+                )
 
     return LockfileDiff(changes)
+
+
+def _group_packages_by_name(packages: Iterable[Package]) -> dict[str, list[Package]]:
+    """Group package variants by normalized package name."""
+    grouped: dict[str, list[Package]] = {}
+    for package in packages:
+        grouped.setdefault(package.name, []).append(package)
+    return grouped
+
+
+def _group_packages_by_source(packages: Iterable[Package]) -> dict[str, list[Package]]:
+    """Group package variants by their source URL or path."""
+    grouped: dict[str, list[Package]] = {}
+    for package in packages:
+        grouped.setdefault(package.source, []).append(package)
+    return grouped
 
 
 # ---------------------------------------------------------------------------

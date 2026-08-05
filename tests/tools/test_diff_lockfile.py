@@ -9,12 +9,37 @@ from pathlib import Path
 from typing import Protocol, cast
 
 import pytest
+from packaging.version import Version
+
+
+class Package(Protocol):
+    """Typed package snapshot exposed by the dynamically loaded tool."""
+
+    name: str
+    version: Version
+    source: str
+
+
+class PackageChange(Protocol):
+    """Typed package delta exposed by the dynamically loaded tool."""
+
+    change: str
+    old: Package | None
+    new: Package | None
+
+
+class LockfileDiff(Protocol):
+    """Typed lockfile diff exposed by the dynamically loaded tool."""
+
+    root: list[PackageChange]
 
 
 class DiffLockfileTool(Protocol):
     """Typed interface exposed by the dynamically loaded lockfile tool."""
 
-    def parse_packages(self, content: str) -> dict[str, object]: ...
+    def parse_packages(self, content: str) -> dict[str, Package]: ...
+
+    def diff_packages(self, base: dict[str, Package], head: dict[str, Package], ref: str) -> LockfileDiff: ...
 
 
 def _load_tool(tool_path: Path) -> DiffLockfileTool:
@@ -54,3 +79,44 @@ source = { registry = "https://pypi.org/simple" }
         "cuda-python@https://pypi.org/simple@12.9.4",
         "cuda-python@https://pypi.org/simple@13.1.1",
     }
+
+
+def test_diff_packages_classifies_changed_duplicate_variant(diff_lockfile_tool: DiffLockfileTool) -> None:
+    base = diff_lockfile_tool.parse_packages(
+        """
+version = 1
+
+[[package]]
+name = "cuda-python"
+version = "12.9.4"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "cuda-python"
+version = "13.1.1"
+source = { registry = "https://pypi.org/simple" }
+""",
+    )
+    head = diff_lockfile_tool.parse_packages(
+        """
+version = 1
+
+[[package]]
+name = "cuda-python"
+version = "12.9.4"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "cuda-python"
+version = "13.2.0"
+source = { registry = "https://pypi.org/simple" }
+""",
+    )
+
+    diff = diff_lockfile_tool.diff_packages(base, head, ref="base..head")
+
+    assert len(diff.root) == 1
+    change = diff.root[0]
+    assert change.change == "upgraded"
+    assert change.old is not None and change.old.version == Version("13.1.1")
+    assert change.new is not None and change.new.version == Version("13.2.0")
