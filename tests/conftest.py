@@ -84,10 +84,22 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     if not gpu_items:
         return
 
-    import torch
+    require_cuda = os.environ.get("NSS_REQUIRE_CUDA") == "1"
+
+    try:
+        import torch
+    except ImportError:
+        if require_cuda:
+            raise pytest.UsageError(
+                "GPU CI requires PyTorch with CUDA support, but PyTorch could not be imported."
+            ) from None
+        raise
 
     if torch.cuda.is_available():
         return
+
+    if require_cuda:
+        raise pytest.UsageError("GPU CI requires CUDA, but torch.cuda.is_available() returned false.")
 
     skip_marker = pytest.mark.skip(reason="CUDA is not available")
     for item in gpu_items:

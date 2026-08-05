@@ -118,8 +118,18 @@ runs:
         uv --no-config pip check --python "${python_bin}"
         "${python_bin}" -c \
           "from importlib.metadata import version; from nemo_safe_synthesizer.package_info import __version__; assert __version__ == version('nemo-safe-synthesizer')"
-        "${python_bin}" -c \
-          "import torch; print('cuda available:', torch.cuda.is_available()); print('device count:', torch.cuda.device_count()); assert torch.cuda.is_available()"
+        "${python_bin}" - <<'PY'
+        try:
+            import torch
+        except ImportError:
+            raise SystemExit("GPU CI requires PyTorch with CUDA support, but PyTorch could not be imported.") from None
+
+        if not torch.cuda.is_available():
+            raise SystemExit("GPU CI requires CUDA, but torch.cuda.is_available() returned false.")
+
+        print("cuda available: true")
+        print("device count:", torch.cuda.device_count())
+        PY
 
         echo "UV_PROJECT_ENVIRONMENT=${venv_path}" >> "${GITHUB_ENV}"
         echo "UV_NO_SYNC=1" >> "${GITHUB_ENV}"

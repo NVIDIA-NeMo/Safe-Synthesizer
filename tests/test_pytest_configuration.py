@@ -5,7 +5,9 @@
 
 from __future__ import annotations
 
+import builtins
 import sys
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from unittest.mock import Mock
@@ -100,13 +102,112 @@ def test_requires_gpu_runs_with_cuda(
     cuda_is_available.assert_called_once_with()
 
 
-def test_cuda_is_not_probed_without_gpu_tests(
+def test_requires_gpu_fails_without_torch_in_gpu_ci(
+    pytester: pytest.Pytester,
+    pytestconfig: pytest.Config,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("NSS_REQUIRE_CUDA", "1")
+    monkeypatch.setitem(sys.modules, "torch", None)
+    _make_pytest_ini(pytester)
+    pytester.makepyfile(
+        """
+        import pytest
+
+        @pytest.mark.requires_gpu
+        def test_gpu():
+            pass
+        """
+    )
+
+    result = pytester.runpytest_inprocess(
+        "-p",
+        "no:cov",
+        plugins=[_root_conftest_module(pytestconfig)],
+    )
+
+    assert result.ret == pytest.ExitCode.USAGE_ERROR
+    result.stderr.fnmatch_lines(["*GPU CI requires PyTorch with CUDA support, but PyTorch could not be imported.*"])
+
+
+def test_requires_gpu_fails_without_cuda_in_gpu_ci(
     pytester: pytest.Pytester,
     pytestconfig: pytest.Config,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     cuda_is_available = Mock(return_value=False)
+    monkeypatch.setenv("NSS_REQUIRE_CUDA", "1")
     monkeypatch.setitem(sys.modules, "torch", SimpleNamespace(cuda=SimpleNamespace(is_available=cuda_is_available)))
+    _make_pytest_ini(pytester)
+    pytester.makepyfile(
+        """
+        import pytest
+
+        @pytest.mark.requires_gpu
+        def test_gpu():
+            pass
+        """
+    )
+
+    result = pytester.runpytest_inprocess(
+        "-p",
+        "no:cov",
+        plugins=[_root_conftest_module(pytestconfig)],
+    )
+
+    assert result.ret == pytest.ExitCode.USAGE_ERROR
+    result.stderr.fnmatch_lines(["*GPU CI requires CUDA, but torch.cuda.is_available() returned false.*"])
+    cuda_is_available.assert_called_once_with()
+
+
+def test_requires_gpu_runs_with_cuda_in_gpu_ci(
+    pytester: pytest.Pytester,
+    pytestconfig: pytest.Config,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cuda_is_available = Mock(return_value=True)
+    monkeypatch.setenv("NSS_REQUIRE_CUDA", "1")
+    monkeypatch.setitem(sys.modules, "torch", SimpleNamespace(cuda=SimpleNamespace(is_available=cuda_is_available)))
+    _make_pytest_ini(pytester)
+    pytester.makepyfile(
+        """
+        import pytest
+
+        @pytest.mark.requires_gpu
+        def test_gpu():
+            pass
+        """
+    )
+
+    result = pytester.runpytest_inprocess(
+        "-p",
+        "no:cov",
+        plugins=[_root_conftest_module(pytestconfig)],
+    )
+
+    result.assert_outcomes(passed=1)
+    cuda_is_available.assert_called_once_with()
+
+
+def test_torch_is_not_imported_without_gpu_tests(
+    pytester: pytest.Pytester,
+    pytestconfig: pytest.Config,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    real_import = builtins.__import__
+
+    def fail_on_torch_import(
+        name: str,
+        globals_: Mapping[str, object] | None = None,
+        locals_: Mapping[str, object] | None = None,
+        fromlist: Sequence[str] = (),
+        level: int = 0,
+    ) -> ModuleType:
+        if name == "torch":
+            raise AssertionError("Torch was imported without a collected requires_gpu test")
+        return real_import(name, globals_, locals_, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", fail_on_torch_import)
     _make_pytest_ini(pytester)
     pytester.makepyfile(
         """
@@ -122,4 +223,3 @@ def test_cuda_is_not_probed_without_gpu_tests(
     )
 
     result.assert_outcomes(passed=1)
-    cuda_is_available.assert_not_called()
