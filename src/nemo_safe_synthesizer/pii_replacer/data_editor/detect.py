@@ -46,8 +46,9 @@ class DefaultLLMConfig:
         No ``max_tokens`` is sent with the request. The default classifier is a
         reasoning model, and ``max_tokens`` budgets reasoning and visible output
         together, so any cap large enough for the reasoning trace on a wide
-        frame is not a meaningful guard anyway. Truncation is instead detected
-        from ``finish_reason`` in ``classify_columns``.
+        frame is not a meaningful guard anyway. A cut-off response is instead
+        detected from ``finish_reason`` (see ``INCOMPLETE_FINISH_REASONS``) and,
+        as a backstop, from the column-coverage check in ``classify_columns``.
     """
 
     DEFAULT_CONFIG_ID = "nvidia/nemotron-3-ultra-550b-a55b"
@@ -91,6 +92,13 @@ DEFAULT_ENTITIES: set[str] = {
 UNKNOWN_ENTITY: str = "none"
 
 MAX_COL_STR_LEN = 128
+
+# ``finish_reason`` values that mean the completion stopped before the model was
+# done, so any JSON it contains describes only part of the frame. The OpenAI
+# schema also defines "tool_calls" and "function_call"; neither can occur here
+# because no tools are sent, and both leave ``content`` empty, which the
+# no-content guard in ``classify_columns`` catches.
+INCOMPLETE_FINISH_REASONS = frozenset({"length", "content_filter"})
 
 TEMPLATE = """Valid types are: [
 {valid_types_str}
@@ -293,20 +301,45 @@ def classify_columns(
         },
     )
 
-    # A truncated response often still repairs into well-formed JSON covering
-    # only the columns emitted before the cut, which would silently classify
-    # part of the frame and leave the rest unclassified with no error. Treat it
-    # as a failure so the caller falls back instead of trusting partial output.
-    if choice.finish_reason == "length":
+    # A cut-off response often still repairs into well-formed JSON covering only
+    # the columns emitted before the cut, which would silently classify part of
+    # the frame and leave the rest unclassified with no error. Treat it as a
+    # failure so the caller falls back instead of trusting partial output.
+    if choice.finish_reason in INCOMPLETE_FINISH_REASONS:
         logger.error(
-            "Classification response from the LLM was truncated before it finished "
-            "(finish_reason='length'); discarding the partial result.",
+            "Classification response from the LLM did not run to completion "
+            "(finish_reason=%r); discarding the partial result.",
+            choice.finish_reason,
             extra={
                 "ctx": {
+                    "finish_reason": choice.finish_reason,
                     "num_columns": len(df.columns),
                     "completion_tokens": getattr(response.usage, "completion_tokens", None),
                 },
             },
+        )
+        on_validation_error()
+        return {}
+
+    # Only "stop" positively means the model finished on its own. Servers do
+    # return values outside the OpenAI schema, so an unrecognized one is not
+    # treated as fatal -- the coverage check below is what actually catches a
+    # response that came up short.
+    if choice.finish_reason != "stop":
+        logger.warning(
+            "Classification response reported an unrecognized finish_reason=%r; treating it as complete.",
+            choice.finish_reason,
+            extra={"ctx": {"finish_reason": choice.finish_reason}},
+        )
+
+    # Guards the parse below, which raises an opaque TypeError on None. Content
+    # can be absent whenever the model returned something other than a message
+    # (a tool call, or a provider-specific empty completion).
+    if not entities_str or not entities_str.strip():
+        logger.error(
+            "Classification response from the LLM had no content (finish_reason=%r).",
+            choice.finish_reason,
+            extra={"ctx": {"finish_reason": choice.finish_reason}},
         )
         on_validation_error()
         return {}
