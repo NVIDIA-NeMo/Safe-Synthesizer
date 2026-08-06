@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import importlib
+import warnings
 from enum import StrEnum
 from typing import (
     TYPE_CHECKING,
@@ -11,7 +12,7 @@ from typing import (
     Literal,
 )
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from ..configurator.parameters import (
     Parameters,
@@ -222,6 +223,26 @@ class TrainingHyperparams(Parameters):
             ),
         ),
     ] = 0.05
+
+    warmup_ratio: Annotated[
+        float | None,
+        Field(
+            title="warmup_ratio",
+            description="Deprecated. Use warmup_steps instead.",
+            exclude=True,
+        ),
+    ] = None
+
+    @model_validator(mode="after")
+    def _migrate_warmup_ratio(self) -> TrainingHyperparams:
+        if self.warmup_ratio is not None:
+            warnings.warn(
+                "warmup_ratio is deprecated and will be removed in a future release. Use warmup_steps instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            self.warmup_steps = self.warmup_ratio
+        return self
 
     lr_scheduler: Annotated[
         str,
