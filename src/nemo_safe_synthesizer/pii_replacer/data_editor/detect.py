@@ -138,6 +138,7 @@ def _format_prompt(
     df: pd.DataFrame,
     entities: set[str],
     num_samples: Optional[int],
+    column_samples: Optional[dict[str, pd.Series]] = None,
 ) -> Optional[str]:
     """Build the LLM prompt for column classification from sampled DataFrame columns.
 
@@ -145,6 +146,9 @@ def _format_prompt(
         df: DataFrame to sample from.
         entities: Set of valid entity type names.
         num_samples: Number of value samples per column (or ``None`` for default).
+        column_samples: Pre-computed output of ``sample_columns``. Callers that
+            need to know which columns actually reached the prompt can sample
+            once and pass the result here; omitted, it is computed internally.
 
     Returns:
         Formatted prompt string, or ``None`` if no sampleable columns.
@@ -229,7 +233,8 @@ def _format_prompt(
     # Not actually valid json with notes, but it's what AS team has found to work.
     valid_types_str = "\n".join(f"{t}{notes.get(t, '')}," for t in types)
 
-    column_samples = sample_columns(df, num_samples)
+    if column_samples is None:
+        column_samples = sample_columns(df, num_samples)
     if not column_samples:
         return None
     prompt_columns = "\n".join([f"{name}: {', '.join(values)}" for name, values in column_samples.items()])
@@ -260,7 +265,10 @@ def classify_columns(
     Returns:
         Map of column name to entity type (or ``UNKNOWN_ENTITY``).
     """
-    formatted_prompt = _format_prompt(df, entities, num_samples)
+    # Sample once and reuse: the prompt only covers columns that survive
+    # sampling, so this is also the set the response is checked against below.
+    column_samples = sample_columns(df, num_samples)
+    formatted_prompt = _format_prompt(df, entities, num_samples, column_samples)
     if not formatted_prompt:
         return {}
 
@@ -304,7 +312,26 @@ def classify_columns(
         return {}
 
     col_entities = _try_extract_entities(entities_str, on_validation_error)
-    return {col: ent if ent in entities else UNKNOWN_ENTITY for col, ent in col_entities.items()}
+
+    # A response can be well-formed yet cover only some of the columns it was
+    # asked about. Those columns are indistinguishable downstream from ones the
+    # model deliberately typed as UNKNOWN_ENTITY, so name them here rather than
+    # letting the gap pass silently. The partial result is still used -- it
+    # classifies more than the degraded-mode fallback would.
+    missing = [col for col in column_samples if col not in col_entities]
+    if missing:
+        logger.warning(
+            "Classification response covered %d of %d submitted columns. The rest are treated as "
+            "unclassified, so PII in them is only caught if NER covers the column: %s",
+            len(column_samples) - len(missing),
+            len(column_samples),
+            ", ".join(missing),
+            extra={"ctx": {"missing_columns": missing}},
+        )
+
+    # Keyed off the submitted columns, so a column the model invented cannot
+    # enter the map and every submitted column gets an explicit entry.
+    return {col: col_entities[col] if col_entities.get(col) in entities else UNKNOWN_ENTITY for col in column_samples}
 
 
 def sample_columns(df: pd.DataFrame, num_samples: int, random_state: Optional[int] = None) -> dict[str, pd.Series]:
