@@ -12,7 +12,11 @@ json_input=$(cat)
 # Cursor puts the command at .command (beforeShellExecution);
 # Claude Code puts it at .tool_input.command (PreToolUse for Bash).
 command=$(printf '%s\n' "$json_input" | jq -r '.command // .tool_input.command // empty')
-commit_pattern='^[[:space:]]*(env([[:space:]]+[^[:space:]]+)*[[:space:]]+)?git([[:space:]]+-[^[:space:]]+([[:space:]]+("[^"]*"|[^[:space:]]+))?)*[[:space:]]+commit([[:space:]]|$)'
+shell_word="([^[:space:]\"']+|\"[^\"]*\"|'[^']*')+"
+assignment="[A-Za-z_][A-Za-z0-9_]*=(${shell_word})?"
+command_prefix="(${assignment}[[:space:]]+)*(env([[:space:]]+${shell_word})*[[:space:]]+)?(${assignment}[[:space:]]+)*"
+git_global_option="[[:space:]]+-[^[:space:]]+([[:space:]]+${shell_word})?"
+commit_pattern="^[[:space:]]*\\(*[[:space:]]*${command_prefix}git(${git_global_option})*[[:space:]]+commit([[:space:]]|$)"
 
 while IFS= read -r segment; do
     if ! printf '%s\n' "$segment" | grep -qE "$commit_pattern"; then
@@ -22,6 +26,7 @@ while IFS= read -r segment; do
     flag_text=$(printf '%s\n' "$segment" | sed -E \
         -e 's/"[^"]*"//g' \
         -e "s/'[^']*'//g" \
+        -e 's/[()]//g' \
         -e 's/(^|[[:space:]])(-m|--message)(=[^[:space:]]+|[[:space:]]+[^[:space:]]+)//g')
 
     if ! printf '%s\n' "$flag_text" | grep -qE '(^|[[:space:]])(--signoff|-[a-zA-Z]*s[a-zA-Z]*)([[:space:]]|$)'; then
