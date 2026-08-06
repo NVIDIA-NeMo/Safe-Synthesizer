@@ -210,12 +210,16 @@ class TrainingHyperparams(Parameters):
         ),
     ] = 0.01
 
-    warmup_ratio: Annotated[
+    warmup_steps: Annotated[
         float,
         ValueValidator(value_func=lambda v: v > 0),
         Field(
-            title="warmup_ratio",
-            description="Ratio of total training steps used for a linear warmup from 0 to the learning rate. Must be > 0.",
+            title="warmup_steps",
+            description=(
+                "Linear warmup from 0 to the learning rate. "
+                "An integer sets the exact number of warmup steps; "
+                "a float in (0, 1) is treated as a ratio of total training steps. Must be > 0."
+            ),
         ),
     ] = 0.05
 

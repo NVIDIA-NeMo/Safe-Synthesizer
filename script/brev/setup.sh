@@ -268,6 +268,10 @@ env = {
     # Keeps `!uv pip install ...` in a notebook from resolving to the Brev
     # image's own ~/.venv, which uv would otherwise discover by walking up.
     "VIRTUAL_ENV": venv,
+    # bitsandbytes ships binaries for even CUDA releases only (12.6, 12.8, 13.0…).
+    # CUDA 12.9 has no native binary and always falls back to 12.8.
+    # Update to "130" when upgrading CUDA_EXTRA to cu130 or later.
+    "BNB_CUDA_VERSION": "128",
 }
 # Secrets live in the kernelspec because the Jupyter server is not launched
 # from a login shell. The VM is single-tenant and the file is mode 0600.
@@ -342,6 +346,12 @@ rm -f "${KERNEL_JSON}"
 if [[ "${registered}" -ne 1 ]]; then
   log "WARNING: kernel not registered; notebooks may open on the wrong Python"
 fi
+
+# Pre-compile third-party packages that emit SyntaxWarnings on first import so
+# the warnings go into the setup log rather than appearing in notebook output.
+log "pre-compiling packages"
+"${VENV_DIR}/bin/python" -W ignore::SyntaxWarning \
+  -c "import torchao, range_regex" 2>/dev/null || true
 
 # Smoke check -- fail provisioning loudly rather than handing over a broken VM.
 

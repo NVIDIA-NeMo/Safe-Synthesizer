@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import logging
 import os
+import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
@@ -660,11 +661,13 @@ class EntityExtractorGliner(EntityExtractor):
             f"Loading NER model from filesystem to {map_location}",
         )
 
-        extractor._model = GLiNER.from_pretrained(
-            clsfy_cfg.gliner_model,
-            map_location=map_location,
-            local_files_only=hf_offline_enabled(),
-        )
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message="The `resume_download` argument is deprecated", category=UserWarning)
+            extractor._model = GLiNER.from_pretrained(
+                clsfy_cfg.gliner_model,
+                map_location=map_location,
+                local_files_only=hf_offline_enabled(),
+            )
         entity_types = DEFAULT_ENTITIES
         if clsfy_cfg.ner_entities:
             entity_types = clsfy_cfg.ner_entities
@@ -691,7 +694,7 @@ class EntityExtractorGliner(EntityExtractor):
                 flat_ner=False,
             )
 
-        return self._model.batch_predict_entities(
+        return self._model.inference(
             [text],
             entity_labels,
             threshold=self._ner_threshold,
@@ -699,9 +702,9 @@ class EntityExtractorGliner(EntityExtractor):
         )[0]
 
     def _batch_predict_entities(self, texts: list[str], entity_labels: list[str]) -> list[list[dict]]:
-        batch_predict_entities = getattr(self._model, "batch_predict_entities", None)
-        if batch_predict_entities is not None:
-            return batch_predict_entities(
+        inference = getattr(self._model, "inference", None)
+        if inference is not None:
+            return inference(
                 texts,
                 entity_labels,
                 threshold=self._ner_threshold,
@@ -720,7 +723,7 @@ class EntityExtractorGliner(EntityExtractor):
                 for text in texts
             ]
 
-        raise AttributeError("GLiNER model has neither batch_predict_entities nor predict_entities")
+        raise AttributeError("GLiNER model has neither inference nor predict_entities")
 
     def _detect_entities_chunked(
         self,

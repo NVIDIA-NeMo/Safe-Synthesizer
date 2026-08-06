@@ -133,21 +133,23 @@ def params_with_orderby(base_params):
 @pytest.fixture
 def backend(base_params, mock_model_metadata, mock_workdir):
     """Create a HuggingFaceBackend instance for testing."""
-    return HuggingFaceBackend(
+    b = HuggingFaceBackend(
         params=base_params,
         model_metadata=mock_model_metadata,
         workdir=mock_workdir,
     )
+    return b
 
 
 @pytest.fixture
 def backend_with_validation(params_with_validation, mock_model_metadata, mock_workdir):
     """Create a HuggingFaceBackend instance with validation enabled."""
-    return HuggingFaceBackend(
+    b = HuggingFaceBackend(
         params=params_with_validation,
         model_metadata=mock_model_metadata,
         workdir=mock_workdir,
     )
+    return b
 
 
 @pytest.fixture
