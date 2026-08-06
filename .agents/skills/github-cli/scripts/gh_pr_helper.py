@@ -5,7 +5,7 @@
 # gh-pr-helper: fetch PR comments and reply to inline review comments via GitHub API.
 # Run: uv run --script scripts/gh_pr_helper.py -- [args]
 # Auth: GITHUB_TOKEN env var (or --token). Optional fallback: gh auth token.
-# Requires network; in Agent use required_permissions: ["all"].
+# Requires network access through the active client or harness.
 # See: references/workflows.md § Fetch and Address Review Comments.
 #
 # /// script

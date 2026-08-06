@@ -254,8 +254,10 @@ Fixed in commit `beefcafe`. The logic now uses the helper and the test was updat
 Workflow: you can draft the reply with the user in a file (e.g. `reply.md` or `pr-171-reply.md`), edit it until they’re happy, then run `reply <COMMENT_ID> --reply-file path/to/reply.md` to post it. No need to paste a long body on the command line.
 
 - Omit `PR_NUMBER` to use the current branch’s open PR. Optional: `--repo OWNER/REPO`, `--token` / `-t`.
-- In Agent use `required_permissions: ["all"]` (sandbox blocks network; see [Terminal docs](https://cursor.com/docs/agent/tools/terminal)).
-- For batch-verifying many comment locations in parallel, consider an [explore subagent](https://cursor.com/docs/subagents).
+- Request network access through the active client or harness when sandboxing
+  blocks the GitHub API.
+- For large batches, use parallel agent work only when the active client
+  supports it and the user has authorized delegation.
 
 ### Alternative: raw gh / gh api
 

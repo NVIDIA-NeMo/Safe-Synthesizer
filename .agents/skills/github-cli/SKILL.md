@@ -12,7 +12,7 @@ Multi-step workflows (pre-merge checklist, debug CI, release, fetch and reply to
 
 ## Scripts
 
-**PR comments: use the CLI helper** (PEP 723 + Typer + PyGithub + Pydantic). Run from repo root or from this skill directory. No `gh` binary required for fetch/reply (uses GitHub API with `GITHUB_TOKEN` or `--token`; optional fallback: `gh auth token`). If `GITHUB_TOKEN` is not set, run `export GITHUB_TOKEN=$(gh auth token)` before invoking the helper (or pass `--token`). Requires network; in Agent use `required_permissions: ["all"]` per [sandbox behavior](https://cursor.com/docs/agent/tools/terminal).
+**PR comments: use the CLI helper** (PEP 723 + Typer + PyGithub + Pydantic). Run from repo root or from this skill directory. No `gh` binary required for fetch/reply (uses GitHub API with `GITHUB_TOKEN` or `--token`; optional fallback: `gh auth token`). If `GITHUB_TOKEN` is not set, run `export GITHUB_TOKEN=$(gh auth token)` before invoking the helper (or pass `--token`). GitHub operations require network access; request it through the active agent or harness when needed.
 
 Path from repo root: `.agents/skills/github-cli/scripts/gh_pr_helper.py` (or `scripts/gh_pr_helper.py` if symlinked).
 
@@ -27,13 +27,11 @@ Draft the reply with the user in a file, then run with `--reply-file path` to po
 
 Options (all commands): `--repo OWNER/REPO` (default: from git remote), `--token` / `-t` (default: `GITHUB_TOKEN` or `gh auth token`). Full workflow: [references/workflows.md](./references/workflows.md) § Fetch and Address Review Comments.
 
-## Shell Permissions
+## Network Access
 
-Always use `required_permissions: ["all"]` when running `gh` commands. Sandboxed environments fail with TLS certificate errors (`x509: OSStatus -26276`).
-
-## Prefer && Chains
-
-When running multiple sequential commands (pre-flight, commit, push, PR create), chain them with `&&` in a single shell call. Only use separate calls when you need to read intermediate output before deciding the next step.
+Sandboxed environments may block GitHub access. Request network permission
+through the current client or harness; do not assume a client-specific
+permission field.
 
 ## Pre-flight
 
