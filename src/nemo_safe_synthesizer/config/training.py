@@ -241,7 +241,8 @@ class TrainingHyperparams(Parameters):
                 DeprecationWarning,
                 stacklevel=2,
             )
-            self.warmup_steps = self.warmup_ratio
+            if "warmup_steps" not in self.model_fields_set:
+                self.warmup_steps = self.warmup_ratio
         return self
 
     lr_scheduler: Annotated[

@@ -694,12 +694,16 @@ class EntityExtractorGliner(EntityExtractor):
                 flat_ner=False,
             )
 
-        return self._model.inference(
-            [text],
-            entity_labels,
-            threshold=self._ner_threshold,
-            flat_ner=False,
-        )[0]
+        inference = getattr(self._model, "inference", None)
+        if inference is not None:
+            return inference(
+                [text],
+                entity_labels,
+                threshold=self._ner_threshold,
+                flat_ner=False,
+            )[0]
+
+        raise AttributeError("GLiNER model has neither inference nor predict_entities")
 
     def _batch_predict_entities(self, texts: list[str], entity_labels: list[str]) -> list[list[dict]]:
         inference = getattr(self._model, "inference", None)
