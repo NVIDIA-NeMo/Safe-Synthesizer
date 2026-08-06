@@ -58,6 +58,7 @@ PyTorch wheels come from dedicated indexes, not PyPI:
 | `pytorch-cu129` | `download.pytorch.org/whl/cu129` | torch, torchvision, triton (CUDA) |
 | `nv-shared-pypi-local` | NVIDIA Artifactory | Internal NVIDIA packages |
 | `flashinfer-jit-cache-cu129` | `flashinfer.ai/whl/cu129` | FlashInfer JIT cache |
+| `flashinfer-jit-cache-cu130` | `flashinfer.ai/whl/cu130` | FlashInfer JIT cache |
 | `nvidia-pypi-public` | `pypi.nvidia.com` | Public NVIDIA packages |
 
 All indexes are `explicit = true` (only used when a package is mapped to them in `[tool.uv.sources]`).

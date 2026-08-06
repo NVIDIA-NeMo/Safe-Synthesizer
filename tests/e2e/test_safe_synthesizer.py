@@ -18,19 +18,24 @@ import pytest
 # Skip all tests in this module if sentence_transformers is not available
 pytest.importorskip(
     "sentence_transformers",
-    reason="sentence_transformers and a GPU are required for these tests (install with: mise run bootstrap-nss cu129)",
+    reason=(
+        "sentence_transformers and a GPU are required for these tests "
+        "(install with: mise run bootstrap-nss cu129 or cu130)"
+    ),
 )
 
 # Skip all tests in this module if vllm is not properly available.
 vllm = pytest.importorskip(
     "vllm",
-    reason="vllm with GPU support is required for these tests (install with: mise run bootstrap-nss cu129)",
+    reason=("vllm with GPU support is required for these tests (install with: mise run bootstrap-nss cu129 or cu130)"),
 )
 
 try:
     importlib.import_module("vllm")
 except ImportError:
-    skip_reason = "vllm with GPU support is required for these tests (install with: mise run bootstrap-nss cu129)"
+    skip_reason = (
+        "vllm with GPU support is required for these tests (install with: mise run bootstrap-nss cu129 or cu130)"
+    )
     pytest.skip(skip_reason, allow_module_level=True)  # ty: ignore[invalid-argument-type,too-many-positional-arguments]
 
 

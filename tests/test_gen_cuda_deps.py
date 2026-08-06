@@ -350,6 +350,7 @@ def test_repository_cuda_variant_dependencies_and_sources(pytestconfig: pytest.C
         {"index": "flashinfer-jit-cache-cu129", "marker": "sys_platform == 'linux'", "extra": "cu129"},
         {"index": "flashinfer-jit-cache-cu130", "marker": "sys_platform == 'linux'", "extra": "cu130"},
     ]
+    assert parsed["tool"]["uv"]["sources"]["nvidia-cublas"] == [{"index": "nvidia-pypi-public"}]
     indexes = {index["name"]: index["url"] for index in parsed["tool"]["uv"]["index"]}
     assert indexes["flashinfer-jit-cache-cu129"] == "https://flashinfer.ai/whl/cu129"
     assert indexes["flashinfer-jit-cache-cu130"] == "https://flashinfer.ai/whl/cu130"
