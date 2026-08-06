@@ -809,11 +809,10 @@ def test_sequential_assembler_initial_prefill(
     assert "A" in prefill
     assert "B" in prefill
 
-    # Pin the exact byte shape: a leading space, then newline-terminated
-    # training-dialect (pandas to_json) records with single newlines between
-    # them -- the same shape training examples use. Blank lines or Python
-    # json.dumps spacing here would put the generation prompt in a dialect
-    # the model never saw in training.
+    # Pin the saved metadata shape retained for the internal training-prefill
+    # path: a leading space, then newline-terminated pandas-JSON records with
+    # single newlines between them. Production partial-prefix prompts assemble
+    # their special-token boundary independently.
     assert prefill["A"] == (
         ' {"group":"A","time":1,"value":10}\n{"group":"A","time":2,"value":20}\n{"group":"A","time":3,"value":30}\n'
     )

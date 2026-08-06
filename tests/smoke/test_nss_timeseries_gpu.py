@@ -48,3 +48,8 @@ def test_nss_timeseries_train_and_generate(fixture_local_tinyllama_dir, fixture_
     from nemo_safe_synthesizer.generation.timeseries_backend import TimeseriesBackend
 
     assert isinstance(nss.generator, TimeseriesBackend)
+    assert nss.generator._group_initial_prefixes
+    assert all(
+        prefix.startswith('{"group_id":') and ',"timestamp":' in prefix and prefix.endswith(',"')
+        for prefix in nss.generator._group_initial_prefixes.values()
+    )

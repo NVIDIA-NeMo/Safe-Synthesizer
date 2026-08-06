@@ -3,7 +3,6 @@
 
 """Unit tests for the TimeseriesBackend class private methods."""
 
-import json
 import re
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -11,7 +10,6 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 import pytest
 from transformers import PretrainedConfig
-from vllm.exceptions import VLLMValidationError
 from vllm.sampling_params import SamplingParams
 
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
@@ -22,10 +20,12 @@ from nemo_safe_synthesizer.config import (
     TimeSeriesParameters,
     TrainingHyperparams,
 )
+from nemo_safe_synthesizer.data_processing.assembler import Example
 from nemo_safe_synthesizer.data_processing.record_utils import ParsedRecord
 from nemo_safe_synthesizer.defaults import DEFAULT_MAX_SEQ_LENGTH, PSEUDO_GROUP_COLUMN
+from nemo_safe_synthesizer.errors import GenerationError
 from nemo_safe_synthesizer.generation.processors import TimeSeriesDataProcessor
-from nemo_safe_synthesizer.generation.results import GenerationBatches
+from nemo_safe_synthesizer.generation.results import GenerationBatches, GenerationStatus
 from nemo_safe_synthesizer.generation.timeseries_backend import (
     GroupProcessingResult,
     GroupState,
@@ -37,7 +37,7 @@ from nemo_safe_synthesizer.llm.metadata import (
     ModelMetadata,
 )
 
-PROMPT_TEMPLATE = "[INST] {instruction} {schema} [/INST]"
+PROMPT_TEMPLATE = "[INST] {instruction} {schema} [/INST]{prefill}"
 
 
 @pytest.fixture(scope="session")
@@ -160,9 +160,13 @@ def mock_workdir(fixture_session_cache_dir):
 def create_timeseries_backend(config: SafeSynthesizerParameters, model_metadata, workdir, schema=None):
     """Helper to create a TimeseriesBackend instance with patched file dependencies."""
     if schema is None:
+        timestamp_column = config.time_series.timestamp_column
+        assert timestamp_column is not None
+        timestamp_type = "integer" if config.time_series.timestamp_format == "elapsed_seconds" else "string"
         schema = {
             "properties": {
-                "timestamp": {"type": "string"},
+                "group_id": {"type": "string"},
+                timestamp_column: {"type": timestamp_type},
                 "value": {"type": "integer"},
             }
         }
@@ -373,6 +377,69 @@ class TestBuildProgressSnapshots:
         assert len(thresholds) == len(set(thresholds))
 
 
+class TestInitGroupState:
+    """Tests for partial-record group initialization."""
+
+    def test_initializes_with_partial_record_prefix(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
+
+        state = backend._init_group_state("group_A")
+
+        expected = '{"group_id":"group_A","timestamp":"2024-01-01 00:00:00","'
+        assert state.initial_prefill == expected
+        assert state.current_prefill == expected
+        assert state.processor_prefix == expected
+        assert state.last_timestamp_seconds is None
+        assert backend._group_prefills["group_A"].startswith('{"timestamp"')
+        assert backend._prefill_context_size == 3
+
+    def test_prompt_tokens_match_training_example_prefix(
+        self,
+        timeseries_base_params,
+        timeseries_model_metadata,
+        mock_workdir,
+        fixture_tokenizer,
+    ):
+        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
+        backend.llm = MagicMock()
+        backend.llm.get_tokenizer.return_value = fixture_tokenizer
+        partial_prefix = backend._init_group_state("group_A").initial_prefill
+        complete_record = f'{partial_prefix}value":3}}\n'
+        prompt = timeseries_model_metadata.prompt_config.template.format(
+            instruction=timeseries_model_metadata.instruction,
+            schema=backend._schema_fragment,
+            prefill="",
+        )
+        example = Example(
+            prompt=prompt,
+            tokenizer=fixture_tokenizer,
+            metadata=timeseries_model_metadata,
+        )
+        record_ids = fixture_tokenizer.encode(complete_record, add_special_tokens=False)
+        example.add_sequence(
+            {"input_ids": record_ids, "attention_mask": [1] * len(record_ids)},
+            add_special_tokens=True,
+        )
+
+        generation_ids = backend._build_prompt_token_ids(partial_prefix)
+
+        assert example.input_ids[: len(generation_ids)] == generation_ids
+
+    def test_rejects_incompatible_saved_schema(self, timeseries_base_params, timeseries_model_metadata, mock_workdir):
+        schema = {
+            "properties": {
+                "value": {"type": "integer"},
+                "group_id": {"type": "string"},
+                "timestamp": {"type": "string"},
+            }
+        }
+
+        with pytest.raises(GenerationError, match="Retrain the artifact"):
+            create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir, schema)
+
+
 class TestUpdateGroupState:
     """Tests for the _update_group_state method."""
 
@@ -382,8 +449,9 @@ class TestUpdateGroupState:
 
         state = GroupState(
             group_id="test",
-            initial_prefill="",
-            current_prefill="",
+            initial_prefill='{"group_id":"test","timestamp":"2024-01-01 00:00:00","',
+            current_prefill='{"group_id":"test","timestamp":"2024-01-01 00:00:00","',
+            processor_prefix='{"group_id":"test","timestamp":"2024-01-01 00:00:00","',
             expected_records=10,
         )
 
@@ -402,12 +470,46 @@ class TestUpdateGroupState:
 
         assert len(state.recent_records) == 2
         # The rebuilt prefill must reuse the records' emitted text verbatim
-        # (training dialect) and mirror the initial prefill's shape: leading
-        # space, newline-terminated records, single newlines between them.
+        # (training dialect): no leading whitespace, newline-terminated records,
+        # and single newlines between them.
         assert state.current_prefill == (
-            ' {"timestamp":"2024-01-01 00:00:00","value":1}\n{"timestamp":"2024-01-01 01:00:00","value":2}\n'
+            '{"timestamp":"2024-01-01 00:00:00","value":1}\n{"timestamp":"2024-01-01 01:00:00","value":2}\n'
         )
         assert state.last_timestamp_seconds is not None
+        assert state.processor_prefix == ""
+
+    def test_keeps_processor_prefix_when_no_records_are_accepted(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
+        state = backend._init_group_state("group_A")
+
+        backend._update_group_state(state, [])
+
+        assert state.processor_prefix == state.initial_prefill
+        assert state.current_prefill == state.initial_prefill
+
+    def test_truncates_context_without_reserializing_records(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
+        backend._prefill_context_size = 1
+        state = backend._init_group_state("group_A")
+        records = [
+            ParsedRecord(
+                text='{"group_id":"group_A","timestamp":"2024-01-01 00:00:00","value":1}',
+                parsed={"group_id": "group_A", "timestamp": "2024-01-01 00:00:00", "value": 1},
+            ),
+            ParsedRecord(
+                text='{"group_id":"group_A","timestamp":"2024-01-01 01:00:00","value":2}',
+                parsed={"group_id": "group_A", "timestamp": "2024-01-01 01:00:00", "value": 2},
+            ),
+        ]
+
+        backend._update_group_state(state, records)
+
+        assert state.recent_records == [records[-1]]
+        assert state.current_prefill == f"{records[-1].text}\n"
 
     def test_updates_timestamp_for_empty_string_column_name(
         self, timeseries_base_params, timeseries_model_metadata, mock_workdir
@@ -498,20 +600,87 @@ class TestBuildModifiedSamplingParamsStopPropagation:
         assert modified.stop == []
         assert modified.stop_token_ids == []
 
+    def test_clamps_max_tokens_to_current_rolling_prompt(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
+
+        modified, _ = backend._build_modified_sampling_params(
+            SamplingParams(max_tokens=1000),
+            num_active=2,
+            max_prompt_tokens=1800,
+        )
+
+        assert modified.max_tokens == 248
+
+    def test_rejects_rolling_prompt_that_fills_context(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
+
+        with pytest.raises(GenerationError, match="leaves no room"):
+            backend._build_modified_sampling_params(
+                SamplingParams(max_tokens=1000),
+                num_active=2,
+                max_prompt_tokens=timeseries_model_metadata.max_seq_length,
+            )
+
 
 class TestGenerateParallelGroups:
     """Tests for processing vLLM completions during parallel time-series generation."""
 
-    def test_records_completion_finish_reasons(self, timeseries_base_params, timeseries_model_metadata, mock_workdir):
+    def test_uses_per_group_retries_instead_of_global_zero_record_stop(
+        self,
+        timeseries_base_params,
+        timeseries_model_metadata,
+        mock_workdir,
+        fixture_tokenizer,
+    ):
+        timeseries_base_params.generation.patience = 2
+        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
+        backend.llm = MagicMock()
+        backend.llm.get_tokenizer.return_value = fixture_tokenizer
+        backend.llm.generate.return_value = [
+            SimpleNamespace(
+                outputs=[
+                    SimpleNamespace(
+                        finish_reason="stop",
+                        text="not-json",
+                        token_ids=[1, 2, 3],
+                    )
+                ]
+            )
+        ]
+        backend._groups = ["group_A"]
+        batches = GenerationBatches(target_num_records=100)
+
+        all_groups_succeeded = backend._generate_parallel_groups(
+            batches=batches,
+            sampling_params=SamplingParams(max_tokens=10),
+            progress_snapshots=[],
+        )
+
+        assert all_groups_succeeded is False
+        assert backend.llm.generate.call_count == 2
+        assert batches.status == GenerationStatus.IN_PROGRESS
+
+    def test_records_completion_finish_reasons(
+        self,
+        timeseries_base_params,
+        timeseries_model_metadata,
+        mock_workdir,
+        fixture_tokenizer,
+    ):
         """The generated batch should preserve vLLM finish reasons for stopping logic."""
         backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
         backend.llm = MagicMock()
+        backend.llm.get_tokenizer.return_value = fixture_tokenizer
         backend.llm.generate.return_value = [
             SimpleNamespace(
                 outputs=[
                     SimpleNamespace(
                         finish_reason="length",
-                        text='{"timestamp": "2024-01-01 01:00:00", "value": 3}\n',
+                        text='value":3}\n',
                         token_ids=[1, 2, 3],
                     )
                 ]
@@ -522,6 +691,7 @@ class TestGenerateParallelGroups:
         captured = {}
 
         def _capture_result(state, batch, invalid_fraction_threshold):  # noqa: ARG001
+            captured["state"] = state
             captured["batch"] = batch
             return GroupProcessingResult.COMPLETED
 
@@ -537,6 +707,16 @@ class TestGenerateParallelGroups:
         )
 
         assert captured["batch"].finish_reasons["length"] == 1
+        assert captured["batch"]._responses[0].valid_records == [
+            {
+                "group_id": "group_A",
+                "timestamp": "2024-01-01 00:00:00",
+                "value": 3,
+            }
+        ]
+        assert captured["state"].processor_prefix.startswith('{"group_id":"group_A"')
+        prompts = backend.llm.generate.call_args.kwargs["prompts"]
+        assert prompts == [{"prompt_token_ids": backend._build_prompt_token_ids(captured["state"].current_prefill)}]
         assert batches.num_length_truncated_completions == 1
 
 
@@ -547,29 +727,22 @@ class TestGenerationMaxTokensPlumbing:
         """Tiny tokenizer stand-in that makes long text payloads countable."""
 
         @staticmethod
-        def encode(text: str) -> list[str]:
-            return re.compile(r"\s+").split(text)
-
-    @staticmethod
-    def _jsonl_prefill_from_dataframe(df: pd.DataFrame, rows: int = 3) -> str:
-        """Serialize seed rows like a time-series initial prefill."""
-        return " " + "\n".join(json.dumps(record) for record in df.head(rows).to_dict("records"))
+        def encode(text: str, *, add_special_tokens: bool) -> list[int]:
+            assert add_special_tokens is False
+            return list(range(len(re.compile(r"\s+").split(text))))
 
     @staticmethod
     def _capture_sampling_params(
         backend,
         *,
-        groups: list[str] | None = None,
-        group_prefills: dict[str, str] | None = None,
         prompt_token_count: int | None = None,
     ) -> SamplingParams:
         """Invoke ``generate`` with ``_generate_parallel_groups`` stubbed out.
 
-        Returns the ``SamplingParams`` the backend constructed. ``groups``
-        and ``group_prefills`` seed minimal state so ``generate()`` reaches
-        SamplingParams construction; ``prompt_token_count`` overrides the
-        backend's prompt-token helper to drive the prompt-length clamp
-        deterministically without standing up a real vLLM engine.
+        Returns the ``SamplingParams`` the backend constructed.
+        ``prompt_token_count`` overrides the backend's prompt-token helper to
+        drive the prompt-length clamp deterministically without standing up a
+        real vLLM engine.
         """
         captured: dict[str, SamplingParams] = {}
 
@@ -578,8 +751,7 @@ class TestGenerationMaxTokensPlumbing:
             raise StopIteration("short-circuit")
 
         backend._generate_parallel_groups = _capture
-        backend._groups = groups if groups is not None else []
-        backend._group_prefills = group_prefills if group_prefills is not None else {}
+        backend._groups = []
         if prompt_token_count is not None:
             backend._get_prompt_token_count = MagicMock(return_value=prompt_token_count)
 
@@ -627,25 +799,31 @@ class TestGenerationMaxTokensPlumbing:
         assert sp.max_tokens == timeseries_model_metadata.max_seq_length - 1500
         assert sp.max_tokens < int(1500 * GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER)
 
-    def test_dataset_shaped_prefill_can_consume_entire_context(
+    def test_partial_prefix_does_not_copy_wide_training_rows_into_prompt(
         self, fixture_pems_sf_sample_dataset, timeseries_elapsed_params, timeseries_model_metadata, mock_workdir
     ):
-        """The wide PEMS-SF fixture can make three seed rows consume the full context."""
+        """A partial prefix leaves generation room even when saved training rows are wide."""
         pems_df = fixture_pems_sf_sample_dataset.to_pandas()
         timeseries_elapsed_params.data.group_training_examples_by = "e_id"
         timeseries_elapsed_params.data.order_training_examples_by = "s_index"
         timeseries_elapsed_params.time_series.timestamp_column = "s_index"
         timeseries_elapsed_params.time_series.stop_timestamp = "4"
         timeseries_model_metadata.max_tokens_per_example = None
-        timeseries_model_metadata.initial_prefill = {"0": self._jsonl_prefill_from_dataframe(pems_df)}
-        schema = {"properties": {column: {"type": "number"} for column in pems_df.columns}}
+        timeseries_model_metadata.initial_prefill = {
+            "0": " " + pems_df.head(3).to_json(orient="records", lines=True),
+        }
+        ordered_columns = [
+            "e_id",
+            "s_index",
+            *(column for column in pems_df.columns if column not in {"e_id", "s_index"}),
+        ]
+        schema = {"properties": {column: {"type": "number"} for column in ordered_columns}}
         backend = create_timeseries_backend(timeseries_elapsed_params, timeseries_model_metadata, mock_workdir, schema)
         backend.llm = MagicMock()
         backend.llm.get_tokenizer.return_value = self._WhitespaceTokenizer()
 
         prompt_len = backend._get_prompt_token_count()
 
-        assert prompt_len >= timeseries_model_metadata.max_seq_length
-        assert timeseries_model_metadata.generation_max_tokens_for(prompt_len) == 0
-        with pytest.raises(VLLMValidationError, match="max_tokens must be at least 1"):
-            backend.generate()
+        assert backend._group_initial_prefixes == {"0": '{"e_id":0.0,"s_index":0.0,"'}
+        assert prompt_len < timeseries_model_metadata.max_seq_length
+        assert timeseries_model_metadata.generation_max_tokens_for(prompt_len) > 0

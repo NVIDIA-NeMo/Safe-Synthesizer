@@ -262,9 +262,10 @@ these conditions are met:
 ### Initial prefill
 
 For each group, the first 3 training records are stored as `initial_prefill` --
-a dictionary mapping group IDs to seed text. During generation, the
-time-series backend uses these prefill strings to prime the model's context for
-each group.
+a dictionary mapping group IDs to sample text. The time-series backend retains
+this metadata to recover the groups present during training, but production
+generation does not insert those training rows into prompts. Instead, it starts
+each group from a partial first record containing the known identity fields.
 
 ### Concrete example
 
@@ -449,19 +450,41 @@ When no BOS/EOS delimiters are found, behavior depends on
 The `TimeseriesBackend` generates one group at a time using a sliding-window
 strategy:
 
-1. Generation is seeded with an `initial_prefill` -- the first 3 records from
-   training data for that group.
-2. The model generates a continuation. Valid records are appended to the
-   group's context window.
-3. The updated context (most recent records) becomes the prefill for the
-   next prompt.
-4. This repeats until the target time range is covered or retries are
+1. Generation starts an incomplete JSON record containing the group ID (for
+   grouped data), configured start timestamp, and opening quote of the next
+   field name.
+2. The model generates the remaining fields. The backend prepends the known
+   prefix before parsing and validation.
+3. Once a complete record is accepted, the constructed prefix is cleared and
+   exact accepted record text is appended to the group's rolling context.
+4. The three most recent accepted records become the prefill for the next
+   prompt.
+5. This repeats until the target time range is covered or retries are
    exhausted.
+
+The backend submits pre-tokenized prompts that reproduce the same special-token
+layout as sequential training: the configured schema-prompt BOS/EOS tokens,
+followed by the record-sequence BOS token and then the JSON bytes. There is no
+whitespace between the sequence BOS and the first `{`. The JSON-only partial
+prefix is tracked separately and prepended to the first completion for parsing,
+so special tokens never enter record validation. The prefix includes the full
+`,"` token at its end because stopping at the preceding comma can tokenize
+differently from the beginning of a complete training record.
 
 Because each prompt sees the model's own prior output, sequential mode
 preserves temporal continuity -- timestamps, intervals, and trends carry
 forward naturally. The trade-off is that generation is inherently serial per
 group (though multiple groups are processed in parallel batches).
+
+Completion length is recalculated for each parallel batch from its longest
+current prompt. This accounts for the three-record rolling context and prevents
+prompt plus completion from exceeding the model context window.
+
+Preprocessing places the group and timestamp columns first in the persisted
+schema and training JSONL. This lets the partial record match the field order
+seen during training. Older artifacts whose saved schema uses another order
+must be retrained; generation fails explicitly instead of silently changing
+prompting behavior.
 
 ---
 

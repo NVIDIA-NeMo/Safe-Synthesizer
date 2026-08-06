@@ -34,6 +34,7 @@ def test_process_timeseries_data_adds_pseudo_group_and_elapsed_timestamp():
     assert result_config.time_series.stop_timestamp == "120"
     assert list(df_result["elapsed_seconds"]) == [0, 60, 120]
     assert df_result[PSEUDO_GROUP_COLUMN].nunique() == 1
+    assert list(df_result.columns) == [PSEUDO_GROUP_COLUMN, "elapsed_seconds", "value"]
 
 
 def test_process_timeseries_data_preserves_existing_group_column():
@@ -51,15 +52,16 @@ def test_process_timeseries_data_preserves_existing_group_column():
     assert PSEUDO_GROUP_COLUMN not in df_result.columns
     assert result_config.data.group_training_examples_by == "group_id"
     assert list(df_result["elapsed_seconds"]) == [0, 60, 0, 60]
+    assert list(df_result.columns) == ["group_id", "elapsed_seconds", "value"]
 
 
 def test_process_timeseries_data_sorts_by_group_and_timestamp():
     """Processed data is sorted by group and timestamp."""
     df = pd.DataFrame(
         {
-            "group_id": ["B", "A", "B", "A"],
-            "timestamp": [2, 1, 1, 2],
             "value": [1, 2, 3, 4],
+            "timestamp": [2, 1, 1, 2],
+            "group_id": ["B", "A", "B", "A"],
         }
     )
     config = SafeSynthesizerParameters.from_params(
@@ -73,6 +75,7 @@ def test_process_timeseries_data_sorts_by_group_and_timestamp():
     df_result, _ = process_timeseries_data(df.copy(), config)
 
     # Should be sorted: A-1, A-2, B-1, B-2
+    assert list(df_result.columns) == ["group_id", "timestamp", "value"]
     assert list(df_result["group_id"]) == ["A", "A", "B", "B"]
     assert list(df_result["timestamp"]) == [1, 2, 1, 2]
 

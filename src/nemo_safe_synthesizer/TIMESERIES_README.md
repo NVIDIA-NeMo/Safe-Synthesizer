@@ -123,6 +123,11 @@ Time series preprocessing occurs during training data preparation in `src/nemo_s
    - If timestamps differ across groups, raises a `DataError`.
    - Sets `start_timestamp` and `stop_timestamp` in config based on validated values.
 
+8. Identity Column Ordering
+   - Places the group and timestamp columns before all generated value columns.
+   - This order is persisted in the schema and training JSONL so generation can begin with those known fields.
+   - The pseudo-group remains internal and is excluded from the persisted schema.
+
 ### Code Flow
 
 ```
@@ -135,6 +140,7 @@ HuggingFaceBackend._process_timeseries()
             │       ├── group length validation
             │       ├── interval consistency validation
             │       └── start/stop consistency validation
+            ├── order group and timestamp columns first
             └── Return (processed_df, updated_config)
 ```
 
@@ -159,8 +165,8 @@ The `SequentialExampleAssembler` in `src/nemo_safe_synthesizer/data_processing/a
 
 5. Initial Prefill Extraction
    - Dictionary mapping each group to its first 3 decoded samples (including pseudo-group for single sequences).
-   - Stored in `model_metadata.initial_prefill` for use during generation.
-   - Used by `TimeseriesBackend` to seed each group's context.
+   - Stored in `model_metadata.initial_prefill` so generation can recover the trained group IDs.
+   - Retained internally for future prompting work, but not inserted into production generation prompts.
 
 6. Train/Test Split
    - Split is done by group boundaries using `grouped_train_test_split`.
@@ -228,16 +234,29 @@ TimeseriesBackend(VllmBackend)
 ### Key Concepts
 
 - Time-Range Based Generation: The number of records generated is determined by `(stop_timestamp - start_timestamp) / interval_seconds`, not by a target count. The `config.generation.num_records` parameter is used only for progress tracking.
-- Sliding Window: Maintains a window of recent records (controlled by `_prefill_context_size`) included in each prompt for context continuity.
+- Partial-Record Initialization: Every group starts with an incomplete JSON record containing its known group ID and start timestamp, plus the opening quote of the next field name. Including the complete training `,"` token makes the prefix tokenization identical to a full training record while leaving the field name and value for the model.
+- Training-Dialect Serialization: Constructed prefixes and rolling records use the same compact JSON representation as training, including escaped slashes and schema field order.
+- Training-Compatible Token Boundary: Generation explicitly reproduces the prompt BOS/EOS settings and sequence BOS token used by training. The first JSON byte follows the sequence BOS directly, without added whitespace.
+- Sliding Window: Maintains the three most recent generated records for context continuity.
+- Rolling Context Budget: Each generation batch clamps `max_tokens` against its longest current rolling prompt so prompt plus completion cannot exceed the model context.
 - Groups from Training: Groups are the same as those seen during training (from `model_metadata.initial_prefill`).
+
+!!! note "Artifact compatibility"
+    Newly trained artifacts persist group and timestamp fields first and support
+    partial-record generation directly. An older artifact remains compatible
+    only when its saved schema already begins with those identity fields.
+    Generation otherwise raises an actionable error requiring retraining rather
+    than constructing a prompt in a field order the model did not observe.
 
 ### Sliding Window Approach
 
-1. Prefill Initialization: Start with initial prefill from training data (first 3 records per group).
-2. Batch Generation: Generate multiple samples (default 5) per prompt for each active group.
-3. Response Selection: Keep the response with the most valid records per group.
-4. Context Update: Update sliding window with new valid records.
-5. Repeat: Continue until stop timestamp is reached for each group.
+1. Partial Prefix Initialization: Start an incomplete first record with the group and start timestamp fields.
+2. Token-Prompt Assembly: Reproduce the training prompt and sequence special-token boundary, then append the partial or rolling JSON bytes.
+3. Batch Generation: Clamp completion length to the remaining context and generate multiple candidate suffixes (default 5) per prompt for each active group.
+4. Record Reconstruction: Prepend the JSON-only partial prefix before parsing each candidate.
+5. Response Selection: Keep the response with the most valid records per group.
+6. Context Update: Clear the partial prefix and update the sliding window with exact accepted record text.
+7. Repeat: Continue until stop timestamp is reached for each group.
 
 ### Key Parameters
 
@@ -245,14 +264,14 @@ TimeseriesBackend(VllmBackend)
 |-----------|-------|-------------|
 | `_samples_per_prompt` | 5 | Number of samples generated per prompt |
 | `_max_prompts_per_batch` | 100 | Max prompts per batch in parallel generation |
-| `_prefill_context_size` | 3 | Number of recent records in sliding window |
+| `_prefill_context_size` | 3 | Internal number of recent records in the sliding window |
 
 ### Parallel Group Generation Flow
 
 All time series use parallel group generation (single-sequence is just 1 group):
 
 ```
-1. Initialize GroupState for each group with prefill from training
+1. Initialize GroupState for each group with a partial first record
 2. Compute expected records per group: (stop - start) / interval + 1
 3. While groups remain pending or active:
    a. Fill active slots with pending groups (up to max_groups_per_batch)
@@ -278,9 +297,10 @@ Each group maintains independent state:
 @dataclass
 class GroupState:
     group_id: str
-    initial_prefill: str           # Original prefill (first few records)
+    initial_prefill: str           # Partial first-record prefix
     current_prefill: str           # Updated as generation progresses
-    recent_records: list[dict]     # Sliding window context
+    recent_records: list[ParsedRecord]  # Exact-text sliding window context
+    processor_prefix: str          # Prepended until the first record is accepted
     expected_records: int          # Based on (stop - start) / interval
     last_timestamp_seconds: int | None
     low_valid_fraction_count: int  # Counter for consecutive bad batches
@@ -298,8 +318,11 @@ Per-Group Stopping:
 
 Global Stopping:
 - Natural completion: All groups processed (pending and active lists empty).
-- No records: Too many consecutive batches with no valid records globally.
-- Target reached: Target number of records reached (for progress tracking).
+- Per-group retry state is authoritative. A zero-valid result for one group does
+  not trigger the generic global no-record stop while other parallel groups can
+  still progress.
+- `num_records` remains a progress target and does not stop time-range-based
+  generation.
 
 ### Progress Checkpoints
 
