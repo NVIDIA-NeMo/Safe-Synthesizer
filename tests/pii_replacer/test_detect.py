@@ -339,7 +339,7 @@ def test_format_prompt_renders_template_and_samples():
             "count_col": [7],
         }
     )
-    prompt = _format_prompt(df, DEFAULT_ENTITIES, num_samples=2)
+    prompt = _format_prompt(sample_columns(df, num_samples=2), DEFAULT_ENTITIES)
     assert prompt is not None
     assert "Valid types are: [" in prompt
     assert "Additional instructions:" in prompt
@@ -359,7 +359,7 @@ def test_format_prompt_includes_custom_entity_types():
     """User-defined entity names are appended to the valid-types list before 'none'."""
     custom = "custom_entity_acme"
     df = pd.DataFrame({"x": [1]})
-    prompt = _format_prompt(df, DEFAULT_ENTITIES | {custom}, num_samples=1)
+    prompt = _format_prompt(sample_columns(df, num_samples=1), DEFAULT_ENTITIES | {custom})
     assert prompt is not None
     assert f"{custom}," in prompt
     none_idx = prompt.index(f"{UNKNOWN_ENTITY},")
@@ -378,7 +378,7 @@ def test_format_prompt_returns_none_without_sampleable_columns():
             "ColC": [np.nan, np.nan, np.nan],
         }
     )
-    assert _format_prompt(df, DEFAULT_ENTITIES, num_samples=3) is None
+    assert _format_prompt(sample_columns(df, num_samples=3), DEFAULT_ENTITIES) is None
 
 
 def test_no_columns_after_filter():

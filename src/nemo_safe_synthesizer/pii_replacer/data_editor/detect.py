@@ -143,23 +143,21 @@ Output:
 
 
 def _format_prompt(
-    df: pd.DataFrame,
+    column_samples: dict[str, pd.Series],
     entities: set[str],
-    num_samples: Optional[int],
-    column_samples: Optional[dict[str, pd.Series]] = None,
 ) -> Optional[str]:
     """Build the LLM prompt for column classification from sampled DataFrame columns.
 
+    Takes the samples rather than the frame so the caller keeps hold of which
+    columns actually reached the prompt -- ``classify_columns`` checks the
+    response against exactly that set.
+
     Args:
-        df: DataFrame to sample from.
+        column_samples: Output of ``sample_columns``: column name to sampled values.
         entities: Set of valid entity type names.
-        num_samples: Number of value samples per column (or ``None`` for default).
-        column_samples: Pre-computed output of ``sample_columns``. Callers that
-            need to know which columns actually reached the prompt can sample
-            once and pass the result here; omitted, it is computed internally.
 
     Returns:
-        Formatted prompt string, or ``None`` if no sampleable columns.
+        Formatted prompt string, or ``None`` if there are no sampled columns.
     """
     types = [
         "certificate_license_number",
@@ -241,8 +239,6 @@ def _format_prompt(
     # Not actually valid json with notes, but it's what AS team has found to work.
     valid_types_str = "\n".join(f"{t}{notes.get(t, '')}," for t in types)
 
-    if column_samples is None:
-        column_samples = sample_columns(df, num_samples)
     if not column_samples:
         return None
     prompt_columns = "\n".join([f"{name}: {', '.join(values)}" for name, values in column_samples.items()])
@@ -273,10 +269,10 @@ def classify_columns(
     Returns:
         Map of column name to entity type (or ``UNKNOWN_ENTITY``).
     """
-    # Sample once and reuse: the prompt only covers columns that survive
-    # sampling, so this is also the set the response is checked against below.
+    # Sampling drops all-NaN and over-long columns, so this is the set that
+    # actually reaches the prompt -- and the set the response is checked against.
     column_samples = sample_columns(df, num_samples)
-    formatted_prompt = _format_prompt(df, entities, num_samples, column_samples)
+    formatted_prompt = _format_prompt(column_samples, entities)
     if not formatted_prompt:
         return {}
 
@@ -307,9 +303,8 @@ def classify_columns(
     # failure so the caller falls back instead of trusting partial output.
     if choice.finish_reason in INCOMPLETE_FINISH_REASONS:
         logger.error(
-            "Classification response from the LLM did not run to completion "
-            "(finish_reason=%r); discarding the partial result.",
-            choice.finish_reason,
+            f"Classification response from the LLM did not run to completion "
+            f"(finish_reason={choice.finish_reason!r}); discarding the partial result.",
             extra={
                 "ctx": {
                     "finish_reason": choice.finish_reason,
@@ -327,8 +322,8 @@ def classify_columns(
     # response that came up short.
     if choice.finish_reason != "stop":
         logger.warning(
-            "Classification response reported an unrecognized finish_reason=%r; treating it as complete.",
-            choice.finish_reason,
+            f"Classification response reported an unrecognized finish_reason={choice.finish_reason!r}; "
+            "treating it as complete.",
             extra={"ctx": {"finish_reason": choice.finish_reason}},
         )
 
@@ -337,8 +332,7 @@ def classify_columns(
     # (a tool call, or a provider-specific empty completion).
     if not entities_str or not entities_str.strip():
         logger.error(
-            "Classification response from the LLM had no content (finish_reason=%r).",
-            choice.finish_reason,
+            f"Classification response from the LLM had no content (finish_reason={choice.finish_reason!r}).",
             extra={"ctx": {"finish_reason": choice.finish_reason}},
         )
         on_validation_error()
@@ -354,11 +348,9 @@ def classify_columns(
     missing = [col for col in column_samples if col not in col_entities]
     if missing:
         logger.warning(
-            "Classification response covered %d of %d submitted columns. The rest are treated as "
-            "unclassified, so PII in them is only caught if NER covers the column: %s",
-            len(column_samples) - len(missing),
-            len(column_samples),
-            ", ".join(missing),
+            f"Classification response covered {len(column_samples) - len(missing)} of {len(column_samples)} "
+            f"submitted columns. The rest are treated as unclassified, so PII in them is only caught if "
+            f"NER covers the column: {', '.join(missing)}",
             extra={"ctx": {"missing_columns": missing}},
         )
 
