@@ -316,16 +316,6 @@ url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
 [[tool.uv.index]]
-name = "nv-shared-pypi-local"
-url = "https://urm.nvidia.com/artifactory/api/pypi/nv-shared-pypi-local/simple"
-explicit = true
-
-[[tool.uv.index]]
-name = "nvidia-pypi-public"
-url = "https://pypi.nvidia.com"
-explicit = true
-
-[[tool.uv.index]]
 name = "flashinfer-cubin"
 url = "https://flashinfer.ai/whl/"
 explicit = true
