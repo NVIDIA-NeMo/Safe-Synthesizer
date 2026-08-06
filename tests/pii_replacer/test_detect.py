@@ -421,8 +421,12 @@ def test_detect_types_llm_bad_json():
     )
 
     def attach_mock_response(content: str):
+        # finish_reason is set explicitly: `classify_columns` rejects a response
+        # marked "length" as truncated, so a bare MagicMock would leave these
+        # cases passing only because the auto-created attribute happens not to
+        # compare equal to that string.
         open_ai_mock.chat.completions.create.return_value = MagicMock(
-            choices=[MagicMock(message=MagicMock(content=content))]
+            choices=[MagicMock(message=MagicMock(content=content), finish_reason="stop")]
         )
 
     # LLMs sometimes append extra commentary after the output, but the
@@ -450,7 +454,7 @@ def test_detect_types_llm_bad_json():
     attach_mock_response("""[["pii", "pii"], "b", "c"]""")
     with pytest.raises(RuntimeError) as exc:
         llm_classifier.detect_types(df, DEFAULT_ENTITIES)
-    assert "LLM failed" in exc.value.args[0]
+    assert "did not return usable JSON" in exc.value.args[0]
 
     # ensure none of the (private) payload makes it into the error
     validation_err = exc.value.__context__
@@ -466,7 +470,7 @@ def test_detect_types_llm_bad_json():
     """)
     with pytest.raises(RuntimeError) as exc:
         llm_classifier.detect_types(df, DEFAULT_ENTITIES)
-    assert "LLM failed" in exc.value.args[0]
+    assert "did not return usable JSON" in exc.value.args[0]
 
 
 def test_redact_from_entities():
