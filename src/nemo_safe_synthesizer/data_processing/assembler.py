@@ -262,10 +262,10 @@ class TrainingExampleAssembler(ABC):
         self.seed = seed
         self._window_rng = None
 
-        prompt_columns = tuple(
+        self.prompt_columns = tuple(
             column for column in dataset.column_names if column not in frozenset(DEFAULT_EXCLUDE_COLUMNS)
         )
-        self.prompt_encoding = self.tokenization.render_prompt(prompt_columns, metadata.instruction)
+        self.prompt_encoding = self.tokenization.render_prompt(self.prompt_columns, metadata.instruction)
         self.schema_prompt = self.prompt_encoding.text
 
         self.tokenized_records = self._tokenize_dataset(dataset, keep_columns)

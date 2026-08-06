@@ -47,7 +47,6 @@ from ..defaults import (
     DEFAULT_VALID_RECORD_EVAL_BATCH_SIZE,
     EVAL_STEPS,
     FIXED_RUNTIME_LORA_ARGS,
-    PSEUDO_GROUP_COLUMN,
 )
 from ..errors import DataError, ParameterError
 from ..generation.processors import create_processor
@@ -755,14 +754,13 @@ class HuggingFaceBackend(TrainingBackend):
         test_df = None
 
         hf_dataset = Dataset.from_pandas(training_df, preserve_index=False)
-        # Exclude PSEUDO_GROUP_COLUMN from schema (internal column for ungrouped time series)
-        schema_df = training_df.drop(columns=[PSEUDO_GROUP_COLUMN], errors="ignore")
-        self.dataset_schema = make_json_schema(schema_df)
         self.training_df = training_df
         self.test_df = test_df
 
         assembler = self._create_example_assembler(hf_dataset)
         self.training_prompt_encoding = assembler.prompt_encoding
+        schema_df = training_df.loc[:, list(assembler.prompt_columns)]
+        self.dataset_schema = make_json_schema(schema_df)
 
         # This is a proxy for the number of training steps.
         num_records_to_sample = self.params.training.num_input_records_to_sample
