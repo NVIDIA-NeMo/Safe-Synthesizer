@@ -98,18 +98,17 @@ class _CharacterTokenizer:
 
 
 @pytest.mark.parametrize(
-    ("add_prompt_bos", "add_prompt_eos", "expected_special_tokens"),
+    ("add_prompt_bos", "add_prompt_eos"),
     [
-        pytest.param(True, True, [101, 102, 101], id="prompt-bos-and-eos"),
-        pytest.param(True, False, [101, 101], id="prompt-bos"),
-        pytest.param(False, True, [102, 101], id="prompt-eos"),
-        pytest.param(False, False, [101], id="sequence-bos-only"),
+        pytest.param(True, True, id="prompt-bos-and-eos"),
+        pytest.param(True, False, id="prompt-bos"),
+        pytest.param(False, True, id="prompt-eos"),
+        pytest.param(False, False, id="sequence-bos-only"),
     ],
 )
 def test_builds_training_compatible_special_token_boundary(
     add_prompt_bos,
     add_prompt_eos,
-    expected_special_tokens,
 ):
     prompt_config = LLMPromptConfig(
         template="P{instruction}|{schema}|{prefill}",
@@ -139,7 +138,6 @@ def test_builds_training_compatible_special_token_boundary(
     expected_ids.extend([101, *prefill_ids])
 
     assert token_ids == expected_ids
-    assert [token for token in token_ids if token in {101, 102}] == expected_special_tokens
 
 
 def test_encodes_rolling_records_as_training_segments():
@@ -163,7 +161,7 @@ def test_encodes_rolling_records_as_training_segments():
     )
     records = ['{"t":1}\n', '{"t":2}\n']
 
-    build_training_compatible_prompt_token_ids(
+    token_ids = build_training_compatible_prompt_token_ids(
         tokenizer=tokenizer,
         prompt_config=prompt_config,
         instruction="I",
@@ -171,4 +169,9 @@ def test_encodes_rolling_records_as_training_segments():
         prefill=records,
     )
 
+    expected_ids = [ord(character) for character in "IS"]
+    expected_ids.append(prompt_config.bos_token_id)
+    expected_ids.extend(ord(character) for record in records for character in record)
+
+    assert token_ids == expected_ids
     assert tokenizer.encoded_text == ["IS", *records]
