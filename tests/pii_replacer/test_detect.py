@@ -146,6 +146,14 @@ def test_gliner_batch_cache_falls_back_to_predict_entities_api():
         assert model.calls[0][0] == "abc"
         assert model.calls[0][1] == ["email", "name"]
 
+    # A build exposing neither API must fail loudly, not return no entities.
+    with patch("nemo_safe_synthesizer.pii_replacer.data_editor.detect.GLiNER") as mock_gliner:
+        mock_gliner.from_pretrained.return_value = object()
+        entity_extractor = EntityExtractorGliner.get_entity_extractor(cfg)
+
+        with pytest.raises(AttributeError, match="neither inference nor predict_entities"):
+            entity_extractor.batch_update_cache(["abc"], None)
+
 
 def test_gliner_single_prediction_falls_back_to_inference_api():
     cfg = ClassifyConfig(
@@ -177,6 +185,14 @@ def test_gliner_single_prediction_falls_back_to_inference_api():
 
         assert model.calls[0][0] == ["abc"]
         assert model.calls[0][1] == ["email", "name"]
+
+    # A build exposing neither API must fail loudly, not return no entities.
+    with patch("nemo_safe_synthesizer.pii_replacer.data_editor.detect.GLiNER") as mock_gliner:
+        mock_gliner.from_pretrained.return_value = object()
+        entity_extractor = EntityExtractorGliner.get_entity_extractor(cfg)
+
+        with pytest.raises(AttributeError, match="neither inference nor predict_entities"):
+            entity_extractor.extract_ner_predictions("abc", {"name", "email"})
 
 
 @pytest.mark.parametrize("offline_var", ["HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE"])
