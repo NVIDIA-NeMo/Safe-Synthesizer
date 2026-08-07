@@ -123,8 +123,8 @@ else
   NSS_VERSION="$(curl -fsSL https://pypi.org/pypi/nemo-safe-synthesizer/json \
     | "${VENV_DIR}/bin/python" -c 'import json, sys; print(json.load(sys.stdin)["info"]["version"])')"
 
-  # Indexes come from the installed release's pyproject. Match both generated
-  # names and URLs because static index names do not enforce the CUDA suffix.
+  # Indexes come from the installed release's pyproject. Match CUDA names and
+  # URLs plus source-mapped indexes whose names are variant-neutral.
   pyproject="$(mktemp)"
   curl -fsSL "${REPO_URL}/raw/v${NSS_VERSION}/pyproject.toml" -o "${pyproject}"
   index_args=()
@@ -140,15 +140,29 @@ import sys
 import tomllib
 
 with open(sys.argv[1], "rb") as handle:
-    indexes = tomllib.load(handle)["tool"]["uv"]["index"]
+    uv_config = tomllib.load(handle)["tool"]["uv"]
 
+indexes = uv_config["index"]
 cuda_extra = os.environ["CUDA_EXTRA"]
+
+# Some indexes carry no CUDA variant in their name or URL. Source config is
+# not wheel metadata, so collect indexes mapped to packages for this extra.
+source_indexes = {
+    entry["index"]
+    for value in uv_config.get("sources", {}).values()
+    for entry in (value if isinstance(value, list) else [value])
+    if isinstance(entry, dict)
+    and entry.get("extra") == cuda_extra
+    and "index" in entry
+}
+
 print(
     "\n".join(
         index["url"]
         for index in indexes
         if index["name"].endswith(f"-{cuda_extra}")
         or f"/{cuda_extra}" in index["url"]
+        or index["name"] in source_indexes
     )
 )
 PY

@@ -91,12 +91,12 @@ hard way on a real instance.
   them -- and they have to match the release being installed, not this repo's `main`.
   The script resolves the latest version from the PyPI JSON API, fetches that tag's
   `pyproject.toml`, and reads the CUDA index URLs out of it, then pins the install to
-  that exact version so the two cannot drift. Selection is keyed on the URL containing
-  `cu129`, not on the index name: the flashinfer entry was renamed
-  `flashinfer-jit-cache` → `flashinfer-jit-cache-cu129` between 0.1.8 and 0.1.9, so
-  names are not stable across releases. The parse runs inside a process substitution and
-  therefore cannot fail the script, so the count of discovered indexes is what validates
-  it.
+  that exact version so the two cannot drift. Selection uses the CUDA extra in each
+  index's name or URL and includes indexes referenced by `[tool.uv.sources]` for that
+  extra. The source lookup matters for variant-neutral indexes such as
+  `https://flashinfer.ai/whl/`, while the URL lookup handles names that changed between
+  releases. The parse runs inside a process substitution and therefore cannot fail the
+  script, so the count of discovered indexes is what validates it.
 - uv is installed from a checksum-verified tarball, not `curl | sh`. The
   `astral.sh/install.sh` path logs `no checksums to verify`, so nothing validated what
   it downloaded. The script fetches the pinned release tarball, compares it against the
