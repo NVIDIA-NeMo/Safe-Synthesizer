@@ -153,6 +153,32 @@ def mock_workdir(fixture_session_cache_dir):
 
     # Create all directories
     workdir.ensure_directories()
+    workdir.dataset_profile_file.write_text(
+        """
+        {
+          "columns": {
+            "timestamp": {
+              "name": "timestamp",
+              "nullable": false,
+              "constraints": {
+                "kind": "other",
+                "min_str_length": 1,
+                "max_str_length": 32
+              }
+            },
+            "value": {
+              "name": "value",
+              "nullable": false,
+              "constraints": {
+                "kind": "integer",
+                "min_value": 1,
+                "max_value": 2
+              }
+            }
+          }
+        }
+        """
+    )
 
     return workdir
 
@@ -177,10 +203,6 @@ def create_timeseries_backend(config: SafeSynthesizerParameters, model_metadata,
     )
 
     with (
-        patch(
-            "nemo_safe_synthesizer.generation.vllm_backend.load_json",
-            return_value=schema,
-        ),
         patch(
             "nemo_safe_synthesizer.generation.vllm_backend.utils.create_schema_prompt",
             return_value="test prompt",

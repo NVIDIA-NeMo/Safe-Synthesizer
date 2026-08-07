@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
-from nemo_safe_synthesizer.data_processing.dataset import make_json_schema
+from nemo_safe_synthesizer.data_processing.dataset_profile import discover_dataset_profile
 from nemo_safe_synthesizer.generation.regex_manager import (
     build_json_based_regex,
     build_json_structural_tag,
@@ -372,17 +372,33 @@ def test_build_json_based_regex_enum_with_none(fixture_safe_synthesizer_config):
 
 # Purpose: Ensures optional properties and nullability are reflected when schema is inferred from data with missing values.
 # Data: DataFrame with name (always present), age (sometimes None), gender (sometimes None) → inferred optional fields.
+#   Each column carries enough distinct values to stay out of the binary and enum
+#   branches of profile discovery, so the inferred schema exercises plain
+#   nullable number and string properties.
 # Asserts: Exact regex equals legacy reference plus re.fullmatch behavior checks for accepted and rejected combinations.
 def test_build_json_based_regex_with_missing(fixture_safe_synthesizer_config):
     df = pd.DataFrame(
         {
-            "name": ["John", "Mary", "Joseph"],
-            "age": [43, None, 61],
-            "gender": [None, "F", "M"],
+            "name": [
+                "John",
+                "Mary",
+                "Joseph",
+                "Anna",
+                "Peter",
+                "Sarah",
+                "David",
+                "Emily",
+                "Frank",
+                "Grace",
+                "Henry",
+                "Isabel",
+            ],
+            "age": [43, None, 61, 27, 35, 52, None, 44, 39, 58, 31, 49],
+            "gender": [None, "F", "M", "F", "X", "M", "F", None, "M", "X", "F", "M"],
         }
     )
 
-    schema = make_json_schema(df)
+    schema = discover_dataset_profile(df).to_json_schema()
     regex = build_json_based_regex(
         schema, config=fixture_safe_synthesizer_config, bos_token=BOS_TOKEN, eos_token=EOS_TOKEN
     )
@@ -546,7 +562,7 @@ def test_build_json_structural_tag_groupby_default_max_records_per_group(fixture
 def test_build_json_regex_with_int(fixture_safe_synthesizer_config):
     # x_min negative and x_max positive, with -x_min > x_max
     df = pd.DataFrame({"number": [-5, 12, 3, -45, 9, -4, 17, 21, -12]})
-    schema = make_json_schema(df)
+    schema = discover_dataset_profile(df).to_json_schema()
     regex = build_json_based_regex(
         schema, config=fixture_safe_synthesizer_config, bos_token=BOS_TOKEN, eos_token=EOS_TOKEN
     )
@@ -560,7 +576,7 @@ def test_build_json_regex_with_int(fixture_safe_synthesizer_config):
 
     # All negative
     df = pd.DataFrame({"number": [-5, -7, -9, -21, -34, -17]})
-    schema = make_json_schema(df)
+    schema = discover_dataset_profile(df).to_json_schema()
     regex = build_json_based_regex(
         schema, config=fixture_safe_synthesizer_config, bos_token=BOS_TOKEN, eos_token=EOS_TOKEN
     )
@@ -807,7 +823,7 @@ def test_round_trip_dataframe_schema_regex_matches_iris(
     sample_df.to_json(buf, orient="records", lines=True)
     jsonl_str = buf.getvalue()
 
-    schema = make_json_schema(sample_df)
+    schema = discover_dataset_profile(sample_df).to_json_schema()
     regex = build_json_based_regex(
         schema, config=fixture_safe_synthesizer_config, bos_token=BOS_TOKEN, eos_token=EOS_TOKEN
     )
@@ -826,7 +842,7 @@ def test_round_trip_doc_summaries_schema_regex_matches(fixture_doc_summaries_dat
     sample_df.to_json(buf, orient="records", lines=True)
     jsonl_str = buf.getvalue()
 
-    schema = make_json_schema(sample_df)
+    schema = discover_dataset_profile(sample_df).to_json_schema()
     regex = build_json_based_regex(
         schema, config=fixture_safe_synthesizer_config, bos_token=BOS_TOKEN, eos_token=EOS_TOKEN
     )

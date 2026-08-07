@@ -17,9 +17,11 @@ import pandas as pd
 from ..cli.artifact_structure import Workdir
 from ..config import SafeSynthesizerResults, SafeSynthesizerSummary, SafeSynthesizerTiming
 from ..config.parameters import SafeSynthesizerParameters
+from ..data_processing.dataset_profile import DatasetProfile
 from ..generation.results import GenerateJobResults
 from ..observability import get_logger
 from ..pii_replacer.transform_result import ColumnStatistics
+from ..utils import load_json
 from .reports.multimodal.multimodal_report import MultimodalReport
 
 logger = get_logger(__name__)
@@ -79,12 +81,19 @@ class Evaluator:
         logger.info("Performing Evaluation.")
         evaluation_start = time.monotonic()
         output = self.generate_results if isinstance(self.generate_results, pd.DataFrame) else self.generate_results.df
+        if self.workdir is None:
+            raise ValueError("workdir is required to load the dataset profile for evaluation")
+        profile_path = self.workdir.dataset_profile_file
+        if not profile_path.exists():
+            raise ValueError(f"Dataset profile is required for evaluation but was not found: {profile_path}")
+        dataset_profile = DatasetProfile.model_validate(load_json(profile_path))
         report = MultimodalReport.from_dataframes(
             training=self.training_df,  # ty: ignore[invalid-argument-type]
             synthetic=output,
             test=self.test_df,
             config=self.config,
             column_statistics=self.column_statistics,
+            dataset_profile=dataset_profile,
         )
         evaluation_time_sec = time.monotonic() - evaluation_start
         logger.info("Evaluation complete.")

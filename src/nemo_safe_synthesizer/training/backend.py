@@ -24,6 +24,7 @@ from ..cli.artifact_structure import Workdir
 from ..config import SafeSynthesizerParameters
 from ..data_processing.actions.data_actions import ActionExecutor
 from ..data_processing.assembler import TrainingExamples
+from ..data_processing.dataset_profile import DatasetProfile
 from ..llm.metadata import ModelMetadata
 from ..observability import get_logger
 from ..privacy.dp_transformers.dp_utils import (
@@ -138,8 +139,8 @@ class TrainingBackend(metaclass=abc.ABCMeta):
     test_df: pd.DataFrame | None
     """Hold-out DataFrame for ML-utility evaluation, or ``None``."""
 
-    dataset_schema: dict | None
-    """JSON schema inferred from the training DataFrame."""
+    dataset_profile: DatasetProfile | None
+    """Profile inferred from the modeled training DataFrame."""
 
     training_output_dir: Path
     """Directory for trainer checkpoints and cache files."""
@@ -173,7 +174,7 @@ class TrainingBackend(metaclass=abc.ABCMeta):
     ):
         self.params = params
         self.model_metadata = model_metadata
-        self.dataset_schema = None
+        self.dataset_profile = None
         self.framework_load_params: dict = {}
         self.data_fraction = data_fraction
         self.true_dataset_size = true_dataset_size
@@ -211,7 +212,7 @@ class TrainingBackend(metaclass=abc.ABCMeta):
         Validates grouping/ordering columns (where applicable), resolves
         auto-config values, applies time-series processing and
         ``action_executor`` preprocessing, then assembles tokenized training
-        examples. Populates ``training_examples``, ``dataset_schema``,
+        examples. Populates ``training_examples``, ``dataset_profile``,
         ``training_df``, and ``data_fraction``.
         """
         ...

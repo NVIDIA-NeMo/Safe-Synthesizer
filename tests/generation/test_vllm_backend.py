@@ -72,6 +72,23 @@ def mock_workdir(fixture_session_cache_dir):
     assert workdir.train.path.exists(), f"Train dir not created: {workdir.train.path}"
     assert workdir.generate.path.exists(), f"Generate dir not created: {workdir.generate.path}"
     assert workdir.train.adapter.path.exists(), f"Adapter path not created: {workdir.train.adapter.path}"
+    workdir.dataset_profile_file.write_text(
+        """
+        {
+          "columns": {
+            "value": {
+              "name": "value",
+              "nullable": false,
+              "constraints": {
+                "kind": "integer",
+                "min_value": 1,
+                "max_value": 2
+              }
+            }
+          }
+        }
+        """
+    )
 
     return workdir
 
@@ -148,12 +165,8 @@ def mock_schema():
 
 
 def create_backend(config, model_metadata, schema, workdir):
-    """Helper to create a VllmBackend instance with mocked dependencies."""
+    """Create a backend while retaining the legacy schema fixtures for unit tests."""
     with (
-        patch(
-            "nemo_safe_synthesizer.generation.vllm_backend.load_json",
-            return_value=schema,
-        ),
         patch(
             "nemo_safe_synthesizer.generation.vllm_backend.utils.create_schema_prompt",
             return_value="test prompt",
@@ -165,7 +178,10 @@ def create_backend(config, model_metadata, schema, workdir):
     ):
         from nemo_safe_synthesizer.generation.vllm_backend import VllmBackend
 
-        return VllmBackend(config=config, model_metadata=model_metadata, workdir=workdir)
+        backend = VllmBackend(config=config, model_metadata=model_metadata, workdir=workdir)
+    backend.schema = schema
+    backend.columns = list(schema["properties"])
+    return backend
 
 
 class TestBuildStructuredOutputParams:

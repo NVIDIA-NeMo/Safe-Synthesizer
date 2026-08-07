@@ -42,7 +42,7 @@ class TestAdapterPersistence:
         workdir, _ = fixture_adapter_train_artifacts
         assert_adapter_saved(workdir)
         assert workdir.train.adapter.metadata.exists()  # metadata_v2.json
-        assert workdir.train.adapter.schema.exists()  # dataset_schema.json
+        assert workdir.train.adapter.dataset_profile.exists()  # dataset_profile.json
         assert workdir.train.config.exists()  # train/safe-synthesizer-config.json
 
     def test_adapter_loadable_by_peft(self, fixture_adapter_train_artifacts):

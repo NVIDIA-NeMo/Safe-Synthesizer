@@ -15,6 +15,7 @@ from ....config.evaluate import (
     DEFAULT_SQS_REPORT_COLUMNS,
 )
 from ....config.parameters import SafeSynthesizerParameters
+from ....data_processing.dataset_profile import DatasetProfile
 from ....evaluation.assets.text.multi_modal_tooltips import tooltips
 from ....evaluation.components.attribute_inference_protection import AttributeInferenceProtection
 from ....evaluation.components.column_distribution import (
@@ -125,6 +126,7 @@ class MultimodalReport(EvaluationReport):
         test: pd.DataFrame | None = None,
         column_statistics: dict[str, ColumnStatistics] | None = None,
         config: SafeSynthesizerParameters | None = None,
+        dataset_profile: DatasetProfile | None = None,
     ) -> MultimodalReport:
         """Build a complete multi-modal evaluation report from dataframes.
 
@@ -137,6 +139,7 @@ class MultimodalReport(EvaluationReport):
             test: Optional holdout dataframe for privacy metrics.
             column_statistics: Per-column PII entity metadata.
             config: Pipeline configuration controlling which metrics are enabled.
+            dataset_profile: Training-time profile used for evaluation column routing.
 
         Returns:
             A fully populated ``MultimodalReport`` ready for rendering.
@@ -148,6 +151,7 @@ class MultimodalReport(EvaluationReport):
             column_statistics=column_statistics,
             rows=MultimodalReport._get_config_value("sqs_report_rows", DEFAULT_RECORD_COUNT, config),
             cols=MultimodalReport._get_config_value("sqs_report_columns", DEFAULT_SQS_REPORT_COLUMNS, config),
+            dataset_profile=dataset_profile,
             mandatory_columns=MultimodalReport._get_config_value("mandatory_columns", [], config),
         )
 
@@ -191,6 +195,7 @@ class MultimodalReport(EvaluationReport):
                     cols=MultimodalReport._get_config_value("sqs_report_columns", DEFAULT_SQS_REPORT_COLUMNS, config),
                     mandatory_columns=MultimodalReport._get_config_value("mandatory_columns", [], config),
                     enable_sampling=False,
+                    dataset_profile=dataset_profile,
                 ),
                 config=config,
             )

@@ -18,6 +18,7 @@ from sklearn.preprocessing import QuantileTransformer
 
 from ...config.evaluate import DEFAULT_RECORD_COUNT
 from ...config.parameters import SafeSynthesizerParameters
+from ...data_processing.dataset_profile import DatasetProfile
 from ...evaluation.components.component import Component
 from ...evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from ...evaluation.data_model.evaluation_score import EvaluationScore, PrivacyGrade
@@ -76,6 +77,7 @@ class MembershipInferenceProtection(Component):
             training_df=evaluation_datasets.training,
             synthetic_df=evaluation_datasets.synthetic,
             test_df=evaluation_datasets.test,
+            dataset_profile=evaluation_datasets.dataset_profile,
             # FIXME config setting?
             # column_name: str | None = None,
         )
@@ -89,6 +91,8 @@ class MembershipInferenceProtection(Component):
     ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         df = pd.concat([training_df, synthetic_df, test_df]).reset_index(drop=True)
 
+        # TODO: Prefer DatasetProfile.numeric_columns() once categorical encoding handles
+        # profile categorical columns that still have int/float dtypes.
         numeric_columns = df.select_dtypes(include=np.number).columns.tolist()
         df[numeric_columns] = df[numeric_columns].fillna(0)  # Fill NaNs with 0 for numeric values
         nominal_columns = []
@@ -120,6 +124,8 @@ class MembershipInferenceProtection(Component):
     ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         df = pd.concat([training_df, synthetic_df, test_df]).reset_index(drop=True).fillna(0)
 
+        # TODO: Prefer DatasetProfile.numeric_columns() once categorical encoding handles
+        # profile categorical columns that still have int/float dtypes.
         numeric_columns = df.select_dtypes(include=np.number).columns.tolist()
         nominal_columns = []
         for column in df.columns:
@@ -426,6 +432,7 @@ class MembershipInferenceProtection(Component):
         synthetic_df: pd.DataFrame,
         test_df: pd.DataFrame | None,
         column_name: str | None = None,
+        dataset_profile: DatasetProfile | None = None,
     ) -> tuple[
         EvaluationScore,
         pd.DataFrame | None,
@@ -462,7 +469,11 @@ class MembershipInferenceProtection(Component):
                 test_df = test_df.filter([column_name])
                 synthetic_df = synthetic_df.filter([column_name])
 
-            text_fields = find_text_fields(training_df)
+            text_fields = (
+                find_text_fields(training_df, dataset_profile)
+                if dataset_profile is not None
+                else find_text_fields(training_df)
+            )
             text_cnt = len(text_fields)
             tabular_cnt = len(training_df.columns) - text_cnt
 
@@ -481,7 +492,11 @@ class MembershipInferenceProtection(Component):
                 training_df_use = training_df.sample(n=training_size_needed, random_state=1)
 
             # Divide the dataframes into text and tabular
-            text_fields = find_text_fields(training_df_use)
+            text_fields = (
+                find_text_fields(training_df_use, dataset_profile)
+                if dataset_profile is not None
+                else find_text_fields(training_df_use)
+            )
             if len(text_fields) > 0:
                 training_df_use, training_df_text = divide_tabular_text(training_df_use, text_fields)
                 test_df, test_df_text = divide_tabular_text(test_df, text_fields)

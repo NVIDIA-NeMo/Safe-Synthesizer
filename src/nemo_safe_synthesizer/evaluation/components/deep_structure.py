@@ -10,11 +10,10 @@ import pandas as pd
 from category_encoders.count import CountEncoder
 from pydantic import ConfigDict, Field
 
-from ...artifacts.analyzers.field_features import (
-    FieldType,
-    describe_field,
-)
+from ...artifacts.analyzers.field_features import describe_field
+from ...artifacts.base.fields import NOMINAL_FIELD_TYPES, NUMERIC_FIELD_TYPES
 from ...config.parameters import SafeSynthesizerParameters
+from ...data_processing.dataset_profile import DatasetProfile
 from ...evaluation.components.component import Component
 from ...evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from ...evaluation.data_model.evaluation_field import EvaluationField
@@ -75,6 +74,7 @@ class DeepStructure(Component):
         training_pca, synthetic_pca = DeepStructure._calculate_pca(
             evaluation_datasets.training.reindex(columns=tabular_columns),
             evaluation_datasets.synthetic.reindex(columns=tabular_columns),
+            evaluation_datasets.dataset_profile,
         )
 
         principal_component_stability = DeepStructure.get_principal_component_stability(
@@ -152,6 +152,7 @@ class DeepStructure(Component):
     def _prep_datasets_for_joined_pca(
         training_df: pd.DataFrame,
         synthetic_df: pd.DataFrame,
+        dataset_profile: DatasetProfile | None = None,
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Preprocess dataframes for joined PCA.
 
@@ -167,9 +168,6 @@ class DeepStructure(Component):
             Tuple of (preprocessed training, preprocessed synthetic) ready
             for ``compute_joined_pcas``.
         """
-        # Identify field types
-        training_field_types = [describe_field(name, training_df[name]).type for name in training_df.columns]
-        synthetic_field_types = [describe_field(name, synthetic_df[name]).type for name in synthetic_df.columns]
         # Only keep columns that are numeric or categorical.
         # Added this because unique text columns or unique ID columns would distort the results
         # now that we are projecting the count encoding to the synthetic set.
@@ -177,24 +175,31 @@ class DeepStructure(Component):
         # and that column effectively would not contribute to the PCA calculation;
         # in the new joined calculation, the column in the training set would be a 1s,
         # but the column in the synthetic set would be all 0s, because they are all out of distribution.
-        categorical_columns = [
-            name
-            for name, field_type in zip(training_df.columns, training_field_types)
-            if field_type in [FieldType.CATEGORICAL, FieldType.BINARY]
-        ]
-        numeric_columns_training = [
-            name
-            for name, field_type in zip(training_df.columns, training_field_types)
-            if field_type == FieldType.NUMERIC
-        ]
-        numeric_columns_synthetic = [
-            name
-            for name, field_type in zip(synthetic_df.columns, synthetic_field_types)
-            if field_type == FieldType.NUMERIC
-        ]
-        numeric_columns = list(set(numeric_columns_training).intersection(set(numeric_columns_synthetic)))
         # TODO: use embeddings to represent text columns
         # TODO: try to include more "OTHER" columns and handle column type mismatch
+        if dataset_profile is not None:
+            categorical_columns = [name for name in training_df.columns if name in dataset_profile.nominal_columns()]
+            numeric_columns = [name for name in training_df.columns if name in dataset_profile.numeric_columns()]
+        else:
+            # Maintain direct-call compatibility while the profile is threaded through evaluation.
+            training_field_types = [describe_field(name, training_df[name]).type for name in training_df.columns]
+            synthetic_field_types = [describe_field(name, synthetic_df[name]).type for name in synthetic_df.columns]
+            categorical_columns = [
+                name
+                for name, field_type in zip(training_df.columns, training_field_types)
+                if field_type in NOMINAL_FIELD_TYPES
+            ]
+            numeric_columns_training = [
+                name
+                for name, field_type in zip(training_df.columns, training_field_types)
+                if field_type in NUMERIC_FIELD_TYPES
+            ]
+            numeric_columns_synthetic = [
+                name
+                for name, field_type in zip(synthetic_df.columns, synthetic_field_types)
+                if field_type in NUMERIC_FIELD_TYPES
+            ]
+            numeric_columns = list(set(numeric_columns_training).intersection(set(numeric_columns_synthetic)))
 
         if len(categorical_columns) + len(numeric_columns) == 0:
             return pd.DataFrame(), pd.DataFrame()
@@ -211,7 +216,9 @@ class DeepStructure(Component):
         return training_df, synthetic_df
 
     @staticmethod
-    def _calculate_pca(training_df: pd.DataFrame, synthetic_df: pd.DataFrame) -> tuple:
+    def _calculate_pca(
+        training_df: pd.DataFrame, synthetic_df: pd.DataFrame, dataset_profile: DatasetProfile | None = None
+    ) -> tuple:
         """Compute PCA projections for training and synthetic dataframes.
 
         Subsamples, preprocesses, and runs joined PCA. Returns ``(None, None)``
@@ -252,7 +259,7 @@ class DeepStructure(Component):
 
             # Fill in missing values and encode categorical columns to numeric values
             training_subsample_prepped, synthetic_subsample_prepped = DeepStructure._prep_datasets_for_joined_pca(
-                training_subsample, synthetic_subsample
+                training_subsample, synthetic_subsample, dataset_profile
             )
 
             training_ss_rows, training_ss_cols = training_subsample_prepped.shape

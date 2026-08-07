@@ -24,6 +24,7 @@ from sklearn.preprocessing import QuantileTransformer
 
 from ...config.evaluate import QUASI_IDENTIFIER_COUNT
 from ...config.parameters import SafeSynthesizerParameters
+from ...data_processing.dataset_profile import DatasetProfile
 from ...observability import get_logger
 from ..components.component import Component
 from ..data_model.evaluation_datasets import EvaluationDatasets
@@ -78,6 +79,7 @@ class AttributeInferenceProtection(Component):
             training_df=evaluation_datasets.training,
             synthetic_df=evaluation_datasets.synthetic,
             quasi_identifier_count=quasi_identifier_count,
+            dataset_profile=evaluation_datasets.dataset_profile,
         )
         return AttributeInferenceProtection(score=score, col_accuracy_df=col_accuracy_df)
 
@@ -335,6 +337,7 @@ class AttributeInferenceProtection(Component):
         training_df: pd.DataFrame,
         synthetic_df: pd.DataFrame,
         quasi_identifier_count: int,
+        dataset_profile: DatasetProfile | None = None,
     ) -> tuple[EvaluationScore, pd.DataFrame | None]:
         """Core attribute inference attack implementation.
 
@@ -383,11 +386,25 @@ class AttributeInferenceProtection(Component):
             np.random.shuffle(qi_combos)
 
             # Calculate nominal and numeric columns
-            nominal_columns = list(training_df.select_dtypes(include=["object", "category", "bool"]).columns)
-            numeric_columns = [column for column in training_df.columns if column not in nominal_columns]
+            # TODO: DO NOT SUBMIT: This is a behavior change I think, we've dropped FieldType.OTHER and otherwise
+            # swapped around dtype numeric columns that DatasetProfile has as categorical.
+            if dataset_profile is not None:
+                nominal_columns = [
+                    column for column in dataset_profile.nominal_columns() if column in training_df.columns
+                ]
+                numeric_columns = [
+                    column for column in dataset_profile.numeric_columns() if column in training_df.columns
+                ]
+            else:
+                nominal_columns = list(training_df.select_dtypes(include=["object", "category", "bool"]).columns)
+                numeric_columns = [column for column in training_df.columns if column not in nominal_columns]
 
             # Now separate out the text columns from the nominal
-            text_columns = find_text_fields(training_df[nominal_columns])
+            text_columns = (
+                find_text_fields(training_df, dataset_profile)
+                if dataset_profile is not None
+                else find_text_fields(training_df[nominal_columns])
+            )
             nominal_columns = [x for x in nominal_columns if x not in text_columns]
 
             # If there are text columns, create an embedder
