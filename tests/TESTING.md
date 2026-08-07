@@ -100,7 +100,7 @@ Defined in `pytest.ini` (`--strict-markers` is enabled):
 | `slow`         | Long-running tests                                                                               |
 | `smoke`        | Quick smoke tests (training/generation hot paths, tiny models)                                   |
 | `e2e`          | End-to-end pipeline tests (requires CUDA)                                                        |
-| `requires_gpu` | Test needs CUDA hardware (modifier, stacks on any category: `unit`/`smoke`/`e2e`)                |
+| `requires_gpu` | Test needs CUDA hardware; local runs skip it automatically when CUDA is unavailable              |
 | `vllm`         | Tests using vLLM generation backend (each file runs in its own process for GPU memory isolation) |
 | `smollm2`      | SmolLM2 Hub download tests (mise tasks use for process isolation)                                |
 | `noautouse`    | Skip autouse fixtures for specific tests                                                         |
@@ -117,6 +117,20 @@ The other markers modify the 3 categories, indicating when they should be run (`
 - No match -> `unit`
 
 Markers are only added if none of the 3 category markers (`unit`, `smoke`, `e2e`) are already present on the test item.
+
+When at least one collected test has `requires_gpu`, the same hook checks `torch.cuda.is_available()`. In ordinary local runs,
+those tests are skipped automatically when CUDA is unavailable. PyTorch is not imported and CUDA is not probed when the
+collected tests do not use the marker.
+
+GPU CI uses the dedicated mise environment to turn missing PyTorch or unavailable CUDA into a collection error instead of
+silently skipping the GPU suite:
+
+```bash
+mise -E gpu-ci run test:smoke:gpu
+```
+
+The `gpu-ci` environment sets `NSS_REQUIRE_CUDA=1`. Use it only for lanes that promise GPU capability; generic CPU CI and
+ordinary local pytest runs must retain skip behavior.
 
 ## Test Data Locations
 

@@ -105,31 +105,31 @@ jobs:
 
       - name: Run GPU unit tests
         timeout-minutes: 30
-        run: mise run test:unit:gpu
+        run: mise -E gpu-ci run test:unit:gpu
 
       - name: Run GPU smoke tests - train only
         timeout-minutes: 10
-        run: mise run test:smoke:gpu:train-only
+        run: mise -E gpu-ci run test:smoke:gpu:train-only
 
       - name: Run GPU smoke tests - generation
         timeout-minutes: 10
-        run: mise run test:smoke:gpu:generation
+        run: mise -E gpu-ci run test:smoke:gpu:generation
 
       - name: Run GPU smoke tests - resume
         timeout-minutes: 10
-        run: mise run test:smoke:gpu:resume
+        run: mise -E gpu-ci run test:smoke:gpu:resume
 
       - name: Run GPU smoke tests - structured generation
         timeout-minutes: 10
-        run: mise run test:smoke:gpu:structured-generation
+        run: mise -E gpu-ci run test:smoke:gpu:structured-generation
 
       - name: Run GPU smoke tests - timeseries
         timeout-minutes: 10
-        run: mise run test:smoke:gpu:timeseries
+        run: mise -E gpu-ci run test:smoke:gpu:timeseries
 
       - name: Run GPU smoke tests - SmolLM2
         timeout-minutes: 20
-        run: mise run test:smoke:gpu:smollm2
+        run: mise -E gpu-ci run test:smoke:gpu:smollm2
 
   gpu-e2e-test:
     name: GPU E2E Tests
@@ -162,7 +162,7 @@ jobs:
         uses: ./.github/actions/setup-gpu-test-env
 
       - name: Run GPU E2E tests
-        run: mise run test:e2e:prepared
+        run: mise -E gpu-ci run test:e2e:prepared
         timeout-minutes: 190
 
   # ---------------------------------------------------------------------------

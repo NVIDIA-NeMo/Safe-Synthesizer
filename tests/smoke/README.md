@@ -56,10 +56,12 @@ When adding a new GPU smoke test, add the appropriate markers to `pytestmark`:
 pytestmark = [
     pytest.mark.requires_gpu,
     pytest.mark.vllm,  # if the test calls .generate() (uses vLLM)
-    pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available"),
     pytest.mark.skipif(sys.platform == "darwin", reason="Not applicable on macOS"),
 ]
 ```
+
+The root pytest configuration automatically skips `requires_gpu` tests when CUDA is unavailable; do not add a per-test
+`torch.cuda.is_available()` skip condition.
 
 If the new file uses vLLM, add a dedicated `test:smoke:gpu:*` mise task and include it in `test:smoke:gpu` so CI shows it as its own stage.
 

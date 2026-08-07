@@ -84,6 +84,7 @@ runs:
             - '.github/workflows/**'
             - '.github/actions/**'
             - '.mise.toml'
+            - '.mise.*.toml'
             - '.mise/tasks/**'
             - '.dockerignore'
             - 'containers/Dockerfile.test_ci'
