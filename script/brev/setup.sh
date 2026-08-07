@@ -21,11 +21,10 @@ readonly REPO_URL="https://github.com/NVIDIA-NeMo/Safe-Synthesizer"
 
 : "${HOME:?HOME is not set}"
 
-# $HOME is the file browser root: only tutorials/ and README.md are visible.
+# $HOME is the file browser root: only customer-facing files stay visible.
 readonly TUTORIALS_DIR="${HOME}/tutorials"
-readonly README_FILE="${HOME}/README.md"
+readonly WELCOME_FILE="${HOME}/welcome.md"
 readonly WAIT_FILE="${HOME}/SETUP-IN-PROGRESS.md"
-readonly WELCOME_STAGED="${HOME}/.nss-welcome.md"
 
 readonly BIN_DIR="${HOME}/.local/bin"
 readonly VENV_DIR="${HOME}/.nss-venv"
@@ -61,7 +60,7 @@ NeMo Safe Synthesizer is still installing -- roughly 5-10 minutes from when
 the instance started. Files appear as it progresses, so a partly-filled file
 browser is expected. Nothing here is ready to run yet.
 
-When setup finishes, this file is replaced by README.md. Refresh to check.
+When setup finishes, this file disappears. Open welcome.md to get started.
 EOF
 
 export PATH="${BIN_DIR}:${PATH}"
@@ -222,13 +221,6 @@ else
       # Written last; the guard keys on this, so partial runs are redone.
       : >"${TUTORIALS_DIR}/.fetched"
       log "tutorials extracted from ${ref}"
-      # Same tarball as the tutorials. Non-fatal -- see README.
-      if tar -xzf "${tarball}" -C "${tarball_dir}" --strip-components=3 \
-        "${top}/script/brev/welcome.md" 2>/dev/null; then
-        mv "${tarball_dir}/welcome.md" "${WELCOME_STAGED}"
-      else
-        log "WARNING: welcome.md not present in ${ref}"
-      fi
       fetched=1
       break
     fi
@@ -282,10 +274,6 @@ env = {
     # Keeps `!uv pip install ...` in a notebook from resolving to the Brev
     # image's own ~/.venv, which uv would otherwise discover by walking up.
     "VIRTUAL_ENV": venv,
-    # bitsandbytes ships binaries for even CUDA releases only (12.6, 12.8, 13.0…).
-    # CUDA 12.9 has no native binary and always falls back to 12.8.
-    # Update to "130" when upgrading CUDA_EXTRA to cu130 or later.
-    "BNB_CUDA_VERSION": "128",
 }
 # Secrets live in the kernelspec because the Jupyter server is not launched
 # from a login shell. The VM is single-tenant and the file is mode 0600.
@@ -374,12 +362,10 @@ log "verifying install"
 "${VENV_DIR}/bin/python" \
   -c "import torch; print('cuda available:', torch.cuda.is_available())"
 
-# Hand over: swap the "please wait" file for the welcome text.
+# Hand over: the Source-provided welcome stays visible after setup completes.
 
-if [[ -f "${WELCOME_STAGED}" ]]; then
-  mv "${WELCOME_STAGED}" "${README_FILE}"
-else
-  log "WARNING: no welcome.md staged; skipping ${README_FILE}"
+if [[ ! -f "${WELCOME_FILE}" ]]; then
+  log "WARNING: ${WELCOME_FILE} is missing; check the Launchable Source files"
 fi
 rm -f "${WAIT_FILE}"
 
@@ -389,7 +375,7 @@ cat <<EOF
 
   Safe Synthesizer is ready.
 
-  Start here : ${README_FILE}
+  Start here : ${WELCOME_FILE}
   Tutorials  : ${TUTORIALS_DIR}/
   Kernel     : "Safe Synthesizer" -- already the default
   Setup log  : ${LOG_FILE}

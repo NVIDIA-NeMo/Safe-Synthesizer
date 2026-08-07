@@ -10,17 +10,16 @@ NeMo Safe Synthesizer without setting up CUDA, drivers, or Python locally.
 Nothing in this directory is executed by the repo or by CI. A Brev Launchable is
 configured in the Brev web console, and the setup script is pasted into a form field
 there. This directory exists so that configuration is versioned and reviewable rather
-than living only in a browser. When you change `setup.sh`, you must also paste the new
-contents into the console for the change to take effect.
+than living only in a browser. When you change `setup.sh` or `welcome.md`, you must also
+update it in the console for the change to take effect.
 
 ### Files
 
 - `setup.sh`: Pasted into the Launchable's Setup Script field. Installs the CUDA
   build of Safe Synthesizer into a dedicated venv, registers it as the default Jupyter
   kernel, and drops the tutorial notebooks in `$HOME`.
-- `welcome.md`: Becomes the customer's `$HOME/README.md`. Fetched at provisioning
-  time from the same tarball as the tutorials, not baked into `setup.sh` -- it would
-  otherwise consume a tenth of the 16 KiB script budget.
+- `welcome.md`: Added to the Launchable's Source files so it renders on the Launchable
+  webpage and appears as the customer's `$HOME/welcome.md`.
 
 ### Console configuration
 
@@ -33,7 +32,7 @@ Launchable with these settings.
 | Software | Install Jupyter on the host | Enabled |
 | Software | Run a Setup Script | Enabled, contents of `setup.sh` |
 | Software | Image ID | Leave blank |
-| Source | Code source | No code files (`setup.sh` downloads the tutorials itself) |
+| Source | Code source | `welcome.md` |
 | Hardware | GPU | 1× 80 GiB VRAM, single GPU |
 | Hardware | Disk | 200 GiB or more -- not resizable after creation |
 | Network | Ports | 8888, named `jupyter` |
@@ -67,8 +66,8 @@ there. Everything operational is a dotfile, which the browser hides by default.
 ```text
 $HOME/
   tutorials/                    the three tutorial notebooks and their datasets
-  README.md                     where to start, rendered on double-click
-                                (SETUP-IN-PROGRESS.md until setup finishes)
+  welcome.md                    where to start, rendered on double-click
+  SETUP-IN-PROGRESS.md          present only while setup is running or after failure
 
   .nss-venv/                    cu129 venv, registered as the default kernel
   .cache/huggingface/           model cache (Hugging Face's default location)
@@ -106,12 +105,11 @@ hard way on a real instance.
   accepts connections well before this script finishes, so a user who opens it early
   would otherwise see an empty or half-populated file browser and assume the Launchable
   is broken. `SETUP-IN-PROGRESS.md` is written before any slow work, rewritten by the
-  `ERR` trap if provisioning fails, and replaced by `README.md` on success.
-- The welcome text lives in `welcome.md`, not a heredoc. It is pulled from the
-  same tarball as the tutorials, so the two always match, and it is staged as a dotfile
-  until the final step so it never appears while setup is still running. The fetch is
-  non-fatal: `script/brev/` exists in no released tag, so it resolves only from the
-  `main` fallback until a release includes it.
+  `ERR` trap if provisioning fails, and removed on success.
+- The welcome text lives in the Launchable's Source configuration, not a heredoc or
+  release tarball. Brev renders it on the Launchable webpage and copies it to
+  `$HOME/welcome.md`; keeping the console copy synchronized with this directory is a
+  manual deployment step.
 - The setup script has a 16 KiB limit. Brev rejects anything larger, which is why
   the script carries short comments pointing here rather than full explanations. Check
   `wc -c script/brev/setup.sh` before pasting.
