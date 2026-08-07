@@ -890,8 +890,9 @@ class TestWithRuntimeOverrides:
 class TestWarmupSteps:
     """`warmup_steps` mirrors the transformers contract: ratio below 1, whole steps at or above 1."""
 
-    @pytest.mark.parametrize("value", [0.05, 0.5, 0.999, 1, 1.0, 10, 10.0, 500])
+    @pytest.mark.parametrize("value", [0, 0.05, 0.5, 0.999, 1, 1.0, 10, 10.0, 500])
     def test_accepts_ratios_and_whole_step_counts(self, value):
+        """0 is legal and disables warmup, matching how transformers treats it."""
         assert TrainingHyperparams(warmup_steps=value).warmup_steps == value
 
     @pytest.mark.parametrize(
@@ -902,11 +903,10 @@ class TestWarmupSteps:
             float("inf"),  # OverflowError once transformers converts it to an int
             float("-inf"),
             float("nan"),
-            0,
             -1,
         ],
     )
-    def test_rejects_fractional_non_finite_and_non_positive(self, value):
+    def test_rejects_fractional_non_finite_and_negative(self, value):
         with pytest.raises((ParameterError, ValidationError, ValueError)):
             TrainingHyperparams(warmup_steps=value)
 

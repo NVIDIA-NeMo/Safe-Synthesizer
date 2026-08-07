@@ -156,13 +156,14 @@ ValueGTZero = ValueValidator(lambda p: range_validator(p, lambda v: v >= 0))
 def is_valid_warmup(value: float) -> bool:
     """Whether a warmup setting is a usable ratio or step count.
 
-    Mirrors how transformers interprets ``warmup_steps``: values below 1 are a
-    ratio of total training steps, values of 1 or more are an absolute step
-    count. Fractional values of 1 or more are rejected because transformers
-    truncates them (``1.5`` silently becomes ``1``), and non-finite values are
-    rejected because they raise ``OverflowError`` once converted to an integer.
+    Mirrors how transformers interprets ``warmup_steps``: ``0`` disables warmup,
+    values below 1 are a ratio of total training steps, and values of 1 or more
+    are an absolute step count. Fractional values of 1 or more are rejected
+    because transformers truncates them (``1.5`` silently becomes ``1``), and
+    non-finite values are rejected because they raise ``OverflowError`` once
+    converted to an integer.
     """
-    return math.isfinite(value) and value > 0 and (value < 1 or float(value).is_integer())
+    return math.isfinite(value) and value >= 0 and (value < 1 or float(value).is_integer())
 
 
 class TrainingHyperparams(Parameters):
@@ -232,8 +233,9 @@ class TrainingHyperparams(Parameters):
             description=(
                 "Linear warmup from 0 to the learning rate. "
                 "A whole number of 1 or more sets the exact number of warmup steps; "
-                "a float in (0, 1) is treated as a ratio of total training steps. "
-                "Must be finite and > 0, and cannot be fractional at or above 1."
+                "a float in (0, 1) is treated as a ratio of total training steps; "
+                "0 disables warmup. "
+                "Must be finite and >= 0, and cannot be fractional at or above 1."
             ),
         ),
     ] = 0.05
