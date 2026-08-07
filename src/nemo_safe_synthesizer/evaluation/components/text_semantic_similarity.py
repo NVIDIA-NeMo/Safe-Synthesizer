@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import logging
+import warnings
+from contextlib import contextmanager
 from functools import cached_property
 from typing import TYPE_CHECKING
 
@@ -36,9 +38,30 @@ from ...observability import get_logger
 from . import multi_modal_figures as figures
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from sentence_transformers import SentenceTransformer
 
 logger = get_logger(__name__)
+
+
+@contextmanager
+def _suppress_ks_exact_fallback() -> Iterator[None]:
+    """Silence SciPy's notice that ``ks_2samp`` fell back to the asymptotic method.
+
+    ``method="auto"`` attempts the exact calculation and falls back to the
+    asymptotic approximation once the samples are large, which is the intended
+    behaviour here -- the resulting p-values are still valid. The notice is not
+    actionable, so keep it out of CLI, SDK, and notebook output rather than
+    suppressing it separately in each caller.
+    """
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="ks_2samp: Exact calculation unsuccessful",
+            category=RuntimeWarning,
+        )
+        yield
 
 
 class TextSemanticSimilarityDatum(BaseModel):
@@ -401,12 +424,13 @@ class TextSemanticSimilarity(Component):
         # the minimum (most negative) difference between the empirical
         # distribution functions of the samples. The range of this statistic is
         # [0, 1], where 0 indicates no overfitting.
-        ks_test_overfitting = ks_2samp(
-            training_synth_similarity_matrix.max(axis=0),  # F(x)
-            training_similarity_matrix.max(axis=0),  # G(x)
-            alternative="less",
-            method="auto",
-        )
+        with _suppress_ks_exact_fallback():
+            ks_test_overfitting = ks_2samp(
+                training_synth_similarity_matrix.max(axis=0),  # F(x)
+                training_similarity_matrix.max(axis=0),  # G(x)
+                alternative="less",
+                method="auto",
+            )
 
         # Underfitting is measured as the extent to which the synthetic
         # data is less similar to the test data than the test data is to
@@ -417,12 +441,13 @@ class TextSemanticSimilarity(Component):
         # the minimum (most negative) difference between the empirical
         # distribution functions of the samples. The range of this statistic is
         # [0, 1], where 0 indicates no underfitting.
-        ks_test_underfitting = ks_2samp(
-            test_synth_similarity_matrix.max(axis=0),  # F(x)
-            test_similarity_matrix.max(axis=0),  # G(x)
-            alternative="greater",
-            method="auto",
-        )
+        with _suppress_ks_exact_fallback():
+            ks_test_underfitting = ks_2samp(
+                test_synth_similarity_matrix.max(axis=0),  # F(x)
+                test_similarity_matrix.max(axis=0),  # G(x)
+                alternative="greater",
+                method="auto",
+            )
 
         # The overall semantic similarity score combines underfitting and overfitting
         # The range of this score is [0.37, 1], where 1 indicates perfect model and
