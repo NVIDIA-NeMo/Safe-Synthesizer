@@ -12,6 +12,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
+from typing import cast
 
 import pandas as pd
 from vllm.inputs.llm import TokensPrompt
@@ -141,7 +142,7 @@ class TimeseriesBackend(VllmBackend):
           The `config.generation.num_records` parameter is used only for progress
           tracking, not to limit output.
         - Sliding Window: The backend maintains a window of recent records
-          (controlled by `_prefill_context_size`) that are included in each prompt
+          (controlled by `_sliding_window_size`) that are included in each prompt
           to provide context for the LLM, ensuring generated records follow the
           established patterns and timestamps.
         - Parallel Group Generation: Multiple time-series groups (e.g., different
@@ -205,7 +206,7 @@ class TimeseriesBackend(VllmBackend):
             Default: 5.
         _max_prompts_per_batch (int): Maximum number of prompts to include in a
             single LLM generation call. Controls parallelism. Default: 100.
-        _prefill_context_size (int): Number of recent records to include in the
+        _sliding_window_size (int): Number of recent records to include in the
             sliding window prefill context. Default: 3.
         _time_column (str): Name of the timestamp column in the data.
         _time_format (str): Format string for parsing timestamps (strptime format),
@@ -232,18 +233,18 @@ class TimeseriesBackend(VllmBackend):
         self._schema_fragment = ",".join([f'"{c}":<unk>' for c in self.columns])
         self._samples_per_prompt = 5  # num of samples per prompt
         self._max_prompts_per_batch = 100  # max prompts per batch for parallel group generation
-        self._prefill_context_size = 3
-        self._time_column = config.time_series.timestamp_column
+        self._sliding_window_size = 3
+        self._time_column = cast(str, config.time_series.timestamp_column)
         self._time_format: str = config.time_series.timestamp_format or ""
         self._is_elapsed_time = self._time_format == "elapsed_seconds"
-        self._start_timestamp_value = config.time_series.start_timestamp
+        self._start_timestamp_value = cast(str | int, config.time_series.start_timestamp)
         self._stop_timestamp_value = config.time_series.stop_timestamp
         self._timestamp_interval_seconds = config.time_series.timestamp_interval_seconds
 
         # Grouped generation support
         # Note: Since time series preprocessing adds a pseudo-group column when no group
         # is specified, we always have grouped mode (even single-sequence is 1 group).
-        self._group_column = config.data.group_training_examples_by
+        self._group_column = cast(str, config.data.group_training_examples_by)
         initial_prefill_value = self.model_metadata.initial_prefill
 
         if not isinstance(initial_prefill_value, dict):
@@ -571,8 +572,8 @@ class TimeseriesBackend(VllmBackend):
 
         group_state.processor_prefix = ""
         group_state.recent_records.extend(records)
-        if len(group_state.recent_records) > self._prefill_context_size:
-            group_state.recent_records = group_state.recent_records[-self._prefill_context_size :]
+        if len(group_state.recent_records) > self._sliding_window_size:
+            group_state.recent_records = group_state.recent_records[-self._sliding_window_size :]
 
         group_state.current_prefill = build_rolling_record_prefill(group_state.recent_records)
 

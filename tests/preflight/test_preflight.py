@@ -850,6 +850,19 @@ class TestTimeSeriesDataShapeCheck:
         assert any(i.code == "timeseries_empty" and i.severity == "error" for i in issues)
         assert not any(i.code == "preflight.check_crash" for i in issues)
 
+    def test_identity_only_timeseries_reports_structured_error(self):
+        df = pd.DataFrame(
+            {
+                "grp": ["A", "A"],
+                "ts": ["2024-01-01", "2024-01-02"],
+            }
+        )
+        config = self._make_config()
+
+        issues = TimeSeriesDataShapeCheck().run(make_ctx(config=config, data=df))
+
+        assert any(i.code == "timeseries_no_value_columns" and i.severity == "error" for i in issues)
+
     def test_mixed_timestamp_formats_report_parse_failure(self):
         df = pd.DataFrame(
             {

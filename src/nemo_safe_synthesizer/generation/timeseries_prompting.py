@@ -99,10 +99,10 @@ def build_partial_record_prefix(
     *,
     columns: Sequence[str],
     schema: Mapping[str, object],
-    group_column: str | None,
+    group_column: str,
     group_id: object,
-    timestamp_column: str | None,
-    start_timestamp: object,
+    timestamp_column: str,
+    start_timestamp: str | int,
 ) -> str:
     """Build a training-dialect incomplete first record for generation.
 
@@ -121,38 +121,26 @@ def build_partial_record_prefix(
         record. The record begins directly with ``{`` because training places
         the sequence BOS token immediately before the first JSON byte.
 
+    Examples:
+        Given columns beginning with ``acct_id``, ``txn_index``, and
+        ``cardholder``, a group ID of ``"ACCT-001"``, and a starting transaction
+        index of ``1``, the returned prefix is::
+
+            {"acct_id":"ACCT-001","txn_index":1,"
+
+        The model completes the next field name and the rest of the record.
+
     Raises:
         GenerationError: If the saved artifact cannot support a partial prefix.
     """
-    if timestamp_column is None:
-        raise GenerationError("Partial-record time-series generation requires a timestamp column.")
-    if start_timestamp is None:
-        raise GenerationError("Partial-record time-series generation requires a resolved start timestamp.")
-
     seed_values: dict[str, object] = {}
+    # The pseudo-group is internal bookkeeping for an originally ungrouped
+    # dataset, so it must not appear in the generated record prefix.
     if group_column != PSEUDO_GROUP_COLUMN:
-        if group_column is None:
-            raise GenerationError("Grouped time-series metadata is missing its group column.")
         seed_values[group_column] = group_id
     seed_values[timestamp_column] = start_timestamp
 
-    missing_columns = [column for column in seed_values if column not in columns]
-    if missing_columns:
-        raise GenerationError(
-            "The saved schema is missing required partial-prefix columns: "
-            f"{', '.join(repr(column) for column in missing_columns)}. Retrain the time-series artifact."
-        )
-
     prefix_columns = [column for column in columns if column in seed_values]
-    if list(columns[: len(prefix_columns)]) != prefix_columns:
-        raise GenerationError(
-            "The saved schema does not begin with the time-series identity columns "
-            f"{prefix_columns!r}. Retrain the artifact so group and timestamp columns are first."
-        )
-    if len(prefix_columns) == len(columns):
-        raise GenerationError(
-            "Partial-record time-series generation requires at least one non-identity column after the prefix."
-        )
 
     ordered_values = {column: _coerce_prefix_value(schema, column, seed_values[column]) for column in prefix_columns}
     serialized = records_to_jsonl([ordered_values]).rstrip("\n")

@@ -3,7 +3,6 @@
 
 """Unit tests for the TimeseriesBackend class private methods."""
 
-import re
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -393,7 +392,7 @@ class TestInitGroupState:
         assert state.processor_prefix == expected
         assert state.last_timestamp_seconds is None
         assert backend._group_prefills["group_A"].startswith('{"timestamp"')
-        assert backend._prefill_context_size == 3
+        assert backend._sliding_window_size == 3
 
     def test_prompt_tokens_match_training_example_prefix(
         self,
@@ -423,21 +422,12 @@ class TestInitGroupState:
             add_special_tokens=True,
         )
 
+        prompt_only_ids = backend._build_prompt_token_ids("")
+        partial_prefix_ids = fixture_tokenizer.encode(partial_prefix, add_special_tokens=False)
         generation_ids = backend._build_prompt_token_ids(partial_prefix)
 
+        assert generation_ids == [*prompt_only_ids, *partial_prefix_ids]
         assert example.input_ids[: len(generation_ids)] == generation_ids
-
-    def test_rejects_incompatible_saved_schema(self, timeseries_base_params, timeseries_model_metadata, mock_workdir):
-        schema = {
-            "properties": {
-                "value": {"type": "integer"},
-                "group_id": {"type": "string"},
-                "timestamp": {"type": "string"},
-            }
-        }
-
-        with pytest.raises(GenerationError, match="Retrain the artifact"):
-            create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir, schema)
 
 
 class TestUpdateGroupState:
@@ -493,7 +483,7 @@ class TestUpdateGroupState:
         self, timeseries_base_params, timeseries_model_metadata, mock_workdir
     ):
         backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
-        backend._prefill_context_size = 1
+        backend._sliding_window_size = 1
         state = backend._init_group_state("group_A")
         records = [
             ParsedRecord(
@@ -723,13 +713,19 @@ class TestGenerateParallelGroups:
 class TestGenerationMaxTokensPlumbing:
     """``SamplingParams.max_tokens`` is sourced from ``metadata.generation_max_tokens_for``."""
 
-    class _WhitespaceTokenizer:
-        """Tiny tokenizer stand-in that makes long text payloads countable."""
+    class _RecordingTokenizer:
+        """Record encoded text and make copied wide rows overflow the context."""
 
-        @staticmethod
-        def encode(text: str, *, add_special_tokens: bool) -> list[int]:
+        def __init__(self, forbidden_text: str, overflow_token_count: int):
+            self.forbidden_text = forbidden_text
+            self.overflow_token_count = overflow_token_count
+            self.encoded_text: list[str] = []
+
+        def encode(self, text: str, *, add_special_tokens: bool = False) -> list[int]:
             assert add_special_tokens is False
-            return list(range(len(re.compile(r"\s+").split(text))))
+            self.encoded_text.append(text)
+            token_count = self.overflow_token_count if self.forbidden_text in text else max(1, len(text.split()))
+            return list(range(token_count))
 
     @staticmethod
     def _capture_sampling_params(
@@ -809,8 +805,9 @@ class TestGenerationMaxTokensPlumbing:
         timeseries_elapsed_params.time_series.timestamp_column = "s_index"
         timeseries_elapsed_params.time_series.stop_timestamp = "4"
         timeseries_model_metadata.max_tokens_per_example = None
+        saved_prefill = " " + pems_df.head(3).to_json(orient="records", lines=True)
         timeseries_model_metadata.initial_prefill = {
-            "0": " " + pems_df.head(3).to_json(orient="records", lines=True),
+            "0": saved_prefill,
         }
         ordered_columns = [
             "e_id",
@@ -820,10 +817,16 @@ class TestGenerationMaxTokensPlumbing:
         schema = {"properties": {column: {"type": "number"} for column in ordered_columns}}
         backend = create_timeseries_backend(timeseries_elapsed_params, timeseries_model_metadata, mock_workdir, schema)
         backend.llm = MagicMock()
-        backend.llm.get_tokenizer.return_value = self._WhitespaceTokenizer()
+        tokenizer = self._RecordingTokenizer(
+            forbidden_text=saved_prefill,
+            overflow_token_count=timeseries_model_metadata.max_seq_length + 1,
+        )
+        backend.llm.get_tokenizer.return_value = tokenizer
 
         prompt_len = backend._get_prompt_token_count()
 
         assert backend._group_initial_prefixes == {"0": '{"e_id":0.0,"s_index":0.0,"'}
         assert prompt_len < timeseries_model_metadata.max_seq_length
         assert timeseries_model_metadata.generation_max_tokens_for(prompt_len) > 0
+        assert tokenizer.encoded_text
+        assert all(saved_prefill not in encoded_text for encoded_text in tokenizer.encoded_text)

@@ -7,7 +7,6 @@ import pytest
 
 from nemo_safe_synthesizer.data_processing.record_utils import ParsedRecord
 from nemo_safe_synthesizer.defaults import PSEUDO_GROUP_COLUMN
-from nemo_safe_synthesizer.errors import GenerationError
 from nemo_safe_synthesizer.generation.timeseries_prompting import (
     build_partial_record_prefix,
     build_rolling_record_prefill,
@@ -70,66 +69,6 @@ def test_supports_empty_timestamp_column_name():
     )
 
     assert prefix == '{"":"2026-08-05","'
-
-
-def test_rejects_legacy_schema_with_nonleading_identity_columns():
-    schema = {
-        "properties": {
-            "value": {"type": "number"},
-            "group_id": {"type": "string"},
-            "timestamp": {"type": "string"},
-        }
-    }
-
-    with pytest.raises(GenerationError, match="does not begin with the time-series identity columns"):
-        build_partial_record_prefix(
-            columns=["value", "group_id", "timestamp"],
-            schema=schema,
-            group_column="group_id",
-            group_id="A",
-            timestamp_column="timestamp",
-            start_timestamp="2026-08-05",
-        )
-
-
-@pytest.mark.parametrize(
-    ("timestamp_column", "start_timestamp", "expected_message"),
-    [
-        pytest.param(None, "2026-08-05", "requires a timestamp column", id="missing-column"),
-        pytest.param("timestamp", None, "requires a resolved start timestamp", id="missing-start"),
-    ],
-)
-def test_rejects_missing_timestamp_seed(timestamp_column, start_timestamp, expected_message):
-    schema = {"properties": {"timestamp": {"type": "string"}, "value": {"type": "integer"}}}
-
-    with pytest.raises(GenerationError, match=expected_message):
-        build_partial_record_prefix(
-            columns=["timestamp", "value"],
-            schema=schema,
-            group_column=PSEUDO_GROUP_COLUMN,
-            group_id="0",
-            timestamp_column=timestamp_column,
-            start_timestamp=start_timestamp,
-        )
-
-
-def test_rejects_schema_without_generated_fields():
-    schema = {
-        "properties": {
-            "group_id": {"type": "string"},
-            "timestamp": {"type": "string"},
-        }
-    }
-
-    with pytest.raises(GenerationError, match="requires at least one non-identity column"):
-        build_partial_record_prefix(
-            columns=["group_id", "timestamp"],
-            schema=schema,
-            group_column="group_id",
-            group_id="A",
-            timestamp_column="timestamp",
-            start_timestamp="2026-08-05",
-        )
 
 
 def test_builds_rolling_prefill_from_exact_record_text():

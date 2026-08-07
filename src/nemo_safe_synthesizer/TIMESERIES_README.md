@@ -241,13 +241,6 @@ TimeseriesBackend(VllmBackend)
 - Rolling Context Budget: Each generation batch clamps `max_tokens` against its longest current rolling prompt so prompt plus completion cannot exceed the model context.
 - Groups from Training: Groups are the same as those seen during training (from `model_metadata.initial_prefill`).
 
-!!! note "Artifact compatibility"
-    Newly trained artifacts persist group and timestamp fields first and support
-    partial-record generation directly. An older artifact remains compatible
-    only when its saved schema already begins with those identity fields.
-    Generation otherwise raises an actionable error requiring retraining rather
-    than constructing a prompt in a field order the model did not observe.
-
 ### Sliding Window Approach
 
 1. Partial Prefix Initialization: Start an incomplete first record with the group and start timestamp fields.
@@ -264,7 +257,7 @@ TimeseriesBackend(VllmBackend)
 |-----------|-------|-------------|
 | `_samples_per_prompt` | 5 | Number of samples generated per prompt |
 | `_max_prompts_per_batch` | 100 | Max prompts per batch in parallel generation |
-| `_prefill_context_size` | 3 | Internal number of recent records in the sliding window |
+| `_sliding_window_size` | 3 | Internal number of recent records in the sliding window |
 
 ### Parallel Group Generation Flow
 
