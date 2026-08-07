@@ -662,7 +662,9 @@ class EntityExtractorGliner(EntityExtractor):
         )
 
         with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", message="The `resume_download` argument is deprecated", category=UserWarning)
+            warnings.filterwarnings(
+                "ignore", message="The `resume_download` argument is deprecated", category=UserWarning
+            )
             extractor._model = GLiNER.from_pretrained(
                 clsfy_cfg.gliner_model,
                 map_location=map_location,
