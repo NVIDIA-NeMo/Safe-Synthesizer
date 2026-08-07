@@ -21,6 +21,7 @@ from nemo_safe_synthesizer.pii_replacer.data_editor.detect import (
     DefaultLLMConfig,
     EntityExtractorGliner,
     _format_prompt,
+    classify_columns,
     merge_subsume,
     redact_from_entities,
     sample_columns,
@@ -471,6 +472,86 @@ def test_detect_types_llm_bad_json():
     with pytest.raises(RuntimeError) as exc:
         llm_classifier.detect_types(df, DEFAULT_ENTITIES)
     assert "did not return usable JSON" in exc.value.args[0]
+
+
+def _completion(content: str | None, finish_reason: str = "stop") -> MagicMock:
+    """Mock one chat completion carrying ``content`` and ``finish_reason``."""
+    return MagicMock(
+        choices=[MagicMock(message=MagicMock(content=content), finish_reason=finish_reason)],
+        usage=MagicMock(completion_tokens=2048),
+    )
+
+
+@pytest.fixture
+def llm_classifier_and_df():
+    """A classifier whose LLM is mocked, plus the frame the tests classify."""
+    classifier = ColumnClassifierLLM()
+    classifier._llm = MagicMock()
+    df = pd.DataFrame({"ColA": ["small string", "ok string"], "ColB": [1, 2]})
+    return classifier, df
+
+
+@pytest.mark.parametrize("finish_reason", ["length", "content_filter"])
+def test_detect_types_rejects_response_cut_short(llm_classifier_and_df, finish_reason):
+    """A response that stopped early is discarded even though its JSON parses.
+
+    ``json_repair`` turns the truncated object below into a valid single-key
+    dict, so without the ``finish_reason`` guard this would silently classify
+    ColA and leave ColB unclassified with no error raised.
+    """
+    classifier, df = llm_classifier_and_df
+    classifier._llm.chat.completions.create.return_value = _completion('{"ColA": "none"', finish_reason)
+
+    with pytest.raises(RuntimeError) as exc:
+        classifier.detect_types(df, DEFAULT_ENTITIES)
+    assert "did not return usable JSON" in exc.value.args[0]
+
+
+@pytest.mark.parametrize("content", [None, "", "   "])
+def test_detect_types_rejects_empty_content(llm_classifier_and_df, content):
+    """Tool-call and empty completions leave content unset; json_repair raises TypeError on None."""
+    classifier, df = llm_classifier_and_df
+    classifier._llm.chat.completions.create.return_value = _completion(content, "tool_calls")
+
+    with pytest.raises(RuntimeError) as exc:
+        classifier.detect_types(df, DEFAULT_ENTITIES)
+    assert "did not return usable JSON" in exc.value.args[0]
+
+
+def test_detect_types_accepts_unrecognized_finish_reason(llm_classifier_and_df):
+    """Servers return reasons outside the OpenAI schema; those are warned about, not rejected."""
+    classifier, df = llm_classifier_and_df
+    classifier._llm.chat.completions.create.return_value = _completion('{"ColA": "none", "ColB": "none"}', "eos_token")
+
+    assert classifier.detect_types(df, DEFAULT_ENTITIES) == {"ColA": "none", "ColB": "none"}
+
+
+def test_classify_columns_warns_when_response_omits_columns():
+    """Columns the model skipped are named in a warning and returned as UNKNOWN_ENTITY.
+
+    Absent keys are indistinguishable downstream from a deliberate "none", so
+    the warning is the only signal that the frame was partly classified.
+    """
+    df = pd.DataFrame({"ColA": ["a string"], "ColB": ["b string"]})
+    client = MagicMock()
+    client.chat.completions.create.return_value = _completion('{"ColA": "none"}')
+    logger = MagicMock()
+
+    result = classify_columns(df, DEFAULT_ENTITIES, 3, client, lambda: None, logger)
+
+    assert result == {"ColA": "none", "ColB": UNKNOWN_ENTITY}
+    logger.warning.assert_called_once()
+    assert "ColB" in logger.warning.call_args.args[0]
+    assert logger.warning.call_args.kwargs["extra"]["ctx"]["missing_columns"] == ["ColB"]
+
+
+def test_classify_columns_drops_columns_that_were_never_submitted():
+    """A column the model invents cannot enter the map."""
+    df = pd.DataFrame({"ColA": ["a string"]})
+    client = MagicMock()
+    client.chat.completions.create.return_value = _completion('{"ColA": "none", "Invented": "name"}')
+
+    assert classify_columns(df, DEFAULT_ENTITIES, 3, client, lambda: None, MagicMock()) == {"ColA": "none"}
 
 
 def test_redact_from_entities():
