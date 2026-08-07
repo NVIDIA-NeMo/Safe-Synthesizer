@@ -390,8 +390,6 @@ class TimeseriesBackend(VllmBackend):
 
     def _build_prompt_token_ids(self, prefill: str | Sequence[str]) -> list[int]:
         """Build a training-compatible token prompt with record context."""
-        if self.llm is None:
-            raise RuntimeError("LLM not initialized")
         return build_training_compatible_prompt_token_ids(
             tokenizer=self.llm.get_tokenizer(),
             prompt_config=self.model_metadata.prompt_config,

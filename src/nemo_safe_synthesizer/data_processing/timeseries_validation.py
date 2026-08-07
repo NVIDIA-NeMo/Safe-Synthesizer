@@ -46,10 +46,10 @@ class TimeSeriesValidationReason(Enum):
     TIMESTAMP_ELAPSED_INVALID = auto()
     TIMESTAMP_INTERVAL_MISMATCH = auto()
     TIMESERIES_EMPTY = auto()
-    TIMESERIES_NO_VALUE_COLUMNS = auto()
     TIMESERIES_GROUP_LENGTH_MISMATCH = auto()
     TIMESERIES_START_MISMATCH = auto()
     TIMESERIES_STOP_MISMATCH = auto()
+    TIMESERIES_NO_VALUE_COLUMNS = auto()
 
 
 class _TimeSeriesValidationError:

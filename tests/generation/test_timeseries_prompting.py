@@ -3,6 +3,8 @@
 
 """Tests for time-series prompt construction."""
 
+from __future__ import annotations
+
 import pytest
 
 from nemo_safe_synthesizer.data_processing.record_utils import ParsedRecord
