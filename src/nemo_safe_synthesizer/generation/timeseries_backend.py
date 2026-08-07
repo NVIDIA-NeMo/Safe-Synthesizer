@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import cast
 
 import pandas as pd
+from vllm import LLM as vLLM
 from vllm.inputs.llm import TokensPrompt
 from vllm.sampling_params import SamplingParams
 
@@ -391,7 +392,7 @@ class TimeseriesBackend(VllmBackend):
     def _build_prompt_token_ids(self, prefill: str | Sequence[str]) -> list[int]:
         """Build a training-compatible token prompt with record context."""
         return build_training_compatible_prompt_token_ids(
-            tokenizer=self.llm.get_tokenizer(),
+            tokenizer=cast(vLLM, self.llm).get_tokenizer(),
             prompt_config=self.model_metadata.prompt_config,
             instruction=self.model_metadata.instruction,
             schema_fragment=self._schema_fragment,
