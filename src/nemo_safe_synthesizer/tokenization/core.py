@@ -11,9 +11,9 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol, Self, cast, final
 
-import pandas as pd
 from transformers import PreTrainedTokenizerBase
 
+from ..data_processing import record_utils
 from ..errors import GenerationError, ParameterError
 
 _IGNORE_LABEL = -100
@@ -186,17 +186,17 @@ def _ordered_record_texts(
     records: Sequence[Mapping[str, object]],
     exclude_columns: Sequence[str],
 ) -> list[str]:
-    """Serialize records through the established pandas JSONL path."""
+    """Serialize records through the shared JSONL byte-dialect authority."""
     if isinstance(exclude_columns, (str, bytes)) or not all(isinstance(column, str) for column in exclude_columns):
         raise ParameterError("Record exclusions must be a sequence of column-name strings.")
     excluded = frozenset(exclude_columns)
-    filtered: list[dict[str, object]] = []
+    filtered: list[record_utils.RawRecordMapping] = []
     for record in records:
         if not isinstance(record, Mapping) or not all(isinstance(column, str) for column in record):
             raise ParameterError("Records must be mappings with string column names.")
         filtered.append({column: value for column, value in record.items() if column not in excluded})
     try:
-        jsonl = pd.DataFrame(filtered).to_json(orient="records", lines=True, force_ascii=False)
+        jsonl = record_utils.records_to_jsonl(filtered)
     except (TypeError, ValueError, OverflowError) as exc:
         raise ParameterError("Records must contain values supported by pandas JSONL serialization.") from exc
     texts = jsonl.splitlines(keepends=True)

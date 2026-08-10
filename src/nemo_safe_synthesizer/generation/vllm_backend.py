@@ -33,7 +33,7 @@ from ..config.generate import (
     structural_tag_backend_error_message,
 )
 from ..data_processing.dataset import relax_numeric_bounds
-from ..defaults import DEFAULT_SAMPLING_PARAMETERS, FIXED_RUNTIME_GENERATE_ARGS
+from ..defaults import DEFAULT_INSTRUCTION, DEFAULT_SAMPLING_PARAMETERS, FIXED_RUNTIME_GENERATE_ARGS
 from ..errors import GenerationError, InternalError, ParameterError
 from ..generation.backend import GeneratorBackend
 from ..generation.batch import Batch
@@ -50,12 +50,21 @@ from ..generation.vllm_observability import (
 from ..llm.metadata import ModelMetadata
 from ..llm.utils import ModelRef, cleanup_memory, get_max_vram
 from ..observability import get_logger, heartbeat
-from ..tokenization import PromptEncoding
+from ..tokenization import PromptEncoding, WorkloadKind
 from ..tokenization.core import _BoundTokenization
 from ..tokenization.persistence import TOKENIZER_ASSET_DIRECTORY
 from ..utils import all_equal_type, load_json
 
 logger = get_logger(__name__)
+
+_TOKENIZER_PARITY_INPUT_COLUMNS = ("value", "group", "time", "name")
+_TOKENIZER_PARITY_TIME_SERIES_COLUMNS = ("group", "time", "value", "name")
+_TOKENIZER_PARITY_TIME_SERIES_PREFILLS = (
+    "",
+    ' {"group":"A","time":0,"value":-1.5,"name":"é\\/☃"}\n',
+    '{"group":"A","time":0,"value":-1.5,"name":"é\\/☃"}\n',
+)
+_TOKENIZER_PARITY_RECORD = {"value": -1.5, "group": "A", "time": 0, "name": "é/☃"}
 
 if torch.cuda.is_available():
     os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "1")
@@ -125,21 +134,53 @@ def _validate_embedding_range(input_ids: tuple[int, ...], llm: vLLM) -> None:
         raise GenerationError("The dispatched tokenizer IDs exceed the vLLM model embedding vocabulary range.")
 
 
+def _tokenizer_parity_boundaries(tokenization: _BoundTokenization) -> tuple[tuple[str, tuple[int, ...]], ...]:
+    """Return approved prompt and record boundaries for engine admission."""
+    if tokenization.workload_kind is WorkloadKind.TIME_SERIES:
+        prompts = tuple(
+            tokenization.render_prompt(
+                _TOKENIZER_PARITY_TIME_SERIES_COLUMNS,
+                DEFAULT_INSTRUCTION,
+                current_prefill=prefill,
+            )
+            for prefill in _TOKENIZER_PARITY_TIME_SERIES_PREFILLS
+        )
+    else:
+        prompts = (
+            tokenization.render_prompt(
+                _TOKENIZER_PARITY_INPUT_COLUMNS,
+                DEFAULT_INSTRUCTION,
+            ),
+        )
+    record = tokenization.encode_records((_TOKENIZER_PARITY_RECORD,)).records[0]
+    prompt_boundaries = tuple((prompt.text, tokenization.encode_no_special(prompt.text)) for prompt in prompts)
+    return (*prompt_boundaries, (record.utf8.decode(), record.input_ids))
+
+
 def _validate_engine_tokenizer(tokenization: _BoundTokenization, engine: PreTrainedTokenizerBase) -> None:
-    """Compare required special IDs and one no-special encode/decode probe."""
+    """Compare required special IDs and approved production boundary encodings."""
     native = tokenization.native
     for name in ("bos_token_id", "eos_token_id", "pad_token_id"):
         if getattr(engine, name, None) != getattr(native, name, None):
             raise GenerationError(f"The vLLM tokenizer disagrees on required {name}.")
-    text = 'NSS tokenizer probe: {"unicode":"λ"}\n'
-    native_ids = tuple(native.encode(text, add_special_tokens=False))
+
+    historical_probe = 'NSS tokenizer probe: {"unicode":"λ"}\n'
+    historical_native_ids = tokenization.encode_no_special(historical_probe)
     try:
-        engine_ids = tuple(engine.encode(text, add_special_tokens=False))
-        native_decoded = native.decode(list(native_ids), skip_special_tokens=False)
-        engine_decoded = engine.decode(list(engine_ids), skip_special_tokens=False)
+        historical_engine_ids = tuple(engine.encode(historical_probe, add_special_tokens=False))
+        native_decoded = native.decode(list(historical_native_ids), skip_special_tokens=False)
+        engine_decoded = engine.decode(list(historical_engine_ids), skip_special_tokens=False)
     except (AttributeError, TypeError, ValueError) as exc:
         raise GenerationError("Could not validate the vLLM tokenizer probe.") from exc
-    if engine_ids != native_ids or engine_decoded != native_decoded:
+    if historical_engine_ids != historical_native_ids or engine_decoded != native_decoded:
+        raise GenerationError("The vLLM tokenizer does not match the saved tokenizer assets.")
+
+    boundaries = _tokenizer_parity_boundaries(tokenization)
+    try:
+        engine_boundaries = tuple(tuple(engine.encode(text, add_special_tokens=False)) for text, _ in boundaries)
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise GenerationError("Could not validate the vLLM tokenizer probe.") from exc
+    if any(engine_ids != native_ids for engine_ids, (_, native_ids) in zip(engine_boundaries, boundaries, strict=True)):
         raise GenerationError("The vLLM tokenizer does not match the saved tokenizer assets.")
 
 

@@ -558,7 +558,11 @@ def normalize_dataframe(dataframe: pd.DataFrame) -> pd.DataFrame:
 
 
 def records_to_jsonl(records: pd.DataFrame | list[RawRecordMapping] | RawRecordMapping) -> str:
-    """Convert list of records to a JSONL string.
+    """Serialize records through the shared JSONL byte-dialect authority.
+
+    The current compatibility format is pandas JSONL with non-ASCII text
+    preserved and one terminal LF per record. Consumers must delegate here
+    instead of independently reconstructing equivalent JSON text.
 
     Args:
         records: DataFrame, list of records, or dict.
