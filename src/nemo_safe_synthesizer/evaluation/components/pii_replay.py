@@ -121,6 +121,8 @@ class PIIReplay(Component):
             synthetic_entity_count = len(synthetic_entity_values)
             # With those query results, we also want the count of unique items in those filtered synthetic results.
             synthetic_entity_unique_count = len(synthetic_entity_values.unique())
+            replay_percentage = synthetic_entity_unique_count / training_entity_unique_count * 100
+            replay_percentage = math.ceil(replay_percentage * 10) / 10
 
             pii_replay_data.append(
                 PIIReplayData(
@@ -131,9 +133,7 @@ class PIIReplay(Component):
                     unique_training_data=training_entity_unique_count,
                     total_synthetic_data=synthetic_entity_count,
                     unique_synthetic_data=synthetic_entity_unique_count,
-                    unique_synthetic_data_percentage=math.ceil(
-                        synthetic_entity_unique_count / training_entity_unique_count * 100
-                    ),
+                    unique_synthetic_data_percentage=replay_percentage,
                 )
             )
 

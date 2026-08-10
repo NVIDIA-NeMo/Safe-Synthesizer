@@ -57,8 +57,8 @@ The variant name is intentionally the same as the CUDA package extra.
 
 Adding a new variant should be mechanical:
 
-1. Add the extra and source indexes to `pyproject.toml`.
-2. Regenerate `uv.lock`.
+1. Add the variant and source indexes to `cuda_deps.toml`.
+2. Regenerate `pyproject.toml` with `tools/gen_cuda_deps.py`, then regenerate `uv.lock`.
 3. Add a matrix row to `.github/workflows/container-build.yml`.
 4. Build locally with `CONTAINER_GPU_EXTRA=<extra> CONTAINER_GPU_VARIANT=<variant>`.
 
@@ -277,7 +277,9 @@ single tag. Clients pull the correct variant automatically. Because
 directly to a registry:
 
 ```bash
-CONTAINER_GPU_REGISTRY=ghcr.io/nvidia-nemo mise run container:build:gpu-multiarch
+CONTAINER_GPU_REGISTRY=registry.example.com/team \
+CONTAINER_GPU_IMAGE=safe-synthesizer:custom-cu129 \
+  mise run container:build:gpu-multiarch
 ```
 
 This runs:
@@ -285,7 +287,7 @@ This runs:
 ```bash
 docker buildx build \
   --platform linux/amd64,linux/arm64 \
-  --tag ghcr.io/nvidia-nemo/nss-gpu:latest \
+  --tag registry.example.com/team/safe-synthesizer:custom-cu129 \
   --target runtime --push \
   -f containers/Dockerfile.cuda .
 ```

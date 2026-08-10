@@ -986,8 +986,11 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
             if len(seen_groups[group_value]) < 3:
                 seen_groups[group_value].append(record["text"])
 
-        # Convert lists to joined strings
-        return {group: " " + "\n".join(samples) for group, samples in seen_groups.items()}
+        # Each sample line is already newline-terminated (see
+        # _convert_records_to_jsonl), so concatenate directly: joining with
+        # "\n" would insert blank lines between records, a shape that never
+        # occurs in training examples.
+        return {group: " " + "".join(samples) for group, samples in seen_groups.items()}
 
     def _apply_train_test_split(self, dataset: Dataset) -> None:
         """Override split logic to preserve record order and split along group boundaries."""
@@ -1405,10 +1408,13 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
             group_indices = group_data.index.to_list()
             group = dataset.select(group_indices).remove_columns(group_by).to_dict()
             num_records = len(group["input_ids"])
-            self.stats["records_per_group"].update(num_records)
+            # Keep train/val group-size stats separate so generation bounds derived
+            # from ``records_per_group`` never incorporate holdout groups.
+            stats = self.stats_val if "is_val" in dataset.info.description else self.stats
+            stats["records_per_group"].update(num_records)
             group["input_ids"] = list(chain(*group["input_ids"]))
             group["attention_mask"] = list(chain(*group["attention_mask"]))
-            self.stats["tokens_per_group"].update(len(group["input_ids"]))
+            stats["tokens_per_group"].update(len(group["input_ids"]))
             group.update({"num_records": num_records})
             yield group
 
@@ -1566,6 +1572,7 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
                 "tokens_per_group": self.stats["tokens_per_group"],
                 "tokens_per_example": self.stats["tokens_per_example"],
                 "records_per_example": self.stats["records_per_example"],
+                "records_per_group": self.stats["records_per_group"],
                 "groups_per_example": self.stats["groups_per_example"],
             },
         )

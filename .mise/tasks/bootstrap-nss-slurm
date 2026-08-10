@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#MISE description="Install project dependencies with Python, caches, and the virtualenv on Lustre for Slurm containers."
+#USAGE arg "<extra>" help="Python dependency profile" {
+#USAGE   choices "dev" "engine" "cpu" "cuda" "cu129"
+#USAGE }
+
+set -euo pipefail
+source "${MISE_CONFIG_ROOT}/.mise/tasks/_lib.sh"
+
+user_name="${NSS_SLURM_USER:-${USER_NAME:-$(id -un)}}"
+lustre_dir="${LUSTRE_DIR:-}"
+if [[ -z "${lustre_dir}" ]]; then
+  echo "Error: LUSTRE_DIR must be set to the user's container-visible project directory" >&2
+  exit 1
+fi
+
+python_version="${NSS_PYTHON_VERSION:-$(resolve_python_version)}"
+venv_path="$(resolve_venv_path)"
+uv_bin="$(mise which uv)"
+readonly user_name lustre_dir python_version venv_path uv_bin
+
+if [[ ! -d "${lustre_dir}" ]]; then
+  echo "Error: LUSTRE_DIR does not exist: ${lustre_dir}" >&2
+  exit 1
+fi
+
+lustre_real="$(readlink -f "${lustre_dir}")"
+venv_parent_real="$(readlink -f "$(dirname "${venv_path}")")"
+readonly lustre_real venv_parent_real
+if [[ "${venv_parent_real}" != "${lustre_real}" && "${venv_parent_real}" != "${lustre_real}/"* ]]; then
+  echo "Error: Slurm virtualenv must be located under Lustre: ${venv_path}" >&2
+  exit 1
+fi
+
+export USER_NAME="${user_name}"
+export LUSTRE_DIR="${lustre_dir}"
+export NSS_DIR="${MISE_CONFIG_ROOT}"
+export UV_CACHE_DIR="${LUSTRE_DIR}/.cache/uv"
+export UV_PYTHON_INSTALL_DIR="${LUSTRE_DIR}/.local/share/uv/python"
+export UV_PYTHON_BIN_DIR="${LUSTRE_DIR}/.local/bin"
+export UV_TOOL_DIR="${LUSTRE_DIR}/.local/share/uv/tools"
+export HF_HOME="${LUSTRE_DIR}/.cache/huggingface"
+export VLLM_CACHE_ROOT="${LUSTRE_DIR}/.cache/vllm"
+export NSS_UV_BIN="${uv_bin}"
+
+mkdir -p \
+  "${UV_CACHE_DIR}" \
+  "${UV_PYTHON_INSTALL_DIR}" \
+  "${UV_PYTHON_BIN_DIR}" \
+  "${UV_TOOL_DIR}" \
+  "${HF_HOME}" \
+  "${VLLM_CACHE_ROOT}"
+
+echo "[slurm-bootstrap] installing Python ${python_version} under ${UV_PYTHON_INSTALL_DIR}"
+"${uv_bin}" python install --no-bin --install-dir "${UV_PYTHON_INSTALL_DIR}" "${python_version}"
+
+python_bin="$(PATH=/usr/bin:/bin VIRTUAL_ENV= \
+  "${uv_bin}" python find --managed-python --no-project "${python_version}")"
+readonly python_bin
+if [[ ! -x "${python_bin}" ]]; then
+  echo "Error: uv did not resolve a managed Lustre Python executable: ${python_bin}" >&2
+  exit 1
+fi
+
+expected_python="$(readlink -f "${python_bin}")"
+readonly expected_python
+if [[ "${expected_python}" != "${lustre_real}/"* ]]; then
+  echo "Error: managed Python is not container-visible under Lustre: ${expected_python}" >&2
+  exit 1
+fi
+
+if [[ -e "${venv_path}" ]]; then
+  current_python="$(readlink -f "${venv_path}/bin/python" 2>/dev/null || true)"
+  if [[ "${current_python}" != "${expected_python}" ]]; then
+    echo "[slurm-bootstrap] recreating ${venv_path}; current Python is ${current_python:-unavailable}"
+    rm -rf "${venv_path}"
+  fi
+fi
+
+"${uv_bin}" venv --seed --allow-existing --python "${python_bin}" "${venv_path}"
+
+echo "[slurm-bootstrap] syncing NSS dependencies with profile ${usage_extra?}"
+sync_nss_dependencies "${usage_extra?}" "${python_bin}"
+
+venv_python="$(readlink -f "${venv_path}/bin/python")"
+readonly venv_python
+if [[ "${venv_python}" != "${lustre_real}/"* ]]; then
+  echo "Error: virtualenv Python is not container-visible under Lustre: ${venv_python}" >&2
+  exit 1
+fi
+
+if ! "${venv_path}/bin/safe-synthesizer" --help >/dev/null 2>&1; then
+  echo "Error: Safe Synthesizer entry point is not usable in ${venv_path}" >&2
+  exit 1
+fi
+
+echo "[slurm-bootstrap] ready: ${venv_python}"

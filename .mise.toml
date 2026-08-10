@@ -7,10 +7,9 @@
 # Tools NOT managed here:
 #   - buildctl: only needed for container builds. Install manually or via `brew install buildkit`.
 
-
 # Single source of truth for the pinned mise version. `tools/install-mise.sh`
 # reads `min_version` from this file; an older mise on PATH fails fast here too.
-min_version = '2026.5.2'
+min_version = '2026.7.5'
 
 [tools]
 # Tools for working with JSON, Git, and other system utilities.
@@ -28,7 +27,6 @@ ty = "0.0.44"
 
 "aqua:j178/prek" = "latest"
 
-
 [env]
 # Activate the project virtualenv (equivalent to the old .envrc "layout python3").
 VIRTUAL_ENV = "{{ env.UV_PROJECT_ENVIRONMENT | default(value=config_root ~ '/.venv') }}"
@@ -37,12 +35,12 @@ _.file = [".env", { path = ".env.local", redact = true }]
 
 [task_config]
 includes = [
-  ".mise/tasks",
-  ".mise/tasks/*.toml",
+    ".mise/tasks",
+    ".mise/tasks/*.toml",
 ]
 
 [settings]
 lockfile = true
-install_before = "7d"  # only resolve to versions released more than 7 days ago - can help mitigate supply chain attacks
+install_before = "7d" # only resolve to versions released more than 7 days ago - can help mitigate supply chain attacks
 lockfile_platforms = ["macos-arm64", "linux-x64", "linux-arm64"]
 idiomatic_version_file_enable_tools = []

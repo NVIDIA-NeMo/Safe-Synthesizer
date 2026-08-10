@@ -354,8 +354,8 @@ class TestCommonSetupWithoutRegistry:
 class TestMergeOverrides:
     """Tests for config-file and CLI override merging."""
 
-    def test_partial_config_preserves_explicit_field_metadata(self, tmp_path: Path):
-        """Partial config files should not make default values look explicit."""
+    def test_partial_config_keeps_validator_and_factory_defaults_implicit(self, tmp_path: Path):
+        """Partial config files preserve only explicitly supplied nested fields."""
         config_file = tmp_path / "config.yaml"
         config_file.write_text("""
 generation:
@@ -366,7 +366,38 @@ generation:
 
         assert config.generation.num_records == 77
         assert config.generation.structured_generation.enabled is False
-        assert config.model_dump(exclude_unset=True) == {"generation": {"num_records": 77}}
+        sparse = config.model_dump(exclude_unset=True)
+        assert sparse["generation"] == {"num_records": 77}
+        assert "data" not in sparse
+        assert "replace_pii" not in sparse
+        assert "evaluation" not in sparse
+
+    @pytest.mark.parametrize(
+        ("config_contents", "overrides", "expected"),
+        [
+            (None, {"unknown_fields": "ignore", "unknown": True}, {"unknown_fields": "ignore"}),
+            (
+                "unknown_fields: ignore\ngeneration:\n  num_records: 77\n",
+                {"generation": {"unknown": True}},
+                {"generation": {"num_records": 77}, "unknown_fields": "ignore"},
+            ),
+        ],
+    )
+    def test_unknown_override_is_ignored(
+        self,
+        tmp_path: Path,
+        config_contents: str | None,
+        overrides: dict[str, object],
+        expected: dict[str, object],
+    ):
+        config_file = None
+        if config_contents is not None:
+            config_file = tmp_path / "config.yaml"
+            config_file.write_text(config_contents)
+
+        config = merge_overrides(config_file, overrides)
+
+        assert config.model_dump(exclude_unset=True) == expected
 
 
 class TestPropagateRuntimeSettingsToEnv:

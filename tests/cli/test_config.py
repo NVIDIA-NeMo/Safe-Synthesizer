@@ -124,3 +124,22 @@ class TestConfigValidateErrorPathExitCodes:
         )
 
         assert result.exit_code == 0
+
+    def test_validate_rejects_unknown_keys_by_default(self, cli_runner: CliRunner, tmp_path: Path):
+        config_path = tmp_path / "unknown.yaml"
+        config_path.write_text("training:\n  epoch: 2\n")
+
+        result = cli_runner.invoke(config, ["validate", "--config", str(config_path)])
+
+        assert result.exit_code != 0
+        assert "epoch" in result.output
+
+    def test_validate_allows_unknown_keys_with_ignore_policy(self, cli_runner: CliRunner, tmp_path: Path):
+        config_path = tmp_path / "unknown.yaml"
+        config_path.write_text("unknown_fields: ignore\ntraining:\n  epoch: 2\n")
+
+        result = cli_runner.invoke(config, ["validate", "--config", str(config_path)])
+
+        assert result.exit_code == 0
+        assert '"unknown_fields": "ignore"' in result.output
+        assert '"epoch"' not in result.output

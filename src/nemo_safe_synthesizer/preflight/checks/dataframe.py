@@ -7,6 +7,12 @@ from __future__ import annotations
 
 from typing_extensions import override
 
+from ...data_processing.timeseries_validation import (
+    TimeSeriesDataValidationError,
+    TimeSeriesParameterValidationError,
+    TimeSeriesValidationReason,
+    validate_timeseries_data,
+)
 from ...data_processing.validation import (
     check_column_has_no_nulls,
     check_column_present,
@@ -23,6 +29,7 @@ __all__ = [
     "GroupbyColumnCheck",
     "OrderbyColumnCheck",
     "PseudoColumnCheck",
+    "TimeSeriesDataShapeCheck",
     "TimestampColumnCheck",
 ]
 
@@ -166,3 +173,57 @@ class TimestampColumnCheck(DataFrameCheck):
             expect=DataError,
             code="timestamp_nulls",
         )
+
+
+class TimeSeriesDataShapeCheck(DataFrameCheck):
+    """Validate time-series timestamp format and per-group shape invariants."""
+
+    name = "timeseries.shape"
+    label = "Time-series data shape"
+    requires = ("columns.groupby", "columns.pseudo")
+    issue_codes = {
+        TimeSeriesValidationReason.COLUMN_NOT_FOUND: "column_not_found",
+        TimeSeriesValidationReason.COLUMN_NULLS: "column_nulls",
+        TimeSeriesValidationReason.PSEUDO_COLUMN_COLLISION: "pseudo_column_collision",
+        TimeSeriesValidationReason.TIMESTAMP_NOT_FOUND: "timestamp_not_found",
+        TimeSeriesValidationReason.TIMESTAMP_NULLS: "timestamp_nulls",
+        TimeSeriesValidationReason.TIMESTAMP_FORMAT_MISMATCH: "timestamp_format_mismatch",
+        TimeSeriesValidationReason.TIMESTAMP_PARSE_FAILED: "timestamp_parse_failed",
+        TimeSeriesValidationReason.TIMESTAMP_ELAPSED_NON_NUMERIC: "timestamp_elapsed_non_numeric",
+        TimeSeriesValidationReason.TIMESTAMP_ELAPSED_INVALID: "timestamp_elapsed_invalid",
+        TimeSeriesValidationReason.TIMESTAMP_INTERVAL_MISMATCH: "timestamp_interval_mismatch",
+        TimeSeriesValidationReason.TIMESERIES_EMPTY: "timeseries_empty",
+        TimeSeriesValidationReason.TIMESERIES_GROUP_LENGTH_MISMATCH: "timeseries_group_length_mismatch",
+        TimeSeriesValidationReason.TIMESERIES_START_MISMATCH: "timeseries_start_mismatch",
+        TimeSeriesValidationReason.TIMESERIES_STOP_MISMATCH: "timeseries_stop_mismatch",
+    }
+
+    @override
+    def enabled(self, ctx: PreflightContext) -> bool:
+        if not super().enabled(ctx):
+            return False
+        if not ctx.config.time_series.is_timeseries:
+            return False
+        timestamp_column = ctx.config.time_series.timestamp_column
+        if timestamp_column is not None:
+            try:
+                check_column_present(ctx.data, timestamp_column, role="Timestamp")
+                check_column_has_no_nulls(ctx.data, timestamp_column, role="Timestamp")
+            except (DataError, ParameterError):
+                return False
+        return True
+
+    @override
+    def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
+        timestamp_column = ctx.config.time_series.timestamp_column
+        if timestamp_column is not None:
+            try:
+                check_column_present(ctx.data, timestamp_column, role="Timestamp")
+                check_column_has_no_nulls(ctx.data, timestamp_column, role="Timestamp")
+            except (DataError, ParameterError):
+                return
+
+        try:
+            validate_timeseries_data(ctx.data, ctx.config)
+        except (TimeSeriesDataValidationError, TimeSeriesParameterValidationError) as exc:
+            collector.error(self.issue_codes[exc.reason], str(exc))

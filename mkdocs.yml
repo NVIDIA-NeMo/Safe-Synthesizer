@@ -181,6 +181,8 @@ nav:
       - Getting Started: user-guide/getting-started.md
       - Running Safe Synthesizer: user-guide/running.md
       - Docker: user-guide/docker.md
+      - Kubernetes Job: user-guide/kubernetes.md
+      - Private Workload Images: user-guide/private-workload-images.md
       - Troubleshooting:
           - Synthetic Data Quality: user-guide/evaluating-data.md
           - Program Runtime: user-guide/troubleshooting.md

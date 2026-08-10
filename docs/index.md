@@ -17,6 +17,21 @@ NeMo Safe Synthesizer creates private, safe versions of sensitive tabular datase
 - Comprehensive evaluation -- Privacy and quality metrics in an in-depth HTML report
 - Flexible interfaces -- CLI for scripting, Python SDK for programmatic workflows, YAML configuration
 
+## Try It Without Installing
+
+[![Launch on Brev](https://brev-assets.s3.us-west-1.amazonaws.com/nv-lb-dark.svg#only-light)](https://brev.nvidia.com/launchable/deploy/now?launchableID=env-3HBtA2NKQaBukL2TyDphWUcvQ17)
+[![Launch on Brev](https://brev-assets.s3.us-west-1.amazonaws.com/nv-lb-light.svg#only-dark)](https://brev.nvidia.com/launchable/deploy/now?launchableID=env-3HBtA2NKQaBukL2TyDphWUcvQ17)
+
+Deploys an NVIDIA GPU instance with NeMo Safe Synthesizer and the tutorial notebooks
+already installed, so there is no CUDA, driver, or Python setup to do. The
+[Safe Synthesizer 101](tutorials/safe-synthesizer-101.ipynb) notebook runs end to end in
+about 15 minutes.
+
+!!! warning "The instance bills continuously"
+    Most GPU providers on Brev do not support stopping an instance. Billing runs from
+    creation until deletion, so delete the instance when you are finished and download
+    anything you want to keep first.
+
 !!! info "System Requirements"
     NeMo Safe Synthesizer requires a Linux machine with an NVIDIA GPU (A100 80GB+ recommended) and CUDA 12.9+ to run the training and generation pipeline. macOS, Windows, and Apple Silicon are not supported for pipeline execution. A CPU-only install is available for development and configuration validation -- see [Getting Started](user-guide/getting-started.md#install-the-package).
 

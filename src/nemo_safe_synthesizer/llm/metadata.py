@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import importlib
 from pathlib import Path
-from typing import ClassVar, Literal
+from typing import Any, ClassVar, Literal
 
 from pydantic import (
     BaseModel,
@@ -204,6 +204,11 @@ class RopeScaling(BaseModel):
 
     theta: float = Field(default=10000.0, description="Theta for rope scaling.")
 
+    rope_parameters: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Native Transformers v5 RoPE parameters preserved from the model config.",
+    )
+
     @field_validator("factor", mode="after")
     @classmethod
     def validate_factor(cls, v: float | int | None) -> float | int | None:
@@ -219,8 +224,9 @@ class RopeScaling(BaseModel):
     def from_autoconfig(cls, config: PretrainedConfig, factor: float | int | None = None) -> "RopeScaling":
         """Create a ``RopeScaling`` from a HuggingFace ``PretrainedConfig``.
 
-        Reads the model's native ``rope_theta`` and ``rope_type`` and
-        optionally overrides the scaling ``factor``.
+        Reads the model's native Transformers v5 ``rope_parameters`` and
+        optionally overrides the scaling ``factor``. Falls back to legacy
+        top-level ``rope_theta`` and ``rope_scaling`` fields for older configs.
 
         Args:
             config: A loaded HuggingFace model config.
@@ -229,20 +235,24 @@ class RopeScaling(BaseModel):
         Returns:
             A ``RopeScaling`` populated from the config.
         """
-        # Try to get theta from config (different models use different attribute names)
-        theta = getattr(config, "rope_theta", None) or 10000.0
+        rope_parameters = getattr(config, "rope_parameters", None)
+        rope_parameters = dict(rope_parameters) if isinstance(rope_parameters, dict) else {}
 
-        # Try to get rope_type from config
-        rope_type = getattr(config, "rope_scaling", {})
-        if isinstance(rope_type, dict):
-            rope_type = rope_type.get("rope_type", "default")
-        else:
-            rope_type = "default"
+        legacy_rope_scaling = getattr(config, "rope_scaling", None)
+        if isinstance(legacy_rope_scaling, dict):
+            rope_parameters = {**legacy_rope_scaling, **rope_parameters}
+
+        theta = rope_parameters.get("rope_theta", rope_parameters.get("theta"))
+        if not isinstance(theta, (int, float)):
+            theta = getattr(config, "rope_theta", None) or 10000.0
+
+        rope_type = rope_parameters.get("rope_type", rope_parameters.get("type", "default"))
 
         return cls(
             rope_type=rope_type,
             factor=factor or 1.0,
             theta=theta,
+            rope_parameters=rope_parameters,
         )
 
     def to_hf_dict(self) -> dict | None:
@@ -256,11 +266,15 @@ class RopeScaling(BaseModel):
         """
         if self.factor == 1.0:
             return None
-        return {
-            "rope_type": self.rope_type,
-            "factor": self.factor,
-            "theta": self.theta,
-        }
+        rope_parameters = dict(self.rope_parameters)
+        rope_parameters.update(
+            {
+                "rope_type": self.rope_type,
+                "factor": self.factor,
+                "theta": self.theta,
+            }
+        )
+        return {key: value for key, value in rope_parameters.items() if key != "rope_theta"}
 
 
 class ModelMetadata(BaseModel):
@@ -345,7 +359,27 @@ class ModelMetadata(BaseModel):
     fine-tuned LoRAs that fail to emit EOS on short structured outputs do
     not decode wasted tokens to the full context-window cap."""
 
+    max_records_per_group: int | None = Field(
+        default=None,
+        description="Maximum number of records in any single group observed during training.",
+    )
+    """Populated by the training backend from the grouped assembler's
+    ``records_per_group`` running statistic. Consumed as the default bound on
+    per-group record repetition in structured generation for grouped data:
+    the grammar forces the group-closing ``eos_token`` after at most this many
+    records, so a fine-tuned model that fails to emit the delimiter terminates
+    and produces a parseable group instead of decoding to the token cap.
+    ``None`` for non-grouped training (the bound does not apply)."""
+
     tokenizer: PreTrainedTokenizerBase | None = Field(default=None, exclude=True, repr=False)
+
+    @field_validator("max_records_per_group", mode="after")
+    @classmethod
+    def validate_max_records_per_group(cls, v: int | None) -> int | None:
+        """Reject non-positive persisted bounds (``None`` or ``>= 1`` only)."""
+        if v is not None and v < 1:
+            raise ValueError("max_records_per_group must be None or >= 1")
+        return v
 
     @model_validator(mode="before")
     @classmethod
@@ -436,13 +470,13 @@ class ModelMetadata(BaseModel):
             rsf = self.rope_scaling.factor
         return int((self.base_max_seq_length or DEFAULT_MAX_SEQ_LENGTH) * rsf)
 
-    def generation_max_tokens_for(self, prompt_len: int) -> int:
+    def generation_max_tokens_for(self, prompt_len: int, multiplier: float | None = None) -> int:
         """Per-sample ``max_tokens`` ceiling, prompt-aware.
 
         Returns the smaller of:
 
-        1. ``int(max_tokens_per_example * GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER)``
-           when the assembler stat is populated, else ``max_seq_length``.
+        1. ``int(max_tokens_per_example * multiplier)`` when the assembler stat
+           is populated, else ``max_seq_length``.
         2. ``max_seq_length - prompt_len`` -- vLLM raises when
            ``len(prompt) + max_tokens > max_model_len``
            (`vllm#33418 <https://github.com/vllm-project/vllm/issues/33418>`_).
@@ -454,15 +488,29 @@ class ModelMetadata(BaseModel):
         clamp is a defensive belt for legacy adapters where the assembler
         stat is missing and for prompts longer than those seen in training.
 
+        The default ``multiplier`` (``GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER``)
+        adds only a small jitter margin, which is enough for most tables but
+        too tight for long, unbounded free-text columns: a model that
+        over-generates slightly past the longest training example truncates
+        mid-JSON and yields no parseable record. Callers wire the user-facing
+        ``generation.max_tokens_multiplier`` knob through here to widen the
+        budget (bounded by the context window) for such datasets.
+
         Args:
             prompt_len: Tokenized length of the prompt this sample will
                 run against. Pass ``0`` to disable the prompt clamp.
+            multiplier: Margin applied to ``max_tokens_per_example``. Defaults
+                to ``GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER`` when ``None`` so
+                non-generation callers (e.g. the training eval callback) keep
+                the legacy sizing.
 
         Returns:
             Non-negative ``max_tokens`` value safe to feed to ``SamplingParams``.
         """
+        if multiplier is None:
+            multiplier = GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER
         if self.max_tokens_per_example and self.max_tokens_per_example > 0:
-            sized = int(self.max_tokens_per_example * GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER)
+            sized = int(self.max_tokens_per_example * multiplier)
         else:
             sized = self.max_seq_length
         return max(0, min(sized, self.max_seq_length - prompt_len))

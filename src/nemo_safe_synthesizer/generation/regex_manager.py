@@ -321,12 +321,27 @@ def _build_regex(instance: dict[str, Any], whitespace_pattern: str, **kwargs) ->
             raise NotImplementedError()
 
 
+def _resolve_max_records_per_sequence(
+    config: SafeSynthesizerParameters, default_max_records_per_group: int | None
+) -> int | None:
+    """Effective per-group record bound for grouped structured generation.
+
+    An explicit ``structured_generation.max_records_per_sequence`` override wins;
+    otherwise the training-derived default (``ModelMetadata.max_records_per_group``,
+    the largest group seen during training) is used. ``None`` leaves the per-group
+    repetition unbounded.
+    """
+    override = config.generation.structured_generation.max_records_per_sequence
+    return override if override is not None else default_max_records_per_group
+
+
 def build_json_based_regex(
     schema: dict[str, Any],
     config: SafeSynthesizerParameters,
     bos_token: str,
     eos_token: str,
     whitespace_pattern: str | None = None,
+    default_max_records_per_group: int | None = None,
 ) -> str:
     """Build a regex that constrains LLM output to valid JSONL records.
 
@@ -345,6 +360,9 @@ def build_json_based_regex(
         eos_token: End-of-sequence token (used when grouping).
         whitespace_pattern: Optional regex fragment for matching
             whitespace between JSON tokens.
+        default_max_records_per_group: Training-derived per-group record
+            bound used when ``structured_generation.max_records_per_sequence``
+            is unset. Typically ``ModelMetadata.max_records_per_group``.
 
     Returns:
         Compiled regex string suitable for vLLM's structured-output
@@ -353,14 +371,23 @@ def build_json_based_regex(
     whitespace_pattern = whitespace_pattern or ""
 
     record_regex = _build_regex(schema, whitespace_pattern)
+    max_records = _resolve_max_records_per_sequence(config, default_max_records_per_group)
 
     if config.data.group_training_examples_by is not None:
-        sequence_regex = rf"{re.escape(bos_token)}({record_regex}\n)+{re.escape(eos_token)}"
+        # Bounding the per-group record repetition forces the closing ``eos_token`` after at
+        # most ``max_records`` records. Without it the ``+`` lets a model that never emits the
+        # delimiter decode to ``max_tokens``, yielding a length-truncated, unparseable group.
+        record_repeat = rf"({record_regex}\n){{1,{max_records}}}" if max_records else rf"({record_regex}\n)+"
+        sequence_regex = rf"{re.escape(bos_token)}{record_repeat}{re.escape(eos_token)}"
     else:
         # Without grouping, the "sequence" is a single record.
         sequence_regex = record_regex
 
-    if config.generation.structured_generation.use_single_sequence and config.data.max_sequences_per_example == 1:
+    if config.data.group_training_examples_by is not None and max_records:
+        # Grouped generation produces one group per completion; a bounded single sequence
+        # (no outer repetition) guarantees a terminable, parseable group.
+        regex = sequence_regex
+    elif config.generation.structured_generation.use_single_sequence and config.data.max_sequences_per_example == 1:
         regex = sequence_regex
     else:
         regex = rf"({sequence_regex}\n)+"
@@ -383,11 +410,20 @@ def _plus_format(content: dict[str, Any]) -> dict[str, Any]:
     return {"type": "plus", "content": content}
 
 
+def _repeat_format(content: dict[str, Any], min_count: int, max_count: int) -> dict[str, Any]:
+    """Return a Structural Tag bounded-repetition format (``min``..``max`` inclusive).
+
+    ``max_count=-1`` means unbounded, matching XGrammar's ``RepeatFormat`` semantics.
+    """
+    return {"type": "repeat", "min": min_count, "max": max_count, "content": content}
+
+
 def build_json_structural_tag(
     schema: dict[str, Any],
     config: SafeSynthesizerParameters,
     bos_token: str,
     eos_token: str,
+    default_max_records_per_group: int | None = None,
 ) -> str:
     """Build an XGrammar Structural Tag for schema-constrained JSONL records.
 
@@ -402,6 +438,9 @@ def build_json_structural_tag(
             structured-generation settings).
         bos_token: Beginning-of-sequence token (used when grouping).
         eos_token: End-of-sequence token (used when grouping).
+        default_max_records_per_group: Training-derived per-group record
+            bound used when ``structured_generation.max_records_per_sequence``
+            is unset. Typically ``ModelMetadata.max_records_per_group``.
 
     Returns:
         JSON string suitable for ``StructuredOutputsParams(structural_tag=...)``.
@@ -411,19 +450,30 @@ def build_json_structural_tag(
         "json_schema": schema,
     }
     record_line_format = _sequence_format([record_format, _const_string_format("\n")])
+    max_records = _resolve_max_records_per_sequence(config, default_max_records_per_group)
 
     if config.data.group_training_examples_by is not None:
+        # Bounding the per-group record repetition forces the closing eos_token after at most
+        # max_records records. The unbounded plus otherwise lets a model that never emits the
+        # delimiter decode to max_tokens, yielding a length-truncated, unparseable group.
+        record_repetition = (
+            _repeat_format(record_line_format, 1, max_records) if max_records else _plus_format(record_line_format)
+        )
         sequence_format = _sequence_format(
             [
                 _const_string_format(bos_token),
-                _plus_format(record_line_format),
+                record_repetition,
                 _const_string_format(eos_token),
             ]
         )
     else:
         sequence_format = record_format
 
-    if config.generation.structured_generation.use_single_sequence and config.data.max_sequences_per_example == 1:
+    if config.data.group_training_examples_by is not None and max_records:
+        # Grouped generation produces one group per completion; a bounded single sequence
+        # (no outer repetition) guarantees a terminable, parseable group.
+        output_format = sequence_format
+    elif config.generation.structured_generation.use_single_sequence and config.data.max_sequences_per_example == 1:
         output_format = sequence_format
     elif config.data.group_training_examples_by is not None:
         output_format = _plus_format(_sequence_format([sequence_format, _const_string_format("\n")]))

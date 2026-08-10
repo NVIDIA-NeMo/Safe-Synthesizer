@@ -37,12 +37,12 @@ def test_render(
     # Section headings rendered (catch wholesale template breakage)
     assert "Dataset Statistics" in output
     assert "Synthetic Quality Score" in output
-    assert "Training Data Columns" in output
+    assert "Training Data" in output
 
     # Dynamic values from Pydantic models made it into HTML (catch silent blanks
     # from Jinja variable typos -- default Undefined renders as empty string)
-    assert str(DEFAULT_RECORD_COUNT) in output
-    assert "Missing %" in output
+    assert f"{DEFAULT_RECORD_COUNT:,}" in output
+    assert "Missing" in output
 
 
 @pytest.mark.slow
@@ -68,7 +68,7 @@ def test_render_dp_enabled(
     assert "Dataset Statistics" in output
     assert "Synthetic Quality Score" in output
     assert "Data Privacy Score" in output
-    assert str(DEFAULT_RECORD_COUNT) in output
+    assert f"{DEFAULT_RECORD_COUNT:,}" in output
 
 
 @pytest.mark.slow
@@ -94,4 +94,4 @@ def test_render_dp_not_enabled(
     assert "Dataset Statistics" in output
     assert "Synthetic Quality Score" in output
     assert "Data Privacy Score" in output
-    assert str(DEFAULT_RECORD_COUNT) in output
+    assert f"{DEFAULT_RECORD_COUNT:,}" in output

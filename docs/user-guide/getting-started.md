@@ -14,7 +14,7 @@ does at each stage.
 
 ### Prerequisites
 
-- Python 3.11–3.13 (dev tooling pins 3.13 via `.python-version` in the repo root; Python 3.14+ is not supported -- see [Troubleshooting](troubleshooting.md#python-314-is-not-supported))
+- Python 3.11–3.14 (dev tooling pins 3.13 via `.python-version` in the repo root)
 - CUDA runtime 12.9+
 - NVIDIA GPU (A100 or larger) for training and generation
 
@@ -25,6 +25,14 @@ does at each stage.
     generate synthetic data.
 
 ### Install the Package
+
+!!! tip "Skip installation entirely"
+    [![Launch on Brev](https://brev-assets.s3.us-west-1.amazonaws.com/nv-lb-dark.svg#only-light)](https://brev.nvidia.com/launchable/deploy/now?launchableID=env-3HBtA2NKQaBukL2TyDphWUcvQ17)
+    [![Launch on Brev](https://brev-assets.s3.us-west-1.amazonaws.com/nv-lb-light.svg#only-dark)](https://brev.nvidia.com/launchable/deploy/now?launchableID=env-3HBtA2NKQaBukL2TyDphWUcvQ17)
+
+    Deploys a GPU instance with everything below already done, plus the tutorial
+    notebooks. Useful for evaluating Safe Synthesizer without a local NVIDIA GPU. The
+    instance bills continuously and cannot be paused -- delete it when you are finished.
 
 The CUDA and CPU extras depend on packages (PyTorch, FlashInfer) hosted on
 indexes outside PyPI. You must pass the extra index URLs shown below.
@@ -37,7 +45,8 @@ indexes outside PyPI. You must pass the extra index URLs shown below.
         pip install "nemo-safe-synthesizer[cu129,engine]" \
           --extra-index-url https://download.pytorch.org/whl/cu129 \
           --extra-index-url https://flashinfer.ai/whl/cu129 \
-          --extra-index-url https://wheels.vllm.ai/88d34c6409e9fb3c7b8ca0c04756f061d2099eb1/cu129
+          --extra-index-url https://flashinfer.ai/whl/ \
+          --extra-index-url https://wheels.vllm.ai/0.26.0/cu129
         ```
 
     === "uv"
@@ -45,8 +54,9 @@ indexes outside PyPI. You must pass the extra index URLs shown below.
         ```bash
         uv pip install "nemo-safe-synthesizer[cu129,engine]" \
           --index https://flashinfer.ai/whl/cu129 \
+          --index https://flashinfer.ai/whl/ \
           --index https://download.pytorch.org/whl/cu129 \
-          --index https://wheels.vllm.ai/88d34c6409e9fb3c7b8ca0c04756f061d2099eb1/cu129 \
+          --index https://wheels.vllm.ai/0.26.0/cu129 \
           --index-strategy unsafe-best-match
         ```
 
@@ -88,7 +98,8 @@ indexes outside PyPI. You must pass the extra index URLs shown below.
 
         ```bash
         uv pip install "nemo-safe-synthesizer[cpu,engine]" \
-          --index https://download.pytorch.org/whl/cpu
+          --index https://download.pytorch.org/whl/cpu \
+          --index-strategy unsafe-best-match
         ```
 
     !!! warning "Development use only"
@@ -99,17 +110,23 @@ indexes outside PyPI. You must pass the extra index URLs shown below.
 === "Docker (Linux with NVIDIA GPU)"
 
     ```bash
-    mise run container:build:gpu
-
-    docker run --gpus all --shm-size=1g \
-      -v $(pwd):/workspace \
-      -v ~/.cache/huggingface:/workspace/.hf_cache \
-      -e HF_HOME=/workspace/.hf_cache \
-      nss-gpu:latest run --config /workspace/config.yaml --data-source /workspace/data.csv
+    docker run --rm --gpus all --shm-size=1g \
+      --user "$(id -u):$(id -g)" \
+      -v /path/to/input:/workspace/input:ro \
+      -v /path/to/config:/workspace/config:ro \
+      -v /path/to/artifacts:/workspace/artifacts \
+      -v /path/to/hf-cache:/workspace/.hf_cache \
+      ghcr.io/nvidia-nemo/safe-synthesizer:latest-cu129 \
+      run --config /workspace/config/config.yaml \
+      --data-source /workspace/input/input.csv \
+      --artifact-path /workspace/artifacts
     ```
 
-    No local Python install needed. See [Docker](docker.md) for full
-    setup, volume mounts, and offline usage.
+    The public image contains the runtime, not input data or configuration.
+    `latest-cu129` is suitable for evaluation; select an approved versioned
+    `cu129` tag or digest for reproducible workloads. No local Python install
+    or source build is needed. See [Docker](docker.md) for tag selection,
+    directory preparation, secrets, mounts, and offline usage.
 
 === "Bare package for config definitions"
 
@@ -138,6 +155,7 @@ indexes outside PyPI. You must pass the extra index URLs shown below.
 After installing, activate your Python virtual environment and confirm the CLI is available:
 
 ```bash
+safe-synthesizer --version
 safe-synthesizer --help
 ```
 
@@ -152,6 +170,7 @@ Usage: safe-synthesizer [OPTIONS] COMMAND [ARGS]...
   modify a config file.
 
 Options:
+  --version  Show the version and exit.
   --help  Show this message and exit.
 
 Commands:

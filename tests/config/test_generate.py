@@ -12,6 +12,7 @@ from nemo_safe_synthesizer.config.generate import (
     resolve_structured_generation_schema_method,
 )
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
+from nemo_safe_synthesizer.errors import ParameterError
 
 
 @pytest.mark.unit
@@ -180,6 +181,13 @@ class TestMixedInputMigration:
         assert params.generation.structured_generation.enabled is True
         assert params.generation.structured_generation.schema_method == "json_schema"  # preserved
 
+    def test_from_params_legacy_alias_and_dotted_name_are_duplicate_paths(self) -> None:
+        with pytest.raises(ParameterError, match=r"generation\.structured_generation\.backend"):
+            SafeSynthesizerParameters.from_params(
+                structured_generation_backend="xgrammar",
+                **{"generation.structured_generation.backend": "outlines"},
+            )
+
     def test_nested_dict_with_no_legacy_keys_uses_dict_values(self) -> None:
         """When no legacy flat keys are present, nested dict values are used as-is."""
         params = GenerateParameters.model_validate(
@@ -209,3 +217,22 @@ class TestMixedInputMigration:
         assert params.structured_generation.backend == "xgrammar"
         assert params.structured_generation.schema_method == "structural_tag"
         assert params.structured_generation.use_single_sequence is True
+
+
+@pytest.mark.unit
+class TestMaxTokensMultiplier:
+    def test_default_matches_metadata_constant(self) -> None:
+        """The config default mirrors the metadata safety-margin constant."""
+        from nemo_safe_synthesizer.llm.metadata import GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER
+
+        assert GenerateParameters().max_tokens_multiplier == GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER
+
+    def test_accepts_widened_value(self) -> None:
+        """Users can widen the budget for long free-text datasets."""
+        assert GenerateParameters(max_tokens_multiplier=1.8).max_tokens_multiplier == 1.8
+
+    @pytest.mark.parametrize("value", [0, -0.5, float("inf"), float("-inf"), float("nan")])
+    def test_rejects_non_positive(self, value: float) -> None:
+        """Non-positive and non-finite multipliers are rejected by the validator."""
+        with pytest.raises(ValidationError):
+            GenerateParameters(max_tokens_multiplier=value)

@@ -94,6 +94,14 @@ else
     config=${all_configs[0]}
 fi
 
+# Fail before installing system packages when PyPI mode cannot access uv.
+if [[ -n "${NSS_VERSION:-}" && ! -f "${LUSTRE_DIR}/.uv/bin/env" ]]; then
+    echo "[NSS SLURM] ERROR: PyPI mode requires uv at ${LUSTRE_DIR}/.uv/bin" >&2
+    echo "[NSS SLURM] Install uv as described in script/slurm/README.md," \
+        "or omit --nss-version to use repo mode." >&2
+    exit 1
+fi
+
 # Ensure minimal build toolchain inside container (no-op if already present)
 apt-get update && apt-get install -y --no-install-recommends \
         curl \
@@ -104,22 +112,21 @@ apt-get update && apt-get install -y --no-install-recommends \
         libcurl4 \
         libcurl3-gnutls
 
-# Ensure Python environment is available inside the container
-source "${LUSTRE_DIR}/.uv/bin/env"
-
 # NSS_PYTHON_VERSION is resolved in env_variables.sh (from .python-version, with
 # an optional override), which is always sourced before this script runs.
 
 if [[ -n "${NSS_VERSION:-}" ]]; then
     # Install nemo-safe-synthesizer from PyPI into a versioned venv cached on
     # lustre so concurrent array jobs can share it without redundant downloads.
+    source "${LUSTRE_DIR}/.uv/bin/env"
     PYPI_VENV="${LUSTRE_DIR}/.venv_nss_py${NSS_PYTHON_VERSION}_${NSS_VERSION}"
     uv venv --python "${NSS_PYTHON_VERSION}" "${PYPI_VENV}"
     source "${PYPI_VENV}/bin/activate"
     uv pip install "nemo-safe-synthesizer[cu129,engine]==${NSS_VERSION}" \
         --index https://flashinfer.ai/whl/cu129 \
+        --index https://flashinfer.ai/whl/ \
         --index https://download.pytorch.org/whl/cu129 \
-        --index https://wheels.vllm.ai/88d34c6409e9fb3c7b8ca0c04756f061d2099eb1/cu129 \
+        --index https://wheels.vllm.ai/0.26.0/cu129 \
         --index-strategy unsafe-best-match
     NSS_RUN_CMD="${PYPI_VENV}/bin/safe-synthesizer"
     echo "[NSS SLURM] Using PyPI install: nemo-safe-synthesizer==${NSS_VERSION} on Python ${NSS_PYTHON_VERSION}"
@@ -128,8 +135,10 @@ else
     # submit_slurm_jobs.sh, rather than each array task running `uv sync` against
     # the shared Lustre .venv (which could race and corrupt it).
     if [[ ! -x "${NSS_DIR}/.venv/bin/safe-synthesizer" ]]; then
-        echo "[NSS SLURM] ERROR: no usable repo venv at ${NSS_DIR}/.venv (missing safe-synthesizer entry point)" >&2
-        echo "[NSS SLURM] Submit via submit_slurm_jobs.sh (it builds the venv once), or build it manually: (cd ${NSS_DIR} && mise run bootstrap-nss cu129)" >&2
+        echo "[NSS SLURM] ERROR: no usable repo venv at ${NSS_DIR}/.venv" \
+            "(missing safe-synthesizer entry point)" >&2
+        echo "[NSS SLURM] Submit via submit_slurm_jobs.sh (it builds the venv once)," \
+            "or build it manually: (cd ${NSS_DIR} && mise run bootstrap-nss-slurm cu129)" >&2
         exit 1
     fi
     echo "[NSS SLURM] Using pre-built repo venv at ${NSS_DIR}/.venv"
@@ -141,7 +150,7 @@ echo "[NSS SLURM] nemo-safe-synthesizer version: $(python -c 'from nemo_safe_syn
 
 # for column classification
 export NSS_INFERENCE_ENDPOINT=https://integrate.api.nvidia.com/v1
-export NSS_INFERENCE_MODEL=qwen/qwen3-next-80b-a3b-instruct
+export NSS_INFERENCE_MODEL=nvidia/nemotron-3-ultra-550b-a55b
 
 # Extract dataset name for path construction (handles both full paths and simple names)
 # e.g., "/path/to/adult.csv" -> "adult", "/path/to/data.parquet" -> "data", "adult" -> "adult"

@@ -17,7 +17,7 @@ Durable implementation guidance belongs with the code it describes: function and
 
 See [STYLE_GUIDE.md](STYLE_GUIDE.md) for detailed code style conventions (Python, markdown, Dockerfiles, shell scripts, testing, config files, docstrings).
 
-Use `uv` for everything -- never `pip` or raw `python`. Python 3.11–3.13 with modern syntax (`X | Y`, `list[str]`, `Self`). Python 3.14+ is not supported.
+Use `uv` for everything -- never `pip` or raw `python`. Python 3.11–3.14 with modern syntax (`X | Y`, `list[str]`, `Self`).
 
 Common commands: `mise run test` (unit tests), `mise run format` (auto-fix formatting + lint + copyright), `mise run check` (read-only local quality checks), `mise run validate` (pre-PR quality, lock, and CI unit checks), `mise run typecheck` (ty only). Always use mise tasks or the wrapper scripts in `tools/` instead of running `ruff` or `ty` directly. Use `uv run` for Python execution. When in doubt, inspect `mise tasks` and `pytest --markers`.
 
@@ -28,6 +28,8 @@ uv sync --frozen --extra cu129 --extra engine --group dev
 ```
 
 Bare `uv sync --frozen` (without extras) installs an incomplete environment -- `ty`, import checks, and GPU tests will fail.
+
+The CPU/CUDA optional-dependency and `[tool.uv.sources]`/`[[tool.uv.index]]` sections of `pyproject.toml` are generated from `cuda_deps.toml` by `tools/gen_cuda_deps.py` -- never hand-edit the `# >>> BEGIN GENERATED ... <<<` blocks in `pyproject.toml`. To add or change a CUDA/CPU dependency, edit `cuda_deps.toml`, then run `uv run --frozen tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml` followed by `uv lock`. `mise run lock-check` verifies both are in sync with `cuda_deps.toml`.
 
 Feature branches off `main`. Branch names often include an issue number prefix (e.g., `<author>/123-short-name`).
 

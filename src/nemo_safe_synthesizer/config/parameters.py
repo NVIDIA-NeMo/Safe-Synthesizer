@@ -5,82 +5,42 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Mapping
-from typing import Any, Self
+from typing import Self, TypeAlias, cast
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import Field, model_validator
+from typing_extensions import override
 
+from ..configurator.parameter_paths import (
+    ParameterPath,
+    ParameterSchema,
+)
 from ..configurator.parameters import Parameters
 from ..errors import ParameterError
 from ..observability import get_logger
 from ..telemetry import _telemetry_enabled
-from ..utils import merge_dicts
 from .data import DataParameters
 from .differential_privacy import DifferentialPrivacyHyperparams
 from .evaluate import EvaluationParameters
 from .generate import GenerateParameters
+from .patch import CompiledConfigPatch, PatchAssignment
 from .preflight import PreflightParameters
 from .replace_pii import PiiReplacerConfig
 from .time_series import TimeSeriesParameters
 from .training import TrainingHyperparams
 from .types import AUTO_STR
+from .unknown_fields import (
+    DEFAULT_UNKNOWN_FIELDS,
+    UnknownFieldBehavior,
+    normalize_unknown_fields,
+    validate_unknown_fields,
+)
 
-__all__ = ["SafeSynthesizerParameters"]
+ConfigPatch: TypeAlias = Mapping[str, object]
+
+__all__ = ["ConfigPatch", "SafeSynthesizerParameters"]
 
 
 logger = get_logger(__name__)
-
-
-def _collect_set_fields(model: BaseModel) -> dict[str, Any]:
-    """Recursively collect a model's explicitly-set fields as a nested dict.
-
-    Unlike ``model_dump(exclude_unset=True)``, nested models are always
-    traversed -- even when the parent did not mark the nested field as set --
-    so in-place mutations of nested fields (e.g.
-    ``cfg.generation.validation.foo = True``) are captured. A nested model is
-    included only when it has at least one set field of its own.
-    """
-    overrides: dict[str, Any] = {}
-    for name in type(model).model_fields:
-        value = getattr(model, name)
-        if isinstance(value, BaseModel):
-            nested = _collect_set_fields(value)
-            if nested:
-                overrides[name] = nested
-        elif name in model.__pydantic_fields_set__:
-            overrides[name] = value
-    return overrides
-
-
-def _overlay_set_fields(saved: Parameters, runtime: Parameters) -> Parameters:
-    """Deep-merge ``runtime``'s explicitly-set fields onto ``saved``.
-
-    Only fields ``runtime`` marks as set (recursively, at every nesting level)
-    override ``saved``; unset fields keep their saved values. The merged mapping
-    is revalidated through the model so nested groups and type coercion are
-    handled correctly. Returns ``saved`` unchanged when ``runtime`` sets no
-    fields.
-    """
-    overrides = _collect_set_fields(runtime)
-    if not overrides:
-        return saved
-    return saved.model_validate(merge_dicts(saved.model_dump(), overrides))
-
-
-def _section_values(kwargs: dict[str, Any], section: str) -> dict[str, Any]:
-    """Return values for a nested section merged with flat compatibility kwargs."""
-    section_value = kwargs.get(section)
-    match section_value:
-        case BaseModel() as model:
-            section_data = model.model_dump()
-        case Mapping() as mapping:
-            section_data = dict(mapping)
-        case None:
-            section_data = {}
-        case _:
-            section_data = {section: section_value}
-
-    flat_values = {key: value for key, value in kwargs.items() if key != section}
-    return section_data | flat_values
 
 
 class SafeSynthesizerParameters(Parameters):
@@ -138,6 +98,35 @@ class SafeSynthesizerParameters(Parameters):
             "Defaults from NEMO_TELEMETRY_ENABLED when unset."
         ),
     )
+
+    unknown_fields: UnknownFieldBehavior = Field(
+        default=DEFAULT_UNKNOWN_FIELDS,
+        description=(
+            "How unknown configuration keys are handled recursively. "
+            "Use 'ignore' only for compatibility with stale configurations and notebooks "
+            "or mismatched client and service versions."
+        ),
+    )
+
+    @classmethod
+    def _unknown_fields_from_input(cls, source: object) -> UnknownFieldBehavior:
+        """Resolve the policy declared by a complete configuration input."""
+        if isinstance(source, cls):
+            return source.unknown_fields
+        if isinstance(source, Mapping):
+            mapping = cast(Mapping[str, object], source)
+            return validate_unknown_fields(mapping.get("unknown_fields", DEFAULT_UNKNOWN_FIELDS))
+        return DEFAULT_UNKNOWN_FIELDS
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_unknown_field_policy(cls, value: object) -> object:
+        """Apply the declared policy before the model tree is validated."""
+        if not isinstance(value, Mapping):
+            return value
+        mapping = cast(Mapping[str, object], value)
+        unknown_fields = cls._unknown_fields_from_input(mapping)
+        return normalize_unknown_fields(cls, mapping, unknown_fields)
 
     @model_validator(mode="after")
     def _validate_and_resolve_data_params(self) -> Self:
@@ -210,59 +199,103 @@ class SafeSynthesizerParameters(Parameters):
         return self
 
     @classmethod
-    def from_params(cls, **kwargs) -> "SafeSynthesizerParameters":
-        """Convert singular, flat parameters to nested structure.
+    @override
+    def from_params(cls, **kwargs: object) -> "SafeSynthesizerParameters":
+        """Construct parameters from resolved keyword names.
 
-          Takes a flat dictionary of parameters, where keys correspond to
-          attributes of the nested parameter classes, and constructs a
-          ``SafeSynthesizerParameters`` instance with the appropriate nested
-          structure, using default values for each subgroup that are not
-          explicitly provided.
+        Names may be top-level fields, canonical dotted paths, unique bare
+        names, or supported legacy aliases. Ambiguous bare names raise an error
+        that lists the canonical dotted alternatives.
 
-          Args:
-              **kwargs: Flat key-value pairs that map to attributes of the
-                  nested parameter classes (e.g., ``TrainingHyperparams``,
-                  ``GenerateParameters``).
+        Args:
+            **kwargs: Values keyed by a supported parameter name.
 
-          Returns:
-              A fully initialized ``SafeSynthesizerParameters`` instance with
-              nested sub-configurations populated from the provided values.
+        Returns:
+            A validated configuration with unspecified fields defaulted.
 
         Example:
             >>> from nemo_safe_synthesizer.config import SafeSynthesizerParameters
-            >>> SafeSynthesizerParameters.from_params(structured_generation={"enabled": True})
+            >>> SafeSynthesizerParameters.from_params(num_records=2000)
         """
-        thp = TrainingHyperparams.model_validate(_section_values(kwargs, "training"))
-        gp = GenerateParameters.model_validate(_section_values(kwargs, "generation"))
-        ep = EvaluationParameters.model_validate(_section_values(kwargs, "evaluation"))
-        pp = DifferentialPrivacyHyperparams.model_validate(_section_values(kwargs, "privacy"))
-        dp = DataParameters.model_validate(_section_values(kwargs, "data"))
-        tsp = TimeSeriesParameters.model_validate(_section_values(kwargs, "time_series"))
+        schema = ParameterSchema.from_model(cls)
+        assignments: list[PatchAssignment] = []
+        resolved_paths: set[ParameterPath] = set()
+        for name, value in kwargs.items():
+            if (path := schema.require(name)) in resolved_paths:
+                raise ParameterError(f"Duplicate parameter path {str(path)!r}.")
+            resolved_paths.add(path)
+            assignments.append(PatchAssignment(path, value, f"parameter {name!r}", 0))
 
-        extra: dict[str, Any] = {
-            "training": thp,
-            "generation": gp,
-            "evaluation": ep,
-            "privacy": pp,
-            "data": dp,
-            "time_series": tsp,
-        }
-        if "replace_pii" in kwargs:
-            extra["replace_pii"] = kwargs["replace_pii"]
-        if "preflight" in kwargs:
-            extra["preflight"] = kwargs["preflight"]
-        if "emit_telemetry" in kwargs:
-            extra["emit_telemetry"] = kwargs["emit_telemetry"]
-        return cls(**extra)
+        return CompiledConfigPatch.from_paths(cls, assignments).apply()
+
+    @classmethod
+    @override
+    def from_config_source(
+        cls,
+        source: Parameters | Mapping[str, object] | None = None,
+        **kwargs: object,
+    ) -> Self:
+        """Normalize a source using its effective unknown-field policy."""
+        if "unknown_fields" in kwargs:
+            unknown_field_behavior = validate_unknown_fields(kwargs["unknown_fields"])
+        else:
+            unknown_field_behavior = cls._unknown_fields_from_input(source)
+        return cast(
+            Self,
+            super().from_config_source(
+                source,
+                unknown_field_behavior=unknown_field_behavior,
+                **kwargs,
+            ),
+        )
+
+    @classmethod
+    def from_config_patch(cls, patch: ConfigPatch) -> Self:
+        """Validate a sparse top-level config patch as a full configuration."""
+        normalized = ParameterSchema.from_model(cls).normalize_aliases(patch)
+        unknown_fields = cls._unknown_fields_from_input(normalized)
+        return CompiledConfigPatch.from_mapping(
+            cls, normalized, origin="config patch", precedence=0, unknown_fields=unknown_fields
+        ).apply()
+
+    def with_config_patch(self, patch: ConfigPatch) -> Self:
+        """Apply a sparse top-level config patch and revalidate the result.
+
+        Only fields explicitly set on ``self`` are carried into the merge before
+        applying ``patch``. This preserves file/CLI precedence while keeping
+        default values implicit for future ``exclude_unset`` dumps.
+        """
+        model_type = type(self)
+        base = CompiledConfigPatch.from_mapping(
+            model_type,
+            self.model_dump(exclude_unset=True),
+            origin="base config",
+            precedence=0,
+            unknown_fields="reject",
+        )
+        normalized = ParameterSchema.from_model(model_type).normalize_aliases(patch)
+        unknown_fields = (
+            validate_unknown_fields(normalized["unknown_fields"])
+            if "unknown_fields" in normalized
+            else self.unknown_fields
+        )
+        override = CompiledConfigPatch.from_mapping(
+            model_type,
+            normalized,
+            origin="config patch",
+            precedence=1,
+            unknown_fields=unknown_fields,
+        )
+        return base.combine(override).apply()
 
     def with_runtime_overrides(self, runtime: SafeSynthesizerParameters) -> "SafeSynthesizerParameters":
-        """Apply resume-time generation/evaluation/telemetry overrides onto a copy of self.
+        """Apply supported resume-time overrides onto a copy of self.
 
         ``self`` is the saved training-run config. Only explicitly-set
         ``generation`` and ``evaluation`` fields from ``runtime`` are merged in,
-        plus ``emit_telemetry`` when the caller set it. Training, data, privacy,
-        and other sections are preserved so training provenance survives a
-        generate-only resume.
+        plus ``emit_telemetry`` and ``unknown_fields`` when the caller set them.
+        Training, data, privacy, and other sections are preserved so training
+        provenance survives a generate-only resume.
 
         Args:
             runtime: Config carrying resume-time CLI/SDK overrides. Typically
@@ -275,17 +308,22 @@ class SafeSynthesizerParameters(Parameters):
             not affect the other.
         """
         updates: dict[str, object] = {}
-        # Only record sections that actually changed; unchanged sections are
-        # deep-copied by ``model_copy(deep=True)`` below so the returned config
-        # never shares mutable sub-objects with ``self``.
-        generation = _overlay_set_fields(self.generation, runtime.generation)
-        if generation is not self.generation:
-            updates["generation"] = generation
-        evaluation = _overlay_set_fields(self.evaluation, runtime.evaluation)
-        if evaluation is not self.evaluation:
-            updates["evaluation"] = evaluation
-        # emit_telemetry is a top-level scalar: detect explicit assignment,
-        # since there is no sub-model to inspect for set fields.
-        if "emit_telemetry" in runtime.__pydantic_fields_set__:
+
+        def _add_section(name: str, section: Parameters) -> None:
+            if (materialized := section.explicit_patch().materialize()) or name in runtime.model_fields_set:
+                updates[name] = materialized
+
+        _add_section("generation", runtime.generation)
+        _add_section("evaluation", runtime.evaluation)
+        if "emit_telemetry" in runtime.model_fields_set:
             updates["emit_telemetry"] = runtime.emit_telemetry
-        return self.model_copy(update=updates, deep=True)
+        if "unknown_fields" in runtime.model_fields_set:
+            updates["unknown_fields"] = runtime.unknown_fields
+        patch = CompiledConfigPatch.from_mapping(
+            type(self),
+            updates,
+            origin="runtime override",
+            precedence=1,
+            unknown_fields="reject",
+        )
+        return self.apply_patch(patch)

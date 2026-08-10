@@ -199,7 +199,7 @@ class GenerationObservability(BaseModel):
     )
 
     def to_wandb_payload(self, prefix: str = "vllm_gen") -> dict[str, Any]:
-        """Flatten this event into a wandb-friendly ``wandb.log(...)`` dict.
+        """Flatten this event into a W&B-summary-friendly metrics dict.
 
         Wandb plots scalars cleanly but renders tuples/dicts as opaque
         blobs, so this method:

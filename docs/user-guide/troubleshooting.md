@@ -14,7 +14,7 @@ configuration, and NER parallelism, see [Environment Variables](environment.md).
 
 | Symptom | Likely Cause | Fix |
 |---------|-------------|-----|
-| Install fails on Python 3.14 | vLLM and dependency wheels are not ready | [Use Python 3.11–3.13](#python-314-is-not-supported) |
+| Install fails on Python 3.15+ | Outside `requires-python` upper bound | [Use Python 3.11–3.14](#unsupported-python-versions) |
 | "kernels package not installed" | Optional Kernels Hub backend selected without `kernels` installed | Set `training.attn_implementation: sdpa` |
 | `ConnectionError` during startup | No internet / model not cached | [Pre-cache models](environment.md#pre-caching-models) |
 | OOM in training | VRAM exhausted | [Reduce batch size, quantize](#out-of-memory-during-training) |
@@ -71,22 +71,21 @@ configuration reference.
 `uv sync` fails with an error mentioning incompatible `transformers` and
 `vllm` requirements.
 
-Safe Synthesizer requires `transformers>=5.6,<6`. vLLM 0.20.0 accepts
-transformers v5, but excludes several early 5.x releases that are not
-compatible with its runtime. Keep vLLM's exclusions intact and resolve to a
-newer transformers v5 release.
+Safe Synthesizer requires `transformers>=5.12,<5.12.1` with vLLM 0.26.0.
+Keep vLLM's constraints intact so the resolver selects the tested
+Transformers/vLLM pairing.
 
 ```toml
 [project]
 dependencies = [
-  "transformers>=5.6,<6",
-  "vllm==0.20.0",
+  "transformers>=5.12,<5.12.1",
+  "vllm==0.26.0",
 ]
 ```
 
 If you've vendored or copied parts of `pyproject.toml` into another project,
 avoid adding a broad `transformers>=5.0,<6` override for vLLM. That can erase
-vLLM's explicit exclusions and allow incompatible early v5 releases.
+vLLM's explicit constraints and allow incompatible Transformers releases.
 
 ### Slow Tokenizer Warning
 
@@ -109,12 +108,10 @@ The warning is informational. To suppress it, switch to a model with a
 fast tokenizer (most popular models do; check
 `AutoTokenizer.from_pretrained(model).is_fast`).
 
-### Python 3.14 Is Not Supported
+### Unsupported Python Versions
 
-Safe Synthesizer requires **Python 3.11, 3.12, or 3.13**. Python 3.14+ is not
-supported because vLLM currently declares `<3.14` support while upstream
-resolves Python 3.14 wheel compatibility across its dependency stack. Attempting
-to install on Python 3.14 fails with an unresolvable dependency error during
+Safe Synthesizer supports Python 3.11, 3.12, 3.13, and 3.14. Python 3.15+ is
+not supported. Attempting to install on an unsupported interpreter fails during
 `pip install` or `uv pip install`.
 
 To fix, create a virtual environment with a supported interpreter:
@@ -124,9 +121,8 @@ uv venv --python 3.13
 source .venv/bin/activate
 ```
 
-The project's `pyproject.toml` enforces `requires-python = ">=3.11, <3.14"`, so
-package managers will reject the install on unsupported versions. This upper
-bound will be raised once all transitive dependencies ship `cp314` wheels.
+The project's `pyproject.toml` enforces `requires-python = ">=3.11, <3.15"`, so
+package managers will reject the install on unsupported versions.
 
 ---
 
@@ -528,6 +524,15 @@ check of its own.
 | `constant_column` | warning | `columns.constant` | Column has only one unique value |
 | `timestamp_not_found` | error | `timeseries.timestamp` | Timestamp column missing, or input DataFrame uses unsupported MultiIndex columns |
 | `timestamp_nulls` | error | `timeseries.timestamp` | Timestamp column has nulls |
+| `timestamp_format_mismatch` | error | `timeseries.shape` | Timestamp format could not be inferred or the configured format does not match the timestamp values |
+| `timestamp_parse_failed` | error | `timeseries.shape` | One or more timestamp values could not be parsed with the inferred or configured timestamp format |
+| `timestamp_elapsed_non_numeric` | error | `timeseries.shape` | `timestamp_format='elapsed_seconds'` was configured for a non-numeric timestamp column |
+| `timestamp_elapsed_invalid` | error | `timeseries.shape` | `timestamp_format='elapsed_seconds'` was configured for boolean or infinite timestamp values |
+| `timestamp_interval_mismatch` | error | `timeseries.shape` | Timestamp intervals are inconsistent within or across groups, or do not match `timestamp_interval_seconds` |
+| `timeseries_empty` | error | `timeseries.shape` | Time-series data contains no records to validate |
+| `timeseries_group_length_mismatch` | error | `timeseries.shape` | Time-series groups do not contain the same number of records |
+| `timeseries_start_mismatch` | error | `timeseries.shape` | Time-series groups do not share the same start timestamp |
+| `timeseries_stop_mismatch` | error | `timeseries.shape` | Time-series groups do not share the same stop timestamp |
 | `tokenizer_unavailable` | warning | `token_budget` | Model tokenizer could not be loaded; token checks skipped |
 | `schema_exceeds_context` | error | `token_budget` | Schema prompt exceeds model context window |
 | `record_exceeds_context` | error | `token_budget` | Individual records exceed context window |
@@ -641,8 +646,12 @@ Missing timestamp values:
 Interval mismatch:
 
 : If `timestamp_interval_seconds` does not match the actual intervals in your
-  data, a warning is logged but the pipeline continues. Verify your interval
-  setting matches the data.
+  data, pre-flight and training fail with `timestamp_interval_mismatch`.
+  Verify your interval setting matches the data and is a positive whole number
+  of seconds. Fractional/sub-second intervals are not supported; resample or
+  represent the data at whole-second resolution. Time-series synthesis is
+  experimental, and this validation is intentionally strict so mismatches are
+  caught before expensive pipeline stages.
 
 Groups skipped during generation:
 

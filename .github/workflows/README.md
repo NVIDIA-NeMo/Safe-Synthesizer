@@ -118,8 +118,8 @@ The `ci-checks.yml` workflow runs on every push to `main` and on pull requests. 
 
 | Job | mise task | What it checks |
 | --- | --- | --- |
-| Format | `format-check` | `ruff format --check` + `ruff check` + SPDX copyright headers |
-| Format (lock) | `lock-check` | `uv.lock` matches `pyproject.toml` |
+| Format | `format-check` | `dprint check` for TOML + `ruff format --check` + `ruff check` + SPDX copyright headers |
+| Format (lock) | `lock-check` | generated CUDA metadata matches `cuda_deps.toml` + `uv.lock` matches `pyproject.toml` |
 | Typecheck | `typecheck` | `ty check` (excludes per `pyproject.toml [tool.ty.src]`) |
 | Unit Tests | `test:ci` | pytest with coverage (excludes slow, e2e, gpu, smoke) |
 | Smoke Tests | `test:smoke` | CPU smoke tests (training/generation hot paths, tiny models) |
@@ -134,7 +134,7 @@ To replicate CI locally:
 
 ```bash
 mise run check        # format-check + typecheck
-mise run lock-check   # verify uv.lock
+mise run lock-check   # verify generated CUDA metadata and uv.lock
 mise run test:ci      # CI unit tests with coverage selectors
 mise run test:smoke   # CPU smoke tests
 ```
@@ -145,13 +145,13 @@ All jobs run on `ubuntu-latest` (GitHub-hosted).
 
 The `gpu-tests.yml` workflow runs nightly at 02:00 UTC, and can also be triggered manually via `workflow_dispatch`. Manual dispatch includes a `suite` dropdown with `all`, `smoke`, and `e2e` options. The `push` trigger for `pull-request/*` branches is currently commented out due to internal blockers, so PRs do not automatically produce GPU status checks. We expect to re-enable that path as soon as those blockers are resolved. There are several key jobs:
 
-- GPU Smoke Tests: staged smoke tests on a gpu runner with a 30-minute job timeout. The train-only, generation, resume, structured generation, timeseries, and SmolLM2 lanes run as separate workflow steps. Required for merge when the workflow is part of branch protection.
-- GPU E2E Tests: End-to-end tests on a gpu runner with a 60-minute job timeout and 45-minute step timeout. Informational -- failures produce a warning but don't block merge.
+- GPU Smoke Tests: runs GPU-marked unit tests, followed by staged train-only, generation, resume, structured generation, timeseries, and SmolLM2 smoke tests. Required for merge when the workflow is part of branch protection.
+- GPU E2E Tests: End-to-end tests on a gpu runner with a 210-minute job timeout and 190-minute step timeout. Informational -- failures produce a warning but don't block merge.
 - GPU CI Status: Aggregation job for the GPU workflow. It is not currently a live branch-protection requirement while PR GPU runs are disabled; when re-enabled, it is intended to be the required GPU check. It fails if smoke tests fail and warns if E2E tests fail.
 
 The `changes` (Detect Changes) job is skipped on `workflow_dispatch`. GPU jobs use `always()` in their job conditions so manual runs can bypass the skipped dependency and run the selected suite. On scheduled runs, `changes` gates GPU jobs with the `src_test_deps` output, which is true for source, test, `pytest.ini`, dependency, or CI workflow/action changes.
 
-GPU jobs use `.github/actions/setup-gpu-test-env` for shared GPU setup: enabling the `uv` cache, setting up Python from `.python-version`, bootstrapping CUDA dependencies with mise, and checking GPU availability.
+GPU jobs use `.github/actions/setup-gpu-test-env` for shared GPU setup. Following the release wheel verification's clean-room pattern, the action builds the wheel and installs `[cu129,engine]` plus test tooling with uv configuration and project sources disabled. Dependencies resolve from PyPI and the required CUDA wheel indexes without consulting `uv.lock` before GPU availability is checked.
 
 To trigger manually from the CLI (produces a run but not a PR status check):
 
@@ -215,21 +215,27 @@ Scans PRs for accidentally committed secrets. False positives can be added to `.
 
 ## Release Workflow (Production)
 
-The production release workflow publishes to test PyPI and regular PyPI. It also creates release notes
+The production release workflow verifies and publishes the wheel to Test PyPI
+and PyPI, creates a GitHub release, and publishes versioned documentation for
+final releases.
 
 ### How to Release
 
-1. Push a tag to the repository (start with a release candidate like `v0.0.5rc0` for big changes)
-2. Monitor the release pipeline to see it makes its way to Test PyPI/PyPI.
+Follow the release preparation, candidate validation, promotion, and
+post-release procedures in the [contributor guide](../../CONTRIBUTING.md#releasing).
+The guide documents the read-only `release:prepare` helper and the supported
+tag formats.
 
 ### Release Process
 
 The workflow performs the following steps:
 
 1. Build wheel - Builds the production wheel
-2. Push to test PyPI
-3. Publish to PyPI - Uploads to PyPI
-4. Create GitHub release
+2. Verify the wheel installs in a clean end-user container
+3. Push to test PyPI
+4. Publish to PyPI - Uploads to PyPI
+5. Create GitHub release
+6. Publish versioned documentation for final releases
 
 ## Reusable Workflows
 

@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+import math
 import warnings
+from collections.abc import Mapping
 from typing import Annotated, Any, ClassVar, Literal, Self
 
 from pydantic import (
@@ -12,6 +14,7 @@ from pydantic import (
     model_validator,
 )
 
+from ..configurator.parameter_paths import ParameterSchema
 from ..configurator.parameters import (
     Parameters,
 )
@@ -112,6 +115,17 @@ class ValidationParameters(Parameters, BaseModel):
         ),
     ] = False
 
+    enforce_numeric_range: Annotated[
+        bool,
+        Field(
+            title="enforce_numeric_range",
+            description=(
+                "When True, reject floats outside the training-observed min/max. "
+                "Set False to skip float range checks (integers/enums still enforced)."
+            ),
+        ),
+    ] = True
+
 
 class StructuredGenerationParameters(Parameters, BaseModel):
     """Configuration for vLLM structured generation.
@@ -162,6 +176,18 @@ class StructuredGenerationParameters(Parameters, BaseModel):
             description="Whether to use a regex that matches exactly one sequence or record if ``max_sequences_per_example`` is 1.",
         ),
     ] = False
+
+    max_records_per_sequence: Annotated[
+        int | None,
+        ValueValidator(value_func=lambda v: v is None or v >= 1),
+        Field(
+            title="max_records_per_sequence",
+            description=(
+                "Max records per grouped sequence under structured generation. "
+                "None uses the largest training group size. Must be None or >= 1."
+            ),
+        ),
+    ] = None
 
     @model_validator(mode="after")
     def _validate_structural_tag_backend(self) -> Self:
@@ -239,6 +265,18 @@ class GenerateParameters(Parameters, BaseModel):
         ),
     ] = 0.8
 
+    max_tokens_multiplier: Annotated[
+        float,
+        ValueValidator(value_func=lambda v: math.isfinite(v) and v > 0),
+        Field(
+            title="max_tokens_multiplier",
+            description=(
+                "Multiplier on the longest training example when sizing per-sample "
+                "max_tokens. Must be a finite value > 0. Default 1.2."
+            ),
+        ),
+    ] = 1.2  # mirrors llm.metadata.GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER (kept a literal to avoid a config->llm import cycle)
+
     structured_generation: StructuredGenerationParameters = Field(
         description="Structured generation parameters controlling schema-constrained output.",
         default_factory=StructuredGenerationParameters,
@@ -270,45 +308,19 @@ class GenerateParameters(Parameters, BaseModel):
         ),
     ] = "auto"
 
-    _STRUCTURED_GENERATION_LEGACY_FIELDS: ClassVar[dict[str, str]] = {
-        "use_structured_generation": "enabled",
-        "structured_generation_backend": "backend",
-        "structured_generation_schema_method": "schema_method",
-        "structured_generation_use_single_sequence": "use_single_sequence",
+    parameter_aliases: ClassVar[Mapping[str, str]] = {
+        "use_structured_generation": "structured_generation.enabled",
+        "structured_generation_backend": "structured_generation.backend",
+        "structured_generation_schema_method": "structured_generation.schema_method",
+        "structured_generation_use_single_sequence": "structured_generation.use_single_sequence",
     }
 
     @model_validator(mode="before")
     @classmethod
     def _migrate_legacy_structured_generation_fields(cls, data: Any) -> Any:
-        if not isinstance(data, dict):
+        if not isinstance(data, Mapping):
             return data
-
-        values = dict(data)
-        legacy = {
-            new_name: values.pop(old_name)
-            for old_name, new_name in cls._STRUCTURED_GENERATION_LEGACY_FIELDS.items()
-            if old_name in values
-        }
-        if not legacy:
-            return values
-
-        structured_generation = values.get("structured_generation")
-        match structured_generation:
-            case StructuredGenerationParameters() as params:
-                structured_values = params.model_dump()
-            case BaseModel() as model:
-                structured_values = model.model_dump()
-            case dict() as mapping:
-                structured_values = dict(mapping)
-            case None:
-                structured_values = {}
-            case _:
-                return values
-
-        # Legacy flat keys are treated as explicit overrides for migration
-        # paths such as ``from_params(generation={...}, structured_generation_backend=...)``.
-        values["structured_generation"] = structured_values | legacy
-        return values
+        return ParameterSchema.from_model(cls).normalize_aliases(data)
 
     @property
     def use_structured_generation(self) -> bool:

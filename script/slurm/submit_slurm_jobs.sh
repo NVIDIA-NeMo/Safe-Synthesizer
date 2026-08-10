@@ -154,13 +154,26 @@ prebuild_repo_venv() {
     flock -x 200
     unset VIRTUAL_ENV
     cd "${NSS_DIR}"
-    uv sync --frozen --extra cu129 --extra engine --group dev --python "${NSS_PYTHON_VERSION}"
+    MISE_IGNORED_CONFIG_PATHS="${MISE_IGNORED_CONFIG_PATHS:-${HOME}/.config/mise/config.toml}" \
+      MISE_LOCKED=1 \
+      NSS_SLURM_USER="${USER_NAME}" \
+      mise run bootstrap-nss-slurm cu129
   ) 200>"${lock_file}"
+
+  local lustre_root
+  local repo_python
+  lustre_root="$(readlink -f "${LUSTRE_DIR}")"
+  repo_python="$(readlink -f "${NSS_DIR}/.venv/bin/python" 2>/dev/null || true)"
+  if [[ -z "${repo_python}" || "${repo_python}" != "${lustre_root}/"* ]]; then
+    echo "[submit] ERROR: repo venv Python is not container-visible under Lustre: ${repo_python:-missing}" >&2
+    echo "[submit] Rebuild it: (cd ${NSS_DIR} && mise run bootstrap-nss-slurm cu129)" >&2
+    exit 1
+  fi
 
   # Functionally verify the venv by running safe-synthesizer once
   if ! "${NSS_DIR}/.venv/bin/safe-synthesizer" --help >/dev/null 2>&1; then
     echo "[submit] ERROR: repo venv at ${NSS_DIR}/.venv is not functional (safe-synthesizer failed to run)" >&2
-    echo "[submit] Rebuild it: (cd ${NSS_DIR} && rm -rf .venv && mise run bootstrap-nss cu129)" >&2
+    echo "[submit] Rebuild it: (cd ${NSS_DIR} && mise run bootstrap-nss-slurm cu129)" >&2
     exit 1
   fi
   echo "[submit] repo venv ready: $("${NSS_DIR}/.venv/bin/python" --version 2>&1)"

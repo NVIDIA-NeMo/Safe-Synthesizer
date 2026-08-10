@@ -120,16 +120,22 @@ def test_parse_overrides_empty_segment_raises():
         parse_overrides({"a____b": "x"})
 
 
-def test_parse_overrides_no_flag_then_nested_override():
-    """Nested override takes precedence over --no_ flag for same field."""
-    result = parse_overrides({"no_privacy": True, "privacy__epsilon": 1.0})
-    assert result == {"privacy": {"epsilon": 1.0}}
+@pytest.mark.parametrize("key", [".a", "a.", "a..b"])
+def test_parse_overrides_custom_separator_rejects_empty_segments(key: str):
+    with pytest.raises(ValueError, match=repr(key)):
+        parse_overrides({key: "x"}, field_sep=".")
 
 
-def test_parse_overrides_nested_then_no_flag():
-    """--no_ flag after nested override disables the field."""
-    result = parse_overrides({"privacy__epsilon": 1.0, "no_privacy": True})
-    assert result["privacy"] is None
+@pytest.mark.parametrize(
+    "values",
+    [
+        pytest.param({"no_privacy": True, "privacy__epsilon": 1.0}, id="parent-then-child"),
+        pytest.param({"privacy__epsilon": 1.0, "no_privacy": True}, id="child-then-parent"),
+    ],
+)
+def test_parse_overrides_rejects_parent_child_collisions(values: dict[str, object]):
+    with pytest.raises(ValueError, match=r"Conflicting override paths.*privacy"):
+        parse_overrides(values)
 
 
 # ---------------------------------------------------------------------------

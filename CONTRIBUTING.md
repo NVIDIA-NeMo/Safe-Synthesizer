@@ -27,10 +27,10 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 
 ### Prerequisites
 
-- Python 3.11–3.13 (project supports Python 3.11, 3.12, and 3.13; `.python-version` pins 3.13 for bootstrapping at the repo root. Python 3.14+ is not supported — see [Troubleshooting](docs/user-guide/troubleshooting.md#python-314-is-not-supported))
+- Python 3.11–3.14 (project supports Python 3.11, 3.12, 3.13, and 3.14; `.python-version` pins 3.13 for bootstrapping at the repo root)
 - Git 2.34+ (minimum required for SSH commit signing)
 
-> Note: Other tools like [uv](https://docs.astral.sh/uv/), [ruff](https://docs.astral.sh/ruff/), [ty](https://github.com/astral-sh/ty), and [gh](https://cli.github.com/) are installed automatically by `make setup` (via [mise](https://mise.jdx.dev/)). Tool versions are declared in `.mise.toml` and locked in `mise.lock` (committed), ensuring reproducible toolchains across developer systems and CI. These should not interfere with locally installed tools.
+> Note: Other tools like [uv](https://docs.astral.sh/uv/), [dprint](https://dprint.dev/), [ruff](https://docs.astral.sh/ruff/), [ty](https://github.com/astral-sh/ty), and [gh](https://cli.github.com/) are installed automatically by `make setup` (via [mise](https://mise.jdx.dev/)). Tool versions are declared in `.mise.toml` and locked in `mise.lock` (committed), ensuring reproducible toolchains across developer systems and CI. These should not interfere with locally installed tools.
 
 > Note on mise itself: the mise version is pinned in `.mise.toml` (`min_version`). The first run of `make setup` installs exactly that version via `tools/install-mise.sh`, preferring the GPG-verified installer when the full toolchain (`gpg`, `gpg-agent`, and `dirmngr`) is available and falling back to `https://mise.run` otherwise (with a warning). If you already have a different mise version on `PATH`, `make setup` will stop and tell you -- either run `mise self-update <pinned>` or uninstall the existing mise and rerun. It will not silently replace your install.
 
@@ -557,14 +557,14 @@ Although the default development/runtime interpreter is Python 3.13, source code
 Use mise tasks instead of running `ruff` or `ty` directly. The tasks use pinned tool versions from `.mise.[toml|lock]` (installed via `make setup`) and check all tracked files.
 
 ```bash
-mise run format   # auto-fix: ruff format + import sorting + copyright headers
+mise run format   # auto-fix: dprint TOML + ruff format/import sorting + copyright headers
 mise run check    # read-only local quality checks (format + lint + typecheck + copyright)
 mise run test     # unit tests
 # or just
 mise run format && mise run check && mise run test
 ```
 
-We use `ruff` and `ty` for the majority of this work, wrapped with settings for consistency.
+We use `dprint` for TOML, `ruff` for Python formatting and linting, and `ty` for type checking, wrapped with settings for consistency.
 
 CI calls the same tools through atomic read-only mise tasks. Declarative tasks live in `.mise/tasks/*.toml`; bash-heavy tasks are executable file tasks under `.mise/tasks/`. Shared shell helpers live in `.mise/tasks/_lib.sh`, which is sourced by file tasks but is not executable and does not appear in `mise tasks`. `mise run check` replicates format-check + typecheck locally; `mise run validate` runs the broader pre-PR graph (`check`, `lock-check`, and `test:ci`). Pre-commit hooks (`pre-commit install`) provide faster feedback by checking only staged files, but are not a substitute for the mise tasks.
 
@@ -590,10 +590,11 @@ All mise tasks check the entire project. Pre-commit scopes checks to staged file
 
 | Check | CI task | `mise run format` / `mise run check` | Pre-commit |
 |---|---|---|---|
+| dprint TOML format | `mise run format-check` | `format`: auto-fix; `check`: read-only | not run |
 | ruff format + lint | `mise run format-check` | `format`: auto-fix; `check`: read-only | staged files (auto-fix) |
 | ty typecheck | `mise run typecheck` | read-only | all files |
 | copyright headers | `mise run format-check` | `format`: auto-fix; `check`: read-only | staged files (auto-fix) |
-| uv lock drift | `mise run lock-check` | not checked | on `pyproject.toml` changes |
+| generated CUDA metadata and uv lock drift | `mise run lock-check` | not checked | on `pyproject.toml` or `cuda_deps.toml` changes |
 | DCO signoff | branch protection | not checked | commit-msg hook |
 
 ## Documentation
@@ -683,13 +684,16 @@ Before contributing, run `mise run format` and `mise run check`. See `AGENTS.md`
 
 ## Releasing
 
-Releases are published to PyPI via the **Release NeMo Safe Synthesizer** GitHub Actions workflow. The workflow builds the wheel from a git tag, publishes to Test PyPI as a pre-flight check, publishes to the real PyPI, and creates a GitHub release.
+Pushing a `v*` tag starts two workflows. [`release.yml`](.github/workflows/release.yml)
+publishes the wheel to Test PyPI and PyPI, creates a GitHub release, and
+publishes versioned documentation for final releases, including post-releases.
+[`container-build.yml`](.github/workflows/container-build.yml) publishes the
+CUDA image to GitHub Container Registry (GHCR).
 
-### 1. Create and push a tag
-
-Release versions follow [PEP440](https://peps.python.org/pep-0440/) with major, minor, and patch release numbers.
-This project uses stable releases and release candidates only; prerelease versions append the suffix rcN (no dash, as specified by PEP440).
-The GitHub tag always starts with a `v` prefix.
+Release versions follow [PEP 440](https://peps.python.org/pep-0440/) with major,
+minor, and patch release numbers. This project uses stable releases, release
+candidates, and post-releases. Prerelease versions append `rcN` without a dash;
+post-releases append `.postN`. The GitHub tag always starts with a `v` prefix.
 
 Examples:
 
@@ -699,26 +703,151 @@ Examples:
 | `v2.1.3`      | `2.1.3`      | ✅                                              |
 | `v0.0.5rc0`   | `0.0.5rc0`   | ✅                                              |
 | `v0.1.2rc5`   | `0.1.2rc5`   | ✅                                              |
+| `v0.1.6.post1` | `0.1.6.post1` | ✅                                              |
 | `1.0.0`       |              | ❌ No `v` prefix                                |
 | `release-1.0` |              | ❌ Wrong format                                 |
 | `v0.0.7-rc4`  |              | ❌ Dash before rc suffix                        |
+| `v0.1.6-post1` |               | ❌ Dash before post-release suffix              |
 | `v0.1.3a1`    |              | ❌ Alpha prereleases are not used; use rcN only |
 
-To create and push tags:
+### Release Preparation Helper
+
+Run `mise run release:prepare -- [OPTIONS]` to compute a release tag before
+creating it. The helper reads local Git tags and resolves the requested target
+commit, but it does not create, delete, or push tags.
+
+- `--bump major`, `--bump minor`, and `--bump patch` propose the corresponding
+  next version's initial `rc0` tag. The default is `patch`.
+- `--bump post` proposes the next `.postN` tag for the latest stable version.
+- `--ref REF` selects the commit to tag and defaults to `HEAD`.
+- `--json` emits the computed release plan as machine-readable JSON.
+
+Fetch the tags you intend the helper to consider before running it. It rejects
+malformed release tags, post-release tags without their stable base tag, and an
+initial `rc0` proposal when an RC already exists for that version.
+
+### Release Checklist
+
+#### Before Publishing
+
+- Fetch `origin/main` and tags, choose the exact release commit, and confirm its
+  normal CI and manually dispatched GPU Tests run passed.
+- Choose the unused tag or tags required for the release type, then record the
+  exact `origin/main` SHA.
+- Decide whether GHCR visibility or a separate nSpect or Pulse scan blocks the
+  release. Those scans are not part of the GitHub release workflows.
+
+After fetching tags, preview the next release's initial `rc0` version and
+resolve its target commit without creating or pushing a tag:
 
 ```bash
-# Stable release
-git tag v0.1.0 <commit-sha>
-
-# Release candidate
-git tag v0.1.0rc1 <commit-sha>
-
-git push origin <tag>
+mise run release:prepare -- --ref origin/main
 ```
 
-### 2. Monitor the workflow run
+#### Tag Trigger
 
-The [workflow](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/actions/workflows/release.yml) to release is triggered automatically when a tag starting with `v` is pushed to GitHub.
+Create the candidate tag at the recorded SHA and push it. This automatically
+starts the package and container workflows described above.
+
+```bash
+RC_TAG=v0.1.0rc0  # Replace with the intended candidate tag.
+RELEASE_SHA="$(git rev-parse 'origin/main^{commit}')"
+git tag "${RC_TAG}" "${RELEASE_SHA}"
+git push origin "refs/tags/${RC_TAG}"
+```
+
+Candidate tags also move the mutable GHCR `cu129` and `latest-cu129` aliases.
+During candidate validation, identify the image by its immutable
+`sha-<short-sha>-cu129` tag and do not treat those aliases as stable.
+
+Never move a published tag. If code changes, create and validate the next
+`rcN`.
+
+#### Verify and Promote
+
+- Verify the candidate tag still resolves to the recorded SHA and both
+  workflows succeeded for that tag.
+- Confirm the candidate exists on Test PyPI, production PyPI, and GitHub
+  Releases, then pull its immutable GHCR SHA tag with the intended visibility.
+- Install the production-PyPI wheel outside the repository with uv project
+  configuration disabled. Check the dependency set, import, and CLI.
+
+Use the same auxiliary indexes documented in the installation guide for the
+clean CUDA install. Set `NSS_VERSION` to the candidate version:
+
+```bash
+SMOKE_DIR=/tmp/nss-release-smoke
+SMOKE_VENV="${SMOKE_DIR}/.venv"
+NSS_VERSION="${RC_TAG#v}"
+mkdir -p "${SMOKE_DIR}"
+cd "${SMOKE_DIR}"
+uv --no-config venv --clear --python 3.13 "${SMOKE_VENV}"
+uv --no-config pip install \
+  --python "${SMOKE_VENV}/bin/python" \
+  --default-index https://pypi.org/simple \
+  --index https://flashinfer.ai/whl/cu129 \
+  --index https://flashinfer.ai/whl/ \
+  --index https://download.pytorch.org/whl/cu129 \
+  --index https://wheels.vllm.ai/0.26.0/cu129 \
+  --index-strategy unsafe-best-match \
+  "nemo-safe-synthesizer[cu129,engine]==${NSS_VERSION}"
+uv --no-config pip check --python "${SMOKE_VENV}/bin/python"
+"${SMOKE_VENV}/bin/python" -c 'import nemo_safe_synthesizer'
+"${SMOKE_VENV}/bin/safe-synthesizer" --help
+```
+
+Promote only after every candidate check passes. The stable tag must point to
+the same tested SHA, not a later `main` commit.
+
+```bash
+STABLE_TAG="${RC_TAG%%rc*}"
+git tag "${STABLE_TAG}" "${RELEASE_SHA}"
+git push origin "refs/tags/${STABLE_TAG}"
+```
+
+#### Post-release
+
+Use a post-release for a packaging or release correction that does not warrant
+a new regular patch version. A post-release is final, so it does not use the
+release-candidate promotion sequence. Preview the next post-release tag and
+resolve its target commit without creating or pushing a tag:
+
+```bash
+mise run release:prepare -- --bump post --ref origin/main
+```
+
+After reviewing the output, create the proposed tag at the resolved commit and
+push it. For example:
+
+```bash
+POST_TAG=v0.1.6.post1
+RELEASE_SHA="$(git rev-parse 'origin/main^{commit}')"
+git tag "${POST_TAG}" "${RELEASE_SHA}"
+git push origin "refs/tags/${POST_TAG}"
+```
+
+The container workflow publishes `X.Y.Z.postN-cu129`, the immutable
+`sha-<short-sha>-cu129` tag, and the mutable `cu129` and `latest-cu129` aliases.
+PEP 440 post-releases do not move the shortened `X.Y-cu129` tag. Validate the
+post-release wheel and immutable container tag before announcing the release.
+
+#### After Publishing a Final Release
+
+After publishing:
+
+- Verify both tag-triggered workflows passed at the tested SHA.
+- Confirm Test PyPI and production PyPI contain the published version.
+- Confirm the GitHub release is not marked as a prerelease.
+- Confirm versioned documentation is available at
+  `https://nvidia-nemo.github.io/Safe-Synthesizer/<version>/`.
+- Confirm GHCR exposes the expected tags with the intended visibility. Regular
+  stable releases publish `X.Y.Z-cu129` and `X.Y-cu129`; post-releases publish
+  `X.Y.Z.postN-cu129` without moving `X.Y-cu129`.
+- Coordinate a NeMo Platform package or container pin, documentation update,
+  and downstream release when Platform should consume the new version. This is
+  not currently automated by the Safe Synthesizer release workflow.
+- Announce the release only after artifacts and versioned documentation pass
+  verification.
 
 ## NMP Integration
 
@@ -732,7 +861,9 @@ The `publish:internal` mise task builds a wheel and uploads it to NVIDIA Artifac
 mise run publish:internal
 ```
 
-This requires `TWINE_REPOSITORY_URL`, `TWINE_USERNAME`, and `TWINE_PASSWORD` environment variables. CI handles this automatically on tagged releases.
+This requires `TWINE_REPOSITORY_URL`, `TWINE_USERNAME`, and `TWINE_PASSWORD`
+environment variables. This is a manual action; the tag-triggered release
+workflow does not publish to internal Artifactory.
 
 ### Local Development with NMP
 

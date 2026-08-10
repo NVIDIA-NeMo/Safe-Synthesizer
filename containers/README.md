@@ -113,7 +113,9 @@ CONTAINER_GPU_PLATFORM=linux/arm64 mise run container:build:gpu
 Multi-platform manifests must be pushed to a registry:
 
 ```bash
-CONTAINER_GPU_REGISTRY=ghcr.io/nvidia-nemo mise run container:build:gpu-multiarch
+CONTAINER_GPU_REGISTRY=registry.example.com/team \
+CONTAINER_GPU_IMAGE=safe-synthesizer:custom-cu129 \
+  mise run container:build:gpu-multiarch
 ```
 
 This builds and pushes `$(CONTAINER_GPU_REGISTRY)/$(CONTAINER_GPU_IMAGE)`.
@@ -123,9 +125,11 @@ before enabling a platform in CI.
 ## CPU Test Image
 
 `Dockerfile.test_ci` provides a CPU-only image for running unit tests locally
-or in CI without a GPU. It uses a two-stage build: `setup` (system packages +
-mise-managed tools) and `install-deps` (Python environment via
-`mise run bootstrap-nss cpu`).
+or in CI without a GPU. Its `setup` stage installs system packages and
+mise-managed tools, while `install-deps` creates the Python environment with
+`mise run bootstrap-nss cpu`. The separate `wheel-install` stage installs the
+built wheel without project sources, runs CPU package and CLI checks, and
+resolves the CUDA dependency set.
 
 ```bash
 # Run CI unit tests in a container
@@ -133,6 +137,10 @@ mise run test:ci-container
 
 # Verify mise-managed tools install correctly (fast -- setup stage only)
 mise run test:tool-install
+
+# Verify the built wheel in a clean container stage
+mise run build-wheel
+mise run release:verify-wheel
 ```
 
 ### CPU Test Mise Tasks
@@ -143,3 +151,4 @@ mise run test:tool-install
 | `container:build:test-setup` | Build only the setup stage (tools, no Python deps) |
 | `test:ci-container` | Build and run CI unit tests |
 | `test:tool-install` | Verify mise-managed tools install correctly (setup stage only) |
+| `release:verify-wheel` | Install and verify the built wheel in the clean wheel stage |

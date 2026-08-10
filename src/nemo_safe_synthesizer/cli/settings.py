@@ -148,6 +148,13 @@ class CLISettings(BaseSettings):
     )
     """WandB project name override."""
 
+    wandb_upload_evaluation_report: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("wandb_upload_evaluation_report", "NSS_WANDB_UPLOAD_EVALUATION_REPORT"),
+        description="Whether the CLI uploads the final evaluation HTML report and artifact to WandB.",
+    )
+    """Whether the CLI uploads the final evaluation HTML report and artifact to WandB."""
+
     synthesis_overrides: dict[str, Any] = Field(
         default_factory=dict,
         description="Nested dict of SafeSynthesizerParameters overrides from CLI",

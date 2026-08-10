@@ -19,6 +19,29 @@ Exactly what avenues of configuration are available, and thus how precedence is 
 Each layer only overrides what it explicitly sets -- everything else falls
 through to the next layer.
 
+### Unknown Configuration Keys
+
+Safe Synthesizer rejects unknown configuration keys recursively by default.
+This catches misspelled sections and parameters before a run starts, for
+example `evaluate` instead of `evaluation` or `training.epoch` when no such
+training parameter exists.
+
+Set `unknown_fields: ignore` at the top level only when a configuration must
+pass between mismatched client and service versions that may not recognize the
+same fields:
+
+```yaml
+unknown_fields: ignore
+training:
+  batch_size: 4
+```
+
+The default is `unknown_fields: reject`. The setting applies to the same
+configuration input in which it appears and is preserved in serialized
+configurations. It controls unknown keys only; normal Pydantic value validation
+and type coercion are unchanged. Undeclared fields cannot be retained because
+Safe Synthesizer would not act on them.
+
 ### Examples
 
 Start from model defaults, override one field via CLI:
@@ -58,37 +81,88 @@ for more detail on combining config files with runtime overrides.
 
 ### Python Parameter Construction
 
-The Python SDK accepts both fully nested config objects and compatibility
-shortcuts for fields on top-level parameter sections:
+`SafeSynthesizerParameters.from_params()` accepts four forms of keyword name:
+
+- top-level fields such as `generation` or `replace_pii`;
+- canonical dotted paths such as `generation.num_records`;
+- bare nested names such as `num_records`, when that name is unique in the
+  configuration schema; and
+- legacy structured-generation aliases, retained for compatibility.
+
+Python syntax requires dotted names to be passed through `**` expansion:
 
 ```python
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 
 config = SafeSynthesizerParameters.from_params(
-    num_records=2000,  # generation.num_records
-    dp_enabled=True,  # privacy.dp_enabled
-    structured_generation={"enabled": True},  # generation.structured_generation.enabled
+    generation={"temperature": 0.8},  # top-level section
+    num_records=2000,  # unique bare leaf
+    **{"generation.structured_generation.enabled": True},  # dotted path
 )
 ```
 
-Flat keyword arguments are matched by field name against the top-level parameter
-sections. Use the nested shape for fields inside nested subobjects, especially
-when a generic field name could appear in multiple places:
+An ambiguous bare name raises an error and lists the accepted dotted paths. For
+example, `enabled` appears in more than one section, so specify the intended
+path:
 
 ```python
-# Preferred: unambiguous nested form.
 SafeSynthesizerParameters.from_params(
-    structured_generation={"enabled": True},
+    **{"generation.structured_generation.enabled": True}
 )
-
-# Also valid: fully nested generation section.
-SafeSynthesizerParameters.from_params(
-    generation={"structured_generation": {"enabled": True}},
-)
-
-# Avoid: this configures evaluation.enabled, not structured generation.
-SafeSynthesizerParameters.from_params(enabled=True)
 ```
+
+Legacy aliases such as `use_structured_generation` and
+`structured_generation_backend` remain accepted. New code should use the
+canonical nested shape or dotted path.
+
+### Sparse Sources and Explicit Values
+
+Absence, explicit `None`, and an explicit value equal to the model default are
+different inputs. An absent field inherits the next lower-precedence source or
+its model default. `None` is applied when the field accepts it, and an explicitly
+supplied default value still counts as an override.
+
+SDK section methods accept a sparse model or mapping as their source. Keyword
+arguments have higher precedence than that source, while omitted source fields
+retain the current lower-precedence configuration values:
+
+```python
+synthesizer.with_generate({"temperature": 0.8}, num_records=2000)
+```
+
+Set an SDK-wide compatibility policy when constructing the builder so it
+applies before any raw section mapping is validated:
+
+```python
+synthesizer = SafeSynthesizer(unknown_fields="ignore")
+```
+
+A mapping is a branch only when its schema field is another Pydantic model.
+Mapping-valued leaf fields, such as free-form dictionaries, are replaced as one
+atomic value rather than recursively merged.
+
+Persistence with `exclude_unset=True` follows Pydantic's explicit-field
+metadata. Sparse model sources also inspect nested explicit fields recursively,
+so an in-place mutation such as
+`source.validation.group_by_fix_unordered_records = True` is captured when that
+model is used as a patch input. Unrelated defaults remain implicit.
+
+Raw mapping sources follow the effective top-level `unknown_fields` setting.
+They reject unknown extra keys by default and discard them when the policy is
+`ignore`. After a name has been resolved to a canonical path,
+however, that path remains strict: unknown paths and paths that descend through
+an atomic leaf raise an error.
+
+### Resume-Time Overrides
+
+When generation resumes from a saved training run, runtime configuration may
+override only `generation`, `evaluation`, `emit_telemetry`, and
+`unknown_fields`. Telemetry and the unknown-field policy are overridden only
+when the runtime input explicitly sets them. An explicit
+`unknown_fields: ignore` is applied while loading the saved configuration,
+allowing legacy fields to be discarded when client and service versions differ.
+Saved `training`, `data`, `privacy`, PII replacement, time-series, and preflight
+settings remain unchanged.
 
 ---
 
@@ -286,7 +360,7 @@ for the full field list.
 |-------|---------|-------------|----------|
 | `time_series.is_timeseries` | `false` | Enable time series mode | Enable for datasets with sequential time-ordered records |
 | `time_series.timestamp_column` | `null` | Timestamp column name | Required when `is_timeseries: true` |
-| `time_series.timestamp_interval_seconds` | `null` | Fixed interval between timestamps | Set if your data has a regular sampling interval |
+| `time_series.timestamp_interval_seconds` | `null` | Positive whole-number interval in seconds between timestamps | Set if your data has a regular whole-second sampling interval |
 | `time_series.timestamp_format` | `null` | strftime format or `"elapsed_seconds"` | Required when `is_timeseries: true` |
 | `time_series.start_timestamp` | `null` | Override start timestamp for all groups (inferred from data if `null`) | Leave `null` to infer from data |
 | `time_series.stop_timestamp` | `null` | Override stop timestamp for all groups (inferred from data if `null`) | Leave `null` to infer from data |

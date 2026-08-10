@@ -57,7 +57,7 @@ class TestGaugeChart:
     """Tests for gauge_chart function."""
 
     def test_gauge_chart_with_score(self):
-        evaluation_score = EvaluationScore(score=7.5, grade=Grade.GOOD)
+        evaluation_score = EvaluationScore(score=7.5, grade=Grade.VERY_GOOD)
         fig = gauge_chart(evaluation_score)
 
         assert isinstance(fig, go.Figure)
@@ -74,7 +74,7 @@ class TestGaugeChart:
         assert any("--" in str(t.text) for t in text_traces)
 
     def test_gauge_chart_min_size(self):
-        evaluation_score = EvaluationScore(score=5.0, grade=Grade.MODERATE)
+        evaluation_score = EvaluationScore(score=5.0, grade=Grade.GOOD)
         fig = gauge_chart(evaluation_score, min=True)
 
         assert isinstance(fig, go.Figure)
@@ -83,7 +83,7 @@ class TestGaugeChart:
         assert fig.layout.height == 75
 
     def test_gauge_chart_regular_size(self):
-        evaluation_score = EvaluationScore(score=5.0, grade=Grade.MODERATE)
+        evaluation_score = EvaluationScore(score=5.0, grade=Grade.GOOD)
         fig = gauge_chart(evaluation_score, min=False)
 
         assert isinstance(fig, go.Figure)
@@ -98,7 +98,7 @@ class TestGaugeChart:
 
     def test_gauge_chart_extreme_scores(self):
         # Test score of 0
-        evaluation_score = EvaluationScore(score=0.0, grade=Grade.VERY_POOR)
+        evaluation_score = EvaluationScore(score=0.0, grade=Grade.POOR)
         fig = gauge_chart(evaluation_score)
         assert isinstance(fig, go.Figure)
 
@@ -270,6 +270,35 @@ class TestGenerateMiaFigure:
 
         assert isinstance(fig, go.Figure)
 
+    def test_generate_mia_figure_uses_counts_without_renormalizing_percentages(self):
+        df = pd.DataFrame(
+            {
+                "Protection": ["Excellent", "Good", "Poor"],
+                "Attack Count": [120, 120, 120],
+                "Attack Percentage": [100 / 3, 100 / 3, 100 / 3],
+            }
+        )
+
+        fig = generate_mia_figure(df)
+
+        assert list(fig.data[0].values) == [120, 120, 120]
+        assert "360 attack evaluations" in fig.layout.title.text
+
+    def test_generate_mia_figure_excludes_unavailable_label_and_value(self):
+        df = pd.DataFrame(
+            {
+                "Protection": ["Excellent", "Good", "Unavailable"],
+                "Attack Count": [120, 120, 120],
+                "Attack Percentage": [100 / 3, 100 / 3, 100 / 3],
+            }
+        )
+
+        fig = generate_mia_figure(df)
+
+        assert list(fig.data[0].labels) == ["Excellent", "Good"]
+        assert list(fig.data[0].values) == [120, 120]
+        assert "240 attack evaluations" in fig.layout.title.text
+
 
 class TestGenerateAiaFigure:
     """Tests for generate_aia_figure function."""
@@ -279,6 +308,27 @@ class TestGenerateAiaFigure:
         fig = generate_aia_figure(df)
 
         assert isinstance(fig, go.Figure)
+
+    def test_generate_aia_figure_keeps_empty_grades_in_legend(self):
+        df = pd.DataFrame(
+            {
+                "Column": ["age"],
+                "Risk": [9.0],
+                "Protection": [PrivacyGrade.EXCELLENT.value],
+                "Attack Percentage": [0.0],
+            }
+        )
+
+        fig = generate_aia_figure(df)
+
+        bars = [trace for trace in fig.data if isinstance(trace, go.Bar)]
+        assert [trace.name for trace in bars] == [grade.value for grade in list(PrivacyGrade)[1:]]
+        assert all(
+            list(trace.x) == [0] and list(trace.y) == [""] and trace.visible == "legendonly" for trace in bars[:-1]
+        )
+        assert list(bars[-1].x) == [9.0]
+        assert list(bars[-1].y) == ["age"]
+        assert bars[-1].visible is True
 
 
 class TestCorrelationHeatmap:
@@ -315,6 +365,13 @@ class TestGenerateCombinedCorrelationFigure:
         assert isinstance(fig.data[0], go.Heatmap)
         assert isinstance(fig.data[1], go.Heatmap)
         assert isinstance(fig.data[2], go.Heatmap)
+        assert fig.data[2].name == "Correlation Difference (Absolute)"
+        assert "Absolute correlation difference" in fig.data[2].text[0][0]
+        assert [annotation.text for annotation in fig.layout.annotations] == [
+            "Training Correlations",
+            "Synthetic Correlations",
+            "Correlation Difference (Absolute)",
+        ]
 
 
 class TestScatterPlot:
@@ -483,7 +540,7 @@ class TestGenerateTextStructureSimilarityFigures:
             {"per_record_statistics": pd.DataFrame()},
         )()
 
-        result = generate_text_structure_similarity_figures(training_stats, synthetic_stats, "Test Title")
+        result = generate_text_structure_similarity_figures(training_stats, synthetic_stats)
 
         assert result is None
 
@@ -504,9 +561,15 @@ class TestGenerateTextStructureSimilarityFigures:
             {"per_record_statistics": pd.DataFrame(data)},
         )()
 
-        result = generate_text_structure_similarity_figures(training_stats, synthetic_stats, "Text Structure")
+        result = generate_text_structure_similarity_figures(training_stats, synthetic_stats)
 
         assert isinstance(result, go.Figure)
+        assert result.layout.title.text is None
+        assert [annotation.text for annotation in result.layout.annotations] == [
+            "Sentence Count",
+            "Words Per Sentence",
+            "Characters Per Word",
+        ]
 
 
 class TestGenerateTextSemanticSimilarityFigures:
@@ -516,7 +579,7 @@ class TestGenerateTextSemanticSimilarityFigures:
         training_pca = pd.DataFrame()
         synthetic_pca = pd.DataFrame()
 
-        result = generate_text_semantic_similarity_figures(training_pca, synthetic_pca, "Test Title")
+        result = generate_text_semantic_similarity_figures(training_pca, synthetic_pca)
 
         assert result is None
 
@@ -524,6 +587,7 @@ class TestGenerateTextSemanticSimilarityFigures:
         training_pca = pd.DataFrame({"pc1": np.random.randn(100), "pc2": np.random.randn(100)})
         synthetic_pca = pd.DataFrame({"pc1": np.random.randn(100), "pc2": np.random.randn(100)})
 
-        result = generate_text_semantic_similarity_figures(training_pca, synthetic_pca, "Semantic Similarity")
+        result = generate_text_semantic_similarity_figures(training_pca, synthetic_pca)
 
         assert isinstance(result, go.Figure)
+        assert result.layout.title.text is None

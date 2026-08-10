@@ -28,6 +28,7 @@ from .utils import (
     PathT,
     common_setup,
 )
+from .wandb_setup import publish_evaluation_report
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -57,6 +58,16 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
             required=False,
             help="Dataset name, URL, or path to CSV dataset. "
             "For 'run generate', this is optional if a cached dataset exists in the workdir.",
+        )
+    )
+    options.append(
+        click.option(
+            "--wandb-upload-evaluation-report/--no-wandb-upload-evaluation-report",
+            default=None,
+            help="Upload the final evaluation HTML report and artifact to WandB. "
+            "Use --no-wandb-upload-evaluation-report to skip report HTML and artifact publishing while retaining "
+            "summary metrics and the evaluation scorecard. "
+            "Can also be set via NSS_WANDB_UPLOAD_EVALUATION_REPORT. [default: --wandb-upload-evaluation-report]",
         )
     )
     options.append(
@@ -187,7 +198,7 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
             default=None,
             help="Model ID sent to the inference endpoint for PII column classification. "
             "Can also be set via NSS_INFERENCE_MODEL env var. "
-            "[default: qwen/qwen3-next-80b-a3b-instruct]",
+            "[default: nvidia/nemotron-3-ultra-550b-a55b]",
         )
     )
     options.append(
@@ -423,7 +434,7 @@ def run(
     )
 
     try:
-        run_logger.warning("Nemo Safe Synthesizer starting")
+        run_logger.info("Nemo Safe Synthesizer starting")
         run_logger.debug("running with: ", extra={"config": config.model_dump()})
 
         with traced_user("SafeSynthesizer"):
@@ -445,6 +456,7 @@ def run(
                 nss.results.summary.log_summary(run_logger)
                 nss.results.summary.timing.log_timing(run_logger)
                 nss.results.summary.log_wandb()
+                publish_evaluation_report(workdir, nss.results.summary, settings.wandb_upload_evaluation_report)
             finally:
                 if hasattr(nss, "generator") and nss.generator is not None:
                     nss.generator.teardown()
@@ -583,6 +595,7 @@ def run_generate(
             nss.results.summary.timing.log_timing(run_logger)
             run_logger.info(f"Generation complete. Results saved to: {final_output_file}")
             nss.results.summary.log_wandb()
+            publish_evaluation_report(workdir, nss.results.summary, settings.wandb_upload_evaluation_report)
         except KeyboardInterrupt:
             _emit_nss_telemetry(nss, TaskStatusEnum.CANCELED)
             raise

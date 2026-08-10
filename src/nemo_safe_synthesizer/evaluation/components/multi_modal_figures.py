@@ -30,11 +30,11 @@ _GRAPH_BARGROUPGAP = 0.1  # gap between bars of the same location coordinates
 GRAPH_BACKGROUND_COLOR = "#EBEAF0"
 
 INFERENCE_ATTACK_VALUES_FOR_GRAPHS = {
-    "Poor": "rgb(203, 210, 252)",
-    "Moderate": "rgb(145, 156, 237)",
-    "Good": "rgb(102, 101, 222)",
-    "Very Good": "rgb(59, 46, 208)",
-    "Excellent": "rgb(12, 0, 117)",
+    "Poor": "#ef4444",
+    "Moderate": "#f97316",
+    "Good": "#eab308",
+    "Very Good": "#84cc16",
+    "Excellent": "#22c55e",
 }
 
 
@@ -264,12 +264,18 @@ def generate_mia_figure(df: pd.DataFrame) -> go.Figure:
     )
     df.sort_values(by=PROTECTION_COLUMN, inplace=True, ascending=False)
 
+    chart_df = df.loc[df[PROTECTION_COLUMN].notna()]
+    value_column = "Attack Count" if "Attack Count" in df else "Attack Percentage"
     fig = pie(
-        labels=df[PROTECTION_COLUMN].dropna().astype(str).tolist(),
-        values=df["Attack Percentage"].replace({0: np.nan}),
+        labels=chart_df[PROTECTION_COLUMN].astype(str).tolist(),
+        values=chart_df[value_column].replace({0: np.nan}),
         sort=False,
     )
+    title = "Membership inference attack outcomes"
+    if value_column == "Attack Count":
+        title += f" ({chart_df[value_column].sum()} attack evaluations graded)"
     fig.update_layout(
+        title=title,
         margin=dict(l=0, r=0, t=24, b=0),
     )
 
@@ -284,14 +290,18 @@ def generate_aia_figure(df: pd.DataFrame) -> go.Figure:
         if grade.value == "Unavailable":
             continue
         filtered_df = df.query(f"Protection == '{grade.value}'")
+        legend_only = filtered_df.empty
+        risk_values = filtered_df["Risk"].tolist() or [0]
+        column_values = filtered_df["Column"].tolist() or [""]
         bar = go.Bar(
-            x=filtered_df["Risk"],
-            y=filtered_df["Column"],
+            x=risk_values,
+            y=column_values,
             orientation="h",
-            marker=dict(color=[INFERENCE_ATTACK_VALUES_FOR_GRAPHS[grade.value]] * filtered_df.shape[0]),
+            marker=dict(color=INFERENCE_ATTACK_VALUES_FOR_GRAPHS[grade.value]),
             width=0.3,
             showlegend=True,
             name=grade.value,
+            visible="legendonly" if legend_only else True,
         )
 
         scatter = go.Scatter(
@@ -383,7 +393,7 @@ def _generate_correlation_hovertext(
             corr_diff_value = corr_diff[x][y]
             text = "x: " + x + "<br>y: " + y + "<br>Training correlation: " + str(round(corr_training_value, 2))
             text = text + "<br>Synthetic correlation: " + str(round(corr_synthetic_value, 2))
-            text = text + "<br>Correlation difference: " + str(round(corr_diff_value, 2))
+            text = text + "<br>Absolute correlation difference: " + str(round(corr_diff_value, 2))
             next_ylist.append(text)
 
         # Append the ylist to the final hovertext list
@@ -412,7 +422,7 @@ def generate_combined_correlation_figure(
 
     training_correlation_figure = correlation_heatmap(training_correlation_df, "Training Correlations")
     synthetic_correlation_figure = correlation_heatmap(synthetic_correlation_df, "Synthetic Correlations")
-    correlation_difference_figure = correlation_heatmap(correlation_difference, "Difference of Correlations")
+    correlation_difference_figure = correlation_heatmap(correlation_difference, "Correlation Difference (Absolute)")
 
     fig = combine_subplots(
         figures=[
@@ -423,7 +433,7 @@ def generate_combined_correlation_figure(
         titles=[
             "Training Correlations",
             "Synthetic Correlations",
-            "Correlation Difference",
+            "Correlation Difference (Absolute)",
         ],
     )
 
@@ -668,7 +678,7 @@ class _TextStatsLike(Protocol):
 
 
 def generate_text_structure_similarity_figures(
-    training_statistics: _TextStatsLike, synthetic_statistics: _TextStatsLike, title: str
+    training_statistics: _TextStatsLike, synthetic_statistics: _TextStatsLike
 ) -> go.Figure | None:
     """Generate overlaid histograms of sentence/word/character distributions."""
     statistics_keys = [
@@ -697,7 +707,6 @@ def generate_text_structure_similarity_figures(
             "Characters Per Word",
         ],
         height=400,
-        general_title=title,
         shared_xaxes=False,
         shared_yaxes=False,
         margin=dict(l=0, r=0, t=64, b=0),
@@ -709,7 +718,7 @@ def generate_text_structure_similarity_figures(
 
 
 def generate_text_semantic_similarity_figures(
-    training_pca: pd.DataFrame, synthetic_pca: pd.DataFrame, title: str
+    training_pca: pd.DataFrame, synthetic_pca: pd.DataFrame
 ) -> go.Figure | None:
     """Generate a PCA scatter matrix for text embedding similarity."""
     figures = []
@@ -764,7 +773,6 @@ def generate_text_semantic_similarity_figures(
     result = combine_subplots(
         figures,
         height=400,
-        general_title=title,
         shared_xaxes=False,
         shared_yaxes=False,
         margin=dict(l=0, r=0, t=64, b=0),

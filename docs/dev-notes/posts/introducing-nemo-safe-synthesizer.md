@@ -87,7 +87,8 @@ Each score maps to concrete remediation guidance in the documentation. The [Prod
 pip install "nemo-safe-synthesizer[cu129,engine]" \
   --extra-index-url https://download.pytorch.org/whl/cu129 \
   --extra-index-url https://flashinfer.ai/whl/cu129 \
-  --extra-index-url https://wheels.vllm.ai/88d34c6409e9fb3c7b8ca0c04756f061d2099eb1/cu129
+  --extra-index-url https://flashinfer.ai/whl/ \
+  --extra-index-url https://wheels.vllm.ai/0.26.0/cu129
 ```
 
 The quickest way to run your first pipeline is the CLI:

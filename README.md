@@ -4,12 +4,21 @@ NVIDIA NeMo Safe Synthesizer creates private, safe versions of sensitive tabular
 
 ## Quick Start
 
+<a href="https://brev.nvidia.com/launchable/deploy/now?launchableID=env-3HBtA2NKQaBukL2TyDphWUcvQ17">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://brev-assets.s3.us-west-1.amazonaws.com/nv-lb-light.svg">
+    <img alt="Launch on Brev" src="https://brev-assets.s3.us-west-1.amazonaws.com/nv-lb-dark.svg">
+  </picture>
+</a>
+
+Try it without installing anything: the launchable above deploys a GPU instance with NeMo Safe Synthesizer and the tutorial notebooks preinstalled. Note that the instance bills continuously and cannot be paused -- delete it when you are finished.
+
 Read detailed usage below, or jump to the documentation with [Getting Started](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/getting-started/) or the [Safe Synthesizer 101](https://nvidia-nemo.github.io/Safe-Synthesizer/tutorials/safe-synthesizer-101/) notebook.
 
 
 ### Prerequisites
 
-- Python 3.11–3.13 (`.python-version` pins 3.13 for local/dev bootstrap; any 3.11, 3.12, or 3.13 interpreter works. Python 3.14+ is NOT supported because vLLM currently declares `<3.14` support while upstream resolves Python 3.14 wheel compatibility across its dependency stack)
+- Python 3.11–3.14 (`.python-version` pins 3.13 for local/dev bootstrap; any 3.11, 3.12, 3.13, or 3.14 interpreter works)
 - [uv](https://docs.astral.sh/uv/) (recommended) or pip -- Python package manager
 - NVIDIA GPU (A100 or larger) for training and generation
 - Linux only -- macOS, Windows, and Apple Silicon are not supported for training or generation. A CPU-only install is available for development and configuration validation.
@@ -20,15 +29,17 @@ Read detailed usage below, or jump to the documentation with [Getting Started](h
 # With uv (recommended):
 uv pip install "nemo-safe-synthesizer[cu129,engine]" \
   --index https://flashinfer.ai/whl/cu129 \
+  --index https://flashinfer.ai/whl/ \
   --index https://download.pytorch.org/whl/cu129 \
-  --index https://wheels.vllm.ai/88d34c6409e9fb3c7b8ca0c04756f061d2099eb1/cu129 \
+  --index https://wheels.vllm.ai/0.26.0/cu129 \
   --index-strategy unsafe-best-match
 
 # With pip:
 pip install "nemo-safe-synthesizer[cu129,engine]" \
   --extra-index-url https://download.pytorch.org/whl/cu129 \
   --extra-index-url https://flashinfer.ai/whl/cu129 \
-  --extra-index-url https://wheels.vllm.ai/88d34c6409e9fb3c7b8ca0c04756f061d2099eb1/cu129
+  --extra-index-url https://flashinfer.ai/whl/ \
+  --extra-index-url https://wheels.vllm.ai/0.26.0/cu129
 ```
 
 Or install from source:
@@ -40,7 +51,14 @@ make setup # installs pinned mise, pinned tools from mise.lock, and .venv
 mise run bootstrap-nss cuda
 ```
 
-Development tools (`ruff`, `ty`, `yq`, `gh`, etc.) are managed via [mise](https://mise.jdx.dev/). Tool versions are declared in `.mise.toml` and locked in `mise.lock` (committed). mise also manages environment variables -- place project-local secrets or overrides in `.env` or `.env.local` (both git-ignored, auto-loaded by mise).
+### Run the public container
+
+The published GPU runtime is available from [GitHub Container Registry](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/pkgs/container/safe-synthesizer) at `ghcr.io/nvidia-nemo/safe-synthesizer`.
+It runs the CLI without a local Python installation; see the [Docker guide](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/docker/) for image tags, mounts, GPU access, and configuration.
+
+Development tools (`dprint`, `ruff`, `ty`, `yq`, `gh`, etc.) are managed via [mise](https://mise.jdx.dev/). Tool versions are declared in `.mise.toml` and locked in `mise.lock` (committed). mise also manages environment variables -- place project-local secrets or overrides in `.env` or `.env.local` (both git-ignored, auto-loaded by mise).
+
+For IDEs to discover mise-managed tools, [add mise shims to the `PATH` in your default shell profile](https://mise.jdx.dev/ide-integration.html#adding-shims-to-path-in-your-default-shell).
 
 Project commands run through mise tasks under `.mise/tasks/`: `*.toml` files for declarative tasks, executable scripts for bash-heavy logic.
 

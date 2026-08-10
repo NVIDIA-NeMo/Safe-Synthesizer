@@ -20,6 +20,7 @@ from nemo_safe_synthesizer.observability import (
     LogCategory,
     NSSObservabilitySettings,
     TracedContext,
+    _canonicalize_log_event,
     _category_log_processor,
     _convert_rich_table_to_string,
     _current_log_category,
@@ -254,6 +255,13 @@ class TestCategoryLogProcessor:
         assert result["category"] == LogCategory.USER.value
         assert _current_log_category.get() is None  # Reset after use
 
+    def test_canonicalizes_native_and_foreign_structured_context(self, mock_logger):
+        native = _canonicalize_log_event(mock_logger, "info", {"extra": {"ctx": {"rows": 1}}})
+        foreign = _canonicalize_log_event(mock_logger, "info", {"ctx": {"rows": 1}})
+
+        assert native == {"context": {"rows": 1}}
+        assert foreign == {"context": {"rows": 1}}
+
 
 class TestMoveCategoryForColumn:
     """Tests for _move_category_for_column processor."""
@@ -294,6 +302,11 @@ class TestRenderRichTable:
         assert "0.35" in result
         assert "0.72" in result
         assert "95.00%" in result
+
+    def test_fraction_fields_render_as_percentages_when_generation_overshoots(self):
+        result = _render_rich_table({"progress_fraction": 1.25})
+
+        assert "125.00%" in result
 
     def test_renders_mapping_values_without_python_repr(self):
         """Mapping values in flat tables are rendered as compact key-value lists."""
@@ -357,8 +370,8 @@ class TestRenderTableDataForConsole:
         assert "key1" in result["extra"]["ctx"]
         assert "value1" == result["extra"]["ctx"]["key1"]
 
-    def test_creates_filtered_extra_display(self, mock_logger):
-        """Test that _extra_display is created without table keys."""
+    def test_creates_filtered_extra_display_without_ctx(self, mock_logger):
+        """Plain output keeps ordinary extras without repeating structured context."""
         event_dict = {
             "event": "test",
             "extra": {
@@ -370,8 +383,8 @@ class TestRenderTableDataForConsole:
         result = _render_table_data_for_console(mock_logger, "info", event_dict)
 
         assert "_extra_display" in result
-        assert "other_key" in result["_extra_display"]
-        assert "count" not in result["_extra_display"]
+        assert result["_extra_display"] == {"other_key": "other_value"}
+        assert result["extra"]["ctx"] == {"count": 100}
 
     def test_handles_empty_event_dict(self, mock_logger):
         """Test handling of event dict without table data."""
@@ -494,8 +507,9 @@ class TestInitializeObservability:
 
     def test_initialize_logging_configures_json_format(self, monkeypatch, capsys, tmp_path):
         """Test that initialize_logging() configures JSON format when NSS_LOG_FORMAT=json."""
-        # Use monkeypatch.setattr for automatic cleanup of module state
-        monkeypatch.setattr(obs, "_INITIALIZED_OBSERVABILITY", False)
+        # Keep the initialization flag aligned with structlog.reset_defaults()
+        # during cleanup; monkeypatch would restore a stale True value.
+        obs._INITIALIZED_OBSERVABILITY = False
         monkeypatch.setenv("NSS_LOG_FORMAT", "json")
         monkeypatch.setenv("NSS_LOG_LEVEL", "INFO")
         monkeypatch.setenv("NSS_LOG_FILE", str(tmp_path / "test.log"))
@@ -517,6 +531,69 @@ class TestInitializeObservability:
                 if line.strip():
                     parsed = json.loads(line)
                     assert "message" in parsed or "event" in parsed
+
+    def test_plain_console_table_does_not_leak_into_json_file(self, monkeypatch, capsys, tmp_path):
+        """Console-only table rendering preserves the canonical JSONL event."""
+        root_logger = logging.getLogger()
+        original_handlers = root_logger.handlers.copy()
+        original_level = root_logger.level
+        log_file = tmp_path / "events.jsonl"
+
+        obs._INITIALIZED_OBSERVABILITY = False
+        monkeypatch.setenv("NSS_LOG_FORMAT", "plain")
+        monkeypatch.setenv("NSS_LOG_LEVEL", "INFO")
+        monkeypatch.setenv("NSS_LOG_COLOR", "false")
+        monkeypatch.setenv("NSS_LOG_FILE", str(log_file))
+        monkeypatch.setattr(obs, "SETTINGS", NSSObservabilitySettings())
+        structlog.reset_defaults()
+        root_logger.handlers.clear()
+
+        try:
+            _initialize_logging()
+            obs._INITIALIZED_OBSERVABILITY = True
+            logger = get_logger("test_mixed_handlers")
+            logger.user.info(
+                "Mixed handler table",
+                extra={"ctx": {"render_table": True, "tabular_data": {"records": 2}, "title": "Dogfood table"}},
+            )
+            logging.getLogger("test_foreign_handlers").info(
+                "Foreign %s interpolation",
+                "logger",
+                extra={"ctx": {"source": "foreign"}},
+            )
+
+            console_output = capsys.readouterr().out
+            native_record, foreign_record = [
+                json.loads(line) for line in log_file.read_text(encoding="utf-8").splitlines()
+            ]
+        finally:
+            structlog.reset_defaults()
+            root_logger.handlers = original_handlers
+            root_logger.setLevel(original_level)
+            obs._INITIALIZED_OBSERVABILITY = False
+
+        assert console_output.count("Dogfood table") == 1
+        assert "Mixed handler table" in console_output
+        assert native_record["message"] == "Mixed handler table"
+        assert native_record["category"] == LogCategory.USER.value
+        assert native_record["context"] == {
+            "render_table": True,
+            "tabular_data": {"records": 2},
+            "title": "Dogfood table",
+        }
+        assert native_record["timestamp"] in console_output
+        assert native_record["logger"] == "test_mixed_handlers"
+        assert native_record["filename"] == Path(__file__).name
+        assert native_record["lineno"] is not None
+        assert native_record["qual_name"] is not None
+        assert "_category_display" not in native_record
+        assert "positional_args" not in native_record
+        assert "+" not in native_record["message"]
+        assert foreign_record["message"] == "Foreign logger interpolation"
+        assert foreign_record["category"] == LogCategory.RUNTIME.value
+        assert foreign_record["context"] == {"source": "foreign"}
+        assert foreign_record["logger"] == "test_foreign_handlers"
+        assert "positional_args" not in foreign_record
 
 
 class TestGetLogger:
@@ -719,6 +796,15 @@ class TestObservabilityIntegration:
 
         # Verify logs were captured
         assert "User message" in caplog.text
+
+    def test_native_logger_interpolates_printf_arguments(self, caplog):
+        caplog.set_level(logging.INFO)
+
+        logger = get_logger("test_native_printf")
+        logger.info("graded %s attack evaluations", 360)
+
+        assert "graded 360 attack evaluations" in caplog.text
+        assert "positional_args" not in caplog.text
 
     def test_traced_decorator_logs_entry_exit(self, caplog):
         """Test that traced decorator logs entry and exit."""

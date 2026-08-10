@@ -15,6 +15,6 @@ run = "uv run --frozen --group docs mkdocs build"
 description = "Deploy the latest docs to GitHub Pages with mike. Requires git push permission and docs dependencies."
 alias = "docs-deploy"
 run = [
-  "uv run --frozen --group docs mike deploy --push --update-aliases main latest",
-  "uv run --frozen --group docs mike set-default --push latest",
+    "uv run --frozen --group docs mike deploy --push --update-aliases main latest",
+    "uv run --frozen --group docs mike set-default --push latest",
 ]

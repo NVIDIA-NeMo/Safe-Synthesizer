@@ -116,7 +116,7 @@ How to write clear, testable Python -- independent of which library primitives y
 
 ### Type hints
 
-The codebase targets Python 3.11–3.13 and uses native typing syntax throughout. Expect 3.11 as the minimum for the foreseeable future; the upper bound tracks dependency availability (currently vLLM declares `<3.14` support while its dependency stack gains full `cp314` wheel coverage).
+The codebase targets Python 3.11–3.14 and uses native typing syntax throughout. Expect 3.11 as the minimum for the foreseeable future; the upper bound tracks dependency availability (`requires-python` is currently `<3.15`).
 
 Even though `.python-version` pins Python 3.13 for local development and CI defaults, shared package code must stay Python 3.11 syntax-compatible until the NMP platform moves its base Python version to 3.12. Do not use Python 3.12-only syntax yet, including PEP 695 `type` statements or bracketed generic class/function parameters. Prefer `TypeAlias`, `TypeVar`, and `typing_extensions` backports when newer typing features are useful before the minimum runtime moves.
 
@@ -443,23 +443,17 @@ def teardown(self) -> None:
 Tier 2 -- moderate. Summary + `Args:` / `Returns:` / `Raises:` blocks:
 
 ```python
-def _resolve_config(self, values: ParamDict | NSSParameters | None, cls: type[ParamT], **kwargs) -> ParamT:
-    """Resolve configuration from various input types.
-
-    Merges caller-supplied overrides on top of a base config. Accepts Pydantic models
-    (copied with updates), plain dicts (validated then updated), or None (built from
-    overrides alone).
+def load_config(path: Path) -> SafeSynthesizerParameters:
+    """Load and validate a Safe Synthesizer YAML configuration.
 
     Args:
-        values: Base configuration -- a Pydantic model, a dict, or None.
-        cls: The Pydantic model class to validate against.
-        **kwargs: Field-level overrides applied on top of the base.
+        path: YAML configuration path.
 
     Returns:
-        An instance of `cls` with all overrides applied.
+        The validated pipeline configuration.
 
     Raises:
-        TypeError: If `values` is not a BaseModel, dict, or None.
+        FileNotFoundError: If ``path`` does not exist.
     """
 ```
 
@@ -831,6 +825,8 @@ readonly OUTPUT_DIR="${1:?Usage: $0 <output-dir>}"
 
 ### TOML
 
+- Format TOML with `mise run format`; dprint configuration lives in `dprint.json`.
+- Use four spaces for multiline arrays and keep inline-table spacing formatter-controlled.
 - Spaces around `=` for key-value pairs
 - Comments: `# comment` with inline comments for dependency pins
 - Section ordering in `pyproject.toml`: `[project]`, `[dependency-groups]`, `[project.optional-dependencies]`, `[tool.uv]`, `[build-system]`, `[tool.*]`

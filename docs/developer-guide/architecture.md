@@ -88,8 +88,6 @@ graph TB
         end
     end
 
-    CLI --> ConfigBuilder
-    SDK --> ConfigBuilder
     ConfigBuilder --> SafeSynthesizerParams
     SafeSynthesizerParams --> DataConfig
     SafeSynthesizerParams --> TrainConfig
@@ -102,7 +100,6 @@ graph TB
     Holdout --> PIIReplacer
     PIIReplacer --> DataActions
     DataActions --> Assembler
-    Assembler --> TrainingBackendBase
 
     TrainingBackendBase --> HFBackend
     HFBackend --> ModelLoader
@@ -111,14 +108,12 @@ graph TB
     HFBackend --> DPTrainer
     HFBackend --> Callbacks
 
-    HFBackend --> GenBackend
     GenBackend --> VLLMBackend
     VLLMBackend --> RegexManager
     VLLMBackend --> BatchGen
     VLLMBackend --> Processors
     VLLMBackend --> Stopping
 
-    VLLMBackend --> EvaluatorComp
     EvaluatorComp --> DataPrivacy
     EvaluatorComp --> PIIReplay
     EvaluatorComp --> MembershipInf
@@ -129,8 +124,14 @@ graph TB
     EvaluatorComp --> StructureSimilarity
     EvaluatorComp --> SQS
 
-    EvaluatorComp --> ReportGen
     ReportGen --> HTMLReport
+    evaluationComponents -->|"results"| reporting
+
+    entryPoints -->|"invocation"| configLayer
+    configLayer -->|"configuration"| dataProcessing
+    dataProcessing -->|"training examples"| trainingBackend
+    trainingBackend ---->|"adapter"| generationBackend
+    generationBackend ---->|"synthetic records"| evaluationSystem
 ```
 
 ---

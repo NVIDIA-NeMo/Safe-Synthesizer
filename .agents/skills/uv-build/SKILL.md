@@ -22,9 +22,18 @@ mise run bootstrap-nss cpu       # + engine + CPU PyTorch
 mise run bootstrap-nss cu129     # + engine + CUDA 12.9 PyTorch
 mise run bootstrap-nss cuda      # alias for cu129
 mise run bootstrap-nss engine    # + engine (no torch)
+
+# Slurm: force Python, caches, and the project venv onto Lustre
+LUSTRE_DIR="/path/to/container-visible/project/directory" \
+  MISE_IGNORED_CONFIG_PATHS="$HOME/.config/mise/config.toml" \
+  MISE_LOCKED=1 mise run bootstrap-nss-slurm cu129
 ```
 
 Under the hood: `uv sync --frozen --extra <extra> [--extra engine] --group dev`
+
+`bootstrap-nss-slurm` requires `LUSTRE_DIR`, installs the pinned Python under
+that directory, recreates `.venv` if its interpreter is not container-visible,
+then runs the same frozen profile sync as `bootstrap-nss`.
 
 ## Extras and Conflicts
 
@@ -46,7 +55,7 @@ PyTorch wheels come from dedicated indexes, not PyPI:
 | `pytorch-cpu` | `download.pytorch.org/whl/cpu` | torch, torchvision (CPU, Linux) |
 | `pytorch-cu129` | `download.pytorch.org/whl/cu129` | torch, torchvision, triton (CUDA) |
 | `nv-shared-pypi-local` | NVIDIA Artifactory | Internal NVIDIA packages |
-| `flashinfer-jit-cache` | `flashinfer.ai/whl/cu129` | FlashInfer JIT cache |
+| `flashinfer-jit-cache-cu129` | `flashinfer.ai/whl/cu129` | FlashInfer JIT cache |
 | `nvidia-pypi-public` | `pypi.nvidia.com` | Public NVIDIA packages |
 
 All indexes are `explicit = true` (only used when a package is mapped to them in `[tool.uv.sources]`).
@@ -61,12 +70,17 @@ uv add <package>
 uv add --group dev <package>
 uv add --group test <package>
 
-# Add to an optional extra
-# (edit pyproject.toml manually, then lock)
+# Change CPU or CUDA runtime extras
+# Edit cuda_deps.toml, regenerate pyproject.toml, then lock.
+uv run --frozen tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml
 uv lock
 ```
 
 After any change: `uv lock` to regenerate `uv.lock`. Pre-commit verifies the lock is up to date.
+The generated CPU/CUDA sections of `pyproject.toml` must not be edited directly;
+`mise run lock-check` verifies that they match `cuda_deps.toml`. The
+generator owns the complete `[tool.uv.sources]` and `[[tool.uv.index]]`
+sections, so add every source or index there through `cuda_deps.toml`.
 
 ## Dependency Groups
 
@@ -126,5 +140,5 @@ Build backend: `hatchling` with wheel target `packages = ["src/nemo_safe_synthes
 2. Use `--frozen` in CI and Make targets to prevent lock updates
 3. Use `uv run` to run tools (pytest, mkdocs, etc.)
 4. uv version is pinned in `.mise.toml`.
-5. Edit extras manually in `pyproject.toml`, then `uv lock`
+5. Edit non-generated `pyproject.toml` sections directly (e.g. dependency groups); CPU/CUDA extras go through `cuda_deps.toml` instead, then `uv lock`
 6. Use `uv add` for base/group deps

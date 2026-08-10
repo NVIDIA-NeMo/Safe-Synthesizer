@@ -60,7 +60,7 @@ jobs:
     outputs:
       src_test_deps: ${{ steps.changes.outputs.src_test_deps }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Detect changes
@@ -85,7 +85,7 @@ jobs:
           inputs.suite == 'smoke'
         )
       }}
-    timeout-minutes: 30
+    timeout-minutes: 60
     runs-on: linux-amd64-gpu-a100-latest-1
     strategy:
       fail-fast: false
@@ -93,7 +93,7 @@ jobs:
         python-version: ["3.13"]
     steps:
       - name: checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -102,6 +102,10 @@ jobs:
         uses: ./.github/actions/setup-gpu-test-env
         with:
           python-version: ${{ matrix.python-version }}
+
+      - name: Run GPU unit tests
+        timeout-minutes: 30
+        run: mise run test:unit:gpu
 
       - name: Run GPU smoke tests - train only
         timeout-minutes: 10
@@ -149,7 +153,7 @@ jobs:
     runs-on: linux-amd64-gpu-a100-latest-1
     steps:
       - name: checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -158,7 +162,7 @@ jobs:
         uses: ./.github/actions/setup-gpu-test-env
 
       - name: Run GPU E2E tests
-        run: mise run test:e2e
+        run: mise run test:e2e:prepared
         timeout-minutes: 190
 
   # ---------------------------------------------------------------------------

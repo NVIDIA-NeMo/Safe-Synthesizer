@@ -29,8 +29,12 @@ from pydantic.fields import FieldInfo
 from typing_extensions import TypeIs
 
 from ..config.types import AUTO_STR
+from .parameter_paths import insert_parameter_value, split_parameter_path
 
 __all__ = ["pydantic_options", "parse_overrides", "AutoParamType"]
+
+_NEGATION_PREFIX = "no_"
+"""Prefix marking a generated disable flag for a nullable sub-config field."""
 
 _LEGACY_CLI_OPTION_PATHS: dict[str, tuple[str, ...]] = {
     "generation.structured_generation.enabled": ("generation.use_structured_generation",),
@@ -53,38 +57,31 @@ def parse_overrides(values: dict[str, Any] | None = None, field_sep: str = "__")
         field_sep: Separator used to reconstruct nesting.  For example, ``{"data__holdout": 0.1}`` becomes ``{"data": {"holdout": 0.1}}``.
 
     Returns:
-        A nested dict suitable for ``model_validate()`` or for merging
-        with a loaded config via ``merge_dicts()``.
+        A nested dictionary suitable for schema-aware config patching or direct
+        model validation.
 
     Raises:
         ValueError: If a key contains empty segments (e.g. consecutive
-            separators like ``a____b``).
+            separators like ``a____b``), or parent and child overrides target
+            incompatible values.
     """
     if not values:
         return {}
     overrides: dict[str, Any] = {}
     for k, v in values.items():
-        if k.startswith("no_") and isinstance(v, bool):
+        if k.startswith(_NEGATION_PREFIX) and isinstance(v, bool):
             if v:
-                overrides[k[3:]] = None
+                insert_parameter_value(
+                    overrides, split_parameter_path(k.removeprefix(_NEGATION_PREFIX), field_sep), None
+                )
             continue
         if v is None:
             continue
-        match k.split(field_sep):
-            case [key]:
-                overrides[key] = v
-            case [first, *rest, last] if all(rest) and last:
-                target = overrides
-                if not isinstance(target.get(first), dict):
-                    target[first] = {}
-                target = target[first]
-                for part in rest:
-                    if not isinstance(target.get(part), dict):
-                        target[part] = {}
-                    target = target[part]
-                target[last] = v
-            case _:
-                raise ValueError(f"Invalid override key: {k!r}")
+        try:
+            path = split_parameter_path(k, field_sep)
+        except ValueError as error:
+            raise ValueError(f"Invalid override key: {k!r}") from error
+        insert_parameter_value(overrides, path, v)
     return overrides
 
 
@@ -283,7 +280,7 @@ def _collect_params(cls: type[BaseModel], prefix: str = "") -> list[ClickParam]:
                 model_arg = _nullable_model_arg(get_args(t))
                 if model_arg is not None:
                     params.extend(_collect_params(model_arg, f"{full}."))
-                    params.append(FlagParam(f"no_{full}", full))
+                    params.append(FlagParam(f"{_NEGATION_PREFIX}{full}", full))
                 else:
                     params.append(LeafParam(full, field))
             case _:

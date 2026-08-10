@@ -8,9 +8,11 @@ from io import BytesIO
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from nemo_safe_synthesizer.data_processing.record_utils import (
     _extract_timestamp_seconds,
+    _parse_and_validate_json,
     _validate_time_interval,
     check_record_for_large_numbers,
     extract_and_validate_records,
@@ -18,11 +20,39 @@ from nemo_safe_synthesizer.data_processing.record_utils import (
     is_safe_for_float_conversion,
     normalize_dataframe,
 )
+from nemo_safe_synthesizer.data_processing.records.json_record import flatten
+from nemo_safe_synthesizer.data_processing.records.json_types import is_json_object, is_json_value
 
 
 def _mock_encode(text: str) -> list[int]:
     """Deterministic mock tokenizer: one token per character."""
     return list(range(len(text)))
+
+
+def test_flatten_handles_top_level_array_and_nested_records():
+    assert flatten([{"name": "Alice"}, {"name": "Bob", "scores": [1, 2]}]) == {
+        "_nssarray_0*#N#*name": "Alice",
+        "_nssarray_1*#N#*name": "Bob",
+        "_nssarray_1*#N#*scores*#N#*_nssarray_0": 1,
+        "_nssarray_1*#N#*scores*#N#*_nssarray_1": 2,
+    }
+
+
+def test_json_type_guards_accept_recursive_json_objects():
+    value = {"name": "Alice", "scores": [1, 2, None], "profile": {"active": True}}
+
+    assert is_json_value(value) is True
+    assert is_json_object(value) is True
+    assert is_json_object({1: "not-json-object"}) is False
+    assert is_json_value({"bad": object()}) is False
+
+
+@pytest.mark.parametrize("value", ["NaN", "Infinity", "-Infinity"])
+def test_json_type_guards_reject_non_finite_numbers(value: str):
+    assert is_json_value(float(value)) is False
+    response = extract_and_validate_records('{"value": ' + value + "}", {"type": "object"})
+    assert response.valid_records == []
+    assert response.errors == [("Object contains a value that is not valid JSON", "Invalid JSON value")]
 
 
 def test_is_safe_for_float_conversion():
@@ -147,6 +177,13 @@ def test_extract_and_validate_records_with_invalid_records(
     assert len(result.errors[0]) == 2
     assert result.errors[0][0] == "Invalid JSON: Expecting ',' delimiter"
     assert result.errors[0][1] == "Invalid JSON"
+
+
+def test_parse_and_validate_json_classifies_non_object_json_type():
+    parsed, error = _parse_and_validate_json("[1, 2, 3]", {"type": "object"})
+
+    assert parsed is None
+    assert error == ("Expected a JSON object", "Invalid JSON type")
 
 
 def test_extract_and_validate_records_with_invalid_schema(

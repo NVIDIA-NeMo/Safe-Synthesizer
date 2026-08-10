@@ -13,7 +13,7 @@
 # limitations under the License.
 
 name: "Setup GPU Test Environment"
-description: "Common setup for GPU test workflows: mise, Python, CUDA dependencies, and GPU availability"
+description: "Build and install the wheel with unpinned GPU dependencies, test tools, and GPU validation"
 
 inputs:
   python-version:
@@ -25,7 +25,7 @@ inputs:
     required: false
     default: "true"
   cuda-extra:
-    description: "CUDA dependency extra to bootstrap"
+    description: "CUDA dependency extra to install from the built wheel"
     required: false
     default: "cu129"
 
@@ -39,7 +39,6 @@ runs:
         cache-dependency-glob: |
           .python-version
           pyproject.toml
-          uv.lock
 
     - name: Setup Python environment
       uses: ./.github/actions/setup-python-env
@@ -48,11 +47,79 @@ runs:
         python-version: ${{ inputs.python-version }}
         bootstrap-tools: ${{ inputs.bootstrap-tools }}
 
-    - name: Bootstrap CUDA environment
+    - name: Build wheel
       shell: bash
-      run: mise run bootstrap-nss ${{ inputs.cuda-extra }}
+      run: mise run build-wheel
 
-    - name: Check GPU availability
+    - name: Install wheel with unpinned GPU dependencies
       shell: bash
+      env:
+        CUDA_EXTRA: ${{ inputs.cuda-extra }}
       run: |
-        uv run python -c "import torch; print('cuda available:', torch.cuda.is_available()); print('device count:', torch.cuda.device_count())"
+        set -euo pipefail
+        shopt -s nullglob
+        wheels=("${GITHUB_WORKSPACE}"/dist/*.whl)
+        if (( ${#wheels[@]} != 1 )); then
+          echo "Error: expected exactly one wheel under ${GITHUB_WORKSPACE}/dist, found ${#wheels[@]}" >&2
+          exit 1
+        fi
+
+        wheel="${wheels[0]}"
+        venv_path="${UV_PROJECT_ENVIRONMENT:-${GITHUB_WORKSPACE}/.venv}"
+        uv --no-config venv --clear --python "${PYTHON_VERSION}" "${venv_path}"
+        python_bin="${venv_path}/bin/python"
+
+        index_args=()
+        index_count=0
+        while IFS= read -r url; do
+          [[ -n "${url}" ]] || continue
+          index_args+=(--index "${url}")
+          index_count=$((index_count + 1))
+          echo "CUDA index: ${url}"
+        done < <("${python_bin}" - "${GITHUB_WORKSPACE}/pyproject.toml" "${CUDA_EXTRA}" <<'PY'
+        import sys
+        import tomllib
+
+        with open(sys.argv[1], "rb") as handle:
+            indexes = tomllib.load(handle)["tool"]["uv"]["index"]
+
+        cuda_extra = sys.argv[2]
+        print(
+            "\n".join(
+                index["url"]
+                for index in indexes
+                if index["name"].endswith(f"-{cuda_extra}")
+                or f"/{cuda_extra}" in index["url"]
+            )
+        )
+        PY
+        )
+
+        if (( index_count < 3 )); then
+          echo "Error: expected 3+ ${CUDA_EXTRA} indexes in pyproject.toml, found ${index_count}" >&2
+          exit 1
+        fi
+
+        uv --no-config pip install \
+          --python "${python_bin}" \
+          --no-sources \
+          --default-index https://pypi.org/simple \
+          "${index_args[@]}" \
+          --index-strategy unsafe-best-match \
+          "nemo-safe-synthesizer[${CUDA_EXTRA},engine] @ file://${wheel}" \
+          "pytest>=9.0.3" \
+          "pytest-asyncio>=0.24.0" \
+          "pytest-cov>=6.0.0" \
+          "pytest-env>=1.1.0" \
+          "pytest-subtests>=0.13.1" \
+          "pytest-timeout>=2.3.1" \
+          "pytest-xdist>=3.5.0"
+
+        uv --no-config pip check --python "${python_bin}"
+        "${python_bin}" -c \
+          "from importlib.metadata import version; from nemo_safe_synthesizer.package_info import __version__; assert __version__ == version('nemo-safe-synthesizer')"
+        "${python_bin}" -c \
+          "import torch; print('cuda available:', torch.cuda.is_available()); print('device count:', torch.cuda.device_count()); assert torch.cuda.is_available()"
+
+        echo "UV_PROJECT_ENVIRONMENT=${venv_path}" >> "${GITHUB_ENV}"
+        echo "UV_NO_SYNC=1" >> "${GITHUB_ENV}"

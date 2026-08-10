@@ -54,12 +54,12 @@ jobs:
       src: ${{ steps.changes.outputs.src }}
       tests: ${{ steps.changes.outputs.tests }}
       pytest_ini: ${{ steps.changes.outputs.pytest_ini }}
-      pyproject: ${{ steps.changes.outputs.pyproject }}
-      uv_lock: ${{ steps.changes.outputs.uv_lock }}
+      deps: ${{ steps.changes.outputs.deps }}
       docs_src: ${{ steps.changes.outputs.docs_src }}
+      ci: ${{ steps.changes.outputs.ci }}
       any: ${{ steps.changes.outputs.any }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Detect changes
@@ -73,7 +73,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -101,7 +101,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -118,6 +118,41 @@ jobs:
 
       - name: Run ty type checks
         run: mise run typecheck
+
+  wheel-install:
+    name: End-user Wheel Install
+    needs: changes
+    if: >-
+      ${{
+        always() &&
+        (
+          github.event_name == 'workflow_dispatch' ||
+          needs.changes.outputs.src == 'true' ||
+          needs.changes.outputs.deps == 'true' ||
+          needs.changes.outputs.ci == 'true'
+        )
+      }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Setup Python environment
+        uses: ./.github/actions/setup-python-env
+        with:
+          checkout: "false"
+          bootstrap-tools: "true"
+
+      - name: Build wheel
+        run: mise run build-wheel
+
+      - name: Verify clean end-user wheel install
+        env:
+          CONTAINER_CMD: docker
+        run: mise run release:verify-wheel
 
   unit-test:
     name: Unit Tests
@@ -139,10 +174,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12", "3.13"]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
     steps:
       - name: checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -157,6 +192,20 @@ jobs:
 
       - name: Bootstrap
         run: mise run bootstrap-nss cpu
+
+      - name: Verify matrix Python version
+        env:
+          EXPECTED_PYTHON_VERSION: ${{ matrix.python-version }}
+        run: |
+          actual_python_version="$(.venv/bin/python --version 2>&1)"
+          echo "Using ${actual_python_version}"
+          case "${actual_python_version}" in
+            "Python ${EXPECTED_PYTHON_VERSION}."*) ;;
+            *)
+              echo "::error::Expected Python ${EXPECTED_PYTHON_VERSION}.x, got ${actual_python_version}"
+              exit 1
+              ;;
+          esac
 
       - name: Run unit tests with coverage
         run: mise run test:ci
@@ -191,14 +240,13 @@ jobs:
           needs.changes.outputs.src == 'true' ||
           needs.changes.outputs.tests == 'true' ||
           needs.changes.outputs.pytest_ini == 'true' ||
-          needs.changes.outputs.uv_lock == 'true' ||
-          needs.changes.outputs.pyproject == 'true'
+          needs.changes.outputs.deps == 'true'
         )
       }}
     runs-on: ubuntu-latest
     steps:
       - name: checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -223,7 +271,7 @@ jobs:
   ci-status:
     name: CI Status
     if: always() && !cancelled()
-    needs: [changes, format, typecheck, unit-test, smoke-test]
+    needs: [changes, format, typecheck, wheel-install, unit-test, smoke-test]
     runs-on: ubuntu-latest
     steps:
       - name: Check job results
@@ -231,6 +279,7 @@ jobs:
           echo "changes:    ${{ needs.changes.result }}"
           echo "format:     ${{ needs.format.result }}"
           echo "typecheck:  ${{ needs.typecheck.result }}"
+          echo "wheel:      ${{ needs.wheel-install.result }}"
           echo "unit-test:  ${{ needs.unit-test.result }}"
           echo "smoke-test: ${{ needs.smoke-test.result }}"
 

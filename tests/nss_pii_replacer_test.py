@@ -14,7 +14,7 @@ from nemo_safe_synthesizer.pii_replacer.nemo_pii import NemoPII
 # Currently use env variables to configure the endpoint and model for column classification.
 # export NSS_INFERENCE_KEY=<...>
 # export NSS_INFERENCE_ENDPOINT=https://integrate.api.nvidia.com/v1
-# export NSS_INFERENCE_MODEL=qwen/qwen3-next-80b-a3b-instruct
+# export NSS_INFERENCE_MODEL=nvidia/nemotron-3-ultra-550b-a55b
 
 
 def main():

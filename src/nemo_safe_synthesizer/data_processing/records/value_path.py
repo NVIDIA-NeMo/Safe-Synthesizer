@@ -73,7 +73,7 @@ def value_path_to_json_path(path: ValuePath) -> str:
 class InvalidPath(Exception): ...
 
 
-def unflatten(data: dict[ValuePath, Any]) -> Optional[dict | list]:
+def unflatten(data: dict[ValuePath, Any]) -> Optional[dict[Any, Any] | list[Any]]:
     """Reconstruct a nested dict/list from a flat ``{ValuePath: value}`` mapping.
 
     Args:
@@ -96,18 +96,20 @@ def unflatten(data: dict[ValuePath, Any]) -> Optional[dict | list]:
     return result
 
 
-def _ensure_array_size(result: list, item: int):
+def _ensure_array_size(result: list[Any], item: int) -> None:
     if len(result) <= item:
-        for i in range(len(result), item + 1):
+        for _ in range(len(result), item + 1):
             result.append(None)
 
 
-def _ensure_dict_key(result: dict, item: str):
+def _ensure_dict_key(result: dict[Any, Any], item: str) -> None:
     if item not in result:
         result[item] = None
 
 
-def _unflatten_path(result: Optional[dict | list], path: ValuePath, value: Any) -> dict | list:
+def _unflatten_path(
+    result: Optional[dict[Any, Any] | list[Any]], path: ValuePath, value: Any
+) -> dict[Any, Any] | list[Any]:
     # Note: result will be a list when working with an array at this level of
     # the path, and thus the first element of path is an integer. Otherwise
     # working with an object at this level of the path, result will be a dict
@@ -137,7 +139,7 @@ def _unflatten_path(result: Optional[dict | list], path: ValuePath, value: Any) 
         return result
 
 
-def _unflatten_recursive(result: Any, prev_item: ValuePathItem, items: list[ValuePathItem], value: Any):
+def _unflatten_recursive(result: Any, prev_item: ValuePathItem, items: list[ValuePathItem], value: Any) -> None:
     # Note: result will be a list when working with an array at this level of
     # the path, and thus the first element of path is an integer. Otherwise
     # working with an object at this level of the path, result will be a dict

@@ -182,6 +182,12 @@ for the full override precedence rules.
 
 ## CLI Commands
 
+Print the installed version and exit:
+
+```bash
+safe-synthesizer --version
+```
+
 ```bash
 safe-synthesizer --help
 ```
@@ -212,6 +218,7 @@ all others have defaults or are optional.
 | `--log-color` / `--no-log-color` | `NSS_LOG_COLOR` | auto | Colorize console output (auto-detected from TTY) |
 | `--wandb-mode` | `NSS_WANDB_MODE` | `disabled` | WandB mode (`online`, `offline`, `disabled`) |
 | `--wandb-project` | `NSS_WANDB_PROJECT` | -- | WandB project name |
+| `--wandb-upload-evaluation-report` / `--no-wandb-upload-evaluation-report` | `NSS_WANDB_UPLOAD_EVALUATION_REPORT` | `true` | Control evaluation HTML and artifact publishing |
 | `--dataset-registry` | `NSS_DATASET_REGISTRY` | -- | Dataset registry YAML path/URL |
 | `-v` / `-vv` | -- | -- | Verbose logging (`-v` debug, `-vv` debug + dependencies) |
 
@@ -290,6 +297,7 @@ execute in order (`config` → `dataframe` → `metadata` → `advisory`).
 | `columns.pseudo` | dataframe | Input does not use the reserved `__nss_sequence_id` column name |
 | `columns.constant` | dataframe | No column is constant (warning only) |
 | `timeseries.timestamp` | dataframe | Timestamp column is present and has no nulls (time-series mode) |
+| `timeseries.shape` | dataframe | Timestamp formats parse cleanly and groups have matching lengths, intervals, starts, and stops (time-series mode) |
 | `gpu.vram` | metadata | Free VRAM headroom for the chosen model, quantization load mode, and per-device batch size; emits `low_vram` as a warning and `vram_exceeds_capacity` as an error when the estimate is far above capacity |
 | `token_budget` | metadata | Schema prompt, sampled records, and top groups each fit in the model's context window |
 | `dataset.row_count` | advisory | Training split is above a comfort threshold (warning only) |
@@ -325,6 +333,8 @@ the best-effort caveat below.
     - PII replacement is skipped in validate mode, so the training split
       that preflight sees is the *pre-replacement* data; replacement text
       can be shorter or longer than the original and shift token budgets.
+      If PII replacement alters time-series timestamp or group columns, a
+      later training-time invariant check can still fail.
     - Token-budget checks sample rows and top groups -- a long-tail
       outlier outside the sample can still exceed the budget at assembly.
     - VRAM headroom includes a coarse bf16 compute activation term
@@ -1342,6 +1352,31 @@ config file.
 
     These environment variables are read by the CLI only. SDK users must
     call `wandb.init(...)` explicitly.
+
+#### Evaluation scorecard and report upload
+
+For CLI-managed runs, final scalar `eval/*`, `gen/*`, timing, failure, and
+vLLM-completion values update the W&B run summary rather than creating history
+points. Existing training curves remain W&B history. After results are saved,
+the CLI publishes an `evaluation/scorecard` table panel containing final
+`eval/*` values.
+
+When W&B is active, the CLI publishes the HTML evaluation report to the
+user-configured project as the `evaluation/report` panel and the
+`evaluation-report` artifact. To skip the HTML report panel and evaluation-report
+artifact while retaining summary metrics and the evaluation scorecard, pass:
+
+    safe-synthesizer run \
+      --config config.yaml \
+      --data-source data.csv \
+      --wandb-mode online \
+      --no-wandb-upload-evaluation-report
+
+or set `NSS_WANDB_UPLOAD_EVALUATION_REPORT=false`. When enabled, the artifact
+is named `safe-synthesizer-evaluation-report-<run-id>` and may contain
+`evaluation_report.html` and `evaluation_metrics.json` when those files are
+available. SDK callers retain scalar `log_wandb()` behavior and do not upload
+evaluation media automatically.
 
 For parameter precedence (CLI flags vs environment variables vs YAML), see
 [Environment Variables -- Precedence](environment.md#precedence).

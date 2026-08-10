@@ -38,6 +38,35 @@ resolve_venv_path() {
   printf '%s\n' "${venv_path}"
 }
 
+sync_nss_dependencies() {
+  local extra="${1:?Python dependency profile is required}"
+  local python="${2:-}"
+  local sync_uv_bin="${NSS_UV_BIN:-uv}"
+
+  if [[ -z "${python}" ]]; then
+    python="$(resolve_python_version)" || return
+  fi
+
+  case "${extra}" in
+    cuda|cu129)
+      "${sync_uv_bin}" sync --frozen --python "${python}" --extra cu129 --extra engine --group dev
+      ;;
+    cpu)
+      "${sync_uv_bin}" sync --frozen --python "${python}" --extra cpu --extra engine --group dev
+      ;;
+    engine)
+      "${sync_uv_bin}" sync --frozen --python "${python}" --extra engine --group dev
+      ;;
+    dev)
+      "${sync_uv_bin}" sync --frozen --python "${python}" --group dev
+      ;;
+    *)
+      echo "Error: Invalid extra '${extra}'. Use one of: dev engine cpu cuda cu129" >&2
+      return 1
+      ;;
+  esac
+}
+
 resolve_container_cmd() {
   local container_cmd="${CONTAINER_CMD:-$(command -v podman 2>/dev/null || command -v docker 2>/dev/null || true)}"
 

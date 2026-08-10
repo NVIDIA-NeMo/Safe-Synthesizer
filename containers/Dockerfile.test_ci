@@ -24,6 +24,43 @@ RUN MISE_GPG_KEY=24853EC9F655CE80B48E6C3A8B81C9D17413A06D \
     MISE_YES=1 mise trust && \
     PYTHON_VERSION="${PYTHON_VERSION}" MISE_YES=1 mise run setup
 
+FROM setup AS wheel-install
+
+ENV UV_LINK_MODE=copy
+
+COPY dist/*.whl /tmp/dist/
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    wheel_count="$(find /tmp/dist -maxdepth 1 -type f -name '*.whl' | wc -l)" && \
+    test "${wheel_count}" -eq 1 && \
+    wheel="$(find /tmp/dist -maxdepth 1 -type f -name '*.whl')" && \
+    uv --no-config venv --clear --python /usr/local/bin/python /opt/wheel-cpu && \
+    uv --no-config pip install \
+        --python /opt/wheel-cpu/bin/python \
+        --no-sources \
+        --default-index https://pypi.org/simple \
+        --index https://download.pytorch.org/whl/cpu \
+        --index https://flashinfer.ai/whl/ \
+        --index-strategy unsafe-best-match \
+        "nemo-safe-synthesizer[cpu,engine] @ file://${wheel}" && \
+    uv --no-config pip check --python /opt/wheel-cpu/bin/python && \
+    /opt/wheel-cpu/bin/python -c \
+        "from importlib.metadata import version; from nemo_safe_synthesizer.package_info import __version__; assert __version__ == version('nemo-safe-synthesizer')" && \
+    /opt/wheel-cpu/bin/safe-synthesizer --help >/dev/null && \
+    uv --no-config venv --clear --python /usr/local/bin/python /opt/wheel-cu129 && \
+    uv --no-config pip install \
+        --python /opt/wheel-cu129/bin/python \
+        --no-sources \
+        --dry-run \
+        --default-index https://pypi.org/simple \
+        --index https://flashinfer.ai/whl/cu129 \
+        --index https://flashinfer.ai/whl/ \
+        --index https://download.pytorch.org/whl/cu129 \
+        --index https://wheels.vllm.ai/0.26.0/cu129 \
+        --index-strategy unsafe-best-match \
+        "nemo-safe-synthesizer[cu129,engine] @ file://${wheel}" && \
+    rm -rf /opt/wheel-cpu /opt/wheel-cu129
+
 FROM setup AS install-deps
 # Install Python dependencies (cached until pyproject.toml, uv.lock, or src/ or tests/ change)
 COPY pyproject.toml .

@@ -1,0 +1,26 @@
+<!-- SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
+{% if kind == "quality" %}
+    {% set uses = [
+        ("Demo environments or mock data", grade in ["Poor", "Moderate"]),
+        ("Pre-production testing environments", grade in ["Poor", "Moderate"]),
+        ("Balance or augment machine learning data", grade in ["Poor", "Moderate", "Good"]),
+        ("Machine learning or statistical analysis", grade in ["Poor", "Moderate", "Good"]),
+    ] %}
+{% else %}
+    {% set uses = [
+        ("Internally, within the same team", grade in ["Poor"]),
+        ("Internally, across different teams", grade in ["Poor", "Moderate"]),
+        ("Externally, with trusted partners", grade in ["Poor", "Moderate", "Good"]),
+        ("Externally, with public availability", grade in ["Poor", "Moderate", "Good", "Very Good"]),
+    ] %}
+{% endif %}
+<ul class="guidance-use-list" aria-label="Recommended uses for this score">
+{% for label, discouraged in uses %}
+    <li{% if discouraged %} class="guidance-use--not-recommended"{% endif %}>
+        <span class="guidance-use-status">{{ "Not recommended" if discouraged else "Suitable" }}</span>
+        {{ label }}
+    </li>
+{% endfor %}
+</ul>

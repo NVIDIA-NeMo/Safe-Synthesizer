@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from unittest.mock import MagicMock, patch
 
 from pydantic import ValidationError
-from transformers import PretrainedConfig, PreTrainedTokenizerBase
+from transformers import PretrainedConfig, PreTrainedTokenizerBase, Qwen2Config
 
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
 from nemo_safe_synthesizer.defaults import (
@@ -457,6 +457,30 @@ class TestResolveRopeScalingFactor:
             assert result.factor == rope_scaling_scenario.expected_factor
             assert result.theta == rope_scaling_scenario.expected_theta
 
+    def test_qwen2_config_preserves_transformers5_rope_parameters(self):
+        """Qwen2 stores native theta in ``rope_parameters`` instead of ``rope_theta``."""
+        config = Qwen2Config()
+        config.rope_parameters = {
+            "rope_type": "default",
+            "rope_theta": 1_000_000.0,
+            "low_freq_factor": 1.0,
+            "high_freq_factor": 4.0,
+        }
+
+        result = resolve_rope_scaling_factor(2.0, autoconfig=config)
+
+        assert result == RopeScaling(
+            rope_type="default",
+            factor=2.0,
+            theta=1_000_000.0,
+            rope_parameters={
+                "rope_type": "default",
+                "rope_theta": 1_000_000.0,
+                "low_freq_factor": 1.0,
+                "high_freq_factor": 4.0,
+            },
+        )
+
 
 class TestModelMetadata:
     """Tests for the ModelMetadata class."""
@@ -665,6 +689,32 @@ class TestGenerationMaxTokensFor:
         # Beyond-context prompts still produce a safe value vLLM can accept.
         assert sample_model_metadata.generation_max_tokens_for(sample_model_metadata.max_seq_length + 64) == 0
 
+    def test_metadata_generation_max_tokens_for_none_multiplier_uses_default(self, sample_model_metadata):
+        """``multiplier=None`` reproduces the legacy safety-margin sizing."""
+        sample_model_metadata.max_tokens_per_example = 1000
+        expected = int(1000 * GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER)
+        assert sample_model_metadata.generation_max_tokens_for(10, multiplier=None) == expected
+        # Explicitly passing the default constant matches the None path.
+        assert (
+            sample_model_metadata.generation_max_tokens_for(10, multiplier=GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER)
+            == expected
+        )
+
+    def test_metadata_generation_max_tokens_for_custom_multiplier_widens_budget(self, sample_model_metadata):
+        """A larger multiplier widens the stat-derived budget (the long-text fix)."""
+        sample_model_metadata.max_tokens_per_example = 1000
+        # 1000 * 1.8 = 1800, still within the 2048 window given a small prompt.
+        assert sample_model_metadata.generation_max_tokens_for(10, multiplier=1.8) == 1800
+
+    def test_metadata_generation_max_tokens_for_custom_multiplier_still_clamped_to_window(self, sample_model_metadata):
+        """The prompt/window clamp still binds even with an aggressive multiplier."""
+        assert sample_model_metadata.max_seq_length == 2048
+        sample_model_metadata.max_tokens_per_example = 1500  # * 4.0 = 6000, far past the window
+        prompt_len = 48
+        assert sample_model_metadata.generation_max_tokens_for(prompt_len, multiplier=4.0) == (
+            sample_model_metadata.max_seq_length - prompt_len
+        )
+
     def test_metadata_max_tokens_per_example_round_trips_through_metadata_json(self, sample_model_metadata):
         """``max_tokens_per_example`` persists through save → load."""
         sample_model_metadata.max_tokens_per_example = 1500
@@ -680,6 +730,80 @@ class TestGenerationMaxTokensFor:
         assert reloaded.max_tokens_per_example == 1500
         # prompt_len=0 reproduces the old prompt-agnostic budget for round-trip parity.
         assert reloaded.generation_max_tokens_for(0) == int(1500 * GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER)
+
+    def test_metadata_max_records_per_group_accepts_none_or_positive(
+        self, sample_prompt_config, mock_autoconfig_obj, sample_workdir
+    ):
+        """``None`` and values ``>= 1`` are valid persisted bounds."""
+        none_meta = ModelMetadata(
+            model_name_or_path="test-model",
+            prompt_config=sample_prompt_config,
+            autoconfig=mock_autoconfig_obj,
+            workdir=sample_workdir,
+            max_records_per_group=None,
+        )
+        assert none_meta.max_records_per_group is None
+        positive_meta = ModelMetadata(
+            model_name_or_path="test-model",
+            prompt_config=sample_prompt_config,
+            autoconfig=mock_autoconfig_obj,
+            workdir=sample_workdir,
+            max_records_per_group=3,
+        )
+        assert positive_meta.max_records_per_group == 3
+
+    @pytest.mark.parametrize("value", [0, -1])
+    def test_metadata_max_records_per_group_rejects_non_positive(
+        self, sample_prompt_config, mock_autoconfig_obj, sample_workdir, value
+    ):
+        """Non-positive persisted bounds fail validation."""
+        with pytest.raises(ValidationError, match="max_records_per_group"):
+            ModelMetadata(
+                model_name_or_path="test-model",
+                prompt_config=sample_prompt_config,
+                autoconfig=mock_autoconfig_obj,
+                workdir=sample_workdir,
+                max_records_per_group=value,
+            )
+
+    def test_qwen2_rope_parameters_round_trip_through_metadata_json(self, sample_prompt_config, sample_workdir):
+        """Native Qwen2 RoPE parameters survive the saved artifact metadata."""
+        autoconfig = Qwen2Config()
+        autoconfig.max_position_embeddings = 2048
+        autoconfig.rope_parameters = {
+            "rope_type": "default",
+            "rope_theta": 1_000_000.0,
+            "low_freq_factor": 1.0,
+            "high_freq_factor": 4.0,
+        }
+        metadata = ModelMetadata(
+            model_name_or_path="Qwen/Qwen2-0.5B",
+            prompt_config=sample_prompt_config,
+            autoconfig=autoconfig,
+            workdir=sample_workdir,
+            rope_scaling=2.0,  # ty: ignore[invalid-argument-type] -- validator accepts numeric factors.
+        )
+
+        metadata.save_metadata()
+
+        with patch("nemo_safe_synthesizer.llm.metadata.AutoConfig") as mock_ac:
+            mock_ac.from_pretrained.return_value = autoconfig
+            reloaded = ModelMetadata.from_metadata_json(
+                sample_workdir.train.adapter.metadata,
+                workdir=sample_workdir,
+            )
+
+        assert reloaded.rope_scaling == RopeScaling(
+            rope_type="default",
+            factor=2.0,
+            theta=1_000_000.0,
+            rope_parameters={
+                "rope_type": "default",
+                "rope_theta": 1_000_000.0,
+                "low_freq_factor": 1.0,
+                "high_freq_factor": 4.0,
+            },
+        )
 
     @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
     @patch("nemo_safe_synthesizer.llm.metadata.load_json")
