@@ -122,7 +122,7 @@ class AutocorrelationSimilarity(Component):
             A scored component, or an unavailable component with explanatory
             notes when no usable comparison remains.
         """
-        timestamp_column = cfg.timestamp_column or (config.time_series.timestamp_column if config is not None else None)
+        timestamp_column = config.time_series.timestamp_column if config is not None else None
         group_column = cfg.group_column or (config.data.group_training_examples_by if config is not None else None)
         columns = AutocorrelationSimilarity._numeric_columns(datasets, cfg, timestamp_column, group_column)
         if not columns:

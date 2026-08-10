@@ -84,7 +84,6 @@ def test_autocorrelation_similarity_explicit_false_disables_auto_enabled_metric(
             time_series=TimeSeriesEvaluationParameters(
                 autocorrelation=AutocorrelationSimilarityParameters(
                     enabled=True,
-                    timestamp_column="time",
                     value_columns=["value"],
                 )
             )
@@ -92,6 +91,17 @@ def test_autocorrelation_similarity_explicit_false_disables_auto_enabled_metric(
     )
     forced = AutocorrelationSimilarity.from_evaluation_datasets(_datasets(frame, frame.copy()), forced_config)
     assert forced.score.score == 10
+
+
+def test_autocorrelation_similarity_preserves_bare_timestamp_column_override():
+    config = SafeSynthesizerParameters.from_params(
+        is_timeseries=True,
+        group_training_examples_by="sequence",
+        timestamp_column="event_time",
+        rope_scaling_factor=1,
+    )
+
+    assert config.time_series.timestamp_column == "event_time"
 
 
 def test_autocorrelation_similarity_column_and_group_caps_are_deterministic():
