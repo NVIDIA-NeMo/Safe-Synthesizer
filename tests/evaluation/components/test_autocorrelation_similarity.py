@@ -112,3 +112,25 @@ def test_column_and_group_caps_are_deterministic():
     assert first.details == second.details
     assert [row["group"] for row in first.details["per_group"]] == ["A", "B"]
     assert [row["column"] for row in first.details["per_column"]] == ["y"]
+
+
+def test_documentation_examples_cover_presentation_bands():
+    time = np.arange(240)
+    reference = pd.DataFrame({"time": time, "value": np.sin(2 * np.pi * time / 8)})
+    examples = {
+        "high": np.sin(2 * np.pi * time / 8),
+        "medium": np.sin(2 * np.pi * time / 16),
+        "low": np.sin(2 * np.pi * time / 40),
+    }
+    config = _config(AutocorrelationSimilarityParameters(max_lag=5))
+
+    scores = {
+        label: AutocorrelationSimilarity.from_evaluation_datasets(
+            _datasets(reference, pd.DataFrame({"time": time, "value": values})), config
+        ).score.score
+        for label, values in examples.items()
+    }
+
+    assert scores["low"] is not None and scores["low"] < 5.0
+    assert scores["medium"] is not None and 5.0 <= scores["medium"] < 7.0
+    assert scores["high"] is not None and scores["high"] >= 7.0
