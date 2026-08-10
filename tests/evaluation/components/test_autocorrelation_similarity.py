@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+from __future__ import annotations
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -25,14 +27,14 @@ def _config(metric: AutocorrelationSimilarityParameters | None = None) -> SafeSy
     )
 
 
-def _datasets(reference: pd.DataFrame, synthetic: pd.DataFrame) -> EvaluationDatasets:
-    return EvaluationDatasets.from_dataframes(reference, synthetic, enable_sampling=False)
+def _datasets(training_df: pd.DataFrame, synthetic_df: pd.DataFrame) -> EvaluationDatasets:
+    return EvaluationDatasets.from_dataframes(training_df, synthetic_df, enable_sampling=False)
 
 
-def test_formula_matches_mean_absolute_acf_difference_divided_by_two():
-    reference = pd.DataFrame({"time": range(8), "value": [0, 1, 2, 3, 2, 1, 0, -1]})
-    synthetic = pd.DataFrame({"time": range(8), "value": [0, 1, 0, -1, 0, 1, 0, -1]})
-    component = AutocorrelationSimilarity.from_evaluation_datasets(_datasets(reference, synthetic), _config())
+def test_autocorrelation_similarity_formula_matches_mean_absolute_acf_difference_divided_by_two():
+    training_df = pd.DataFrame({"time": range(8), "value": [0, 1, 2, 3, 2, 1, 0, -1]})
+    synthetic_df = pd.DataFrame({"time": range(8), "value": [0, 1, 0, -1, 0, 1, 0, -1]})
+    component = AutocorrelationSimilarity.from_evaluation_datasets(_datasets(training_df, synthetic_df), _config())
 
     atomic = component.details["atomics"][0]
     expected = np.mean(np.abs(np.array(atomic["reference_acf"]) - np.array(atomic["synthetic_acf"]))) / 2.0
@@ -40,8 +42,8 @@ def test_formula_matches_mean_absolute_acf_difference_divided_by_two():
     assert component.score.score == pytest.approx(10 * (1 - expected), abs=0.1)
 
 
-def test_identical_grouped_series_are_scored_atomically():
-    reference = pd.DataFrame(
+def test_autocorrelation_similarity_identical_grouped_series_are_scored_atomically():
+    training_df = pd.DataFrame(
         [
             {"group": group, "time": index, "value": offset + index}
             for group, offset in [("B", 100), ("A", 0)]
@@ -49,7 +51,7 @@ def test_identical_grouped_series_are_scored_atomically():
         ]
     ).sample(frac=1.0, random_state=7)
     config = _config(AutocorrelationSimilarityParameters(group_column="group"))
-    component = AutocorrelationSimilarity.from_evaluation_datasets(_datasets(reference, reference.copy()), config)
+    component = AutocorrelationSimilarity.from_evaluation_datasets(_datasets(training_df, training_df.copy()), config)
 
     assert component.score.score == 10
     assert component.details["counts"]["groups"] == 2
@@ -57,21 +59,24 @@ def test_identical_grouped_series_are_scored_atomically():
     assert [row["group"] for row in component.details["per_group"]] == ["A", "B"]
 
 
-def test_short_and_constant_series_are_unavailable_instead_of_perfect():
-    reference = pd.DataFrame({"time": range(4), "value": [1.0] * 4})
-    component = AutocorrelationSimilarity.from_evaluation_datasets(_datasets(reference, reference.copy()), _config())
+def test_autocorrelation_similarity_short_and_constant_series_are_unavailable_instead_of_perfect():
+    training_df = pd.DataFrame({"time": range(4), "value": [1.0] * 4})
+    component = AutocorrelationSimilarity.from_evaluation_datasets(
+        _datasets(training_df, training_df.copy()), _config()
+    )
 
     assert component.score.score is None
     assert component.details["skipped"][0]["reason"] == "constant or near-constant series"
 
 
-def test_explicit_false_disables_auto_enabled_metric():
+def test_autocorrelation_similarity_explicit_false_disables_auto_enabled_metric():
     frame = pd.DataFrame({"time": range(5), "value": range(5)})
     config = _config(AutocorrelationSimilarityParameters(enabled=False))
 
     component = AutocorrelationSimilarity.from_evaluation_datasets(_datasets(frame, frame.copy()), config)
 
     assert component.score.score is None
+    assert component.score.notes is not None
     assert "disabled" in component.score.notes
 
     forced_config = SafeSynthesizerParameters(
@@ -89,7 +94,7 @@ def test_explicit_false_disables_auto_enabled_metric():
     assert forced.score.score == 10
 
 
-def test_column_and_group_caps_are_deterministic():
+def test_autocorrelation_similarity_column_and_group_caps_are_deterministic():
     rows = []
     for group_index, group in enumerate(["C", "A", "B"]):
         rows.extend(
@@ -114,9 +119,9 @@ def test_column_and_group_caps_are_deterministic():
     assert [row["column"] for row in first.details["per_column"]] == ["y"]
 
 
-def test_documentation_examples_cover_presentation_bands():
+def test_autocorrelation_similarity_documentation_examples_cover_presentation_bands():
     time = np.arange(240)
-    reference = pd.DataFrame({"time": time, "value": np.sin(2 * np.pi * time / 8)})
+    training_df = pd.DataFrame({"time": time, "value": np.sin(2 * np.pi * time / 8)})
     examples = {
         "high": np.sin(2 * np.pi * time / 8),
         "medium": np.sin(2 * np.pi * time / 16),
@@ -126,7 +131,7 @@ def test_documentation_examples_cover_presentation_bands():
 
     scores = {
         label: AutocorrelationSimilarity.from_evaluation_datasets(
-            _datasets(reference, pd.DataFrame({"time": time, "value": values})), config
+            _datasets(training_df, pd.DataFrame({"time": time, "value": values})), config
         ).score.score
         for label, values in examples.items()
     }

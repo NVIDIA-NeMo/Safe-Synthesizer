@@ -7,25 +7,25 @@
 
     This metric is available for standalone evaluation only. It is not yet included in an aggregate score or the default report.
 
-Autocorrelation Similarity measures whether synthetic values depend on their recent history in the same way as real values. It can reveal lost persistence, incorrect oscillation, over-smoothed dynamics, and synthetic sequences whose order has effectively been shuffled.
+Autocorrelation Similarity measures whether synthetic values depend on their recent history in the same way as training values. The diagnostic labels the training profile as Real. The metric can reveal lost persistence, incorrect oscillation, over-smoothed dynamics, and synthetic sequences whose order has effectively been shuffled.
 
 ## Reading the score
 
-A higher score means the real and synthetic autocorrelation profiles are more alike.
+A higher score means the training and synthetic autocorrelation profiles are more alike.
 
 | Band | Score | Interpretation |
 | --- | --- | --- |
 | Low | 0.0–4.9 | The synthetic lag structure is substantially different. |
 | Medium | 5.0–6.9 | Some temporal dependence is preserved, but important lags differ. |
-| High | 7.0–10.0 | The synthetic series preserves the real short-range dependence well. |
+| High | 7.0–10.0 | The synthetic series preserves the training short-range dependence well. |
 
-![Three autocorrelation plots comparing real and synthetic lag profiles. The low example scores 4.0 and has a slowly decaying synthetic profile, the medium example scores 6.7 and partially follows the real oscillation, and the high example scores 10.0 with overlapping profiles.](../../assets/time-series-metrics/autocorrelation-similarity/score-examples.png)
+![Three autocorrelation plots comparing training and synthetic lag profiles, with the training profile labeled Real. The low example scores 4.0 and has a slowly decaying synthetic profile, the medium example scores 6.7 and partially follows the training oscillation, and the high example scores 10.0 with overlapping profiles.](../../assets/time-series-metrics/autocorrelation-similarity/score-examples.png)
 
 The examples are computed by the metric with `max_lag: 5`: low 4.0, medium 6.7, and high 10.0. The illustration uses periodic signals with increasingly similar lag structure.
 
 ## Data and grouping requirements
 
-- Real and synthetic data need a shared timestamp column and at least one shared numeric value column. Set `value_columns` to restrict the comparison; otherwise all shared numeric columns except the timestamp and group columns are used.
+- Training and synthetic data need a shared timestamp column and at least one shared numeric value column. Set `value_columns` to restrict the comparison; otherwise all shared numeric columns except the timestamp and group columns are used.
 - Rows are sorted by the configured timestamp. With `group_column`, profiles are computed independently for each shared group and value column, then averaged. A sequence never crosses a group boundary.
 - A test set is not required.
 - Each group/column comparison needs at least `min_points` finite values, with a default of 4. Constant or near-constant series cannot produce a usable autocorrelation profile.
@@ -35,7 +35,7 @@ The result is `UNAVAILABLE` when the metric is disabled, required columns or sha
 
 ## Calculation
 
-For every usable group and value column, the metric computes autocorrelation at lags 1 through the effective maximum lag. It takes the mean absolute difference between the real and synthetic profiles, divides by 2 to map the maximum possible difference to 1, and calculates:
+For every usable group and value column, the metric computes autocorrelation at lags 1 through the effective maximum lag. It takes the mean absolute difference between the training and synthetic profiles, divides by 2 to map the maximum possible difference to 1, and calculates:
 
 `atomic similarity = 1 - mean_absolute_profile_difference / 2`
 
