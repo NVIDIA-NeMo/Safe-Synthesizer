@@ -440,7 +440,7 @@ This section is the canonical source. To add, rename, or remove a label, open a 
 
 ### CODEOWNERS
 
-- All files under `src/`, `tests/`, `docs/`, `skills/`, and `typings/`: `@NVIDIA-NeMo/safe-synthesizer-reviewers`
+- All files under `src/`, `tests/`, `docs/`, `skills/`, `tools/`, and `typings/`: `@NVIDIA-NeMo/safe-synthesizer-reviewers`
 - All remaining files, including critical files such as `pyproject.toml`, `uv.lock`, `SECURITY.md`, `LICENSE`, and `.github/`: `@NVIDIA-NeMo/safe-synthesizer-maintainers`
 
 ## Issues and Discussions
