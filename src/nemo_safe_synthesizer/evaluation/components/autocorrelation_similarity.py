@@ -26,6 +26,7 @@ from pydantic import Field
 from ...artifacts.analyzers.field_features import FieldType
 from ...config.evaluate import AutocorrelationSimilarityParameters
 from ...config.parameters import SafeSynthesizerParameters
+from ...defaults import PSEUDO_GROUP_COLUMN
 from ...evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from ...evaluation.data_model.evaluation_score import EvaluationScore
 from ...observability import get_logger
@@ -123,7 +124,19 @@ class AutocorrelationSimilarity(Component):
             notes when no usable comparison remains.
         """
         timestamp_column = config.time_series.timestamp_column if config is not None else None
-        group_column = cfg.group_column or (config.data.group_training_examples_by if config is not None else None)
+        inherited_group_column = config.data.group_training_examples_by if config is not None else None
+        group_column = cfg.group_column or inherited_group_column
+        if cfg.group_column is None and inherited_group_column == PSEUDO_GROUP_COLUMN:
+            # Training injects this reserved column to reuse grouped sequence
+            # infrastructure, but evaluation receives frames with it removed.
+            group_column = None
+        elif group_column is not None and (
+            group_column not in datasets.training or group_column not in datasets.synthetic
+        ):
+            return AutocorrelationSimilarity(
+                score=EvaluationScore(notes=f"Configured group column {group_column!r} is missing from a dataset.")
+            )
+
         columns = AutocorrelationSimilarity._numeric_columns(datasets, cfg, timestamp_column, group_column)
         if not columns:
             return AutocorrelationSimilarity(score=EvaluationScore(notes="No shared numeric value columns."))
@@ -218,10 +231,10 @@ class AutocorrelationSimilarity(Component):
                 and column in datasets.synthetic
                 and pd.api.types.is_numeric_dtype(datasets.training[column])
                 and pd.api.types.is_numeric_dtype(datasets.synthetic[column])
-                and column not in {timestamp_column, group_column}
+                and column not in {timestamp_column, group_column, PSEUDO_GROUP_COLUMN}
             ]
         numeric = set(datasets.get_columns_of_type({FieldType.NUMERIC}, based_on="both"))
-        numeric.difference_update(filter(None, [timestamp_column, group_column]))
+        numeric.difference_update(filter(None, [timestamp_column, group_column, PSEUDO_GROUP_COLUMN]))
         return sorted(numeric)
 
     @staticmethod
@@ -307,6 +320,8 @@ class AutocorrelationSimilarity(Component):
         """
         training_values = training.dropna().to_numpy(dtype=float)
         synthetic_values = synthetic.dropna().to_numpy(dtype=float)
+        training_values = training_values[np.isfinite(training_values)]
+        synthetic_values = synthetic_values[np.isfinite(synthetic_values)]
         n = min(len(training_values), len(synthetic_values))
         if n < cfg.min_points:
             return None, f"fewer than {cfg.min_points} points"

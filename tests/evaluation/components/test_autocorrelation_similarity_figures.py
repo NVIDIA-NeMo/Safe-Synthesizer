@@ -29,10 +29,21 @@ def test_autocorrelation_similarity_figure_uses_requested_lags_without_mutating_
     pd.testing.assert_series_equal(synthetic_df, synthetic_before)
 
 
+def test_autocorrelation_similarity_figure_discards_non_finite_values():
+    training_df = pd.Series([0.0, 1.0, np.inf, 2.0, 3.0, 2.0, 1.0])
+    synthetic_df = pd.Series([0.0, 1.0, -np.inf, 2.0, 3.0, 2.0, 1.0])
+
+    figure = generate_autocorrelation_similarity_figure(training_df, synthetic_df)
+
+    assert np.isfinite(figure.data[0].y).all()
+    assert np.isfinite(figure.data[1].y).all()
+
+
 @pytest.mark.parametrize(
     ("training_df", "synthetic_df", "message"),
     [
         (pd.Series([1.0, 2.0, 3.0]), pd.Series([1.0, 2.0, 3.0]), "At least 4 finite points"),
+        (pd.Series([1.0, 2.0, np.inf, np.nan]), pd.Series(range(4)), "At least 4 finite points"),
         (pd.Series([1.0] * 8), pd.Series(range(8)), "constant or near-constant"),
     ],
 )
