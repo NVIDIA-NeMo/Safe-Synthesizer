@@ -6,7 +6,10 @@
 
 src/ @NVIDIA-NeMo/safe-synthesizer-reviewers
 tests/ @NVIDIA-NeMo/safe-synthesizer-reviewers
-
+docs/ @NVIDIA-NeMo/safe-synthesizer-reviewers
+skills/ @NVIDIA-NeMo/safe-synthesizer-reviewers
+typings/ @NVIDIA-NeMo/safe-synthesizer-reviewers
+tools/ @NVIDIA-NeMo/safe-synthesizer-reviewers
 # Critical files require maintainers
 pyproject.toml @NVIDIA-NeMo/safe-synthesizer-maintainers
 uv.lock @NVIDIA-NeMo/safe-synthesizer-maintainers
