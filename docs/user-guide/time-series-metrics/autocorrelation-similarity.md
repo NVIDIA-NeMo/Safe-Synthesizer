@@ -3,11 +3,7 @@
 
 # Autocorrelation Similarity
 
-!!! note "Standalone metric"
-
-    This metric is available for standalone evaluation only. It is not yet included in an aggregate score or the default report.
-
-Autocorrelation Similarity measures whether synthetic values depend on their recent history in the same way as training values. The diagnostic labels the training profile as Real. The metric can reveal lost persistence, incorrect oscillation, over-smoothed dynamics, and synthetic sequences whose order has effectively been shuffled.
+Autocorrelation Similarity measures whether synthetic values depend on their recent history in the same way as training values. It can reveal lost persistence, incorrect oscillation, overly smooth or repetitive behavior, and synthetic sequences whose temporal order has been disrupted.
 
 ## Reading the score
 
@@ -19,19 +15,13 @@ A higher score means the training and synthetic autocorrelation profiles are mor
 | Medium | 5.0–6.9 | Some temporal dependence is preserved, but important lags differ. |
 | High | 7.0–10.0 | The synthetic series preserves the training short-range dependence well. |
 
-![Three autocorrelation plots comparing training and synthetic lag profiles, with the training profile labeled Real. The low example scores 4.0 and has a slowly decaying synthetic profile, the medium example scores 6.7 and partially follows the training oscillation, and the high example scores 10.0 with overlapping profiles.](../../assets/time-series-metrics/autocorrelation-similarity/score-examples.png)
+![Three examples arranged from low to high score. Each example shows the original training and synthetic sequences above their autocorrelation profiles. The low example has a much slower synthetic oscillation, the medium example has a related but longer synthetic cycle, and the high example has overlapping sequences and profiles.](../../assets/time-series-metrics/autocorrelation-similarity/score-examples.png)
 
-The examples are computed by the metric with `max_lag: 5`: low 4.0, medium 6.7, and high 10.0. The illustration uses periodic signals with increasingly similar lag structure.
+The scores are computed by the metric with `max_lag: 5`: low 4.0, medium 6.7, and high 10.0. The sequence panels show the first 80 of the 240 points used to calculate each score.
 
-## Data and grouping requirements
-
-- Training and synthetic data need a shared timestamp column and at least one shared numeric value column. Set `value_columns` to restrict the comparison; otherwise all shared numeric columns except the timestamp and group columns are used.
-- Rows are sorted by the configured timestamp. With `group_column`, profiles are computed independently for each shared group and value column, then averaged. A sequence never crosses a group boundary.
-- A test set is not required.
-- Each group/column comparison needs at least `min_points` finite values, with a default of 4. Constant or near-constant series cannot produce a usable autocorrelation profile.
-- The effective maximum lag is the smaller of `max_lag` and half the available sequence length.
-
-The result is `UNAVAILABLE` when the metric is disabled, required columns or shared groups are absent, or every group/column comparison is too short, constant, or otherwise has no stable lag. Usable comparisons still contribute when only some comparisons are skipped.
+- Low (4.0) -- The synthetic sequence oscillates much more slowly, and its autocorrelation remains strongly positive.
+- Medium (6.7) -- The synthetic sequence has a related but longer cycle.
+- High (10.0) -- The sequences and autocorrelation profiles overlap.
 
 ## Calculation
 
@@ -43,6 +33,8 @@ The final 0–10 score is ten times the mean atomic similarity. Therefore, 10 me
 
 ## Configuration
 
+The following block shows the default autocorrelation settings.
+
 ```yaml
 time_series:
   is_timeseries: true
@@ -50,18 +42,28 @@ time_series:
 evaluation:
   time_series:
     autocorrelation:
-      enabled: true
-      value_columns: [value]
-      group_column: entity_id
+      enabled: null
+      value_columns: null
+      timestamp_column: null
+      group_column: null
       max_lag: 20
       min_points: 4
       max_groups: 128
 ```
 
+With the defaults, `enabled: null` automatically enables the metric for time-series data, `value_columns: null` evaluates all shared numeric value columns, and the `null` timestamp and group overrides use the corresponding top-level settings.
+
 ## Diagnosing and improving a low score
 
-Inspect the per-column and per-group details to identify whether the mismatch is global or concentrated in particular entities. In the plot, check for missing peaks, incorrect sign changes, or decay that is too fast or too slow. Confirm timestamp ordering and group boundaries first. Then review whether sequence length, context length, and training examples expose the generator to the relevant temporal span. A larger `max_lag` tests longer memory but also requires longer sequences.
+Start by checking whether the low score is widespread or concentrated in particular columns or groups. Then compare the sequence and autocorrelation plots:
 
-## Limitations and complementary metrics
+- If synthetic autocorrelation decays too quickly, the generated values are losing persistence. Make sure training and generation windows are long enough to contain the dependency span, and that preprocessing does not shuffle observations within a sequence.
+- If synthetic autocorrelation stays high for too long, the generated sequences may be overly smooth or repetitive. Check whether generation or postprocessing suppresses short-term variation, and whether repeated patterns are being overproduced.
+- If peaks or sign changes occur at the wrong lags, the generator is not reproducing the observed cycle or reversal interval. Preserve the original sampling cadence and make sure training examples span enough complete cycles.
+- If only some groups score poorly, inspect whether those groups have less training coverage, shorter sequences, or different temporal behavior that a single synthesis configuration does not represent well.
 
-Autocorrelation describes linear dependence within one channel. It does not identify cross-channel lead/lag relationships, local regime changes, frequency composition, or privacy leakage. Pair it with Lagged Dependency Fidelity for channel interactions, Rolling Statistics Similarity for local level and volatility, Spectral Similarity for periodic behavior, and Window Membership Inference Protection for privacy.
+Correct timestamp ordering, group boundaries, and sampling intervals before changing the generator. After data preparation is verified, improve the synthetic data by preserving longer temporal context, representing slow and fast patterns in the training examples, and avoiding generation or postprocessing steps that break sequence order. Change `max_lag` only when the evaluation horizon is wrong for the use case; changing it does not improve the synthetic data itself.
+
+## Limitations
+
+Autocorrelation summarizes average linear dependence within one value channel. Different sequences can have similar autocorrelation profiles, so a high score does not mean that individual events, amplitudes, or phases match. A single profile can also hide local regime changes, and irregular sampling intervals can make lag comparisons misleading. The metric does not establish causality or show whether the synthetic data memorizes training sequences. Interpret the score at a lag range and sequence granularity that match the behavior you need to preserve.
