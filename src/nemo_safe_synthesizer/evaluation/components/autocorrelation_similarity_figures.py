@@ -56,6 +56,8 @@ def generate_autocorrelation_similarity_figure(
 
     reference_values = pd.to_numeric(reference, errors="coerce").dropna().to_numpy(dtype=float)
     synthetic_values = pd.to_numeric(synthetic, errors="coerce").dropna().to_numpy(dtype=float)
+    reference_values = reference_values[np.isfinite(reference_values)]
+    synthetic_values = synthetic_values[np.isfinite(synthetic_values)]
     n = min(len(reference_values), len(synthetic_values))
     if n < 4:
         raise ValueError("At least 4 finite points are required in each series.")
