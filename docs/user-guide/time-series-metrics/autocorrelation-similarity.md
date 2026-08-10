@@ -44,14 +44,13 @@ evaluation:
     autocorrelation:
       enabled: null
       value_columns: null
-      timestamp_column: null
       group_column: null
       max_lag: 20
       min_points: 4
       max_groups: 128
 ```
 
-With the defaults, `enabled: null` automatically enables the metric for time-series data, `value_columns: null` evaluates all shared numeric value columns, and the `null` timestamp and group overrides use the corresponding top-level settings.
+With the defaults, `enabled: null` automatically enables the metric for time-series data, `value_columns: null` evaluates all shared numeric value columns, timestamp ordering uses the top-level `time_series.timestamp_column`, and `group_column: null` uses the top-level data grouping setting.
 
 ## Diagnosing and improving a low score
 

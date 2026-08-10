@@ -29,9 +29,10 @@ QUASI_IDENTIFIER_COUNT = 3
 class AutocorrelationSimilarityParameters(Parameters):
     """Control autocorrelation similarity evaluation.
 
-    Optional column overrides inherit the corresponding top-level time-series
-    settings when left unset. The requested lag is capped automatically for
-    short sequences, and unusable constant or undersized profiles are skipped.
+    Timestamp ordering always uses the top-level time-series setting. The
+    optional grouping override inherits the top-level data grouping when left
+    unset. The requested lag is capped automatically for short sequences, and
+    unusable constant or undersized profiles are skipped.
     """
 
     enabled: bool | None = Field(
@@ -41,10 +42,6 @@ class AutocorrelationSimilarityParameters(Parameters):
     value_columns: list[str] | None = Field(
         default=None,
         description="Numeric value columns to evaluate. Defaults to all shared numeric columns.",
-    )
-    timestamp_column: str | None = Field(
-        default=None,
-        description="Optional ordering column overriding the top-level time-series timestamp.",
     )
     group_column: str | None = Field(
         default=None,
