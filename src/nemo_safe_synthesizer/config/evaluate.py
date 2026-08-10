@@ -27,7 +27,12 @@ QUASI_IDENTIFIER_COUNT = 3
 
 
 class AutocorrelationSimilarityParameters(Parameters):
-    """Configuration for autocorrelation similarity evaluation."""
+    """Control autocorrelation similarity evaluation.
+
+    Optional column overrides inherit the corresponding top-level time-series
+    settings when left unset. The requested lag is capped automatically for
+    short sequences, and unusable constant or undersized profiles are skipped.
+    """
 
     enabled: bool | None = Field(
         default=None,
@@ -45,15 +50,30 @@ class AutocorrelationSimilarityParameters(Parameters):
         default=None,
         description="Optional group column overriding the top-level data grouping column.",
     )
-    max_lag: int = Field(default=20, ge=1, description="Maximum autocorrelation lag.")
-    min_points: int = Field(default=4, ge=4, description="Minimum points required for a usable series.")
-    max_groups: int = Field(default=128, ge=1, description="Maximum shared groups to evaluate.")
+    max_lag: int = Field(
+        default=20,
+        ge=1,
+        description="Maximum requested lag; short sequences use a smaller stable lag cap.",
+    )
+    min_points: int = Field(
+        default=4,
+        ge=4,
+        description="Minimum finite observations required in each sequence.",
+    )
+    max_groups: int = Field(
+        default=128,
+        ge=1,
+        description="Maximum shared groups to evaluate in deterministic label order.",
+    )
 
 
 class TimeSeriesEvaluationParameters(Parameters):
     """Metric-specific time-series evaluation configuration."""
 
-    autocorrelation: AutocorrelationSimilarityParameters = Field(default_factory=AutocorrelationSimilarityParameters)
+    autocorrelation: AutocorrelationSimilarityParameters = Field(
+        default_factory=AutocorrelationSimilarityParameters,
+        description="Autocorrelation similarity metric parameters.",
+    )
 
 
 class EvaluationParameters(Parameters):
