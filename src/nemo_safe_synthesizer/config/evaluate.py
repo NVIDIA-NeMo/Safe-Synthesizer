@@ -15,11 +15,45 @@ from ..configurator.parameters import (
     Parameters,
 )
 
-__all__ = ["EvaluationParameters"]
+__all__ = [
+    "AutocorrelationSimilarityParameters",
+    "EvaluationParameters",
+    "TimeSeriesEvaluationParameters",
+]
 
 DEFAULT_SQS_REPORT_COLUMNS: int = 250
 DEFAULT_RECORD_COUNT = 5000
 QUASI_IDENTIFIER_COUNT = 3
+
+
+class AutocorrelationSimilarityParameters(Parameters):
+    """Configuration for autocorrelation similarity evaluation."""
+
+    enabled: bool | None = Field(
+        default=None,
+        description="Enable this metric; None enables it automatically for time-series data.",
+    )
+    value_columns: list[str] | None = Field(
+        default=None,
+        description="Numeric value columns to evaluate. Defaults to all shared numeric columns.",
+    )
+    timestamp_column: str | None = Field(
+        default=None,
+        description="Optional ordering column overriding the top-level time-series timestamp.",
+    )
+    group_column: str | None = Field(
+        default=None,
+        description="Optional group column overriding the top-level data grouping column.",
+    )
+    max_lag: int = Field(default=20, ge=1, description="Maximum autocorrelation lag.")
+    min_points: int = Field(default=4, ge=4, description="Minimum points required for a usable series.")
+    max_groups: int = Field(default=128, ge=1, description="Maximum shared groups to evaluate.")
+
+
+class TimeSeriesEvaluationParameters(Parameters):
+    """Metric-specific time-series evaluation configuration."""
+
+    autocorrelation: AutocorrelationSimilarityParameters = Field(default_factory=AutocorrelationSimilarityParameters)
 
 
 class EvaluationParameters(Parameters):
@@ -97,3 +131,8 @@ class EvaluationParameters(Parameters):
             description="List of columns for PII Replay. If not provided, only entities will be used.",
         ),
     ] = None
+
+    time_series: TimeSeriesEvaluationParameters = Field(
+        default_factory=TimeSeriesEvaluationParameters,
+        description="Time-series-specific evaluation settings.",
+    )
