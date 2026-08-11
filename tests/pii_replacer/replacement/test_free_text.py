@@ -167,7 +167,10 @@ def test_a_name_token_is_aliased_without_the_punctuation_around_it():
 def test_a_name_keeps_the_punctuation_inside_it():
     from nemo_safe_synthesizer.pii_replacer.replacement import instance_text_pairs
 
-    inst = {"originals_by_label": {"full_name": "Jane O'Brien"}, "synthetic_by_label": {"full_name": "Robert Smith-Jones"}}
+    inst = {
+        "originals_by_label": {"full_name": "Jane O'Brien"},
+        "synthetic_by_label": {"full_name": "Robert Smith-Jones"},
+    }
 
     assert dict(instance_text_pairs(inst))["O'Brien"] == "Smith-Jones"
 

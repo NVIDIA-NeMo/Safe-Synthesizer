@@ -173,3 +173,60 @@ def test_entity_name_patterns_have_fuzzy_keywords():
 
     missing = sorted(set(ENTITY_NAME_PATTERNS) - set(FUZZY_KEYWORDS))
     assert missing == [], f"entity types missing fuzzy keywords: {missing}"
+
+
+def test_match_labels_returns_all_regex_hits():
+    from nemo_safe_synthesizer.pii_replacer.detection.column_names import match_labels
+
+    patterns = {
+        "first_name": [r"name"],
+        "full_name": [r"name"],
+        "email": [r"mail"],
+    }
+    assert match_labels("patient_name", patterns) == ["first_name", "full_name"]
+    assert match_labels("email", patterns) == ["email"]
+    assert match_labels("weight", patterns) == []
+
+
+def test_fuzzy_match_label_resolves_multi_regex_with_warning(caplog, monkeypatch):
+    """Overlapping name patterns pick the best fuzzy candidate and warn."""
+    import logging
+
+    from nemo_safe_synthesizer.pii_replacer.detection import column_names
+
+    patterns = {
+        "first_name": [r"name"],
+        "full_name": [r"name"],
+    }
+    monkeypatch.setattr(
+        column_names,
+        "FUZZY_KEYWORDS",
+        {
+            "first_name": ("firstname", "fname"),
+            "full_name": ("patientname", "fullname"),
+        },
+    )
+    caplog.set_level(logging.WARNING)
+    chosen = column_names.fuzzy_match_label("patient_name", patterns, threshold=0.86)
+    assert chosen == "full_name"
+    messages = [record.getMessage() for record in caplog.records]
+    assert any(
+        "patient_name" in m
+        and "multiple entity types" in m
+        and "full_name" in m
+        and "first_name" in m
+        and "Review the replacement plan" in m
+        and "bug report" in m
+        for m in messages
+    )
+
+
+def test_fuzzy_match_label_single_regex_skips_warning(caplog):
+    import logging
+
+    from nemo_safe_synthesizer.pii_replacer.detection.column_names import fuzzy_match_label
+    from nemo_safe_synthesizer.pii_replacer.entities import ENTITY_NAME_PATTERNS
+
+    caplog.set_level(logging.WARNING)
+    assert fuzzy_match_label("email", ENTITY_NAME_PATTERNS, threshold=0.86) == "email"
+    assert not any("multiple entity types" in record.getMessage() for record in caplog.records)

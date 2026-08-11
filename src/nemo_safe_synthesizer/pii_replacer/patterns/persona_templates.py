@@ -9,6 +9,7 @@ import random
 import re
 from collections import Counter
 from collections.abc import Mapping, Sequence
+from typing import cast
 
 import pandas as pd
 
@@ -155,7 +156,8 @@ def _columns_by_label(fields: Mapping[str, object]) -> dict[str, str]:
     out: dict[str, str] = {}
     for label, entry in fields.items():
         if isinstance(entry, Mapping):
-            out[str(label)] = str(entry["column"])
+            entry_map = cast(Mapping[str, object], entry)
+            out[str(label)] = str(entry_map["column"])
         else:
             out[str(label)] = str(entry)
     return out

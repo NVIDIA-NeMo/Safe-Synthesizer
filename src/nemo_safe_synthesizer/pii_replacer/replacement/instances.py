@@ -245,9 +245,7 @@ def compute_instance_synthetics(instances: list[PersonaInstance], cfg: entities.
                 original = inst.originals_by_label.get(label)
                 if original is None:
                     continue
-                sv = synth_value(
-                    label, original, persona, fake, patterns_by_label.get(label), inst.originals_by_label
-                )
+                sv = synth_value(label, original, persona, fake, patterns_by_label.get(label), inst.originals_by_label)
                 if sv is None or str(sv) == str(original):
                     continue
                 synthetic_by_label[label] = str(sv)
