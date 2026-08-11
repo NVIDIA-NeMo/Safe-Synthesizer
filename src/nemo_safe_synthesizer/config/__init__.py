@@ -13,8 +13,8 @@ from .generate import GenerateParameters, StructuredGenerationParameters
 from .internal_results import SafeSynthesizerResults
 from .job import SafeSynthesizerJobConfig
 from .parameters import SafeSynthesizerParameters
-from .replace_pii import PiiReplacerConfig
 from .preflight import PreflightParameters
+from .replace_pii import PiiReplacerConfig
 from .time_series import TimeSeriesParameters
 from .training import TrainingHyperparams
 
@@ -23,8 +23,8 @@ __all__ = [
     "DifferentialPrivacyHyperparams",
     "EvaluationParameters",
     "GenerateParameters",
-    "PreflightParameters",
     "PiiReplacerConfig",
+    "PreflightParameters",
     "SafeSynthesizerJobConfig",
     "SafeSynthesizerParameters",
     "SafeSynthesizerResults",

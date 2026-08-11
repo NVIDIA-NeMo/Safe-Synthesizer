@@ -23,8 +23,8 @@ from .differential_privacy import DifferentialPrivacyHyperparams
 from .evaluate import EvaluationParameters
 from .generate import GenerateParameters
 from .patch import CompiledConfigPatch, PatchAssignment
-from .replace_pii import PiiReplacerConfig
 from .preflight import PreflightParameters
+from .replace_pii import PiiReplacerConfig
 from .time_series import TimeSeriesParameters
 from .training import TrainingHyperparams
 from .types import AUTO_STR
