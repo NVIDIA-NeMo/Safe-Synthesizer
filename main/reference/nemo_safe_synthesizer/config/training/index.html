@@ -2912,6 +2912,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.config.training.TrainingHyperparams.warmup_steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;warmup_steps
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#nemo_safe_synthesizer.config.training.TrainingHyperparams.warmup_ratio" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3100,6 +3111,17 @@
         
       </ul>
     </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.config.training.is_valid_warmup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;is_valid_warmup
+      
+    </span>
+  </a>
   
 </li>
         
@@ -9584,6 +9606,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.config.training.TrainingHyperparams.warmup_steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;warmup_steps
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#nemo_safe_synthesizer.config.training.TrainingHyperparams.warmup_ratio" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -9772,6 +9805,17 @@
         
       </ul>
     </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.config.training.is_valid_warmup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;is_valid_warmup
+      
+    </span>
+  </a>
   
 </li>
         
@@ -10213,9 +10257,7 @@ locally imported in that construction path.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/nemo_safe_synthesizer/config/training.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-81">81</a></span>
-<span class="normal"><a href="#__codelineno-0-82">82</a></span>
-<span class="normal"><a href="#__codelineno-0-83">83</a></span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-83">83</a></span>
 <span class="normal"><a href="#__codelineno-0-84">84</a></span>
 <span class="normal"><a href="#__codelineno-0-85">85</a></span>
 <span class="normal"><a href="#__codelineno-0-86">86</a></span>
@@ -10225,19 +10267,21 @@ locally imported in that construction path.</p>
 <span class="normal"><a href="#__codelineno-0-90">90</a></span>
 <span class="normal"><a href="#__codelineno-0-91">91</a></span>
 <span class="normal"><a href="#__codelineno-0-92">92</a></span>
-<span class="normal"><a href="#__codelineno-0-93">93</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-81"><a id="__codelineno-0-81" name="__codelineno-0-81"></a><span class="nd">@classmethod</span>
-</span><span id="__span-0-82"><a id="__codelineno-0-82" name="__codelineno-0-82"></a><span class="k">def</span><span class="w"> </span><span class="nf">from_alias</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">scheme</span><span class="p">:</span> <span class="n">QuantizationScheme</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Literal</span><span class="p">[</span><span class="mi">4</span><span class="p">,</span> <span class="mi">8</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">QuantizationScheme</span><span class="p">:</span>
-</span><span id="__span-0-83"><a id="__codelineno-0-83" name="__codelineno-0-83"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Normalize string and legacy bit-count aliases to a scheme.&quot;&quot;&quot;</span>
-</span><span id="__span-0-84"><a id="__codelineno-0-84" name="__codelineno-0-84"></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">scheme</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
-</span><span id="__span-0-85"><a id="__codelineno-0-85" name="__codelineno-0-85"></a>        <span class="n">legacy_aliases</span> <span class="o">=</span> <span class="p">{</span>
-</span><span id="__span-0-86"><a id="__codelineno-0-86" name="__codelineno-0-86"></a>            <span class="mi">4</span><span class="p">:</span> <span class="bp">cls</span><span class="o">.</span><span class="n">BNB_4BIT</span><span class="p">,</span>
-</span><span id="__span-0-87"><a id="__codelineno-0-87" name="__codelineno-0-87"></a>            <span class="mi">8</span><span class="p">:</span> <span class="bp">cls</span><span class="o">.</span><span class="n">BNB_8BIT</span><span class="p">,</span>
-</span><span id="__span-0-88"><a id="__codelineno-0-88" name="__codelineno-0-88"></a>        <span class="p">}</span>
-</span><span id="__span-0-89"><a id="__codelineno-0-89" name="__codelineno-0-89"></a>        <span class="k">try</span><span class="p">:</span>
-</span><span id="__span-0-90"><a id="__codelineno-0-90" name="__codelineno-0-90"></a>            <span class="k">return</span> <span class="n">legacy_aliases</span><span class="p">[</span><span class="n">scheme</span><span class="p">]</span>
-</span><span id="__span-0-91"><a id="__codelineno-0-91" name="__codelineno-0-91"></a>        <span class="k">except</span> <span class="ne">KeyError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
-</span><span id="__span-0-92"><a id="__codelineno-0-92" name="__codelineno-0-92"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unknown quantization bit-count alias: </span><span class="si">{</span><span class="n">scheme</span><span class="si">!r}</span><span class="s2">. Expected 4 or 8.&quot;</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span>
-</span><span id="__span-0-93"><a id="__codelineno-0-93" name="__codelineno-0-93"></a>    <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">scheme</span><span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-93">93</a></span>
+<span class="normal"><a href="#__codelineno-0-94">94</a></span>
+<span class="normal"><a href="#__codelineno-0-95">95</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-83"><a id="__codelineno-0-83" name="__codelineno-0-83"></a><span class="nd">@classmethod</span>
+</span><span id="__span-0-84"><a id="__codelineno-0-84" name="__codelineno-0-84"></a><span class="k">def</span><span class="w"> </span><span class="nf">from_alias</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">scheme</span><span class="p">:</span> <span class="n">QuantizationScheme</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Literal</span><span class="p">[</span><span class="mi">4</span><span class="p">,</span> <span class="mi">8</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">QuantizationScheme</span><span class="p">:</span>
+</span><span id="__span-0-85"><a id="__codelineno-0-85" name="__codelineno-0-85"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Normalize string and legacy bit-count aliases to a scheme.&quot;&quot;&quot;</span>
+</span><span id="__span-0-86"><a id="__codelineno-0-86" name="__codelineno-0-86"></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">scheme</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+</span><span id="__span-0-87"><a id="__codelineno-0-87" name="__codelineno-0-87"></a>        <span class="n">legacy_aliases</span> <span class="o">=</span> <span class="p">{</span>
+</span><span id="__span-0-88"><a id="__codelineno-0-88" name="__codelineno-0-88"></a>            <span class="mi">4</span><span class="p">:</span> <span class="bp">cls</span><span class="o">.</span><span class="n">BNB_4BIT</span><span class="p">,</span>
+</span><span id="__span-0-89"><a id="__codelineno-0-89" name="__codelineno-0-89"></a>            <span class="mi">8</span><span class="p">:</span> <span class="bp">cls</span><span class="o">.</span><span class="n">BNB_8BIT</span><span class="p">,</span>
+</span><span id="__span-0-90"><a id="__codelineno-0-90" name="__codelineno-0-90"></a>        <span class="p">}</span>
+</span><span id="__span-0-91"><a id="__codelineno-0-91" name="__codelineno-0-91"></a>        <span class="k">try</span><span class="p">:</span>
+</span><span id="__span-0-92"><a id="__codelineno-0-92" name="__codelineno-0-92"></a>            <span class="k">return</span> <span class="n">legacy_aliases</span><span class="p">[</span><span class="n">scheme</span><span class="p">]</span>
+</span><span id="__span-0-93"><a id="__codelineno-0-93" name="__codelineno-0-93"></a>        <span class="k">except</span> <span class="ne">KeyError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+</span><span id="__span-0-94"><a id="__codelineno-0-94" name="__codelineno-0-94"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unknown quantization bit-count alias: </span><span class="si">{</span><span class="n">scheme</span><span class="si">!r}</span><span class="s2">. Expected 4 or 8.&quot;</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span>
+</span><span id="__span-0-95"><a id="__codelineno-0-95" name="__codelineno-0-95"></a>    <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">scheme</span><span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -10260,9 +10304,7 @@ locally imported in that construction path.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/nemo_safe_synthesizer/config/training.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-95"> 95</a></span>
-<span class="normal"><a href="#__codelineno-0-96"> 96</a></span>
-<span class="normal"><a href="#__codelineno-0-97"> 97</a></span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-97"> 97</a></span>
 <span class="normal"><a href="#__codelineno-0-98"> 98</a></span>
 <span class="normal"><a href="#__codelineno-0-99"> 99</a></span>
 <span class="normal"><a href="#__codelineno-0-100">100</a></span>
@@ -10273,20 +10315,22 @@ locally imported in that construction path.</p>
 <span class="normal"><a href="#__codelineno-0-105">105</a></span>
 <span class="normal"><a href="#__codelineno-0-106">106</a></span>
 <span class="normal"><a href="#__codelineno-0-107">107</a></span>
-<span class="normal"><a href="#__codelineno-0-108">108</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-95"><a id="__codelineno-0-95" name="__codelineno-0-95"></a><span class="k">def</span><span class="w"> </span><span class="nf">to_transformers_config</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">QuantizationConfigMixin</span><span class="p">:</span>
-</span><span id="__span-0-96"><a id="__codelineno-0-96" name="__codelineno-0-96"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Build the transformers quantization config for this scheme.&quot;&quot;&quot;</span>
-</span><span id="__span-0-97"><a id="__codelineno-0-97" name="__codelineno-0-97"></a>    <span class="k">match</span> <span class="bp">self</span><span class="p">:</span>
-</span><span id="__span-0-98"><a id="__codelineno-0-98" name="__codelineno-0-98"></a>        <span class="k">case</span> <span class="n">QuantizationScheme</span><span class="o">.</span><span class="n">BNB_4BIT</span><span class="p">:</span>
-</span><span id="__span-0-99"><a id="__codelineno-0-99" name="__codelineno-0-99"></a>            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_bnb_4bit_config</span><span class="p">()</span>
-</span><span id="__span-0-100"><a id="__codelineno-0-100" name="__codelineno-0-100"></a>        <span class="k">case</span> <span class="n">QuantizationScheme</span><span class="o">.</span><span class="n">BNB_8BIT</span><span class="p">:</span>
-</span><span id="__span-0-101"><a id="__codelineno-0-101" name="__codelineno-0-101"></a>            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_bnb_8bit_config</span><span class="p">()</span>
-</span><span id="__span-0-102"><a id="__codelineno-0-102" name="__codelineno-0-102"></a>        <span class="k">case</span> <span class="n">QuantizationScheme</span><span class="o">.</span><span class="n">FP8</span><span class="p">:</span>
-</span><span id="__span-0-103"><a id="__codelineno-0-103" name="__codelineno-0-103"></a>            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_fp8_config</span><span class="p">()</span>
-</span><span id="__span-0-104"><a id="__codelineno-0-104" name="__codelineno-0-104"></a>        <span class="k">case</span> <span class="n">QuantizationScheme</span><span class="o">.</span><span class="n">NVFP4</span><span class="p">:</span>
-</span><span id="__span-0-105"><a id="__codelineno-0-105" name="__codelineno-0-105"></a>            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_nvfp4_config</span><span class="p">()</span>
-</span><span id="__span-0-106"><a id="__codelineno-0-106" name="__codelineno-0-106"></a>        <span class="k">case</span> <span class="n">QuantizationScheme</span><span class="o">.</span><span class="n">MXFP4</span><span class="p">:</span>
-</span><span id="__span-0-107"><a id="__codelineno-0-107" name="__codelineno-0-107"></a>            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_mxfp4_config</span><span class="p">()</span>
-</span><span id="__span-0-108"><a id="__codelineno-0-108" name="__codelineno-0-108"></a>    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unknown quantization scheme: </span><span class="si">{</span><span class="bp">self</span><span class="si">!r}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-108">108</a></span>
+<span class="normal"><a href="#__codelineno-0-109">109</a></span>
+<span class="normal"><a href="#__codelineno-0-110">110</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-97"><a id="__codelineno-0-97" name="__codelineno-0-97"></a><span class="k">def</span><span class="w"> </span><span class="nf">to_transformers_config</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">QuantizationConfigMixin</span><span class="p">:</span>
+</span><span id="__span-0-98"><a id="__codelineno-0-98" name="__codelineno-0-98"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Build the transformers quantization config for this scheme.&quot;&quot;&quot;</span>
+</span><span id="__span-0-99"><a id="__codelineno-0-99" name="__codelineno-0-99"></a>    <span class="k">match</span> <span class="bp">self</span><span class="p">:</span>
+</span><span id="__span-0-100"><a id="__codelineno-0-100" name="__codelineno-0-100"></a>        <span class="k">case</span> <span class="n">QuantizationScheme</span><span class="o">.</span><span class="n">BNB_4BIT</span><span class="p">:</span>
+</span><span id="__span-0-101"><a id="__codelineno-0-101" name="__codelineno-0-101"></a>            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_bnb_4bit_config</span><span class="p">()</span>
+</span><span id="__span-0-102"><a id="__codelineno-0-102" name="__codelineno-0-102"></a>        <span class="k">case</span> <span class="n">QuantizationScheme</span><span class="o">.</span><span class="n">BNB_8BIT</span><span class="p">:</span>
+</span><span id="__span-0-103"><a id="__codelineno-0-103" name="__codelineno-0-103"></a>            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_bnb_8bit_config</span><span class="p">()</span>
+</span><span id="__span-0-104"><a id="__codelineno-0-104" name="__codelineno-0-104"></a>        <span class="k">case</span> <span class="n">QuantizationScheme</span><span class="o">.</span><span class="n">FP8</span><span class="p">:</span>
+</span><span id="__span-0-105"><a id="__codelineno-0-105" name="__codelineno-0-105"></a>            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_fp8_config</span><span class="p">()</span>
+</span><span id="__span-0-106"><a id="__codelineno-0-106" name="__codelineno-0-106"></a>        <span class="k">case</span> <span class="n">QuantizationScheme</span><span class="o">.</span><span class="n">NVFP4</span><span class="p">:</span>
+</span><span id="__span-0-107"><a id="__codelineno-0-107" name="__codelineno-0-107"></a>            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_nvfp4_config</span><span class="p">()</span>
+</span><span id="__span-0-108"><a id="__codelineno-0-108" name="__codelineno-0-108"></a>        <span class="k">case</span> <span class="n">QuantizationScheme</span><span class="o">.</span><span class="n">MXFP4</span><span class="p">:</span>
+</span><span id="__span-0-109"><a id="__codelineno-0-109" name="__codelineno-0-109"></a>            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_mxfp4_config</span><span class="p">()</span>
+</span><span id="__span-0-110"><a id="__codelineno-0-110" name="__codelineno-0-110"></a>    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unknown quantization scheme: </span><span class="si">{</span><span class="bp">self</span><span class="si">!r}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -10367,12 +10411,20 @@ settings. These parameters directly affect training performance and quality.</p>
                 (<code><span title="float">float</span></code>)
             </li>
             <li>
+              <code><a class="autorefs autorefs-internal" title="            warmup_steps
+
+  
+      pydantic-field
+   (nemo_safe_synthesizer.config.training.TrainingHyperparams.warmup_steps)" href="#nemo_safe_synthesizer.config.training.TrainingHyperparams.warmup_steps">warmup_steps</a></code>
+                (<code><span title="float">float</span></code>)
+            </li>
+            <li>
               <code><a class="autorefs autorefs-internal" title="            warmup_ratio
 
   
       pydantic-field
    (nemo_safe_synthesizer.config.training.TrainingHyperparams.warmup_ratio)" href="#nemo_safe_synthesizer.config.training.TrainingHyperparams.warmup_ratio">warmup_ratio</a></code>
-                (<code><span title="float">float</span></code>)
+                (<code><span title="float">float</span> | None</code>)
             </li>
             <li>
               <code><a class="autorefs autorefs-internal" title="            lr_scheduler
@@ -10496,6 +10548,12 @@ settings. These parameters directly affect training performance and quality.</p>
             </li>
         </ul>
 
+        <p>Validators:</p>
+        <ul>
+            <li>
+              <code><span title="nemo_safe_synthesizer.config.training.TrainingHyperparams._migrate_warmup_ratio">_migrate_warmup_ratio</span></code>
+            </li>
+        </ul>
 
 
 
@@ -10599,6 +10657,28 @@ settings. These parameters directly affect training performance and quality.</p>
 
 
 
+<h4 id="nemo_safe_synthesizer.config.training.TrainingHyperparams.warmup_steps" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">warmup_steps</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
+  </span>
+
+<a href="#nemo_safe_synthesizer.config.training.TrainingHyperparams.warmup_steps" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Linear warmup from 0 to the learning rate. A whole number of 1 or more sets the exact number of warmup steps; a float in (0, 1) is treated as a ratio of total training steps; 0 disables warmup. Must be finite and &gt;= 0, and cannot be fractional at or above 1.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
 <h4 id="nemo_safe_synthesizer.config.training.TrainingHyperparams.warmup_ratio" class="doc doc-heading">
 <code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">warmup_ratio</span></code>
 
@@ -10611,7 +10691,7 @@ settings. These parameters directly affect training performance and quality.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Ratio of total training steps used for a linear warmup from 0 to the learning rate. Must be &gt; 0.</p>
+        <p>Deprecated. Use warmup_steps instead.</p>
 
     </div>
 
@@ -10984,6 +11064,55 @@ checks and logged by the training callbacks.</p>
 
 </div>
 
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="nemo_safe_synthesizer.config.training.is_valid_warmup" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">is_valid_warmup</span><span class="p">(</span><span class="n">value</span><span class="p">)</span></code>
+
+<a href="#nemo_safe_synthesizer.config.training.is_valid_warmup" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Whether a warmup setting is a usable ratio or step count.</p>
+<p>Mirrors how transformers interprets <code>warmup_steps</code>: <code>0</code> disables warmup,
+values below 1 are a ratio of total training steps, and values of 1 or more
+are an absolute step count. Fractional values of 1 or more are rejected
+because transformers truncates them (<code>1.5</code> silently becomes <code>1</code>), and
+non-finite values are rejected because they raise <code>OverflowError</code> once
+converted to an integer.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/nemo_safe_synthesizer/config/training.py</code></summary>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-156">156</a></span>
+<span class="normal"><a href="#__codelineno-0-157">157</a></span>
+<span class="normal"><a href="#__codelineno-0-158">158</a></span>
+<span class="normal"><a href="#__codelineno-0-159">159</a></span>
+<span class="normal"><a href="#__codelineno-0-160">160</a></span>
+<span class="normal"><a href="#__codelineno-0-161">161</a></span>
+<span class="normal"><a href="#__codelineno-0-162">162</a></span>
+<span class="normal"><a href="#__codelineno-0-163">163</a></span>
+<span class="normal"><a href="#__codelineno-0-164">164</a></span>
+<span class="normal"><a href="#__codelineno-0-165">165</a></span>
+<span class="normal"><a href="#__codelineno-0-166">166</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-156"><a id="__codelineno-0-156" name="__codelineno-0-156"></a><span class="k">def</span><span class="w"> </span><span class="nf">is_valid_warmup</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+</span><span id="__span-0-157"><a id="__codelineno-0-157" name="__codelineno-0-157"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Whether a warmup setting is a usable ratio or step count.</span>
+</span><span id="__span-0-158"><a id="__codelineno-0-158" name="__codelineno-0-158"></a>
+</span><span id="__span-0-159"><a id="__codelineno-0-159" name="__codelineno-0-159"></a><span class="sd">    Mirrors how transformers interprets ``warmup_steps``: ``0`` disables warmup,</span>
+</span><span id="__span-0-160"><a id="__codelineno-0-160" name="__codelineno-0-160"></a><span class="sd">    values below 1 are a ratio of total training steps, and values of 1 or more</span>
+</span><span id="__span-0-161"><a id="__codelineno-0-161" name="__codelineno-0-161"></a><span class="sd">    are an absolute step count. Fractional values of 1 or more are rejected</span>
+</span><span id="__span-0-162"><a id="__codelineno-0-162" name="__codelineno-0-162"></a><span class="sd">    because transformers truncates them (``1.5`` silently becomes ``1``), and</span>
+</span><span id="__span-0-163"><a id="__codelineno-0-163" name="__codelineno-0-163"></a><span class="sd">    non-finite values are rejected because they raise ``OverflowError`` once</span>
+</span><span id="__span-0-164"><a id="__codelineno-0-164" name="__codelineno-0-164"></a><span class="sd">    converted to an integer.</span>
+</span><span id="__span-0-165"><a id="__codelineno-0-165" name="__codelineno-0-165"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-166"><a id="__codelineno-0-166" name="__codelineno-0-166"></a>    <span class="k">return</span> <span class="n">math</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="ow">and</span> <span class="n">value</span> <span class="o">&gt;=</span> <span class="mi">0</span> <span class="ow">and</span> <span class="p">(</span><span class="n">value</span> <span class="o">&lt;</span> <span class="mi">1</span> <span class="ow">or</span> <span class="nb">float</span><span class="p">(</span><span class="n">value</span><span class="p">)</span><span class="o">.</span><span class="n">is_integer</span><span class="p">())</span>
+</span></code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
 
 
 
