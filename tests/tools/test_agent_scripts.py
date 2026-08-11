@@ -18,21 +18,7 @@ CLAUDE_SETTINGS = REPO_ROOT / ".claude" / "settings.json"
 CODEX_HOOKS = REPO_ROOT / ".codex" / "hooks.json"
 
 
-def _run_signing_hook(command: str, *, client: str = "cursor") -> subprocess.CompletedProcess[str]:
-    if client == "cursor":
-        payload = {"command": command}
-    elif client == "claude":
-        payload = {"tool_input": {"command": command}}
-    elif client == "codex":
-        payload = {
-            "session_id": "test-session",
-            "cwd": str(REPO_ROOT),
-            "hook_event_name": "PreToolUse",
-            "tool_name": "Bash",
-            "tool_input": {"command": command},
-        }
-    else:
-        raise ValueError(f"Unsupported hook client: {client}")
+def _run_signing_hook(payload: dict[str, object]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["bash", str(SIGNING_HOOK)],
         check=False,
@@ -60,7 +46,6 @@ printf 'args=%s\\n' "$*" > "$CAPTURE_FILE"
     return bin_dir, capture_file
 
 
-@pytest.mark.parametrize("client", ["cursor", "claude", "codex"])
 @pytest.mark.parametrize(
     "command",
     [
@@ -79,13 +64,12 @@ printf 'args=%s\\n' "$*" > "$CAPTURE_FILE"
         'git commit -s -S -m "--no-signoff; --no-gpg-sign"',
     ],
 )
-def test_signing_hook_allows_supported_commit_forms(command: str, client: str) -> None:
-    result = _run_signing_hook(command, client=client)
+def test_signing_hook_allows_supported_commit_forms(command: str) -> None:
+    result = _run_signing_hook({"command": command})
 
     assert result.returncode == 0, result.stderr
 
 
-@pytest.mark.parametrize("client", ["cursor", "claude", "codex"])
 @pytest.mark.parametrize(
     ("command", "expected_error"),
     [
@@ -106,8 +90,8 @@ def test_signing_hook_allows_supported_commit_forms(command: str, client: str) -
         ('(git commit -S -m "message")', "DCO sign-off"),
     ],
 )
-def test_signing_hook_blocks_unsupported_commit_forms(command: str, expected_error: str, client: str) -> None:
-    result = _run_signing_hook(command, client=client)
+def test_signing_hook_blocks_unsupported_commit_forms(command: str, expected_error: str) -> None:
+    result = _run_signing_hook({"command": command})
 
     assert result.returncode == 2, result.stderr
     assert expected_error in result.stderr
@@ -122,60 +106,73 @@ def test_signing_hook_blocks_unsupported_commit_forms(command: str, expected_err
     ],
 )
 def test_signing_hook_ignores_commands_outside_its_supported_scope(command: str) -> None:
-    result = _run_signing_hook(command)
+    result = _run_signing_hook({"command": command})
 
     assert result.returncode == 0, result.stderr
 
 
+@pytest.mark.parametrize(
+    "payload",
+    [
+        pytest.param({"command": "git commit -m message"}, id="cursor"),
+        pytest.param({"tool_input": {"command": "git commit -m message"}}, id="claude"),
+        pytest.param(
+            {
+                "session_id": "test-session",
+                "cwd": str(REPO_ROOT),
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Bash",
+                "tool_input": {"command": "git commit -m message"},
+            },
+            id="codex",
+        ),
+    ],
+)
+def test_signing_hook_reads_client_payload(payload: dict[str, object]) -> None:
+    result = _run_signing_hook(payload)
+
+    assert result.returncode == 2
+    assert "DCO sign-off" in result.stderr
+
+
 def test_codex_registers_signing_hook() -> None:
     config = json.loads(CODEX_HOOKS.read_text())
-
-    assert config["hooks"]["PreToolUse"] == [
-        {
-            "matcher": "^Bash$",
-            "hooks": [
-                {
-                    "type": "command",
-                    "command": 'bash "$(git rev-parse --show-toplevel)/.agents/hooks/enforce-signoff.sh"',
-                    "timeout": 5,
-                    "statusMessage": "Checking commit signing requirements",
-                }
-            ],
-        }
+    command = 'bash "$(git rev-parse --show-toplevel)/.agents/hooks/enforce-signoff.sh"'
+    signing_hooks = [
+        hook
+        for registration in config["hooks"]["PreToolUse"]
+        if registration.get("matcher") == "^Bash$"
+        for hook in registration.get("hooks", [])
+        if hook.get("command") == command
     ]
+
+    assert len(signing_hooks) == 1
+    assert signing_hooks[0]["type"] == "command"
+    assert signing_hooks[0]["timeout"] == 5
+    assert signing_hooks[0]["statusMessage"] == "Checking commit signing requirements"
 
 
 def test_cursor_registers_signing_hook() -> None:
     config = json.loads(CURSOR_HOOKS.read_text())
 
-    assert config == {
-        "version": 1,
-        "hooks": {
-            "beforeShellExecution": [
-                {"command": ".cursor/hooks/enforce-signoff.sh"},
-            ]
-        },
-    }
+    registrations = config["hooks"]["beforeShellExecution"]
+
+    assert sum(entry.get("command") == ".cursor/hooks/enforce-signoff.sh" for entry in registrations) == 1
 
 
 def test_claude_registers_signing_hook() -> None:
     config = json.loads(CLAUDE_SETTINGS.read_text())
+    command = '"$CLAUDE_PROJECT_DIR"/.claude/hooks/enforce-signoff.sh'
+    signing_hooks = [
+        hook
+        for registration in config["hooks"]["PreToolUse"]
+        if registration.get("matcher") == "Bash"
+        for hook in registration.get("hooks", [])
+        if hook.get("command") == command
+    ]
 
-    assert config == {
-        "hooks": {
-            "PreToolUse": [
-                {
-                    "matcher": "Bash",
-                    "hooks": [
-                        {
-                            "type": "command",
-                            "command": '"$CLAUDE_PROJECT_DIR"/.claude/hooks/enforce-signoff.sh',
-                        }
-                    ],
-                }
-            ]
-        }
-    }
+    assert len(signing_hooks) == 1
+    assert signing_hooks[0]["type"] == "command"
 
 
 @pytest.mark.parametrize(
