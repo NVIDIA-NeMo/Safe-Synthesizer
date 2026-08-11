@@ -82,11 +82,6 @@ class FieldFeatures(BaseModel):
         description="Total number of space characters across all non-null values.",
     )
 
-    classification: dict | None = Field(
-        default=None,
-        description="NER-based classification metadata, when available.",
-    )
-
     def to_dict(self, **kwargs) -> dict:
         """Serialize to a dict, excluding unset and None fields."""
         return self.model_dump(exclude_unset=True, exclude_none=True)

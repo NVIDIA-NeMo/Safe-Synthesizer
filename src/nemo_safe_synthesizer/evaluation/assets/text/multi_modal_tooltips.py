@@ -24,7 +24,8 @@ tooltips = {
         This table shows the count of unique and missing column values, the average length of each column, as well as its data type in the training data.
         When a dataset contains a large number of highly unique columns or a large amount of missing data,
         these characteristics can impede the model's ability to accurately learn the statistical structure of the data.
-        Exceptionally long columns can also have the same impact.
+        When PII replacement is enabled, the table also lists detected entity counts,
+        whether each column was transformed, and the replacement method used.
     """,
     "column_correlation_stability_info": """
         To measure Column Correlation Stability, the correlation between every pair of numeric and categorical columns is computed first in the training data,

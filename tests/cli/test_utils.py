@@ -418,23 +418,20 @@ class TestPropagateRuntimeSettingsToEnv:
         assert os.environ["NSS_INFERENCE_KEY"] == "token-propagated-cli"
 
     def test_propagates_remaining_runtime_settings(self, monkeypatch):
-        """Model ID, offline mode, and CPU count propagate to their runtime env vars."""
+        """Model ID and offline mode propagate to their runtime env vars."""
         monkeypatch.delenv("NSS_INFERENCE_MODEL", raising=False)
         monkeypatch.delenv("HF_HUB_OFFLINE", raising=False)
         monkeypatch.delenv("TRANSFORMERS_OFFLINE", raising=False)
-        monkeypatch.delenv("NSS_PII_REPLACER_CPU_COUNT", raising=False)
 
         settings = CLISettings.from_cli_kwargs(
             inference_model_id="custom/model",
             huggingface_remote=False,
-            cpu_count=3,
         )
         _propagate_runtime_settings_to_env(settings)
 
         assert os.environ["NSS_INFERENCE_MODEL"] == "custom/model"
         assert os.environ["HF_HUB_OFFLINE"] == "1"
         assert os.environ["TRANSFORMERS_OFFLINE"] == "1"
-        assert os.environ["NSS_PII_REPLACER_CPU_COUNT"] == "3"
 
     def test_enabling_huggingface_remote_disables_offline_env(self, monkeypatch):
         """--enable-huggingface-remote sets the HF offline vars to 0, overriding inherited offline env."""

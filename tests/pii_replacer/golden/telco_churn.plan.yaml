@@ -1,0 +1,32 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# PII replacement plan for this dataset. Edit and pass back via
+# replace_pii.replacement_plan to override auto-discovery.
+
+# Columns that describe a person. Each entry is one persona whose
+# columns_to_replace are filled from a single synthetic identity, so the
+# values stay consistent with each other. match_persona_by lists existing
+# columns that constrain which persona is drawn (those columns are read,
+# never replaced). Put free_text and entity-driven columns
+# (IDs, cards, IPs, date_of_birth; phone when not using pgm) in
+# standalone_columns_to_replace instead.
+persona_backed_columns:
+- persona: person_1
+  columns_to_replace:
+  - column_name: Name
+    entity_type: full_name
+    patterns:
+    - '{First} {Last}'
+
+# Columns replaced on their own, with no persona behind them: record IDs,
+# free-text notes, and other values that need no cross-column consistency.
+# Person-identifying columns listed only here do not share a synthetic
+# person with other columns.
+standalone_columns_to_replace:
+- column_name: CustomerID
+  entity_type: unique_identifier
+  patterns:
+  - ^^^^-###^#^##
+- column_name: Churn Reason
+  entity_type: free_text

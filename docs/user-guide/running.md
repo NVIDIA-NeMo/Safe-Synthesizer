@@ -289,7 +289,7 @@ execute in order (`config` → `dataframe` → `metadata` → `advisory`).
 | Check name | Stage | What it validates |
 |-------|-------|-------------------|
 | `gpu.cuda` | config | PyTorch is importable and a CUDA GPU is visible |
-| `env.inference` | config | Inference config for PII classification: `NSS_INFERENCE_KEY` is set, `NSS_INFERENCE_MODEL` is non-empty, and `NSS_INFERENCE_ENDPOINT` is a valid http(s) URL (warnings only) |
+| `env.inference` | config | Inference endpoint settings for LLM-assisted features: `NSS_INFERENCE_KEY` is set, `NSS_INFERENCE_MODEL` is non-empty, and `NSS_INFERENCE_ENDPOINT` is a valid http(s) URL (warnings only; not required for PII replacement) |
 | `env.hf_model_availability` | config | The pretrained model reference is usable locally or can be fetched from Hugging Face; warns about a missing HF token only when online HF access may be needed |
 | `dataset.size` | dataframe | Training split meets the hard minimum row count |
 | `columns.groupby` | dataframe | `group_training_examples_by` column is present and has no nulls |
@@ -533,15 +533,22 @@ See [Configuration Reference -- Data](configuration.md#data) for the full parame
 
 ## PII Replacement
 
-Enabled-by-default stage that runs before training. Detection works in two independent
-steps: GLiNER NER is used on columns detected as free text for named-entity
-patterns (names, emails, phone numbers, etc.) and replaces matches with
-synthetic placeholders. An optional second step uses an LLM to identify
-columns that are exclusively a single entity type (e.g., a column that is
-always SSNs), marking those columns for wholesale replacement before training.
-The two steps are independent -- NER runs on free-text content, LLM
-classification targets structured sensitive columns. PII replacement is on by
-default in both the CLI and SDK. PII on by default means no config flag is needed to enable it.
+Enabled-by-default stage that runs before training. It builds a *replacement plan*
+from the dataframe -- which columns hold PII, which entity type each holds, and which
+columns describe the same person -- then substitutes values, drawing one synthetic
+identity per person so a row's name, email, and address stay consistent. That reduces
+exposure of detected PII; heuristic discovery can miss columns or mistype them, so
+review `pii_replacement_plan.yaml` before training. Values replaced in structured
+columns are also propagated into free-text columns, so notes agree with the columns
+they describe. In heuristic mode, free text is scanned only when at least one
+structured entity column was identified; see
+[PII Replacement](../product-overview/pii_replacement.md) for that gate and for
+how `person.backend: faker` omits `ethnic_background` matching.
+
+Discovery reads column names, values, and dtypes; no inference endpoint is required.
+PII replacement is on by default in both the CLI and SDK, so no config flag is needed
+to enable it. See [PII Replacement](../product-overview/pii_replacement.md) for the
+detection signals, entity vocabulary, and plan format.
 
 !!! tip "Skip PII replacement"
     If your dataset does not contain PII, you may disable this stage to reduce pipeline
@@ -558,17 +565,17 @@ default in both the CLI and SDK. PII on by default means no config flag is neede
     safe-synthesizer run --data-source data.csv
     ```
 
-    Customize (e.g. enable LLM classification and restrict entity types):
-    put the `replace_pii` block in a YAML file and pass it with `--config`.
-    List-typed fields like `entities` cannot be set via CLI flags; use the
-    config file (see Config reference tab) or SDK.
+    Override individual settings with the `__` syntax:
 
     ```bash
-    safe-synthesizer run --config pii_config.yaml --url data.csv
+    safe-synthesizer run --data-source data.csv \
+      --replace_pii__person__backend faker \
+      --replace_pii__replacement__locale en_GB \
+      --replace_pii__replacement__seed 42
     ```
 
-    To override only non-list PII settings from the CLI, use the `__` syntax,
-    e.g. `--replace_pii__globals__classify__enable_classify true`.
+    A replacement plan cannot be expressed as a flag -- put it in a config file and
+    pass it with `--config` (see the Config reference tab).
 
 === "SDK"
 
@@ -577,76 +584,133 @@ default in both the CLI and SDK. PII on by default means no config flag is neede
 
     ```python
     from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
-    from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
 
     # Default: PII on, no call needed
     synthesizer = SafeSynthesizer().with_data_source("data.csv").with_train()
 
-    # Customize: enable LLM classification for specific entity types
-    pii_config = PiiReplacerConfig.get_default_config()
-    pii_config.globals.classify.enable_classify = True
-    pii_config.globals.classify.entities = ["email", "phone_number", "ssn"]
-
+    # Customize: Faker personas, a fixed seed, and an edited plan
     synthesizer = (
         SafeSynthesizer()
         .with_data_source("data.csv")
-        .with_replace_pii(config=pii_config)
+        .with_replace_pii(
+            person={"backend": "faker"},
+            replacement={"locale": "en_US", "seed": 42},
+            replacement_plan="pii_replacement_plan.yaml",
+        )
         .with_train()
         .with_generate(num_records=5000)
     )
     ```
 
-    The SDK builder merges partial overrides with
-    [`PiiReplacerConfig.get_default_config()`][nemo_safe_synthesizer.config.replace_pii.PiiReplacerConfig], so you don't need to
-    provide the full `steps` list.
+    Partial overrides merge with the defaults of
+    [`ReplacePiiConfig`][nemo_safe_synthesizer.config.pii_replacement.ReplacePiiConfig],
+    so you only pass the fields you are changing.
 
 === "Config reference"
 
     ```yaml
     replace_pii:
-      globals:
-        classify:
-          enable_classify: true
-          entities: ["email", "phone_number", "ssn"]
-      steps:
-        - rows:
-            update:
-              - condition: column.entity == "email" and not (this | isna)
-                value: column.entity | fake
-              - condition: column.entity == "phone_number" and not (this | isna)
-                value: column.entity | fake
-              - condition: column.entity == "ssn" and not (this | isna)
-                value: column.entity | fake
+      # "auto_discovery" (default), a path to a plan file, or an inline plan
+      replacement_plan: pii_replacement_plan.yaml
+      replacement:
+        locale: en_US
+        seed: 42
+      person:
+        # managed (default) or faker
+        backend: faker
     ```
 
-    `steps` is required and has no default. The snippet above shows a minimal
-    single-step config. For the full default ruleset (50+ entity types), use
-    [`PiiReplacerConfig.get_default_config()`][nemo_safe_synthesizer.config.replace_pii.PiiReplacerConfig]
-    in the SDK and export it to YAML:
+    Every field has a default, so `replace_pii: {}` behaves like the default run.
+    Each run writes its discovered plan to `pii_replacement_plan.yaml` in the run
+    directory; edit that file and point `replacement_plan` at it to take control of
+    which columns are replaced and which belong to the same persona.
 
-    ```python
-    from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
-    PiiReplacerConfig.get_default_config().to_yaml("pii_config.yaml")
-    ```
+### Managed persona assets
 
-### LLM Column Classification
+The default `person.backend: managed` samples synthetic identities from curated
+[Nemotron-Personas](https://huggingface.co/collections/nvidia/nemotron-personas)
+parquet files packaged for Data Designer on NGC (not the Hugging Face narrative
+exports, which omit name fields). Download those NGC resources with the NGC CLI
+and install them under the managed-assets root.
 
-To enable LLM-based PII column classification (optional), set the API key
-before running the pipeline. The endpoint defaults to
-`https://integrate.api.nvidia.com/v1`; override `NSS_INFERENCE_ENDPOINT` for a
-custom OpenAI-compatible endpoint.
+If the locale file is missing, preflight warns (`pii_managed_assets_missing`) and
+replacement falls back to Faker for that run. Use `person.backend: faker` when you
+want that path on purpose and need no downloads.
 
-When using the CLI, set both for column classification:
+Supported managed locales (filename must match `replace_pii.replacement.locale`):
+
+| Locale | Region | NGC package |
+|--------|--------|-------------|
+| `en_US` | United States | `nemotron-personas-dataset-en_us` |
+| `en_IN` | India (English) | `nemotron-personas-dataset-en_in` |
+| `en_SG` | Singapore (English) | `nemotron-personas-dataset-en_sg` |
+| `fr_FR` | France (French) | `nemotron-personas-dataset-fr_fr` |
+| `hi_Deva_IN` | India (Devanagari script) | `nemotron-personas-dataset-hi_deva_in` |
+| `hi_Latn_IN` | India (Latin script) | `nemotron-personas-dataset-hi_latn_in` |
+| `ja_JP` | Japan | `nemotron-personas-dataset-ja_jp` |
+| `ko_KR` | South Korea | `nemotron-personas-dataset-ko_kr` |
+| `pt_BR` | Brazil (Portuguese) | `nemotron-personas-dataset-pt_br` |
+
+#### 1. Install and configure the NGC CLI
+
+1. Obtain an NGC API key from [NVIDIA GPU Cloud](https://ngc.nvidia.com/).
+2. Install the [NGC CLI](https://org.ngc.nvidia.com/setup/installers/cli).
+3. Configure credentials (creates `~/.ngc/config`):
 
 ```bash
-export NSS_INFERENCE_ENDPOINT="https://integrate.api.nvidia.com/v1"  # optional; this is the default
-export NSS_INFERENCE_KEY="your-api-key"  # pragma: allowlist secret  (required for column classification with the inference endpoint)
+ngc config set
 ```
 
-PII column classification requires `NSS_INFERENCE_KEY` (and optionally `NSS_INFERENCE_ENDPOINT` if not using the default).
-When `NSS_INFERENCE_KEY` is unset, the classification step is attempted but
-falls back to NER-only detection (with an error log). No environment
-variables are required for NER-only PII replacement.
+Browse available packages in the
+[NGC Nemotron-Personas catalog](https://catalog.ngc.nvidia.com/search?orderBy=scoreDESC&query=nemotron+personas).
+
+#### 2. Download locales with the NGC CLI
+
+Run these from a working directory where you can unpack the downloads (for example
+your home directory). Download only the locales you need:
+
+```bash
+# United States (matches the default replace_pii.replacement.locale)
+ngc registry resource download-version "nvidia/nemotron-personas/nemotron-personas-dataset-en_us"
+
+# Optional additional locales
+ngc registry resource download-version "nvidia/nemotron-personas/<NGC package>"
+```
+
+#### 3. Install parquet files as `{locale}.parquet`
+
+Safe Synthesizer loads
+`{managed_assets_root}/datasets/{locale}.parquet` (for example
+`~/.data-designer/managed-assets/datasets/en_US.parquet`). Create the directory and
+install each downloaded package under that exact name:
+
+```bash
+mkdir -p ~/.data-designer/managed-assets/datasets
+
+# Adjust the left-hand glob if your NGC CLI unpacked a versioned folder name.
+mv nemotron-personas-dataset-en_us*/*.parquet \
+  ~/.data-designer/managed-assets/datasets/en_US.parquet
+
+# Examples for other locales:
+# mv nemotron-personas-dataset-ja_jp*/*.parquet \
+#   ~/.data-designer/managed-assets/datasets/ja_JP.parquet
+```
+
+Override the root with `NSS_MANAGED_ASSETS_PATH` or
+`replace_pii.person.managed_assets_path` when assets live elsewhere (for example a
+shared cluster mount). See
+[Environment Variables -- NSS_MANAGED_ASSETS_PATH](environment.md#nss_managed_assets_path).
+
+### LLM-assisted discovery
+
+Discovery is heuristic in this release and needs no inference endpoint or API key.
+`replace_pii.llm_enhancement: true` is reserved for a future release and currently
+raises `ParameterError`.
+
+The `NSS_INFERENCE_ENDPOINT`, `NSS_INFERENCE_KEY`, and `NSS_INFERENCE_MODEL`
+variables are plumbed for that future work and do not affect PII replacement today.
+Preflight still reports an `env.inference` warning when `NSS_INFERENCE_KEY` is unset;
+it is advisory and safe to ignore.
 
 See [Configuration Reference -- Replacing PII](configuration.md#replacing-pii) for the full parameter reference.
 

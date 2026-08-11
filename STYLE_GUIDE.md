@@ -154,8 +154,6 @@ def is_json_object(value: object) -> TypeIs[dict[str, JsonValue]]:
     )
 ```
 
-Legacy modules (`pii_replacer/`) still use `Optional`/`List`/`Dict`. Only `pii_replacer/` is excluded from `ty` type-checking (see `[tool.ty.src] exclude` in `pyproject.toml`). The remaining legacy usages will be migrated when those modules come under the type checker.
-
 ### Control flow
 
 - Prefer `match`/`case` for dispatch on types or tagged values. Not a blanket rule -- `if`/`elif` is fine for simple boolean predicates.

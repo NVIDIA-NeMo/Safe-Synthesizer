@@ -31,7 +31,7 @@ from ..llm.metadata import ModelMetadata
 from ..llm.utils import get_device_name
 from ..observability import LogCategory, configure_logging_from_workdir, get_logger, initialize_observability, traced
 from ..package_info import __version__
-from ..pii_replacer.nemo_pii import NemoPII
+from ..pii_replacer import TabularPiiReplacer
 from ..preflight import PreflightReport, PreflightStage, run_preflight
 from ..results import SafeSynthesizerResults, make_nss_results
 from ..telemetry import (
@@ -442,7 +442,13 @@ class SafeSynthesizer(ConfigBuilder):
         # text can shift token lengths, so ``--validate`` is documented as
         # best-effort rather than a guarantee (see user-guide/running.md).
         if not check_only and self._nss_config.replace_pii is not None:
-            replacer = NemoPII(self._nss_config.replace_pii)
+            assert self._workdir is not None
+            replacer = TabularPiiReplacer(
+                self._nss_config.replace_pii,
+                data_config=self._nss_config.data,
+                workdir=self._workdir.run_dir,
+                time_series=self._nss_config.time_series,
+            )
             replacer.transform_df(original_training_df)
             assert replacer.result is not None
             self._training_df = replacer.result.transformed_df
@@ -478,7 +484,15 @@ class SafeSynthesizer(ConfigBuilder):
             self._nss_config.to_yaml(config_path, exclude_unset=False)
             self._preflight_config_path = config_path
 
-        preflight = run_preflight(self._training_df, self._nss_config, metadata_for_preflight)
+        # User plans were already validated in the early CONFIG/DATAFRAME
+        # preflight against the same columns. Skip re-checking the plan YAML in
+        # the late pass (training-split token-budget checks still run).
+        late_config = self._nss_config.model_copy(deep=True)
+        disabled = list(late_config.preflight.disabled_checks)
+        if "pii.plan_validity" not in disabled:
+            disabled.append("pii.plan_validity")
+        late_config.preflight.disabled_checks = disabled
+        preflight = run_preflight(self._training_df, late_config, metadata_for_preflight)
         self.preflight_report = preflight
         for issue in preflight.warnings:
             logger.user.warning(issue.message, extra={"preflight_code": issue.code, "preflight_check": issue.check})

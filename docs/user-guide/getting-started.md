@@ -266,13 +266,19 @@ Your dataset should have at least 1,000 records (10,000 records if enabling diff
 
 ### 2. PII Replacement
 
-PII replacement is on by default as a pre-processing step. The PII replacer detects
-personally identifiable information (PII) using GLiNER NER and optional LLM-based
-column classification, then replaces detected entities with synthetic but
-realistic values prior to fine-tuning. This ensures the model never has the opportunity to learn the most sensitive information (e.g. names, addresses, identifiers) from the training data. See [Supported Entity Types](../product-overview/pii_replacement.md#supported-entity-types) for the full entity list.
+PII replacement is on by default as a pre-processing step. The PII replacer inspects
+column names, values, and dtypes to decide which columns hold PII, then replaces them
+with synthetic but realistic values prior to fine-tuning -- drawing one synthetic
+identity per person so a row's name, email, and address stay consistent. That reduces
+the model's exposure to detected PII (e.g. names, addresses, identifiers); heuristic
+discovery can miss columns or assign an unexpected entity type, so review
+`pii_replacement_plan.yaml` before training. See
+[Supported Entity Types](../product-overview/pii_replacement.md#supported-entity-types)
+for the full entity list.
 
-See [Configuration -- Replacing PII](configuration.md#replacing-pii) for
-entity types, LLM classification setup, and SDK customization.
+See [Configuration -- Replacing PII](configuration.md#replacing-pii) for the
+configurable fields, and [PII Replacement](../product-overview/pii_replacement.md)
+for the replacement plan format.
 
 ### 3. Training
 

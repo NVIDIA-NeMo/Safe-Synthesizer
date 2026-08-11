@@ -112,7 +112,7 @@ def test_training_columns_render_distribution_links_grades_and_entity_counts() -
                     "column_statistics": {
                         "detected_entity_counts": {"PERSON": 12},
                         "is_transformed": True,
-                        "transform_functions": ["fake_name"],
+                        "transform_methods": ["fake_name"],
                     },
                 }
             ]
@@ -126,6 +126,7 @@ def test_training_columns_render_distribution_links_grades_and_entity_counts() -
     assert '<span class="score-label">Very Good</span>' in rendered
     assert "<th>Entities (Count)</th>" in rendered
     assert "PERSON (12)" in rendered
+    assert "fake_name" in rendered
 
 
 def test_score_guidance_renders_recommendations_for_the_current_grade() -> None:

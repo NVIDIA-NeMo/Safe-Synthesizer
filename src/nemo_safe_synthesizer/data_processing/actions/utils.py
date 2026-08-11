@@ -4,8 +4,7 @@
 """Shared utilities for the data actions framework.
 
 Provides ``ActionCtx`` (execution context with state and dependency injection),
-``TransformsUtil`` (wrapper around the transforms_v2 engine), helper types
-(``MetadataColumns``, ``TransformsUpdate``), and subclass-discovery functions.
+helper types (``MetadataColumns``), data sources, and subclass-discovery functions.
 """
 
 from __future__ import annotations
@@ -15,7 +14,6 @@ import uuid
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Hashable
 from enum import StrEnum
-from functools import cached_property
 from typing import (
     Annotated,
     Any,
@@ -79,79 +77,6 @@ def remove_metadata_columns_from_records(records: list[dict]) -> list[dict]:
     return new_records
 
 
-class TransformsUpdate(BaseModel):
-    """Typed wrapper for a single transforms_v2 update step."""
-
-    name: str = Field(description="Target column name for the update.")
-    value: str = Field(description="Jinja expression evaluated by the transforms_v2 engine.")
-    position: int | None = Field(default=None, description="Column insertion index when adding a new column.")
-
-
-class TransformsUtil:
-    """Wrapper around a transforms_v2 ``Environment`` for executing column updates and drop conditions.
-
-    Args:
-        seed: Random seed passed to the underlying ``Environment``.
-    """
-
-    def __init__(self, seed: int | None = None) -> None:
-        from ...pii_replacer.data_editor.edit import (
-            Environment,
-        )
-
-        self.env = Environment(locales=None, seed=seed, globals_config={}, entity_extractor=None)
-
-    def execute_col_updates(self, col: str, df: pd.DataFrame, updates: list[str]) -> pd.DataFrame:
-        from ...pii_replacer.data_editor.edit import (
-            ProgressLog,
-            Step,
-        )
-
-        columns = {"add": []}
-        rows = {"update": []}
-
-        if col not in df.columns:
-            columns["add"].append({"name": col})
-
-        for step in updates:
-            rows["update"].append({"name": col, "value": step})
-
-        step = {"columns": columns, "rows": rows}
-        return Step.execute(df, {}, {}, step, self.env, ProgressLog(30), None)
-
-    def execute_updates(self, df: pd.DataFrame, updates: list[TransformsUpdate]) -> pd.DataFrame:
-        from ...pii_replacer.data_editor.edit import (
-            ProgressLog,
-            Step,
-        )
-
-        columns = {"add": []}
-        rows = {"update": []}
-
-        for step in updates:
-            col_name = step.name
-            if col_name not in df.columns:
-                position_dict = {}
-                if (position := step.position) is not None:
-                    position_dict["position"] = position
-                columns["add"].append({"name": col_name, **position_dict})
-
-            rows["update"].append({"name": col_name, "value": step.value})
-
-        step = {"columns": columns, "rows": rows}
-        return Step.execute(df, {}, {}, step, self.env, ProgressLog(30), None)
-
-    def execute_drop_condition(self, batch: pd.DataFrame, conditions: list) -> pd.DataFrame:
-        from ...pii_replacer.data_editor.edit import (
-            ProgressLog,
-            Step,
-        )
-
-        conditions_list = [{"condition": c} for c in conditions]
-        step = {"rows": {"drop": conditions_list}}
-        return Step.execute(batch, {}, {}, step, self.env, ProgressLog(30), None)
-
-
 class DataSource(BaseModel, ABC):
     """Abstract base for pluggable data sources used by ``GenDataSource`` actions.
 
@@ -189,15 +114,6 @@ class UniqueIdSource(DataSource):
         }[self.id_type]
         df[col] = df.apply(lambda batch: id_fn(batch), axis=1)
         return df
-
-
-class ExpressionSource(DataSource):
-    type_: Literal["expression"] = "expression"
-
-    expression: str
-
-    def generate_data(self, df: pd.DataFrame, col: str = "newcol") -> pd.DataFrame:
-        return self._ctx.transforms_util.execute_col_updates(col, df, [self.expression])
 
 
 DataSourceT = Annotated[DataSource, Field(discriminator="type_")]
@@ -244,8 +160,7 @@ def guess_datetime_format(datetime_str: str) -> str | None:
 class ActionCtx(BaseModel):
     """Execution context shared across all action invocations.
 
-    Provides a random seed, a state dictionary for cross-phase communication,
-    and a lazily-initialized ``TransformsUtil`` for expression evaluation.
+    Provides a random seed and a state dictionary for cross-phase communication.
     """
 
     seed: int | None = Field(default=None, description="Seed used for all random generation tasks.")
@@ -257,7 +172,3 @@ class ActionCtx(BaseModel):
     def __init__(self, /, **data: Any) -> None:
         super().__init__(**data)
         np.random.seed(seed=self.seed)
-
-    @cached_property
-    def transforms_util(self) -> TransformsUtil:
-        return TransformsUtil(seed=self.seed)

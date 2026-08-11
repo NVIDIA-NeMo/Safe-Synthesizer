@@ -355,7 +355,7 @@ class TestPathOptions:
         assert "Explicit path for this run" in result.output
 
     def test_run_help_shows_runtime_settings_options(self, cli_runner: CliRunner):
-        """Verify runtime PII/NER settings appear in run command help."""
+        """Verify runtime inference/HF settings appear in run command help."""
         result = cli_runner.invoke(run, ["--help"])
 
         assert result.exit_code == 0
@@ -363,9 +363,16 @@ class TestPathOptions:
         assert "--inference-api-key" in result.output
         assert "--inference-model-id" in result.output
         assert "--disable-huggingface-remote" in result.output
-        assert "--cpu-count" in result.output
+        assert "--cpu-count" not in result.output
+        assert "NSS_PII_REPLACER_CPU_COUNT" not in result.output
         assert "NSS_INFERENCE_ENDPOINT" in result.output
         assert "NSS_INFERENCE_KEY" in result.output
+
+    def test_run_rejects_cpu_count_option(self, cli_runner: CliRunner, dummy_csv: Path):
+        """Removed --cpu-count must fail as an unknown option."""
+        result = cli_runner.invoke(run, ["--data-source", str(dummy_csv), "--cpu-count", "2"])
+        assert result.exit_code != 0
+        assert "cpu-count" in result.output.lower() or "no such option" in result.output.lower()
 
     def test_run_with_artifact_path_only(
         self,

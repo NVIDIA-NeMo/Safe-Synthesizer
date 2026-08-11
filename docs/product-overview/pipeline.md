@@ -35,7 +35,7 @@ The pipeline begins by loading your input data (CSV or DataFrame) and preparing 
 
 ### 2. PII Replacement
 
-On by default, the PII replacer detects personally identifiable information (PII) using NER models and regex patterns, then replaces detected entities with synthetic but realistic values. This ensures the model never has the opportunity to learn the most sensitive information (e.g. names, addresses, identifiers) from the training data. Disable with `--no-replace-pii` (CLI) or `.with_replace_pii(enable=False)` (SDK) if your data contains no PII.
+On by default, the PII replacer detects personally identifiable information (PII) from column names and value patterns, then replaces detected entities with synthetic but realistic values. That reduces the model's exposure to detected PII (e.g. names, addresses, identifiers); heuristic discovery can miss columns or assign an unexpected entity type, so review `pii_replacement_plan.yaml` before training. Disable with `--no-replace-pii` (CLI) or `.with_replace_pii(enable=False)` (SDK) if your data contains no PII.
 
 See [PII Replacement](pii_replacement.md) for detailed PII Replacement documentation.
 

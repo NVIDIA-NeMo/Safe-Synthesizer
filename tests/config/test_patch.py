@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-from copy import deepcopy
 from typing import Self
 
 import pytest
@@ -9,9 +8,18 @@ from pydantic import BaseModel, Field, model_validator
 
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.patch import CompiledConfigPatch, PatchAssignment
-from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig, StepDefinition
+from nemo_safe_synthesizer.config.pii_replacement import ReplacePiiConfig
 from nemo_safe_synthesizer.configurator.parameter_paths import ParameterPath, ParameterSchema, UnknownParameterName
+from nemo_safe_synthesizer.configurator.parameters import Parameters
 from nemo_safe_synthesizer.errors import ParameterError
+
+
+class _StepLike(Parameters):
+    vars: dict[str, object] = Field(default_factory=dict)
+
+
+class _WithSteps(Parameters):
+    steps: list[_StepLike] = Field(default_factory=list)
 
 
 class _Child(BaseModel):
@@ -46,9 +54,7 @@ def _paths(*assignments: PatchAssignment) -> CompiledConfigPatch[_PatchTarget]:
 def test_mapping_leaf_with_nested_dictionaries_is_atomic_and_isolated() -> None:
     fallback = {"fallback": "name"}
     source = {"vars": {"template": {"given": ["first", fallback]}}}
-    patch = CompiledConfigPatch.from_mapping(
-        StepDefinition, source, origin="mapping", precedence=0, unknown_fields="reject"
-    )
+    patch = CompiledConfigPatch.from_mapping(_StepLike, source, origin="mapping", precedence=0, unknown_fields="reject")
     fallback["fallback"] = "changed"
 
     first = patch.apply()
@@ -59,12 +65,12 @@ def test_mapping_leaf_with_nested_dictionaries_is_atomic_and_isolated() -> None:
     assert second.vars == {"template": {"given": ["first", {"fallback": "name"}]}}
 
 
-def test_nested_nss_model_branch_patch_preserves_pii_global_siblings() -> None:
-    base = PiiReplacerConfig.get_default_config()
-    original_entities = deepcopy(base.globals.classify.entities)
+def test_nested_nss_model_branch_patch_preserves_replace_pii_siblings() -> None:
+    base = ReplacePiiConfig()
+    original_locale = base.replacement.locale
     patch = CompiledConfigPatch.from_mapping(
-        PiiReplacerConfig,
-        {"globals": {"seed": 17}},
+        ReplacePiiConfig,
+        {"replacement": {"seed": 17}},
         origin="override",
         precedence=1,
         unknown_fields="reject",
@@ -72,9 +78,8 @@ def test_nested_nss_model_branch_patch_preserves_pii_global_siblings() -> None:
 
     result = patch.apply(base)
 
-    assert result.globals.seed == 17
-    assert result.globals.classify.entities == original_entities
-    assert result.steps == base.steps
+    assert result.replacement.seed == 17
+    assert result.replacement.locale == original_locale
 
 
 @pytest.mark.parametrize("path", ["payload.nested", "items.0", "child.count.value"])
@@ -182,6 +187,19 @@ def test_mapping_constructor_ignores_unknown_keys_at_each_model_level() -> None:
     assert result.model_dump(exclude_unset=True) == {"child": {}}
 
 
+@pytest.mark.parametrize("key", ["globals", "steps"])
+def test_replace_pii_mapping_rejects_legacy_keys_under_ignore(key: str) -> None:
+    """Direct ReplacePiiConfig patches must not strip legacy keys under ignore."""
+    with pytest.raises(ParameterError, match=rf"replace_pii\.{key}"):
+        CompiledConfigPatch.from_mapping(
+            ReplacePiiConfig,
+            {key: {"anything": True}},
+            origin="mapping",
+            precedence=0,
+            unknown_fields="ignore",
+        )
+
+
 @pytest.mark.parametrize(
     ("source", "path"),
     [
@@ -195,10 +213,9 @@ def test_mapping_constructor_can_reject_unknown_keys(source: dict[str, object], 
 
 
 def test_unknown_field_rejection_leaves_model_collections_to_pydantic() -> None:
-    step = PiiReplacerConfig.get_default_config().steps[0].model_dump()
-    step["unknown"] = True
+    step = {"vars": {"row_seed": 1}, "unknown": True}
     patch = CompiledConfigPatch.from_mapping(
-        PiiReplacerConfig,
+        _WithSteps,
         {"steps": [step]},
         origin="mapping",
         precedence=0,
@@ -260,12 +277,13 @@ def test_wrong_target_model_is_rejected_for_combine_and_apply() -> None:
 def test_patch_schema_does_not_widen_public_pii_name_resolution() -> None:
     CompiledConfigPatch.from_mapping(
         SafeSynthesizerParameters,
-        {"replace_pii": {"globals": {"seed": 3}}},
+        {"replace_pii": {"replacement": {"seed": 3}}},
         origin="config",
         precedence=0,
         unknown_fields="reject",
     )
 
     assert isinstance(
-        ParameterSchema.from_model(SafeSynthesizerParameters).resolve("replace_pii.globals.seed"), UnknownParameterName
+        ParameterSchema.from_model(SafeSynthesizerParameters).resolve("replace_pii.replacement.seed"),
+        UnknownParameterName,
     )

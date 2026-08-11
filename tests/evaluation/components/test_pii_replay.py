@@ -50,7 +50,7 @@ def test_pii_replay_column_name_with_apostrophe():
             detected_entity_counts={"name": 4},
             detected_entity_values={"name": {"foo", "bar"}},
             is_transformed=True,
-            transform_functions={"fake"},
+            transform_methods={"fake"},
         )
     }
 
@@ -81,7 +81,7 @@ def test_pii_replay_percentage_rounds_up_to_one_decimal_place():
             detected_entity_counts={"name": 3},
             detected_entity_values={"name": {"Ada", "Grace", "Katherine"}},
             is_transformed=True,
-            transform_functions={"fake"},
+            transform_methods={"fake"},
         )
     }
     evaluation_datasets = EvaluationDatasets.from_dataframes(

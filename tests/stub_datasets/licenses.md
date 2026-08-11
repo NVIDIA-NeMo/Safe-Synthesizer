@@ -15,3 +15,7 @@ Synthetic document summaries generated with [NeMo Data Designer](https://github.
 ### Dow Jones Index (`dow_jones_index_group_size_8.csv`)
 
 Data provided for free by [IEX](https://www.iexexchange.io/products/market-data-connectivity). By accessing or using IEX Historical Data, you agree to the [IEX Historical Data Terms of Use](https://www.iexexchange.io/legal/hist-data-terms). The dataset is truncated per stock to create shorter sequences for testing.
+
+### Telco churn sample (`telco_churn_sample.csv`)
+
+60-row column subset of a synthetic Telco Customer Churn sample (CustomerID, Name, City, State, Zip Code, Churn Reason, Monthly Charge), for PII discovery goldens. Generated with [NeMo Data Designer](https://github.com/NVIDIA-NeMo/DataDesigner), Apache 2.0 license.

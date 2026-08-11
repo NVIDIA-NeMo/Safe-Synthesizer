@@ -1,0 +1,192 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+"""Temporal formats: match a cell's strftime format, and rank the formats a column writes."""
+
+from __future__ import annotations
+
+import re
+from collections import Counter
+from datetime import datetime
+
+import pandas as pd
+
+from .evidence import pattern_evidence_values, ranked_formats
+
+_DATETIME_FORMATS = [
+    "%Y-%m-%dT%H:%M:%S.%f",
+    "%Y-%m-%dT%H:%M:%S",
+    "%Y-%m-%d %H:%M:%S",
+    "%m/%d/%Y %H:%M:%S",
+    "%d/%m/%Y %H:%M:%S",
+]
+_DATE_FORMATS = [
+    "%m/%d/%Y",
+    "%d/%m/%Y",
+    "%Y-%m-%d",
+    "%m-%d-%Y",
+    "%Y/%m/%d",
+    "%m/%d/%y",
+    "%d-%m-%Y",
+    "%m/%Y",
+    "%Y/%m",
+    "%m-%Y",
+    "%Y-%m",
+]
+_TIME_FORMATS = [
+    "%H:%M:%S",
+    "%H:%M",
+    "%I:%M:%S %p",
+    "%I:%M %p",
+]
+_ISO_DURATION_RE = re.compile(
+    r"^P(?=\d|T)(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?:\d+H)?(?:\d+M)?(?:\d+(?:\.\d+)?S)?)?$",
+    re.IGNORECASE,
+)
+_HUMAN_DURATION_RE = re.compile(
+    r"^\d+(?:\.\d+)?\s*(?:s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days)$",
+    re.IGNORECASE,
+)
+_COMPACT_DURATION_RE = re.compile(r"^\d+[hms](?:\d+[hms])?$", re.IGNORECASE)
+
+
+def try_strftime_formats(value: str, formats: list[str]) -> str | None:
+    for fmt in formats:
+        try:
+            datetime.strptime(value, fmt)
+        except (ValueError, TypeError):
+            continue
+        return fmt
+    return None
+
+
+def match_datetime_format(value: object) -> str | None:
+    """Return the strftime format for a datetime cell, or None.
+
+    Args:
+        value: Cell value to inspect.
+
+    Returns:
+        A strftime format string when the value parses as datetime, else None.
+
+    Example:
+        ``"2020-03-15 14:30:00"`` -> ``"%Y-%m-%d %H:%M:%S"``.
+    """
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return None
+    s = str(value).strip()
+    if not s or not any(ch.isdigit() for ch in s):
+        return None
+    if "T" not in s and " " not in s:
+        return None
+    return try_strftime_formats(s, _DATETIME_FORMATS)
+
+
+def match_date_format(value: object) -> str | None:
+    """Return the strftime format a date cell parses as, or None.
+
+    Cheap pre-filters (must contain a digit and a ``/`` or ``-`` separator) keep
+    this from attempting ``strptime`` on obvious non-dates such as plain numbers,
+    emails, or free text.
+
+    Args:
+        value: Cell value to inspect.
+
+    Returns:
+        A strftime format string (e.g. ``%m/%d/%Y``) when the value parses as a
+        date, else None.
+
+    Example:
+        ``"03/15/2020"`` -> ``"%m/%d/%Y"``; ``"12345"`` -> None.
+    """
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return None
+    s = str(value).strip()
+    if not s or not any(ch.isdigit() for ch in s) or ("/" not in s and "-" not in s):
+        return None
+    if match_datetime_format(s):
+        return None
+    return try_strftime_formats(s, _DATE_FORMATS)
+
+
+def match_time_format(value: object) -> str | None:
+    """Return the strftime format for a time-only cell, or None.
+
+    Args:
+        value: Cell value to inspect.
+
+    Returns:
+        A strftime format string when the value parses as time-only, else None.
+
+    Example:
+        ``"2:30 PM"`` -> ``"%I:%M %p"``; ``"192.168.1.1"`` -> None.
+    """
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return None
+    s = str(value).strip()
+    if not s or ":" not in s or not any(ch.isdigit() for ch in s):
+        return None
+    if "/" in s or "-" in s:
+        return None
+    if "::" in s or re.search(r"[A-Fa-f]", s):
+        return None
+    return try_strftime_formats(s, _TIME_FORMATS)
+
+
+def match_duration_format(value: object) -> str | None:
+    """Return a duration pattern label (``iso8601`` or ``human``), or None.
+
+    Args:
+        value: Cell value to inspect.
+
+    Returns:
+        ``"iso8601"`` or ``"human"`` when the value matches a known duration
+        shape, else None.
+
+    Example:
+        ``"P1DT2H"`` -> ``"iso8601"``; ``"45 minutes"`` / ``"2h30m"`` -> ``"human"``.
+    """
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return None
+    s = str(value).strip()
+    if not s:
+        return None
+    if _ISO_DURATION_RE.match(s):
+        return "iso8601"
+    if _HUMAN_DURATION_RE.match(s) or _COMPACT_DURATION_RE.match(s):
+        return "human"
+    return None
+
+
+def detect_date_format(sample: str) -> str:
+    """Return the best strftime format for one date/datetime sample.
+
+    Args:
+        sample: One date or datetime string.
+
+    Returns:
+        A strftime format string; unparseable samples default to ``"%Y-%m-%d"``.
+
+    Example:
+        ``"03/15/2020"`` -> ``"%m/%d/%Y"``.
+    """
+    return match_datetime_format(sample) or match_date_format(sample) or "%Y-%m-%d"
+
+
+def date_patterns(values: pd.Series) -> list[str]:
+    """Return strftime formats a column writes its dates in, most common first.
+
+    Args:
+        values: Column date values.
+
+    Returns:
+        Ranked strftime format strings for formats that clear ``PATTERN_MIN_SHARE``.
+
+    Example:
+        A column mostly ``03/15/2020`` with a few ISO dates -> ``["%m/%d/%Y"]``
+        (or both when the minority clears ``PATTERN_MIN_SHARE``).
+    """
+    counts: Counter = Counter()
+    for value in pattern_evidence_values(values):
+        counts[detect_date_format(value)] += 1
+    return ranked_formats(counts, sum(counts.values()))

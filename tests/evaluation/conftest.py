@@ -145,7 +145,7 @@ def fixture_column_statistics(fixture_training_df_5k) -> dict[str, ColumnStatist
         detected_entity_counts={"some_cats": small_cat_count, "other_cats": other_cat_count},
         detected_entity_values={"some_cats": small_cat_values, "other_cats": other_cat_values},
         is_transformed=True,
-        transform_functions={"fake", "munge"},
+        transform_methods={"fake", "munge"},
     )
 
     other_values = set(fixture_training_df_5k["other"].head(250))
@@ -160,7 +160,7 @@ def fixture_column_statistics(fixture_training_df_5k) -> dict[str, ColumnStatist
             "name": other_values,
         },
         is_transformed=True,
-        transform_functions={"fake"},
+        transform_methods={"fake"},
     )
 
     return {

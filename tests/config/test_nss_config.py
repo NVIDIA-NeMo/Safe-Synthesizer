@@ -9,7 +9,7 @@ from pydantic import Field, ValidationError
 from nemo_safe_synthesizer.config import (
     DataParameters,
     DifferentialPrivacyHyperparams,
-    PiiReplacerConfig,
+    ReplacePiiConfig,
     SafeSynthesizerParameters,
     TimeSeriesParameters,
 )
@@ -116,13 +116,10 @@ class TestParametersClass:
 
 
 class TestPiiParameters:
-    def test_pii_parameters_create_without_steps(self):
-        with pytest.raises(ValidationError):
-            _ = PiiReplacerConfig()  # ty: ignore[missing-argument] -- intentionally omits required field to test that ValidationError is raised
-
-    def test_create_default(self):
-        params = PiiReplacerConfig.get_default_config()
-        assert params.globals.ner.ner_threshold == 0.3
+    def test_pii_parameters_defaults(self):
+        params = ReplacePiiConfig()
+        assert params.replacement.locale == "en_US"
+        assert params.replacement_plan == "auto_discovery"
 
 
 class TestSafeSynthesizerParameters:
