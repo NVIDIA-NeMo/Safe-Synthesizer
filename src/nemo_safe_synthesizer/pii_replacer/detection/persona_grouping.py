@@ -25,8 +25,7 @@ from ..entities import (
 from ..models import ColumnEvidence
 from ..patterns import date_patterns, split_full_name, value_patterns
 from .column_names import (
-    fuzzy_match_label,
-    match_label,
+    match_column_header,
     name_supports_value_entity,
     normalize_column_name_for_match,
 )
@@ -311,7 +310,9 @@ def detect_structured_columns(df_subset: pd.DataFrame, stats: dict, cfg: Config)
 
     def _gather(col: str) -> ColumnEvidence:
         series = df_subset[col]
-        name_label = fuzzy_match_label(col, ENTITY_NAME_PATTERNS, cfg.name_fuzzy_threshold)
+        name_label, demo_label = match_column_header(
+            col, ENTITY_NAME_PATTERNS, DEMO_LABEL_PATTERNS, cfg.name_fuzzy_threshold
+        )
         phone_min = 7 if name_label == "phone_number" else 10
         analysis = analyze_column_patterns(series, cfg, phone_min_digits=phone_min)
         value_entity = analysis["entity"] if analysis["structured"] else None
@@ -319,7 +320,6 @@ def detect_structured_columns(df_subset: pd.DataFrame, stats: dict, cfg: Config)
         # (identify-not-replaced) keep value evidence without a name match.
         if value_entity is not None and not name_supports_value_entity(name_label, value_entity):
             value_entity = None
-        demo_label = match_label(col, DEMO_LABEL_PATTERNS)
         return ColumnEvidence(col, series, name_label, value_entity, analysis, demo_label)
 
     for col in df_subset.columns:

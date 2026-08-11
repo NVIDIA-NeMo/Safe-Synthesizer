@@ -212,12 +212,33 @@ def test_fuzzy_match_label_resolves_multi_regex_with_warning(caplog, monkeypatch
     messages = [record.getMessage() for record in caplog.records]
     assert any(
         "patient_name" in m
-        and "multiple entity types" in m
+        and "multiple header labels" in m
         and "full_name" in m
         and "first_name" in m
         and "Review the replacement plan" in m
         and "bug report" in m
         for m in messages
+    )
+
+
+def test_match_column_header_resolves_entity_vs_demo_collision(caplog, monkeypatch):
+    """Entity and demographic regex hits share the same multi-match warning path."""
+    import logging
+
+    from nemo_safe_synthesizer.pii_replacer.detection import column_names
+
+    entity_patterns = {"first_name": [r"sex|name"]}
+    demo_patterns = {"sex": [r"^sex$", r"gender"]}
+    monkeypatch.setattr(column_names, "FUZZY_KEYWORDS", {"first_name": ("firstname", "fname")})
+    monkeypatch.setattr(column_names, "DEMO_FUZZY_KEYWORDS", {"sex": ("sex", "gender")})
+    caplog.set_level(logging.WARNING)
+
+    name_label, demo_label = column_names.match_column_header("sex", entity_patterns, demo_patterns, threshold=0.86)
+    assert name_label is None
+    assert demo_label == "sex"
+    messages = [record.getMessage() for record in caplog.records]
+    assert any(
+        "sex" in m and "multiple header labels" in m and "first_name" in m and "chose 'sex'" in m for m in messages
     )
 
 
@@ -229,4 +250,13 @@ def test_fuzzy_match_label_single_regex_skips_warning(caplog):
 
     caplog.set_level(logging.WARNING)
     assert fuzzy_match_label("email", ENTITY_NAME_PATTERNS, threshold=0.86) == "email"
-    assert not any("multiple entity types" in record.getMessage() for record in caplog.records)
+    assert not any("multiple header labels" in record.getMessage() for record in caplog.records)
+
+
+def test_match_column_header_assigns_demo_without_entity():
+    from nemo_safe_synthesizer.pii_replacer.detection.column_names import match_column_header
+    from nemo_safe_synthesizer.pii_replacer.entities import DEMO_LABEL_PATTERNS, ENTITY_NAME_PATTERNS
+
+    name_label, demo_label = match_column_header("gender", ENTITY_NAME_PATTERNS, DEMO_LABEL_PATTERNS, threshold=0.86)
+    assert name_label is None
+    assert demo_label == "sex"

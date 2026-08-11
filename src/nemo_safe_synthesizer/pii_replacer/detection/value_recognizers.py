@@ -69,10 +69,6 @@ _API_RE = re.compile(r"[A-Za-z0-9_\-]{20,}\Z")
 _COMPACT_YMD_RE = re.compile(r"^(19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\Z")
 _MULTI_PERSON_DELIM_RE = re.compile(r"(?i)\s+(?:and|&)\s+|\s*/\s*|\s*;\s*")
 
-# Transitional aliases for the pre-package private spellings.
-_UUID_RE = UUID_RE
-_API_PREFIXES = API_PREFIXES
-
 
 def _digits(s: str) -> str:
     return re.sub(r"\D", "", s)

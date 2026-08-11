@@ -7,10 +7,10 @@ from __future__ import annotations
 
 import difflib
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 
 from ...observability import get_logger
-from ..entities import FUZZY_KEYWORDS, is_identify_only
+from ..entities import DEMO_FUZZY_KEYWORDS, FUZZY_KEYWORDS, is_identify_only
 
 logger = get_logger(__name__)
 
@@ -38,35 +38,35 @@ def normalize_column_name_for_match(col: str) -> str:
     return re.sub(r"\s+", " ", s).strip().lower()
 
 
-def match_labels(col: str, patterns: dict[str, list[str]]) -> list[str]:
-    """Return every entity label whose regex matches the normalized column name.
+def match_labels(col: str, patterns: Mapping[str, list[str]]) -> list[str]:
+    """Return every label whose regex matches the normalized column name.
 
     Labels are returned in ``patterns`` iteration order (registry order for
     ``ENTITY_NAME_PATTERNS``).
 
     Args:
         col: Raw column header name.
-        patterns: Mapping of entity label to list of regex fragments.
+        patterns: Mapping of label to list of regex fragments.
 
     Returns:
-        Matching entity labels (possibly empty).
+        Matching labels (possibly empty).
     """
     name = normalize_column_name_for_match(col)
     return [label for label, regexes in patterns.items() if any(re.search(rg, name) for rg in regexes)]
 
 
-def match_label(col: str, patterns: dict[str, list[str]]) -> str | None:
-    """Return the first entity label whose regex matches the normalized column name.
+def match_label(col: str, patterns: Mapping[str, list[str]]) -> str | None:
+    """Return the first label whose regex matches the normalized column name.
 
-    Prefer ``fuzzy_match_label`` for entity detection (handles multi-match). This
-    helper remains for demographics and simple single-label checks.
+    Prefer ``match_column_header`` for detection (handles multi-match across entity
+    and demographic patterns). This helper remains for simple single-pattern checks.
 
     Args:
         col: Raw column header name.
-        patterns: Mapping of entity label to list of regex fragments.
+        patterns: Mapping of label to list of regex fragments.
 
     Returns:
-        First matched entity label, or ``None`` when no pattern matches.
+        First matched label, or ``None`` when no pattern matches.
     """
     labels = match_labels(col, patterns)
     return labels[0] if labels else None
@@ -101,11 +101,17 @@ def name_supports_value_entity(name_label: str | None, value_entity: str) -> boo
     return name_label == "date_of_birth" and value_entity == "date"
 
 
+def _fuzzy_keys(label: str) -> list[str]:
+    keys = list(FUZZY_KEYWORDS.get(label) or ())
+    keys.extend(DEMO_FUZZY_KEYWORDS.get(label) or ())
+    return keys
+
+
 def _best_fuzzy_label(col: str, candidates: Iterable[str] | None = None) -> tuple[str | None, float]:
     """Return ``(label, score)`` for the best fuzzy keyword match among candidates.
 
-    When ``candidates`` is ``None``, scores every label in ``FUZZY_KEYWORDS``.
-    Ties keep the first label seen (candidate / registry order).
+    When ``candidates`` is ``None``, scores every label in ``FUZZY_KEYWORDS`` (entity
+    typo backstop only). Ties keep the first label seen (candidate order).
     """
     joined = re.sub(r"[^a-z0-9]+", "", col.lower())
     if not joined:
@@ -113,51 +119,92 @@ def _best_fuzzy_label(col: str, candidates: Iterable[str] | None = None) -> tupl
     labels: Iterable[str] = FUZZY_KEYWORDS.keys() if candidates is None else candidates
     best_label, best = None, 0.0
     for label in labels:
-        for key in FUZZY_KEYWORDS.get(label) or ():
+        for key in _fuzzy_keys(label):
             sc = difflib.SequenceMatcher(None, joined, key).ratio()
             if sc > best:
                 best_label, best = label, sc
     return best_label, best
 
 
-# Curated, specific keyword spellings per label for the fuzzy backstop. These are
-# deliberately NOT generic single words (no bare "name"/"date"/"id"), so a typo'd
-# variant matches but unrelated columns (e.g. "event_name", "event_date") do not.
-def fuzzy_match_label(col: str, patterns: dict[str, list[str]], threshold: float) -> str | None:
-    """Return an entity label via regex match(es), with fuzzy resolution when needed.
+def _warn_multi_header_match(col: str, matches: list[str], chosen: str) -> None:
+    alternatives = [label for label in matches if label != chosen]
+    logger.user.warning(
+        f"[PII Replacement] Column {col!r} matched multiple header labels by name "
+        f"({', '.join(matches)}); chose {chosen!r} by fuzzy similarity "
+        f"(alternatives: {', '.join(alternatives)}). Review the replacement plan; "
+        f"if the chosen type is wrong, please file a bug report at {_BUG_REPORT_URL}"
+    )
 
-    1. Collect **all** regex matches against ``patterns``.
-    2. Zero matches → fuzzy backstop over ``FUZZY_KEYWORDS`` (must meet ``threshold``).
-    3. One match → that label.
-    4. Multiple matches → fuzzy score among those candidates only; pick the highest
-       and warn so the plan can be reviewed (overlapping name patterns are unexpected).
 
-    Example:
-        ``"emial_address"`` at threshold ``0.86`` -> ``"email"``.
+def match_column_header(
+    col: str,
+    entity_patterns: Mapping[str, list[str]],
+    demo_patterns: Mapping[str, list[str]],
+    threshold: float,
+) -> tuple[str | None, str | None]:
+    """Classify a column header as an entity label, a demographic label, or neither.
+
+    Regex matches are collected across **both** pattern maps. At most one of
+    ``name_label`` / ``demo_label`` is returned:
+
+    1. Zero matches → fuzzy backstop over entity ``FUZZY_KEYWORDS`` (must meet
+       ``threshold``); demographics are not invented from typos alone.
+    2. One match → that label (entity or demographic).
+    3. Multiple matches (entity/entity, demo/demo, or entity/demo) → fuzzy score
+       among those candidates; pick the highest and warn.
 
     Args:
         col: Raw column header name.
-        patterns: Mapping of entity label to list of regex fragments.
-        threshold: Minimum fuzzy similarity ratio in ``[0.0, 1.0]`` for the
-            no-regex-match backstop.
+        entity_patterns: Entity label → regex fragments (e.g. ``ENTITY_NAME_PATTERNS``).
+        demo_patterns: Demographic label → regex fragments (e.g. ``DEMO_LABEL_PATTERNS``).
+        threshold: Minimum fuzzy similarity for the no-regex entity backstop.
 
     Returns:
-        Matched entity label, or ``None`` when neither regex nor fuzzy match succeeds.
+        ``(name_label, demo_label)`` with at most one side set.
     """
-    matches = match_labels(col, patterns)
+    demo_keys = set(demo_patterns)
+    matches = match_labels(col, entity_patterns) + [label for label in match_labels(col, demo_patterns)]
+    # De-dupe while preserving order (entity hits first, then demos).
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for label in matches:
+        if label not in seen:
+            seen.add(label)
+            ordered.append(label)
+    matches = ordered
+
+    def _split(chosen: str | None) -> tuple[str | None, str | None]:
+        if chosen is None:
+            return None, None
+        if chosen in demo_keys:
+            return None, chosen
+        return chosen, None
+
     if len(matches) == 1:
-        return matches[0]
+        return _split(matches[0])
     if len(matches) > 1:
         best_label, _ = _best_fuzzy_label(col, matches)
         chosen = best_label or matches[0]
-        alternatives = [label for label in matches if label != chosen]
-        logger.user.warning(
-            f"[PII Replacement] Column {col!r} matched multiple entity types by name "
-            f"({', '.join(matches)}); chose {chosen!r} by fuzzy similarity "
-            f"(alternatives: {', '.join(alternatives)}). Review the replacement plan; "
-            f"if the chosen type is wrong, please file a bug report at {_BUG_REPORT_URL}"
-        )
-        return chosen
+        _warn_multi_header_match(col, matches, chosen)
+        return _split(chosen)
 
     best_label, best = _best_fuzzy_label(col)
-    return best_label if best >= threshold else None
+    if best_label is None or best < threshold:
+        return None, None
+    return _split(best_label)
+
+
+# Curated, specific keyword spellings per label for the fuzzy backstop. These are
+# deliberately NOT generic single words (no bare "name"/"date"/"id"), so a typo'd
+# variant matches but unrelated columns (e.g. "event_name", "event_date") do not.
+def fuzzy_match_label(col: str, patterns: Mapping[str, list[str]], threshold: float) -> str | None:
+    """Return an entity label via regex/fuzzy match (entity patterns only).
+
+    Detection should prefer ``match_column_header``, which also considers
+    demographic patterns. This helper remains for entity-only callers and tests.
+
+    Example:
+        ``"emial_address"`` at threshold ``0.86`` -> ``"email"``.
+    """
+    name_label, _demo_label = match_column_header(col, patterns, {}, threshold)
+    return name_label

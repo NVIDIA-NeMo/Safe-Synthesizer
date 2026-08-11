@@ -829,6 +829,14 @@ DEMO_LABEL_PATTERNS: dict[str, list[str]] = {
     "ethnic_background": [r"race", r"ethnic"],
 }
 
+# Keyword spellings for fuzzy resolution when a header matches both an entity and a
+# demographic label (or multiple demos). Kept separate from ``FUZZY_KEYWORDS`` so the
+# no-regex fuzzy backstop can still prefer entity typos over bare demographic words.
+DEMO_FUZZY_KEYWORDS: dict[str, list[str]] = {
+    "sex": ["sex", "gender"],
+    "ethnic_background": ["race", "ethnic", "ethnicity", "ethnicbackground"],
+}
+
 ORG_KEYWORDS = [
     "hospital",
     "clinic",
