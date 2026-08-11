@@ -7,14 +7,14 @@ from __future__ import annotations
 
 import pandas as pd
 
-from ...config.pii_replacement import (
+from ...config.replace_pii import (
     PersonaColumnSet,
     PersonaMatchColumn,
     PiiColumnPlan,
     PiiEntity,
     PiiReplacementPlan,
     PiiReplacementScope,
-    ReplacePiiConfig,
+    PiiReplacerConfig,
 )
 from ...observability import get_logger
 from .. import detection, entities, patterns
@@ -214,7 +214,7 @@ def discover_plan(
     df: pd.DataFrame,
     group_key: str | None,
     cfg: entities.Config,
-    config: ReplacePiiConfig,
+    config: PiiReplacerConfig,
     *,
     enhancer: PiiEnhancer | None = None,
 ) -> PiiReplacementPlan:

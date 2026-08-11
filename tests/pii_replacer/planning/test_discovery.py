@@ -8,7 +8,7 @@ from __future__ import annotations
 import pandas as pd
 
 from nemo_safe_synthesizer.config.data import DataParameters
-from nemo_safe_synthesizer.config.pii_replacement import (
+from nemo_safe_synthesizer.config.replace_pii import (
     AUTO_DISCOVERY,
     PersonaColumnSet,
     PersonaMatchColumn,
@@ -18,7 +18,7 @@ from nemo_safe_synthesizer.config.pii_replacement import (
     PiiPersonConfig,
     PiiReplacementPlan,
     PiiReplacementScope,
-    ReplacePiiConfig,
+    PiiReplacerConfig,
 )
 from nemo_safe_synthesizer.pii_replacer.entities import Config, config_from_replace_pii
 from nemo_safe_synthesizer.pii_replacer.planning import (
@@ -45,8 +45,8 @@ def test_discover_event_date_identified_not_replaced():
     plan = discover_plan(
         df,
         group_key=None,
-        cfg=config_from_replace_pii(ReplacePiiConfig()),
-        config=ReplacePiiConfig(),
+        cfg=config_from_replace_pii(PiiReplacerConfig()),
+        config=PiiReplacerConfig(),
     )
     # A generic date column is identified as structured only to keep it out of the
     # free-text path; it is excluded from the replacement plan entirely.
@@ -75,8 +75,8 @@ def test_discovery_logs_temporal_and_free_text_gates(caplog):
     discover_plan(
         df,
         group_key=None,
-        cfg=config_from_replace_pii(ReplacePiiConfig()),
-        config=ReplacePiiConfig(),
+        cfg=config_from_replace_pii(PiiReplacerConfig()),
+        config=PiiReplacerConfig(),
     )
     messages = [record.getMessage() for record in caplog.records]
     assert any("Identified temporal column 'event_date'" in message for message in messages)
@@ -137,8 +137,8 @@ def test_discover_temporal_columns_identified_not_replaced():
     plan = discover_plan(
         df,
         group_key=None,
-        cfg=config_from_replace_pii(ReplacePiiConfig()),
-        config=ReplacePiiConfig(),
+        cfg=config_from_replace_pii(PiiReplacerConfig()),
+        config=PiiReplacerConfig(),
     )
     for col in ("created_at", "shift_start", "wait_time"):
         assert column_spec(plan.standalone_columns_to_replace, col) is None
@@ -161,8 +161,8 @@ def test_discover_date_of_birth_gets_its_format():
     plan = discover_plan(
         df,
         group_key="patient_id",
-        cfg=config_from_replace_pii(ReplacePiiConfig()),
-        config=ReplacePiiConfig(),
+        cfg=config_from_replace_pii(PiiReplacerConfig()),
+        config=PiiReplacerConfig(),
     )
     assert plan.scope == PiiReplacementScope.group
     # Birth dates are replaced independently of any persona, so they are placed
@@ -196,7 +196,7 @@ def test_a_repeating_identifier_is_detected_with_or_without_a_group_key():
                 }
             )
     df = pd.DataFrame(rows)
-    cfg = config_from_replace_pii(ReplacePiiConfig())
+    cfg = config_from_replace_pii(PiiReplacerConfig())
 
     for group_key in (None, "patient_id"):
         discovery = _detect_full_dataframe(df, cfg, group_key=group_key)
@@ -237,7 +237,7 @@ def test_faker_discovery_omits_ethnic_background_from_match_persona_by():
             "race": (["White", "Black"] * (n // 2))[:n],
         }
     )
-    cfg = ReplacePiiConfig(person=PiiPersonConfig(backend=PiiPersonBackend.faker))
+    cfg = PiiReplacerConfig(person=PiiPersonConfig(backend=PiiPersonBackend.faker))
     plan = discover_plan(df, None, config_from_replace_pii(cfg), cfg)
     assert plan.persona_backed_columns
     matchers = [
@@ -272,7 +272,7 @@ def test_faker_ignores_ethnic_background_in_hand_written_plan():
             )
         ]
     )
-    runtime = config_from_replace_pii(ReplacePiiConfig(person=PiiPersonConfig(backend=PiiPersonBackend.faker)))
+    runtime = config_from_replace_pii(PiiReplacerConfig(person=PiiPersonConfig(backend=PiiPersonBackend.faker)))
     assert runtime.persona_backend == "faker"
     codes = {issue.code for issue in iter_plan_advisories(plan, persona_backend="faker")}
     assert "pii_plan_ethnic_background_ignored_under_faker" in codes
@@ -292,7 +292,7 @@ def test_discovery_routes_phone_standalone_with_its_own_shape(fixture_phone_df: 
     from nemo_safe_synthesizer.pii_replacer.patterns import value_matches_template
     from nemo_safe_synthesizer.pii_replacer.planning import discover_plan
 
-    cfg = ReplacePiiConfig()
+    cfg = PiiReplacerConfig()
     plan = discover_plan(fixture_phone_df, group_key=None, cfg=config_from_replace_pii(cfg), config=cfg)
 
     assert not any(
@@ -319,7 +319,7 @@ def test_discovery_reports_no_pattern_for_a_column_that_wears_none():
 
     ips = [f"{(i * 37) % 240 + 1}.{(i * 11) % 256}.{(i * 7) % 256}.{(i * 3) % 256}" for i in range(40)]
     df = pd.DataFrame({"ip_address": ips, "full_name": [f"Person {i}" for i in range(40)]})
-    cfg = ReplacePiiConfig(person=PiiPersonConfig(backend=PiiPersonBackend.faker))
+    cfg = PiiReplacerConfig(person=PiiPersonConfig(backend=PiiPersonBackend.faker))
     plan = discover_plan(df, group_key=None, cfg=config_from_replace_pii(cfg), config=cfg)
 
     spec = column_spec(plan.standalone_columns_to_replace, "ip_address")
@@ -335,7 +335,7 @@ def test_discovery_reports_no_pattern_for_a_column_that_wears_none():
 def test_discovery_reads_the_name_and_email_conventions(fixture_contact_df: pd.DataFrame):
     from nemo_safe_synthesizer.pii_replacer.planning import discover_plan
 
-    cfg = ReplacePiiConfig(person=PiiPersonConfig(backend=PiiPersonBackend.faker))
+    cfg = PiiReplacerConfig(person=PiiPersonConfig(backend=PiiPersonBackend.faker))
     plan = discover_plan(fixture_contact_df, group_key=None, cfg=config_from_replace_pii(cfg), config=cfg)
     specs = persona_set(plan, "patient").columns_to_replace
 
@@ -354,7 +354,7 @@ def test_discovery_leaves_ip_columns_to_their_generator():
     # Fixed-width octets: a template is inferable here, and still must not be used.
     ips = [f"{101 + i}.{110 + i}.{120 + i}.{130 + i}" for i in range(40)]
     df = pd.DataFrame({"ip_address": ips, "full_name": [f"Person {i}" for i in range(40)]})
-    cfg = ReplacePiiConfig(person=PiiPersonConfig(backend=PiiPersonBackend.faker))
+    cfg = PiiReplacerConfig(person=PiiPersonConfig(backend=PiiPersonBackend.faker))
     plan = discover_plan(df, group_key=None, cfg=config_from_replace_pii(cfg), config=cfg)
 
     spec = column_spec(plan.standalone_columns_to_replace, "ip_address")
@@ -379,7 +379,7 @@ def test_discovery_replaces_every_phone_column():
             "mobile_phone": [f"(206) 555-{2000 + i:04d}" for i in range(20)],
         }
     )
-    cfg = ReplacePiiConfig()
+    cfg = PiiReplacerConfig()
     plan = discover_plan(df, group_key=None, cfg=config_from_replace_pii(cfg), config=cfg)
 
     replaced = {spec.column_name for spec in plan.standalone_columns_to_replace}
@@ -399,7 +399,7 @@ def test_auto_discovery_emits_plan_shape():
         }
     )
     replacer = TabularPiiReplacer(
-        ReplacePiiConfig(replacement_plan=AUTO_DISCOVERY, person=PiiPersonConfig(backend=PiiPersonBackend.faker)),
+        PiiReplacerConfig(replacement_plan=AUTO_DISCOVERY, person=PiiPersonConfig(backend=PiiPersonBackend.faker)),
         data_config=DataParameters(group_training_examples_by="patient_id"),
     )
     replacer.transform_df(df)
@@ -419,7 +419,7 @@ def test_an_identifier_that_repeats_is_still_an_identifier():
     """
     references = [f"550e8400-e29b-41d4-a716-4466554400{i:02d}" for i in range(20)]
     df = pd.DataFrame({"ticket_ref": references * 2, "note": [f"row {i}" for i in range(40)]})
-    config = ReplacePiiConfig(person=PiiPersonConfig(backend=PiiPersonBackend.faker))
+    config = PiiReplacerConfig(person=PiiPersonConfig(backend=PiiPersonBackend.faker))
     runtime = config_from_replace_pii(config)
 
     plan = resolve_plan(config, df, data_config=DataParameters(), cfg=runtime)
@@ -439,7 +439,7 @@ def test_low_cardinality_name_matched_pii_is_still_planned():
             "first_name": [f"First{i}" for i in range(8)],
         }
     )
-    plan = discover_plan(df, None, config_from_replace_pii(ReplacePiiConfig()), ReplacePiiConfig())
+    plan = discover_plan(df, None, config_from_replace_pii(PiiReplacerConfig()), PiiReplacerConfig())
     patient = column_spec(plan.standalone_columns_to_replace, "patient_id")
     assert patient is not None and patient.entity_type == PiiEntity.unique_identifier
     first = None
@@ -456,7 +456,7 @@ def test_discover_plan_falls_back_to_dataframe_scope_when_group_key_missing(capl
     caplog.set_level(logging.WARNING)
     df = pd.DataFrame({"first_name": ["Alice", "Bob", "Cleo"] * 10})
     plan = discover_plan(
-        df, group_key="missing_group", cfg=config_from_replace_pii(ReplacePiiConfig()), config=ReplacePiiConfig()
+        df, group_key="missing_group", cfg=config_from_replace_pii(PiiReplacerConfig()), config=PiiReplacerConfig()
     )
     assert plan.scope == PiiReplacementScope.dataframe
     assert any("dataframe scope instead of group" in r.getMessage() for r in caplog.records)
@@ -480,7 +480,7 @@ def test_transcription_job_id_pattern_inferred():
     assert patterns[0].startswith("transcription-job-")
 
     df = pd.DataFrame({"job_id": samples})
-    plan = discover_plan(df, None, config_from_replace_pii(ReplacePiiConfig()), ReplacePiiConfig())
+    plan = discover_plan(df, None, config_from_replace_pii(PiiReplacerConfig()), PiiReplacerConfig())
     spec = column_spec(plan.standalone_columns_to_replace, "job_id")
     assert spec is not None and spec.entity_type == PiiEntity.unique_identifier
     assert spec.patterns
@@ -594,7 +594,7 @@ def test_discovered_secondary_pattern_validates_against_same_evidence_sample():
     a_vals = [f"CUST-{i:08d}" for i in range(1000)]
     b_vals = [f"NEWID{i:08d}" for i in range(400)]
     df = pd.DataFrame({"record_id": a_vals + b_vals * 5})
-    cfg = ReplacePiiConfig(
+    cfg = PiiReplacerConfig(
         replacement_plan=AUTO_DISCOVERY,
         person=PiiPersonConfig(backend=PiiPersonBackend.faker),
     )

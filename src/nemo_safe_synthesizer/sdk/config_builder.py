@@ -16,7 +16,7 @@ from ..config import (
     EvaluationParameters,
     GenerateParameters,
     PreflightParameters,
-    ReplacePiiConfig,
+    PiiReplacerConfig,
     SafeSynthesizerParameters,
     TimeSeriesParameters,
     TrainingHyperparams,
@@ -80,7 +80,7 @@ class ConfigBuilder:
             self._data_config: DataParameters = DataParameters()
             self._evaluation_config: EvaluationParameters = EvaluationParameters()
             self._generation_config: GenerateParameters = GenerateParameters()
-            self._replace_pii_config: ReplacePiiConfig | None = ReplacePiiConfig()
+            self._replace_pii_config: PiiReplacerConfig | None = PiiReplacerConfig()
             self._preflight_config = PreflightParameters()
             self._privacy_config: DifferentialPrivacyHyperparams = DifferentialPrivacyHyperparams()
             self._training_config: TrainingHyperparams = TrainingHyperparams()
@@ -199,17 +199,17 @@ class ConfigBuilder:
         return self
 
     def with_replace_pii(
-        self, config: ReplacePiiConfig | RawConfig | None = None, *, enable: bool = True, **kwargs: object
+        self, config: PiiReplacerConfig | RawConfig | None = None, *, enable: bool = True, **kwargs: object
     ) -> Self:
         """Configure PII replacement settings.
 
-        Falls back to the default ``ReplacePiiConfig()`` (auto-discovery)
+        Falls back to the default ``PiiReplacerConfig()`` (auto-discovery)
         when ``config`` is ``None``.  Pass ``enable=False`` to explicitly
         disable PII replacement for this run -- this sets
         ``replace_pii=None``, which is the sole disabled signal.
 
         Note: PII replacement uses ``replace_pii=None`` as the disabled
-        signal rather than a ``ReplacePiiConfig.enabled`` boolean field.
+        signal rather than a ``PiiReplacerConfig.enabled`` boolean field.
         This differs from ``EvaluationConfig.enabled`` but is intentional:
         ``replace_pii`` has a non-trivial ``default_factory`` that must
         fire when the field is absent from a YAML config.  Adding an
@@ -228,7 +228,7 @@ class ConfigBuilder:
             This builder instance with PII replacement configured.
 
         Raises:
-            ValueError: If ``config`` is not a ``ReplacePiiConfig``,
+            ValueError: If ``config`` is not a ``PiiReplacerConfig``,
                 raw mapping, or ``None``.
 
         Example::
@@ -240,20 +240,20 @@ class ConfigBuilder:
             return self
 
         match config:
-            case ReplacePiiConfig() | Mapping() as values:
-                cfg = ReplacePiiConfig.from_config_source(
+            case PiiReplacerConfig() | Mapping() as values:
+                cfg = PiiReplacerConfig.from_config_source(
                     values,
                     unknown_field_behavior=self._effective_unknown_fields,
                     **kwargs,
                 )
             case None:
-                cfg = ReplacePiiConfig.from_config_source(
-                    ReplacePiiConfig(),
+                cfg = PiiReplacerConfig.from_config_source(
+                    PiiReplacerConfig(),
                     unknown_field_behavior=self._effective_unknown_fields,
                     **kwargs,
                 )
             case _:
-                raise ValueError(f"Config must be a ReplacePiiConfig, raw mapping, or None, got {config!r}")
+                raise ValueError(f"Config must be a PiiReplacerConfig, raw mapping, or None, got {config!r}")
 
         self._replace_pii_config = cfg
         return self

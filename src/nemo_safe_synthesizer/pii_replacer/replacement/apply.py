@@ -11,7 +11,7 @@ from typing import cast
 
 import pandas as pd
 
-from ...config.pii_replacement import PiiEntity, PiiReplacementPlan
+from ...config.replace_pii import PiiEntity, PiiReplacementPlan
 from ...observability import get_logger
 from .. import entities
 from ..llm import PiiEnhancer, select_enhancer

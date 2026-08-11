@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.patch import CompiledConfigPatch, PatchAssignment
-from nemo_safe_synthesizer.config.pii_replacement import ReplacePiiConfig
+from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
 from nemo_safe_synthesizer.configurator.parameter_paths import ParameterPath, ParameterSchema, UnknownParameterName
 from nemo_safe_synthesizer.configurator.parameters import Parameters
 from nemo_safe_synthesizer.errors import ParameterError
@@ -66,10 +66,10 @@ def test_mapping_leaf_with_nested_dictionaries_is_atomic_and_isolated() -> None:
 
 
 def test_nested_nss_model_branch_patch_preserves_replace_pii_siblings() -> None:
-    base = ReplacePiiConfig()
+    base = PiiReplacerConfig()
     original_locale = base.replacement.locale
     patch = CompiledConfigPatch.from_mapping(
-        ReplacePiiConfig,
+        PiiReplacerConfig,
         {"replacement": {"seed": 17}},
         origin="override",
         precedence=1,
@@ -189,10 +189,10 @@ def test_mapping_constructor_ignores_unknown_keys_at_each_model_level() -> None:
 
 @pytest.mark.parametrize("key", ["globals", "steps"])
 def test_replace_pii_mapping_rejects_legacy_keys_under_ignore(key: str) -> None:
-    """Direct ReplacePiiConfig patches must not strip legacy keys under ignore."""
+    """Direct PiiReplacerConfig patches must not strip legacy keys under ignore."""
     with pytest.raises(ParameterError, match=rf"replace_pii\.{key}"):
         CompiledConfigPatch.from_mapping(
-            ReplacePiiConfig,
+            PiiReplacerConfig,
             {key: {"anything": True}},
             origin="mapping",
             precedence=0,

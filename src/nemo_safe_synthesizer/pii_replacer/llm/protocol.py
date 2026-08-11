@@ -25,7 +25,7 @@ from typing import Protocol, runtime_checkable
 
 import pandas as pd
 
-from ...config.pii_replacement import PiiReplacementPlan
+from ...config.replace_pii import PiiReplacementPlan
 from ..entities import Config
 from ..models import DiscoveryResult, FreeTextDetection, PersonaInstance
 

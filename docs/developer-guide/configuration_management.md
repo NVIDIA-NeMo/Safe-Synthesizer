@@ -39,7 +39,7 @@ The generated Click options use `Field(description=...)` as CLI help text.
 Optional sub-configs use `None` as the disabled signal. Do not add a second
 boolean flag for the same feature.
 
-For a field such as `replace_pii: ReplacePiiConfig | None`,
+For a field such as `replace_pii: PiiReplacerConfig | None`,
 `pydantic_options()` emits:
 
 ```bash

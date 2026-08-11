@@ -13,7 +13,7 @@ from typing import Literal
 import pandas as pd
 
 from ...config.data import DataParameters
-from ...config.pii_replacement import (
+from ...config.replace_pii import (
     PiiColumnPlan,
     PiiEntity,
     PiiReplacementPlan,

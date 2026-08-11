@@ -8,7 +8,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from nemo_safe_synthesizer.config.pii_replacement import (
+from nemo_safe_synthesizer.config.replace_pii import (
     PersonaColumnSet,
     PiiColumnPlan,
     PiiEntity,

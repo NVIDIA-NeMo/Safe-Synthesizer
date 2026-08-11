@@ -3,7 +3,7 @@
 
 """Typed internal pipeline contracts for detection, planning, and replacement.
 
-Public plan and config types stay in ``config.pii_replacement``. These dataclasses
+Public plan and config types stay in ``config.replace_pii``. These dataclasses
 are engine-only boundaries so LLM hooks and package seams do not harden raw
 dictionary shapes.
 """

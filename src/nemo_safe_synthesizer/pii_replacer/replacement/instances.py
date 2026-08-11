@@ -10,7 +10,7 @@ from typing import cast
 
 import pandas as pd
 
-from ...config.pii_replacement import PersonaColumnSet, PiiEntity, PiiReplacementPlan
+from ...config.replace_pii import PersonaColumnSet, PiiEntity, PiiReplacementPlan
 from ...errors import InternalError, ParameterError
 from .. import entities
 from ..detection import looks_like_person_name

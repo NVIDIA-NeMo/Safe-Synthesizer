@@ -11,7 +11,7 @@ from random import Random
 
 import pandas as pd
 
-from ...config.pii_replacement import PiiColumnPlan, PiiEntity, PiiReplacementPlan
+from ...config.replace_pii import PiiColumnPlan, PiiEntity, PiiReplacementPlan
 from ...observability import get_logger
 from .. import entities
 from ..detection import API_PREFIXES, UUID_RE

@@ -13,7 +13,7 @@ from pydantic import ValidationError
 
 from nemo_safe_synthesizer.config.data import DataParameters
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
-from nemo_safe_synthesizer.config.pii_replacement import (
+from nemo_safe_synthesizer.config.replace_pii import (
     AUTO_DISCOVERY,
     PersonaColumnSet,
     PiiColumnPlan,
@@ -23,7 +23,7 @@ from nemo_safe_synthesizer.config.pii_replacement import (
     PiiReplacementPlan,
     PiiReplacementScope,
     PiiReplacementSettings,
-    ReplacePiiConfig,
+    PiiReplacerConfig,
 )
 from nemo_safe_synthesizer.defaults import NSS_MANAGED_ASSETS_PATH_ENV, default_managed_assets_path
 from nemo_safe_synthesizer.pii_replacer.entities import Config, config_from_replace_pii
@@ -45,14 +45,14 @@ def test_replace_pii_defaults():
 def test_replace_pii_config_rejects_llm_enhancement_true():
     """Direct construction must refuse the unsupported LLM flag."""
     with pytest.raises(ValidationError, match=r"replace_pii\.llm_enhancement"):
-        ReplacePiiConfig(llm_enhancement=True)
+        PiiReplacerConfig(llm_enhancement=True)
 
 
 def test_config_from_replace_pii_maps_user_fields(tmp_path, monkeypatch):
     monkeypatch.delenv("PERSON_RANDOM_SEED", raising=False)
     assets = tmp_path / "assets"
     assets.mkdir()
-    cfg = ReplacePiiConfig(
+    cfg = PiiReplacerConfig(
         replacement=PiiReplacementSettings(locale="en_GB", seed=7),
         person=PiiPersonConfig(backend=PiiPersonBackend.faker, managed_assets_path=str(assets)),
     )
@@ -66,7 +66,7 @@ def test_config_from_replace_pii_maps_user_fields(tmp_path, monkeypatch):
 
 def test_config_from_replace_pii_seed_falls_back_to_env(monkeypatch):
     monkeypatch.setenv("PERSON_RANDOM_SEED", "99")
-    cfg = ReplacePiiConfig(replacement=PiiReplacementSettings(seed=None))
+    cfg = PiiReplacerConfig(replacement=PiiReplacementSettings(seed=None))
     assert config_from_replace_pii(cfg).random_seed == 99
 
 
@@ -105,7 +105,7 @@ def test_managed_backend_smoke(fixture_patient_df: pd.DataFrame):
         ],
     )
     replacer = TabularPiiReplacer(
-        ReplacePiiConfig(
+        PiiReplacerConfig(
             replacement_plan=plan,
             replacement=PiiReplacementSettings(locale="en_US"),
             person=PiiPersonConfig(backend=PiiPersonBackend.managed),
@@ -140,7 +140,7 @@ def test_column_statistics_transform_methods_and_entity_counts(fixture_patient_d
         ],
     )
     replacer = TabularPiiReplacer(
-        ReplacePiiConfig(
+        PiiReplacerConfig(
             replacement_plan=plan,
             replacement=PiiReplacementSettings(locale="en_US"),
             person=PiiPersonConfig(backend=PiiPersonBackend.faker),
@@ -183,7 +183,7 @@ def test_column_statistics_dob_perturbation_and_unique_id_methods():
         ],
     )
     replacer = TabularPiiReplacer(
-        ReplacePiiConfig(
+        PiiReplacerConfig(
             replacement_plan=plan,
             replacement=PiiReplacementSettings(locale="en_US"),
             person=PiiPersonConfig(backend=PiiPersonBackend.faker),
@@ -218,8 +218,8 @@ def test_plan_column_counts():
 
 
 def test_replacement_plan_source():
-    assert _replacement_plan_source(ReplacePiiConfig()) == "auto_discovery"
-    assert _replacement_plan_source(ReplacePiiConfig(replacement_plan="/tmp/plan.json")) == "/tmp/plan.json"
+    assert _replacement_plan_source(PiiReplacerConfig()) == "auto_discovery"
+    assert _replacement_plan_source(PiiReplacerConfig(replacement_plan="/tmp/plan.json")) == "/tmp/plan.json"
 
 
 def test_replace_pii_null_disables():
@@ -234,7 +234,7 @@ def test_managed_backend_says_so_when_it_falls_back_to_faker(caplog):
     from nemo_safe_synthesizer.pii_replacer.replacement import PersonaEngine
 
     caplog.set_level(logging.WARNING)
-    cfg = ReplacePiiConfig(
+    cfg = PiiReplacerConfig(
         person=PiiPersonConfig(backend=PiiPersonBackend.managed, managed_assets_path="/nonexistent/assets")
     )
     engine = PersonaEngine(config_from_replace_pii(cfg), 1)
@@ -253,7 +253,7 @@ def test_replacement_plan_artifact(tmp_path, fixture_patient_df: pd.DataFrame):
     )
 
     replacer = TabularPiiReplacer(
-        ReplacePiiConfig(replacement_plan=AUTO_DISCOVERY, person=PiiPersonConfig(backend=PiiPersonBackend.faker)),
+        PiiReplacerConfig(replacement_plan=AUTO_DISCOVERY, person=PiiPersonConfig(backend=PiiPersonBackend.faker)),
         data_config=DataParameters(group_training_examples_by="patient_id"),
         workdir=tmp_path,
     )
@@ -305,7 +305,7 @@ def test_managed_fallback_stats_report_faker():
         ],
     )
     replacer = TabularPiiReplacer(
-        ReplacePiiConfig(
+        PiiReplacerConfig(
             replacement_plan=plan,
             person=PiiPersonConfig(backend=PiiPersonBackend.managed, managed_assets_path="/nonexistent/assets"),
         ),

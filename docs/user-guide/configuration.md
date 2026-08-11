@@ -313,7 +313,7 @@ Key config parameters:
 
 Structural columns are never PII-replaced: the group key when `time_series.is_timeseries` is true, `data.order_training_examples_by` when set, and `time_series.timestamp_column` in time-series mode. Auto-discovery omits them; a user-supplied plan that lists them under `columns_to_replace` is rejected. Free-text columns are scanned in heuristic mode only when structured entity columns exist — see [PII Replacement](../product-overview/pii_replacement.md).
 
-See [`ReplacePiiConfig`][nemo_safe_synthesizer.config.pii_replacement.ReplacePiiConfig]
+See [`PiiReplacerConfig`][nemo_safe_synthesizer.config.replace_pii.PiiReplacerConfig]
 for the full schema.
 
 ---
@@ -466,7 +466,7 @@ safe-synthesizer run --config config.yaml --data-source data.csv \
 | `training` | `with_train()` | [`TrainingHyperparams`][nemo_safe_synthesizer.config.training.TrainingHyperparams] |
 | `generation` | `with_generate()` | [`GenerateParameters`][nemo_safe_synthesizer.config.generate.GenerateParameters] |
 | `evaluation` | `with_evaluate()` | [`EvaluationParameters`][nemo_safe_synthesizer.config.evaluate.EvaluationParameters] |
-| `replace_pii` (`null` to disable) | `with_replace_pii()` / `with_replace_pii(enable=False)` | [`ReplacePiiConfig`][nemo_safe_synthesizer.config.pii_replacement.ReplacePiiConfig] |
+| `replace_pii` (`null` to disable) | `with_replace_pii()` / `with_replace_pii(enable=False)` | [`PiiReplacerConfig`][nemo_safe_synthesizer.config.replace_pii.PiiReplacerConfig] |
 | `privacy` (`null` to disable) | `with_differential_privacy()` | [`DifferentialPrivacyHyperparams`][nemo_safe_synthesizer.config.differential_privacy.DifferentialPrivacyHyperparams] |
 | `time_series` | `with_time_series()` | [`TimeSeriesParameters`][nemo_safe_synthesizer.config.time_series.TimeSeriesParameters] |
 

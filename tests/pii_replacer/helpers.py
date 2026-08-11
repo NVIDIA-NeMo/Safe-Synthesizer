@@ -8,7 +8,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
-from nemo_safe_synthesizer.config.pii_replacement import PersonaColumnSet, PiiColumnPlan, PiiReplacementPlan
+from nemo_safe_synthesizer.config.replace_pii import PersonaColumnSet, PiiColumnPlan, PiiReplacementPlan
 
 PHONE_TEMPLATE = "+1-415-555-####"
 PHONE_MINORITY = "(206) 555-0114"

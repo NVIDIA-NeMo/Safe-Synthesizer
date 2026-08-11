@@ -11,14 +11,14 @@ import pandas as pd
 import pytest
 
 from nemo_safe_synthesizer.config.data import DataParameters
-from nemo_safe_synthesizer.config.pii_replacement import (
+from nemo_safe_synthesizer.config.replace_pii import (
     PersonaColumnSet,
     PiiColumnPlan,
     PiiEntity,
     PiiPersonBackend,
     PiiPersonConfig,
     PiiReplacementPlan,
-    ReplacePiiConfig,
+    PiiReplacerConfig,
 )
 from nemo_safe_synthesizer.pii_replacer.entities import Config
 from nemo_safe_synthesizer.pii_replacer.replacer import (
@@ -44,7 +44,7 @@ def _replace_phones(df: pd.DataFrame, spec: PiiColumnPlan, *, standalone: bool) 
             ]
         )
     replacer = TabularPiiReplacer(
-        ReplacePiiConfig(replacement_plan=plan, person=PiiPersonConfig(backend=PiiPersonBackend.faker)),
+        PiiReplacerConfig(replacement_plan=plan, person=PiiPersonConfig(backend=PiiPersonBackend.faker)),
         data_config=DataParameters(),
     )
     replacer.transform_df(df)
@@ -193,7 +193,7 @@ def test_rows_differing_only_by_phone_share_one_persona(fixture_phone_df: pd.Dat
         ]
     )
     replacer = TabularPiiReplacer(
-        ReplacePiiConfig(replacement_plan=plan, person=PiiPersonConfig(backend=PiiPersonBackend.faker)),
+        PiiReplacerConfig(replacement_plan=plan, person=PiiPersonConfig(backend=PiiPersonBackend.faker)),
         data_config=DataParameters(),
     )
     replacer.transform_df(fixture_phone_df)

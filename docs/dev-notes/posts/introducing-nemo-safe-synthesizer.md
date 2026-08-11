@@ -54,7 +54,7 @@ Before the model sees any data, Safe Synthesizer can detect sensitive values and
 
 In this context, data like addresses, phone numbers, emails, social security numbers, and credit card numbers are referred to as entities, and we include those by default as replacement targets. Dozens of additional entity types are supported, and custom entities are configurable. PII replacement is on by default and can be disabled when your data does not contain PII.
 
-Safe Synthesizer discovers PII heuristically from column names, values, and dtypes, then replaces values with synthetic personas and format-preserving generators. For the complete entity list and replacement modes, see [PII Replacement](../../product-overview/pii_replacement.md).
+Safe Synthesizer uses NVIDIA's fine-tuned [GLiNER PII model](https://huggingface.co/nvidia/gliner-PII#evaluation-datasets) for free-text columns and LLM-based classification for whole-column entities. For the complete entity list and replacement modes, see [PII Replacement](../../product-overview/pii_replacement.md).
 
 ### Stage 2: Fine-Tuning
 

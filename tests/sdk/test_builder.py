@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 from pydantic import ValidationError
 
-from nemo_safe_synthesizer.config import GenerateParameters, ReplacePiiConfig, SafeSynthesizerParameters
+from nemo_safe_synthesizer.config import GenerateParameters, PiiReplacerConfig, SafeSynthesizerParameters
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer, _emit_nss_telemetry
 from nemo_safe_synthesizer.telemetry import DeploymentTypeEnum, TaskStatusEnum
 
@@ -163,8 +163,8 @@ def test_builder_change_generation_params_with_kwargs(fixture_base_builder):
 
 
 def test_pii_replacer_with_default_config_object(fixture_base_builder):
-    """Test PII replacer configuration using ReplacePiiConfig defaults."""
-    default_config = ReplacePiiConfig()
+    """Test PII replacer configuration using PiiReplacerConfig defaults."""
+    default_config = PiiReplacerConfig()
 
     builder = fixture_base_builder.with_replace_pii(config=default_config).resolve()
     assert builder._nss_config is not None
@@ -184,7 +184,7 @@ def test_builder_with_all_parameters_customized():
     builder = (
         SafeSynthesizer()
         .with_data_source(data)
-        .with_replace_pii(config=ReplacePiiConfig())
+        .with_replace_pii(config=PiiReplacerConfig())
         .with_train(
             batch_size=64,
             learning_rate=0.001,
@@ -228,10 +228,10 @@ def test_builder_with_all_parameters_customized():
 
 
 def test_pii_config_equality():
-    """Test that ReplacePiiConfig objects can be compared for equality."""
-    config1 = ReplacePiiConfig()
-    config2 = ReplacePiiConfig()
-    yaml_config = ReplacePiiConfig.model_validate(
+    """Test that PiiReplacerConfig objects can be compared for equality."""
+    config1 = PiiReplacerConfig()
+    config2 = PiiReplacerConfig()
+    yaml_config = PiiReplacerConfig.model_validate(
         {
             "schema_version": 1,
             "llm_enhancement": False,
@@ -249,12 +249,12 @@ def test_pii_config_equality():
 def test_pii_schema_version_refuses_an_unknown_value():
     """schema_version is the forward-compat gate: only the current release's value is accepted."""
     with pytest.raises(ValidationError):
-        ReplacePiiConfig.model_validate({"schema_version": 2})
+        PiiReplacerConfig.model_validate({"schema_version": 2})
 
 
 def test_pii_replacer_from_yaml_str(fixture_base_builder):
-    """Test creating ReplacePiiConfig directly from YAML string."""
-    config = ReplacePiiConfig.from_yaml_str(
+    """Test creating PiiReplacerConfig directly from YAML string."""
+    config = PiiReplacerConfig.from_yaml_str(
         """
         schema_version: 1
         llm_enhancement: false

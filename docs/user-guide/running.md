@@ -603,7 +603,7 @@ detection signals, entity vocabulary, and plan format.
     ```
 
     Partial overrides merge with the defaults of
-    [`ReplacePiiConfig`][nemo_safe_synthesizer.config.pii_replacement.ReplacePiiConfig],
+    [`PiiReplacerConfig`][nemo_safe_synthesizer.config.replace_pii.PiiReplacerConfig],
     so you only pass the fields you are changing.
 
 === "Config reference"

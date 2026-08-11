@@ -16,7 +16,7 @@ import pandas as pd
 if TYPE_CHECKING:
     from .replacement.scope import FakerLike
 
-from ..config.pii_replacement import ReplacePiiConfig
+from ..config.replace_pii import PiiReplacerConfig
 from ..defaults import default_managed_assets_path
 
 
@@ -61,7 +61,7 @@ class Config:
     name_fuzzy_threshold: float = 0.86
     # When True, discovery/apply call the injected PiiEnhancer (stub raises until LLM lands).
     llm_enhancement: bool = False
-    # Reserved inference settings propagated from ReplacePiiConfig.llm.
+    # Reserved inference settings propagated from PiiReplacerConfig.llm.
     llm_model_provider: str | None = None
     llm_max_workers: int = 64
 
@@ -98,8 +98,8 @@ class Config:
             self.managed_assets_path = str(default_managed_assets_path())
 
 
-def config_from_replace_pii(config: ReplacePiiConfig) -> Config:
-    """Build engine ``Config`` from the user-facing ``ReplacePiiConfig``.
+def config_from_replace_pii(config: PiiReplacerConfig) -> Config:
+    """Build engine ``Config`` from the user-facing ``PiiReplacerConfig``.
 
     Only a handful of fields come from the user; the rest keep ``Config`` defaults.
 

@@ -23,7 +23,7 @@ from .differential_privacy import DifferentialPrivacyHyperparams
 from .evaluate import EvaluationParameters
 from .generate import GenerateParameters
 from .patch import CompiledConfigPatch, PatchAssignment
-from .pii_replacement import ReplacePiiConfig
+from .replace_pii import PiiReplacerConfig
 from .preflight import PreflightParameters
 from .time_series import TimeSeriesParameters
 from .training import TrainingHyperparams
@@ -81,9 +81,9 @@ class SafeSynthesizerParameters(Parameters):
         default_factory=TimeSeriesParameters,
     )
 
-    replace_pii: ReplacePiiConfig | None = Field(
+    replace_pii: PiiReplacerConfig | None = Field(
         description="PII replacement configuration. When ``None``, PII replacement is skipped.",
-        default_factory=ReplacePiiConfig,
+        default_factory=PiiReplacerConfig,
     )
 
     preflight: PreflightParameters = Field(

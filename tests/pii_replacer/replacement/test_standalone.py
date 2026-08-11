@@ -10,13 +10,13 @@ import re
 import pandas as pd
 
 from nemo_safe_synthesizer.config.data import DataParameters
-from nemo_safe_synthesizer.config.pii_replacement import (
+from nemo_safe_synthesizer.config.replace_pii import (
     PiiColumnPlan,
     PiiEntity,
     PiiPersonBackend,
     PiiPersonConfig,
     PiiReplacementPlan,
-    ReplacePiiConfig,
+    PiiReplacerConfig,
 )
 from nemo_safe_synthesizer.pii_replacer.replacer import (
     TabularPiiReplacer,
@@ -56,7 +56,7 @@ def test_a_minority_identifier_keeps_its_own_prefix_end_to_end():
     """The motivating case: 'ACC-0042' in a mostly 'PMC-######' column, not 'TIX-5807'."""
     ids = [f"PMC-{(i * 24851) % 1000000:06d}" for i in range(40)] + [f"ACC-{(i * 937) % 10000:04d}" for i in range(10)]
     df = pd.DataFrame({"record_id": ids, "full_name": [f"Person {i}" for i in range(50)]})
-    cfg = ReplacePiiConfig(person=PiiPersonConfig(backend=PiiPersonBackend.faker))
+    cfg = PiiReplacerConfig(person=PiiPersonConfig(backend=PiiPersonBackend.faker))
     replacer = TabularPiiReplacer(cfg, data_config=DataParameters())
     replacer.transform_df(df)
     assert replacer.result is not None
@@ -77,7 +77,7 @@ def test_a_cell_that_says_it_holds_nothing_keeps_saying_so():
         ]
     )
     replacer = TabularPiiReplacer(
-        ReplacePiiConfig(replacement_plan=plan, person=PiiPersonConfig(backend=PiiPersonBackend.faker)),
+        PiiReplacerConfig(replacement_plan=plan, person=PiiPersonConfig(backend=PiiPersonBackend.faker)),
         data_config=DataParameters(),
     )
     replacer.transform_df(df)
@@ -94,7 +94,7 @@ def test_card_replacement_keeps_the_columns_grouping_and_its_checksum():
     # Luhn-valid 16-digit numbers written the way the column writes them.
     cards = ["4111-1111-1111-1111", "4012-8888-8888-1881", "4222-2222-2222-2220"] * 8
     df = pd.DataFrame({"full_name": [f"Person {i}" for i in range(24)], "card_number": cards})
-    cfg = ReplacePiiConfig(person=PiiPersonConfig(backend=PiiPersonBackend.faker))
+    cfg = PiiReplacerConfig(person=PiiPersonConfig(backend=PiiPersonBackend.faker))
     replacer = TabularPiiReplacer(cfg, data_config=DataParameters())
     replacer.transform_df(df)
     assert replacer.result is not None

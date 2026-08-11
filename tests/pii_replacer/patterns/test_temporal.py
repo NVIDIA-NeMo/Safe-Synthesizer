@@ -9,7 +9,7 @@ import re
 
 import pandas as pd
 
-from nemo_safe_synthesizer.config.pii_replacement import (
+from nemo_safe_synthesizer.config.replace_pii import (
     PersonaColumnSet,
     PiiColumnPlan,
     PiiEntity,

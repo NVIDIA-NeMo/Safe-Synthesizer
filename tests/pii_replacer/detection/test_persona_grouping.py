@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from nemo_safe_synthesizer.config.pii_replacement import ReplacePiiConfig
+from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
 from nemo_safe_synthesizer.pii_replacer.entities import config_from_replace_pii
 
 
@@ -21,7 +21,7 @@ def test_multi_role_full_name_columns_get_distinct_person_ids():
             "surgeon_name": [f"Dr Surgeon{i}" for i in range(n)],
         }
     )
-    plan = discover_plan(df, None, config_from_replace_pii(ReplacePiiConfig()), ReplacePiiConfig())
+    plan = discover_plan(df, None, config_from_replace_pii(PiiReplacerConfig()), PiiReplacerConfig())
     personas = {p.persona for p in plan.persona_backed_columns}
     assert personas == {"attending", "surgeon"}
     cols = {spec.column_name for persona in plan.persona_backed_columns for spec in persona.columns_to_replace}
@@ -53,7 +53,7 @@ def test_non_medical_name_roles_discovered_as_distinct_personas():
             "attorney_name": [f"Counsel {i}" for i in range(n)],
         }
     )
-    plan = discover_plan(df, None, config_from_replace_pii(ReplacePiiConfig()), ReplacePiiConfig())
+    plan = discover_plan(df, None, config_from_replace_pii(PiiReplacerConfig()), PiiReplacerConfig())
     personas = {p.persona for p in plan.persona_backed_columns}
     assert personas == {"policyholder", "attorney"}
     cols = {spec.column_name for persona in plan.persona_backed_columns for spec in persona.columns_to_replace}
@@ -82,7 +82,7 @@ def test_agreeing_name_parts_share_role_persona():
             "patient_full_name": [f"Alice{i} Smith{i}" for i in range(n)],
         }
     )
-    plan = discover_plan(df, None, config_from_replace_pii(ReplacePiiConfig()), ReplacePiiConfig())
+    plan = discover_plan(df, None, config_from_replace_pii(PiiReplacerConfig()), PiiReplacerConfig())
     assert len(plan.persona_backed_columns) == 1
     assert plan.persona_backed_columns[0].persona == "patient"
     cols = {spec.column_name for spec in plan.persona_backed_columns[0].columns_to_replace}
@@ -103,7 +103,7 @@ def test_disagreeing_full_name_gets_split_persona(caplog):
             "patient_full_name": ["Bob Jones"] * n,
         }
     )
-    plan = discover_plan(df, None, config_from_replace_pii(ReplacePiiConfig()), ReplacePiiConfig())
+    plan = discover_plan(df, None, config_from_replace_pii(PiiReplacerConfig()), PiiReplacerConfig())
     personas = {p.persona: p for p in plan.persona_backed_columns}
     assert "patient" in personas
     assert "patient_2" in personas
@@ -125,5 +125,5 @@ def test_demo_only_persona_omits_match_persona_by_from_plan():
             "amount": list(range(n)),
         }
     )
-    plan = discover_plan(df, None, config_from_replace_pii(ReplacePiiConfig()), ReplacePiiConfig())
+    plan = discover_plan(df, None, config_from_replace_pii(PiiReplacerConfig()), PiiReplacerConfig())
     assert plan.persona_backed_columns == []

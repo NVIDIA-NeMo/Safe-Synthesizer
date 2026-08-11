@@ -7,9 +7,9 @@ from __future__ import annotations
 
 import pandas as pd
 
-from nemo_safe_synthesizer.config.pii_replacement import (
+from nemo_safe_synthesizer.config.replace_pii import (
     PiiEntity,
-    ReplacePiiConfig,
+    PiiReplacerConfig,
 )
 from nemo_safe_synthesizer.pii_replacer.entities import Config, config_from_replace_pii
 from tests.pii_replacer.helpers import column_spec
@@ -93,7 +93,7 @@ def test_phone_with_extension_and_short_national_detected():
 
     n = 30
     df = pd.DataFrame({"phone": [f"555-{1000 + i:04d}" for i in range(n)]})
-    plan = discover_plan(df, None, config_from_replace_pii(ReplacePiiConfig()), ReplacePiiConfig())
+    plan = discover_plan(df, None, config_from_replace_pii(PiiReplacerConfig()), PiiReplacerConfig())
     phone = column_spec(plan.standalone_columns_to_replace, "phone")
     assert phone is not None and phone.entity_type == PiiEntity.phone_number
 
@@ -107,7 +107,7 @@ def test_opaque_hex_is_unique_identifier_not_api_key():
     assert match_value_entity("sk-" + "x" * 24) == "api_key"
     n = 30
     df = pd.DataFrame({"subject_key": [f"{i:064x}" for i in range(n)]})
-    plan = discover_plan(df, None, config_from_replace_pii(ReplacePiiConfig()), ReplacePiiConfig())
+    plan = discover_plan(df, None, config_from_replace_pii(PiiReplacerConfig()), PiiReplacerConfig())
     spec = column_spec(plan.standalone_columns_to_replace, "subject_key")
     assert spec is not None and spec.entity_type == PiiEntity.unique_identifier
 
@@ -123,7 +123,7 @@ def test_org_name_column_skipped_mary_health_kept(caplog):
     caplog.set_level(logging.WARNING)
     n = 30
     df = pd.DataFrame({"provider_name": ["Regional Health Partners"] * n})
-    plan = discover_plan(df, None, config_from_replace_pii(ReplacePiiConfig()), ReplacePiiConfig())
+    plan = discover_plan(df, None, config_from_replace_pii(PiiReplacerConfig()), PiiReplacerConfig())
     assert not any(
         spec.column_name == "provider_name"
         for persona in plan.persona_backed_columns
@@ -145,7 +145,7 @@ def test_temporal_values_identified_without_temporal_header(caplog):
             "misc_col": [f"2023-04-{(i % 28) + 1:02d}" for i in range(n)],
         }
     )
-    discover_plan(df, None, config_from_replace_pii(ReplacePiiConfig()), ReplacePiiConfig())
+    discover_plan(df, None, config_from_replace_pii(PiiReplacerConfig()), PiiReplacerConfig())
     assert any("Identified temporal column 'misc_col'" in r.getMessage() for r in caplog.records)
 
 
@@ -157,7 +157,7 @@ def test_multi_person_cell_not_auto_assigned(caplog):
     caplog.set_level(logging.WARNING)
     n = 30
     df = pd.DataFrame({"guardians": [f"Jane Doe and John Doe {i}" for i in range(n)]})
-    plan = discover_plan(df, None, config_from_replace_pii(ReplacePiiConfig()), ReplacePiiConfig())
+    plan = discover_plan(df, None, config_from_replace_pii(PiiReplacerConfig()), PiiReplacerConfig())
     assert not plan.persona_backed_columns or not any(
         spec.column_name == "guardians" for p in plan.persona_backed_columns for spec in p.columns_to_replace
     )
@@ -192,7 +192,7 @@ def test_sequential_integer_id_skipped_any_origin():
             "gapped_id": [100000 + i * 17 for i in range(n)],
         }
     )
-    plan = discover_plan(df, None, config_from_replace_pii(ReplacePiiConfig()), ReplacePiiConfig())
+    plan = discover_plan(df, None, config_from_replace_pii(PiiReplacerConfig()), PiiReplacerConfig())
     assert column_spec(plan.standalone_columns_to_replace, "row_id") is None
     assert column_spec(plan.standalone_columns_to_replace, "member_id") is None
     gapped = column_spec(plan.standalone_columns_to_replace, "gapped_id")
@@ -212,7 +212,7 @@ def test_street_name_only_not_planned_as_street_address():
             "first_name": [f"First{i}" for i in range(n)],
         }
     )
-    plan = discover_plan(df, None, config_from_replace_pii(ReplacePiiConfig()), ReplacePiiConfig())
+    plan = discover_plan(df, None, config_from_replace_pii(PiiReplacerConfig()), PiiReplacerConfig())
     for persona in plan.persona_backed_columns:
         assert column_spec(persona.columns_to_replace, "street") is None
 
@@ -222,5 +222,5 @@ def test_numeric_token_column_not_api_key():
 
     n = 40
     df = pd.DataFrame({"token": list(range(1000, 1000 + n))})
-    plan = discover_plan(df, None, config_from_replace_pii(ReplacePiiConfig()), ReplacePiiConfig())
+    plan = discover_plan(df, None, config_from_replace_pii(PiiReplacerConfig()), PiiReplacerConfig())
     assert column_spec(plan.standalone_columns_to_replace, "token") is None

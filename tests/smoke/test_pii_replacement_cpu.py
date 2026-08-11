@@ -8,7 +8,7 @@ from __future__ import annotations
 import pandas as pd
 
 from nemo_safe_synthesizer.config.data import DataParameters
-from nemo_safe_synthesizer.config.pii_replacement import (
+from nemo_safe_synthesizer.config.replace_pii import (
     PersonaColumnSet,
     PiiColumnPlan,
     PiiEntity,
@@ -16,7 +16,7 @@ from nemo_safe_synthesizer.config.pii_replacement import (
     PiiPersonConfig,
     PiiReplacementPlan,
     PiiReplacementScope,
-    ReplacePiiConfig,
+    PiiReplacerConfig,
 )
 from nemo_safe_synthesizer.pii_replacer import TabularPiiReplacer
 
@@ -44,7 +44,7 @@ def test_tabular_pii_replacement_cpu_smoke():
         ],
     )
     replacer = TabularPiiReplacer(
-        ReplacePiiConfig(replacement_plan=plan, person=PiiPersonConfig(backend=PiiPersonBackend.faker)),
+        PiiReplacerConfig(replacement_plan=plan, person=PiiPersonConfig(backend=PiiPersonBackend.faker)),
         data_config=DataParameters(group_training_examples_by="patient_id"),
     )
     replacer.transform_df(df)

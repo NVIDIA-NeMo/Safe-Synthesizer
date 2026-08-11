@@ -11,7 +11,7 @@ from typing import cast
 
 import pandas as pd
 
-from ...config.pii_replacement import PiiReplacementPlan
+from ...config.replace_pii import PiiReplacementPlan
 from ...errors import InternalError
 from ..entities import Config
 from ..models import FreeTextDetection, PersonaInstance, ScopedValueMap
