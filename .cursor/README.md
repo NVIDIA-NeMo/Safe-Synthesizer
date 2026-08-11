@@ -32,12 +32,19 @@ Registers hook scripts against Cursor lifecycle events.
 |-------|--------|---------|
 | `beforeShellExecution` | `enforce-signoff.sh` | Blocks recognized Git commits missing `--signoff` or `--gpg-sign` |
 
-Cursor invokes the hook for every shell command so it can recognize wrapped
-commits and Git global options. The hook exits immediately for other commands
-and requires the repository-pinned `jq` tool.
+Cursor invokes the hook for every shell command so it can recognize direct Git
+commits after environment assignments, command separators, and Git global
+options. Nested interpreters and other process wrappers are outside this
+best-effort guardrail's scope. The hook exits immediately for other commands
+and requires the repository-pinned `jq` tool. Trust the workspace before
+relying on project hooks, and verify that `.cursor/hooks.json` is active.
+
+Use staged commits with standalone signing flags, such as
+`git commit -s -S -m "message"`. The guard rejects non-message quoted arguments
+and explicit signing negations rather than attempting to interpret them.
 
 The same hook implementation is exposed to Claude Code through a client-local
-symlink and registered in `.claude/settings.json`.
+symlink and registered directly for Codex in `.codex/hooks.json`.
 
 ## worktrees.json
 

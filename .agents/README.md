@@ -47,9 +47,10 @@ Most skills live there directly. The publishable `safe-synthesizer` package
 lives under `skills/` and uses a relative symlink from `.agents/skills/` for
 repository-local discovery.
 
-Client directories expose shared commands and hooks through relative symlinks.
-Keep reusable implementations under `.agents/`; keep only client registration
-and client-specific formats under `.cursor/` or `.claude/`.
+Client directories register shared commands and hooks in their native formats,
+using relative symlinks where needed. Keep reusable implementations under
+`.agents/`; keep only client registration and client-specific formats under
+`.cursor/`, `.claude/`, or `.codex/`.
 
 ## Adding skills
 

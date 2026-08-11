@@ -1,0 +1,18 @@
+{
+  "description": "Safe-Synthesizer repository hooks for Codex.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^Bash$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/.agents/hooks/enforce-signoff.sh\"",
+            "timeout": 5,
+            "statusMessage": "Checking commit signing requirements"
+          }
+        ]
+      }
+    ]
+  }
+}

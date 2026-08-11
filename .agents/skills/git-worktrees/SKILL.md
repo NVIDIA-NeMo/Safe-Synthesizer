@@ -20,6 +20,8 @@ below.
   `scripts/setup-worktree.sh` through `.cursor/worktrees.json`. Other clients
   can run the same script after creating a worktree. Inspect the actual
   environment and machine-local configuration without printing secrets.
+- Codex does not read `.cursor/worktrees.json`; configure its local environment
+  to invoke `scripts/setup-worktree.sh`, or run the script manually.
 - Keep machine-local configuration local to each checkout. Worktree hooks do
   not copy `.env`, `.env.local`, `mise.local.toml`, or `.local.envrc` from
   another checkout.

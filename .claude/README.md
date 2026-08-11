@@ -31,7 +31,16 @@ Registers the shared signing hook against Claude Code lifecycle events.
 
 | Event | Script | Purpose |
 |-------|--------|---------|
-| `PreToolUse` (Bash) | `enforce-signoff.sh` | Blocks commits missing `--signoff` or `--gpg-sign` |
+| `PreToolUse` (Bash) | `enforce-signoff.sh` | Blocks recognized direct Git commits missing `--signoff` or `--gpg-sign` |
+
+The shared hook is a best-effort guardrail for direct Git commands. Nested
+interpreters and other process wrappers are outside its scope. Trust the
+project before relying on its settings, and use `/hooks` to verify that the
+registration is active.
+
+Use staged commits with standalone signing flags, such as
+`git commit -s -S -m "message"`. The guard rejects non-message quoted arguments
+and explicit signing negations rather than attempting to interpret them.
 
 ## commands/
 
