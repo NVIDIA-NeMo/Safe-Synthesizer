@@ -19,9 +19,9 @@ from __future__ import annotations
 from collections.abc import Mapping
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, Literal
+from typing import Literal, Self
 
-from pydantic import Field, ValidationError, field_validator
+from pydantic import Field, ValidationError, field_validator, model_validator
 
 from ..configurator.parameters import Parameters
 from ..defaults import NSS_MANAGED_ASSETS_PATH_ENV, default_managed_assets_path
@@ -217,9 +217,12 @@ class PiiPersonConfig(NSSBaseModel):
             "sdg-pgms checkout; it is the only backend that supplies a phone number."
         ),
     )
-    sdg_pgms_src: str = Field(
-        default="/root/sdg-pgms/src",
-        description="Source tree for sdg-pgms when backend is 'pgm'. Required for that backend; it never falls back.",
+    sdg_pgms_src: str | None = Field(
+        default=None,
+        description=(
+            "Source tree for sdg-pgms when backend is 'pgm'. Required for that backend; ignored otherwise. "
+            "The 'pgm' backend never falls back if this path is missing or unusable."
+        ),
     )
     managed_assets_path: str | None = Field(
         default=None,
@@ -228,6 +231,14 @@ class PiiPersonConfig(NSSBaseModel):
             f"Defaults to {NSS_MANAGED_ASSETS_PATH_ENV} or ~/.data-designer/managed-assets."
         ),
     )
+
+    @model_validator(mode="after")
+    def _require_sdg_pgms_src_for_pgm(self) -> Self:
+        if self.backend == PiiPersonBackend.pgm and self.sdg_pgms_src is None:
+            raise ParameterError(
+                "replace_pii.person.sdg_pgms_src is required when replace_pii.person.backend is 'pgm'."
+            )
+        return self
 
     def resolved_managed_assets_path(self) -> Path:
         if self.managed_assets_path is not None:
@@ -290,7 +301,7 @@ class PiiReplacerConfig(Parameters):
 
     @field_validator("replacement_plan", mode="before")
     @classmethod
-    def _resolve_replacement_plan(cls, value: Any) -> Any:
+    def _resolve_replacement_plan(cls, value: object) -> object:
         """Resolve the plan/string union here so errors describe the plan, not the union.
 
         Left to the union, a malformed inline plan reports the plan's own errors

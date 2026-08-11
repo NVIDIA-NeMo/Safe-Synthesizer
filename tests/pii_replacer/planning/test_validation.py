@@ -266,6 +266,7 @@ def test_iter_plan_advisories_flag_section_mismatches(fixture_dob_df: pd.DataFra
                 persona="patient",
                 columns_to_replace=[
                     PiiColumnPlan(column_name="notes", entity_type=PiiEntity.free_text),
+                    # Standalone-mapped under persona is silent: generation path is unchanged.
                     PiiColumnPlan(column_name="date_of_birth", entity_type=PiiEntity.date_of_birth),
                     PiiColumnPlan(column_name="patient_id", entity_type=PiiEntity.unique_identifier),
                 ],
@@ -278,29 +279,11 @@ def test_iter_plan_advisories_flag_section_mismatches(fixture_dob_df: pd.DataFra
     codes = {issue.code for issue in iter_plan_advisories(plan, persona_backend="managed")}
     assert codes == {
         "pii_plan_free_text_under_persona",
-        "pii_plan_entity_driven_under_persona",
         "pii_plan_persona_column_under_standalone",
     }
     # Errors stay separate; mis-sectioning never fails validation.
     assert list(iter_plan_issues(fixture_dob_df, plan)) == []
     validate_plan(fixture_dob_df, plan, data_config=DataParameters())
-
-
-def test_iter_plan_advisories_phone_depends_on_backend(fixture_dob_df: pd.DataFrame):
-    plan = PiiReplacementPlan(
-        persona_backed_columns=[
-            PersonaColumnSet(
-                persona="patient",
-                columns_to_replace=[
-                    PiiColumnPlan(column_name="first_name", entity_type=PiiEntity.phone_number),
-                ],
-            ),
-        ],
-    )
-    managed = [i.code for i in iter_plan_advisories(plan, persona_backend="managed")]
-    pgm = [i.code for i in iter_plan_advisories(plan, persona_backend="pgm")]
-    assert managed == ["pii_plan_entity_driven_under_persona"]
-    assert pgm == []
 
 
 def test_iter_plan_advisories_phone_under_standalone_depends_on_backend(fixture_dob_df: pd.DataFrame):

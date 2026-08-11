@@ -25,73 +25,85 @@ from ..defaults import default_managed_assets_path
 # ===========================================================================
 @dataclass
 class Config:
-    """All knobs for detection + generation. Only sensible defaults required."""
+    """Engine knobs for detection and generation.
+
+    A few fields are copied from user-facing ``PiiReplacerConfig`` (locale, seed,
+    persona backend/paths, LLM flags) via ``config_from_replace_pii``. The rest
+    are fixed product defaults used by discovery and replacement; they are not
+    exposed in YAML/SDK today, but can be overridden when constructing
+    ``Config`` directly (e.g. in tests).
+    """
 
     locale: str = "en_US"
-    # Seed for persona/ID/faker generation. Env-overridable so a batched run can give
-    # each row-batch a distinct seed -- otherwise every batch regenerates the SAME
-    # unique-identifier sequence and they collide across batches (breaking injectivity).
+    """Locale for generated names, addresses, and phone numbers."""
     random_seed: int = field(default_factory=lambda: int(os.environ.get("PERSON_RANDOM_SEED", "42") or "42"))
+    """Seed for persona/ID/Faker generation.
 
-    # Grouping (Safe-Synthesizer's group_training_records_by) is configured, not
-    # auto-detected. A column is GROUP-level when single-valued within >= this
-    # fraction of groups.
+    Env-overridable via ``PERSON_RANDOM_SEED`` so batched runs can give each
+    row-batch a distinct seed; otherwise every batch regenerates the same
+    unique-identifier sequence and values collide across batches.
+    """
     group_constancy_threshold: float = 0.95
+    """Fraction of groups that must be single-valued for GROUP-level treatment.
 
-    # Persona sampling.
-    persona_backend: str = "managed"  # pgm | managed | faker
-    sdg_pgms_src: str = "/root/sdg-pgms/src"
+    Grouping itself comes from Safe Synthesizer's ``group_training_records_by``;
+    it is configured, not auto-detected.
+    """
+    persona_backend: str = "managed"
+    """Persona sampler backend: ``pgm``, ``managed``, or ``faker``."""
+    sdg_pgms_src: str | None = None
+    """Source tree for sdg-pgms when ``persona_backend`` is ``pgm``; else unused."""
     managed_assets_path: str | None = None
+    """Root of managed persona parquet assets; resolved in ``__post_init__`` when unset."""
     pool_min_size: int = 3_000
+    """Floor on how many synthetic personas to pre-generate for the PGM pool."""
     pool_oversample: int = 6
-
-    # --- Structural / value-pattern detection ---
-    # Minimum percent of non-null values matching the dominant concrete pattern
-    # required to classify a column as structured (not free text).
+    """Multiplier of persona instances used with ``pool_min_size`` to size the PGM pool."""
     dominant_pattern_min_coverage: float = 85.0
-    # Free-text columns: long, varied object columns.
+    """Minimum percent of non-null values matching the dominant pattern for structured columns."""
     free_text_min_len: float = 25.0
+    """Minimum average string length for free-text column selection."""
     free_text_min_unique_ratio: float = 0.3
-    # A free-text column must read like natural-language PROSE: at least this many
-    # whitespace-separated tokens on average. Used to reject single-token columns
-    # such as URLs or short code columns (avg ~1 word). The length +
-    # unique_ratio gate above already excludes low-cardinality phrase columns.
+    """Minimum unique-value ratio for free-text column selection."""
     free_text_min_words: float = 1.5
-    # Fuzzy column-name match acceptance.
+    """Minimum average whitespace-separated tokens for free-text prose selection.
+
+    Rejects single-token columns such as URLs or short codes; length and
+    unique-ratio gates already exclude low-cardinality phrase columns.
+    """
     name_fuzzy_threshold: float = 0.86
-    # When True, discovery/apply call the injected PiiEnhancer (stub raises until LLM lands).
+    """Acceptance threshold for fuzzy column-name matching."""
     llm_enhancement: bool = False
-    # Reserved inference settings propagated from PiiReplacerConfig.llm.
+    """When True, discovery/apply call the injected ``PiiEnhancer`` (stub raises until LLM lands)."""
     llm_model_provider: str | None = None
+    """Reserved inference model provider propagated from ``PiiReplacerConfig.llm``."""
     llm_max_workers: int = 64
-
-    # --- Free-text name-token aliasing (BOTH modes) ---
-    # When a person is identified only by a full name (no separate first/last columns),
-    # also propagate the individual name TOKENS into free text so honorific/partial
-    # mentions are caught consistently (e.g. provider "John Smith" -> synthetic "Robert
-    # Jones" also rewrites a later "Dr. Smith" -> "Dr. Jones"). Tokens shorter than
-    # freetext_alias_min_token_len are skipped to avoid over-matching short common words.
+    """Reserved max workers for LLM enhancement calls."""
     freetext_name_token_aliases: bool = True
-    freetext_alias_min_token_len: int = 3
+    """Also propagate individual name tokens into free text for honorific/partial mentions.
 
-    # --- Value-pattern inference (Faker template) ---
-    # Identifier and phone columns are regenerated from an inferred template that
-    # keeps constant characters literal (e.g. a 'pmc-' prefix) and constrains
-    # low-entropy positions to their observed alphabet (e.g. first digit in {6,8})
-    # instead of fully randomizing every character.
-    # A variable position whose observed alphabet is <= this many distinct chars is
-    # emitted as an explicit class (e.g. "[68]"); larger -> a family token (#/^/@/&/%/*).
+    When a person is identified only by a full name (no separate first/last
+    columns), rewriting tokens catches later mentions such as ``Dr. Smith``
+    after ``John Smith`` was replaced.
+    """
+    freetext_alias_min_token_len: int = 3
+    """Skip free-text name-token aliases shorter than this to avoid over-matching."""
     pattern_class_max: int = 6
-    # Values required per character before a position may be pinned to a literal or
-    # narrowed to a class. Below it the position widens to its family token, so a
-    # handful of samples cannot freeze a coincidence (three IDs that happen to start
-    # "PMC") into every replacement.
+    """Max distinct chars for a template position before it widens to a family token.
+
+    Smaller alphabets become an explicit class (e.g. ``[68]``); larger use
+    family tokens (``#`` / ``^`` / ``@`` / …).
+    """
     pattern_min_evidence_per_char: int = 4
-    # Characters covering < this fraction of a position are dropped as noise so a
-    # rare outlier (e.g. a single 'pmc-7...') doesn't widen the template.
+    """Samples required per character before pinning a literal or narrowing a class.
+
+    Below this, the position widens to its family token so a few coincidences
+    cannot freeze a template (e.g. three IDs that happen to start ``PMC``).
+    """
     pattern_rare_char_frac: float = 0.01
-    # Cap on distinct sample values scanned when inferring a template.
+    """Drop characters covering less than this fraction of a position as noise."""
     pattern_sample_cap: int = 5000
+    """Cap on distinct sample values scanned when inferring a value template."""
 
     def __post_init__(self) -> None:
         if self.managed_assets_path is None:
@@ -149,19 +161,15 @@ class EntitySpec:
     apply_path: ApplyPath
     """Default fill channel: persona, standalone map, identify-only, or free-text.
 
-    Resolved with ``effective_apply_path`` (may override per backend). Independent
-    of which YAML plan section lists the column.
+    Resolved with ``effective_apply_path`` (entity type + backend; may override
+    per backend). That channel is not chosen by YAML section — but section still
+    matters for consistency: persona-sourced columns share one synthetic person
+    only when listed together under ``persona_backed_columns``.
     """
     pattern_kind: PatternKind = "none"
     """How plan patterns are interpreted for this entity (strftime, template, …)."""
-    entity_driven: bool = False
-    """If True, apply uses entity type for generation, not YAML section placement."""
     persona_only_backends: frozenset[str] | None = None
     """Backends for which ``apply_path`` is forced to ``persona``; ``None`` means none."""
-    persona_field: bool = False
-    """Whether this label is a field on a persona record (name, email, address, …)."""
-    valid_form: bool = False
-    """If True, replacements must pass a format validator (e.g. IP addresses)."""
     requires_value_match: bool = False
     """Discovery: values must classify as this entity before the column is allocated."""
     name_shape_gates: bool = False
@@ -188,7 +196,6 @@ def _build_registry() -> dict[str, EntitySpec]:
             label="first_name",
             apply_path="persona",
             pattern_kind="persona_placeholder",
-            persona_field=True,
             name_shape_gates=True,
             name_patterns=(
                 "first[_ ]?name",
@@ -207,7 +214,6 @@ def _build_registry() -> dict[str, EntitySpec]:
             label="last_name",
             apply_path="persona",
             pattern_kind="persona_placeholder",
-            persona_field=True,
             name_shape_gates=True,
             name_patterns=(
                 "last[_ ]?name",
@@ -227,7 +233,6 @@ def _build_registry() -> dict[str, EntitySpec]:
             label="middle_name",
             apply_path="persona",
             pattern_kind="persona_placeholder",
-            persona_field=True,
             name_shape_gates=True,
             name_patterns=(
                 "middle[_ ]?name",
@@ -243,7 +248,6 @@ def _build_registry() -> dict[str, EntitySpec]:
             label="full_name",
             apply_path="persona",
             pattern_kind="persona_placeholder",
-            persona_field=True,
             name_shape_gates=True,
             name_patterns=(
                 "full[_ ]?name",
@@ -368,7 +372,6 @@ def _build_registry() -> dict[str, EntitySpec]:
             label="email",
             apply_path="persona",
             pattern_kind="persona_placeholder",
-            persona_field=True,
             requires_value_match=True,
             name_patterns=("e[-_ ]?mail",),
             fuzzy_keywords=(
@@ -383,7 +386,6 @@ def _build_registry() -> dict[str, EntitySpec]:
             apply_path="persona",
             pattern_kind="template",
             persona_only_backends=frozenset({"pgm"}),
-            persona_field=True,
             requires_value_match=True,
             name_patterns=(
                 "(?<![a-z])phone(?![a-z])",
@@ -403,8 +405,6 @@ def _build_registry() -> dict[str, EntitySpec]:
             label="date_of_birth",
             apply_path="standalone_map",
             pattern_kind="strftime",
-            entity_driven=True,
-            persona_field=True,
             transform_method="perturbation",
             name_patterns=(
                 "date[_ ]?of[_ ]?birth",
@@ -431,7 +431,6 @@ def _build_registry() -> dict[str, EntitySpec]:
         EntitySpec(
             label="street_address",
             apply_path="persona",
-            persona_field=True,
             name_patterns=(
                 "street",
                 "(?<!ip)(?<!ip[_ ])address",
@@ -491,7 +490,6 @@ def _build_registry() -> dict[str, EntitySpec]:
         EntitySpec(
             label="ssn",
             apply_path="standalone_map",
-            entity_driven=True,
             requires_value_match=True,
             name_patterns=(
                 "\\bssn\\b",
@@ -506,7 +504,6 @@ def _build_registry() -> dict[str, EntitySpec]:
         EntitySpec(
             label="national_id",
             apply_path="standalone_map",
-            entity_driven=True,
             name_patterns=(
                 "national[_ ]?id",
                 "\\bnino\\b",
@@ -532,7 +529,6 @@ def _build_registry() -> dict[str, EntitySpec]:
             label="credit_debit_card",
             apply_path="standalone_map",
             pattern_kind="template",
-            entity_driven=True,
             requires_value_match=True,
             name_patterns=(
                 "credit[_ ]?card",
@@ -552,7 +548,6 @@ def _build_registry() -> dict[str, EntitySpec]:
             label="api_key",
             apply_path="standalone_map",
             pattern_kind="template",
-            entity_driven=True,
             name_patterns=(
                 "api[_ ]?key",
                 "secret[_ ]?key",
@@ -573,8 +568,6 @@ def _build_registry() -> dict[str, EntitySpec]:
         EntitySpec(
             label="ipv4",
             apply_path="standalone_map",
-            entity_driven=True,
-            valid_form=True,
             requires_value_match=True,
             name_patterns=(
                 "ipv4",
@@ -591,8 +584,6 @@ def _build_registry() -> dict[str, EntitySpec]:
         EntitySpec(
             label="ipv6",
             apply_path="standalone_map",
-            entity_driven=True,
-            valid_form=True,
             requires_value_match=True,
             name_patterns=("ipv6",),
             fuzzy_keywords=(
@@ -605,7 +596,6 @@ def _build_registry() -> dict[str, EntitySpec]:
             label="unique_identifier",
             apply_path="standalone_map",
             pattern_kind="template",
-            entity_driven=True,
             name_patterns=(
                 "\\buuid\\b",
                 "\\bguid\\b",
@@ -676,8 +666,6 @@ def effective_apply_path(label: str, persona_backend: str) -> ApplyPath | None:
     if s is None:
         return None
     if s.persona_only_backends is not None and persona_backend not in s.persona_only_backends:
-        return "standalone_map"
-    if s.entity_driven:
         return "standalone_map"
     return s.apply_path
 
@@ -751,6 +739,17 @@ class EntityHandler(Protocol):
 
         Returns:
             The synthetic value, or ``None`` when none can be made.
+        """
+        ...
+
+    def plan_pattern_rejection(self, column_name: str) -> str | None:
+        """Return why plan ``patterns`` are illegal for this entity, or ``None`` if allowed.
+
+        Args:
+            column_name: Column that listed patterns in the replacement plan.
+
+        Returns:
+            A human-readable rejection message, or ``None`` when patterns are fine.
         """
         ...
 

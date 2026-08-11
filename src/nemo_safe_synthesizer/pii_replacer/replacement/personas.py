@@ -72,6 +72,11 @@ def _load_pgm_generator(cfg: Config):
             f"replace_pii.person.backend is 'pgm', which supports locale 'en_US' only, but the locale is "
             f"{cfg.locale!r}. Set the locale to 'en_US' or choose another persona backend."
         )
+    if not cfg.sdg_pgms_src:
+        raise ParameterError(
+            "replace_pii.person.backend is 'pgm' but replace_pii.person.sdg_pgms_src is unset. "
+            "Point it at an sdg-pgms checkout, or use the 'managed' or 'faker' backend."
+        )
     try:
         if cfg.sdg_pgms_src not in sys.path:
             sys.path.insert(0, cfg.sdg_pgms_src)

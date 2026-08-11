@@ -500,17 +500,7 @@ def test_entity_registry_membership_matches_product_rules():
             s.label for s in entities.ENTITY_REGISTRY.values() if all(getattr(s, k) == v for k, v in attrs.items())
         )
 
-    assert labels_where(persona_field=True) == [
-        "date_of_birth",
-        "email",
-        "first_name",
-        "full_name",
-        "last_name",
-        "middle_name",
-        "phone_number",
-        "street_address",
-    ]
-    assert labels_where(entity_driven=True) == [
+    assert labels_where(apply_path="standalone_map") == [
         "api_key",
         "credit_debit_card",
         "date_of_birth",
@@ -520,7 +510,6 @@ def test_entity_registry_membership_matches_product_rules():
         "ssn",
         "unique_identifier",
     ]
-    assert labels_where(valid_form=True) == ["ipv4", "ipv6"]
     assert labels_where(persona_only_backends=frozenset({"pgm"})) == ["phone_number"]
     assert labels_where(apply_path="identify_only") == [
         "city",

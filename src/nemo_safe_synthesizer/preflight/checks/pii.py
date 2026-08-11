@@ -91,6 +91,13 @@ class PiiReplacementConfigCheck(ConfigCheck):
         # The PGM is internal-only and never falls back (see replacement.personas._load_pgm_generator),
         # so a missing checkout is an error here rather than a warning about a fallback.
         if backend == PiiPersonBackend.pgm:
+            if replace_pii.person.sdg_pgms_src is None:
+                collector.error(
+                    "pii_pgm_src_missing",
+                    "replace_pii.person.sdg_pgms_src is required when replace_pii.person.backend is 'pgm'; "
+                    "the 'pgm' backend needs a local sdg-pgms checkout.",
+                )
+                return
             src = Path(replace_pii.person.sdg_pgms_src)
             if locale != "en_US":
                 collector.error(

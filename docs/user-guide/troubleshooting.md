@@ -544,7 +544,7 @@ check of its own.
 | `pii_faker_locale_invalid` | error | `pii.replacement_config` | `replace_pii.replacement.locale` is not a locale Faker supports |
 | `pii_managed_assets_missing` | warning | `pii.replacement_config` | Managed persona assets not found; replacement falls back to Faker. See [Managed persona assets](running.md#managed-persona-assets) |
 | `pii_pgm_locale_invalid` | error | `pii.replacement_config` | `person.backend` is `pgm`, which supports `en_US` only |
-| `pii_pgm_src_missing` | error | `pii.replacement_config` | `person.sdg_pgms_src` is missing or unreadable; the internal `pgm` backend needs a local sdg-pgms checkout |
+| `pii_pgm_src_missing` | error | `pii.replacement_config` | `person.sdg_pgms_src` is unset, missing, or unreadable; the internal `pgm` backend needs a local sdg-pgms checkout |
 | `pii_pgm_import_missing` | error | `pii.replacement_config` | sdg-pgms package not found under `person.sdg_pgms_src` |
 | `pii_plan_unreadable` | error | `pii.plan_validity` | Replacement plan file could not be read or parsed |
 | `pii_plan_protected_column` | error | `pii.plan_validity` | Plan lists a structural column (time-series group key, `order_training_examples_by`, or time-series timestamp) under `columns_to_replace` |
@@ -556,7 +556,6 @@ check of its own.
 | `pii_plan_column_conflict` | error | `pii.plan_validity` | Column is listed in both `match_persona_by` and `columns_to_replace` |
 | `pii_plan_ethnic_background_ignored_under_faker` | warning | `pii.plan_validity` | `match_persona_by` lists `ethnic_background` but `person.backend` is `faker` (sex-only); remove it or use managed/pgm |
 | `pii_plan_free_text_under_persona` | warning | `pii.plan_validity` | `free_text` column listed under `persona_backed_columns`; move it to `standalone_columns_to_replace` (behavior is unchanged either way) |
-| `pii_plan_entity_driven_under_persona` | warning | `pii.plan_validity` | Entity-driven column (IDs, cards, IPs, `date_of_birth`; `phone_number` when not using `pgm`) listed under `persona_backed_columns`; it is still replaced from its own value, not from the persona |
 | `pii_plan_persona_column_under_standalone` | warning | `pii.plan_validity` | Person-identifying column listed only under `standalone_columns_to_replace`; it will not share a synthetic person with other columns |
 
 ---

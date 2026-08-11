@@ -26,6 +26,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiReplacerConfig,
 )
 from nemo_safe_synthesizer.defaults import NSS_MANAGED_ASSETS_PATH_ENV, default_managed_assets_path
+from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.pii_replacer.entities import Config, config_from_replace_pii
 from nemo_safe_synthesizer.pii_replacer.replacer import (
     TabularPiiReplacer,
@@ -48,6 +49,17 @@ def test_replace_pii_config_rejects_llm_enhancement_true():
         PiiReplacerConfig(llm_enhancement=True)
 
 
+def test_person_config_requires_sdg_pgms_src_for_pgm():
+    with pytest.raises((ParameterError, ValidationError), match=r"sdg_pgms_src"):
+        PiiPersonConfig(backend=PiiPersonBackend.pgm)
+
+
+def test_person_config_default_leaves_sdg_pgms_src_unset():
+    cfg = PiiPersonConfig()
+    assert cfg.backend == PiiPersonBackend.managed
+    assert cfg.sdg_pgms_src is None
+
+
 def test_config_from_replace_pii_maps_user_fields(tmp_path, monkeypatch):
     monkeypatch.delenv("PERSON_RANDOM_SEED", raising=False)
     assets = tmp_path / "assets"
@@ -62,6 +74,7 @@ def test_config_from_replace_pii_maps_user_fields(tmp_path, monkeypatch):
     assert engine.random_seed == 7
     assert engine.persona_backend == "faker"
     assert engine.managed_assets_path == str(assets)
+    assert engine.sdg_pgms_src is None
 
 
 def test_config_from_replace_pii_seed_falls_back_to_env(monkeypatch):
