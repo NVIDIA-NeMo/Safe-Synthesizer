@@ -673,7 +673,7 @@ This project supports AI coding assistants. Configuration is layered so that con
 |-------------|---------|---------|
 | `AGENTS.md` | All agents (Cursor, Windsurf, Claude Code, etc.) | Repo conventions, module map, skills index |
 | `AGENTS.local.md` | All agents | Local developer preferences (git-ignored) |
-| `CLAUDE.md` | Claude Code | Entry point; references `AGENTS.md` and `AGENTS.local.md` |
+| `CLAUDE.md` | Claude Code | Entry point; imports `AGENTS.md` |
 | `.cursor/rules/*.mdc` | Cursor only | Workflow rules, style enforcement, file-pattern triggers |
 | `.agents/skills/*/SKILL.md` | All agents (via skills index in `AGENTS.md`) | Domain-specific knowledge (testing, sync, typing, etc.) |
 | `.cursor/`, `.claude/`, `.codex/` | Matching clients | Client-specific rules, registrations, and adapters for shared `.agents/` assets |
