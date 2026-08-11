@@ -166,7 +166,7 @@ training:
   rope_scaling_factor: auto
   validation_ratio: 0.0
   validation_steps: 15
-  warmup_ratio: 0.05
+  warmup_steps: 0.05
   weight_decay: 0.01
 """
 

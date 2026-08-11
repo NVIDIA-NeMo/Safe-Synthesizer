@@ -67,7 +67,7 @@ def test_gliner_batch_predict_config():
         entity_extractor = EntityExtractorGliner.get_entity_extractor(cfg)
         entity_extractor.batch_update_cache(["abc"], None)
         assert entity_extractor._model is not None
-        entity_extractor._model.batch_predict_entities.assert_not_called()  # ty: ignore[call-non-callable, unresolved-attribute] -- mock object
+        entity_extractor._model.inference.assert_not_called()  # ty: ignore[call-non-callable, unresolved-attribute] -- mock object
 
     cfg = ClassifyConfig(
         valid_entities={"name"},
@@ -85,7 +85,7 @@ def test_gliner_batch_predict_config():
         entity_extractor = EntityExtractorGliner.get_entity_extractor(cfg)
         entity_extractor.batch_update_cache(["abc"], None)
         assert entity_extractor._model is not None
-        entity_extractor._model.batch_predict_entities.assert_called()  # ty: ignore[call-non-callable, unresolved-attribute] -- mock object
+        entity_extractor._model.inference.assert_called()  # ty: ignore[call-non-callable, unresolved-attribute] -- mock object
 
 
 def test_gliner_entity_labels_are_indexable():
@@ -104,14 +104,14 @@ def test_gliner_entity_labels_are_indexable():
     with patch("nemo_safe_synthesizer.pii_replacer.data_editor.detect.GLiNER") as mock_gliner:
         model = mock_gliner.from_pretrained.return_value
         model.predict_entities.return_value = []
-        model.batch_predict_entities.return_value = [[]]
+        model.inference.return_value = [[]]
 
         entity_extractor = EntityExtractorGliner.get_entity_extractor(cfg)
         entity_extractor.extract_ner_predictions("abc", {"name", "email"})
         entity_extractor.batch_update_cache(["abc"], None)
 
         assert model.predict_entities.call_args.args[1] == ["email", "name"]
-        assert model.batch_predict_entities.call_args.args[1] == ["email", "name"]
+        assert model.inference.call_args.args[1] == ["email", "name"]
 
 
 def test_gliner_batch_cache_falls_back_to_predict_entities_api():
@@ -146,8 +146,16 @@ def test_gliner_batch_cache_falls_back_to_predict_entities_api():
         assert model.calls[0][0] == "abc"
         assert model.calls[0][1] == ["email", "name"]
 
+    # A build exposing neither API must fail loudly, not return no entities.
+    with patch("nemo_safe_synthesizer.pii_replacer.data_editor.detect.GLiNER") as mock_gliner:
+        mock_gliner.from_pretrained.return_value = object()
+        entity_extractor = EntityExtractorGliner.get_entity_extractor(cfg)
 
-def test_gliner_single_prediction_falls_back_to_batch_api():
+        with pytest.raises(AttributeError, match="neither inference nor predict_entities"):
+            entity_extractor.batch_update_cache(["abc"], None)
+
+
+def test_gliner_single_prediction_falls_back_to_inference_api():
     cfg = ClassifyConfig(
         valid_entities={"email", "name"},
         ner_threshold=0.8,
@@ -164,7 +172,7 @@ def test_gliner_single_prediction_falls_back_to_batch_api():
         def __init__(self):
             self.calls = []
 
-        def batch_predict_entities(self, texts, labels, **kwargs):
+        def inference(self, texts, labels, **kwargs):
             self.calls.append((texts, labels, kwargs))
             return [[]]
 
@@ -177,6 +185,14 @@ def test_gliner_single_prediction_falls_back_to_batch_api():
 
         assert model.calls[0][0] == ["abc"]
         assert model.calls[0][1] == ["email", "name"]
+
+    # A build exposing neither API must fail loudly, not return no entities.
+    with patch("nemo_safe_synthesizer.pii_replacer.data_editor.detect.GLiNER") as mock_gliner:
+        mock_gliner.from_pretrained.return_value = object()
+        entity_extractor = EntityExtractorGliner.get_entity_extractor(cfg)
+
+        with pytest.raises(AttributeError, match="neither inference nor predict_entities"):
+            entity_extractor.extract_ner_predictions("abc", {"name", "email"})
 
 
 @pytest.mark.parametrize("offline_var", ["HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE"])
