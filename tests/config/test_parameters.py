@@ -903,6 +903,7 @@ class TestWithRuntimeOverrides:
         assert saved.training.batch_size == 8
         assert saved.generation.structured_generation.enabled is True
 
+
 class TestWarmupSteps:
     """`warmup_steps` mirrors the transformers contract: ratio below 1, whole steps at or above 1."""
 
