@@ -17,7 +17,7 @@ from ..entities import Config
 from ..models import FreeTextDetection, PersonaInstance, ScopedValueMap
 from ..patterns import split_full_name, split_title
 
-# These helpers only read ``originals`` / ``synthetic``, so a plain mapping with
+# These helpers only read ``originals_by_label`` / ``synthetic_by_label``, so a plain mapping with
 # those keys works as well as a full instance.
 InstanceLike = PersonaInstance | Mapping[str, object]
 
@@ -109,8 +109,8 @@ def _iter_instance_text_triples(inst: InstanceLike, cfg: Config | None = None):
         ``full_name`` ``"Smith, Jane"`` -> ``"Jones, Robert"`` also yields
         ``("Smith", "Jones", "last_name")`` so ``"Dr. Smith"`` becomes ``"Dr. Jones"``.
     """
-    syn = cast(Mapping[str, str], inst.get("synthetic", {}))
-    orig = cast(Mapping[str, str], inst["originals"])
+    syn = cast(Mapping[str, str], inst.get("synthetic_by_label", {}))
+    orig = cast(Mapping[str, str], inst["originals_by_label"])
     ordered: list[tuple[str, str, str]] = []
     index_of: dict[str, int] = {}
 
@@ -172,7 +172,7 @@ def instance_text_pairs(inst: InstanceLike, cfg: Config | None = None) -> list[t
     """Return original→synthetic pairs for propagating structured values into free text.
 
     Args:
-        inst: Persona instance (or mapping with ``originals`` / ``synthetic`` keys).
+        inst: Persona instance (or mapping with ``originals_by_label`` / ``synthetic_by_label`` keys).
         cfg: Replacement configuration (controls name-token aliases).
 
     Returns:
@@ -189,7 +189,7 @@ def instance_text_pair_labels(inst: InstanceLike, cfg: Config | None = None) -> 
     precision/recall log (generation itself is label-agnostic).
 
     Args:
-        inst: Persona instance (or mapping with ``originals`` / ``synthetic`` keys).
+        inst: Persona instance (or mapping with ``originals_by_label`` / ``synthetic_by_label`` keys).
         cfg: Replacement configuration (controls name-token aliases).
 
     Returns:

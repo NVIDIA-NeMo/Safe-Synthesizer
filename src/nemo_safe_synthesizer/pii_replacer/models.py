@@ -16,7 +16,7 @@ from typing import Literal, TypeAlias, cast
 
 import pandas as pd
 
-PersonaAttribute: TypeAlias = Literal["gender", "ethnic_background"]
+PersonaAttribute: TypeAlias = Literal["sex", "ethnic_background"]
 ScopedValueMapKind: TypeAlias = Literal["flat", "group", "record"]
 
 
@@ -39,21 +39,26 @@ class ColumnEvidence:
 
 
 @dataclass
-class FieldMeta:
-    """Per-field discovery metadata (currently pattern templates)."""
+class DetectedPersonaField:
+    """One persona-backed column from structured detection."""
 
+    column: str
+    """Dataframe column name."""
     patterns: list[str] = field(default_factory=list)
-    """Value templates or strftime formats attached during discovery."""
+    """Value templates or strftime formats inferred for the column."""
 
     def to_dict(self) -> dict[str, object]:
-        return {"patterns": list(self.patterns)}
+        return {"column": self.column, "patterns": list(self.patterns)}
 
     @classmethod
-    def from_dict(cls, raw: Mapping[str, object] | None) -> FieldMeta:
-        if not raw:
-            return cls()
+    def from_dict(cls, raw: Mapping[str, object] | str) -> DetectedPersonaField:
+        if isinstance(raw, str):
+            return cls(column=raw)
         patterns = raw.get("patterns") or []
-        return cls(patterns=[str(p) for p in cast(Sequence[object], patterns)])
+        return cls(
+            column=str(raw["column"]),
+            patterns=[str(p) for p in cast(Sequence[object], patterns)],
+        )
 
 
 @dataclass
@@ -61,7 +66,7 @@ class PersonaMatchBy:
     """Demographic column used to condition persona sampling."""
 
     persona_attribute: PersonaAttribute
-    """Persona attribute name (``gender`` or ``ethnic_background``)."""
+    """Persona attribute name (``sex`` or ``ethnic_background``)."""
     column_name: str
     """Dataframe column whose values constrain which synthetic persona is drawn."""
 
@@ -82,30 +87,28 @@ class DetectedPersona:
 
     persona: str
     """Persona identifier (e.g. ``patient``, ``provider_2``)."""
-    fields: dict[str, str] = field(default_factory=dict)
-    """Map of entity label to column name for persona-backed replacement."""
-    field_meta: dict[str, FieldMeta] = field(default_factory=dict)
-    """Per-field metadata keyed by entity label (pattern templates, …)."""
+    fields: dict[str, DetectedPersonaField] = field(default_factory=dict)
+    """Map of entity label to column (+ patterns) for persona-backed replacement."""
     match_persona_by: list[PersonaMatchBy] = field(default_factory=list)
     """Demographic columns that condition which synthetic persona is drawn."""
 
     def to_dict(self) -> dict[str, object]:
         return {
             "persona": self.persona,
-            "fields": dict(self.fields),
-            "field_meta": {k: v.to_dict() for k, v in self.field_meta.items()},
+            "fields": {k: v.to_dict() for k, v in self.fields.items()},
             "match_persona_by": [m.to_dict() for m in self.match_persona_by],
         }
 
     @classmethod
     def from_dict(cls, raw: Mapping[str, object]) -> DetectedPersona:
-        meta_raw = cast(Mapping[str, object], raw.get("field_meta") or {})
         match_raw = cast(Sequence[Mapping[str, object]], raw.get("match_persona_by") or [])
         fields_raw = cast(Mapping[str, object], raw.get("fields") or {})
         return cls(
             persona=str(raw["persona"]),
-            fields={str(k): str(v) for k, v in fields_raw.items()},
-            field_meta={str(k): FieldMeta.from_dict(cast(Mapping[str, object], v)) for k, v in meta_raw.items()},
+            fields={
+                str(k): DetectedPersonaField.from_dict(cast(Mapping[str, object] | str, v))
+                for k, v in fields_raw.items()
+            },
             match_persona_by=[PersonaMatchBy.from_dict(m) for m in match_raw],
         )
 
@@ -220,7 +223,8 @@ class PersonaInstance:
     """One persona-backed replacement unit (group, record, or dataframe signature).
 
     Carries the original field values and column map up front; after sampling,
-    ``synthetic``, ``syn_by_col``, and ``text_pairs`` hold what to write back.
+    ``synthetic_by_label``, ``synthetic_by_column``, and ``free_text_pairs`` hold
+    what to write back.
 
     Example:
         PersonaInstance(
@@ -228,7 +232,7 @@ class PersonaInstance:
             match=("g1",),
             field_cols={"first_name": "fname", "last_name": "lname"},
             patterns_by_label={},
-            originals={"first_name": "Jane", "last_name": "Smith"},
+            originals_by_label={"first_name": "Jane", "last_name": "Smith"},
         )
     """
 
@@ -240,8 +244,8 @@ class PersonaInstance:
     """Map of entity label to column name for this persona instance."""
     patterns_by_label: dict[str, list[str]]
     """Per-label value templates or strftime formats for formatted fields."""
-    originals: dict[str, str]
-    """Original field values before replacement."""
+    originals_by_label: dict[str, str]
+    """Original field values keyed by entity label."""
     sex: str | None = None
     """Normalized sex/gender constraint for persona sampling, or ``None``."""
     race_raw: str | None = None
@@ -256,11 +260,11 @@ class PersonaInstance:
     """Sampled synthetic persona record from the backend, or ``None`` before sampling."""
     synthetic_person_source: str | None = None
     """Backend that produced ``synthetic_person`` (``managed``, ``pgm``, ``faker``)."""
-    synthetic: dict[str, str] = field(default_factory=dict)
+    synthetic_by_label: dict[str, str] = field(default_factory=dict)
     """Synthetic field values keyed by entity label."""
-    syn_by_col: dict[str, str] = field(default_factory=dict)
+    synthetic_by_column: dict[str, str] = field(default_factory=dict)
     """Synthetic values keyed by column name for write-back."""
-    text_pairs: list[tuple[str, str]] = field(default_factory=list)
+    free_text_pairs: list[tuple[str, str]] = field(default_factory=list)
     """Original-to-synthetic pairs propagated into free-text columns."""
 
     # Mapping-style access so helpers can take either an instance or a plain dict
@@ -286,7 +290,7 @@ class PersonaInstance:
             "match": self.match,
             "field_cols": dict(self.field_cols),
             "patterns_by_label": {k: list(v) for k, v in self.patterns_by_label.items()},
-            "originals": dict(self.originals),
+            "originals_by_label": dict(self.originals_by_label),
             "sex": self.sex,
             "race_raw": self.race_raw,
             "select_field_values": (
@@ -296,9 +300,9 @@ class PersonaInstance:
             "row_indices": list(self.row_indices),
             "synthetic_person": self.synthetic_person,
             "synthetic_person_source": self.synthetic_person_source,
-            "synthetic": dict(self.synthetic),
-            "syn_by_col": dict(self.syn_by_col),
-            "text_pairs": list(self.text_pairs),
+            "synthetic_by_label": dict(self.synthetic_by_label),
+            "synthetic_by_column": dict(self.synthetic_by_column),
+            "free_text_pairs": list(self.free_text_pairs),
         }
 
     @classmethod
@@ -306,7 +310,7 @@ class PersonaInstance:
         match_raw = cast(Sequence[object], raw["match"])
         field_cols = cast(Mapping[str, object], raw.get("field_cols") or {})
         patterns_by_label = cast(Mapping[str, object], raw.get("patterns_by_label") or {})
-        originals = cast(Mapping[str, object], raw.get("originals") or {})
+        originals_by_label = cast(Mapping[str, object], raw.get("originals_by_label") or {})
         sfv_raw = raw.get("select_field_values")
         select_field_values: dict[str, list[str]] | None
         if sfv_raw is None:
@@ -320,9 +324,9 @@ class PersonaInstance:
         synthetic_person = (
             None if synthetic_person_raw is None else dict(cast(Mapping[str, object], synthetic_person_raw))
         )
-        synthetic = cast(Mapping[str, object], raw.get("synthetic") or {})
-        syn_by_col = cast(Mapping[str, object], raw.get("syn_by_col") or {})
-        text_pairs_raw = cast(Sequence[Sequence[object]], raw.get("text_pairs") or [])
+        synthetic_by_label = cast(Mapping[str, object], raw.get("synthetic_by_label") or {})
+        synthetic_by_column = cast(Mapping[str, object], raw.get("synthetic_by_column") or {})
+        free_text_pairs_raw = cast(Sequence[Sequence[object]], raw.get("free_text_pairs") or [])
         return cls(
             persona=str(raw["persona"]),
             match=tuple(match_raw),
@@ -330,7 +334,7 @@ class PersonaInstance:
             patterns_by_label={
                 str(k): [str(p) for p in cast(Sequence[object], v)] for k, v in patterns_by_label.items()
             },
-            originals={str(k): str(v) for k, v in originals.items()},
+            originals_by_label={str(k): str(v) for k, v in originals_by_label.items()},
             sex=None if raw.get("sex") is None else str(raw.get("sex")),
             race_raw=None if raw.get("race_raw") is None else str(raw.get("race_raw")),
             select_field_values=select_field_values,
@@ -340,9 +344,9 @@ class PersonaInstance:
             synthetic_person_source=(
                 None if raw.get("synthetic_person_source") is None else str(raw.get("synthetic_person_source"))
             ),
-            synthetic={str(k): str(v) for k, v in synthetic.items()},
-            syn_by_col={str(k): str(v) for k, v in syn_by_col.items()},
-            text_pairs=[(str(a), str(b)) for a, b in text_pairs_raw],
+            synthetic_by_label={str(k): str(v) for k, v in synthetic_by_label.items()},
+            synthetic_by_column={str(k): str(v) for k, v in synthetic_by_column.items()},
+            free_text_pairs=[(str(a), str(b)) for a, b in free_text_pairs_raw],
         )
 
 

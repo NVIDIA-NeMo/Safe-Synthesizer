@@ -78,7 +78,7 @@ def test_noop_enhancer_leaves_heuristics_authoritative(fixture_patient_df: pd.Da
             match=("record", {"first_name": "Alice"}),
             field_cols={"first_name": "first_name"},
             patterns_by_label={},
-            originals={"first_name": "Alice"},
+            originals_by_label={"first_name": "Alice"},
             sex="Female",
         )
     ]
@@ -157,7 +157,7 @@ def test_a_name_token_is_aliased_without_the_punctuation_around_it():
     """Free text writes 'SMITH', never 'SMITH,', so the comma must not travel with the token."""
     from nemo_safe_synthesizer.pii_replacer.replacement import instance_text_pairs
 
-    inst = {"originals": {"full_name": "SMITH, Jane"}, "synthetic": {"full_name": "JONES, Robert"}}
+    inst = {"originals_by_label": {"full_name": "SMITH, Jane"}, "synthetic_by_label": {"full_name": "JONES, Robert"}}
 
     pairs = dict(instance_text_pairs(inst))
     assert pairs["SMITH"] == "JONES"
@@ -167,7 +167,7 @@ def test_a_name_token_is_aliased_without_the_punctuation_around_it():
 def test_a_name_keeps_the_punctuation_inside_it():
     from nemo_safe_synthesizer.pii_replacer.replacement import instance_text_pairs
 
-    inst = {"originals": {"full_name": "Jane O'Brien"}, "synthetic": {"full_name": "Robert Smith-Jones"}}
+    inst = {"originals_by_label": {"full_name": "Jane O'Brien"}, "synthetic_by_label": {"full_name": "Robert Smith-Jones"}}
 
     assert dict(instance_text_pairs(inst))["O'Brien"] == "Smith-Jones"
 
@@ -176,7 +176,7 @@ def test_an_aliased_token_is_labelled_by_its_role():
     """Which token is the surname is the column's business, not the token's position."""
     from nemo_safe_synthesizer.pii_replacer.replacement import instance_text_pair_labels
 
-    inst = {"originals": {"full_name": "SMITH, Jane"}, "synthetic": {"full_name": "JONES, Robert"}}
+    inst = {"originals_by_label": {"full_name": "SMITH, Jane"}, "synthetic_by_label": {"full_name": "JONES, Robert"}}
 
     labels = instance_text_pair_labels(inst)
     assert labels["SMITH"] == "last_name"

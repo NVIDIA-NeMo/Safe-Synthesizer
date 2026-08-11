@@ -153,7 +153,8 @@ def resolve_plan(
         Validated ``PiiReplacementPlan`` ready for replacement.
 
     Raises:
-        ParameterError: When the plan source is missing, invalid, or fails validation.
+        ParameterError: When the plan source is missing, invalid, or fails user/config validation.
+        InternalError: When auto-discovery emits an unexpected invalid plan.
     """
     # ``llm_enhancement`` is refused by the enhancer discovery/apply select; do not
     # gate here so the failure site matches the future stacking call path.
@@ -191,15 +192,12 @@ def resolve_plan(
 
     # User-supplied plans that list protected columns fail validation instead of
     # being silently rewritten. Auto-discovered plans are validated too (defense
-    # in depth); failures there are almost always discovery/config bugs.
-    if config.is_auto_discovery:
-        try:
-            validate_plan(df, plan, data_config=data_config, time_series=time_series)
-        except ParameterError as exc:
-            message = str(exc)
-            if "group" in message.lower() and "scope" in message.lower():
-                raise
-            raise ParameterError(f"Discovery produced an invalid plan (internal error): {message}") from exc
-    else:
-        validate_plan(df, plan, data_config=data_config, time_series=time_series)
+    # in depth); unexpected failures there are discovery bugs.
+    validate_plan(
+        df,
+        plan,
+        data_config=data_config,
+        time_series=time_series,
+        plan_origin="auto_discovery" if config.is_auto_discovery else "user",
+    )
     return plan

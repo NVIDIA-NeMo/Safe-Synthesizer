@@ -52,8 +52,8 @@ def _make_instance(
         A new ``PersonaInstance`` with demographics and originals populated.
     """
     cond = persona_match_map(match_persona_by)
-    sex = norm_sex(row[cond["gender"]]) if cond.get("gender") else None
-    # Persona name realism depends on gender + ethnic_background for PGM/managed.
+    sex = norm_sex(row[cond["sex"]]) if cond.get("sex") else None
+    # Persona name realism depends on sex + ethnic_background for PGM/managed.
     # Faker only conditions on sex.
     race_val = None
     if (
@@ -67,7 +67,7 @@ def _make_instance(
         match=match,
         field_cols=dict(field_cols),
         patterns_by_label={lab: list(pats) for lab, pats in (patterns_by_label or {}).items()},
-        originals={lab: str(v) for lab, v in originals.items()},
+        originals_by_label={lab: str(v) for lab, v in originals.items()},
         sex=sex,
         # Raw race value is kept for audit output. Matching uses select_field_values,
         # set programmatically by ethnicity_to_pgm.
@@ -222,7 +222,7 @@ def _person_key(inst: PersonaInstance) -> object:
 
 
 def compute_instance_synthetics(instances: list[PersonaInstance], cfg: entities.Config) -> None:
-    """Fill each instance's ``synthetic``, ``syn_by_col``, and ``text_pairs`` in place.
+    """Fill each instance's label/column synthetics and free-text pairs in place.
 
     Args:
         instances: Persona instances with ``synthetic_person`` already assigned.
@@ -230,8 +230,8 @@ def compute_instance_synthetics(instances: list[PersonaInstance], cfg: entities.
     """
     for inst in instances:
         persona = inst.synthetic_person
-        synthetic: dict[str, str] = {}
-        syn_by_col: dict[str, str] = {}
+        synthetic_by_label: dict[str, str] = {}
+        synthetic_by_column: dict[str, str] = {}
         if persona:
             seed = cfg.random_seed ^ stable_hash(str(_person_key(inst)))
             fake = seeded_faker(seed, cfg.locale)
@@ -242,14 +242,16 @@ def compute_instance_synthetics(instances: list[PersonaInstance], cfg: entities.
                 persona = {**persona, "middle_name": given_name(persona, fake)}
             patterns_by_label = inst.patterns_by_label
             for label, col in inst.field_cols.items():
-                original = inst.originals.get(label)
+                original = inst.originals_by_label.get(label)
                 if original is None:
                     continue
-                sv = synth_value(label, original, persona, fake, patterns_by_label.get(label), inst.originals)
+                sv = synth_value(
+                    label, original, persona, fake, patterns_by_label.get(label), inst.originals_by_label
+                )
                 if sv is None or str(sv) == str(original):
                     continue
-                synthetic[label] = str(sv)
-                syn_by_col[col] = str(sv)
-        inst.synthetic = synthetic
-        inst.syn_by_col = syn_by_col
-        inst.text_pairs = instance_text_pairs(inst, cfg)
+                synthetic_by_label[label] = str(sv)
+                synthetic_by_column[col] = str(sv)
+        inst.synthetic_by_label = synthetic_by_label
+        inst.synthetic_by_column = synthetic_by_column
+        inst.free_text_pairs = instance_text_pairs(inst, cfg)

@@ -150,30 +150,41 @@ def persona_column_patterns(
     return ranked_formats(counts, len(rows))
 
 
+def _columns_by_label(fields: Mapping[str, object]) -> dict[str, str]:
+    """Normalize persona ``fields`` (inline or legacy label→column) to label→column."""
+    out: dict[str, str] = {}
+    for label, entry in fields.items():
+        if isinstance(entry, Mapping):
+            out[str(label)] = str(entry["column"])
+        else:
+            out[str(label)] = str(entry)
+    return out
+
+
 def attach_persona_patterns(df: pd.DataFrame, personas: list[dict], cfg: Config) -> None:
-    """Write discovered name/email conventions onto each persona field's ``field_meta``.
+    """Write discovered name/email conventions onto each persona field's ``patterns``.
 
     Mutates in place.
 
     Args:
         df: Source dataframe.
-        personas: Persona set dicts to update with ``field_meta`` pattern entries.
+        personas: Persona set dicts to update with inline ``patterns`` on each field.
         cfg: Pattern inference configuration.
 
     Example:
         A full-name field whose values look like ``"Smith, Jane"`` gets
-        ``field_meta["full_name"] = {"patterns": ["{LAST}, {First}"]}``.
+        ``fields["full_name"] = {"column": "...", "patterns": ["{LAST}, {First}"]}``.
     """
     for persona_set in personas:
-        fields = persona_set.get("fields") or {}
-        meta_by_label = persona_set.setdefault("field_meta", {})
+        fields = persona_set.setdefault("fields", {})
+        columns_by_label = _columns_by_label(fields)
         for label in _PERSONA_PATTERN_LABELS:
-            col = fields.get(label)
+            col = columns_by_label.get(label)
             if col is None or col not in df.columns:
                 continue
-            patterns = persona_column_patterns(df, label, col, fields, cfg)
+            patterns = persona_column_patterns(df, label, col, columns_by_label, cfg)
             if patterns:
-                meta_by_label[label] = {"patterns": patterns}
+                fields[label] = {"column": col, "patterns": patterns}
                 logger.runtime.info(
                     f"[PII Replacement] Persona-backed column {col!r} (entity={label}, patterns={patterns})"
                 )

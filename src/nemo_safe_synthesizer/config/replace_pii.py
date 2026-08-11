@@ -84,15 +84,15 @@ class PiiEntity(StrEnum):
 class PersonaMatchColumn(NSSBaseModel):
     """An existing column that decides which kind of persona to generate.
 
-    ``persona_attribute: gender`` with ``column_name: sex`` picks synthetic names
+    ``persona_attribute: sex`` with ``column_name: sex`` picks synthetic names
     that agree with each row's original ``sex`` value. ``ethnic_background`` is
     supported under the ``managed`` and ``pgm`` backends only; with ``faker`` it
     is omitted from auto-discovered plans and ignored if present in a hand-written
     plan. The named column is read, never replaced.
     """
 
-    persona_attribute: Literal["gender", "ethnic_background"] = Field(
-        description="Demographic attribute used to condition the synthetic persona (gender or ethnic_background)."
+    persona_attribute: Literal["sex", "ethnic_background"] = Field(
+        description="Demographic attribute used to condition the synthetic persona (sex or ethnic_background)."
     )
     column_name: str = Field(description="Existing dataframe column that supplies the demographic value.")
 

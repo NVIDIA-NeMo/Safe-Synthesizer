@@ -98,8 +98,10 @@ def test_detected_to_plan_warns_on_unmapped_entity_label(caplog):
             "personas": [
                 {
                     "persona": "person_1",
-                    "fields": {"first_name": "first_name", "alien_id": "alien_col"},
-                    "field_meta": {},
+                    "fields": {
+                        "first_name": {"column": "first_name", "patterns": []},
+                        "alien_id": {"column": "alien_col", "patterns": []},
+                    },
                     "match_persona_by": [],
                 }
             ],
@@ -213,7 +215,7 @@ def test_match_persona_by_only_sex_and_race_in_plan():
                 persona="primary_person",
                 columns_to_replace=[PiiColumnPlan(column_name="first_name", entity_type=PiiEntity.first_name)],
                 match_persona_by=[
-                    PersonaMatchColumn(persona_attribute="gender", column_name="sex"),
+                    PersonaMatchColumn(persona_attribute="sex", column_name="sex"),
                     PersonaMatchColumn(persona_attribute="ethnic_background", column_name="race"),
                 ],
             )
@@ -221,7 +223,7 @@ def test_match_persona_by_only_sex_and_race_in_plan():
     )
     matchers = [(cond.persona_attribute, cond.column_name) for cond in plan.persona_backed_columns[0].match_persona_by]
     assert matchers == [
-        ("gender", "sex"),
+        ("sex", "sex"),
         ("ethnic_background", "race"),
     ]
 
@@ -245,7 +247,7 @@ def test_faker_discovery_omits_ethnic_background_from_match_persona_by():
         for col_set in plan.persona_backed_columns
         for cond in col_set.match_persona_by
     ]
-    assert ("gender", "sex") in matchers
+    assert ("sex", "sex") in matchers
     assert not any(attr == "ethnic_background" for attr, _ in matchers)
 
 
@@ -266,7 +268,7 @@ def test_faker_ignores_ethnic_background_in_hand_written_plan():
                 persona="primary_person",
                 columns_to_replace=[PiiColumnPlan(column_name="first_name", entity_type=PiiEntity.first_name)],
                 match_persona_by=[
-                    PersonaMatchColumn(persona_attribute="gender", column_name="sex"),
+                    PersonaMatchColumn(persona_attribute="sex", column_name="sex"),
                     PersonaMatchColumn(persona_attribute="ethnic_background", column_name="race"),
                 ],
             )

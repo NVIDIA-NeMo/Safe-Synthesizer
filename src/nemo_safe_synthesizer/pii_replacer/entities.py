@@ -810,22 +810,22 @@ def _build_role_strip_tokens() -> frozenset[str]:
 
 ROLE_STRIP_TOKENS: frozenset[str] = _build_role_strip_tokens()
 
-# Only gender and ethnic_background are used to condition synthetic-name generation.
+# Only sex and ethnic_background are used to condition synthetic-name generation.
 # Faker only conditions given names on sex, so ethnic_background is omitted for that backend.
-DEMO_KEYS: tuple[Literal["gender", "ethnic_background"], ...] = ("gender", "ethnic_background")
+DEMO_KEYS: tuple[Literal["sex", "ethnic_background"], ...] = ("sex", "ethnic_background")
 
 
-def demo_keys_for_backend(persona_backend: str) -> tuple[Literal["gender", "ethnic_background"], ...]:
+def demo_keys_for_backend(persona_backend: str) -> tuple[Literal["sex", "ethnic_background"], ...]:
     """Demographics that may appear in ``match_persona_by`` for this persona backend."""
     if persona_backend == "faker":
-        return ("gender",)
+        return ("sex",)
     return DEMO_KEYS
 
 
-# Only gender and ethnic_background condition synthetic-name generation, so those
+# Only sex and ethnic_background condition synthetic-name generation, so those
 # are the only demographics detected. (Age/DOB/occupation do not constrain persona sampling.)
 DEMO_LABEL_PATTERNS: dict[str, list[str]] = {
-    "gender": [r"^sex$", r"gender"],
+    "sex": [r"^sex$", r"gender"],
     "ethnic_background": [r"race", r"ethnic"],
 }
 

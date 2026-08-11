@@ -23,7 +23,7 @@ persona_backed_columns:
     patterns:
     - '{First} {Last}'
   match_persona_by:
-  - persona_attribute: gender
+  - persona_attribute: sex
     column_name: sex
 - persona: provider
   columns_to_replace:

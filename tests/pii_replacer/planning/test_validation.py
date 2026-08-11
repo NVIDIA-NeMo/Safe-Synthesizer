@@ -22,7 +22,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiReplacementScope,
     PiiReplacerConfig,
 )
-from nemo_safe_synthesizer.errors import ParameterError
+from nemo_safe_synthesizer.errors import InternalError, ParameterError
 from nemo_safe_synthesizer.pii_replacer.planning import (
     iter_plan_advisories,
     iter_plan_issues,
@@ -147,7 +147,7 @@ def test_replacement_plan_rejects_values_that_are_neither_plan_nor_string():
                     {
                         "persona": "patient",
                         "columns_to_replace": [{"column_name": "sex", "entity_type": "first_name"}],
-                        "match_persona_by": [{"persona_attribute": "gender", "column_name": "sex"}],
+                        "match_persona_by": [{"persona_attribute": "sex", "column_name": "sex"}],
                     }
                 ]
             },
@@ -203,13 +203,13 @@ def test_validate_plan_rejects_unusable_column_specs(fixture_dob_df: pd.DataFram
                         "persona": "patient",
                         "columns_to_replace": [{"column_name": "first_name", "entity_type": "first_name"}],
                         "match_persona_by": [
-                            {"persona_attribute": "gender", "column_name": "sex"},
-                            {"persona_attribute": "gender", "column_name": "sex"},
+                            {"persona_attribute": "sex", "column_name": "sex"},
+                            {"persona_attribute": "sex", "column_name": "sex"},
                         ],
                     }
                 ],
             },
-            "persona_attribute 'gender' appears more than once",
+            "persona_attribute 'sex' appears more than once",
             id="duplicate_match_attribute",
         ),
     ],
@@ -228,7 +228,7 @@ def test_iter_plan_issues_reports_every_problem_at_once(fixture_dob_df: pd.DataF
                 {
                     "persona": "patient",
                     "columns_to_replace": [{"column_name": "first_name", "entity_type": "first_name"}],
-                    "match_persona_by": [{"persona_attribute": "gender", "column_name": "not_a_column"}],
+                    "match_persona_by": [{"persona_attribute": "sex", "column_name": "not_a_column"}],
                 }
             ],
             "standalone_columns_to_replace": [
@@ -245,6 +245,49 @@ def test_iter_plan_issues_reports_every_problem_at_once(fixture_dob_df: pd.DataF
         "pii_plan_entity_type_invalid",
         "pii_plan_column_not_found",
     ]
+
+
+def test_validate_plan_reports_every_problem_at_once(fixture_dob_df: pd.DataFrame):
+    """Direct validate_plan aggregates blocking issues instead of failing on the first."""
+    plan = PiiReplacementPlan.model_validate(
+        {
+            "standalone_columns_to_replace": [
+                {"column_name": "missing_column", "entity_type": "unique_identifier"},
+                {"column_name": "notes"},
+            ],
+        }
+    )
+    with pytest.raises(ParameterError, match=r"2 plan validation error\(s\):") as excinfo:
+        validate_plan(fixture_dob_df, plan, data_config=DataParameters())
+    message = str(excinfo.value)
+    assert "pii_plan_column_not_found" in message
+    assert "pii_plan_entity_type_invalid" in message
+
+
+def test_validate_plan_auto_discovery_wraps_content_failures_as_internal(fixture_dob_df: pd.DataFrame):
+    plan = PiiReplacementPlan(
+        standalone_columns_to_replace=[
+            PiiColumnPlan(column_name="missing_column", entity_type=PiiEntity.unique_identifier),
+        ],
+    )
+    with pytest.raises(InternalError, match="Discovery produced an invalid plan"):
+        validate_plan(
+            fixture_dob_df,
+            plan,
+            data_config=DataParameters(),
+            plan_origin="auto_discovery",
+        )
+
+
+def test_validate_plan_auto_discovery_keeps_group_scope_as_parameter_error(fixture_patient_df: pd.DataFrame):
+    plan = PiiReplacementPlan(scope=PiiReplacementScope.group)
+    with pytest.raises(ParameterError, match="group_training_examples_by"):
+        validate_plan(
+            fixture_patient_df,
+            plan,
+            data_config=DataParameters(),
+            plan_origin="auto_discovery",
+        )
 
 
 def test_iter_plan_issues_skips_pattern_sampling_for_absent_columns(fixture_dob_df: pd.DataFrame):

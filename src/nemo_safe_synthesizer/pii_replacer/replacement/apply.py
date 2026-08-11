@@ -59,7 +59,7 @@ def apply_replacements(
     Args:
         source_df: Frame to copy and mutate (typically the same as ``original_df``).
         original_df: Unmodified source for lookups and free-text detection.
-        instances: Persona instances with ``syn_by_col`` and ``text_pairs`` filled.
+        instances: Persona instances with ``synthetic_by_column`` and ``free_text_pairs`` filled.
         standalone_maps: Per-column scoped maps from the standalone pass.
         plan: Resolved replacement plan.
         cfg: Replacement configuration.
@@ -77,9 +77,9 @@ def apply_replacements(
     backend = cfg.persona_backend
 
     for inst in instances:
-        if not inst.syn_by_col:
+        if not inst.synthetic_by_column:
             continue
-        for col, syn in inst.syn_by_col.items():
+        for col, syn in inst.synthetic_by_column.items():
             replaced_df.loc[inst.row_indices, col] = syn
             structured_cols.add(col)
 
@@ -122,11 +122,11 @@ def apply_replacements(
     # would merge competing mappings for duplicate structured identities).
     row_text_pairs: dict[Hashable, list[tuple[str, str]]] = {}
     for inst in instances:
-        if not inst.text_pairs:
+        if not inst.free_text_pairs:
             continue
         for idx in inst.row_indices:
             existing = row_text_pairs.setdefault(idx, [])
-            for pair in inst.text_pairs:
+            for pair in inst.free_text_pairs:
                 if pair not in existing:
                     existing.append(pair)
 

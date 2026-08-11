@@ -49,7 +49,7 @@ they can be kept out of free-text scanning without being replaced.
     `enrich_demographics`, `detect_freetext_spans`). Discovery is heuristic in
     this release; when LLM mode lands, heuristics will pass candidates and decision
     context into those seams and the LLM will be the final judge -- without forking
-    apply. Demographics: the LLM may infer gender and fine-grained
+    apply. Demographics: the LLM may infer sex and fine-grained
     `ethnic_background` from names, starting from any heuristic
     `match_persona_by` values.
 
@@ -134,7 +134,7 @@ value, `pgm`, drives an internal probabilistic generator that is not distributed
 Safe Synthesizer; it needs a local source tree and fails the run with an error if that
 tree is missing, rather than quietly substituting another backend.
 
-`match_persona_by` may list `gender` and, under `managed` / `pgm`, `ethnic_background`.
+`match_persona_by` may list `sex` and, under `managed` / `pgm`, `ethnic_background`.
 Faker only conditions given names on sex, so auto-discovery omits `ethnic_background`
 when `person.backend` is `faker`, and a hand-written matcher for it is ignored (with a
 plan advisory). The same applies when managed assets are missing and the engine falls
@@ -184,7 +184,7 @@ persona_backed_columns:
         entity_type: last_name
     # Existing columns that constrain which persona is drawn. Read, never replaced.
     match_persona_by:
-      - persona_attribute: gender
+      - persona_attribute: sex
         column_name: sex
   - persona: provider
     columns_to_replace:

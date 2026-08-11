@@ -49,7 +49,7 @@ class PiiEnhancer(Protocol):
         instances: list[PersonaInstance],
         cfg: Config,
     ) -> list[PersonaInstance]:
-        """Infer gender and race constraints before programmatic persona assignment."""
+        """Infer sex and race constraints before programmatic persona assignment."""
         ...
 
     def detect_freetext_entities(

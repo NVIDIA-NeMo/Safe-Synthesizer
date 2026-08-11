@@ -226,7 +226,7 @@ def detect_structured_columns(df_subset: pd.DataFrame, stats: dict, cfg: Config)
     """
     backend = cfg.persona_backend
     fields_by_persona: dict[str, dict[str, str]] = {}
-    field_meta_by_persona: dict[str, dict[str, dict]] = {}
+    field_patterns_by_persona: dict[str, dict[str, list[str]]] = {}
     demo_by_persona: dict[str, dict[str, str]] = {}
     role_personas: dict[str, list[str]] = {}
     empty_persona_seq = 0
@@ -401,7 +401,7 @@ def detect_structured_columns(df_subset: pd.DataFrame, stats: dict, cfg: Config)
                 fields_by_persona.setdefault(persona, {})[ev.name_label] = col
                 patterns = value_patterns(ev.series.dropna(), cfg) if ev.name_label == "phone_number" else []
                 if patterns:
-                    field_meta_by_persona.setdefault(persona, {}).setdefault(ev.name_label, {"patterns": patterns})
+                    field_patterns_by_persona.setdefault(persona, {})[ev.name_label] = patterns
                     logger.runtime.info(
                         f"[PII Replacement] Persona-backed column {col!r} (entity={ev.name_label}, patterns={patterns})"
                     )
@@ -438,11 +438,14 @@ def detect_structured_columns(df_subset: pd.DataFrame, stats: dict, cfg: Config)
         demo = demo_by_persona.get(persona, {})
         if not fields and not demo:
             continue
+        patterns_by_label = field_patterns_by_persona.get(persona, {})
         personas.append(
             {
                 "persona": persona,
-                "fields": fields,
-                "field_meta": field_meta_by_persona.get(persona, {}),
+                "fields": {
+                    label: {"column": col, "patterns": list(patterns_by_label.get(label) or [])}
+                    for label, col in fields.items()
+                },
                 "match_persona_by": [
                     {"persona_attribute": attr, "column_name": demo[attr]}
                     for attr in demo_keys_for_backend(cfg.persona_backend)

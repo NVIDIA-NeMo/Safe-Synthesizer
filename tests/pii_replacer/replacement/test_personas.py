@@ -54,7 +54,7 @@ def test_faker_persona_names_conditioned_on_sex():
                     PiiColumnPlan(column_name="Name", entity_type=PiiEntity.full_name),
                 ],
                 match_persona_by=[
-                    PersonaMatchColumn(persona_attribute="gender", column_name="Gender"),
+                    PersonaMatchColumn(persona_attribute="sex", column_name="Gender"),
                 ],
             )
         ],

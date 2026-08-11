@@ -28,7 +28,7 @@ def _discovery_exclude_columns(discovery: DiscoveryResult) -> set[str]:
     """Columns already assigned to a persona, or read to match one."""
     exclude = set()
     for persona_set in discovery.personas:
-        exclude |= set(persona_set.fields.values())
+        exclude |= {field.column for field in persona_set.fields.values()}
         exclude |= {matcher.column_name for matcher in persona_set.match_persona_by if matcher.column_name}
     for ent in discovery.standalone_columns:
         if ent.column:
@@ -58,7 +58,6 @@ def _detect_full_dataframe(
             {
                 "persona": persona_set["persona"],
                 "fields": persona_set["fields"],
-                "field_meta": persona_set.get("field_meta", {}),
                 "match_persona_by": persona_set.get("match_persona_by") or [],
             }
         )
@@ -165,15 +164,14 @@ def _detected_to_plan(
     persona_backed: list[PersonaColumnSet] = []
     for persona_set in discovery.personas:
         cols: list[PiiColumnPlan] = []
-        for label, col in persona_set.fields.items():
-            entity = _mapped_entity_or_warn(label, column=col)
+        for label, field_info in persona_set.fields.items():
+            entity = _mapped_entity_or_warn(label, column=field_info.column)
             if entity is not None:
-                meta = persona_set.field_meta.get(label)
                 cols.append(
                     PiiColumnPlan(
-                        column_name=col,
+                        column_name=field_info.column,
                         entity_type=entity,
-                        patterns=list(meta.patterns) if meta else [],
+                        patterns=list(field_info.patterns),
                     )
                 )
         matchers = [

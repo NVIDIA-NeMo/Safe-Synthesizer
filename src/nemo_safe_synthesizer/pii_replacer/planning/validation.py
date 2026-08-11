@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal
@@ -20,7 +20,7 @@ from ...config.replace_pii import (
     PiiReplacementScope,
 )
 from ...config.time_series import TimeSeriesParameters
-from ...errors import ParameterError
+from ...errors import InternalError, ParameterError
 from .. import entities, patterns
 from ..entity_handlers import get_handler
 
@@ -524,6 +524,12 @@ def iter_plan_advisories(
     yield from _iter_section_placement_advisories(plan, persona_backend=persona_backend)
 
 
+# Issues that remain user/config errors even when the plan was auto-discovered.
+_AUTO_DISCOVERY_CONFIG_ISSUE_CODES = frozenset({"pii_plan_group_scope_invalid"})
+
+PlanOrigin = Literal["user", "auto_discovery"]
+
+
 def iter_plan_issues(
     df: pd.DataFrame,
     plan: PiiReplacementPlan,
@@ -533,9 +539,9 @@ def iter_plan_issues(
 ) -> Iterator[PlanIssue]:
     """Yield every problem that makes ``plan`` unusable on ``df``.
 
-    Used by the preflight check to report a hand-edited plan's mistakes in one
-    pass; ``validate_plan`` wraps this and raises on the first error. Section
-    placement mismatches are warnings via ``iter_plan_advisories``, not errors.
+    Used by preflight and ``validate_plan`` so callers can report every blocking
+    issue in one pass. Section placement mismatches are warnings via
+    ``iter_plan_advisories``, not errors.
 
     Args:
         df: Input dataframe the plan will be applied to.
@@ -554,24 +560,62 @@ def iter_plan_issues(
     yield from _iter_persona_issues(plan, df_cols)
 
 
+def _format_plan_issue_summary(issues: Sequence[PlanIssue]) -> str:
+    if len(issues) == 1:
+        return issues[0].message
+    return f"{len(issues)} plan validation error(s):\n" + "\n".join(
+        f"  {issue.code}: {issue.message}" for issue in issues
+    )
+
+
 def validate_plan(
     df: pd.DataFrame,
     plan: PiiReplacementPlan,
     *,
     data_config: DataParameters | None = None,
     time_series: TimeSeriesParameters | None = None,
+    plan_origin: PlanOrigin = "user",
 ) -> None:
     """Validate a resolved plan against the input dataframe.
+
+    Collects every blocking ``PlanIssue`` before raising. For user plans, all
+    issues are ``ParameterError``. For auto-discovered plans, group-scope /
+    missing group-key issues stay ``ParameterError`` (user config); other
+    failures are ``InternalError`` because discovery should have emitted a
+    runnable plan.
 
     Args:
         df: Input dataframe the plan will be applied to.
         plan: Replacement plan to validate.
         data_config: Optional data parameters for group-key and protected-column checks.
         time_series: Optional time-series parameters for timestamp protection.
+        plan_origin: Whether ``plan`` came from a user source or auto-discovery.
 
     Raises:
-        ParameterError: On the first validation error with ``severity="error"``.
+        ParameterError: User-plan issues, or auto-discovery config/group-scope issues.
+        InternalError: Unexpected auto-discovery plan content failures.
     """
-    for issue in iter_plan_issues(df, plan, data_config=data_config, time_series=time_series):
-        if issue.severity == "error":
-            raise ParameterError(issue.message)
+    errors = [
+        issue
+        for issue in iter_plan_issues(df, plan, data_config=data_config, time_series=time_series)
+        if issue.severity == "error"
+    ]
+    if not errors:
+        return
+
+    if plan_origin == "user":
+        raise ParameterError(_format_plan_issue_summary(errors))
+
+    config_errors = [issue for issue in errors if issue.code in _AUTO_DISCOVERY_CONFIG_ISSUE_CODES]
+    discovery_errors = [issue for issue in errors if issue.code not in _AUTO_DISCOVERY_CONFIG_ISSUE_CODES]
+    if config_errors and discovery_errors:
+        raise ParameterError(
+            f"{_format_plan_issue_summary(config_errors)}\n"
+            "Additionally, discovery produced unexpected plan issues (internal error):\n"
+            + "\n".join(f"  {issue.code}: {issue.message}" for issue in discovery_errors)
+        )
+    if config_errors:
+        raise ParameterError(_format_plan_issue_summary(config_errors))
+    raise InternalError(
+        f"Discovery produced an invalid plan (internal error): {_format_plan_issue_summary(discovery_errors)}"
+    )
