@@ -54,3 +54,7 @@ class TransformResult(BaseModel):
     column_statistics: dict[str, ColumnStatistics] = Field(
         description="Column name to ``ColumnStatistics`` for that column.",
     )
+    free_text_entities: list[dict] = Field(
+        default_factory=list,
+        description="Propagation hits in free-text columns (original/synthetic/label/column).",
+    )

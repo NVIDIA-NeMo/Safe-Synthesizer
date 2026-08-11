@@ -1,0 +1,331 @@
+/* SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. */
+/* SPDX-License-Identifier: Apache-2.0 */
+
+.nss-pii-preview {
+  --nss-pii-border: #c9d2dc;
+  --nss-pii-surface: #f7f9fb;
+  --nss-pii-card: #ffffff;
+  --nss-pii-ink: #1f2a37;
+  --nss-pii-muted: #5b6b7c;
+  --nss-pii-accent: #0f6a6a;
+  --nss-pii-accent-soft: #d7efef;
+  --nss-pii-danger: #9b1c1c;
+  --nss-pii-danger-soft: #fde8e8;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  color: var(--nss-pii-ink);
+  border: 1px solid var(--nss-pii-border);
+  background: var(--nss-pii-surface);
+  border-radius: 8px;
+  padding: 0.75rem;
+}
+
+.nss-pii-header {
+  margin-bottom: 0.75rem;
+}
+
+.nss-pii-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  color: var(--nss-pii-ink);
+}
+
+.nss-pii-footer {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.nss-pii-render-btn {
+  appearance: none;
+  border: 1px solid var(--nss-pii-accent);
+  background: var(--nss-pii-accent);
+  color: #fff;
+  border-radius: 6px;
+  padding: 0.45rem 0.9rem;
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.nss-pii-render-btn:hover {
+  filter: brightness(1.05);
+}
+
+.nss-pii-status {
+  flex: 1;
+  font-size: 0.85rem;
+  color: var(--nss-pii-muted);
+}
+
+.nss-pii-error {
+  font-size: 0.85rem;
+  color: var(--nss-pii-danger);
+  background: var(--nss-pii-danger-soft);
+  border: 1px solid #f3b4b4;
+  border-radius: 6px;
+  padding: 0.35rem 0.6rem;
+  white-space: pre-wrap;
+  margin-top: 0.5rem;
+}
+
+.nss-pii-warnings {
+  --nss-pii-warn: #8a5a00;
+  --nss-pii-warn-soft: #fff6e0;
+  font-size: 0.85rem;
+  color: var(--nss-pii-warn);
+  background: var(--nss-pii-warn-soft);
+  border: 1px solid #e6c97a;
+  border-radius: 6px;
+  padding: 0.45rem 0.65rem;
+  margin-top: 0.5rem;
+}
+
+.nss-pii-warnings-title {
+  font-weight: 650;
+  margin-bottom: 0.25rem;
+}
+
+.nss-pii-warnings-list {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.nss-pii-warnings-list li + li {
+  margin-top: 0.25rem;
+}
+
+.nss-pii-panes {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.75rem;
+  min-height: 28rem;
+}
+
+.nss-pii-pane-label {
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--nss-pii-muted);
+  margin-bottom: 0.35rem;
+}
+
+.nss-pii-yaml-shell {
+  position: relative;
+  height: 26rem;
+  border: 1px solid var(--nss-pii-border);
+  border-radius: 6px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.nss-pii-yaml-backdrop,
+.nss-pii-yaml-editor {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 0.75rem;
+  border: 0;
+  font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow: auto;
+  box-sizing: border-box;
+}
+
+.nss-pii-yaml-backdrop {
+  color: transparent;
+  pointer-events: none;
+  background: #fff;
+}
+
+.nss-pii-yaml-editor {
+  color: var(--nss-pii-ink);
+  background: transparent;
+  caret-color: var(--nss-pii-ink);
+  resize: none;
+  outline: none;
+}
+
+.nss-pii-yaml-mark {
+  background: var(--nss-pii-accent-soft);
+  color: transparent;
+  border-radius: 2px;
+}
+
+.nss-pii-diagram-host {
+  height: 26rem;
+  overflow: auto;
+  border: 1px solid var(--nss-pii-border);
+  border-radius: 6px;
+  background: #eef3f7;
+  padding: 0.75rem;
+}
+
+.nss-pii-scope-row {
+  margin-bottom: 0.75rem;
+}
+
+.nss-pii-scope-row .nss-pii-scope {
+  margin-bottom: 0;
+}
+
+.nss-pii-scope-row .nss-pii-help-text {
+  margin-top: 0.35rem;
+  max-width: 34rem;
+}
+
+.nss-pii-scope .nss-pii-help-btn {
+  margin-left: 0.4rem;
+  vertical-align: text-bottom;
+}
+
+.nss-pii-scope {
+  display: inline-block;
+  margin-bottom: 0.75rem;
+  padding: 0.25rem 0.55rem;
+  border: 1px dashed var(--nss-pii-border);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--nss-pii-muted);
+  font-size: 0.85rem;
+  cursor: default;
+}
+
+.nss-pii-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.nss-pii-card {
+  background: var(--nss-pii-card);
+  border: 1px solid var(--nss-pii-border);
+  border-radius: 0;
+  box-shadow: 0 1px 0 rgba(31, 42, 55, 0.04);
+  outline: none;
+}
+
+.nss-pii-card-header {
+  display: block;
+  padding: 0.55rem 0.7rem;
+  border-bottom: 1px solid var(--nss-pii-border);
+  background: #f3f6f9;
+}
+
+.nss-pii-card-titlerow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.nss-pii-card-title {
+  font-weight: 650;
+}
+
+.nss-pii-help-btn {
+  flex: 0 0 auto;
+  width: 1.15rem;
+  height: 1.15rem;
+  padding: 0;
+  border: 1px solid var(--nss-pii-border);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--nss-pii-muted);
+  font-size: 0.7rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.nss-pii-help-btn:hover,
+.nss-pii-help-btn[aria-expanded="true"] {
+  border-color: #6b7f95;
+  color: #33475b;
+}
+
+.nss-pii-help-text {
+  margin-top: 0.3rem;
+  padding: 0.35rem 0.45rem;
+  border-left: 2px solid #6b7f95;
+  background: #fff;
+  font-size: 0.73rem;
+  font-weight: 400;
+  line-height: 1.4;
+  color: #33475b;
+  white-space: normal;
+}
+
+.nss-pii-compartment {
+  border-bottom: 1px solid var(--nss-pii-border);
+}
+
+.nss-pii-compartment:last-child {
+  border-bottom: 0;
+}
+
+.nss-pii-compartment-label {
+  padding: 0.35rem 0.7rem 0.15rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--nss-pii-muted);
+}
+
+.nss-pii-compartment-hint {
+  margin-left: 0.35rem;
+  letter-spacing: 0;
+  text-transform: none;
+  font-style: italic;
+}
+
+.nss-pii-rows {
+  padding: 0.15rem 0.35rem 0.45rem;
+}
+
+.nss-pii-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.28rem 0.35rem;
+  border-radius: 4px;
+  font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  outline: none;
+}
+
+.nss-pii-row-empty {
+  color: var(--nss-pii-muted);
+  font-style: italic;
+  font-family: inherit;
+}
+
+.nss-pii-secondary {
+  color: var(--nss-pii-muted);
+}
+
+.nss-pii-active,
+.nss-pii-card.nss-pii-active,
+.nss-pii-compartment.nss-pii-active,
+.nss-pii-row.nss-pii-active,
+.nss-pii-scope.nss-pii-active {
+  background: var(--nss-pii-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--nss-pii-accent);
+}
+
+@media (max-width: 900px) {
+  .nss-pii-panes {
+    grid-template-columns: 1fr;
+  }
+
+  .nss-pii-yaml-shell,
+  .nss-pii-diagram-host {
+    height: 18rem;
+  }
+}
