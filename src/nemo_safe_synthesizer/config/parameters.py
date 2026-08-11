@@ -129,6 +129,16 @@ class SafeSynthesizerParameters(Parameters):
         return normalize_unknown_fields(cls, mapping, unknown_fields)
 
     @model_validator(mode="after")
+    def _validate_in_context_generation_mode(self) -> Self:
+        """Keep the experimental few-shot path distinct from LoRA fine-tuning."""
+        if self.training.enabled and self.generation.num_in_context_records > 0:
+            raise ParameterError(
+                "generation.num_in_context_records requires training.enabled=false. "
+                "This experimental path performs in-context generation with the base model."
+            )
+        return self
+
+    @model_validator(mode="after")
     def _validate_and_resolve_data_params(self) -> Self:
         """Validate that DP-enabled configs have compatible data settings.
 

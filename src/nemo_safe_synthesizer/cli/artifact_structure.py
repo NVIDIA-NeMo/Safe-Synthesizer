@@ -81,6 +81,24 @@ def _parse_project_name(project_name: str) -> tuple[str, str]:
             return project_name, "unknown"
 
 
+def _is_generation_source(run_dir: Path) -> bool:
+    """Return whether a run has either LoRA weights or complete base-model artifacts."""
+    adapter_dir = run_dir / "train" / "adapter"
+    if adapter_dir.is_dir() and any(adapter_dir.glob("*.safetensors")):
+        return True
+    config_exists = (run_dir / "safe-synthesizer-config.json").exists() or (
+        run_dir / "train" / "safe-synthesizer-config.json"
+    ).exists()
+    return all(
+        (
+            config_exists,
+            (adapter_dir / "metadata_v2.json").exists(),
+            (adapter_dir / "dataset_schema.json").exists(),
+            (run_dir / "dataset" / "prompt_records.jsonl").exists(),
+        )
+    )
+
+
 @dataclass
 class RunName:
     """Run name for artifact directories.
@@ -372,6 +390,7 @@ class _DatasetDir(BoundDir):
         test: Path
         validation: Path
         transformed_training: Path
+        prompt_records: Path
 
 
 @dataclass
@@ -403,6 +422,7 @@ class Workdir:
           - test.csv
           - validation.csv               (when training.validation_ratio > 0)
           - transformed_training.csv     (when PII replacement transforms the data)
+          - prompt_records.jsonl          (base-model prompt record pool)
         - logs/
           - <phase>.jsonl                (e.g. end_to_end.jsonl or train.jsonl)
 
@@ -478,6 +498,7 @@ class Workdir:
         test=FileNode("test.csv"),
         validation=FileNode("validation.csv"),
         transformed_training=FileNode("transformed_training.csv"),
+        prompt_records=FileNode("prompt_records.jsonl"),
     )
     """Location and contents of dataset directory structure."""
 
@@ -603,6 +624,11 @@ class Workdir:
         return self.run_dir
 
     @property
+    def has_generation_source(self) -> bool:
+        """Whether the source run can drive adapter or base-model generation."""
+        return _is_generation_source(self.source_run_dir)
+
+    @property
     def source_config(self) -> Path:
         """Source config file path (from parent workdir if available).
 
@@ -633,11 +659,16 @@ class Workdir:
         return self.adapter_path
 
     @property
-    def source_dataset(self) -> BoundDir:
+    def source_dataset(self) -> _DatasetDir:
         """Source dataset directory (from parent workdir if available)."""
         if self._parent_workdir is not None:
             return self._parent_workdir.dataset
         return self.dataset
+
+    @property
+    def prompt_records_file(self) -> Path:
+        """Prompt-record pool path from the source run."""
+        return self.source_dataset.prompt_records
 
     @property
     def source_schema_file(self) -> Path:
@@ -691,6 +722,7 @@ class Workdir:
                 "Config": str(self.source_config),
                 "Original training data": str(self.source_dataset.training),
                 "Test data": str(self.source_dataset.test),
+                "Prompt records": str(self.prompt_records_file),
                 "Schema": str(self.schema_file),
             },
         }
@@ -750,14 +782,11 @@ class Workdir:
         run_path = Path(run_path).resolve()
 
         # Check if path already contains a previous run (Option A: error)
-        adapter_dir = run_path / "train" / "adapter"
-        if adapter_dir.is_dir():
-            adapter_files = list(adapter_dir.glob("*.safetensors"))
-            if adapter_files:
-                raise ValueError(
-                    f"--run-path '{run_path}' already contains a training run.\n"
-                    f"Use a different path or delete the existing run."
-                )
+        if _is_generation_source(run_path):
+            raise ValueError(
+                f"--run-path '{run_path}' already contains a training run or prepared base-model run.\n"
+                f"Use a different path or delete the existing run."
+            )
 
         # For explicit paths, we store the path directly and use _explicit_run_path
         # to override the normal run_dir calculation. The base_path and run_name are
@@ -781,7 +810,7 @@ class Workdir:
         """Load a Workdir from an existing path.
 
         This method handles three scenarios:
-        1. Path is a run_dir (contains train/adapter/ with safetensors) - use it directly
+        1. Path is a run_dir with trained or prepared base-model artifacts - use it directly
         2. Path is a project_dir - find the latest run within that project
         3. Path is a base_path - find the latest run across all projects
 
@@ -797,43 +826,44 @@ class Workdir:
         if not path.is_dir():
             raise ValueError(f"Invalid path: {path}")
 
-        # Check if this is a run_dir (has train/adapter/ subdirectory with safetensors)
+        # Check if this is a run_dir with trained or base-model generation artifacts.
         train_dir = path / "train"
         adapter_dir = train_dir / "adapter" if train_dir.is_dir() else path / "adapter"
 
-        if adapter_dir.is_dir():
+        if _is_generation_source(path):
             adapter_files = list(adapter_dir.glob("*.safetensors"))
+            # This is a run_dir - parse structure from path
+            # Path structure: base_path/<config>---<dataset>/<run_name>
+            run_name = path.name
+            project_dir = path.parent
+            base_path = project_dir.parent
+
+            # Parse project name using pattern matching helper
+            config_name, dataset_name = _parse_project_name(project_dir.name)
+
+            logger.info(f"Found existing workdir at {path}")
             if adapter_files:
-                # This is a run_dir - parse structure from path
-                # Path structure: base_path/<config>---<dataset>/<run_name>
-                run_name = path.name
-                project_dir = path.parent
-                base_path = project_dir.parent
-
-                # Parse project name using pattern matching helper
-                config_name, dataset_name = _parse_project_name(project_dir.name)
-
-                logger.info(f"Found existing workdir at {path}")
                 logger.info(f"Adapter files: {adapter_files}")
 
-                return cls(
-                    base_path=base_path,
-                    config_name=config_name,
-                    dataset_name=dataset_name,
-                    run_name=run_name,
-                )
+            return cls(
+                base_path=base_path,
+                config_name=config_name,
+                dataset_name=dataset_name,
+                run_name=run_name,
+            )
 
-        # Check if this is a project_dir - find the latest run with an adapter
-        adapter_files = list(path.glob("*/train/adapter/*.safetensors"))
-        if adapter_files:
-            adapter_files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
-            latest_adapter = adapter_files[0]
-            run_dir = latest_adapter.parent.parent.parent  # adapter file -> adapter -> train -> run_dir
+        # Check if this is a project_dir - find the latest usable run.
+        project_runs = [
+            candidate for candidate in path.iterdir() if candidate.is_dir() and _is_generation_source(candidate)
+        ]
+        if project_runs:
+            project_runs.sort(key=lambda candidate: candidate.stat().st_mtime, reverse=True)
+            run_dir = project_runs[0]
 
             # Parse project name using pattern matching helper
             config_name, dataset_name = _parse_project_name(path.name)
 
-            logger.info(f"Found {len(adapter_files)} runs with adapters in {path}")
+            logger.info(f"Found {len(project_runs)} usable runs in {path}")
             logger.info(f"Using most recent run: {run_dir}")
 
             return cls(
@@ -843,19 +873,23 @@ class Workdir:
                 run_name=run_dir.name,
             )
 
-        # Check if this is a base_path - find the latest run across all projects
-        adapter_files = list(path.glob("*/*/train/adapter/*.safetensors"))
-        if adapter_files:
-            adapter_files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
-            latest_adapter = adapter_files[0]
-            # adapter file -> adapter -> train -> run_dir -> project_dir
-            run_dir = latest_adapter.parent.parent.parent
+        # Check if this is a base_path - find the latest usable run across projects.
+        base_runs = [
+            run_dir
+            for project_dir in path.iterdir()
+            if project_dir.is_dir()
+            for run_dir in project_dir.iterdir()
+            if run_dir.is_dir() and _is_generation_source(run_dir)
+        ]
+        if base_runs:
+            base_runs.sort(key=lambda candidate: candidate.stat().st_mtime, reverse=True)
+            run_dir = base_runs[0]
             project_dir = run_dir.parent
 
             # Parse project name using pattern matching helper
             config_name, dataset_name = _parse_project_name(project_dir.name)
 
-            logger.info(f"Found {len(adapter_files)} runs with adapters across all projects in {path}")
+            logger.info(f"Found {len(base_runs)} usable runs across all projects in {path}")
             logger.info(f"Using most recent run: {run_dir}")
 
             return cls(

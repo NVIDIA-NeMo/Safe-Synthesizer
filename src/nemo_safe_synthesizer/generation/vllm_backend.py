@@ -32,6 +32,7 @@ from ..config.generate import (
     structural_tag_backend_error_message,
 )
 from ..data_processing.dataset import relax_numeric_bounds
+from ..data_processing.prompt_records import PromptRecordPool
 from ..defaults import DEFAULT_SAMPLING_PARAMETERS, FIXED_RUNTIME_GENERATE_ARGS
 from ..errors import InternalError, ParameterError
 from ..generation.backend import GeneratorBackend
@@ -256,11 +257,24 @@ class VllmBackend(GeneratorBackend):
             # and enum constraints (which the grammar enforces) are unaffected.
             self.schema = relax_numeric_bounds(self.schema)
         self.columns = list(self.schema["properties"].keys())
-        self.prompt = utils.create_schema_prompt(
-            self.columns,
-            instruction=self.model_metadata.instruction,
-            prompt_template=self.model_metadata.prompt_config.template,
+        self.prompt_pool: PromptRecordPool | None = None
+        if not self.config.training.enabled:
+            if not self.workdir.prompt_records_file.exists():
+                raise FileNotFoundError(f"Base-model prompt record pool not found: {self.workdir.prompt_records_file}")
+            self.prompt_pool = PromptRecordPool.load(
+                self.workdir.prompt_records_file,
+                self.config,
+            ).bind_metadata(self.model_metadata)
+        self.prompt = (
+            self.prompt_pool.prompt(self.model_metadata)
+            if self.prompt_pool is not None and not self.config.time_series.is_timeseries
+            else utils.create_schema_prompt(
+                self.columns,
+                instruction=self.model_metadata.instruction,
+                prompt_template=self.model_metadata.prompt_config.template,
+            )
         )
+        self._next_prompt_index = 0
         self.llm: vLLM | None = None
         self._prompt_token_count: int | None = None
         # Populated in ``initialize()`` after engine build; pre-declared
@@ -277,8 +291,9 @@ class VllmBackend(GeneratorBackend):
         # This lets callers introspect the processor type before ``initialize()``,
         # at the cost of token counts being zero until the tokenizer is attached.
         self.processor: Processor = create_processor(self.schema, self.model_metadata, self.config)
-        adapter_path = self.workdir.adapter_path if self.workdir.adapter_path else self.model_metadata.adapter_path
-        self.lora_req = LoRARequest("lora", 1, str(adapter_path)) if adapter_path else None
+        adapter_path = self.workdir.adapter_path
+        self._use_lora = adapter_path.is_dir() and any(adapter_path.glob("*.safetensors"))
+        self.lora_req = LoRARequest("lora", 1, str(adapter_path)) if self._use_lora else None
         self._torn_down = False
 
     def teardown(self) -> None:
@@ -337,17 +352,22 @@ class VllmBackend(GeneratorBackend):
         model_ref = ModelRef.parse(self.config.training.pretrained_model)
         hf_overrides = _build_rope_hf_overrides(self.model_metadata)
 
+        engine_kwargs: dict[str, Any] = {
+            "model": model_ref.target(),
+            "gpu_memory_utilization": max_vram,
+            "max_model_len": self.model_metadata.max_seq_length,
+            "enable_lora": self._use_lora,
+            "structured_outputs_config": structured_outputs_config,
+            "attention_config": attention_config,
+            "trust_remote_code": model_ref.trust_remote_code,
+            "hf_overrides": hf_overrides,
+        }
+        if self._use_lora:
+            engine_kwargs["max_lora_rank"] = self.config.training.lora_r
+
         with heartbeat("Model loading", logger_name=__name__, model=self.config.training.pretrained_model):
             self.llm = vLLM(
-                model=model_ref.target(),
-                gpu_memory_utilization=max_vram,
-                max_model_len=self.model_metadata.max_seq_length,
-                enable_lora=True,
-                max_lora_rank=self.config.training.lora_r,
-                structured_outputs_config=structured_outputs_config,
-                attention_config=attention_config,
-                trust_remote_code=model_ref.trust_remote_code,
-                hf_overrides=hf_overrides,
+                **engine_kwargs,
             )
 
         # Cache the engine's *effective* runtime config once at init. Read by
@@ -378,8 +398,24 @@ class VllmBackend(GeneratorBackend):
         if self.llm is None:
             return 0
         tokenizer = self.llm.get_tokenizer()
-        self._prompt_token_count = len(tokenizer.encode(self.prompt))
+        if self.prompt_pool is not None and not self.config.time_series.is_timeseries:
+            self._prompt_token_count = self.prompt_pool.max_prompt_token_count(self.model_metadata, tokenizer)
+        else:
+            self._prompt_token_count = len(tokenizer.encode(self.prompt))
         return self._prompt_token_count
+
+    def _build_prompts(self, count: int) -> list[str]:
+        if self.prompt_pool is None:
+            return [self.prompt] * count
+        if self.config.generation.in_context_record_selection != "sample_per_prompt":
+            return [self.prompt] * count
+
+        prompts = [
+            self.prompt_pool.prompt(self.model_metadata, prompt_index=self._next_prompt_index + index)
+            for index in range(count)
+        ]
+        self._next_prompt_index += count
+        return prompts
 
     def _build_structured_output_params(self) -> StructuredOutputsParams | None:
         """Build structured output parameters based on generation config.
@@ -625,8 +661,9 @@ class VllmBackend(GeneratorBackend):
         Returns:
             Batch object that contains the generated records and associated statistics.
         """
-        logger.debug(f"generation prompt ({len(self.prompt)} chars):\n{self.prompt}")
-        prompt_list = [self.prompt] * num_prompts_per_batch
+        prompt_list = self._build_prompts(num_prompts_per_batch)
+        if prompt_list:
+            logger.debug(f"generation prompt ({len(prompt_list[0])} chars):\n{prompt_list[0]}")
 
         # `n` is the number of output sequences per prompt.
         # Subsequent processing assumes `n=1`, so we hardcode it here.

@@ -58,7 +58,7 @@ class LLMPromptConfig(BaseModel):
     * ``{schema}`` -- column schema fragment listing expected output fields,
       typically formatted as ``"col":<unk>,"col2":<unk>``.
     * ``{prefill}`` -- optional text injected at the start of the model's
-      response to steer generation, currently used for time series data.
+      response for time-series continuation or zero/few-shot record context.
     """
 
     add_bos_token_to_prompt: bool

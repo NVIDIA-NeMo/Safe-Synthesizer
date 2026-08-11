@@ -95,7 +95,8 @@ def create_schema_prompt(
         instruction: Instruction text placed before the schema.
         prompt_template: Template string with ``{instruction}``, ``{schema}``,
             and ``{prefill}`` placeholders.
-        prefill: Optional text appended after the schema.
+        prefill: Optional serialized records appended after the schema and
+            assistant marker.
         exclude_columns: Column names to omit from the schema.
 
     Returns:

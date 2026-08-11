@@ -546,12 +546,12 @@ def run_generate(
 ) -> None:
     """Run the generation stage only.
 
-    This command loads a trained adapter and generates synthetic data.
-    Requires 'run train' to have been executed first.
+    This command loads a trained adapter or prepared base-model artifacts and
+    generates synthetic data.
 
-    Use --run-path to specify the exact run directory containing the trained model,
-    or use --auto-discover-adapter with --artifact-path to automatically find
-    the latest trained run.
+    Use --run-path to specify the exact source run directory, or use
+    --auto-discover-adapter with --artifact-path to automatically find the
+    latest usable run.
     """
     _set_cli_deployment_type_default()
 
@@ -559,7 +559,7 @@ def run_generate(
     settings = _settings_from_run_kwargs(kwargs)
 
     os.environ["NSS_PHASE"] = "generate"
-    # Generation always resumes from an existing workdir with a trained model
+    # Generation always resumes from an existing workdir with model artifacts.
     run_logger, config, df, workdir = common_setup(
         settings=settings,
         resume=True,

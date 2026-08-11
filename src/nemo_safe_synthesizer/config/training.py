@@ -174,6 +174,17 @@ class TrainingHyperparams(Parameters):
     settings. These parameters directly affect training performance and quality.
     """
 
+    enabled: Annotated[
+        bool,
+        Field(
+            title="enabled",
+            description=(
+                "Whether to fine-tune a LoRA adapter before generation. Set to false "
+                "for experimental zero/few-shot generation from the base model."
+            ),
+        ),
+    ] = True
+
     num_input_records_to_sample: Annotated[
         AutoIntParam,
         ValueGTZero,

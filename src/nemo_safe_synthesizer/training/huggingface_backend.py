@@ -840,6 +840,7 @@ class HuggingFaceBackend(TrainingBackend):
         with redirect_stdout(io.StringIO()) as stdout:
             self.model.save_pretrained(str(adapter_dir))
         logger.runtime.debug(stdout.getvalue())
+        self.model_metadata.is_adapter = True
         logger.user.info(f"Saving model metadata to {adapter_dir.metadata}")
         self.model_metadata.save_metadata()
         logger.user.info(f"Saving dataset schema to {adapter_dir.schema}")

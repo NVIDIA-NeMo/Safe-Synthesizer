@@ -22,6 +22,9 @@ from ..config import (
 from ..config.autoconfig import AutoConfigResolver
 from ..config.unknown_fields import UnknownFieldBehavior, normalize_unknown_fields
 from ..configurator.parameters import Parameters
+from ..data_processing.dataset import make_json_schema
+from ..data_processing.prompt_records import PromptRecordPool
+from ..defaults import PSEUDO_GROUP_COLUMN
 from ..errors import ParameterError
 from ..evaluation.evaluator import Evaluator
 from ..generation.timeseries_backend import TimeseriesBackend
@@ -46,6 +49,8 @@ from ..telemetry import (
     sanitize_model_for_telemetry,
 )
 from ..training.huggingface_backend import HuggingFaceBackend
+from ..training.timeseries_preprocessing import process_timeseries_data
+from ..utils import write_json
 from .config_builder import ConfigBuilder
 
 logger = get_logger(__name__)
@@ -451,6 +456,12 @@ class SafeSynthesizer(ConfigBuilder):
             # We explicitly do not replace PII in the test set so that the
             # privacy metrics are valid.
 
+        if not check_only and not self._nss_config.training.enabled and self._nss_config.time_series.is_timeseries:
+            self._training_df, self._nss_config = process_timeseries_data(
+                self._training_df,
+                self._nss_config,
+            )
+
         # Only create new metadata if not already loaded (e.g., from load_from_save_path)
         metadata_for_preflight = self._llm_metadata
         if metadata_for_preflight is None:
@@ -511,7 +522,49 @@ class SafeSynthesizer(ConfigBuilder):
             self._training_df.to_csv(self._workdir.dataset.transformed_training, index=False)
         if self._test_df is not None:
             self._test_df.to_csv(self._workdir.dataset.test, index=False)
+        if not self._nss_config.training.enabled:
+            self._prepare_base_model_generation_artifacts()
         return self
+
+    def _prepare_base_model_generation_artifacts(self) -> None:
+        """Persist schema, metadata, and prompt records without training a LoRA."""
+        assert self._workdir is not None
+        assert self._nss_config is not None
+        assert self._training_df is not None
+        assert self._llm_metadata is not None
+
+        schema_df = self._training_df.drop(columns=[PSEUDO_GROUP_COLUMN], errors="ignore")
+        schema = make_json_schema(schema_df)
+        pool = PromptRecordPool(self._training_df, self._nss_config).bind_metadata(self._llm_metadata)
+
+        if self._nss_config.time_series.is_timeseries:
+            self._llm_metadata.initial_prefill = pool.timeseries_prefills(self._llm_metadata)
+        elif pool.count:
+            pool.select()
+
+        group_column = self._nss_config.data.group_training_examples_by
+        if group_column is not None and group_column in self._training_df.columns:
+            max_group_size = int(self._training_df.groupby(group_column, dropna=False).size().max())
+            self._llm_metadata.max_records_per_group = max_group_size
+
+        tokenizer = self._llm_metadata.tokenizer
+        if tokenizer is not None:
+            prompt_tokens = pool.max_prompt_token_count(self._llm_metadata, tokenizer)
+            if prompt_tokens >= self._llm_metadata.max_seq_length:
+                raise ParameterError(
+                    "The configured in-context records consume the model's full context window "
+                    f"({prompt_tokens} >= {self._llm_metadata.max_seq_length} tokens)."
+                )
+
+        pool.save(self._workdir.dataset.prompt_records)
+        self._llm_metadata.is_adapter = False
+        self._llm_metadata.save_metadata()
+        write_json(schema, self._workdir.train.adapter.schema, indent=4)
+        write_json(
+            self._nss_config.model_dump(mode="json"),
+            self._workdir.train.config,
+            indent=4,
+        )
 
     @traced("SafeSynthesizer.train", category=LogCategory.RUNTIME)
     def train(self) -> SafeSynthesizer:
@@ -528,6 +581,8 @@ class SafeSynthesizer(ConfigBuilder):
             RuntimeError: If called after ``load_from_save_path()`` or
                 before ``process_data()``.
         """
+        if self._nss_config is not None and not self._nss_config.training.enabled:
+            raise RuntimeError("train() cannot be called when training.enabled=false")
         if self._loaded_from_save_path:
             raise RuntimeError(
                 "train() cannot be called after load_from_save_path(). "
@@ -667,9 +722,10 @@ class SafeSynthesizer(ConfigBuilder):
     def run(self, output_file: Path | str | None = None) -> None:
         """Run the full pipeline and save results.
 
-        Executes ``process_data`` -> ``train`` -> ``generate`` ->
-        ``evaluate`` -> ``save_results``.  For step-by-step control,
-        call the individual methods instead.
+        Executes ``process_data`` -> optional ``train`` -> ``generate`` ->
+        ``evaluate`` -> ``save_results``. Training is skipped when
+        ``training.enabled`` is false. For step-by-step control, call the
+        individual methods instead.
 
         Args:
             output_file: Explicit output path for the synthetic data CSV.
@@ -691,7 +747,10 @@ class SafeSynthesizer(ConfigBuilder):
             assert isinstance(self._data_source, pd.DataFrame)
 
         try:
-            self.process_data().train().generate().evaluate()
+            self.process_data()
+            if self._nss_config.training.enabled:
+                self.train()
+            self.generate().evaluate()
             self.save_results(output_file=output_file)
             _emit_nss_telemetry(self, TaskStatusEnum.COMPLETED)
         except KeyboardInterrupt:

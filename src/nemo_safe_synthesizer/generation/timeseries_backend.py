@@ -219,7 +219,7 @@ class TimeseriesBackend(VllmBackend):
         self._schema_fragment = ",".join([f'"{c}":<unk>' for c in self.columns])
         self._samples_per_prompt = 5  # num of samples per prompt
         self._max_prompts_per_batch = 100  # max prompts per batch for parallel group generation
-        self._prefill_context_size = 3  # number of records to prefill
+        self._prefill_context_size = config.generation.num_in_context_records if not config.training.enabled else 3
         self._time_column = config.time_series.timestamp_column
         self._time_format: str = config.time_series.timestamp_format or ""
         self._is_elapsed_time = self._time_format == "elapsed_seconds"
@@ -231,7 +231,11 @@ class TimeseriesBackend(VllmBackend):
         # Note: Since time series preprocessing adds a pseudo-group column when no group
         # is specified, we always have grouped mode (even single-sequence is 1 group).
         self._group_column = config.data.group_training_examples_by
-        initial_prefill_value = self.model_metadata.initial_prefill
+        initial_prefill_value = (
+            self.prompt_pool.timeseries_prefills(self.model_metadata)
+            if self.prompt_pool is not None
+            else self.model_metadata.initial_prefill
+        )
 
         if not isinstance(initial_prefill_value, dict):
             raise ValueError(
@@ -536,6 +540,15 @@ class TimeseriesBackend(VllmBackend):
             return
 
         group_state.recent_records.extend(records)
+        if self._prefill_context_size == 0:
+            group_state.recent_records = []
+            group_state.current_prefill = ""
+            last_parsed = records[-1].parsed or {}
+            timestamp_value = last_parsed.get(self._time_column) if self._time_column is not None else None
+            timestamp_seconds = self._parse_timestamp_seconds(timestamp_value)
+            if timestamp_seconds is not None:
+                group_state.last_timestamp_seconds = timestamp_seconds
+            return
         if len(group_state.recent_records) > self._prefill_context_size:
             group_state.recent_records = group_state.recent_records[-self._prefill_context_size :]
 

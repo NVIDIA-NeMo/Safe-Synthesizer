@@ -157,12 +157,11 @@ def _create_workdir(
                 "  safe-synthesizer run generate --data-source data.csv --auto-discover-adapter"
             )
 
-        # Verify adapter exists using the workdir's adapter_path property
-        adapter_path = parent_workdir.adapter_path
-        if not adapter_path.exists() or not list(adapter_path.glob("*.safetensors")):
+        # Accept either trained adapter weights or a complete base-model generation bundle.
+        if not parent_workdir.has_generation_source:
             raise click.ClickException(
-                f"No trained adapter found in {adapter_path}.\n"
-                "Run training first or specify a path with an existing trained adapter."
+                f"No usable generation artifacts found in {parent_workdir.run_dir}.\n"
+                "Expected a trained adapter or base-model metadata, schema, config, and prompt records."
             )
 
         # When --run-path is explicitly provided, use that path directly for generation

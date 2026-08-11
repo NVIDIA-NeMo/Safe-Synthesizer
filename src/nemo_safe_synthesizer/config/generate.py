@@ -27,11 +27,13 @@ from ..errors import ParameterError
 StructuredGenerationSchemaMethod = Literal["auto", "regex", "json_schema", "structural_tag"]
 ResolvedStructuredGenerationSchemaMethod = Literal["regex", "json_schema", "structural_tag"]
 StructuredGenerationBackend = Literal["auto", "xgrammar", "guidance", "outlines", "lm-format-enforcer"]
+InContextRecordSelection = Literal["first", "sample_once", "sample_per_prompt"]
 
 STRUCTURAL_TAG_COMPATIBLE_BACKENDS = frozenset({"auto", "xgrammar"})
 
 __all__ = [
     "GenerateParameters",
+    "InContextRecordSelection",
     "ResolvedStructuredGenerationSchemaMethod",
     "StructuredGenerationParameters",
     "StructuredGenerationBackend",
@@ -214,6 +216,29 @@ class GenerateParameters(Parameters, BaseModel):
             description="Number of records to generate.",
         ),
     ] = 1000
+
+    num_in_context_records: Annotated[
+        int,
+        ValueValidator(value_func=lambda v: 0 <= v <= 64),
+        Field(
+            title="num_in_context_records",
+            description=(
+                "Number of processed input records appended to each base-model prompt. "
+                "Zero enables zero-shot generation; values from 1 through 64 enable few-shot generation."
+            ),
+        ),
+    ] = 0
+
+    in_context_record_selection: Annotated[
+        InContextRecordSelection,
+        Field(
+            title="in_context_record_selection",
+            description=(
+                "How in-context records are selected: first records in canonical order, "
+                "one seeded sample reused for the run, or a seeded sample per prompt."
+            ),
+        ),
+    ] = "first"
 
     temperature: Annotated[
         float,
