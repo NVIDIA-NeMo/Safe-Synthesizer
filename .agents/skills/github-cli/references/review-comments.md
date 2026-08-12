@@ -6,6 +6,10 @@
 Use this contract when drafting or posting new PR review findings. Replies in an
 existing thread follow the reply workflow in `workflows.md`.
 
+The finding-header shape and classification style are based on CodeRabbit's
+review-comment template. Expected handling, exact approval, and agent
+attribution are Safe Synthesizer additions.
+
 ## Workflow
 
 1. Pin the PR head and verify every finding against that revision. Tie each
