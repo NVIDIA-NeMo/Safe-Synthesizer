@@ -4,7 +4,7 @@
 
 #
 # install-mise.sh -- install the pinned mise version, preferring the
-# GPG-verified path when the local toolchain supports it.
+# GPG-verified path when gpg is available.
 #
 # Version source:
 #   `.mise.toml` `min_version` is the single source of truth. Set MISE_VERSION
@@ -18,8 +18,8 @@
 #   MISE_REQUIRE_SIGNED_INSTALL=1  fail instead of falling back to the
 #                                  unsigned mise.run installer when the
 #                                  signed path can't be completed (missing
-#                                  toolchain or keyserver/CDN flake).
-#                                  Recommended for CI/release pipelines.
+#                                  gpg or CDN/network flake). Recommended
+#                                  for CI/release pipelines.
 #
 # Behaviour:
 #   - If mise is already on PATH at the pinned version, exit early.
@@ -30,11 +30,11 @@
 #   - If gpg is available, fetch the release signing key over HTTPS
 #     (keys.openpgp.org VKS, not gpg --recv-keys / dirmngr -- dirmngr's
 #     bundled DNS resolver hangs indefinitely on some corporate networks
-#     and GnuPG 2.x ignores legacy keyserver timeout options), fetch
-#     install.sh.sig, verify its GPG signature against a temporary
-#     GNUPGHOME (so we don't mutate the user's keyring), and run the
-#     embedded install script. All HTTP fetches are bounded by timeouts
-#     and retried a few times on failure.
+#     and GnuPG 2.x ignores legacy keyserver timeout options), assert the
+#     imported key fingerprint matches MISE_GPG_KEY, fetch install.sh.sig,
+#     verify its GPG signature against a temporary GNUPGHOME (so we don't
+#     mutate the user's keyring), and run the embedded install script. All
+#     HTTP fetches are bounded by timeouts and retried a few times on failure.
 #   - If any of the above fails and MISE_REQUIRE_SIGNED_INSTALL != 1, fall
 #     back to https://mise.run (no signature verification; warn loudly).
 #   - In either install path, pass the pinned version through to the installer
@@ -83,19 +83,23 @@ readonly CURL_RETRIES=3
 readonly CURL_RETRY_DELAY=2
 
 # Set MISE_REQUIRE_SIGNED_INSTALL=1 to fail hard when the signed path can't
-# be completed (missing toolchain or network failure fetching the key /
-# installer) instead of falling back to the unsigned `curl | sh` path.
-# Recommended for CI/release pipelines; default is off so local dev on slim
-# images still succeeds with a loud warning.
+# be completed (missing gpg or network failure fetching the key / installer)
+# instead of falling back to the unsigned `curl | sh` path. Recommended for
+# CI/release pipelines; default is off so local dev on slim images still
+# succeeds with a loud warning.
 REQUIRE_SIGNED_INSTALL="${MISE_REQUIRE_SIGNED_INSTALL:-0}"
 
 curl_fetch() {
+    # Fetch to a file (via -o) rather than a pipe when the consumer is gpg:
+    # curl --retry can emit partial bytes before retrying, which would leave
+    # gpg with a truncated then re-sent stream. --retry-all-errors covers
+    # transient HTTP 5xx as well as connection failures.
     curl -fsSL \
         --connect-timeout "$CURL_CONNECT_TIMEOUT" \
         --max-time "$CURL_MAX_TIME" \
         --retry "$CURL_RETRIES" \
         --retry-delay "$CURL_RETRY_DELAY" \
-        --retry-connrefused \
+        --retry-all-errors \
         "$@"
 }
 
@@ -103,8 +107,17 @@ curl_fetch() {
 # (curl's --max-time resets per attempt, so nested retries can stretch for
 # many minutes before the unsigned fallback).
 gpg_import_release_key() {
-    curl_fetch "${MISE_GPG_KEY_URL}/${MISE_GPG_KEY}" \
-        | gpg --batch --no-tty --import
+    local key_file="${GNUPGHOME}/mise-release-key.asc"
+    curl_fetch -H 'Accept: application/pgp-keys' \
+        -o "$key_file" \
+        "${MISE_GPG_KEY_URL}/${MISE_GPG_KEY}"
+    gpg --batch --no-tty --import "$key_file"
+    rm -f "$key_file"
+    # The URL is not a guarantee: a TLS-intercepting proxy could serve a
+    # substitute key. Verify the imported fingerprint matches the pin before
+    # trusting any signature it makes.
+    gpg --batch --no-tty --with-colons --list-keys "0x${MISE_GPG_KEY}" \
+        | grep -q "^fpr:::::::::${MISE_GPG_KEY}:"
 }
 
 unsigned_install_or_fail() {
@@ -189,13 +202,15 @@ if command -v gpg >/dev/null 2>&1; then
     tmp_prefix="${TMPDIR:-/tmp}/mise-install"
     gnupg_home="$(mktemp -d "${tmp_prefix}.gnupg.XXXXXXXX")"
     tmpscript="$(mktemp "${tmp_prefix}.sh.XXXXXXXX")"
-    trap 'gpgconf --homedir "$gnupg_home" --kill all >/dev/null 2>&1 || true; rm -rf "$gnupg_home" "$tmpscript"' EXIT
+    tmpsig="$(mktemp "${tmp_prefix}.sig.XXXXXXXX")"
+    trap 'gpgconf --homedir "$gnupg_home" --kill all >/dev/null 2>&1 || true; rm -rf "$gnupg_home" "$tmpscript" "$tmpsig"' EXIT
     chmod 700 "$gnupg_home"
     export GNUPGHOME="$gnupg_home"
 
     if ! gpg_import_release_key; then
-        unsigned_install_or_fail "failed to fetch/import mise release key from ${MISE_GPG_KEY_URL}"
-    elif ! curl_fetch "$MISE_SIG_URL" | gpg --batch --no-tty --decrypt >"$tmpscript"; then
+        unsigned_install_or_fail "failed to fetch/import/verify mise release key from ${MISE_GPG_KEY_URL}"
+    elif ! curl_fetch -o "$tmpsig" "$MISE_SIG_URL" \
+        || ! gpg --batch --no-tty --decrypt "$tmpsig" >"$tmpscript"; then
         unsigned_install_or_fail "failed to fetch/verify ${MISE_SIG_URL}"
     else
         MISE_VERSION="$MISE_VERSION" sh "$tmpscript"

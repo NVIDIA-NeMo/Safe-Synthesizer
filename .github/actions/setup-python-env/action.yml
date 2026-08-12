@@ -114,6 +114,7 @@ runs:
       if: inputs.bootstrap-tools == 'true'
       shell: bash
       run: |
+        MISE_REQUIRE_SIGNED_INSTALL=1 \
         MISE_GPG_KEY=24853EC9F655CE80B48E6C3A8B81C9D17413A06D \
           bash tools/install-mise.sh
         export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"
