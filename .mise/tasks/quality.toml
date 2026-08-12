@@ -9,38 +9,48 @@ run = [
     "uv run --script tools/codestyle/copyright_fixer.py .",
 ]
 
-["format-check"]
-description = "Check TOML and Python formatting, lint rules, and SPDX copyright headers without modifying source files. Safe for CI and local pre-review checks."
+["check:format"]
+description = "Check TOML and Python formatting without modifying tracked files."
 run = [
     "dprint check --incremental=false",
     "bash tools/codestyle/format.sh --check",
-    "bash tools/codestyle/ruff_check.sh",
-    "uv run --script tools/codestyle/copyright_fixer.py --check .",
 ]
 
-[typecheck]
+["check:lint"]
+description = "Check Python lint rules without modifying tracked files."
+run = "bash tools/codestyle/ruff_check.sh"
+
+["check:type"]
 description = "Run ty type checks through the repo wrapper. Requires Python dependencies installed; does not modify files."
 run = "bash tools/codestyle/typecheck.sh"
 
-["lock-check"]
-description = "Verify generated CUDA metadata and uv.lock match their sources."
+["check:lock"]
+description = "Verify generated CUDA metadata and uv.lock match their sources without modifying tracked files."
 run = [
     "uv run --offline --frozen tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml --check",
-    "uv lock",
-    "git diff --exit-code uv.lock",
+    "uv lock --check",
 ]
+
+["check:license:headers"]
+description = "Check SPDX copyright headers without modifying tracked files."
+run = "uv run --script tools/codestyle/copyright_fixer.py --check ."
+
+["check:tasks"]
+description = "Validate public Mise task definitions and usage declarations without modifying tracked files."
+run = "mise tasks validate"
+
+["lock:update"]
+description = "Regenerate uv.lock from pyproject.toml. Modifies uv.lock in place."
+run = "uv lock"
 
 [check]
-description = "Run local read-only quality checks: format-check and typecheck. Dependencies are independent and may run in parallel."
-depends = ["format-check", "typecheck"]
-run = "echo 'quality checks passed'"
-
-[validate]
-description = "Run the standard pre-PR validation suite: check, lock-check, then CI unit tests."
-alias = "ci"
-run = [
-    { task = "check" },
-    { task = "lock-check" },
-    { task = "test:ci" },
-    "echo 'validation passed'",
+description = "Run all read-only format, lint, type, lock, license-header, and Mise task checks. Dependencies may run in parallel."
+depends = [
+    "check:format",
+    "check:lint",
+    "check:type",
+    "check:lock",
+    "check:license:headers",
+    "check:tasks",
 ]
+run = "echo 'quality checks passed'"

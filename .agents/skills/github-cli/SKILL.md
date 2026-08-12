@@ -129,12 +129,12 @@ CI jobs map to local commands:
 
 | CI Job | Local Command |
 |--------|---------------|
-| Format | `mise run format` (fix) or `mise run format-check` (check) |
-| Format (lock) | `mise run lock-check` |
-| Typecheck | `mise run typecheck` |
+| Format | `mise run format` (fix) or `mise run check:format ::: check:lint ::: check:license:headers` (check) |
+| Format (lock) | `mise run check:lock` |
+| Typecheck | `mise run check:type` |
 | Unit Tests | `mise run test:ci` |
 
-Path filtering may skip format/typecheck/unit-test when only non-source files change. Run `mise run validate` locally or add a relevant source/test/config change to trigger CI.
+Format and type checks run on every pull request. The local pre-PR gate is `mise run check ::: test`; specialized CI and GPU suites remain separate.
 
 ## Issues
 

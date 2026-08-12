@@ -118,9 +118,9 @@ The `ci-checks.yml` workflow runs on every push to `main` and on pull requests. 
 
 | Job | mise task | What it checks |
 | --- | --- | --- |
-| Format | `format-check` | `dprint check` for TOML + `ruff format --check` + `ruff check` + SPDX copyright headers |
-| Format (lock) | `lock-check` | generated CUDA metadata matches `cuda_deps.toml` + `uv.lock` matches `pyproject.toml` |
-| Typecheck | `typecheck` | `ty check` (excludes per `pyproject.toml [tool.ty.src]`) |
+| Format | `check:format`, `check:lint`, `check:license:headers` | `dprint check` for TOML + `ruff format --check` + `ruff check` + SPDX copyright headers |
+| Format (lock) | `check:lock` | generated CUDA metadata matches `cuda_deps.toml` + `uv.lock` matches `pyproject.toml` |
+| Typecheck | `check:type` | `ty check` (excludes per `pyproject.toml [tool.ty.src]`) |
 | Unit Tests | `test:ci` | pytest with coverage (excludes slow, e2e, gpu, smoke) |
 | Smoke Tests | `test:smoke` | CPU smoke tests (training/generation hot paths, tiny models) |
 
@@ -133,8 +133,8 @@ Docs source paths include `docs/*.py`, `docs/**/*.py`, and `mkdocs.yml`. These p
 To replicate CI locally:
 
 ```bash
-mise run check        # format-check + typecheck
-mise run lock-check   # verify generated CUDA metadata and uv.lock
+mise run check        # all read-only static checks
+mise run check:lock   # verify generated CUDA metadata and uv.lock
 mise run test:ci      # CI unit tests with coverage selectors
 mise run test:smoke   # CPU smoke tests
 ```

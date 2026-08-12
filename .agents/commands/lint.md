@@ -6,5 +6,5 @@ description: Check code quality
 Run read-only local quality checks (formatting, lint rules, type checking, copyright).
 
 * Run with: `mise run check`
-* Runs `mise run format-check` (ruff format + ruff check + copyright) + `mise run typecheck` (ty)
+* Runs the `check:*` leaves for formatting, lint rules, type checking, lock state, copyright headers, and Mise task validation
 * Always run after `mise run format`
