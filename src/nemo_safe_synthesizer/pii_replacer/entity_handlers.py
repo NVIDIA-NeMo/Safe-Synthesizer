@@ -8,13 +8,12 @@ the gates discovery holds it to. This module holds what each label *does*: read
 a value as that entity, refuse a column that only looks like one, and write a
 synthetic stand-in for a value.
 
-Handlers are deliberately thin. Each one delegates to the function that already
-implements the rule (``detection.match_value_entity``,
-``detection.persona_grouping.skip_reason_named_column``,
-``replacement.standalone.fake_value``, the pattern generators), so the handler
-is an address, not a second implementation. A rule that today lives in an
-``if entity == ...`` branch has one obvious place to move to, one entity at a
-time, without the call site learning about it.
+Handlers are deliberately thin. Discovery skips and standalone generation both
+go through ``get_handler(label)``. Shared content gates still live in
+``detection.persona_grouping.skip_reason_named_column`` (``DefaultHandler.skip_reason``
+delegates there); Faker / shape-preserving draws live on the handler
+(``DefaultHandler._faker_draw`` and overrides). Call sites should not keep a
+parallel ``match entity`` table.
 """
 
 from __future__ import annotations
@@ -30,7 +29,13 @@ import pandas as pd
 from .detection.persona_grouping import skip_reason_named_column
 from .detection.value_recognizers import match_value_entity
 from .entities import EntityHandler, spec
-from .patterns import generate_from_pattern, matching_template, synth_card_value, try_strftime_formats
+from .patterns import (
+    generate_from_pattern,
+    matching_template,
+    pattern_preserving_token,
+    synth_card_value,
+    try_strftime_formats,
+)
 
 if TYPE_CHECKING:
     from .replacement.scope import FakerLike
@@ -97,7 +102,7 @@ class DefaultHandler:
 
         Example:
             With ``patterns=["pmc-[68]####"]`` and original ``"pmc-6123"`` -> a fresh
-            value in that template; without patterns -> ``fake_value`` for the label.
+            value in that template; without patterns -> a Faker / shape-preserving draw.
 
         Args:
             original: Original cell value to replace.
@@ -110,10 +115,57 @@ class DefaultHandler:
         """
         if patterns:
             return generate_from_pattern(matching_template(original, patterns), self._rng(fake, rng))
-        # Deferred: ``replacement.standalone`` imports this module for its generators.
-        from .replacement.standalone import fake_value
+        return self._faker_draw(original, fake)
 
-        return fake_value(self.label, original, fake)
+    def _faker_draw(self, original: str, fake: FakerLike) -> str:
+        """Return one Faker (or shape-preserving) draw for this handler's label."""
+        from .detection import API_PREFIXES, UUID_RE
+
+        rng = fake.random
+        match self.label:
+            case "credit_debit_card":
+                return fake.credit_card_number()
+            case "ipv4":
+                return fake.ipv4()
+            case "ipv6":
+                return fake.ipv6()
+            case "unique_identifier":
+                if UUID_RE.match(original.strip()):
+                    return str(fake.uuid4())
+                return pattern_preserving_token(original, rng)
+            case "api_key":
+                for pfx in API_PREFIXES:
+                    if original.startswith(pfx):
+                        return pfx + pattern_preserving_token(original[len(pfx) :], rng)
+                return pattern_preserving_token(original, rng)
+            # Persona-sourced entities listed under standalone still get real Faker draws
+            # (independent of any persona); pattern_preserving_token is only for opaque tokens.
+            case "first_name":
+                return fake.first_name()
+            case "last_name":
+                return fake.last_name()
+            case "middle_name":
+                return fake.first_name()
+            case "full_name":
+                return f"{fake.first_name()} {fake.last_name()}"
+            case "email":
+                return fake.email()
+            case "phone_number":
+                return fake.phone_number()
+            case "ssn":
+                return fake.ssn()
+            case "street_address":
+                return fake.street_address()
+            case "city":
+                return fake.city()
+            case "state":
+                return fake.state_abbr()
+            case "zipcode":
+                return fake.postcode()
+            case "national_id":
+                return fake.ssn()
+            case _:
+                return pattern_preserving_token(original, rng)
 
     def plan_pattern_rejection(self, column_name: str) -> str | None:
         """Return why plan ``patterns`` are illegal for this entity, or ``None`` if allowed."""
@@ -159,9 +211,7 @@ class IpAddressHandler(DefaultHandler):
         rng: Random | None = None,
     ) -> str | None:
         # Always use Faker's IP generators; never character templates.
-        from .replacement.standalone import fake_value
-
-        return fake_value(self.label, original, fake)
+        return self._faker_draw(original, fake)
 
 
 class DateOfBirthHandler(DefaultHandler):

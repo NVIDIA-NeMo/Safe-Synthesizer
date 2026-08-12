@@ -21,6 +21,7 @@ from ..entities import (
     spec,
     sval,
 )
+from ..models import DetectedStandalone
 from .evidence import pattern_evidence_values, ranked_formats
 
 logger = get_logger(__name__)
@@ -69,34 +70,32 @@ def _value_patterns_for_shape_fn(sample: list[str], cfg: Config, shape_fn) -> li
     return patterns
 
 
-def attach_value_patterns(df: pd.DataFrame, standalone: list[dict], cfg: Config) -> None:
+def attach_value_patterns(df: pd.DataFrame, standalone: list[DetectedStandalone], cfg: Config) -> None:
     """Attach character templates each standalone column writes, in place.
 
     A phone column of ``+1-415-555-####`` values gets
-    ``ent["patterns"] = ["+1-###-###-####"]``. Temporal / identify-only entities
+    ``ent.patterns = ["+1-###-###-####"]``. Temporal / identify-only entities
     are left alone (they use strftime, not character templates).
 
     Args:
         df: Source dataframe.
-        standalone: Standalone entity dicts to mutate with ``patterns`` keys.
+        standalone: Detected standalone columns to mutate with ``patterns``.
         cfg: Pattern inference configuration.
     """
     for ent in standalone:
         # Temporal columns and birth dates are written in strftime formats, which
         # detection already read, not character-template regeneration.
-        entity_label = ent.get("entity")
-        if entity_label == "date_of_birth" or (isinstance(entity_label, str) and is_identify_only(entity_label)):
+        if ent.entity == "date_of_birth" or is_identify_only(ent.entity):
             continue
         # Generators that ignore character templates (IPs, SSN, national ID, …).
-        entity_spec = spec(entity_label) if isinstance(entity_label, str) else None
+        entity_spec = spec(ent.entity)
         if entity_spec is not None and entity_spec.pattern_kind != "template":
-            ent["patterns"] = []
+            ent.patterns = []
             continue
-        col = ent.get("column")
-        if col not in df.columns:
+        if ent.column not in df.columns:
             continue
-        ent["patterns"] = value_patterns(df[col].dropna(), cfg)
-        logger.runtime.info(f"[PII Replacement] Standalone column {col!r} writes patterns={ent['patterns']}")
+        ent.patterns = value_patterns(df[ent.column].dropna(), cfg)
+        logger.runtime.info(f"[PII Replacement] Standalone column {ent.column!r} writes patterns={ent.patterns}")
 
 
 def pattern_preserving_token(s: str, rng) -> str:

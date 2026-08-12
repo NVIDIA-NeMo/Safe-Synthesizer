@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import re
-from typing import cast
 
 import pandas as pd
 import pytest
@@ -25,7 +24,6 @@ from nemo_safe_synthesizer.config.replace_pii import (
 )
 from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.pii_replacer.entities import Config, config_from_replace_pii
-from nemo_safe_synthesizer.pii_replacer.models import ScopedValueMap
 from nemo_safe_synthesizer.pii_replacer.planning import (
     resolve_plan,
     validate_plan,
@@ -154,7 +152,7 @@ def test_entity_driven_column_under_persona_routes_to_standalone():
     assert all("first_name" in inst.field_cols for inst in instances)
     maps = build_standalone_maps(df, plan, cfg)
     assert "date_of_birth" in maps
-    out, _ = run_replacement(df, plan, cfg)
+    out = run_replacement(df, plan, cfg).replaced_df
     for original, new in zip(df["date_of_birth"], out["date_of_birth"], strict=True):
         assert new != original
         assert re.fullmatch(r"\d{2}/\d{2}/\d{4}", str(new))
@@ -286,15 +284,16 @@ def test_standalone_identifier_scope_record_group_dataframe():
 
     # dataframe: one original -> one synthetic everywhere
     plan_df = PiiReplacementPlan(scope=PiiReplacementScope.dataframe, standalone_columns_to_replace=standalone)
-    out_df, _ = run_replacement(df, plan_df, cfg)
+    out_df = run_replacement(df, plan_df, cfg).replaced_df
     assert out_df["phone"].nunique() == 1
     assert out_df["phone"].iloc[0] != phone
     assert out_df["event_id"].nunique() == 1
 
     # record: same original can get independent synthetics per row
     plan_rec = PiiReplacementPlan(scope=PiiReplacementScope.record, standalone_columns_to_replace=standalone)
-    out_rec, details_rec = run_replacement(df, plan_rec, cfg)
-    standalone_rec = cast(dict[str, ScopedValueMap], details_rec["standalone_maps"])
+    outcome_rec = run_replacement(df, plan_rec, cfg)
+    out_rec = outcome_rec.replaced_df
+    standalone_rec = outcome_rec.standalone_maps
     assert standalone_rec["phone"].kind == "record"
     assert out_rec["phone"].nunique() == 4
     assert (out_rec["phone"] != phone).all()
@@ -302,8 +301,9 @@ def test_standalone_identifier_scope_record_group_dataframe():
 
     # group: shared within group, independent across groups; synthetics injective
     plan_grp = PiiReplacementPlan(scope=PiiReplacementScope.group, standalone_columns_to_replace=standalone)
-    out_grp, details_grp = run_replacement(df, plan_grp, cfg, group_key="group_id")
-    standalone_grp = cast(dict[str, ScopedValueMap], details_grp["standalone_maps"])
+    outcome_grp = run_replacement(df, plan_grp, cfg, group_key="group_id")
+    out_grp = outcome_grp.replaced_df
+    standalone_grp = outcome_grp.standalone_maps
     assert standalone_grp["phone"].kind == "group"
     g1 = out_grp.loc[df["group_id"] == "G1", "phone"]
     g2 = out_grp.loc[df["group_id"] == "G2", "phone"]

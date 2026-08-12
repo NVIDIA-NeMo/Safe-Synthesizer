@@ -15,6 +15,7 @@ import pandas as pd
 
 from ...observability import get_logger
 from ..entities import Config
+from ..models import DetectedPersona, DetectedPersonaField
 from .evidence import PATTERN_SAMPLE_SIZE, ranked_formats
 from .value_templates import (
     generate_from_pattern,
@@ -152,10 +153,12 @@ def persona_column_patterns(
 
 
 def _columns_by_label(fields: Mapping[str, object]) -> dict[str, str]:
-    """Normalize persona ``fields`` (inline or legacy label→column) to label→column."""
+    """Normalize persona ``fields`` (typed, inline dict, or legacy label→column) to label→column."""
     out: dict[str, str] = {}
     for label, entry in fields.items():
-        if isinstance(entry, Mapping):
+        if isinstance(entry, DetectedPersonaField):
+            out[str(label)] = entry.column
+        elif isinstance(entry, Mapping):
             entry_map = cast(Mapping[str, object], entry)
             out[str(label)] = str(entry_map["column"])
         else:
@@ -163,22 +166,22 @@ def _columns_by_label(fields: Mapping[str, object]) -> dict[str, str]:
     return out
 
 
-def attach_persona_patterns(df: pd.DataFrame, personas: list[dict], cfg: Config) -> None:
+def attach_persona_patterns(df: pd.DataFrame, personas: list[DetectedPersona], cfg: Config) -> None:
     """Write discovered name/email conventions onto each persona field's ``patterns``.
 
     Mutates in place.
 
     Args:
         df: Source dataframe.
-        personas: Persona set dicts to update with inline ``patterns`` on each field.
+        personas: Detected persona groups to update with ``patterns`` on each field.
         cfg: Pattern inference configuration.
 
     Example:
         A full-name field whose values look like ``"Smith, Jane"`` gets
-        ``fields["full_name"] = {"column": "...", "patterns": ["{LAST}, {First}"]}``.
+        ``fields["full_name"].patterns == ["{LAST}, {First}"]``.
     """
     for persona_set in personas:
-        fields = persona_set.setdefault("fields", {})
+        fields = persona_set.fields
         columns_by_label = _columns_by_label(fields)
         for label in _PERSONA_PATTERN_LABELS:
             col = columns_by_label.get(label)
@@ -186,7 +189,7 @@ def attach_persona_patterns(df: pd.DataFrame, personas: list[dict], cfg: Config)
                 continue
             patterns = persona_column_patterns(df, label, col, columns_by_label, cfg)
             if patterns:
-                fields[label] = {"column": col, "patterns": patterns}
+                fields[label] = DetectedPersonaField(column=col, patterns=patterns)
                 logger.runtime.info(
                     f"[PII Replacement] Persona-backed column {col!r} (entity={label}, patterns={patterns})"
                 )

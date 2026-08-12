@@ -6,9 +6,13 @@
 PII (Personally Identifiable Information) replacement detects and replaces sensitive
 information in your datasets before synthesis. It reduces the model's exposure to
 **detected** PII (e.g. names, addresses, identifiers); it is not a guarantee that every
-sensitive value is found or correctly typed. Heuristic discovery can miss columns or
-assign an unexpected entity type, so always review the emitted
-`pii_replacement_plan.yaml` before training.
+sensitive value is found or correctly typed.
+
+!!! warning "Best-effort heuristics — review the plan"
+    This implementation is **best effort** across a wide range of datasets and may not
+    work perfectly for your particular data. Heuristic discovery can miss columns, assign
+    an unexpected entity type, or split/merge personas incorrectly. Always review the
+    emitted `pii_replacement_plan.yaml` (and edit or supply your own plan) before training.
 
 ## How It Works
 
@@ -41,12 +45,12 @@ they can be kept out of free-text scanning without being replaced.
 | Column name | Required for replaceable entities. Fuzzy match against known name patterns (`dob`, `surname`, `postcode`, `ssn`, ...) |
 | Value pattern | Content gate when a simple check exists. The dominant concrete format must cover at least 85% of non-null values. Without a supporting name label, value hits are ignored for replacement (temporals are the exception) |
 | Group constancy | With `data.group_training_examples_by` set, columns that stay constant within a group are treated as attributes of that group's entity; uniqueness for those columns is measured per group |
-| Field type | Long free-form columns are marked `free_text` and scanned for known values instead of being replaced as a single value |
+| Field type | Long free-form columns may be marked `free_text` for value propagation rather than whole-cell replacement. In heuristic mode they are only scanned when at least one structured replaceable column was identified (otherwise there is nothing to propagate) |
 
 !!! note "LLM-assisted discovery"
     `replace_pii.llm_enhancement: true` is reserved for a future release and currently
-    raises `ParameterError` from the `PiiEnhancer` seams (`enrich_structured`,
-    `enrich_demographics`, `detect_freetext_spans`). Discovery is heuristic in
+    raises `ParameterError` from the `PiiEnhancer` seams (`review_discovery`,
+    `infer_persona_demographics`, `detect_freetext_entities`). Discovery is heuristic in
     this release; when LLM mode lands, heuristics will pass candidates and decision
     context into those seams and the LLM will be the final judge -- without forking
     apply. Demographics: the LLM may infer sex and fine-grained
@@ -59,7 +63,7 @@ they can be kept out of free-text scanning without being replaced.
 |--------|-----------|----------|
 | Synthetic persona | Persona-sourced columns | One synthetic identity supplies persona-sourced columns under a persona, so first name, last name, and email belong to the same fictional person, each written the way its own column writes it |
 | Pattern-preserving substitution | Entity-driven columns | The synthetic value is derived from the original, keeping its format (a `%m/%d/%Y` date stays `%m/%d/%Y`, a `+1-###-555-####` phone stays `+1-###-555-####`), and is stable per distinct original value within the configured scope |
-| Free-text propagation | `free_text` columns | Values replaced from structured entity columns (persona-backed or standalone) -- plus individual name tokens, so honorifics and partial mentions follow -- are swapped inside the text. In heuristic mode, free text is scanned only when at least one structured entity column was identified (otherwise there is nothing to propagate). Matches are case-insensitive; the synthetic is reshaped to the matched token's case. A token is read as free text mentions it, without the punctuation its column writes around it, so a note naming `SMITH` alone is rewritten whether the column writes `Jane Smith` or `SMITH, Jane` |
+| Free-text propagation | `free_text` columns | Values replaced from structured entity columns (persona-backed or standalone) -- plus individual name tokens, so honorifics and partial mentions follow -- are swapped inside the text. In heuristic mode, free text is scanned only when at least one structured entity column was identified (otherwise there is nothing to propagate). Matches are case-insensitive; the synthetic is reshaped to the matched token's case. A token is read as free text mentions it, without the punctuation its column writes around it, so a note naming `SMITH` alone is rewritten whether the column writes `Jane Smith` or `SMITH, Jane`. A runtime warning fires when a single row accumulates more than 500 substitution pairs (slow rewrite and higher risk of unrelated mentions being changed) |
 | Identified, not replaced | Generic `date` / datetime / time / duration, and address parts (`city`, `state`, `zipcode`) | Reported in the plan logs and deliberately left untouched |
 
 ### Consistency scope
@@ -84,15 +88,19 @@ and never depend on a persona, so listing one under a persona changes nothing.
 | `email` | Persona-sourced | Built from the same synthetic identity as the names, following the convention the value itself follows (`j.smith@acme.com`), and keeping its domain. A value that reads as no person is a handle, which is regenerated in its own shape instead |
 | `phone_number` | Entity-driven | Rebuilt in the column's own format. Persona-sourced only under the internal `pgm` backend, the one persona source that carries a number, whose number is then printed in that same format |
 | `street_address` | Persona-sourced | |
-| `city`, `state`, `zipcode` | Special | Name-matched address parts: identified and **not** replaced (not allocated as persona fields) |
 | `ssn`, `national_id` | Entity-driven | Rebuilt from the original (Faker / shape-preserving); not carried on managed or PGM personas |
 | `date_of_birth` | Entity-driven | Perturbed per record or group, keeping the original date format |
 | `unique_identifier` | Entity-driven | Record and group IDs |
 | `credit_debit_card` | Entity-driven | |
 | `api_key` | Entity-driven | |
 | `ipv4`, `ipv6` | Entity-driven | |
-| `date` | Special | Marks a column as a generic (non-birth) date: structured, identified, and **not** replaced |
 | `free_text` | Special | Marks a column for value propagation rather than whole-column replacement |
+
+Discovery may also **identify without replacing** address parts (`city`, `state`,
+`zipcode`) and other temporals (`datetime` / `time` / `duration`). Those labels are
+**not** part of the plan `entity_type` vocabulary — they appear in logs / exclude
+lists so free-text scanning does not treat them as prose, but they cannot be
+authored in `pii_replacement_plan.yaml`.
 
 To change how a column is treated -- including forcing a column to be skipped by
 leaving it out -- edit the replacement plan rather than the entity vocabulary, which is

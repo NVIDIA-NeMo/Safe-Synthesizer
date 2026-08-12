@@ -50,34 +50,14 @@ def _detect_full_dataframe(
     # low-variety and can be mistaken for free text. ``scoped_column_stats``
     # recomputes ``unique_ratio`` per group.
     stats = detection.scoped_column_stats(df, group_key, cfg.group_constancy_threshold)
-    out = detection.detect_structured_columns(df, stats, cfg)
+    discovery = detection.detect_structured_columns(df, stats, cfg)
 
-    personas = []
-    for persona_set in out["personas"]:
-        personas.append(
-            {
-                "persona": persona_set["persona"],
-                "fields": persona_set["fields"],
-                "match_persona_by": persona_set.get("match_persona_by") or [],
-            }
-        )
-
-    patterns.attach_persona_patterns(df, personas, cfg)
-
-    standalone = list(out["standalone_columns"])
-    patterns.attach_value_patterns(df, standalone, cfg)
+    patterns.attach_persona_patterns(df, discovery.personas, cfg)
+    patterns.attach_value_patterns(df, discovery.standalone_columns, cfg)
 
     # Heuristics first; LLM re-judges structured detection with that context
     # (same seam as the former enrich_structured_detection), before free-text
     # eligibility / plan emission.
-    discovery = DiscoveryResult.from_dict(
-        {
-            "personas": personas,
-            "standalone_columns": standalone,
-            "identified_not_replaced": out.get("identified_not_replaced", []),
-            "free_text_columns": [],
-        }
-    )
     llm = select_enhancer(llm_enhancement=llm_enhancement, enhancer=enhancer)
     discovery = llm.review_discovery(df, discovery, cfg)
 
@@ -155,12 +135,12 @@ def _mapped_entity_or_warn(label: str | None, *, column: str | None) -> PiiEntit
 
 
 def _detected_to_plan(
-    detected: DiscoveryResult | dict[str, object],
+    detected: DiscoveryResult,
     *,
     scope: PiiReplacementScope,
 ) -> PiiReplacementPlan:
     """Convert structured detection into a typed ``PiiReplacementPlan``."""
-    discovery = detected if isinstance(detected, DiscoveryResult) else DiscoveryResult.from_dict(detected)
+    discovery = detected
     persona_backed: list[PersonaColumnSet] = []
     for persona_set in discovery.personas:
         cols: list[PiiColumnPlan] = []

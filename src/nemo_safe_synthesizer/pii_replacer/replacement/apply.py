@@ -15,7 +15,7 @@ from ...config.replace_pii import PiiEntity, PiiReplacementPlan
 from ...observability import get_logger
 from .. import entities
 from ..llm import PiiEnhancer, select_enhancer
-from ..models import PersonaInstance, ScopedValueMap
+from ..models import PersonaInstance, ReplacementOutcome, ScopedValueMap
 from .free_text import build_text_substituter, instance_text_pair_labels, resolve_freetext_detections
 from .instances import compute_instance_synthetics, extract_instances
 from .personas import PersonaEngine
@@ -49,7 +49,7 @@ def apply_replacements(
     *,
     group_key: str | None = None,
     enhancer: PiiEnhancer | None = None,
-) -> dict[str, object]:
+) -> ReplacementOutcome:
     """Apply structured and free-text replacements to a copy of the source frame.
 
     Structured persona and standalone maps are written first. Free-text columns
@@ -67,8 +67,9 @@ def apply_replacements(
         enhancer: Optional LLM enhancer override.
 
     Returns:
-        Dict with ``replaced_df``, ``structured_cols``, ``free_text_applied``,
-        ``standalone_cols``, ``changed_summary``, and ``free_text_entities``.
+        ``ReplacementOutcome`` with ``replaced_df``, ``free_text_applied``, and
+        diagnostic ``details`` (structured/standalone cols, change summary, entities).
+        Callers that own instances/maps (``run_replacement``) fill those fields.
     """
     replaced_df = source_df.copy()
     structured_cols: set[str] = set()
@@ -271,14 +272,16 @@ def apply_replacements(
     changed_summary = [{"column": c, "cells_changed": _cells_changed(c)} for c in column_order]
     changed_summary = [d for d in changed_summary if d["cells_changed"]]
 
-    return {
-        "replaced_df": replaced_df,
-        "structured_cols": structured_cols,
-        "free_text_applied": free_text_applied,
-        "standalone_cols": standalone_cols,
-        "changed_summary": changed_summary,
-        "free_text_entities": free_text_entities,
-    }
+    return ReplacementOutcome(
+        replaced_df=replaced_df,
+        free_text_applied=free_text_applied,
+        details={
+            "structured_cols": structured_cols,
+            "standalone_cols": standalone_cols,
+            "changed_summary": changed_summary,
+            "free_text_entities": free_text_entities,
+        },
+    )
 
 
 def run_replacement(
@@ -289,7 +292,7 @@ def run_replacement(
     group_key: str | None = None,
     persona_engine: PersonaEngine | None = None,
     enhancer: PiiEnhancer | None = None,
-) -> tuple[pd.DataFrame, dict[str, object]]:
+) -> ReplacementOutcome:
     """Run the full PII replacement pipeline on a dataframe.
 
     Extracts persona instances, infers demographics, assigns synthetic personas,
@@ -305,9 +308,9 @@ def run_replacement(
         enhancer: Optional LLM enhancer override.
 
     Returns:
-        Tuple of ``(replaced_df, audit_dict)`` where ``audit_dict`` includes
-        ``instances``, ``standalone_maps``, ``persona_backend_effective``, and
-        fields from ``apply_replacements``.
+        ``ReplacementOutcome`` with the replaced frame, persona instances,
+        standalone maps, free-text columns touched, and diagnostic ``details``
+        (including ``persona_backend_effective`` and change summary).
     """
     llm = select_enhancer(llm_enhancement=cfg.llm_enhancement, enhancer=enhancer)
     instances = extract_instances(df, plan, cfg, group_key=group_key)
@@ -318,10 +321,8 @@ def run_replacement(
     engine.assign(instances)
     compute_instance_synthetics(instances, cfg)
     standalone_maps = build_standalone_maps(df, plan, cfg, group_key=group_key)
-    result = apply_replacements(df, df, instances, standalone_maps, plan, cfg, group_key=group_key, enhancer=llm)
-    return cast(pd.DataFrame, result["replaced_df"]), {
-        "instances": instances,
-        "standalone_maps": standalone_maps,
-        "persona_backend_effective": engine.backend,
-        **result,
-    }
+    outcome = apply_replacements(df, df, instances, standalone_maps, plan, cfg, group_key=group_key, enhancer=llm)
+    outcome.instances = instances
+    outcome.standalone_maps = standalone_maps
+    outcome.details["persona_backend_effective"] = engine.backend
+    return outcome

@@ -42,7 +42,7 @@ def _dob_replacement(patterns: list[str], dates: list[str]) -> pd.Series:
         sdg_pgms_src="/tmp",
         managed_assets_path=None,
     )
-    out, _ = run_replacement(df, plan, runtime)
+    out = run_replacement(df, plan, runtime).replaced_df
     return out["date_of_birth"]
 
 

@@ -61,16 +61,6 @@ class Config:
     """Multiplier of persona instances used with ``pool_min_size`` to size the PGM pool."""
     dominant_pattern_min_coverage: float = 85.0
     """Minimum percent of non-null values matching the dominant pattern for structured columns."""
-    free_text_min_len: float = 25.0
-    """Minimum average string length for free-text column selection."""
-    free_text_min_unique_ratio: float = 0.3
-    """Minimum unique-value ratio for free-text column selection."""
-    free_text_min_words: float = 1.5
-    """Minimum average whitespace-separated tokens for free-text prose selection.
-
-    Rejects single-token columns such as URLs or short codes; length and
-    unique-ratio gates already exclude low-cardinality phrase columns.
-    """
     name_fuzzy_threshold: float = 0.86
     """Acceptance threshold for fuzzy column-name matching."""
     llm_enhancement: bool = False

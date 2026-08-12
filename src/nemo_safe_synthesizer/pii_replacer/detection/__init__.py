@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from .column_names import fuzzy_match_label
-from .free_text import detect_free_text_columns, select_free_text_columns
+from .free_text import select_free_text_columns
 from .persona_grouping import detect_structured_columns
 from .stats import (
     classify_columns_by_scope,
@@ -31,7 +31,6 @@ __all__ = [
     "analyze_column_patterns",
     "classify_columns_by_scope",
     "column_stats",
-    "detect_free_text_columns",
     "detect_structured_columns",
     "fuzzy_match_label",
     "looks_like_api_key_value",

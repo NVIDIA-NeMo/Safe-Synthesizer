@@ -113,7 +113,7 @@ def test_standalone_persona_entity_uses_real_faker_value():
             PiiColumnPlan(column_name="email", entity_type=PiiEntity.email),
         ]
     )
-    out, _ = run_replacement(df, plan, cfg)
+    out = run_replacement(df, plan, cfg).replaced_df
     assert list(out["first_name"]) != ["Alice", "Bob"]
     assert all(isinstance(v, str) and v.isalpha() for v in out["first_name"])
     assert all("@" in v and "." in v.split("@", 1)[-1] for v in out["email"])

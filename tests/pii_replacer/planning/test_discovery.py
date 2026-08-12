@@ -90,24 +90,27 @@ def test_detected_to_plan_warns_on_unmapped_entity_label(caplog):
     """Detector/PiiEntity vocabulary drift must not silently drop a column."""
     import logging
 
+    from nemo_safe_synthesizer.pii_replacer.models import DiscoveryResult
     from nemo_safe_synthesizer.pii_replacer.planning.discovery import _detected_to_plan
 
     caplog.set_level(logging.WARNING)
     plan = _detected_to_plan(
-        {
-            "personas": [
-                {
-                    "persona": "person_1",
-                    "fields": {
-                        "first_name": {"column": "first_name", "patterns": []},
-                        "alien_id": {"column": "alien_col", "patterns": []},
-                    },
-                    "match_persona_by": [],
-                }
-            ],
-            "standalone_columns": [{"column": "token_col", "entity": "mystery_token", "patterns": []}],
-            "free_text_columns": [],
-        },
+        DiscoveryResult.from_dict(
+            {
+                "personas": [
+                    {
+                        "persona": "person_1",
+                        "fields": {
+                            "first_name": {"column": "first_name", "patterns": []},
+                            "alien_id": {"column": "alien_col", "patterns": []},
+                        },
+                        "match_persona_by": [],
+                    }
+                ],
+                "standalone_columns": [{"column": "token_col", "entity": "mystery_token", "patterns": []}],
+                "free_text_columns": [],
+            }
+        ),
         scope=PiiReplacementScope.dataframe,
     )
     assert column_spec(plan.persona_backed_columns[0].columns_to_replace, "first_name") is not None

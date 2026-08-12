@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import re
-from typing import cast
 
 import pandas as pd
 
@@ -22,14 +21,20 @@ from ..entities import (
     is_missing_value,
     spec,
 )
-from ..models import ColumnEvidence
+from ..models import (
+    ColumnEvidence,
+    DetectedPersona,
+    DetectedPersonaField,
+    DetectedStandalone,
+    DiscoveryResult,
+    PersonaMatchBy,
+)
 from ..patterns import date_patterns, split_full_name, value_patterns
 from .column_names import (
     match_column_header,
     name_supports_value_entity,
     normalize_column_name_for_match,
 )
-from .free_text import detect_free_text_columns
 from .value_recognizers import (
     analyze_column_patterns,
     looks_like_sequential_integer_id,
@@ -45,7 +50,6 @@ logger = get_logger(__name__)
 # Only these name parts participate in cross-column agreement checks.
 _NAME_AGREE_LABELS = frozenset({"first_name", "last_name", "full_name"})
 _NAME_AGREE_THRESHOLD = 0.85
-_NAME_AGREE_MIN_COMPARABLE = 3
 
 
 def _persona_role_key(col: str) -> str:
@@ -133,6 +137,8 @@ def _persona_names_agree(
     """True when ``new_col`` may join a persona that already has name parts.
 
     Scans at most ``sample`` rows (same bound as other content gates in this module).
+    When no row is comparable (missing overlap), returns ``True`` so columns still
+    merge; only a clear disagreement rate below the threshold forces a split.
     """
     if new_label not in _NAME_AGREE_LABELS:
         return True
@@ -158,8 +164,8 @@ def _persona_names_agree(
         comparable += 1
         if result:
             agree += 1
-    if comparable < _NAME_AGREE_MIN_COMPARABLE:
-        return False
+    if comparable == 0:
+        return True
     return (agree / comparable) >= _NAME_AGREE_THRESHOLD
 
 
@@ -208,7 +214,7 @@ def skip_reason_named_column(
     return None
 
 
-def detect_structured_columns(df_subset: pd.DataFrame, stats: dict, cfg: Config) -> dict:
+def detect_structured_columns(df_subset: pd.DataFrame, stats: dict, cfg: Config) -> DiscoveryResult:
     """Detect persona-backed and standalone PII columns over a column subset.
 
     Per column: gather name/value evidence, resolve ``EntitySpec`` and apply path,
@@ -220,8 +226,8 @@ def detect_structured_columns(df_subset: pd.DataFrame, stats: dict, cfg: Config)
         cfg: Engine configuration controlling thresholds and persona backend.
 
     Returns:
-        Dict with ``personas``, ``free_text_columns``, ``standalone_columns``, and
-        ``identified_not_replaced`` keys.
+        Typed discovery result. ``free_text_columns`` is always empty here;
+        discovery fills it via ``select_free_text_columns``.
     """
     backend = cfg.persona_backend
     fields_by_persona: dict[str, dict[str, str]] = {}
@@ -230,7 +236,7 @@ def detect_structured_columns(df_subset: pd.DataFrame, stats: dict, cfg: Config)
     role_personas: dict[str, list[str]] = {}
     empty_persona_seq = 0
     role_instance_count: dict[str, int] = {}
-    standalone: list[dict] = []
+    standalone: list[DetectedStandalone] = []
     identified_not_replaced: list[str] = []
     consumed: set[str] = set()
 
@@ -298,7 +304,7 @@ def detect_structured_columns(df_subset: pd.DataFrame, stats: dict, cfg: Config)
         return _allocate_persona(col, label, warn_collision=False)
 
     def _add_standalone(col: str, entity: str, patterns: list[str], *, note: str = "") -> None:
-        standalone.append({"column": col, "entity": entity, "patterns": patterns})
+        standalone.append(DetectedStandalone(column=col, entity=entity, patterns=patterns))
         consumed.add(col)
         extra = f" — {note}" if note else ""
         if patterns:
@@ -360,7 +366,11 @@ def detect_structured_columns(df_subset: pd.DataFrame, stats: dict, cfg: Config)
                 )
                 continue
             if entity_spec is not None and apply_path in {"persona", "standalone_map"}:
-                skip = skip_reason_named_column(entity_spec, ev.series, ev.value_entity, apply_path)
+                # Route content gates through EntityHandler (same function DefaultHandler
+                # wraps); keep the import local to avoid a cycle with entity_handlers.
+                from ..entity_handlers import get_handler
+
+                skip = get_handler(ev.name_label).skip_reason(ev.series, ev.value_entity, apply_path)
                 if skip is not None:
                     # Prefer the historical phrasing for value-match skips.
                     if entity_spec.requires_value_match or ev.name_label == "date_of_birth":
@@ -432,7 +442,7 @@ def detect_structured_columns(df_subset: pd.DataFrame, stats: dict, cfg: Config)
                 "excluded from replacement plan"
             )
 
-    personas: list[dict[str, object]] = []
+    personas: list[DetectedPersona] = []
     for persona in sorted(set(fields_by_persona) | set(demo_by_persona), key=lambda p: (len(p), p)):
         fields = fields_by_persona.get(persona, {})
         demo = demo_by_persona.get(persona, {})
@@ -440,29 +450,25 @@ def detect_structured_columns(df_subset: pd.DataFrame, stats: dict, cfg: Config)
             continue
         patterns_by_label = field_patterns_by_persona.get(persona, {})
         personas.append(
-            {
-                "persona": persona,
-                "fields": {
-                    label: {"column": col, "patterns": list(patterns_by_label.get(label) or [])}
+            DetectedPersona(
+                persona=persona,
+                fields={
+                    label: DetectedPersonaField(column=col, patterns=list(patterns_by_label.get(label) or []))
                     for label, col in fields.items()
                 },
-                "match_persona_by": [
-                    {"persona_attribute": attr, "column_name": demo[attr]}
+                match_persona_by=[
+                    PersonaMatchBy(persona_attribute=attr, column_name=demo[attr])
                     for attr in demo_keys_for_backend(cfg.persona_backend)
                     if demo.get(attr)
                 ],
-            }
+            )
         )
 
-    exclude = set(consumed)
-    for persona_set in personas:
-        matchers = cast(list[dict[str, str]], persona_set.get("match_persona_by") or [])
-        exclude |= {entry["column_name"] for entry in matchers}
-    exclude |= set(identified_not_replaced)
-    free_text = detect_free_text_columns(df_subset, stats, exclude, cfg)
-    return {
-        "personas": personas,
-        "free_text_columns": free_text,
-        "standalone_columns": standalone,
-        "identified_not_replaced": identified_not_replaced,
-    }
+    # Free-text eligibility for the plan is decided later in discovery via
+    # ``select_free_text_columns`` (NSS field types + structured-gate).
+    return DiscoveryResult(
+        personas=personas,
+        free_text_columns=[],
+        standalone_columns=standalone,
+        identified_not_replaced=identified_not_replaced,
+    )

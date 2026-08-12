@@ -142,7 +142,7 @@ class DiscoveryResult:
     """Authoritative structured-detection output before plan emission.
 
     Example:
-        discovery = DiscoveryResult.from_dict(detection.detect_structured_columns(df, stats, cfg))
+        discovery = detection.detect_structured_columns(df, stats, cfg)
     """
 
     personas: list[DetectedPersona] = field(default_factory=list)

@@ -199,6 +199,30 @@ def test_sequential_integer_id_skipped_any_origin():
     assert gapped is not None and gapped.entity_type == PiiEntity.unique_identifier
 
 
+def test_numeric_ssn_and_national_id_keep_header_entity():
+    """Numeric probe must preserve ssn/national_id (B1/B2); sequential skip is unique_identifier-only."""
+    from nemo_safe_synthesizer.pii_replacer.planning import discover_plan
+
+    n = 30
+    df = pd.DataFrame(
+        {
+            # Contiguous ints under an ssn header must still be planned as ssn.
+            "ssn": [100000000 + i for i in range(n)],
+            # Contiguous ints under national_id must still be planned as national_id.
+            "national_id": [200000000 + i for i in range(n)],
+            # Gapped numeric unique_identifier still planned (unchanged).
+            "member_id": [100000 + i * 17 for i in range(n)],
+        }
+    )
+    plan = discover_plan(df, None, config_from_replace_pii(PiiReplacerConfig()), PiiReplacerConfig())
+    ssn = column_spec(plan.standalone_columns_to_replace, "ssn")
+    nat = column_spec(plan.standalone_columns_to_replace, "national_id")
+    mid = column_spec(plan.standalone_columns_to_replace, "member_id")
+    assert ssn is not None and ssn.entity_type == PiiEntity.ssn
+    assert nat is not None and nat.entity_type == PiiEntity.national_id
+    assert mid is not None and mid.entity_type == PiiEntity.unique_identifier
+
+
 def test_street_name_only_not_planned_as_street_address():
     from nemo_safe_synthesizer.pii_replacer.detection import looks_like_street_address
     from nemo_safe_synthesizer.pii_replacer.planning import discover_plan

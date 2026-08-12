@@ -18,6 +18,7 @@ from ..errors import InternalError
 from ..observability import get_logger
 from . import entities
 from .llm import PiiEnhancer
+from .models import ReplacementOutcome
 from .planning import PII_REPLACEMENT_PLAN_FILENAME, iter_plan_advisories, resolve_plan, save_plan_to_path
 from .replacement import run_replacement
 from .transform_result import ColumnStatistics, TransformResult
@@ -125,14 +126,14 @@ class TabularPiiReplacer:
         for advisory in iter_plan_advisories(plan, persona_backend=self._cfg.persona_backend):
             logger.user.warning(advisory.message)
 
-        replaced_df, details = run_replacement(df, plan, self._cfg, group_key=group_key, enhancer=self._enhancer)
+        outcome = run_replacement(df, plan, self._cfg, group_key=group_key, enhancer=self._enhancer)
         self.result = TransformResult(
-            transformed_df=replaced_df,
-            column_statistics=self._build_column_statistics(df, plan, details),
+            transformed_df=outcome.replaced_df,
+            column_statistics=self._build_column_statistics(df, plan, outcome),
         )
         self.elapsed_time = time.perf_counter() - start
 
-        changed_summary = cast(list[dict[str, object]], details.get("changed_summary", []))
+        changed_summary = cast(list[dict[str, object]], outcome.details.get("changed_summary", []))
         cells_changed = sum(int(cast(int, item["cells_changed"])) for item in changed_summary)
         plan_path = None
         if self._workdir:
@@ -147,7 +148,7 @@ class TabularPiiReplacer:
                         "rows": len(df),
                         "columns_changed": len(changed_summary),
                         "cells_changed": cells_changed,
-                        "persona_instances": len(cast(list[object], details.get("instances", []))),
+                        "persona_instances": len(outcome.instances),
                         "duration_sec": round(self.elapsed_time, 2),
                         "plan_path": plan_path or "not written",
                     },
@@ -168,13 +169,13 @@ class TabularPiiReplacer:
         self,
         original_df: pd.DataFrame,
         plan: PiiReplacementPlan,
-        details: dict[str, object],
+        outcome: ReplacementOutcome,
     ) -> dict[str, ColumnStatistics]:
         stats: dict[str, ColumnStatistics] = {}
-        changed_raw = cast(list[dict[str, object]], details.get("changed_summary", []))
+        changed_raw = cast(list[dict[str, object]], outcome.details.get("changed_summary", []))
         changed = {str(d["column"]): int(cast(int, d["cells_changed"])) for d in changed_raw}
         locale = self._cfg.locale
-        effective_backend = details.get("persona_backend_effective") or self._cfg.persona_backend
+        effective_backend = outcome.details.get("persona_backend_effective") or self._cfg.persona_backend
         persona_method = _persona_transform_method(locale, str(effective_backend))
 
         def _add(
@@ -233,7 +234,7 @@ class TabularPiiReplacer:
             methods = {_method_for(spec, persona_backed=False)} if changed.get(col, 0) > 0 else set()
             _add(col, entity, transformed=changed.get(col, 0) > 0, transform_methods=methods)
 
-        for ent in cast(list[dict[str, object]], details.get("free_text_entities", [])):
+        for ent in cast(list[dict[str, object]], outcome.details.get("free_text_entities", [])):
             col = ent.get("column")
             label = ent.get("label")
             if not col:

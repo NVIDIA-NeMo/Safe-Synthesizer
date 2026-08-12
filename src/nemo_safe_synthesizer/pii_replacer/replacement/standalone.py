@@ -14,7 +14,6 @@ import pandas as pd
 from ...config.replace_pii import PiiColumnPlan, PiiEntity, PiiReplacementPlan
 from ...observability import get_logger
 from .. import entities
-from ..detection import API_PREFIXES, UUID_RE
 from ..entity_handlers import get_handler
 from ..models import ScopedValueMap
 from ..patterns import (
@@ -109,6 +108,9 @@ def synth_dob_programmatic(original: str, rng: Random, fmt: str | None = None) -
 def fake_value(entity: str, original: str, fake: FakerLike) -> str:
     """Return one Faker (or shape-preserving) draw for an entity-driven cell.
 
+    Delegates to ``get_handler(entity).generate`` so draws live on the handler,
+    not a parallel ``match entity`` table here.
+
     Args:
         entity: Entity type label (for example ``"unique_identifier"``).
         original: Original cell value (used for shape-preserving tokens).
@@ -122,51 +124,10 @@ def fake_value(entity: str, original: str, fake: FakerLike) -> str:
         returns a new UUID; an opaque token keeps its character classes via
         ``pattern_preserving_token``.
     """
-    rng = fake.random
-    match entity:
-        case "credit_debit_card":
-            return fake.credit_card_number()
-        case "ipv4":
-            return fake.ipv4()
-        case "ipv6":
-            return fake.ipv6()
-        case "unique_identifier":
-            if UUID_RE.match(original.strip()):
-                return str(fake.uuid4())
-            return pattern_preserving_token(original, rng)
-        case "api_key":
-            for pfx in API_PREFIXES:
-                if original.startswith(pfx):
-                    return pfx + pattern_preserving_token(original[len(pfx) :], rng)
-            return pattern_preserving_token(original, rng)
-        # Persona-sourced entities listed under standalone still get real Faker draws
-        # (independent of any persona); pattern_preserving_token is only for opaque tokens.
-        case "first_name":
-            return fake.first_name()
-        case "last_name":
-            return fake.last_name()
-        case "middle_name":
-            return fake.first_name()
-        case "full_name":
-            return f"{fake.first_name()} {fake.last_name()}"
-        case "email":
-            return fake.email()
-        case "phone_number":
-            return fake.phone_number()
-        case "ssn":
-            return fake.ssn()
-        case "street_address":
-            return fake.street_address()
-        case "city":
-            return fake.city()
-        case "state":
-            return fake.state_abbr()
-        case "zipcode":
-            return fake.postcode()
-        case "national_id":
-            return fake.ssn()
-        case _:
-            return pattern_preserving_token(original, rng)
+    drawn = get_handler(entity).generate(original, fake)
+    if drawn is not None:
+        return drawn
+    return pattern_preserving_token(original, fake.random)
 
 
 def unique_synthetic(

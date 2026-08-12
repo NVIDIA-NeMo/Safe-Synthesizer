@@ -54,7 +54,7 @@ def test_repeated_original_consistent_within_scope_unit(scope: PiiReplacementSco
             PiiColumnPlan(column_name="patient_id", entity_type=PiiEntity.unique_identifier),
         ],
     )
-    out, _ = run_replacement(df, plan, _cfg(), group_key="group_id")
+    out = run_replacement(df, plan, _cfg(), group_key="group_id").replaced_df
 
     assert (out["patient_id"] != df["patient_id"]).all()
     assert (out["first_name"] != df["first_name"]).all()
