@@ -177,9 +177,12 @@ def apply_replacements(
         return pairs
 
     _sub_cache: dict[tuple[tuple[str, str], ...], Callable[[object], object]] = {}
+    # Pairs computed once during substitution; diagnostic accounting reuses them.
+    row_pairs_by_idx: dict[Hashable, list[tuple[str, str]]] = {}
 
     def _row_substituter(idx: Hashable) -> Callable[[object], object] | None:
         pairs = _row_pairs(idx)
+        row_pairs_by_idx[idx] = pairs
         if not pairs:
             return None
         key = tuple(sorted(set(pairs)))
@@ -218,14 +221,22 @@ def apply_replacements(
             for val, lab in instance_text_pair_labels(inst, cfg).items():
                 label_of.setdefault(str(val), lab)
 
+        # One compiled word-boundary pattern per distinct original; re.search with a
+        # fresh concatenated string would miss the module regex cache and recompile
+        # on every rows × cols × pairs check.
+        needle_re: dict[str, re.Pattern[str]] = {}
+
         def _present(needle: str, hay: str) -> bool:
             if not needle:
                 return False
-            return re.search(r"(?<!\w)" + re.escape(needle) + r"(?!\w)", hay, flags=re.IGNORECASE) is not None
+            pat = needle_re.get(needle)
+            if pat is None:
+                pat = re.compile(r"(?<!\w)" + re.escape(needle) + r"(?!\w)", flags=re.IGNORECASE)
+                needle_re[needle] = pat
+            return pat.search(hay) is not None
 
         seen: set[tuple[str, str, str]] = set()
-        for idx in original_df.index:
-            pairs = _row_pairs(idx)
+        for idx, pairs in row_pairs_by_idx.items():
             if not pairs:
                 continue
             if plan_scope == "group" and group_key:

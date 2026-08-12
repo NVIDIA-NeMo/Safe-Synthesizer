@@ -14,6 +14,9 @@ from ..entities import Config
 
 CATEGORY_FUZZY_THRESHOLD = 0.82
 
+# Tokens that invert a following category word ("Not Hispanic", "non-white").
+_NEGATION_TOKENS = frozenset({"not", "non", "no"})
+
 __all__ = [
     "CATEGORY_FUZZY_THRESHOLD",
     "ethnicity_to_pgm",
@@ -27,6 +30,31 @@ def _norm_cat(value: object) -> str:
     return re.sub(r"[^a-z0-9]+", " ", str(value).strip().lower()).strip()
 
 
+def _alias_preceded_by_negation(value_tokens: list[str], a_tokens: list[str]) -> bool:
+    """Return True when a contiguous alias span is under a negation.
+
+    Covers ``not black`` / ``non-white`` (alias directly after a negation token)
+    and ``Not Hispanic or Latino`` (right disjunct under a shared ``not … or …``).
+    Leaves ``Non-Hispanic White`` free to match ``white``.
+    """
+    n, m = len(value_tokens), len(a_tokens)
+    if m == 0 or m > n:
+        return False
+    for i in range(n - m + 1):
+        if value_tokens[i : i + m] != a_tokens:
+            continue
+        if i > 0 and value_tokens[i - 1] in _NEGATION_TOKENS:
+            return True
+        # Shared negation over a disjunction: "not hispanic or latino".
+        if i >= 2 and value_tokens[i - 1] == "or":
+            j = i - 2
+            while j > 0 and value_tokens[j] not in _NEGATION_TOKENS and value_tokens[j] != "or":
+                j -= 1
+            if value_tokens[j] in _NEGATION_TOKENS:
+                return True
+    return False
+
+
 def _alias_score(value_tokens: list[str], value_join: str, alias: str) -> float:
     a = _norm_cat(alias)
     if not a:
@@ -34,8 +62,13 @@ def _alias_score(value_tokens: list[str], value_join: str, alias: str) -> float:
     a_tokens = a.split()
     if len(a_tokens) == 1:
         if a in value_tokens:
+            # "Not Hispanic" / "non-white" must not score as hispanic / white.
+            if _alias_preceded_by_negation(value_tokens, a_tokens):
+                return 0.0
             return 1.0
         return difflib.SequenceMatcher(None, value_join, a).ratio()
+    if _alias_preceded_by_negation(value_tokens, a_tokens):
+        return 0.0
     if a in value_join:
         return 1.0
     if all(t in value_tokens for t in a_tokens):
