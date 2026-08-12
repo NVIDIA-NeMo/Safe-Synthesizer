@@ -83,7 +83,8 @@ def test_config_from_replace_pii_seed_falls_back_to_env(monkeypatch):
     assert config_from_replace_pii(cfg).random_seed == 99
 
 
-def test_default_managed_assets_path():
+def test_default_managed_assets_path(monkeypatch):
+    monkeypatch.delenv(NSS_MANAGED_ASSETS_PATH_ENV, raising=False)
     assert default_managed_assets_path() == Path.home() / ".data-designer" / "managed-assets"
 
 
@@ -100,11 +101,19 @@ def test_managed_assets_path_explicit_overrides_env(monkeypatch, tmp_path):
     assert cfg.resolved_managed_assets_path() == explicit
 
 
-def test_managed_backend_smoke(fixture_patient_df: pd.DataFrame):
-    assets_root = default_managed_assets_path()
-    parquet = assets_root / "datasets" / "en_US.parquet"
-    if not parquet.exists():
-        pytest.skip(f"managed persona assets not installed at {parquet}")
+def test_managed_backend_smoke(tmp_path, fixture_patient_df: pd.DataFrame):
+    """Managed sampling works when a locale parquet is present (no NGC install required)."""
+    assets_root = tmp_path / "managed-assets"
+    (assets_root / "datasets").mkdir(parents=True)
+    # Minimal columns the managed sampler / name writer read from the parquet.
+    pd.DataFrame(
+        {
+            "first_name": [f"SynFirst{i}" for i in range(40)],
+            "last_name": [f"SynLast{i}" for i in range(40)],
+            "sex": (["Female", "Male"] * 20),
+            "ethnic_background": (["white", "black"] * 20),
+        }
+    ).to_parquet(assets_root / "datasets" / "en_US.parquet")
 
     plan = PiiReplacementPlan(
         scope=PiiReplacementScope.group,
@@ -121,7 +130,7 @@ def test_managed_backend_smoke(fixture_patient_df: pd.DataFrame):
         PiiReplacerConfig(
             replacement_plan=plan,
             replacement=PiiReplacementSettings(locale="en_US"),
-            person=PiiPersonConfig(backend=PiiPersonBackend.managed),
+            person=PiiPersonConfig(backend=PiiPersonBackend.managed, managed_assets_path=str(assets_root)),
         ),
         data_config=DataParameters(group_training_examples_by="patient_id"),
     )
@@ -129,6 +138,7 @@ def test_managed_backend_smoke(fixture_patient_df: pd.DataFrame):
     assert replacer.result is not None
     out = replacer.result.transformed_df
     assert out["first_name"].tolist() != fixture_patient_df["first_name"].tolist()
+    assert replacer.result.column_statistics["first_name"].transform_methods == {"en_US personas"}
 
 
 def test_persona_transform_method_labels():
@@ -230,9 +240,10 @@ def test_plan_column_counts():
     assert _plan_column_counts(plan) == (1, 2, 1)
 
 
-def test_replacement_plan_source():
+def test_replacement_plan_source(tmp_path):
+    plan_path = str(tmp_path / "plan.yaml")
     assert _replacement_plan_source(PiiReplacerConfig()) == "auto_discovery"
-    assert _replacement_plan_source(PiiReplacerConfig(replacement_plan="/tmp/plan.json")) == "/tmp/plan.json"
+    assert _replacement_plan_source(PiiReplacerConfig(replacement_plan=plan_path)) == plan_path
 
 
 def test_replace_pii_null_disables():

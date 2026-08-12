@@ -112,3 +112,18 @@ def test_a_patterned_card_number_still_adds_up():
 
     assert all(re.fullmatch(r"4\d{3}-\d{4}-\d{4}-\d{4}", number) for number in numbers)
     assert all(luhn_valid("".join(c for c in number if c.isdigit())) for number in numbers)
+
+
+def test_unterminated_character_class_is_rejected():
+    from nemo_safe_synthesizer.pii_replacer.patterns import (
+        generate_from_pattern,
+        value_template_has_unbalanced_brackets,
+    )
+    from nemo_safe_synthesizer.pii_replacer.replacement import seeded_faker
+
+    assert value_template_has_unbalanced_brackets("pmc-[68")
+    assert value_template_has_unbalanced_brackets("[")
+    assert not value_template_has_unbalanced_brackets("pmc-[68]#")
+    assert not value_template_has_unbalanced_brackets(r"pmc-\[literal")
+    with pytest.raises(ValueError, match="unterminated character class"):
+        generate_from_pattern("pmc-[68", seeded_faker(0, "en_US").random)

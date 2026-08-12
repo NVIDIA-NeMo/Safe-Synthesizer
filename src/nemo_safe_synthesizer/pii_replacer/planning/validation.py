@@ -409,7 +409,13 @@ def _iter_column_spec_issues(df: pd.DataFrame, plan: PiiReplacementPlan, df_cols
             if spec.entity_type in DATE_PATTERN_ENTITIES:
                 yield from _iter_date_pattern_issues(col, pattern, samples)
             elif spec.entity_type in TEMPLATE_PATTERN_ENTITIES:
-                if patterns.value_template_is_constant(pattern):
+                if patterns.value_template_has_unbalanced_brackets(pattern):
+                    yield PlanIssue(
+                        "pii_plan_pattern_invalid",
+                        f"pattern {pattern!r} for column {col!r} has an unclosed '[' character class; "
+                        f"close it with ']' (use '\\[' for a literal bracket)",
+                    )
+                elif patterns.value_template_is_constant(pattern):
                     yield PlanIssue(
                         "pii_plan_pattern_invalid",
                         f"pattern {pattern!r} for column {col!r} has no variable position, so every row "

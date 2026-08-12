@@ -163,7 +163,9 @@ def test_replacement_follows_the_columns_own_conventions(fixture_contact_df: pd.
 
     assert (out["patient_name"] != fixture_contact_df["patient_name"]).all()
     assert (out["patient_email"] != fixture_contact_df["patient_email"]).all()
-    for name, email, original in zip(out["patient_name"], out["patient_email"], fixture_contact_df["patient_email"]):
+    for name, email, original in zip(
+        out["patient_name"], out["patient_email"], fixture_contact_df["patient_email"], strict=True
+    ):
         last, _, first = name.partition(", ")
         assert last.isupper() and first.istitle(), name
         # The address is built from the same person, and keeps the domain it had.
@@ -211,7 +213,7 @@ def test_one_person_has_one_middle_name(fixture_middle_name_df: pd.DataFrame):
     assert replacer.result is not None
     out = replacer.result.transformed_df
 
-    for full, middle in zip(out["full_name"], out["middle_name"]):
+    for full, middle in zip(out["full_name"], out["middle_name"], strict=True):
         assert full.split()[1] == middle, (full, middle)
 
 
@@ -248,7 +250,9 @@ def test_an_address_following_no_convention_is_replaced_without_one(fixture_cont
     out = replacer.result.transformed_df
 
     assert (out["patient_email"] != df["patient_email"]).all()
-    for email, original, was in zip(out["patient_email"], fixture_contact_df["patient_name"], df["patient_email"]):
+    for email, original, was in zip(
+        out["patient_email"], fixture_contact_df["patient_name"], df["patient_email"], strict=True
+    ):
         local, domain = email.split("@")
         assert domain == was.split("@")[1]  # the domain is the part of it that was real
         assert local != was.split("@")[0]
@@ -276,7 +280,7 @@ def test_a_column_of_several_conventions_keeps_each_of_them():
     assert replacer.result is not None
     out = replacer.result.transformed_df
 
-    for i, (name, email) in enumerate(zip(out["patient_name"], out["patient_email"])):
+    for i, (name, email) in enumerate(zip(out["patient_name"], out["patient_email"], strict=True)):
         first, last = (part.lower() for part in name.split())
         expected = f"{first[0]}.{last}" if i % 10 < 4 else (f"{first}.{last}" if i % 10 < 7 else f"{first}{last}")
         assert email == f"{expected}@acme.com", (df["patient_email"][i], name, email)

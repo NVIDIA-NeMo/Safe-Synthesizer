@@ -49,7 +49,7 @@ def _dob_replacement(patterns: list[str], dates: list[str]) -> pd.Series:
 def test_a_column_of_one_date_format_keeps_it():
     dates = [f"{(i % 12) + 1:02d}/{(i % 28) + 1:02d}/1980" for i in range(10)]
     result = _dob_replacement(["%m/%d/%Y"], dates)
-    for original, new in zip(dates, result):
+    for original, new in zip(dates, result, strict=True):
         assert new != original
         assert re.fullmatch(r"\d{2}/\d{2}/\d{4}", str(new))
 
@@ -66,7 +66,7 @@ def test_a_column_of_two_date_formats_parses_each_value_in_its_own():
     """Each format the column writes is listed, and each date is read in its own."""
     dates = ["01/15/1980", "1975-03-25", "02/20/1990", "1969-11-02"]
     result = _dob_replacement(["%m/%d/%Y", "%Y-%m-%d"], dates)
-    for original, new in zip(dates, result):
+    for original, new in zip(dates, result, strict=True):
         assert new != original
     assert re.fullmatch(r"\d{2}/\d{2}/\d{4}", str(result.iloc[0]))
     assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(result.iloc[1]))

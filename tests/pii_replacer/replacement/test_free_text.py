@@ -45,7 +45,7 @@ def test_a_surname_mentioned_in_a_note_follows_its_column():
     assert replacer.result is not None
     out = replacer.result.transformed_df
 
-    for new_name, new_note, original in zip(out["patient_name"], out["notes"], df["patient_name"]):
+    for new_name, new_note, original in zip(out["patient_name"], out["notes"], df["patient_name"], strict=True):
         new_last, original_last = new_name.split(",")[0], original.split(",")[0]
         assert new_last in new_note, (new_name, new_note)
         if new_last != original_last:

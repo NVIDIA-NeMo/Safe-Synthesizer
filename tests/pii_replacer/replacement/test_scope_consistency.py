@@ -68,8 +68,8 @@ def test_repeated_original_consistent_within_scope_unit(scope: PiiReplacementSco
         for _, g in out.groupby(df["group_id"]):
             assert g["patient_id"].nunique() == 1
             assert g["first_name"].nunique() == 1
-        # Same original across groups may (and typically does) differ under group scope.
-        assert out["patient_id"].nunique() >= 1
+        # Same original across groups may (and typically does) differ under group scope,
+        # so no cross-group assertion is made here.
         return
 
     # record: each row is its own unit

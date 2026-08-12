@@ -47,7 +47,7 @@ UUID_RE = re.compile(r"[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{
 _PHONE_RE = re.compile(r"\+?\(?\d[\d\-\.\s()]{5,}\d\Z")
 _PHONE_EXT_RE = re.compile(r"(?i)[\s,;]*\b(?:x|ext\.?|extension)\s*\d+\s*$")
 _CARD_RE = re.compile(r"(?:\d[ -]?){12,18}\d\Z")
-_HEX_OPAQUE_RE = re.compile(r"(?i)^[0-9a-f]{32}$|^[0-9a-f]{64}$\Z")
+_HEX_OPAQUE_RE = re.compile(r"(?i)(?:[0-9a-f]{32}|[0-9a-f]{64})\Z")
 _BASE64_OPAQUE_RE = re.compile(r"^[A-Za-z0-9_\-]{22,}={0,2}\Z")
 _JWT_OPAQUE_RE = re.compile(r"^[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+\Z")
 API_PREFIXES = (

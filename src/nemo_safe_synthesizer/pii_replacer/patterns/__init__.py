@@ -60,6 +60,7 @@ from .value_templates import (
     value_patterns,
     value_shape_template,
     value_structure_template,
+    value_template_has_unbalanced_brackets,
     value_template_is_constant,
 )
 
@@ -104,5 +105,6 @@ __all__ = [
     "value_patterns",
     "value_shape_template",
     "value_structure_template",
+    "value_template_has_unbalanced_brackets",
     "value_template_is_constant",
 ]

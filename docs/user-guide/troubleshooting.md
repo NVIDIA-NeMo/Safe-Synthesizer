@@ -552,7 +552,7 @@ check of its own.
 | `pii_plan_column_not_found` | error | `pii.plan_validity` | Plan references a column that is not in the dataset |
 | `pii_plan_duplicate_entry` | error | `pii.plan_validity` | A column, persona, persona attribute, or one of a column's `patterns` appears more than once in the plan |
 | `pii_plan_entity_type_invalid` | error | `pii.plan_validity` | Column has no `entity_type`, or uses `date` (identified but never replaced) |
-| `pii_plan_pattern_invalid` | error | `pii.plan_validity` | A listed pattern is empty, describes none of the column's values, has no variable position, or is set on a column that takes none (`ssn`, `national_id`, `street_address`, `ipv4`, `ipv6`, `free_text`) |
+| `pii_plan_pattern_invalid` | error | `pii.plan_validity` | A listed pattern is empty, describes none of the column's values, has no variable position, has an unclosed `[` class, or is set on a column that takes none (`ssn`, `national_id`, `street_address`, `ipv4`, `ipv6`, `free_text`) |
 | `pii_plan_column_conflict` | error | `pii.plan_validity` | Column is listed in both `match_persona_by` and `columns_to_replace` |
 | `pii_plan_ethnic_background_ignored_under_faker` | warning | `pii.plan_validity` | `match_persona_by` lists `ethnic_background` but `person.backend` is `faker` (sex-only); remove it or use managed/pgm |
 | `pii_plan_free_text_under_persona` | warning | `pii.plan_validity` | `free_text` column listed under `persona_backed_columns`; move it to `standalone_columns_to_replace` (behavior is unchanged either way) |

@@ -466,6 +466,7 @@ def test_a_plan_may_not_list_patterns_a_field_ignores(entity: PiiEntity, column:
     [
         pytest.param("+1-415-555-0100", "no variable position", id="constant_template"),
         pytest.param("###-####", "matches none of its values", id="describes_no_value"),
+        pytest.param("+1-###-[68", r"unclosed '\[' character class", id="unbalanced_brackets"),
     ],
 )
 def test_validate_plan_rejects_unusable_phone_patterns(fixture_phone_df: pd.DataFrame, pattern: str, message: str):

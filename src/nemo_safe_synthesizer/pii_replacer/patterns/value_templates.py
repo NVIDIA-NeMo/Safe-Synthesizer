@@ -198,6 +198,35 @@ def value_template_is_constant(pattern: str) -> bool:
     return _VARIABLE_TEMPLATE_POSITION.search(pattern) is None
 
 
+def value_template_has_unbalanced_brackets(pattern: str) -> bool:
+    r"""Return whether ``pattern`` opens a ``[`` class that never closes.
+
+    A backslash-escaped ``[`` is a literal and does not start a class.
+
+    Example:
+        ``"pmc-[68"`` -> ``True``; ``"pmc-[68]"`` / ``"pmc-\\["`` -> ``False``.
+    """
+    i, n = 0, len(pattern)
+    while i < n:
+        ch = pattern[i]
+        if ch == "\\" and i + 1 < n:
+            i += 2
+            continue
+        if ch == "[":
+            j = i + 1
+            while j < n and pattern[j] != "]":
+                if pattern[j] == "\\" and j + 1 < n:
+                    j += 2
+                    continue
+                j += 1
+            if j >= n:
+                return True
+            i = j + 1
+            continue
+        i += 1
+    return False
+
+
 def infer_value_pattern(values, cfg: Config) -> str | None:
     """Infer a Faker-style template from sample values (modal length).
 
@@ -272,6 +301,8 @@ def _template_positions(pattern: str) -> tuple[tuple[str, bool], ...]:
                     continue
                 body.append(pattern[j])
                 j += 1
+            if j >= n:
+                raise ValueError(f"unterminated character class in value template {pattern!r}")
             if body:
                 out.append(("".join(body), False))
             i = j + 1

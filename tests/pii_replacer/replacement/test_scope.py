@@ -101,7 +101,7 @@ def test_grouped_unique_id_and_dob_replaced_globally_unique_and_group_consistent
     # unique (identifiers get a hard cross-group uniqueness guarantee).
     assert (out["patient_id"] != df["patient_id"]).all()
     orig_to_new: dict[str, str] = {}
-    for o, n in zip(df["patient_id"], out["patient_id"]):
+    for o, n in zip(df["patient_id"], out["patient_id"], strict=True):
         orig_to_new.setdefault(o, n)
         assert orig_to_new[o] == n  # same original -> same synthetic within its group
     synth_ids = list(orig_to_new.values())
@@ -155,7 +155,7 @@ def test_entity_driven_column_under_persona_routes_to_standalone():
     maps = build_standalone_maps(df, plan, cfg)
     assert "date_of_birth" in maps
     out, _ = run_replacement(df, plan, cfg)
-    for original, new in zip(df["date_of_birth"], out["date_of_birth"]):
+    for original, new in zip(df["date_of_birth"], out["date_of_birth"], strict=True):
         assert new != original
         assert re.fullmatch(r"\d{2}/\d{2}/\d{4}", str(new))
 
