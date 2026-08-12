@@ -8,12 +8,12 @@
 
 ## Human review
 
-Select one:
+Select exactly one. The default is no human review; uncheck it when choosing another level.
 
-- [ ] No human review; automated review only
-- [ ] Partially reviewed or spot-checked by a human
-- [ ] Complete diff reviewed by a human
-- [ ] Complete diff reviewed and verified by a human
+- [x] ⚪ No human review; automated review only
+- [ ] 🟡 Partially reviewed or spot-checked by a human
+- [ ] 🔵 Complete diff reviewed by a human
+- [ ] 🟢 Complete diff reviewed and verified by a human
 
 Verification performed:
 

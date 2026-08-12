@@ -35,7 +35,7 @@ Feature branches off `main`. Branch names often include an issue number prefix (
 
 Do not commit unless the user asks for a commit or PR work. When committing, all commits require DCO sign-off and GPG signing. Always use `git commit --signoff --gpg-sign` (or `-s -S`) -- never write the `Signed-off-by` trailer manually, and never pass `--no-gpg-sign`.
 
-When creating or updating a pull request, complete the Human review section accurately. Do not claim that a human reviewed or verified a change unless the human explicitly confirmed it; otherwise select “No human review; automated review only.”
+When creating or updating a pull request, complete the Human review section in `.github/PULL_REQUEST_TEMPLATE.md` accurately. Keep its default checkbox unless a human explicitly confirms a higher review level; then select exactly that level and report only review or verification the human confirmed.
 
 Shell scripting: never use `~` inside double-quoted strings -- it does not expand. Use `$HOME` or an absolute path instead.
 
