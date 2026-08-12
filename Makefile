@@ -75,8 +75,6 @@ $(eval $(call deprecated_target,docs-build,docs:build))
 $(eval $(call deprecated_target,docs-deploy,docs:deploy))
 $(eval $(call deprecated_target,docs-serve,docs:serve))
 $(eval $(call deprecated_target,format,format))
-$(eval $(call deprecated_target,format-check,check:format ::: check:lint ::: check:license:headers))
-$(eval $(call deprecated_target,lock-check,check:lock))
 $(eval $(call deprecated_target,publish-internal,publish:internal))
 $(eval $(call deprecated_target,publish-pypi,publish:pypi))
 $(eval $(call deprecated_target,test,test))
@@ -98,7 +96,6 @@ $(eval $(call deprecated_target,test-smoke-gpu-timeseries,test:smoke:gpu:timeser
 $(eval $(call deprecated_target,test-smoke-gpu-train-only,test:smoke:gpu:train-only))
 $(eval $(call deprecated_target,test-tool-install,test:tool-install))
 $(eval $(call deprecated_target,test-unit-slow,test:unit-slow))
-$(eval $(call deprecated_target,typecheck,check:type))
 
 .PHONY: test-nss-%-ci
 test-nss-%-ci:
