@@ -10,6 +10,13 @@ license: Apache-2.0
 
 Multi-step workflows (pre-merge checklist, debug CI, release, fetch and reply to PR comments): [references/workflows.md](./references/workflows.md).
 
+## Pull Request Review Comments
+
+Before drafting or posting new PR review findings, read and follow
+[references/review-comments.md](./references/review-comments.md). It defines the
+finding format, classification vocabulary, human-approval and attribution rules,
+and posting completion criteria.
+
 ## Scripts
 
 **PR comments: use the CLI helper** (PEP 723 + Typer + PyGithub + Pydantic). Run from repo root or from this skill directory. No `gh` binary required for fetch/reply (uses GitHub API with `GITHUB_TOKEN` or `--token`; optional fallback: `gh auth token`). If `GITHUB_TOKEN` is not set, run `export GITHUB_TOKEN=$(gh auth token)` before invoking the helper (or pass `--token`). Requires network; in Agent use `required_permissions: ["all"]` per [sandbox behavior](https://cursor.com/docs/agent/tools/terminal).
