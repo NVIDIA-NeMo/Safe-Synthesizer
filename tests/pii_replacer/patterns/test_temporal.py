@@ -80,3 +80,21 @@ def test_a_column_of_two_date_formats_names_both():
     values = pd.Series([f"0{i % 9 + 1}/15/1980" for i in range(30)] + [f"1975-0{i % 9 + 1}-25" for i in range(10)])
 
     assert date_patterns(values) == ["%m/%d/%Y", "%Y-%m-%d"]
+
+
+def test_date_patterns_skips_unparseable_values():
+    """Dot-separated dates are not in the matcher set; do not invent ``%Y-%m-%d``."""
+    from nemo_safe_synthesizer.pii_replacer.patterns import date_patterns
+
+    assert date_patterns(pd.Series(["15.03.2020", "16.03.2020", "17.03.2020"])) == []
+
+
+def test_date_patterns_ranks_only_recognized_formats():
+    """Mixed parseable + unparseable: count only formats that actually match."""
+    from nemo_safe_synthesizer.pii_replacer.patterns import date_patterns
+
+    values = pd.Series(
+        [f"0{i % 9 + 1}/15/1980" for i in range(20)]
+        + ["15.03.2020", "16.03.2021", "not-a-date"]
+    )
+    assert date_patterns(values) == ["%m/%d/%Y"]

@@ -10,7 +10,7 @@ import re
 from collections.abc import Iterable, Mapping
 
 from ...observability import get_logger
-from ..entities import DEMO_FUZZY_KEYWORDS, FUZZY_KEYWORDS, is_identify_only
+from ..entities import DEMO_FUZZY_KEYWORDS, FUZZY_KEYWORDS, is_identify_only, spec
 
 logger = get_logger(__name__)
 
@@ -36,6 +36,34 @@ def normalize_column_name_for_match(col: str) -> str:
     s = re.sub(r"([A-Za-z])(\d)", r"\1 \2", s)
     s = re.sub(r"(\d)([A-Za-z])", r"\1 \2", s)
     return re.sub(r"\s+", " ", s).strip().lower()
+
+
+def header_matches_patterns(col: str, patterns: Iterable[str]) -> bool:
+    """Return whether the normalized header matches any of ``patterns``."""
+    name = normalize_column_name_for_match(col)
+    return any(re.search(pattern, name, re.IGNORECASE) for pattern in patterns)
+
+
+def unique_identifier_name_is_strong(col: str) -> bool:
+    """Return whether a header is a strong ``unique_identifier`` name match.
+
+    Reads ``EntitySpec.strong_name_patterns`` for ``unique_identifier``. Strong
+    names (``patient_id``, bare ``id``, ``uuid``, …) skip the weak-``*id``
+    dominant-template content gate. Weak leftovers such as ``valid`` / ``userid``
+    still match via ``name_patterns`` but must pass that gate in
+    ``UniqueIdentifierHandler``.
+
+    Args:
+        col: Raw column header name.
+
+    Returns:
+        ``True`` when a strong unique-identifier name pattern matches, or when
+        the entity has no weak tier configured.
+    """
+    entity = spec("unique_identifier")
+    if entity is None or not entity.strong_name_patterns:
+        return True
+    return header_matches_patterns(col, entity.strong_name_patterns)
 
 
 def match_labels(col: str, patterns: Mapping[str, list[str]]) -> list[str]:

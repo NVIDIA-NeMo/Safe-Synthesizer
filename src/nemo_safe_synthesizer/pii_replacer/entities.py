@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from random import Random
 from typing import TYPE_CHECKING, Literal, Protocol
@@ -168,6 +168,13 @@ class EntitySpec:
     """Stats/report method label (e.g. ``propagation``, ``perturbation``); ``None`` if N/A."""
     name_patterns: tuple[str, ...] = ()
     """Regex fragments matched against normalized column headers."""
+    strong_name_patterns: tuple[str, ...] = ()
+    """Subset of ``name_patterns`` that skip weak-name content gates.
+
+    Empty means every name match is treated as strong (no weak tier). When set,
+    a header that matches ``name_patterns`` but none of these is a weak match and
+    the entity handler may require extra value evidence (e.g. dominant template).
+    """
     fuzzy_keywords: tuple[str, ...] = ()
     """Tokens used for fuzzy header matching when exact regexes miss."""
     role_strip_tokens: tuple[str, ...] = ()
@@ -181,6 +188,18 @@ class EntitySpec:
 
 
 def _build_registry() -> dict[str, EntitySpec]:
+    unique_id_strong_name_patterns = (
+        r"\buuid\b",
+        r"\bguid\b",
+        r"\bmrn\b",
+        r"(?:^|[_ ])id$",
+        r"\w+[_ ]id$",
+        r"identifier",
+        r"(?:^|_)key$",
+        r"(?:^|_)ref$",
+    )
+    unique_id_weak_name_pattern = r"\b\w*_?id$"
+
     specs: list[EntitySpec] = [
         EntitySpec(
             label="first_name",
@@ -586,15 +605,11 @@ def _build_registry() -> dict[str, EntitySpec]:
             label="unique_identifier",
             apply_path="standalone_map",
             pattern_kind="template",
-            name_patterns=(
-                "\\buuid\\b",
-                "\\bguid\\b",
-                "\\bmrn\\b",
-                "\\b\\w*_?id$",
-                "identifier",
-                "(?:^|_)key$",
-                "(?:^|_)ref$",
-            ),
+            # Strong names skip the weak-``*id`` dominant-template gate; the catch-all
+            # weak pattern still matches English leftovers (``valid``, ``userid``) but
+            # ``UniqueIdentifierHandler`` requires a dominant identifier template then.
+            strong_name_patterns=unique_id_strong_name_patterns,
+            name_patterns=unique_id_strong_name_patterns + (unique_id_weak_name_pattern,),
             fuzzy_keywords=(
                 "uniqueidentifier",
                 "mrn",
@@ -695,13 +710,23 @@ class EntityHandler(Protocol):
         """
         ...
 
-    def skip_reason(self, series: pd.Series, value_entity: str | None, apply_path: str) -> str | None:
+    def skip_reason(
+        self,
+        series: pd.Series,
+        value_entity: str | None,
+        apply_path: str,
+        *,
+        column_name: str | None = None,
+        cfg: Config | None = None,
+    ) -> str | None:
         """Return why discovery must not allocate this name-matched column.
 
         Args:
             series: Column values under consideration.
             value_entity: Entity inferred from values, if any.
             apply_path: Effective apply path for this label.
+            column_name: Header for entity-specific name tiers (e.g. strong/weak).
+            cfg: Engine configuration for entity-specific content gates.
 
         Returns:
             A human-readable skip reason, or ``None`` when the column may allocate.
@@ -729,6 +754,32 @@ class EntityHandler(Protocol):
 
         Returns:
             The synthetic value, or ``None`` when none can be made.
+        """
+        ...
+
+    def persona_value(
+        self,
+        original: str,
+        persona: Mapping[str, object],
+        *,
+        patterns: Sequence[str] | None = None,
+        originals: Mapping[str, object] | None = None,
+        fake: FakerLike | None = None,
+    ) -> str | None:
+        """Return a persona-sourced replacement for one cell, or ``None``.
+
+        Only persona-channel labels implement this; standalone entities leave it
+        unused (``synth_value`` never reaches them).
+
+        Args:
+            original: Original cell text to replace.
+            persona: Sampled persona dict for this instance.
+            patterns: Optional column format templates.
+            originals: This person's other original values (email local-part inference).
+            fake: Optional seeded Faker for fallbacks / phone formatting.
+
+        Returns:
+            The synthetic value, or ``None`` to leave the cell unchanged.
         """
         ...
 

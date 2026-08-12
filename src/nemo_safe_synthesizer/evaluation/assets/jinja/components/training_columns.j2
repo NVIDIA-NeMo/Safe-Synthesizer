@@ -61,7 +61,7 @@
                 <td>{{ column.column_statistics.is_transformed if column.column_statistics else False }}</td>
                 <td class="transform-function-cell">
                     {% if column.column_statistics %}
-                    {{ column.column_statistics.transform_methods | join(", ") }}
+                    {{ column.column_statistics.transform_methods | sort | join(", ") }}
                     {% endif %}
                 </td>
                 {% endif %}

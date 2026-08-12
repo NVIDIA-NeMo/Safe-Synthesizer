@@ -176,11 +176,17 @@ def detect_date_format(sample: str) -> str:
 def date_patterns(values: pd.Series) -> list[str]:
     """Return strftime formats a column writes its dates in, most common first.
 
+    Only formats returned by ``match_datetime_format`` / ``match_date_format``
+    are counted. Unparseable values (for example ``15.03.2020``) are skipped so
+    discovery does not invent a fallback pattern that later fails plan
+    validation. When no value is recognized, the result is empty.
+
     Args:
         values: Column date values.
 
     Returns:
-        Ranked strftime format strings for formats that clear ``PATTERN_MIN_SHARE``.
+        Ranked strftime format strings for formats that clear ``PATTERN_MIN_SHARE``,
+        or ``[]`` when none is recognized.
 
     Example:
         A column mostly ``03/15/2020`` with a few ISO dates -> ``["%m/%d/%Y"]``
@@ -188,5 +194,9 @@ def date_patterns(values: pd.Series) -> list[str]:
     """
     counts: Counter = Counter()
     for value in pattern_evidence_values(values):
-        counts[detect_date_format(value)] += 1
+        fmt = match_datetime_format(value) or match_date_format(value)
+        if fmt is not None:
+            counts[fmt] += 1
+    if not counts:
+        return []
     return ranked_formats(counts, sum(counts.values()))

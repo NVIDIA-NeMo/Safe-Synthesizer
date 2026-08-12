@@ -350,7 +350,7 @@ class PersonaEngine:
 # ===========================================================================
 # Writing a persona into a column
 # ===========================================================================
-def _persona_phone(number: str, original: str, patterns: Sequence[str] | None, fake: FakerLike | None) -> str:
+def format_persona_phone(number: str, original: str, patterns: Sequence[str] | None, fake: FakerLike | None) -> str:
     """Format the persona's phone number to match the column's convention.
 
     The generator gives a number in its own format (``"(206) 555-0181"``), which would
@@ -489,7 +489,8 @@ def synth_value(
 
     Only persona-sourced fields are handled here. Entity-driven columns
     (``unique_identifier``, ``date_of_birth``, ...) are replaced via the standalone path
-    and never reach this function.
+    and never reach this function. Per-label writes live on
+    ``get_handler(label).persona_value``.
 
     Args:
         label: Persona-sourced field label.
@@ -508,46 +509,13 @@ def synth_value(
     """
     if is_missing_value(original):
         return None
-    p = persona or {}
-    if label in ("first_name", "last_name", "middle_name", "full_name", "email"):
-        written = persona_written(label, str(original), p, patterns, originals, fake.random if fake else None)
-        if written is not None:
-            return written
-    match label:
-        case "first_name":
-            return _as_str(p.get("first_name"))
-        case "last_name":
-            return _as_str(p.get("last_name"))
-        case "middle_name":
-            return _as_str(p.get("middle_name"))
-        case "email":
-            # Only reached by a value that is no address at all, since one with a
-            # domain is written from itself above.
-            return _as_str(p.get("email_address")) or (fake.email() if fake else None)
-        case "phone_number":
-            # Only reached under the PGM backend, whose number is tied to the
-            # persona's address; the other backends route phones standalone
-            # (see effective_apply_path).
-            number = _as_str(p.get("phone_number")) or (fake.phone_number() if fake else None)
-            return _persona_phone(number, original, patterns, fake) if number else None
-        case "street_address":
-            parts = [str(x) for x in (p.get("street_number"), p.get("street_name")) if x not in (None, "")]
-            new_street = " ".join(parts)
-            if not new_street:
-                return None
-            # Preserve city/state/zip context: replace only the street line (before first comma).
-            if "," in str(original):
-                return new_street + "," + str(original).split(",", 1)[1]
-            return new_street
-        case "full_name":
-            title, _ = split_title(str(original))
-            full = f"{p.get('first_name', '')} {p.get('last_name', '')}".strip()
-            if not full:
-                return None
-            return f"{title} {full}" if title else full
-        case _:
-            return None
+    # Deferred: handlers import persona helpers from this module.
+    from ..entity_handlers import get_handler
 
-
-def _as_str(value: object | None) -> str | None:
-    return None if value is None else str(value)
+    return get_handler(label).persona_value(
+        str(original),
+        persona or {},
+        patterns=patterns,
+        originals=originals,
+        fake=fake,
+    )

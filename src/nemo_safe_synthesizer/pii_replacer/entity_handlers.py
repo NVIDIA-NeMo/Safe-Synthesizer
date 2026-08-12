@@ -5,20 +5,23 @@
 
 ``entities.py`` says what each label *is* — its channel, its pattern language,
 the gates discovery holds it to. This module holds what each label *does*: read
-a value as that entity, refuse a column that only looks like one, and write a
-synthetic stand-in for a value.
+a value as that entity, refuse a column that only looks like one, write a
+synthetic stand-in for a standalone value, and (for persona-channel labels)
+map a sampled persona onto a cell.
 
-Handlers are deliberately thin. Discovery skips and standalone generation both
-go through ``get_handler(label)``. Shared content gates still live in
-``detection.persona_grouping.skip_reason_named_column`` (``DefaultHandler.skip_reason``
-delegates there); Faker / shape-preserving draws live on the handler
-(``DefaultHandler._faker_draw`` and overrides). Call sites should not keep a
-parallel ``match entity`` table.
+Handlers are deliberately thin. Discovery skips, standalone generation, and
+persona writes all go through ``get_handler(label)``. Shared content gates
+(``requires_value_match``, ``name_shape_gates``) live in
+``skip_reason_named_column`` for ``DefaultHandler``; entity-specific gates
+(phone messaging, DOB parseability, API-key shape, street house numbers,
+``unique_identifier`` strong/weak tiers) live on the dedicated handler. Faker /
+shape-preserving draws live on the handler (``DefaultHandler._faker_draw`` and
+overrides).
 """
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from functools import lru_cache
 from random import Random
@@ -26,13 +29,22 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 
-from .detection.persona_grouping import skip_reason_named_column
-from .detection.value_recognizers import match_value_entity
-from .entities import EntityHandler, spec
+from .detection.column_names import header_matches_patterns
+from .detection.value_recognizers import (
+    looks_like_sequential_integer_id,
+    match_value_entity,
+    sample_has_dominant_identifier_template,
+    sample_looks_like_api_key,
+    sample_looks_like_multi_person,
+    sample_looks_like_org_name,
+    sample_looks_like_street_address,
+)
+from .entities import Config, EntityHandler, EntitySpec, spec
 from .patterns import (
     generate_from_pattern,
     matching_template,
     pattern_preserving_token,
+    split_title,
     synth_card_value,
     try_strftime_formats,
 )
@@ -45,8 +57,49 @@ __all__ = [
     "DateOfBirthHandler",
     "DefaultHandler",
     "EntityHandler",
+    "UniqueIdentifierHandler",
     "get_handler",
+    "skip_reason_named_column",
 ]
+
+
+def skip_reason_named_column(
+    entity_spec: EntitySpec,
+    series: pd.Series,
+    value_entity: str | None,
+    apply_path: str,
+) -> str | None:
+    """Return a skip reason for a name-matched column, or ``None`` to allocate it.
+
+    Shared gates used by ``DefaultHandler``: ``requires_value_match`` and
+    ``name_shape_gates``. Entity-specific content checks live on dedicated
+    handlers.
+
+    Example:
+        Header ``email`` whose values are not emails ->
+        ``"values do not match that entity"``.
+
+    Args:
+        entity_spec: Registry entry for the name-matched entity.
+        series: Column values used for content gates.
+        value_entity: Dominant value-derived entity label, or ``None``.
+        apply_path: Resolved apply path (``persona`` or ``standalone_map``).
+
+    Returns:
+        Human-readable skip reason, or ``None`` when the column may be allocated.
+    """
+    label = entity_spec.label
+    if entity_spec.requires_value_match and value_entity != label:
+        return "values do not match that entity"
+    if entity_spec.name_shape_gates:
+        if sample_looks_like_multi_person(series):
+            return (
+                "looks like multi-person values (delimiters such as 'and', '/', '&'); "
+                "not auto-assigned — pre-split or hand-plan"
+            )
+        if sample_looks_like_org_name(series):
+            return "values look like organizations, not people"
+    return None
 
 
 @dataclass(frozen=True)
@@ -56,7 +109,7 @@ class DefaultHandler:
     A value reads as the entity when the value recognizers say so, a column is
     refused for the reason the discovery gates give, and a replacement is written
     in the column's format when one describes the value, or drawn from Faker when
-    none does.
+    none does. Persona-channel writes default to unused (``None``).
     """
 
     label: str
@@ -74,13 +127,23 @@ class DefaultHandler:
         """
         return self.label if match_value_entity(value, phone_min_digits=phone_min_digits) == self.label else None
 
-    def skip_reason(self, series: pd.Series, value_entity: str | None, apply_path: str) -> str | None:
+    def skip_reason(
+        self,
+        series: pd.Series,
+        value_entity: str | None,
+        apply_path: str,
+        *,
+        column_name: str | None = None,
+        cfg: Config | None = None,
+    ) -> str | None:
         """Return the discovery gate's reason for refusing this column.
 
         Args:
             series: Column values used for content gates.
             value_entity: Dominant value-derived entity label, or ``None``.
             apply_path: Resolved apply path (``persona`` or ``standalone_map``).
+            column_name: Optional header; unused by the default shared gates.
+            cfg: Optional engine configuration; unused by the default shared gates.
 
         Returns:
             Human-readable skip reason, or ``None`` to allocate the column.
@@ -116,6 +179,21 @@ class DefaultHandler:
         if patterns:
             return generate_from_pattern(matching_template(original, patterns), self._rng(fake, rng))
         return self._faker_draw(original, fake)
+
+    def persona_value(
+        self,
+        original: str,
+        persona: Mapping[str, object],
+        *,
+        patterns: Sequence[str] | None = None,
+        originals: Mapping[str, object] | None = None,
+        fake: FakerLike | None = None,
+    ) -> str | None:
+        """Return a persona-sourced replacement, or ``None`` when this label has none.
+
+        Persona-channel handlers override this; standalone labels leave cells alone.
+        """
+        return None
 
     def _faker_draw(self, original: str, fake: FakerLike) -> str:
         """Return one Faker (or shape-preserving) draw for this handler's label."""
@@ -175,6 +253,42 @@ class DefaultHandler:
     def _rng(fake: FakerLike, rng: Random | None) -> Random:
         return fake.random if rng is None else rng
 
+    @staticmethod
+    def _as_str(value: object | None) -> str | None:
+        return None if value is None else str(value)
+
+
+class UniqueIdentifierHandler(DefaultHandler):
+    """Unique-identifier handler: sequential skip + weak-name template gate.
+
+    ``EntitySpec.strong_name_patterns`` vs the rest of ``name_patterns`` is the
+    product rule; this handler enforces it. Strong headers (``patient_id``,
+    ``uuid``, …) only refuse dense sequential integers. Weak leftovers
+    (``valid``, ``userid``, …) also need a dominant identifier template.
+    """
+
+    def skip_reason(
+        self,
+        series: pd.Series,
+        value_entity: str | None,
+        apply_path: str,
+        *,
+        column_name: str | None = None,
+        cfg: Config | None = None,
+    ) -> str | None:
+        if apply_path != "standalone_map":
+            return None
+        if looks_like_sequential_integer_id(series):
+            return "looks like a sequential integer id (1, 2, 3, …); not treated as a unique identifier"
+        entity_spec = spec(self.label)
+        if entity_spec is None or not entity_spec.strong_name_patterns or column_name is None:
+            return None
+        if header_matches_patterns(column_name, entity_spec.strong_name_patterns):
+            return None
+        if cfg is None or not sample_has_dominant_identifier_template(series, cfg):
+            return "values lack a dominant identifier template"
+        return None
+
 
 class CreditCardHandler(DefaultHandler):
     """Credit card handler that validates Luhn checksum on generated values."""
@@ -215,7 +329,7 @@ class IpAddressHandler(DefaultHandler):
 
 
 class DateOfBirthHandler(DefaultHandler):
-    """Date-of-birth handler that perturbs dates rather than redrawing them.
+    """Date-of-birth handler: parseable-date gate + date perturbation (not redraw).
 
     Example:
         ``"1985-03-15"`` with patterns ``["%Y-%m-%d"]`` -> e.g. ``"1986-03-15"``.
@@ -225,6 +339,19 @@ class DateOfBirthHandler(DefaultHandler):
         # No value alone says 'date of birth'; a parseable date under a birth-date
         # header is what discovery accepts, and what the gate below checks for.
         return self.label if match_value_entity(value, phone_min_digits=phone_min_digits) == "date" else None
+
+    def skip_reason(
+        self,
+        series: pd.Series,
+        value_entity: str | None,
+        apply_path: str,
+        *,
+        column_name: str | None = None,
+        cfg: Config | None = None,
+    ) -> str | None:
+        if value_entity != "date":
+            return "values are not parseable dates"
+        return None
 
     def generate(
         self,
@@ -243,6 +370,186 @@ class DateOfBirthHandler(DefaultHandler):
         return synth_dob_programmatic(original, self._rng(fake, rng), fmt=fmt)
 
 
+class PhoneNumberHandler(DefaultHandler):
+    """Phone handler: phone-specific value-mismatch messaging + PGM persona writes."""
+
+    def skip_reason(
+        self,
+        series: pd.Series,
+        value_entity: str | None,
+        apply_path: str,
+        *,
+        column_name: str | None = None,
+        cfg: Config | None = None,
+    ) -> str | None:
+        entity_spec = spec(self.label)
+        if entity_spec is not None and entity_spec.requires_value_match and value_entity != self.label:
+            return "values do not look like phone numbers"
+        return None
+
+    def persona_value(
+        self,
+        original: str,
+        persona: Mapping[str, object],
+        *,
+        patterns: Sequence[str] | None = None,
+        originals: Mapping[str, object] | None = None,
+        fake: FakerLike | None = None,
+    ) -> str | None:
+        # Only reached under the PGM backend, whose number is tied to the
+        # persona's address; the other backends route phones standalone
+        # (see effective_apply_path).
+        from .replacement.personas import format_persona_phone
+
+        number = self._as_str(persona.get("phone_number")) or (fake.phone_number() if fake else None)
+        return format_persona_phone(number, original, patterns, fake) if number else None
+
+
+class ApiKeyHandler(DefaultHandler):
+    """API-key handler: refuse numeric or non-credential-like columns."""
+
+    def skip_reason(
+        self,
+        series: pd.Series,
+        value_entity: str | None,
+        apply_path: str,
+        *,
+        column_name: str | None = None,
+        cfg: Config | None = None,
+    ) -> str | None:
+        base = super().skip_reason(series, value_entity, apply_path, column_name=column_name, cfg=cfg)
+        if base is not None:
+            return base
+        if pd.api.types.is_numeric_dtype(series) or not sample_looks_like_api_key(series):
+            return "content is numeric or not credential-like"
+        return None
+
+
+class StreetAddressHandler(DefaultHandler):
+    """Street-address handler: house-number sample gate + persona street-line writes."""
+
+    def skip_reason(
+        self,
+        series: pd.Series,
+        value_entity: str | None,
+        apply_path: str,
+        *,
+        column_name: str | None = None,
+        cfg: Config | None = None,
+    ) -> str | None:
+        base = super().skip_reason(series, value_entity, apply_path, column_name=column_name, cfg=cfg)
+        if base is not None:
+            return base
+        if not sample_looks_like_street_address(series):
+            return "values lack house numbers (street name only)"
+        return None
+
+    def persona_value(
+        self,
+        original: str,
+        persona: Mapping[str, object],
+        *,
+        patterns: Sequence[str] | None = None,
+        originals: Mapping[str, object] | None = None,
+        fake: FakerLike | None = None,
+    ) -> str | None:
+        parts = [str(x) for x in (persona.get("street_number"), persona.get("street_name")) if x not in (None, "")]
+        new_street = " ".join(parts)
+        if not new_street:
+            return None
+        # Preserve city/state/zip context: replace only the street line (before first comma).
+        if "," in original:
+            return new_street + "," + original.split(",", 1)[1]
+        return new_street
+
+
+class NamePartHandler(DefaultHandler):
+    """first_name / last_name / middle_name: pattern write, then persona field fallback."""
+
+    def persona_value(
+        self,
+        original: str,
+        persona: Mapping[str, object],
+        *,
+        patterns: Sequence[str] | None = None,
+        originals: Mapping[str, object] | None = None,
+        fake: FakerLike | None = None,
+    ) -> str | None:
+        from .replacement.personas import persona_written
+
+        written = persona_written(
+            self.label,
+            original,
+            persona,
+            patterns,
+            originals,
+            fake.random if fake else None,
+        )
+        if written is not None:
+            return written
+        return self._as_str(persona.get(self.label))
+
+
+class FullNameHandler(DefaultHandler):
+    """full_name: pattern write, then first+last with preserved title."""
+
+    def persona_value(
+        self,
+        original: str,
+        persona: Mapping[str, object],
+        *,
+        patterns: Sequence[str] | None = None,
+        originals: Mapping[str, object] | None = None,
+        fake: FakerLike | None = None,
+    ) -> str | None:
+        from .replacement.personas import persona_written
+
+        written = persona_written(
+            self.label,
+            original,
+            persona,
+            patterns,
+            originals,
+            fake.random if fake else None,
+        )
+        if written is not None:
+            return written
+        title, _ = split_title(original)
+        full = f"{persona.get('first_name', '')} {persona.get('last_name', '')}".strip()
+        if not full:
+            return None
+        return f"{title} {full}" if title else full
+
+
+class EmailHandler(DefaultHandler):
+    """email: pattern/local-part write, then persona email or Faker fallback."""
+
+    def persona_value(
+        self,
+        original: str,
+        persona: Mapping[str, object],
+        *,
+        patterns: Sequence[str] | None = None,
+        originals: Mapping[str, object] | None = None,
+        fake: FakerLike | None = None,
+    ) -> str | None:
+        from .replacement.personas import persona_written
+
+        written = persona_written(
+            self.label,
+            original,
+            persona,
+            patterns,
+            originals,
+            fake.random if fake else None,
+        )
+        if written is not None:
+            return written
+        # Only reached by a value that is no address at all, since one with a
+        # domain is written from itself above.
+        return self._as_str(persona.get("email_address")) or (fake.email() if fake else None)
+
+
 # Every label with behavior of its own is listed, including the ones that have
 # none yet: the point of the table is that there is a single line to change when
 # one of them grows a rule. Anything unlisted takes the shared behavior.
@@ -251,11 +558,17 @@ _HANDLERS: dict[str, type[DefaultHandler]] = {
     "national_id": DefaultHandler,
     "date_of_birth": DateOfBirthHandler,
     "credit_debit_card": CreditCardHandler,
-    "unique_identifier": DefaultHandler,
-    "phone_number": DefaultHandler,
+    "unique_identifier": UniqueIdentifierHandler,
+    "phone_number": PhoneNumberHandler,
     "ipv4": IpAddressHandler,
     "ipv6": IpAddressHandler,
-    "api_key": DefaultHandler,
+    "api_key": ApiKeyHandler,
+    "street_address": StreetAddressHandler,
+    "first_name": NamePartHandler,
+    "last_name": NamePartHandler,
+    "middle_name": NamePartHandler,
+    "full_name": FullNameHandler,
+    "email": EmailHandler,
 }
 
 

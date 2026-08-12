@@ -39,10 +39,6 @@ from .value_recognizers import (
     analyze_column_patterns,
     looks_like_sequential_integer_id,
     probe_numeric_column,
-    sample_looks_like_api_key,
-    sample_looks_like_multi_person,
-    sample_looks_like_org_name,
-    sample_looks_like_street_address,
 )
 
 logger = get_logger(__name__)
@@ -167,51 +163,6 @@ def _persona_names_agree(
     if comparable == 0:
         return True
     return (agree / comparable) >= _NAME_AGREE_THRESHOLD
-
-
-def skip_reason_named_column(
-    entity_spec,
-    series: pd.Series,
-    value_entity: str | None,
-    apply_path: str,
-) -> str | None:
-    """Return a skip reason for a name-matched column, or ``None`` to allocate it.
-
-    Example:
-        Header ``phone_number`` whose values are not phones ->
-        ``"values do not look like phone numbers"``.
-
-    Args:
-        entity_spec: Registry entry for the name-matched entity.
-        series: Column values used for content gates.
-        value_entity: Dominant value-derived entity label, or ``None``.
-        apply_path: Resolved apply path (``persona`` or ``standalone_map``).
-
-    Returns:
-        Human-readable skip reason, or ``None`` when the column may be allocated.
-    """
-    label = entity_spec.label
-    if entity_spec.requires_value_match and value_entity != label:
-        if label == "phone_number":
-            return "values do not look like phone numbers"
-        return "values do not match that entity"
-    if label == "date_of_birth" and value_entity != "date":
-        return "values are not parseable dates"
-    if label == "unique_identifier" and apply_path == "standalone_map" and looks_like_sequential_integer_id(series):
-        return "looks like a sequential integer id (1, 2, 3, …); not treated as a unique identifier"
-    if label == "api_key" and (pd.api.types.is_numeric_dtype(series) or not sample_looks_like_api_key(series)):
-        return "content is numeric or not credential-like"
-    if entity_spec.name_shape_gates:
-        if sample_looks_like_multi_person(series):
-            return (
-                "looks like multi-person values (delimiters such as 'and', '/', '&'); "
-                "not auto-assigned — pre-split or hand-plan"
-            )
-        if sample_looks_like_org_name(series):
-            return "values look like organizations, not people"
-    if label == "street_address" and not sample_looks_like_street_address(series):
-        return "values lack house numbers (street name only)"
-    return None
 
 
 def detect_structured_columns(df_subset: pd.DataFrame, stats: dict, cfg: Config) -> DiscoveryResult:
@@ -370,17 +321,24 @@ def detect_structured_columns(df_subset: pd.DataFrame, stats: dict, cfg: Config)
                 # wraps); keep the import local to avoid a cycle with entity_handlers.
                 from ..entity_handlers import get_handler
 
-                skip = get_handler(ev.name_label).skip_reason(ev.series, ev.value_entity, apply_path)
+                skip = get_handler(ev.name_label).skip_reason(
+                    ev.series, ev.value_entity, apply_path, column_name=col, cfg=cfg
+                )
                 if skip is not None:
                     # Prefer the historical phrasing for value-match skips.
                     if entity_spec.requires_value_match or ev.name_label == "date_of_birth":
                         logger.user.warning(
                             f"[PII Replacement] Column {col!r} looks like {ev.name_label} by name but {skip}; skipped."
                         )
-                    elif ev.name_label == "unique_identifier":
+                    elif ev.name_label == "unique_identifier" and "sequential" in skip:
                         logger.user.warning(
                             f"[PII Replacement] Column {col!r} looks like a sequential integer id "
                             "(1, 2, 3, …); skipped — not treated as a unique identifier."
+                        )
+                    elif ev.name_label == "unique_identifier":
+                        logger.user.warning(
+                            f"[PII Replacement] Column {col!r} looks like unique_identifier by name but "
+                            f"{skip}; skipped."
                         )
                     elif ev.name_label == "api_key":
                         logger.user.warning(

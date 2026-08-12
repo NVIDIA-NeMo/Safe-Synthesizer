@@ -17,6 +17,9 @@ from ..patterns import (
     match_datetime_format,
     match_duration_format,
     match_time_format,
+    pattern_evidence_values,
+    value_matches_template,
+    value_patterns,
 )
 
 
@@ -381,6 +384,42 @@ def sample_looks_like_street_address(series: pd.Series, sample: int = 40) -> boo
 
 def sample_looks_like_api_key(series: pd.Series, sample: int = 40) -> bool:
     return _sample_majority(series, looks_like_api_key_value, sample=sample)
+
+
+# Weak ``*id`` headers (``valid``, ``userid``, …) must look like opaque codes, not
+# category labels. Require both variety and a dominant character template.
+_WEAK_UNIQUE_ID_MIN_UNIQUE_RATIO = 0.5
+
+
+def sample_has_dominant_identifier_template(series: pd.Series, cfg: Config) -> bool:
+    """Return whether values share a dominant identifier-like character template.
+
+    Used for weak ``unique_identifier`` name matches. Requires:
+    - unique-value ratio at least ``_WEAK_UNIQUE_ID_MIN_UNIQUE_RATIO`` (rejects
+      low-cardinality labels such as ``type_0`` / ``type_1``), and
+    - a inferred value template covering at least
+      ``cfg.dominant_pattern_min_coverage`` percent of the evidence sample.
+
+    Args:
+        series: Column values to evaluate.
+        cfg: Engine configuration with ``dominant_pattern_min_coverage``.
+
+    Returns:
+        ``True`` when the column looks like templated opaque identifiers.
+    """
+    non_null = series.dropna()
+    if non_null.empty:
+        return False
+    if non_null.nunique() / len(non_null) < _WEAK_UNIQUE_ID_MIN_UNIQUE_RATIO:
+        return False
+    patterns = value_patterns(non_null, cfg)
+    if not patterns:
+        return False
+    sample = pattern_evidence_values(non_null)
+    if not sample:
+        return False
+    matched = sum(1 for value in sample if value_matches_template(value, patterns[0]))
+    return matched / len(sample) * 100 >= cfg.dominant_pattern_min_coverage
 
 
 def looks_like_sequential_integer_id(series: pd.Series) -> bool:

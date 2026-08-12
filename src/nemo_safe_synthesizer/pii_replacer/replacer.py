@@ -70,9 +70,9 @@ class TabularPiiReplacer:
         # not-implemented from replace_pii.llm_enhancement.
         self._enhancer = enhancer
         self._cfg = entities.config_from_replace_pii(config)
-        self.result = None
+        self.result: TransformResult | None = None
         self.elapsed_time = 0.0
-        self.resolved_plan = None
+        self.resolved_plan: PiiReplacementPlan | None = None
 
     def transform_df(self, df: pd.DataFrame) -> None:
         start = time.perf_counter()

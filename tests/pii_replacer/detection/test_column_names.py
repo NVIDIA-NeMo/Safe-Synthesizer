@@ -260,3 +260,52 @@ def test_match_column_header_assigns_demo_without_entity():
     name_label, demo_label = match_column_header("gender", ENTITY_NAME_PATTERNS, DEMO_LABEL_PATTERNS, threshold=0.86)
     assert name_label is None
     assert demo_label == "sex"
+
+
+def test_weak_id_headers_need_dominant_identifier_template():
+    """English ``*id`` leftovers stay unplanned unless values look like opaque IDs."""
+    from nemo_safe_synthesizer.pii_replacer.detection.column_names import unique_identifier_name_is_strong
+    from nemo_safe_synthesizer.pii_replacer.planning import discover_plan
+
+    assert not unique_identifier_name_is_strong("valid")
+    assert not unique_identifier_name_is_strong("hybrid")
+    assert not unique_identifier_name_is_strong("userid")
+    assert unique_identifier_name_is_strong("patient_id")
+    assert unique_identifier_name_is_strong("id")
+    assert unique_identifier_name_is_strong("order id")
+
+    n = 40
+    cfg = config_from_replace_pii(PiiReplacerConfig())
+    # Category-like values under weak headers must not be replaced.
+    labels = pd.DataFrame(
+        {
+            "valid": (["yes", "no"] * (n // 2))[:n],
+            "hybrid": [f"type_{i % 3}" for i in range(n)],
+            "first_name": [f"First{i}" for i in range(n)],
+        }
+    )
+    label_plan = discover_plan(labels, None, cfg, PiiReplacerConfig())
+    assert column_spec(label_plan.standalone_columns_to_replace, "valid") is None
+    assert column_spec(label_plan.standalone_columns_to_replace, "hybrid") is None
+
+    # Weak ``userid`` with a dominant opaque template is still planned.
+    userids = pd.DataFrame(
+        {
+            "userid": [f"user{i:04d}" for i in range(n)],
+            "first_name": [f"First{i}" for i in range(n)],
+        }
+    )
+    user_plan = discover_plan(userids, None, cfg, PiiReplacerConfig())
+    user = column_spec(user_plan.standalone_columns_to_replace, "userid")
+    assert user is not None and user.entity_type == PiiEntity.unique_identifier
+
+    # Strong ``patient_id`` keeps today's path (no weak template gate).
+    patients = pd.DataFrame(
+        {
+            "patient_id": [f"pmc-6{i:05d}-1" for i in range(n)],
+            "first_name": [f"First{i}" for i in range(n)],
+        }
+    )
+    patient_plan = discover_plan(patients, None, cfg, PiiReplacerConfig())
+    patient = column_spec(patient_plan.standalone_columns_to_replace, "patient_id")
+    assert patient is not None and patient.entity_type == PiiEntity.unique_identifier
