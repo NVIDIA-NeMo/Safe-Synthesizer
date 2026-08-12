@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Preflight checks for PII replacement config and plan validity."""
+"""Tests for ``preflight.checks.pii`` (config + plan validity)."""
 
 from __future__ import annotations
 
@@ -40,6 +40,20 @@ def test_preflight_faker_locale_error():
     )
     issues = PiiReplacementConfigCheck().run(PreflightContext(config=config, data=pd.DataFrame(), metadata=MagicMock()))
     assert any(i.code == "pii_faker_locale_invalid" for i in issues)
+
+
+@pytest.mark.parametrize("locale", ["en_SG", "hi_Deva_IN", "hi_Latn_IN"])
+def test_preflight_managed_locale_warns_when_faker_needs_fallback(locale: str):
+    """Managed locales without Faker providers must not silently pass then crash at apply."""
+    config = SafeSynthesizerParameters(
+        replace_pii=PiiReplacerConfig(
+            replacement=PiiReplacementSettings(locale=locale),
+            person=PiiPersonConfig(backend=PiiPersonBackend.managed),
+        )
+    )
+    issues = PiiReplacementConfigCheck().run(PreflightContext(config=config, data=pd.DataFrame(), metadata=MagicMock()))
+    assert any(i.code == "pii_managed_faker_locale_fallback" for i in issues)
+    assert not any(i.code == "pii_faker_locale_invalid" for i in issues)
 
 
 def _pgm_preflight_issues(locale: str, src: Path):

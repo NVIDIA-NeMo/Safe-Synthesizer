@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
+from nemo_safe_synthesizer.config.replace_pii import PiiPersonBackend, PiiPersonConfig, PiiReplacerConfig
 from nemo_safe_synthesizer.pii_replacer.entities import config_from_replace_pii
 
 
@@ -127,3 +127,24 @@ def test_demo_only_persona_omits_match_persona_by_from_plan():
     )
     plan = discover_plan(df, None, config_from_replace_pii(PiiReplacerConfig()), PiiReplacerConfig())
     assert plan.persona_backed_columns == []
+
+
+def test_group_constant_name_and_varying_email_get_split_personas(fixture_group_grain_df: pd.DataFrame):
+    """One name per group cannot belong to the same person as a per-row email."""
+    from nemo_safe_synthesizer.pii_replacer.planning import discover_plan
+    from tests.pii_replacer.helpers import column_spec
+
+    config = PiiReplacerConfig(person=PiiPersonConfig(backend=PiiPersonBackend.faker))
+    plan = discover_plan(fixture_group_grain_df, "patient_id", config_from_replace_pii(config), config)
+
+    name_persona = next(
+        (p.persona for p in plan.persona_backed_columns if column_spec(p.columns_to_replace, "full_name")),
+        None,
+    )
+    email_persona = next(
+        (p.persona for p in plan.persona_backed_columns if column_spec(p.columns_to_replace, "email")),
+        None,
+    )
+    assert name_persona is not None
+    assert email_persona is not None
+    assert name_persona != email_persona

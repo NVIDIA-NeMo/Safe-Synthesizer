@@ -89,6 +89,21 @@ def fixture_numbered_email_df() -> pd.DataFrame:
 
 
 @pytest.fixture
+def fixture_group_grain_df() -> pd.DataFrame:
+    """One name per patient group, with an email that varies row by row."""
+    rows = [
+        {
+            "patient_id": f"P{g}",
+            "full_name": f"Patient {g}",
+            "email": f"visit{i}.p{g}@example.com",
+        }
+        for g in range(2)
+        for i in range(20)
+    ]
+    return pd.DataFrame(rows)
+
+
+@pytest.fixture
 def fixture_middle_name_df() -> pd.DataFrame:
     """Sample names for persona pattern inference tests."""
     from nemo_safe_synthesizer.pii_replacer.replacement import seeded_faker

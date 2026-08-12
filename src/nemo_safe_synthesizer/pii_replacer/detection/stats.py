@@ -1,11 +1,20 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Per-column descriptive statistics and group/record scope classification."""
+"""Per-column descriptive statistics and structural grain classification.
+
+Structural grain (``key`` / ``group`` / ``record``) describes whether a column is
+constant within a training group. It is distinct from the plan's replacement
+``scope`` (``record`` / ``group`` / ``dataframe``), which controls map consistency.
+"""
 
 from __future__ import annotations
 
+from typing import Literal
+
 import pandas as pd
+
+StructuralGrain = Literal["key", "group", "record"]
 
 
 def _sample_values(series: pd.Series, k: int = 8) -> list[str]:
@@ -55,7 +64,7 @@ def within_group_constancy(df: pd.DataFrame, key: str, col: str) -> float:
     return float((g <= 1).mean()) if len(g) else 0.0
 
 
-def classify_columns_by_scope(df: pd.DataFrame, group_key: str, threshold: float) -> tuple[list[str], list[str]]:
+def classify_columns_by_grain(df: pd.DataFrame, group_key: str, threshold: float) -> tuple[list[str], list[str]]:
     """Split non-key columns into group-constant and record-varying lists.
 
     Args:
@@ -80,31 +89,32 @@ def classify_columns_by_scope(df: pd.DataFrame, group_key: str, threshold: float
 def scoped_column_stats(
     df: pd.DataFrame, group_key: str | None, group_constancy_threshold: float = 0.95
 ) -> dict[str, dict]:
-    """Return ``column_stats`` with scope-aware cardinality denominators.
+    """Return ``column_stats`` with grain-aware cardinality denominators.
 
     For group-constant columns, ``unique_ratio`` is recomputed as
     ``n_unique / n_groups`` so a per-group attribute (e.g. one MRN per patient
     that repeats on every visit row) is not mistaken for low-variety free text.
     Record-level columns keep the per-row denominator. Each entry also gets a
-    ``scope`` tag (``key``, ``group``, or ``record``).
+    ``grain`` tag (``key``, ``group``, or ``record``) — not the plan replacement
+    ``scope``.
 
     Args:
         df: Input dataframe.
-        group_key: Grouping column name, or ``None`` to treat all columns as record-scoped.
+        group_key: Grouping column name, or ``None`` to treat all columns as record-grain.
         group_constancy_threshold: Constancy threshold passed to
-            ``classify_columns_by_scope``.
+            ``classify_columns_by_grain``.
 
     Returns:
         Mapping of column name to stats dict (same keys as ``column_stats`` plus
-        ``scope``).
+        ``grain``).
     """
     stats = column_stats(df)
     if not (group_key and group_key in df.columns):
         for c in stats:
-            stats[c]["scope"] = "record"
+            stats[c]["grain"] = "record"
         return stats
     n_groups = int(df[group_key].nunique(dropna=True)) or len(df)
-    const_cols, _ = classify_columns_by_scope(df, group_key, group_constancy_threshold)
+    const_cols, _ = classify_columns_by_grain(df, group_key, group_constancy_threshold)
     const_set = set(const_cols)
     for c in stats:
         if c == group_key:
@@ -112,11 +122,11 @@ def scoped_column_stats(
             # so its cardinality is also measured per group -> unique_ratio == 1.0.
             nun = stats[c]["n_unique"]
             stats[c]["unique_ratio"] = round(nun / n_groups, 4) if n_groups else 0.0
-            stats[c]["scope"] = "key"
+            stats[c]["grain"] = "key"
         elif c in const_set:
             nun = stats[c]["n_unique"]
             stats[c]["unique_ratio"] = round(nun / n_groups, 4) if n_groups else 0.0
-            stats[c]["scope"] = "group"
+            stats[c]["grain"] = "group"
         else:
-            stats[c]["scope"] = "record"
+            stats[c]["grain"] = "record"
     return stats

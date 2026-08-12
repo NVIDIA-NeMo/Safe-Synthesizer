@@ -541,7 +541,8 @@ check of its own.
 | `dataset_small` | warning | `dataset.row_count` | Training set below 1000 records |
 | `extreme_oversampling` | warning | `training.oversampling` | Data fraction exceeds 5x |
 | `pii_llm_not_implemented` | error | `pii.replacement_config` | `replace_pii.llm_enhancement=True` is not implemented in this release |
-| `pii_faker_locale_invalid` | error | `pii.replacement_config` | `replace_pii.replacement.locale` is not a locale Faker supports |
+| `pii_faker_locale_invalid` | error | `pii.replacement_config` | `replace_pii.replacement.locale` is not a locale Faker supports (faker backend, or managed with no fallback mapping) |
+| `pii_managed_faker_locale_fallback` | warning | `pii.replacement_config` | Managed locale has parquet assets but is not a Faker provider; Faker draws use a documented fallback (e.g. `en_SG` → `en_US`) |
 | `pii_managed_assets_missing` | warning | `pii.replacement_config` | Managed persona assets not found; replacement falls back to Faker. See [Managed persona assets](running.md#managed-persona-assets) |
 | `pii_pgm_locale_invalid` | error | `pii.replacement_config` | `person.backend` is `pgm`, which supports `en_US` only |
 | `pii_pgm_src_missing` | error | `pii.replacement_config` | `person.sdg_pgms_src` is unset, missing, or unreadable; the internal `pgm` backend needs a local sdg-pgms checkout |

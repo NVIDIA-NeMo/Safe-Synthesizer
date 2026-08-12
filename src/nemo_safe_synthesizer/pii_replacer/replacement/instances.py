@@ -118,6 +118,11 @@ def extract_instances(
     becomes one instance covering many ``row_indices``. Under ``scope="record"``,
     each row is its own instance.
 
+    Structural grain (group-constant vs record-varying) partitions fields so a
+    constant ``full_name`` and varying ``email`` under one plan persona do not
+    share instance identity — otherwise one group would mint a new synthetic
+    name per distinct email.
+
     Args:
         df: Source dataframe.
         plan: Resolved replacement plan.
@@ -131,94 +136,117 @@ def extract_instances(
         ParameterError: If scope is ``"group"`` but ``group_key`` is missing.
         InternalError: If group-scoped extraction reaches groupby without a key.
     """
+    from ..detection.stats import scoped_column_stats
+
     instances: list[PersonaInstance] = []
     scope = plan.scope.value
     gk = group_key
     backend = cfg.persona_backend
+    grain_stats = scoped_column_stats(df, gk if scope == "group" else None, cfg.group_constancy_threshold)
+    grain_by_col = {col: str(col_stats.get("grain", "record")) for col, col_stats in grain_stats.items()}
 
     if scope == "group" and (not gk or gk not in df.columns):
         raise ParameterError(
             "replacement scope is 'group' but data.group_training_examples_by is not set or missing from dataframe"
         )
 
+    def _field_partitions(field_cols: dict[str, str]) -> list[dict[str, str]]:
+        """Split persona fields by structural grain when both strata are present."""
+        group_fields = {lab: col for lab, col in field_cols.items() if grain_by_col.get(col) in {"group", "key"}}
+        record_fields = {lab: col for lab, col in field_cols.items() if grain_by_col.get(col) == "record"}
+        if group_fields and record_fields:
+            return [group_fields, record_fields]
+        return [field_cols]
+
     for col_set in plan.persona_backed_columns:
         fields, patterns_by_label = _persona_sourced_fields(col_set, backend)
-        field_cols = {lab: c for lab, c in fields.items() if c in df.columns}
-        if not field_cols:
+        all_field_cols = {lab: c for lab, c in fields.items() if c in df.columns}
+        if not all_field_cols:
             continue
         match_persona_by = [
             {"persona_attribute": cond.persona_attribute, "column_name": cond.column_name}
             for cond in col_set.match_persona_by
         ]
 
-        def _append_instance(
-            match: tuple,
-            row: pd.Series,
-            originals: dict,
-            row_indices: list,
-        ) -> None:
-            if not originals or not _instance_is_person(field_cols, originals):
-                return
-            inst = _make_instance(
-                col_set.persona,
-                match,
-                originals,
-                field_cols,
-                match_persona_by,
-                row,
-                cfg,
-                patterns_by_label,
-            )
-            inst.group_key = gk
-            inst.row_indices = row_indices
-            instances.append(inst)
+        for field_cols in _field_partitions(all_field_cols):
+            part_patterns = {lab: pats for lab, pats in patterns_by_label.items() if lab in field_cols}
 
-        match scope:
-            case "group":
-                if gk is None:
-                    raise InternalError(
-                        "group-scoped persona extraction reached groupby without a group key; "
-                        "validate_plan should have rejected this configuration"
-                    )
-                for gval, gdf in df.groupby(gk, dropna=True):
-                    sig_rows: dict[tuple, list] = {}
-                    sig_first: dict[tuple, pd.Series] = {}
-                    for idx, row in gdf.iterrows():
+            def _append_instance(
+                match: tuple,
+                row: pd.Series,
+                originals: dict,
+                row_indices: list,
+                *,
+                _field_cols: dict[str, str] = field_cols,
+                _patterns: dict[str, list[str]] = part_patterns,
+            ) -> None:
+                if not originals or not _instance_is_person(_field_cols, originals):
+                    return
+                inst = _make_instance(
+                    col_set.persona,
+                    match,
+                    originals,
+                    _field_cols,
+                    match_persona_by,
+                    row,
+                    cfg,
+                    _patterns,
+                )
+                inst.group_key = gk
+                inst.row_indices = row_indices
+                instances.append(inst)
+
+            match scope:
+                case "group":
+                    if gk is None:
+                        raise InternalError(
+                            "group-scoped persona extraction reached groupby without a group key; "
+                            "validate_plan should have rejected this configuration"
+                        )
+                    for gval, gdf in df.groupby(gk, dropna=True):
+                        sig_rows: dict[tuple, list] = {}
+                        sig_first: dict[tuple, pd.Series] = {}
+                        for idx, row in gdf.iterrows():
+                            sig = tuple((c, entities.sval(row[c])) for c in field_cols.values())
+                            if all(v is None for _, v in sig):
+                                continue
+                            sig_rows.setdefault(sig, []).append(idx)
+                            sig_first.setdefault(sig, row)
+                        for _sig, idxs in sig_rows.items():
+                            row = sig_first[_sig]
+                            originals = {lab: row[c] for lab, c in field_cols.items() if pd.notna(row[c])}
+                            _append_instance(("group", gval), row, originals, list(idxs))
+                case "record":
+                    for idx, row in df.iterrows():
+                        originals = {lab: row[c] for lab, c in field_cols.items() if pd.notna(row[c])}
+                        sig_dict = {c: entities.sval(row[c]) for c in field_cols.values() if pd.notna(row[c])}
+                        _append_instance(("record", sig_dict), row, originals, [idx])
+                case _:
+                    sig_rows = {}
+                    sig_first = {}
+                    for idx, row in df.iterrows():
                         sig = tuple((c, entities.sval(row[c])) for c in field_cols.values())
                         if all(v is None for _, v in sig):
                             continue
                         sig_rows.setdefault(sig, []).append(idx)
                         sig_first.setdefault(sig, row)
-                    for _sig, idxs in sig_rows.items():
-                        row = sig_first[_sig]
+                    for sig, idxs in sig_rows.items():
+                        row = sig_first[sig]
                         originals = {lab: row[c] for lab, c in field_cols.items() if pd.notna(row[c])}
-                        _append_instance(("group", gval), row, originals, list(idxs))
-            case "record":
-                for idx, row in df.iterrows():
-                    originals = {lab: row[c] for lab, c in field_cols.items() if pd.notna(row[c])}
-                    sig_dict = {c: entities.sval(row[c]) for c in field_cols.values() if pd.notna(row[c])}
-                    _append_instance(("record", sig_dict), row, originals, [idx])
-            case _:
-                sig_rows: dict[tuple, list] = {}
-                sig_first: dict[tuple, pd.Series] = {}
-                for idx, row in df.iterrows():
-                    sig = tuple((c, entities.sval(row[c])) for c in field_cols.values())
-                    if all(v is None for _, v in sig):
-                        continue
-                    sig_rows.setdefault(sig, []).append(idx)
-                    sig_first.setdefault(sig, row)
-                for sig, idxs in sig_rows.items():
-                    row = sig_first[sig]
-                    originals = {lab: row[c] for lab, c in field_cols.items() if pd.notna(row[c])}
-                    sig_dict = {c: entities.sval(row[c]) for c in field_cols.values() if pd.notna(row[c])}
-                    _append_instance(("record", sig_dict), row, originals, list(idxs))
+                        sig_dict = {c: entities.sval(row[c]) for c in field_cols.values() if pd.notna(row[c])}
+                        _append_instance(("record", sig_dict), row, originals, list(idxs))
 
     return instances
 
 
 def _person_key(inst: PersonaInstance) -> object:
     kind, payload = inst.match
-    return payload if kind == "group" else dict(cast(Mapping[str, object], payload))
+    base = payload if kind == "group" else dict(cast(Mapping[str, object], payload))
+    # Under group scope the match payload is the group value. Record-varying
+    # fields partitioned into their own instances still share that payload, so
+    # fold originals into the key or every email in the group would reuse one seed.
+    originals = tuple(sorted(inst.originals_by_label.items()))
+    return (base, originals)
 
 
 def compute_instance_synthetics(instances: list[PersonaInstance], cfg: entities.Config) -> None:

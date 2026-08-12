@@ -18,6 +18,7 @@ import pandas as pd
 
 PersonaAttribute: TypeAlias = Literal["sex", "ethnic_background"]
 ScopedValueMapKind: TypeAlias = Literal["flat", "group", "record"]
+StructuralGrain: TypeAlias = Literal["key", "group", "record"]
 
 
 @dataclass
@@ -36,6 +37,12 @@ class ColumnEvidence:
     """Pattern analysis dict from ``analyze_column_patterns`` (entity, coverage, …)."""
     demo_label: str | None
     """Demographic label inferred from the header (sex, race, …), or ``None``."""
+    grain: StructuralGrain = "record"
+    """Structural grain within a training group (``key`` / ``group`` / ``record``).
+
+    Distinct from plan replacement ``scope``. Group-constant and record-varying
+    persona fields must not share one persona identity.
+    """
 
 
 @dataclass

@@ -9,7 +9,7 @@ from .column_names import fuzzy_match_label
 from .free_text import select_free_text_columns
 from .persona_grouping import detect_structured_columns
 from .stats import (
-    classify_columns_by_scope,
+    classify_columns_by_grain,
     column_stats,
     scoped_column_stats,
     within_group_constancy,
@@ -29,7 +29,7 @@ __all__ = [
     "API_PREFIXES",
     "UUID_RE",
     "analyze_column_patterns",
-    "classify_columns_by_scope",
+    "classify_columns_by_grain",
     "column_stats",
     "detect_structured_columns",
     "fuzzy_match_label",

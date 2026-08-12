@@ -48,7 +48,7 @@ def _detect_full_dataframe(
     # must be measured against the number of groups, not rows. Otherwise a
     # per-group attribute that repeats across every row of its group looks
     # low-variety and can be mistaken for free text. ``scoped_column_stats``
-    # recomputes ``unique_ratio`` per group.
+    # recomputes ``unique_ratio`` per group and tags structural ``grain``.
     stats = detection.scoped_column_stats(df, group_key, cfg.group_constancy_threshold)
     discovery = detection.detect_structured_columns(df, stats, cfg)
 

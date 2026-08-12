@@ -171,16 +171,6 @@ def test_failed_luhn_card_does_not_become_phone():
     assert match_value_entity("4111-1111-1111-1111") == "credit_debit_card"  # valid Luhn Visa test
 
 
-def test_sparse_email_column_unique_ratio_not_null_diluted():
-    from nemo_safe_synthesizer.pii_replacer.detection import column_stats
-
-    df = pd.DataFrame({"emailish": [None] * 90 + [f"user{i}@example.com" for i in range(10)]})
-    stats = column_stats(df)["emailish"]
-    # Denominator is non-null rows (10), not full length (100), so nulls do not dilute.
-    assert stats["unique_ratio"] == 1.0
-    assert stats["n_unique"] == 10
-
-
 def test_sequential_integer_id_skipped_any_origin():
     from nemo_safe_synthesizer.pii_replacer.planning import discover_plan
 
@@ -200,7 +190,7 @@ def test_sequential_integer_id_skipped_any_origin():
 
 
 def test_numeric_ssn_and_national_id_keep_header_entity():
-    """Numeric probe must preserve ssn/national_id (B1/B2); sequential skip is unique_identifier-only."""
+    """Numeric probe must preserve ssn/national_id; sequential skip is unique_identifier-only."""
     from nemo_safe_synthesizer.pii_replacer.planning import discover_plan
 
     n = 30

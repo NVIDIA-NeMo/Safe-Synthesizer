@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import pandas as pd
+import pytest
 
 from nemo_safe_synthesizer.config.replace_pii import (
     PiiEntity,
@@ -299,6 +300,17 @@ def test_weak_id_headers_need_dominant_identifier_template():
     user = column_spec(user_plan.standalone_columns_to_replace, "userid")
     assert user is not None and user.entity_type == PiiEntity.unique_identifier
 
+    # Mostly-blank ``userid``: blanks must not dilute uniqueness of nonempty IDs.
+    sparse = pd.DataFrame(
+        {
+            "userid": ([""] * (n - 10)) + [f"user{i:04d}" for i in range(10)],
+            "first_name": [f"First{i}" for i in range(n)],
+        }
+    )
+    sparse_plan = discover_plan(sparse, None, cfg, PiiReplacerConfig())
+    sparse_user = column_spec(sparse_plan.standalone_columns_to_replace, "userid")
+    assert sparse_user is not None and sparse_user.entity_type == PiiEntity.unique_identifier
+
     # Strong ``patient_id`` keeps today's path (no weak template gate).
     patients = pd.DataFrame(
         {
@@ -309,3 +321,13 @@ def test_weak_id_headers_need_dominant_identifier_template():
     patient_plan = discover_plan(patients, None, cfg, PiiReplacerConfig())
     patient = column_spec(patient_plan.standalone_columns_to_replace, "patient_id")
     assert patient is not None and patient.entity_type == PiiEntity.unique_identifier
+
+
+def test_unique_identifier_name_is_strong_fails_closed_when_spec_missing(monkeypatch):
+    """A missing registry entry must not treat every header as strong."""
+    import nemo_safe_synthesizer.pii_replacer.detection.column_names as column_names
+    from nemo_safe_synthesizer.errors import InternalError
+
+    monkeypatch.setattr(column_names, "spec", lambda _label: None)
+    with pytest.raises(InternalError, match="missing unique_identifier"):
+        column_names.unique_identifier_name_is_strong("valid")

@@ -639,17 +639,23 @@ want that path on purpose and need no downloads.
 
 Supported managed locales (filename must match `replace_pii.replacement.locale`):
 
-| Locale | Region | NGC package |
-|--------|--------|-------------|
-| `en_US` | United States | `nemotron-personas-dataset-en_us` |
-| `en_IN` | India (English) | `nemotron-personas-dataset-en_in` |
-| `en_SG` | Singapore (English) | `nemotron-personas-dataset-en_sg` |
-| `fr_FR` | France (French) | `nemotron-personas-dataset-fr_fr` |
-| `hi_Deva_IN` | India (Devanagari script) | `nemotron-personas-dataset-hi_deva_in` |
-| `hi_Latn_IN` | India (Latin script) | `nemotron-personas-dataset-hi_latn_in` |
-| `ja_JP` | Japan | `nemotron-personas-dataset-ja_jp` |
-| `ko_KR` | South Korea | `nemotron-personas-dataset-ko_kr` |
-| `pt_BR` | Brazil (Portuguese) | `nemotron-personas-dataset-pt_br` |
+| Locale | Region | NGC package | Faker draws |
+|--------|--------|-------------|-------------|
+| `en_US` | United States | `nemotron-personas-dataset-en_us` | same locale |
+| `en_IN` | India (English) | `nemotron-personas-dataset-en_in` | same locale |
+| `en_SG` | Singapore (English) | `nemotron-personas-dataset-en_sg` | falls back to `en_US` |
+| `fr_FR` | France (French) | `nemotron-personas-dataset-fr_fr` | same locale |
+| `hi_Deva_IN` | India (Devanagari script) | `nemotron-personas-dataset-hi_deva_in` | falls back to `hi_IN` |
+| `hi_Latn_IN` | India (Latin script) | `nemotron-personas-dataset-hi_latn_in` | falls back to `hi_IN` |
+| `ja_JP` | Japan | `nemotron-personas-dataset-ja_jp` | same locale |
+| `ko_KR` | South Korea | `nemotron-personas-dataset-ko_kr` | same locale |
+| `pt_BR` | Brazil (Portuguese) | `nemotron-personas-dataset-pt_br` | same locale |
+
+Managed apply still constructs Faker for standalone identifiers, middle names, and
+missing-asset fallback even when the parquet loads. Locales without a Faker
+provider (`en_SG`, `hi_Deva_IN`, `hi_Latn_IN`) keep parquet sampling under the
+configured locale and remap Faker draws as above; preflight warns
+(`pii_managed_faker_locale_fallback`).
 
 #### 1. Install and configure the NGC CLI
 

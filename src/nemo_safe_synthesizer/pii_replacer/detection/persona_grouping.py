@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import re
+from typing import cast
 
 import pandas as pd
 
@@ -28,6 +29,7 @@ from ..models import (
     DetectedStandalone,
     DiscoveryResult,
     PersonaMatchBy,
+    StructuralGrain,
 )
 from ..patterns import date_patterns, split_full_name, value_patterns
 from .column_names import (
@@ -170,10 +172,13 @@ def detect_structured_columns(df_subset: pd.DataFrame, stats: dict, cfg: Config)
 
     Per column: gather name/value evidence, resolve ``EntitySpec`` and apply path,
     run content gates, then allocate to persona, standalone, or identify-only.
+    Persona membership respects structural ``grain`` from ``stats`` so a
+    group-constant name and a record-varying email do not share one identity.
 
     Args:
         df_subset: Dataframe slice whose columns are classified.
-        stats: Per-column stats from ``scoped_column_stats`` or ``column_stats``.
+        stats: Per-column stats from ``scoped_column_stats`` or ``column_stats``
+            (expects a ``grain`` tag when a training group key was used).
         cfg: Engine configuration controlling thresholds and persona backend.
 
     Returns:
@@ -184,12 +189,21 @@ def detect_structured_columns(df_subset: pd.DataFrame, stats: dict, cfg: Config)
     fields_by_persona: dict[str, dict[str, str]] = {}
     field_patterns_by_persona: dict[str, dict[str, list[str]]] = {}
     demo_by_persona: dict[str, dict[str, str]] = {}
+    grain_by_persona: dict[str, StructuralGrain] = {}
     role_personas: dict[str, list[str]] = {}
     empty_persona_seq = 0
     role_instance_count: dict[str, int] = {}
     standalone: list[DetectedStandalone] = []
     identified_not_replaced: list[str] = []
     consumed: set[str] = set()
+
+    def _column_grain(col: str) -> StructuralGrain:
+        raw = (stats.get(col) or {}).get("grain", "record")
+        return cast(StructuralGrain, raw if raw in {"key", "group", "record"} else "record")
+
+    def _persona_grain(grain: StructuralGrain) -> StructuralGrain:
+        # Group-key columns are not persona fields; treat as group-constant.
+        return "group" if grain == "key" else grain
 
     def _mint_persona(role: str) -> str:
         nonlocal empty_persona_seq
@@ -206,11 +220,15 @@ def detect_structured_columns(df_subset: pd.DataFrame, stats: dict, cfg: Config)
         *,
         warn_collision: bool,
         require_name_agreement: bool = False,
+        grain: StructuralGrain = "record",
     ) -> str:
         role = _persona_role_key(col)
         pool = role_personas.setdefault(role, [])
+        persona_grain = _persona_grain(grain)
         disagreement: str | None = None
         for pid in pool:
+            if grain_by_persona.get(pid) not in (None, persona_grain):
+                continue
             if label in fields_by_persona.get(pid, {}) or label in demo_by_persona.get(pid, {}):
                 continue
             if require_name_agreement and label in _NAME_AGREE_LABELS:
@@ -220,6 +238,7 @@ def detect_structured_columns(df_subset: pd.DataFrame, stats: dict, cfg: Config)
                 ):
                     disagreement = pid
                     continue
+            grain_by_persona.setdefault(pid, persona_grain)
             return pid
         if disagreement is not None:
             logger.user.warning(
@@ -235,9 +254,10 @@ def detect_structured_columns(df_subset: pd.DataFrame, stats: dict, cfg: Config)
             )
         pid = _mint_persona(role)
         pool.append(pid)
+        grain_by_persona[pid] = persona_grain
         return pid
 
-    def _allocate_demo(col: str, label: str) -> str:
+    def _allocate_demo(col: str, label: str, grain: StructuralGrain) -> str:
         """Attach an unprefixed demographic to the earliest compatible persona.
 
         Prefixed demos (``patient_sex``) stay in their role pool. Bare ``sex`` /
@@ -246,13 +266,17 @@ def detect_structured_columns(df_subset: pd.DataFrame, stats: dict, cfg: Config)
         subject persona (e.g. ``patient``) even when role keys differ.
         """
         role = _persona_role_key(col)
+        persona_grain = _persona_grain(grain)
         if role:
-            return _allocate_persona(col, label, warn_collision=False)
+            return _allocate_persona(col, label, warn_collision=False, grain=grain)
         for pool in role_personas.values():
             for pid in pool:
+                if grain_by_persona.get(pid) not in (None, persona_grain):
+                    continue
                 if label not in demo_by_persona.get(pid, {}) and label not in fields_by_persona.get(pid, {}):
+                    grain_by_persona.setdefault(pid, persona_grain)
                     return pid
-        return _allocate_persona(col, label, warn_collision=False)
+        return _allocate_persona(col, label, warn_collision=False, grain=grain)
 
     def _add_standalone(col: str, entity: str, patterns: list[str], *, note: str = "") -> None:
         standalone.append(DetectedStandalone(column=col, entity=entity, patterns=patterns))
@@ -277,7 +301,7 @@ def detect_structured_columns(df_subset: pd.DataFrame, stats: dict, cfg: Config)
         # (identify-not-replaced) keep value evidence without a name match.
         if value_entity is not None and not name_supports_value_entity(name_label, value_entity):
             value_entity = None
-        return ColumnEvidence(col, series, name_label, value_entity, analysis, demo_label)
+        return ColumnEvidence(col, series, name_label, value_entity, analysis, demo_label, grain=_column_grain(col))
 
     for col in df_subset.columns:
         ev = _gather(col)
@@ -365,6 +389,7 @@ def detect_structured_columns(df_subset: pd.DataFrame, stats: dict, cfg: Config)
                     ev.name_label,
                     warn_collision=had_label,
                     require_name_agreement=True,
+                    grain=ev.grain,
                 )
                 fields_by_persona.setdefault(persona, {})[ev.name_label] = col
                 patterns = value_patterns(ev.series.dropna(), cfg) if ev.name_label == "phone_number" else []
@@ -382,7 +407,7 @@ def detect_structured_columns(df_subset: pd.DataFrame, stats: dict, cfg: Config)
 
         # 3) Demographic matchers (read-only; may share a persona with later fields).
         if ev.demo_label:
-            persona = _allocate_demo(col, ev.demo_label)
+            persona = _allocate_demo(col, ev.demo_label, ev.grain)
             demo_by_persona.setdefault(persona, {})[ev.demo_label] = col
 
         # 4) Identify-only temporals (value evidence, no replaceable name match).

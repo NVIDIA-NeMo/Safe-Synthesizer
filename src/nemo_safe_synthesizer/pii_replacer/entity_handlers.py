@@ -276,12 +276,19 @@ class UniqueIdentifierHandler(DefaultHandler):
         column_name: str | None = None,
         cfg: Config | None = None,
     ) -> str | None:
+        from ..errors import InternalError
+
         if apply_path != "standalone_map":
             return None
         if looks_like_sequential_integer_id(series):
             return "looks like a sequential integer id (1, 2, 3, …); not treated as a unique identifier"
         entity_spec = spec(self.label)
-        if entity_spec is None or not entity_spec.strong_name_patterns or column_name is None:
+        if entity_spec is None:
+            raise InternalError(
+                "Entity registry is missing unique_identifier; cannot apply strong/weak identifier name gates."
+            )
+        # Empty strong_name_patterns means no weak tier: skip the template gate.
+        if not entity_spec.strong_name_patterns or column_name is None:
             return None
         if header_matches_patterns(column_name, entity_spec.strong_name_patterns):
             return None

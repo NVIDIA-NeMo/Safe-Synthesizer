@@ -400,6 +400,10 @@ def sample_has_dominant_identifier_template(series: pd.Series, cfg: Config) -> b
     - a inferred value template covering at least
       ``cfg.dominant_pattern_min_coverage`` percent of the evidence sample.
 
+    Uniqueness and template evidence both use ``pattern_evidence_values`` so
+    blanks and configured textual missings do not dilute the ratio when the
+    nonempty cells are distinct opaque IDs (e.g. mostly-blank ``userid``).
+
     Args:
         series: Column values to evaluate.
         cfg: Engine configuration with ``dominant_pattern_min_coverage``.
@@ -407,16 +411,13 @@ def sample_has_dominant_identifier_template(series: pd.Series, cfg: Config) -> b
     Returns:
         ``True`` when the column looks like templated opaque identifiers.
     """
-    non_null = series.dropna()
-    if non_null.empty:
-        return False
-    if non_null.nunique() / len(non_null) < _WEAK_UNIQUE_ID_MIN_UNIQUE_RATIO:
-        return False
-    patterns = value_patterns(non_null, cfg)
-    if not patterns:
-        return False
-    sample = pattern_evidence_values(non_null)
+    sample = pattern_evidence_values(series)
     if not sample:
+        return False
+    if len(set(sample)) / len(sample) < _WEAK_UNIQUE_ID_MIN_UNIQUE_RATIO:
+        return False
+    patterns = value_patterns(pd.Series(sample), cfg)
+    if not patterns:
         return False
     matched = sum(1 for value in sample if value_matches_template(value, patterns[0]))
     return matched / len(sample) * 100 >= cfg.dominant_pattern_min_coverage

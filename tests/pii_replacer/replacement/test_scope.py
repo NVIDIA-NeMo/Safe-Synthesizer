@@ -201,6 +201,45 @@ def test_grouped_replacement_distinct_doctors_within_group(fixture_patient_df: p
     assert "Dr Z" not in b_providers
 
 
+def test_group_scope_keeps_one_name_per_group_when_email_varies(fixture_group_grain_df: pd.DataFrame):
+    """Grain partitions instance identity, so a per-row email cannot mint per-row names."""
+    from nemo_safe_synthesizer.pii_replacer.replacement import run_replacement
+
+    df = fixture_group_grain_df
+    plan = PiiReplacementPlan(
+        scope=PiiReplacementScope.group,
+        persona_backed_columns=[
+            PersonaColumnSet(
+                persona="patient",
+                columns_to_replace=[
+                    PiiColumnPlan(column_name="full_name", entity_type=PiiEntity.full_name),
+                    PiiColumnPlan(column_name="email", entity_type=PiiEntity.email),
+                ],
+            )
+        ],
+    )
+    cfg = config_from_replace_pii(
+        PiiReplacerConfig(person=PiiPersonConfig(backend=PiiPersonBackend.faker), replacement_plan=plan)
+    )
+    out = run_replacement(df, plan, cfg, group_key="patient_id").replaced_df
+
+    for pid, gdf in out.groupby(df["patient_id"]):
+        assert gdf["full_name"].nunique() == 1
+        assert gdf["email"].nunique() == len(gdf)
+        assert gdf["full_name"].iloc[0] != df.loc[df["patient_id"] == pid, "full_name"].iloc[0]
+
+
+@pytest.mark.parametrize("locale", ["en_SG", "hi_Deva_IN", "hi_Latn_IN"])
+def test_seeded_faker_uses_fallback_for_managed_only_locales(locale: str):
+    from nemo_safe_synthesizer.pii_replacer.replacement.scope import resolve_faker_locale, seeded_faker
+
+    faker_locale, fallback_from = resolve_faker_locale(locale)
+    assert fallback_from == locale
+    assert faker_locale != locale
+    # Must construct without Faker's raw locale AttributeError.
+    assert seeded_faker(7, locale).first_name()
+
+
 def test_record_scoped_replacement_changes_per_row():
     df = pd.DataFrame(
         {

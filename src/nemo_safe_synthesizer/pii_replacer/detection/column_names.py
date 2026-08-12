@@ -58,10 +58,21 @@ def unique_identifier_name_is_strong(col: str) -> bool:
 
     Returns:
         ``True`` when a strong unique-identifier name pattern matches, or when
-        the entity has no weak tier configured.
+        the entity has no weak tier configured (empty ``strong_name_patterns``).
+
+    Raises:
+        InternalError: If the ``unique_identifier`` registry entry is missing.
     """
+    from ...errors import InternalError
+
     entity = spec("unique_identifier")
-    if entity is None or not entity.strong_name_patterns:
+    if entity is None:
+        raise InternalError(
+            "Entity registry is missing unique_identifier; cannot classify strong vs weak "
+            f"identifier headers (see {_BUG_REPORT_URL})."
+        )
+    # Empty strong_name_patterns means no weak tier: every name match is strong.
+    if not entity.strong_name_patterns:
         return True
     return header_matches_patterns(col, entity.strong_name_patterns)
 

@@ -30,15 +30,60 @@ except Exception as exc:  # pragma: no cover - faker should be installed
     Faker = None  # type: ignore
     _FAKER_IMPORT_ERROR = exc
 
+# Managed persona parquet locales that Faker does not ship. Apply still builds
+# Faker for standalone maps / middle names / fallbacks, so these map to the
+# closest installed provider locale.
+FAKER_LOCALE_FALLBACKS: dict[str, str] = {
+    "en_SG": "en_US",
+    "hi_Deva_IN": "hi_IN",
+    "hi_Latn_IN": "hi_IN",
+}
+
 __all__ = [
+    "FAKER_LOCALE_FALLBACKS",
     "FakerLike",
     "ScopedValueMap",
     "StandaloneColMap",
     "build_scoped_col_map",
+    "faker_locale_supported",
+    "resolve_faker_locale",
     "seeded_faker",
     "stable_hash",
     "unit_key",
 ]
+
+
+def faker_locale_supported(locale: str) -> bool:
+    """Return whether the installed Faker package recognizes ``locale``."""
+    if Faker is None:
+        return True
+    try:
+        from faker.config import AVAILABLE_LOCALES
+    except ImportError:
+        return True
+    return locale in AVAILABLE_LOCALES
+
+
+def resolve_faker_locale(locale: str) -> tuple[str, str | None]:
+    """Return ``(faker_locale, fallback_from)`` for constructing Faker.
+
+    Managed parquet locales such as ``en_SG`` are kept for persona sampling but
+    are not Faker providers. When ``locale`` is unsupported, a documented
+    fallback is used and ``fallback_from`` is the original locale; otherwise
+    ``fallback_from`` is ``None``.
+
+    Args:
+        locale: Configured ``replace_pii.replacement.locale``.
+
+    Returns:
+        Effective Faker locale and the original locale when a fallback applied.
+    """
+    if faker_locale_supported(locale):
+        return locale, None
+    fallback = FAKER_LOCALE_FALLBACKS.get(locale)
+    if fallback is None:
+        return locale, None
+    return fallback, locale
 
 
 class FakerLike(Protocol):
@@ -95,7 +140,8 @@ def seeded_faker(seed: int, locale: str = "en_US") -> FakerLike:
 
     Args:
         seed: Seed passed to ``Faker.seed_instance``.
-        locale: Faker locale (default ``"en_US"``).
+        locale: Requested locale (default ``"en_US"``). Managed-only locales
+            such as ``en_SG`` are remapped via ``FAKER_LOCALE_FALLBACKS``.
 
     Returns:
         A configured ``Faker`` instance.
@@ -112,7 +158,8 @@ def seeded_faker(seed: int, locale: str = "en_US") -> FakerLike:
             "Install the project environment with: "
             "uv sync --frozen --extra cu129 --extra engine --group dev"
         ) from _FAKER_IMPORT_ERROR
-    f = Faker(locale)
+    faker_locale, _fallback_from = resolve_faker_locale(locale)
+    f = Faker(faker_locale)
     f.seed_instance(seed)
     return cast(FakerLike, f)
 

@@ -16,6 +16,11 @@ from ...config.replace_pii import PiiPersonBackend, PiiReplacementPlan, PiiRepla
 from ...defaults import NSS_MANAGED_ASSETS_PATH_ENV
 from ...errors import ParameterError
 from ...pii_replacer.planning import iter_plan_advisories, iter_plan_issues, load_plan_from_path
+from ...pii_replacer.replacement.scope import (
+    FAKER_LOCALE_FALLBACKS,
+    faker_locale_supported,
+    resolve_faker_locale,
+)
 from ..base import ConfigCheck, DataFrameCheck, IssueCollector
 from ..types import ConfigView, DataFrameView
 
@@ -23,14 +28,6 @@ __all__ = [
     "PiiPlanValidityCheck",
     "PiiReplacementConfigCheck",
 ]
-
-
-def _faker_locale_supported(locale: str) -> bool:
-    try:
-        from faker.config import AVAILABLE_LOCALES
-    except ImportError:
-        return True
-    return locale in AVAILABLE_LOCALES
 
 
 def _pgm_source_state(src: Path) -> Literal["unusable", "no_package", "ok"]:
@@ -70,12 +67,33 @@ class PiiReplacementConfigCheck(ConfigCheck):
         locale = replace_pii.replacement.locale
         backend = replace_pii.person.backend
 
-        if backend == PiiPersonBackend.faker and not _faker_locale_supported(locale):
-            collector.error(
-                "pii_faker_locale_invalid",
-                f"replace_pii.replacement.locale {locale!r} is not supported by Faker.",
-            )
-            return
+        # Managed apply still constructs Faker for standalone maps / middle names /
+        # fallbacks, so every locale that reaches seeded_faker must be usable.
+        if backend == PiiPersonBackend.faker:
+            if not faker_locale_supported(locale):
+                collector.error(
+                    "pii_faker_locale_invalid",
+                    f"replace_pii.replacement.locale {locale!r} is not supported by Faker.",
+                )
+                return
+        elif backend == PiiPersonBackend.managed:
+            faker_locale, fallback_from = resolve_faker_locale(locale)
+            if fallback_from is not None:
+                collector.warning(
+                    "pii_managed_faker_locale_fallback",
+                    f"replace_pii.replacement.locale {fallback_from!r} has managed persona assets but is not a "
+                    f"Faker provider locale; Faker draws (standalone identifiers, middle names, missing-asset "
+                    f"fallback) use {faker_locale!r}. Managed parquet sampling still uses {fallback_from!r} "
+                    "when assets exist.",
+                )
+            elif not faker_locale_supported(locale):
+                collector.error(
+                    "pii_faker_locale_invalid",
+                    f"replace_pii.replacement.locale {locale!r} is not supported by Faker, and no managed "
+                    f"fallback is configured (known fallbacks: {sorted(FAKER_LOCALE_FALLBACKS)}). "
+                    "Choose a Faker-supported locale or add a fallback mapping.",
+                )
+                return
 
         if backend == PiiPersonBackend.managed:
             assets_root = replace_pii.person.resolved_managed_assets_path()
