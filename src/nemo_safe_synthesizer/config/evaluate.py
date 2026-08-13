@@ -32,7 +32,8 @@ class AutocorrelationSimilarityParameters(Parameters):
     Timestamp ordering always uses the top-level time-series setting. The
     optional grouping override inherits the top-level data grouping when left
     unset. The requested lag is capped automatically for short sequences, and
-    unusable constant or undersized profiles are skipped.
+    undersized or constant training profiles are skipped. A constant synthetic
+    profile paired with varying training data receives zero similarity.
     """
 
     enabled: bool | None = Field(
