@@ -16,8 +16,9 @@ update it in the console for the change to take effect.
 ### Files
 
 - `setup.sh`: Pasted into the Launchable's Setup Script field. Installs the CUDA
-  build of Safe Synthesizer into a dedicated venv, registers it as the default Jupyter
-  kernel, and drops the tutorial notebooks in `$HOME`.
+  build of Safe Synthesizer into a dedicated venv, provisions Triton's runtime compiler,
+  registers the venv as the default Jupyter kernel, and drops the tutorial notebooks in
+  `$HOME`.
 - `welcome.md`: Added to the Launchable's Source files so it renders on the Launchable
   webpage and appears as the customer's `$HOME/welcome.md`.
 
@@ -113,9 +114,12 @@ hard way on a real instance.
 - The setup script has a 16 KiB limit. Brev rejects anything larger, which is why
   the script carries short comments pointing here rather than full explanations. Check
   `wc -c script/brev/setup.sh` before pasting.
-- The script runs unprivileged. Brev executes it as the instance user, not root, so
-  `/usr/local/bin`, `/var/log`, and `/etc/profile.d` are all unwritable. Everything
-  installs under `$HOME`.
+- The script runs as the instance user, not root, so Python and customer-facing assets
+  install under `$HOME`. The sole host-level dependency is `gcc` plus `libc6-dev`:
+  Triton JIT-compiles a CUDA driver shim the first time vLLM uses the GPU. Some provider
+  images include these packages and others do not, so the script installs them with
+  non-interactive passwordless `sudo` when needed. If the provider does not grant that
+  permission, setup fails before presenting the notebooks as ready.
 - The venv is deliberately separate from Brev's. Installing `[cu129,engine]` into
   `$HOME/.venv` would resolve torch, vllm, and flashinfer alongside jupyterlab's own
   pins. If that breaks the notebook server, the customer's only interface is gone and

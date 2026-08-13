@@ -75,6 +75,19 @@ else
   log "WARNING: nvidia-smi not found. Training and generation will not work."
 fi
 
+# Triton needs a C compiler on first GPU use.
+if ! command -v gcc >/dev/null 2>&1 || [[ ! -f /usr/include/stdlib.h ]]; then
+  if ! command -v sudo >/dev/null 2>&1 || ! sudo -n true; then
+    log "ERROR: Triton requires gcc and libc6-dev, but passwordless sudo is unavailable."
+    exit 1
+  fi
+  log "installing Triton runtime compiler"
+  sudo -n apt-get update
+  sudo -n apt-get install -y --no-install-recommends gcc libc6-dev
+else
+  log "Triton runtime compiler already present"
+fi
+
 # uv -- installed into ~/.local/bin, which needs no privileges.
 
 if [[ "$(uv --version 2>/dev/null | awk '{print $2}')" != "${UV_VERSION}" ]]; then
