@@ -60,12 +60,10 @@ If more than `max_groups` groups are shared, the metric evaluates a reproducible
 
 Start by checking whether the low score is widespread or concentrated in particular columns or groups. Then compare the sequence and autocorrelation plots:
 
-- If synthetic autocorrelation decays too quickly, the generated values are losing persistence. Preserve row order, then lengthen training examples and generated sequences until they cover the dependency span before retraining and regenerating.
-- If synthetic autocorrelation stays high for too long, the generated sequences may be overly smooth or repetitive. Remove smoothing postprocessing, check for duplicated generated patterns, and retrain with examples that preserve the expected short-term variation.
-- If peaks or sign changes occur at the wrong lags, verify the timestamp interval and make sure training examples contain multiple complete cycles. Increase `max_lag` only when the expected cycle lies beyond the current evaluation horizon.
-- If only some groups score poorly, use the per-group details to identify them, then add representative training coverage or use a separate synthesis configuration for groups with distinct temporal behavior.
-
-Correct timestamp ordering, group boundaries, and sampling intervals before changing the generator. After data preparation is verified, improve the synthetic data by preserving longer temporal context, representing slow and fast patterns in the training examples, and avoiding generation or postprocessing steps that break sequence order. Change `max_lag` only when the evaluation horizon is wrong for the use case; changing it does not improve the synthetic data itself.
+- If synthetic autocorrelation decays too quickly, verify `time_series.timestamp_column`, `time_series.timestamp_interval_seconds`, and `data.group_training_examples_by`, and enable `generation.enforce_timeseries_fidelity`. If ordering is correct, try moderately lowering `generation.temperature` or gradually increasing `training.num_input_records_to_sample` so the model sees more effective training epochs.
+- If synthetic autocorrelation stays high for too long, verify that the training data contains the expected short-term variation. If the output is overly smooth or repetitive, try moderately increasing `generation.temperature`, setting `generation.repetition_penalty` slightly above 1, or decreasing `training.num_input_records_to_sample` to reduce overfitting.
+- If peaks or sign changes occur at the wrong lags, verify `time_series.timestamp_interval_seconds` and confirm that the training data contains multiple examples of the expected cycle. Increase `max_lag` only when the expected cycle lies beyond the current evaluation horizon.
+- If only some groups score poorly, use the per-group details to identify them and improve their training coverage. If groups require materially different modeling behavior, split them into separate datasets and synthesis runs.
 
 ## Limitations
 
