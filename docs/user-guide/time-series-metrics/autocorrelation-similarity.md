@@ -31,6 +31,8 @@ For every usable group and value column, the metric computes autocorrelation at 
 
 The final 0–10 score is ten times the mean atomic similarity. Therefore, 10 means matching profiles and lower scores mean larger lag-by-lag disagreement.
 
+Non-finite observations remain as gaps in their original temporal positions. Each lag uses only pairs whose two endpoints are finite, so removing an invalid observation cannot collapse the time axis. A comparison is skipped when the training series is constant because its autocorrelation is undefined. If the training series varies but the synthetic series is constant, that comparison receives zero similarity to represent complete loss of temporal variation.
+
 ## Configuration
 
 The following block shows the default autocorrelation settings.
@@ -52,14 +54,16 @@ evaluation:
 
 With the defaults, `enabled: null` automatically enables the metric for time-series data, `value_columns: null` evaluates all shared numeric value columns, timestamp ordering uses the top-level `time_series.timestamp_column`, and `group_column: null` uses the top-level data grouping setting.
 
+If more than `max_groups` groups are shared, the metric evaluates a reproducible hash-selected subset instead of favoring labels that sort first. The result notes and details report the total, evaluated, and omitted group counts.
+
 ## Diagnosing and improving a low score
 
 Start by checking whether the low score is widespread or concentrated in particular columns or groups. Then compare the sequence and autocorrelation plots:
 
-- If synthetic autocorrelation decays too quickly, the generated values are losing persistence. Make sure training and generation windows are long enough to contain the dependency span, and that preprocessing does not shuffle observations within a sequence.
-- If synthetic autocorrelation stays high for too long, the generated sequences may be overly smooth or repetitive. Check whether generation or postprocessing suppresses short-term variation, and whether repeated patterns are being overproduced.
-- If peaks or sign changes occur at the wrong lags, the generator is not reproducing the observed cycle or reversal interval. Preserve the original sampling cadence and make sure training examples span enough complete cycles.
-- If only some groups score poorly, inspect whether those groups have less training coverage, shorter sequences, or different temporal behavior that a single synthesis configuration does not represent well.
+- If synthetic autocorrelation decays too quickly, the generated values are losing persistence. Preserve row order, then lengthen training examples and generated sequences until they cover the dependency span before retraining and regenerating.
+- If synthetic autocorrelation stays high for too long, the generated sequences may be overly smooth or repetitive. Remove smoothing postprocessing, check for duplicated generated patterns, and retrain with examples that preserve the expected short-term variation.
+- If peaks or sign changes occur at the wrong lags, verify the timestamp interval and make sure training examples contain multiple complete cycles. Increase `max_lag` only when the expected cycle lies beyond the current evaluation horizon.
+- If only some groups score poorly, use the per-group details to identify them, then add representative training coverage or use a separate synthesis configuration for groups with distinct temporal behavior.
 
 Correct timestamp ordering, group boundaries, and sampling intervals before changing the generator. After data preparation is verified, improve the synthetic data by preserving longer temporal context, representing slow and fast patterns in the training examples, and avoiding generation or postprocessing steps that break sequence order. Change `max_lag` only when the evaluation horizon is wrong for the use case; changing it does not improve the synthetic data itself.
 

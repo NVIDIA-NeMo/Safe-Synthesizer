@@ -5,8 +5,9 @@
 
 The metric compares lagged self-correlation in training and synthetic
 sequences. It evaluates each shared group and numeric value column separately,
-skips profiles that are too short or effectively constant, and averages the
-remaining similarities into a 0--10 score.
+skips profiles with unusable training data, treats constant synthetic output
+as a fidelity failure, and averages the remaining similarities into a 0--10
+score.
 
 Classes:
     AutocorrelationSimilarity: Component that computes and summarizes the
@@ -15,6 +16,7 @@ Classes:
 
 from __future__ import annotations
 
+import hashlib
 from collections import defaultdict
 from typing import Any
 
@@ -33,6 +35,8 @@ from ...observability import get_logger
 from .component import Component
 
 logger = get_logger(__name__)
+
+_MIN_VALID_PAIRS = 3
 
 
 class AutocorrelationSimilarity(Component):
@@ -141,7 +145,7 @@ class AutocorrelationSimilarity(Component):
         if not columns:
             return AutocorrelationSimilarity(score=EvaluationScore(notes="No shared numeric value columns."))
 
-        groups, missing_training, missing_synthetic = AutocorrelationSimilarity._shared_groups(
+        groups, missing_training, missing_synthetic, shared_group_count = AutocorrelationSimilarity._shared_groups(
             datasets.training,
             datasets.synthetic,
             group_column,
@@ -149,6 +153,13 @@ class AutocorrelationSimilarity(Component):
         )
         if not groups:
             return AutocorrelationSimilarity(score=EvaluationScore(notes="No shared groups to evaluate."))
+        omitted_groups = shared_group_count - len(groups)
+        group_selection = {
+            "shared_groups": shared_group_count,
+            "evaluated_groups": len(groups),
+            "omitted_groups": omitted_groups,
+            "policy": "deterministic_hash" if omitted_groups else "all_shared_groups",
+        }
 
         atomics: list[dict[str, Any]] = []
         skipped: list[dict[str, Any]] = []
@@ -164,21 +175,48 @@ class AutocorrelationSimilarity(Component):
                     training_group[column], synthetic_group[column], cfg
                 )
                 group_label = None if group_column is None else str(group_value)
-                if result is None:
-                    skipped.append({"group": group_label, "column": column, "reason": reason})
-                    continue
-                atomics.append({"group": group_label, "column": column, **result})
+                AutocorrelationSimilarity._record_atomic_result(
+                    atomics,
+                    skipped,
+                    group_label,
+                    column,
+                    result,
+                    reason,
+                )
 
         if not atomics:
+            notes = "No usable group/column autocorrelation profiles."
+            if omitted_groups:
+                notes += f" Evaluated {len(groups)} of {shared_group_count} shared groups using deterministic hash selection."
             return AutocorrelationSimilarity(
-                score=EvaluationScore(notes="No usable group/column autocorrelation profiles."),
-                details={"skipped": skipped},
+                score=EvaluationScore(notes=notes),
+                details={
+                    "counts": {
+                        "groups": len(groups),
+                        "shared_groups": shared_group_count,
+                        "omitted_groups": omitted_groups,
+                        "columns": len(columns),
+                        "atomic_scores": 0,
+                        "skipped": len(skipped),
+                    },
+                    "group_selection": group_selection,
+                    "skipped": skipped,
+                    "groups_only_in_training": missing_training,
+                    "groups_only_in_synthetic": missing_synthetic,
+                },
             )
 
         similarity = float(np.mean([item["similarity"] for item in atomics]))
         score = EvaluationScore.finalize_grade(raw_score=similarity, score=10.0 * similarity)
+        notes: list[str] = []
         if skipped:
-            score.notes = f"Skipped {len(skipped)} unusable group/column comparisons."
+            notes.append(f"Skipped {len(skipped)} unusable group/column comparisons.")
+        if omitted_groups:
+            notes.append(
+                f"Evaluated {len(groups)} of {shared_group_count} shared groups using deterministic hash selection."
+            )
+        if notes:
+            score.notes = " ".join(notes)
 
         details = {
             "evaluation_mode": "per_group" if group_column else "global",
@@ -188,18 +226,36 @@ class AutocorrelationSimilarity(Component):
             "min_points": cfg.min_points,
             "counts": {
                 "groups": len(groups),
+                "shared_groups": shared_group_count,
+                "omitted_groups": omitted_groups,
                 "columns": len(columns),
                 "atomic_scores": len(atomics),
                 "skipped": len(skipped),
             },
+            "group_selection": group_selection,
             "per_group": AutocorrelationSimilarity._summaries(atomics, "group"),
             "per_column": AutocorrelationSimilarity._summaries(atomics, "column"),
             "atomics": atomics,
             "skipped": skipped,
-            "groups_only_in_reference": missing_training,
+            "groups_only_in_training": missing_training,
             "groups_only_in_synthetic": missing_synthetic,
         }
         return AutocorrelationSimilarity(score=score, details=details)
+
+    @staticmethod
+    def _record_atomic_result(
+        atomics: list[dict[str, Any]],
+        skipped: list[dict[str, Any]],
+        group_label: str | None,
+        column: str,
+        result: dict[str, Any] | None,
+        reason: str | None,
+    ) -> None:
+        """Record one successful or skipped group-and-column comparison."""
+        if result is None:
+            skipped.append({"group": group_label, "column": column, "reason": reason})
+            return
+        atomics.append({"group": group_label, "column": column, **result})
 
     @staticmethod
     def _numeric_columns(
@@ -243,7 +299,7 @@ class AutocorrelationSimilarity(Component):
         synthetic: pd.DataFrame,
         group_column: str | None,
         max_groups: int,
-    ) -> tuple[list[Any], list[str], list[str]]:
+    ) -> tuple[list[Any], list[str], list[str], int]:
         """Find a deterministic, bounded set of groups shared by both datasets.
 
         A ``None`` sentinel represents one global sequence when grouping is not
@@ -257,18 +313,27 @@ class AutocorrelationSimilarity(Component):
             max_groups: Maximum number of shared groups to evaluate.
 
         Returns:
-            Shared group keys, training-only labels, and synthetic-only labels.
+            Shared group keys, training-only labels, synthetic-only labels,
+            and the total number of shared groups before limiting.
         """
         if group_column is None:
-            return [None], [], []
+            return [None], [], [], 1
         if group_column not in training or group_column not in synthetic:
-            return [], [], []
+            return [], [], [], 0
         training_groups = set(training[group_column].dropna().unique())
         synthetic_groups = set(synthetic[group_column].dropna().unique())
-        shared = sorted(training_groups & synthetic_groups, key=str)[:max_groups]
+        shared_groups = training_groups & synthetic_groups
+        shared = sorted(shared_groups, key=AutocorrelationSimilarity._group_selection_key)[:max_groups]
         only_training = [str(value) for value in sorted(training_groups - synthetic_groups, key=str)]
         only_synthetic = [str(value) for value in sorted(synthetic_groups - training_groups, key=str)]
-        return shared, only_training, only_synthetic
+        return shared, only_training, only_synthetic, len(shared_groups)
+
+    @staticmethod
+    def _group_selection_key(value: Any) -> tuple[str, str]:
+        """Return a stable pseudo-random ordering key for a group value."""
+        type_name = f"{type(value).__module__}.{type(value).__qualname__}"
+        payload = f"{type_name}:{value!r}".encode()
+        return hashlib.sha256(payload).hexdigest(), str(value)
 
     @staticmethod
     def _group_frame(
@@ -318,56 +383,93 @@ class AutocorrelationSimilarity(Component):
             Atomic score details and ``None`` on success, or ``None`` and a
             human-readable skip reason when the profile is unusable.
         """
-        training_values = training.dropna().to_numpy(dtype=float)
-        synthetic_values = synthetic.dropna().to_numpy(dtype=float)
-        training_values = training_values[np.isfinite(training_values)]
-        synthetic_values = synthetic_values[np.isfinite(synthetic_values)]
-        n = min(len(training_values), len(synthetic_values))
+        training_values = AutocorrelationSimilarity._prepare_values(training)
+        synthetic_values = AutocorrelationSimilarity._prepare_values(synthetic)
+        training_count = int(np.count_nonzero(np.isfinite(training_values)))
+        synthetic_count = int(np.count_nonzero(np.isfinite(synthetic_values)))
+        n = min(training_count, synthetic_count)
         if n < cfg.min_points:
             return None, f"fewer than {cfg.min_points} points"
-        if np.std(training_values) <= 1e-12 or np.std(synthetic_values) <= 1e-12:
-            return None, "constant or near-constant series"
+        if np.nanstd(training_values) <= 1e-12:
+            return None, "training series is constant or near-constant"
 
         # Retaining at least half of the shorter sequence at every lag avoids
         # presenting correlations based on only a small tail of observations.
         effective_max_lag = min(cfg.max_lag, (n - 1) // 2)
         if effective_max_lag < 1:
             return None, "no stable lags"
-        reference_acf = AutocorrelationSimilarity._acf_vector(training_values, effective_max_lag)
+        training_acf = AutocorrelationSimilarity._acf_vector(training_values, effective_max_lag)
+        if not np.any(np.isfinite(training_acf)):
+            return None, "no training lags with sufficient pair support"
+        if np.nanstd(synthetic_values) <= 1e-12:
+            return {
+                "effective_max_lag": effective_max_lag,
+                "evaluated_lags": 0,
+                "error": 1.0,
+                "similarity": 0.0,
+                "reason": "synthetic series is constant or near-constant",
+                "training_acf": AutocorrelationSimilarity._profile_details(training_acf),
+                "synthetic_acf": [None] * effective_max_lag,
+            }, None
+
         synthetic_acf = AutocorrelationSimilarity._acf_vector(synthetic_values, effective_max_lag)
+        shared_valid_lags = np.isfinite(training_acf) & np.isfinite(synthetic_acf)
+        if not np.any(shared_valid_lags):
+            return None, "no lags with sufficient pair support"
         # ACF values are bounded by -1 and 1. Dividing their absolute
         # difference by two maps the theoretical maximum error to one.
-        error = float(np.mean(np.abs(reference_acf - synthetic_acf)) / 2.0)
+        error = float(np.mean(np.abs(training_acf[shared_valid_lags] - synthetic_acf[shared_valid_lags])) / 2.0)
         error = float(np.clip(error, 0.0, 1.0))
         return {
             "effective_max_lag": effective_max_lag,
+            "evaluated_lags": int(np.count_nonzero(shared_valid_lags)),
             "error": round(error, 6),
             "similarity": round(1.0 - error, 6),
-            "reference_acf": np.round(reference_acf, 6).tolist(),
-            "synthetic_acf": np.round(synthetic_acf, 6).tolist(),
+            "training_acf": AutocorrelationSimilarity._profile_details(training_acf),
+            "synthetic_acf": AutocorrelationSimilarity._profile_details(synthetic_acf),
         }, None
 
     @staticmethod
-    def _acf_vector(values: NDArray[np.float64], max_lag: int) -> NDArray[np.float64]:
-        """Compute a consistently normalized autocorrelation vector.
+    def _prepare_values(values: pd.Series) -> NDArray[np.float64]:
+        """Convert a series to floats while preserving non-finite positions as gaps."""
+        numeric_values = pd.to_numeric(values, errors="coerce").to_numpy(dtype=float)
+        return np.where(np.isfinite(numeric_values), numeric_values, np.nan)
 
-        The estimator centers the full sequence once and uses
-        ``n * population_variance`` as the denominator at every lag. Keeping a
-        common denominator makes lag profiles directly comparable and yields
-        the bounded, gradually tapered form used by the metric.
+    @staticmethod
+    def _profile_details(values: NDArray[np.float64]) -> list[float | None]:
+        """Convert an ACF vector into JSON-safe rounded details."""
+        return [round(float(value), 6) if np.isfinite(value) else None for value in values]
+
+    @staticmethod
+    def _acf_vector(values: NDArray[np.float64], max_lag: int) -> NDArray[np.float64]:
+        """Compute a gap-aware, consistently normalized autocorrelation vector.
+
+        The estimator preserves missing positions and uses only finite endpoint
+        pairs at each lag. It centers all finite observations once and retains
+        ``n * population_variance`` as the common denominator so complete input
+        series keep the original estimator semantics.
 
         Args:
-            values: Finite, nonconstant values in temporal order.
+            values: Nonconstant values in temporal order, with gaps represented
+                as ``NaN``.
             max_lag: Largest positive lag to include.
 
         Returns:
             Autocorrelation values for lags 1 through ``max_lag``.
         """
-        centered = values - np.mean(values)
-        variance = float(np.var(centered))
-        return np.array(
-            [np.dot(centered[:-lag], centered[lag:]) / (len(centered) * variance) for lag in range(1, max_lag + 1)]
-        )
+        finite = np.isfinite(values)
+        finite_count = int(np.count_nonzero(finite))
+        centered = np.full_like(values, np.nan)
+        centered[finite] = values[finite] - np.mean(values[finite])
+        variance = float(np.var(centered[finite]))
+        acf = np.full(max_lag, np.nan)
+        for lag in range(1, max_lag + 1):
+            valid_pairs = finite[:-lag] & finite[lag:]
+            if np.count_nonzero(valid_pairs) < _MIN_VALID_PAIRS:
+                continue
+            numerator = np.dot(centered[:-lag][valid_pairs], centered[lag:][valid_pairs])
+            acf[lag - 1] = numerator / (finite_count * variance)
+        return acf
 
     @staticmethod
     def _summaries(atomics: list[dict[str, Any]], key: str) -> list[dict[str, Any]]:
