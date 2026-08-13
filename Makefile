@@ -11,7 +11,7 @@ help: ## Show mise tasks
 	@mise tasks
 
 .PHONY: install-mise
-install-mise: ## Install mise (version from .mise.toml min_version; GPG-verified when gpg + gpg-agent + dirmngr are all available)
+install-mise: ## Install mise (version from .mise.toml min_version; GPG-verified when gpg is available)
 	@MISE_GPG_KEY=$(MISE_GPG_KEY) bash tools/install-mise.sh
 
 .PHONY: setup
