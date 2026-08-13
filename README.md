@@ -395,7 +395,7 @@ When a dataset registry is provided, you can use dataset names defined in the re
 For example:
 
 ```bash
-nemo-safe-synthesizer run --dataset-registry my_registry.yaml --data-source my_dataset
+safe-synthesizer run --dataset-registry my_registry.yaml --data-source my_dataset
 ```
 
 This will load the dataset from the url plus apply any overrides for `my_dataset` from the registry YAML.
