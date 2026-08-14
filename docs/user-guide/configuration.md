@@ -292,20 +292,28 @@ for the full API reference.
 ## Replacing PII
 
 PII replacement detects and replaces personally identifiable information (PII) in
-your dataset before synthesis. It is on by default -- set `replace_pii: null`
-in YAML (or use `--no-replace-pii` on the CLI) to disable it.
-The `replace_pii` block is only needed when customizing entity types or
-classification via the SDK.
+your dataset before synthesis, reducing exposure of detected values. Heuristic
+discovery can miss PII or assign an unexpected entity type -- review
+`pii_replacement_plan.yaml` before training. It is on by default -- set
+`replace_pii: null` in YAML (or use `--no-replace-pii` on the CLI) to disable it.
+Every field has a usable default, so the `replace_pii` block is only needed when
+customizing.
 
 Key config parameters:
 
 | Field | Default | Description | Guidance |
 |-------|---------|-------------|----------|
-| `replace_pii.globals.classify.enable_classify` | `true` | Enable LLM-based PII column classification | When using the CLI, set `NSS_INFERENCE_KEY` (and optionally `NSS_INFERENCE_ENDPOINT`); set to `false` if no LLM endpoint is available |
-| `replace_pii.globals.classify.entities` | (see default list) | Entity types used for LLM-based column classification. Defaults to 15 types covering names, addresses, phone numbers, emails, SSN, national/tax IDs, and credit/debit cards -- see [PII Replacement](../product-overview/pii_replacement.md) and [`PiiReplacerConfig`][nemo_safe_synthesizer.config.replace_pii.PiiReplacerConfig] | Override to add or remove entity types from classification |
-| `replace_pii.globals.ner.ner_threshold` | `0.3` | GLiNER confidence threshold for NER detection | Lower to catch more entities (more false positives); raise to reduce false positives |
+| `replace_pii.schema_version` | `1` | Version of the `replace_pii` config shape | Leave at `1`; a future release that changes fields or plan semantics will accept a new value and refuse older ones |
+| `replace_pii.replacement_plan` | `"auto_discovery"` | The replacement plan: `"auto_discovery"`, a path to a plan file, or an inline plan | Supply a plan to control which columns are replaced and which belong to the same persona -- see [PII Replacement](../product-overview/pii_replacement.md) |
+| `replace_pii.replacement.locale` | `"en_US"` | Locale for generated names, addresses, and phone numbers | Match your dataset's locale |
+| `replace_pii.replacement.seed` | `null` | Seed for synthetic value generation | Set for reproducible replacements |
+| `replace_pii.person.backend` | `"managed"` | Synthetic person sampler: `managed` or `faker` | `managed` needs Nemotron-Personas parquet files under the managed-assets root ([download](running.md#managed-persona-assets)); `faker` needs no assets and only conditions names on sex (`ethnic_background` is omitted/ignored). A third value, `pgm`, is internal-only and requires a local sdg-pgms checkout |
+| `replace_pii.person.managed_assets_path` | `null` | Root containing `datasets/{locale}.parquet` | Defaults to `NSS_MANAGED_ASSETS_PATH` or `~/.data-designer/managed-assets` |
+| `replace_pii.llm_enhancement` | `false` | Reserved for LLM-assisted discovery | Leave `false`; `true` raises `ParameterError` in this release |
 
-See [`PiiReplacerConfig`][nemo_safe_synthesizer.config.replace_pii.PiiReplacerConfig]
+Structural columns are never PII-replaced: the group key when `time_series.is_timeseries` is true, `data.order_training_examples_by` when set, and `time_series.timestamp_column` in time-series mode. Auto-discovery omits them; a user-supplied plan that lists them under `columns_to_replace` is rejected. Free-text columns are scanned in heuristic mode only when structured entity columns exist — see [PII Replacement](../product-overview/pii_replacement.md).
+
+See [`ReplacePiiConfig`][nemo_safe_synthesizer.config.replace_pii.ReplacePiiConfig]
 for the full schema.
 
 ---
@@ -458,7 +466,7 @@ safe-synthesizer run --config config.yaml --data-source data.csv \
 | `training` | `with_train()` | [`TrainingHyperparams`][nemo_safe_synthesizer.config.training.TrainingHyperparams] |
 | `generation` | `with_generate()` | [`GenerateParameters`][nemo_safe_synthesizer.config.generate.GenerateParameters] |
 | `evaluation` | `with_evaluate()` | [`EvaluationParameters`][nemo_safe_synthesizer.config.evaluate.EvaluationParameters] |
-| `replace_pii` (`null` to disable) | `with_replace_pii()` / `with_replace_pii(enable=False)` | [`PiiReplacerConfig`][nemo_safe_synthesizer.config.replace_pii.PiiReplacerConfig] |
+| `replace_pii` (`null` to disable) | `with_replace_pii()` / `with_replace_pii(enable=False)` | [`ReplacePiiConfig`][nemo_safe_synthesizer.config.replace_pii.ReplacePiiConfig] |
 | `privacy` (`null` to disable) | `with_differential_privacy()` | [`DifferentialPrivacyHyperparams`][nemo_safe_synthesizer.config.differential_privacy.DifferentialPrivacyHyperparams] |
 | `time_series` | `with_time_series()` | [`TimeSeriesParameters`][nemo_safe_synthesizer.config.time_series.TimeSeriesParameters] |
 

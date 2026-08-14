@@ -69,56 +69,49 @@ Small datasets cause poor privacy budget utilization. Consider lowering
 
 ## PII Replacement
 
-Entity detection and classification issues during PII replacement.
+Heuristic discovery can skip a column or assign an unexpected entity type.
 
 ### PII Uses Unexpected Entity Types
 
-If PII replacement is not detecting the entity types you expect, the column
-classifier may have failed silently. When the classifier fails to initialize
-or classify, it falls back to default entity types.
+Discovery is heuristic: it assigns entity types from column names and value patterns.
+A column can be skipped or given an unexpected type when its name is unusual or its
+values are inconsistently formatted.
 
-Look for the following log lines if PII replacement seems to use unexpected entity types:
+Start from the plan the run actually used. Each run writes it to
+`pii_replacement_plan.yaml` in the run directory, listing every column, its
+`entity_type`, and which persona it belongs to.
 
-```text
-Could not initialize column classifier, falling back to default entities.
-```
-
-or
+The run log explains the notable decisions:
 
 ```text
-Could not perform classify, falling back to default entities.
+[PII Replacement] Free-text scan for PII detection: scanned as text: notes; not scanned: weight
+[PII Replacement] Temporal columns identified (excluded from replacement plan): event_date
+[PII Replacement] Standalone columns: patient_id (unique_identifier)
 ```
 
-When `NSS_INFERENCE_KEY` is not set, the same log line is followed by guidance to set it (and a note that `NSS_INFERENCE_ENDPOINT` is optional with the default API). When the key is set, a traceback may be included to show the underlying API error.
-
-Fix: set entity types explicitly in your config, or when using the CLI ensure
-`NSS_INFERENCE_KEY` is set (and `NSS_INFERENCE_ENDPOINT` if not using the default). PII classify config is deeply nested -- use YAML or SDK:
+Fix: edit that plan file and pass it back, which overrides discovery entirely.
 
 === "Config reference"
 
     ```yaml
     replace_pii:
-      globals:
-        classify:
-          enable_classify: true
-          entities: ["name", "email", "phone_number"]
+      replacement_plan: pii_replacement_plan.yaml
     ```
 
 === "SDK"
 
     ```python
-    from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
-
-    pii_config = PiiReplacerConfig.get_default_config()
-    pii_config.globals.classify.enable_classify = True
-    pii_config.globals.classify.entities = ["name", "email", "phone_number"]
-
     synthesizer = (
-        SafeSynthesizer(config)
+        SafeSynthesizer()
         .with_data_source("data.csv")
-        .with_replace_pii(config=pii_config)
+        .with_replace_pii(replacement_plan="pii_replacement_plan.yaml")
     )
     ```
+
+Unknown column names, duplicate entries, and `scope: group` without
+`data.group_training_examples_by` are rejected before any data is touched. See
+[PII Replacement](../product-overview/pii_replacement.md) for the entity vocabulary
+and plan format.
 
 ---
 

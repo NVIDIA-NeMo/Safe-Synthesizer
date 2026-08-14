@@ -29,7 +29,7 @@ graph TB
             TrainConfig["TrainingHyperparams"]
             GenConfig["GenerateParameters"]
             EvalConfig["EvaluationParameters"]
-            PIIConfig["PiiReplacerConfig"]
+            PIIConfig["ReplacePiiConfig"]
             DPConfig["DifferentialPrivacyHyperparams"]
         end
     end
@@ -188,7 +188,7 @@ flowchart TB
         training_p["TrainingHyperparams"]
         gen_p["GenerateParameters"]
         eval_p["EvaluationParameters"]
-        pii_p["PiiReplacerConfig | None"]
+        pii_p["ReplacePiiConfig | None"]
         dp_p["DifferentialPrivacyHyperparams | None"]
         ts_p["TimeSeriesParameters"]
     end
@@ -233,7 +233,7 @@ Exactly what avenues of configuration are available, and thus how precedence is 
 - CLI: CLI flags > dataset registry overrides > YAML config file > defaults
 - SDK: Python SDK builder calls > YAML config file > defaults
 
-Nullable sub-configs (`PiiReplacerConfig | None`, `DifferentialPrivacyHyperparams | None`)
+Nullable sub-configs (`ReplacePiiConfig | None`, `DifferentialPrivacyHyperparams | None`)
 use `None` as the sole disabled signal. The `@pydantic_options` decorator auto-generates
 `--no_<field>` is-flags for these fields; `parse_overrides` translates them into
 `{field: None}` in the overrides dict.
@@ -297,7 +297,7 @@ Path: `src/nemo_safe_synthesizer/config/`
 - TrainingHyperparams: training settings (learning rate, epochs, batch size, etc.)
 - GenerateParameters: generation settings (temperature, top_p, num_records, etc.)
 - EvaluationParameters: evaluation component toggles and settings
-- PiiReplacerConfig: PII detection and replacement settings
+- ReplacePiiConfig: PII detection and replacement settings
 - DifferentialPrivacyHyperparams: DP training parameters (epsilon, delta, clipping norm)
 
 ### 2. Data Processing Pipeline
@@ -395,4 +395,4 @@ The execution follows a clear pipeline: Data --> PII Replacement --> Training --
 2. Custom Generation Backend: implement `GeneratorBackend` abstract class
 3. Custom Evaluation Component: extend `Component` base class
 4. Custom Data Actions: add to `data_processing/actions/`
-5. Custom PII Detectors: extend NER pipeline
+5. Custom PII discovery: extend heuristic detectors in `pii_replacer/`

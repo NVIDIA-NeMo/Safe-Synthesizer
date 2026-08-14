@@ -53,6 +53,12 @@ class ModelWithBoth(BaseModel):
     optional: Inner | None = Field(default_factory=Inner, description="Nullable sub-model.")
 
 
+class ModelWithScalarOrModel(BaseModel):
+    """A model-or-scalar union, like ``replace_pii.replacement_plan``."""
+
+    either: Inner | str = Field(default="auto", description="A sub-model or a sentinel/path string.")
+
+
 # ---------------------------------------------------------------------------
 # parse_overrides
 # ---------------------------------------------------------------------------
@@ -106,12 +112,12 @@ def test_parse_overrides_mixed_depth():
     result = parse_overrides(
         {
             "training__batch_size": "4",
-            "replace_pii__globals__seed": "42",
+            "replace_pii__replacement__seed": "42",
         }
     )
     assert result == {
         "training": {"batch_size": "4"},
-        "replace_pii": {"globals": {"seed": "42"}},
+        "replace_pii": {"replacement": {"seed": "42"}},
     }
 
 
@@ -286,6 +292,15 @@ def test_collect_params_flag_for_nullable_model():
     assert "no_nested" in names
     # scalar | None must NOT produce a flag
     assert "no_scalar" not in names
+
+
+def test_collect_params_leaf_for_model_or_scalar_union():
+    """``Inner | str`` is settable as a string, so it stays one option and gets no flag."""
+    params = _collect_params(ModelWithScalarOrModel)
+    assert len(params) == 1
+    param = params[0]
+    assert isinstance(param, LeafParam)
+    assert param.name == "either"
 
 
 def test_collect_params_flag_has_correct_field_name():
@@ -481,9 +496,9 @@ def test_deep_nested_override_end_to_end_via_click_runner():
     def cmd(**kwargs):
         captured.update(parse_overrides(kwargs))
 
-    result = CliRunner().invoke(cmd, ["--replace_pii__globals__seed", "42"])
+    result = CliRunner().invoke(cmd, ["--replace_pii__replacement__seed", "42"])
     assert result.exit_code == 0, result.output
-    assert captured["replace_pii"]["globals"]["seed"] == 42
+    assert captured["replace_pii"]["replacement"]["seed"] == 42
 
 
 def test_structured_generation_nested_option_end_to_end_via_click_runner():

@@ -2,3 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
+
+from .replacer import TabularPiiReplacer
+
+__all__ = ["TabularPiiReplacer"]

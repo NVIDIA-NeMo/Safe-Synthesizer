@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import cast
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
@@ -91,7 +92,7 @@ def _create_process_data_setup(
     """Shared factory for the ``fixture_process_data_setup_*`` fixtures.
 
     Builds a ``SafeSynthesizer`` wired with deterministic train/test splits
-    and a pre-built PII replacer mock, bypassing real NER models.  The
+    and a pre-built PII replacer mock, bypassing real tabular PII replacement.  The
     builder is returned before ``process_data()`` runs so each test
     controls when -- and whether -- the method is called.
     """
@@ -111,13 +112,13 @@ def _create_process_data_setup(
     builder._data_source = original_df
     assert builder._nss_config is not None
     if replace_pii:
-        from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
+        from nemo_safe_synthesizer.config import ReplacePiiConfig
 
-        builder._nss_config.replace_pii = PiiReplacerConfig.get_default_config()
+        builder._nss_config.replace_pii = ReplacePiiConfig()
     else:
         builder._nss_config.replace_pii = None
 
-    # Stub just enough of NemoPII's interface to satisfy process_data
+    # Stub just enough of TabularPiiReplacer's interface to satisfy process_data
     mock_replacer_instance = MagicMock()
     mock_replacer_instance.result.transformed_df = pii_replaced_df
     mock_replacer_instance.result.column_statistics = {
@@ -182,7 +183,7 @@ class TestProcessDataPiiSeparation:
         pd.testing.assert_frame_equal(builder._training_df, train_split)
 
     @patch("nemo_safe_synthesizer.sdk.library_builder.run_preflight", return_value=_EMPTY_PREFLIGHT)
-    @patch("nemo_safe_synthesizer.sdk.library_builder.NemoPII")
+    @patch("nemo_safe_synthesizer.sdk.library_builder.TabularPiiReplacer")
     @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
     @patch("nemo_safe_synthesizer.sdk.library_builder.AutoConfigResolver")
     @patch("nemo_safe_synthesizer.sdk.library_builder.Holdout")
@@ -209,7 +210,46 @@ class TestProcessDataPiiSeparation:
         pd.testing.assert_frame_equal(builder._original_training_df, train_split)
 
     @patch("nemo_safe_synthesizer.sdk.library_builder.run_preflight", return_value=_EMPTY_PREFLIGHT)
-    @patch("nemo_safe_synthesizer.sdk.library_builder.NemoPII")
+    @patch("nemo_safe_synthesizer.sdk.library_builder.TabularPiiReplacer")
+    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    @patch("nemo_safe_synthesizer.sdk.library_builder.AutoConfigResolver")
+    @patch("nemo_safe_synthesizer.sdk.library_builder.Holdout")
+    def test_late_preflight_disables_pii_plan_validity(
+        self,
+        mock_holdout_cls,
+        mock_resolver_cls,
+        mock_metadata_cls,
+        mock_pii_cls,
+        mock_preflight,
+        fixture_process_data_setup_with_pii,
+    ):
+        """Late preflight skips ``pii.plan_validity`` (already checked early on the same columns)."""
+        builder, train_split, test_split, _pii_replaced_df, mock_replacer = fixture_process_data_setup_with_pii
+        _wire_process_data_mocks(
+            mock_holdout_cls, mock_resolver_cls, mock_metadata_cls, builder, train_split, test_split
+        )
+        mock_pii_cls.return_value = mock_replacer
+        captured: list[tuple[tuple[object, ...], dict[str, object]]] = []
+
+        def _capture_preflight(*args: object, **kwargs: object):
+            captured.append((args, kwargs))
+            return _EMPTY_PREFLIGHT
+
+        mock_preflight.side_effect = _capture_preflight
+        builder.process_data()
+
+        assert len(captured) >= 2
+        early_args, early_kwargs = captured[0]
+        late_args, late_kwargs = captured[-1]
+        early_config = cast(SafeSynthesizerParameters, early_args[1])
+        late_config = cast(SafeSynthesizerParameters, late_args[1])
+        assert early_kwargs.get("stages") == frozenset({PreflightStage.CONFIG, PreflightStage.DATAFRAME})
+        assert "pii.plan_validity" not in early_config.preflight.disabled_checks
+        assert late_kwargs.get("stages") is None
+        assert "pii.plan_validity" in late_config.preflight.disabled_checks
+
+    @patch("nemo_safe_synthesizer.sdk.library_builder.run_preflight", return_value=_EMPTY_PREFLIGHT)
+    @patch("nemo_safe_synthesizer.sdk.library_builder.TabularPiiReplacer")
     @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
     @patch("nemo_safe_synthesizer.sdk.library_builder.AutoConfigResolver")
     @patch("nemo_safe_synthesizer.sdk.library_builder.Holdout")

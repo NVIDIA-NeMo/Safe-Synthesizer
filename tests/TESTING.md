@@ -136,10 +136,11 @@ ordinary local pytest runs must retain skip behavior.
 
 | Location                                     | Contents                                                                                                                                                                                                                                                            |
 | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tests/stub_datasets/`                       | Sample datasets including: `iris.csv`, `chickweight.csv`, `dow_jones_index_group_size_8.csv`, `clinc_oos.csv`, `sample-patient-events-12groups-200-records.csv`, `pems_sf_sample.csv`, `lmsys_chat_non_english_sample.jsonl`, `doc_summaries.csv` (+ `licenses.md`) |
+| `tests/stub_datasets/`                       | Sample datasets including: `iris.csv`, `chickweight.csv`, `dow_jones_index_group_size_8.csv`, `clinc_oos.csv`, `sample-patient-events-12groups-200-records.csv`, `telco_churn_sample.csv`, `pems_sf_sample.csv`, `lmsys_chat_non_english_sample.jsonl`, `doc_summaries.csv` (+ `licenses.md`) |
 | `tests/stub_tokenizer/`                      | Minimal tokenizer config                                                                                                                                                                                                                                            |
 | `tests/test_data/tokenizers/`                | Full tokenizers: `tinyllama/`, `mistral7b/`, `smollm3b/`                                                                                                                                                                                                            |
-| `tests/pii_replacer/fake_people_dataset.csv` | PII test data for NER/replacement                                                                                                                                                                                                                                   |
+| `tests/test_data/pii/fake_people_dataset.csv` | PII test data for tabular replacement                                                                                                                                                                                                                              |
+| `tests/pii_replacer/golden/`                 | Expected auto-discovered `pii_replacement_plan.yaml` snapshots for stub CSVs                                                                                                                                                                                       |
 | `tests/e2e/required_configs/`                | 6 YAML configs: `tinyllama-nodp`, `tinyllama-dp`, `smollm3-nodp`, `smollm3-dp`, `mistral-nodp`, `mistral-dp`                                                                                                                                                        |
 
 Load helpers in root `conftest.py`:
@@ -149,7 +150,7 @@ Load helpers in root `conftest.py`:
 
 ## Fixture Discovery
 
-9 `conftest.py` files: `tests/`, `tests/training/`, `tests/generation/`, `tests/evaluation/`, `tests/cli/`, `tests/data_processing/`, `tests/config/`, `tests/e2e/`, `tests/smoke/`.
+10 `conftest.py` files: `tests/`, `tests/training/`, `tests/generation/`, `tests/evaluation/`, `tests/cli/`, `tests/data_processing/`, `tests/config/`, `tests/e2e/`, `tests/smoke/`, `tests/pii_replacer/`.
 
 Dataset/tokenizer fixtures use the `fixture_` prefix; CLI helpers use descriptive names (`mock_workdir`).
 

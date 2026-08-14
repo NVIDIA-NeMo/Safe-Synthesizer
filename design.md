@@ -23,7 +23,7 @@ graph TB
             TrainConfig[TrainingHyperparams]
             GenConfig[GenerateParameters]
             EvalConfig[EvaluationParameters]
-            PIIConfig[PiiReplacerConfig]
+            PIIConfig[ReplacePiiConfig]
             DPConfig[DifferentialPrivacyHyperparams]
         end
     end
@@ -207,7 +207,7 @@ Path: `src/nemo_safe_synthesizer/config/`
 - `TrainingHyperparams`: Training settings (learning rate, epochs, batch size, etc.)
 - `GenerateParameters`: Generation settings (temperature, top_p, num_records, etc.)
 - `EvaluationParameters`: Evaluation component toggles and settings
-- `PiiReplacerConfig`: PII detection and replacement settings
+- `ReplacePiiConfig`: PII detection and replacement settings
 - `DifferentialPrivacyHyperparams`: DP training parameters (epsilon, delta, clipping norm)
 
 ### 2. Data Processing Pipeline
@@ -415,7 +415,7 @@ results = synthesizer.results
 
 ### PII Protection
 
-- Named Entity Recognition (NER) to detect PII
+- Heuristic discovery to find PII columns (names, values, dtypes)
 - Deterministic replacement with synthetic values
 - Preserves column statistics and distributions
 
@@ -469,7 +469,7 @@ safe-synthesizer-artifacts/
 2. Custom Generation Backend: Implement `GeneratorBackend` abstract class
 3. Custom Evaluation Component: Extend `Component` base class
 4. Custom Data Actions: Add to `data_processing/actions/`
-5. Custom PII Detectors: Extend NER pipeline
+5. Custom PII discovery: extend heuristic detectors in `pii_replacer/`
 
 ---
 

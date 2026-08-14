@@ -24,7 +24,7 @@ from .evaluate import EvaluationParameters
 from .generate import GenerateParameters
 from .patch import CompiledConfigPatch, PatchAssignment
 from .preflight import PreflightParameters
-from .replace_pii import PiiReplacerConfig
+from .replace_pii import ReplacePiiConfig
 from .time_series import TimeSeriesParameters
 from .training import TrainingHyperparams
 from .types import AUTO_STR
@@ -81,9 +81,9 @@ class SafeSynthesizerParameters(Parameters):
         default_factory=TimeSeriesParameters,
     )
 
-    replace_pii: PiiReplacerConfig | None = Field(
+    replace_pii: ReplacePiiConfig | None = Field(
         description="PII replacement configuration. When ``None``, PII replacement is skipped.",
-        default_factory=PiiReplacerConfig.get_default_config,
+        default_factory=ReplacePiiConfig,
     )
 
     preflight: PreflightParameters = Field(

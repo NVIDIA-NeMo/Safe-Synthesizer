@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from ..configurator.parameter_paths import ParameterPath, format_parameter_path
 from ..configurator.pydantic_compat import nested_model_type
 from ..errors import ParameterError
-from .unknown_fields import UnknownFieldBehavior
+from .unknown_fields import _LEGACY_REPLACE_PII_KEYS, UnknownFieldBehavior
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
 
@@ -176,19 +176,40 @@ def _mapping_assignments(
     return tuple(assignments)
 
 
+def _reject_legacy_replace_pii_keys(source: Mapping[str, object]) -> None:
+    """Fail closed on pre-v3 replace_pii keys (even under unknown_fields=ignore)."""
+    legacy = sorted(_LEGACY_REPLACE_PII_KEYS & set(source))
+    if legacy:
+        raise ParameterError(
+            f"Legacy configuration field 'replace_pii.{legacy[0]}' is no longer supported. "
+            "Migrate to replace_pii.replacement_plan / replacement / person "
+            "(see product overview: PII replacement)."
+        )
+
+
 def _mapping_without_extras(model_type: type[BaseModel], source: Mapping[str, object]) -> dict[str, object]:
     """Adapt a raw mapping to Pydantic's recursive extra-ignore behavior."""
+    # Lazy import: configurator.parameters imports this module, and ReplacePiiConfig
+    # subclasses Parameters, so a top-level import would cycle.
+    from .replace_pii import ReplacePiiConfig
+
+    # When the patch target is ReplacePiiConfig itself (SDK with_replace_pii),
+    # legacy keys are top-level on ``source`` and must be rejected before they
+    # are stripped as unknown extras — otherwise ignore silently yields defaults.
+    if model_type is ReplacePiiConfig:
+        _reject_legacy_replace_pii_keys(source)
     adapted: dict[str, object] = {}
     for name, value in source.items():
         if (field := model_type.model_fields.get(name)) is None:
             continue
         nested_model = nested_model_type(field.annotation, BaseModel)
         nested_source = _branch_mapping(nested_model, value)
-        adapted[name] = (
-            _mapping_without_extras(nested_model, nested_source)
-            if nested_model is not None and nested_source is not None
-            else value
-        )
+        if nested_model is not None and nested_source is not None:
+            if name == "replace_pii":
+                _reject_legacy_replace_pii_keys(nested_source)
+            adapted[name] = _mapping_without_extras(nested_model, nested_source)
+        else:
+            adapted[name] = value
     return adapted
 
 

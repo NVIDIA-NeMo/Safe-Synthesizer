@@ -10,6 +10,7 @@ modules.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 # default artifacts path
@@ -73,6 +74,22 @@ DEFAULT_EXCLUDE_COLUMNS: tuple[str, ...] = (PSEUDO_GROUP_COLUMN,)
 
 # default LLM inference endpoint for PII column classification.
 DEFAULT_NSS_INFERENCE_ENDPOINT = "https://integrate.api.nvidia.com/v1"
+
+# Managed persona parquet assets for tabular PII replacement (``datasets/{locale}.parquet``).
+NSS_MANAGED_ASSETS_PATH_ENV = "NSS_MANAGED_ASSETS_PATH"
+
+
+def default_managed_assets_path() -> Path:
+    """Return the managed persona assets root directory.
+
+    Resolution order: ``NSS_MANAGED_ASSETS_PATH`` environment variable, then
+    ``~/.data-designer/managed-assets``.
+    """
+    env = os.environ.get(NSS_MANAGED_ASSETS_PATH_ENV)
+    if env:
+        return Path(env)
+    return Path.home() / ".data-designer" / "managed-assets"
+
 
 # training +  parameters
 DEFAULT_BASE_SEQ_LENGTH = 2048

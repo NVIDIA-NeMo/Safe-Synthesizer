@@ -5,9 +5,6 @@
 
 from __future__ import annotations
 
-import pytest
-from pydantic import ValidationError
-
 from nemo_safe_synthesizer.cli.settings import CLISettings
 from nemo_safe_synthesizer.cli.wandb_setup import WandbMode
 
@@ -261,29 +258,21 @@ class TestCLISettings:
     def test_runtime_settings_from_env(self, monkeypatch):
         """Remaining runtime settings load from their documented env vars."""
         monkeypatch.setenv("NSS_INFERENCE_MODEL", "custom/model")
-        monkeypatch.setenv("NSS_PII_REPLACER_CPU_COUNT", "4")
 
         settings = CLISettings()
         assert settings.inference_model_id == "custom/model"
-        assert settings.cpu_count == 4
+
+    def test_removed_pii_cpu_count_env_is_ignored(self, monkeypatch):
+        """NSS_PII_REPLACER_CPU_COUNT is no longer a CLISettings field."""
+        monkeypatch.setenv("NSS_PII_REPLACER_CPU_COUNT", "4")
+        settings = CLISettings()
+        assert "cpu_count" not in CLISettings.model_fields
+        assert not hasattr(settings, "cpu_count")
 
     def test_huggingface_remote_is_cli_only(self, monkeypatch):
         """huggingface_remote is set via the CLI flag, not a parallel NSS env var."""
         settings = CLISettings.from_cli_kwargs(huggingface_remote=False)
         assert settings.huggingface_remote is False
-
-    @pytest.mark.parametrize("bad_value", ["0", "-1"])
-    def test_cpu_count_rejects_non_positive(self, monkeypatch, bad_value):
-        """cpu_count must be >= 1; 0 or negative fails fast at parse time."""
-        monkeypatch.setenv("NSS_PII_REPLACER_CPU_COUNT", bad_value)
-        with pytest.raises(ValidationError):
-            CLISettings()
-
-    @pytest.mark.parametrize("bad_value", [0, -1])
-    def test_cpu_count_rejects_non_positive_from_cli(self, bad_value):
-        """A non-positive --cpu-count is rejected when passed via CLI kwargs."""
-        with pytest.raises(ValidationError):
-            CLISettings.from_cli_kwargs(cpu_count=bad_value)
 
 
 class TestCLISettingsIntegration:

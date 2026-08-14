@@ -17,6 +17,10 @@ UnknownFieldBehavior: TypeAlias = Literal["ignore", "reject"]
 
 DEFAULT_UNKNOWN_FIELDS: UnknownFieldBehavior = "reject"
 
+# Pre-v3 replace_pii keys. Always rejected — even under unknown_fields: ignore —
+# so a legacy YAML cannot silently become auto-discovery defaults.
+_LEGACY_REPLACE_PII_KEYS = frozenset({"globals", "steps"})
+
 _UNKNOWN_FIELDS_ADAPTER: TypeAdapter[UnknownFieldBehavior] = TypeAdapter(UnknownFieldBehavior)
 
 
@@ -44,8 +48,14 @@ def _normalize_model_mapping(
     for name, value in source.items():
         field = model_type.model_fields.get(name)
         if field is None:
+            location = ".".join((*path, name))
+            if path and path[-1] == "replace_pii" and name in _LEGACY_REPLACE_PII_KEYS:
+                raise ParameterError(
+                    f"Legacy configuration field {location!r} is no longer supported. "
+                    "Migrate to replace_pii.replacement_plan / replacement / person "
+                    "(see product overview: PII replacement)."
+                )
             if unknown_fields == "reject":
-                location = ".".join((*path, name))
                 raise ParameterError(f"Unknown configuration field {location!r}.")
             continue
         normalized[name] = _normalize_annotation(field.annotation, value, unknown_fields, (*path, name))

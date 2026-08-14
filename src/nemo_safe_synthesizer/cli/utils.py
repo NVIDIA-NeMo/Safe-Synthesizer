@@ -232,9 +232,9 @@ def common_setup(
         cached datasets, dataframe may be None (loaded from cached files by SafeSynthesizer).
     """
     # 0. Propagate CLI-resolved runtime settings back to os.environ. This must
-    # run before any deferred pii_replacer imports so that module-level reads
-    # of NSS_INFERENCE_*, HF_HUB_OFFLINE/TRANSFORMERS_OFFLINE, and
-    # NSS_PII_REPLACER_CPU_COUNT see the CLI-overridden values.
+    # run before any deferred pipeline imports so that module-level reads
+    # of NSS_INFERENCE_* and HF_HUB_OFFLINE/TRANSFORMERS_OFFLINE see the
+    # CLI-overridden values.
     _propagate_runtime_settings_to_env(settings)
 
     # 1. Create workdir FIRST - this establishes all artifact paths
@@ -325,13 +325,11 @@ def _set_wandb_env_vars(
 def _propagate_runtime_settings_to_env(settings: "CLISettings") -> None:
     """Materialize CLI-resolved runtime settings back to ``os.environ``.
 
-    The downstream readers for these settings live deep in ``pii_replacer``
-    (NER, GLiNER, column classification) and historically read directly from
-    the process environment. Rather than thread a ``CLISettings`` handle
-    through every callsite, we propagate the resolved values back to
-    ``os.environ`` here so that CLI flag precedence -- which ``CLISettings``
-    handles via ``from_cli_kwargs`` -- carries through to those readers
-    unchanged.
+    Downstream readers for inference and Hugging Face offline mode historically
+    read directly from the process environment. Rather than thread a
+    ``CLISettings`` handle through every callsite, we propagate the resolved
+    values back to ``os.environ`` here so that CLI flag precedence carries
+    through unchanged.
 
     ``CLISettings`` values are already env-aware (via ``AliasChoices``); when
     no CLI flag is provided, the field carries the env var's existing value
@@ -363,8 +361,6 @@ def _propagate_runtime_settings_to_env(settings: "CLISettings") -> None:
         offline = "0" if settings.huggingface_remote else "1"
         os.environ["HF_HUB_OFFLINE"] = offline
         os.environ["TRANSFORMERS_OFFLINE"] = offline
-    if settings.cpu_count is not None:
-        os.environ["NSS_PII_REPLACER_CPU_COUNT"] = str(settings.cpu_count)
 
 
 def _initialize_logging_for_cli_from_settings(

@@ -6,7 +6,7 @@
 Runtime errors, OOM issues, and configuration problems for NeMo Safe
 Synthesizer. Sections are organized by pipeline phase. For output quality
 and evaluation metrics, see [Synthetic Data Quality](evaluating-data.md). For environment variables, model caching, offline setup, NIM endpoint
-configuration, and NER parallelism, see [Environment Variables](environment.md).
+configuration, and model caching, see [Environment Variables](environment.md).
 
 ---
 
@@ -29,7 +29,7 @@ configuration, and NER parallelism, see [Environment Variables](environment.md).
 | "fraction of invalid records" | Generation quality too low | [Lower threshold or retrain](#generationerror) |
 | Metrics show UNAVAILABLE | Too few records / columns | [Ensure >= 200 records](evaluating-data.md#minimum-data-requirements) |
 | Low SQS scores | Underfit or too few records | [Review distributions](evaluating-data.md#low-sqs-scores) |
-| PII uses default entities | Classifier failed | [Set entities explicitly](evaluating-data.md#pii-uses-unexpected-entity-types) |
+| PII misses or mislabels a column | Heuristic discovery | [Edit the discovered plan](evaluating-data.md#pii-uses-unexpected-entity-types) |
 | "timestamp_column has missing values" | Dirty time series data | Clean NaN/nulls from timestamp column |
 | "groups must have same start" | Inconsistent groups | [Align group start timestamps](#groups-must-have-same-start) |
 | Pre-flight validation fails | Dataset or config issue | [Pre-flight validation codes](#pre-flight-validation-codes) |
@@ -510,9 +510,9 @@ check of its own.
 | `no_gpu` | error | `gpu.cuda` | No CUDA GPU detected (required for training or generation) |
 | `low_vram` | warning | `gpu.vram` | Free GPU VRAM may be insufficient |
 | `vram_exceeds_capacity` | error | `gpu.vram` | Estimated training VRAM is far above available GPU memory |
-| `inference_key_missing` | warning | `env.inference` | `NSS_INFERENCE_KEY` not set; PII classification degraded |
+| `inference_key_missing` | warning | `env.inference` | `NSS_INFERENCE_KEY` not set; advisory only -- PII replacement does not use an inference endpoint |
 | `inference_model_blank` | warning | `env.inference` | `NSS_INFERENCE_MODEL` set but empty; the blank value is ignored and the default model id is used |
-| `inference_endpoint_invalid` | error | `env.inference` | `NSS_INFERENCE_ENDPOINT` set but not a valid http(s) URL; classification requests will fail |
+| `inference_endpoint_invalid` | error | `env.inference` | `NSS_INFERENCE_ENDPOINT` set but not a valid http(s) URL; inference requests will fail |
 | `hf_token_missing` | warning | `env.hf_model_availability` | Neither `HF_TOKEN` nor `HUGGING_FACE_HUB_TOKEN` set, and model loading may need online Hugging Face access |
 | `hf_model_not_cached` | warning/error | `env.hf_model_availability` | Hugging Face model is not present in the local cache; severity is error when HF offline mode is enabled |
 | `hf_model_cache_incomplete` | warning/error | `env.hf_model_availability` | Cached Hugging Face model snapshot is missing required config, tokenizer, weights, or shards; severity is error when HF offline mode is enabled |
@@ -540,52 +540,37 @@ check of its own.
 | `dataset_too_small` | error | `dataset.size` | Dataset has fewer than minimum required rows |
 | `dataset_small` | warning | `dataset.row_count` | Training set below 1000 records |
 | `extreme_oversampling` | warning | `training.oversampling` | Data fraction exceeds 5x |
+| `pii_llm_not_implemented` | error | `pii.replacement_config` | `replace_pii.llm_enhancement=True` is not implemented in this release |
+| `pii_faker_locale_invalid` | error | `pii.replacement_config` | `replace_pii.replacement.locale` is not a locale Faker supports (faker backend, or managed with no fallback mapping) |
+| `pii_managed_faker_locale_fallback` | warning | `pii.replacement_config` | Managed locale has parquet assets but is not a Faker provider; Faker draws use a documented fallback (e.g. `en_SG` → `en_US`) |
+| `pii_managed_assets_missing` | warning | `pii.replacement_config` | Managed persona assets not found; replacement falls back to Faker. See [Managed persona assets](running.md#managed-persona-assets) |
+| `pii_pgm_locale_invalid` | error | `pii.replacement_config` | `person.backend` is `pgm`, which supports `en_US` only |
+| `pii_pgm_src_missing` | error | `pii.replacement_config` | `person.sdg_pgms_src` is unset, missing, or unreadable; the internal `pgm` backend needs a local sdg-pgms checkout |
+| `pii_pgm_import_missing` | error | `pii.replacement_config` | sdg-pgms package not found under `person.sdg_pgms_src` |
+| `pii_plan_unreadable` | error | `pii.plan_validity` | Replacement plan file could not be read or parsed |
+| `pii_plan_protected_column` | error | `pii.plan_validity` | Plan lists a structural column (time-series group key, `order_training_examples_by`, or time-series timestamp) under `columns_to_replace` |
+| `pii_plan_group_scope_invalid` | error | `pii.plan_validity` | Plan uses `scope: group` but `data.group_training_examples_by` is unset or missing from the dataset |
+| `pii_plan_column_not_found` | error | `pii.plan_validity` | Plan references a column that is not in the dataset |
+| `pii_plan_duplicate_entry` | error | `pii.plan_validity` | A column, persona, persona attribute, or one of a column's `patterns` appears more than once in the plan |
+| `pii_plan_entity_type_invalid` | error | `pii.plan_validity` | Column has no `entity_type`, or uses `date` (identified but never replaced) |
+| `pii_plan_pattern_invalid` | error | `pii.plan_validity` | A listed pattern is empty, describes none of the column's values, has no variable position, has an unclosed `[` class, or is set on a column that takes none (`ssn`, `national_id`, `street_address`, `ipv4`, `ipv6`, `free_text`) |
+| `pii_plan_column_conflict` | error | `pii.plan_validity` | Column is listed in both `match_persona_by` and `columns_to_replace` |
+| `pii_plan_ethnic_background_ignored_under_faker` | warning | `pii.plan_validity` | `match_persona_by` lists `ethnic_background` but `person.backend` is `faker` (sex-only); remove it or use managed/pgm |
+| `pii_plan_free_text_under_persona` | warning | `pii.plan_validity` | `free_text` column listed under `persona_backed_columns`; move it to `standalone_columns_to_replace` (behavior is unchanged either way) |
+| `pii_plan_persona_column_under_standalone` | warning | `pii.plan_validity` | Person-identifying column listed only under `standalone_columns_to_replace`; it will not share a synthetic person with other columns |
 
 ---
 
-## PII and NER
+## PII replacement
 
-Model downloads and processing timeouts for PII detection.
+Discovery is heuristic (column names, values, and dtypes) -- it does not download
+an NER model or call an LLM. When a column is skipped or mistyped, edit the
+written `pii_replacement_plan.yaml` and pass it back; see
+[PII Uses Unexpected Entity Types](evaluating-data.md#pii-uses-unexpected-entity-types)
+and the `pii_*` codes in [Pre-flight validation codes](#pre-flight-validation-codes).
 
-### GLiNER Download Fails
-
-The PII replacer downloads the GLiNER NER model on first use. If the download
-fails, it raises an exception immediately.
-
-Pre-download the model by running PII replacement once in an environment
-with internet access. To force offline use after the model is cached, set
-`HF_HUB_OFFLINE=1` or pass `--disable-huggingface-remote`.
-
-### Offline Mode Not Taking Effect
-
-Symptom: `HF_HUB_OFFLINE=1` (or `--disable-huggingface-remote`) is set, yet the
-run still attempts a download, or `--enable-huggingface-remote` does not
-re-enable downloads.
-
-Cause: huggingface_hub reads `HF_HUB_OFFLINE` once, at import time, and caches
-it. If the variable is changed after huggingface_hub has been imported in the
-process, the change is ignored.
-
-Fixes:
-
-- CLI: export `HF_HUB_OFFLINE` before launching `safe-synthesizer`, or use
-  `--enable-huggingface-remote` / `--disable-huggingface-remote`. The CLI
-  applies the flag before huggingface_hub loads, so the flag always wins over
-  an inherited environment value.
-- Programmatic / SDK: set `HF_HUB_OFFLINE` before importing
-  `nemo_safe_synthesizer` (or any library that imports huggingface_hub, such as
-  `transformers` or `datasets`). Setting it afterward has no effect for that
-  process.
-
-### NER Processing Timeouts
-
-NER uses an internal `max_runtime_seconds` timeout. If processing a chunk takes
-too long, it is dropped with a warning in the logs.
-
-Check the logs for timeout warnings. The timeout is not currently
-configurable; for large datasets, reduce the amount of text processed per
-chunk (for example, shorten text fields or split them into smaller pieces) and
-optionally reduce CPU parallelism so each worker has more resources.
+For Hugging Face offline / cache issues (base model and other Hub assets), see
+[Environment Variables -- Hugging Face cache and offline](environment.md#hugging-face-cache-and-offline).
 
 ---
 

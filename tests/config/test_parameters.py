@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field, ValidationError, model_validator
 from nemo_safe_synthesizer.config.generate import GenerateParameters, StructuredGenerationParameters
 from nemo_safe_synthesizer.config.job import SafeSynthesizerJobConfig
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
-from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig, StepDefinition
+from nemo_safe_synthesizer.config.replace_pii import ReplacePiiConfig
 from nemo_safe_synthesizer.config.training import QuantizationScheme, TrainingHyperparams
 from nemo_safe_synthesizer.configurator.parameter_paths import (
     AmbiguousParameterName,
@@ -72,9 +72,9 @@ def test_emit_telemetry_from_yaml_uses_env_when_unset(monkeypatch):
     assert c.emit_telemetry is False
 
 
-def test_pii_replacer_default():
-    with pytest.raises(ValidationError):
-        PiiReplacerConfig()  # ty: ignore[missing-argument] -- intentionally testing validation error
+def test_replace_pii_default():
+    cfg = ReplacePiiConfig()
+    assert cfg.replacement.locale == "en_US"
 
 
 def test_quantization_scheme_from_alias_rejects_invalid_legacy_bit_alias() -> None:
@@ -136,6 +136,18 @@ def test_old_yaml_with_enable_replace_pii_requires_ignore_policy():
 
     c = SafeSynthesizerParameters.model_validate({"unknown_fields": "ignore", "enable_replace_pii": True})
     assert c.replace_pii is not None
+
+
+def test_legacy_replace_pii_globals_steps_always_rejected():
+    """Legacy transform keys must not silently become auto-discovery under ignore."""
+    for key in ("globals", "steps"):
+        with pytest.raises((ParameterError, ValidationError), match=rf"replace_pii\.{key}"):
+            SafeSynthesizerParameters.model_validate(
+                {
+                    "unknown_fields": "ignore",
+                    "replace_pii": {key: {"anything": True}},
+                }
+            )
 
 
 def test_to_yaml_from_yaml_round_trip_enabled(tmp_path: Path):
@@ -241,7 +253,10 @@ def test_parameter_schema_reports_ambiguous_bare_names_with_candidates():
 
 
 def test_mapping_valued_step_vars_annotation_is_a_leaf():
-    annotation = StepDefinition.model_fields["vars"].annotation
+    class _StepLike(Parameters):
+        vars: dict[str, object] = Field(default_factory=dict)
+
+    annotation = _StepLike.model_fields["vars"].annotation
 
     assert classify_parameter_annotation(annotation) is ParameterFieldKind.LEAF
 
@@ -370,7 +385,9 @@ def test_constructor_applies_unknown_field_policy_recursively():
 def test_unknown_field_policy_reaches_models_inside_collections():
     raw = SafeSynthesizerParameters().model_dump()
     assert isinstance(raw["replace_pii"], dict)
-    raw["replace_pii"]["steps"][0]["unknown"] = True  # type: ignore[index]
+    raw["replace_pii"]["replacement_plan"] = {
+        "standalone_columns_to_replace": [{"column_name": "Phone", "unknown": True}]
+    }
 
     with pytest.raises(ValidationError, match="unknown"):
         SafeSynthesizerParameters.model_validate(raw)

@@ -203,7 +203,7 @@ def stub_tokenizer_dir(tests_dir) -> Path:
 
 @pytest.fixture(scope="session")
 def pii_test_data_dir(test_data_dir) -> Path:
-    """Path to PII-specific test data (NER fixtures, redaction samples)."""
+    """Path to PII-specific test data (redaction samples and related fixtures)."""
     return test_data_dir / "pii"
 
 
@@ -360,16 +360,27 @@ def fixture_dow_jones_index_dataset(stub_datasets_dir) -> Dataset:
     return load_test_dataset("dow_jones_index_group_size_8.csv", stub_datasets_dir)
 
 
+_SAMPLE_PATIENT_LEGACY_COLUMNS = ("patient_name", "timestamp", "patient_age")
+
+
 @pytest.fixture
 def fixture_sample_patient_dataset(stub_datasets_dir) -> Dataset:
-    """Sample patient-events dataset (12 groups, 200 records) for grouped tests."""
-    return load_test_dataset("sample-patient-events-12groups-200-records.csv", stub_datasets_dir)
+    """Sample patient-events (12 groups, 200 records) for grouped tests.
+
+    Returns only the legacy three columns so existing assembler token-count
+    assertions stay stable. The on-disk CSV also has PII-oriented columns for
+    discovery goldens; load that file directly when those are needed.
+    """
+    dataset = load_test_dataset("sample-patient-events-12groups-200-records.csv", stub_datasets_dir)
+    return dataset.select_columns(list(_SAMPLE_PATIENT_LEGACY_COLUMNS))
 
 
 @pytest.fixture
 def fixture_sample_patient_dataframe(stub_datasets_dir) -> pd.DataFrame:
-    """Sample patient-events dataset as a DataFrame."""
-    return load_test_dataframe("sample-patient-events-12groups-200-records.csv", stub_datasets_dir)
+    """Sample patient-events as a DataFrame (legacy three columns only)."""
+    return load_test_dataframe("sample-patient-events-12groups-200-records.csv", stub_datasets_dir)[
+        list(_SAMPLE_PATIENT_LEGACY_COLUMNS)
+    ]
 
 
 @pytest.fixture

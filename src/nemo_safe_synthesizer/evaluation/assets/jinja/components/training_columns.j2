@@ -19,7 +19,7 @@
                 {% if ctx.with_transform %}
                 <th>Entities (Count)</th>
                 <th>Transformed</th>
-                <th>Transform function</th>
+                <th>Transform method</th>
                 {% endif %}
             </tr>
         </thead>
@@ -51,7 +51,9 @@
                     {% if column.column_statistics and column.column_statistics.detected_entity_counts %}
                     <div class="entity-tags">
                         {% for entity, count in column.column_statistics.detected_entity_counts.items() %}
+                        {% if entity != "free_text" %}
                         <span class="type-tag">{{ entity }} ({{ "{:,}".format(count) }})</span>
+                        {% endif %}
                         {% endfor %}
                     </div>
                     {% endif %}
@@ -59,7 +61,7 @@
                 <td>{{ column.column_statistics.is_transformed if column.column_statistics else False }}</td>
                 <td class="transform-function-cell">
                     {% if column.column_statistics %}
-                    {{ column.column_statistics.transform_functions | join(", ") }}
+                    {{ column.column_statistics.transform_methods | sort | join(", ") }}
                     {% endif %}
                 </td>
                 {% endif %}

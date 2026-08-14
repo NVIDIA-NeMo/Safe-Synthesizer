@@ -8,7 +8,7 @@ or whose published stubs are incomplete.
 Add a `.pyi` file here when:
 
 - A third-party package has no `py.typed` marker and no published stub package
-  (e.g. `faiss`, `opacus`).
+  (e.g. `faiss`, `opacus`, optional internal `pgms`).
 - The published stubs are missing definitions that cause `ty: ignore` annotations
   in source code and a small local stub can eliminate the suppression.
 

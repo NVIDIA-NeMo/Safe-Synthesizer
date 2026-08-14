@@ -119,8 +119,19 @@ def _is_basemodel(t: Any) -> TypeIs[type[BaseModel]]:
 
 
 def _nullable_model_arg(union_args: tuple) -> type[BaseModel] | None:
-    """Return the BaseModel member of a ``SomeModel | None`` union, or ``None``."""
-    return next((a for a in union_args if a is not type(None) and _is_basemodel(a)), None)
+    """Return the BaseModel member of a ``SomeModel | None`` union, or ``None``.
+
+    Requires the union to be exactly a model plus ``None``. A union that pairs a
+    model with a scalar (``PiiReplacementPlan | str``) is a leaf as far as the CLI
+    is concerned: the scalar is how it gets set on the command line, and there is
+    no ``None`` to offer a ``--no-<field>`` flag for.
+    """
+    if type(None) not in union_args:
+        return None
+    members = [a for a in union_args if a is not type(None)]
+    if len(members) != 1 or not _is_basemodel(members[0]):
+        return None
+    return members[0]
 
 
 # Click types ordered from widest to narrowest acceptance. When a union
