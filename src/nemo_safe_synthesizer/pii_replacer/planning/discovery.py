@@ -14,7 +14,7 @@ from ...config.replace_pii import (
     PiiEntity,
     PiiReplacementPlan,
     PiiReplacementScope,
-    PiiReplacerConfig,
+    ReplacePiiConfig,
 )
 from ...observability import get_logger
 from .. import detection, entities, patterns
@@ -192,7 +192,7 @@ def discover_plan(
     df: pd.DataFrame,
     group_key: str | None,
     cfg: entities.Config,
-    config: PiiReplacerConfig,
+    config: ReplacePiiConfig,
     *,
     enhancer: PiiDiscoveryEnhancer | None = None,
 ) -> PiiReplacementPlan:

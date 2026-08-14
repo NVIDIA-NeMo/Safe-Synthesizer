@@ -16,7 +16,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiPersonConfig,
     PiiReplacementPlan,
     PiiReplacementScope,
-    PiiReplacerConfig,
+    ReplacePiiConfig,
 )
 from nemo_safe_synthesizer.pii_replacer import TabularPiiReplacer
 
@@ -44,7 +44,7 @@ def test_tabular_pii_replacement_cpu_smoke():
         ],
     )
     replacer = TabularPiiReplacer(
-        PiiReplacerConfig(replacement_plan=plan, person=PiiPersonConfig(backend=PiiPersonBackend.faker)),
+        ReplacePiiConfig(replacement_plan=plan, person=PiiPersonConfig(backend=PiiPersonBackend.faker)),
         data_config=DataParameters(group_training_examples_by="patient_id"),
     )
     replacer.transform_df(df)

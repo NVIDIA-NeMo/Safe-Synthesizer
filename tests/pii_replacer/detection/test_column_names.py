@@ -10,7 +10,7 @@ import pytest
 
 from nemo_safe_synthesizer.config.replace_pii import (
     PiiEntity,
-    PiiReplacerConfig,
+    ReplacePiiConfig,
 )
 from nemo_safe_synthesizer.pii_replacer.entities import config_from_replace_pii
 from tests.pii_replacer.helpers import column_spec
@@ -26,7 +26,7 @@ def test_dob_and_national_id_alias_headers_discovered():
             "aadhaar": [f"AAAA{i:08d}Z" for i in range(n)],
         }
     )
-    plan = discover_plan(df, None, config_from_replace_pii(PiiReplacerConfig()), PiiReplacerConfig())
+    plan = discover_plan(df, None, config_from_replace_pii(ReplacePiiConfig()), ReplacePiiConfig())
     dob = column_spec(plan.standalone_columns_to_replace, "born_on")
     assert dob is not None and dob.entity_type == PiiEntity.date_of_birth
     # national_id is entity-driven; lands in standalone_columns_to_replace
@@ -45,7 +45,7 @@ def test_numeric_compact_dob_and_id_probed():
             "member_id": [100000 + i * 17 for i in range(n)],
         }
     )
-    plan = discover_plan(df, None, config_from_replace_pii(PiiReplacerConfig()), PiiReplacerConfig())
+    plan = discover_plan(df, None, config_from_replace_pii(ReplacePiiConfig()), ReplacePiiConfig())
     dob = column_spec(plan.standalone_columns_to_replace, "birth_ymd")
     mid = column_spec(plan.standalone_columns_to_replace, "member_id")
     assert dob is not None and dob.entity_type == PiiEntity.date_of_birth
@@ -57,7 +57,7 @@ def test_ssn_shaped_order_code_not_detected_as_ssn():
 
     n = 30
     df = pd.DataFrame({"order_code": [f"{100 + i:03d}-45-{6000 + i:04d}" for i in range(n)]})
-    plan = discover_plan(df, None, config_from_replace_pii(PiiReplacerConfig()), PiiReplacerConfig())
+    plan = discover_plan(df, None, config_from_replace_pii(ReplacePiiConfig()), ReplacePiiConfig())
     for persona in plan.persona_backed_columns:
         assert column_spec(persona.columns_to_replace, "order_code") is None
     assert column_spec(plan.standalone_columns_to_replace, "order_code") is None
@@ -78,7 +78,7 @@ def test_value_only_entities_not_assigned_without_name_match():
             "endpoint": [f"10.0.{i // 256}.{i % 256}" for i in range(n)],
         }
     )
-    plan = discover_plan(df, None, config_from_replace_pii(PiiReplacerConfig()), PiiReplacerConfig())
+    plan = discover_plan(df, None, config_from_replace_pii(ReplacePiiConfig()), ReplacePiiConfig())
     planned = {spec.column_name for spec in plan.standalone_columns_to_replace}
     for persona in plan.persona_backed_columns:
         planned.update(spec.column_name for spec in persona.columns_to_replace)
@@ -94,7 +94,7 @@ def test_email_header_requires_email_shaped_values(caplog):
     caplog.set_level(logging.WARNING)
     n = 30
     df = pd.DataFrame({"email": [f"not-an-email-{i}" for i in range(n)]})
-    plan = discover_plan(df, None, config_from_replace_pii(PiiReplacerConfig()), PiiReplacerConfig())
+    plan = discover_plan(df, None, config_from_replace_pii(ReplacePiiConfig()), ReplacePiiConfig())
     for persona in plan.persona_backed_columns:
         assert column_spec(persona.columns_to_replace, "email") is None
     assert any("looks like email by name" in r.getMessage() for r in caplog.records)
@@ -121,7 +121,7 @@ def test_compound_street_headers_planned_as_street_address():
             "City": [f"City{i % 10}" for i in range(n)],
         }
     )
-    plan = discover_plan(df, None, config_from_replace_pii(PiiReplacerConfig()), PiiReplacerConfig())
+    plan = discover_plan(df, None, config_from_replace_pii(ReplacePiiConfig()), ReplacePiiConfig())
     street_cols = {
         spec.column_name
         for persona in plan.persona_backed_columns
@@ -162,7 +162,7 @@ def test_ipaddress_header_is_not_street_address():
             "first_name": [f"First{i}" for i in range(n)],
         }
     )
-    plan = discover_plan(df, None, config_from_replace_pii(PiiReplacerConfig()), PiiReplacerConfig())
+    plan = discover_plan(df, None, config_from_replace_pii(ReplacePiiConfig()), ReplacePiiConfig())
     ip = column_spec(plan.standalone_columns_to_replace, "ipaddress")
     assert ip is not None and ip.entity_type == PiiEntity.ipv4
     for persona in plan.persona_backed_columns:
@@ -276,7 +276,7 @@ def test_weak_id_headers_need_dominant_identifier_template():
     assert unique_identifier_name_is_strong("order id")
 
     n = 40
-    cfg = config_from_replace_pii(PiiReplacerConfig())
+    cfg = config_from_replace_pii(ReplacePiiConfig())
     # Category-like values under weak headers must not be replaced.
     labels = pd.DataFrame(
         {
@@ -285,7 +285,7 @@ def test_weak_id_headers_need_dominant_identifier_template():
             "first_name": [f"First{i}" for i in range(n)],
         }
     )
-    label_plan = discover_plan(labels, None, cfg, PiiReplacerConfig())
+    label_plan = discover_plan(labels, None, cfg, ReplacePiiConfig())
     assert column_spec(label_plan.standalone_columns_to_replace, "valid") is None
     assert column_spec(label_plan.standalone_columns_to_replace, "hybrid") is None
 
@@ -296,7 +296,7 @@ def test_weak_id_headers_need_dominant_identifier_template():
             "first_name": [f"First{i}" for i in range(n)],
         }
     )
-    user_plan = discover_plan(userids, None, cfg, PiiReplacerConfig())
+    user_plan = discover_plan(userids, None, cfg, ReplacePiiConfig())
     user = column_spec(user_plan.standalone_columns_to_replace, "userid")
     assert user is not None and user.entity_type == PiiEntity.unique_identifier
 
@@ -307,7 +307,7 @@ def test_weak_id_headers_need_dominant_identifier_template():
             "first_name": [f"First{i}" for i in range(n)],
         }
     )
-    sparse_plan = discover_plan(sparse, None, cfg, PiiReplacerConfig())
+    sparse_plan = discover_plan(sparse, None, cfg, ReplacePiiConfig())
     sparse_user = column_spec(sparse_plan.standalone_columns_to_replace, "userid")
     assert sparse_user is not None and sparse_user.entity_type == PiiEntity.unique_identifier
 
@@ -318,7 +318,7 @@ def test_weak_id_headers_need_dominant_identifier_template():
             "first_name": [f"First{i}" for i in range(n)],
         }
     )
-    patient_plan = discover_plan(patients, None, cfg, PiiReplacerConfig())
+    patient_plan = discover_plan(patients, None, cfg, ReplacePiiConfig())
     patient = column_spec(patient_plan.standalone_columns_to_replace, "patient_id")
     assert patient is not None and patient.entity_type == PiiEntity.unique_identifier
 

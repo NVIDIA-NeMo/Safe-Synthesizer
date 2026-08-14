@@ -23,7 +23,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiPersonBackend,
     PiiPersonConfig,
     PiiReplacementPlan,
-    PiiReplacerConfig,
+    ReplacePiiConfig,
 )
 from nemo_safe_synthesizer.pii_replacer.entities import config_from_replace_pii
 from nemo_safe_synthesizer.pii_replacer.planning import discover_plan
@@ -51,7 +51,7 @@ def _load_golden_plan(stem: str) -> PiiReplacementPlan:
 @pytest.mark.parametrize(("stem", "csv_name", "group_key", "nrows"), _GOLDEN_CASES)
 def test_discover_plan_matches_golden(stem: str, csv_name: str, group_key: str | None, nrows: int | None):
     """Auto-discovery on stub CSVs must match checked-in plan goldens."""
-    config = PiiReplacerConfig(person=PiiPersonConfig(backend=PiiPersonBackend.faker))
+    config = ReplacePiiConfig(person=PiiPersonConfig(backend=PiiPersonBackend.faker))
     cfg = config_from_replace_pii(config)
     df = pd.read_csv(_STUB / csv_name, nrows=nrows)
     discovered = discover_plan(df, group_key=group_key, cfg=cfg, config=config)

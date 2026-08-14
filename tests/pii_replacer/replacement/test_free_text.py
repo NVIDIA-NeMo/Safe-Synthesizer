@@ -17,7 +17,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiPersonConfig,
     PiiReplacementPlan,
     PiiReplacementScope,
-    PiiReplacerConfig,
+    ReplacePiiConfig,
 )
 from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.pii_replacer.entities import config_from_replace_pii
@@ -39,7 +39,7 @@ def test_a_surname_mentioned_in_a_note_follows_its_column():
             }
         )
     df = pd.DataFrame(rows)
-    cfg = PiiReplacerConfig(person=PiiPersonConfig(backend=PiiPersonBackend.faker))
+    cfg = ReplacePiiConfig(person=PiiPersonConfig(backend=PiiPersonBackend.faker))
     replacer = TabularPiiReplacer(cfg, data_config=DataParameters())
     replacer.transform_df(df)
     assert replacer.result is not None
@@ -55,7 +55,7 @@ def test_a_surname_mentioned_in_a_note_follows_its_column():
 def test_llm_enhancement_not_implemented(fixture_patient_df: pd.DataFrame):
     """Defense in depth: apply still refuses if config somehow carries the flag."""
     replacer = TabularPiiReplacer(
-        PiiReplacerConfig.model_construct(llm_enhancement=True, person=PiiPersonConfig(backend=PiiPersonBackend.faker)),
+        ReplacePiiConfig.model_construct(llm_enhancement=True, person=PiiPersonConfig(backend=PiiPersonBackend.faker)),
         data_config=DataParameters(),
     )
     with pytest.raises(ParameterError, match=r"replace_pii\.llm_enhancement"):
@@ -66,7 +66,7 @@ def test_noop_enhancer_leaves_heuristics_authoritative(fixture_patient_df: pd.Da
     from nemo_safe_synthesizer.pii_replacer.llm import NoopEnhancer
     from nemo_safe_synthesizer.pii_replacer.models import DiscoveryResult, PersonaInstance
 
-    cfg = config_from_replace_pii(PiiReplacerConfig(person=PiiPersonConfig(backend=PiiPersonBackend.faker)))
+    cfg = config_from_replace_pii(ReplacePiiConfig(person=PiiPersonConfig(backend=PiiPersonBackend.faker)))
     enhancer = NoopEnhancer()
 
     discovery = DiscoveryResult()
@@ -104,7 +104,7 @@ def test_hand_plan_llm_enhancement_raises_at_freetext_hook():
     df = pd.DataFrame({"first_name": ["Alice", "Bob"], "notes": ["saw Alice", "saw Bob"]})
     # Bypass construction validation to exercise the apply-time enhancer seam.
     replacer = TabularPiiReplacer(
-        PiiReplacerConfig.model_construct(
+        ReplacePiiConfig.model_construct(
             replacement_plan=plan,
             llm_enhancement=True,
             person=PiiPersonConfig(backend=PiiPersonBackend.faker),
@@ -138,7 +138,7 @@ def test_record_scoped_free_text_follows_each_rows_persona():
         ],
     )
     replacer = TabularPiiReplacer(
-        PiiReplacerConfig(replacement_plan=plan, person=PiiPersonConfig(backend=PiiPersonBackend.faker)),
+        ReplacePiiConfig(replacement_plan=plan, person=PiiPersonConfig(backend=PiiPersonBackend.faker)),
         data_config=DataParameters(),
     )
     replacer.transform_df(df)
@@ -219,7 +219,7 @@ def test_group_free_text_uses_row_local_persona_pairs(fixture_patient_df: pd.Dat
         ],
     )
     replacer = TabularPiiReplacer(
-        PiiReplacerConfig(replacement_plan=plan, person=PiiPersonConfig(backend=PiiPersonBackend.faker)),
+        ReplacePiiConfig(replacement_plan=plan, person=PiiPersonConfig(backend=PiiPersonBackend.faker)),
         data_config=DataParameters(group_training_examples_by="patient_id"),
     )
     replacer.transform_df(fixture_patient_df)
@@ -258,7 +258,7 @@ def test_standalone_values_propagate_into_free_text():
         ],
     )
     replacer = TabularPiiReplacer(
-        PiiReplacerConfig(replacement_plan=plan, person=PiiPersonConfig(backend=PiiPersonBackend.faker)),
+        ReplacePiiConfig(replacement_plan=plan, person=PiiPersonConfig(backend=PiiPersonBackend.faker)),
         data_config=DataParameters(),
     )
     replacer.transform_df(df)

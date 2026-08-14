@@ -40,10 +40,10 @@ __all__ = [
     "PiiReplacementPlan",
     "PiiReplacementScope",
     "PiiReplacementSettings",
-    "PiiReplacerConfig",
+    "ReplacePiiConfig",
 ]
 
-# Sentinel value for ``PiiReplacerConfig.replacement_plan`` requesting automatic
+# Sentinel value for ``ReplacePiiConfig.replacement_plan`` requesting automatic
 # entity discovery instead of an explicit plan.
 AUTO_DISCOVERY = "auto_discovery"
 
@@ -246,7 +246,7 @@ class PiiPersonConfig(NSSBaseModel):
         return default_managed_assets_path()
 
 
-class PiiReplacerConfig(Parameters):
+class ReplacePiiConfig(Parameters):
     """Top-level ``replace_pii`` config wrapping the replacement plan.
 
     ``replacement_plan`` is one of:

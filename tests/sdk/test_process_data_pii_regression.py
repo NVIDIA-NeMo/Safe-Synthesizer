@@ -19,7 +19,7 @@ from unittest.mock import MagicMock
 import pandas as pd
 import pytest
 
-from nemo_safe_synthesizer.config import PiiReplacerConfig
+from nemo_safe_synthesizer.config import ReplacePiiConfig
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
 
 MODULE = "nemo_safe_synthesizer.sdk.library_builder"
@@ -104,7 +104,7 @@ class TestProcessDataPreservesOriginalForEvaluation:
         builder = (
             SafeSynthesizer(save_path=tmp_path)
             .with_data_source(original)
-            .with_replace_pii(config=PiiReplacerConfig())
+            .with_replace_pii(config=ReplacePiiConfig())
             .resolve()
         )
         builder.process_data()
@@ -157,7 +157,7 @@ class TestLoadFromSavePathGuard:
         builder = (
             SafeSynthesizer(save_path=tmp_path)
             .with_data_source(original)
-            .with_replace_pii(config=PiiReplacerConfig())
+            .with_replace_pii(config=ReplacePiiConfig())
             .resolve()
         )
         # Run process_data to create the workdir artifacts

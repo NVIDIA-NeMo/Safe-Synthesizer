@@ -112,9 +112,9 @@ def _create_process_data_setup(
     builder._data_source = original_df
     assert builder._nss_config is not None
     if replace_pii:
-        from nemo_safe_synthesizer.config import PiiReplacerConfig
+        from nemo_safe_synthesizer.config import ReplacePiiConfig
 
-        builder._nss_config.replace_pii = PiiReplacerConfig()
+        builder._nss_config.replace_pii = ReplacePiiConfig()
     else:
         builder._nss_config.replace_pii = None
 

@@ -21,7 +21,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiPersonConfig,
     PiiReplacementPlan,
     PiiReplacementSettings,
-    PiiReplacerConfig,
+    ReplacePiiConfig,
 )
 from nemo_safe_synthesizer.preflight import PreflightContext
 from nemo_safe_synthesizer.preflight.checks.pii import (
@@ -33,7 +33,7 @@ from tests.pii_replacer.helpers import PgmCheckout, pgm_checkout
 
 def test_preflight_faker_locale_error():
     config = SafeSynthesizerParameters(
-        replace_pii=PiiReplacerConfig(
+        replace_pii=ReplacePiiConfig(
             replacement=PiiReplacementSettings(locale="not_a_real_locale"),
             person=PiiPersonConfig(backend=PiiPersonBackend.faker),
         )
@@ -46,7 +46,7 @@ def test_preflight_faker_locale_error():
 def test_preflight_managed_locale_warns_when_faker_needs_fallback(locale: str):
     """Managed locales without Faker providers must not silently pass then crash at apply."""
     config = SafeSynthesizerParameters(
-        replace_pii=PiiReplacerConfig(
+        replace_pii=ReplacePiiConfig(
             replacement=PiiReplacementSettings(locale=locale),
             person=PiiPersonConfig(backend=PiiPersonBackend.managed),
         )
@@ -58,7 +58,7 @@ def test_preflight_managed_locale_warns_when_faker_needs_fallback(locale: str):
 
 def _pgm_preflight_issues(locale: str, src: Path):
     config = SafeSynthesizerParameters(
-        replace_pii=PiiReplacerConfig(
+        replace_pii=ReplacePiiConfig(
             replacement=PiiReplacementSettings(locale=locale),
             person=PiiPersonConfig(backend=PiiPersonBackend.pgm, sdg_pgms_src=str(src)),
         )
@@ -109,7 +109,7 @@ def test_preflight_plan_validity_reports_user_plan_errors(fixture_dob_df: pd.Dat
             ]
         }
     )
-    config = SafeSynthesizerParameters(replace_pii=PiiReplacerConfig(replacement_plan=plan))
+    config = SafeSynthesizerParameters(replace_pii=ReplacePiiConfig(replacement_plan=plan))
     issues = _plan_validity_issues(config, fixture_dob_df)
     assert {i.code for i in issues} == {"pii_plan_column_not_found", "pii_plan_pattern_invalid"}
     assert all(i.severity == "error" for i in issues)
@@ -119,7 +119,7 @@ def test_preflight_plan_validity_accepts_a_usable_plan(fixture_dob_df: pd.DataFr
     plan = PiiReplacementPlan(
         standalone_columns_to_replace=[PiiColumnPlan(column_name="patient_id", entity_type=PiiEntity.unique_identifier)]
     )
-    config = SafeSynthesizerParameters(replace_pii=PiiReplacerConfig(replacement_plan=plan))
+    config = SafeSynthesizerParameters(replace_pii=ReplacePiiConfig(replacement_plan=plan))
     assert _plan_validity_issues(config, fixture_dob_df) == []
 
 
@@ -137,7 +137,7 @@ def test_preflight_plan_validity_warns_on_section_mismatches(fixture_dob_df: pd.
             PiiColumnPlan(column_name="first_name", entity_type=PiiEntity.first_name),
         ],
     )
-    config = SafeSynthesizerParameters(replace_pii=PiiReplacerConfig(replacement_plan=plan))
+    config = SafeSynthesizerParameters(replace_pii=ReplacePiiConfig(replacement_plan=plan))
     issues = _plan_validity_issues(config, fixture_dob_df)
     assert {i.code: i.severity for i in issues} == {
         "pii_plan_free_text_under_persona": "warning",
@@ -147,7 +147,7 @@ def test_preflight_plan_validity_warns_on_section_mismatches(fixture_dob_df: pd.
 
 def test_preflight_plan_validity_skips_auto_discovery(fixture_dob_df: pd.DataFrame):
     """Discovery builds its plan from this dataframe, so there is nothing to pre-check."""
-    config = SafeSynthesizerParameters(replace_pii=PiiReplacerConfig())
+    config = SafeSynthesizerParameters(replace_pii=ReplacePiiConfig())
     assert config.replace_pii is not None and config.replace_pii.is_auto_discovery
     assert _plan_validity_issues(config, fixture_dob_df) == []
 
@@ -155,7 +155,7 @@ def test_preflight_plan_validity_skips_auto_discovery(fixture_dob_df: pd.DataFra
 def test_preflight_plan_validity_reports_unreadable_plan_file(fixture_dob_df: pd.DataFrame, tmp_path):
     plan_path = tmp_path / "plan.yaml"
     plan_path.write_text("persona_backed_columns: [oops\n")
-    config = SafeSynthesizerParameters(replace_pii=PiiReplacerConfig(replacement_plan=str(plan_path)))
+    config = SafeSynthesizerParameters(replace_pii=ReplacePiiConfig(replacement_plan=str(plan_path)))
     issues = _plan_validity_issues(config, fixture_dob_df)
     assert [i.code for i in issues] == ["pii_plan_unreadable"]
 
@@ -164,7 +164,7 @@ def test_preflight_llm_enhancement_is_error():
     # Bypass config validation so preflight can still report the not-implemented flag
     # if an instance somehow carries llm_enhancement=True.
     config = SafeSynthesizerParameters(
-        replace_pii=PiiReplacerConfig.model_construct(
+        replace_pii=ReplacePiiConfig.model_construct(
             llm_enhancement=True, person=PiiPersonConfig(backend=PiiPersonBackend.faker)
         )
     )
@@ -195,7 +195,7 @@ def test_preflight_rejects_user_plan_with_protected_column():
             order_training_examples_by="seq_id",
         ),
         time_series=TimeSeriesParameters(is_timeseries=False),
-        replace_pii=PiiReplacerConfig(replacement_plan=plan),
+        replace_pii=ReplacePiiConfig(replacement_plan=plan),
     )
     issues = _plan_validity_issues(config, df)
     assert {i.code for i in issues} == {"pii_plan_protected_column"}

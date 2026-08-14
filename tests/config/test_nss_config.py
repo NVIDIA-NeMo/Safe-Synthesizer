@@ -9,7 +9,7 @@ from pydantic import Field, ValidationError
 from nemo_safe_synthesizer.config import (
     DataParameters,
     DifferentialPrivacyHyperparams,
-    PiiReplacerConfig,
+    ReplacePiiConfig,
     SafeSynthesizerParameters,
     TimeSeriesParameters,
 )
@@ -117,7 +117,7 @@ class TestParametersClass:
 
 class TestPiiParameters:
     def test_pii_parameters_defaults(self):
-        params = PiiReplacerConfig()
+        params = ReplacePiiConfig()
         assert params.replacement.locale == "en_US"
         assert params.replacement_plan == "auto_discovery"
 

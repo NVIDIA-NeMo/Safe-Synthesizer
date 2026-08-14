@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field, ValidationError, model_validator
 from nemo_safe_synthesizer.config.generate import GenerateParameters, StructuredGenerationParameters
 from nemo_safe_synthesizer.config.job import SafeSynthesizerJobConfig
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
-from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
+from nemo_safe_synthesizer.config.replace_pii import ReplacePiiConfig
 from nemo_safe_synthesizer.config.training import QuantizationScheme, TrainingHyperparams
 from nemo_safe_synthesizer.configurator.parameter_paths import (
     AmbiguousParameterName,
@@ -73,7 +73,7 @@ def test_emit_telemetry_from_yaml_uses_env_when_unset(monkeypatch):
 
 
 def test_replace_pii_default():
-    cfg = PiiReplacerConfig()
+    cfg = ReplacePiiConfig()
     assert cfg.replacement.locale == "en_US"
 
 

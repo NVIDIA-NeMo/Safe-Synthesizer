@@ -13,7 +13,7 @@ import yaml
 from pydantic import ValidationError
 
 from ...config.data import DataParameters
-from ...config.replace_pii import PiiReplacementPlan, PiiReplacerConfig
+from ...config.replace_pii import PiiReplacementPlan, ReplacePiiConfig
 from ...config.time_series import TimeSeriesParameters
 from ...errors import ParameterError
 from ...observability import get_logger
@@ -127,7 +127,7 @@ def save_plan_to_path(plan: PiiReplacementPlan, path: str | Path) -> Path:
 
 
 def resolve_plan(
-    config: PiiReplacerConfig,
+    config: ReplacePiiConfig,
     df: pd.DataFrame,
     *,
     data_config: DataParameters,

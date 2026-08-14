@@ -12,7 +12,7 @@ import yaml
 from pydantic import ValidationError
 from typing_extensions import override
 
-from ...config.replace_pii import PiiPersonBackend, PiiReplacementPlan, PiiReplacerConfig
+from ...config.replace_pii import PiiPersonBackend, PiiReplacementPlan, ReplacePiiConfig
 from ...defaults import NSS_MANAGED_ASSETS_PATH_ENV
 from ...errors import ParameterError
 from ...pii_replacer.planning import iter_plan_advisories, iter_plan_issues, load_plan_from_path
@@ -138,7 +138,7 @@ class PiiReplacementConfigCheck(ConfigCheck):
                     pass
 
 
-def _load_user_plan(replace_pii: PiiReplacerConfig) -> PiiReplacementPlan | None:
+def _load_user_plan(replace_pii: ReplacePiiConfig) -> PiiReplacementPlan | None:
     """Return the user's plan, or ``None`` when the config asks for auto-discovery.
 
     Raises whatever ``load_plan_from_path`` raises for an unreadable plan file;

@@ -189,14 +189,14 @@ def _reject_legacy_replace_pii_keys(source: Mapping[str, object]) -> None:
 
 def _mapping_without_extras(model_type: type[BaseModel], source: Mapping[str, object]) -> dict[str, object]:
     """Adapt a raw mapping to Pydantic's recursive extra-ignore behavior."""
-    # Lazy import: configurator.parameters imports this module, and PiiReplacerConfig
+    # Lazy import: configurator.parameters imports this module, and ReplacePiiConfig
     # subclasses Parameters, so a top-level import would cycle.
-    from .replace_pii import PiiReplacerConfig
+    from .replace_pii import ReplacePiiConfig
 
-    # When the patch target is PiiReplacerConfig itself (SDK with_replace_pii),
+    # When the patch target is ReplacePiiConfig itself (SDK with_replace_pii),
     # legacy keys are top-level on ``source`` and must be rejected before they
     # are stripped as unknown extras — otherwise ignore silently yields defaults.
-    if model_type is PiiReplacerConfig:
+    if model_type is ReplacePiiConfig:
         _reject_legacy_replace_pii_keys(source)
     adapted: dict[str, object] = {}
     for name, value in source.items():

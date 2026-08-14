@@ -13,8 +13,8 @@ from nemo_safe_synthesizer.config import (
     DifferentialPrivacyHyperparams,
     EvaluationParameters,
     GenerateParameters,
-    PiiReplacerConfig,
     PreflightParameters,
+    ReplacePiiConfig,
     SafeSynthesizerParameters,
     TimeSeriesParameters,
     TrainingHyperparams,
@@ -171,7 +171,7 @@ def test_with_generate_rejects_duplicate_alias_keyword_path():
 
 
 def test_with_generate_rejects_wrong_typed_config_object():
-    wrong_config = cast(Any, PiiReplacerConfig())
+    wrong_config = cast(Any, ReplacePiiConfig())
 
     with pytest.raises(TypeError, match="Expected GenerateParameters"):
         ConfigBuilder().with_generate(config=wrong_config)
@@ -188,7 +188,7 @@ def test_with_replace_pii_resolves_raw_config_with_kwargs():
 
 @pytest.mark.parametrize("as_mapping", [False, True])
 def test_with_replace_pii_deep_merges_nested_kwargs(as_mapping: bool):
-    config_model = PiiReplacerConfig()
+    config_model = ReplacePiiConfig()
     config_model.replacement.locale = "en_GB"
     config = config_model.model_dump() if as_mapping else config_model
 
@@ -216,7 +216,7 @@ def test_with_replace_pii_invalid_source_preserves_value_error_contract():
 
 @pytest.mark.parametrize("key", ["globals", "steps"])
 def test_with_replace_pii_rejects_legacy_keys_under_ignore(key: str):
-    """Legacy replace_pii keys must error on the direct PiiReplacerConfig SDK path."""
+    """Legacy replace_pii keys must error on the direct ReplacePiiConfig SDK path."""
     with pytest.raises(ParameterError, match=rf"replace_pii\.{key}"):
         ConfigBuilder(unknown_fields="ignore").with_replace_pii({key: {"anything": True}})
 

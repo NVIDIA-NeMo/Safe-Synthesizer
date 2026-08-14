@@ -12,7 +12,7 @@ from typing import cast
 import pandas as pd
 
 from ..config.data import DataParameters
-from ..config.replace_pii import PiiColumnPlan, PiiEntity, PiiReplacementPlan, PiiReplacementScope, PiiReplacerConfig
+from ..config.replace_pii import PiiColumnPlan, PiiEntity, PiiReplacementPlan, PiiReplacementScope, ReplacePiiConfig
 from ..config.time_series import TimeSeriesParameters
 from ..errors import InternalError
 from ..observability import get_logger
@@ -32,7 +32,7 @@ def _plan_column_counts(plan: PiiReplacementPlan) -> tuple[int, int, int]:
     return len(plan.persona_backed_columns), persona_backed, len(plan.standalone_columns_to_replace)
 
 
-def _replacement_plan_source(config: PiiReplacerConfig) -> str:
+def _replacement_plan_source(config: ReplacePiiConfig) -> str:
     if config.is_auto_discovery:
         return "auto_discovery"
     if config.plan_path:
@@ -55,7 +55,7 @@ class TabularPiiReplacer:
 
     def __init__(
         self,
-        config: PiiReplacerConfig,
+        config: ReplacePiiConfig,
         *,
         data_config: DataParameters,
         workdir: Path | str | None = None,

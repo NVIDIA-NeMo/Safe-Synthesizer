@@ -20,7 +20,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiPersonConfig,
     PiiReplacementPlan,
     PiiReplacementScope,
-    PiiReplacerConfig,
+    ReplacePiiConfig,
 )
 from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.pii_replacer.entities import Config, config_from_replace_pii
@@ -50,7 +50,7 @@ def test_pii_replacement_logs_scope_warning_when_group_key_set(fixture_patient_d
         ],
     )
     replacer = TabularPiiReplacer(
-        PiiReplacerConfig(replacement_plan=plan, person=PiiPersonConfig(backend=PiiPersonBackend.faker)),
+        ReplacePiiConfig(replacement_plan=plan, person=PiiPersonConfig(backend=PiiPersonBackend.faker)),
         data_config=DataParameters(group_training_examples_by="patient_id"),
     )
     replacer.transform_df(fixture_patient_df)
@@ -80,7 +80,7 @@ def test_grouped_unique_id_and_dob_replaced_globally_unique_and_group_consistent
                 }
             )
     df = pd.DataFrame(rows)
-    config = PiiReplacerConfig(replacement_plan=AUTO_DISCOVERY, person=PiiPersonConfig(backend=PiiPersonBackend.faker))
+    config = ReplacePiiConfig(replacement_plan=AUTO_DISCOVERY, person=PiiPersonConfig(backend=PiiPersonBackend.faker))
     data_config = DataParameters(group_training_examples_by="patient_id")
     plan = discover_plan(df, "patient_id", config_from_replace_pii(config), config)
     patient_id_spec = column_spec(plan.standalone_columns_to_replace, "patient_id")
@@ -181,7 +181,7 @@ def test_grouped_replacement_distinct_doctors_within_group(fixture_patient_df: p
     )
     validate_plan(fixture_patient_df, plan, data_config=DataParameters(group_training_examples_by="patient_id"))
     replacer = TabularPiiReplacer(
-        PiiReplacerConfig(replacement_plan=plan, person=PiiPersonConfig(backend=PiiPersonBackend.faker)),
+        ReplacePiiConfig(replacement_plan=plan, person=PiiPersonConfig(backend=PiiPersonBackend.faker)),
         data_config=DataParameters(group_training_examples_by="patient_id"),
     )
     replacer.transform_df(fixture_patient_df)
@@ -219,7 +219,7 @@ def test_group_scope_keeps_one_name_per_group_when_email_varies(fixture_group_gr
         ],
     )
     cfg = config_from_replace_pii(
-        PiiReplacerConfig(person=PiiPersonConfig(backend=PiiPersonBackend.faker), replacement_plan=plan)
+        ReplacePiiConfig(person=PiiPersonConfig(backend=PiiPersonBackend.faker), replacement_plan=plan)
     )
     out = run_replacement(df, plan, cfg, group_key="patient_id").replaced_df
 
@@ -260,7 +260,7 @@ def test_record_scoped_replacement_changes_per_row():
         ],
     )
     replacer = TabularPiiReplacer(
-        PiiReplacerConfig(replacement_plan=plan, person=PiiPersonConfig(backend=PiiPersonBackend.faker)),
+        ReplacePiiConfig(replacement_plan=plan, person=PiiPersonConfig(backend=PiiPersonBackend.faker)),
         data_config=DataParameters(),
     )
     replacer.transform_df(df)
@@ -408,7 +408,7 @@ def test_duplicate_dataframe_index_is_reset_for_record_scope():
         ],
     )
     replacer = TabularPiiReplacer(
-        PiiReplacerConfig(replacement_plan=plan, person=PiiPersonConfig(backend=PiiPersonBackend.faker)),
+        ReplacePiiConfig(replacement_plan=plan, person=PiiPersonConfig(backend=PiiPersonBackend.faker)),
         data_config=DataParameters(),
     )
     replacer.transform_df(df)
@@ -435,7 +435,7 @@ def test_timeseries_does_not_replace_group_key_or_timestamp():
             "first_name": [f"First{i}" for i in range(n)],
         }
     )
-    config = PiiReplacerConfig(
+    config = ReplacePiiConfig(
         replacement_plan=AUTO_DISCOVERY,
         person=PiiPersonConfig(backend=PiiPersonBackend.faker),
     )
@@ -465,7 +465,7 @@ def test_order_by_column_is_not_replaced():
             "first_name": [f"First{i}" for i in range(n)],
         }
     )
-    config = PiiReplacerConfig(
+    config = ReplacePiiConfig(
         replacement_plan=AUTO_DISCOVERY,
         person=PiiPersonConfig(backend=PiiPersonBackend.faker),
     )
@@ -510,7 +510,7 @@ def test_user_plan_with_protected_column_is_rejected():
             )
         ],
     )
-    config = PiiReplacerConfig(
+    config = ReplacePiiConfig(
         replacement_plan=plan,
         person=PiiPersonConfig(backend=PiiPersonBackend.faker),
     )

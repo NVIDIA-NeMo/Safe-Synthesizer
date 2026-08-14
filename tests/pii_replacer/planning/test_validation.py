@@ -20,7 +20,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiPersonConfig,
     PiiReplacementPlan,
     PiiReplacementScope,
-    PiiReplacerConfig,
+    ReplacePiiConfig,
 )
 from nemo_safe_synthesizer.errors import InternalError, ParameterError
 from nemo_safe_synthesizer.pii_replacer.planning import (
@@ -41,7 +41,7 @@ def test_tabular_pii_replacer_rejects_date_entity_plan(fixture_dob_df: pd.DataFr
         ],
     )
     replacer = TabularPiiReplacer(
-        PiiReplacerConfig(replacement_plan=plan),
+        ReplacePiiConfig(replacement_plan=plan),
         data_config=DataParameters(),
     )
     with pytest.raises(ParameterError, match="only identified, never replaced"):
@@ -57,7 +57,7 @@ def test_validate_plan_group_scope_requires_training_group_key(fixture_patient_d
 def test_replacement_plan_reports_plan_errors_without_union_noise():
     """A malformed inline plan names its own bad field, not the string half of the union."""
     with pytest.raises(ValidationError) as excinfo:
-        PiiReplacerConfig.model_validate(
+        ReplacePiiConfig.model_validate(
             {"replacement_plan": {"standalone_columns_to_replace": [{"entity_type": "date_of_birth"}]}}
         )
     message = str(excinfo.value)
@@ -67,7 +67,7 @@ def test_replacement_plan_reports_plan_errors_without_union_noise():
 
 def test_replacement_plan_rejects_values_that_are_neither_plan_nor_string():
     with pytest.raises(ValidationError, match="must be 'auto_discovery', a path to a plan file, or an inline plan"):
-        PiiReplacerConfig.model_validate({"replacement_plan": 42})
+        ReplacePiiConfig.model_validate({"replacement_plan": 42})
 
 
 @pytest.mark.parametrize(
@@ -378,7 +378,7 @@ def test_pii_replacement_logs_section_placement_warnings(fixture_patient_df: pd.
         ],
     )
     replacer = TabularPiiReplacer(
-        PiiReplacerConfig(replacement_plan=plan, person=PiiPersonConfig(backend=PiiPersonBackend.faker)),
+        ReplacePiiConfig(replacement_plan=plan, person=PiiPersonConfig(backend=PiiPersonBackend.faker)),
         data_config=DataParameters(),
     )
     replacer.transform_df(fixture_patient_df)
@@ -546,7 +546,7 @@ def test_hand_plan_still_replaces_oddly_named_email_column():
         ]
     )
     replacer = TabularPiiReplacer(
-        PiiReplacerConfig(replacement_plan=plan, person=PiiPersonConfig(backend=PiiPersonBackend.faker)),
+        ReplacePiiConfig(replacement_plan=plan, person=PiiPersonConfig(backend=PiiPersonBackend.faker)),
         data_config=DataParameters(),
     )
     replacer.transform_df(df)

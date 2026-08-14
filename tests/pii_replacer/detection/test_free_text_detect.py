@@ -9,7 +9,7 @@ import pandas as pd
 
 from nemo_safe_synthesizer.config.replace_pii import (
     PiiEntity,
-    PiiReplacerConfig,
+    ReplacePiiConfig,
 )
 from nemo_safe_synthesizer.pii_replacer.detection import select_free_text_columns
 from nemo_safe_synthesizer.pii_replacer.entities import config_from_replace_pii
@@ -63,8 +63,8 @@ def test_non_llm_mode_skips_free_text_scan_without_structured_columns(caplog):
     plan = discover_plan(
         df,
         group_key=None,
-        cfg=config_from_replace_pii(PiiReplacerConfig()),
-        config=PiiReplacerConfig(),
+        cfg=config_from_replace_pii(ReplacePiiConfig()),
+        config=ReplacePiiConfig(),
     )
     assert column_spec(plan.standalone_columns_to_replace, "notes") is None
     for col_set in plan.persona_backed_columns:
@@ -84,7 +84,7 @@ def test_free_text_planned_with_standalone_only_structured_columns():
             "notes": [f"Patient record {i} visited clinic for follow up care today" for i in range(n)],
         }
     )
-    plan = discover_plan(df, None, config_from_replace_pii(PiiReplacerConfig()), PiiReplacerConfig())
+    plan = discover_plan(df, None, config_from_replace_pii(ReplacePiiConfig()), ReplacePiiConfig())
     assert plan.persona_backed_columns == []
     assert any(s.entity_type == PiiEntity.unique_identifier for s in plan.standalone_columns_to_replace)
     notes = column_spec(plan.standalone_columns_to_replace, "notes")

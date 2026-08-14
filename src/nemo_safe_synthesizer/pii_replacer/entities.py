@@ -17,7 +17,7 @@ import pandas as pd
 if TYPE_CHECKING:
     from .replacement.scope import FakerLike
 
-from ..config.replace_pii import PiiReplacerConfig
+from ..config.replace_pii import ReplacePiiConfig
 from ..defaults import default_managed_assets_path
 
 
@@ -28,7 +28,7 @@ from ..defaults import default_managed_assets_path
 class Config:
     """Engine knobs for detection and generation.
 
-    A few fields are copied from user-facing ``PiiReplacerConfig`` (locale, seed,
+    A few fields are copied from user-facing ``ReplacePiiConfig`` (locale, seed,
     persona backend/paths, LLM flags) via ``config_from_replace_pii``. The rest
     are fixed product defaults used by discovery and replacement; they are not
     exposed in YAML/SDK today, but can be overridden when constructing
@@ -67,7 +67,7 @@ class Config:
     llm_enhancement: bool = False
     """When True, discovery/apply call the injected discovery and replacement enhancers (stubs raise until LLM lands)."""
     llm_model_provider: str | None = None
-    """Reserved inference model provider propagated from ``PiiReplacerConfig.llm``."""
+    """Reserved inference model provider propagated from ``ReplacePiiConfig.llm``."""
     llm_max_workers: int = 64
     """Reserved max workers for LLM enhancement calls."""
     freetext_name_token_aliases: bool = True
@@ -101,8 +101,8 @@ class Config:
             self.managed_assets_path = str(default_managed_assets_path())
 
 
-def config_from_replace_pii(config: PiiReplacerConfig) -> Config:
-    """Build engine ``Config`` from the user-facing ``PiiReplacerConfig``.
+def config_from_replace_pii(config: ReplacePiiConfig) -> Config:
+    """Build engine ``Config`` from the user-facing ``ReplacePiiConfig``.
 
     Only a handful of fields come from the user; the rest keep ``Config`` defaults.
 

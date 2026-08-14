@@ -10,7 +10,7 @@ import pandas as pd
 import pytest
 
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
-from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
+from nemo_safe_synthesizer.config.replace_pii import ReplacePiiConfig
 from nemo_safe_synthesizer.llm.metadata import ModelMetadata
 from nemo_safe_synthesizer.preflight import PreflightContext
 
@@ -50,7 +50,7 @@ def default_config():
 def llm_pii_config(default_config):
     """Config with LLM PII enhancement enabled (inference env checks apply)."""
     return default_config.model_copy(
-        update={"replace_pii": PiiReplacerConfig.model_construct(llm_enhancement=True)},
+        update={"replace_pii": ReplacePiiConfig.model_construct(llm_enhancement=True)},
         deep=True,
     )
 

@@ -22,7 +22,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiPersonConfig,
     PiiReplacementPlan,
     PiiReplacementSettings,
-    PiiReplacerConfig,
+    ReplacePiiConfig,
 )
 from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.pii_replacer.entities import Config, config_from_replace_pii
@@ -60,7 +60,7 @@ def test_faker_persona_names_conditioned_on_sex():
         ],
     )
     runtime = config_from_replace_pii(
-        PiiReplacerConfig(
+        ReplacePiiConfig(
             person=PiiPersonConfig(backend=PiiPersonBackend.faker), replacement=PiiReplacementSettings(locale="en_US")
         )
     )
@@ -87,7 +87,7 @@ def test_pgm_backend_fails_loudly_when_unavailable(locale: str, checkout: PgmChe
     """Falling back would replace columns by a method the plan never described."""
     from nemo_safe_synthesizer.pii_replacer.replacement import PersonaEngine
 
-    cfg = PiiReplacerConfig(
+    cfg = ReplacePiiConfig(
         replacement=PiiReplacementSettings(locale=locale),
         person=PiiPersonConfig(backend=PiiPersonBackend.pgm, sdg_pgms_src=str(pgm_checkout(tmp_path, checkout))),
     )
@@ -155,7 +155,7 @@ def test_an_address_is_built_from_the_person_the_row_names(fixture_numbered_emai
 
 def test_replacement_follows_the_columns_own_conventions(fixture_contact_df: pd.DataFrame):
     """The point of reading the convention: the column still reads like itself."""
-    cfg = PiiReplacerConfig(person=PiiPersonConfig(backend=PiiPersonBackend.faker))
+    cfg = ReplacePiiConfig(person=PiiPersonConfig(backend=PiiPersonBackend.faker))
     replacer = TabularPiiReplacer(cfg, data_config=DataParameters())
     replacer.transform_df(fixture_contact_df)
     assert replacer.result is not None
@@ -177,7 +177,7 @@ def test_replacement_follows_the_columns_own_conventions(fixture_contact_df: pd.
 def test_a_name_outside_the_columns_convention_keeps_its_own(fixture_contact_df: pd.DataFrame):
     df = fixture_contact_df.copy()
     df.loc[0, "patient_name"] = "Jane Smith"  # the one row written the other way round
-    cfg = PiiReplacerConfig(person=PiiPersonConfig(backend=PiiPersonBackend.faker))
+    cfg = ReplacePiiConfig(person=PiiPersonConfig(backend=PiiPersonBackend.faker))
     replacer = TabularPiiReplacer(cfg, data_config=DataParameters())
     replacer.transform_df(df)
     assert replacer.result is not None
@@ -191,7 +191,7 @@ def test_a_middle_name_column_is_replaced(fixture_middle_name_df: pd.DataFrame):
     """Detected but absent from the entity vocabulary, middle names used to survive whole."""
     from nemo_safe_synthesizer.pii_replacer.planning import discover_plan
 
-    cfg = PiiReplacerConfig(person=PiiPersonConfig(backend=PiiPersonBackend.faker))
+    cfg = ReplacePiiConfig(person=PiiPersonConfig(backend=PiiPersonBackend.faker))
     plan = discover_plan(fixture_middle_name_df, group_key=None, cfg=config_from_replace_pii(cfg), config=cfg)
     spec = column_spec(persona_set(plan, "person_1").columns_to_replace, "middle_name")
     assert spec is not None and spec.entity_type == PiiEntity.middle_name
@@ -207,7 +207,7 @@ def test_a_middle_name_column_is_replaced(fixture_middle_name_df: pd.DataFrame):
 
 def test_one_person_has_one_middle_name(fixture_middle_name_df: pd.DataFrame):
     """No backend supplies a middle name, so the drawn one has to hold across columns."""
-    cfg = PiiReplacerConfig(person=PiiPersonConfig(backend=PiiPersonBackend.faker))
+    cfg = ReplacePiiConfig(person=PiiPersonConfig(backend=PiiPersonBackend.faker))
     replacer = TabularPiiReplacer(cfg, data_config=DataParameters())
     replacer.transform_df(fixture_middle_name_df)
     assert replacer.result is not None
@@ -243,7 +243,7 @@ def test_an_address_following_no_convention_is_replaced_without_one(fixture_cont
 
     df = fixture_contact_df.copy()
     df["patient_email"] = [f"usr{i}x{i * 37 % 97}@{'acme' if i % 2 else 'globex'}.com" for i in range(len(df))]
-    cfg = PiiReplacerConfig(person=PiiPersonConfig(backend=PiiPersonBackend.faker))
+    cfg = ReplacePiiConfig(person=PiiPersonConfig(backend=PiiPersonBackend.faker))
     replacer = TabularPiiReplacer(cfg, data_config=DataParameters())
     replacer.transform_df(df)
     assert replacer.result is not None
@@ -274,7 +274,7 @@ def test_a_column_of_several_conventions_keeps_each_of_them():
             local = f"{first.lower()}{last.lower()}"
         rows.append({"patient_name": f"{first} {last}", "patient_email": f"{local}@acme.com"})
     df = pd.DataFrame(rows)
-    cfg = PiiReplacerConfig(person=PiiPersonConfig(backend=PiiPersonBackend.faker))
+    cfg = ReplacePiiConfig(person=PiiPersonConfig(backend=PiiPersonBackend.faker))
     replacer = TabularPiiReplacer(cfg, data_config=DataParameters())
     replacer.transform_df(df)
     assert replacer.result is not None
