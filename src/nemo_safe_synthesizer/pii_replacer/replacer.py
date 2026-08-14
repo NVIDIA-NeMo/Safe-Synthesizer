@@ -132,7 +132,7 @@ class TabularPiiReplacer:
         self.result = TransformResult(
             transformed_df=outcome.replaced_df,
             column_statistics=self._build_column_statistics(df, plan, outcome),
-            free_text_entities=list(outcome.details.get("free_text_entities") or []),
+            free_text_entities=cast(list[dict], outcome.details.get("free_text_entities", [])),
         )
         self.elapsed_time = time.perf_counter() - start
 

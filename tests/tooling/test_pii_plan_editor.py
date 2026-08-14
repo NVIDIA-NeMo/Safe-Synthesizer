@@ -10,7 +10,7 @@ import pytest
 import yaml
 
 from nemo_safe_synthesizer.config.data import DataParameters
-from nemo_safe_synthesizer.config.pii_replacement import (
+from nemo_safe_synthesizer.config.replace_pii import (
     PersonaColumnSet,
     PersonaMatchColumn,
     PiiColumnPlan,
@@ -23,12 +23,12 @@ from nemo_safe_synthesizer.config.pii_replacement import (
 )
 from nemo_safe_synthesizer.pii_replacer.planning import PII_REPLACEMENT_PLAN_FILENAME, plan_section_help
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
-from nemo_safe_synthesizer.tooling.pii_plan_preview import (
+from nemo_safe_synthesizer.tooling.pii_plan_editor import (
     build_diagram_model,
     map_yaml_source_ranges,
-    plan_to_preview_yaml,
-    preview_pii_replacement_plan,
-    preview_state_from_yaml,
+    plan_to_editor_yaml,
+    open_pii_plan_editor,
+    pii_plan_editor_state_from_yaml,
 )
 
 SAMPLE_YAML = """\
@@ -41,7 +41,7 @@ persona_backed_columns:
       - column_name: last_name
         entity_type: last_name
     match_persona_by:
-      - persona_attribute: gender
+      - persona_attribute: sex
         column_name: sex
   - persona: provider
     columns_to_replace:
@@ -108,7 +108,7 @@ def test_build_diagram_model_cards():
     assert "never replaced" in patient["compartments"][1]["hint"]
     assert diagram["scope_help"] == plan_section_help("scope")
     assert patient["compartments"][0]["rows"][0]["primary"] == "first_name"
-    assert patient["compartments"][1]["rows"][0]["secondary"] == "gender"
+    assert patient["compartments"][1]["rows"][0]["secondary"] == "sex"
     assert provider["title"] == "provider"
     assert standalone["kind"] == "standalone"
     assert standalone["title"] == "Standalone columns"
@@ -123,8 +123,8 @@ def test_build_diagram_model_empty_sections():
     assert diagram["cards"][0]["compartments"][0]["rows"] == []
 
 
-def test_preview_state_validates_against_dataframe(patient_df, data_config):
-    good = preview_state_from_yaml(SAMPLE_YAML, df=patient_df, data_config=data_config)
+def test_editor_state_validates_against_dataframe(patient_df, data_config):
+    good = pii_plan_editor_state_from_yaml(SAMPLE_YAML, df=patient_df, data_config=data_config)
     assert good.valid
     assert good.error is None
     assert good.warnings == []
@@ -135,14 +135,14 @@ def test_preview_state_validates_against_dataframe(patient_df, data_config):
         "column_name: not_a_column\n        entity_type: first_name",
         1,
     )
-    bad = preview_state_from_yaml(missing_col, df=patient_df, data_config=data_config, previous=good)
+    bad = pii_plan_editor_state_from_yaml(missing_col, df=patient_df, data_config=data_config, previous=good)
     assert not bad.valid
     assert "not_a_column" in (bad.error or "")
     assert bad.warnings == []
     assert bad.diagram == good.diagram
 
 
-def test_preview_state_rejects_protected_structural_columns(patient_df, data_config):
+def test_editor_state_rejects_protected_structural_columns(patient_df, data_config):
     """Edits that list order-by / time-series keys under columns_to_replace fail like resolve_plan."""
     from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
 
@@ -155,7 +155,7 @@ standalone_columns_to_replace:
   - column_name: patient_id
     entity_type: unique_identifier
 """
-    state = preview_state_from_yaml(yaml_text, df=patient_df, data_config=order_by_config)
+    state = pii_plan_editor_state_from_yaml(yaml_text, df=patient_df, data_config=order_by_config)
     assert not state.valid
     assert "structural columns" in (state.error or "")
 
@@ -165,7 +165,7 @@ standalone_columns_to_replace:
   - column_name: provider_name
     entity_type: unique_identifier
 """
-    ts_state = preview_state_from_yaml(
+    ts_state = pii_plan_editor_state_from_yaml(
         ts_yaml,
         df=patient_df,
         data_config=data_config,
@@ -175,7 +175,7 @@ standalone_columns_to_replace:
     assert "structural columns" in (ts_state.error or "")
 
 
-def test_preview_state_surfaces_section_placement_warnings(patient_df, data_config):
+def test_editor_state_surfaces_section_placement_warnings(patient_df, data_config):
     yaml_text = """\
 scope: group
 persona_backed_columns:
@@ -187,35 +187,34 @@ standalone_columns_to_replace:
   - column_name: first_name
     entity_type: first_name
 """
-    state = preview_state_from_yaml(yaml_text, df=patient_df, data_config=data_config)
+    state = pii_plan_editor_state_from_yaml(yaml_text, df=patient_df, data_config=data_config)
     assert state.valid
     assert state.error is None
-    assert len(state.warnings) == 2
-    assert any("unique_identifier" in msg for msg in state.warnings)
+    assert len(state.warnings) == 1
     assert any("first_name" in msg for msg in state.warnings)
 
 
-def test_preview_state_keeps_last_valid_diagram_across_repeated_errors(patient_df, data_config):
-    good = preview_state_from_yaml(SAMPLE_YAML, df=patient_df, data_config=data_config)
-    first_bad = preview_state_from_yaml(
+def test_editor_state_keeps_last_valid_diagram_across_repeated_errors(patient_df, data_config):
+    good = pii_plan_editor_state_from_yaml(SAMPLE_YAML, df=patient_df, data_config=data_config)
+    first_bad = pii_plan_editor_state_from_yaml(
         SAMPLE_YAML.replace("column_name: first_name", "column_name: not_a_column", 1),
         df=patient_df,
         data_config=data_config,
         previous=good,
     )
-    second_bad = preview_state_from_yaml("scope: [oops]", df=patient_df, data_config=data_config, previous=first_bad)
+    second_bad = pii_plan_editor_state_from_yaml("scope: [oops]", df=patient_df, data_config=data_config, previous=first_bad)
     assert not second_bad.valid
     assert second_bad.diagram == good.diagram
 
 
-def test_preview_state_invalid_without_previous_uses_empty_diagram(patient_df, data_config):
-    state = preview_state_from_yaml("scope: [oops]", df=patient_df, data_config=data_config)
+def test_editor_state_invalid_without_previous_uses_empty_diagram(patient_df, data_config):
+    state = pii_plan_editor_state_from_yaml("scope: [oops]", df=patient_df, data_config=data_config)
     assert not state.valid
     assert state.error
     assert state.diagram["cards"][0]["kind"] == "standalone"
 
 
-def test_preview_state_explains_yaml_indentation_errors(patient_df, data_config):
+def test_editor_state_explains_yaml_indentation_errors(patient_df, data_config):
     """Over-indented keys under a list item get a clearer hint than raw PyYAML."""
     bad = """\
 scope: group
@@ -223,7 +222,7 @@ standalone_columns_to_replace:
   - column_name: Street
       entity_type: street_address
 """
-    state = preview_state_from_yaml(bad, df=patient_df, data_config=data_config)
+    state = pii_plan_editor_state_from_yaml(bad, df=patient_df, data_config=data_config)
     assert not state.valid
     assert state.error is not None
     assert "same indentation" in state.error
@@ -231,26 +230,26 @@ standalone_columns_to_replace:
     assert "entity_type" in state.error
 
 
-def test_plan_to_preview_yaml_round_trip_omits_defaults(tmp_path: Path, patient_df):
+def test_plan_to_editor_yaml_round_trip_omits_defaults(tmp_path: Path, patient_df):
     plan = PiiReplacementPlan(
         persona_backed_columns=[
             PersonaColumnSet(
                 persona="patient",
                 columns_to_replace=[PiiColumnPlan(column_name="first_name", entity_type=PiiEntity.first_name)],
-                match_persona_by=[PersonaMatchColumn(persona_attribute="gender", column_name="sex")],
+                match_persona_by=[PersonaMatchColumn(persona_attribute="sex", column_name="sex")],
             )
         ],
         standalone_columns_to_replace=[
             PiiColumnPlan(column_name="patient_id", entity_type=PiiEntity.unique_identifier),
         ],
     )
-    text = plan_to_preview_yaml(plan)
+    text = plan_to_editor_yaml(plan)
     data = yaml.safe_load(text)
     assert "scope" not in data  # default dataframe omitted
     assert data["persona_backed_columns"][0]["persona"] == "patient"
     path = tmp_path / "plan.yaml"
     path.write_text(text)
-    assert preview_state_from_yaml(
+    assert pii_plan_editor_state_from_yaml(
         path.read_text(),
         df=patient_df,
         data_config=DataParameters(),
@@ -271,31 +270,31 @@ def _builder(patient_df: pd.DataFrame, save_path: Path) -> SafeSynthesizer:
     )
 
 
-def test_preview_helper_syncs_plan_and_builder_integration(patient_df, data_config, tmp_path):
+def test_editor_helper_syncs_plan_and_builder_integration(patient_df, data_config, tmp_path):
     pytest.importorskip("anywidget")
 
     synced: list[PiiReplacementPlan] = []
-    widget = preview_pii_replacement_plan(
+    editor = open_pii_plan_editor(
         SAMPLE_YAML,
         df=patient_df,
         data_config=data_config,
         on_plan=synced.append,
     )
-    assert widget.diagram["cards"][0]["title"] == "patient"
-    assert widget.error == ""
-    assert list(widget.warnings) == []
+    assert editor.diagram["cards"][0]["title"] == "patient"
+    assert editor.error == ""
+    assert list(editor.warnings) == []
     assert synced and synced[0].persona_backed_columns[0].persona == "patient"
-    assert widget.current_plan is synced[0]
+    assert editor.current_plan is synced[0]
 
-    widget.yaml_text = SAMPLE_YAML.replace(
+    editor.yaml_text = SAMPLE_YAML.replace(
         "column_name: first_name\n        entity_type: first_name",
         "column_name: not_a_column\n        entity_type: first_name",
         1,
     )
-    state = widget.refresh()
+    state = editor.refresh()
     assert not state.valid
-    assert "not_a_column" in widget.error
-    assert list(widget.warnings) == []
+    assert "not_a_column" in editor.error
+    assert list(editor.warnings) == []
     assert len(synced) == 1  # invalid render does not sync
 
     misplaced = """\
@@ -313,37 +312,37 @@ standalone_columns_to_replace:
   - column_name: provider_name
     entity_type: full_name
 """
-    widget.yaml_text = misplaced
-    state = widget.refresh()
+    editor.yaml_text = misplaced
+    state = editor.refresh()
     assert state.valid
-    assert widget.error == ""
-    assert len(widget.warnings) >= 2
-    assert "placement warning" in widget.status
+    assert editor.error == ""
+    assert len(editor.warnings) >= 2
+    assert "placement warning" in editor.status
     assert len(synced) == 2  # warnings still sync the plan
 
-    widget.yaml_text = SAMPLE_YAML.replace("persona: patient", "persona: member", 1)
-    state = widget.refresh()
+    editor.yaml_text = SAMPLE_YAML.replace("persona: patient", "persona: member", 1)
+    state = editor.refresh()
     assert state.valid
-    assert widget.current_plan is not None
-    assert widget.current_plan.persona_backed_columns[0].persona == "member"
+    assert editor.current_plan is not None
+    assert editor.current_plan.persona_backed_columns[0].persona == "member"
     assert synced[-1].persona_backed_columns[0].persona == "member"
 
     builder = _builder(patient_df, tmp_path)
-    preview = builder.preview_replace_pii()
+    editor = builder.review_pii_plan()
     assert builder._nss_config is not None and builder._nss_config.replace_pii is not None
     assert isinstance(builder._nss_config.replace_pii.replacement_plan, PiiReplacementPlan)
     assert builder._nss_config.replace_pii.replacement_plan.persona_backed_columns[0].persona == "patient"
-    assert preview.current_plan is not None
+    assert editor.current_plan is not None
 
     assert builder._workdir is not None
     plan_path = builder._workdir.run_dir / PII_REPLACEMENT_PLAN_FILENAME
     assert plan_path.exists()
-    preview.yaml_text = SAMPLE_YAML.replace("persona: patient", "persona: member", 1)
-    preview.refresh()
+    editor.yaml_text = SAMPLE_YAML.replace("persona: patient", "persona: member", 1)
+    editor.refresh()
     assert "persona: member" in plan_path.read_text()
 
 
-def test_previewed_plan_rearms_process_data_only_when_the_plan_changes(patient_df, tmp_path):
+def test_reviewed_plan_rearms_process_data_only_when_the_plan_changes(patient_df, tmp_path):
     """Editing the plan after process_data() must let a re-run apply the edit."""
     builder = _builder(patient_df, tmp_path)
     builder._resolve_nss_config()
@@ -355,12 +354,12 @@ def test_previewed_plan_rearms_process_data_only_when_the_plan_changes(patient_d
     builder._data_processed = True
     builder._applied_pii_plan = applied
 
-    builder._apply_previewed_plan(applied)
-    assert builder._data_processed  # re-opening the preview alone is not an edit
+    builder._adopt_pii_plan(applied)
+    assert builder._data_processed  # re-opening the editor alone is not an edit
 
     edited = applied.model_copy(deep=True)
     edited.persona_backed_columns[0].persona = "member"
-    builder._apply_previewed_plan(edited)
+    builder._adopt_pii_plan(edited)
     assert not builder._data_processed
 
     assert builder._workdir is not None

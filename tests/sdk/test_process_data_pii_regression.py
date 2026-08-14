@@ -138,12 +138,12 @@ class TestProcessDataPreservesOriginalForEvaluation:
 
 
 # ---------------------------------------------------------------------------
-# Re-running process_data after editing the plan in the preview
+# Re-running process_data after editing the plan in the editor
 # ---------------------------------------------------------------------------
 
 
 class TestProcessDataRerun:
-    """Editing the plan in the preview clears ``_data_processed``; the re-run
+    """Editing the plan in the editor clears ``_data_processed``; the re-run
     must refresh the artifacts in the same run directory rather than leaving
     the previous pass behind.
     """
@@ -172,7 +172,7 @@ class TestProcessDataRerun:
         builder.process_data()  # still guarded: no plan edit, so nothing re-runs
         assert pd.read_csv(transformed)["name"][0] == "ANON_0"
 
-        builder._data_processed = False  # what _apply_previewed_plan does after an edit
+        builder._data_processed = False  # what _adopt_pii_plan does after an edit
         builder.process_data()
         assert builder._workdir.run_dir == run_dir
         assert pd.read_csv(transformed)["name"][0] == "REDACTED_0"

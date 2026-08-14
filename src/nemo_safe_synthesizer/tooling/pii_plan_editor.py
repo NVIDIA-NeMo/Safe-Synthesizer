@@ -1,9 +1,9 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Interactive notebook preview for PII replacement plans in a Safe Synthesizer run.
+"""Interactive notebook editor for PII replacement plans in a Safe Synthesizer run.
 
-The preview shows editable YAML beside a UML-style card diagram of
+The editor shows editable YAML beside a UML-style card diagram of
 ``persona_backed_columns`` and ``standalone_columns_to_replace``. Each card and
 the scope chip carry a ``?`` toggle holding that section's explanation, so the
 diagram can explain the plan rather than only echoing field names. Validation
@@ -14,8 +14,8 @@ Hovering a diagram region highlights the matching YAML span (and vice versa).
 Edits are applied when the user clicks **Save and render diagram**; each valid
 render can sync the plan back into the Safe Synthesizer builder.
 
-Prefer :meth:`SafeSynthesizer.preview_replace_pii` so discovery, data config, and
-plan sync stay inside the builder workflow. Preview is optional — skip it and
+Prefer :meth:`SafeSynthesizer.review_pii_plan` so discovery, data config, and
+plan sync stay inside the builder workflow. Review is optional — skip it and
 ``run()`` / ``process_data()`` still use auto-discovery or the configured plan.
 
 Install the optional notebook extra before use::
@@ -36,24 +36,24 @@ import yaml
 from pydantic import ValidationError
 
 from ..config.data import DataParameters
-from ..config.pii_replacement import PersonaColumnSet, PiiColumnPlan, PiiReplacementPlan
+from ..config.replace_pii import PersonaColumnSet, PiiColumnPlan, PiiReplacementPlan
 from ..config.time_series import TimeSeriesParameters
 from ..errors import ParameterError
 from ..pii_replacer.planning import iter_plan_advisories, plan_section_help, validate_plan
 
 __all__ = [
-    "PreviewState",
-    "PiiPlanPreview",
+    "PiiPlanEditorState",
+    "PiiPlanEditor",
     "build_diagram_model",
     "map_yaml_source_ranges",
-    "plan_to_preview_yaml",
-    "preview_pii_replacement_plan",
-    "preview_state_from_yaml",
+    "plan_to_editor_yaml",
+    "open_pii_plan_editor",
+    "pii_plan_editor_state_from_yaml",
 ]
 
-_ASSETS_DIR = Path(__file__).resolve().parent / "assets" / "pii_plan_preview"
+_ASSETS_DIR = Path(__file__).resolve().parent / "assets" / "pii_plan_editor"
 _NOTEBOOK_EXTRA_HINT = (
-    "Notebook PII plan preview requires the 'notebook' optional dependency. "
+    "Notebook PII plan editor requires the 'notebook' optional dependency. "
     "Install with: pip install 'nemo-safe-synthesizer[notebook]'"
 )
 
@@ -61,8 +61,8 @@ PlanCallback = Callable[[PiiReplacementPlan], None]
 
 
 @dataclass(frozen=True)
-class PreviewState:
-    """Parsed preview payload synced to the notebook widget."""
+class PiiPlanEditorState:
+    """Parsed editor payload synced to the notebook widget."""
 
     yaml_text: str
     diagram: dict[str, Any]
@@ -73,7 +73,7 @@ class PreviewState:
     valid: bool = False
 
 
-def _status_for_state(state: PreviewState, *, initial: bool = False) -> str:
+def _status_for_state(state: PiiPlanEditorState, *, initial: bool = False) -> str:
     if not state.valid:
         return "Fix validation errors, then click Save and render diagram."
     if state.warnings:
@@ -95,7 +95,7 @@ def _status_for_state(state: PreviewState, *, initial: bool = False) -> str:
     return "Plan is valid. Continue the Safe Synthesizer run, or edit and Save and render diagram again."
 
 
-def plan_to_preview_yaml(plan: PiiReplacementPlan) -> str:
+def plan_to_editor_yaml(plan: PiiReplacementPlan) -> str:
     """Serialize a plan the same way artifact writers omit defaults/nulls.
 
     Section comments are left out here; the diagram's ``?`` toggles carry those
@@ -235,7 +235,7 @@ def build_diagram_model(plan: PiiReplacementPlan) -> dict[str, Any]:
 
 
 def _format_plan_parse_error(exc: BaseException) -> str:
-    """Turn raw YAML/Pydantic parse failures into a preview-friendly message."""
+    """Turn raw YAML/Pydantic parse failures into a editor-friendly message."""
     if isinstance(exc, yaml.YAMLError):
         detail = str(exc).strip()
         # Scanner errors like "mapping values are not allowed here" almost always
@@ -250,15 +250,15 @@ def _format_plan_parse_error(exc: BaseException) -> str:
     return str(exc)
 
 
-def preview_state_from_yaml(
+def pii_plan_editor_state_from_yaml(
     yaml_text: str,
     *,
     df: pd.DataFrame,
     data_config: DataParameters,
-    previous: PreviewState | None = None,
+    previous: PiiPlanEditorState | None = None,
     persona_backend: str = "managed",
     time_series: TimeSeriesParameters | None = None,
-) -> PreviewState:
+) -> PiiPlanEditorState:
     """Parse YAML, validate against ``df``, and build diagram + source ranges.
 
     Invalid edits retain the last valid diagram and surface the error inline.
@@ -266,13 +266,13 @@ def preview_state_from_yaml(
     """
     ranges = map_yaml_source_ranges(yaml_text)
 
-    def _invalid(exc: BaseException, plan: PiiReplacementPlan | None = None) -> PreviewState:
+    def _invalid(exc: BaseException, plan: PiiReplacementPlan | None = None) -> PiiPlanEditorState:
         # ``previous.diagram`` is the last diagram shown, which for an already
         # invalid previous state is still the last valid one. Reusing it keeps the
         # diagram stable across a run of failed edits instead of blanking it.
         message = _format_plan_parse_error(exc)
         if previous is not None:
-            return PreviewState(
+            return PiiPlanEditorState(
                 yaml_text=yaml_text,
                 diagram=previous.diagram,
                 ranges=ranges or previous.ranges,
@@ -282,7 +282,7 @@ def preview_state_from_yaml(
                 valid=False,
             )
         empty = PiiReplacementPlan()
-        return PreviewState(
+        return PiiPlanEditorState(
             yaml_text=yaml_text,
             diagram=build_diagram_model(empty),
             ranges=ranges,
@@ -303,7 +303,7 @@ def preview_state_from_yaml(
         return _invalid(exc, plan=plan)
 
     warnings = [issue.message for issue in iter_plan_advisories(plan, persona_backend=persona_backend)]
-    return PreviewState(
+    return PiiPlanEditorState(
         yaml_text=yaml_text,
         diagram=build_diagram_model(plan),
         ranges=ranges,
@@ -316,7 +316,7 @@ def preview_state_from_yaml(
 
 def _normalize_source(source: str | Path | PiiReplacementPlan) -> str:
     if isinstance(source, PiiReplacementPlan):
-        return plan_to_preview_yaml(source)
+        return plan_to_editor_yaml(source)
     if isinstance(source, Path):
         return source.expanduser().read_text(encoding="utf-8")
     if isinstance(source, str):
@@ -324,7 +324,7 @@ def _normalize_source(source: str | Path | PiiReplacementPlan) -> str:
         if "\n" not in source and path.is_file():
             return path.read_text(encoding="utf-8")
         return source
-    raise TypeError(f"Unsupported preview source type: {type(source)!r}")
+    raise TypeError(f"Unsupported editor source type: {type(source)!r}")
 
 
 def _load_asset(name: str) -> str:
@@ -333,12 +333,12 @@ def _load_asset(name: str) -> str:
 
 def _build_widget_class() -> type:
     try:
-        import anywidget
+        import anywidget  # noqa: F401  # ty:ignore[unresolved-import]
         import traitlets
     except ImportError as exc:  # pragma: no cover - exercised via helper
         raise ImportError(_NOTEBOOK_EXTRA_HINT) from exc
 
-    class _PiiPlanPreview(anywidget.AnyWidget):
+    class _PiiPlanEditor(anywidget.AnyWidget):
         """Side-by-side YAML editor and interactive PII plan diagram."""
 
         _esm = _load_asset("widget.js")
@@ -370,7 +370,7 @@ def _build_widget_class() -> type:
             self._persona_backend = persona_backend
             self._on_plan = on_plan
             yaml_text = _normalize_source(source)
-            state = preview_state_from_yaml(
+            state = pii_plan_editor_state_from_yaml(
                 yaml_text,
                 df=self._df,
                 data_config=self._data_config,
@@ -393,23 +393,23 @@ def _build_widget_class() -> type:
         def current_plan(self) -> PiiReplacementPlan | None:
             """Latest plan that validated successfully, if any."""
             state = getattr(self, "_state", None)
-            if isinstance(state, PreviewState) and state.valid:
+            if isinstance(state, PiiPlanEditorState) and state.valid:
                 return state.plan
             return None
 
-        def _sync_plan(self, state: PreviewState) -> None:
+        def _sync_plan(self, state: PiiPlanEditorState) -> None:
             if state.valid and state.plan is not None and self._on_plan is not None:
                 self._on_plan(state.plan)
 
-        def refresh(self, yaml_text: str | None = None) -> PreviewState:
+        def refresh(self, yaml_text: str | None = None) -> PiiPlanEditorState:
             """Re-parse YAML, validate against the dataset, and refresh traits."""
             text = self.yaml_text if yaml_text is None else yaml_text
             previous = getattr(self, "_state", None)
-            state = preview_state_from_yaml(
+            state = pii_plan_editor_state_from_yaml(
                 text,
                 df=self._df,
                 data_config=self._data_config,
-                previous=previous if isinstance(previous, PreviewState) else None,
+                previous=previous if isinstance(previous, PiiPlanEditorState) else None,
                 persona_backend=self._persona_backend,
                 time_series=self._time_series,
             )
@@ -430,23 +430,23 @@ def _build_widget_class() -> type:
                 return
             self.refresh(self.yaml_text)
 
-    _PiiPlanPreview.__name__ = "PiiPlanPreview"
-    _PiiPlanPreview.__qualname__ = "PiiPlanPreview"
-    return _PiiPlanPreview
+    _PiiPlanEditor.__name__ = "PiiPlanEditor"
+    _PiiPlanEditor.__qualname__ = "PiiPlanEditor"
+    return _PiiPlanEditor
 
 
 try:
-    PiiPlanPreview = _build_widget_class()
+    PiiPlanEditor = _build_widget_class()
 except ImportError:
 
-    class PiiPlanPreview:  # type: ignore[no-redef]
+    class PiiPlanEditor:  # type: ignore[no-redef]
         """Notebook widget placeholder when ``notebook`` deps are missing."""
 
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             raise ImportError(_NOTEBOOK_EXTRA_HINT)
 
 
-def preview_pii_replacement_plan(
+def open_pii_plan_editor(
     source: str | Path | PiiReplacementPlan,
     *,
     df: pd.DataFrame,
@@ -455,12 +455,12 @@ def preview_pii_replacement_plan(
     on_plan: PlanCallback | None = None,
     time_series: TimeSeriesParameters | None = None,
 ) -> Any:
-    """Create a notebook widget for a PII plan validated against ``df``.
+    """Create a notebook plan editor validated against ``df``.
 
     The return type is ``Any`` because the widget class is built at import time
     only when the optional ``anywidget`` dependency is present.
 
-    Prefer :meth:`nemo_safe_synthesizer.sdk.library_builder.SafeSynthesizer.preview_replace_pii`
+    Prefer :meth:`nemo_safe_synthesizer.sdk.library_builder.SafeSynthesizer.review_pii_plan`
     so discovery and plan sync stay inside the builder workflow.
 
     Args:
@@ -473,12 +473,12 @@ def preview_pii_replacement_plan(
             ``resolve_plan`` / preflight.
 
     Returns:
-        A ``PiiPlanPreview`` anywidget instance.
+        A ``PiiPlanEditor`` anywidget instance.
 
     Raises:
         ImportError: If the ``notebook`` optional dependency is not installed.
     """
-    return PiiPlanPreview(
+    return PiiPlanEditor(
         source,
         df=df,
         data_config=data_config,

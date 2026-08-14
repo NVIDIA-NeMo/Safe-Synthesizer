@@ -89,7 +89,7 @@ PLAN_YAML_SECTION_COMMENTS: dict[str, str] = {
 def plan_section_help(field: str) -> str:
     """Unwrap a section comment into one prose paragraph for UI surfaces.
 
-    Keeps the notebook preview's explanations identical to the comments written
+    Keeps the notebook editor's explanations identical to the comments written
     into the plan file.
 
     Args:

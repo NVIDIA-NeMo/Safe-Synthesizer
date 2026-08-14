@@ -1,7 +1,7 @@
 /* SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. */
 /* SPDX-License-Identifier: Apache-2.0 */
 
-.nss-pii-preview {
+.nss-pii-editor {
   --nss-pii-border: #c9d2dc;
   --nss-pii-surface: #f7f9fb;
   --nss-pii-card: #ffffff;

@@ -259,7 +259,7 @@ Consider using PII replacement when:
 
 PII replacement is on by default as a pre-processing step before synthesis.
 
-## Notebook plan preview
+## Notebook plan review
 
 Review a discovered PII plan against your dataset before the rest of the pipeline
 runs. Install the notebook extra:
@@ -278,17 +278,17 @@ builder = (
     .with_replace_pii()
 )
 
-preview = builder.preview_replace_pii()
-preview  # optional: edit YAML, Save and render diagram, then continue the run
+editor = builder.review_pii_plan()
+editor  # optional: edit YAML, Save and render diagram, then continue the run
 ```
 
-`preview_replace_pii()` discovers (or loads) the plan for the builder's
+`review_pii_plan()` discovers (or loads) the plan for the builder's
 dataframe and validates every **Save and render diagram** against that dataset —
 including unknown `column_name` values and structural columns that must not be
 replaced (time-series group keys, `order_training_examples_by`, and the
 time-series timestamp). Each successful render stores the plan on the builder so
 a later `run()` / `process_data()` applies it instead of rediscovering. Skipping
-the preview leaves auto-discovery unchanged.
+the editor leaves auto-discovery unchanged.
 
 See the [PII Replacement](../tutorials/pii-replacement.ipynb) tutorial for a
 full patient-events walkthrough, including an optional post-replacement

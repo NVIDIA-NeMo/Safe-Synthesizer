@@ -366,8 +366,8 @@ class SafeSynthesizer(ConfigBuilder):
             )
         return self
 
-    def preview_replace_pii(self) -> Any:
-        """Discover/resolve the PII plan and open an interactive notebook preview.
+    def review_pii_plan(self) -> Any:
+        """Discover/resolve the PII plan and open an interactive notebook review.
 
         Resolves the current builder config and dataframe, runs plan discovery
         or loads the configured plan, then returns a widget that validates edits
@@ -376,11 +376,11 @@ class SafeSynthesizer(ConfigBuilder):
         ``<run_dir>/pii_replacement_plan.yaml`` so a subsequent ``run()`` /
         ``process_data()`` applies the reviewed plan instead of rediscovering.
         Editing the plan after ``process_data()`` re-arms that step, so the
-        preview → edit → ``process_data()`` loop can be repeated in a notebook.
-        Preview is optional; skipping it leaves auto-discovery unchanged.
+        review → edit → ``process_data()`` loop can be repeated in a notebook.
+        Review is optional; skipping it leaves auto-discovery unchanged.
 
         Returns:
-            A ``PiiPlanPreview`` widget.
+            A ``PiiPlanEditor`` widget.
 
         Raises:
             ParameterError: If no data source is set or PII replacement is disabled.
@@ -388,7 +388,7 @@ class SafeSynthesizer(ConfigBuilder):
         """
         from ..pii_replacer.entities import config_from_replace_pii
         from ..pii_replacer.planning import resolve_plan
-        from ..tooling.pii_plan_preview import preview_pii_replacement_plan
+        from ..tooling.pii_plan_editor import open_pii_plan_editor
 
         self._resolve_nss_config()
         self._resolve_datasource()
@@ -396,9 +396,9 @@ class SafeSynthesizer(ConfigBuilder):
             assert self._nss_config is not None
 
         if self._nss_config is None or self._nss_config.replace_pii is None:
-            raise ParameterError("PII replacement is disabled; call with_replace_pii() before preview_replace_pii()")
+            raise ParameterError("PII replacement is disabled; call with_replace_pii() before review_pii_plan()")
         if not isinstance(self._data_source, pd.DataFrame):
-            raise ParameterError("preview_replace_pii() requires a DataFrame data source")
+            raise ParameterError("review_pii_plan() requires a DataFrame data source")
 
         cfg = config_from_replace_pii(self._nss_config.replace_pii)
         plan = resolve_plan(
@@ -409,21 +409,21 @@ class SafeSynthesizer(ConfigBuilder):
             time_series=self._nss_config.time_series,
         )
 
-        preview = preview_pii_replacement_plan(
+        editor = open_pii_plan_editor(
             plan,
             df=self._data_source,
             data_config=self._nss_config.data,
             persona_backend=cfg.persona_backend,
-            on_plan=self._apply_previewed_plan,
+            on_plan=self._adopt_pii_plan,
             time_series=self._nss_config.time_series,
         )
-        self._pii_plan_preview = preview
-        return preview
+        self._pii_plan_editor = editor
+        return editor
 
-    def _apply_previewed_plan(self, updated_plan: Any) -> None:
-        """Adopt a plan the preview widget validated, and persist it to the run dir.
+    def _adopt_pii_plan(self, updated_plan: Any) -> None:
+        """Adopt a plan the editor widget validated, and persist it to the run dir.
 
-        Called on the initial preview load and after every successful **Save and
+        Called on the initial editor load and after every successful **Save and
         render diagram**, so the plan YAML in the run directory always reflects the
         plan the builder would apply. A plan that differs from the one the last
         ``process_data()`` applied clears ``_data_processed``, letting the caller
@@ -438,7 +438,7 @@ class SafeSynthesizer(ConfigBuilder):
         self._nss_config = self._nss_config.model_copy(update={"replace_pii": cfg})
 
         plan_path = save_plan_to_path(updated_plan, self._workdir.run_dir / PII_REPLACEMENT_PLAN_FILENAME)
-        logger.runtime.info(f"Wrote previewed PII replacement plan to {plan_path}")
+        logger.runtime.info(f"Wrote reviewed PII replacement plan to {plan_path}")
 
         if self._data_processed and updated_plan != self._applied_pii_plan:
             self._data_processed = False
@@ -651,7 +651,7 @@ class SafeSynthesizer(ConfigBuilder):
             # inspection only -- we don't need it in the generation or evaluation phase.
             self._training_df.to_csv(transformed_path, index=False)
         elif transformed_path.exists():
-            # A repeated process_data() (e.g. after editing the plan in the preview)
+            # A repeated process_data() (e.g. after editing the plan in the editor)
             # reuses this run directory, so an earlier transformed split would
             # otherwise linger and misrepresent the current one.
             transformed_path.unlink()

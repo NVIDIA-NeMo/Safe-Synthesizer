@@ -176,9 +176,9 @@ function setActivePath(model, root, path, { scrollYaml = false } = {}) {
 
 function render({ model, el }) {
   el.innerHTML = `
-    <div class="nss-pii-preview">
+    <div class="nss-pii-editor">
       <header class="nss-pii-header">
-        <h2 class="nss-pii-title">PII Replacement Plan Preview</h2>
+        <h2 class="nss-pii-title">Review PII Replacement Plan</h2>
       </header>
       <div class="nss-pii-panes">
         <div class="nss-pii-yaml-pane">
@@ -202,7 +202,7 @@ function render({ model, el }) {
     </div>
   `;
 
-  const root = el.querySelector(".nss-pii-preview");
+  const root = el.querySelector(".nss-pii-editor");
   const editor = el.querySelector(".nss-pii-yaml-editor");
   const backdrop = el.querySelector(".nss-pii-yaml-backdrop");
   const diagramHost = el.querySelector(".nss-pii-diagram-host");

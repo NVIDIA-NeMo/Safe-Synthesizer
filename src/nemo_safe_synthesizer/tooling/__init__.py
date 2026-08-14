@@ -5,8 +5,8 @@
 
 This package collects the "display" side of Safe Synthesizer that is
 decoupled from core logic. Today it hosts the pre-flight report
-renderer and an optional notebook PII plan preview
-(``nemo_safe_synthesizer.tooling.pii_plan_preview``); over time it is
+renderer and an optional notebook PII plan editor
+(``nemo_safe_synthesizer.tooling.pii_plan_editor``); over time it is
 expected to absorb the evaluation-report rendering and alternative
 output modes (agent-friendly markdown, plain text, JSON) behind a common
 [`RenderMode`][nemo_safe_synthesizer.tooling.modes.RenderMode] dispatcher.
