@@ -25,7 +25,8 @@ Path from repo root: `.agents/skills/github-cli/scripts/gh_pr_helper.py` (or `sc
 
 | Command | Description |
 |---------|-------------|
-| `uv run --script .agents/skills/github-cli/scripts/gh_pr_helper.py -- comments [PR_NUMBER]` | Fetch all PR comments (inline + top-level). Single JSON object to stdout: `{ "pr_number", "repo", "inline": [...], "top_level": [...] }`. Omit PR to use current branch's open PR. |
+| `uv run --script .agents/skills/github-cli/scripts/gh_pr_helper.py -- comments [PR_NUMBER]` | Fetch all PR discussion (inline comments + submitted review bodies + top-level comments). Single JSON object to stdout: `{ "pr_number", "repo", "inline": [...], "reviews": [...], "top_level": [...] }`. Omit PR to use current branch's open PR. |
+| `uv run --script ... -- submit-review <PR_NUMBER> --review-file path/to/review.json` | Submit one approved inline review, abort if the PR head changed, and return the review URL plus each inline comment URL. |
 | `uv run --script .agents/skills/github-cli/scripts/gh_pr_helper.py -- reply <COMMENT_ID> "Reply body"` | Post a reply to an inline review comment. |
 | `uv run --script ... -- reply <COMMENT_ID> --reply-file -` | Reply body from stdin. |
 | `uv run --script ... -- reply <COMMENT_ID> --reply-file path/to/body.md` | Reply body from file. |
@@ -96,6 +97,9 @@ EOF
 ```bash
 # Inline code review comments on a PR
 gh api repos/NVIDIA-NeMo/Safe-Synthesizer/pulls/<number>/comments
+
+# Submitted reviews and their summary bodies
+gh api repos/NVIDIA-NeMo/Safe-Synthesizer/pulls/<number>/reviews
 
 # Issue discussion thread
 gh api repos/NVIDIA-NeMo/Safe-Synthesizer/issues/<number>/comments
