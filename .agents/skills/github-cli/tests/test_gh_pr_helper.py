@@ -29,9 +29,7 @@ helper = _load_helper()
 
 def test_collect_comments_includes_submitted_review_bodies() -> None:
     pr = SimpleNamespace(
-        get_review_comments=lambda: [
-            SimpleNamespace(raw_data={"id": 10, "body": "Inline finding"})
-        ],
+        get_review_comments=lambda: [SimpleNamespace(raw_data={"id": 10, "body": "Inline finding"})],
         get_reviews=lambda: [
             SimpleNamespace(
                 raw_data={
@@ -44,9 +42,7 @@ def test_collect_comments_includes_submitted_review_bodies() -> None:
         ],
     )
     issue = SimpleNamespace(
-        get_comments=lambda: [
-            SimpleNamespace(raw_data={"id": 30, "body": "Conversation decision"})
-        ]
+        get_comments=lambda: [SimpleNamespace(raw_data={"id": 30, "body": "Conversation decision"})]
     )
 
     output = helper._collect_comments_output(715, "owner/repo", pr, issue)
