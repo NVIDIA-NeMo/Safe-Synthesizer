@@ -1085,7 +1085,8 @@ def _exit_code(result: GenerationResult) -> int:
 )
 @click.option(
     "--installer",
-    type=click.Path(path_type=Path),
+    # click-stubs omits pathlib.Path from this runtime-supported argument.
+    type=click.Path(path_type=Path),  # ty: ignore[invalid-argument-type]
     default=Path("install_nss.sh"),
     show_default=True,
     help="Installer script whose generated runtime indexes should be updated or checked.",
