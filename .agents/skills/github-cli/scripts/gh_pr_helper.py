@@ -319,7 +319,11 @@ def comments(
             raise typer.Exit(1)
         pr_number = str(prs[0].number)
 
-    resolved_pr_number = int(pr_number)
+    try:
+        resolved_pr_number = int(pr_number)
+    except ValueError as exc:
+        typer.echo(f"Invalid PR number: {pr_number}", err=True)
+        raise typer.Exit(1) from exc
     out = _collect_comments_output(
         pr_number=resolved_pr_number,
         repo_name=rep,
