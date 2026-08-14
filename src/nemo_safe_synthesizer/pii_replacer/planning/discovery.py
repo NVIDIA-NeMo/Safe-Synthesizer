@@ -18,7 +18,7 @@ from ...config.replace_pii import (
 )
 from ...observability import get_logger
 from .. import detection, entities, patterns
-from ..llm import PiiEnhancer, select_enhancer
+from ..llm import PiiDiscoveryEnhancer, select_discovery_enhancer
 from ..models import DiscoveryResult
 
 logger = get_logger(__name__)
@@ -42,7 +42,7 @@ def _detect_full_dataframe(
     *,
     group_key: str | None = None,
     llm_enhancement: bool = False,
-    enhancer: PiiEnhancer | None = None,
+    enhancer: PiiDiscoveryEnhancer | None = None,
 ) -> DiscoveryResult:
     # When a group key is set, cardinality of per-group (group-constant) columns
     # must be measured against the number of groups, not rows. Otherwise a
@@ -58,7 +58,7 @@ def _detect_full_dataframe(
     # Heuristics first; LLM re-judges structured detection with that context
     # (same seam as the former enrich_structured_detection), before free-text
     # eligibility / plan emission.
-    llm = select_enhancer(llm_enhancement=llm_enhancement, enhancer=enhancer)
+    llm = select_discovery_enhancer(llm_enhancement=llm_enhancement, enhancer=enhancer)
     discovery = llm.review_discovery(df, discovery, cfg)
 
     exclude = _discovery_exclude_columns(discovery)
@@ -194,7 +194,7 @@ def discover_plan(
     cfg: entities.Config,
     config: PiiReplacerConfig,
     *,
-    enhancer: PiiEnhancer | None = None,
+    enhancer: PiiDiscoveryEnhancer | None = None,
 ) -> PiiReplacementPlan:
     """Run auto-discovery and emit a typed replacement plan.
 
@@ -203,7 +203,7 @@ def discover_plan(
         group_key: Training group column name, or ``None`` for dataframe scope.
         cfg: Engine configuration for detection thresholds and persona backend.
         config: User-facing PII replacement configuration.
-        enhancer: Optional LLM enhancer injected for discovery review.
+        enhancer: Optional discovery enhancer injected for ``review_discovery``.
 
     Returns:
         Validated ``PiiReplacementPlan`` with scope inferred from ``group_key``.

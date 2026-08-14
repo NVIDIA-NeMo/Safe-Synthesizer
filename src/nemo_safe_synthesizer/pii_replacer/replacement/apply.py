@@ -14,7 +14,7 @@ import pandas as pd
 from ...config.replace_pii import PiiEntity, PiiReplacementPlan
 from ...observability import get_logger
 from .. import entities
-from ..llm import PiiEnhancer, select_enhancer
+from ..llm import PiiReplacementEnhancer, select_replacement_enhancer
 from ..models import PersonaInstance, ReplacementOutcome, ScopedValueMap
 from .free_text import build_text_substituter, instance_text_pair_labels, resolve_freetext_detections
 from .instances import compute_instance_synthetics, extract_instances
@@ -48,7 +48,7 @@ def apply_replacements(
     cfg: entities.Config,
     *,
     group_key: str | None = None,
-    enhancer: PiiEnhancer | None = None,
+    enhancer: PiiReplacementEnhancer | None = None,
 ) -> ReplacementOutcome:
     """Apply structured and free-text replacements to a copy of the source frame.
 
@@ -64,7 +64,7 @@ def apply_replacements(
         plan: Resolved replacement plan.
         cfg: Replacement configuration.
         group_key: Training group-key column when scope is ``"group"``.
-        enhancer: Optional LLM enhancer override.
+        enhancer: Optional replacement enhancer override.
 
     Returns:
         ``ReplacementOutcome`` with ``replaced_df``, ``free_text_applied``, and
@@ -136,7 +136,7 @@ def apply_replacements(
     # Structured persona/standalone mappings now exist. Detect against the
     # original text, resolve detections programmatically, and only then apply
     # all free-text substitutions to the already-structured output frame.
-    llm = select_enhancer(llm_enhancement=cfg.llm_enhancement, enhancer=enhancer)
+    llm = select_replacement_enhancer(llm_enhancement=cfg.llm_enhancement, enhancer=enhancer)
     detections = llm.detect_freetext_entities(original_df, ft_cols, plan, cfg)
     resolved_pairs = resolve_freetext_detections(
         detections,
@@ -302,7 +302,7 @@ def run_replacement(
     *,
     group_key: str | None = None,
     persona_engine: PersonaEngine | None = None,
-    enhancer: PiiEnhancer | None = None,
+    enhancer: PiiReplacementEnhancer | None = None,
 ) -> ReplacementOutcome:
     """Run the full PII replacement pipeline on a dataframe.
 
@@ -316,14 +316,14 @@ def run_replacement(
         cfg: Replacement configuration.
         group_key: Training group-key column when ``plan.scope`` is ``"group"``.
         persona_engine: Optional pre-built ``PersonaEngine`` (for testing).
-        enhancer: Optional LLM enhancer override.
+        enhancer: Optional replacement enhancer override.
 
     Returns:
         ``ReplacementOutcome`` with the replaced frame, persona instances,
         standalone maps, free-text columns touched, and diagnostic ``details``
         (including ``persona_backend_effective`` and change summary).
     """
-    llm = select_enhancer(llm_enhancement=cfg.llm_enhancement, enhancer=enhancer)
+    llm = select_replacement_enhancer(llm_enhancement=cfg.llm_enhancement, enhancer=enhancer)
     instances = extract_instances(df, plan, cfg, group_key=group_key)
     # Demographics inferred from names/structured context condition the
     # programmatic persona assignment that follows.

@@ -49,8 +49,10 @@ they can be kept out of free-text scanning without being replaced.
 
 !!! note "LLM-assisted discovery"
     `replace_pii.llm_enhancement: true` is reserved for a future release and currently
-    raises `ParameterError` from the `PiiEnhancer` seams (`review_discovery`,
-    `infer_persona_demographics`, `detect_freetext_entities`). Discovery is heuristic in
+    raises `ParameterError` from the discovery and replacement enhancer seams
+    (`PiiDiscoveryEnhancer.review_discovery`,
+    `PiiReplacementEnhancer.infer_persona_demographics`,
+    `PiiReplacementEnhancer.detect_freetext_entities`). Discovery is heuristic in
     this release; when LLM mode lands, heuristics will pass candidates and decision
     context into those seams and the LLM will be the final judge -- without forking
     apply. Demographics: the LLM may infer sex and fine-grained

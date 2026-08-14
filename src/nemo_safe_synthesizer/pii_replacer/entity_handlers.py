@@ -103,7 +103,7 @@ def skip_reason_named_column(
 
 
 @dataclass(frozen=True)
-class DefaultHandler:
+class DefaultHandler(EntityHandler):
     """Default entity behavior delegated to shared detection and replacement functions.
 
     A value reads as the entity when the value recognizers say so, a column is

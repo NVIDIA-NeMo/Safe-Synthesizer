@@ -17,7 +17,7 @@ from ..config.time_series import TimeSeriesParameters
 from ..errors import InternalError
 from ..observability import get_logger
 from . import entities
-from .llm import PiiEnhancer
+from .llm import PiiDiscoveryEnhancer, PiiReplacementEnhancer
 from .models import ReplacementOutcome
 from .planning import PII_REPLACEMENT_PLAN_FILENAME, iter_plan_advisories, resolve_plan, save_plan_to_path
 from .replacement import run_replacement
@@ -60,15 +60,17 @@ class TabularPiiReplacer:
         data_config: DataParameters,
         workdir: Path | str | None = None,
         time_series: TimeSeriesParameters | None = None,
-        enhancer: PiiEnhancer | None = None,
+        discovery_enhancer: PiiDiscoveryEnhancer | None = None,
+        replacement_enhancer: PiiReplacementEnhancer | None = None,
     ) -> None:
         self._config = config
         self._data_config = data_config
         self._time_series = time_series
         self._workdir = Path(workdir) if workdir else None
-        # Injected LLM stacking provider; when None the run picks noop /
+        # Injected LLM stacking providers; when None the run picks noop /
         # not-implemented from replace_pii.llm_enhancement.
-        self._enhancer = enhancer
+        self._discovery_enhancer = discovery_enhancer
+        self._replacement_enhancer = replacement_enhancer
         self._cfg = entities.config_from_replace_pii(config)
         self.result: TransformResult | None = None
         self.elapsed_time = 0.0
@@ -101,7 +103,7 @@ class TabularPiiReplacer:
             data_config=self._data_config,
             cfg=self._cfg,
             time_series=self._time_series,
-            enhancer=self._enhancer,
+            enhancer=self._discovery_enhancer,
         )
         self.resolved_plan = plan
 
@@ -126,7 +128,7 @@ class TabularPiiReplacer:
         for advisory in iter_plan_advisories(plan, persona_backend=self._cfg.persona_backend):
             logger.user.warning(advisory.message)
 
-        outcome = run_replacement(df, plan, self._cfg, group_key=group_key, enhancer=self._enhancer)
+        outcome = run_replacement(df, plan, self._cfg, group_key=group_key, enhancer=self._replacement_enhancer)
         self.result = TransformResult(
             transformed_df=outcome.replaced_df,
             column_statistics=self._build_column_statistics(df, plan, outcome),

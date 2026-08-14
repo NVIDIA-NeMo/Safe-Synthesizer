@@ -5,13 +5,20 @@
 
 from __future__ import annotations
 
+from .base import (
+    PiiDiscoveryEnhancer,
+    PiiReplacementEnhancer,
+    select_discovery_enhancer,
+    select_replacement_enhancer,
+)
 from .noop import NoopEnhancer
 from .not_implemented import NotImplementedEnhancer
-from .protocol import PiiEnhancer, select_enhancer
 
 __all__ = [
     "NoopEnhancer",
     "NotImplementedEnhancer",
-    "PiiEnhancer",
-    "select_enhancer",
+    "PiiDiscoveryEnhancer",
+    "PiiReplacementEnhancer",
+    "select_discovery_enhancer",
+    "select_replacement_enhancer",
 ]

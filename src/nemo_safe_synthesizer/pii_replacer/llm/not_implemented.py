@@ -13,6 +13,7 @@ from ...config.replace_pii import PiiReplacementPlan
 from ...errors import ParameterError
 from ..entities import Config
 from ..models import DiscoveryResult, FreeTextDetection, PersonaInstance
+from .base import PiiDiscoveryEnhancer, PiiReplacementEnhancer
 
 _LLM_NOT_IMPLEMENTED = (
     "replace_pii.llm_enhancement=True is not supported in this release; "
@@ -20,7 +21,7 @@ _LLM_NOT_IMPLEMENTED = (
 )
 
 
-class NotImplementedEnhancer:
+class NotImplementedEnhancer(PiiDiscoveryEnhancer, PiiReplacementEnhancer):
     """Raises at the future call site so enabling the flag fails consistently."""
 
     def review_discovery(

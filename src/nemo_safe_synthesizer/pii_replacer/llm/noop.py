@@ -12,10 +12,11 @@ import pandas as pd
 from ...config.replace_pii import PiiReplacementPlan
 from ..entities import Config
 from ..models import DiscoveryResult, FreeTextDetection, PersonaInstance
+from .base import PiiDiscoveryEnhancer, PiiReplacementEnhancer
 
 
-class NoopEnhancer:
-    """Pass-through enhancer: heuristics are authoritative."""
+class NoopEnhancer(PiiDiscoveryEnhancer, PiiReplacementEnhancer):
+    """Pass-through enhancer: heuristics are authoritative for both phases."""
 
     def review_discovery(
         self,

@@ -18,7 +18,7 @@ from ...config.time_series import TimeSeriesParameters
 from ...errors import ParameterError
 from ...observability import get_logger
 from .. import entities
-from ..llm import PiiEnhancer
+from ..llm import PiiDiscoveryEnhancer
 from .validation import protected_columns, strip_protected_columns_from_plan, validate_plan
 
 logger = get_logger(__name__)
@@ -133,7 +133,7 @@ def resolve_plan(
     data_config: DataParameters,
     cfg: entities.Config,
     time_series: TimeSeriesParameters | None = None,
-    enhancer: PiiEnhancer | None = None,
+    enhancer: PiiDiscoveryEnhancer | None = None,
 ) -> PiiReplacementPlan:
     """Resolve a replacement plan from auto-discovery, file, or inline config.
 
@@ -147,7 +147,7 @@ def resolve_plan(
         data_config: Data parameters with group and order keys.
         cfg: Engine configuration for discovery thresholds.
         time_series: Optional time-series parameters for protected-column rules.
-        enhancer: Optional LLM enhancer injected for discovery review.
+        enhancer: Optional discovery enhancer injected for ``review_discovery``.
 
     Returns:
         Validated ``PiiReplacementPlan`` ready for replacement.
@@ -156,7 +156,7 @@ def resolve_plan(
         ParameterError: When the plan source is missing, invalid, or fails user/config validation.
         InternalError: When auto-discovery emits an unexpected invalid plan.
     """
-    # ``llm_enhancement`` is refused by the enhancer discovery/apply select; do not
+    # ``llm_enhancement`` is refused by the discovery/replacement enhancer select; do not
     # gate here so the failure site matches the future stacking call path.
 
     group_key = data_config.group_training_examples_by

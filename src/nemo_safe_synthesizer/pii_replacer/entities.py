@@ -6,10 +6,11 @@
 from __future__ import annotations
 
 import os
+from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from random import Random
-from typing import TYPE_CHECKING, Literal, Protocol
+from typing import TYPE_CHECKING, Literal
 
 import pandas as pd
 
@@ -64,7 +65,7 @@ class Config:
     name_fuzzy_threshold: float = 0.86
     """Acceptance threshold for fuzzy column-name matching."""
     llm_enhancement: bool = False
-    """When True, discovery/apply call the injected ``PiiEnhancer`` (stub raises until LLM lands)."""
+    """When True, discovery/apply call the injected discovery and replacement enhancers (stubs raise until LLM lands)."""
     llm_model_provider: str | None = None
     """Reserved inference model provider propagated from ``PiiReplacerConfig.llm``."""
     llm_max_workers: int = 64
@@ -682,9 +683,9 @@ def is_identify_only(label: str) -> bool:
 
 
 # ===========================================================================
-# Entity behavior protocol
+# Entity behavior base
 # ===========================================================================
-class EntityHandler(Protocol):
+class EntityHandler(ABC):
     """What one entity label does, as opposed to what ``EntitySpec`` declares it is.
 
     ``EntitySpec`` is data: routing, pattern language, discovery gates. This is
@@ -698,6 +699,7 @@ class EntityHandler(Protocol):
     label: str
     """Engine entity name this handler speaks for."""
 
+    @abstractmethod
     def match_value(self, value: object, *, phone_min_digits: int = 10) -> str | None:
         """Return this handler's entity label when ``value`` matches, else ``None``.
 
@@ -708,8 +710,8 @@ class EntityHandler(Protocol):
         Returns:
             ``self.label`` on a match, otherwise ``None``.
         """
-        ...
 
+    @abstractmethod
     def skip_reason(
         self,
         series: pd.Series,
@@ -731,8 +733,8 @@ class EntityHandler(Protocol):
         Returns:
             A human-readable skip reason, or ``None`` when the column may allocate.
         """
-        ...
 
+    @abstractmethod
     def generate(
         self,
         original: str,
@@ -755,8 +757,8 @@ class EntityHandler(Protocol):
         Returns:
             The synthetic value, or ``None`` when none can be made.
         """
-        ...
 
+    @abstractmethod
     def persona_value(
         self,
         original: str,
@@ -781,8 +783,8 @@ class EntityHandler(Protocol):
         Returns:
             The synthetic value, or ``None`` to leave the cell unchanged.
         """
-        ...
 
+    @abstractmethod
     def plan_pattern_rejection(self, column_name: str) -> str | None:
         """Return why plan ``patterns`` are illegal for this entity, or ``None`` if allowed.
 
@@ -792,7 +794,6 @@ class EntityHandler(Protocol):
         Returns:
             A human-readable rejection message, or ``None`` when patterns are fine.
         """
-        ...
 
 
 # Name / fuzzy match tables derived from the registry (detect still consumes these).
