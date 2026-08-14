@@ -10,7 +10,7 @@ import os
 import time
 from collections.abc import Iterator, Mapping
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 from datasets import Dataset
@@ -235,12 +235,14 @@ class SafeSynthesizer(ConfigBuilder):
         )
         self._test_df: pd.DataFrame | None = None
         self._column_statistics: dict | None = None
+        self._pii_transform_result = None
         self._pii_replacer_time: float | None = None
         self._llm_metadata: ModelMetadata | None = None
         self._total_start: float | None = None
         self._loaded_from_save_path: bool = False
         self.preflight_report: PreflightReport | None = None
         self._data_processed: bool = False
+        self._applied_pii_plan: Any = None  # Resolved plan used by the last process_data() run.
         self._preflight_config_path: Path | None = None
         self._emit_telemetry: bool = emit_telemetry if emit_telemetry is not None else self._config_emit_telemetry()
         self._deployment_type: DeploymentTypeEnum = (
@@ -364,6 +366,127 @@ class SafeSynthesizer(ConfigBuilder):
             )
         return self
 
+    def review_pii_plan(self) -> Any:
+        """Discover/resolve the PII plan and open an interactive notebook review.
+
+        Resolves the current builder config and dataframe, runs plan discovery
+        or loads the configured plan, then returns a widget that validates edits
+        against the dataset. Each successful **Save and render diagram** (and the initial
+        load) stores the plan on this builder and writes it to
+        ``<run_dir>/pii_replacement_plan.yaml`` so a subsequent ``run()`` /
+        ``process_data()`` applies the reviewed plan instead of rediscovering.
+        Editing the plan after ``process_data()`` re-arms that step, so the
+        review → edit → ``process_data()`` loop can be repeated in a notebook.
+        Review is optional; skipping it leaves auto-discovery unchanged.
+
+        Returns:
+            A ``PiiPlanEditor`` widget.
+
+        Raises:
+            ParameterError: If no data source is set or PII replacement is disabled.
+            ImportError: If the ``notebook`` optional dependency is missing.
+        """
+        from ..pii_replacer.entities import config_from_replace_pii
+        from ..pii_replacer.planning import resolve_plan
+        from ..tooling.pii_plan_editor import open_pii_plan_editor
+
+        self._resolve_nss_config()
+        self._resolve_datasource()
+        if TYPE_CHECKING:
+            assert self._nss_config is not None
+
+        if self._nss_config is None or self._nss_config.replace_pii is None:
+            raise ParameterError("PII replacement is disabled; call with_replace_pii() before review_pii_plan()")
+        if not isinstance(self._data_source, pd.DataFrame):
+            raise ParameterError("review_pii_plan() requires a DataFrame data source")
+
+        cfg = config_from_replace_pii(self._nss_config.replace_pii)
+        plan = resolve_plan(
+            self._nss_config.replace_pii,
+            self._data_source,
+            data_config=self._nss_config.data,
+            cfg=cfg,
+            time_series=self._nss_config.time_series,
+        )
+
+        editor = open_pii_plan_editor(
+            plan,
+            df=self._data_source,
+            data_config=self._nss_config.data,
+            persona_backend=cfg.persona_backend,
+            on_plan=self._adopt_pii_plan,
+            time_series=self._nss_config.time_series,
+        )
+        self._pii_plan_editor = editor
+        return editor
+
+    def _adopt_pii_plan(self, updated_plan: Any) -> None:
+        """Adopt a plan the editor widget validated, and persist it to the run dir.
+
+        Called on the initial editor load and after every successful **Save and
+        render diagram**, so the plan YAML in the run directory always reflects the
+        plan the builder would apply. A plan that differs from the one the last
+        ``process_data()`` applied clears ``_data_processed``, letting the caller
+        re-run ``process_data()`` to replace PII again with the edited plan.
+        """
+        from ..pii_replacer.planning import PII_REPLACEMENT_PLAN_FILENAME, save_plan_to_path
+
+        assert self._nss_config is not None and self._nss_config.replace_pii is not None
+        assert self._workdir is not None
+        cfg = self._nss_config.replace_pii.model_copy(update={"replacement_plan": updated_plan})
+        self._replace_pii_config = cfg
+        self._nss_config = self._nss_config.model_copy(update={"replace_pii": cfg})
+
+        plan_path = save_plan_to_path(updated_plan, self._workdir.run_dir / PII_REPLACEMENT_PLAN_FILENAME)
+        logger.runtime.info(f"Wrote reviewed PII replacement plan to {plan_path}")
+
+        if self._data_processed and updated_plan != self._applied_pii_plan:
+            self._data_processed = False
+            logger.user.info(
+                "PII plan changed after process_data(); re-run process_data() to apply it to the training data."
+            )
+
+    def preview_replaced_data(
+        self,
+        *,
+        max_records: int = 50,
+        only_changed: bool = True,
+        columns: list[str] | None = None,
+    ) -> Any:
+        """Browse original vs PII-replaced training rows after ``process_data()``.
+
+        Shows an interlaced Original/Transformed ``.head()``-style table built from
+        a comparison DataFrame, with colored chips on replaced values. Entity types
+        appear under column names. Optional — skip it and continue the pipeline.
+
+        Args:
+            max_records: Maximum number of records to include (like ``DataFrame.head``).
+            only_changed: When ``True``, only rows with at least one changed cell;
+                free-text changes are prioritized.
+            columns: Optional column subset; defaults to transformed columns.
+
+        Returns:
+            A ``PiiReplacementResultPreview`` display object (``_repr_html_``).
+
+        Raises:
+            ParameterError: If PII replacement has not been run yet.
+        """
+        from ..tooling.pii_replacement_result_preview import preview_pii_replacement_result
+
+        original = getattr(self, "_original_training_df", None)
+        result = getattr(self, "_pii_transform_result", None)
+        if original is None or result is None:
+            raise ParameterError("preview_replaced_data() requires process_data() with PII replacement enabled first")
+        preview = preview_pii_replacement_result(
+            original_df=original,
+            transform_result=result,
+            max_records=max_records,
+            only_changed=only_changed,
+            columns=columns,
+        )
+        self._pii_result_preview = preview
+        return preview
+
     @traced("SafeSynthesizer.process_data", category=LogCategory.RUNTIME)
     def process_data(self, check_only: bool = False) -> SafeSynthesizer:
         """Perform train/test split, auto-config resolution, and optional PII replacement.
@@ -429,6 +552,7 @@ class SafeSynthesizer(ConfigBuilder):
         )
         self._training_df = original_training_df  # The active training df that might go through transformation
         self._column_statistics = None
+        self._pii_transform_result = None
 
         resolver = AutoConfigResolver(self._training_df, self._nss_config)
         resolved_config = resolver()
@@ -453,7 +577,9 @@ class SafeSynthesizer(ConfigBuilder):
             assert replacer.result is not None
             self._training_df = replacer.result.transformed_df
             self._column_statistics = replacer.result.column_statistics
+            self._pii_transform_result = replacer.result
             self._pii_replacer_time = replacer.elapsed_time
+            self._applied_pii_plan = replacer.resolved_plan
             # We explicitly do not replace PII in the test set so that the
             # privacy metrics are valid.
 
@@ -519,10 +645,16 @@ class SafeSynthesizer(ConfigBuilder):
         self._workdir.ensure_directories()
         # ``training.csv`` is the canonical persisted original training split.
         self._original_training_df.to_csv(self._workdir.dataset.training, index=False)
+        transformed_path = self._workdir.dataset.transformed_training
         if not self._training_df.equals(self._original_training_df):
             # The transformed (e.g. PII-replaced) training data is saved for
             # inspection only -- we don't need it in the generation or evaluation phase.
-            self._training_df.to_csv(self._workdir.dataset.transformed_training, index=False)
+            self._training_df.to_csv(transformed_path, index=False)
+        elif transformed_path.exists():
+            # A repeated process_data() (e.g. after editing the plan in the editor)
+            # reuses this run directory, so an earlier transformed split would
+            # otherwise linger and misrepresent the current one.
+            transformed_path.unlink()
         if self._test_df is not None:
             self._test_df.to_csv(self._workdir.dataset.test, index=False)
         return self

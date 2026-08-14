@@ -78,6 +78,11 @@ test = [
 ]
 
 [project.optional-dependencies]
+notebook = [
+    "anywidget>=0.9.13",
+    "ipywidgets>=8.1.0",
+]
+
 engine = [
     "anyascii",
     "pycountry",

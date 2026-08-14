@@ -138,6 +138,61 @@ class TestProcessDataPreservesOriginalForEvaluation:
 
 
 # ---------------------------------------------------------------------------
+# Re-running process_data after editing the plan in the editor
+# ---------------------------------------------------------------------------
+
+
+class TestProcessDataRerun:
+    """Editing the plan in the editor clears ``_data_processed``; the re-run
+    must refresh the artifacts in the same run directory rather than leaving
+    the previous pass behind.
+    """
+
+    def _builder(self, tmp_path: Path, original: pd.DataFrame) -> SafeSynthesizer:
+        return (
+            SafeSynthesizer(save_path=tmp_path)
+            .with_data_source(original)
+            .with_replace_pii(config=ReplacePiiConfig())
+            .resolve()
+        )
+
+    def test_rerun_overwrites_transformed_training_in_place(self, tmp_path: Path, monkeypatch):
+        original = _make_original_df()
+        _patch_heavy_deps(monkeypatch, original, _make_replaced_df())
+        builder = self._builder(tmp_path, original)
+        builder.process_data()
+        assert builder._workdir is not None
+        run_dir = builder._workdir.run_dir
+        transformed = builder._workdir.dataset.transformed_training
+        assert pd.read_csv(transformed)["name"][0] == "ANON_0"
+
+        second_pass = original.assign(name=[f"REDACTED_{i}" for i in range(len(original))])
+        _patch_heavy_deps(monkeypatch, original, second_pass)
+
+        builder.process_data()  # still guarded: no plan edit, so nothing re-runs
+        assert pd.read_csv(transformed)["name"][0] == "ANON_0"
+
+        builder._data_processed = False  # what _adopt_pii_plan does after an edit
+        builder.process_data()
+        assert builder._workdir.run_dir == run_dir
+        assert pd.read_csv(transformed)["name"][0] == "REDACTED_0"
+
+    def test_rerun_without_changes_drops_the_stale_transformed_split(self, tmp_path: Path, monkeypatch):
+        original = _make_original_df()
+        _patch_heavy_deps(monkeypatch, original, _make_replaced_df())
+        builder = self._builder(tmp_path, original)
+        builder.process_data()
+        assert builder._workdir is not None
+        transformed = builder._workdir.dataset.transformed_training
+        assert transformed.exists()
+
+        _patch_heavy_deps(monkeypatch, original, original)  # edited plan replaces nothing
+        builder._data_processed = False
+        builder.process_data()
+        assert not transformed.exists()
+
+
+# ---------------------------------------------------------------------------
 # Guard: train()/run() must not be called after load_from_save_path()
 # ---------------------------------------------------------------------------
 

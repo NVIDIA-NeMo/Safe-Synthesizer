@@ -21,6 +21,7 @@ one with Safe Synthesizer and all three notebooks already installed.
 - [Safe Synthesizer 101](safe-synthesizer-101.ipynb) -- learn the fundamentals
 - [Differential Privacy](differential-privacy.ipynb) -- enable differential privacy guarantees
 - [Time-Series Financial Transactions](time-series-financial-transactions.ipynb) -- synthesize grouped transaction histories
+- [PII Replacement](pii-replacement.ipynb) -- optionally review/edit a PII plan, then continue the pipeline
 
 ## Adding a Tutorial
 

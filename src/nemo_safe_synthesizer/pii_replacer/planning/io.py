@@ -79,11 +79,27 @@ PLAN_YAML_SECTION_COMMENTS: dict[str, str] = {
     ),
     "standalone_columns_to_replace": (
         "# Columns replaced on their own, with no persona behind them: record IDs,\n"
-        "# free-text notes, and other values that need no cross-column consistency.\n"
+        "# free-text notes, API keys, and other values that need no cross-column consistency.\n"
         "# Person-identifying columns listed only here do not share a synthetic\n"
         "# person with other columns.\n"
     ),
 }
+
+
+def plan_section_help(field: str) -> str:
+    """Unwrap a section comment into one prose paragraph for UI surfaces.
+
+    Keeps the notebook editor's explanations identical to the comments written
+    into the plan file.
+
+    Args:
+        field: Top-level ``PiiReplacementPlan`` field name.
+
+    Returns:
+        Prose help string for the section, or empty when unknown.
+    """
+    comment = PLAN_YAML_SECTION_COMMENTS.get(field, "")
+    return " ".join(line.lstrip("#").strip() for line in comment.splitlines() if line.strip())
 
 
 def plan_to_commented_yaml(plan: PiiReplacementPlan) -> str:

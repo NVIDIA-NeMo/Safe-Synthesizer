@@ -258,3 +258,63 @@ Consider using PII replacement when:
 - You need to share synthetic data with external parties
 
 PII replacement is on by default as a pre-processing step before synthesis.
+
+## Notebook plan review and result preview
+
+Optional notebook helpers let you inspect the replacement plan before apply and
+compare original vs transformed records afterward. Install the notebook extra:
+
+```bash
+pip install 'nemo-safe-synthesizer[notebook]'
+```
+
+### Review the PII plan
+
+Review a discovered PII plan against your dataset before the rest of the pipeline
+runs:
+
+```python
+from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+
+builder = (
+    SafeSynthesizer()
+    .with_data_source(df)
+    .with_data(group_training_examples_by="patient_id")
+    .with_replace_pii()
+)
+
+editor = builder.review_pii_plan()
+editor  # optional: edit YAML, Save and render diagram, then continue the run
+```
+
+`review_pii_plan()` discovers (or loads) the plan for the builder's
+dataframe and validates every **Save and render diagram** against that dataset —
+including unknown `column_name` values and structural columns that must not be
+replaced (time-series group keys, `order_training_examples_by`, and the
+time-series timestamp). Each successful render stores the plan on the builder so
+a later `run()` / `process_data()` applies it instead of rediscovering. Skipping
+the editor leaves auto-discovery unchanged.
+
+### Preview replaced data
+
+After `process_data()` (or a full `run()` that includes PII replacement), browse
+original vs transformed training records:
+
+```python
+builder.process_data()
+
+result_preview = builder.preview_replaced_data(max_records=25, only_changed=True)
+result_preview
+```
+
+`preview_replaced_data()` shows a column-interlaced table for changed records:
+each source column appears as an **Original** / **Transformed** sub-column pair,
+one row per record. Replaced values get colored chips, with one color per
+original/transformed value pair — a replaced value and its replacement share a
+color everywhere they appear, including inside free-text columns, so you can
+trace what became what. Entity types appear under the column headers. Use
+`only_changed=False` to include unchanged rows, or pass `columns=[...]` to limit
+the view. Skipping this step does not affect the pipeline.
+
+See the [PII Replacement](../tutorials/pii-replacement.ipynb) tutorial for a
+full patient-events walkthrough of both steps.
