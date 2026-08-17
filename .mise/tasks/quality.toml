@@ -4,8 +4,9 @@
 [format]
 description = "Format all tracked source files with ruff and SPDX copyright fixer. Modifies files in place; run before committing."
 run = [
-  "bash tools/codestyle/format.sh",
-  "uv run --script tools/codestyle/copyright_fixer.py .",
+    "dprint fmt --incremental=false",
+    "bash tools/codestyle/format.sh",
+    "uv run --script tools/codestyle/copyright_fixer.py .",
 ]
 
 ["check:format"]
