@@ -26,15 +26,10 @@ fi
 
 mise run venv
 
-echo "Synchronizing the standard CUDA development environment"
-sync_nss_dependencies cu129
-
-echo "Building the pinned external Nemotron fused-kernel packages"
+echo "Synchronizing the CUDA development environment and building the pinned Nemotron fused kernels"
 echo "CUDA_HOME=${cuda_home}"
 CUDA_HOME="${cuda_home}" \
   MAX_JOBS="${MAX_JOBS:-4}" \
-  uv pip install --python "$(resolve_venv_path)/bin/python" --no-build-isolation \
-    "causal-conv1d==1.6.2.post1" \
-    "mamba-ssm==2.2.6.post3"
+  sync_nss_dependencies cu129
 
 echo "Nemotron fused-kernel environment is ready"

@@ -21,7 +21,9 @@ torch_runtime_deps = [
 ]
 
 cuda_runtime_deps = [
+    "causal-conv1d==1.6.2.post1; sys_platform == 'linux'",
     { name = "flashinfer-jit-cache", version = "0.6.14", local = "{torch_local_version}", sys_platform = "linux", source_kind = "flashinfer" },
+    "mamba-ssm==2.2.6.post3; sys_platform == 'linux'",
     { name = "nvidia-cublas-{cuda_package_suffix}", sys_platform = "linux" },
     "nvidia-ml-py; sys_platform == 'linux'",
     "torch-c-dlpack-ext",

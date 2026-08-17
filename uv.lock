@@ -533,6 +533,17 @@ wheels = [
 ]
 
 [[package]]
+name = "causal-conv1d"
+version = "1.6.2.post1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "ninja", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "packaging", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "torch", version = "2.11.0+cu129", source = { registry = "https://download.pytorch.org/whl/cu129" }, marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/63/5c/2403b8410122d159405c4bd8456340c7251c193358fa24d30cb273fb5048/causal_conv1d-1.6.2.post1.tar.gz", hash = "sha256:245e314ea21064ded7a5bf6b3b842b644aa6f92e45cecfe3e935629744c35ff4", size = 29434, upload-time = "2026-05-09T13:00:51.622Z" }
+
+[[package]]
 name = "cbor2"
 version = "5.9.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2805,6 +2816,21 @@ wheels = [
 ]
 
 [[package]]
+name = "mamba-ssm"
+version = "2.2.6.post3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "einops", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "ninja", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "packaging", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "setuptools", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "torch", version = "2.11.0+cu129", source = { registry = "https://download.pytorch.org/whl/cu129" }, marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "transformers", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "triton", version = "3.6.0", source = { registry = "https://download.pytorch.org/whl/cu129" }, marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b6/0c/9373a469ff7a33bdd0644e55fa45165ba3900274dcf7fe9f10ccc232aef9/mamba_ssm-2.2.6.post3.tar.gz", hash = "sha256:826a3cdb651959f191dac64502f8a29627d9116fe6bb7c57e4f562da1aea7bf3", size = 113913, upload-time = "2025-10-10T06:00:44.939Z" }
+
+[[package]]
 name = "markdown"
 version = "3.10.2"
 source = { registry = "https://pypi.org/simple" }
@@ -3604,11 +3630,13 @@ cpu = [
 cu129 = [
     { name = "accelerate", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "bitsandbytes", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "causal-conv1d", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "flashinfer-cubin", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "flashinfer-jit-cache", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "flashinfer-python", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "gliner", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "kernels", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "mamba-ssm", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "nvidia-cublas-cu12", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "nvidia-ml-py", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "opacus", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
@@ -3705,6 +3733,7 @@ requires-dist = [
     { name = "bitsandbytes", marker = "extra == 'cpu'", specifier = ">=0.46.1" },
     { name = "bitsandbytes", marker = "extra == 'cu129'", specifier = ">=0.46.1" },
     { name = "category-encoders", marker = "extra == 'engine'" },
+    { name = "causal-conv1d", marker = "sys_platform == 'linux' and extra == 'cu129'", specifier = "==1.6.2.post1" },
     { name = "colorama", specifier = ">=0.4.6" },
     { name = "datasets", marker = "extra == 'engine'", specifier = ">=4.8.4" },
     { name = "dateparser", marker = "extra == 'engine'" },
@@ -3726,6 +3755,7 @@ requires-dist = [
     { name = "jsonschema", specifier = ">=4.22.0" },
     { name = "kernels", marker = "extra == 'cpu'", specifier = ">=0.12.1,<0.15" },
     { name = "kernels", marker = "extra == 'cu129'", specifier = ">=0.12.1,<0.15" },
+    { name = "mamba-ssm", marker = "sys_platform == 'linux' and extra == 'cu129'", specifier = "==2.2.6.post3" },
     { name = "nvidia-cublas-cu12", marker = "sys_platform == 'linux' and extra == 'cu129'", index = "https://download.pytorch.org/whl/cu129" },
     { name = "nvidia-ml-py", marker = "sys_platform == 'linux' and extra == 'cu129'" },
     { name = "opacus", marker = "extra == 'cpu'" },

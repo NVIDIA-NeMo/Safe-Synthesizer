@@ -15,7 +15,6 @@ import pytest
 from rich.console import Console
 from transformers import PretrainedConfig, PreTrainedTokenizerBase
 
-import nemo_safe_synthesizer.preflight as nss_preflight
 from nemo_safe_synthesizer.config.data import DataParameters
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
@@ -30,8 +29,10 @@ from nemo_safe_synthesizer.preflight import (
     CUDAAvailabilityCheck,
     DatasetSizeCheck,
     GroupbyColumnCheck,
+    GenerationModelCompatibilityCheck,
     HFModelAvailabilityCheck,
     InferenceModelCheck,
+    NemotronTrainingCapabilityCheck,
     OrderbyColumnCheck,
     OversamplingCheck,
     PreflightContext,
@@ -108,7 +109,7 @@ class TestCUDAAvailabilityCheck:
 class TestNemotronTrainingCapabilityCheck:
     @staticmethod
     def _check():
-        return nss_preflight.NemotronTrainingCapabilityCheck()
+        return NemotronTrainingCapabilityCheck()
 
     @pytest.mark.parametrize("scheme", ["bnb-4bit", "bnb-8bit", "fp8", "nvfp4", "mxfp4"])
     def test_bf16_checkpoint_rejects_every_dynamic_quantization_scheme(self, scheme):
@@ -183,7 +184,7 @@ class TestNemotronTrainingCapabilityCheck:
 class TestGenerationModelCompatibilityCheck:
     @staticmethod
     def _check():
-        return nss_preflight.GenerationModelCompatibilityCheck()
+        return GenerationModelCompatibilityCheck()
 
     def test_incompatible_generation_override_is_a_structured_preflight_error(self):
         config = SafeSynthesizerParameters.from_params(
