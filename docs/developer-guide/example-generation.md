@@ -259,12 +259,11 @@ these conditions are met:
 - Token budget exceeded -- the accumulated tokens reach the randomized budget
 - `max_sequences_per_example` reached
 
-### Initial prefill
+### Time-series group registry
 
-For each group, the first 3 training records are stored as `initial_prefill` --
-a dictionary mapping group IDs to sample text. The time-series backend retains
-this metadata to recover the groups present during training. The generation starts
-each group from a partial first record containing the known identity fields.
+The artifact stores each typed group value in `timeseries_group_values`.
+Generation uses this registry to initialize one stream per training group.
+Each stream starts with a generated prefix as described below.
 
 ### Concrete example
 
@@ -446,20 +445,21 @@ When no BOS/EOS delimiters are found, behavior depends on
 !!! warning "Experimental"
     Time-series generation is experimental and its API may change.
 
-The `TimeseriesBackend` generates one group at a time using a sliding-window
-strategy:
+The `TimeseriesBackend` generates each group using a sliding history:
 
-1. Generation starts an incomplete JSON record containing the group ID (for
-   grouped data), configured start timestamp, and opening quote of the next
-   field name.
-2. The model generates the remaining fields. The backend prepends the known
-   prefix before parsing and validation.
-3. Once a complete record is accepted, the constructed prefix is cleared and
-   exact accepted record text is appended to the group's rolling context.
-4. The three most recent accepted records become the prefill for the next
-   prompt.
-5. This repeats until the target time range is covered or retries are
+1. The model receives up to the three most recently accepted records as
+   history and may generate one or more new records.
+2. The backend parses and validates each candidate, retains one response, and
+   appends its exact accepted record text to the history.
+3. This repeats until the target time range is covered or retries are
    exhausted.
+
+The first iteration is a special case because no generated history exists yet.
+The backend uses a prefix: an incomplete JSON record containing the group
+ID (for grouped data), configured start timestamp, and opening quote of the
+next field name. The model may complete that record and generate additional
+records. Before parsing, the backend prepends the prefix to each completion.
+After the first record is accepted, subsequent iterations use history only.
 
 Because each prompt sees the model's own prior output, sequential mode
 preserves temporal continuity -- timestamps, intervals, and trends carry

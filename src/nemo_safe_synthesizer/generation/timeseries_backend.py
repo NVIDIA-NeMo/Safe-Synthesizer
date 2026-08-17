@@ -5,41 +5,76 @@
 
 from __future__ import annotations
 
-import json
 import math
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
-from typing import cast
+from typing import Self
 
 import pandas as pd
-from vllm import LLM as vLLM
 from vllm.inputs.llm import TokensPrompt
 from vllm.sampling_params import SamplingParams
 
 from .. import utils
 from ..config import SafeSynthesizerParameters
-from ..data_processing.record_utils import (
-    ParsedRecord,
-    _parse_timestamp_to_seconds,
-    extract_records_from_jsonl_string,
-)
+from ..data_processing.record_utils import ParsedRecord, _parse_timestamp_to_seconds
 from ..defaults import FIXED_RUNTIME_GENERATE_ARGS, LOG_DASHES, PSEUDO_GROUP_COLUMN
 from ..errors import GenerationError
 from ..generation.batch import Batch
 from ..generation.results import GenerateJobResults, GenerationBatches, GenerationStatus
 from ..generation.timeseries_prompting import (
     build_partial_record_prefix,
-    build_rolling_record_prefill,
+    build_record_history,
     build_training_compatible_prompt_token_ids,
 )
 from ..generation.vllm_backend import VllmBackend
-from ..llm.metadata import ModelMetadata
+from ..llm.metadata import ModelMetadata, TimeSeriesGroupValue
 from ..observability import get_logger
 
 logger = get_logger(__name__)
+
+
+@dataclass(frozen=True)
+class _ResolvedTimeseriesSettings:
+    """Generation-required values produced by time-series preprocessing."""
+
+    timestamp_column: str
+    group_column: str
+    start_timestamp: str | int
+    stop_timestamp: str | int | None
+    timestamp_interval_seconds: int | None
+    timestamp_format: str
+
+    @classmethod
+    def from_config(cls, config: SafeSynthesizerParameters) -> Self:
+        """Validate and extract the time-series values required by generation."""
+        timestamp_column = config.time_series.timestamp_column
+        group_column = config.data.group_training_examples_by
+        start_timestamp = config.time_series.start_timestamp
+        if timestamp_column is None or group_column is None or start_timestamp is None:
+            missing = [
+                name
+                for name, value in (
+                    ("timestamp column", timestamp_column),
+                    ("group column", group_column),
+                    ("start timestamp", start_timestamp),
+                )
+                if value is None
+            ]
+            raise GenerationError(
+                f"Time-series generation requires resolved {', '.join(missing)}. "
+                "Run time-series preprocessing before generation."
+            )
+        return cls(
+            timestamp_column=timestamp_column,
+            group_column=group_column,
+            start_timestamp=start_timestamp,
+            stop_timestamp=config.time_series.stop_timestamp,
+            timestamp_interval_seconds=config.time_series.timestamp_interval_seconds,
+            timestamp_format=config.time_series.timestamp_format or "",
+        )
 
 
 @dataclass
@@ -60,6 +95,46 @@ class ProgressSnapshot:
 
 
 @dataclass
+class RecordPromptState:
+    """Mutable prefix/history state used to build record prompts."""
+
+    prefix: str
+    """Incomplete first record used until the first generated record is accepted."""
+
+    history: list[ParsedRecord] = field(default_factory=list)
+    """Exact accepted record text used as rolling prompt history."""
+
+    using_prefix: bool = True
+    """Whether generation is still completing the initial record prefix."""
+
+    @property
+    def prompt_segments(self) -> str | Sequence[str]:
+        """Return the prefix or individually encoded history records."""
+        if self.using_prefix:
+            return self.prefix
+        return [f"{record.text}\n" for record in self.history]
+
+    @property
+    def completion_prefix(self) -> str:
+        """Return bytes prepended to completions during the prefix phase."""
+        return self.prefix if self.using_prefix else ""
+
+    @property
+    def history_text(self) -> str:
+        """Return history as newline-terminated training-compatible JSONL."""
+        return build_record_history(self.history)
+
+    def add_history(self, records: Sequence[ParsedRecord], *, max_records: int) -> None:
+        """Accept records, switch from prefix to history, and clamp the window."""
+        if not records:
+            return
+        self.using_prefix = False
+        self.history.extend(records)
+        if len(self.history) > max_records:
+            self.history = self.history[-max_records:]
+
+
+@dataclass
 class GroupState:
     """Mutable state for tracking a single group during parallel generation.
 
@@ -68,32 +143,17 @@ class GroupState:
     while tracking progress independently.
     """
 
-    group_id: str
+    group_id: TimeSeriesGroupValue
     """Unique identifier for this group (e.g., device ID, customer ID)."""
 
-    initial_prefill: str
-    """Partial first-record prefix used to seed generation."""
-
-    current_prefill: str
-    """Current prefill string, updated as generation progresses to include recently generated records."""
-
-    recent_records: list[ParsedRecord] = field(default_factory=list)
-    """Sliding window of recently generated records used to build the next prompt context.
-
-    Holds ``ParsedRecord`` so the next prompt context can reuse the exact
-    bytes the model emitted (``.text``): re-serializing the parsed dicts
-    would drift the prompt into a JSON dialect the model was not trained
-    on (spacing, slash escaping, float formatting).
-    """
+    prompt_state: RecordPromptState
+    """Prefix/history container for building prompts and parsing completions."""
 
     expected_records: int = 0
     """Target record count, calculated from ``(stop_timestamp - start_timestamp) / interval_seconds``."""
 
     last_timestamp_seconds: int | None = None
     """Timestamp (in seconds) of the most recently generated record, used for chronological validation."""
-
-    processor_prefix: str = ""
-    """Text prepended to raw completions until the first complete record is accepted."""
 
     low_valid_fraction_count: int = 0
     """Consecutive batches with high invalid fraction.  Triggers group failure after ``patience`` is exceeded."""
@@ -109,6 +169,9 @@ class GroupState:
 
     total_invalid_records: int = 0
     """Cumulative count of invalid records generated for this group."""
+
+    generation_attempts: int = 0
+    """Number of generation calls processed for this group."""
 
 
 class GroupProcessingResult(Enum):
@@ -133,7 +196,7 @@ class TimeseriesBackend(VllmBackend):
 
     This backend extends VllmBackend to generate synthetic time-series data with
     strict chronological ordering. It uses a sliding window approach where recently
-    generated records are used as context (prefill) for subsequent generation,
+    generated records are used as history for subsequent generation,
     ensuring temporal continuity.
 
     Key Concepts:
@@ -143,14 +206,14 @@ class TimeseriesBackend(VllmBackend):
           The `config.generation.num_records` parameter is used only for progress
           tracking, not to limit output.
         - Sliding Window: The backend maintains a window of recent records
-          (controlled by `_sliding_window_size`) that are included in each prompt
+          (controlled by `_history_window_size`) that are included in each prompt
           to provide context for the LLM, ensuring generated records follow the
           established patterns and timestamps.
         - Parallel Group Generation: Multiple time-series groups (e.g., different
           devices, customers) are processed in parallel batches for efficiency.
           Even single-sequence data uses this path (treated as 1 group via a
           pseudo-group column added during preprocessing). Groups are the same as
-          those seen during training (from `model_metadata.initial_prefill`).
+          those seen during training (from `model_metadata.timeseries_group_values`).
         - Chronological Validation: Each generated record must continue from the
           previous timestamp at the expected interval. Out-of-order records are
           marked invalid.
@@ -159,13 +222,13 @@ class TimeseriesBackend(VllmBackend):
         1. Initialize GroupState for each group with a partial first record
         2. While groups remain pending or active:
            a. Fill active slots with pending groups (up to max_groups_per_batch)
-           b. Build prompts for all active groups using their current prefill
+           b. Build prompts for all active groups using their prefix or history
            c. Generate completions for all prompts in a single LLM batch call
            d. Process LLM outputs into per-group Batch objects
            e. For each group:
               - Validate chronological order against group's last timestamp
               - Retain the response with the most valid records (discard others)
-              - Update group state with new records (prefill, last_timestamp)
+              - Update group state with new records (history, last_timestamp)
               - Check if stop timestamp was reached (marks group complete)
               - Track low valid fraction; fail group after max retries
            f. Remove completed/failed groups from active list
@@ -200,15 +263,13 @@ class TimeseriesBackend(VllmBackend):
         returns False, and the final generation status reflects partial completion.
 
     Attributes:
-        _schema_fragment (str): JSON schema template with column placeholders,
-            e.g., '"col1":<unk>,"col2":<unk>'. Used in prompt formatting.
         _samples_per_prompt (int): Number of completion samples to generate per
             prompt. Multiple samples increase chances of getting valid records.
             Default: 5.
         _max_prompts_per_batch (int): Maximum number of prompts to include in a
             single LLM generation call. Controls parallelism. Default: 100.
-        _sliding_window_size (int): Number of recent records to include in the
-            sliding window prefill context. Default: 3.
+        _history_window_size (int): Number of recent records to include in the
+            sliding prompt history. Default: 3.
         _time_column (str): Name of the timestamp column in the data.
         _time_format (str): Format string for parsing timestamps (strptime format),
             or "elapsed_seconds" for numeric elapsed time.
@@ -218,47 +279,33 @@ class TimeseriesBackend(VllmBackend):
             stops when a record reaches or exceeds this timestamp.
         _timestamp_interval_seconds (int | None): Expected interval between
             consecutive timestamps. Used for chronological validation.
-        _group_column (str | None): Column name used to group time-series data.
-            If None or PSEUDO_GROUP_COLUMN, treated as single-sequence.
-        _group_prefills (dict[str, str]): Saved mapping of group IDs to training
-            sample text. The keys define generation groups; values remain
-            available internally but are not inserted into prompts.
-        _group_initial_prefixes (dict[str, str]): Mapping of group IDs to
+        _group_column (str): Column name used to group time-series data.
+        _group_prefixes (dict[TimeSeriesGroupValue, str]): Mapping of group IDs to
             incomplete first records used to start generation.
-        _groups (list[str]): List of all group IDs to generate.
+        _groups (list[TimeSeriesGroupValue]): Typed group IDs to generate.
     """
 
     def __init__(self, config: SafeSynthesizerParameters, model_metadata: ModelMetadata, **kwargs):
+        settings = _ResolvedTimeseriesSettings.from_config(config)
         super().__init__(config, model_metadata, **kwargs)
 
-        self._schema_fragment = ",".join([f'"{c}":<unk>' for c in self.columns])
         self._samples_per_prompt = 5  # num of samples per prompt
         self._max_prompts_per_batch = 100  # max prompts per batch for parallel group generation
-        self._sliding_window_size = 3
-        self._time_column = cast(str, config.time_series.timestamp_column)
-        self._time_format: str = config.time_series.timestamp_format or ""
+        self._history_window_size = 3
+        self._time_column = settings.timestamp_column
+        self._time_format = settings.timestamp_format
         self._is_elapsed_time = self._time_format == "elapsed_seconds"
-        self._start_timestamp_value = cast(str | int, config.time_series.start_timestamp)
-        self._stop_timestamp_value = config.time_series.stop_timestamp
-        self._timestamp_interval_seconds = config.time_series.timestamp_interval_seconds
+        self._start_timestamp_value = settings.start_timestamp
+        self._stop_timestamp_value = settings.stop_timestamp
+        self._timestamp_interval_seconds = settings.timestamp_interval_seconds
+        self._group_column = settings.group_column
 
-        # Grouped generation support
-        # Note: Since time series preprocessing adds a pseudo-group column when no group
-        # is specified, we always have grouped mode (even single-sequence is 1 group).
-        self._group_column = cast(str, config.data.group_training_examples_by)
-        initial_prefill_value = self.model_metadata.initial_prefill
+        group_values = self.model_metadata.timeseries_group_values
+        if not group_values:
+            raise GenerationError("The saved artifact has no time-series group registry. Retrain it before generating.")
 
-        if not isinstance(initial_prefill_value, dict):
-            raise ValueError(
-                "TimeseriesBackend requires initial_prefill to be a dict mapping group -> prefill string. "
-                "This should be set by SequentialExampleAssembler during training."
-            )
-
-        # Saved training prefills still define the groups and remain available
-        # internally, but generation starts from a partial first record.
-        self._group_prefills: dict[str, str] = initial_prefill_value
-        self._groups: list[str] = list(self._group_prefills.keys())
-        self._group_initial_prefixes: dict[str, str] = {
+        self._groups: list[TimeSeriesGroupValue] = list(group_values)
+        self._group_prefixes: dict[TimeSeriesGroupValue, str] = {
             group_id: build_partial_record_prefix(
                 columns=self.columns,
                 schema=self.schema,
@@ -286,14 +333,13 @@ class TimeseriesBackend(VllmBackend):
             return 0
         tokenizer = self.llm.get_tokenizer()
         self._prompt_token_count = max(
-            (len(self._build_prompt_token_ids(prefix)) for prefix in self._group_initial_prefixes.values()),
+            (len(self._build_prompt_token_ids(prefix)) for prefix in self._group_prefixes.values()),
             default=len(
                 build_training_compatible_prompt_token_ids(
                     tokenizer=tokenizer,
                     prompt_config=self.model_metadata.prompt_config,
-                    instruction=self.model_metadata.instruction,
-                    schema_fragment=self._schema_fragment,
-                    prefill="",
+                    prompt=self.prompt,
+                    record_context="",
                 )
             ),
         )
@@ -389,14 +435,15 @@ class TimeseriesBackend(VllmBackend):
                 continue
             self._write_progress_snapshot(batches, snapshot, is_group_based=is_group_based)
 
-    def _build_prompt_token_ids(self, prefill: str | Sequence[str]) -> list[int]:
+    def _build_prompt_token_ids(self, record_context: str | Sequence[str]) -> list[int]:
         """Build a training-compatible token prompt with record context."""
+        if self.llm is None:
+            raise GenerationError("The generation backend must be initialized before building prompts.")
         return build_training_compatible_prompt_token_ids(
-            tokenizer=cast(vLLM, self.llm).get_tokenizer(),
+            tokenizer=self.llm.get_tokenizer(),
             prompt_config=self.model_metadata.prompt_config,
-            instruction=self.model_metadata.instruction,
-            schema_fragment=self._schema_fragment,
-            prefill=prefill,
+            prompt=self.prompt,
+            record_context=record_context,
         )
 
     def _parse_timestamp_seconds(self, timestamp_value: object) -> int | None:
@@ -432,7 +479,7 @@ class TimeseriesBackend(VllmBackend):
                 return True
         return False
 
-    def _init_group_state(self, group_id: str) -> GroupState:
+    def _init_group_state(self, group_id: TimeSeriesGroupValue) -> GroupState:
         """Initialize a GroupState for a given group.
 
         Args:
@@ -441,16 +488,17 @@ class TimeseriesBackend(VllmBackend):
         Returns:
             A new GroupState initialized with the group's partial record.
         """
-        initial_prefill = self._group_initial_prefixes[group_id]
+        try:
+            prefix = self._group_prefixes[group_id]
+        except KeyError as exc:
+            raise GenerationError(f"No initial prefix was built for time-series group {group_id!r}.") from exc
 
         # Calculate expected number of records: (stop - start) / interval + 1
         expected_records = self._compute_expected_records_per_group()
 
         state = GroupState(
             group_id=group_id,
-            initial_prefill=initial_prefill,
-            current_prefill=initial_prefill,
-            processor_prefix=initial_prefill,
+            prompt_state=RecordPromptState(prefix=prefix),
             expected_records=expected_records,
         )
         return state
@@ -463,6 +511,8 @@ class TimeseriesBackend(VllmBackend):
         """
         start_ts = self._parse_timestamp_seconds(self._start_timestamp_value)
         stop_ts = self._parse_timestamp_seconds(self._stop_timestamp_value)
+        if start_ts is not None and start_ts == stop_ts:
+            return 1
         if (
             start_ts is not None
             and stop_ts is not None
@@ -480,32 +530,6 @@ class TimeseriesBackend(VllmBackend):
         """
         expected_per_group = self._compute_expected_records_per_group()
         return expected_per_group * len(self._groups)
-
-    def _get_timestamp_from_prefill(self, prefill: str) -> int | None:
-        """Parse prefill string to extract the timestamp of the last record.
-
-        Args:
-            prefill: The prefill string containing JSONL records.
-
-        Returns:
-            The timestamp in seconds of the last record, or None if not found.
-        """
-        if not prefill:
-            return None
-
-        json_strings = extract_records_from_jsonl_string(prefill)
-        if not json_strings:
-            return None
-
-        try:
-            last_record = json.loads(json_strings[-1])
-            timestamp_value = last_record.get(self._time_column)
-            if timestamp_value is not None:
-                return self._parse_timestamp_seconds(timestamp_value)
-        except (json.JSONDecodeError, KeyError) as e:
-            logger.debug(f"Failed to parse timestamp from prefill: {e}")
-
-        return None
 
     def _is_chronological_for_group(self, records: list[dict], group_state: GroupState) -> bool:
         """Check if records continue from the group's last timestamp.
@@ -557,7 +581,7 @@ class TimeseriesBackend(VllmBackend):
     def _update_group_state(self, group_state: GroupState, records: list[ParsedRecord]) -> None:
         """Update a group's state with new valid records.
 
-        The rebuilt prefill reuses each record's original ``text`` (the bytes
+        The history reuses each record's original ``text`` (the bytes
         the model emitted, which match the training serialization) as
         newline-terminated records. The prompt builder inserts the sequence BOS
         token directly before these bytes.
@@ -569,12 +593,7 @@ class TimeseriesBackend(VllmBackend):
         if not records:
             return
 
-        group_state.processor_prefix = ""
-        group_state.recent_records.extend(records)
-        if len(group_state.recent_records) > self._sliding_window_size:
-            group_state.recent_records = group_state.recent_records[-self._sliding_window_size :]
-
-        group_state.current_prefill = build_rolling_record_prefill(group_state.recent_records)
+        group_state.prompt_state.add_history(records, max_records=self._history_window_size)
 
         # Update last timestamp
         last_parsed = records[-1].parsed or {}
@@ -610,6 +629,12 @@ class TimeseriesBackend(VllmBackend):
         # Remove pseudo-group column from output (it's only used internally)
         if PSEUDO_GROUP_COLUMN in df.columns:
             df = df.drop(columns=[PSEUDO_GROUP_COLUMN])
+
+        source_columns = self.model_metadata.timeseries_source_columns
+        if source_columns:
+            restored_columns = [column for column in source_columns if column in df.columns]
+            extra_columns = [column for column in df.columns if column not in restored_columns]
+            df = df.loc[:, [*restored_columns, *extra_columns]]
 
         return df
 
@@ -681,19 +706,28 @@ class TimeseriesBackend(VllmBackend):
         Returns:
             GroupProcessingResult enum indicating the group's status.
         """
+        state.generation_attempts += 1
         if self.config.time_series.timestamp_interval_seconds is not None:
             self._check_chronological_for_group(batch, state)
 
         retained_records = self._retain_single_valid_response(batch)
         reached_stop = self._has_reached_stop_time([r.parsed for r in retained_records if r.parsed is not None])
         self._update_group_state(state, retained_records)
+        patience = self.config.generation.patience
+        attempt_limit = max(1, state.expected_records) + patience
+        if not reached_stop and state.generation_attempts >= attempt_limit:
+            state.failed = True
+            logger.warning(
+                f"Group '{state.group_id}' skipped after {state.generation_attempts} attempts without reaching "
+                f"the configured stop timestamp."
+            )
+            return GroupProcessingResult.FAILED
 
         # Check if batch has high invalid fraction
         invalid_fraction = 1.0 - batch.valid_record_fraction
         if invalid_fraction >= invalid_fraction_threshold:
             state.low_valid_fraction_count += 1
 
-            patience = self.config.generation.patience
             if batch.num_valid_records == 0:
                 logger.warning(
                     f"Group '{state.group_id}' batch produced no valid records "
@@ -732,7 +766,7 @@ class TimeseriesBackend(VllmBackend):
     def _log_parallel_batch_summary(
         self,
         active_states: list[GroupState],
-        group_batches: dict[str, Batch],
+        group_batches: dict[TimeSeriesGroupValue, Batch],
         groups_completed: int,
         batches: GenerationBatches,
         duration: float,
@@ -805,7 +839,7 @@ class TimeseriesBackend(VllmBackend):
         max_groups_per_batch = max(1, self._max_prompts_per_batch // self._samples_per_prompt)
 
         # Initialize states for all groups
-        all_group_states: dict[str, GroupState] = {
+        all_group_states: dict[TimeSeriesGroupValue, GroupState] = {
             group_id: self._init_group_state(group_id) for group_id in self._groups
         }
 
@@ -834,19 +868,13 @@ class TimeseriesBackend(VllmBackend):
 
             # Build token prompts that reproduce the training BOS/EOS boundary.
             prompt_token_ids = [
-                self._build_prompt_token_ids(
-                    [f"{record.text}\n" for record in state.recent_records]
-                    if state.recent_records
-                    else state.current_prefill
-                )
-                for state in active_states
+                self._build_prompt_token_ids(state.prompt_state.prompt_segments) for state in active_states
             ]
             prompts = [TokensPrompt(prompt_token_ids=token_ids) for token_ids in prompt_token_ids]
-            group_batches: dict[str, Batch] = {
+            group_batches: dict[TimeSeriesGroupValue, Batch] = {
                 state.group_id: Batch(processor=self.processor) for state in active_states
             }
 
-            # Build modified sampling params
             modified_params, effective_samples_per_prompt = self._build_modified_sampling_params(
                 sampling_params,
                 len(active_states),
@@ -855,7 +883,7 @@ class TimeseriesBackend(VllmBackend):
 
             # Generate for all prompts at once
             if self.llm is None:
-                raise RuntimeError("LLM not initialized")
+                raise GenerationError("The generation backend must be initialized before generating.")
             outputs = self.llm.generate(
                 prompts=prompts,
                 sampling_params=modified_params,
@@ -868,7 +896,7 @@ class TimeseriesBackend(VllmBackend):
                 batch = group_batches[group_state.group_id]
                 for completion_idx, completion in enumerate(output.outputs):
                     batch.finish_reasons[str(completion.finish_reason or "unknown")] += 1
-                    completion_text = f"{group_state.processor_prefix}{completion.text}"
+                    completion_text = f"{group_state.prompt_state.completion_prefix}{completion.text}"
                     batch.process(completion_idx, completion_text, completion_tokens=len(completion.token_ids))
 
             duration = time.perf_counter() - start_time
@@ -977,7 +1005,7 @@ class TimeseriesBackend(VllmBackend):
             generated is determined by (stop_timestamp - start_timestamp) / interval_seconds
             for each group. The config.generation.num_records parameter is used for
             progress tracking but does not limit output. Groups are the same as those
-            seen during training (from model_metadata.initial_prefill).
+            seen during training (from model_metadata.timeseries_group_values).
 
         Args:
             data_actions_fn: Optional function that takes a DataFrame and returns a modified DataFrame.

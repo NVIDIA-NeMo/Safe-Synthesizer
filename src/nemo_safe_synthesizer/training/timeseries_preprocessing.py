@@ -34,7 +34,7 @@ def _reorder_timeseries_columns(
         A view with group and timestamp columns first, followed by all remaining
         columns in their original relative order.
     """
-    leading_columns = list(dict.fromkeys((group_by_column, timestamp_column)))
+    leading_columns = [group_by_column, timestamp_column]
     remaining_columns = [column for column in dataframe.columns if column not in leading_columns]
     return dataframe.loc[:, [*leading_columns, *remaining_columns]]
 

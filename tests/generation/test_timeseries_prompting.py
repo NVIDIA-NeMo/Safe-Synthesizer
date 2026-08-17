@@ -9,9 +9,10 @@ import pytest
 
 from nemo_safe_synthesizer.data_processing.record_utils import ParsedRecord
 from nemo_safe_synthesizer.defaults import PSEUDO_GROUP_COLUMN
+from nemo_safe_synthesizer.errors import GenerationError
 from nemo_safe_synthesizer.generation.timeseries_prompting import (
     build_partial_record_prefix,
-    build_rolling_record_prefill,
+    build_record_history,
     build_training_compatible_prompt_token_ids,
 )
 from nemo_safe_synthesizer.llm.metadata import LLMPromptConfig
@@ -73,19 +74,39 @@ def test_supports_empty_timestamp_column_name():
     assert prefix == '{"":"2026-08-05","'
 
 
-def test_builds_rolling_prefill_from_exact_record_text():
+def test_builds_history_from_exact_record_text():
     records = [
         ParsedRecord(text='{"value":1.0,"date":"08\\/05\\/2026"}', parsed={"value": 1.0}),
         ParsedRecord(text='{"value":2,"date":"08\\/06\\/2026"}', parsed={"value": 2}),
     ]
 
-    assert build_rolling_record_prefill(records) == (
+    assert build_record_history(records) == (
         '{"value":1.0,"date":"08\\/05\\/2026"}\n{"value":2,"date":"08\\/06\\/2026"}\n'
     )
 
 
-def test_builds_empty_rolling_prefill():
-    assert build_rolling_record_prefill([]) == ""
+def test_builds_empty_history():
+    assert build_record_history([]) == ""
+
+
+def test_rejects_schema_without_leading_identity_columns():
+    schema = {
+        "properties": {
+            "value": {"type": "number"},
+            "group_id": {"type": "integer"},
+            "timestamp": {"type": "string"},
+        }
+    }
+
+    with pytest.raises(GenerationError, match="does not begin"):
+        build_partial_record_prefix(
+            columns=["value", "group_id", "timestamp"],
+            schema=schema,
+            group_column="group_id",
+            group_id=7,
+            timestamp_column="timestamp",
+            start_timestamp="08/05/2026",
+        )
 
 
 class _CharacterTokenizer:
@@ -123,9 +144,8 @@ def test_builds_training_compatible_special_token_boundary(
     token_ids = build_training_compatible_prompt_token_ids(
         tokenizer=_CharacterTokenizer(),
         prompt_config=prompt_config,
-        instruction="I",
-        schema_fragment="S",
-        prefill='{"t":1,',
+        prompt="PI|S|",
+        record_context='{"t":1,',
     )
 
     prompt_ids = [ord(character) for character in "PI|S|"]
@@ -164,9 +184,8 @@ def test_encodes_rolling_records_as_training_segments():
     token_ids = build_training_compatible_prompt_token_ids(
         tokenizer=tokenizer,
         prompt_config=prompt_config,
-        instruction="I",
-        schema_fragment="S",
-        prefill=records,
+        prompt="IS",
+        record_context=records,
     )
 
     expected_ids = [ord(character) for character in "IS"]

@@ -28,7 +28,9 @@ from nemo_safe_synthesizer.generation.results import GenerationBatches, Generati
 from nemo_safe_synthesizer.generation.timeseries_backend import (
     GroupProcessingResult,
     GroupState,
+    RecordPromptState,
     TimeseriesBackend,
+    _ResolvedTimeseriesSettings,
 )
 from nemo_safe_synthesizer.llm.metadata import (
     GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER,
@@ -65,11 +67,7 @@ def timeseries_model_metadata(fixture_session_cache_dir, fixture_tokenizer, fixt
         autoconfig=fixture_autoconfig,
         workdir=mock_workdir,
     )
-    # TimeseriesBackend requires initial_prefill to be a dict mapping group -> prefill
-    metadata.initial_prefill = {
-        "group_A": '{"timestamp": "2024-01-01 00:00:00", "value": 1}\n',
-        "group_B": '{"timestamp": "2024-01-01 00:00:00", "value": 2}\n',
-    }
+    metadata.timeseries_group_values = ["group_A", "group_B"]
     return metadata
 
 
@@ -287,6 +285,16 @@ class TestComputeExpectedRecordsPerGroup:
         result = backend._compute_expected_records_per_group()
         assert result == 4
 
+    def test_single_timestamp_without_interval_has_one_expected_record(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        """One-record groups remain bounded when no interval can be inferred."""
+        timeseries_base_params.time_series.timestamp_interval_seconds = None
+        timeseries_base_params.time_series.stop_timestamp = timeseries_base_params.time_series.start_timestamp
+        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
+
+        assert backend._compute_expected_records_per_group() == 1
+
 
 class TestSortDataframe:
     """Tests for the _sort_dataframe method."""
@@ -343,6 +351,22 @@ class TestSortDataframe:
 
         assert df_result.empty
 
+    def test_restores_source_column_order(self, timeseries_base_params, timeseries_model_metadata, mock_workdir):
+        """Generated output should match the user's input column order."""
+        timeseries_model_metadata.timeseries_source_columns = ["value", "group_id", "timestamp"]
+        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
+        df = pd.DataFrame(
+            {
+                "group_id": ["A"],
+                "timestamp": ["2024-01-01 00:00:00"],
+                "value": [1],
+            }
+        )
+
+        result = backend._sort_dataframe(df)
+
+        assert list(result.columns) == ["value", "group_id", "timestamp"]
+
 
 class TestBuildProgressSnapshots:
     """Tests for the _build_progress_snapshots method."""
@@ -379,6 +403,38 @@ class TestBuildProgressSnapshots:
 class TestInitGroupState:
     """Tests for partial-record group initialization."""
 
+    @pytest.mark.parametrize(
+        ("attribute", "expected_name"),
+        [
+            pytest.param("timestamp_column", "timestamp column", id="timestamp-column"),
+            pytest.param("start_timestamp", "start timestamp", id="start-timestamp"),
+            pytest.param("group_training_examples_by", "group column", id="group-column"),
+        ],
+    )
+    def test_requires_resolved_timeseries_settings(
+        self,
+        timeseries_base_params,
+        attribute,
+        expected_name,
+    ):
+        """Generation rejects configs that skipped time-series preprocessing."""
+        target = (
+            timeseries_base_params.data
+            if attribute == "group_training_examples_by"
+            else timeseries_base_params.time_series
+        )
+        setattr(target, attribute, None)
+
+        with pytest.raises(GenerationError, match=expected_name):
+            _ResolvedTimeseriesSettings.from_config(timeseries_base_params)
+
+    def test_requires_group_registry(self, timeseries_base_params, timeseries_model_metadata, mock_workdir):
+        """Artifacts without typed group values must be retrained."""
+        timeseries_model_metadata.timeseries_group_values = None
+
+        with pytest.raises(GenerationError, match="no time-series group registry"):
+            create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
+
     def test_initializes_with_partial_record_prefix(
         self, timeseries_base_params, timeseries_model_metadata, mock_workdir
     ):
@@ -387,12 +443,12 @@ class TestInitGroupState:
         state = backend._init_group_state("group_A")
 
         expected = '{"group_id":"group_A","timestamp":"2024-01-01 00:00:00","'
-        assert state.initial_prefill == expected
-        assert state.current_prefill == expected
-        assert state.processor_prefix == expected
+        assert state.prompt_state.prefix == expected
+        assert state.prompt_state.prompt_segments == expected
+        assert state.prompt_state.completion_prefix == expected
         assert state.last_timestamp_seconds is None
-        assert backend._group_prefills["group_A"].startswith('{"timestamp"')
-        assert backend._sliding_window_size == 3
+        assert backend._groups == ["group_A", "group_B"]
+        assert backend._history_window_size == 3
 
     def test_prompt_tokens_match_training_example_prefix(
         self,
@@ -404,15 +460,10 @@ class TestInitGroupState:
         backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
         backend.llm = MagicMock()
         backend.llm.get_tokenizer.return_value = fixture_tokenizer
-        partial_prefix = backend._init_group_state("group_A").initial_prefill
+        partial_prefix = backend._init_group_state("group_A").prompt_state.prefix
         complete_record = f'{partial_prefix}value":3}}\n'
-        prompt = timeseries_model_metadata.prompt_config.template.format(
-            instruction=timeseries_model_metadata.instruction,
-            schema=backend._schema_fragment,
-            prefill="",
-        )
         example = Example(
-            prompt=prompt,
+            prompt=backend.prompt,
             tokenizer=fixture_tokenizer,
             metadata=timeseries_model_metadata,
         )
@@ -429,19 +480,48 @@ class TestInitGroupState:
         assert generation_ids == [*prompt_only_ids, *partial_prefix_ids]
         assert example.input_ids[: len(generation_ids)] == generation_ids
 
+    def test_history_prompt_tokens_match_open_training_sequence(
+        self,
+        timeseries_base_params,
+        timeseries_model_metadata,
+        mock_workdir,
+        fixture_tokenizer,
+    ):
+        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
+        backend.llm = MagicMock()
+        backend.llm.get_tokenizer.return_value = fixture_tokenizer
+        records = [
+            '{"group_id":"group_A","timestamp":"2024-01-01 00:00:00","value":1}\n',
+            '{"group_id":"group_A","timestamp":"2024-01-02 00:00:00","value":2}\n',
+        ]
+        record_ids: list[int] = []
+        for record in records:
+            record_ids.extend(fixture_tokenizer.encode(record, add_special_tokens=False))
+        example = Example(
+            prompt=backend.prompt,
+            tokenizer=fixture_tokenizer,
+            metadata=timeseries_model_metadata,
+        )
+        example.add_sequence(
+            {"input_ids": record_ids, "attention_mask": [1] * len(record_ids)},
+            add_special_tokens=True,
+        )
+
+        generation_ids = backend._build_prompt_token_ids(records)
+
+        assert generation_ids == example.input_ids[:-1]
+
 
 class TestUpdateGroupState:
     """Tests for the _update_group_state method."""
 
-    def test_appends_records_and_updates_prefill(self, timeseries_base_params, timeseries_model_metadata, mock_workdir):
-        """Test that records are appended and prefill is regenerated."""
+    def test_appends_records_and_updates_history(self, timeseries_base_params, timeseries_model_metadata, mock_workdir):
+        """Test that records are appended and history is regenerated."""
         backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
 
         state = GroupState(
             group_id="test",
-            initial_prefill='{"group_id":"test","timestamp":"2024-01-01 00:00:00","',
-            current_prefill='{"group_id":"test","timestamp":"2024-01-01 00:00:00","',
-            processor_prefix='{"group_id":"test","timestamp":"2024-01-01 00:00:00","',
+            prompt_state=RecordPromptState(prefix='{"group_id":"test","timestamp":"2024-01-01 00:00:00","'),
             expected_records=10,
         )
 
@@ -458,17 +538,17 @@ class TestUpdateGroupState:
 
         backend._update_group_state(state, records)
 
-        assert len(state.recent_records) == 2
-        # The rebuilt prefill must reuse the records' emitted text verbatim
+        assert len(state.prompt_state.history) == 2
+        # The rebuilt history must reuse the records' emitted text verbatim
         # (training dialect): no leading whitespace, newline-terminated records,
         # and single newlines between them.
-        assert state.current_prefill == (
+        assert state.prompt_state.history_text == (
             '{"timestamp":"2024-01-01 00:00:00","value":1}\n{"timestamp":"2024-01-01 01:00:00","value":2}\n'
         )
         assert state.last_timestamp_seconds is not None
-        assert state.processor_prefix == ""
+        assert state.prompt_state.completion_prefix == ""
 
-    def test_keeps_processor_prefix_when_no_records_are_accepted(
+    def test_keeps_prefix_when_no_records_are_accepted(
         self, timeseries_base_params, timeseries_model_metadata, mock_workdir
     ):
         backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
@@ -476,14 +556,14 @@ class TestUpdateGroupState:
 
         backend._update_group_state(state, [])
 
-        assert state.processor_prefix == state.initial_prefill
-        assert state.current_prefill == state.initial_prefill
+        assert state.prompt_state.using_prefix is True
+        assert state.prompt_state.completion_prefix == state.prompt_state.prefix
 
     def test_truncates_context_without_reserializing_records(
         self, timeseries_base_params, timeseries_model_metadata, mock_workdir
     ):
         backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
-        backend._sliding_window_size = 1
+        backend._history_window_size = 1
         state = backend._init_group_state("group_A")
         records = [
             ParsedRecord(
@@ -498,8 +578,8 @@ class TestUpdateGroupState:
 
         backend._update_group_state(state, records)
 
-        assert state.recent_records == [records[-1]]
-        assert state.current_prefill == f"{records[-1].text}\n"
+        assert state.prompt_state.history == [records[-1]]
+        assert state.prompt_state.history_text == f"{records[-1].text}\n"
 
     def test_updates_timestamp_for_empty_string_column_name(
         self, timeseries_base_params, timeseries_model_metadata, mock_workdir
@@ -509,8 +589,7 @@ class TestUpdateGroupState:
         backend._time_column = ""
         state = GroupState(
             group_id="test",
-            initial_prefill="",
-            current_prefill="",
+            prompt_state=RecordPromptState(prefix=""),
             expected_records=10,
             last_timestamp_seconds=0,
         )
@@ -520,27 +599,6 @@ class TestUpdateGroupState:
         backend._update_group_state(state, records)
 
         assert state.last_timestamp_seconds == backend._parse_timestamp_seconds(timestamp)
-
-
-class TestGetTimestampFromPrefill:
-    """Tests for the _get_timestamp_from_prefill method."""
-
-    def test_extracts_timestamp_from_prefill(self, timeseries_base_params, timeseries_model_metadata, mock_workdir):
-        """Test extracting timestamp from prefill string."""
-        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
-
-        prefill = '{"timestamp": "2024-01-01 00:00:00", "value": 1}\n{"timestamp": "2024-01-01 01:00:00", "value": 2}\n'
-        result = backend._get_timestamp_from_prefill(prefill)
-
-        assert result is not None
-        assert isinstance(result, int)
-
-    def test_returns_none_for_empty_prefill(self, timeseries_base_params, timeseries_model_metadata, mock_workdir):
-        """Test that empty prefill returns None."""
-        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
-
-        assert backend._get_timestamp_from_prefill("") is None
-        assert backend._get_timestamp_from_prefill(None) is None
 
 
 class TestBuildModifiedSamplingParamsStopPropagation:
@@ -704,9 +762,12 @@ class TestGenerateParallelGroups:
                 "value": 3,
             }
         ]
-        assert captured["state"].processor_prefix.startswith('{"group_id":"group_A"')
+        assert captured["state"].prompt_state.completion_prefix.startswith('{"group_id":"group_A"')
         prompts = backend.llm.generate.call_args.kwargs["prompts"]
-        assert prompts == [{"prompt_token_ids": backend._build_prompt_token_ids(captured["state"].current_prefill)}]
+        assert prompts == [
+            {"prompt_token_ids": backend._build_prompt_token_ids(captured["state"].prompt_state.prompt_segments)}
+        ]
+        assert isinstance(backend.llm.generate.call_args.kwargs["sampling_params"], SamplingParams)
         assert batches.num_length_truncated_completions == 1
 
 
@@ -806,9 +867,7 @@ class TestGenerationMaxTokensPlumbing:
         timeseries_elapsed_params.time_series.stop_timestamp = "4"
         timeseries_model_metadata.max_tokens_per_example = None
         saved_prefill = " " + pems_df.head(3).to_json(orient="records", lines=True)
-        timeseries_model_metadata.initial_prefill = {
-            "0": saved_prefill,
-        }
+        timeseries_model_metadata.timeseries_group_values = [0]
         ordered_columns = [
             "e_id",
             "s_index",
@@ -825,7 +884,7 @@ class TestGenerationMaxTokensPlumbing:
 
         prompt_len = backend._get_prompt_token_count()
 
-        assert backend._group_initial_prefixes == {"0": '{"e_id":0.0,"s_index":0.0,"'}
+        assert backend._group_prefixes == {0: '{"e_id":0.0,"s_index":0.0,"'}
         assert prompt_len < timeseries_model_metadata.max_seq_length
         assert timeseries_model_metadata.generation_max_tokens_for(prompt_len) > 0
         assert tokenizer.encoded_text

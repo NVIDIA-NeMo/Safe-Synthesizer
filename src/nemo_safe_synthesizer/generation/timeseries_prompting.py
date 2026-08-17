@@ -6,8 +6,9 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import Protocol, cast
+from typing import cast
 
+from ..data_processing.prompt_tokens import EncodeOnlyTokenizer, encode_prompt_token_ids, wrap_sequence_token_ids
 from ..data_processing.record_utils import ParsedRecord, records_to_jsonl
 from ..defaults import PSEUDO_GROUP_COLUMN
 from ..errors import GenerationError
@@ -15,16 +16,9 @@ from ..llm.metadata import LLMPromptConfig
 
 __all__ = [
     "build_partial_record_prefix",
-    "build_rolling_record_prefill",
+    "build_record_history",
     "build_training_compatible_prompt_token_ids",
 ]
-
-
-class EncodeOnlyTokenizer(Protocol):
-    """Tokenizer interface required for time-series prompt construction."""
-
-    def encode(self, text: str, *, add_special_tokens: bool) -> list[int]:
-        """Encode text without injecting tokenizer-defined special tokens."""
 
 
 def _schema_types(schema: Mapping[str, object], column: str) -> list[str]:
@@ -104,7 +98,7 @@ def build_partial_record_prefix(
     timestamp_column: str,
     start_timestamp: str | int,
 ) -> str:
-    """Build a training-dialect incomplete first record for generation.
+    """Build an incomplete first record matching the training serialization.
 
     Args:
         columns: Saved JSON schema columns in generation order.
@@ -141,6 +135,17 @@ def build_partial_record_prefix(
     seed_values[timestamp_column] = start_timestamp
 
     prefix_columns = [column for column in columns if column in seed_values]
+    expected_prefix_columns = (
+        [timestamp_column] if group_column == PSEUDO_GROUP_COLUMN else [group_column, timestamp_column]
+    )
+    if (
+        prefix_columns != expected_prefix_columns
+        or list(columns[: len(expected_prefix_columns)]) != expected_prefix_columns
+    ):
+        raise GenerationError(
+            "The saved time-series schema does not begin with the configured group and timestamp columns. "
+            "Retrain the model with the current time-series preprocessing before generating."
+        )
 
     ordered_values = {column: _coerce_prefix_value(schema, column, seed_values[column]) for column in prefix_columns}
     serialized = records_to_jsonl([ordered_values]).rstrip("\n")
@@ -149,8 +154,8 @@ def build_partial_record_prefix(
     return f'{serialized[:-1]},"'
 
 
-def build_rolling_record_prefill(records: Sequence[ParsedRecord]) -> str:
-    """Build rolling prompt context from exact model-emitted record text.
+def build_record_history(records: Sequence[ParsedRecord]) -> str:
+    """Build prompt history from exact model-emitted record text.
 
     Training inserts the sequence BOS token immediately before the first record,
     with no intervening whitespace. The caller adds that BOS token separately,
@@ -172,43 +177,43 @@ def build_training_compatible_prompt_token_ids(
     *,
     tokenizer: EncodeOnlyTokenizer,
     prompt_config: LLMPromptConfig,
-    instruction: str,
-    schema_fragment: str,
-    prefill: str | Sequence[str],
+    prompt: str,
+    record_context: str | Sequence[str],
 ) -> list[int]:
     """Build the token prefix seen before record continuation during training.
 
     This mirrors ``Example`` construction: encode the schema prompt without
     tokenizer-defined special tokens, apply the configured prompt BOS/EOS
-    tokens, add the sequence BOS token, then append the partial or rolling
+    tokens, add the sequence BOS token, then append the prefix or history
     record context. Building IDs explicitly is necessary for tokenizers such as
     SmolLM3's, which do not add ``<|im_start|>`` automatically at inference.
 
     Args:
         tokenizer: Tokenizer used by the generation engine.
-        prompt_config: Saved prompt template and special-token settings.
-        instruction: Training instruction inserted into the prompt template.
-        schema_fragment: Ordered column placeholder fragment.
-        prefill: Partial first record, or separately encoded rolling records.
-            Encoding rolling records individually mirrors training, which
+        prompt_config: Saved special-token settings.
+        prompt: Schema prompt text used during training.
+        record_context: Partial first record, or separately encoded history records.
+            Encoding history records individually mirrors training, which
             tokenizes each newline-terminated JSON record before concatenation.
 
     Returns:
         Prompt token IDs whose boundary exactly matches a training example.
     """
-    prompt = prompt_config.template.format(
-        instruction=instruction,
-        schema=schema_fragment,
-        prefill="",
+    prompt_ids = encode_prompt_token_ids(
+        prompt,
+        tokenizer=tokenizer,
+        prompt_config=prompt_config,
     )
-    prompt_ids = list(tokenizer.encode(prompt, add_special_tokens=False))
-    if prompt_config.add_bos_token_to_prompt:
-        prompt_ids.insert(0, prompt_config.bos_token_id)
-    if prompt_config.add_eos_token_to_prompt:
-        prompt_ids.append(prompt_config.eos_token_id)
 
-    prompt_ids.append(prompt_config.bos_token_id)
-    prefill_segments = [prefill] if isinstance(prefill, str) else prefill
-    for segment in prefill_segments:
-        prompt_ids.extend(tokenizer.encode(segment, add_special_tokens=False))
-    return prompt_ids
+    context_ids: list[int] = []
+    context_segments = [record_context] if isinstance(record_context, str) else record_context
+    for segment in context_segments:
+        context_ids.extend(tokenizer.encode(segment, add_special_tokens=False))
+    return [
+        *prompt_ids,
+        *wrap_sequence_token_ids(
+            context_ids,
+            prompt_config=prompt_config,
+            include_eos=False,
+        ),
+    ]

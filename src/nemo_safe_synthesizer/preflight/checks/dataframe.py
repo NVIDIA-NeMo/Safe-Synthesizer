@@ -194,6 +194,7 @@ class TimeSeriesDataShapeCheck(DataFrameCheck):
         TimeSeriesValidationReason.TIMESTAMP_INTERVAL_MISMATCH: "timestamp_interval_mismatch",
         TimeSeriesValidationReason.TIMESERIES_EMPTY: "timeseries_empty",
         TimeSeriesValidationReason.TIMESERIES_NO_VALUE_COLUMNS: "timeseries_no_value_columns",
+        TimeSeriesValidationReason.TIMESERIES_IDENTITY_COLUMNS_SAME: "timeseries_identity_columns_same",
         TimeSeriesValidationReason.TIMESERIES_GROUP_LENGTH_MISMATCH: "timeseries_group_length_mismatch",
         TimeSeriesValidationReason.TIMESERIES_START_MISMATCH: "timeseries_start_mismatch",
         TimeSeriesValidationReason.TIMESERIES_STOP_MISMATCH: "timeseries_stop_mismatch",

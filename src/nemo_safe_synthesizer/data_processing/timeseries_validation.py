@@ -50,6 +50,7 @@ class TimeSeriesValidationReason(Enum):
     TIMESERIES_START_MISMATCH = auto()
     TIMESERIES_STOP_MISMATCH = auto()
     TIMESERIES_NO_VALUE_COLUMNS = auto()
+    TIMESERIES_IDENTITY_COLUMNS_SAME = auto()
 
 
 class _TimeSeriesValidationError:
@@ -470,6 +471,12 @@ def validate_timeseries_data(data: pd.DataFrame, config: SafeSynthesizerParamete
             raise TimeSeriesDataValidationError(TimeSeriesValidationReason.TIMESTAMP_NULLS, str(exc)) from exc
 
         is_elapsed_time = _detect_elapsed_seconds_format(working_df, ts_config, timestamp_col)
+
+    if group_by_col == timestamp_col:
+        raise TimeSeriesParameterValidationError(
+            TimeSeriesValidationReason.TIMESERIES_IDENTITY_COLUMNS_SAME,
+            "The time-series group and timestamp columns must be different columns.",
+        )
 
     identity_columns = {group_by_col, timestamp_col}
     if not any(column not in identity_columns for column in working_df.columns):

@@ -731,6 +731,22 @@ class TestGenerationMaxTokensFor:
         # prompt_len=0 reproduces the old prompt-agnostic budget for round-trip parity.
         assert reloaded.generation_max_tokens_for(0) == int(1500 * GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER)
 
+    def test_timeseries_group_values_preserve_types_through_metadata_json(self, sample_model_metadata):
+        """Time-series group values must not become strings through dictionary keys."""
+        sample_model_metadata.timeseries_group_values = [7, "group-A", 2.5]
+        sample_model_metadata.timeseries_source_columns = ["value", "group_id", "timestamp"]
+        sample_model_metadata.save_metadata()
+
+        with patch("nemo_safe_synthesizer.llm.metadata.AutoConfig") as mock_ac:
+            mock_ac.from_pretrained.return_value = sample_model_metadata.autoconfig
+            reloaded = ModelMetadata.from_metadata_json(
+                sample_model_metadata.workdir.train.adapter.metadata,  # ty: ignore[unresolved-attribute]
+                workdir=sample_model_metadata.workdir,
+            )
+
+        assert reloaded.timeseries_group_values == [7, "group-A", 2.5]
+        assert reloaded.timeseries_source_columns == ["value", "group_id", "timestamp"]
+
     def test_metadata_max_records_per_group_accepts_none_or_positive(
         self, sample_prompt_config, mock_autoconfig_obj, sample_workdir
     ):

@@ -149,6 +149,23 @@ def test_validate_timeseries_data_requires_a_non_identity_column():
     assert exc_info.value.reason is TimeSeriesValidationReason.TIMESERIES_NO_VALUE_COLUMNS
 
 
+def test_validate_timeseries_data_requires_distinct_group_and_timestamp_columns():
+    """The same column cannot identify both a group and its chronological position."""
+    df = pd.DataFrame({"identity": [1, 2], "value": [10, 20]})
+    config = SafeSynthesizerParameters.from_params(
+        is_timeseries=True,
+        timestamp_column="identity",
+        timestamp_format="elapsed_seconds",
+        group_training_examples_by="identity",
+        rope_scaling_factor=1,
+    )
+
+    with pytest.raises(TimeSeriesParameterValidationError) as exc_info:
+        validate_timeseries_data(df, config)
+
+    assert exc_info.value.reason is TimeSeriesValidationReason.TIMESERIES_IDENTITY_COLUMNS_SAME
+
+
 def test_validate_timeseries_data_does_not_mutate_inputs():
     """Preflight calls the validator, so it must leave caller-owned objects unchanged."""
     df = pd.DataFrame(
