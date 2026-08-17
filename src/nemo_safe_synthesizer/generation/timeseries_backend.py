@@ -146,6 +146,9 @@ class GroupState:
     group_id: TimeSeriesGroupValue
     """Unique identifier for this group (e.g., device ID, customer ID)."""
 
+    group_ordinal: int
+    """Stable one-based position in the saved group registry, used in diagnostics."""
+
     prompt_state: RecordPromptState
     """Prefix/history container for building prompts and parsing completions."""
 
@@ -170,8 +173,8 @@ class GroupState:
     total_invalid_records: int = 0
     """Cumulative count of invalid records generated for this group."""
 
-    generation_attempts: int = 0
-    """Number of generation calls processed for this group."""
+    no_progress_count: int = 0
+    """Consecutive batches that did not advance the accepted timestamp."""
 
 
 class GroupProcessingResult(Enum):
@@ -188,7 +191,7 @@ class GroupProcessingResult(Enum):
     """Group reached the stop timestamp; remove from active processing."""
 
     FAILED = auto()
-    """Group failed (e.g., too many retries); remove from active, no batch added."""
+    """Group failed after exhausting a consecutive retry condition."""
 
 
 class TimeseriesBackend(VllmBackend):
@@ -228,9 +231,10 @@ class TimeseriesBackend(VllmBackend):
            e. For each group:
               - Validate chronological order against group's last timestamp
               - Retain the response with the most valid records (discard others)
-              - Update group state with new records (history, last_timestamp)
-              - Check if stop timestamp was reached (marks group complete)
-              - Track low valid fraction; fail group after max retries
+              - Apply data actions and discard records rejected by post-processing
+              - Update group state from accepted records (history, last_timestamp)
+              - Check if an accepted record reached the stop timestamp
+              - Track invalid output and timestamp progress; fail after consecutive retries
            f. Remove completed/failed groups from active list
            g. Save progress snapshots if thresholds are met
            h. Log per-group progress summary
@@ -243,13 +247,11 @@ class TimeseriesBackend(VllmBackend):
             - Completion (success): A group completes when any generated record
               has a timestamp >= `_stop_timestamp_value`. The group is marked as
               completed and removed from active processing.
-            - Failure (low valid fraction): A group fails after
-              `config.generation.patience` consecutive batches where the invalid
-              record fraction >= `config.generation.invalid_fraction_threshold`.
-              This prevents infinite loops when the model consistently produces
-              bad output for a particular group. Failed groups are not retried
-              and produce no synthetic data for that group ID. The failure is
-              reflected in `all_groups_succeeded` returning False.
+            - Failure (low valid fraction or no progress): A group fails after
+              `config.generation.patience` consecutive batches where either the
+              invalid record fraction remains above the configured threshold or
+              no accepted timestamp advances. Failed groups are not retried;
+              records accepted in earlier batches remain in the partial output.
 
         Global Stopping:
             - Natural completion: Generation ends when both the pending groups
@@ -280,6 +282,8 @@ class TimeseriesBackend(VllmBackend):
         _timestamp_interval_seconds (int | None): Expected interval between
             consecutive timestamps. Used for chronological validation.
         _group_column (str): Column name used to group time-series data.
+        _group_ordinals (dict[TimeSeriesGroupValue, int]): Mapping of group IDs
+            to stable, non-sensitive positions used in diagnostics.
         _group_prefixes (dict[TimeSeriesGroupValue, str]): Mapping of group IDs to
             incomplete first records used to start generation.
         _groups (list[TimeSeriesGroupValue]): Typed group IDs to generate.
@@ -305,6 +309,7 @@ class TimeseriesBackend(VllmBackend):
             raise GenerationError("The saved artifact has no time-series group registry. Retrain it before generating.")
 
         self._groups: list[TimeSeriesGroupValue] = list(group_values)
+        self._group_ordinals = {group_id: ordinal for ordinal, group_id in enumerate(self._groups, start=1)}
         self._group_prefixes: dict[TimeSeriesGroupValue, str] = {
             group_id: build_partial_record_prefix(
                 columns=self.columns,
@@ -488,16 +493,20 @@ class TimeseriesBackend(VllmBackend):
         Returns:
             A new GroupState initialized with the group's partial record.
         """
+        group_ordinal = self._group_ordinals.get(group_id)
+        if group_ordinal is None:
+            raise GenerationError("Cannot initialize an unregistered time-series group.")
         try:
             prefix = self._group_prefixes[group_id]
         except KeyError as exc:
-            raise GenerationError(f"No initial prefix was built for time-series group {group_id!r}.") from exc
+            raise GenerationError(f"No initial prefix was built for time-series group {group_ordinal}.") from exc
 
         # Calculate expected number of records: (stop - start) / interval + 1
         expected_records = self._compute_expected_records_per_group()
 
         state = GroupState(
             group_id=group_id,
+            group_ordinal=group_ordinal,
             prompt_state=RecordPromptState(prefix=prefix),
             expected_records=expected_records,
         )
@@ -694,34 +703,42 @@ class TimeseriesBackend(VllmBackend):
         self,
         state: GroupState,
         batch: Batch,
+        accepted_records: list[ParsedRecord],
         invalid_fraction_threshold: float,
     ) -> GroupProcessingResult:
-        """Process generation result for a single group.
+        """Update a group from records accepted after post-processing.
 
         Args:
             state: The group state.
             batch: The batch containing results for this group.
+            accepted_records: Retained records that passed data actions.
             invalid_fraction_threshold: Threshold for invalid fraction.
 
         Returns:
             GroupProcessingResult enum indicating the group's status.
         """
-        state.generation_attempts += 1
-        if self.config.time_series.timestamp_interval_seconds is not None:
-            self._check_chronological_for_group(batch, state)
+        previous_timestamp_seconds = state.last_timestamp_seconds
+        reached_stop = self._has_reached_stop_time(
+            [record.parsed for record in accepted_records if record.parsed is not None]
+        )
+        self._update_group_state(state, accepted_records)
+        made_progress = state.last_timestamp_seconds is not None and (
+            previous_timestamp_seconds is None or state.last_timestamp_seconds > previous_timestamp_seconds
+        )
 
-        retained_records = self._retain_single_valid_response(batch)
-        reached_stop = self._has_reached_stop_time([r.parsed for r in retained_records if r.parsed is not None])
-        self._update_group_state(state, retained_records)
+        state.total_valid_records += batch.num_valid_records
+        state.total_invalid_records += batch.num_invalid_records
+
+        if made_progress:
+            state.no_progress_count = 0
+        else:
+            state.no_progress_count += 1
+
+        if reached_stop:
+            state.completed = True
+            return GroupProcessingResult.COMPLETED
+
         patience = self.config.generation.patience
-        attempt_limit = max(1, state.expected_records) + patience
-        if not reached_stop and state.generation_attempts >= attempt_limit:
-            state.failed = True
-            logger.warning(
-                f"Group '{state.group_id}' skipped after {state.generation_attempts} attempts without reaching "
-                f"the configured stop timestamp."
-            )
-            return GroupProcessingResult.FAILED
 
         # Check if batch has high invalid fraction
         invalid_fraction = 1.0 - batch.valid_record_fraction
@@ -730,36 +747,51 @@ class TimeseriesBackend(VllmBackend):
 
             if batch.num_valid_records == 0:
                 logger.warning(
-                    f"Group '{state.group_id}' batch produced no valid records "
-                    f"(attempt {state.low_valid_fraction_count}/{patience})",
+                    "Time-series group batch produced no valid records.",
+                    extra={
+                        "group_ordinal": state.group_ordinal,
+                        "retry_count": state.low_valid_fraction_count,
+                        "patience": patience,
+                    },
                 )
             else:
                 logger.warning(
-                    f"Group '{state.group_id}' batch has high invalid fraction "
-                    f"({invalid_fraction:.1%} >= {invalid_fraction_threshold:.1%}), "
-                    f"attempt {state.low_valid_fraction_count}/{patience}",
+                    "Time-series group batch has a high invalid fraction.",
+                    extra={
+                        "group_ordinal": state.group_ordinal,
+                        "invalid_fraction": invalid_fraction,
+                        "invalid_fraction_threshold": invalid_fraction_threshold,
+                        "retry_count": state.low_valid_fraction_count,
+                        "patience": patience,
+                    },
                 )
 
             if state.low_valid_fraction_count >= patience:
                 state.failed = True
                 logger.warning(
-                    f"Group '{state.group_id}' skipped after {patience} "
-                    f"consecutive batches with high invalid fraction (>= {invalid_fraction_threshold:.0%})",
+                    "Time-series group skipped after consecutive batches with a high invalid fraction.",
+                    extra={
+                        "group_ordinal": state.group_ordinal,
+                        "retry_count": state.low_valid_fraction_count,
+                        "patience": patience,
+                        "invalid_fraction_threshold": invalid_fraction_threshold,
+                    },
                 )
                 return GroupProcessingResult.FAILED
+        else:
+            state.low_valid_fraction_count = 0
 
-            return GroupProcessingResult.IN_PROGRESS
-
-        # Reset the counter when we get a good batch
-        state.low_valid_fraction_count = 0
-
-        # Update cumulative stats
-        state.total_valid_records += batch.num_valid_records
-        state.total_invalid_records += batch.num_invalid_records
-
-        if reached_stop:
-            state.completed = True
-            return GroupProcessingResult.COMPLETED
+        if state.no_progress_count >= patience:
+            state.failed = True
+            logger.warning(
+                "Time-series group skipped after consecutive batches without timestamp progress.",
+                extra={
+                    "group_ordinal": state.group_ordinal,
+                    "no_progress_count": state.no_progress_count,
+                    "patience": patience,
+                },
+            )
+            return GroupProcessingResult.FAILED
 
         return GroupProcessingResult.IN_PROGRESS
 
@@ -798,7 +830,8 @@ class TimeseriesBackend(VllmBackend):
             )
             status = "✓" if batch.num_valid_records > 0 else "✗"
             group_progress_lines.append(
-                f"  {status} {state.group_id}: +{batch.num_valid_records} ({batch_valid_rate:.0%} valid), "
+                f"  {status} group {state.group_ordinal}: "
+                f"+{batch.num_valid_records} ({batch_valid_rate:.0%} valid), "
                 f"progress={state.total_valid_records}/{state.expected_records} ({progress_pct:.1f}%)"
             )
         group_progress_str = "\n".join(group_progress_lines)
@@ -859,7 +892,10 @@ class TimeseriesBackend(VllmBackend):
                 next_group = pending_groups.pop(0)
                 state = all_group_states[next_group]
                 active_states.append(state)
-                logger.debug(f"Activated group '{next_group}' for parallel generation")
+                logger.debug(
+                    "Activated time-series group for parallel generation.",
+                    extra={"group_ordinal": state.group_ordinal},
+                )
 
             if not active_states:
                 break
@@ -905,27 +941,39 @@ class TimeseriesBackend(VllmBackend):
             states_to_remove = []
             for state in active_states:
                 batch = group_batches[state.group_id]
-                result = self._process_group_result(state, batch, invalid_fraction_threshold)
+                if self.config.time_series.timestamp_interval_seconds is not None:
+                    self._check_chronological_for_group(batch, state)
+                retained_records = self._retain_single_valid_response(batch)
+                batches.postprocess_batch(batch)
+                accepted_records = [
+                    record for record in retained_records if record.is_valid and record.parsed is not None
+                ]
+                result = self._process_group_result(
+                    state,
+                    batch,
+                    accepted_records,
+                    invalid_fraction_threshold,
+                )
+                batches.add_batch(batch, apply_data_actions=False)
+                # Time-series retries are tracked per group. Since completion is
+                # determined from post-processed records, a batch-level zero-record
+                # status can safely be cleared while group processing continues.
+                batches.status = GenerationStatus.IN_PROGRESS
                 if result == GroupProcessingResult.FAILED:
-                    # Failed groups are not retried and produce no output for that group ID.
                     states_to_remove.append(state)
                     groups_completed += 1
                     all_groups_succeeded = False
                 elif result == GroupProcessingResult.COMPLETED:
                     states_to_remove.append(state)
                     groups_completed += 1
-                    batches.add_batch(batch)
-                    # Per-group retry state governs time-series stopping. A
-                    # zero-valid result for one group must not stop every
-                    # parallel group through GenerationBatches' global status.
-                    batches.status = GenerationStatus.IN_PROGRESS
                     logger.info(
-                        f"Group '{state.group_id}' completed (stop timestamp reached). "
-                        f"Progress: {groups_completed}/{len(self._groups)} groups.",
+                        "Time-series group completed after reaching the stop timestamp.",
+                        extra={
+                            "group_ordinal": state.group_ordinal,
+                            "groups_completed": groups_completed,
+                            "total_groups": len(self._groups),
+                        },
                     )
-                elif result == GroupProcessingResult.IN_PROGRESS:
-                    batches.add_batch(batch)
-                    batches.status = GenerationStatus.IN_PROGRESS
 
             # Remove completed/failed states from active list
             for state in states_to_remove:

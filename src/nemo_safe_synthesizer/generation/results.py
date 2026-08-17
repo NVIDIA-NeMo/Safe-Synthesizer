@@ -302,6 +302,19 @@ class GenerationBatches:
                 else:
                     raise AssertionError("Every record in response should map to either a valid or rejected row.")
 
+    def postprocess_batch(self, batch: Batch) -> None:
+        """Apply configured data actions before generation-specific state updates.
+
+        Most generation paths use :meth:`add_batch`, which applies data actions
+        immediately before recording the batch. Generation backends that must
+        inspect the accepted records first can call this method and then pass
+        ``apply_data_actions=False`` to :meth:`add_batch`.
+
+        Args:
+            batch: The completed batch to post-process in place.
+        """
+        self._apply_data_actions_fn(batch)
+
     @property
     def num_batches(self) -> int:
         """The number of batches in the generation job."""
@@ -371,7 +384,7 @@ class GenerationBatches:
         """Return whether a first zero-valid batch has enough signal to stop immediately."""
         return cls._has_no_valid_records(batch) and not cls._is_inconclusive_zero_valid_batch(batch)
 
-    def add_batch(self, batch: Batch) -> None:
+    def add_batch(self, batch: Batch, *, apply_data_actions: bool = True) -> None:
         """Add a batch and update the generation status.
 
         Stopping rules:
@@ -389,9 +402,12 @@ class GenerationBatches:
 
         Args:
             batch: The completed batch to add.
+            apply_data_actions: Whether to apply configured data actions before
+                recording the batch. Set to ``False`` only after explicitly
+                calling :meth:`postprocess_batch`.
         """
-        # TODO: Move application of the data_actions_fn deeper in the generation process
-        self._apply_data_actions_fn(batch)
+        if apply_data_actions:
+            self.postprocess_batch(batch)
         self.running_stopping_metric.update(batch.stopping_metric)
         if self.stop_condition is None:
             if self._has_no_valid_records(batch):

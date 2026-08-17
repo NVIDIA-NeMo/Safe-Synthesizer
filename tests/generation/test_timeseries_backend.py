@@ -19,10 +19,12 @@ from nemo_safe_synthesizer.config import (
     TimeSeriesParameters,
     TrainingHyperparams,
 )
+from nemo_safe_synthesizer.data_processing.actions.utils import MetadataColumns
 from nemo_safe_synthesizer.data_processing.assembler import Example
 from nemo_safe_synthesizer.data_processing.record_utils import ParsedRecord
 from nemo_safe_synthesizer.defaults import DEFAULT_MAX_SEQ_LENGTH, PSEUDO_GROUP_COLUMN
 from nemo_safe_synthesizer.errors import GenerationError
+from nemo_safe_synthesizer.generation.batch import Batch
 from nemo_safe_synthesizer.generation.processors import TimeSeriesDataProcessor
 from nemo_safe_synthesizer.generation.results import GenerationBatches, GenerationStatus
 from nemo_safe_synthesizer.generation.timeseries_backend import (
@@ -446,9 +448,24 @@ class TestInitGroupState:
         assert state.prompt_state.prefix == expected
         assert state.prompt_state.prompt_segments == expected
         assert state.prompt_state.completion_prefix == expected
+        assert state.group_ordinal == 1
         assert state.last_timestamp_seconds is None
         assert backend._groups == ["group_A", "group_B"]
         assert backend._history_window_size == 3
+
+    def test_missing_prefix_error_uses_group_ordinal(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        sensitive_group = "ACCT-SENSITIVE-1234"
+        timeseries_model_metadata.timeseries_group_values = [sensitive_group]
+        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
+        del backend._group_prefixes[sensitive_group]
+
+        with pytest.raises(GenerationError) as exc_info:
+            backend._init_group_state(sensitive_group)
+
+        assert sensitive_group not in str(exc_info.value)
+        assert "group 1" in str(exc_info.value)
 
     def test_prompt_tokens_match_training_example_prefix(
         self,
@@ -521,6 +538,7 @@ class TestUpdateGroupState:
 
         state = GroupState(
             group_id="test",
+            group_ordinal=1,
             prompt_state=RecordPromptState(prefix='{"group_id":"test","timestamp":"2024-01-01 00:00:00","'),
             expected_records=10,
         )
@@ -589,6 +607,7 @@ class TestUpdateGroupState:
         backend._time_column = ""
         state = GroupState(
             group_id="test",
+            group_ordinal=1,
             prompt_state=RecordPromptState(prefix=""),
             expected_records=10,
             last_timestamp_seconds=0,
@@ -599,6 +618,72 @@ class TestUpdateGroupState:
         backend._update_group_state(state, records)
 
         assert state.last_timestamp_seconds == backend._parse_timestamp_seconds(timestamp)
+
+
+class TestProcessGroupResult:
+    """Tests for post-processed group progress and retry accounting."""
+
+    @staticmethod
+    def _batch(*, valid_records: int = 1, invalid_records: int = 0) -> Batch:
+        batch = MagicMock(spec=Batch)
+        batch.num_valid_records = valid_records
+        batch.num_invalid_records = invalid_records
+        total_records = valid_records + invalid_records
+        batch.valid_record_fraction = valid_records / total_records if total_records else 0
+        return batch
+
+    @staticmethod
+    def _record(timestamp: str) -> ParsedRecord:
+        return ParsedRecord(
+            text=f'{{"timestamp":"{timestamp}","value":1}}',
+            parsed={"timestamp": timestamp, "value": 1},
+        )
+
+    def test_timestamp_progress_resets_no_progress_count(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
+        state = backend._init_group_state("group_A")
+        state.no_progress_count = 1
+        records = [self._record("2024-01-01 01:00:00")]
+
+        result = backend._process_group_result(
+            state,
+            self._batch(),
+            records,
+            invalid_fraction_threshold=0.8,
+        )
+
+        assert result == GroupProcessingResult.IN_PROGRESS
+        assert state.no_progress_count == 0
+        assert state.total_valid_records == 1
+
+    def test_fails_after_consecutive_batches_without_timestamp_progress(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        timeseries_base_params.generation.patience = 2
+        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
+        state = backend._init_group_state("group_A")
+        state.last_timestamp_seconds = backend._parse_timestamp_seconds("2024-01-01 00:00:00")
+        records = [self._record("2024-01-01 00:00:00")]
+
+        first_result = backend._process_group_result(
+            state,
+            self._batch(),
+            records,
+            invalid_fraction_threshold=0.8,
+        )
+        second_result = backend._process_group_result(
+            state,
+            self._batch(),
+            records,
+            invalid_fraction_threshold=0.8,
+        )
+
+        assert first_result == GroupProcessingResult.IN_PROGRESS
+        assert second_result == GroupProcessingResult.FAILED
+        assert state.no_progress_count == 2
+        assert state.failed is True
 
 
 class TestBuildModifiedSamplingParamsStopPropagation:
@@ -677,6 +762,102 @@ class TestBuildModifiedSamplingParamsStopPropagation:
 class TestGenerateParallelGroups:
     """Tests for processing vLLM completions during parallel time-series generation."""
 
+    def test_data_action_rejection_prevents_completion_and_redacts_diagnostics(
+        self,
+        timeseries_base_params,
+        timeseries_model_metadata,
+        mock_workdir,
+        fixture_tokenizer,
+    ):
+        sensitive_group = "ACCT-SENSITIVE-1234"
+        timeseries_base_params.generation.patience = 2
+        timeseries_base_params.time_series.stop_timestamp = timeseries_base_params.time_series.start_timestamp
+        timeseries_model_metadata.timeseries_group_values = [sensitive_group]
+        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
+        backend.llm = MagicMock()
+        backend.llm.get_tokenizer.return_value = fixture_tokenizer
+        backend.llm.generate.return_value = [
+            SimpleNamespace(
+                outputs=[
+                    SimpleNamespace(
+                        finish_reason="stop",
+                        text='value":3}\n',
+                        token_ids=[1, 2, 3],
+                    )
+                ]
+            )
+        ]
+
+        def reject_all_records(batch: pd.DataFrame, df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+            assert df.empty
+            rejected_df = batch.copy()
+            rejected_df[MetadataColumns.REJECT_REASON.value] = "test rejection"
+            return batch.iloc[0:0].copy(), rejected_df
+
+        batches = GenerationBatches(target_num_records=100, data_actions_fn=reject_all_records)
+        with patch("nemo_safe_synthesizer.generation.timeseries_backend.logger") as mock_logger:
+            all_groups_succeeded = backend._generate_parallel_groups(
+                batches=batches,
+                sampling_params=SamplingParams(max_tokens=10),
+                progress_snapshots=[],
+            )
+
+        assert all_groups_succeeded is False
+        assert backend.llm.generate.call_count == 2
+        assert batches.num_valid_records == 0
+        assert batches.status == GenerationStatus.IN_PROGRESS
+        assert sensitive_group not in repr(mock_logger.method_calls)
+        warning_extras = [call.kwargs.get("extra", {}) for call in mock_logger.warning.call_args_list]
+        assert any(extra.get("group_ordinal") == 1 for extra in warning_extras)
+        assert any(extra.get("retry_count") == 2 for extra in warning_extras)
+
+    def test_completion_log_uses_group_ordinal(
+        self,
+        timeseries_base_params,
+        timeseries_model_metadata,
+        mock_workdir,
+        fixture_tokenizer,
+    ):
+        sensitive_group = "ACCT-SENSITIVE-1234"
+        timeseries_base_params.time_series.stop_timestamp = timeseries_base_params.time_series.start_timestamp
+        timeseries_model_metadata.timeseries_group_values = [sensitive_group]
+        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
+        backend.llm = MagicMock()
+        backend.llm.get_tokenizer.return_value = fixture_tokenizer
+        backend.llm.generate.return_value = [
+            SimpleNamespace(
+                outputs=[
+                    SimpleNamespace(
+                        finish_reason="stop",
+                        text='value":3}\n',
+                        token_ids=[1, 2, 3],
+                    )
+                ]
+            )
+        ]
+        batches = GenerationBatches(target_num_records=1)
+
+        with patch("nemo_safe_synthesizer.generation.timeseries_backend.logger") as mock_logger:
+            all_groups_succeeded = backend._generate_parallel_groups(
+                batches=batches,
+                sampling_params=SamplingParams(max_tokens=10),
+                progress_snapshots=[],
+            )
+
+        assert all_groups_succeeded is True
+        assert batches.num_valid_records == 1
+        assert sensitive_group not in repr(mock_logger.method_calls)
+        completion_call = next(
+            call
+            for call in mock_logger.info.call_args_list
+            if call.args[0] == "Time-series group completed after reaching the stop timestamp."
+        )
+        assert completion_call.kwargs["extra"] == {
+            "group_ordinal": 1,
+            "groups_completed": 1,
+            "total_groups": 1,
+        }
+
     def test_uses_per_group_retries_instead_of_global_zero_record_stop(
         self,
         timeseries_base_params,
@@ -738,9 +919,10 @@ class TestGenerateParallelGroups:
 
         captured = {}
 
-        def _capture_result(state, batch, invalid_fraction_threshold):  # noqa: ARG001
+        def _capture_result(state, batch, accepted_records, invalid_fraction_threshold):  # noqa: ARG001
             captured["state"] = state
             captured["batch"] = batch
+            captured["accepted_records"] = accepted_records
             return GroupProcessingResult.COMPLETED
 
         backend._process_group_result = _capture_result
