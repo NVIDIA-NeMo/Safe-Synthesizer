@@ -35,4 +35,4 @@ concurrency:
 
 jobs:
   conventional-commit:
-    uses: NVIDIA-NeMo/FW-CI-templates/.github/workflows/_semantic_pull_request.yml@fe0ff3bbe10790c51273ee3c1189b3c0497bf860 # v1.8.5
+    uses: NVIDIA-NeMo/FW-CI-templates/.github/workflows/_semantic_pull_request.yml@affd689912d7975a1aa29ea60c1b983f12dfb7e7 # v1.8.9
