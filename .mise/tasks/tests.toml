@@ -73,10 +73,10 @@ alias = "test-smoke-gpu-smollm2"
 run = 'uv run --frozen pytest --dist loadscope -vv -n 0 tests/smoke/ -m "requires_gpu and smollm2"'
 
 ["test:gpu-integration"]
-description = "Run GPU integration e2e tests for default and DP configs. Requires CUDA; stages are sequential to control GPU load."
+description = "Run GPU integration e2e tests for default and DP configs. Requires CUDA; stages are sequential to control GPU load. Bootstraps $NSS_GPU_CUDA_EXTRA (default cu129)."
 alias = "test-gpu-integration"
 run = [
-    { task = "bootstrap-nss", args = ["cu129"] },
+    'mise run bootstrap-nss "${NSS_GPU_CUDA_EXTRA:-cu129}"',
     "uv run --frozen pytest -n 0 --dist loadscope -vv tests/e2e/test_safe_synthesizer.py -k default",
     "uv run --frozen pytest -n 0 --dist loadscope -vv tests/e2e/test_safe_synthesizer.py -k dp",
 ]
@@ -91,10 +91,10 @@ description = "Run all GPU e2e tests without bootstrapping dependencies. Require
 run = [{ task = "test:e2e:default:run" }, { task = "test:e2e:dp:run" }]
 
 ["test:e2e:default"]
-description = "Run default e2e tests (requires CUDA)"
+description = "Run default e2e tests (requires CUDA). Bootstraps $NSS_GPU_CUDA_EXTRA (default cu129)."
 alias = "test-e2e-default"
 run = [
-    { task = "bootstrap-nss", args = ["cu129"] },
+    'mise run bootstrap-nss "${NSS_GPU_CUDA_EXTRA:-cu129}"',
     { task = "test:e2e:default:run" },
 ]
 
@@ -103,10 +103,10 @@ hide = true
 run = "uv run --frozen --no-sync pytest --dist loadscope -vv -n 0 tests/e2e/test_safe_synthesizer.py -k default"
 
 ["test:e2e:dp"]
-description = "Run dp e2e tests (requires CUDA)"
+description = "Run dp e2e tests (requires CUDA). Bootstraps $NSS_GPU_CUDA_EXTRA (default cu129)."
 alias = "test-e2e-dp"
 run = [
-    { task = "bootstrap-nss", args = ["cu129"] },
+    'mise run bootstrap-nss "${NSS_GPU_CUDA_EXTRA:-cu129}"',
     { task = "test:e2e:dp:run" },
 ]
 
@@ -118,7 +118,7 @@ run = "uv run --frozen --no-sync pytest --dist loadscope -vv -n 0 tests/e2e/test
 description = "Dry-run e2e and GPU selectors with pytest collection only. Does not run tests; useful before changing task selectors."
 alias = "test-e2e-collect"
 run = [
-    { task = "bootstrap-nss", args = ["cu129"] },
+    'mise run bootstrap-nss "${NSS_GPU_CUDA_EXTRA:-cu129}"',
     '''
 #!/usr/bin/env bash
 set -euo pipefail

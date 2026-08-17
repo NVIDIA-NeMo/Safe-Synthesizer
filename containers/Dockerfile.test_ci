@@ -18,6 +18,7 @@ COPY .mise/tasks/ .mise/tasks/
 COPY mise.lock .
 RUN mkdir -p /workspace/tools
 COPY tools/install-mise.sh ./tools/install-mise.sh
+COPY install_nss.sh ./install_nss.sh
 ENV PATH="/root/.local/share/mise/shims:/root/.local/bin:${PATH}"
 RUN MISE_REQUIRE_SIGNED_INSTALL=1 \
     MISE_GPG_KEY=24853EC9F655CE80B48E6C3A8B81C9D17413A06D \
@@ -35,15 +36,10 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     wheel_count="$(find /tmp/dist -maxdepth 1 -type f -name '*.whl' | wc -l)" && \
     test "${wheel_count}" -eq 1 && \
     wheel="$(find /tmp/dist -maxdepth 1 -type f -name '*.whl')" && \
-    uv --no-config venv --clear --python /usr/local/bin/python /opt/wheel-cpu && \
-    uv --no-config pip install \
-        --python /opt/wheel-cpu/bin/python \
-        --no-sources \
-        --default-index https://pypi.org/simple \
-        --index https://download.pytorch.org/whl/cpu \
-        --index https://flashinfer.ai/whl/ \
-        --index-strategy unsafe-best-match \
-        "nemo-safe-synthesizer[cpu,engine] @ file://${wheel}" && \
+    CUDA=cpu \
+        UV_PROJECT_ENVIRONMENT=/opt/wheel-cpu \
+        PACKAGE_VERSION=" @ file://${wheel}" \
+        ./install_nss.sh && \
     uv --no-config pip check --python /opt/wheel-cpu/bin/python && \
     /opt/wheel-cpu/bin/python -c \
         "from importlib.metadata import version; from nemo_safe_synthesizer.package_info import __version__; assert __version__ == version('nemo-safe-synthesizer')" && \
@@ -60,6 +56,10 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         --index https://wheels.vllm.ai/0.26.0/cu129 \
         --index-strategy unsafe-best-match \
         "nemo-safe-synthesizer[cu129,engine] @ file://${wheel}" && \
+    CUDA=130 \
+        DRY_RUN=1 \
+        UV_PROJECT_ENVIRONMENT=/opt/wheel-cu130 \
+        ./install_nss.sh && \
     rm -rf /opt/wheel-cpu /opt/wheel-cu129
 
 FROM setup AS install-deps

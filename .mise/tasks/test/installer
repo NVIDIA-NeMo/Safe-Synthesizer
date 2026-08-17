@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#MISE description="Validate install_nss.sh dry-run commands without installing packages."
+
+set -euo pipefail
+
+bash tests/tools/test_install_nss.sh

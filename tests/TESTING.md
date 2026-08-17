@@ -90,6 +90,8 @@ Details:
 
 These tests are GPU-only and intentionally slow. Each model case has a 30-minute timeout, so budget up to 90 minutes for either `mise run test:e2e:default` or `mise run test:e2e:dp`, and up to 3 hours for the full `mise run test:e2e` target in cold-cache environments. Warm Hugging Face caches are expected to finish sooner.
 
+Each e2e target bootstraps `$NSS_GPU_CUDA_EXTRA` (default `cu129`) before running; set it to `cu130` to run against the CUDA 13 stack instead.
+
 ## Pytest Markers
 
 Defined in `pytest.ini` (`--strict-markers` is enabled):
