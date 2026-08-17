@@ -200,6 +200,9 @@ def build_scoped_col_map(
     *,
     synthesize: Callable[[str, Random, FakerLike, set[str]], str | None],
     track_used: bool = False,
+    seed_key: str | None = None,
+    used: set[str] | None = None,
+    preexisting: dict[str, str] | None = None,
 ) -> ScopedValueMap:
     """Build a scope-keyed original→synthetic map for one standalone column.
 
@@ -215,6 +218,10 @@ def build_scoped_col_map(
     ``scope="record"`` builds one unit map per row -- fine for typical training
     samples, costly on large frames (see ``standalone._RECORD_SCOPE_COST_WARN_ROWS``).
 
+    Optional ``seed_key`` / ``used`` / ``preexisting`` support shared multi-table
+    domains (pass ``seed_key=domain_id`` so RNG does not depend on which
+    ``table.column`` first saw a value).
+
     Args:
         original_df: Source dataframe.
         col: Column to map.
@@ -223,6 +230,9 @@ def build_scoped_col_map(
         cfg: Replacement configuration (seed, locale).
         synthesize: Callable ``(sv, rng, fake, used) -> str | None``.
         track_used: When True, maintain an injective ``used`` set across the column.
+        seed_key: Optional seed identity (defaults to ``col``).
+        used: Optional shared ``used`` set (defaults to a fresh per-column set).
+        preexisting: Optional original→synthetic entries to reuse before synthesizing.
 
     Returns:
         A ``ScopedValueMap`` keyed by scope unit.
@@ -232,17 +242,32 @@ def build_scoped_col_map(
 
             ScopedValueMap("group", {"A": {"001": "syn-a"}, "B": {"002": "syn-b"}})
     """
-    fake = seeded_faker(cfg.random_seed ^ stable_hash(col), cfg.locale)
+    identity = seed_key if seed_key is not None else col
+    fake = seeded_faker(cfg.random_seed ^ stable_hash(identity), cfg.locale)
     rng = fake.random
-    used: set[str] = {str(v) for v in original_df[col].dropna().unique()} if track_used else set()
+    if used is None:
+        used = {str(v) for v in original_df[col].dropna().unique()} if track_used else set()
+    elif track_used:
+        used |= {str(v) for v in original_df[col].dropna().unique()}
+    # Shared preexisting is only for multi-table domain reuse. Do not accumulate
+    # synthetics into it across group/record units — that would collapse
+    # per-unit independence for the same original.
+    shared = preexisting
 
     def _unit_map(values: pd.Series, scope_key: Hashable) -> dict[str, str]:
-        rng.seed(cfg.random_seed ^ stable_hash(f"{col}\x00{scope_key}"))
+        rng.seed(cfg.random_seed ^ stable_hash(f"{identity}\x00{scope_key}"))
         mapping: dict[str, str] = {}
         for sv in (str(v) for v in values.dropna().unique()):
+            if shared is not None and sv in shared:
+                mapping[sv] = shared[sv]
+                if track_used:
+                    used.add(shared[sv])
+                continue
             new = synthesize(sv, rng, fake, used)
             if new and new != sv:
                 mapping[sv] = new
+                if shared is not None:
+                    shared[sv] = new
                 if track_used:
                     used.add(new)
         return mapping

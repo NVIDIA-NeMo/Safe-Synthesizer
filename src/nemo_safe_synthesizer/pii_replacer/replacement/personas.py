@@ -36,7 +36,21 @@ from .scope import FakerLike, seeded_faker
 
 logger = get_logger(__name__)
 
-__all__ = ["PersonaEngine", "load_managed_person_sampler", "synth_value"]
+__all__ = [
+    "PersonaEngine",
+    "clear_managed_person_sampler_cache",
+    "load_managed_person_sampler",
+    "synth_value",
+]
+
+# Process-wide cache: managed persona parquets are multi-GB once materialized.
+# Multi-table runs must not reload them once per table.
+_MANAGED_SAMPLER_CACHE: dict[tuple[str, str], pd.DataFrame | None] = {}
+
+
+def clear_managed_person_sampler_cache() -> None:
+    """Drop cached managed persona dataframes (for tests / memory recovery)."""
+    _MANAGED_SAMPLER_CACHE.clear()
 
 
 # ===========================================================================
@@ -187,6 +201,10 @@ def _constraint_signature(
 def load_managed_person_sampler(assets_root: str, locale: str) -> pd.DataFrame | None:
     """Load persona parquet assets without data_designer.
 
+    Results are cached by resolved ``(assets_root, locale)`` so multi-table (and
+    repeated single-table) runs share one in-memory copy instead of reloading a
+    multi-GB parquet each time.
+
     Args:
         assets_root: Root directory containing ``datasets/{locale}.parquet``.
         locale: Locale subdirectory name (for example ``"en_US"``).
@@ -194,14 +212,30 @@ def load_managed_person_sampler(assets_root: str, locale: str) -> pd.DataFrame |
     Returns:
         Persona dataframe, or ``None`` if the asset is missing or unreadable.
     """
-    path = Path(assets_root) / "datasets" / f"{locale}.parquet"
+    root = Path(assets_root)
+    try:
+        cache_key = (str(root.resolve()), locale)
+    except OSError:
+        cache_key = (str(root), locale)
+    if cache_key in _MANAGED_SAMPLER_CACHE:
+        return _MANAGED_SAMPLER_CACHE[cache_key]
+
+    path = root / "datasets" / f"{locale}.parquet"
     if not path.exists():
+        _MANAGED_SAMPLER_CACHE[cache_key] = None
         return None
     try:
-        return pd.read_parquet(path)
+        df = pd.read_parquet(path)
     except Exception as exc:
         logger.runtime.warning(f"Managed assets unreadable at {path} ({exc}); using Faker person sampler.")
+        _MANAGED_SAMPLER_CACHE[cache_key] = None
         return None
+    _MANAGED_SAMPLER_CACHE[cache_key] = df
+    logger.user.info(
+        f"[PII Replacement] Loaded managed persona assets for locale {locale!r} "
+        f"from {path} ({len(df)} rows); cached for reuse"
+    )
+    return df
 
 
 def _row_to_persona(row: pd.Series) -> dict:

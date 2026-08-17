@@ -29,11 +29,15 @@ def _cfg() -> Config:
     )
 
 
-@pytest.mark.parametrize("scope", list(PiiReplacementScope))
+@pytest.mark.parametrize(
+    "scope",
+    [s for s in PiiReplacementScope if s != PiiReplacementScope.database],
+)
 def test_repeated_original_consistent_within_scope_unit(scope: PiiReplacementScope):
     """Within each scope unit, the same original ID/name gets the same synthetic.
 
     Across units, ``record`` and ``group`` may differ; ``dataframe`` must not.
+    ``database`` is multi-table only (covered under tests/pii_replacer/multi_table/).
     """
     df = pd.DataFrame(
         {

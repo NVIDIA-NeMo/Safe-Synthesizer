@@ -76,6 +76,64 @@ def test_faker_persona_names_conditioned_on_sex():
     assert all(inst.synthetic_person is not None and inst.synthetic_person["sex"] == inst.sex for inst in instances)
 
 
+def test_managed_person_sampler_is_cached(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Managed parquet must be read once per (assets_root, locale), not per PersonaEngine."""
+    from nemo_safe_synthesizer.pii_replacer.replacement import (
+        PersonaEngine,
+        clear_managed_person_sampler_cache,
+        load_managed_person_sampler,
+    )
+
+    clear_managed_person_sampler_cache()
+    assets = tmp_path / "assets"
+    datasets = assets / "datasets"
+    datasets.mkdir(parents=True)
+    parquet_path = datasets / "en_US.parquet"
+    sample = pd.DataFrame(
+        {
+            "first_name": ["Ada", "Bob"],
+            "last_name": ["Lovelace", "Builder"],
+            "sex": ["Female", "Male"],
+            "ethnic_background": ["white", "white"],
+            "email_address": ["a@example.com", "b@example.com"],
+            "phone_number": ["555-0100", "555-0101"],
+            "birth_date": ["1815-12-10", "1990-01-01"],
+            "street_number": ["1", "2"],
+            "street_name": ["Main", "Oak"],
+            "city": ["Town", "Town"],
+            "state": ["CA", "CA"],
+            "postcode": ["90001", "90002"],
+        }
+    )
+    sample.to_parquet(parquet_path)
+
+    reads: list[str] = []
+    real_read_parquet = pd.read_parquet
+
+    def counting_read_parquet(path, *args, **kwargs):
+        reads.append(str(path))
+        return real_read_parquet(path, *args, **kwargs)
+
+    monkeypatch.setattr(pd, "read_parquet", counting_read_parquet)
+
+    first = load_managed_person_sampler(str(assets), "en_US")
+    second = load_managed_person_sampler(str(assets), "en_US")
+    assert first is second
+    assert len(reads) == 1
+
+    cfg = config_from_replace_pii(
+        ReplacePiiConfig(
+            person=PiiPersonConfig(backend=PiiPersonBackend.managed, managed_assets_path=str(assets)),
+            replacement=PiiReplacementSettings(locale="en_US", seed=1),
+        )
+    )
+    engine_a = PersonaEngine(cfg, 2)
+    engine_b = PersonaEngine(cfg, 2)
+    assert engine_a.managed_df is engine_b.managed_df is first
+    assert len(reads) == 1
+    clear_managed_person_sampler_cache()
+
+
 @pytest.mark.parametrize(
     ("locale", "checkout", "message"),
     [
