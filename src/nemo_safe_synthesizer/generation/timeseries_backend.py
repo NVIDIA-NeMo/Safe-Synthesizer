@@ -691,10 +691,15 @@ class TimeseriesBackend(VllmBackend):
         return GroupProcessingResult.IN_PROGRESS
 
     def _truncate_records_after_stop(self, batch: Batch) -> list[ParsedRecord]:
-        """Invalidate retained records strictly beyond the configured stop time."""
+        """Return retained records after dropping entries beyond the configured stop time."""
         stop_ts = self._parse_timestamp_seconds(self._stop_timestamp_value)
         if stop_ts is None:
-            return [record for response in batch._responses for record in response.valid_records]
+            return [
+                record
+                for response in batch._responses
+                for record in response.records
+                if record.is_valid and record.parsed is not None
+            ]
 
         time_column = self._time_column
         if time_column is None:
@@ -711,7 +716,12 @@ class TimeseriesBackend(VllmBackend):
                 )
             ]
 
-        return [record for response in batch._responses for record in response.valid_records]
+        return [
+            record
+            for response in batch._responses
+            for record in response.records
+            if record.is_valid and record.parsed is not None
+        ]
 
     def _log_parallel_batch_summary(
         self,
