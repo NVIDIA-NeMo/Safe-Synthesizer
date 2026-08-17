@@ -32,7 +32,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 
 > Note: Other tools like [uv](https://docs.astral.sh/uv/), [dprint](https://dprint.dev/), [ruff](https://docs.astral.sh/ruff/), [ty](https://github.com/astral-sh/ty), and [gh](https://cli.github.com/) are installed automatically by `make setup` (via [mise](https://mise.jdx.dev/)). Tool versions are declared in `.mise.toml` and locked in `mise.lock` (committed), ensuring reproducible toolchains across developer systems and CI. These should not interfere with locally installed tools.
 
-> Note on mise itself: the mise version is pinned in `.mise.toml` (`min_version`). The first run of `make setup` installs exactly that version via `tools/install-mise.sh`, preferring the GPG-verified installer when the full toolchain (`gpg`, `gpg-agent`, and `dirmngr`) is available and falling back to `https://mise.run` otherwise (with a warning). If you already have a different mise version on `PATH`, `make setup` will stop and tell you -- either run `mise self-update <pinned>` or uninstall the existing mise and rerun. It will not silently replace your install.
+> Note on mise itself: the mise version is pinned in `.mise.toml` (`min_version`). The first run of `make setup` installs exactly that version via `tools/install-mise.sh`, preferring the GPG-verified installer when `gpg` is available and falling back to `https://mise.run` otherwise (with a warning). If you already have a different mise version on `PATH`, `make setup` will stop and tell you -- either run `mise self-update <pinned>` or uninstall the existing mise and rerun. It will not silently replace your install.
 
 ### Setup
 
@@ -673,10 +673,10 @@ This project supports AI coding assistants. Configuration is layered so that con
 |-------------|---------|---------|
 | `AGENTS.md` | All agents (Cursor, Windsurf, Claude Code, etc.) | Repo conventions, module map, skills index |
 | `AGENTS.local.md` | All agents | Local developer preferences (git-ignored) |
-| `CLAUDE.md` | Claude Code | Entry point; references `AGENTS.md` and `AGENTS.local.md` |
+| `CLAUDE.md` | Claude Code | Entry point; imports `AGENTS.md` |
 | `.cursor/rules/*.mdc` | Cursor only | Workflow rules, style enforcement, file-pattern triggers |
 | `.agents/skills/*/SKILL.md` | All agents (via skills index in `AGENTS.md`) | Domain-specific knowledge (testing, sync, typing, etc.) |
-| `.cursor/skills/` | Cursor only | Symlinks to `.agents/skills/` for Cursor discoverability |
+| `.cursor/`, `.claude/`, `.codex/` | Matching clients | Client-specific rules, registrations, and adapters for shared `.agents/` assets |
 
 Conventions defined in `AGENTS.md` (code style, markdown style, testing, etc.) apply universally. Durable module-level guidance belongs in Python docstrings and source comments so it appears in the generated API reference; test-suite guidance belongs in `tests/TESTING.md`. Tool-specific config (`.cursor/rules/`, `CLAUDE.md`) reinforces those conventions for its respective tool.
 

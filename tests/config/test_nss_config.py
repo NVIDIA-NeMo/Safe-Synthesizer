@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Callable
 from typing import Annotated, Literal
 
 import pytest
@@ -12,9 +13,11 @@ from nemo_safe_synthesizer.config import (
     PiiReplacerConfig,
     SafeSynthesizerParameters,
     TimeSeriesParameters,
+    TrainingHyperparams,
 )
 from nemo_safe_synthesizer.configurator.parameters import Parameters
 from nemo_safe_synthesizer.configurator.validators import ValueValidator
+from nemo_safe_synthesizer.sdk.config_builder import ConfigBuilder
 
 
 class SubGroup(Parameters):
@@ -95,6 +98,35 @@ class TestValueValidation:
         # This should fail validation
         with pytest.raises(ValidationError):
             TestParams(validation_ratio=1.2)
+
+
+class TestTrainingHyperparams:
+    @pytest.mark.parametrize(
+        "validate",
+        [
+            pytest.param(
+                lambda: TrainingHyperparams.model_validate({"rope_scaling_factor": None}),
+                id="model_validate",
+            ),
+            pytest.param(
+                lambda: TrainingHyperparams.from_yaml_str("rope_scaling_factor: null\n"),
+                id="section_yaml",
+            ),
+            pytest.param(
+                lambda: SafeSynthesizerParameters.from_yaml_str("training:\n  rope_scaling_factor: null\n"),
+                id="top_level_yaml",
+            ),
+            pytest.param(
+                lambda: ConfigBuilder().with_train({"rope_scaling_factor": None}),
+                id="builder",
+            ),
+        ],
+    )
+    def test_rope_scaling_factor_null_rejected_as_validation_error(self, validate: Callable[[], object]):
+        with pytest.raises(ValidationError) as exc_info:
+            validate()
+
+        assert "rope_scaling_factor" in str(exc_info.value)
 
 
 class TestParametersClass:
