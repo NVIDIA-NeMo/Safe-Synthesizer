@@ -34,8 +34,8 @@ __all__ = [
     "ConditioningColumn",
     "LLMConfig",
     "PiiColumnPlan",
-    "PiiPersonBackend",
-    "PiiPersonConfig",
+    "PiiSamplerBackend",
+    "PiiSamplerConfig",
     "PiiReplacementPlan",
     "PiiReplacementScope",
     "PiiReplacementSettings",
@@ -201,19 +201,29 @@ def uses_original_conditioner(kind: ColumnKind) -> bool:
 class ConditioningColumn(NSSBaseModel):
     """An existing column that conditions the replacement of another column.
 
-    ``column_type`` must be a :class:`ColumnKind` with a ``condition_*`` capability.
-    Synthetic conditioners (e.g. ``first_name``) use replacement values; original
-    conditioners (e.g. ``sex``) use the row's existing value and are not replaced.
+    ``column_type`` is required for **read-only** conditioners (``sex``,
+    ``ethnic_background``, ``city``, …) that are not listed under
+    ``columns_to_replace``.
+
+    When the conditioner is itself a replace target (e.g. email depends on
+    ``first_name``), omit ``column_type``: the plan infers it from that column's
+    ``entity_type``. Synthetic conditioners use replacement values; original
+    conditioners use the row's existing value and are not replaced.
     """
 
     column_name: str = Field(description="Existing dataframe column that supplies the conditioning value.")
-    column_type: ColumnKind = Field(
-        description="Semantic kind of the conditioning column (must be a conditioner capability).",
+    column_type: ColumnKind | None = Field(
+        default=None,
+        description=(
+            "Semantic kind of the conditioning column. Required for read-only "
+            "conditioners; omit when this column_name is also in columns_to_replace "
+            "(inferred from that entry's entity_type)."
+        ),
     )
 
     @model_validator(mode="after")
-    def _require_conditioner_capability(self) -> Self:
-        if not can_condition(self.column_type):
+    def _require_conditioner_capability_when_set(self) -> Self:
+        if self.column_type is not None and not can_condition(self.column_type):
             raise ParameterError(
                 f"column_type {self.column_type.value!r} cannot be used in depends_on "
                 f"(allowed conditioner kinds: "
@@ -231,8 +241,7 @@ class PiiColumnPlan(NSSBaseModel):
     """
 
     column_name: str = Field(description="Name of the dataframe column to replace or scan.")
-    entity_type: ColumnKind | None = Field(
-        default=None,
+    entity_type: ColumnKind = Field(
         description=(
             "Column kind this entry holds. Must be replaceable or free_text; "
             "identify-only kinds are refused."
@@ -252,14 +261,15 @@ class PiiColumnPlan(NSSBaseModel):
         default_factory=list,
         description=(
             "Columns that condition the replacement of this column. "
-            "Not allowed when entity_type is free_text. Full matrix / DAG checks "
-            "live in planning validation; this model only enforces cheap shape rules."
+            "Not allowed when entity_type is free_text. Omit ConditioningColumn.column_type "
+            "when the conditioner is listed in columns_to_replace. Matrix checks for "
+            "explicit column_type run here; omitted types are resolved on PiiReplacementPlan."
         ),
     )
 
     @model_validator(mode="after")
     def _validate_entity_and_depends_on(self) -> Self:
-        if self.entity_type is not None and not can_be_entity_type(self.entity_type):
+        if not can_be_entity_type(self.entity_type):
             raise ParameterError(
                 f"column {self.column_name!r}: entity_type {self.entity_type.value!r} is "
                 "identify-only (or otherwise not replaceable); omit it from columns_to_replace "
@@ -269,7 +279,7 @@ class PiiColumnPlan(NSSBaseModel):
             raise ParameterError(
                 f"column {self.column_name!r}: depends_on is not allowed when entity_type is free_text"
             )
-        if self.entity_type is not None and self.depends_on:
+        if self.depends_on:
             allowed = ALLOWED_DEPENDS_ON.get(self.entity_type, frozenset())
             if not allowed:
                 raise ParameterError(
@@ -277,6 +287,8 @@ class PiiColumnPlan(NSSBaseModel):
                     "does not allow depends_on"
                 )
             for dep in self.depends_on:
+                if dep.column_type is None:
+                    continue
                 if dep.column_type not in allowed:
                     raise ParameterError(
                         f"column {self.column_name!r}: depends_on column_type "
@@ -298,7 +310,7 @@ class PiiReplacementScope(StrEnum):
 class PiiReplacementPlan(Parameters):
     """Dataset-specific detection/replacement plan (column-oriented).
 
-    Flat ``columns_to_replace`` list; person-like consistency is expressed only
+    Flat ``columns_to_replace`` list; cross-column consistency is expressed only
     via ``depends_on`` edges (a DAG). Plan-vs-dataframe and graph checks live in
     ``pii_replacer.planning.validation``.
     """
@@ -311,6 +323,54 @@ class PiiReplacementPlan(Parameters):
         default_factory=list,
         description="Columns to replace or (for free_text) scan for value propagation.",
     )
+
+    @model_validator(mode="after")
+    def _resolve_omitted_depends_on_types(self) -> Self:
+        """Infer missing depends_on.column_type from columns_to_replace entity_type."""
+        by_name = {spec.column_name: spec for spec in self.columns_to_replace}
+        for spec in self.columns_to_replace:
+            if not spec.depends_on:
+                continue
+            allowed = ALLOWED_DEPENDS_ON.get(spec.entity_type, frozenset())
+            resolved: list[ConditioningColumn] = []
+            for dep in spec.depends_on:
+                col_type = dep.column_type
+                if col_type is None:
+                    source = by_name.get(dep.column_name)
+                    if source is None:
+                        raise ParameterError(
+                            f"column {spec.column_name!r}: depends_on column "
+                            f"{dep.column_name!r} omits column_type but is not listed in "
+                            "columns_to_replace; set column_type for read-only conditioners "
+                            "(e.g. sex, ethnic_background, city)"
+                        )
+                    inferred = source.entity_type
+                    if not can_condition(inferred):
+                        raise ParameterError(
+                            f"column {spec.column_name!r}: depends_on column "
+                            f"{dep.column_name!r} has entity_type {inferred.value!r}, which "
+                            "cannot be used as a conditioner"
+                        )
+                    if inferred not in allowed:
+                        raise ParameterError(
+                            f"column {spec.column_name!r}: depends_on column "
+                            f"{dep.column_name!r} (entity_type {inferred.value!r}) is not "
+                            f"allowed for entity_type {spec.entity_type.value!r} (allowed: "
+                            f"{sorted(k.value for k in allowed)})"
+                        )
+                    dep = dep.model_copy(update={"column_type": inferred})
+                elif dep.column_name in by_name:
+                    planned = by_name[dep.column_name].entity_type
+                    if planned != col_type:
+                        raise ParameterError(
+                            f"column {spec.column_name!r}: depends_on column "
+                            f"{dep.column_name!r} has column_type {col_type.value!r} but "
+                            f"columns_to_replace lists entity_type {planned.value!r}"
+                        )
+                resolved.append(dep)
+            spec.depends_on = resolved
+        return self
+
 
 
 class LLMConfig(NSSBaseModel):
@@ -339,20 +399,18 @@ class PiiReplacementSettings(NSSBaseModel):
     )
 
 
-class PiiPersonBackend(StrEnum):
+class PiiSamplerBackend(StrEnum):
     # pgm = "pgm" # Internal generator
     managed = "managed"
     faker = "faker"
 
 
-class PiiPersonConfig(NSSBaseModel):
-    """Synthetic-person generation settings."""
+class PiiSamplerConfig(NSSBaseModel):
+    """Settings for the synthetic value sampler (names and related person-like fields)."""
 
-    backend: PiiPersonBackend = Field(
-        default=PiiPersonBackend.managed,
-        description=(
-            "Persona sampler backend: managed assets or Faker."
-        ),
+    backend: PiiSamplerBackend = Field(
+        default=PiiSamplerBackend.managed,
+        description="Synthetic value sampler backend: managed assets or Faker.",
     )
     managed_assets_path: str | None = Field(
         default=None,
@@ -406,9 +464,9 @@ class ReplacePiiConfig(Parameters):
         default_factory=PiiReplacementSettings,
         description="Locale and seed for synthetic value generation.",
     )
-    person: PiiPersonConfig = Field(
-        default_factory=PiiPersonConfig,
-        description="Synthetic-person sampler backend and asset paths.",
+    sampler: PiiSamplerConfig = Field(
+        default_factory=PiiSamplerConfig,
+        description="Synthetic value sampler backend and asset paths.",
     )
 
     @field_validator("llm_enhancement")

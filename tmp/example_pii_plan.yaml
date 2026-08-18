@@ -1,0 +1,70 @@
+scope: record
+columns_to_replace:
+  - column_name: first_name
+    entity_type: first_name
+    depends_on:
+      - column_name: gender
+        column_type: sex
+      - column_name: ethnicity
+        column_type: ethnic_background
+  - column_name: last_name
+    entity_type: last_name
+    depends_on:
+      - column_name: ethnicity
+        column_type: ethnic_background
+  - column_name: spouse_first_name
+    entity_type: first_name
+    depends_on:
+      - column_name: spouse_gender
+        column_type: sex
+      - column_name: ethnicity
+        column_type: ethnic_background
+  - column_name: spouse_last_name
+    entity_type: last_name
+    depends_on:
+      - column_name: ethnicity
+        column_type: ethnic_background
+  - column_name: phone_number
+    entity_type: phone_number
+  - column_name: spouse_phone_number
+    entity_type: phone_number
+  - column_name: email
+    entity_type: email
+    depends_on:
+      # column_type inferred from columns_to_replace entity_type
+      - column_name: first_name
+      - column_name: last_name
+  - column_name: notes_about_family
+    entity_type: free_text
+  - column_name: username
+    entity_type: free_text
+  - column_name: provider_name
+    entity_type: full_name
+  - column_name: kid_full_name_1
+    entity_type: full_name
+    depends_on:
+      - column_name: ethnicity
+        column_type: ethnic_background
+  - column_name: kid_full_name_2
+    entity_type: full_name
+    depends_on:
+      - column_name: ethnicity
+        column_type: ethnic_background
+  - column_name: kid_full_name_3
+    entity_type: full_name
+    depends_on:
+      - column_name: ethnicity
+        column_type: ethnic_background
+  - column_name: ssn
+    entity_type: ssn
+  - column_name: unique_id
+    entity_type: unique_identifier
+  - column_name: date_of_birth
+    entity_type: date_of_birth
+  - column_name: spouse_date_of_birth
+    entity_type: date_of_birth
+    pattern: "%d.%m.%y"
+  - column_name: birth_street_address
+    entity_type: street_address
+  - column_name: current_full_address
+    entity_type: street_address
