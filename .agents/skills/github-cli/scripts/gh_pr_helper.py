@@ -31,7 +31,7 @@ from github import Auth, Github
 from github.Issue import Issue
 from github.PullRequest import PullRequest
 from github.Repository import Repository
-from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 app = typer.Typer(
     name="gh-pr-helper",
@@ -109,6 +109,8 @@ class ReplyOutput(BaseModel):
 class ReviewDraftComment(BaseModel):
     """One approved inline finding to submit in a PR review."""
 
+    model_config = ConfigDict(extra="forbid")
+
     path: str
     body: str
     line: int = Field(gt=0)
@@ -138,6 +140,8 @@ class ReviewDraftComment(BaseModel):
 
 class ReviewSubmission(BaseModel):
     """Exact approved review artifact pinned to one PR head."""
+
+    model_config = ConfigDict(extra="forbid")
 
     head_sha: str = Field(pattern=r"^[0-9a-fA-F]{40}$")
     body: str = ""

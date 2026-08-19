@@ -140,3 +140,32 @@ def test_review_comment_range_requires_both_start_fields() -> None:
             body="Approved finding",
             start_line=40,
         )
+
+
+@pytest.mark.parametrize("unknown_field", ["boddy", "headSha"])
+def test_review_submission_rejects_unknown_top_level_fields(unknown_field: str) -> None:
+    artifact = {
+        "head_sha": "a" * 40,
+        "body": "Approved summary",
+        "comments": [{"path": "src/example.py", "line": 42, "body": "Approved finding"}],
+        unknown_field: "misspelled value",
+    }
+
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        helper.ReviewSubmission.model_validate(artifact)
+
+
+@pytest.mark.parametrize("unknown_field", ["boddy", "startLine", "startSide"])
+def test_review_submission_rejects_unknown_comment_fields(unknown_field: str) -> None:
+    comment = {
+        "path": "src/example.py",
+        "line": 42,
+        "body": "Approved finding",
+        unknown_field: "misspelled value",
+    }
+
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        helper.ReviewSubmission(
+            head_sha="a" * 40,
+            comments=[comment],
+        )
