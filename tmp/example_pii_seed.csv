@@ -1,0 +1,2 @@
+first_name,last_name,gender,ethnicity,spouse_first_name,spouse_last_name,spouse_gender,phone_number,spouse_phone_number,email,notes_about_family,username,provider_name,kid_full_name_1,kid_full_name_2,kid_full_name_3,ssn,unique_id,date_of_birth,spouse_date_of_birth,birth_street_address,current_full_address
+Ada,Kim,Female,korean,Sam,Kim,Male,555-0100,555-0101,ada.kim@example.com,Ada and Sam live with three kids.,akim,Dr. Patel,Mina Kim,Leo Kim,Jun Kim,123-45-6789,u-001,1990-01-15,12.03.88,10 Oak St,10 Oak St Springfield IL 62701
