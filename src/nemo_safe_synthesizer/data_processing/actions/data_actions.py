@@ -37,7 +37,6 @@ from pydantic import (
     ConfigDict,
     Field,
     PrivateAttr,
-    ValidationError,
     ValidationInfo,
     model_validator,
 )
@@ -52,7 +51,6 @@ from .utils import (
     ActionCtx,
     DataSourceT,
     MetadataColumns,
-    TransformsUpdate,
     UniqueIdSource,
     concrete_subclasses,
     guess_datetime_format,
@@ -279,69 +277,6 @@ class GenerateAction(BaseAction, ABC):
         return self.generate(df).to_dict("records")
 
 
-class GenExpression(GenerateAction):
-    type_: Literal["gen_expression"] = "gen_expression"
-
-    col: str
-
-    expression: Optional[str] = None
-    """
-    A jinja transforms_v2 expression that specifies the value of the column.
-    """
-
-    expressions: Optional[list[str]] = None
-    """
-    Similar to `expression`, but allows you to specify multiple statements
-    that'll be processed in sequence to transforms_v2. This might be useful
-    if you have a more complex set of expressions.
-    """
-
-    dtype: Optional[str] = None
-    """
-    If specified, the column will be cast as this `dtype` after generation.
-    """
-
-    _expressions: list[str] = PrivateAttr()
-
-    @model_validator(mode="after")
-    def validate_model(self) -> "BaseAction":
-        if (self.expression is None and self.expressions is None) or (
-            self.expression is not None and self.expressions is not None
-        ):
-            raise ValueError("Specify one and only one of `expression` or `expressions`.")
-
-        if self.expression is not None:
-            # TV2 expects a list of updates, so coerce a singular update into a list
-            self._expressions = [self.expression]
-
-        if self.expressions is not None:
-            self._expressions = self.expressions
-
-        return self
-
-    def generate(self, df: pd.DataFrame) -> pd.DataFrame:
-        df = self._ctx.transforms_util.execute_col_updates(self.col, df, self._expressions)
-        if self.dtype is not None:
-            df[self.col] = df[self.col].astype(self.dtype)  # type: ignore
-
-        return df
-
-
-class GenRawExpression(GenerateAction):
-    """Low-level action that passes raw transforms_v2 update payloads.
-
-    Unlike ``GenExpression`` which targets a single column, this action
-    accepts a full list of ``TransformsUpdate`` steps. Prefer
-    ``GenExpression`` for simpler use cases.
-    """
-
-    type_: Literal["gen_raw_expression"] = "gen_raw_expression"
-    expressions: list[TransformsUpdate] = []
-
-    def generate(self, df: pd.DataFrame) -> pd.DataFrame:
-        return self._ctx.transforms_util.execute_updates(df, self.expressions)
-
-
 class GenDistribution(GenerateAction):
     type_: Literal["gen_distribution"] = "gen_distribution"
     col: str
@@ -430,44 +365,9 @@ class GenUniqueId(GenerateAction):
         return self._action.generate(df)
 
 
-class GenFaker(GenerateAction):
-    type_: Literal["gen_faker"] = "gen_faker"
-    col: str
-    faker_fn: str
-
-    @model_validator(mode="after")
-    def validate_faker_fn(self) -> "BaseAction":
-        transforms_util = self._ctx.transforms_util
-        fn = getattr(transforms_util.env._fake, self.faker_fn, None)
-        if fn is None:
-            raise ValidationError(f"unknown `faker_fn`: [{self.faker_fn}]")
-
-        return self
-
-    def generate(self, df: pd.DataFrame) -> pd.DataFrame:
-        fn = getattr(self._ctx.transforms_util.env._fake, self.faker_fn)
-        df[self.col] = df.apply(lambda _: fn(), axis=1)
-        return df
-
-
 class ValidationAction(BaseAction, ABC):
     @abstractmethod
     def _validate_batch(self, batch: pd.DataFrame, df: pd.DataFrame) -> pd.Series: ...
-
-
-class DropExpression(ValidationAction):
-    type_: Literal["expression_drop"] = "expression_drop"
-    conditions: list[str] = []
-
-    def _validate_batch(self, batch: pd.DataFrame, df: pd.DataFrame) -> pd.Series:
-        batch[MetadataColumns.INDEX] = range(len(batch))
-        batch_copy = batch.copy()
-
-        batch_copy = self._ctx.transforms_util.execute_drop_condition(batch=batch_copy, conditions=self.conditions)
-
-        # Create a mask based on which temp IDs survived
-        remaining_ids = set(batch_copy[MetadataColumns.INDEX])
-        return pd.Series([i in remaining_ids for i in range(len(batch))], index=batch.index)
 
 
 class DropDuplicates(ValidationAction):

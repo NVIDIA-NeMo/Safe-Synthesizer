@@ -51,7 +51,7 @@ NSS uncached-model capture example::
         --artifact-path "$ARTIFACTS" \
         --training__pretrained_model "$MODEL" \
         --training__attn_implementation sdpa \
-        --replace_pii__globals__classify__enable_classify false \
+        --no-replace-pii \
         --log-format plain \
         -vv
 
