@@ -29,7 +29,7 @@ graph TB
             TrainConfig["TrainingHyperparams"]
             GenConfig["GenerateParameters"]
             EvalConfig["EvaluationParameters"]
-            PIIConfig["PiiReplacerConfig"]
+            PIIConfig["ReplacePiiConfig"]
             DPConfig["DifferentialPrivacyHyperparams"]
         end
     end
@@ -37,7 +37,7 @@ graph TB
     subgraph dataProcessing [Data Processing Pipeline]
         DataSource["Input Data"]
         Holdout["Holdout - Train/Test Split"]
-        PIIReplacer["PII Replacer - NemoPII"]
+        PIIReplacer["PII Replacement v3 - Placeholder"]
         DataActions["ActionExecutor"]
         Assembler["ExampleAssembler"]
     end
@@ -188,7 +188,7 @@ flowchart TB
         training_p["TrainingHyperparams"]
         gen_p["GenerateParameters"]
         eval_p["EvaluationParameters"]
-        pii_p["PiiReplacerConfig | None"]
+        pii_p["ReplacePiiConfig | None"]
         dp_p["DifferentialPrivacyHyperparams | None"]
         ts_p["TimeSeriesParameters"]
     end
@@ -233,7 +233,7 @@ Exactly what avenues of configuration are available, and thus how precedence is 
 - CLI: CLI flags > dataset registry overrides > YAML config file > defaults
 - SDK: Python SDK builder calls > YAML config file > defaults
 
-Nullable sub-configs (`PiiReplacerConfig | None`, `DifferentialPrivacyHyperparams | None`)
+Nullable sub-configs (`ReplacePiiConfig | None`, `DifferentialPrivacyHyperparams | None`)
 use `None` as the sole disabled signal. The `@pydantic_options` decorator auto-generates
 `--no_<field>` is-flags for these fields; `parse_overrides` translates them into
 `{field: None}` in the overrides dict.
@@ -297,7 +297,7 @@ Path: `src/nemo_safe_synthesizer/config/`
 - TrainingHyperparams: training settings (learning rate, epochs, batch size, etc.)
 - GenerateParameters: generation settings (temperature, top_p, num_records, etc.)
 - EvaluationParameters: evaluation component toggles and settings
-- PiiReplacerConfig: PII detection and replacement settings
+- ReplacePiiConfig: placeholder for PII replacement v3
 - DifferentialPrivacyHyperparams: DP training parameters (epsilon, delta, clipping norm)
 
 ### 2. Data Processing Pipeline
@@ -305,7 +305,7 @@ Path: `src/nemo_safe_synthesizer/config/`
 Path: `src/nemo_safe_synthesizer/data_processing/`
 
 - Holdout (`holdout/`): splits data into train/test sets with stratification support
-- NemoPII (`pii_replacer/`): detects PII entities (names, emails, SSN, etc.) and replaces with synthetic but realistic values
+- `pii_replacer/`: placeholder for PII replacement v3; only evaluation result models remain
 - ActionExecutor (`actions/`): executes data transformations (date normalization, distributions)
 - ExampleAssembler (`assembler.py`): converts records to JSON format, tokenizes for model training, handles truncation and padding
 

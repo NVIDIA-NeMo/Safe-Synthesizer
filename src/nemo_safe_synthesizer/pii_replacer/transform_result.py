@@ -41,7 +41,7 @@ class ColumnStatistics(BaseModel):
 class TransformResult(BaseModel):
     """Result of PII replacement: transformed data and per-column statistics.
 
-    Produced by ``NemoPII.transform_df`` and exposed as ``NemoPII.result``.
+    Shared result shape consumed by evaluation after a replacement run.
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)

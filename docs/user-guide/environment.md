@@ -25,7 +25,7 @@ For output quality and evaluation metrics, see
 | Run offline or air-gapped | [HF cache and offline](#hugging-face-cache-and-offline) · [Running in Offline Environments](running.md#running-in-offline-environments) |
 | Docker / container mounts | [Containers](#containers) · [Docker](docker.md) |
 | Logging and WandB | [Running -- Logging and Experiment Tracking](running.md#logging-and-experiment-tracking) |
-| PII column classification API key | [PII, NER, and column classification](#pii-ner-and-column-classification) · [Running -- LLM Column Classification](running.md#llm-column-classification) |
+| Inference endpoint and API key (unused) | [PII, NER, and column classification](#pii-ner-and-column-classification) · [PII Replacement](../product-overview/pii_replacement.md) |
 | Disable telemetry | [Telemetry](#telemetry) |
 | Resolve CLI vs env vs defaults | [Precedence](#precedence) |
 
@@ -45,24 +45,21 @@ Grouped by the `Category` column -- `nss`-native settings first, then
 | `NSS_LOG_COLOR` | nss | `--log-color` / `--no-log-color` | CLI / observability | auto (TTY) | Colorize console output | [Running -- Log Format](running.md#log-format) |
 | `NSS_LOG_LEVEL` | nss | `--verbose` (0–2) | observability | `INFO` | Log level (`DEBUG`, `DEBUG_DEPENDENCIES`, etc.) | Set via verbosity, not a direct CLI flag |
 | `NSS_DATASET_REGISTRY` | nss | `--dataset-registry` | CLI | -- | Dataset registry YAML path or URL | [Running -- Dataset Registry](running.md#dataset-registry) |
+| `NSS_INFERENCE_ENDPOINT` | nss | `--inference-endpoint-url` | CLI | NVIDIA integrate URL | Unused until PII replacement v3 | [PII appendix](#pii-ner-and-column-classification) |
+| `NSS_INFERENCE_KEY` | nss | `--inference-api-key` | CLI | -- | Unused until PII replacement v3 | [PII appendix](#pii-ner-and-column-classification) |
+| `NSS_INFERENCE_MODEL` | nss | `--inference-model-id` | CLI | `nvidia/nemotron-3-ultra-550b-a55b` | Unused until PII replacement v3 | [PII appendix](#pii-ner-and-column-classification) |
 | `NSS_WANDB_MODE` | nss | `--wandb-mode` | WandB | `disabled` | WandB run mode | Alias for `WANDB_MODE` |
 | `NSS_WANDB_PROJECT` | nss | `--wandb-project` | WandB | -- | WandB project name | Alias for `WANDB_PROJECT` |
 | `NSS_WANDB_UPLOAD_EVALUATION_REPORT` | nss | `--wandb-upload-evaluation-report` / `--no-wandb-upload-evaluation-report` | WandB | `true` | Upload final evaluation HTML and artifact | Set to `false` to skip HTML and artifact publishing; summary metrics and the scorecard remain enabled |
-| `NSS_INFERENCE_ENDPOINT` | nss | `--inference-endpoint-url` | PII column classifier | NVIDIA integrate URL | OpenAI-compatible endpoint for column classification | [PII appendix](#pii-ner-and-column-classification) |
-| `NSS_INFERENCE_KEY` | nss | `--inference-api-key` | PII column classifier | -- | API key for `NSS_INFERENCE_ENDPOINT` | Required for LLM column classification |
-| `NSS_INFERENCE_MODEL` | nss | `--inference-model-id` | PII column classifier | `nvidia/nemotron-3-ultra-550b-a55b` | Model ID sent to the inference endpoint | [PII appendix](#pii-ner-and-column-classification) |
-| `NSS_PII_REPLACER_CPU_COUNT` | nss | `--cpu-count` | NER worker pool | `max(1, cpu_count - 1)` | CPU processes for PII NER | [PII appendix](#pii-ner-and-column-classification) |
 | `NEMO_TELEMETRY_ENABLED` | telemetry | `--emit_telemetry` | telemetry | `true` | Enable anonymous usage telemetry | Also `emit_telemetry` in YAML; see [Telemetry](#telemetry) |
 | `HF_HOME` | third-party | -- | Hugging Face Hub | platform cache dir | Root directory for HF downloads | [HF appendix](#hugging-face-cache-and-offline) |
-| `HF_HUB_OFFLINE` | third-party | `--enable-huggingface-remote` / `--disable-huggingface-remote` | Hugging Face Hub | unset | Fail if a model is not cached (covers base model and GLiNER) | Preferred offline gate; CLI flag also sets `TRANSFORMERS_OFFLINE` |
+| `HF_HUB_OFFLINE` | third-party | `--enable-huggingface-remote` / `--disable-huggingface-remote` | Hugging Face Hub | unset | Fail if a model is not cached | Preferred offline gate; CLI flag also sets `TRANSFORMERS_OFFLINE` |
 | `VLLM_CACHE_ROOT` | third-party | -- | vLLM | `~/.cache/vllm` | vLLM model cache directory | [vLLM appendix](#vllm-and-attention) |
 | `VLLM_ATTENTION_BACKEND` | third-party | -- | vLLM | auto | Override attention implementation | [vLLM appendix](#vllm-and-attention) |
 | `WANDB_MODE` | third-party | `--wandb-mode` | WandB | `disabled` | WandB run mode | Same as `NSS_WANDB_MODE` |
 | `WANDB_PROJECT` | third-party | `--wandb-project` | WandB | -- | WandB project name | Same as `NSS_WANDB_PROJECT` |
 | `WANDB_API_KEY` | third-party | -- | WandB | -- | WandB authentication | Required for online logging |
 | `NVIDIA_VISIBLE_DEVICES` | container | -- | NVIDIA runtime | all visible GPUs | Limit GPUs inside a container | [Containers](#containers) · [Docker -- GPU Access](docker.md#gpu-access) |
-| `NSS_OPT_BUCKET` | internal | -- | NER optimization | `nss-opt-dev-use2` | S3 bucket for optional NER opt artifacts | [Internal](#internal-and-cluster) |
-| `NSS_OPT_CACHE_DIR` | internal | -- | NER optimization | `.optcache` | Local cache for NER optimization downloads | [Internal](#internal-and-cluster) |
 | `NEMO_TELEMETRY_ENDPOINT` | internal | -- | telemetry | NVIDIA default | Override telemetry upload URL | [Telemetry](#telemetry) |
 | `NEMO_SESSION_PREFIX` | internal | -- | telemetry | -- | Prefix for telemetry session IDs | [Telemetry](#telemetry) |
 | `NEMO_JOB_ID` | internal | -- | evaluation reports | -- | Cluster job ID in multimodal reports | [Internal](#internal-and-cluster) |
@@ -73,9 +70,8 @@ Grouped by the `Category` column -- `nss`-native settings first, then
 
 ### Infrastructure (CLISettings)
 
-For artifact paths, logging, WandB overrides, and the five runtime flags
-(`--inference-*`, `--enable-huggingface-remote` / `--disable-huggingface-remote`,
-`--cpu-count`):
+For artifact paths, logging, WandB overrides, and the runtime flags
+(`--inference-*`, `--enable-huggingface-remote` / `--disable-huggingface-remote`):
 
 1. CLI flags
 2. Environment variables
@@ -107,7 +103,7 @@ and [Docker -- Offline and Air-Gapped Environments](docker.md#offline-and-air-ga
 
 ### `HF_HOME`
 
-Root cache for model weights, tokenizers, compiled attention kernels, GLiNER,
+Root cache for model weights, tokenizers, compiled attention kernels,
 evaluation SentenceTransformer weights, and other Hub assets.
 
 ```bash
@@ -117,9 +113,8 @@ export HF_HOME=/shared/cache/huggingface
 ### `HF_HUB_OFFLINE`
 
 `HF_HUB_OFFLINE=1` tells Hugging Face Hub to refuse network access. It is the
-canonical offline switch: huggingface_hub honors it globally, so a single
-setting covers both the base model and GLiNER. Pair it with a pre-populated
-`HF_HOME`.
+canonical offline switch: huggingface_hub honors it globally. Pair it with a
+pre-populated `HF_HOME`.
 
 ```bash
 export HF_HUB_OFFLINE=1
@@ -152,14 +147,14 @@ safe-synthesizer run --disable-huggingface-remote ...
 ```
 
 !!! warning "Models must be cached"
-    Offline mode requires the base model and GLiNER to already be present in
-    `HF_HOME`. Loading fails if a required model is not cached.
+    Offline mode requires all models to already be present in `HF_HOME`.
+    Loading fails if a required model is not cached.
 
 ### Pre-caching models
 
 Run once with network access, then copy or mount the populated cache. Typical
-first-run downloads include training weights, GLiNER, evaluation embeddings,
-and the vLLM base model.
+first-run downloads include training weights, evaluation embeddings, and the
+vLLM base model.
 
 !!! warning "Silent downloads on first use"
     Downloads happen on first use. In an air-gapped environment, the first
@@ -172,41 +167,7 @@ for the full pre-cache checklist.
 
 ## PII, NER, and column classification
 
-Controls LLM-based column classification and CPU parallelism for NER-based PII
-replacement. For setup examples and NER-only fallback behavior, see
-[Running -- LLM Column Classification](running.md#llm-column-classification).
-
-### `NSS_INFERENCE_ENDPOINT` and `NSS_INFERENCE_KEY`
-
-OpenAI-compatible endpoint and API key for column classification. The endpoint
-defaults to `https://integrate.api.nvidia.com/v1` when unset.
-
-```bash
-export NSS_INFERENCE_ENDPOINT="https://your-llm-inference-endpoint"
-export NSS_INFERENCE_KEY="your-api-key"  # pragma: allowlist secret
-```
-
-On the CLI, can also use `--inference-api-key` and optionally
-`--inference-endpoint-url` instead of exporting these variables.
-
-To disable column classification entirely, set
-`replace_pii.globals.classify.enable_classify: false` in YAML or use the SDK.
-See [Configuration Reference -- Replacing PII](configuration.md#replacing-pii).
-
-### `NSS_INFERENCE_MODEL`
-
-Model ID sent to the inference endpoint. Defaults to
-`nvidia/nemotron-3-ultra-550b-a55b`. Override with `--inference-model-id`.
-
-### `NSS_PII_REPLACER_CPU_COUNT`
-
-Number of CPU worker processes for NER. Override with `--cpu-count`. Defaults
-to `max(1, cpu_count - 1)`, capped so each worker handles at least 1,000
-records.
-
-```bash
-export NSS_PII_REPLACER_CPU_COUNT=4
-```
+PII replacement v3 environment guidance will be added in a later update.
 
 ---
 

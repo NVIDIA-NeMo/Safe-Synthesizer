@@ -199,23 +199,14 @@ class CLISettings(BaseSettings):
     huggingface_remote: bool | None = Field(
         default=None,
         validation_alias=AliasChoices("huggingface_remote"),
-        description="Whether to allow Hugging Face remote downloads (base model and GLiNER)",
+        description="Whether to allow Hugging Face remote downloads for Hub assets",
     )
-    """Whether to allow Hugging Face remote downloads for the base model and GLiNER.
+    """Whether to allow Hugging Face remote downloads for Hub assets (base model, etc.).
 
     ``None`` leaves the environment untouched. ``True`` / ``False`` is propagated
     to the standard ``HF_HUB_OFFLINE`` and ``TRANSFORMERS_OFFLINE`` variables (the
     canonical env switch) by ``_propagate_runtime_settings_to_env``; there is no
     separate NSS env var."""
-
-    cpu_count: int | None = Field(
-        default=None,
-        ge=1,
-        validation_alias=AliasChoices("cpu_count", "NSS_PII_REPLACER_CPU_COUNT"),
-        description="Number of CPU worker processes used for NER (PII replacement)",
-    )
-    """Number of CPU worker processes used for NER (PII replacement)
-    (env: ``NSS_PII_REPLACER_CPU_COUNT``)."""
 
     @field_validator("wandb_mode", mode="before")
     @classmethod

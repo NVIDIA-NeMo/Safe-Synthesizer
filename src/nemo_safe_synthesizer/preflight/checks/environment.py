@@ -9,7 +9,6 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
-from urllib.parse import urlparse
 
 from typing_extensions import override
 
@@ -450,38 +449,8 @@ class VRAMHeadroomCheck(MetadataCheck):
                 )
 
 
-def _is_blank(value: str | None) -> bool:
-    """Whether ``value`` is set but contains only whitespace (an empty override)."""
-    return value is not None and not value.strip()
-
-
-def _is_valid_http_url(value: str | None) -> bool:
-    """Whether ``value`` parses as an ``http(s)`` URL with a network location."""
-    if value is None:
-        return False
-    parsed = urlparse(value.strip())
-    return parsed.scheme in ("http", "https") and bool(parsed.netloc)
-
-
 class InferenceModelCheck(ConfigCheck):
-    """Validate the inference configuration used for PII column classification.
-
-    When classification is enabled, the runtime calls an OpenAI-compatible
-    inference endpoint configured by ``NSS_INFERENCE_KEY``,
-    ``NSS_INFERENCE_MODEL``, and ``NSS_INFERENCE_ENDPOINT`` (set directly or via
-    the matching CLI flags, which are propagated to the environment before
-    preflight runs). This check reads those env vars -- not ``config`` -- because
-    the inference settings live in ``CLISettings``/the environment rather than in
-    ``SafeSynthesizerParameters``.
-
-    The body uses a single-dispatch ``match`` over ``(model, key, endpoint)``,
-    so at most one finding is emitted per run -- the highest-priority problem.
-    Priority order: invalid endpoint, then missing key, then blank model id. The
-    invalid endpoint is an error (a non-http(s) endpoint cannot succeed, so the
-    run must not pass ``--validate``); the key and model findings are warnings
-    (classification degrades or falls back rather than failing the run). The
-    error is checked first so a lower-severity warning never masks it.
-    """
+    """Placeholder for inference checks used by a future PII implementation."""
 
     name = "env.inference"
     label = "Inference configuration"
@@ -489,36 +458,9 @@ class InferenceModelCheck(ConfigCheck):
 
     @override
     def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
-        config = ctx.config
-        if config.replace_pii is None or config.replace_pii.globals.classify.enable_classify is False:
-            return
-
-        model = os.environ.get("NSS_INFERENCE_MODEL")
-        key = os.environ.get("NSS_INFERENCE_KEY")
-        endpoint = os.environ.get("NSS_INFERENCE_ENDPOINT")
-
-        # Single-dispatch: the first matching case wins, so cases are ordered by
-        # severity then priority. The invalid endpoint is a hard error and is
-        # checked first so it is never masked by the missing-key or blank-model
-        # warnings.
-        match model, key, endpoint:
-            case _, _, e if e is not None and e.strip() and not _is_valid_http_url(e):
-                collector.error(
-                    "inference_endpoint_invalid",
-                    f"NSS_INFERENCE_ENDPOINT '{e}' is not a valid http(s) URL. "
-                    "PII column classification requests will fail.",
-                )
-            case _, k, _ if not (k or "").strip():
-                collector.warning(
-                    "inference_key_missing",
-                    "NSS_INFERENCE_KEY is not set. PII column classification will run in degraded mode.",
-                )
-            case m, _, _ if _is_blank(m):
-                collector.warning(
-                    "inference_model_blank",
-                    "NSS_INFERENCE_MODEL is set but empty. The blank value is ignored and the "
-                    "default model id is used. Set a non-empty model id to override the default.",
-                )
+        # The inference-backed PII classifier was removed with the legacy
+        # replacement engine. A later implementation will restore this check.
+        return
 
 
 def _has_hf_token() -> bool:

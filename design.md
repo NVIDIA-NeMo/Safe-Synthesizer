@@ -23,7 +23,7 @@ graph TB
             TrainConfig[TrainingHyperparams]
             GenConfig[GenerateParameters]
             EvalConfig[EvaluationParameters]
-            PIIConfig[PiiReplacerConfig]
+            PIIConfig[ReplacePiiConfig]
             DPConfig[DifferentialPrivacyHyperparams]
         end
     end
@@ -31,7 +31,7 @@ graph TB
     subgraph "Data Processing Pipeline"
         DataSource[Input Data<br/>DataFrame/CSV]
         Holdout[Holdout<br/>Train/Test Split]
-        PIIReplacer[PII Replacer<br/>NemoPII]
+        PIIReplacer[PII Replacement v3<br/>Placeholder]
         DataActions[ActionExecutor<br/>Data Transformations]
         Assembler[ExampleAssembler<br/>Tokenization]
     end
@@ -207,7 +207,7 @@ Path: `src/nemo_safe_synthesizer/config/`
 - `TrainingHyperparams`: Training settings (learning rate, epochs, batch size, etc.)
 - `GenerateParameters`: Generation settings (temperature, top_p, num_records, etc.)
 - `EvaluationParameters`: Evaluation component toggles and settings
-- `PiiReplacerConfig`: PII detection and replacement settings
+- `ReplacePiiConfig`: Placeholder for PII replacement v3
 - `DifferentialPrivacyHyperparams`: DP training parameters (epsilon, delta, clipping norm)
 
 ### 2. Data Processing Pipeline
@@ -217,10 +217,7 @@ Path: `src/nemo_safe_synthesizer/data_processing/`
 #### Components:
 
 - Holdout (`holdout/`): Splits data into train/test sets with stratification support
-- `NemoPII` (`pii_replacer/`): 
-  - Detects PII entities (names, emails, SSN, etc.)
-  - Replaces with synthetic but realistic values
-  - Maintains column statistics
+- `pii_replacer/`: Placeholder for PII replacement v3; only evaluation result models remain
 - `ActionExecutor` (`actions/`): Executes data transformations (date normalization, distributions)
 - `ExampleAssembler` (`assembler.py`): 
   - Converts records to JSON format

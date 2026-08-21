@@ -58,7 +58,6 @@ Key flags:
 - `-v HOST:CONTAINER` -- bind-mount data and HF cache; Docker requires absolute paths
 - `-e HF_HOME=...` -- persist model downloads across container runs
 - `-e HF_TOKEN=...` -- Hugging Face token for gated models
-- `-e NSS_INFERENCE_KEY=...` -- inference API key for PII column classification
 
 ### Build Arguments
 

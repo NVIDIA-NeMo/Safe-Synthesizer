@@ -545,47 +545,7 @@ check of its own.
 
 ## PII and NER
 
-Model downloads and processing timeouts for PII detection.
-
-### GLiNER Download Fails
-
-The PII replacer downloads the GLiNER NER model on first use. If the download
-fails, it raises an exception immediately.
-
-Pre-download the model by running PII replacement once in an environment
-with internet access. To force offline use after the model is cached, set
-`HF_HUB_OFFLINE=1` or pass `--disable-huggingface-remote`.
-
-### Offline Mode Not Taking Effect
-
-Symptom: `HF_HUB_OFFLINE=1` (or `--disable-huggingface-remote`) is set, yet the
-run still attempts a download, or `--enable-huggingface-remote` does not
-re-enable downloads.
-
-Cause: huggingface_hub reads `HF_HUB_OFFLINE` once, at import time, and caches
-it. If the variable is changed after huggingface_hub has been imported in the
-process, the change is ignored.
-
-Fixes:
-
-- CLI: export `HF_HUB_OFFLINE` before launching `safe-synthesizer`, or use
-  `--enable-huggingface-remote` / `--disable-huggingface-remote`. The CLI
-  applies the flag before huggingface_hub loads, so the flag always wins over
-  an inherited environment value.
-- Programmatic / SDK: set `HF_HUB_OFFLINE` before importing
-  `nemo_safe_synthesizer` (or any library that imports huggingface_hub, such as
-  `transformers` or `datasets`). Setting it afterward has no effect for that
-  process.
-
-### NER Processing Timeouts
-
-NER uses an internal `max_runtime_seconds` timeout. If processing a chunk takes
-too long, it is dropped with a warning in the logs.
-
-Check the logs for timeout warnings. The timeout is not currently
-configurable; for large datasets, reduce the amount of text processed per
-chunk (for example, shorten text fields or split them into smaller pieces) and
-optionally reduce CPU parallelism so each worker has more resources.
+PII replacement v3 troubleshooting guidance will be added in a later update.
 
 ---
 

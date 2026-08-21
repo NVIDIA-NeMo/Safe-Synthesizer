@@ -220,6 +220,9 @@ all others have defaults or are optional.
 | `--wandb-project` | `NSS_WANDB_PROJECT` | -- | WandB project name |
 | `--wandb-upload-evaluation-report` / `--no-wandb-upload-evaluation-report` | `NSS_WANDB_UPLOAD_EVALUATION_REPORT` | `true` | Control evaluation HTML and artifact publishing |
 | `--dataset-registry` | `NSS_DATASET_REGISTRY` | -- | Dataset registry YAML path/URL |
+| `--inference-endpoint-url` | `NSS_INFERENCE_ENDPOINT` | NVIDIA integrate URL | OpenAI-compatible inference endpoint (unused until PII replacement v3) |
+| `--inference-api-key` | `NSS_INFERENCE_KEY` | -- | API key for the inference endpoint (unused until PII replacement v3) |
+| `--inference-model-id` | `NSS_INFERENCE_MODEL` | `nvidia/nemotron-3-ultra-550b-a55b` | Model ID sent to the inference endpoint (unused until PII replacement v3) |
 | `-v` / `-vv` | -- | -- | Verbose logging (`-v` debug, `-vv` debug + dependencies) |
 
 #### Synthesis Parameter Overrides
@@ -533,122 +536,10 @@ See [Configuration Reference -- Data](configuration.md#data) for the full parame
 
 ## PII Replacement
 
-Enabled-by-default stage that runs before training. Detection works in two independent
-steps: GLiNER NER is used on columns detected as free text for named-entity
-patterns (names, emails, phone numbers, etc.) and replaces matches with
-synthetic placeholders. An optional second step uses an LLM to identify
-columns that are exclusively a single entity type (e.g., a column that is
-always SSNs), marking those columns for wholesale replacement before training.
-The two steps are independent -- NER runs on free-text content, LLM
-classification targets structured sensitive columns. PII replacement is on by
-default in both the CLI and SDK. PII on by default means no config flag is needed to enable it.
+PII replacement v3 will be added and documented in a later update.
 
-!!! tip "Skip PII replacement"
-    If your dataset does not contain PII, you may disable this stage to reduce pipeline
-    runtime:
-
-    - CLI: `--no-replace-pii`
-    - SDK: `.with_replace_pii(enable=False)`
-
-=== "CLI"
-
-    Default (PII on, no config needed):
-
-    ```bash
-    safe-synthesizer run --data-source data.csv
-    ```
-
-    Customize (e.g. enable LLM classification and restrict entity types):
-    put the `replace_pii` block in a YAML file and pass it with `--config`.
-    List-typed fields like `entities` cannot be set via CLI flags; use the
-    config file (see Config reference tab) or SDK.
-
-    ```bash
-    safe-synthesizer run --config pii_config.yaml --url data.csv
-    ```
-
-    To override only non-list PII settings from the CLI, use the `__` syntax,
-    e.g. `--replace_pii__globals__classify__enable_classify true`.
-
-=== "SDK"
-
-    PII replacement is on by default -- no `with_replace_pii()` call is needed
-    for the standard case.  Call it only to customize the config or to disable:
-
-    ```python
-    from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
-    from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
-
-    # Default: PII on, no call needed
-    synthesizer = SafeSynthesizer().with_data_source("data.csv").with_train()
-
-    # Customize: enable LLM classification for specific entity types
-    pii_config = PiiReplacerConfig.get_default_config()
-    pii_config.globals.classify.enable_classify = True
-    pii_config.globals.classify.entities = ["email", "phone_number", "ssn"]
-
-    synthesizer = (
-        SafeSynthesizer()
-        .with_data_source("data.csv")
-        .with_replace_pii(config=pii_config)
-        .with_train()
-        .with_generate(num_records=5000)
-    )
-    ```
-
-    The SDK builder merges partial overrides with
-    [`PiiReplacerConfig.get_default_config()`][nemo_safe_synthesizer.config.replace_pii.PiiReplacerConfig], so you don't need to
-    provide the full `steps` list.
-
-=== "Config reference"
-
-    ```yaml
-    replace_pii:
-      globals:
-        classify:
-          enable_classify: true
-          entities: ["email", "phone_number", "ssn"]
-      steps:
-        - rows:
-            update:
-              - condition: column.entity == "email" and not (this | isna)
-                value: column.entity | fake
-              - condition: column.entity == "phone_number" and not (this | isna)
-                value: column.entity | fake
-              - condition: column.entity == "ssn" and not (this | isna)
-                value: column.entity | fake
-    ```
-
-    `steps` is required and has no default. The snippet above shows a minimal
-    single-step config. For the full default ruleset (50+ entity types), use
-    [`PiiReplacerConfig.get_default_config()`][nemo_safe_synthesizer.config.replace_pii.PiiReplacerConfig]
-    in the SDK and export it to YAML:
-
-    ```python
-    from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
-    PiiReplacerConfig.get_default_config().to_yaml("pii_config.yaml")
-    ```
-
-### LLM Column Classification
-
-To enable LLM-based PII column classification (optional), set the API key
-before running the pipeline. The endpoint defaults to
-`https://integrate.api.nvidia.com/v1`; override `NSS_INFERENCE_ENDPOINT` for a
-custom OpenAI-compatible endpoint.
-
-When using the CLI, set both for column classification:
-
-```bash
-export NSS_INFERENCE_ENDPOINT="https://integrate.api.nvidia.com/v1"  # optional; this is the default
-export NSS_INFERENCE_KEY="your-api-key"  # pragma: allowlist secret  (required for column classification with the inference endpoint)
-```
-
-PII column classification requires `NSS_INFERENCE_KEY` (and optionally `NSS_INFERENCE_ENDPOINT` if not using the default).
-When `NSS_INFERENCE_KEY` is unset, the classification step is attempted but
-falls back to NER-only detection (with an error log). No environment
-variables are required for NER-only PII replacement.
-
-See [Configuration Reference -- Replacing PII](configuration.md#replacing-pii) for the full parameter reference.
+On this branch, set `replace_pii: null`, pass `--no-replace-pii`, or call
+`.with_replace_pii(enable=False)` before running the pipeline.
 
 ---
 
