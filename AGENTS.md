@@ -11,6 +11,8 @@ This project loads local developer preferences from @AGENTS.local.md. You MUST r
 
 Repo-specific skills live in `.agents/skills/`; see `.agents/README.md` for the catalog. Read a skill when the task matches its scope instead of copying workflow details into this file.
 
+Pull request review comments: before drafting or posting new findings, use the `github-cli` skill and follow its review-comment format, approval, attribution, and handling contract.
+
 Durable implementation guidance belongs with the code it describes: function and class docstrings for public contracts and source comments for local invariants. Test-suite guidance belongs in `tests/TESTING.md`.
 
 ## Repo Conventions

@@ -3,7 +3,14 @@
 
 [test]
 description = "Run unit tests excluding slow, e2e, and smoke tests. Requires Python dependencies; exits non-zero on test failure."
-run = 'uv run --frozen pytest -n auto --dist loadscope -vv -m "unit and not slow"'
+run = [
+    'uv run --frozen pytest -n auto --dist loadscope -vv -m "unit and not slow"',
+    { task = "test:github-cli" },
+]
+
+["test:github-cli"]
+description = "Run GitHub CLI helper tests with the helper's PEP 723 dependencies plus pytest."
+run = 'uv run --no-project --with-requirements .agents/skills/github-cli/scripts/gh_pr_helper.py --with pytest pytest -q .agents/skills/github-cli/tests'
 
 ["test:unit-slow"]
 description = "Run all unit tests including slow tests, excluding e2e and smoke. Requires Python dependencies; may take longer than test."
@@ -18,7 +25,10 @@ run = 'uv run --frozen pytest --dist loadscope -vv -n 0 tests -m "requires_gpu a
 ["test:ci"]
 description = "Run CI unit tests with coverage, excluding slow, e2e, GPU, and smoke tests. Produces coverage.json."
 alias = "test-ci"
-run = 'uv run --frozen pytest -n auto --dist loadscope -vv --cov --cov-report json:coverage.json tests -m "not e2e and not requires_gpu and not slow and not smoke"'
+run = [
+    'uv run --frozen pytest -n auto --dist loadscope -vv --cov --cov-report json:coverage.json tests -m "not e2e and not requires_gpu and not slow and not smoke"',
+    { task = "test:github-cli" },
+]
 
 ["test:ci-slow"]
 description = "Run slow tests with coverage for CI. Produces coverage.json and can take longer than normal unit tests."
