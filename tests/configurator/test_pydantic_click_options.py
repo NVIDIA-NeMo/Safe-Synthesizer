@@ -106,12 +106,12 @@ def test_parse_overrides_mixed_depth():
     result = parse_overrides(
         {
             "training__batch_size": "4",
-            "replace_pii__globals__seed": "42",
+            "generation__structured_generation__backend": "outlines",
         }
     )
     assert result == {
         "training": {"batch_size": "4"},
-        "replace_pii": {"globals": {"seed": "42"}},
+        "generation": {"structured_generation": {"backend": "outlines"}},
     }
 
 
@@ -470,20 +470,6 @@ def test_literal_int_override_end_to_end_via_click_runner():
     result = CliRunner().invoke(cmd, ["--training__quantization_bits", "4"])
     assert result.exit_code == 0, result.output
     assert captured["training"]["quantization_bits"] == 4
-
-
-def test_deep_nested_override_end_to_end_via_click_runner():
-    """A deeply nested option (3+ segments) flows through decorator + parse_overrides."""
-    captured: dict = {}
-
-    @pydantic_options(SafeSynthesizerParameters, field_separator="__")
-    @click.command()
-    def cmd(**kwargs):
-        captured.update(parse_overrides(kwargs))
-
-    result = CliRunner().invoke(cmd, ["--replace_pii__globals__seed", "42"])
-    assert result.exit_code == 0, result.output
-    assert captured["replace_pii"]["globals"]["seed"] == 42
 
 
 def test_structured_generation_nested_option_end_to_end_via_click_runner():

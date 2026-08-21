@@ -291,22 +291,8 @@ for the full API reference.
 
 ## Replacing PII
 
-PII replacement detects and replaces personally identifiable information (PII) in
-your dataset before synthesis. It is on by default -- set `replace_pii: null`
-in YAML (or use `--no-replace-pii` on the CLI) to disable it.
-The `replace_pii` block is only needed when customizing entity types or
-classification via the SDK.
-
-Key config parameters:
-
-| Field | Default | Description | Guidance |
-|-------|---------|-------------|----------|
-| `replace_pii.globals.classify.enable_classify` | `true` | Enable LLM-based PII column classification | When using the CLI, set `NSS_INFERENCE_KEY` (and optionally `NSS_INFERENCE_ENDPOINT`); set to `false` if no LLM endpoint is available |
-| `replace_pii.globals.classify.entities` | (see default list) | Entity types used for LLM-based column classification. Defaults to 15 types covering names, addresses, phone numbers, emails, SSN, national/tax IDs, and credit/debit cards -- see [PII Replacement](../product-overview/pii_replacement.md) and [`PiiReplacerConfig`][nemo_safe_synthesizer.config.replace_pii.PiiReplacerConfig] | Override to add or remove entity types from classification |
-| `replace_pii.globals.ner.ner_threshold` | `0.3` | GLiNER confidence threshold for NER detection | Lower to catch more entities (more false positives); raise to reduce false positives |
-
-See [`PiiReplacerConfig`][nemo_safe_synthesizer.config.replace_pii.PiiReplacerConfig]
-for the full schema.
+PII replacement v3 will be added and documented in a later update. On this
+branch, set `replace_pii: null` or use `--no-replace-pii`.
 
 ---
 
@@ -457,7 +443,7 @@ safe-synthesizer run --config config.yaml --data-source data.csv \
 | `training` | `with_train()` | [`TrainingHyperparams`][nemo_safe_synthesizer.config.training.TrainingHyperparams] |
 | `generation` | `with_generate()` | [`GenerateParameters`][nemo_safe_synthesizer.config.generate.GenerateParameters] |
 | `evaluation` | `with_evaluate()` | [`EvaluationParameters`][nemo_safe_synthesizer.config.evaluate.EvaluationParameters] |
-| `replace_pii` (`null` to disable) | `with_replace_pii()` / `with_replace_pii(enable=False)` | [`PiiReplacerConfig`][nemo_safe_synthesizer.config.replace_pii.PiiReplacerConfig] |
+| `replace_pii` (`null` to disable) | `with_replace_pii(enable=False)` | Placeholder for PII replacement v3 |
 | `privacy` (`null` to disable) | `with_differential_privacy()` | [`DifferentialPrivacyHyperparams`][nemo_safe_synthesizer.config.differential_privacy.DifferentialPrivacyHyperparams] |
 | `time_series` | `with_time_series()` | [`TimeSeriesParameters`][nemo_safe_synthesizer.config.time_series.TimeSeriesParameters] |
 
