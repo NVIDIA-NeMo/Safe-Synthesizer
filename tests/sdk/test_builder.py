@@ -67,7 +67,7 @@ def fixture_base_builder() -> SafeSynthesizer:
 
 
 def test_pii_replacer_only_builder_rejects_legacy_config(fixture_base_builder: SafeSynthesizer):
-    with pytest.raises(ParameterError, match="globals"):
+    with pytest.raises(ParameterError, match="PII replacement v2 configuration was removed"):
         fixture_base_builder.with_replace_pii(config={"globals": {}})
 
 

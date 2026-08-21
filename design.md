@@ -412,7 +412,8 @@ results = synthesizer.results
 
 ### PII Protection
 
-- Named Entity Recognition (NER) to detect PII
+(To update)
+- Detect and replace sensitive values before training
 - Deterministic replacement with synthetic values
 - Preserves column statistics and distributions
 
@@ -466,7 +467,7 @@ safe-synthesizer-artifacts/
 2. Custom Generation Backend: Implement `GeneratorBackend` abstract class
 3. Custom Evaluation Component: Extend `Component` base class
 4. Custom Data Actions: Add to `data_processing/actions/`
-5. Custom PII Detectors: Extend NER pipeline
+5. Custom evaluation metrics: extend the evaluation component interface
 
 ---
 

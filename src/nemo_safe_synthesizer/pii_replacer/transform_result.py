@@ -10,19 +10,19 @@ from pydantic import BaseModel, ConfigDict, Field
 class ColumnStatistics(BaseModel):
     """Metadata and statistics for transformations and detected entities in a column.
 
-    Tracks assigned type and entity from classification, NER-detected counts and
-    values per entity, and which transform functions were applied.
+    Tracks assigned type and entity, detected entity counts and values, and
+    which transform functions were applied.
     """
 
     assigned_type: str | None = Field(
-        description="Type assigned to the column, usually from column classification.",
+        description="Type assigned to the column.",
     )
     assigned_entity: str | None = Field(
-        description="Entity assigned to the column, usually from column classification.",
+        description="Entity assigned to the column.",
     )
     detected_entity_counts: dict[str, int] = Field(
         default_factory=dict,
-        description="Entity name to count of times NER detected it in the column.",
+        description="Entity name to count of times it was detected in the column.",
     )
     detected_entity_values: dict[str, set] = Field(
         default_factory=dict,

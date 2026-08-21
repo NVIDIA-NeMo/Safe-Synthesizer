@@ -458,8 +458,8 @@ class InferenceModelCheck(ConfigCheck):
 
     @override
     def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
-        # The inference-backed PII classifier was removed with the legacy
-        # replacement engine. A later implementation will restore this check.
+        # Legacy PII inference checks were removed with the replacement engine.
+        # A later implementation will restore this check.
         return
 
 

@@ -75,6 +75,30 @@ def test_replace_pii_placeholder_is_valid():
     assert ReplacePiiConfig().model_dump() == {}
 
 
+@pytest.mark.parametrize(
+    ("payload", "field"),
+    [
+        ({"globals": {"seed": 42}}, "replace_pii.globals"),
+        ({"steps": []}, "replace_pii.steps"),
+    ],
+)
+def test_replace_pii_v2_fields_raise_removed_error(payload: dict[str, object], field: str):
+    pattern = rf"PII replacement v2 configuration was removed.*{field}"
+    with pytest.raises((ParameterError, ValidationError), match=pattern):
+        SafeSynthesizerParameters.model_validate({"replace_pii": payload})
+    with pytest.raises((ParameterError, ValidationError), match="PII replacement v2 configuration was removed"):
+        SafeSynthesizerParameters.model_validate({"unknown_fields": "ignore", "replace_pii": payload})
+    with pytest.raises((ParameterError, ValidationError), match="PII replacement v2 configuration was removed"):
+        ReplacePiiConfig.model_validate(payload)
+    with pytest.raises(ParameterError, match="PII replacement v2 configuration was removed"):
+        ReplacePiiConfig.from_config_source(payload)
+
+
+def test_replace_pii_unknown_non_v2_field_uses_generic_error():
+    with pytest.raises(ValidationError, match="Unknown configuration field 'replace_pii.foo'"):
+        SafeSynthesizerParameters.model_validate({"replace_pii": {"foo": 1}})
+
+
 def test_quantization_scheme_from_alias_rejects_invalid_legacy_bit_alias() -> None:
     with pytest.raises(ValueError, match="Expected 4 or 8"):
         QuantizationScheme.from_alias(5)  # ty: ignore[invalid-argument-type] -- intentionally invalid alias

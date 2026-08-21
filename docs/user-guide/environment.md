@@ -25,7 +25,7 @@ For output quality and evaluation metrics, see
 | Run offline or air-gapped | [HF cache and offline](#hugging-face-cache-and-offline) · [Running in Offline Environments](running.md#running-in-offline-environments) |
 | Docker / container mounts | [Containers](#containers) · [Docker](docker.md) |
 | Logging and WandB | [Running -- Logging and Experiment Tracking](running.md#logging-and-experiment-tracking) |
-| Inference endpoint and API key (unused) | [PII, NER, and column classification](#pii-ner-and-column-classification) · [PII Replacement](../product-overview/pii_replacement.md) |
+| Inference endpoint and API key (unused) | [PII Replacement](#pii-replacement) · [PII Replacement](../product-overview/pii_replacement.md) |
 | Disable telemetry | [Telemetry](#telemetry) |
 | Resolve CLI vs env vs defaults | [Precedence](#precedence) |
 
@@ -45,9 +45,9 @@ Grouped by the `Category` column -- `nss`-native settings first, then
 | `NSS_LOG_COLOR` | nss | `--log-color` / `--no-log-color` | CLI / observability | auto (TTY) | Colorize console output | [Running -- Log Format](running.md#log-format) |
 | `NSS_LOG_LEVEL` | nss | `--verbose` (0–2) | observability | `INFO` | Log level (`DEBUG`, `DEBUG_DEPENDENCIES`, etc.) | Set via verbosity, not a direct CLI flag |
 | `NSS_DATASET_REGISTRY` | nss | `--dataset-registry` | CLI | -- | Dataset registry YAML path or URL | [Running -- Dataset Registry](running.md#dataset-registry) |
-| `NSS_INFERENCE_ENDPOINT` | nss | `--inference-endpoint-url` | CLI | NVIDIA integrate URL | Unused until PII replacement v3 | [PII appendix](#pii-ner-and-column-classification) |
-| `NSS_INFERENCE_KEY` | nss | `--inference-api-key` | CLI | -- | Unused until PII replacement v3 | [PII appendix](#pii-ner-and-column-classification) |
-| `NSS_INFERENCE_MODEL` | nss | `--inference-model-id` | CLI | `nvidia/nemotron-3-ultra-550b-a55b` | Unused until PII replacement v3 | [PII appendix](#pii-ner-and-column-classification) |
+| `NSS_INFERENCE_ENDPOINT` | nss | `--inference-endpoint-url` | CLI | NVIDIA integrate URL | Unused until PII replacement v3 | [PII appendix](#pii-replacement) |
+| `NSS_INFERENCE_KEY` | nss | `--inference-api-key` | CLI | -- | Unused until PII replacement v3 | [PII appendix](#pii-replacement) |
+| `NSS_INFERENCE_MODEL` | nss | `--inference-model-id` | CLI | `nvidia/nemotron-3-ultra-550b-a55b` | Unused until PII replacement v3 | [PII appendix](#pii-replacement) |
 | `NSS_WANDB_MODE` | nss | `--wandb-mode` | WandB | `disabled` | WandB run mode | Alias for `WANDB_MODE` |
 | `NSS_WANDB_PROJECT` | nss | `--wandb-project` | WandB | -- | WandB project name | Alias for `WANDB_PROJECT` |
 | `NSS_WANDB_UPLOAD_EVALUATION_REPORT` | nss | `--wandb-upload-evaluation-report` / `--no-wandb-upload-evaluation-report` | WandB | `true` | Upload final evaluation HTML and artifact | Set to `false` to skip HTML and artifact publishing; summary metrics and the scorecard remain enabled |
@@ -165,7 +165,7 @@ for the full pre-cache checklist.
 
 ---
 
-## PII, NER, and column classification
+## PII Replacement
 
 PII replacement v3 environment guidance will be added in a later update.
 

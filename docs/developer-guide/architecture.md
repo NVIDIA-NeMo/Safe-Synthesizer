@@ -395,4 +395,4 @@ The execution follows a clear pipeline: Data --> PII Replacement --> Training --
 2. Custom Generation Backend: implement `GeneratorBackend` abstract class
 3. Custom Evaluation Component: extend `Component` base class
 4. Custom Data Actions: add to `data_processing/actions/`
-5. Custom PII Detectors: extend NER pipeline
+5. Custom evaluation metrics: extend the evaluation component interface
