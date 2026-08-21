@@ -30,20 +30,21 @@ from .unknown_fields import raise_if_removed_legacy_fields
 __all__ = [
     "ALLOWED_DEPENDS_ON",
     "AUTO_DISCOVERY",
+    "ConditioningColumn",
     "ENTITIES",
     "ENTITY_BY_TYPE",
     "EXCLUSIVE_DEPENDS_ON_GROUPS",
-    "ConditioningColumn",
     "Entity",
     "EntityAction",
     "EntityType",
     "LLMConfig",
+    "PatternKind",
     "PiiColumnPlan",
-    "PiiSamplerBackend",
-    "PiiSamplerConfig",
     "PiiReplacementPlan",
     "PiiReplacementScope",
     "PiiReplacementSettings",
+    "PiiSamplerBackend",
+    "PiiSamplerConfig",
     "ReplacePiiConfig",
     "can_condition",
     "is_columns_to_replace_type",
@@ -101,6 +102,19 @@ class EntityAction(StrEnum):
     none = "none"
 
 
+class PatternKind(StrEnum):
+    """How ``PiiColumnPlan.pattern`` is interpreted for this entity type.
+
+    ``none``: plan must omit ``pattern``. ``name_parts``: ``{first}`` / ``{middle}``
+    / ``{last}`` placeholders for names and email.
+    """
+
+    none = "none"
+    strftime = "strftime"
+    template = "template"
+    name_parts = "name_parts"
+
+
 @dataclass(frozen=True, slots=True)
 class Entity:
     """One label in the entity vocabulary.
@@ -108,32 +122,84 @@ class Entity:
     ``action``: engine treatment (see :class:`EntityAction`). ``can_condition``:
     may appear as ``entity_type`` on a ``depends_on`` entry. The executor
     applies ``columns_to_replace`` in DAG order and reads the current cell
-    as the conditioner.
+    as the conditioner. ``pattern_kind``: whether ``pattern`` is allowed and
+    which language it uses.
     """
 
     entity_type: EntityType
     action: EntityAction
     can_condition: bool
+    pattern_kind: PatternKind = PatternKind.none
 
 
 ENTITIES: tuple[Entity, ...] = (
     # Replace and may condition later columns.
-    Entity(EntityType.first_name, action=EntityAction.replace, can_condition=True),
-    Entity(EntityType.middle_name, action=EntityAction.replace, can_condition=True),
-    Entity(EntityType.last_name, action=EntityAction.replace, can_condition=True),
-    Entity(EntityType.full_name, action=EntityAction.replace, can_condition=True),
+    Entity(
+        EntityType.first_name,
+        action=EntityAction.replace,
+        can_condition=True,
+        pattern_kind=PatternKind.name_parts,
+    ),
+    Entity(
+        EntityType.middle_name,
+        action=EntityAction.replace,
+        can_condition=True,
+        pattern_kind=PatternKind.name_parts,
+    ),
+    Entity(
+        EntityType.last_name,
+        action=EntityAction.replace,
+        can_condition=True,
+        pattern_kind=PatternKind.name_parts,
+    ),
+    Entity(
+        EntityType.full_name,
+        action=EntityAction.replace,
+        can_condition=True,
+        pattern_kind=PatternKind.name_parts,
+    ),
     # Replace only.
-    Entity(EntityType.email, action=EntityAction.replace, can_condition=False),
-    Entity(EntityType.phone_number, action=EntityAction.replace, can_condition=False),
-    Entity(EntityType.date_of_birth, action=EntityAction.replace, can_condition=False),
+    Entity(
+        EntityType.email,
+        action=EntityAction.replace,
+        can_condition=False,
+        pattern_kind=PatternKind.name_parts,
+    ),
+    Entity(
+        EntityType.phone_number,
+        action=EntityAction.replace,
+        can_condition=False,
+        pattern_kind=PatternKind.template,
+    ),
+    Entity(
+        EntityType.date_of_birth,
+        action=EntityAction.replace,
+        can_condition=False,
+        pattern_kind=PatternKind.strftime,
+    ),
     Entity(EntityType.street_address, action=EntityAction.replace, can_condition=False),
     Entity(EntityType.ssn, action=EntityAction.replace, can_condition=False),
     Entity(EntityType.national_id, action=EntityAction.replace, can_condition=False),
-    Entity(EntityType.credit_debit_card, action=EntityAction.replace, can_condition=False),
-    Entity(EntityType.api_key, action=EntityAction.replace, can_condition=False),
+    Entity(
+        EntityType.credit_debit_card,
+        action=EntityAction.replace,
+        can_condition=False,
+        pattern_kind=PatternKind.template,
+    ),
+    Entity(
+        EntityType.api_key,
+        action=EntityAction.replace,
+        can_condition=False,
+        pattern_kind=PatternKind.template,
+    ),
     Entity(EntityType.ipv4, action=EntityAction.replace, can_condition=False),
     Entity(EntityType.ipv6, action=EntityAction.replace, can_condition=False),
-    Entity(EntityType.unique_identifier, action=EntityAction.replace, can_condition=False),
+    Entity(
+        EntityType.unique_identifier,
+        action=EntityAction.replace,
+        can_condition=False,
+        pattern_kind=PatternKind.template,
+    ),
     # Scan cell text and propagate already-replaced values (username/url use this too).
     Entity(EntityType.free_text, action=EntityAction.propagate, can_condition=False),
     # Identify-only.
@@ -165,9 +231,7 @@ ALLOWED_DEPENDS_ON: dict[EntityType, frozenset[EntityType]] = {
             EntityType.organization,
         }
     ),
-    EntityType.street_address: frozenset(
-        {EntityType.city, EntityType.state, EntityType.zip_code, EntityType.country}
-    ),
+    EntityType.street_address: frozenset({EntityType.city, EntityType.state, EntityType.zip_code, EntityType.country}),
 }
 
 # Each inner tuple is one exclusivity family: at most one group from that family
@@ -249,8 +313,11 @@ class PiiColumnPlan(NSSBaseModel):
             "Format this column writes the entity in: strftime for birth "
             "dates (%m/%d/%Y), character templates for identifiers/phones (pmc-######, "
             "+1-###-555-####), or person-part placeholders for names/emails ({LAST}, {First}, "
-            "{f}.{last}@{domain}). When a pattern is provided, the whole column is "
-            "replaced with the pattern."
+            "{f}.{last}@{domain}). Empty string is treated as omitted. Only "
+            "entity types with a pattern_kind other than none may set this. "
+            "When provided, the whole column is replaced with the pattern if it "
+            "covers at least 85% of non-null values (checked against the dataframe, "
+            "not here)."
         ),
     )
     depends_on: list[ConditioningColumn] = Field(
@@ -264,20 +331,31 @@ class PiiColumnPlan(NSSBaseModel):
         ),
     )
 
+    @field_validator("pattern", mode="before")
+    @classmethod
+    def _empty_pattern_is_omitted(cls, value: object) -> object:
+        if isinstance(value, str) and value.strip() == "":
+            return None
+        return value
+
     @model_validator(mode="after")
     def _validate_entity_and_depends_on(self) -> Self:
-        action = ENTITY_BY_TYPE[self.entity_type].action
-        if action is EntityAction.none:
+        entity = ENTITY_BY_TYPE[self.entity_type]
+        if entity.action is EntityAction.none:
             raise ParameterError(
                 f"column {self.column_name!r}: entity_type {self.entity_type.value!r} is "
                 "identify-only (or otherwise not replaceable); omit it from columns_to_replace "
+            )
+        if self.pattern is not None and entity.pattern_kind is PatternKind.none:
+            raise ParameterError(
+                f"column {self.column_name!r}: entity_type {self.entity_type.value!r} does "
+                "not allow pattern; omit pattern (replacement uses the entity generator)"
             )
         if self.depends_on:
             allowed = ALLOWED_DEPENDS_ON.get(self.entity_type, frozenset())
             if not allowed:
                 raise ParameterError(
-                    f"column {self.column_name!r}: entity_type {self.entity_type.value!r} "
-                    "does not allow depends_on"
+                    f"column {self.column_name!r}: entity_type {self.entity_type.value!r} does not allow depends_on"
                 )
             for dep in self.depends_on:
                 if dep.entity_type is None:
@@ -316,6 +394,20 @@ class PiiReplacementPlan(Parameters):
         default_factory=list,
         description="Columns to replace or (for free_text) scan for value propagation.",
     )
+
+    @model_validator(mode="after")
+    def _reject_duplicate_replace_columns(self) -> Self:
+        seen: set[str] = set()
+        duplicates: list[str] = []
+        for spec in self.columns_to_replace:
+            if spec.column_name in seen:
+                duplicates.append(spec.column_name)
+            seen.add(spec.column_name)
+        if duplicates:
+            raise ParameterError(
+                "columns_to_replace has duplicate column_name values: " + ", ".join(repr(name) for name in duplicates)
+            )
+        return self
 
     @model_validator(mode="after")
     def _resolve_omitted_depends_on_types(self) -> Self:
@@ -379,8 +471,7 @@ class PiiReplacementPlan(Parameters):
                     "{" + ", ".join(sorted(member.value for member in group)) + "}" for group in hit
                 )
                 raise ParameterError(
-                    f"column {spec.column_name!r}: depends_on mixes mutually exclusive "
-                    f"conditioner groups: {formatted}"
+                    f"column {spec.column_name!r}: depends_on mixes mutually exclusive conditioner groups: {formatted}"
                 )
         return self
 
