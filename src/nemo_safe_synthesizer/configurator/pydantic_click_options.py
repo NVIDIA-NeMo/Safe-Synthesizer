@@ -119,7 +119,13 @@ def _is_basemodel(t: Any) -> TypeIs[type[BaseModel]]:
 
 
 def _nullable_model_arg(union_args: tuple) -> type[BaseModel] | None:
-    """Return the BaseModel member of a ``SomeModel | None`` union, or ``None``."""
+    """Return the BaseModel member of a ``SomeModel | None`` union, or ``None``.
+
+    A union that contains a model but not ``None`` (for example
+    ``SomeModel | str``) is not nullable and must not get a ``--no-*`` flag.
+    """
+    if type(None) not in union_args:
+        return None
     return next((a for a in union_args if a is not type(None) and _is_basemodel(a)), None)
 
 
