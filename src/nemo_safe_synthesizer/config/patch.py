@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from ..configurator.parameter_paths import ParameterPath, format_parameter_path
 from ..configurator.pydantic_compat import nested_model_type
 from ..errors import ParameterError
-from .unknown_fields import UnknownFieldBehavior
+from .unknown_fields import UnknownFieldBehavior, raise_if_removed_legacy_fields
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
 
@@ -152,6 +152,7 @@ def _mapping_assignments(
     assignments: list[PatchAssignment] = []
     for name, value in source.items():
         if name not in model_type.model_fields:
+            raise_if_removed_legacy_fields(model_type, (name,), path=prefix)
             path = format_parameter_path((*prefix, name))
             raise ParameterError(f"Unknown configuration path {path!r}.")
         path = ParameterPath((*prefix, name))
@@ -176,16 +177,22 @@ def _mapping_assignments(
     return tuple(assignments)
 
 
-def _mapping_without_extras(model_type: type[BaseModel], source: Mapping[str, object]) -> dict[str, object]:
+def _mapping_without_extras(
+    model_type: type[BaseModel],
+    source: Mapping[str, object],
+    *,
+    prefix: tuple[str, ...] = (),
+) -> dict[str, object]:
     """Adapt a raw mapping to Pydantic's recursive extra-ignore behavior."""
     adapted: dict[str, object] = {}
     for name, value in source.items():
         if (field := model_type.model_fields.get(name)) is None:
+            raise_if_removed_legacy_fields(model_type, (name,), path=prefix)
             continue
         nested_model = nested_model_type(field.annotation, BaseModel)
         nested_source = _branch_mapping(nested_model, value)
         adapted[name] = (
-            _mapping_without_extras(nested_model, nested_source)
+            _mapping_without_extras(nested_model, nested_source, prefix=(*prefix, name))
             if nested_model is not None and nested_source is not None
             else value
         )

@@ -355,7 +355,7 @@ class TestPathOptions:
         assert "Explicit path for this run" in result.output
 
     def test_run_help_shows_runtime_settings_options(self, cli_runner: CliRunner):
-        """Verify runtime PII/NER settings appear in run command help."""
+        """Verify inference and Hugging Face settings appear in run command help."""
         result = cli_runner.invoke(run, ["--help"])
 
         assert result.exit_code == 0
@@ -363,7 +363,6 @@ class TestPathOptions:
         assert "--inference-api-key" in result.output
         assert "--inference-model-id" in result.output
         assert "--disable-huggingface-remote" in result.output
-        assert "--cpu-count" in result.output
         assert "NSS_INFERENCE_ENDPOINT" in result.output
         assert "NSS_INFERENCE_KEY" in result.output
 
