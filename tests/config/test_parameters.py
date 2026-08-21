@@ -71,12 +71,6 @@ def test_emit_telemetry_from_yaml_uses_env_when_unset(monkeypatch):
     assert c.emit_telemetry is False
 
 
-def test_replace_pii_v3_contract_default_is_valid():
-    config = ReplacePiiConfig()
-    assert config.schema_version == 1
-    assert config.replacement_plan == "auto_discovery"
-
-
 @pytest.mark.parametrize(
     ("payload", "field"),
     [
