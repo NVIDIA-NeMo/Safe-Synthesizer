@@ -452,8 +452,33 @@ class PiiReplacementPlan(Parameters):
                             f"{dep.column_name!r} has entity_type {entity_type.value!r} but "
                             f"columns_to_replace lists entity_type {planned.value!r}"
                         )
+                elif is_columns_to_replace_type(entity_type):
+                    raise ParameterError(
+                        f"column {spec.column_name!r}: depends_on column "
+                        f"{dep.column_name!r} has entity_type {entity_type.value!r}, which is "
+                        "a replace target; list it in columns_to_replace"
+                    )
                 resolved.append(dep)
             spec.depends_on = resolved
+        return self
+
+    @model_validator(mode="after")
+    def _reject_duplicate_depends_on_entity_types(self) -> Self:
+        """At most one depends_on edge per conditioner entity_type on a target."""
+        for spec in self.columns_to_replace:
+            seen: dict[EntityType, str] = {}
+            for dep in spec.depends_on:
+                entity_type = dep.entity_type
+                if entity_type is None:
+                    continue
+                prior = seen.get(entity_type)
+                if prior is not None:
+                    raise ParameterError(
+                        f"column {spec.column_name!r}: depends_on entity_type "
+                        f"{entity_type.value!r} appears more than once "
+                        f"({prior!r} and {dep.column_name!r})"
+                    )
+                seen[entity_type] = dep.column_name
         return self
 
     @model_validator(mode="after")
@@ -564,8 +589,10 @@ class ReplacePiiConfig(Parameters):
     replacement_plan: PiiReplacementPlan | str = Field(
         default=AUTO_DISCOVERY,
         description=(
-            f"{AUTO_DISCOVERY!r} to discover the plan from the data, or a path to a plan file. "
-            "An inline plan can only be given in a config file."
+            f"{AUTO_DISCOVERY!r} to discover the plan from the data, a path to a plan "
+            "file, or an inline plan (YAML/SDK mapping or PiiReplacementPlan). "
+            f"Other strings are treated as paths. The CLI option only accepts the "
+            "sentinel or a path."
         ),
     )
     llm: LLMConfig = Field(

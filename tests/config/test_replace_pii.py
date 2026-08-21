@@ -147,6 +147,39 @@ class TestPiiReplacementPlan:
                 }
             )
 
+    def test_replaceable_conditioner_must_be_a_replace_target(self) -> None:
+        with _raises("list it in columns_to_replace"):
+            PiiReplacementPlan.model_validate(
+                {
+                    "columns_to_replace": [
+                        {
+                            "column_name": "email",
+                            "entity_type": "email",
+                            "depends_on": [
+                                {"column_name": "first_name", "entity_type": "first_name"},
+                            ],
+                        }
+                    ]
+                }
+            )
+
+    def test_duplicate_conditioner_entity_type_on_one_target_is_rejected(self) -> None:
+        with _raises("appears more than once"):
+            PiiReplacementPlan.model_validate(
+                {
+                    "columns_to_replace": [
+                        {
+                            "column_name": "first_name",
+                            "entity_type": "first_name",
+                            "depends_on": [
+                                {"column_name": "gender", "entity_type": "gender"},
+                                {"column_name": "spouse_gender", "entity_type": "gender"},
+                            ],
+                        }
+                    ]
+                }
+            )
+
     def test_email_may_depend_on_name_parts_or_full_name_not_both(self) -> None:
         PiiReplacementPlan.model_validate(
             {
@@ -320,6 +353,15 @@ class TestReplacePiiConfig:
         config = ReplacePiiConfig.model_validate({"replacement_plan": Path("plans/pii.yaml")})
         assert config.replacement_plan == "plans/pii.yaml"
         assert config.plan_path == "plans/pii.yaml"
+
+    @pytest.mark.parametrize(
+        "value",
+        ["plans/pii.yaml", "plan.yaml", "./plan.yaml", "plan"],
+    )
+    def test_non_sentinel_strings_are_stored_as_plan_path(self, value: str) -> None:
+        config = ReplacePiiConfig(replacement_plan=value)
+        assert config.plan_path == value
+        assert not config.is_auto_discovery
 
     def test_inline_mapping_is_validated_as_a_plan(self) -> None:
         config = ReplacePiiConfig.model_validate(
