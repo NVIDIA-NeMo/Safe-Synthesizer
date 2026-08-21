@@ -58,6 +58,22 @@ class ModelWithBoth(BaseModel):
     optional: Inner | None = Field(default_factory=Inner, description="Nullable sub-model.")
 
 
+class Step(BaseModel):
+    vars: dict[str, str] = Field(default_factory=dict, description="Step variables.")
+
+
+class StepGroup(BaseModel):
+    steps: list[Step] = Field(
+        default_factory=lambda: [Step(vars={"default": "step"})],
+        min_length=1,
+        description="A structured list.",
+    )
+
+
+class ModelWithStructuredList(BaseModel):
+    group: StepGroup = Field(default_factory=StepGroup)
+
+
 # ---------------------------------------------------------------------------
 # parse_overrides
 # ---------------------------------------------------------------------------
@@ -111,12 +127,12 @@ def test_parse_overrides_mixed_depth():
     result = parse_overrides(
         {
             "training__batch_size": "4",
-            "replace_pii__globals__seed": "42",
+            "generation__structured_generation__backend": "outlines",
         }
     )
     assert result == {
         "training": {"batch_size": "4"},
-        "replace_pii": {"globals": {"seed": "42"}},
+        "generation": {"structured_generation": {"backend": "outlines"}},
     }
 
 
@@ -477,20 +493,6 @@ def test_literal_int_override_end_to_end_via_click_runner():
     assert captured["training"]["quantization_bits"] == 4
 
 
-def test_deep_nested_override_end_to_end_via_click_runner():
-    """A deeply nested option (3+ segments) flows through decorator + parse_overrides."""
-    captured: dict = {}
-
-    @pydantic_options(SafeSynthesizerParameters, field_separator="__")
-    @click.command()
-    def cmd(**kwargs):
-        captured.update(parse_overrides(kwargs))
-
-    result = CliRunner().invoke(cmd, ["--replace_pii__globals__seed", "42"])
-    assert result.exit_code == 0, result.output
-    assert captured["replace_pii"]["globals"]["seed"] == 42
-
-
 def test_structured_generation_nested_option_end_to_end_via_click_runner():
     """The canonical nested structured-generation option flows through Click parsing."""
     captured: dict = {}
@@ -662,13 +664,13 @@ def test_cli_list_parameters_end_to_end(cli_args: list[str], expected: list[str]
     "cli_args",
     [
         [
-            "--replace_pii__steps",
+            "--group__steps",
             '{"vars":{"first":"one"}}',
-            "--replace_pii__steps",
+            "--group__steps",
             '{"vars":{"second":"two"}}',
         ],
         [
-            "--replace_pii__steps",
+            "--group__steps",
             '[{"vars":{"first":"one"}},{"vars":{"second":"two"}}]',
         ],
     ],
@@ -677,7 +679,7 @@ def test_cli_structured_list_parameters_end_to_end(cli_args: list[str]):
     """Structured list parameters accept repeated objects and JSON arrays."""
     captured: dict = {}
 
-    @pydantic_options(SafeSynthesizerParameters, field_separator="__")
+    @pydantic_options(ModelWithStructuredList, field_separator="__")
     @click.command()
     def cmd(**kwargs):
         """Capture parsed CLI overrides."""
@@ -685,23 +687,21 @@ def test_cli_structured_list_parameters_end_to_end(cli_args: list[str]):
 
     result = CliRunner().invoke(cmd, cli_args)
     assert result.exit_code == 0, result.output
-    params = SafeSynthesizerParameters.model_validate(captured)
-    replace_pii = params.replace_pii
-    assert replace_pii is not None
-    assert [step.vars for step in replace_pii.steps] == [{"first": "one"}, {"second": "two"}]
+    params = ModelWithStructuredList.model_validate(captured)
+    assert [step.vars for step in params.group.steps] == [{"first": "one"}, {"second": "two"}]
 
 
 def test_cli_structured_list_parameters_reject_invalid_json():
     """Structured list parameters report malformed JSON at the CLI boundary."""
 
-    @pydantic_options(SafeSynthesizerParameters, field_separator="__")
+    @pydantic_options(ModelWithStructuredList, field_separator="__")
     @click.command()
     def cmd(**_kwargs):
         """Accept generated CLI options."""
 
-    result = CliRunner().invoke(cmd, ["--replace_pii__steps", "not-json"])
+    result = CliRunner().invoke(cmd, ["--group__steps", "not-json"])
     assert result.exit_code == 2
-    assert "Invalid value for '--replace_pii__steps': must be valid JSON" in result.output
+    assert "Invalid value for '--group__steps': must be valid JSON" in result.output
 
 
 def test_cli_list_parameters_omitted_preserves_default():
@@ -725,24 +725,23 @@ def test_cli_explicit_empty_structured_list_reaches_model_validation():
     """An explicit empty structured list reaches model validation while omitted preserves default."""
     captured: dict = {}
 
-    @pydantic_options(SafeSynthesizerParameters, field_separator="__")
+    @pydantic_options(ModelWithStructuredList, field_separator="__")
     @click.command()
     def cmd(**kwargs):
         """Capture parsed CLI overrides."""
         captured.update(parse_overrides(kwargs))
 
     # 1. Explicit empty structured list reaches model validation and fails min_length constraint
-    result = CliRunner().invoke(cmd, ["--replace_pii__steps", "[]"])
+    result = CliRunner().invoke(cmd, ["--group__steps", "[]"])
     assert result.exit_code == 0, result.output
-    assert captured == {"replace_pii": {"steps": []}}
+    assert captured == {"group": {"steps": []}}
     with pytest.raises(ValidationError, match="List should have at least 1 item after validation"):
-        SafeSynthesizerParameters.model_validate(captured)
+        ModelWithStructuredList.model_validate(captured)
 
     # 2. Omitted option drops the parameter so model retains default steps
     captured.clear()
     result = CliRunner().invoke(cmd, [])
     assert result.exit_code == 0, result.output
-    assert "replace_pii" not in captured or "steps" not in captured.get("replace_pii", {})
-    params = SafeSynthesizerParameters.model_validate(captured)
-    assert params.replace_pii is not None
-    assert len(params.replace_pii.steps) >= 1
+    assert "group" not in captured or "steps" not in captured.get("group", {})
+    params = ModelWithStructuredList.model_validate(captured)
+    assert [step.vars for step in params.group.steps] == [{"default": "step"}]

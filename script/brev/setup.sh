@@ -7,7 +7,7 @@
 # after Jupyter is installed; everything lands under $HOME. Idempotent.
 #
 # Launch parameters, passed by Brev as environment variables:
-#   NSS_INFERENCE_KEY  NIM key for column classification (degraded without it)
+#   NSS_INFERENCE_KEY  unused on this branch (reserved for PII replacement v3)
 #   HF_TOKEN           only for gated Hugging Face models
 #
 # script/brev/README.md explains every non-obvious step below. Each one exists
