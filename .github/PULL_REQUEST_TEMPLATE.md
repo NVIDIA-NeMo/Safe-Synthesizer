@@ -6,6 +6,17 @@
 # Summary
 <!-- Brief description of changes -->
 
+## Human review
+
+Select exactly one. The default is no human review; uncheck it when choosing another level.
+
+- [x] ⚪ No human review; automated review only
+- [ ] 🟡 Partially reviewed or spot-checked by a human
+- [ ] 🔵 Complete diff reviewed by a human
+- [ ] 🟢 Complete diff reviewed and verified by a human
+
+Verification performed:
+
 ## Pre-Review Checklist
 
 <!-- These checks should be completed before a PR is reviewed, -->
