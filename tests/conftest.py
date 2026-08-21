@@ -202,12 +202,6 @@ def stub_tokenizer_dir(tests_dir) -> Path:
 
 
 @pytest.fixture(scope="session")
-def pii_test_data_dir(test_data_dir) -> Path:
-    """Path to PII-specific test data (NER fixtures, redaction samples)."""
-    return test_data_dir / "pii"
-
-
-@pytest.fixture(scope="session")
 def e2e_config_dir(tests_dir) -> Path:
     """Path to YAML configs required by end-to-end tests."""
     return tests_dir / "e2e" / "required_configs"

@@ -10,7 +10,6 @@ from pydantic import Field, ValidationError
 from nemo_safe_synthesizer.config import (
     DataParameters,
     DifferentialPrivacyHyperparams,
-    PiiReplacerConfig,
     SafeSynthesizerParameters,
     TimeSeriesParameters,
     TrainingHyperparams,
@@ -147,16 +146,6 @@ class TestParametersClass:
         assert SubGroup.model_validate(subgroup_py) == subgroup_fixture
 
 
-class TestPiiParameters:
-    def test_pii_parameters_create_without_steps(self):
-        with pytest.raises(ValidationError):
-            _ = PiiReplacerConfig()  # ty: ignore[missing-argument] -- intentionally omits required field to test that ValidationError is raised
-
-    def test_create_default(self):
-        params = PiiReplacerConfig.get_default_config()
-        assert params.globals.ner.ner_threshold == 0.3
-
-
 class TestSafeSynthesizerParameters:
     @pytest.mark.parametrize(
         "value, expected",
@@ -184,16 +173,6 @@ class TestSafeSynthesizerParameters:
         assert params.get("batch_size") == 10
         print(params.training)
         assert params.get("group_training_examples_by") == "my_col"
-
-    @pytest.mark.parametrize(
-        "replace_pii_kwarg, expected_pii_config",
-        [({}, True), ({"replace_pii": None}, None)],
-        ids=["enabled", "disabled"],
-    )
-    def test_enabled_pii(self, replace_pii_kwarg, expected_pii_config):
-        params = SafeSynthesizerParameters.from_params(**replace_pii_kwarg)
-        val = True if params.replace_pii is not None else None
-        assert val == expected_pii_config
 
     def test_timestamp_required_for_time_series(self):
         """Test that is_timeseries=True requires timestamp_column or timestamp_interval_seconds."""

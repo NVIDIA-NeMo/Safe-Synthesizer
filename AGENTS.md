@@ -57,7 +57,7 @@ Source code lives in `src/nemo_safe_synthesizer/`:
 | `generation/` | GeneratorBackend, VllmBackend, regex manager, batch gen |
 | `holdout/` | Train/test splitting |
 | `llm/` | Model loading, metadata, memory management |
-| `pii_replacer/` | NER-based PII detection and replacement |
+| `pii_replacer/` | Placeholder for PII replacement v3 |
 | `privacy/` | DP transformers (Opacus integration) |
 | `sdk/` | SafeSynthesizer builder, library_builder |
 | `training/` | TrainingBackend, HuggingFace backend, timeseries_preprocessing (`timeseries_preprocessing.py`) |

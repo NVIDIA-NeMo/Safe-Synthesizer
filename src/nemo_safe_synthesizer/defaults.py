@@ -71,7 +71,7 @@ NUM_EVAL_BATCHES_GROUPED = 1
 PSEUDO_GROUP_COLUMN = "__nss_sequence_id"
 DEFAULT_EXCLUDE_COLUMNS: tuple[str, ...] = (PSEUDO_GROUP_COLUMN,)
 
-# default LLM inference endpoint for PII column classification.
+# Unused default LLM inference endpoint (reserved for PII replacement v3).
 DEFAULT_NSS_INFERENCE_ENDPOINT = "https://integrate.api.nvidia.com/v1"
 
 # training +  parameters

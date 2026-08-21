@@ -10,7 +10,6 @@ torch_runtime_deps = [
     "bitsandbytes>=0.46.1",
     "flashinfer-python==0.6.14; sys_platform == 'linux'",
     "flashinfer-cubin==0.6.14; sys_platform == 'linux'",
-    "gliner",
     "kernels>=0.12.1,<0.15",
     "opacus",
     "peft>=0.18.0",
