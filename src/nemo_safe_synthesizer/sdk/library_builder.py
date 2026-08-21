@@ -31,7 +31,6 @@ from ..llm.metadata import ModelMetadata
 from ..llm.utils import get_device_name
 from ..observability import LogCategory, configure_logging_from_workdir, get_logger, initialize_observability, traced
 from ..package_info import __version__
-from ..pii_replacer.nemo_pii import NemoPII
 from ..preflight import PreflightReport, PreflightStage, run_preflight
 from ..results import SafeSynthesizerResults, make_nss_results
 from ..telemetry import (
@@ -434,22 +433,14 @@ class SafeSynthesizer(ConfigBuilder):
         resolved_config = resolver()
         self._nss_config = resolved_config
 
-        # PII replacement is skipped on the validate path (``check_only=True``).
-        # Rationale: the replacer makes network calls to the PII classifier
-        # and can take minutes on large datasets -- incompatible with the
-        # fast fail-fast semantics of ``--validate``. The consequence is
-        # that preflight sees the pre-replacement training split; replacement
-        # text can shift token lengths, so ``--validate`` is documented as
-        # best-effort rather than a guarantee (see user-guide/running.md).
+        # PII replacement is intentionally unavailable on this removal-only
+        # branch. Keep validation usable, but require callers running the
+        # pipeline to disable PII explicitly.
         if not check_only and self._nss_config.replace_pii is not None:
-            replacer = NemoPII(self._nss_config.replace_pii)
-            replacer.transform_df(original_training_df)
-            assert replacer.result is not None
-            self._training_df = replacer.result.transformed_df
-            self._column_statistics = replacer.result.column_statistics
-            self._pii_replacer_time = replacer.elapsed_time
-            # We explicitly do not replace PII in the test set so that the
-            # privacy metrics are valid.
+            raise ParameterError(
+                "PII replacement is not available on this branch. Set replace_pii to null, "
+                "pass --no-replace-pii, or call with_replace_pii(enable=False)."
+            )
 
         # Only create new metadata if not already loaded (e.g., from load_from_save_path)
         metadata_for_preflight = self._llm_metadata

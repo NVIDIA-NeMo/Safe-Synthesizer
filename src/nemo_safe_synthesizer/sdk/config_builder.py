@@ -15,8 +15,8 @@ from ..config import (
     DifferentialPrivacyHyperparams,
     EvaluationParameters,
     GenerateParameters,
-    PiiReplacerConfig,
     PreflightParameters,
+    ReplacePiiConfig,
     SafeSynthesizerParameters,
     TimeSeriesParameters,
     TrainingHyperparams,
@@ -26,11 +26,7 @@ from ..config.unknown_fields import (
     UnknownFieldBehavior,
     validate_unknown_fields,
 )
-from ..observability import get_logger
 from ..telemetry import _telemetry_enabled
-
-logger = get_logger(__name__)
-
 
 DataSource = pd.DataFrame | str
 RawConfig: TypeAlias = Mapping[str, object]
@@ -80,7 +76,7 @@ class ConfigBuilder:
             self._data_config: DataParameters = DataParameters()
             self._evaluation_config: EvaluationParameters = EvaluationParameters()
             self._generation_config: GenerateParameters = GenerateParameters()
-            self._replace_pii_config: PiiReplacerConfig | None = PiiReplacerConfig.get_default_config()
+            self._replace_pii_config: ReplacePiiConfig | None = ReplacePiiConfig()
             self._preflight_config = PreflightParameters()
             self._privacy_config: DifferentialPrivacyHyperparams = DifferentialPrivacyHyperparams()
             self._training_config: TrainingHyperparams = TrainingHyperparams()
@@ -88,7 +84,6 @@ class ConfigBuilder:
             self._emit_telemetry_config = _telemetry_enabled()
 
         self._data_source: DataSource | None = None
-        self._classify_model_provider: str | None = None
         self._hf_token_secret: str | None = None
 
     @property
@@ -199,36 +194,24 @@ class ConfigBuilder:
         return self
 
     def with_replace_pii(
-        self, config: PiiReplacerConfig | RawConfig | None = None, *, enable: bool = True, **kwargs: object
+        self, config: ReplacePiiConfig | RawConfig | None = None, *, enable: bool = True, **kwargs: object
     ) -> Self:
-        """Configure PII replacement settings.
+        """Request or disable PII replacement.
 
-        Falls back to ``PiiReplacerConfig.get_default_config()`` when
-        ``config`` is ``None``.  Pass ``enable=False`` to explicitly
-        disable PII replacement for this run -- this sets
-        ``replace_pii=None``, which is the sole disabled signal.
-
-        Note: PII replacement uses ``replace_pii=None`` as the disabled
-        signal rather than a ``PiiReplacerConfig.enabled`` boolean field.
-        This differs from ``EvaluationConfig.enabled`` but is intentional:
-        ``PiiReplacerConfig`` has a non-trivial ``default_factory`` that
-        must fire when the field is absent from a YAML config.  Adding an
-        ``enabled`` boolean inside the sub-config would require a
-        ``model_validator`` to reconcile the two signals and would not
-        interact cleanly with Pydantic's ``exclude_unset`` semantics used
-        in ``from_params``.
+        This branch contains only a placeholder configuration. Pass
+        ``enable=False`` to set ``replace_pii=None`` and run the pipeline.
 
         Args:
             config: PII replacement configuration object or raw mapping.
             enable: When ``False``, disables PII replacement entirely
                 and clears any previously set config.
-            **kwargs: Field-level overrides (e.g. ``classify``).
+            **kwargs: Reserved for the replacement configuration added later.
 
         Returns:
             This builder instance with PII replacement configured.
 
         Raises:
-            ValueError: If ``config`` is not a ``PiiReplacerConfig``,
+            ValueError: If ``config`` is not a ``ReplacePiiConfig``,
                 raw mapping, or ``None``.
 
         Example::
@@ -240,20 +223,20 @@ class ConfigBuilder:
             return self
 
         match config:
-            case PiiReplacerConfig() | Mapping() as values:
-                cfg = PiiReplacerConfig.from_config_source(
+            case ReplacePiiConfig() | Mapping() as values:
+                cfg = ReplacePiiConfig.from_config_source(
                     values,
                     unknown_field_behavior=self._effective_unknown_fields,
                     **kwargs,
                 )
             case None:
-                cfg = PiiReplacerConfig.from_config_source(
-                    PiiReplacerConfig.get_default_config(),
+                cfg = ReplacePiiConfig.from_config_source(
+                    ReplacePiiConfig(),
                     unknown_field_behavior=self._effective_unknown_fields,
                     **kwargs,
                 )
             case _:
-                raise ValueError(f"Config must be a PiiReplacerConfig, raw mapping, or None, got {config!r}")
+                raise ValueError(f"Config must be a ReplacePiiConfig, raw mapping, or None, got {config!r}")
 
         self._replace_pii_config = cfg
         return self
@@ -292,9 +275,7 @@ class ConfigBuilder:
     def _resolve_nss_config(self) -> None:
         """Assemble per-section configs into a ``SafeSynthesizerParameters``.
 
-        Constructs the unified config from already-normalized typed sections,
-        then injects ``_classify_model_provider`` into PII configuration when
-        requested.
+        Constructs the unified config from already-normalized typed sections.
         """
         config_values: dict[str, object] = {
             "data": self._data_config,
@@ -309,11 +290,6 @@ class ConfigBuilder:
             "unknown_fields": self._effective_unknown_fields,
         }
         self._nss_config = SafeSynthesizerParameters.model_validate(config_values)
-
-        # Inject classify_model_provider into PII replacer config if set
-        if self._classify_model_provider and self._nss_config.replace_pii:
-            self._nss_config.replace_pii.globals.classify.classify_model_provider = self._classify_model_provider
-            logger.debug(f"Injected classify model provider into PII config: {self._classify_model_provider}")
 
     def _resolve_datasource(self, **kwargs) -> None:
         """Convert the data source into a ``pandas.DataFrame``.
