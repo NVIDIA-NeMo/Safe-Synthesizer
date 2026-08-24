@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# PII replacement plan for this dataset. Edit and pass back via
+# replace_pii.replacement_plan to override auto-discovery.
+
+# How widely one original value keeps the same synthetic value:
+# record (per row), group (per training group), or dataframe (whole dataset).
+
+# Flat columns_to_replace with optional depends_on / pattern.
+# Identify-only conditioners (gender, …) appear only as depends_on.
+
+columns_to_replace:
+- column_name: Name
+  entity_type: full_name
+  pattern: '{First} {Last}'
+- column_name: CustomerID
+  entity_type: unique_identifier
+  pattern: CUST-&&&&&&&&
+- column_name: Churn Reason
+  entity_type: free_text

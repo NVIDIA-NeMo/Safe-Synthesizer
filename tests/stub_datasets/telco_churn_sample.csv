@@ -1,0 +1,61 @@
+CustomerID,Name,City,State,Zip Code,Churn Reason,Monthly Charge
+CUST-77CB4C5B,Ana Flores,Auburn,WA,98092,Service outages,125.56
+CUST-0DB5B011,Betty Jennings,Auburn,ME,4210,Price too high,51.04
+CUST-B900198C,Cristina Bozeman,Mooresville,IN,46158,price too high,100.94
+CUST-6091F2CD,Nam Vaidyanathan,Oldsmar,FL,34677,Internet speed issues,106.18
+CUST-0D222E7A,Tiffany Golden,Edwardsville,IL,62025,High price,125.85
+CUST-182C4C4E,Elizabeth Kibler,Sandy,UT,84070,Service outages,75.59
+CUST-03C0A464,Linda Back,Vacaville,CA,95687,Competitor offer,79.99
+CUST-D497D9F2,James Byers,Missoula,MT,59808,price too high,117.25
+CUST-1FBE7274,Annalyn Agarwal,Wheeling,IL,60090,price too high,123.88
+CUST-D5194C7F,Francis Renoux,Hickman,KY,42050,High price and unreliable service,77.11
+CUST-5CC27825,Stella Alston,Minneapolis,MN,55428,Service outages,87.99
+CUST-17068F24,Vilma Riverarivera,Smyrna,GA,30080,Moved to competitor,73.96
+CUST-BE9BC8B4,Brad Garris,Elkhart,IN,46516,Network reliability issues,106.13
+CUST-24F12691,Michael Foster,Graham,NC,27253,Price too high,70.7
+CUST-8A31A512,Chelsea Polk,Mesa,WA,99343,Moved to competitor,67.36
+CUST-B63AE218,Thanh Nordman,La Canada Flintridge,CA,91011,Service outages affecting fiber,75.52
+CUST-349F8F60,Belle Cowdery,Teaneck,NJ,7666,Price too high,112.04
+CUST-ABB56F19,Gene Mulvihill,Zeigler,IL,62999,Price too high,85.93
+CUST-CB64D6A1,Philip Reed,Fort Lauderdale,FL,33313,"Price too high, competitor offer",103.0
+CUST-03AA1BF7,Sherri Kelly,Orange,NJ,7050,High monthly charge,128.37
+CUST-10BD32DA,Olivia Brown,Madison,OH,44057,Price too high,104.73
+CUST-F898C892,Ismarys Araman,Scotts Valley,CA,95066,Price too high,102.3
+CUST-CD09D0CE,Laquita Benedict,Ellicott City,MD,21043,Service outages,102.65
+CUST-CCF767D4,Christine Celis,San Antonio,TX,78222,price too high,66.42
+CUST-83E7812F,Nashawn Walton,Baton Rouge,LA,70809,Price too high,94.66
+CUST-04E6EE13,Emilio Rodriguez,Schenectady,NY,12304,price too high,92.96
+CUST-A057C34A,Shanette Jackson,Aberdeen,WA,98520,price too high,91.3
+CUST-CF9DAB8C,Anna Green,Mooresboro,NC,28114,price too high,80.31
+CUST-1237F8A9,Amie Clopton,Columbia,KY,42728,network reliability issues,99.64
+CUST-80F0E47F,Cora Billings,Altoona,AL,35952,Competitive offer,63.49
+CUST-E4E4DD80,Tonya Balila,Selinsgrove,PA,17870,,98.27
+CUST-1171231A,Christopher Levy,Wilmington,DE,19803,,64.36
+CUST-96B8DD8F,Sandra Pleitez,Phoenix,AZ,85042,,76.6
+CUST-0EF22CCB,Haleigh Ammons,Livermore,CA,94550,,58.1
+CUST-0B38EEA6,Dan Jewell,Slidell,LA,70458,,87.21
+CUST-58CDADC8,Jennifer Thomas,Hesperia,CA,92345,,99.21
+CUST-8E4B8204,James Lee,New York,NY,10022,,92.07
+CUST-E8942E86,Roselia Moultrie,Columbus,OH,43206,,88.57
+CUST-0C007DE2,Lauren Hicks,Irvine,KY,40336,,61.47
+CUST-D751C5BA,Marieange Muir,Philadelphia,PA,19148,,111.54
+CUST-E960135D,Setsuko Le,Austell,GA,30106,,100.0
+CUST-CF548DC5,Cameron Abrigo,Dunlap,TN,37327,,63.53
+CUST-A163CD7E,Johnny Johnson,Foley,AL,36535,,102.54
+CUST-55FDCA4A,Mong Huynh,Millington,TN,38053,,19.14
+CUST-987E6B17,Rajiv Raveendran,Griffin,GA,30223,,84.49
+CUST-8705B556,William Fanara,Leola,PA,17540,,51.69
+CUST-8BE202B4,Robert Bird,Indianapolis,IN,46228,,84.59
+CUST-461D5F25,Jovita Rosado,Fort Morgan,CO,80701,,83.18
+CUST-F6863212,Luz Sanchez,Campbell,OH,44405,,75.4
+CUST-AC6F3A65,Samuel Williams,Los Angeles,CA,90068,,127.05
+CUST-FB5AD1C6,Christopher Hines,Bloomfield,NM,87413,,71.31
+CUST-10173E74,Luis Luna,Colorado Springs,CO,80917,,110.88
+CUST-21023DCB,Donald Vizcaino,Crab Orchard,KY,40419,,94.34
+CUST-B0DD2BD6,Oscar Lugo,Oxon Hill,MD,20745,,63.46
+CUST-A9A0E059,Janice Kinsey,New Albany,OH,43054,,91.01
+CUST-6FD2E2B7,Jesse Horsley,Eagle,WI,53119,,78.0
+CUST-7BC01890,Joseph Dahiya,Vallejo,CA,94590,,73.91
+CUST-8BFCE43D,Dora Harney,Taylorsville,IN,47280,,70.76
+CUST-966A7ADE,Alvaro Loredo,Los Angeles,CA,90044,,96.64
+CUST-FCB8B3F0,Alvaro Lopez,Concord,CA,94520,,123.55
