@@ -239,13 +239,21 @@ The workflow performs the following steps:
 
 ## Third-party action pinning
 
-Every `uses:` that is not a local composite (`./.github/actions/...`) must pin a 40-character commit SHA, with the full release tag in a trailing comment:
+Pin every `uses:` that references an external GitHub repository (`owner/repo/...`)
+to a 40-character commit SHA, with the full release tag in a trailing comment:
 
 ```yaml
 uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 ```
 
-Do not pin a floating tag or branch (`@v7`, `@main`). Local composites stay unpinned. If the upstream repo has no version tags, pin the commit SHA and comment the ref name (`# main`), this fallback is only allowed for other NVIDIA owned repos. Dependabot's `github-actions` updates keep the SHA and comment in sync.
+This applies in workflow files and in composite `action.yml` files. Do not pin a
+floating tag or branch (`@v7`, `@main`). Local composites (`./.github/actions/...`)
+and local reusable workflows (`./.github/workflows/...`) stay unpinned.
+
+If the upstream repo has no version tags, pin the commit SHA and comment the ref
+name (`# main`). That fallback is only allowed for other NVIDIA-owned repos.
+
+Dependabot's `github-actions` updates keep the SHA and comment in sync.
 
 ## Reusable Workflows
 
