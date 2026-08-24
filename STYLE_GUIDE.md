@@ -821,7 +821,7 @@ readonly OUTPUT_DIR="${1:?Usage: $0 <output-dir>}"
 - SPDX copyright headers at top
 - Unquoted values unless special characters require them
 - Newline at end of file
-- GitHub Actions workflows: `#` with dashes for section dividers
+- GitHub Actions workflows: `#` with dashes for section dividers. Pin third-party `uses:` to a commit SHA with a full version comment; see [`.github/workflows/README.md`](.github/workflows/README.md).
 
 ### TOML
 
