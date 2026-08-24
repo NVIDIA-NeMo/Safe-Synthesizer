@@ -84,7 +84,7 @@ class EntityType(StrEnum):
     ethnic_background = "ethnic_background"
     city = "city"
     state = "state"
-    zip_code = "zip_code"
+    zipcode = "zipcode"
     country = "country"
     organization = "organization"
 
@@ -209,7 +209,7 @@ ENTITIES: tuple[Entity, ...] = (
     Entity(EntityType.ethnic_background, action=EntityAction.none, can_condition=True),
     Entity(EntityType.city, action=EntityAction.none, can_condition=True),
     Entity(EntityType.state, action=EntityAction.none, can_condition=True),
-    Entity(EntityType.zip_code, action=EntityAction.none, can_condition=True),
+    Entity(EntityType.zipcode, action=EntityAction.none, can_condition=True),
     Entity(EntityType.country, action=EntityAction.none, can_condition=True),
     Entity(EntityType.organization, action=EntityAction.none, can_condition=True),
 )
@@ -231,7 +231,7 @@ ALLOWED_DEPENDS_ON: dict[EntityType, frozenset[EntityType]] = {
             EntityType.organization,
         }
     ),
-    EntityType.street_address: frozenset({EntityType.city, EntityType.state, EntityType.zip_code, EntityType.country}),
+    EntityType.street_address: frozenset({EntityType.city, EntityType.state, EntityType.zipcode, EntityType.country}),
 }
 
 # Each inner tuple is one exclusivity family: at most one group from that family
@@ -247,7 +247,7 @@ EXCLUSIVE_DEPENDS_ON_GROUPS: tuple[tuple[frozenset[EntityType], ...], ...] = (
         frozenset({EntityType.gender, EntityType.ethnic_background}),
     ),
     (
-        frozenset({EntityType.zip_code}),
+        frozenset({EntityType.zipcode}),
         frozenset({EntityType.city, EntityType.state, EntityType.country}),
     ),
 )

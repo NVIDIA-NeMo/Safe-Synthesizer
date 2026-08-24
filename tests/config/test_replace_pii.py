@@ -250,7 +250,7 @@ class TestPiiReplacementPlan:
             }
         )
 
-    def test_zip_code_cannot_mix_with_city(self) -> None:
+    def test_zipcode_cannot_mix_with_city(self) -> None:
         with _raises("mutually exclusive conditioner groups"):
             PiiReplacementPlan.model_validate(
                 {
@@ -259,7 +259,7 @@ class TestPiiReplacementPlan:
                             "column_name": "street",
                             "entity_type": "street_address",
                             "depends_on": [
-                                {"column_name": "zip", "entity_type": "zip_code"},
+                                {"column_name": "zip", "entity_type": "zipcode"},
                                 {"column_name": "city", "entity_type": "city"},
                             ],
                         }
