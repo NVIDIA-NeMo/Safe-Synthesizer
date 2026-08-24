@@ -24,6 +24,6 @@ jobs:
       contents: read
       pull-requests: read
       statuses: read
-    uses: NVIDIA/skills/.github/workflows/team-request.yml@main
+    uses: NVIDIA/skills/.github/workflows/team-request.yml@3a38625bf3e863eb9f26ea0d985130ddfb5c66ae # main
     secrets:
       NVSKILLS_CI_DISPATCH_TOKEN: ${{ secrets.NVSKILLS_CI_DISPATCH_TOKEN }}
