@@ -22,6 +22,7 @@ one with Safe Synthesizer and all three notebooks already installed.
 - [Differential Privacy](differential-privacy.ipynb) -- enable differential privacy guarantees
 - [Time-Series Financial Transactions](time-series-financial-transactions.ipynb) -- synthesize grouped transaction histories
 - [PII Replacement](pii-replacement.ipynb) -- optionally review/edit a PII plan, then continue the pipeline
+- [Multi-table PII Replacement](multi-table-pii-replacement.ipynb) -- consistent PII across a folder of related CSV tables
 
 ## Adding a Tutorial
 

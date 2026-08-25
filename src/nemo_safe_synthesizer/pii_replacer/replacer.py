@@ -14,7 +14,7 @@ import pandas as pd
 from ..config.data import DataParameters
 from ..config.replace_pii import PiiColumnPlan, PiiEntity, PiiReplacementPlan, PiiReplacementScope, ReplacePiiConfig
 from ..config.time_series import TimeSeriesParameters
-from ..errors import InternalError
+from ..errors import InternalError, ParameterError
 from ..observability import get_logger
 from . import entities
 from .llm import PiiDiscoveryEnhancer, PiiReplacementEnhancer
@@ -106,6 +106,12 @@ class TabularPiiReplacer:
             enhancer=self._discovery_enhancer,
         )
         self.resolved_plan = plan
+
+        if plan.scope == PiiReplacementScope.database:
+            raise ParameterError(
+                "scope 'database' requires MultiTablePiiReplacer.transform_folder "
+                "(folder of CSVs + schema). TabularPiiReplacer is single-table only."
+            )
 
         persona_count, persona_backed_cols, standalone_cols = _plan_column_counts(plan)
         logger.user.info(

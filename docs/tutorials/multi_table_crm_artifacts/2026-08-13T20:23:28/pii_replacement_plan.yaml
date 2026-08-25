@@ -1,0 +1,1078 @@
+# PII replacement plan for this dataset. Edit and pass back via
+# replace_pii.replacement_plan to override auto-discovery.
+
+# How widely one original value keeps the same synthetic value:
+# record (per row), group (per training group), dataframe (whole table),
+# or database (multi-table folder + schema via MultiTablePiiReplacer).
+scope: database
+
+# Database scope only: equivalence classes of table-qualified columns that
+# share one original→synthetic map (from schema PK/FK, plus optional overlap).
+# person_reference=true hangs person attribute bundles off keys in the domain.
+# Ordinary FK child columns appear here; polymorphic Id columns do not.
+key_domains:
+- id: Account.Id
+  person_reference: true
+  columns:
+  - Account.Id
+  - Account.ParentId
+  - AccountContactRelation.AccountId
+  - AccountTeamMember.AccountId
+  - Asset.AccountId
+  - Case.AccountId
+  - Contact.AccountId
+  - Contract.AccountId
+  - Lead.ConvertedAccountId
+  - Opportunity.AccountId
+  - Order.AccountId
+  - Partner.AccountFromId
+  - Partner.AccountToId
+  - Quote.AccountId
+- id: AccountContactRelation.Id
+  columns:
+  - AccountContactRelation.Id
+- id: AccountTeamMember.Id
+  columns:
+  - AccountTeamMember.Id
+- id: Asset.Id
+  columns:
+  - Asset.Id
+  - Asset.ParentId
+  - Case.AssetId
+- id: Campaign.Id
+  person_reference: true
+  columns:
+  - Campaign.Id
+  - Campaign.ParentId
+  - CampaignMember.CampaignId
+  - Opportunity.CampaignId
+- id: CampaignMember.Id
+  columns:
+  - CampaignMember.Id
+- id: Case.Id
+  person_reference: true
+  columns:
+  - Case.Id
+  - Case.ParentId
+  - CaseComment.ParentId
+  - EmailMessage.ParentId
+- id: CaseComment.Id
+  columns:
+  - CaseComment.Id
+- id: Contact.Id
+  person_reference: true
+  columns:
+  - AccountContactRelation.ContactId
+  - Asset.ContactId
+  - CampaignMember.ContactId
+  - Case.ContactId
+  - Contact.Id
+  - Contact.ReportsToId
+  - ContractContactRole.ContactId
+  - Lead.ConvertedContactId
+  - OpportunityContactRole.ContactId
+  - Order.BillToContactId
+  - Order.ShipToContactId
+- id: Contract.Id
+  person_reference: true
+  columns:
+  - Contract.Id
+  - ContractContactRole.ContractId
+  - Order.ContractId
+  - Quote.ContractId
+- id: ContractContactRole.Id
+  columns:
+  - ContractContactRole.Id
+- id: EmailMessage.Id
+  person_reference: true
+  columns:
+  - EmailMessage.Id
+- id: Event.Id
+  columns:
+  - Event.Id
+  - EventRelation.EventId
+- id: EventRelation.Id
+  columns:
+  - EventRelation.Id
+- id: Lead.Id
+  person_reference: true
+  columns:
+  - CampaignMember.LeadId
+  - Lead.Id
+- id: ObjectTerritory2Association.Id
+  columns:
+  - ObjectTerritory2Association.Id
+- id: Opportunity.Id
+  columns:
+  - Lead.ConvertedOpportunityId
+  - Opportunity.Id
+  - OpportunityContactRole.OpportunityId
+  - OpportunityLineItem.OpportunityId
+  - OpportunityTeamMember.OpportunityId
+  - Order.OpportunityId
+  - Partner.OpportunityId
+  - Quote.OpportunityId
+- id: OpportunityContactRole.Id
+  columns:
+  - OpportunityContactRole.Id
+- id: OpportunityLineItem.Id
+  columns:
+  - OpportunityLineItem.Id
+- id: OpportunityTeamMember.Id
+  columns:
+  - OpportunityTeamMember.Id
+- id: Order.Id
+  person_reference: true
+  columns:
+  - Order.Id
+  - OrderItem.OrderId
+- id: OrderItem.Id
+  columns:
+  - OrderItem.Id
+- id: Partner.Id
+  columns:
+  - Partner.Id
+- id: Pricebook2.Id
+  columns:
+  - Contract.Pricebook2Id
+  - Opportunity.Pricebook2Id
+  - Order.Pricebook2Id
+  - Pricebook2.Id
+  - PricebookEntry.Pricebook2Id
+  - Quote.Pricebook2Id
+- id: PricebookEntry.Id
+  columns:
+  - OpportunityLineItem.PricebookEntryId
+  - OrderItem.PricebookEntryId
+  - PricebookEntry.Id
+  - QuoteLineItem.PricebookEntryId
+- id: Product2.Id
+  person_reference: true
+  columns:
+  - Asset.Product2Id
+  - Case.ProductId
+  - PricebookEntry.Product2Id
+  - Product2.Id
+- id: Quote.Id
+  person_reference: true
+  columns:
+  - Opportunity.SyncedQuoteId
+  - Order.QuoteId
+  - Quote.Id
+  - QuoteLineItem.QuoteId
+- id: QuoteLineItem.Id
+  columns:
+  - OrderItem.QuoteLineItemId
+  - QuoteLineItem.Id
+- id: Task.Id
+  columns:
+  - Task.Id
+  - TaskRelation.TaskId
+- id: TaskRelation.Id
+  columns:
+  - TaskRelation.Id
+- id: Territory2.Id
+  person_reference: true
+  columns:
+  - ObjectTerritory2Association.Territory2Id
+  - Territory2.Id
+  - UserTerritory2Association.Territory2Id
+- id: User.Id
+  person_reference: true
+  columns:
+  - AccountTeamMember.UserId
+  - OpportunityTeamMember.UserId
+  - User.Id
+  - UserTerritory2Association.UserId
+- id: UserTerritory2Association.Id
+  columns:
+  - UserTerritory2Association.Id
+
+# Database scope only (omit when unused): Salesforce-style polymorphic Id
+# routers. Each parent PK stays its own key_domain; the Id column picks a
+# domain per row via type_column. Type discriminator columns are not replaced.
+polymorphic_foreign_keys:
+- column: EmailMessage.RelatedToId
+  type_column: EmailMessage.RelatedToType
+  targets:
+  - type_value: Account
+    domain: Account.Id
+  - type_value: Asset
+    domain: Asset.Id
+  - type_value: Campaign
+    domain: Campaign.Id
+  - type_value: Case
+    domain: Case.Id
+  - type_value: Contract
+    domain: Contract.Id
+  - type_value: Opportunity
+    domain: Opportunity.Id
+  - type_value: Order
+    domain: Order.Id
+  - type_value: Product2
+    domain: Product2.Id
+- column: Event.WhatId
+  type_column: Event.WhatType
+  targets:
+  - type_value: Account
+    domain: Account.Id
+  - type_value: Asset
+    domain: Asset.Id
+  - type_value: Campaign
+    domain: Campaign.Id
+  - type_value: Case
+    domain: Case.Id
+  - type_value: Contract
+    domain: Contract.Id
+  - type_value: Opportunity
+    domain: Opportunity.Id
+  - type_value: Order
+    domain: Order.Id
+  - type_value: Product2
+    domain: Product2.Id
+- column: Event.WhoId
+  type_column: Event.WhoType
+  targets:
+  - type_value: Contact
+    domain: Contact.Id
+  - type_value: Lead
+    domain: Lead.Id
+- column: EventRelation.RelationId
+  type_column: EventRelation.RelationType
+  targets:
+  - type_value: Account
+    domain: Account.Id
+  - type_value: Contact
+    domain: Contact.Id
+  - type_value: Lead
+    domain: Lead.Id
+  - type_value: User
+    domain: User.Id
+- column: ObjectTerritory2Association.ObjectId
+  type_column: ObjectTerritory2Association.ObjectType
+  targets:
+  - type_value: Account
+    domain: Account.Id
+  - type_value: Lead
+    domain: Lead.Id
+- column: Task.WhatId
+  type_column: Task.WhatType
+  targets:
+  - type_value: Account
+    domain: Account.Id
+  - type_value: Asset
+    domain: Asset.Id
+  - type_value: Campaign
+    domain: Campaign.Id
+  - type_value: Case
+    domain: Case.Id
+  - type_value: Contract
+    domain: Contract.Id
+  - type_value: Opportunity
+    domain: Opportunity.Id
+  - type_value: Order
+    domain: Order.Id
+  - type_value: Product2
+    domain: Product2.Id
+- column: Task.WhoId
+  type_column: Task.WhoType
+  targets:
+  - type_value: Contact
+    domain: Contact.Id
+  - type_value: Lead
+    domain: Lead.Id
+- column: TaskRelation.RelationId
+  type_column: TaskRelation.RelationType
+  targets:
+  - type_value: Account
+    domain: Account.Id
+  - type_value: Contact
+    domain: Contact.Id
+  - type_value: Lead
+    domain: Lead.Id
+  - type_value: User
+    domain: User.Id
+
+# Database scope only: per-table persona + standalone sections with
+# table-qualified column names (Contact.FirstName, Case.ContactId, ...).
+tables:
+  Account:
+    persona_backed_columns:
+    - persona: billing
+      columns_to_replace:
+      - column_name: Account.BillingStreet
+        entity_type: street_address
+      person_key_domain: Account.Id
+    - persona: person_1
+      columns_to_replace:
+      - column_name: Account.Name
+        entity_type: full_name
+        patterns:
+        - '{First} {Middle} {Last}'
+      person_key_domain: Account.Id
+    standalone_columns_to_replace:
+    - column_name: Account.Id
+      entity_type: unique_identifier
+      patterns:
+      - 001************[AIQY]&&
+    - column_name: Account.ParentId
+      entity_type: unique_identifier
+      patterns:
+      - 001************[AIQY]&&
+    - column_name: Account.Phone
+      entity_type: free_text
+    - column_name: Account.Website
+      entity_type: free_text
+    - column_name: Account.CreatedDate
+      entity_type: free_text
+  AccountContactRelation:
+    standalone_columns_to_replace:
+    - column_name: AccountContactRelation.Id
+      entity_type: unique_identifier
+      patterns:
+      - 07k************[AIQY]&&
+    - column_name: AccountContactRelation.AccountId
+      entity_type: unique_identifier
+      patterns:
+      - 001************[AIQY]&&
+    - column_name: AccountContactRelation.ContactId
+      entity_type: unique_identifier
+      patterns:
+      - 003************[AIQY]&&
+    - column_name: AccountContactRelation.CreatedDate
+      entity_type: free_text
+  AccountTeamMember:
+    standalone_columns_to_replace:
+    - column_name: AccountTeamMember.Id
+      entity_type: unique_identifier
+      patterns:
+      - 01M************[2EMU]&&
+    - column_name: AccountTeamMember.AccountId
+      entity_type: unique_identifier
+      patterns:
+      - 001************[AIQY]&&
+    - column_name: AccountTeamMember.UserId
+      entity_type: unique_identifier
+      patterns:
+      - 005************[AIQY]&&
+    - column_name: AccountTeamMember.CreatedDate
+      entity_type: free_text
+  Asset:
+    standalone_columns_to_replace:
+    - column_name: Asset.Id
+      entity_type: unique_identifier
+      patterns:
+      - 02i************[AIQY]&&
+    - column_name: Asset.AccountId
+      entity_type: unique_identifier
+      patterns:
+      - 001************[AIQY]&&
+    - column_name: Asset.ContactId
+      entity_type: unique_identifier
+      patterns:
+      - 003************[AIQY]&&
+    - column_name: Asset.ParentId
+      entity_type: unique_identifier
+      patterns:
+      - 02i************[AIQY]&&
+    - column_name: Asset.Product2Id
+      entity_type: unique_identifier
+      patterns:
+      - 01t************[AIQY]&&
+    - column_name: Asset.Name
+      entity_type: free_text
+    - column_name: Asset.AssetNumber
+      entity_type: free_text
+    - column_name: Asset.SerialNumber
+      entity_type: free_text
+    - column_name: Asset.Description
+      entity_type: free_text
+    - column_name: Asset.CreatedDate
+      entity_type: free_text
+  Campaign:
+    persona_backed_columns:
+    - persona: person_1
+      columns_to_replace:
+      - column_name: Campaign.Name
+        entity_type: full_name
+        patterns:
+        - '{First} {Middle} {Last}'
+        - '{First} {Middle} {L}'
+      person_key_domain: Campaign.Id
+    standalone_columns_to_replace:
+    - column_name: Campaign.Id
+      entity_type: unique_identifier
+      patterns:
+      - 701************[AIQY]&&
+    - column_name: Campaign.ParentId
+      entity_type: unique_identifier
+      patterns:
+      - 701************^&^
+    - column_name: Campaign.CreatedDate
+      entity_type: free_text
+  CampaignMember:
+    standalone_columns_to_replace:
+    - column_name: CampaignMember.Id
+      entity_type: unique_identifier
+      patterns:
+      - 00v************[AIQY]&&
+    - column_name: CampaignMember.CampaignId
+      entity_type: unique_identifier
+      patterns:
+      - 701************[AIQY]&&
+    - column_name: CampaignMember.ContactId
+      entity_type: unique_identifier
+      patterns:
+      - 003************[AIQY]&&
+    - column_name: CampaignMember.LeadId
+      entity_type: unique_identifier
+      patterns:
+      - 00Q************[2EMU]&&
+    - column_name: CampaignMember.CreatedDate
+      entity_type: free_text
+  Case:
+    persona_backed_columns:
+    - persona: supplied
+      columns_to_replace:
+      - column_name: Case.SuppliedEmail
+        entity_type: email
+        patterns:
+        - '@{domain}'
+        - '@[aeilov][alrsv]@[ainq]-@.@@@[elnrsv][eilnor][eklnr]-@[aeilos]@[delnrt].###-####@{domain}'
+        - '@[aeruv]@[aino]-@.@@@[elnrsv][eilnor][eklnr]-@[aeilos]@[delnrt].###-####@{domain}'
+        - '@[aeilov][alrsv]@[ainq]-@.@@@[elnrsv][eilnor][eklnr]-[abefo][aels][hkmny].###-####@{domain}'
+        - '@[aeruv]@[aino]-@.@@@[elnrsv][eilnor][eklnr]-[abefo][aels][hkmny].###-####@{domain}'
+      person_key_domain: Case.Id
+    standalone_columns_to_replace:
+    - column_name: Case.Id
+      entity_type: unique_identifier
+      patterns:
+      - 500************[AIQY]&&
+    - column_name: Case.AccountId
+      entity_type: unique_identifier
+      patterns:
+      - 001************[AIQY]&&
+    - column_name: Case.AssetId
+      entity_type: unique_identifier
+      patterns:
+      - 02i************[AIQY]&&
+    - column_name: Case.ContactId
+      entity_type: unique_identifier
+      patterns:
+      - 003************[AIQY]&&
+    - column_name: Case.ParentId
+      entity_type: unique_identifier
+      patterns:
+      - 500************[AIQY]&&
+    - column_name: Case.ProductId
+      entity_type: unique_identifier
+      patterns:
+      - 01t************[AIQY]&&
+    - column_name: Case.SuppliedName
+      entity_type: free_text
+    - column_name: Case.ClosedDate
+      entity_type: free_text
+    - column_name: Case.CreatedDate
+      entity_type: free_text
+  CaseComment:
+    standalone_columns_to_replace:
+    - column_name: CaseComment.Id
+      entity_type: unique_identifier
+      patterns:
+      - 00a************[AIQY]&&
+    - column_name: CaseComment.ParentId
+      entity_type: unique_identifier
+      patterns:
+      - 500************[AIQY]&&
+    - column_name: CaseComment.CreatedDate
+      entity_type: free_text
+  Contact:
+    persona_backed_columns:
+    - persona: mailing
+      columns_to_replace:
+      - column_name: Contact.MailingStreet
+        entity_type: street_address
+      person_key_domain: Contact.Id
+    - persona: person_1
+      columns_to_replace:
+      - column_name: Contact.FirstName
+        entity_type: first_name
+        patterns:
+        - '{First}'
+      - column_name: Contact.LastName
+        entity_type: last_name
+        patterns:
+        - '{Last}'
+      - column_name: Contact.Name
+        entity_type: full_name
+        patterns:
+        - '{First} {M}. {Last}'
+      - column_name: Contact.Email
+        entity_type: email
+        patterns:
+        - '{first}.{last}.###-####@{domain}'
+        - '{first}.{last}.####-####@{domain}'
+      person_key_domain: Contact.Id
+    standalone_columns_to_replace:
+    - column_name: Contact.Id
+      entity_type: unique_identifier
+      patterns:
+      - 003************[AIQY]&&
+    - column_name: Contact.Phone
+      entity_type: phone_number
+      patterns:
+      - +1-[234679][017][12357]-555-01##
+    - column_name: Contact.AccountId
+      entity_type: unique_identifier
+      patterns:
+      - 001************[AIQY]&&
+    - column_name: Contact.ReportsToId
+      entity_type: unique_identifier
+      patterns:
+      - 003************[AIQY]&&
+    - column_name: Contact.CreatedDate
+      entity_type: free_text
+  Contract:
+    persona_backed_columns:
+    - persona: billing
+      columns_to_replace:
+      - column_name: Contract.BillingStreet
+        entity_type: street_address
+      person_key_domain: Contract.Id
+    standalone_columns_to_replace:
+    - column_name: Contract.Id
+      entity_type: unique_identifier
+      patterns:
+      - 800************[AIQY]&&
+    - column_name: Contract.AccountId
+      entity_type: unique_identifier
+      patterns:
+      - 001************[AIQY]&&
+    - column_name: Contract.Pricebook2Id
+      entity_type: unique_identifier
+      patterns:
+      - '##@%%****%***^&^^^'
+    - column_name: Contract.ContractNumber
+      entity_type: free_text
+    - column_name: Contract.CreatedDate
+      entity_type: free_text
+  ContractContactRole:
+    standalone_columns_to_replace:
+    - column_name: ContractContactRole.Id
+      entity_type: unique_identifier
+      patterns:
+      - 02a************[AIQY]&&
+    - column_name: ContractContactRole.ContactId
+      entity_type: unique_identifier
+      patterns:
+      - 003************[AIQY]&&
+    - column_name: ContractContactRole.ContractId
+      entity_type: unique_identifier
+      patterns:
+      - 800************[AIQY]&&
+    - column_name: ContractContactRole.CreatedDate
+      entity_type: free_text
+  EmailMessage:
+    persona_backed_columns:
+    - persona: from
+      columns_to_replace:
+      - column_name: EmailMessage.FromAddress
+        entity_type: street_address
+      person_key_domain: EmailMessage.Id
+    standalone_columns_to_replace:
+    - column_name: EmailMessage.Id
+      entity_type: unique_identifier
+      patterns:
+      - 02s************[AIQY]&&
+    - column_name: EmailMessage.ParentId
+      entity_type: unique_identifier
+      patterns:
+      - 500************[AIQY]&&
+    - column_name: EmailMessage.RelatedToId
+      entity_type: unique_identifier
+      patterns:
+      - '[0578][012][016it]************[AIQY]&&'
+    - column_name: EmailMessage.FromName
+      entity_type: free_text
+    - column_name: EmailMessage.ToAddress
+      entity_type: free_text
+    - column_name: EmailMessage.MessageDate
+      entity_type: free_text
+    - column_name: EmailMessage.CreatedDate
+      entity_type: free_text
+  Event:
+    standalone_columns_to_replace:
+    - column_name: Event.Id
+      entity_type: unique_identifier
+      patterns:
+      - 00U************[2EMU]&&
+    - column_name: Event.WhatId
+      entity_type: unique_identifier
+      patterns:
+      - '[0578][012][016it]************[AIQY]&&'
+    - column_name: Event.WhoId
+      entity_type: unique_identifier
+      patterns:
+      - 00[3Q]************&&&
+    - column_name: Event.StartDateTime
+      entity_type: free_text
+    - column_name: Event.EndDateTime
+      entity_type: free_text
+    - column_name: Event.CreatedDate
+      entity_type: free_text
+  EventRelation:
+    standalone_columns_to_replace:
+    - column_name: EventRelation.Id
+      entity_type: unique_identifier
+      patterns:
+      - 0RE************[4GOW]&&
+    - column_name: EventRelation.EventId
+      entity_type: unique_identifier
+      patterns:
+      - 00U************[2EMU]&&
+    - column_name: EventRelation.RelationId
+      entity_type: unique_identifier
+      patterns:
+      - 00[135Q]************&&&
+    - column_name: EventRelation.CreatedDate
+      entity_type: free_text
+  Lead:
+    persona_backed_columns:
+    - persona: person_1
+      columns_to_replace:
+      - column_name: Lead.FirstName
+        entity_type: first_name
+        patterns:
+        - '{First}'
+      - column_name: Lead.LastName
+        entity_type: last_name
+        patterns:
+        - '{Last}'
+      - column_name: Lead.Name
+        entity_type: full_name
+        patterns:
+        - '{First} {M}. {Last}'
+      - column_name: Lead.Email
+        entity_type: email
+        patterns:
+        - '{first}.{last}.###-####@{domain}'
+        - '{first}.{last}.####-####@{domain}'
+        - '{first}.{last}.##-####@{domain}'
+        - '{first}.{last}.###-###@{domain}'
+      - column_name: Lead.Street
+        entity_type: street_address
+      person_key_domain: Lead.Id
+    standalone_columns_to_replace:
+    - column_name: Lead.Id
+      entity_type: unique_identifier
+      patterns:
+      - 00Q************[2EMU]&&
+    - column_name: Lead.Phone
+      entity_type: phone_number
+      patterns:
+      - +1-[234679][017][12357]-555-01##
+    - column_name: Lead.ConvertedAccountId
+      entity_type: unique_identifier
+      patterns:
+      - 001************[AIQY]&&
+    - column_name: Lead.ConvertedContactId
+      entity_type: unique_identifier
+      patterns:
+      - 003************[AIQY]&&
+    - column_name: Lead.ConvertedOpportunityId
+      entity_type: unique_identifier
+      patterns:
+      - 006************[AIQY]&&
+    - column_name: Lead.Company
+      entity_type: free_text
+    - column_name: Lead.CreatedDate
+      entity_type: free_text
+  ObjectTerritory2Association:
+    standalone_columns_to_replace:
+    - column_name: ObjectTerritory2Association.Id
+      entity_type: unique_identifier
+      patterns:
+      - 0jx************[AIQY]&&
+    - column_name: ObjectTerritory2Association.ObjectId
+      entity_type: unique_identifier
+      patterns:
+      - 00[1Q]************&&&
+    - column_name: ObjectTerritory2Association.Territory2Id
+      entity_type: unique_identifier
+      patterns:
+      - 0MI************[4GOW]&&
+    - column_name: ObjectTerritory2Association.CreatedDate
+      entity_type: free_text
+  Opportunity:
+    standalone_columns_to_replace:
+    - column_name: Opportunity.Id
+      entity_type: unique_identifier
+      patterns:
+      - 006************[AIQY]&&
+    - column_name: Opportunity.AccountId
+      entity_type: unique_identifier
+      patterns:
+      - 001************[AIQY]&&
+    - column_name: Opportunity.CampaignId
+      entity_type: unique_identifier
+      patterns:
+      - 701************[AIQY]&&
+    - column_name: Opportunity.Pricebook2Id
+      entity_type: unique_identifier
+      patterns:
+      - 01s*%**********^^^
+    - column_name: Opportunity.SyncedQuoteId
+      entity_type: unique_identifier
+      patterns:
+      - 0Q0************[0CKS]&&
+    - column_name: Opportunity.Name
+      entity_type: free_text
+    - column_name: Opportunity.CreatedDate
+      entity_type: free_text
+  OpportunityContactRole:
+    standalone_columns_to_replace:
+    - column_name: OpportunityContactRole.Id
+      entity_type: unique_identifier
+      patterns:
+      - 00K************[2EMU]&&
+    - column_name: OpportunityContactRole.ContactId
+      entity_type: unique_identifier
+      patterns:
+      - 003************[AIQY]&&
+    - column_name: OpportunityContactRole.OpportunityId
+      entity_type: unique_identifier
+      patterns:
+      - 006************[AIQY]&&
+    - column_name: OpportunityContactRole.CreatedDate
+      entity_type: free_text
+  OpportunityLineItem:
+    standalone_columns_to_replace:
+    - column_name: OpportunityLineItem.Id
+      entity_type: unique_identifier
+      patterns:
+      - 00k************[AIQY]&&
+    - column_name: OpportunityLineItem.OpportunityId
+      entity_type: unique_identifier
+      patterns:
+      - 006************[AIQY]&&
+    - column_name: OpportunityLineItem.PricebookEntryId
+      entity_type: unique_identifier
+      patterns:
+      - 01u************[AIQY]&&
+    - column_name: OpportunityLineItem.Description
+      entity_type: free_text
+    - column_name: OpportunityLineItem.CreatedDate
+      entity_type: free_text
+  OpportunityTeamMember:
+    standalone_columns_to_replace:
+    - column_name: OpportunityTeamMember.Id
+      entity_type: unique_identifier
+      patterns:
+      - 00q************[AIQY]&&
+    - column_name: OpportunityTeamMember.OpportunityId
+      entity_type: unique_identifier
+      patterns:
+      - 006************[AIQY]&&
+    - column_name: OpportunityTeamMember.UserId
+      entity_type: unique_identifier
+      patterns:
+      - 005************[AIQY]&&
+    - column_name: OpportunityTeamMember.CreatedDate
+      entity_type: free_text
+  Order:
+    persona_backed_columns:
+    - persona: billing
+      columns_to_replace:
+      - column_name: Order.BillingStreet
+        entity_type: street_address
+      person_key_domain: Order.Id
+    - persona: shipping
+      columns_to_replace:
+      - column_name: Order.ShippingStreet
+        entity_type: street_address
+      person_key_domain: Order.Id
+    standalone_columns_to_replace:
+    - column_name: Order.Id
+      entity_type: unique_identifier
+      patterns:
+      - 801************[AIQY]&&
+    - column_name: Order.AccountId
+      entity_type: unique_identifier
+      patterns:
+      - 001************[AIQY]&&
+    - column_name: Order.BillToContactId
+      entity_type: unique_identifier
+      patterns:
+      - 003************[AIQY]&&
+    - column_name: Order.ContractId
+      entity_type: unique_identifier
+      patterns:
+      - 800************[AIQY]&&
+    - column_name: Order.OpportunityId
+      entity_type: unique_identifier
+      patterns:
+      - 006************[AIQY]&&
+    - column_name: Order.Pricebook2Id
+      entity_type: unique_identifier
+      patterns:
+      - 01s*%**********^^^
+    - column_name: Order.QuoteId
+      entity_type: unique_identifier
+      patterns:
+      - 0Q0************[0CKS]&&
+    - column_name: Order.ShipToContactId
+      entity_type: unique_identifier
+      patterns:
+      - 003************[AIQY]&&
+    - column_name: Order.OrderNumber
+      entity_type: free_text
+    - column_name: Order.CreatedDate
+      entity_type: free_text
+  OrderItem:
+    standalone_columns_to_replace:
+    - column_name: OrderItem.Id
+      entity_type: unique_identifier
+      patterns:
+      - 802************[AIQY]&&
+    - column_name: OrderItem.OrderId
+      entity_type: unique_identifier
+      patterns:
+      - 801************[AIQY]&&
+    - column_name: OrderItem.PricebookEntryId
+      entity_type: unique_identifier
+      patterns:
+      - 01u************[AIQY]&&
+    - column_name: OrderItem.QuoteLineItemId
+      entity_type: unique_identifier
+      patterns:
+      - 0QL************[4GOW]&&
+    - column_name: OrderItem.Description
+      entity_type: free_text
+    - column_name: OrderItem.CreatedDate
+      entity_type: free_text
+  Partner:
+    standalone_columns_to_replace:
+    - column_name: Partner.Id
+      entity_type: unique_identifier
+      patterns:
+      - 00I************[2EMU]&&
+    - column_name: Partner.AccountFromId
+      entity_type: unique_identifier
+      patterns:
+      - 001************[AIQY]&&
+    - column_name: Partner.AccountToId
+      entity_type: unique_identifier
+      patterns:
+      - 001************[AIQY]&&
+    - column_name: Partner.OpportunityId
+      entity_type: unique_identifier
+      patterns:
+      - 006************[AIQY]&&
+    - column_name: Partner.CreatedDate
+      entity_type: free_text
+  Pricebook2:
+    standalone_columns_to_replace:
+    - column_name: Pricebook2.Id
+      entity_type: unique_identifier
+      patterns:
+      - 01s*%**********^^^
+    - column_name: Pricebook2.Name
+      entity_type: free_text
+    - column_name: Pricebook2.CreatedDate
+      entity_type: free_text
+  PricebookEntry:
+    standalone_columns_to_replace:
+    - column_name: PricebookEntry.Id
+      entity_type: unique_identifier
+      patterns:
+      - 01u************[AIQY]&&
+    - column_name: PricebookEntry.Pricebook2Id
+      entity_type: unique_identifier
+      patterns:
+      - 01s*%**********^^^
+    - column_name: PricebookEntry.Product2Id
+      entity_type: unique_identifier
+      patterns:
+      - 01t************[AIQY]&&
+    - column_name: PricebookEntry.CreatedDate
+      entity_type: free_text
+  Product2:
+    persona_backed_columns:
+    - persona: person_1
+      columns_to_replace:
+      - column_name: Product2.Name
+        entity_type: full_name
+        patterns:
+        - '{First} {Middle} {Last}'
+      person_key_domain: Product2.Id
+    standalone_columns_to_replace:
+    - column_name: Product2.Id
+      entity_type: unique_identifier
+      patterns:
+      - 01t************[AIQY]&&
+    - column_name: Product2.ProductCode
+      entity_type: free_text
+    - column_name: Product2.CreatedDate
+      entity_type: free_text
+  Quote:
+    persona_backed_columns:
+    - persona: billing
+      columns_to_replace:
+      - column_name: Quote.BillingStreet
+        entity_type: street_address
+      person_key_domain: Quote.Id
+    - persona: person_1
+      columns_to_replace:
+      - column_name: Quote.Name
+        entity_type: full_name
+        patterns:
+        - '{First} {Middle} {Last}'
+      person_key_domain: Quote.Id
+    - persona: shipping
+      columns_to_replace:
+      - column_name: Quote.ShippingStreet
+        entity_type: street_address
+      person_key_domain: Quote.Id
+    standalone_columns_to_replace:
+    - column_name: Quote.Id
+      entity_type: unique_identifier
+      patterns:
+      - 0Q0************[0CKS]&&
+    - column_name: Quote.AccountId
+      entity_type: unique_identifier
+      patterns:
+      - 001************[AIQY]&&
+    - column_name: Quote.ContractId
+      entity_type: unique_identifier
+      patterns:
+      - 800************[AIQY]&&
+    - column_name: Quote.OpportunityId
+      entity_type: unique_identifier
+      patterns:
+      - 006************[AIQY]&&
+    - column_name: Quote.Pricebook2Id
+      entity_type: unique_identifier
+      patterns:
+      - 01s*%**********^^^
+    - column_name: Quote.QuoteNumber
+      entity_type: free_text
+    - column_name: Quote.CreatedDate
+      entity_type: free_text
+  QuoteLineItem:
+    standalone_columns_to_replace:
+    - column_name: QuoteLineItem.Id
+      entity_type: unique_identifier
+      patterns:
+      - 0QL************[4GOW]&&
+    - column_name: QuoteLineItem.PricebookEntryId
+      entity_type: unique_identifier
+      patterns:
+      - 01u************[AIQY]&&
+    - column_name: QuoteLineItem.QuoteId
+      entity_type: unique_identifier
+      patterns:
+      - 0Q0************[0CKS]&&
+    - column_name: QuoteLineItem.Description
+      entity_type: free_text
+    - column_name: QuoteLineItem.CreatedDate
+      entity_type: free_text
+  Task:
+    standalone_columns_to_replace:
+    - column_name: Task.Id
+      entity_type: unique_identifier
+      patterns:
+      - 00T************[2EMU]&&
+    - column_name: Task.WhatId
+      entity_type: unique_identifier
+      patterns:
+      - '[0578][012][016it]************[AIQY]&&'
+    - column_name: Task.WhoId
+      entity_type: unique_identifier
+      patterns:
+      - 00[3Q]************&&&
+    - column_name: Task.CreatedDate
+      entity_type: free_text
+  TaskRelation:
+    standalone_columns_to_replace:
+    - column_name: TaskRelation.Id
+      entity_type: unique_identifier
+      patterns:
+      - 0RT************[4GOW]&&
+    - column_name: TaskRelation.RelationId
+      entity_type: unique_identifier
+      patterns:
+      - 00[135Q]************&&&
+    - column_name: TaskRelation.TaskId
+      entity_type: unique_identifier
+      patterns:
+      - 00T************[2EMU]&&
+    - column_name: TaskRelation.CreatedDate
+      entity_type: free_text
+  Territory2:
+    persona_backed_columns:
+    - persona: person_1
+      columns_to_replace:
+      - column_name: Territory2.Name
+        entity_type: full_name
+        patterns:
+        - '{First} {Last}'
+      person_key_domain: Territory2.Id
+    standalone_columns_to_replace:
+    - column_name: Territory2.Id
+      entity_type: unique_identifier
+      patterns:
+      - 0MI************[4GOW]&&
+    - column_name: Territory2.DeveloperName
+      entity_type: free_text
+    - column_name: Territory2.CreatedDate
+      entity_type: free_text
+  User:
+    persona_backed_columns:
+    - persona: person_1
+      columns_to_replace:
+      - column_name: User.FirstName
+        entity_type: first_name
+        patterns:
+        - '{First}'
+      - column_name: User.LastName
+        entity_type: last_name
+        patterns:
+        - '{Last}'
+      - column_name: User.Name
+        entity_type: full_name
+        patterns:
+        - '{First} {M}. {Last}'
+      - column_name: User.Email
+        entity_type: email
+        patterns:
+        - '{first}.{last}.##-####@{domain}'
+        - '{first}.{last}.##-###@{domain}'
+        - '{first}.{last}.#-####@{domain}'
+      person_key_domain: User.Id
+    standalone_columns_to_replace:
+    - column_name: User.Id
+      entity_type: unique_identifier
+      patterns:
+      - 005************[AIQY]&&
+    - column_name: User.Alias
+      entity_type: free_text
+    - column_name: User.Username
+      entity_type: free_text
+    - column_name: User.CreatedDate
+      entity_type: free_text
+  UserTerritory2Association:
+    standalone_columns_to_replace:
+    - column_name: UserTerritory2Association.Id
+      entity_type: unique_identifier
+      patterns:
+      - 0R0************[0CKS]&&
+    - column_name: UserTerritory2Association.Territory2Id
+      entity_type: unique_identifier
+      patterns:
+      - 0MI************&&&
+    - column_name: UserTerritory2Association.UserId
+      entity_type: unique_identifier
+      patterns:
+      - 005************[AIQY]&&
+    - column_name: UserTerritory2Association.CreatedDate
+      entity_type: free_text

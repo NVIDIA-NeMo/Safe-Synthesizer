@@ -16,6 +16,7 @@ from ...observability import get_logger
 from .. import entities
 from ..llm import PiiReplacementEnhancer, select_replacement_enhancer
 from ..models import PersonaInstance, ReplacementOutcome, ScopedValueMap
+from ..multi_table.store import SharedRuntimeStore, TableRunContext
 from .free_text import build_text_substituter, instance_text_pair_labels, resolve_freetext_detections
 from .instances import compute_instance_synthetics, extract_instances
 from .personas import PersonaEngine
@@ -39,6 +40,93 @@ def _free_text_columns(plan: PiiReplacementPlan) -> list[str]:
     return list(dict.fromkeys(cols))
 
 
+def _ingest_instances_into_store(
+    df: pd.DataFrame,
+    instances: list[PersonaInstance],
+    store: SharedRuntimeStore,
+    table_ctx: TableRunContext,
+) -> None:
+    """Register persona instances on the shared store under each persona's key domain."""
+    for inst in instances:
+        binding = table_ctx.persona_key_bindings.get(inst.persona)
+        if binding is None or not inst.row_indices:
+            continue
+        domain_id, key_col = binding
+        if key_col not in df.columns:
+            continue
+        for idx in inst.row_indices:
+            original_key = entities.sval(df.at[idx, key_col])
+            if original_key is None:
+                continue
+            synthetic_key = None
+            if key_col in inst.synthetic_by_column:
+                synthetic_key = inst.synthetic_by_column.get(key_col)
+            domain_state = store.domains.get(domain_id)
+            if domain_state and original_key in domain_state.values:
+                synthetic_key = domain_state.values[original_key]
+            store.ingest_persona_instance(
+                domain_id=domain_id,
+                original_key=original_key,
+                synthetic_key=synthetic_key,
+                originals_by_label=dict(inst.originals_by_label),
+                synthetic_by_label=dict(inst.synthetic_by_label),
+                free_text_pairs=list(inst.free_text_pairs),
+                sex=inst.sex,
+                race_raw=inst.race_raw,
+            )
+
+
+def _row_person_pairs_from_store(
+    df: pd.DataFrame,
+    store: SharedRuntimeStore,
+    table_ctx: TableRunContext,
+) -> dict[Hashable, list[tuple[str, str]]]:
+    """Free-text pairs for rows that reference a known person via FK/PK or polymorphic Id."""
+    from ..multi_table.polymorphic import resolve_polymorphic_domain
+
+    out: dict[Hashable, list[tuple[str, str]]] = {}
+    if not table_ctx.person_ref_columns and not table_ctx.polymorphic_routes:
+        return out
+    for idx in df.index:
+        pairs: list[tuple[str, str]] = []
+        # Ordinary person-reference columns
+        for bare_col, domain_id in table_ctx.person_ref_columns.items():
+            if bare_col in table_ctx.polymorphic_routes:
+                continue  # handled below with routing
+            if bare_col not in df.columns:
+                continue
+            original_key = entities.sval(df.at[idx, bare_col])
+            if original_key is None:
+                continue
+            for pair in store.free_text_pairs_for_key(domain_id, original_key):
+                if pair not in pairs:
+                    pairs.append(pair)
+        # Polymorphic person-reference columns
+        for bare_col, route in table_ctx.polymorphic_routes.items():
+            if bare_col not in df.columns:
+                continue
+            original_key = entities.sval(df.at[idx, bare_col])
+            if original_key is None:
+                continue
+            type_value = None
+            if route.type_column in df.columns:
+                type_value = entities.sval(df.at[idx, route.type_column])
+            domain_id = resolve_polymorphic_domain(
+                store, route, original=original_key, type_value=type_value
+            )
+            if domain_id is None:
+                continue
+            state = store.domains.get(domain_id)
+            if state is None or not state.person_reference:
+                continue
+            for pair in store.free_text_pairs_for_key(domain_id, original_key):
+                if pair not in pairs:
+                    pairs.append(pair)
+        if pairs:
+            out[idx] = pairs
+    return out
+
+
 def apply_replacements(
     source_df: pd.DataFrame,
     original_df: pd.DataFrame,
@@ -49,6 +137,8 @@ def apply_replacements(
     *,
     group_key: str | None = None,
     enhancer: PiiReplacementEnhancer | None = None,
+    store: SharedRuntimeStore | None = None,
+    table_ctx: TableRunContext | None = None,
 ) -> ReplacementOutcome:
     """Apply structured and free-text replacements to a copy of the source frame.
 
@@ -65,6 +155,8 @@ def apply_replacements(
         cfg: Replacement configuration.
         group_key: Training group-key column when scope is ``"group"``.
         enhancer: Optional replacement enhancer override.
+        store: Optional shared multi-table runtime store.
+        table_ctx: Optional per-table context for ``store``.
 
     Returns:
         ``ReplacementOutcome`` with ``replaced_df``, ``free_text_applied``, and
@@ -128,6 +220,13 @@ def apply_replacements(
         for idx in inst.row_indices:
             existing = row_text_pairs.setdefault(idx, [])
             for pair in inst.free_text_pairs:
+                if pair not in existing:
+                    existing.append(pair)
+
+    if store is not None and table_ctx is not None:
+        for idx, pairs in _row_person_pairs_from_store(original_df, store, table_ctx).items():
+            existing = row_text_pairs.setdefault(idx, [])
+            for pair in pairs:
                 if pair not in existing:
                     existing.append(pair)
 
@@ -303,6 +402,8 @@ def run_replacement(
     group_key: str | None = None,
     persona_engine: PersonaEngine | None = None,
     enhancer: PiiReplacementEnhancer | None = None,
+    store: SharedRuntimeStore | None = None,
+    table_ctx: TableRunContext | None = None,
 ) -> ReplacementOutcome:
     """Run the full PII replacement pipeline on a dataframe.
 
@@ -317,6 +418,8 @@ def run_replacement(
         group_key: Training group-key column when ``plan.scope`` is ``"group"``.
         persona_engine: Optional pre-built ``PersonaEngine`` (for testing).
         enhancer: Optional replacement enhancer override.
+        store: Optional shared multi-table runtime store.
+        table_ctx: Optional per-table context for ``store``.
 
     Returns:
         ``ReplacementOutcome`` with the replaced frame, persona instances,
@@ -331,8 +434,23 @@ def run_replacement(
     engine = persona_engine if persona_engine is not None else PersonaEngine(cfg, max(len(instances), 1))
     engine.assign(instances)
     compute_instance_synthetics(instances, cfg)
-    standalone_maps = build_standalone_maps(df, plan, cfg, group_key=group_key)
-    outcome = apply_replacements(df, df, instances, standalone_maps, plan, cfg, group_key=group_key, enhancer=llm)
+    standalone_maps = build_standalone_maps(
+        df, plan, cfg, group_key=group_key, store=store, table_ctx=table_ctx
+    )
+    if store is not None and table_ctx is not None:
+        _ingest_instances_into_store(df, instances, store, table_ctx)
+    outcome = apply_replacements(
+        df,
+        df,
+        instances,
+        standalone_maps,
+        plan,
+        cfg,
+        group_key=group_key,
+        enhancer=llm,
+        store=store,
+        table_ctx=table_ctx,
+    )
     outcome.instances = instances
     outcome.standalone_maps = standalone_maps
     outcome.details["persona_backend_effective"] = engine.backend

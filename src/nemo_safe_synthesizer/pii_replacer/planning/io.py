@@ -66,7 +66,8 @@ PLAN_YAML_HEADER = """\
 PLAN_YAML_SECTION_COMMENTS: dict[str, str] = {
     "scope": (
         "# How widely one original value keeps the same synthetic value:\n"
-        "# record (per row), group (per training group), or dataframe (whole dataset).\n"
+        "# record (per row), group (per training group), dataframe (whole table),\n"
+        "# or database (multi-table folder + schema via MultiTablePiiReplacer).\n"
     ),
     "persona_backed_columns": (
         "# Columns that describe a person. Each entry is one persona whose\n"
@@ -82,6 +83,21 @@ PLAN_YAML_SECTION_COMMENTS: dict[str, str] = {
         "# free-text notes, API keys, and other values that need no cross-column consistency.\n"
         "# Person-identifying columns listed only here do not share a synthetic\n"
         "# person with other columns.\n"
+    ),
+    "key_domains": (
+        "# Database scope only: equivalence classes of table-qualified columns that\n"
+        "# share one original→synthetic map (from schema PK/FK, plus optional overlap).\n"
+        "# person_reference=true hangs person attribute bundles off keys in the domain.\n"
+        "# Ordinary FK child columns appear here; polymorphic Id columns do not.\n"
+    ),
+    "polymorphic_foreign_keys": (
+        "# Database scope only (omit when unused): Salesforce-style polymorphic Id\n"
+        "# routers. Each parent PK stays its own key_domain; the Id column picks a\n"
+        "# domain per row via type_column. Type discriminator columns are not replaced.\n"
+    ),
+    "tables": (
+        "# Database scope only: per-table persona + standalone sections with\n"
+        "# table-qualified column names (Contact.FirstName, Case.ContactId, ...).\n"
     ),
 }
 

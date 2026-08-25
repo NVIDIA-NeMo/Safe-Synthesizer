@@ -4,5 +4,6 @@
 from __future__ import annotations
 
 from .replacer import TabularPiiReplacer
+from .multi_table import MultiTablePiiReplacer
 
-__all__ = ["TabularPiiReplacer"]
+__all__ = ["MultiTablePiiReplacer", "TabularPiiReplacer"]

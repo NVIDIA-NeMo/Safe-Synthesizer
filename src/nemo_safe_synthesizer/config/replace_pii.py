@@ -30,6 +30,7 @@ from .base import NSSBaseModel
 
 __all__ = [
     "AUTO_DISCOVERY",
+    "KeyDomain",
     "LLMConfig",
     "PiiEntity",
     "PersonaMatchColumn",
@@ -41,6 +42,9 @@ __all__ = [
     "PiiReplacementScope",
     "PiiReplacementSettings",
     "ReplacePiiConfig",
+    "PolymorphicForeignKeyPlan",
+    "PolymorphicFkTarget",
+    "TableReplacementPlan",
 ]
 
 # Sentinel value for ``ReplacePiiConfig.replacement_plan`` requesting automatic
@@ -123,11 +127,18 @@ class PiiColumnPlan(NSSBaseModel):
 
 
 class PiiReplacementScope(StrEnum):
-    """Unit at which original→synthetic mappings stay consistent."""
+    """Unit at which original→synthetic mappings stay consistent.
+
+    ``record``, ``group``, and ``dataframe`` apply within a single table.
+    ``database`` applies across a folder of related tables (schema + shared
+    runtime store); use ``MultiTablePiiReplacer``, not the full Safe Synthesizer
+    pipeline.
+    """
 
     record = "record"
     group = "group"
     dataframe = "dataframe"
+    database = "database"
 
 
 class PersonaColumnSet(NSSBaseModel):
@@ -149,20 +160,57 @@ class PersonaColumnSet(NSSBaseModel):
         default_factory=list,
         description="Existing columns that constrain which synthetic persona is drawn (read, never replaced).",
     )
+    person_key_domain: str | None = Field(
+        default=None,
+        description=(
+            "For database scope: key-domain id that identities this persona bundle hang off "
+            "(e.g. patients.id). Defaults to the table's PK domain when applicable."
+        ),
+    )
 
 
-class PiiReplacementPlan(Parameters):
-    """Dataset-specific detection/replacement plan (column-oriented).
+class KeyDomain(NSSBaseModel):
+    """Database scope only: equivalence class of columns that share one map.
 
-    Columns under ``persona_backed_columns`` are replaced together as one
-    synthetic person; ``standalone_columns_to_replace`` are replaced
-    independently of any persona.
+    Built from schema PK/FK links (and optional value-overlap bundling). When
+    ``person_reference`` is true, person attribute bundles hang off keys in this
+    domain. Ordinary FK child columns appear here; polymorphic Id columns do not
+    (they route per row into parent domains).
     """
 
-    scope: PiiReplacementScope = Field(
-        default=PiiReplacementScope.dataframe,
-        description="How widely one original value keeps the same synthetic value: record, group, or dataframe.",
+    id: str = Field(description="Stable domain id; prefer the PK table.column (e.g. patients.id).")
+    person_reference: bool = Field(
+        default=False,
+        description="When true, person bundles hang off keys in this domain.",
     )
+    columns: list[str] = Field(
+        default_factory=list,
+        description="Table-qualified columns in this domain (e.g. patients.id, events.patient_id).",
+    )
+
+
+class PolymorphicFkTarget(NSSBaseModel):
+    """Database scope only: one parent domain a polymorphic Id may route into."""
+
+    type_value: str = Field(description="Value of the type discriminator (e.g. patient).")
+    domain: str = Field(description="Key-domain id for that parent (e.g. patients.id).")
+
+
+class PolymorphicForeignKeyPlan(NSSBaseModel):
+    """Database scope only: per-row router from a polymorphic Id into parent domains."""
+
+    column: str = Field(description="Table-qualified polymorphic Id column (e.g. notes.subject_id).")
+    type_column: str = Field(
+        description="Table-qualified type discriminator (e.g. notes.subject_type); not replaced."
+    )
+    targets: list[PolymorphicFkTarget] = Field(
+        description="type_value → parent domain mappings.",
+    )
+
+
+class TableReplacementPlan(NSSBaseModel):
+    """Database scope only: per-table persona + standalone sections of the plan."""
+
     persona_backed_columns: list[PersonaColumnSet] = Field(
         default_factory=list,
         description="Persona sets whose columns share one synthetic identity.",
@@ -171,6 +219,91 @@ class PiiReplacementPlan(Parameters):
         default_factory=list,
         description="Columns replaced independently of any persona (IDs, free text, entity-driven values).",
     )
+
+
+class PiiReplacementPlan(Parameters):
+    """Dataset-specific detection/replacement plan (column-oriented).
+
+    For single-table scopes (``record`` / ``group`` / ``dataframe``), columns under
+    ``persona_backed_columns`` are replaced together as one synthetic person and
+    ``standalone_columns_to_replace`` are replaced independently.
+
+    For ``scope: database``, use ``key_domains`` plus ``tables`` (per-table plan
+    bodies with table-qualified column names). Top-level persona/standalone lists
+    must be empty. ``polymorphic_foreign_keys`` is omitted when the schema has none.
+    """
+
+    scope: PiiReplacementScope = Field(
+        default=PiiReplacementScope.dataframe,
+        description=(
+            "How widely one original value keeps the same synthetic value: record, group, "
+            "dataframe (single table), or database (multi-table folder + schema)."
+        ),
+    )
+    persona_backed_columns: list[PersonaColumnSet] = Field(
+        default_factory=list,
+        description="Persona sets whose columns share one synthetic identity (single-table scopes).",
+    )
+    standalone_columns_to_replace: list[PiiColumnPlan] = Field(
+        default_factory=list,
+        description="Columns replaced independently of any persona (single-table scopes).",
+    )
+    key_domains: list[KeyDomain] = Field(
+        default_factory=list,
+        description="Cross-table key domains for database scope (PK/FK equivalence classes).",
+    )
+    polymorphic_foreign_keys: list[PolymorphicForeignKeyPlan] | None = Field(
+        default=None,
+        description=(
+            "Database scope only: polymorphic Id routers "
+            "(e.g. notes.subject_id + notes.subject_type → patients.id or providers.id). "
+            "Omit entirely when the schema has no polymorphic FKs."
+        ),
+    )
+    tables: dict[str, TableReplacementPlan] = Field(
+        default_factory=dict,
+        description="Per-table plan bodies for database scope (table-qualified column names).",
+    )
+
+    @model_validator(mode="after")
+    def _validate_scope_shape(self) -> Self:
+        if self.scope == PiiReplacementScope.database:
+            if not self.tables:
+                raise ValueError("database-scope plan requires a non-empty tables mapping")
+            if self.persona_backed_columns or self.standalone_columns_to_replace:
+                raise ValueError(
+                    "database-scope plan must put persona/standalone columns under tables.<Name>, "
+                    "not at the top level"
+                )
+            if self.polymorphic_foreign_keys is not None and len(self.polymorphic_foreign_keys) == 0:
+                # Normalize empty list → omitted
+                self.polymorphic_foreign_keys = None
+            self._validate_key_domain_membership()
+        else:
+            if self.key_domains or self.tables or self.polymorphic_foreign_keys:
+                raise ValueError(
+                    f"key_domains, tables, and polymorphic_foreign_keys are only valid when "
+                    f"scope is 'database' (got scope={self.scope.value!r})"
+                )
+        return self
+
+    def _validate_key_domain_membership(self) -> None:
+        """Key domains partition columns; polymorphic Ids route instead of joining one."""
+        polymorphic_columns = {entry.column for entry in self.polymorphic_foreign_keys or []}
+        domain_by_column: dict[str, str] = {}
+        for domain in self.key_domains:
+            for column in domain.columns:
+                owner = domain_by_column.setdefault(column, domain.id)
+                if owner != domain.id:
+                    raise ValueError(
+                        f"column {column!r} appears in key domains {owner!r} and {domain.id!r}; "
+                        "each column belongs to exactly one key domain"
+                    )
+                if column in polymorphic_columns:
+                    raise ValueError(
+                        f"polymorphic column {column!r} must not be listed in key domain "
+                        f"{domain.id!r}; it is routed per row into a parent domain"
+                    )
 
 
 class LLMConfig(NSSBaseModel):
@@ -288,6 +421,20 @@ class ReplacePiiConfig(Parameters):
         default_factory=PiiPersonConfig,
         description="Synthetic-person sampler backend and asset paths.",
     )
+    schema_path: str | None = Field(
+        default=None,
+        description=(
+            "Path to a multi-table schema YAML (PK/FK). Required for database-scope "
+            "replacement via MultiTablePiiReplacer; ignored for single-table scopes."
+        ),
+    )
+
+    @field_validator("schema_path", mode="before")
+    @classmethod
+    def _coerce_schema_path(cls, value: object) -> object:
+        if isinstance(value, Path):
+            return str(value)
+        return value
 
     @field_validator("llm_enhancement")
     @classmethod

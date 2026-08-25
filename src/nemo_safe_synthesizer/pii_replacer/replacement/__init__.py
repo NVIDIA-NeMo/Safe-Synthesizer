@@ -25,6 +25,7 @@ from .instances import compute_instance_synthetics, extract_instances
 from .personas import (
     PersonaEngine,
     PgmPersonaPool,
+    clear_managed_person_sampler_cache,
     load_managed_person_sampler,
     persona_written,
     synth_value,
@@ -42,6 +43,7 @@ __all__ = [
     "build_scoped_col_map",
     "build_standalone_maps",
     "build_text_substituter",
+    "clear_managed_person_sampler_cache",
     "compute_instance_synthetics",
     "ethnicity_to_pgm",
     "extract_instances",

@@ -22,6 +22,7 @@ from ..entities import (
     is_missing_value,
     spec,
 )
+from ..log_context import column_log_label
 from ..models import (
     ColumnEvidence,
     DetectedPersona,
@@ -242,14 +243,15 @@ def detect_structured_columns(df_subset: pd.DataFrame, stats: dict, cfg: Config)
             return pid
         if disagreement is not None:
             logger.user.warning(
-                f"[PII Replacement] Column {col!r} ({label}) does not agree with name columns on "
+                f"[PII Replacement] Column {column_log_label(col)!r} ({label}) does not agree with name columns on "
                 f"persona {disagreement!r}; assigning a new persona (review the plan)."
             )
         elif warn_collision and pool:
             prior = pool[-1]
             prior_col = fields_by_persona.get(prior, {}).get(label) or demo_by_persona.get(prior, {}).get(label)
+            prior_label = column_log_label(prior_col) if prior_col else prior_col
             logger.user.warning(
-                f"[PII Replacement] Column {col!r} shares entity {label!r} with {prior_col!r}; "
+                f"[PII Replacement] Column {column_log_label(col)!r} shares entity {label!r} with {prior_label!r}; "
                 f"assigning a new persona so both are replaced (review the plan)."
             )
         pid = _mint_persona(role)
@@ -321,7 +323,7 @@ def detect_structured_columns(df_subset: pd.DataFrame, stats: dict, cfg: Config)
             # keys). Numeric ssn / national_id columns must still be replaced.
             if numeric_probe == "unique_identifier" and looks_like_sequential_integer_id(ev.series):
                 logger.user.warning(
-                    f"[PII Replacement] Column {col!r} looks like a sequential integer id "
+                    f"[PII Replacement] Column {column_log_label(col)!r} looks like a sequential integer id "
                     "(1, 2, 3, …); skipped — not treated as a unique identifier."
                 )
                 continue
@@ -352,24 +354,26 @@ def detect_structured_columns(df_subset: pd.DataFrame, stats: dict, cfg: Config)
                     # Prefer the historical phrasing for value-match skips.
                     if entity_spec.requires_value_match or ev.name_label == "date_of_birth":
                         logger.user.warning(
-                            f"[PII Replacement] Column {col!r} looks like {ev.name_label} by name but {skip}; skipped."
+                            f"[PII Replacement] Column {column_log_label(col)!r} looks like {ev.name_label} by name but {skip}; skipped."
                         )
                     elif ev.name_label == "unique_identifier" and "sequential" in skip:
                         logger.user.warning(
-                            f"[PII Replacement] Column {col!r} looks like a sequential integer id "
+                            f"[PII Replacement] Column {column_log_label(col)!r} looks like a sequential integer id "
                             "(1, 2, 3, …); skipped — not treated as a unique identifier."
                         )
                     elif ev.name_label == "unique_identifier":
                         logger.user.warning(
-                            f"[PII Replacement] Column {col!r} looks like unique_identifier by name but "
+                            f"[PII Replacement] Column {column_log_label(col)!r} looks like unique_identifier by name but "
                             f"{skip}; skipped."
                         )
                     elif ev.name_label == "api_key":
                         logger.user.warning(
-                            f"[PII Replacement] Column {col!r} looks like api_key by name/values but {skip}; skipped."
+                            f"[PII Replacement] Column {column_log_label(col)!r} looks like api_key by name/values but {skip}; skipped."
                         )
                     else:
-                        logger.user.warning(f"[PII Replacement] Column {col!r} {skip}; skipped.")
+                        logger.user.warning(
+                            f"[PII Replacement] Column {column_log_label(col)!r} {skip}; skipped."
+                        )
                     continue
 
                 if apply_path == "standalone_map":

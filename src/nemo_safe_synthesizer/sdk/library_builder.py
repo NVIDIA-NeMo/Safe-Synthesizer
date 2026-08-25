@@ -32,7 +32,9 @@ from ..llm.utils import get_device_name
 from ..observability import LogCategory, configure_logging_from_workdir, get_logger, initialize_observability, traced
 from ..package_info import __version__
 from ..pii_replacer import TabularPiiReplacer
+from ..pii_replacer.planning.io import load_plan_from_path
 from ..preflight import PreflightReport, PreflightStage, run_preflight
+from ..config.replace_pii import PiiReplacementScope, ReplacePiiConfig
 from ..results import SafeSynthesizerResults, make_nss_results
 from ..telemetry import (
     DeploymentTypeEnum,
@@ -49,6 +51,33 @@ from ..training.huggingface_backend import HuggingFaceBackend
 from .config_builder import ConfigBuilder
 
 logger = get_logger(__name__)
+
+_DATABASE_SCOPE_PIPELINE_ERROR = (
+    "replace_pii scope 'database' is multi-table PII-only and cannot be used with "
+    "SafeSynthesizer.run() / process_data(). Use MultiTablePiiReplacer.transform_folder "
+    "instead (no holdout, train, generate, or eval)."
+)
+
+
+def _plan_has_database_scope(replace_pii: ReplacePiiConfig) -> bool:
+    """Return whether the configured plan is (or will resolve as) database scope."""
+    inline = replace_pii.inline_plan
+    if inline is not None:
+        return inline.scope == PiiReplacementScope.database
+    if replace_pii.plan_path:
+        try:
+            plan = load_plan_from_path(replace_pii.plan_path)
+        except ParameterError:
+            return False
+        return plan.scope == PiiReplacementScope.database
+    return False
+
+
+def _reject_database_scope_in_pipeline(replace_pii: ReplacePiiConfig | None) -> None:
+    if replace_pii is None:
+        return
+    if _plan_has_database_scope(replace_pii):
+        raise ParameterError(_DATABASE_SCOPE_PIPELINE_ERROR)
 
 if TYPE_CHECKING:
     from ..generation.backend import GeneratorBackend
@@ -524,6 +553,9 @@ class SafeSynthesizer(ConfigBuilder):
 
         self._resolve_nss_config()
         self._resolve_datasource()
+        _reject_database_scope_in_pipeline(
+            None if self._nss_config is None else self._nss_config.replace_pii
+        )
 
         if TYPE_CHECKING:
             assert self._nss_config is not None
@@ -835,6 +867,13 @@ class SafeSynthesizer(ConfigBuilder):
         if TYPE_CHECKING:
             assert self._nss_config is not None
             assert isinstance(self._data_source, pd.DataFrame)
+
+        pii_cfg = None
+        if self._nss_config is not None:
+            pii_cfg = self._nss_config.replace_pii
+        elif getattr(self, "_replace_pii_config", None) is not None:
+            pii_cfg = self._replace_pii_config
+        _reject_database_scope_in_pipeline(pii_cfg)
 
         try:
             self.process_data().train().generate().evaluate()

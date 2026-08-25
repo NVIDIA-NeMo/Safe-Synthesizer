@@ -178,6 +178,7 @@ nav:
       - Differential Privacy: tutorials/differential-privacy.ipynb
       - Time-Series Financial Transactions: tutorials/time-series-financial-transactions.ipynb
       - PII Replacement: tutorials/pii-replacement.ipynb
+      - Multi-table PII Replacement: tutorials/multi-table-pii-replacement.ipynb
   - User Guide:
       - Getting Started: user-guide/getting-started.md
       - Running Safe Synthesizer: user-guide/running.md

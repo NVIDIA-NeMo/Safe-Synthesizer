@@ -8,6 +8,7 @@ from __future__ import annotations
 from collections.abc import Iterator, Sequence
 from datetime import datetime, timedelta
 from random import Random
+from typing import cast
 
 import pandas as pd
 
@@ -16,12 +17,14 @@ from ...observability import get_logger
 from .. import entities
 from ..entity_handlers import get_handler
 from ..models import ScopedValueMap
+from ..multi_table.polymorphic import resolve_polymorphic_domain
+from ..multi_table.store import DomainState, SharedRuntimeStore, TableRunContext
 from ..patterns import (
     detect_date_format,
     matching_template,
     pattern_preserving_token,
 )
-from .scope import FakerLike, build_scoped_col_map
+from .scope import FakerLike, build_scoped_col_map, seeded_faker, stable_hash
 
 logger = get_logger(__name__)
 
@@ -194,14 +197,18 @@ def _build_identifier_map(
     scope: str,
     gk: str | None,
     cfg: entities.Config,
+    *,
+    seed_key: str | None = None,
+    used: set[str] | None = None,
+    preexisting: dict[str, str] | None = None,
 ) -> ScopedValueMap:
     """Build an identifier/phone/card map keyed by plan scope.
 
     Uses ``track_used=True`` so synthetics stay injective across the column.
     """
 
-    def synthesize(sv: str, rng: Random, fake: FakerLike, used: set[str]) -> str | None:
-        return unique_synthetic(sv, entity, patterns, rng, fake, used)
+    def synthesize(sv: str, rng: Random, fake: FakerLike, used_set: set[str]) -> str | None:
+        return unique_synthetic(sv, entity, patterns, rng, fake, used_set)
 
     return build_scoped_col_map(
         original_df,
@@ -211,6 +218,9 @@ def _build_identifier_map(
         cfg,
         synthesize=synthesize,
         track_used=True,
+        seed_key=seed_key,
+        used=used,
+        preexisting=preexisting,
     )
 
 
@@ -221,6 +231,9 @@ def _build_dob_map(
     scope: str,
     gk: str | None,
     cfg: entities.Config,
+    *,
+    seed_key: str | None = None,
+    preexisting: dict[str, str] | None = None,
 ) -> ScopedValueMap:
     """Build a birth-date map keyed by plan scope.
 
@@ -238,7 +251,54 @@ def _build_dob_map(
         cfg,
         synthesize=synthesize,
         track_used=False,
+        seed_key=seed_key,
+        preexisting=preexisting,
     )
+
+
+def _build_polymorphic_identifier_map(
+    original_df: pd.DataFrame,
+    col: str,
+    entity: str,
+    patterns: Sequence[str],
+    cfg: entities.Config,
+    store: SharedRuntimeStore,
+    table_ctx: TableRunContext,
+) -> ScopedValueMap:
+    """Build a per-row map for a polymorphic Id column via type routing."""
+    from typing import cast as _cast
+
+    route = table_ctx.polymorphic_routes[col]
+    type_col = route.type_column
+    data: dict = {}
+    for idx in original_df.index:
+        ov = entities.sval(original_df.at[idx, col])
+        if ov is None:
+            data[idx] = {}
+            continue
+        type_value = None
+        if type_col in original_df.columns:
+            type_value = entities.sval(original_df.at[idx, type_col])
+        domain_id = resolve_polymorphic_domain(store, route, original=ov, type_value=type_value)
+        if domain_id is None:
+            data[idx] = {}
+            continue
+        state = store.domains.setdefault(domain_id, DomainState(domain_id=domain_id))
+        if ov in state.values:
+            data[idx] = {ov: state.values[ov]}
+            continue
+        fake = seeded_faker(cfg.random_seed ^ stable_hash(domain_id), cfg.locale)
+        rng = fake.random
+        rng.seed(cfg.random_seed ^ stable_hash(f"{domain_id}\x00{ov}"))
+        used = state.used
+        used.add(ov)
+        syn = unique_synthetic(ov, entity, patterns, rng, fake, used)
+        if syn and syn != ov:
+            store.record_domain_mapping(domain_id, ov, syn)
+            data[idx] = {ov: syn}
+        else:
+            data[idx] = {}
+    return ScopedValueMap("record", _cast(dict, data))
 
 
 def build_standalone_maps(
@@ -247,14 +307,22 @@ def build_standalone_maps(
     cfg: entities.Config,
     *,
     group_key: str | None = None,
+    store: SharedRuntimeStore | None = None,
+    table_ctx: TableRunContext | None = None,
 ) -> dict[str, ScopedValueMap]:
     """Build a replacement map per standalone column in the plan.
+
+    When ``store`` and ``table_ctx`` are provided, columns that belong to a shared
+    key domain reuse that domain's map, ``used`` set, and domain-id seeding.
+    Polymorphic Id columns are routed per row into a parent domain.
 
     Args:
         original_df: Source dataframe.
         plan: Resolved replacement plan.
         cfg: Replacement configuration.
         group_key: Training group-key column when ``plan.scope`` is ``"group"``.
+        store: Optional shared multi-table runtime store.
+        table_ctx: Optional per-table domain/person context for ``store``.
 
     Returns:
         Mapping from column name to ``ScopedValueMap``.
@@ -278,6 +346,14 @@ def build_standalone_maps(
             )
             continue
 
+        patterns = list(spec.patterns)
+
+        if store is not None and table_ctx is not None and col in table_ctx.polymorphic_routes:
+            maps[col] = _build_polymorphic_identifier_map(
+                original_df, col, entity, patterns, cfg, store, table_ctx
+            )
+            continue
+
         if scope == "record" and not warned_record_cost and n_rows > _RECORD_SCOPE_COST_WARN_ROWS:
             logger.user.warning(
                 f"[PII Replacement] scope=record with {n_rows} rows builds one standalone-"
@@ -286,12 +362,50 @@ def build_standalone_maps(
             )
             warned_record_cost = True
 
-        patterns = list(spec.patterns)
+        seed_key: str | None = None
+        used: set[str] | None = None
+        preexisting: dict[str, str] | None = None
+        domain_id: str | None = None
+        if store is not None and table_ctx is not None:
+            domain_id = table_ctx.column_domains.get(col)
+            if domain_id is not None:
+                state = store.domains.setdefault(domain_id, DomainState(domain_id=domain_id))
+                seed_key = domain_id
+                used = state.used
+                preexisting = dict(state.values)
 
         match entity:
             case "date_of_birth":
-                maps[col] = _build_dob_map(original_df, col, patterns, scope, gk, cfg)
+                maps[col] = _build_dob_map(
+                    original_df,
+                    col,
+                    patterns,
+                    scope,
+                    gk,
+                    cfg,
+                    seed_key=seed_key,
+                    preexisting=preexisting,
+                )
             case _:
-                maps[col] = _build_identifier_map(original_df, col, entity, patterns, scope, gk, cfg)
+                maps[col] = _build_identifier_map(
+                    original_df,
+                    col,
+                    entity,
+                    patterns,
+                    scope,
+                    gk,
+                    cfg,
+                    seed_key=seed_key,
+                    used=used,
+                    preexisting=preexisting,
+                )
+
+        if store is not None and domain_id is not None:
+            cm = maps[col]
+            if cm.kind == "flat":
+                store.merge_domain_map(domain_id, cast(dict[str, str], cm.data))
+            else:
+                for raw_mapping in cm.data.values():
+                    store.merge_domain_map(domain_id, cast(dict[str, str], raw_mapping))
 
     return maps

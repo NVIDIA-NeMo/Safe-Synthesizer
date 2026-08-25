@@ -11,6 +11,7 @@ from collections.abc import Iterable, Mapping
 
 from ...observability import get_logger
 from ..entities import DEMO_FUZZY_KEYWORDS, FUZZY_KEYWORDS, is_identify_only, spec
+from ..log_context import column_log_label
 
 logger = get_logger(__name__)
 
@@ -168,7 +169,7 @@ def _best_fuzzy_label(col: str, candidates: Iterable[str] | None = None) -> tupl
 def _warn_multi_header_match(col: str, matches: list[str], chosen: str) -> None:
     alternatives = [label for label in matches if label != chosen]
     logger.user.warning(
-        f"[PII Replacement] Column {col!r} matched multiple header labels by name "
+        f"[PII Replacement] Column {column_log_label(col)!r} matched multiple header labels by name "
         f"({', '.join(matches)}); chose {chosen!r} by fuzzy similarity "
         f"(alternatives: {', '.join(alternatives)}). Review the replacement plan; "
         f"if the chosen type is wrong, please file a bug report at {_BUG_REPORT_URL}"
