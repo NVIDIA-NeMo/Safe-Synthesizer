@@ -207,6 +207,18 @@ class GenerateParameters(Parameters, BaseModel):
     They affect the quality, diversity, and validity of the generated synthetic records.
     """
 
+    pretrained_model: Annotated[
+        str | None,
+        Field(
+            title="pretrained_model",
+            description=(
+                "Optional generation-only base model override. When unset, generation "
+                "uses ``training.pretrained_model``. Only explicitly compatible model "
+                "pairs are accepted before the inference engine starts."
+            ),
+        ),
+    ] = None
+
     num_records: Annotated[
         int,
         Field(

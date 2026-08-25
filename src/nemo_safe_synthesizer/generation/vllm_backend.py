@@ -47,6 +47,7 @@ from ..generation.vllm_observability import (
     read_vllm_runtime_metrics,
 )
 from ..llm.metadata import ModelMetadata
+from ..llm.model_policy import ModelPolicy, model_policy_for_reference, validate_generation_model_pair
 from ..llm.utils import ModelRef, cleanup_memory, get_max_vram
 from ..observability import get_logger, heartbeat
 from ..utils import all_equal_type, load_json
@@ -75,6 +76,24 @@ os.environ.setdefault("VLLM_USE_DEEP_GEMM", "0")
 #   2. Pin OUTLINES_CACHE_DIR to a per-user path and chmod it to 0700, since
 #      outlines always uses diskcache for its FSM/index cache.
 os.environ["VLLM_V1_USE_OUTLINES_CACHE"] = "0"
+
+
+def _validate_generation_hardware(model_policy: ModelPolicy | None) -> None:
+    """Reject model policies whose minimum GPU capability is not available."""
+    minimum = model_policy.minimum_generation_compute_capability if model_policy is not None else None
+    if minimum is None:
+        return
+    try:
+        actual = torch.cuda.get_device_capability()
+    except (AssertionError, RuntimeError) as exc:
+        raise ParameterError(
+            f"The selected generation model requires GPU compute capability {minimum[0]}.{minimum[1]} or newer"
+        ) from exc
+    if actual < minimum:
+        raise ParameterError(
+            f"The selected generation model requires GPU compute capability {minimum[0]}.{minimum[1]} or newer; "
+            f"detected {actual[0]}.{actual[1]}"
+        )
 
 
 def _build_rope_hf_overrides(model_metadata: ModelMetadata) -> dict[str, Any] | None:
@@ -256,11 +275,7 @@ class VllmBackend(GeneratorBackend):
             # and enum constraints (which the grammar enforces) are unaffected.
             self.schema = relax_numeric_bounds(self.schema)
         self.columns = list(self.schema["properties"].keys())
-        self.prompt = utils.create_schema_prompt(
-            self.columns,
-            instruction=self.model_metadata.instruction,
-            prompt_template=self.model_metadata.prompt_config.template,
-        )
+        self.prompt = self.model_metadata.render_prompt(self.columns)
         self.llm: vLLM | None = None
         self._prompt_token_count: int | None = None
         # Populated in ``initialize()`` after engine build; pre-declared
@@ -308,6 +323,16 @@ class VllmBackend(GeneratorBackend):
         except Exception:
             logger.debug("VllmBackend teardown failed during garbage collection", exc_info=True)
 
+    def _resolve_generation_model(self) -> tuple[ModelRef, ModelPolicy | None]:
+        """Resolve and validate the configured generation model."""
+        training_model_ref = ModelRef.parse(self.config.training.pretrained_model)
+        generation_model_ref = ModelRef.parse(self.config.effective_generation_model)
+        generation_policy = model_policy_for_reference(generation_model_ref.repo_id, generation_model_ref.local_path)
+        if str(training_model_ref.original).casefold() != str(generation_model_ref.original).casefold():
+            validate_generation_model_pair(training_model_ref.repo_id, generation_model_ref.repo_id)
+        _validate_generation_hardware(generation_policy)
+        return generation_model_ref, generation_policy
+
     def initialize(self, **kwargs) -> None:
         """Initialize and load the model into memory.
 
@@ -326,6 +351,8 @@ class VllmBackend(GeneratorBackend):
             else None
         )
 
+        generation_model_ref, generation_policy = self._resolve_generation_model()
+
         max_vram = get_max_vram()
         # note this only works for single GPU setups
         max_vram = max_vram.get(0, 0.8)
@@ -334,20 +361,21 @@ class VllmBackend(GeneratorBackend):
         structured_outputs_config = StructuredOutputsConfig(
             backend=self.config.generation.structured_generation.backend,
         )
-        model_ref = ModelRef.parse(self.config.training.pretrained_model)
+        model_specific_kwargs = generation_policy.engine_kwargs() if generation_policy is not None else {}
         hf_overrides = _build_rope_hf_overrides(self.model_metadata)
 
-        with heartbeat("Model loading", logger_name=__name__, model=self.config.training.pretrained_model):
+        with heartbeat("Model loading", logger_name=__name__, model=self.config.effective_generation_model):
             self.llm = vLLM(
-                model=model_ref.target(),
+                model=generation_model_ref.target(),
                 gpu_memory_utilization=max_vram,
                 max_model_len=self.model_metadata.max_seq_length,
                 enable_lora=True,
                 max_lora_rank=self.config.training.lora_r,
                 structured_outputs_config=structured_outputs_config,
                 attention_config=attention_config,
-                trust_remote_code=model_ref.trust_remote_code,
+                trust_remote_code=generation_model_ref.trust_remote_code,
                 hf_overrides=hf_overrides,
+                **model_specific_kwargs,  # ty: ignore[invalid-argument-type] -- model policy keys are validated vLLM kwargs.
             )
 
         # Cache the engine's *effective* runtime config once at init. Read by
@@ -405,6 +433,7 @@ class VllmBackend(GeneratorBackend):
                 bos_token=pc.bos_token,
                 eos_token=pc.eos_token,
                 default_max_records_per_group=self.model_metadata.max_records_per_group,
+                response_framing=self.model_metadata.response_framing,
             )
             params["regex"] = regex
         elif schema_method == "json_schema":
@@ -421,6 +450,7 @@ class VllmBackend(GeneratorBackend):
                 bos_token=pc.bos_token,
                 eos_token=pc.eos_token,
                 default_max_records_per_group=self.model_metadata.max_records_per_group,
+                response_framing=self.model_metadata.response_framing,
             )
 
         return StructuredOutputsParams(**params)

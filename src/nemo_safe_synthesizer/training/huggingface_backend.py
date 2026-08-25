@@ -50,6 +50,12 @@ from ..defaults import (
 )
 from ..errors import DataError, ParameterError
 from ..generation.processors import create_processor
+from ..llm.model_policy import (
+    NEMOTRON3_NANO_FP8_POLICY,
+    configure_local_training_kernels,
+    model_policy_for_reference,
+)
+from ..llm.modelopt_fp8 import load_modelopt_fp8_training_config
 from ..llm.utils import (
     ModelRef,
     add_bos_eos_tokens_to_tokenizer,
@@ -101,6 +107,19 @@ Training duration is controlled by ``num_input_records_to_sample`` and the
 assembled ``data_fraction``, not by epochs. These values keep the HuggingFace
 Trainer behavior stable across CLI and SDK entry points.
 """
+
+
+def validate_lora_targets(model: Any, target_suffixes: list[str]) -> dict[str, int]:
+    """Return per-suffix module counts or reject a partially unmatched target set."""
+    counts = dict.fromkeys(target_suffixes, 0)
+    for name, _module in model.named_modules():
+        for suffix in counts:
+            if name == suffix or name.endswith(f".{suffix}"):
+                counts[suffix] += 1
+    missing = [suffix for suffix, count in counts.items() if count == 0]
+    if missing:
+        raise ParameterError(f"LoRA target modules did not match the loaded model: {', '.join(missing)}")
+    return counts
 
 
 class HuggingFaceBackend(TrainingBackend):
@@ -257,6 +276,18 @@ class HuggingFaceBackend(TrainingBackend):
         logger.info(f"Quantizing model with scheme={scheme.value}")
         return get_quantization_config(scheme)
 
+    def _configure_prequantized_base(self) -> None:
+        """Attach the loader config for an already-quantized training checkpoint."""
+        policy = model_policy_for_reference(self.model_ref.repo_id, self.model_ref.local_path)
+        if policy is not NEMOTRON3_NANO_FP8_POLICY:
+            return
+        if self.params.training.quantize_model:
+            raise ParameterError(
+                "The official Nemotron 3 Nano FP8 checkpoint is already quantized; set training.quantize_model to false"
+            )
+        quant_config = load_modelopt_fp8_training_config(self.model_ref)
+        self.autoconfig.quantization_config = quant_config.to_dict()
+
     def _normalize_rope_parameters(self) -> None:
         """Ensure Transformers v5 ``rope_parameters`` includes ``rope_theta``."""
         rope_parameters = getattr(self.autoconfig, "rope_parameters", None)
@@ -319,6 +350,7 @@ class HuggingFaceBackend(TrainingBackend):
 
         logger.info(f"preparing parameters for HF Automodel with model: {self.params.training.pretrained_model}")
 
+        self._configure_prequantized_base()
         model_kwargs = self._filter_model_kwargs(kwargs)
         # Pop unconditionally: max_vram_fraction is an NSS-internal kwarg that
         # transformers does not accept, so it must not leak into
@@ -373,6 +405,8 @@ class HuggingFaceBackend(TrainingBackend):
 
     def maybe_quantize(self, **quant_params: dict) -> None:
         """Apply LoRA wrapping (and optional k-bit quantization) to the model."""
+        target_counts = validate_lora_targets(self.model, self.params.training.lora_target_modules)
+        logger.info(f"Resolved LoRA target modules: {target_counts}")
         self._prepare_quantize_base(**quant_params)
         lora_config = LoraConfig(**self.quant_params)
         if not self.params.training.quantize_model:
@@ -400,6 +434,7 @@ class HuggingFaceBackend(TrainingBackend):
                 passed directly to ``AutoModelForCausalLM.from_pretrained()``.
         """
         logger.info(f"loading pretrained model: {self.params.training.pretrained_model}")
+        configure_local_training_kernels(self.model_ref.repo_id, self.model_ref.local_path)
         self.prepare_config(**model_args)
         self._load_pretrained_model(**model_args)
         self.maybe_quantize(**model_args)

@@ -1,0 +1,791 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+"""Contracts for NVIDIA Nemotron 3 Nano 4B BF16 and FP8 support."""
+
+import importlib.util
+import json
+import re
+import sys
+from importlib.metadata import version
+from pathlib import Path
+from types import ModuleType
+from unittest.mock import MagicMock, patch
+
+import pandas as pd
+import pytest
+import torch
+from packaging.version import Version
+from peft import LoraConfig, PeftModel, get_peft_model
+from safetensors.torch import load_file, save_file
+from transformers import (
+    AutoModelForCausalLM,
+    LlamaConfig,
+    LlamaForCausalLM,
+    NemotronHConfig,
+    PretrainedConfig,
+    PreTrainedTokenizerBase,
+)
+
+from nemo_safe_synthesizer.config.autoconfig import AutoConfigResolver
+from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
+from nemo_safe_synthesizer.data_processing.assembler import Example
+from nemo_safe_synthesizer.data_processing.budget import compute_max_new_tokens
+from nemo_safe_synthesizer.errors import ParameterError
+from nemo_safe_synthesizer.generation.processors import create_processor
+from nemo_safe_synthesizer.generation.regex_manager import build_json_based_regex
+from nemo_safe_synthesizer.generation.timeseries_backend import TimeseriesBackend
+from nemo_safe_synthesizer.llm import model_policy
+from nemo_safe_synthesizer.llm.metadata import ModelMetadata
+from nemo_safe_synthesizer.llm.model_policy import NEMOTRON3_NANO_LAYER_BLOCK_TYPES
+from nemo_safe_synthesizer.llm.utils import ModelRef
+from nemo_safe_synthesizer.preflight.checks.environment import param_count_from_empty_model
+from nemo_safe_synthesizer.training import huggingface_backend
+
+MODEL_ID = "nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16"
+FP8_MODEL_ID = "nvidia/NVIDIA-Nemotron-3-Nano-4B-FP8"
+LEGACY_HYBRID_PATTERN = "M-M-M-MM-M-M*-M-M*-M-M-M*-M-M-MM*-MMM-M-M-"
+LAYER_TYPES = list(NEMOTRON3_NANO_LAYER_BLOCK_TYPES)
+
+
+def _write_local_model_config(path: Path, **overrides) -> Path:
+    config = {
+        "architectures": ["NemotronHForCausalLM"],
+        "hidden_size": 3136,
+        "layers_block_type": LAYER_TYPES,
+        "mamba_head_dim": 80,
+        "mamba_num_heads": 96,
+        "model_type": "nemotron_h",
+        "ssm_state_size": 128,
+        "dtype": "bfloat16",
+        "vocab_size": 131072,
+        **overrides,
+    }
+    path.mkdir()
+    (path / "config.json").write_text(json.dumps(config))
+    return path
+
+
+class StubNemotronTokenizer:
+    """Small tokenizer double that preserves the official chat boundaries."""
+
+    bos_token = "<s>"
+    bos_token_id = 1
+    eos_token = "<|im_end|>"
+    eos_token_id = 11
+    name_or_path = MODEL_ID
+
+    _pieces = {
+        "<|im_start|>": 10,
+        "<|im_end|>": 11,
+        "<think>": 12,
+        "</think>": 13,
+        "\n": 1010,
+    }
+
+    def apply_chat_template(
+        self,
+        messages,
+        *,
+        tokenize=False,
+        add_generation_prompt=False,
+        enable_thinking=True,
+        **_kwargs,
+    ):
+        assert tokenize is False
+        system = messages[0]["content"]
+        user = messages[1]["content"]
+        prefix = f"<|im_start|>system\n{system}<|im_end|>\n<|im_start|>user\n{user}<|im_end|>\n<|im_start|>assistant\n"
+        if add_generation_prompt:
+            return prefix + ("<think>\n" if enable_thinking else "<think></think>")
+        if len(messages) == 2:
+            return prefix.removesuffix("<|im_start|>assistant\n")
+        assistant = messages[2]["content"]
+        return prefix + f"<think></think>{assistant}<|im_end|>\n"
+
+    def encode(self, text, add_special_tokens=False):
+        assert add_special_tokens is False
+        for marker, token_id in sorted(self._pieces.items(), key=lambda item: -len(item[0])):
+            text = text.replace(marker, chr(0xE000 + token_id))
+        return [ord(char) - 0xE000 if ord(char) >= 0xE000 else 2000 + ord(char) for char in text]
+
+
+def _metadata() -> ModelMetadata:
+    stub = StubNemotronTokenizer()
+    tokenizer = MagicMock(spec=PreTrainedTokenizerBase)
+    tokenizer.bos_token = stub.bos_token
+    tokenizer.bos_token_id = stub.bos_token_id
+    tokenizer.eos_token = stub.eos_token
+    tokenizer.eos_token_id = stub.eos_token_id
+    tokenizer.name_or_path = stub.name_or_path
+    tokenizer.apply_chat_template.side_effect = stub.apply_chat_template
+    tokenizer.encode.side_effect = stub.encode
+    config = PretrainedConfig()
+    setattr(config, "max_position_embeddings", 262_144)
+    with patch.object(ModelMetadata, "_load_config_and_tokenizer", return_value=(config, tokenizer)):
+        return ModelMetadata.from_str_or_path(MODEL_ID)
+
+
+def test_exact_bf16_id_resolves_native_nemotron3_policy() -> None:
+    metadata = _metadata()
+
+    assert type(metadata).__name__ == "Nemotron3Nano"
+    assert metadata.uses_rope is False
+    assert metadata.base_max_seq_length == 12_288
+    assert ModelRef.parse(MODEL_ID).trust_remote_code is False
+
+
+def test_slurm_fp8_config_keeps_bf16_training_and_selects_official_generation_sibling() -> None:
+    repo_root = Path(__file__).parents[2]
+    config = SafeSynthesizerParameters.from_yaml(repo_root / "script/slurm/configs/nemotron3-nano-bf16-fp8-nodp.yaml")
+
+    assert config.training.pretrained_model == MODEL_ID
+    assert config.effective_generation_model == FP8_MODEL_ID
+    assert config.training.quantize_model is False
+    assert config.privacy is not None
+    assert config.privacy.dp_enabled is False
+
+
+def test_slurm_direct_fp8_config_trains_and_generates_from_official_checkpoint() -> None:
+    repo_root = Path(__file__).parents[2]
+    config = SafeSynthesizerParameters.from_yaml(repo_root / "script/slurm/configs/nemotron3-nano-fp8-nodp.yaml")
+
+    assert config.training.pretrained_model == FP8_MODEL_ID
+    assert config.effective_generation_model == FP8_MODEL_ID
+    assert config.training.quantize_model is False
+    assert config.privacy is not None
+    assert config.privacy.dp_enabled is False
+
+
+def test_model_policy_matches_exact_id_case_insensitively_without_substrings() -> None:
+    policy = model_policy.NEMOTRON3_NANO_POLICY
+    fp8_policy = model_policy.NEMOTRON3_NANO_FP8_POLICY
+
+    assert model_policy.model_policy_for(MODEL_ID.upper()) is policy
+    assert model_policy.model_policy_for(FP8_MODEL_ID.upper()) is fp8_policy
+    assert model_policy.model_policy_for(f"mirror/{MODEL_ID}") is None
+    assert model_policy.model_policy_for(f"mirror/{FP8_MODEL_ID}") is None
+    assert model_policy.model_policy_for(None) is None
+
+
+def test_official_fp8_policy_supports_direct_lora_training() -> None:
+    policy = model_policy.model_policy_for(FP8_MODEL_ID)
+
+    assert policy is model_policy.NEMOTRON3_NANO_FP8_POLICY
+    assert ModelMetadata._resolve_model_class(FP8_MODEL_ID).__name__ == "Nemotron3Nano"
+
+
+def test_peft_version_supports_low_precision_float_base_weights() -> None:
+    assert Version(version("peft")) >= Version("0.19.1")
+
+
+def test_modelopt_fp8_training_loader_module_is_available() -> None:
+    spec = importlib.util.find_spec("nemo_safe_synthesizer.llm.modelopt_fp8")
+
+    assert spec is not None
+
+
+def test_modelopt_fp8_training_loader_exposes_autograd_linear() -> None:
+    from nemo_safe_synthesizer.llm import modelopt_fp8
+
+    assert hasattr(modelopt_fp8, "ModelOptFP8Linear")
+    assert hasattr(modelopt_fp8, "ModelOptFP8TrainingConfig")
+    assert hasattr(modelopt_fp8, "ModelOptFP8TrainingHfQuantizer")
+
+
+def test_modelopt_fp8_linear_preserves_storage_and_backpropagates_through_input() -> None:
+    from nemo_safe_synthesizer.llm.modelopt_fp8 import ModelOptFP8Linear
+
+    layer = ModelOptFP8Linear(3, 2)
+    layer.weight.data.copy_(torch.tensor([[1.0, -2.0, 0.5], [0.25, 1.5, -1.0]], dtype=torch.float8_e4m3fn))
+    layer.weight_scale.data.fill_(0.25)
+    layer.input_scale.data.fill_(0.5)
+    inputs = torch.tensor([[1.0, 2.0, -1.0]], requires_grad=True)
+
+    output = layer(inputs)
+    expected_weight = layer.weight.float() * layer.weight_scale
+    output.sum().backward()
+
+    assert layer.weight.dtype is torch.float8_e4m3fn
+    assert layer.weight.requires_grad is False
+    assert torch.allclose(output, torch.nn.functional.linear(inputs, expected_weight))
+    assert inputs.grad is not None
+    assert torch.isfinite(inputs.grad).all()
+
+
+def test_modelopt_fp8_quantizer_replaces_only_quantized_linears() -> None:
+    from nemo_safe_synthesizer.llm.modelopt_fp8 import (
+        ModelOptFP8Linear,
+        ModelOptFP8TrainingConfig,
+        ModelOptFP8TrainingHfQuantizer,
+    )
+
+    model = torch.nn.Module()
+    model.q_proj = torch.nn.Linear(4, 4, bias=False)
+    model.lm_head = torch.nn.Linear(4, 8, bias=False)
+    quantizer = ModelOptFP8TrainingHfQuantizer(
+        ModelOptFP8TrainingConfig(exclude_modules=["lm_head"]),
+        pre_quantized=True,
+    )
+
+    with (
+        patch("nemo_safe_synthesizer.llm.modelopt_fp8.torch.cuda.is_available", return_value=True),
+        patch("nemo_safe_synthesizer.llm.modelopt_fp8.torch.cuda.get_device_capability", return_value=(8, 9)),
+    ):
+        quantizer.validate_environment()
+    quantizer._process_model_before_weight_loading(model)
+
+    assert isinstance(model.q_proj, ModelOptFP8Linear)
+    assert type(model.lm_head) is torch.nn.Linear
+    assert quantizer.is_trainable is True
+
+
+def test_modelopt_fp8_quantizer_rejects_unsupported_training_hardware() -> None:
+    from nemo_safe_synthesizer.llm.modelopt_fp8 import (
+        ModelOptFP8TrainingConfig,
+        ModelOptFP8TrainingHfQuantizer,
+    )
+
+    quantizer = ModelOptFP8TrainingHfQuantizer(ModelOptFP8TrainingConfig(), pre_quantized=True)
+
+    with (
+        patch("nemo_safe_synthesizer.llm.modelopt_fp8.torch.cuda.is_available", return_value=True),
+        patch("nemo_safe_synthesizer.llm.modelopt_fp8.torch.cuda.get_device_capability", return_value=(8, 0)),
+        pytest.raises(RuntimeError, match="8.9 or newer"),
+    ):
+        quantizer.validate_environment()
+
+
+def test_modelopt_fp8_quantizer_rejects_cpu_or_disk_offload() -> None:
+    from nemo_safe_synthesizer.llm.modelopt_fp8 import (
+        ModelOptFP8TrainingConfig,
+        ModelOptFP8TrainingHfQuantizer,
+    )
+
+    quantizer = ModelOptFP8TrainingHfQuantizer(ModelOptFP8TrainingConfig(), pre_quantized=True)
+
+    with (
+        patch("nemo_safe_synthesizer.llm.modelopt_fp8.torch.cuda.is_available", return_value=True),
+        patch("nemo_safe_synthesizer.llm.modelopt_fp8.torch.cuda.get_device_capability", return_value=(8, 9)),
+        pytest.raises(RuntimeError, match="CPU or disk offload"),
+    ):
+        quantizer.validate_environment(device_map={"model.layers.0": 0, "model.layers.1": "cpu"})
+
+
+def test_modelopt_fp8_quantizer_normalizes_modelopt_export_module_names() -> None:
+    from nemo_safe_synthesizer.llm.modelopt_fp8 import (
+        ModelOptFP8TrainingConfig,
+        ModelOptFP8TrainingHfQuantizer,
+    )
+
+    class BackboneToModel:
+        @staticmethod
+        def rename_source_key(key: str) -> tuple[str, None]:
+            return key.replace("backbone.", "model.", 1), None
+
+    quantizer = ModelOptFP8TrainingHfQuantizer(
+        ModelOptFP8TrainingConfig(exclude_modules=["backbone.layers.11.mixer.in_proj"]),
+        pre_quantized=True,
+    )
+
+    with patch(
+        "transformers.conversion_mapping.get_model_conversion_mapping",
+        return_value=[BackboneToModel()],
+    ):
+        normalized = quantizer._normalize_exclude_modules(torch.nn.Module())
+
+    assert normalized == ["model.layers.11.mixer.in_proj"]
+
+
+def test_peft_trains_every_nemotron_target_over_frozen_modelopt_fp8_weights() -> None:
+    from nemo_safe_synthesizer.llm.modelopt_fp8 import ModelOptFP8Linear
+
+    target_names = ["in_proj", "up_proj", "down_proj", "q_proj", "k_proj", "v_proj", "o_proj"]
+
+    class TargetStack(torch.nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.config = {"model_type": "target-stack"}
+            for target_name in target_names:
+                layer = ModelOptFP8Linear(4, 4)
+                layer.weight.data.copy_(torch.eye(4, dtype=torch.float8_e4m3fn))
+                layer.weight_scale.data.fill_(1)
+                layer.input_scale.data.fill_(1)
+                setattr(self, target_name, layer)
+
+        def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+            outputs = inputs
+            for target_name in target_names:
+                outputs = getattr(self, target_name)(outputs)
+            return outputs
+
+    model = get_peft_model(
+        TargetStack(),
+        LoraConfig(r=2, lora_alpha=4, target_modules=target_names, init_lora_weights=True),
+    )
+    inputs = torch.randn(2, 4, requires_grad=True)
+
+    model(inputs).square().sum().backward()
+
+    fp8_base_weights = [module.weight for module in model.modules() if type(module) is ModelOptFP8Linear]
+    adapter_parameters = {name: parameter for name, parameter in model.named_parameters() if "lora_" in name}
+    assert len(fp8_base_weights) == len(target_names)
+    assert all(weight.dtype is torch.float8_e4m3fn and not weight.requires_grad for weight in fp8_base_weights)
+    assert adapter_parameters
+    assert all(
+        parameter.dtype is torch.float32 and parameter.requires_grad for parameter in adapter_parameters.values()
+    )
+    for target_name in target_names:
+        gradients = [
+            parameter.grad for name, parameter in adapter_parameters.items() if f".{target_name}.lora_B." in name
+        ]
+        assert gradients
+        assert all(gradient is not None and torch.isfinite(gradient).all() for gradient in gradients)
+    assert inputs.grad is not None
+    assert torch.isfinite(inputs.grad).all()
+
+
+def test_transformers_loads_modelopt_fp8_storage_without_casting_back_to_bf16(tmp_path: Path) -> None:
+    from nemo_safe_synthesizer.llm.modelopt_fp8 import (
+        MODELOPT_FP8_TRAINING_METHOD,
+        ModelOptFP8Linear,
+    )
+
+    config = LlamaConfig(
+        hidden_size=16,
+        intermediate_size=32,
+        num_attention_heads=2,
+        num_hidden_layers=1,
+        num_key_value_heads=2,
+        tie_word_embeddings=False,
+        vocab_size=32,
+    )
+    source_model = LlamaForCausalLM(config)
+    quantized_module_names = [
+        name for name, module in source_model.named_modules() if type(module) is torch.nn.Linear and name != "lm_head"
+    ]
+    source_model.save_pretrained(tmp_path, safe_serialization=True)
+    weights_path = tmp_path / "model.safetensors"
+    state = load_file(weights_path)
+    quantized_state = dict(state)
+    for module_name in quantized_module_names:
+        weight_name = f"{module_name}.weight"
+        weight = state[weight_name].float()
+        scale = weight.abs().max().clamp_min(1e-8) / torch.finfo(torch.float8_e4m3fn).max
+        quantized_state[weight_name] = (
+            (weight / scale)
+            .clamp(
+                torch.finfo(torch.float8_e4m3fn).min,
+                torch.finfo(torch.float8_e4m3fn).max,
+            )
+            .to(torch.float8_e4m3fn)
+        )
+        quantized_state[f"{module_name}.weight_scale"] = scale.reshape(1)
+        quantized_state[f"{module_name}.input_scale"] = torch.ones(1)
+    save_file(quantized_state, weights_path)
+
+    config_path = tmp_path / "config.json"
+    saved_config = json.loads(config_path.read_text())
+    saved_config["quantization_config"] = {
+        "quant_method": MODELOPT_FP8_TRAINING_METHOD,
+        "exclude_modules": ["lm_head"],
+        "group_size": 16,
+        "producer_version": "test",
+    }
+    config_path.write_text(json.dumps(saved_config))
+
+    with (
+        patch("nemo_safe_synthesizer.llm.modelopt_fp8.torch.cuda.is_available", return_value=True),
+        patch("nemo_safe_synthesizer.llm.modelopt_fp8.torch.cuda.get_device_capability", return_value=(8, 9)),
+    ):
+        loaded = AutoModelForCausalLM.from_pretrained(tmp_path, dtype=torch.bfloat16)
+
+    q_proj = loaded.model.layers[0].self_attn.q_proj
+    assert isinstance(q_proj, ModelOptFP8Linear)
+    assert q_proj.weight.dtype is torch.float8_e4m3fn
+    assert q_proj.weight_scale.dtype is torch.float32
+    assert type(loaded.lm_head) is torch.nn.Linear
+    assert loaded.lm_head.weight.dtype is torch.bfloat16
+
+    peft_model = get_peft_model(
+        loaded,
+        LoraConfig(r=2, lora_alpha=4, target_modules=["q_proj", "v_proj"]),
+    )
+    loss = peft_model(input_ids=torch.tensor([[1, 2, 3]])).logits.float().square().mean()
+    loss.backward()
+    adapter_dir = tmp_path / "adapter"
+    peft_model.save_pretrained(str(adapter_dir))
+
+    with (
+        patch("nemo_safe_synthesizer.llm.modelopt_fp8.torch.cuda.is_available", return_value=True),
+        patch("nemo_safe_synthesizer.llm.modelopt_fp8.torch.cuda.get_device_capability", return_value=(8, 9)),
+    ):
+        reloaded_base = AutoModelForCausalLM.from_pretrained(tmp_path, dtype=torch.bfloat16)
+    reloaded = PeftModel.from_pretrained(reloaded_base, adapter_dir, is_trainable=True)
+
+    assert any(
+        "lora_B" in name and parameter.grad is not None and torch.isfinite(parameter.grad).all()
+        for name, parameter in peft_model.named_parameters()
+    )
+    assert isinstance(reloaded.base_model.model.model.layers[0].self_attn.q_proj.base_layer, ModelOptFP8Linear)
+    assert all(parameter.requires_grad for name, parameter in reloaded.named_parameters() if "lora_" in name)
+
+
+def test_local_bf16_checkpoint_config_resolves_native_nemotron3_policy(tmp_path: Path) -> None:
+    model_path = _write_local_model_config(tmp_path / "renamed-local-checkpoint")
+
+    assert ModelMetadata._resolve_model_class(model_path).__name__ == "Nemotron3Nano"
+    assert model_policy.model_policy_for_local_path(model_path) is model_policy.NEMOTRON3_NANO_POLICY
+
+
+def test_transformers_saved_local_checkpoint_resolves_native_nemotron3_policy(tmp_path: Path) -> None:
+    model_path = tmp_path / "transformers-saved-checkpoint"
+    config = NemotronHConfig(
+        architectures=["NemotronHForCausalLM"],
+        hidden_size=3136,
+        layers_block_type=LAYER_TYPES,
+        mamba_head_dim=80,
+        mamba_num_heads=96,
+        ssm_state_size=128,
+        dtype="bfloat16",
+        vocab_size=131072,
+    )
+
+    config.save_pretrained(model_path)
+
+    assert model_policy.model_policy_for_local_path(model_path) is model_policy.NEMOTRON3_NANO_POLICY
+    assert ModelMetadata._resolve_model_class(model_path).__name__ == "Nemotron3Nano"
+
+
+def test_legacy_local_checkpoint_schema_resolves_native_nemotron3_policy(tmp_path: Path) -> None:
+    model_path = _write_local_model_config(tmp_path / "legacy-checkpoint")
+    config_path = model_path / "config.json"
+    config = json.loads(config_path.read_text())
+    config["num_hidden_layers"] = len(config.pop("layers_block_type"))
+    config["hybrid_override_pattern"] = LEGACY_HYBRID_PATTERN
+    config["torch_dtype"] = config.pop("dtype")
+    config_path.write_text(json.dumps(config))
+
+    assert model_policy.model_policy_for_local_path(model_path) is model_policy.NEMOTRON3_NANO_POLICY
+
+
+def test_legacy_local_checkpoint_requires_exact_hybrid_pattern(tmp_path: Path) -> None:
+    model_path = _write_local_model_config(tmp_path / "wrong-legacy-checkpoint")
+    config_path = model_path / "config.json"
+    config = json.loads(config_path.read_text())
+    config.pop("layers_block_type")
+    config["num_hidden_layers"] = 42
+    config["hybrid_override_pattern"] = f"X{LEGACY_HYBRID_PATTERN[1:]}"
+    config_path.write_text(json.dumps(config))
+
+    assert model_policy.model_policy_for_local_path(model_path) is None
+
+
+def test_local_modelopt_fp8_checkpoint_resolves_fp8_policy(tmp_path: Path) -> None:
+    from nemo_safe_synthesizer.llm.modelopt_fp8 import load_modelopt_fp8_training_config
+
+    model_path = _write_local_model_config(tmp_path / "quantized-local-checkpoint")
+    (model_path / "hf_quant_config.json").write_text(
+        json.dumps(
+            {
+                "producer": {"name": "modelopt", "version": "0.29.0"},
+                "quantization": {
+                    "quant_algo": "FP8",
+                    "kv_cache_quant_algo": "FP8",
+                    "group_size": 16,
+                    "exclude_modules": ["lm_head"],
+                },
+            }
+        )
+    )
+
+    assert model_policy.model_policy_for_local_path(model_path) is model_policy.NEMOTRON3_NANO_FP8_POLICY
+    assert ModelMetadata._resolve_model_class(model_path).__name__ == "Nemotron3Nano"
+    quant_config = load_modelopt_fp8_training_config(ModelRef.parse(model_path))
+    assert quant_config.group_size == 16
+    assert quant_config.exclude_modules == ["lm_head"]
+    assert quant_config.producer_version == "0.29.0"
+
+
+def test_reasoning_off_prompt_places_timeseries_prefill_inside_assistant_turn() -> None:
+    metadata = _metadata()
+
+    prompt = metadata.render_prompt(["device", "timestamp", "value"], prefill='{"device":"A"')
+
+    assert prompt.endswith('<think></think>{"device":"A"')
+    assert "</think><s>" not in prompt
+    assert metadata.response_prefix_ids[-2:] == [12, 13]
+    assert metadata.response_suffix_ids == [11, 1010]
+
+
+def test_chat_prompt_renderer_caches_a_reloaded_tokenizer() -> None:
+    metadata = _metadata()
+    tokenizer = metadata.tokenizer
+    assert tokenizer is not None
+    metadata.tokenizer = None
+
+    with patch("nemo_safe_synthesizer.llm.metadata.load_fast_tokenizer", return_value=tokenizer) as load:
+        metadata.render_prompt(["device"])
+        metadata.render_prompt(["device"], prefill='{"device":"A"')
+
+    load.assert_called_once()
+    assert metadata.tokenizer is tokenizer
+
+
+def test_nemotron3_autoconfig_disables_rope_and_selects_hybrid_lora_targets() -> None:
+    params = SafeSynthesizerParameters.from_params(pretrained_model=MODEL_ID)
+    data = pd.DataFrame({"device": ["A", "A"], "timestamp": [0, 60], "value": [1.0, 2.0]})
+
+    with patch("nemo_safe_synthesizer.config.autoconfig.choose_rope_scaling_factor", return_value=4):
+        resolved = AutoConfigResolver(data=data, config=params).resolve()
+
+    assert resolved.training.rope_scaling_factor == 1
+    assert resolved.training.lora_target_modules == [
+        "in_proj",
+        "up_proj",
+        "down_proj",
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj",
+    ]
+
+
+def test_nemotron3_fp8_autoconfig_selects_hybrid_lora_targets_without_requantizing() -> None:
+    params = SafeSynthesizerParameters.from_params(pretrained_model=FP8_MODEL_ID)
+    data = pd.DataFrame({"device": ["A", "A"], "timestamp": [0, 60], "value": [1.0, 2.0]})
+
+    resolved = AutoConfigResolver(data=data, config=params).resolve()
+
+    assert resolved.training.quantize_model is False
+    assert resolved.training.rope_scaling_factor == 1
+    assert resolved.training.lora_target_modules == [
+        "in_proj",
+        "up_proj",
+        "down_proj",
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj",
+    ]
+
+
+def test_nemotron3_rejects_explicit_rope_scaling() -> None:
+    params = SafeSynthesizerParameters.from_params(pretrained_model=MODEL_ID, rope_scaling_factor=2)
+
+    with pytest.raises(ValueError, match="does not use RoPE"):
+        AutoConfigResolver(data=pd.DataFrame({"value": [1]}), config=params).resolve()
+
+
+@pytest.mark.parametrize(
+    ("parameters", "message"),
+    [
+        ({"privacy.dp_enabled": True}, "does not support differential-privacy training"),
+    ],
+)
+def test_nemotron3_rejects_unsupported_training_modes(parameters, message) -> None:
+    params = SafeSynthesizerParameters.from_params(pretrained_model=MODEL_ID, **parameters)
+
+    with pytest.raises(ValueError, match=message):
+        AutoConfigResolver(data=pd.DataFrame({"value": [1]}), config=params).resolve()
+
+
+def test_training_example_masks_chat_prefix_and_labels_json_and_assistant_suffix() -> None:
+    metadata = _metadata()
+    tokenizer = metadata.tokenizer
+    assert tokenizer is not None
+    prompt = metadata.render_prompt(["device", "timestamp", "value"])
+    prompt_ids = tokenizer.encode(prompt, add_special_tokens=False)
+    record_ids = [3001, 3002, 3003]
+    example = Example(
+        prompt=prompt,
+        tokenizer=tokenizer,  # ty: ignore[invalid-argument-type] -- tokenizer mock implements the required backend.
+        metadata=metadata,
+    )
+
+    example.add_sequence({"input_ids": record_ids, "attention_mask": [1, 1, 1]})
+
+    expected_response = [*record_ids, 11, 1010]
+    assert example.input_ids == [*prompt_ids, *expected_response]
+    assert example.labels == [-100] * len(prompt_ids) + expected_response
+    assert metadata.prompt_config.bos_token_id not in example.input_ids[len(prompt_ids) :]
+
+
+def test_grouped_training_reopens_an_assistant_turn_between_sequences() -> None:
+    metadata = _metadata()
+    tokenizer = metadata.tokenizer
+    assert tokenizer is not None
+    prompt = metadata.render_prompt(["device", "value"])
+    prompt_ids = tokenizer.encode(prompt, add_special_tokens=False)
+    example = Example(
+        prompt=prompt,
+        tokenizer=tokenizer,  # ty: ignore[invalid-argument-type] -- tokenizer mock implements the required backend.
+        metadata=metadata,
+    )
+
+    example.add_sequence({"input_ids": [3001], "attention_mask": [1]})
+    example.add_sequence({"input_ids": [3002], "attention_mask": [1]})
+
+    expected_response = [
+        3001,
+        *metadata.response_suffix_ids,
+        *metadata.response_prefix_ids,
+        3002,
+        *metadata.response_suffix_ids,
+    ]
+    assert example.input_ids == [*prompt_ids, *expected_response]
+    assert example.labels == [-100] * len(prompt_ids) + expected_response
+
+
+def test_grouped_generation_uses_the_same_chat_boundaries_as_training() -> None:
+    metadata = _metadata()
+    framing = metadata.response_framing
+    schema = {
+        "type": "object",
+        "properties": {
+            "device": {"type": "string"},
+            "value": {"type": "integer"},
+        },
+        "required": ["device", "value"],
+    }
+    config = SafeSynthesizerParameters.from_params(
+        group_training_examples_by="device",
+        max_sequences_per_example=2,
+    )
+    completion = (
+        f'{{"device":"A","value":1}}\n{framing.suffix}'
+        f'{framing.subsequent_prefix}{{"device":"B","value":2}}\n{framing.suffix}'
+    )
+
+    regex = build_json_based_regex(
+        schema,
+        config,
+        bos_token=metadata.prompt_config.bos_token,
+        eos_token=metadata.prompt_config.eos_token,
+        response_framing=framing,
+    )
+    response = create_processor(schema, metadata, config)(0, completion)
+
+    assert re.fullmatch(regex, completion) is not None
+    assert response.invalid_records == []
+    assert response.valid_records == [
+        {"device": "A", "value": 1},
+        {"device": "B", "value": 2},
+    ]
+
+
+def test_token_budget_uses_chat_response_suffix_instead_of_four_generic_tokens() -> None:
+    metadata = _metadata()
+    prompt_ids = list(range(100))
+
+    assert compute_max_new_tokens(prompt_ids, 1000, metadata=metadata) == 898
+
+
+def test_timeseries_backend_uses_model_renderer_for_sliding_prefill() -> None:
+    metadata = _metadata()
+    backend = object.__new__(TimeseriesBackend)
+    backend.model_metadata = metadata
+    backend.schema = {"properties": {"device": {}, "timestamp": {}, "value": {}}}
+
+    prompt = backend._format_prompt('{"device":"A","timestamp":120')
+
+    assert prompt.endswith('<think></think>{"device":"A","timestamp":120')
+
+
+def test_lora_target_validation_reports_every_suffix_and_rejects_missing_targets() -> None:
+    model = torch.nn.Module()
+    model.in_proj = torch.nn.Linear(4, 8, bias=False)
+    model.q_proj = torch.nn.Linear(4, 4, bias=False)
+    validate = huggingface_backend.validate_lora_targets
+
+    assert validate(model, ["in_proj", "q_proj"]) == {"in_proj": 1, "q_proj": 1}
+    with pytest.raises(ValueError, match="gate_proj"):
+        validate(model, ["in_proj", "gate_proj"])
+
+
+def test_training_kernel_setup_reports_bootstrap_command_when_extensions_are_missing() -> None:
+    with (
+        patch("nemo_safe_synthesizer.llm.model_policy.importlib.import_module", side_effect=ImportError),
+        pytest.raises(ValueError, match="mise run bootstrap-nemotron-kernels"),
+    ):
+        model_policy.configure_local_training_kernels(MODEL_ID)
+
+
+def test_training_kernel_setup_registers_compiled_modules_with_transformers(tmp_path: Path) -> None:
+    from transformers.integrations import hub_kernels
+
+    causal_conv1d = ModuleType("causal_conv1d")
+    selective_state_update = ModuleType("mamba_ssm.ops.triton.selective_state_update")
+    selective_state_update_fn = object()
+    setattr(selective_state_update, "selective_state_update", selective_state_update_fn)
+    ssd_combined = ModuleType("mamba_ssm.ops.triton.ssd_combined")
+    mamba_chunk_scan_combined = object()
+    mamba_split_conv1d_scan_combined = object()
+    setattr(ssd_combined, "mamba_chunk_scan_combined", mamba_chunk_scan_combined)
+    setattr(ssd_combined, "mamba_split_conv1d_scan_combined", mamba_split_conv1d_scan_combined)
+    imported_modules = {
+        "causal_conv1d": causal_conv1d,
+        "mamba_ssm.ops.triton.selective_state_update": selective_state_update,
+        "mamba_ssm.ops.triton.ssd_combined": ssd_combined,
+    }
+    distribution = MagicMock()
+    distribution.locate_file.return_value = tmp_path / "mamba_ssm"
+
+    with (
+        patch.dict(hub_kernels._KERNEL_MODULE_MAPPING, {}, clear=True),
+        patch.dict(sys.modules, {}, clear=False),
+        patch.object(model_policy.importlib.metadata, "distribution", return_value=distribution),
+        patch.object(model_policy.importlib, "import_module", side_effect=imported_modules.__getitem__),
+    ):
+        model_policy.configure_local_training_kernels(MODEL_ID)
+
+        registered_mamba = hub_kernels._KERNEL_MODULE_MAPPING["mamba-ssm"]
+        assert hub_kernels._KERNEL_MODULE_MAPPING["causal-conv1d"] is causal_conv1d
+        assert isinstance(registered_mamba, ModuleType)
+        assert getattr(registered_mamba, "selective_state_update") is selective_state_update_fn
+        assert getattr(registered_mamba, "mamba_chunk_scan_combined") is mamba_chunk_scan_combined
+        assert getattr(registered_mamba, "mamba_split_conv1d_scan_combined") is mamba_split_conv1d_scan_combined
+        assert getattr(registered_mamba, "__path__") == [str(tmp_path / "mamba_ssm")]
+
+
+def test_training_kernel_setup_restores_mamba_module_after_attribute_failure(tmp_path: Path) -> None:
+    causal_conv1d = ModuleType("causal_conv1d")
+    selective_state_update = ModuleType("mamba_ssm.ops.triton.selective_state_update")
+    ssd_combined = ModuleType("mamba_ssm.ops.triton.ssd_combined")
+    previous_mamba = ModuleType("mamba_ssm")
+    imported_modules = {
+        "causal_conv1d": causal_conv1d,
+        "mamba_ssm.ops.triton.selective_state_update": selective_state_update,
+        "mamba_ssm.ops.triton.ssd_combined": ssd_combined,
+    }
+    distribution = MagicMock()
+    distribution.locate_file.return_value = tmp_path / "mamba_ssm"
+
+    with patch.dict(sys.modules, {"mamba_ssm": previous_mamba}, clear=False):
+        with (
+            patch.object(model_policy.importlib.metadata, "distribution", return_value=distribution),
+            patch.object(model_policy.importlib, "import_module", side_effect=imported_modules.__getitem__),
+            pytest.raises(ParameterError, match="could not import the compiled mamba-ssm runtime"),
+        ):
+            model_policy.configure_local_training_kernels(MODEL_ID)
+        assert sys.modules["mamba_ssm"] is previous_mamba
+
+
+def test_meta_parameter_count_disables_mamba_kernels_on_a_config_copy() -> None:
+    config = PretrainedConfig()
+    setattr(config, "use_mamba_kernels", True)
+    object.__setattr__(config, "model_type", "nemotron_h")
+    observed = {}
+    fake_model = MagicMock()
+    fake_model.parameters.return_value = [torch.nn.Parameter(torch.empty(7, device="meta"))]
+
+    def from_config(candidate):
+        observed["candidate"] = candidate
+        return fake_model
+
+    with patch("transformers.AutoModelForCausalLM.from_config", side_effect=from_config):
+        assert param_count_from_empty_model(config) == 7
+
+    assert observed["candidate"] is not config
+    assert observed["candidate"].use_mamba_kernels is False
+    assert config.use_mamba_kernels is True

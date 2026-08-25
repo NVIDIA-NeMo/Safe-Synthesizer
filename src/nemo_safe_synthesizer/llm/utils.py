@@ -375,6 +375,11 @@ class ModelRef:
     @property
     def trust_remote_code(self) -> bool:
         """Whether loaders should pass ``trust_remote_code=True`` for this model."""
+        from .model_policy import model_policy_for
+
+        policy = model_policy_for(self.repo_id)
+        if policy is not None and policy.force_native_transformers:
+            return False
         if not self.repo_id or "/" not in self.repo_id:
             return False
         org, _ = self.repo_id.split("/", 1)

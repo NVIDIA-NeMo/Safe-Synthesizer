@@ -23,6 +23,7 @@ from nemo_safe_synthesizer.privacy.dp_transformers.dp_utils import (
     OpacusDPTrainer,
 )
 from nemo_safe_synthesizer.privacy.dp_transformers.privacy_args import PrivacyArguments
+from nemo_safe_synthesizer.utils import create_schema_prompt
 
 
 def _cpu_training_args(tmp_path, **overrides):
@@ -47,6 +48,7 @@ class _StubPromptConfig:
     """Minimal picklable prompt config for assembler tests."""
 
     template: str = PROMPT_TEMPLATE
+    use_chat_template: bool = False
     add_bos_token_to_prompt: bool = False
     add_eos_token_to_prompt: bool = False
     bos_token: str = "<s>"
@@ -64,6 +66,32 @@ class _StubModelMetadata:
     rope_scaling_factor: float = 1.0
     max_sequences_per_example: int | None = None
     prompt_config: _StubPromptConfig = field(default_factory=_StubPromptConfig)
+
+    @property
+    def response_prefix_ids(self) -> list[int]:
+        """Return the legacy response prefix used by the smoke fixture."""
+        return [self.prompt_config.bos_token_id]
+
+    @property
+    def response_suffix_ids(self) -> list[int]:
+        """Return the legacy response suffix used by the smoke fixture."""
+        return [self.prompt_config.eos_token_id]
+
+    def render_prompt(
+        self,
+        columns: list[str],
+        *,
+        prefill: str = "",
+        exclude_columns: list[str] | None = None,
+    ) -> str:
+        """Render the legacy schema prompt used by the smoke fixture."""
+        return create_schema_prompt(
+            columns,
+            instruction=self.instruction,
+            prompt_template=self.prompt_config.template,
+            prefill=prefill,
+            exclude_columns=exclude_columns,
+        )
 
 
 def test_hf_trainer_one_step(fixture_tiny_model, fixture_stub_tokenizer, fixture_tiny_training_dataset, tmp_path):

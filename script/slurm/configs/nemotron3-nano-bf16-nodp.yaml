@@ -1,0 +1,12 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+training:
+  pretrained_model: nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16
+  batch_size: 1
+  gradient_accumulation_steps: 8
+  lora_r: 8
+  lora_alpha_over_r: 2.0
+generation:
+  use_structured_generation: true
+  num_records: 3000

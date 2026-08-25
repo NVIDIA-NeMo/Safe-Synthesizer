@@ -192,7 +192,13 @@ def extract_records_from_jsonl_string(jsonl_string: str) -> list[str]:
     return re.findall(RECORD_REGEX_PATTEN_LOOKAHEAD, jsonl_string)
 
 
-def extract_groups_from_jsonl_string(jsonl_string: str, bos: str, eos: str) -> list[str]:
+def extract_groups_from_jsonl_string(
+    jsonl_string: str,
+    bos: str,
+    eos: str,
+    *,
+    first_group_without_bos: bool = False,
+) -> list[str]:
     """Extract groups of records from the given JSONL string.
 
     This function assumes that the complete group of records
@@ -203,12 +209,19 @@ def extract_groups_from_jsonl_string(jsonl_string: str, bos: str, eos: str) -> l
         jsonl_string: Single JSONL string containing grouped tabular records.
         bos: Beginning-of-sequence token used to identify the start of a group.
         eos: End-of-sequence token used to identify the end of a group.
+        first_group_without_bos: Whether the prompt already contains the first
+            response prefix, so the first generated group begins with JSON.
 
     Returns:
         Substrings matching complete bos/eos-delimited record groups.
     """
     bos_re = re.escape(rf"{bos}")
     eos_re = re.escape(rf"{eos}")
+    if first_group_without_bos:
+        return re.findall(
+            rf"(?:\A\s*|{bos_re}\s?)(?:{RECORD_REGEX_PATTERN}\s?)+\s?{eos_re}",
+            jsonl_string,
+        )
     return re.findall(rf"{bos_re}\s?(?:{RECORD_REGEX_PATTERN}\s?)+\s?{eos_re}", jsonl_string)
 
 

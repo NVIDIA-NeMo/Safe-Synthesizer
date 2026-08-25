@@ -40,25 +40,37 @@ def compute_schema_prompt_ids(
 
     if metadata.tokenizer is None:
         raise RuntimeError("compute_schema_prompt_ids requires a loaded tokenizer on ModelMetadata")
-    schema_prompt = create_schema_prompt(
-        columns,
-        instruction=metadata.instruction,
-        prompt_template=metadata.prompt_config.template,
-        exclude_columns=list(exclude_columns),
-    )
+    if hasattr(metadata, "render_prompt"):
+        schema_prompt = metadata.render_prompt(columns, exclude_columns=list(exclude_columns))
+    else:
+        schema_prompt = create_schema_prompt(
+            columns,
+            instruction=metadata.instruction,
+            prompt_template=metadata.prompt_config.template,
+            exclude_columns=list(exclude_columns),
+        )
     return metadata.tokenizer.encode(schema_prompt, add_special_tokens=False)
 
 
 def compute_max_new_tokens(
     schema_prompt_ids: list[int],
     max_seq_length: int,
+    *,
+    metadata: ModelMetadata | None = None,
 ) -> int:
     """Max tokens available for record content after schema and special tokens.
 
     Uses the same formula as assembler._tokenize_records:
     ``max_seq_length - len(schema_prompt_ids) - 2 * NUM_SPECIAL_TOKENS``.
     """
-    return max_seq_length - len(schema_prompt_ids) - 2 * NUM_SPECIAL_TOKENS
+    prompt_config = None if metadata is None else metadata.prompt_config
+    if metadata is None or not hasattr(prompt_config, "add_bos_token_to_prompt"):
+        boundary_tokens = 2 * NUM_SPECIAL_TOKENS
+    else:
+        prompt_tokens = int(prompt_config.add_bos_token_to_prompt) + int(prompt_config.add_eos_token_to_prompt)
+        response_prefix_tokens = 0 if prompt_config.use_chat_template else len(metadata.response_prefix_ids)
+        boundary_tokens = prompt_tokens + response_prefix_tokens + len(metadata.response_suffix_ids)
+    return max_seq_length - len(schema_prompt_ids) - boundary_tokens
 
 
 def tokenize_record(row: pd.Series, tokenizer: Any) -> list[int]:

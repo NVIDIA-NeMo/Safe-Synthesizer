@@ -47,7 +47,7 @@ def check_schema_prompt_budget(
     Delegates to ``data_processing.budget`` for parity with the assembler.
     """
     schema_prompt_ids = compute_schema_prompt_ids(columns, metadata, exclude_columns=DEFAULT_EXCLUDE_COLUMNS)
-    max_new_tokens = compute_max_new_tokens(schema_prompt_ids, metadata.max_seq_length)
+    max_new_tokens = compute_max_new_tokens(schema_prompt_ids, metadata.max_seq_length, metadata=metadata)
     if max_new_tokens <= 0:
         collector.error(
             "schema_exceeds_context",

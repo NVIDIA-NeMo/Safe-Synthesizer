@@ -14,7 +14,7 @@ Jobs are submitted via `submit_slurm_jobs.sh`, which launches a containerized `s
 - `slurm_nss_matrix.sh`: Picks dataset and config and launches the python entrypoint inside the container. Honors `NSS_PHASE=train|generate|end_to_end`.
 - `slurm_srun.sh`: Wraps `srun` with container image and mounts, mostly just a pass through, primary logic is in `submit_slurm_jobs.sh` and `slurm_nss_matrix.sh`.
 - `.mise/tasks/bootstrap-nss-slurm`: Installs a container-visible Python and project virtualenv under the current user's Lustre directory.
-- `configs/*.yaml`: Major configs we support. Use the config basenames from this directory in commands (for example, `smollm3-nodp`, `smollm3-dp`, etc.). The current set is the cross product of 3 pre-trained models and 2 DP settings (on or off).
+- `configs/*.yaml`: Major configs we support. Use the config basenames from this directory in commands (for example, `smollm3-nodp`, `smollm3-dp`, `nemotron3-nano-bf16-fp8-nodp`, and `nemotron3-nano-fp8-nodp`). The baseline set covers three pretrained model families with DP on or off. Nemotron has non-DP BF16 training, an optional official FP8 generation variant, and an experimental direct FP8 training config.
 
 Pipeline entrypoints invoked from the prebuilt project virtualenv:
 - `.venv/bin/safe-synthesizer run --run-path <path>` (full end-to-end pipeline)
@@ -28,6 +28,17 @@ Pipeline entrypoints invoked from the prebuilt project virtualenv:
 - Weights & Biases API Key: W&B logging is enabled by default (`WANDB_MODE=online`). You will need a `WANDB_API_KEY` — request an account [here](https://confluence.nvidia.com/display/AIALGO/Weights+and+Biases+%28WandB%29+Enterprise+Account). Set `WANDB_MODE=disabled` in `env_variables.sh` to skip W&B.
 - Enroot Credentials: Follow https://confluence.nvidia.com/display/HWINFCSSUP/Using+Containers#UsingContainers-SettingupEnrootCredentials. You should add the lines for all 3 of `nvcr.io`, `authn.nvidia.com`, and `gitlab-master.nvidia.com`.
 - Clone Safe-Synthesizer
+
+The experimental `nemotron3-nano-bf16-fp8-nodp` config trains against the BF16
+checkpoint and generates from the official FP8 sibling. Select a partition
+with GPU compute capability 8.9 or newer. In offline Hugging Face mode,
+pre-cache both model snapshots before submitting the job.
+
+The experimental `nemotron3-nano-fp8-nodp` config trains the LoRA adapter
+directly over NVIDIA's official ModelOpt FP8 checkpoint and generates from the
+same base. The frozen base remains in FP8 storage and uses BF16 layer compute.
+Select a compute capability 8.9 or newer partition, bootstrap the Nemotron
+kernels, and pre-cache the FP8 snapshot in offline mode.
 
 The instructions below assume that Safe-Synthesizer is cloned directly under
 `LUSTRE_DIR` and that commands after cloning are run from the repository root.
@@ -200,6 +211,24 @@ bash submit_slurm_jobs.sh \
   --exp-name financial_repeats \
   --pipeline-mode end_to_end \
   --max-concurrent-slurm-jobs 3
+
+# Example: BF16 Nemotron training followed by official FP8 generation
+bash submit_slurm_jobs.sh \
+  --dataset-urls adult \
+  --configs nemotron3-nano-bf16-fp8-nodp \
+  --runs 1 \
+  --partition YOUR_SM89_PARTITION \
+  --exp-name nemotron_fp8 \
+  --pipeline-mode two_stage
+
+# Example: direct LoRA training over the official FP8 Nemotron base
+bash submit_slurm_jobs.sh \
+  --dataset-urls adult \
+  --configs nemotron3-nano-fp8-nodp \
+  --runs 1 \
+  --partition YOUR_SM89_PARTITION \
+  --exp-name nemotron_direct_fp8 \
+  --pipeline-mode two_stage
 ```
 
 - CONFIGS source: By default, configs come from `CONFIGS=(...)` in `env_variables.sh`. Override with `--configs c1,c2` (base names without `.yaml`).

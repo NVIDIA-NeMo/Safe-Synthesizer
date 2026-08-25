@@ -182,7 +182,7 @@ for the full field list.
 | `training.lora_r` | `32` | LoRA rank; lower values produce fewer trainable parameters | 16--64 typical; 32 is a reasonable default |
 | `training.lora_alpha_over_r` | `1.0` | LoRA scaling ratio (alpha / rank) | Leave at 1.0 |
 | `training.pretrained_model` | `"HuggingFaceTB/SmolLM3-3B"` | HuggingFace model ID or local path | See supported families below; `TinyLlama/TinyLlama-1.1B-Chat-v1.0` for fast CPU/low-VRAM iteration |
-| `training.quantize_model` | `false` | Enable quantization to reduce VRAM usage | Enable if VRAM is limited; 8-bit has lower quality impact than 4-bit |
+| `training.quantize_model` | `false` | Enable quantization to reduce VRAM usage | Support is model-dependent; see [Quantization schemes](#quantization-schemes) |
 | `training.quantization_scheme` | `null` | Quantization scheme: `bnb-4bit`, `bnb-8bit`, `fp8`, `nvfp4`, `mxfp4` | See [Quantization schemes](#quantization-schemes) below; leave unset to fall back to `quantization_bits` |
 | `training.quantization_bits` | `8` | Legacy bit width (4 or 8) used when `quantization_scheme` is unset | Prefer setting `quantization_scheme` explicitly for new configs |
 | `training.attn_implementation` | `"sdpa"` | Attention backend for model loading | Leave at default |
@@ -200,7 +200,8 @@ Safe Synthesizer has explicit support (prompt templates, RoPE scaling,
 tokenizer handling) for the model families listed below. Models outside this
 list will raise a `ValueError` at startup.
 
-We have extensively tested the following models for synthetic data use in NSS, and encourage you to start with `SmolLM3-3B` (the default).
+The following model families have explicit prompt and runtime support. Start
+with `SmolLM3-3B`, the default, unless your workload requires another family.
 
 
 | Family | HuggingFace ID |
@@ -208,6 +209,27 @@ We have extensively tested the following models for synthetic data use in NSS, a
 | SmolLM3 (default) | `HuggingFaceTB/SmolLM3-3B` |
 | TinyLlama | `TinyLlama/TinyLlama-1.1B-Chat-v1.0` |
 | Mistral | `mistralai/Mistral-7B-Instruct-v0.3` |
+| Nemotron 3 Nano BF16 | `nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16` |
+| Nemotron 3 Nano FP8 (experimental) | `nvidia/NVIDIA-Nemotron-3-Nano-4B-FP8` |
+
+Nemotron 3 Nano supports non-DP LoRA training and generation, including grouped
+and ungrouped time series. The BF16 checkpoint requires an Ampere-class GPU
+with BF16 support, such as an A100. The experimental FP8 checkpoint requires
+compute capability 8.9 or newer. It keeps the frozen base weights in ModelOpt
+FP8 storage, dequantizes one linear layer at a time for BF16 autograd compute,
+and trains FP32 LoRA adapters with PEFT. Adapter merging into the FP8 base is
+unsupported.
+
+Safe Synthesizer selects the model's seven LoRA projection families, uses its
+native no-position-embedding configuration, and disables reasoning in the chat
+template. Dynamic quantization of the BF16 checkpoint, re-quantization of the
+FP8 checkpoint, and DP training are unsupported. Run
+`mise run bootstrap-nemotron-kernels` from a source checkout before training.
+The bootstrap packages are intentionally external to the standard CUDA extra
+because they compile against the active PyTorch and CUDA toolchain.
+Review the model card and
+[NVIDIA Open Model License](https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16)
+before use.
 
 Benchmarking data for additional models will be added as they are
 validated. To understand the trade-offs with model selection, see [Training](running.md#training).
@@ -243,6 +265,14 @@ If `quantization_scheme` is unset, Safe Synthesizer falls back to
 `quantization_bits` for backward compatibility (`4` → `bnb-4bit`,
 `8` → `bnb-8bit`).
 
+!!! warning "Nemotron 3 Nano training"
+    Nemotron 3 Nano BF16 rejects every dynamic training quantization scheme,
+    including `bnb-4bit`, `bnb-8bit`, `fp8`, `nvfp4`, and `mxfp4`. To train
+    over NVIDIA's official ModelOpt FP8 base, set `training.pretrained_model`
+    to `nvidia/NVIDIA-Nemotron-3-Nano-4B-FP8` and leave
+    `training.quantize_model: false`. The checkpoint is already quantized and
+    is not selected by `training.quantization_scheme`.
+
 !!! note "LoftQ + non-BNB schemes"
     `peft_implementation: loftq` is incompatible with `fp8`, `nvfp4`, and
     `mxfp4` — LoftQ requires the bitsandbytes runtime. Setting both will
@@ -260,6 +290,7 @@ for the full API reference.
 
 | Field | Default | Description | Guidance |
 |-------|---------|-------------|----------|
+| `generation.pretrained_model` | `null` | Optional generation-only base model override; defaults to `training.pretrained_model` | Only explicitly compatible training and generation pairs are accepted |
 | `generation.num_records` | `1000` | Number of synthetic records to generate | Match or exceed input dataset size for best quality |
 | `generation.temperature` | `0.9` | Sampling temperature; lower values produce more predictable, less varied output | 0.7--1.1 typical; lower if output is noisy, higher if too repetitive |
 | `generation.top_p` | `1.0` | Nucleus sampling probability | Leave at 1.0; lower (e.g. 0.9) to reduce tail tokens |
@@ -272,6 +303,25 @@ for the full API reference.
 | `generation.structured_generation.use_single_sequence` | `false` | Match exactly one sequence when `max_sequences_per_example` is 1 | Leave at default |
 | `generation.enforce_timeseries_fidelity` | `false` | Enforce time series order, intervals, and timestamps | Enable for time series data |
 | `generation.attention_backend` | `"auto"` | vLLM attention backend | Leave at `"auto"` |
+
+The experimental Nemotron FP8 path can use the official FP8 checkpoint for
+both training and generation:
+
+```yaml
+training:
+  pretrained_model: nvidia/NVIDIA-Nemotron-3-Nano-4B-FP8
+  quantize_model: false
+```
+
+You can instead train against BF16 and set
+`generation.pretrained_model: nvidia/NVIDIA-Nemotron-3-Nano-4B-FP8`.
+Safe Synthesizer accepts this exact sibling pair. Both paths configure the
+required float32 Mamba state cache and FP8 KV cache for generation and reject
+the FP8 checkpoint on GPUs older than compute capability 8.9.
+
+!!! warning "Experimental FP8 path"
+    Validate adapter training, save and reload, and generation on the target
+    SM89-or-newer GPU before treating this as a production configuration.
 
 Advanced group-by validation knobs live under `generation.validation`:
 

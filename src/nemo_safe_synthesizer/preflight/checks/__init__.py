@@ -27,8 +27,10 @@ from .dataframe import (
 )
 from .environment import (
     CUDAAvailabilityCheck,
+    GenerationModelCompatibilityCheck,
     HFModelAvailabilityCheck,
     InferenceModelCheck,
+    NemotronTrainingCapabilityCheck,
     VRAMHeadroomCheck,
 )
 from .metadata import TokenBudgetCheck
@@ -38,9 +40,11 @@ __all__ = [
     "ConstantColumnCheck",
     "SmallDatasetCheck",
     "DatasetSizeCheck",
+    "GenerationModelCompatibilityCheck",
     "GroupbyColumnCheck",
     "HFModelAvailabilityCheck",
     "InferenceModelCheck",
+    "NemotronTrainingCapabilityCheck",
     "OrderbyColumnCheck",
     "OversamplingCheck",
     "PseudoColumnCheck",
@@ -59,6 +63,8 @@ __all__ = [
 _CORE_CHECKS: tuple[PreflightCheck, ...] = (
     # CONFIG
     CUDAAvailabilityCheck(),
+    GenerationModelCompatibilityCheck(),
+    NemotronTrainingCapabilityCheck(),
     InferenceModelCheck(),
     HFModelAvailabilityCheck(),
     # DATAFRAME

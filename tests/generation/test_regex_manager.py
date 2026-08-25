@@ -14,6 +14,7 @@ from nemo_safe_synthesizer.generation.regex_manager import (
     build_json_based_regex,
     build_json_structural_tag,
 )
+from nemo_safe_synthesizer.llm.metadata import ResponseFraming
 
 from .structural_tag_helpers import structural_tag_accepts_text
 
@@ -120,6 +121,45 @@ def test_build_json_structural_tag_with_single_sequence(fixture_safe_synthesizer
     )
 
     assert structural_tag["format"] == {"type": "json_schema", "json_schema": schema}
+
+
+def test_structured_group_constraints_follow_chat_response_framing(
+    fixture_safe_synthesizer_config,
+    fixture_tokenizer,
+):
+    """The first chat group starts in the prompt and later groups reopen the assistant turn."""
+    fixture_safe_synthesizer_config.data.group_training_examples_by = "name"
+    fixture_safe_synthesizer_config.data.max_sequences_per_example = 2
+    schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}},
+        "required": ["name"],
+    }
+    framing = ResponseFraming(
+        first_prefix="",
+        subsequent_prefix="<|assistant|>",
+        suffix="<|end|>\n",
+    )
+    text = '{"name":"first"}\n<|end|>\n<|assistant|>{"name":"second"}\n<|end|>\n'
+
+    regex = build_json_based_regex(
+        schema,
+        config=fixture_safe_synthesizer_config,
+        bos_token=BOS_TOKEN,
+        eos_token=EOS_TOKEN,
+        response_framing=framing,
+    )
+    structural_tag = build_json_structural_tag(
+        schema,
+        config=fixture_safe_synthesizer_config,
+        bos_token=BOS_TOKEN,
+        eos_token=EOS_TOKEN,
+        response_framing=framing,
+    )
+
+    assert re.fullmatch(regex, text) is not None
+    assert structural_tag_accepts_text(text, structural_tag, fixture_tokenizer) is True
+    assert re.fullmatch(regex, f"{BOS_TOKEN}{text}") is None
 
 
 def test_build_json_structural_tag_with_groupby(fixture_safe_synthesizer_config):

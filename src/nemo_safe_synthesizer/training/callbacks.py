@@ -8,6 +8,7 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Any
 
+import torch
 from tqdm.auto import tqdm
 from transformers import (
     TrainerCallback,
@@ -35,7 +36,6 @@ from ..generation.results import (
 )
 from ..llm.metadata import ModelMetadata
 from ..observability import get_logger
-from ..utils import create_schema_prompt
 
 logger = get_logger(__name__)
 
@@ -75,11 +75,7 @@ class InferenceEvalCallback(TrainerCallback):
     ):
         self.schema = schema
         self.metadata = metadata
-        self.templated_prompt = create_schema_prompt(
-            list(schema["properties"].keys()),
-            instruction=self.metadata.instruction,
-            prompt_template=self.metadata.prompt_config.template,
-        )
+        self.templated_prompt = self.metadata.render_prompt(list(schema["properties"].keys()))
         self.num_prompts_per_batch = num_prompts_per_batch
 
         self.is_tabular_processor = isinstance(processor, TabularDataProcessor)
@@ -128,10 +124,30 @@ class InferenceEvalCallback(TrainerCallback):
         for _ in range(self.num_batches):
             prompt_tokens = tokenizer(
                 [self.templated_prompt] * self.num_prompts_per_batch,
+                add_special_tokens=False,
                 return_tensors="pt",
             )
             input_ids = prompt_tokens["input_ids"].to(model.device)
             attention_mask = prompt_tokens["attention_mask"].to(model.device)
+            prompt_config = self.metadata.prompt_config
+            if prompt_config.add_bos_token_to_prompt:
+                bos = torch.full(
+                    (len(input_ids), 1),
+                    prompt_config.bos_token_id,
+                    dtype=input_ids.dtype,
+                    device=model.device,
+                )
+                input_ids = torch.cat([bos, input_ids], dim=1)
+                attention_mask = torch.cat([torch.ones_like(bos), attention_mask], dim=1)
+            if prompt_config.add_eos_token_to_prompt:
+                eos = torch.full(
+                    (len(input_ids), 1),
+                    prompt_config.eos_token_id,
+                    dtype=input_ids.dtype,
+                    device=model.device,
+                )
+                input_ids = torch.cat([input_ids, eos], dim=1)
+                attention_mask = torch.cat([attention_mask, torch.ones_like(eos)], dim=1)
 
             outputs = model.generate(
                 input_ids=input_ids,

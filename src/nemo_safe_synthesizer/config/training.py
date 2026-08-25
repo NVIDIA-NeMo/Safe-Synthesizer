@@ -315,8 +315,9 @@ class TrainingHyperparams(Parameters):
         Field(
             title="lora_target_modules",
             description=(
-                "The list of transformer modules to apply LoRA to. Possible modules: "
-                "'q_proj', 'k_proj', 'v_proj', 'o_proj', 'gate_proj', 'up_proj', 'down_proj'."
+                "The model-dependent transformer modules to apply LoRA to. Common modules include "
+                "'q_proj', 'k_proj', 'v_proj', 'o_proj', 'gate_proj', 'up_proj', and 'down_proj'; "
+                "hybrid models may also use 'in_proj'."
             ),
         ),
     ] = ["q_proj", "k_proj", "v_proj", "o_proj"]

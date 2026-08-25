@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import importlib
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, ClassVar, Literal
 
@@ -29,6 +30,12 @@ from ..defaults import (
 from ..errors import ParameterError
 from ..observability import get_logger
 from ..utils import load_json, write_json
+from .model_policy import (
+    NEMOTRON3_NANO_FP8_POLICY,
+    NEMOTRON3_NANO_POLICY,
+    model_policy_for,
+    model_policy_for_reference,
+)
 from .utils import ModelRef, load_fast_tokenizer
 
 logger = get_logger(__name__)
@@ -79,6 +86,21 @@ class LLMPromptConfig(BaseModel):
     eos_token_id: int
     """Integer id for the EOS token."""
 
+    use_chat_template: bool = False
+    """Whether prompts are rendered through the tokenizer's chat template."""
+
+    response_prefix_ids: list[int] = Field(default_factory=list)
+    """Tokens inserted immediately before response content."""
+
+    response_suffix_ids: list[int] = Field(default_factory=list)
+    """Tokens inserted immediately after response content."""
+
+    response_prefix: str = ""
+    """Text inserted before a subsequent response sequence."""
+
+    response_suffix: str = ""
+    """Text inserted after each response sequence."""
+
     @classmethod
     def from_tokenizer(cls, name: str, tokenizer: PreTrainedTokenizerBase | None = None, **kwargs) -> LLMPromptConfig:
         """Create a prompt config by reading from settings of a tokenizer.
@@ -119,9 +141,23 @@ class LLMPromptConfig(BaseModel):
             "bos_token_id": bos_token_id,
             "eos_token": eos_token,
             "eos_token_id": eos_token_id,
+            "use_chat_template": kwargs.get("use_chat_template", False),
+            "response_prefix_ids": kwargs.get("response_prefix_ids", []),
+            "response_suffix_ids": kwargs.get("response_suffix_ids", []),
+            "response_prefix": kwargs.get("response_prefix", ""),
+            "response_suffix": kwargs.get("response_suffix", ""),
         }
 
         return cls(**pc)
+
+
+@dataclass(frozen=True)
+class ResponseFraming:
+    """Text boundaries generated around grouped response sequences."""
+
+    first_prefix: str
+    subsequent_prefix: str
+    suffix: str
 
 
 def resolve_rope_scaling_factor(
@@ -299,6 +335,8 @@ class ModelMetadata(BaseModel):
 
     # Learning rate when training.learning_rate is "auto". Override in subclasses.
     default_learning_rate: ClassVar[float] = 0.0005
+    uses_rope: ClassVar[bool] = True
+    automatic_lora_targets: ClassVar[tuple[str, ...]] = ("q_proj", "k_proj", "v_proj", "o_proj")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -380,6 +418,79 @@ class ModelMetadata(BaseModel):
         if v is not None and v < 1:
             raise ValueError("max_records_per_group must be None or >= 1")
         return v
+
+    @property
+    def response_prefix_ids(self) -> list[int]:
+        """Return model-owned token IDs inserted before response content."""
+        if self.prompt_config.use_chat_template:
+            return list(self.prompt_config.response_prefix_ids)
+        return [self.prompt_config.bos_token_id]
+
+    @property
+    def response_suffix_ids(self) -> list[int]:
+        """Return model-owned token IDs inserted after response content."""
+        if self.prompt_config.use_chat_template:
+            return list(self.prompt_config.response_suffix_ids)
+        return [self.prompt_config.eos_token_id]
+
+    @property
+    def response_framing(self) -> ResponseFraming:
+        """Return the generated-text framing used for grouped sequences."""
+        if self.prompt_config.use_chat_template:
+            return ResponseFraming(
+                first_prefix="",
+                subsequent_prefix=self.prompt_config.response_prefix,
+                suffix=self.prompt_config.response_suffix,
+            )
+        return ResponseFraming(
+            first_prefix=self.prompt_config.bos_token,
+            subsequent_prefix=self.prompt_config.bos_token,
+            suffix=self.prompt_config.eos_token,
+        )
+
+    def _get_tokenizer(self) -> PreTrainedTokenizerBase:
+        """Return the metadata tokenizer, loading and caching it when needed."""
+        if self.tokenizer is None:
+            model_ref = ModelRef.parse(self.model_name_or_path)
+            self.tokenizer = load_fast_tokenizer(
+                model_ref.target(),
+                trust_remote_code=model_ref.trust_remote_code,
+            )
+        return self.tokenizer
+
+    def render_prompt(
+        self,
+        columns: list[str],
+        *,
+        prefill: str = "",
+        exclude_columns: list[str] | None = None,
+    ) -> str:
+        """Render the schema and optional prefill with this model's prompt policy."""
+        from ..utils import create_schema_prompt
+
+        if not self.prompt_config.use_chat_template:
+            return create_schema_prompt(
+                columns,
+                instruction=self.instruction,
+                prompt_template=self.prompt_config.template,
+                prefill=prefill,
+                exclude_columns=exclude_columns,
+            )
+
+        tokenizer = self._get_tokenizer()
+        excluded = set(exclude_columns or [])
+        schema = ",".join(f'"{column}":<unk>' for column in columns if column not in excluded)
+        messages = [
+            {"role": "system", "content": ""},
+            {"role": "user", "content": f"{self.instruction}{schema}"},
+        ]
+        rendered = tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
+            enable_thinking=False,
+        )
+        return f"{rendered}{prefill}"
 
     @model_validator(mode="before")
     @classmethod
@@ -574,6 +685,18 @@ class ModelMetadata(BaseModel):
         Raises:
             ValueError: If no registered subclass matches.
         """
+        model_name = str(model_name_or_path)
+        model_path = Path(model_name_or_path)
+        if model_path.exists():
+            model_ref = ModelRef.parse(model_path)
+            if model_policy_for_reference(model_ref.repo_id, model_ref.local_path) in (
+                NEMOTRON3_NANO_POLICY,
+                NEMOTRON3_NANO_FP8_POLICY,
+            ):
+                return Nemotron3Nano
+        elif model_policy_for(model_name) in (NEMOTRON3_NANO_POLICY, NEMOTRON3_NANO_FP8_POLICY):
+            return Nemotron3Nano
+
         classes = TinyLlama, Qwen, Llama32, SmolLM2, SmolLM3, Mistral, Nemotron, Granite
         for class_ in classes:
             if class_.__name__.lower() in str(model_name_or_path).lower():
@@ -865,6 +988,80 @@ class Nemotron(ModelMetadata):
         )
 
 
+class Nemotron3Nano(ModelMetadata):
+    """Metadata for the official NVIDIA Nemotron 3 Nano 4B BF16 checkpoint."""
+
+    uses_rope: ClassVar[bool] = NEMOTRON3_NANO_POLICY.uses_rope
+    automatic_lora_targets: ClassVar[tuple[str, ...]] = NEMOTRON3_NANO_POLICY.automatic_lora_targets
+
+    def __init__(
+        self,
+        model_name_or_path: str,
+        tokenizer=None,
+        rope_scaling_factor: float | None = None,
+        **kwargs,
+    ) -> None:
+        if rope_scaling_factor not in (None, 1, 1.0):
+            raise ParameterError("Nemotron 3 Nano does not use RoPE; rope_scaling_factor must be 1")
+        config, tokenizer = ModelMetadata._load_config_and_tokenizer(model_name_or_path, tokenizer)
+        empty_user = [
+            {"role": "system", "content": ""},
+            {"role": "user", "content": ""},
+        ]
+        dialogue = tokenizer.apply_chat_template(
+            empty_user,
+            tokenize=False,
+            add_generation_prompt=False,
+            enable_thinking=False,
+        )
+        prefix = tokenizer.apply_chat_template(
+            empty_user,
+            tokenize=False,
+            add_generation_prompt=True,
+            enable_thinking=False,
+        )
+        full = tokenizer.apply_chat_template(
+            [*empty_user, {"role": "assistant", "content": ""}],
+            tokenize=False,
+            add_generation_prompt=False,
+            enable_thinking=False,
+        )
+        if not isinstance(dialogue, str) or not isinstance(prefix, str) or not isinstance(full, str):
+            raise ParameterError("Nemotron 3 chat template did not render text")
+        dialogue_ids = tokenizer.encode(dialogue, add_special_tokens=False)
+        prefix_ids = tokenizer.encode(prefix, add_special_tokens=False)
+        full_ids = tokenizer.encode(full, add_special_tokens=False)
+        if (
+            not prefix.startswith(dialogue)
+            or not full.startswith(prefix)
+            or prefix_ids[: len(dialogue_ids)] != dialogue_ids
+            or full_ids[: len(prefix_ids)] != prefix_ids
+        ):
+            raise ParameterError("Nemotron 3 chat-template prefix is not token-boundary stable")
+
+        super().__init__(
+            autoconfig=config,
+            instruction=DEFAULT_INSTRUCTION,
+            prompt_config=LLMPromptConfig.from_tokenizer(
+                name=model_name_or_path,
+                tokenizer=tokenizer,
+                template="{instruction}{schema}{prefill}",
+                add_bos_token_to_prompt=False,
+                add_eos_token_to_prompt=False,
+                use_chat_template=True,
+                response_prefix_ids=prefix_ids[len(dialogue_ids) :],
+                response_suffix_ids=full_ids[len(prefix_ids) :],
+                response_prefix=prefix[len(dialogue) :],
+                response_suffix=full[len(prefix) :],
+            ),
+            model_name_or_path=model_name_or_path,
+            rope_scaling=None,
+            rope_parameters_location="autoconfig",
+            tokenizer=tokenizer,
+            **kwargs,
+        )
+
+
 class Qwen(ModelMetadata):
     """Metadata for Alibaba Qwen model family.
 
@@ -1054,6 +1251,7 @@ for _cls in (
     Llama32,
     Mistral,
     Nemotron,
+    Nemotron3Nano,
     Qwen,
     SmolLM2,
     SmolLM3,

@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import copy
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -13,6 +14,13 @@ from urllib.parse import urlparse
 
 from typing_extensions import override
 
+from ...errors import ParameterError
+from ...llm.model_policy import (
+    NEMOTRON3_NANO_FP8_POLICY,
+    NEMOTRON3_NANO_POLICY,
+    model_policy_for_reference,
+    validate_generation_model_pair,
+)
 from ...llm.utils import ModelRef
 from ...observability import get_logger
 from ...utils import hf_offline_enabled
@@ -29,8 +37,10 @@ if TYPE_CHECKING:
 
 __all__ = [
     "CUDAAvailabilityCheck",
+    "GenerationModelCompatibilityCheck",
     "HFModelAvailabilityCheck",
     "InferenceModelCheck",
+    "NemotronTrainingCapabilityCheck",
     "VRAMComponentEstimate",
     "VRAMHeadroomCheck",
     "bytes_per_base_weight",
@@ -65,6 +75,76 @@ class CUDAAvailabilityCheck(ConfigCheck):
         collector.error("no_gpu", "No CUDA GPU detected. Safe Synthesizer requires a CUDA-capable GPU.")
 
 
+class GenerationModelCompatibilityCheck(ConfigCheck):
+    """Reject an explicit generation base that is incompatible with the training base."""
+
+    name = "generation.model_compatibility"
+    label = "Generation model compatibility"
+    category = "configuration"
+
+    @override
+    def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
+        generation_model = ctx.config.generation.pretrained_model
+        if generation_model is None:
+            return
+
+        training_ref = ModelRef.parse(ctx.config.training.pretrained_model)
+        generation_ref = ModelRef.parse(generation_model)
+        try:
+            validate_generation_model_pair(training_ref.repo_id, generation_ref.repo_id)
+        except ParameterError as exc:
+            collector.error("generation_model_incompatible", str(exc))
+
+
+class NemotronTrainingCapabilityCheck(ConfigCheck):
+    """Reject Nemotron modes that are unsupported by the training workflow."""
+
+    name = "training.nemotron_capabilities"
+    label = "Nemotron training capabilities"
+    category = "configuration"
+
+    @override
+    def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
+        config = ctx.config
+        model_ref = ModelRef.parse(config.training.pretrained_model)
+        policy = model_policy_for_reference(model_ref.repo_id, model_ref.local_path)
+        if policy is NEMOTRON3_NANO_FP8_POLICY and config.training.quantize_model:
+            collector.error(
+                "nemotron_fp8_requantization_unsupported",
+                "The official Nemotron 3 Nano FP8 checkpoint is already quantized. "
+                "Set training.quantize_model to false.",
+            )
+        if policy is NEMOTRON3_NANO_FP8_POLICY:
+            import torch
+
+            minimum_capability = policy.minimum_training_compute_capability
+            if torch.cuda.is_available() and minimum_capability is not None:
+                capability = torch.cuda.get_device_capability()
+                if capability < minimum_capability:
+                    required = ".".join(str(part) for part in minimum_capability)
+                    actual = ".".join(str(part) for part in capability)
+                    collector.error(
+                        "nemotron_fp8_hardware_unsupported",
+                        f"Direct Nemotron 3 Nano FP8 training requires compute capability "
+                        f"{required} or newer; detected {actual}.",
+                    )
+        if policy is NEMOTRON3_NANO_POLICY and config.training.quantize_model:
+            scheme = config.training.quantization_scheme
+            scheme_name = scheme.value if scheme is not None else f"bnb-{config.training.quantization_bits}bit"
+            collector.error(
+                "nemotron_quantized_training_unsupported",
+                f"Nemotron 3 Nano does not support dynamic quantized training with {scheme_name}. "
+                "Use BF16 training and optionally select the official FP8 checkpoint for generation.",
+            )
+        if policy in (NEMOTRON3_NANO_POLICY, NEMOTRON3_NANO_FP8_POLICY):
+            dp_enabled = config.privacy is not None and config.privacy.dp_enabled
+            if dp_enabled:
+                collector.error(
+                    "nemotron_dp_training_unsupported",
+                    "Nemotron 3 Nano does not support differential-privacy training.",
+                )
+
+
 def param_count_from_empty_model(autoconfig: PretrainedConfig) -> int | None:
     """Count parameters by instantiating the model on the ``meta`` device.
 
@@ -97,8 +177,12 @@ def param_count_from_empty_model(autoconfig: PretrainedConfig) -> int | None:
     except ImportError:
         return None
     try:
+        inspection_config = autoconfig
+        if getattr(autoconfig, "model_type", None) == "nemotron_h":
+            inspection_config = copy.deepcopy(autoconfig)
+            inspection_config.use_mamba_kernels = False
         with init_empty_weights():
-            model = AutoModelForCausalLM.from_config(autoconfig)
+            model = AutoModelForCausalLM.from_config(inspection_config)
         return sum(p.numel() for p in model.parameters())
     except Exception as exc:
         logger.runtime.debug(
@@ -539,38 +623,64 @@ class HFModelAvailabilityCheck(ConfigCheck):
 
     @override
     def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
-        model_name = ctx.config.training.pretrained_model
+        self._check_model(ctx.config.training.pretrained_model, "training.pretrained_model", "", collector)
+
+        generation_model = ctx.config.generation.pretrained_model
+        if (
+            generation_model is not None
+            and generation_model.casefold() != ctx.config.training.pretrained_model.casefold()
+        ):
+            self._check_model(generation_model, "generation.pretrained_model", "generation_", collector)
+
+    def _check_model(
+        self,
+        model_name: str,
+        parameter_name: str,
+        code_prefix: str,
+        collector: IssueCollector,
+    ) -> None:
         if not model_name:
-            collector.error("model_ref_empty", "`training.pretrained_model` must not be empty.")
+            collector.error(f"{code_prefix}model_ref_empty", f"`{parameter_name}` must not be empty.")
             return
 
         model_ref = ModelRef.parse(model_name)
         if model_ref.local_path is not None and Path(model_name).resolve(strict=False) == model_ref.local_path.resolve(
             strict=False
         ):
-            self._check_local_path(model_ref.local_path, collector, model_ref=model_ref)
+            self._check_local_path(
+                model_ref.local_path,
+                collector,
+                model_ref=model_ref,
+                parameter_name=parameter_name,
+                code_prefix=code_prefix,
+            )
             return
 
         if _is_missing_local_path(model_name):
             collector.error(
-                "local_model_missing",
-                f"`training.pretrained_model` points to missing local path '{model_name}'.",
+                f"{code_prefix}local_model_missing",
+                f"`{parameter_name}` points to missing local path '{model_name}'.",
             )
             return
 
         if model_ref.repo_id is None:
             collector.error(
-                "model_ref_invalid",
+                f"{code_prefix}model_ref_invalid",
                 (
-                    f"`training.pretrained_model` value '{model_name}' is neither an existing local path "
+                    f"`{parameter_name}` value '{model_name}' is neither an existing local path "
                     "nor a valid Hugging Face model ID."
                 ),
             )
             return
 
+        self._check_cached_model(model_ref, collector, code_prefix=code_prefix)
+
+    @staticmethod
+    def _check_cached_model(model_ref: ModelRef, collector: IssueCollector, *, code_prefix: str) -> None:
+        """Validate one Hub model's cached files and remote-code dependencies."""
         snapshot_path = model_ref.local_path or model_ref.partial_cached_snapshot()
         if snapshot_path is None:
-            self._report_missing_cache(model_ref, collector)
+            HFModelAvailabilityCheck._report_missing_cache(model_ref, collector, code_prefix=code_prefix)
             return
 
         missing = ModelRef.missing_required_components(snapshot_path)
@@ -580,53 +690,76 @@ class HFModelAvailabilityCheck(ConfigCheck):
             )
             if hf_offline_enabled():
                 collector.error(
-                    "hf_model_cache_incomplete",
+                    f"{code_prefix}hf_model_cache_incomplete",
                     f"{message} Offline Hugging Face mode is enabled, so model loading will fail.",
                 )
                 return
             collector.warning(
-                "hf_model_cache_incomplete",
+                f"{code_prefix}hf_model_cache_incomplete",
                 f"{message} Model loading will contact Hugging Face unless the full model snapshot is pre-downloaded.",
             )
-            self._report_missing_hf_token(collector)
-        self._report_missing_remote_code(model_ref, snapshot_path, collector)
+            HFModelAvailabilityCheck._report_missing_hf_token(collector)
+        HFModelAvailabilityCheck._report_missing_remote_code(
+            model_ref,
+            snapshot_path,
+            collector,
+            code_prefix=code_prefix,
+        )
 
     @staticmethod
-    def _check_local_path(model_path: Path, collector: IssueCollector, *, model_ref: ModelRef) -> None:
+    def _check_local_path(
+        model_path: Path,
+        collector: IssueCollector,
+        *,
+        model_ref: ModelRef,
+        parameter_name: str,
+        code_prefix: str,
+    ) -> None:
         if not model_path.is_dir():
             collector.error(
-                "local_model_not_directory",
-                f"`training.pretrained_model` points to '{model_path}', but local models must be directories.",
+                f"{code_prefix}local_model_not_directory",
+                f"`{parameter_name}` points to '{model_path}', but local models must be directories.",
             )
             return
 
         missing = ModelRef.missing_required_components(model_path)
         if missing:
             collector.error(
-                "local_model_incomplete",
+                f"{code_prefix}local_model_incomplete",
                 f"Local model directory '{model_path}' is missing {', '.join(missing)}.",
             )
-        HFModelAvailabilityCheck._report_missing_remote_code(model_ref, model_path, collector)
+        HFModelAvailabilityCheck._report_missing_remote_code(
+            model_ref,
+            model_path,
+            collector,
+            code_prefix=code_prefix,
+        )
 
     @staticmethod
-    def _report_missing_cache(model_ref: ModelRef, collector: IssueCollector) -> None:
+    def _report_missing_cache(model_ref: ModelRef, collector: IssueCollector, *, code_prefix: str) -> None:
         message = (
             f"Hugging Face model '{model_ref.repo_id}' is not present in the local cache at '{model_ref.cache_root}'."
         )
         if hf_offline_enabled():
             collector.error(
-                "hf_model_not_cached",
+                f"{code_prefix}hf_model_not_cached",
                 f"{message} Offline Hugging Face mode is enabled, so model loading will fail.",
             )
             return
         collector.warning(
-            "hf_model_not_cached",
+            f"{code_prefix}hf_model_not_cached",
             f"{message} Model loading will contact Hugging Face unless the model is pre-downloaded.",
         )
         HFModelAvailabilityCheck._report_missing_hf_token(collector)
 
     @staticmethod
-    def _report_missing_remote_code(model_ref: ModelRef, model_path: Path, collector: IssueCollector) -> None:
+    def _report_missing_remote_code(
+        model_ref: ModelRef,
+        model_path: Path,
+        collector: IssueCollector,
+        *,
+        code_prefix: str,
+    ) -> None:
         if not model_ref.trust_remote_code:
             return
 
@@ -640,19 +773,19 @@ class HFModelAvailabilityCheck(ConfigCheck):
         )
         if hf_offline_enabled():
             collector.error(
-                "hf_remote_code_not_cached",
+                f"{code_prefix}hf_remote_code_not_cached",
                 f"{message} Offline Hugging Face mode is enabled, so Transformers cannot fetch it.",
             )
             return
         collector.warning(
-            "hf_remote_code_not_cached",
+            f"{code_prefix}hf_remote_code_not_cached",
             f"{message} Model loading may contact Hugging Face to fetch it.",
         )
         HFModelAvailabilityCheck._report_missing_hf_token(collector)
 
     @staticmethod
     def _report_missing_hf_token(collector: IssueCollector) -> None:
-        if _has_hf_token():
+        if _has_hf_token() or any(issue.code == "hf_token_missing" for issue in collector.issues):
             return
         collector.warning(
             "hf_token_missing",

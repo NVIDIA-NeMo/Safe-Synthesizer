@@ -563,6 +563,7 @@ class TestLoadFromSavePath:
         )
         saved_config = SafeSynthesizerParameters()
         saved_config.training.batch_size = 8
+        saved_config.training.pretrained_model = "nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16"
         saved_config.generation.num_records = 3000
         saved_config.generation.structured_generation.enabled = True
         saved_config.generation.structured_generation.schema_method = "auto"
@@ -570,6 +571,7 @@ class TestLoadFromSavePath:
 
         runtime_config = SafeSynthesizerParameters()
         runtime_config.training.batch_size = 32
+        runtime_config.generation.pretrained_model = "nvidia/NVIDIA-Nemotron-3-Nano-4B-FP8"
         runtime_config.generation.num_records = 100
         runtime_config.generation.structured_generation.schema_method = "auto"
         runtime_config.evaluation.enabled = False
@@ -580,6 +582,8 @@ class TestLoadFromSavePath:
 
         assert builder._nss_config is not None
         assert builder._nss_config.training.batch_size == 8
+        assert builder._nss_config.training.pretrained_model == "nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16"
+        assert builder._nss_config.effective_generation_model == "nvidia/NVIDIA-Nemotron-3-Nano-4B-FP8"
         assert builder._nss_config.generation.num_records == 100
         # Saved value not re-specified at runtime is preserved (field-level merge).
         assert builder._nss_config.generation.structured_generation.enabled is True

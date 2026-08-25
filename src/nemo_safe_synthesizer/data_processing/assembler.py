@@ -198,12 +198,20 @@ class Example:
         Raises:
             GenerationError: If the number of tokens in the example exceeds the context length.
         """
-        input_ids = (
-            [self.metadata.prompt_config.bos_token_id] + seq["input_ids"] + [self.metadata.prompt_config.eos_token_id]
-            if add_special_tokens
-            else seq["input_ids"]
-        )
-        attention_mask = [1] + seq["attention_mask"] + [1] if add_special_tokens else seq["attention_mask"]
+        if add_special_tokens:
+            # Chat prompts already contain the first assistant prefix. Re-add it
+            # only when packing another group as a new assistant turn.
+            prefix_ids = (
+                self.metadata.response_prefix_ids
+                if self.num_sequences > 0 or not self.metadata.prompt_config.use_chat_template
+                else []
+            )
+            suffix_ids = self.metadata.response_suffix_ids
+            input_ids = [*prefix_ids, *seq["input_ids"], *suffix_ids]
+            attention_mask = [1] * len(prefix_ids) + seq["attention_mask"] + [1] * len(suffix_ids)
+        else:
+            input_ids = seq["input_ids"]
+            attention_mask = seq["attention_mask"]
         self.input_ids.extend(input_ids)
         self.attention_mask.extend(attention_mask)
         self.labels.extend(input_ids)
@@ -295,11 +303,7 @@ class TrainingExampleAssembler(ABC):
         self.seed = seed
         self._window_rng = None
 
-        self.schema_prompt = utils.create_schema_prompt(
-            dataset.column_names,
-            instruction=metadata.instruction,
-            prompt_template=metadata.prompt_config.template,
-        )
+        self.schema_prompt = metadata.render_prompt(list(dataset.column_names))
 
         # The prompt IDs attribute does *not* include special tokens.
         self.schema_prompt_ids: list[int] = tokenizer(self.schema_prompt, add_special_tokens=False)["input_ids"]
@@ -485,7 +489,11 @@ class TrainingExampleAssembler(ABC):
         )
         tokenized = self.tokenizer(record_jsonl["text"], add_special_tokens=False)
 
-        max_new_tokens = compute_max_new_tokens(self.schema_prompt_ids, self.metadata.max_seq_length)
+        max_new_tokens = compute_max_new_tokens(
+            self.schema_prompt_ids,
+            self.metadata.max_seq_length,
+            metadata=self.metadata,
+        )
         for ids in tokenized["input_ids"]:
             if len(ids) > max_new_tokens:
                 max_tokens_action = _get_max_tokens_action(self.metadata.rope_scaling_factor)
@@ -593,10 +601,11 @@ class TabularDataExampleAssembler(TrainingExampleAssembler):
             for one training example.
         """
         num_rows = len(dataset)
-        max_new_tokens = self.metadata.max_seq_length - len(self.schema_prompt_ids)
-        # Both the prompt and the records are enclosed by special tokens.
-        # TODO: 2 * num_special_tokens may not be a valid assumption
-        max_new_tokens -= 2 * NUM_SPECIAL_TOKENS
+        max_new_tokens = compute_max_new_tokens(
+            self.schema_prompt_ids,
+            self.metadata.max_seq_length,
+            metadata=self.metadata,
+        )
         num_sequences = 0
 
         i = 0
@@ -909,10 +918,8 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
             metadata: Model metadata with instruction and prompt config.
             tokenizer: Tokenizer for computing prompt IDs.
         """
-        self.schema_prompt = utils.create_schema_prompt(
-            dataset.column_names,
-            instruction=metadata.instruction,
-            prompt_template=metadata.prompt_config.template,
+        self.schema_prompt = metadata.render_prompt(
+            list(dataset.column_names),
             exclude_columns=list(DEFAULT_EXCLUDE_COLUMNS),
         )
         self.schema_prompt_ids = tokenizer(self.schema_prompt, add_special_tokens=False)["input_ids"]
@@ -980,7 +987,10 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
         # Use the preserved 'text' column directly to avoid encode/decode roundtrip issues
         seen_groups: dict[str, list[str]] = {}
         for record in self.training_dataset:
-            group_value = record[self.group_by_column]
+            # Metadata is serialized as JSON, whose object keys are strings.
+            # Normalize here so pseudo-groups and numeric user groups survive
+            # an adapter metadata save/load round trip without type drift.
+            group_value = str(record[self.group_by_column])
             if group_value not in seen_groups:
                 seen_groups[group_value] = []
             if len(seen_groups[group_value]) < 3:
@@ -1174,7 +1184,11 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
         if len(dataset) == 0:
             return
 
-        max_new_tokens = self.metadata.max_seq_length - len(self.schema_prompt_ids) - 2 * NUM_SPECIAL_TOKENS
+        max_new_tokens = compute_max_new_tokens(
+            self.schema_prompt_ids,
+            self.metadata.max_seq_length,
+            metadata=self.metadata,
+        )
         is_val = "is_val" in dataset.info.description
         stats_target = self.stats_val if is_val else self.stats
         max_sequences = self.metadata.max_sequences_per_example or math.inf
@@ -1438,9 +1452,7 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
         num_sequences = 0
 
         num_groups = len(dataset)
-        max_new_tokens = self.metadata.max_seq_length - len(self.schema_prompt_ids)
-        # The prompt is enclosed by special tokens.
-        max_new_tokens -= NUM_SPECIAL_TOKENS
+        legacy_max_new_tokens = self.metadata.max_seq_length - len(self.schema_prompt_ids) - NUM_SPECIAL_TOKENS
         update_interval = max(min(100, num_groups // 10), 1)
         # Create example for the first group.
         num_records = 0
@@ -1464,8 +1476,15 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
                 i == len(dataset) - 1
                 or num_sequences == self.metadata.max_sequences_per_example
                 or (
-                    # TODO: is this accurate in including special tokens properly?
-                    example.num_tokens + len(dataset[i + 1]["input_ids"]) > max_new_tokens
+                    (
+                        example.num_tokens
+                        + len(self.metadata.response_prefix_ids)
+                        + len(dataset[i + 1]["input_ids"])
+                        + len(self.metadata.response_suffix_ids)
+                        > self.metadata.max_seq_length
+                    )
+                    if self.metadata.prompt_config.use_chat_template
+                    else example.num_tokens + len(dataset[i + 1]["input_ids"]) > legacy_max_new_tokens
                 )
             ):
                 yield example.to_dict()

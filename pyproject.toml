@@ -122,7 +122,7 @@ cpu = [
     "gliner",
     "kernels>=0.12.1,<0.15",
     "opacus",
-    "peft>=0.18.0",
+    "peft>=0.19.1",
     "sentence-transformers",
     "openai>=2.25.0",
     "trl>=0.23.0",
@@ -146,12 +146,14 @@ cu129 = [
     "gliner",
     "kernels>=0.12.1,<0.15",
     "opacus",
-    "peft>=0.18.0",
+    "peft>=0.19.1",
     "sentence-transformers",
     "openai>=2.25.0",
     "trl>=0.23.0",
     "xgrammar>=0.2.0; sys_platform == 'linux'",
+    "causal-conv1d==1.6.2.post1; sys_platform == 'linux'",
     "flashinfer-jit-cache==0.6.14+cu129; sys_platform == 'linux'",
+    "mamba-ssm==2.2.6.post3; sys_platform == 'linux'",
     "nvidia-cublas-cu12; sys_platform == 'linux'",
     "nvidia-ml-py; sys_platform == 'linux'",
     "torch-c-dlpack-ext",
@@ -225,6 +227,10 @@ constraint-dependencies = [
     "tornado>=6.5.7",
     "urllib3>=2.7.0",
 ]
+
+[tool.uv.extra-build-dependencies]
+causal-conv1d = [{ requirement = "torch", match-runtime = true }]
+mamba-ssm = [{ requirement = "torch", match-runtime = true }]
 
 # >>> BEGIN GENERATED CUDA UV SOURCES AND INDEXES - DO NOT EDIT <<<
 # Source of truth: cuda_deps.toml.

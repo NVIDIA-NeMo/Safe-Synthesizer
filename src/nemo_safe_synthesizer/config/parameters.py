@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Mapping
-from typing import Self, TypeAlias, cast
+from typing import ClassVar, Self, TypeAlias, cast
 
 from pydantic import Field, model_validator
 from typing_extensions import override
@@ -50,6 +50,10 @@ class SafeSynthesizerParameters(Parameters):
     synthetic data generation including training, generation, privacy, evaluation,
     and data handling. It provides validation to ensure parameter compatibility.
     """
+
+    parameter_aliases: ClassVar[Mapping[str, str]] = {
+        "pretrained_model": "training.pretrained_model",
+    }
 
     data: DataParameters = Field(
         description="Configuration controlling how input data is grouped and split for training and evaluation.",
@@ -127,6 +131,11 @@ class SafeSynthesizerParameters(Parameters):
         mapping = cast(Mapping[str, object], value)
         unknown_fields = cls._unknown_fields_from_input(mapping)
         return normalize_unknown_fields(cls, mapping, unknown_fields)
+
+    @property
+    def effective_generation_model(self) -> str:
+        """Return the generation override or the training base model."""
+        return self.generation.pretrained_model or self.training.pretrained_model
 
     @model_validator(mode="after")
     def _validate_and_resolve_data_params(self) -> Self:

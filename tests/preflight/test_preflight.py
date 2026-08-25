@@ -28,9 +28,11 @@ from nemo_safe_synthesizer.preflight import (
     ConstantColumnCheck,
     CUDAAvailabilityCheck,
     DatasetSizeCheck,
+    GenerationModelCompatibilityCheck,
     GroupbyColumnCheck,
     HFModelAvailabilityCheck,
     InferenceModelCheck,
+    NemotronTrainingCapabilityCheck,
     OrderbyColumnCheck,
     OversamplingCheck,
     PreflightContext,
@@ -101,6 +103,110 @@ class TestCUDAAvailabilityCheck:
         codes = {i.code for i in issues}
         assert "torch_missing" in codes
         assert "no_gpu" not in codes
+
+
+@pytest.mark.unit
+class TestNemotronTrainingCapabilityCheck:
+    @staticmethod
+    def _check():
+        return NemotronTrainingCapabilityCheck()
+
+    @pytest.mark.parametrize("scheme", ["bnb-4bit", "bnb-8bit", "fp8", "nvfp4", "mxfp4"])
+    def test_bf16_checkpoint_rejects_every_dynamic_quantization_scheme(self, scheme):
+        config = SafeSynthesizerParameters.from_params(
+            **{"training.pretrained_model": "nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16"},
+            quantize_model=True,
+            quantization_scheme=scheme,
+        )
+
+        issues = self._check().run(make_ctx(config=config))
+
+        issue = _issue_by_code(issues, "nemotron_quantized_training_unsupported")
+        assert issue.severity == "error"
+        assert scheme in issue.message
+
+    def test_official_fp8_checkpoint_accepts_direct_lora_training(self):
+        config = SafeSynthesizerParameters.from_params(
+            **{"training.pretrained_model": "nvidia/NVIDIA-Nemotron-3-Nano-4B-FP8"},
+        )
+
+        with (
+            patch("torch.cuda.is_available", return_value=True),
+            patch("torch.cuda.get_device_capability", return_value=(8, 9)),
+        ):
+            issues = self._check().run(make_ctx(config=config))
+
+        assert issues == []
+
+    def test_official_fp8_checkpoint_rejects_unsupported_training_gpu(self):
+        config = SafeSynthesizerParameters.from_params(
+            **{"training.pretrained_model": "nvidia/NVIDIA-Nemotron-3-Nano-4B-FP8"},
+        )
+
+        with (
+            patch("torch.cuda.is_available", return_value=True),
+            patch("torch.cuda.get_device_capability", return_value=(8, 0)),
+        ):
+            issues = self._check().run(make_ctx(config=config))
+
+        issue = _issue_by_code(issues, "nemotron_fp8_hardware_unsupported")
+        assert issue.severity == "error"
+        assert "8.9" in issue.message
+        assert "8.0" in issue.message
+
+    def test_official_fp8_checkpoint_rejects_a_second_quantization_pass(self):
+        config = SafeSynthesizerParameters.from_params(
+            **{"training.pretrained_model": "nvidia/NVIDIA-Nemotron-3-Nano-4B-FP8"},
+            quantize_model=True,
+            quantization_scheme="fp8",
+        )
+
+        issues = self._check().run(make_ctx(config=config))
+
+        issue = _issue_by_code(issues, "nemotron_fp8_requantization_unsupported")
+        assert issue.severity == "error"
+        assert "already quantized" in issue.message
+
+    def test_nemotron_dp_training_is_rejected(self):
+        config = SafeSynthesizerParameters.from_params(
+            **{
+                "training.pretrained_model": "nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16",
+                "privacy.dp_enabled": True,
+            },
+        )
+
+        issues = self._check().run(make_ctx(config=config))
+
+        assert _issue_by_code(issues, "nemotron_dp_training_unsupported").severity == "error"
+
+
+@pytest.mark.unit
+class TestGenerationModelCompatibilityCheck:
+    @staticmethod
+    def _check():
+        return GenerationModelCompatibilityCheck()
+
+    def test_incompatible_generation_override_is_a_structured_preflight_error(self):
+        config = SafeSynthesizerParameters.from_params(
+            **{
+                "training.pretrained_model": "example/training-model",
+                "generation.pretrained_model": "example/generation-model",
+            },
+        )
+
+        issues = self._check().run(make_ctx(config=config))
+
+        assert _issue_by_code(issues, "generation_model_incompatible").severity == "error"
+
+    def test_official_nemotron_bf16_to_fp8_pair_is_accepted(self):
+        config = SafeSynthesizerParameters.from_params(
+            **{
+                "training.pretrained_model": "nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16",
+                "generation.pretrained_model": "nvidia/NVIDIA-Nemotron-3-Nano-4B-FP8",
+            },
+        )
+
+        assert not self._check().run(make_ctx(config=config))
 
 
 @pytest.mark.unit
@@ -560,6 +666,21 @@ class TestHFModelAvailabilityCheck:
 
         assert any(i.code == "hf_model_not_cached" and i.severity == "error" for i in issues)
         assert not any(i.code == "hf_token_missing" for i in issues)
+
+    def test_missing_generation_override_cache_errors_when_offline(
+        self, hf_cached_snapshot_factory, pretrained_config, ctx_factory, monkeypatch
+    ):
+        cache_root, _ = hf_cached_snapshot_factory(repo_id="nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16")
+        self._use_cache_root(monkeypatch, cache_root)
+        monkeypatch.setenv("HF_HUB_OFFLINE", "1")
+        config = pretrained_config("nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16")
+        config.generation.pretrained_model = "nvidia/NVIDIA-Nemotron-3-Nano-4B-FP8"
+
+        issues = HFModelAvailabilityCheck().run(ctx_factory(config=config))
+
+        issue = _issue_by_code(issues, "generation_hf_model_not_cached")
+        assert issue.severity == "error"
+        assert "NVIDIA-Nemotron-3-Nano-4B-FP8" in issue.message
 
     @pytest.mark.parametrize("value", ["0", "false", "FALSE", "no", "off", ""])
     def test_missing_cache_warns_when_offline_env_is_falsey(
@@ -1056,6 +1177,23 @@ class TestTokenBudgetCheck:
         config = SafeSynthesizerParameters(data=DataParameters(group_training_examples_by=PSEUDO_GROUP_COLUMN))
         df = pd.DataFrame({PSEUDO_GROUP_COLUMN: ["group-1", "group-1"], "value": ["visible", "also-visible"]})
         metadata = self._metadata(_PseudoColumnSensitiveTokenizer(), max_seq_length=10)
+        check = TokenBudgetCheck()
+        check.token_sample_size = 0
+        check.top_groups_to_check = 1
+
+        issues = check.run(make_ctx(config=config, data=df, metadata=metadata))
+
+        assert not any(i.code == "group_exceeds_context" for i in issues)
+
+    def test_timeseries_skips_whole_group_budget_because_training_splits_long_histories(self):
+        config = SafeSynthesizerParameters(
+            data=DataParameters(group_training_examples_by="device"),
+            time_series=TimeSeriesParameters(is_timeseries=True, timestamp_interval_seconds=60),
+        )
+        df = pd.DataFrame({"device": ["A"] * 20, "value": ["long-value"] * 20})
+        tokenizer = MagicMock()
+        tokenizer.encode.return_value = list(range(20))
+        metadata = self._metadata(tokenizer, max_seq_length=40)
         check = TokenBudgetCheck()
         check.token_sample_size = 0
         check.top_groups_to_check = 1
