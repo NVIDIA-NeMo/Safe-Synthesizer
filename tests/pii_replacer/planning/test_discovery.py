@@ -6,8 +6,8 @@
 from __future__ import annotations
 
 import pandas as pd
-
 import pytest
+
 from nemo_safe_synthesizer.config.replace_pii import (
     EntityType,
     PiiReplacementScope,
@@ -15,6 +15,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiSamplerConfig,
     ReplacePiiConfig,
 )
+from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.pii_replacer.entities import Config, config_from_replace_pii
 from nemo_safe_synthesizer.pii_replacer.planning import discover_plan
 from tests.pii_replacer.helpers import PHONE_MINORITY, column_spec, depends_on_columns
@@ -69,8 +70,9 @@ def test_detected_to_plan_warns_on_unmapped_entity_label(caplog):
             {
                 "same_person_bundles": [
                     {
-                        "bundle_id": "person_1",
+                        "bundle_id": "person",
                         "fields": {"not_a_real_entity": {"column": "weird_col", "pattern": None}},
+                        "demographics": {},
                     }
                 ],
                 "standalone_columns": [],
@@ -79,7 +81,6 @@ def test_detected_to_plan_warns_on_unmapped_entity_label(caplog):
             }
         ),
         scope=PiiReplacementScope.dataframe,
-        df=pd.DataFrame({"weird_col": ["x"]}),
     )
     assert plan.columns_to_replace == []
     assert any("not_a_real_entity" in r.getMessage() for r in caplog.records)
@@ -209,14 +210,13 @@ def test_name_parts_prefer_full_name_over_demographics():
     assert "gender" not in depends_on_columns(first)
 
 
-def test_prefix_free_name_agreement_links_full_name_depends_on():
-    """Name-agreement (no shared role prefix) still emits first/last → full_name edges."""
+def test_prefix_free_columns_still_link_full_name_depends_on():
+    """Distinct headers still emit first/last → full_name edges under one subject."""
     n = 40
     df = pd.DataFrame(
         {
             "first_name": [f"Alice{i}" for i in range(n)],
             "last_name": [f"Smith{i}" for i in range(n)],
-            # ``legal_name`` → full_name; role prefix ``legal`` ≠ bare first/last.
             "legal_name": [f"Alice{i} Smith{i}" for i in range(n)],
             "gender": (["Female", "Male"] * (n // 2))[:n],
         }
@@ -252,27 +252,19 @@ def test_email_prefers_name_parts_over_full_name():
     assert "full_name" not in deps
 
 
-def test_demographics_consumed_once_per_column():
-    """Bare gender/ethnicity attach to the first same-person column bundle only (subject, not spouse)."""
+def test_duplicate_persona_columns_raise_multi_person():
+    """Heuristics mode supports one subject; duplicate persona entity types error."""
     n = 40
     df = pd.DataFrame(
         {
             "first_name": [f"Alice{i}" for i in range(n)],
             "spouse_first_name": [f"Bob{i}" for i in range(n)],
             "gender": (["Female", "Male"] * (n // 2))[:n],
-            "spouse_gender": (["Male", "Female"] * (n // 2))[:n],
-            "ethnicity": (["White", "Black"] * (n // 2))[:n],
         }
     )
     config, cfg = _cfg()
-    plan = discover_plan(df, None, cfg, config)
-    subject = column_spec(plan, "first_name")
-    spouse = column_spec(plan, "spouse_first_name")
-    assert subject is not None and spouse is not None
-    assert "gender" in depends_on_columns(subject)
-    assert "ethnicity" in depends_on_columns(subject)
-    assert "spouse_gender" in depends_on_columns(spouse)
-    assert "ethnicity" not in depends_on_columns(spouse)
+    with pytest.raises(ParameterError, match="more than one person"):
+        discover_plan(df, None, cfg, config)
 
 
 def test_discover_plan_falls_back_to_dataframe_scope_when_group_key_missing(caplog):

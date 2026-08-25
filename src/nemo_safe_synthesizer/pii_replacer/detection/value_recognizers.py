@@ -10,16 +10,13 @@ from collections import Counter
 
 import pandas as pd
 
-from ..entities import ORG_KEYWORDS, Config, is_missing_value
+from ..entities import Config
 from ..patterns import (
     PATTERN_SAMPLE_SIZE,
     match_date_format,
     match_datetime_format,
     match_duration_format,
     match_time_format,
-    pattern_evidence_values,
-    value_matches_template,
-    value_patterns,
 )
 
 
@@ -53,24 +50,8 @@ _CARD_RE = re.compile(r"(?:\d[ -]?){12,18}\d\Z")
 _HEX_OPAQUE_RE = re.compile(r"(?i)(?:[0-9a-f]{32}|[0-9a-f]{64})\Z")
 _BASE64_OPAQUE_RE = re.compile(r"^[A-Za-z0-9_\-]{22,}={0,2}\Z")
 _JWT_OPAQUE_RE = re.compile(r"^[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+\Z")
-API_PREFIXES = (
-    "sk-",
-    "pk-",
-    "rk-",
-    "ak-",
-    "ghp_",
-    "gho_",
-    "github_pat_",
-    "xoxb-",
-    "xoxp-",
-    "AKIA",
-    "ASIA",
-    "AIza",
-    "Bearer ",
-)
 _API_RE = re.compile(r"[A-Za-z0-9_\-]{20,}\Z")
 _COMPACT_YMD_RE = re.compile(r"^(19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\Z")
-_MULTI_PERSON_DELIM_RE = re.compile(r"(?i)\s+(?:and|&)\s+|\s*/\s*|\s*;\s*")
 
 
 def _digits(s: str) -> str:
@@ -127,10 +108,8 @@ def match_value_entity(value: object, *, phone_min_digits: int = 10) -> str | No
     if _HEX_OPAQUE_RE.match(s) or _JWT_OPAQUE_RE.match(s):
         return "unique_identifier"
     if _BASE64_OPAQUE_RE.match(s) and any(c.isdigit() for c in s) and any(c.isalpha() for c in s):
-        # Prefer opaque unique_identifier over api_key for long base64-like blobs
-        # without a known API prefix.
-        if not any(s.startswith(p) for p in API_PREFIXES):
-            return "unique_identifier"
+        # Prefer opaque unique_identifier over api_key for long base64-like blobs.
+        return "unique_identifier"
     # Long composite job/record ids (prefix + timestamp + uuid + epoch, etc.).
     if (
         len(s) >= 24
@@ -138,7 +117,6 @@ def match_value_entity(value: object, *, phone_min_digits: int = 10) -> str | No
         and any(c.isdigit() for c in s)
         and any(c.isalpha() for c in s)
         and any(c in "-_.:/" for c in s)
-        and not any(s.startswith(p) for p in API_PREFIXES)
     ):
         return "unique_identifier"
     if _SSN_RE.match(s):
@@ -151,8 +129,6 @@ def match_value_entity(value: object, *, phone_min_digits: int = 10) -> str | No
         return "time"
     if match_duration_format(s):
         return "duration"
-    if any(s.startswith(p) for p in API_PREFIXES):
-        return "api_key"
     phone_s = _strip_phone_extension(s)
     d = _digits(phone_s)
     if _CARD_RE.match(s) and 13 <= len(_digits(s)) <= 19:
@@ -163,7 +139,8 @@ def match_value_entity(value: object, *, phone_min_digits: int = 10) -> str | No
             return None
     if _PHONE_RE.match(phone_s) and phone_min_digits <= len(d) <= 15 and _looks_like_phone_punctuation(phone_s):
         return "phone_number"
-    if _API_RE.match(s) and any(c.isdigit() for c in s) and any(c.isalpha() for c in s):
+    # Long alphanumeric tokens (credentials / opaque keys); reject pure numbers elsewhere.
+    if _API_RE.match(s) and any(c.isalpha() for c in s):
         return "api_key"
     return None
 
@@ -264,207 +241,6 @@ def analyze_column_patterns(
         "coverage": coverage,
         "structured": structured,
     }
-
-
-def looks_like_person_name(value: object) -> bool:
-    """Return whether a value looks like a person name rather than an organization.
-
-    Example:
-        ``"Jane Smith"`` -> ``True``
-        ``"St. Mary's Hospital"`` -> ``False``
-
-    Args:
-        value: Cell value to evaluate.
-
-    Returns:
-        ``True`` when the value passes person-name heuristics.
-    """
-    if is_missing_value(value):
-        return False
-    s = str(value).strip()
-    if _MULTI_PERSON_DELIM_RE.search(s):
-        return False
-    tokens = [t for t in re.split(r"\s+", s) if t]
-    if not (1 <= len(tokens) <= 5):
-        return False
-    # Word-boundary / token match so "Mary Health" can still pass when the only
-    # other token is a personal given name, while "Regional Health Partners" fails.
-    lowered_tokens = [re.sub(r"[^a-z0-9]", "", t.lower()) for t in tokens]
-    org_hits = [t for t in lowered_tokens if t in ORG_KEYWORDS]
-    if org_hits:
-        other = [t for t in lowered_tokens if t not in ORG_KEYWORDS]
-        if len(other) != 1 or len(tokens) > 2:
-            return False
-    return True
-
-
-def sample_looks_like_multi_person(series: pd.Series, sample: int = 40) -> bool:
-    non_null = series.dropna().astype(str)
-    if non_null.empty:
-        return False
-    if len(non_null) > sample:
-        non_null = non_null.sample(sample, random_state=0)
-    hits = sum(1 for v in non_null if _MULTI_PERSON_DELIM_RE.search(str(v)))
-    return hits / len(non_null) >= 0.5
-
-
-def sample_looks_like_org_name(series: pd.Series, sample: int = 40) -> bool:
-    non_null = series.dropna()
-    if non_null.empty:
-        return False
-    if len(non_null) > sample:
-        non_null = non_null.sample(sample, random_state=0)
-    personish = sum(1 for v in non_null if looks_like_person_name(v))
-    return personish / len(non_null) < 0.5
-
-
-def looks_like_street_address(value: object) -> bool:
-    """Return whether a value looks like a full street line with a house number.
-
-    Example:
-        ``"123 Main St"`` -> ``True``
-        ``"Main Street"`` -> ``False``
-
-    Args:
-        value: Cell value to evaluate.
-
-    Returns:
-        ``True`` when the value contains both digits and alphabetic street text.
-    """
-    if is_missing_value(value):
-        return False
-    s = str(value).strip()
-    if len(s) < 5:
-        return False
-    # Require a house / unit number and alphabetic street text.
-    if not re.search(r"\d", s) or not re.search(r"[A-Za-z]{2,}", s):
-        return False
-    return True
-
-
-def looks_like_api_key_value(value: object) -> bool:
-    """Return whether a cell looks like an API credential rather than a plain number.
-
-    Args:
-        value: Cell value to evaluate.
-
-    Returns:
-        ``True`` when the value matches known API-key prefixes or credential shapes.
-    """
-    if is_missing_value(value):
-        return False
-    s = str(value).strip()
-    if not s:
-        return False
-    # Pure numeric strings are never api keys (avoids token/count columns).
-    if re.fullmatch(r"[+-]?\d+(\.\d+)?([eE][+-]?\d+)?", s):
-        return False
-    if any(s.startswith(p) for p in API_PREFIXES):
-        return True
-    if _JWT_OPAQUE_RE.match(s):
-        return True
-    if _API_RE.match(s) and any(c.isdigit() for c in s) and any(c.isalpha() for c in s):
-        return True
-    return False
-
-
-def _sample_majority(series: pd.Series, predicate, sample: int = 40, threshold: float = 0.5) -> bool:
-    non_null = series.dropna()
-    if non_null.empty:
-        return False
-    if len(non_null) > sample:
-        non_null = non_null.sample(sample, random_state=0)
-    hits = sum(1 for v in non_null if predicate(v))
-    return hits / len(non_null) >= threshold
-
-
-def sample_looks_like_street_address(series: pd.Series, sample: int = 40) -> bool:
-    return _sample_majority(series, looks_like_street_address, sample=sample)
-
-
-def sample_looks_like_api_key(series: pd.Series, sample: int = 40) -> bool:
-    return _sample_majority(series, looks_like_api_key_value, sample=sample)
-
-
-# Weak ``*id`` headers (``valid``, ``userid``, …) must look like opaque codes, not
-# category labels. Require both variety and a dominant character template.
-_WEAK_UNIQUE_ID_MIN_UNIQUE_RATIO = 0.5
-
-
-def sample_has_dominant_identifier_template(series: pd.Series, cfg: Config) -> bool:
-    """Return whether values share a dominant identifier-like character template.
-
-    Used for weak ``unique_identifier`` name matches. Requires:
-    - unique-value ratio at least ``_WEAK_UNIQUE_ID_MIN_UNIQUE_RATIO`` (rejects
-      low-cardinality labels such as ``type_0`` / ``type_1``), and
-    - a inferred value template covering at least
-      ``cfg.dominant_pattern_min_coverage`` percent of the evidence sample.
-
-    Uniqueness and template evidence both use ``pattern_evidence_values`` so
-    blanks and configured textual missings do not dilute the ratio when the
-    nonempty cells are distinct opaque IDs (e.g. mostly-blank ``userid``).
-
-    Args:
-        series: Column values to evaluate.
-        cfg: Engine configuration with ``dominant_pattern_min_coverage``.
-
-    Returns:
-        ``True`` when the column looks like templated opaque identifiers.
-    """
-    sample = pattern_evidence_values(series)
-    if not sample:
-        return False
-    if len(set(sample)) / len(sample) < _WEAK_UNIQUE_ID_MIN_UNIQUE_RATIO:
-        return False
-    patterns = value_patterns(pd.Series(sample), cfg)
-    if not patterns:
-        return False
-    matched = sum(1 for value in sample if value_matches_template(value, patterns[0]))
-    return matched / len(sample) * 100 >= cfg.dominant_pattern_min_coverage
-
-
-def looks_like_sequential_integer_id(series: pd.Series) -> bool:
-    """Return whether a numeric column is a contiguous integer sequence.
-
-    Only applies to numeric dtypes so zero-padded string ids (``00000001``) still
-    get templates. Dense contiguous integers such as ``1, 2, 3, …`` or
-    ``100000, 100001, …`` are skipped from ``unique_identifier`` replacement.
-
-    Args:
-        series: Column values to evaluate.
-
-    Returns:
-        ``True`` when values form a dense or near-contiguous integer sequence.
-    """
-    if not pd.api.types.is_numeric_dtype(series):
-        return False
-    non_null = series.dropna()
-    if len(non_null) < 3:
-        return False
-    vals: list[int] = []
-    for v in non_null:
-        if isinstance(v, bool):
-            return False
-        try:
-            if isinstance(v, float) and not float(v).is_integer():
-                return False
-            iv = int(v)
-        except (TypeError, ValueError):
-            return False
-        if iv < 0:
-            return False
-        vals.append(iv)
-    uniq = sorted(set(vals))
-    if len(uniq) < 3:
-        return False
-    # Dense contiguous range at any origin (surrogate keys, autoincrement, etc.).
-    if uniq[-1] - uniq[0] + 1 == len(uniq):
-        return True
-    arr = pd.Series(vals, dtype="int64")
-    diffs = arr.diff().dropna()
-    if len(diffs) and float((diffs == 1).mean()) >= 0.95:
-        return True
-    return False
 
 
 def probe_numeric_column(series: pd.Series, name_label: str | None) -> str | None:

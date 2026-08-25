@@ -43,7 +43,6 @@ from .name_templates import (
 from .temporal import (
     date_pattern,
     date_patterns,
-    detect_date_format,
     match_date_format,
     match_datetime_format,
     match_duration_format,
@@ -80,7 +79,6 @@ __all__ = [
     "attach_value_patterns",
     "date_pattern",
     "date_patterns",
-    "detect_date_format",
     "dominant_format",
     "generate_from_pattern",
     "handle_email_pattern",

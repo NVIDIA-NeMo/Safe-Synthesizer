@@ -44,10 +44,8 @@ def _detect_full_dataframe(
     *,
     group_key: str | None = None,
 ) -> DiscoveryResult:
-    # When a group key is set, cardinality of per-group (group-constant) columns
-    # must be measured against the number of groups, not rows.
-    stats = detection.scoped_column_stats(df, group_key, cfg.group_constancy_threshold)
-    discovery = detection.detect_structured_columns(df, stats, cfg)
+    _ = group_key  # Used only for plan scope in ``discover_plan``, not detection.
+    discovery = detection.detect_structured_columns(df, cfg)
 
     patterns.attach_name_patterns(df, discovery.same_person_bundles, cfg)
     patterns.attach_value_patterns(df, discovery.standalone_columns, cfg)
@@ -55,7 +53,6 @@ def _detect_full_dataframe(
     exclude = _discovery_exclude_columns(discovery)
     exclude |= set(discovery.identified_not_replaced)
 
-    # Without LLM, free-text only propagates values from structured columns.
     has_same_person = any(bundle.fields for bundle in discovery.same_person_bundles)
     has_replaceable_standalone = any(
         e.entity and not entities.is_identify_only(e.entity) for e in discovery.standalone_columns
@@ -140,8 +137,6 @@ def _depends_on_for_target(
     target_type: EntityType,
     bundle: SamePersonBundle,
     replace_columns: set[str],
-    all_bundles: list[SamePersonBundle],
-    df: pd.DataFrame,
 ) -> list[ConditioningColumn]:
     """Attach conditioners for one replaceable field using discovery priorities."""
     target_label = target_type.value
@@ -157,11 +152,14 @@ def _depends_on_for_target(
         # At most one edge per conditioner entity_type.
         if any(
             (e.entity_type is entity)
-            or (e.entity_type is None and entity.value in bundle.fields and bundle.fields[entity.value].column == e.column_name)
+            or (
+                e.entity_type is None
+                and entity.value in bundle.fields
+                and bundle.fields[entity.value].column == e.column_name
+            )
             for e in edges
         ):
             return
-        # Also check by inferred type from replace_columns membership of known fields.
         for existing in edges:
             for lbl, field in bundle.fields.items():
                 if field.column == existing.column_name and lbl == entity.value:
@@ -171,29 +169,12 @@ def _depends_on_for_target(
                     return
         edges.append(_conditioner(column, entity, replace_columns=replace_columns))
 
-    # --- name parts: full_name (prefix or agreement) else demographics ---
+    # --- name parts: full_name else demographics ---
     if target_label in {"first_name", "middle_name", "last_name"}:
-        linked_full_name = False
         full = bundle.fields.get("full_name")
         if full is not None:
             _add(full.column, EntityType.full_name)
-            linked_full_name = True
         else:
-            # Cross-bundle name-agreement: find a full_name that agrees with this part.
-            part_col = bundle.fields[target_label].column
-            for other in all_bundles:
-                if other is bundle:
-                    continue
-                other_full = other.fields.get("full_name")
-                if other_full is None:
-                    continue
-                if detection.names_agree_for_link(df, part_col, target_label, other_full.column):
-                    _add(other_full.column, EntityType.full_name)
-                    linked_full_name = True
-                    break
-        if not linked_full_name:
-            # Demographics for this person (exclusive with full_name).
-            # Replaceable full_name edges omit entity_type, so track linkage explicitly.
             if target_label != "last_name" and "gender" in bundle.demographics:
                 _add(bundle.demographics["gender"], EntityType.gender)
             if "ethnic_background" in bundle.demographics:
@@ -231,12 +212,10 @@ def _detected_to_plan(
     detected: DiscoveryResult,
     *,
     scope: PiiReplacementScope,
-    df: pd.DataFrame,
 ) -> PiiReplacementPlan:
     """Convert structured detection into a flat ``PiiReplacementPlan``."""
     columns: list[PiiColumnPlan] = []
 
-    # First pass: collect replaceable column names for entity_type inference on edges.
     replace_columns: set[str] = set()
     pending: list[tuple[str, EntityType, str | None, SamePersonBundle | None]] = []
 
@@ -269,8 +248,6 @@ def _detected_to_plan(
                 target_type=entity,
                 bundle=bundle,
                 replace_columns=replace_columns,
-                all_bundles=detected.same_person_bundles,
-                df=df,
             )
         columns.append(
             PiiColumnPlan(
@@ -314,4 +291,4 @@ def discover_plan(
                 "column; discovering with dataframe scope instead of group."
             )
         scope = PiiReplacementScope.dataframe
-    return _detected_to_plan(discovery, scope=scope, df=df)
+    return _detected_to_plan(discovery, scope=scope)

@@ -1,18 +1,20 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Same-person clustering: role keys, name agreement, and splits."""
+"""Single-subject person columns and depends_on edges."""
 
 from __future__ import annotations
 
 import pandas as pd
+import pytest
 
 from nemo_safe_synthesizer.config.replace_pii import PiiSamplerBackend, PiiSamplerConfig, ReplacePiiConfig
+from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.pii_replacer.entities import config_from_replace_pii
 from tests.pii_replacer.helpers import column_spec, depends_on_columns
 
 
-def test_multi_role_full_name_columns_are_distinct_replace_targets():
+def test_duplicate_full_name_columns_raise_multi_person():
     from nemo_safe_synthesizer.pii_replacer.planning import discover_plan
 
     n = 30
@@ -22,18 +24,11 @@ def test_multi_role_full_name_columns_are_distinct_replace_targets():
             "surgeon_name": [f"Dr Surgeon{i}" for i in range(n)],
         }
     )
-    plan = discover_plan(df, None, config_from_replace_pii(ReplacePiiConfig()), ReplacePiiConfig())
-    cols = {spec.column_name for spec in plan.columns_to_replace}
-    assert {"attending_name", "surgeon_name"} <= cols
-    # Distinct roles: no depends_on linking them.
-    attending = column_spec(plan, "attending_name")
-    surgeon = column_spec(plan, "surgeon_name")
-    assert attending is not None and surgeon is not None
-    assert "surgeon_name" not in depends_on_columns(attending)
-    assert "attending_name" not in depends_on_columns(surgeon)
+    with pytest.raises(ParameterError, match="more than one person"):
+        discover_plan(df, None, config_from_replace_pii(ReplacePiiConfig()), ReplacePiiConfig())
 
 
-def test_non_medical_name_roles_discovered_as_distinct_columns():
+def test_non_medical_name_roles_still_match_full_name():
     from nemo_safe_synthesizer.pii_replacer.detection.column_names import match_label
     from nemo_safe_synthesizer.pii_replacer.entities import ENTITY_NAME_PATTERNS
     from nemo_safe_synthesizer.pii_replacer.planning import discover_plan
@@ -51,29 +46,12 @@ def test_non_medical_name_roles_discovered_as_distinct_columns():
     assert match_label("dependent_id", ENTITY_NAME_PATTERNS) != "full_name"
 
     n = 30
-    df = pd.DataFrame(
-        {
-            "policyholder_name": [f"Holder {i}" for i in range(n)],
-            "attorney_name": [f"Counsel {i}" for i in range(n)],
-        }
-    )
+    df = pd.DataFrame({"policyholder_name": [f"Holder {i}" for i in range(n)]})
     plan = discover_plan(df, None, config_from_replace_pii(ReplacePiiConfig()), ReplacePiiConfig())
-    cols = {spec.column_name for spec in plan.columns_to_replace}
-    assert {"policyholder_name", "attorney_name"} <= cols
+    assert column_spec(plan, "policyholder_name") is not None
 
 
-def test_role_key_from_column_name():
-    from nemo_safe_synthesizer.pii_replacer.detection.column_grouping import _role_key
-
-    assert _role_key("patient_first_name") == "patient"
-    assert _role_key("provider_email") == "provider"
-    assert _role_key("emergency_contact_name") == "emergency_contact"
-    assert _role_key("first_name") == ""
-    assert _role_key("Name") == ""
-    assert _role_key("primary_name") == ""
-
-
-def test_agreeing_name_parts_share_depends_on_edges():
+def test_name_parts_and_full_name_share_depends_on_edges():
     from nemo_safe_synthesizer.pii_replacer.planning import discover_plan
 
     n = 30
@@ -94,12 +72,10 @@ def test_agreeing_name_parts_share_depends_on_edges():
     assert "patient_full_name" in depends_on_columns(last)
 
 
-def test_disagreeing_full_name_does_not_link_to_name_parts(caplog):
-    import logging
-
+def test_disagreeing_values_still_link_full_name_depends_on():
+    """Heuristics mode does not check name agreement; one subject links by entity type."""
     from nemo_safe_synthesizer.pii_replacer.planning import discover_plan
 
-    caplog.set_level(logging.WARNING)
     n = 30
     df = pd.DataFrame(
         {
@@ -109,12 +85,9 @@ def test_disagreeing_full_name_does_not_link_to_name_parts(caplog):
         }
     )
     plan = discover_plan(df, None, config_from_replace_pii(ReplacePiiConfig()), ReplacePiiConfig())
-    cols = {spec.column_name for spec in plan.columns_to_replace}
-    assert {"patient_first_name", "patient_last_name", "patient_full_name"} <= cols
     first = column_spec(plan, "patient_first_name")
     assert first is not None
-    assert "patient_full_name" not in depends_on_columns(first)
-    assert any("does not agree" in r.getMessage() for r in caplog.records)
+    assert "patient_full_name" in depends_on_columns(first)
 
 
 def test_demo_only_group_omitted_from_plan():
@@ -132,14 +105,15 @@ def test_demo_only_group_omitted_from_plan():
     assert plan.columns_to_replace == []
 
 
-def test_group_constant_name_and_varying_email_do_not_share_depends_on(fixture_group_grain_df: pd.DataFrame):
-    """One name per group cannot condition a per-row email (different grain)."""
+def test_group_scope_still_links_name_and_email(fixture_group_scope_df: pd.DataFrame):
+    """Group key sets plan scope only; email still depends_on full_name."""
     from nemo_safe_synthesizer.pii_replacer.planning import discover_plan
 
     config = ReplacePiiConfig(sampler=PiiSamplerConfig(backend=PiiSamplerBackend.faker))
-    plan = discover_plan(fixture_group_grain_df, "patient_id", config_from_replace_pii(config), config)
+    plan = discover_plan(fixture_group_scope_df, "patient_id", config_from_replace_pii(config), config)
 
     name = column_spec(plan, "full_name")
     email = column_spec(plan, "email")
     assert name is not None and email is not None
-    assert "full_name" not in depends_on_columns(email)
+    assert "full_name" in depends_on_columns(email)
+    assert plan.scope.value == "group"

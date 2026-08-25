@@ -16,7 +16,6 @@ from typing import Literal, TypeAlias, cast
 import pandas as pd
 
 DemographicAttribute: TypeAlias = Literal["gender", "ethnic_background"]
-StructuralGrain: TypeAlias = Literal["key", "group", "record"]
 
 
 @dataclass
@@ -26,7 +25,7 @@ class ColumnEvidence:
     col: str
     """Column name in the source dataframe."""
     series: pd.Series
-    """Column values used for pattern and content analysis."""
+    """Column values used for pattern coverage and DOB / value checks."""
     name_label: str | None
     """Entity label inferred from the column header, or ``None`` when no name match."""
     value_entity: str | None
@@ -35,12 +34,6 @@ class ColumnEvidence:
     """Pattern analysis dict from ``analyze_column_patterns`` (entity, coverage, …)."""
     demo_label: str | None
     """Demographic label inferred from the header (gender, ethnic_background, …)."""
-    grain: StructuralGrain = "record"
-    """Structural grain within a training group (``key`` / ``group`` / ``record``).
-
-    Distinct from plan replacement ``scope``. Group-constant and record-varying
-    fields must not share one identity bundle.
-    """
 
 
 @dataclass
@@ -66,10 +59,15 @@ class DetectedField:
 
 @dataclass
 class SamePersonBundle:
-    """A bundle of columns that describe one person (role prefix and/or name agreement)."""
+    """Columns that describe one person (persona-backed fields + demographics).
+
+    Heuristics discovery does not cluster columns into roles; it places every
+    allocated persona field into a single bundle (or errors on duplicate entity
+    types). LLM mode may emit multiple bundles later.
+    """
 
     bundle_id: str
-    """Bundle identifier (e.g. ``patient``, ``provider_2``)."""
+    """Bundle identifier. Heuristics always uses ``\"person\"``; LLM mode may set roles."""
     fields: dict[str, DetectedField] = field(default_factory=dict)
     """Map of entity label to column (+ optional pattern) for replaceable fields."""
     demographics: dict[DemographicAttribute, str] = field(default_factory=dict)
@@ -88,9 +86,7 @@ class SamePersonBundle:
         demo_raw = cast(Mapping[str, object], raw.get("demographics") or {})
         return cls(
             bundle_id=str(raw["bundle_id"]),
-            fields={
-                str(k): DetectedField.from_dict(cast(Mapping[str, object], v)) for k, v in fields_raw.items()
-            },
+            fields={str(k): DetectedField.from_dict(cast(Mapping[str, object], v)) for k, v in fields_raw.items()},
             demographics={cast(DemographicAttribute, str(k)): str(v) for k, v in demo_raw.items()},
         )
 
@@ -124,11 +120,15 @@ class DiscoveryResult:
     """Authoritative structured-detection output before plan emission.
 
     Example:
-        discovery = detection.detect_structured_columns(df, stats, cfg)
+        discovery = detection.detect_structured_columns(df, cfg)
     """
 
     same_person_bundles: list[SamePersonBundle] = field(default_factory=list)
-    """Bundles of columns that describe the same person, with demographic conditioners."""
+    """Same-person column bundles with demographic conditioners.
+
+    Heuristics-only mode allows at most one bundle (a second persona-backed
+    column of the same entity type raises). LLM mode may produce multiple.
+    """
     standalone_columns: list[DetectedStandalone] = field(default_factory=list)
     """Columns replaced independently of any same-person bundle."""
     identified_not_replaced: list[str] = field(default_factory=list)

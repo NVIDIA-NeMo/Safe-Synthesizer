@@ -12,6 +12,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     EntityType,
     ReplacePiiConfig,
 )
+from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.pii_replacer.entities import config_from_replace_pii
 from tests.pii_replacer.helpers import column_spec
 
@@ -95,14 +96,14 @@ def test_email_header_requires_email_shaped_values(caplog):
     assert any("looks like email by name" in r.getMessage() for r in caplog.records)
 
 
-def test_compound_street_headers_planned_as_street_address():
+def test_compound_street_header_planned_as_street_address():
     """CamelCase / compound headers with street-like values classify as street_address."""
     from nemo_safe_synthesizer.pii_replacer.detection.column_names import normalize_column_name_for_match
     from nemo_safe_synthesizer.pii_replacer.planning import discover_plan
 
     assert normalize_column_name_for_match("MailingStreet") == "mailing street"
     assert normalize_column_name_for_match("AddressLine1") == "address line 1"
-    # Underscores stay so applicant_id does not fuzzy-match as a person name column.
+    # Underscores stay so applicant_id does not match as a person name column.
     assert normalize_column_name_for_match("applicant_id") == "applicant_id"
     assert normalize_column_name_for_match("dependent_id") == "dependent_id"
 
@@ -110,19 +111,27 @@ def test_compound_street_headers_planned_as_street_address():
     df = pd.DataFrame(
         {
             "MailingStreet": [f"{100 + i} Lantern Avenue" for i in range(n)],
-            "AddressLine1": [f"{200 + i} Orchard Road" for i in range(n)],
-            "HomeStreet": [f"{300 + i} Willow Drive" for i in range(n)],
             "first_name": [f"First{i}" for i in range(n)],
             "City": [f"City{i % 10}" for i in range(n)],
         }
     )
     plan = discover_plan(df, None, config_from_replace_pii(ReplacePiiConfig()), ReplacePiiConfig())
-    street_cols = {
-        spec.column_name
-        for spec in plan.columns_to_replace
-        if spec.entity_type == EntityType.street_address
-    }
-    assert {"MailingStreet", "AddressLine1", "HomeStreet"} <= street_cols
+    street = column_spec(plan, "MailingStreet")
+    assert street is not None and street.entity_type == EntityType.street_address
+
+
+def test_duplicate_street_columns_raise_multi_person():
+    from nemo_safe_synthesizer.pii_replacer.planning import discover_plan
+
+    n = 20
+    df = pd.DataFrame(
+        {
+            "MailingStreet": [f"{100 + i} Lantern Avenue" for i in range(n)],
+            "AddressLine1": [f"{200 + i} Orchard Road" for i in range(n)],
+        }
+    )
+    with pytest.raises(ParameterError, match="more than one person"):
+        discover_plan(df, None, config_from_replace_pii(ReplacePiiConfig()), ReplacePiiConfig())
 
 
 def test_normalize_column_name_preserves_underscores():
@@ -159,13 +168,6 @@ def test_ipaddress_header_is_not_street_address():
     assert ip is not None and ip.entity_type == EntityType.ipv4
 
 
-def test_entity_name_patterns_have_fuzzy_keywords():
-    from nemo_safe_synthesizer.pii_replacer.entities import ENTITY_NAME_PATTERNS, FUZZY_KEYWORDS
-
-    missing = sorted(set(ENTITY_NAME_PATTERNS) - set(FUZZY_KEYWORDS))
-    assert missing == [], f"entity types missing fuzzy keywords: {missing}"
-
-
 def test_match_labels_returns_all_regex_hits():
     from nemo_safe_synthesizer.pii_replacer.detection.column_names import match_labels
 
@@ -179,8 +181,8 @@ def test_match_labels_returns_all_regex_hits():
     assert match_labels("weight", patterns) == []
 
 
-def test_fuzzy_match_label_resolves_multi_regex_with_warning(caplog, monkeypatch):
-    """Overlapping name patterns pick the best fuzzy candidate and warn."""
+def test_match_column_header_multi_regex_picks_first_with_warning(caplog):
+    """Overlapping name patterns pick the first registry hit and warn."""
     import logging
 
     from nemo_safe_synthesizer.pii_replacer.detection import column_names
@@ -189,58 +191,48 @@ def test_fuzzy_match_label_resolves_multi_regex_with_warning(caplog, monkeypatch
         "first_name": [r"name"],
         "full_name": [r"name"],
     }
-    monkeypatch.setattr(
-        column_names,
-        "FUZZY_KEYWORDS",
-        {
-            "first_name": ("firstname", "fname"),
-            "full_name": ("patientname", "fullname"),
-        },
-    )
     caplog.set_level(logging.WARNING)
-    chosen = column_names.fuzzy_match_label("patient_name", patterns, threshold=0.86)
-    assert chosen == "full_name"
+    name_label, demo_label = column_names.match_column_header("patient_name", patterns, {})
+    assert name_label == "first_name"
+    assert demo_label is None
     messages = [record.getMessage() for record in caplog.records]
     assert any(
         "patient_name" in m
         and "multiple header labels" in m
-        and "full_name" in m
         and "first_name" in m
+        and "full_name" in m
         and "Review the replacement plan" in m
-        and "bug report" in m
         for m in messages
     )
 
 
-def test_match_column_header_resolves_entity_vs_demo_collision(caplog, monkeypatch):
-    """Entity and demographic regex hits share the same multi-match warning path."""
+def test_match_column_header_resolves_entity_vs_demo_collision(caplog):
+    """Entity and demographic regex hits: first match wins (entity listed first)."""
     import logging
 
     from nemo_safe_synthesizer.pii_replacer.detection import column_names
 
     entity_patterns = {"first_name": [r"sex|name"]}
     demo_patterns = {"sex": [r"^sex$", r"gender"]}
-    monkeypatch.setattr(column_names, "FUZZY_KEYWORDS", {"first_name": ("firstname", "fname")})
-    monkeypatch.setattr(column_names, "DEMO_FUZZY_KEYWORDS", {"sex": ("sex", "gender")})
     caplog.set_level(logging.WARNING)
 
-    name_label, demo_label = column_names.match_column_header("sex", entity_patterns, demo_patterns, threshold=0.86)
-    assert name_label is None
-    assert demo_label == "sex"
-    messages = [record.getMessage() for record in caplog.records]
-    assert any(
-        "sex" in m and "multiple header labels" in m and "first_name" in m and "chose 'sex'" in m for m in messages
-    )
+    name_label, demo_label = column_names.match_column_header("sex", entity_patterns, demo_patterns)
+    # Entity patterns are scanned first, so ``first_name`` wins over demo ``sex``.
+    assert name_label == "first_name"
+    assert demo_label is None
+    assert any("multiple header labels" in r.getMessage() for r in caplog.records)
 
 
-def test_fuzzy_match_label_single_regex_skips_warning(caplog):
+def test_match_column_header_single_regex_skips_warning(caplog):
     import logging
 
-    from nemo_safe_synthesizer.pii_replacer.detection.column_names import fuzzy_match_label
+    from nemo_safe_synthesizer.pii_replacer.detection.column_names import match_column_header
     from nemo_safe_synthesizer.pii_replacer.entities import ENTITY_NAME_PATTERNS
 
     caplog.set_level(logging.WARNING)
-    assert fuzzy_match_label("email", ENTITY_NAME_PATTERNS, threshold=0.86) == "email"
+    name_label, demo_label = match_column_header("email", ENTITY_NAME_PATTERNS, {})
+    assert name_label == "email"
+    assert demo_label is None
     assert not any("multiple header labels" in record.getMessage() for record in caplog.records)
 
 
@@ -248,52 +240,31 @@ def test_match_column_header_assigns_demo_without_entity():
     from nemo_safe_synthesizer.pii_replacer.detection.column_names import match_column_header
     from nemo_safe_synthesizer.pii_replacer.entities import DEMO_LABEL_PATTERNS, ENTITY_NAME_PATTERNS
 
-    name_label, demo_label = match_column_header("gender", ENTITY_NAME_PATTERNS, DEMO_LABEL_PATTERNS, threshold=0.86)
+    name_label, demo_label = match_column_header("gender", ENTITY_NAME_PATTERNS, DEMO_LABEL_PATTERNS)
     assert name_label is None
     assert demo_label == "gender"
 
 
-def test_weak_id_headers_need_dominant_identifier_template():
-    """English ``*id`` leftovers stay unplanned unless values look like opaque IDs."""
+def test_weak_id_headers_are_not_matched():
+    """English ``*id`` leftovers no longer match unique_identifier (strong patterns only)."""
     from nemo_safe_synthesizer.pii_replacer.planning import discover_plan
 
     n = 40
     cfg = config_from_replace_pii(ReplacePiiConfig())
-    # Category-like values under weak headers must not be replaced.
     labels = pd.DataFrame(
         {
             "valid": (["yes", "no"] * (n // 2))[:n],
             "hybrid": [f"type_{i % 3}" for i in range(n)],
-            "first_name": [f"First{i}" for i in range(n)],
-        }
-    )
-    label_plan = discover_plan(labels, None, cfg, ReplacePiiConfig())
-    assert column_spec(label_plan, "valid") is None
-    assert column_spec(label_plan, "hybrid") is None
-
-    # Weak ``userid`` with a dominant opaque template is still planned.
-    userids = pd.DataFrame(
-        {
             "userid": [f"user{i:04d}" for i in range(n)],
             "first_name": [f"First{i}" for i in range(n)],
         }
     )
-    user_plan = discover_plan(userids, None, cfg, ReplacePiiConfig())
-    user = column_spec(user_plan, "userid")
-    assert user is not None and user.entity_type == EntityType.unique_identifier
+    plan = discover_plan(labels, None, cfg, ReplacePiiConfig())
+    assert column_spec(plan, "valid") is None
+    assert column_spec(plan, "hybrid") is None
+    userid = column_spec(plan, "userid")
+    assert userid is None or userid.entity_type is EntityType.free_text
 
-    # Mostly-blank ``userid``: blanks must not dilute uniqueness of nonempty IDs.
-    sparse = pd.DataFrame(
-        {
-            "userid": ([""] * (n - 10)) + [f"user{i:04d}" for i in range(10)],
-            "first_name": [f"First{i}" for i in range(n)],
-        }
-    )
-    sparse_plan = discover_plan(sparse, None, cfg, ReplacePiiConfig())
-    sparse_user = column_spec(sparse_plan, "userid")
-    assert sparse_user is not None and sparse_user.entity_type == EntityType.unique_identifier
-
-    # Strong ``patient_id`` keeps today's path (no weak template gate).
     patients = pd.DataFrame(
         {
             "patient_id": [f"pmc-6{i:05d}-1" for i in range(n)],

@@ -50,7 +50,7 @@ def name_parts(values: Mapping[str, object]) -> dict[str, str]:
 
 
 def _row_name_parts(row: pd.Series, fields: Mapping[str, str]) -> dict[str, str]:
-    """Return ``name_parts`` for one dataframe row using the cluster's column map."""
+    """Return ``name_parts`` for one dataframe row using the bundle's column map."""
     return name_parts(
         {
             label: row[col]
@@ -70,9 +70,7 @@ def _handle_shape_counts(handles: Sequence[str], cfg: Config) -> Counter:
     return counts
 
 
-def name_column_pattern(
-    df: pd.DataFrame, label: str, col: str, fields: Mapping[str, str], cfg: Config
-) -> str | None:
+def name_column_pattern(df: pd.DataFrame, label: str, col: str, fields: Mapping[str, str], cfg: Config) -> str | None:
     """Dominant name/email convention for one column, or ``None`` if under coverage."""
     rows = df.dropna(subset=[col]).head(PATTERN_SAMPLE_SIZE)
     counts: Counter = Counter()

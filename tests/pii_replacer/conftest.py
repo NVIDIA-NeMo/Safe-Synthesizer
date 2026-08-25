@@ -89,8 +89,8 @@ def fixture_numbered_email_df() -> pd.DataFrame:
 
 
 @pytest.fixture
-def fixture_group_grain_df() -> pd.DataFrame:
-    """One name per patient group, with an email that varies row by row."""
+def fixture_group_scope_df() -> pd.DataFrame:
+    """Grouped rows for plan ``scope=group`` discovery tests."""
     rows = [
         {
             "patient_id": f"P{g}",
