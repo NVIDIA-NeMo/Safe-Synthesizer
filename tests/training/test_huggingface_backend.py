@@ -2,12 +2,14 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pandas as pd
 import pytest
 import torch
+from datasets import Dataset
 from transformers import EvalPrediction, IntervalStrategy
 
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
@@ -18,6 +20,7 @@ from nemo_safe_synthesizer.config import (
     SafeSynthesizerParameters,
     TrainingHyperparams,
 )
+from nemo_safe_synthesizer.data_processing.assembler import TrainingExampleAssembler
 from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.training.callbacks import ProgressBarCallback, SafeSynthesizerWorkerCallback
 from nemo_safe_synthesizer.training.huggingface_backend import (
@@ -25,6 +28,32 @@ from nemo_safe_synthesizer.training.huggingface_backend import (
     compute_metrics,
     preprocess_logits_for_metrics,
 )
+
+
+def test_example_assembler_reuses_backend_bound_tokenization(backend) -> None:
+    backend.tokenization = MagicMock()
+    backend.tokenizer = MagicMock()
+    expected = MagicMock()
+
+    with patch.object(TrainingExampleAssembler, "from_data", return_value=expected) as factory:
+        actual = backend._create_example_assembler(Dataset.from_dict({"a": [1]}))
+
+    assert actual is expected
+    assert factory.call_args.kwargs["tokenization"] is backend.tokenization
+
+
+def test_inference_callback_reuses_exact_assembler_prompt_encoding(backend) -> None:
+    backend.dataset_schema = {"properties": {"value": {}, "time": {}, "group": {}, "other": {}}}
+    backend.training_prompt_encoding = MagicMock()
+    trainer = MagicMock()
+
+    with (
+        patch("nemo_safe_synthesizer.training.huggingface_backend.create_processor", return_value=MagicMock()),
+        patch("nemo_safe_synthesizer.training.huggingface_backend.InferenceEvalCallback") as callback_factory,
+    ):
+        backend._add_inference_eval_callback(trainer, {"inference_eval_kwargs": {}})
+
+    assert callback_factory.call_args.kwargs["prompt_encoding"] is backend.training_prompt_encoding
 
 
 @pytest.fixture
@@ -49,6 +78,8 @@ def mock_model_metadata(mock_workdir):
     metadata.save_path = mock_workdir.train.adapter.path
     metadata.metadata_path = mock_workdir.train.adapter.metadata
     metadata.rope_parameters_location = "autoconfig"
+    metadata.tokenizer = None
+    metadata.tokenization = None
     return metadata
 
 
@@ -61,6 +92,8 @@ def mock_model_metadata_with_rope_automodel(mock_workdir):
     metadata.save_path = mock_workdir.train.adapter.path
     metadata.metadata_path = mock_workdir.train.adapter.metadata
     metadata.rope_parameters_location = "automodel"
+    metadata.tokenizer = None
+    metadata.tokenization = None
     return metadata
 
 
@@ -133,11 +166,15 @@ def params_with_orderby(base_params):
 @pytest.fixture
 def backend(base_params, mock_model_metadata, mock_workdir):
     """Create a HuggingFaceBackend instance for testing."""
-    return HuggingFaceBackend(
+    backend: Any = HuggingFaceBackend(
         params=base_params,
         model_metadata=mock_model_metadata,
         workdir=mock_workdir,
     )
+    backend.tokenizer = MagicMock()
+    backend.tokenization = MagicMock()
+    backend.tokenization.native = backend.tokenizer
+    return backend
 
 
 @pytest.fixture
@@ -153,12 +190,14 @@ def backend_with_validation(params_with_validation, mock_model_metadata, mock_wo
 @pytest.fixture
 def backend_with_dp(params_with_dp, mock_model_metadata, mock_workdir):
     """Create a HuggingFaceBackend instance with DP enabled."""
-    backend = HuggingFaceBackend(
+    backend: Any = HuggingFaceBackend(
         params=params_with_dp,
         model_metadata=mock_model_metadata,
         workdir=mock_workdir,
     )
     backend.tokenizer = MagicMock()
+    backend.tokenization = MagicMock()
+    backend.tokenization.native = backend.tokenizer
     backend.true_dataset_size = 100
     backend.data_fraction = 0.5
     return backend
@@ -395,6 +434,8 @@ class TestResolvedModelLoading:
         model_ref.target.return_value = cached_target
         model_ref.trust_remote_code = True
         tokenizer = MagicMock()
+        tokenization = MagicMock()
+        tokenization.native = tokenizer
         backend.model_ref = model_ref
         backend.framework_load_params = {
             "pretrained_model_name_or_path": cached_target,
@@ -410,8 +451,8 @@ class TestResolvedModelLoading:
                 return_value=tokenizer,
             ) as load_tok,
             patch(
-                "nemo_safe_synthesizer.training.huggingface_backend.add_bos_eos_tokens_to_tokenizer",
-                return_value=tokenizer,
+                "nemo_safe_synthesizer.training.huggingface_backend.bind_tokenizer",
+                return_value=tokenization,
             ),
         ):
             backend._load_pretrained_model()
@@ -421,6 +462,29 @@ class TestResolvedModelLoading:
             trust_remote_code=True,
             model_max_length=None,
         )
+
+    def test_load_pretrained_model_reuses_saved_bound_tokenization(self, backend):
+        """A loaded artifact tokenizer is not loaded or bound a second time."""
+        persisted = MagicMock()
+        persisted.workload_kind = "tabular"
+        native = MagicMock()
+        persisted.native = native
+        backend.model_metadata.tokenization = persisted
+        backend.model_loader_type = MagicMock()
+        backend.model_loader_type.from_pretrained.return_value = MagicMock()
+        backend.framework_load_params = {}
+        backend.model_metadata.max_seq_length = 2048
+
+        with (
+            patch("nemo_safe_synthesizer.training.huggingface_backend.load_fast_tokenizer") as load_native,
+            patch("nemo_safe_synthesizer.training.huggingface_backend.bind_tokenizer") as create_runtime,
+        ):
+            backend._load_pretrained_model()
+
+        assert backend.tokenization is persisted
+        assert backend.tokenizer is native
+        load_native.assert_not_called()
+        create_runtime.assert_not_called()
 
 
 class TestResolveAttnImplementation:

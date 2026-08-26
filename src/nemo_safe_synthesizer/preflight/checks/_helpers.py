@@ -9,10 +9,11 @@ from typing import TYPE_CHECKING, Protocol
 
 import numpy as np
 import pandas as pd
-from transformers import PreTrainedTokenizerBase
 
-from ...data_processing.budget import compute_max_new_tokens, compute_schema_prompt_ids, tokenize_records
+from ...data_processing.budget import compute_prompt_encoding, tokenize_records
 from ...defaults import DEFAULT_EXCLUDE_COLUMNS
+from ...errors import GenerationError
+from ...tokenization.core import _BoundTokenization
 from ..base import IssueCollector
 
 if TYPE_CHECKING:
@@ -41,40 +42,49 @@ def check_schema_prompt_budget(
     collector: IssueCollector,
     columns: list[str],
     metadata: ModelMetadata,
+    tokenization: _BoundTokenization,
 ) -> int | None:
     """Validate schema prompt against context length; return token budget.
 
     Delegates to ``data_processing.budget`` for parity with the assembler.
     """
-    schema_prompt_ids = compute_schema_prompt_ids(columns, metadata, exclude_columns=DEFAULT_EXCLUDE_COLUMNS)
-    max_new_tokens = compute_max_new_tokens(schema_prompt_ids, metadata.max_seq_length)
-    if max_new_tokens <= 0:
+    prompt = compute_prompt_encoding(
+        columns,
+        metadata,
+        tokenization,
+        exclude_columns=DEFAULT_EXCLUDE_COLUMNS,
+    )
+    try:
+        capacity = tokenization.capacity_for(
+            prompt,
+            context_limit=metadata.max_seq_length,
+            sequence_count=1,
+        )
+    except GenerationError:
         collector.error(
             "schema_exceeds_context",
             (
-                f"Schema prompt ({len(schema_prompt_ids)} tokens) "
+                f"Schema prompt ({len(prompt.input_ids)} tokens) "
                 f"exceeds model context window ({metadata.max_seq_length})."
             ),
         )
         return None
-    return max_new_tokens
+    return capacity.record_token_capacity
 
 
 def check_sampled_record_budget(
     collector: IssueCollector,
     data: pd.DataFrame,
     metadata: ModelMetadata,
+    tokenization: _BoundTokenization,
     max_new_tokens: int,
     *,
     sample_size_limit: int,
 ) -> None:
     """Validate sampled records against token budget."""
-    if metadata.tokenizer is None:
-        raise RuntimeError("check_sampled_record_budget requires a loaded tokenizer on ModelMetadata")
-
     sample_size = min(len(data), sample_size_limit)
     sample = data.sample(n=sample_size, random_state=42) if sample_size < len(data) else data
-    tokenized_records = tokenize_records(sample, metadata.tokenizer, exclude_columns=DEFAULT_EXCLUDE_COLUMNS)
+    tokenized_records = tokenize_records(sample, tokenization, exclude_columns=DEFAULT_EXCLUDE_COLUMNS)
     exceeded = sum(1 for token_ids in tokenized_records if len(token_ids) > max_new_tokens)
     if exceeded:
         collector.error(
@@ -88,14 +98,12 @@ def check_group_budget(
     data: pd.DataFrame,
     group_col: str,
     metadata: ModelMetadata,
+    tokenization: _BoundTokenization,
     max_new_tokens: int,
     *,
     top_n: int,
 ) -> None:
     """Validate largest groups against token budget."""
-    if metadata.tokenizer is None:
-        raise RuntimeError("check_group_budget requires a loaded tokenizer on ModelMetadata")
-
     # Stop at the first flagged group: the message only says "N of the
     # largest groups exceed" as a diagnostic, so we don't need an exact
     # count, and tokenizing every group on a large dataset is expensive.
@@ -106,16 +114,11 @@ def check_group_budget(
     top_positions = _top_group_positions(data, group_col, top_n=top_n)
     n_top = len(top_positions)
 
-    if (tokenizer := metadata.tokenizer) is None:
-        raise RuntimeError("check_group_budget requires a loaded tokenizer on ModelMetadata")
-    if not isinstance(tokenizer, PreTrainedTokenizerBase):
-        raise RuntimeError("check_group_budget requires a HuggingFace tokenizer on ModelMetadata")
-
     def _check_group(positions: np.ndarray) -> bool:
         running_tokens = 0
         for start in range(0, positions.size, chunk_size):
             chunk = data.iloc[positions[start : start + chunk_size]]
-            chunk_token_ids = tokenize_records(chunk, tokenizer, exclude_columns=DEFAULT_EXCLUDE_COLUMNS)
+            chunk_token_ids = tokenize_records(chunk, tokenization, exclude_columns=DEFAULT_EXCLUDE_COLUMNS)
             running_tokens += sum(len(token_ids) for token_ids in chunk_token_ids)
             if running_tokens > max_new_tokens:
                 return True

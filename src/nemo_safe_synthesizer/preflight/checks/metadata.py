@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from typing_extensions import override
 
+from ...tokenization import WorkloadKind, bind_tokenizer
 from ..base import IssueCollector, MetadataCheck
 from ..types import MetadataView
 from ._helpers import check_group_budget, check_sampled_record_budget, check_schema_prompt_budget
@@ -56,12 +57,25 @@ class TokenBudgetCheck(MetadataCheck):
                 "Tokenizer not available; token budget checks skipped.",
             )
             return
+        workload_kind = WorkloadKind.TIME_SERIES if config.time_series.is_timeseries else WorkloadKind.TABULAR
+        tokenization = bind_tokenizer(
+            metadata.tokenizer,
+            metadata,
+            workload_kind=workload_kind,
+        )
 
-        max_new_tokens = check_schema_prompt_budget(collector, list(data.columns), metadata)
+        max_new_tokens = check_schema_prompt_budget(collector, list(data.columns), metadata, tokenization)
         if max_new_tokens is None:
             return
 
-        check_sampled_record_budget(collector, data, metadata, max_new_tokens, sample_size_limit=self.token_sample_size)
+        check_sampled_record_budget(
+            collector,
+            data,
+            metadata,
+            tokenization,
+            max_new_tokens,
+            sample_size_limit=self.token_sample_size,
+        )
 
         # Only run the per-group budget when group-by is configured AND the
         # column is actually present (GroupbyColumnCheck may have flagged
@@ -69,4 +83,12 @@ class TokenBudgetCheck(MetadataCheck):
         # checks to run; guarding here keeps them independent).
         group_col = config.data.group_training_examples_by
         if group_col is not None and group_col in data.columns:
-            check_group_budget(collector, data, group_col, metadata, max_new_tokens, top_n=self.top_groups_to_check)
+            check_group_budget(
+                collector,
+                data,
+                group_col,
+                metadata,
+                tokenization,
+                max_new_tokens,
+                top_n=self.top_groups_to_check,
+            )

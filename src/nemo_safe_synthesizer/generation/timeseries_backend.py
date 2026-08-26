@@ -25,9 +25,10 @@ from ..data_processing.record_utils import (
 from ..defaults import FIXED_RUNTIME_GENERATE_ARGS, LOG_DASHES, PSEUDO_GROUP_COLUMN
 from ..generation.batch import Batch
 from ..generation.results import GenerateJobResults, GenerationBatches, GenerationStatus
-from ..generation.vllm_backend import VllmBackend
+from ..generation.vllm_backend import VllmBackend, _tokens_prompt
 from ..llm.metadata import ModelMetadata
 from ..observability import get_logger
+from ..tokenization import PromptEncoding
 
 logger = get_logger(__name__)
 
@@ -255,6 +256,14 @@ class TimeseriesBackend(VllmBackend):
         engine has not yet been initialized or no group prefills are
         populated.
         """
+        if self.model_metadata.tokenization is not None:
+            prefills = tuple(self._group_prefills.values()) or ("",)
+            return max(
+                len(prompt.input_ids)
+                for prefill in prefills
+                if (prompt := self._render_token_prompt(prefill)) is not None
+            )
+
         base = super()._get_prompt_token_count()
         if self.llm is None or not self._group_prefills:
             return base
@@ -264,6 +273,25 @@ class TimeseriesBackend(VllmBackend):
             default=0,
         )
         return base + longest_prefill_tokens
+
+    def _render_token_prompt(self, current_prefill: str) -> PromptEncoding | None:
+        """Render a time-series token prompt with the live prefill."""
+        tokenization = self.model_metadata.tokenization
+        if tokenization is None:
+            return None
+        return tokenization.render_prompt(
+            tuple(self.columns),
+            self.model_metadata.instruction,
+            current_prefill=current_prefill,
+        )
+
+    def _initial_generation_max_tokens(self) -> int:
+        """Return the safe initial budget before creating base sampling params."""
+        if self.model_metadata.tokenization is None:
+            return self._max_tokens_for_prompt_length(self._get_prompt_token_count())
+        prefills = tuple(self._group_prefills.values()) or ("",)
+        prompts = [self._render_token_prompt(prefill) for prefill in prefills]
+        return min(self._generation_max_tokens(prompt) for prompt in prompts if prompt is not None)
 
     def _build_progress_snapshots(self, total: int, is_group_based: bool = False) -> list[ProgressSnapshot]:
         """Build progress snapshots for saving intermediate results.
@@ -581,13 +609,18 @@ class TimeseriesBackend(VllmBackend):
         return df
 
     def _build_modified_sampling_params(
-        self, sampling_params: SamplingParams, num_active: int
+        self,
+        sampling_params: SamplingParams,
+        num_active: int,
+        *,
+        max_tokens: int | None = None,
     ) -> tuple[SamplingParams, int]:
         """Build modified sampling params with dynamic samples per prompt.
 
         Args:
             sampling_params: Base sampling parameters.
             num_active: Number of active groups.
+            max_tokens: Optional live-capacity override for this dispatch.
 
         Returns:
             Tuple of (modified SamplingParams, effective_samples_per_prompt).
@@ -603,7 +636,7 @@ class TimeseriesBackend(VllmBackend):
             top_p=sampling_params.top_p,
             top_k=sampling_params.top_k,
             min_p=sampling_params.min_p,
-            max_tokens=sampling_params.max_tokens,
+            max_tokens=sampling_params.max_tokens if max_tokens is None else max_tokens,
             repetition_penalty=sampling_params.repetition_penalty,
             skip_special_tokens=sampling_params.skip_special_tokens,
             include_stop_str_in_output=sampling_params.include_stop_str_in_output,
@@ -782,14 +815,24 @@ class TimeseriesBackend(VllmBackend):
             start_time = time.perf_counter()
 
             # Build prompts and batches for all active groups
-            prompts = [self._format_prompt(state.current_prefill) for state in active_states]
+            prompt_encodings = [self._render_token_prompt(state.current_prefill) for state in active_states]
+            if all(prompt is not None for prompt in prompt_encodings):
+                canonical_prompts = [prompt for prompt in prompt_encodings if prompt is not None]
+                prompts = [_tokens_prompt(list(prompt.input_ids)) for prompt in canonical_prompts]
+                live_max_tokens = min(self._generation_max_tokens(prompt) for prompt in canonical_prompts)
+            else:
+                text_prompts = [self._format_prompt(state.current_prefill) for state in active_states]
+                prompts = text_prompts
+                live_max_tokens = min(self._generation_max_tokens(prompt) for prompt in text_prompts)
             group_batches: dict[str, Batch] = {
                 state.group_id: Batch(processor=self.processor) for state in active_states
             }
 
             # Build modified sampling params
             modified_params, effective_samples_per_prompt = self._build_modified_sampling_params(
-                sampling_params, len(active_states)
+                sampling_params,
+                len(active_states),
+                max_tokens=live_max_tokens,
             )
 
             # Generate for all prompts at once
@@ -935,10 +978,7 @@ class TimeseriesBackend(VllmBackend):
             top_p=self.config.generation.top_p,
             top_k=FIXED_RUNTIME_GENERATE_ARGS["top_k"],
             min_p=FIXED_RUNTIME_GENERATE_ARGS["min_p"],
-            max_tokens=self.model_metadata.generation_max_tokens_for(
-                self._get_prompt_token_count(),
-                multiplier=self.config.generation.max_tokens_multiplier,
-            ),
+            max_tokens=self._initial_generation_max_tokens(),
             skip_special_tokens=True,
             include_stop_str_in_output=False,
             ignore_eos=False,

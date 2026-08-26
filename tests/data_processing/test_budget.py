@@ -1,136 +1,137 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for ``data_processing.budget`` token-budget arithmetic."""
+"""Shared assembler/preflight token-budget behavior."""
 
 from __future__ import annotations
 
-from types import SimpleNamespace
+from pathlib import Path
 from typing import cast
 
 import pandas as pd
 import pytest
-from transformers import BatchEncoding, PreTrainedTokenizerBase
+from transformers import AutoTokenizer, PreTrainedTokenizerBase
 
 from nemo_safe_synthesizer.data_processing.budget import (
     compute_max_new_tokens,
-    compute_schema_prompt_ids,
+    compute_prompt_encoding,
+    tokenize_record,
     tokenize_records,
 )
 from nemo_safe_synthesizer.defaults import PSEUDO_GROUP_COLUMN
+from nemo_safe_synthesizer.errors import GenerationError
 from nemo_safe_synthesizer.llm.metadata import ModelMetadata
+from nemo_safe_synthesizer.tokenization import WorkloadKind, bind_tokenizer
 
 
-class _RecordingTokenizer(PreTrainedTokenizerBase):
-    def __init__(self) -> None:
-        self.texts: list[str] = []
-        self.encoded_text = ""
-
-    def __call__(self, texts: list[str], *, add_special_tokens: bool) -> dict[str, list[list[int]]]:
-        assert add_special_tokens is False
-        self.texts = texts
-        return {"input_ids": [[ord(char) for char in text] for text in texts]}
-
-    def encode(self, text: str, *, add_special_tokens: bool) -> list[int]:
-        assert add_special_tokens is False
-        self.encoded_text = text
-        return [ord(char) for char in text]
+def _values(tokenizers_dir: Path):
+    source = tokenizers_dir / "smollm3b"
+    native = cast(PreTrainedTokenizerBase, AutoTokenizer.from_pretrained(source))
+    metadata = ModelMetadata.from_str_or_path(source, tokenizer=native)
+    tokenization = bind_tokenizer(native, metadata, workload_kind=WorkloadKind.TABULAR)
+    return native, metadata, tokenization
 
 
-@pytest.mark.unit
-def test_compute_max_new_tokens_subtracts_schema_and_special_tokens():
-    """Budget = context - schema - 2 * NUM_SPECIAL_TOKENS.
+def test_prompt_budget_preserves_order_and_excludes_internal_columns(tokenizers_dir: Path) -> None:
+    _, metadata, tokenization = _values(tokenizers_dir)
 
-    With NUM_SPECIAL_TOKENS=2: 2048 - 100 - 4 = 1944.
-    """
-    assert compute_max_new_tokens(list(range(100)), 2048) == 1944
-
-
-@pytest.mark.unit
-def test_compute_max_new_tokens_negative_when_schema_exceeds_context():
-    """A schema larger than the context window produces a negative budget."""
-    assert compute_max_new_tokens(list(range(2050)), 2048) < 0
-
-
-@pytest.mark.unit
-def test_tokenize_records_excludes_columns():
-    """Excluded columns should serialize exactly like a frame without those columns."""
-    df = pd.DataFrame({PSEUDO_GROUP_COLUMN: ["group-1"], "value": ["visible"]})
-    expected_df = pd.DataFrame({"value": ["visible"]})
-    tokenizer = _RecordingTokenizer()
-    expected_tokenizer = _RecordingTokenizer()
-
-    token_ids = tokenize_records(df, tokenizer, exclude_columns=(PSEUDO_GROUP_COLUMN,))
-    expected_token_ids = tokenize_records(expected_df, expected_tokenizer)
-
-    assert token_ids == expected_token_ids
-    assert PSEUDO_GROUP_COLUMN not in tokenizer.texts[0]
-
-
-class _BatchEncodingTokenizer(PreTrainedTokenizerBase):
-    """Stub that mimics a real HF tokenizer: ``__call__`` returns ``BatchEncoding``.
-
-    ``BatchEncoding`` subclasses ``UserDict``, not ``dict``, which is the exact
-    case ``tokenize_records`` must accept for the batch fast path. This stub
-    also tracks per-record ``encode()`` invocations so the test can assert the
-    fast path was actually taken (zero ``encode`` calls).
-    """
-
-    def __init__(self) -> None:
-        self.encode_calls = 0
-
-    def __call__(self, texts: list[str], *, add_special_tokens: bool) -> BatchEncoding:
-        assert add_special_tokens is False
-        return BatchEncoding({"input_ids": [[ord(char) for char in text] for text in texts]})
-
-    def encode(self, text: str, *, add_special_tokens: bool) -> list[int]:
-        assert add_special_tokens is False
-        self.encode_calls += 1
-        return [ord(char) for char in text]
-
-
-@pytest.mark.unit
-def test_tokenize_records_takes_batch_fast_path_for_batchencoding():
-    """Real HF tokenizers return ``BatchEncoding`` (a ``UserDict`` subclass).
-
-    Regression: an earlier ``isinstance(tokenized, dict)`` guard skipped the
-    batch path for every real tokenizer because ``BatchEncoding`` does not
-    subclass ``dict``, silently degrading to per-record ``encode()`` calls.
-    """
-    df = pd.DataFrame({"value": ["a", "b", "c"]})
-    tokenizer = _BatchEncodingTokenizer()
-
-    token_ids = tokenize_records(df, tokenizer)
-
-    assert len(token_ids) == 3
-    assert all(isinstance(ids, list) for ids in token_ids)
-    assert tokenizer.encode_calls == 0, "batch path was bypassed; fell through to per-record encode()"
-
-
-@pytest.mark.unit
-def test_tokenize_records_no_exclude_default_keeps_all_columns():
-    """The shared helper stays policy-free unless callers pass exclude_columns."""
-    df = pd.DataFrame({PSEUDO_GROUP_COLUMN: ["group-1"], "value": ["visible"]})
-    tokenizer = _RecordingTokenizer()
-
-    tokenize_records(df, tokenizer)
-
-    assert PSEUDO_GROUP_COLUMN in tokenizer.texts[0]
-
-
-@pytest.mark.unit
-def test_compute_schema_prompt_ids_excludes_columns():
-    tokenizer = _RecordingTokenizer()
-    metadata = cast(
-        ModelMetadata,
-        SimpleNamespace(
-            tokenizer=tokenizer,
-            instruction="Generate: ",
-            prompt_config=SimpleNamespace(template="{instruction}{schema}{prefill}"),
-        ),
+    prompt = compute_prompt_encoding(
+        ["b", PSEUDO_GROUP_COLUMN, "a"],
+        metadata,
+        tokenization,
+        exclude_columns=[PSEUDO_GROUP_COLUMN],
     )
 
-    compute_schema_prompt_ids(["value", PSEUDO_GROUP_COLUMN], metadata, exclude_columns=(PSEUDO_GROUP_COLUMN,))
+    assert '"b":<unk>,"a":<unk>' in prompt.text
+    assert PSEUDO_GROUP_COLUMN not in prompt.text
 
-    assert '"value":<unk>' in tokenizer.encoded_text
-    assert PSEUDO_GROUP_COLUMN not in tokenizer.encoded_text
+
+def test_max_new_tokens_is_exact_one_sequence_capacity(tokenizers_dir: Path) -> None:
+    _, metadata, tokenization = _values(tokenizers_dir)
+    prompt = compute_prompt_encoding(["value"], metadata, tokenization)
+
+    result = compute_max_new_tokens(prompt, metadata.max_seq_length, tokenization)
+
+    assert result == metadata.max_seq_length - len(prompt.input_ids) - 2
+
+
+def test_negative_record_capacity_is_reported_without_clamping(tokenizers_dir: Path) -> None:
+    _, metadata, tokenization = _values(tokenizers_dir)
+    prompt = compute_prompt_encoding(["value"], metadata, tokenization)
+
+    result = compute_max_new_tokens(prompt, len(prompt.input_ids) + 1, tokenization)
+
+    assert result == -1
+
+
+def test_single_and_batch_record_paths_preserve_pandas_row_dtypes(tokenizers_dir: Path) -> None:
+    _, _, tokenization = _values(tokenizers_dir)
+    frame = pd.DataFrame([{"b": 2, "a": 0.12345678901234567}])
+
+    single = tokenize_record(frame.iloc[0], tokenization)
+    batch = tokenize_records(frame, tokenization)
+
+    single_text = '{"b":2.0,"a":0.123456789}\n'
+    batch_text = '{"b":2,"a":0.123456789}\n'
+    assert single == list(tokenization.native.encode(single_text, add_special_tokens=False))
+    assert batch == [list(tokenization.native.encode(batch_text, add_special_tokens=False))]
+
+
+def test_batch_record_path_preserves_unicode_and_order(tokenizers_dir: Path) -> None:
+    _, _, tokenization = _values(tokenizers_dir)
+    frame = pd.DataFrame({"second": ["λ", "雪"], "first": [1, 2]})
+
+    result = tokenize_records(frame, tokenization)
+
+    expected = [
+        tokenization.native.encode('{"second":"λ","first":1}\n', add_special_tokens=False),
+        tokenization.native.encode('{"second":"雪","first":2}\n', add_special_tokens=False),
+    ]
+    assert result == expected
+
+
+def test_batch_record_path_excludes_internal_columns(tokenizers_dir: Path) -> None:
+    _, _, tokenization = _values(tokenizers_dir)
+    frame = pd.DataFrame({PSEUDO_GROUP_COLUMN: ["g"], "value": [1]})
+
+    result = tokenize_records(frame, tokenization, exclude_columns=[PSEUDO_GROUP_COLUMN])
+
+    assert result == [tokenization.native.encode('{"value":1}\n', add_special_tokens=False)]
+
+
+def test_empty_dataframe_produces_no_record_ids(tokenizers_dir: Path) -> None:
+    _, _, tokenization = _values(tokenizers_dir)
+
+    assert tokenize_records(pd.DataFrame({"value": []}), tokenization) == []
+
+
+def test_prompt_overflow_uses_shared_user_error(tokenizers_dir: Path) -> None:
+    _, metadata, tokenization = _values(tokenizers_dir)
+    prompt = compute_prompt_encoding(["long_column_name"], metadata, tokenization)
+
+    with pytest.raises(GenerationError, match="dataset schema requires more tokens"):
+        tokenization.validate_prompt_capacity(
+            prompt,
+            context_limit=len(prompt.input_ids) - 1,
+            rope_scaling_factor=1,
+        )
+
+
+def test_time_series_budget_includes_initial_prefill(tokenizers_dir: Path) -> None:
+    source = tokenizers_dir / "smollm3b"
+    native = cast(PreTrainedTokenizerBase, AutoTokenizer.from_pretrained(source))
+    metadata = ModelMetadata.from_str_or_path(source, tokenizer=native)
+    tokenization = bind_tokenizer(native, metadata, workload_kind=WorkloadKind.TIME_SERIES)
+    base = tokenization.render_prompt(["t", "v"], metadata.instruction)
+    prefilled = tokenization.render_prompt(
+        ["t", "v"],
+        metadata.instruction,
+        current_prefill=' {"t":1,"v":2}\n',
+    )
+
+    assert len(prefilled.input_ids) > len(base.input_ids)
+    assert compute_max_new_tokens(prefilled, metadata.max_seq_length, tokenization) < compute_max_new_tokens(
+        base,
+        metadata.max_seq_length,
+        tokenization,
+    )

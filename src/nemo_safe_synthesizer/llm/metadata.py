@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import importlib
+import re
 from pathlib import Path
 from typing import Any, ClassVar, Literal
 
@@ -28,6 +29,10 @@ from ..defaults import (
 )
 from ..errors import ParameterError
 from ..observability import get_logger
+from ..tokenization import WorkloadKind, bind_tokenizer
+from ..tokenization.cache import RECORD_FORMAT_VERSION
+from ..tokenization.core import _BoundTokenization
+from ..tokenization.persistence import load_tokenizer_assets, save_tokenizer_assets
 from ..utils import load_json, write_json
 from .utils import ModelRef, load_fast_tokenizer
 
@@ -122,6 +127,25 @@ class LLMPromptConfig(BaseModel):
         }
 
         return cls(**pc)
+
+
+class TokenizerRepresentation(BaseModel):
+    """Minimal contract for a new artifact's saved tokenizer assets."""
+
+    model_config = ConfigDict(frozen=True)
+
+    artifact_version: Literal[2] = 2
+    workload: WorkloadKind
+    record_format_version: Literal[1] = RECORD_FORMAT_VERSION
+    tokenizer_asset_digest: str
+
+    @field_validator("tokenizer_asset_digest")
+    @classmethod
+    def validate_tokenizer_asset_digest(cls, value: str) -> str:
+        """Require a lowercase SHA-256 asset digest."""
+        if re.fullmatch(r"[0-9a-f]{64}", value) is None:
+            raise ValueError("tokenizer_asset_digest must be a SHA-256 digest")
+        return value
 
 
 def resolve_rope_scaling_factor(
@@ -373,6 +397,13 @@ class ModelMetadata(BaseModel):
 
     tokenizer: PreTrainedTokenizerBase | None = Field(default=None, exclude=True, repr=False)
 
+    tokenization: _BoundTokenization | None = Field(default=None, exclude=True, repr=False)
+
+    tokenizer_representation: TokenizerRepresentation | None = Field(
+        default=None,
+        description="Saved tokenizer assets claimed by a redesigned artifact; absence selects the legacy route.",
+    )
+
     @field_validator("max_records_per_group", mode="after")
     @classmethod
     def validate_max_records_per_group(cls, v: int | None) -> int | None:
@@ -523,8 +554,17 @@ class ModelMetadata(BaseModel):
         """
         if self.workdir is None:
             raise ValueError("Cannot save metadata: workdir is not set")
+        if self.tokenization is not None:
+            asset_digest = save_tokenizer_assets(self.tokenization.native, self.adapter_path)
+            self.tokenizer_representation = TokenizerRepresentation(
+                workload=self.tokenization.workload_kind,
+                tokenizer_asset_digest=asset_digest,
+            )
+        elif self.tokenizer_representation is not None:
+            raise ParameterError("Redesigned tokenizer metadata cannot be saved without its bound native tokenizer.")
+        metadata_payload = self.model_dump(mode="json")
         write_json(
-            self.model_dump(mode="json"),
+            metadata_payload,
             path=self.workdir.train.adapter.metadata,
             indent=4,
         )
@@ -659,21 +699,50 @@ class ModelMetadata(BaseModel):
         cls: type["ModelMetadata"],
         path: Path | str,
         workdir: Workdir | None = None,
+        *,
+        admit_remote_code: bool = False,
     ) -> ModelMetadata:
         """Load ModelMetadata from a saved JSON file.
 
         Args:
             path: Path to the metadata JSON file.
             workdir: Workdir instance for artifact paths. If not provided, will be None.
+            admit_remote_code: Explicitly admit saved tokenizer custom code
+                when the existing ``ModelRef`` ownership requires it.
 
         Returns:
             ModelMetadata instance with the loaded configuration.
         """
         path = Path(path).resolve()
         kwargs = load_json(path)
+        representation_value = kwargs.get("tokenizer_representation")
+        representation = (
+            TokenizerRepresentation.model_validate(representation_value) if representation_value is not None else None
+        )
+        native: PreTrainedTokenizerBase | None = None
+        if representation is not None:
+            source = kwargs.get("model_name_or_path")
+            if not isinstance(source, str):
+                raise ParameterError("Model metadata must declare a model source.")
+            model_ref = ModelRef.parse(source)
+            if model_ref.trust_remote_code and not admit_remote_code:
+                raise ParameterError("Loading this artifact's tokenizer requires explicit remote-code admission.")
+            native = load_tokenizer_assets(
+                path.parent,
+                expected_digest=representation.tokenizer_asset_digest,
+                trust_remote_code=model_ref.trust_remote_code,
+            )
+            kwargs["tokenizer"] = native
         if workdir is not None:
             kwargs["workdir"] = workdir
-        return cls(**kwargs)
+        metadata = cls(**kwargs)
+        if native is not None and representation is not None:
+            metadata.tokenization = bind_tokenizer(
+                native,
+                metadata,
+                workload_kind=representation.workload,
+            )
+        return metadata
 
 
 def get_base_max_seq_length(config: AutoConfig) -> int:

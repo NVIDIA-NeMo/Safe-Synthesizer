@@ -29,6 +29,7 @@ from ..observability import get_logger
 from ..privacy.dp_transformers.dp_utils import (
     OpacusDPTrainer,
 )
+from ..tokenization.core import _BoundTokenization
 
 logger = get_logger()
 
@@ -110,6 +111,9 @@ class TrainingBackend(metaclass=abc.ABCMeta):
 
     tokenizer: PreTrainedTokenizer
     """Tokenizer corresponding to the pretrained model."""
+
+    tokenization: _BoundTokenization
+    """Validated binding around the sole native tokenizer authority."""
 
     quant_params: dict
     """LoRA and optional quantization configuration populated by ``maybe_quantize``."""

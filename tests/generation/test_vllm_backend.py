@@ -5,9 +5,13 @@
 
 import os
 from functools import partial
+from pathlib import Path
+from types import SimpleNamespace
+from typing import cast
 from unittest.mock import MagicMock, patch
 
 import pytest
+from transformers import AutoTokenizer, PreTrainedTokenizerBase
 
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
 from nemo_safe_synthesizer.config import (
@@ -17,11 +21,58 @@ from nemo_safe_synthesizer.config import (
     TrainingHyperparams,
 )
 from nemo_safe_synthesizer.config.generate import ValidationParameters
-from nemo_safe_synthesizer.defaults import DEFAULT_SAMPLING_PARAMETERS
-from nemo_safe_synthesizer.errors import ParameterError
+from nemo_safe_synthesizer.defaults import DEFAULT_INSTRUCTION, DEFAULT_SAMPLING_PARAMETERS
+from nemo_safe_synthesizer.errors import GenerationError, ParameterError
+from nemo_safe_synthesizer.generation.batch import Batch
 from nemo_safe_synthesizer.generation.processors import TabularDataProcessor
 from nemo_safe_synthesizer.generation.vllm_observability import GenerationObservability
 from nemo_safe_synthesizer.llm.metadata import ModelMetadata, RopeScaling
+from nemo_safe_synthesizer.tokenization import PromptEncoding, WorkloadKind, bind_tokenizer
+from nemo_safe_synthesizer.tokenization.persistence import TOKENIZER_ASSET_DIRECTORY
+
+_PARITY_INPUT_COLUMNS = ("value", "group", "time", "name")
+_PARITY_TIME_SERIES_COLUMNS = ("group", "time", "value", "name")
+_PARITY_RECORD = {"value": -1.5, "group": "A", "time": 0, "name": "é/☃"}
+_PARITY_PREFILLS = (
+    "",
+    ' {"group":"A","time":0,"value":-1.5,"name":"é\\/☃"}\n',
+    '{"group":"A","time":0,"value":-1.5,"name":"é\\/☃"}\n',
+)
+
+
+class _BoundaryDivergentTokenizer:
+    """Delegate to a real saved tokenizer except at one exact production boundary."""
+
+    def __init__(self, delegate: PreTrainedTokenizerBase, divergent_text: str) -> None:
+        self._delegate = delegate
+        self._divergent_text = divergent_text
+
+    def __getattr__(self, name: str):
+        return getattr(self._delegate, name)
+
+    def encode(self, text: str, *args, **kwargs) -> list[int]:
+        ids = list(self._delegate.encode(text, *args, **kwargs))
+        if text == self._divergent_text:
+            ids.append(cast(int, self._delegate.eos_token_id))
+        return ids
+
+
+def _persisted_metadata(
+    tokenizers_dir: Path,
+    fixture_name: str,
+    workload: WorkloadKind,
+    workdir: Workdir,
+) -> tuple[ModelMetadata, Path]:
+    source = tokenizers_dir / fixture_name
+    native = cast(
+        PreTrainedTokenizerBase,
+        AutoTokenizer.from_pretrained(source, local_files_only=True),
+    )
+    metadata = ModelMetadata.from_str_or_path(source, tokenizer=native, workdir=workdir)
+    metadata.tokenization = bind_tokenizer(native, metadata, workload_kind=workload)
+    metadata.tokenizer = native
+    metadata.save_metadata()
+    return ModelMetadata.from_metadata_json(workdir.train.adapter.metadata), source
 
 
 @pytest.fixture
@@ -48,6 +99,8 @@ def mock_model_metadata(fixture_session_cache_dir):
     metadata.rope_scaling = None
     metadata.max_tokens_per_example = None
     metadata.max_records_per_group = None
+    metadata.tokenization = None
+    metadata.tokenizer_representation = None
     metadata.generation_max_tokens_for.return_value = 2048
     return metadata
 
@@ -373,6 +426,253 @@ class TestBuildStructuredOutputParams:
 class TestInitializeModelRef:
     """Tests intentionally tied to HF cache layout through ``ModelRef``."""
 
+    @pytest.mark.parametrize("fixture_name", ["tinyllama", "mistral7b", "smollm3b"])
+    @pytest.mark.parametrize(
+        ("workload", "columns"),
+        [
+            (WorkloadKind.TABULAR, _PARITY_INPUT_COLUMNS),
+            (WorkloadKind.TIME_SERIES, _PARITY_TIME_SERIES_COLUMNS),
+        ],
+        ids=["tabular", "time-series"],
+    )
+    def test_initialize_accepts_persisted_tokenizer_and_dispatches_canonical_ids(
+        self,
+        base_params,
+        tokenizers_dir,
+        tmp_path,
+        fixture_name,
+        workload,
+        columns,
+    ):
+        workdir = Workdir(
+            base_path=tmp_path,
+            dataset_name="dataset",
+            config_name="config",
+            run_name="run",
+            _current_phase="train",
+        )
+        workdir.ensure_directories()
+        metadata, source = _persisted_metadata(tokenizers_dir, fixture_name, workload, workdir)
+        base_params.training.pretrained_model = str(source)
+        schema = {"properties": dict.fromkeys(columns, {"type": "string"})}
+        backend = create_backend(base_params, metadata, schema, workdir)
+        engine = MagicMock()
+        processor = MagicMock()
+        selected_paths = []
+
+        def build_engine(**kwargs):
+            selected_path = Path(kwargs["tokenizer"])
+            selected_paths.append(selected_path)
+            engine.get_tokenizer.return_value = AutoTokenizer.from_pretrained(
+                selected_path,
+                local_files_only=True,
+            )
+            return engine
+
+        with (
+            patch("nemo_safe_synthesizer.generation.vllm_backend.vLLM", side_effect=build_engine),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.get_max_vram", return_value={0: 0.8}),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.probe_engine_runtime_config", return_value={}),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.create_processor", return_value=processor),
+        ):
+            backend.initialize()
+
+        tokenizer_path = (workdir.adapter_path / TOKENIZER_ASSET_DIRECTORY).resolve()
+        assert selected_paths == [tokenizer_path]
+        assert backend.llm is engine
+        assert backend.processor is processor
+
+        captured = {}
+
+        def generate(**kwargs):
+            captured.update(kwargs)
+            return []
+
+        backend._gen_method = partial(generate, sampling_params=object())
+        batch = Batch(processor=processor)
+        tokenization = metadata.tokenization
+        assert tokenization is not None
+        expected = tokenization.render_prompt(columns, DEFAULT_INSTRUCTION)
+
+        assert backend._generate_batch(num_prompts_per_batch=1, batch=batch) is batch
+        assert captured["prompts"] == [{"prompt_token_ids": list(expected.input_ids)}]
+
+    @pytest.mark.parametrize("fixture_name", ["tinyllama", "mistral7b", "smollm3b"])
+    @pytest.mark.parametrize(
+        ("workload", "columns", "prefill"),
+        [
+            (WorkloadKind.TABULAR, _PARITY_INPUT_COLUMNS, ""),
+            *[(WorkloadKind.TIME_SERIES, _PARITY_TIME_SERIES_COLUMNS, prefill) for prefill in _PARITY_PREFILLS],
+        ],
+        ids=["tabular-grouped", "time-series-empty", "time-series-space-led", "time-series-space-less"],
+    )
+    def test_initialize_rejects_engine_tokenizer_at_each_production_prompt_boundary(
+        self,
+        base_params,
+        tokenizers_dir,
+        tmp_path,
+        fixture_name,
+        workload,
+        columns,
+        prefill,
+    ):
+        workdir = Workdir(
+            base_path=tmp_path,
+            dataset_name="dataset",
+            config_name="config",
+            run_name="run",
+            _current_phase="train",
+        )
+        workdir.ensure_directories()
+        metadata, source = _persisted_metadata(tokenizers_dir, fixture_name, workload, workdir)
+        base_params.training.pretrained_model = str(source)
+        schema = {"properties": dict.fromkeys(columns, {"type": "string"})}
+        backend = create_backend(base_params, metadata, schema, workdir)
+        tokenization = metadata.tokenization
+        assert tokenization is not None
+        target = tokenization.render_prompt(
+            columns,
+            DEFAULT_INSTRUCTION,
+            current_prefill=prefill,
+        ).text
+        saved = cast(
+            PreTrainedTokenizerBase,
+            AutoTokenizer.from_pretrained(
+                workdir.adapter_path / TOKENIZER_ASSET_DIRECTORY,
+                local_files_only=True,
+            ),
+        )
+        engine = MagicMock()
+        engine.get_tokenizer.return_value = _BoundaryDivergentTokenizer(saved, target)
+
+        with (
+            patch("nemo_safe_synthesizer.generation.vllm_backend.vLLM", return_value=engine),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.get_max_vram", return_value={0: 0.8}),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.probe_engine_runtime_config", return_value={}),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.create_processor") as create_processor_mock,
+            patch("nemo_safe_synthesizer.generation.vllm_backend.cleanup_dist_env_and_memory") as cleanup_mock,
+            pytest.raises(GenerationError, match="does not match"),
+        ):
+            backend.initialize()
+
+        create_processor_mock.assert_not_called()
+        cleanup_mock.assert_called_once_with()
+        assert backend.llm is None
+
+    @pytest.mark.parametrize("fixture_name", ["tinyllama", "mistral7b", "smollm3b"])
+    def test_initialize_rejects_engine_tokenizer_at_pandas_jsonl_record_boundary(
+        self,
+        base_params,
+        tokenizers_dir,
+        tmp_path,
+        fixture_name,
+    ):
+        workdir = Workdir(
+            base_path=tmp_path,
+            dataset_name="dataset",
+            config_name="config",
+            run_name="run",
+            _current_phase="train",
+        )
+        workdir.ensure_directories()
+        metadata, source = _persisted_metadata(tokenizers_dir, fixture_name, WorkloadKind.TABULAR, workdir)
+        base_params.training.pretrained_model = str(source)
+        backend = create_backend(
+            base_params,
+            metadata,
+            {"properties": dict.fromkeys(_PARITY_INPUT_COLUMNS, {"type": "string"})},
+            workdir,
+        )
+        tokenization = metadata.tokenization
+        assert tokenization is not None
+        record = tokenization.encode_records((_PARITY_RECORD,)).records[0]
+        target = record.utf8.decode()
+        assert target == '{"value":-1.5,"group":"A","time":0,"name":"é\\/☃"}\n'
+        saved = cast(
+            PreTrainedTokenizerBase,
+            AutoTokenizer.from_pretrained(
+                workdir.adapter_path / TOKENIZER_ASSET_DIRECTORY,
+                local_files_only=True,
+            ),
+        )
+        engine = MagicMock()
+        engine.get_tokenizer.return_value = _BoundaryDivergentTokenizer(saved, target)
+
+        with (
+            patch("nemo_safe_synthesizer.generation.vllm_backend.vLLM", return_value=engine),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.get_max_vram", return_value={0: 0.8}),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.probe_engine_runtime_config", return_value={}),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.create_processor") as create_processor_mock,
+            pytest.raises(GenerationError, match="does not match"),
+        ):
+            backend.initialize()
+
+        create_processor_mock.assert_not_called()
+        assert backend.llm is None
+
+    @pytest.mark.parametrize("new_artifact", [False, True])
+    def test_initialize_selects_saved_tokenizer_path_only_for_new_artifacts(
+        self,
+        base_params,
+        mock_model_metadata,
+        mock_schema,
+        mock_workdir,
+        new_artifact,
+    ):
+        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
+        mock_model_metadata.tokenizer_representation = MagicMock() if new_artifact else None
+        mock_model_metadata.tokenization = None
+        mock_llm = MagicMock()
+        mock_llm.get_tokenizer.return_value = MagicMock()
+
+        with (
+            patch("nemo_safe_synthesizer.generation.vllm_backend.vLLM", return_value=mock_llm) as mock_vllm,
+            patch("nemo_safe_synthesizer.generation.vllm_backend.get_max_vram", return_value={0: 0.8}),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.create_processor", return_value=MagicMock()),
+        ):
+            backend.initialize()
+
+        if new_artifact:
+            expected = (mock_workdir.adapter_path / "tokenizer").resolve()
+            assert mock_vllm.call_args.kwargs["tokenizer"] == str(expected)
+        else:
+            assert "tokenizer" not in mock_vllm.call_args.kwargs
+
+    def test_initialize_keeps_legacy_artifact_on_text_prompt_path(
+        self,
+        base_params,
+        mock_model_metadata,
+        mock_schema,
+        mock_workdir,
+    ):
+        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
+        mock_model_metadata.tokenizer_representation = None
+        mock_model_metadata.tokenization = None
+        engine = MagicMock()
+        engine.get_tokenizer.return_value = MagicMock()
+        processor = MagicMock()
+
+        with (
+            patch("nemo_safe_synthesizer.generation.vllm_backend.vLLM", return_value=engine) as vllm_mock,
+            patch("nemo_safe_synthesizer.generation.vllm_backend.get_max_vram", return_value={0: 0.8}),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.probe_engine_runtime_config", return_value={}),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.create_processor", return_value=processor),
+        ):
+            backend.initialize()
+
+        captured = {}
+
+        def generate(**kwargs):
+            captured.update(kwargs)
+            return []
+
+        backend._gen_method = partial(generate, sampling_params=object())
+        batch = Batch(processor=processor)
+
+        assert backend._generate_batch(num_prompts_per_batch=1, batch=batch) is batch
+        assert "tokenizer" not in vllm_mock.call_args.kwargs
+        assert captured["prompts"] == [backend.prompt]
+
     def test_initialize_passes_cached_snapshot_target_and_trust_to_vllm(
         self,
         base_params,
@@ -404,6 +704,98 @@ class TestInitializeModelRef:
         assert mock_vllm.call_args.kwargs["max_model_len"] == mock_model_metadata.max_seq_length
         assert mock_vllm.call_args.kwargs["hf_overrides"] is None
         assert mock_vllm.call_args.kwargs["trust_remote_code"] is True
+
+    def test_initialize_rejects_saved_tokenizer_probe_before_processor_attachment(
+        self, base_params, mock_model_metadata, mock_schema, mock_workdir, fixture_cached_nvidia_snapshot
+    ):
+        cache_root, _ = fixture_cached_nvidia_snapshot
+        base_params.training.pretrained_model = "nvidia/Nemotron-Mini-4B-Instruct"
+        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
+        tokenization = MagicMock()
+        tokenization.native.bos_token_id = 1
+        tokenization.native.eos_token_id = 2
+        tokenization.native.pad_token_id = 2
+        tokenization.native.encode.return_value = [7]
+        tokenization.native.decode.return_value = "native"
+        mock_model_metadata.tokenization = tokenization
+        mock_llm = MagicMock()
+        engine = mock_llm.get_tokenizer.return_value
+        engine.bos_token_id = 1
+        engine.eos_token_id = 2
+        engine.pad_token_id = 2
+        engine.encode.return_value = [8]
+        engine.decode.return_value = "engine"
+
+        with (
+            patch(
+                "nemo_safe_synthesizer.generation.vllm_backend.ModelRef._default_hf_cache_root", return_value=cache_root
+            ),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.vLLM", return_value=mock_llm),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.get_max_vram", return_value={0: 0.8}),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.create_processor") as create_processor_mock,
+            pytest.raises(GenerationError, match="does not match"),
+        ):
+            backend.initialize()
+
+        create_processor_mock.assert_not_called()
+        assert backend.llm is None
+
+    @pytest.mark.parametrize("failure_point", ["runtime_config", "tokenizer", "processor"])
+    def test_initialize_tears_down_after_any_post_engine_failure(
+        self,
+        base_params,
+        mock_model_metadata,
+        mock_schema,
+        mock_workdir,
+        fixture_cached_nvidia_snapshot,
+        failure_point,
+    ):
+        cache_root, _ = fixture_cached_nvidia_snapshot
+        base_params.training.pretrained_model = "nvidia/Nemotron-Mini-4B-Instruct"
+        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
+        mock_llm = MagicMock()
+        if failure_point == "tokenizer":
+            mock_llm.get_tokenizer.side_effect = RuntimeError("provider failure")
+        else:
+            mock_llm.get_tokenizer.return_value = MagicMock()
+
+        runtime_config_error = RuntimeError("provider failure") if failure_point == "runtime_config" else None
+        processor_error = RuntimeError("provider failure") if failure_point == "processor" else None
+        with (
+            patch(
+                "nemo_safe_synthesizer.generation.vllm_backend.ModelRef._default_hf_cache_root",
+                return_value=cache_root,
+            ),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.vLLM", return_value=mock_llm),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.get_max_vram", return_value={0: 0.8}),
+            patch(
+                "nemo_safe_synthesizer.generation.vllm_backend.probe_engine_runtime_config",
+                return_value={},
+                side_effect=runtime_config_error,
+            ),
+            patch(
+                "nemo_safe_synthesizer.generation.vllm_backend.create_processor",
+                return_value=MagicMock(),
+                side_effect=processor_error,
+            ),
+            pytest.raises(RuntimeError, match="provider failure"),
+        ):
+            backend.initialize()
+
+        assert backend.llm is None
+        assert backend._torn_down is True
+
+    def test_dispatched_tokens_outside_model_embedding_range_fail(
+        self, base_params, mock_model_metadata, mock_schema, mock_workdir, fixture_cached_nvidia_snapshot
+    ):
+        cache_root, _ = fixture_cached_nvidia_snapshot
+        base_params.training.pretrained_model = "nvidia/Nemotron-Mini-4B-Instruct"
+        mock_llm = MagicMock()
+        mock_llm.llm_engine.model_config.get_vocab_size.return_value = 8
+        from nemo_safe_synthesizer.generation.vllm_backend import _validate_embedding_range
+
+        with pytest.raises(GenerationError, match="embedding vocabulary range"):
+            _validate_embedding_range((0, 7, 8), mock_llm)
 
     def test_initialize_passes_rope_hf_overrides_for_extended_context(
         self,
@@ -822,6 +1214,76 @@ class TestGenerateDispatch:
         assert backend._generate(input_ids=[[1, 2], [3, 4]]) == ["ok"]
         assert captured["prompts"] == [{"prompt_token_ids": [1, 2]}, {"prompt_token_ids": [3, 4]}]
         assert "prompt_token_ids" not in captured
+
+    def test_generate_batch_uses_canonical_token_prompts(
+        self, base_params, mock_model_metadata, mock_schema, mock_workdir
+    ):
+        """NSS-backed static generation sends canonical IDs instead of prompt text."""
+        prompt = PromptEncoding(text="canonical prompt", input_ids=(101, 102, 103), attention_mask=(1, 1, 1))
+        tokenization = MagicMock()
+        tokenization.render_prompt.return_value = prompt
+        tokenization.capacity_for.return_value = SimpleNamespace(record_token_capacity=2045)
+        mock_model_metadata.tokenization = tokenization
+        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
+        captured = {}
+
+        def fake_generate(**kwargs):
+            captured.update(kwargs)
+            return []
+
+        backend._gen_method = partial(fake_generate, sampling_params=object())
+
+        batch = Batch(processor=backend.processor)
+        assert backend._generate_batch(num_prompts_per_batch=2, batch=batch) is batch
+        assert captured["prompts"] == [
+            {"prompt_token_ids": [101, 102, 103]},
+            {"prompt_token_ids": [101, 102, 103]},
+        ]
+        tokenization.render_prompt.assert_called_once_with(("name", "age"), "Generate data")
+
+    def test_token_prompt_capacity_uses_canonical_ids_without_engine_tokenization(
+        self, base_params, mock_model_metadata, mock_schema, mock_workdir
+    ):
+        """Static capacity is derived from the exact canonical prompt sent to vLLM."""
+        prompt = PromptEncoding(text="canonical prompt", input_ids=(7, 8, 9), attention_mask=(1, 1, 1))
+        tokenization = MagicMock()
+        tokenization.render_prompt.return_value = prompt
+        tokenization.capacity_for.return_value = SimpleNamespace(record_token_capacity=2045)
+        mock_model_metadata.tokenization = tokenization
+        mock_model_metadata.generation_max_tokens_for.side_effect = lambda prompt_len, *, multiplier: prompt_len + 397
+        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
+        captured = {}
+
+        def capture_and_stop(**kwargs):
+            captured.update(kwargs)
+            raise StopIteration("short-circuit")
+
+        backend.prepare_params = capture_and_stop
+
+        with pytest.raises(StopIteration):
+            backend.generate()
+
+        assert captured["max_tokens"] == 400
+
+    def test_token_prompt_with_no_live_capacity_fails_before_dispatch(
+        self, base_params, mock_model_metadata, mock_schema, mock_workdir
+    ):
+        """A full-context canonical prompt fails with an NSS error before vLLM dispatch."""
+        prompt = PromptEncoding(text="full prompt", input_ids=tuple(range(2048)), attention_mask=(1,) * 2048)
+        tokenization = MagicMock()
+        tokenization.render_prompt.return_value = prompt
+        tokenization.capacity_for.return_value = SimpleNamespace(record_token_capacity=0)
+        mock_model_metadata.tokenization = tokenization
+        mock_model_metadata.generation_max_tokens_for.return_value = 0
+        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
+        backend.prepare_params = MagicMock()
+        backend._generate_batch = MagicMock()
+
+        with pytest.raises(GenerationError, match="no room for generated tokens"):
+            backend.generate()
+
+        backend.prepare_params.assert_not_called()
+        backend._generate_batch.assert_not_called()
 
 
 class TestNoopRemoteCacheBackend:

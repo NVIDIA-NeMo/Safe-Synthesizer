@@ -548,6 +548,30 @@ class TestLoadFromSavePath:
         assert not hasattr(builder._nss_config.training, "epoch")
 
     @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    def test_load_forwards_explicit_remote_code_admission(
+        self,
+        mock_metadata_cls,
+        tmp_path,
+        fixture_sample_patient_dataframe,
+        fixture_sample_patient_redacted_dataframe,
+    ):
+        workdir, _, _ = self._prepare_workdir(
+            tmp_path,
+            fixture_sample_patient_dataframe,
+            fixture_sample_patient_redacted_dataframe,
+        )
+        mock_metadata_cls.from_metadata_json.return_value = MagicMock()
+        builder = SafeSynthesizer(config=SafeSynthesizerParameters(), workdir=workdir)
+
+        builder.load_from_save_path(admit_remote_code=True)
+
+        mock_metadata_cls.from_metadata_json.assert_called_once_with(
+            workdir.metadata_file,
+            workdir=workdir,
+            admit_remote_code=True,
+        )
+
+    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
     def test_load_applies_runtime_generation_and_evaluation_config(
         self,
         mock_metadata_cls,

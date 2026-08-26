@@ -35,7 +35,8 @@ from ..generation.results import (
 )
 from ..llm.metadata import ModelMetadata
 from ..observability import get_logger
-from ..utils import create_schema_prompt
+from ..tokenization import PromptEncoding
+from ..tokenization.core import _BoundTokenization
 
 logger = get_logger(__name__)
 
@@ -67,6 +68,8 @@ class InferenceEvalCallback(TrainerCallback):
         schema: dict[str, Any],
         metadata: ModelMetadata,
         processor: Processor,
+        tokenization: _BoundTokenization,
+        prompt_encoding: PromptEncoding,
         num_prompts_per_batch: int = 16,
         num_batches: int | None = None,
         patience: int = 3,
@@ -75,11 +78,8 @@ class InferenceEvalCallback(TrainerCallback):
     ):
         self.schema = schema
         self.metadata = metadata
-        self.templated_prompt = create_schema_prompt(
-            list(schema["properties"].keys()),
-            instruction=self.metadata.instruction,
-            prompt_template=self.metadata.prompt_config.template,
-        )
+        self.tokenization = tokenization
+        self.prompt_encoding = prompt_encoding
         self.num_prompts_per_batch = num_prompts_per_batch
 
         self.is_tabular_processor = isinstance(processor, TabularDataProcessor)
@@ -119,24 +119,35 @@ class InferenceEvalCallback(TrainerCallback):
             return
 
         model = kwargs["model"]
-        tokenizer = kwargs["tokenizer"]
+        tokenizer = kwargs["processing_class"]
 
         logger.info(
             f"🔮 Starting inference-based evaluation with the '{self.processor.name}'",
         )
 
         for _ in range(self.num_batches):
-            prompt_tokens = tokenizer(
-                [self.templated_prompt] * self.num_prompts_per_batch,
+            prompt_tokens = tokenizer.pad(
+                {
+                    "input_ids": [list(self.prompt_encoding.input_ids)] * self.num_prompts_per_batch,
+                    "attention_mask": [list(self.prompt_encoding.attention_mask)] * self.num_prompts_per_batch,
+                },
                 return_tensors="pt",
             )
             input_ids = prompt_tokens["input_ids"].to(model.device)
             attention_mask = prompt_tokens["attention_mask"].to(model.device)
 
+            nss_capacity = self.tokenization.capacity_for(
+                self.prompt_encoding,
+                context_limit=self.metadata.max_seq_length,
+                sequence_count=0,
+            ).record_token_capacity
             outputs = model.generate(
                 input_ids=input_ids,
                 attention_mask=attention_mask,
-                max_new_tokens=self.metadata.generation_max_tokens_for(len(input_ids[0])),
+                max_new_tokens=min(
+                    self.metadata.generation_max_tokens_for(len(input_ids[0])),
+                    nss_capacity,
+                ),
                 do_sample=True,
                 use_cache=True,
                 **self.generate_kwargs,

@@ -47,6 +47,9 @@ from nemo_safe_synthesizer.preflight import (
     get_registry,
     run_preflight,
 )
+from nemo_safe_synthesizer.preflight.checks._helpers import check_schema_prompt_budget
+from nemo_safe_synthesizer.tokenization import WorkloadKind, bind_tokenizer
+from nemo_safe_synthesizer.tokenization.core import _BoundTokenization
 from nemo_safe_synthesizer.tooling import PreflightRenderContext, render_preflight_report
 
 from .conftest import make_ctx
@@ -66,6 +69,55 @@ class _PseudoColumnSensitiveTokenizer(PreTrainedTokenizerBase):
     def __call__(self, texts: list[str], *, add_special_tokens: bool) -> dict[str, list[list[int]]]:
         assert add_special_tokens is False
         return {"input_ids": [[0] * (100 if PSEUDO_GROUP_COLUMN in text else 1) for text in texts]}
+
+
+class _NssRecordAdapter:
+    """Minimal NSS-shaped adapter for isolated preflight policy tests."""
+
+    def __init__(self, native) -> None:
+        self.native = native
+
+    def encode_records(self, records, *, exclude_columns=()):
+        excluded = frozenset(exclude_columns)
+        texts = [
+            json.dumps(
+                {key: value for key, value in record.items() if key not in excluded},
+                ensure_ascii=False,
+                separators=(",", ":"),
+                allow_nan=False,
+            )
+            + "\n"
+            for record in records
+        ]
+        result = self.native(texts, add_special_tokens=False)
+        return SimpleNamespace(input_ids=tuple(tuple(row) for row in result["input_ids"]))
+
+    def render_prompt(self, ordered_columns, instruction):
+        input_ids = tuple(self.native.encode("prompt", add_special_tokens=False))
+        return SimpleNamespace(text="prompt", input_ids=input_ids, attention_mask=(1,) * len(input_ids))
+
+    def capacity_for(self, prompt, *, context_limit, sequence_count):
+        return SimpleNamespace(record_token_capacity=max(0, context_limit - len(prompt.input_ids) - 2 * sequence_count))
+
+
+def test_empty_input_exact_prompt_fit_is_not_a_schema_error() -> None:
+    collector = MagicMock()
+    native = MagicMock()
+    native.encode.return_value = list(range(10))
+    metadata = cast(
+        ModelMetadata,
+        SimpleNamespace(instruction="generate", max_seq_length=10),
+    )
+
+    budget = check_schema_prompt_budget(
+        collector,
+        ["a"],
+        metadata,
+        cast(_BoundTokenization, _NssRecordAdapter(native)),
+    )
+
+    assert budget == 0
+    collector.error.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -999,10 +1051,19 @@ class TestTokenBudgetCheck:
         metadata.prompt_config = SimpleNamespace(template="{instruction}{schema}{prefill}")
         return metadata
 
+    @staticmethod
+    def _run(config, data, metadata):
+        record_tokenizer = _NssRecordAdapter(metadata.tokenizer) if metadata.tokenizer is not None else None
+        with patch(
+            "nemo_safe_synthesizer.preflight.checks.metadata.bind_tokenizer",
+            return_value=record_tokenizer,
+        ):
+            return TokenBudgetCheck().run(make_ctx(config=config, data=data, metadata=metadata))
+
     def test_tokenizer_unavailable(self, sample_df, default_config):
         metadata = MagicMock(spec=ModelMetadata)
         metadata.tokenizer = None
-        issues = TokenBudgetCheck().run(make_ctx(config=default_config, data=sample_df, metadata=metadata))
+        issues = self._run(default_config, sample_df, metadata)
         assert any(i.code == "tokenizer_unavailable" for i in issues)
 
     def test_happy_path(self, sample_df, default_config):
@@ -1011,9 +1072,39 @@ class TestTokenBudgetCheck:
         # attach the nested mock explicitly before configuring it.
         tokenizer = MagicMock()
         tokenizer.encode.return_value = list(range(50))
+        tokenizer.side_effect = lambda texts, **_: {"input_ids": [list(range(50)) for _text in texts]}
         metadata = self._metadata(tokenizer, max_seq_length=2048)
-        issues = TokenBudgetCheck().run(make_ctx(config=default_config, data=sample_df, metadata=metadata))
+        issues = self._run(default_config, sample_df, metadata)
         assert not any(i.severity == "error" for i in issues)
+
+    def test_local_provenance_uses_registered_contract_without_mocking(
+        self,
+        sample_df,
+        default_config,
+        fixture_tokenizer,
+        fixture_smollm3_tokenizer,
+    ):
+        metadata = ModelMetadata.from_str_or_path(
+            model_name_or_path=fixture_smollm3_tokenizer,
+            tokenizer=fixture_tokenizer,
+        )
+        expected = bind_tokenizer(
+            fixture_tokenizer,
+            metadata,
+            workload_kind=WorkloadKind.TABULAR,
+        )
+
+        issues = TokenBudgetCheck().run(make_ctx(config=default_config, data=sample_df, metadata=metadata))
+
+        assert not any(issue.code == "tokenizer_unavailable" for issue in issues)
+        assert metadata.tokenizer is not None
+        actual = bind_tokenizer(
+            metadata.tokenizer,
+            metadata,
+            workload_kind=WorkloadKind.TABULAR,
+        )
+        assert actual.native is expected.native
+        assert actual.workload_kind is expected.workload_kind
 
     def test_does_not_require_columns_groupby(self):
         # Regression: ``requires = ("columns.groupby",)`` used to cause
@@ -1025,8 +1116,7 @@ class TestTokenBudgetCheck:
     def test_batch_tokenizer_flags_oversized_record(self, default_config):
         """Batch-tokenizer path is exercised: an oversized record trips record_exceeds_context.
 
-        Budget = max_seq_length - len(schema_prompt) - 2*NUM_SPECIAL_TOKENS
-               = 60 - 20 - 4 = 36 tokens per record.
+        The NSS one-sequence capacity leaves fewer than 100 record tokens.
 
         The batch ``tokenizer(...)`` call returns a single 100-token record, so
         the budget must flag it. If the batch path were skipped, fallback
@@ -1040,7 +1130,7 @@ class TestTokenBudgetCheck:
         tokenizer.return_value = {"input_ids": [list(range(100))]}
         metadata = self._metadata(tokenizer, max_seq_length=60)
 
-        issues = TokenBudgetCheck().run(make_ctx(config=default_config, data=df, metadata=metadata))
+        issues = self._run(default_config, df, metadata)
 
         assert any(i.code == "record_exceeds_context" and i.severity == "error" for i in issues)
 
@@ -1048,7 +1138,7 @@ class TestTokenBudgetCheck:
         df = pd.DataFrame({PSEUDO_GROUP_COLUMN: ["synthetic-group"], "value": ["visible"]})
         metadata = self._metadata(_PseudoColumnSensitiveTokenizer(), max_seq_length=10)
 
-        issues = TokenBudgetCheck().run(make_ctx(config=default_config, data=df, metadata=metadata))
+        issues = self._run(default_config, df, metadata)
 
         assert not any(i.code == "record_exceeds_context" for i in issues)
 
@@ -1060,7 +1150,12 @@ class TestTokenBudgetCheck:
         check.token_sample_size = 0
         check.top_groups_to_check = 1
 
-        issues = check.run(make_ctx(config=config, data=df, metadata=metadata))
+        record_tokenizer = _NssRecordAdapter(metadata.tokenizer)
+        with patch(
+            "nemo_safe_synthesizer.preflight.checks.metadata.bind_tokenizer",
+            return_value=record_tokenizer,
+        ):
+            issues = check.run(make_ctx(config=config, data=df, metadata=metadata))
 
         assert not any(i.code == "group_exceeds_context" for i in issues)
 
@@ -1124,10 +1219,17 @@ class TestRunPreflight:
         metadata = MagicMock(spec=ModelMetadata)
         metadata.tokenizer = MagicMock()
         metadata.tokenizer.encode.return_value = list(range(50))
+        metadata.tokenizer.side_effect = lambda texts, **_: {"input_ids": [list(range(50)) for _text in texts]}
         metadata.max_seq_length = 2048
         metadata.instruction = "Generate: "
         metadata.prompt_config = SimpleNamespace(template="{instruction}{schema}{prefill}")
-        with patch("torch.cuda.is_available", return_value=True):
+        with (
+            patch("torch.cuda.is_available", return_value=True),
+            patch(
+                "nemo_safe_synthesizer.preflight.checks.metadata.bind_tokenizer",
+                return_value=_NssRecordAdapter(metadata.tokenizer),
+            ),
+        ):
             with patch.dict("os.environ", {"NSS_INFERENCE_KEY": "test", "HF_TOKEN": "hf_xxx"}):
                 report = run_preflight(sample_df, resolved_config, metadata)
         assert len(report.errors) == 0
