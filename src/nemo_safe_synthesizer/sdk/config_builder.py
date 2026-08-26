@@ -198,14 +198,16 @@ class ConfigBuilder:
     ) -> Self:
         """Request or disable PII replacement.
 
-        This branch contains only a placeholder configuration. Pass
-        ``enable=False`` to set ``replace_pii=None`` and run the pipeline.
+        When enabled, ``process_data`` runs plan resolution (auto-discovery by
+        default) and writes ``pii_replacement_plan.yaml`` under the run
+        directory. Value replacement is still a no-op on this branch. Pass
+        ``enable=False`` to set ``replace_pii=None`` and skip that step.
 
         Args:
             config: PII replacement configuration object or raw mapping.
             enable: When ``False``, disables PII replacement entirely
                 and clears any previously set config.
-            **kwargs: Reserved for the replacement configuration added later.
+            **kwargs: Forwarded to ``ReplacePiiConfig.from_config_source``.
 
         Returns:
             This builder instance with PII replacement configured.

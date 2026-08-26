@@ -134,6 +134,51 @@ class TestProcessDataPiiSeparation:
     @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
     @patch("nemo_safe_synthesizer.sdk.library_builder.AutoConfigResolver")
     @patch("nemo_safe_synthesizer.sdk.library_builder.Holdout")
+    def test_process_data_with_replace_pii_writes_plan(
+        self,
+        mock_holdout_cls,
+        mock_resolver_cls,
+        mock_metadata_cls,
+        mock_preflight,
+        fixture_workdir: Workdir,
+    ):
+        """Enabled PII writes ``pii_replacement_plan.yaml`` under the run dir."""
+        from nemo_safe_synthesizer.config.replace_pii import ReplacePiiConfig
+        from nemo_safe_synthesizer.pii_replacer.planning import PII_REPLACEMENT_PLAN_FILENAME
+
+        # Single-subject frame so heuristic discovery succeeds (no multi-person error).
+        original_df = pd.DataFrame(
+            {
+                "first_name": ["Ada", "Grace"],
+                "last_name": ["Lovelace", "Hopper"],
+                "email": ["ada@example.com", "grace@example.com"],
+                "amount": [10.0, 20.0],
+            }
+        )
+        train_split = original_df.copy()
+        test_split = original_df.copy()
+
+        builder = SafeSynthesizer(
+            config=SafeSynthesizerParameters(replace_pii=ReplacePiiConfig()),
+            workdir=fixture_workdir,
+        )
+        builder._data_source = original_df
+        _wire_process_data_mocks(
+            mock_holdout_cls, mock_resolver_cls, mock_metadata_cls, builder, train_split, test_split
+        )
+
+        builder.process_data()
+
+        plan_path = fixture_workdir.run_dir / PII_REPLACEMENT_PLAN_FILENAME
+        assert plan_path.is_file()
+        plan_text = plan_path.read_text()
+        assert "replace_pii.replacement_plan" in plan_text
+        assert "columns_to_replace" in plan_text
+
+    @patch("nemo_safe_synthesizer.sdk.library_builder.run_preflight", return_value=_EMPTY_PREFLIGHT)
+    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    @patch("nemo_safe_synthesizer.sdk.library_builder.AutoConfigResolver")
+    @patch("nemo_safe_synthesizer.sdk.library_builder.Holdout")
     def test_process_data_without_pii_replacement_does_not_write_transformed_training(
         self,
         mock_holdout_cls,

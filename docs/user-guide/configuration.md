@@ -444,7 +444,7 @@ safe-synthesizer run --config config.yaml --data-source data.csv \
 | `training` | `with_train()` | [`TrainingHyperparams`][nemo_safe_synthesizer.config.training.TrainingHyperparams] |
 | `generation` | `with_generate()` | [`GenerateParameters`][nemo_safe_synthesizer.config.generate.GenerateParameters] |
 | `evaluation` | `with_evaluate()` | [`EvaluationParameters`][nemo_safe_synthesizer.config.evaluate.EvaluationParameters] |
-| `replace_pii` (`null` to disable) | `with_replace_pii(enable=False)` | Placeholder for PII replacement v3 |
+| `replace_pii` (`null` to disable) | `with_replace_pii(enable=False)` | Discover/write plan YAML; value replacement is a no-op on this branch |
 | `privacy` (`null` to disable) | `with_differential_privacy()` | [`DifferentialPrivacyHyperparams`][nemo_safe_synthesizer.config.differential_privacy.DifferentialPrivacyHyperparams] |
 | `time_series` | `with_time_series()` | [`TimeSeriesParameters`][nemo_safe_synthesizer.config.time_series.TimeSeriesParameters] |
 

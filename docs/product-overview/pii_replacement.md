@@ -3,7 +3,10 @@
 
 # PII Replacement
 
-PII replacement v3 will be added and documented in a later update.
+On this branch, enabling PII replacement runs heuristic auto-discovery (or
+loads a user plan) and writes `pii_replacement_plan.yaml` under the run
+directory. Column values are left unchanged — replacement execution lands in a
+later update.
 
-On this branch, set `replace_pii: null`, pass `--no-replace-pii`, or call
-`.with_replace_pii(enable=False)` to run NeMo Safe Synthesizer.
+Disable with `replace_pii: null`, `--no-replace-pii`, or
+`.with_replace_pii(enable=False)`.

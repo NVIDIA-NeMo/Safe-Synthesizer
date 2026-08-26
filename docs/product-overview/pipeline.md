@@ -35,9 +35,10 @@ The pipeline begins by loading your input data (CSV or DataFrame) and preparing 
 
 ### 2. PII Replacement
 
-PII replacement v3 will be added in a later update. On this branch, disable PII replacement with
-`--no-replace-pii` (CLI), `replace_pii: null` (configuration), or
-`.with_replace_pii(enable=False)` (SDK).
+When enabled, the pipeline runs heuristic auto-discovery (or loads a user plan)
+and writes `pii_replacement_plan.yaml` under the run directory. Column values
+are left unchanged on this branch. Disable with `--no-replace-pii` (CLI),
+`replace_pii: null` (configuration), or `.with_replace_pii(enable=False)` (SDK).
 
 See [PII Replacement](pii_replacement.md) for detailed PII Replacement documentation.
 

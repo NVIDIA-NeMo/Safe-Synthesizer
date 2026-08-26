@@ -536,10 +536,12 @@ See [Configuration Reference -- Data](configuration.md#data) for the full parame
 
 ## PII Replacement
 
-PII replacement v3 will be added and documented in a later update.
+When enabled (the default), `process_data` resolves a replacement plan
+(auto-discovery by default) and writes `pii_replacement_plan.yaml` under the
+run directory. Column values are left unchanged on this branch.
 
-On this branch, set `replace_pii: null`, pass `--no-replace-pii`, or call
-`.with_replace_pii(enable=False)` before running the pipeline.
+Disable with `replace_pii: null`, `--no-replace-pii`, or
+`.with_replace_pii(enable=False)`.
 
 ---
 

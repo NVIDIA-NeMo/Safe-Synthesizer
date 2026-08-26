@@ -433,13 +433,33 @@ class SafeSynthesizer(ConfigBuilder):
         resolved_config = resolver()
         self._nss_config = resolved_config
 
-        # PII replacement is intentionally unavailable on this removal-only
-        # branch. Keep validation usable, but require callers running the
-        # pipeline to disable PII explicitly.
+        # PII: discover/load a plan and write it under the run dir. Value
+        # replacement is still a no-op on this branch (training data unchanged).
+        # Skipped on ``check_only`` / ``--validate`` so validation stays fast.
         if not check_only and self._nss_config.replace_pii is not None:
-            raise ParameterError(
-                "PII replacement is not available on this branch. Set replace_pii to null, "
-                "pass --no-replace-pii, or call with_replace_pii(enable=False)."
+            from ..pii_replacer.planning import (
+                PII_REPLACEMENT_PLAN_FILENAME,
+                resolve_plan,
+                save_plan_to_path,
+            )
+
+            assert self._workdir is not None
+            self._workdir.ensure_directories()
+            t0 = time.monotonic()
+            plan = resolve_plan(
+                self._nss_config.replace_pii,
+                self._training_df,
+                group_key=self._nss_config.data.group_training_examples_by,
+            )
+            plan_path = save_plan_to_path(
+                plan,
+                self._workdir.run_dir / PII_REPLACEMENT_PLAN_FILENAME,
+            )
+            self._pii_replacer_time = time.monotonic() - t0
+            self._column_statistics = {}
+            logger.user.info(
+                f"[PII Replacement] Wrote plan to {plan_path}. "
+                "Column values are left unchanged on this branch (replacement no-op)."
             )
 
         # Only create new metadata if not already loaded (e.g., from load_from_save_path)

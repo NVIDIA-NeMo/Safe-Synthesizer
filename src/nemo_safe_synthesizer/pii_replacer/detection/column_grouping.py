@@ -20,9 +20,9 @@ from ..entities import (
 )
 from ..models import (
     ColumnEvidence,
-    DemographicAttribute,
     DetectedField,
     DetectedStandalone,
+    DemographicAttribute,
     DiscoveryResult,
     SamePersonBundle,
 )
@@ -43,7 +43,7 @@ def allocation_skip_reason(entity_spec: EntitySpec, value_entity: str | None) ->
 
     Discovery gates only:
     - ``requires_value_match`` entities need a matching dominant value entity
-    - ``date_of_birth`` needs date-shaped values (classifier emits ``"date"``)
+    - ``date_of_birth`` needs date-shaped values (classifier emits ``\"date\"``)
 
     Apply-time per-entity generate / persona sampling is deferred to the
     execution PR (see ``pii_replacement_plan_spec.md``).
@@ -88,7 +88,10 @@ def detect_structured_columns(df_subset: pd.DataFrame, cfg: Config) -> Discovery
     def _add_person_field(col: str, label: str) -> None:
         if label in person_fields:
             prior = person_fields[label]
-            raise ParameterError(f"{_MULTI_PERSON_MSG} Found multiple {label!r} columns ({prior!r} and {col!r}).")
+            raise ParameterError(
+                f"{_MULTI_PERSON_MSG} "
+                f"Found multiple {label!r} columns ({prior!r} and {col!r})."
+            )
         person_fields[label] = col
         logger.runtime.info(f"[PII Replacement] Same-person column {col!r} (entity={label})")
 
