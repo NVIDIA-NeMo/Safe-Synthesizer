@@ -112,15 +112,19 @@ def test_opaque_hex_is_unique_identifier_not_api_key():
     assert spec is not None and spec.entity_type == EntityType.unique_identifier
 
 
-def test_org_like_full_name_is_still_planned():
-    """Content gates for org-shaped names were removed; header match is enough."""
+def test_org_name_column_skipped_mary_health_kept(caplog):
+    import logging
+
+    from nemo_safe_synthesizer.pii_replacer.detection import looks_like_person_name
     from nemo_safe_synthesizer.pii_replacer.planning import discover_plan
 
+    assert looks_like_person_name("Mary Health")
+    assert not looks_like_person_name("Regional Health Partners")
+    caplog.set_level(logging.WARNING)
     n = 30
     df = pd.DataFrame({"provider_name": ["Regional Health Partners"] * n})
     plan = discover_plan(df, None, config_from_replace_pii(ReplacePiiConfig()), ReplacePiiConfig())
-    provider = column_spec(plan, "provider_name")
-    assert provider is not None and provider.entity_type == EntityType.full_name
+    assert column_spec(plan, "provider_name") is None
 
 
 def test_temporal_values_identified_without_temporal_header(caplog):
@@ -141,9 +145,12 @@ def test_temporal_values_identified_without_temporal_header(caplog):
     assert any("Identified temporal column 'misc_col'" in r.getMessage() for r in caplog.records)
 
 
-def test_multi_person_cell_header_without_name_pattern_unplanned():
+def test_multi_person_cell_not_auto_assigned(caplog):
+    import logging
+
     from nemo_safe_synthesizer.pii_replacer.planning import discover_plan
 
+    caplog.set_level(logging.WARNING)
     n = 30
     df = pd.DataFrame({"guardians": [f"Jane Doe and John Doe {i}" for i in range(n)]})
     plan = discover_plan(df, None, config_from_replace_pii(ReplacePiiConfig()), ReplacePiiConfig())
@@ -158,8 +165,7 @@ def test_failed_luhn_card_does_not_become_phone():
     assert match_value_entity("4111-1111-1111-1111") == "credit_debit_card"  # valid Luhn Visa test
 
 
-def test_sequential_integer_ids_are_planned_as_unique_identifier():
-    """Sequential-integer content gate was removed; strong ``*_id`` headers still plan."""
+def test_sequential_integer_id_skipped_any_origin():
     from nemo_safe_synthesizer.pii_replacer.planning import discover_plan
 
     n = 30
@@ -171,20 +177,24 @@ def test_sequential_integer_ids_are_planned_as_unique_identifier():
         }
     )
     plan = discover_plan(df, None, config_from_replace_pii(ReplacePiiConfig()), ReplacePiiConfig())
-    for col in ("row_id", "member_id", "gapped_id"):
-        spec = column_spec(plan, col)
-        assert spec is not None and spec.entity_type == EntityType.unique_identifier
+    assert column_spec(plan, "row_id") is None
+    assert column_spec(plan, "member_id") is None
+    gapped = column_spec(plan, "gapped_id")
+    assert gapped is not None and gapped.entity_type == EntityType.unique_identifier
 
 
 def test_numeric_ssn_and_national_id_keep_header_entity():
-    """Numeric probe must preserve ssn/national_id entity from the header."""
+    """Numeric probe must preserve ssn/national_id; sequential skip is unique_identifier-only."""
     from nemo_safe_synthesizer.pii_replacer.planning import discover_plan
 
     n = 30
     df = pd.DataFrame(
         {
+            # Contiguous ints under an ssn header must still be planned as ssn.
             "ssn": [100000000 + i for i in range(n)],
+            # Contiguous ints under national_id must still be planned as national_id.
             "national_id": [200000000 + i for i in range(n)],
+            # Gapped numeric unique_identifier still planned (unchanged).
             "member_id": [100000 + i * 17 for i in range(n)],
         }
     )
@@ -197,10 +207,12 @@ def test_numeric_ssn_and_national_id_keep_header_entity():
     assert mid is not None and mid.entity_type == EntityType.unique_identifier
 
 
-def test_street_name_only_still_planned_as_street_address():
-    """House-number content gate was removed; street header is enough."""
+def test_street_name_only_not_planned_as_street_address():
+    from nemo_safe_synthesizer.pii_replacer.detection import looks_like_street_address
     from nemo_safe_synthesizer.pii_replacer.planning import discover_plan
 
+    assert looks_like_street_address("123 Main St")
+    assert not looks_like_street_address("Maple Avenue")
     n = 30
     df = pd.DataFrame(
         {
@@ -210,7 +222,9 @@ def test_street_name_only_still_planned_as_street_address():
     )
     plan = discover_plan(df, None, config_from_replace_pii(ReplacePiiConfig()), ReplacePiiConfig())
     street = column_spec(plan, "street")
-    assert street is not None and street.entity_type == EntityType.street_address
+    # Street-name-only values are not street_address; they may still be free_text
+    # once structured PII exists to propagate into.
+    assert street is None or street.entity_type is not EntityType.street_address
 
 
 def test_numeric_token_column_not_api_key():

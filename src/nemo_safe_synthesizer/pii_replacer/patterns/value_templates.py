@@ -13,8 +13,8 @@ from functools import lru_cache
 
 import pandas as pd
 
-from ...config.replace_pii import ENTITY_BY_TYPE, EntityType, PatternKind
 from ...observability import get_logger
+from ...config.replace_pii import ENTITY_BY_TYPE, EntityType, PatternKind
 from ..entities import (
     Config,
     is_identify_only,

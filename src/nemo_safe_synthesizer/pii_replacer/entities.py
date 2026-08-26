@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Literal
@@ -37,6 +38,12 @@ class Config:
     execution PR checklist in ``pii_replacement_plan_spec.md``.
     """
 
+    group_constancy_threshold: float = 0.95
+    """Fraction of groups that must be single-valued for GROUP-level treatment.
+
+    Grouping itself comes from Safe Synthesizer's ``group_training_records_by``;
+    it is configured, not auto-detected.
+    """
     sampler_backend: str = "managed"
     """Synthetic value sampler backend: ``managed`` or ``faker``.
 
@@ -47,6 +54,8 @@ class Config:
     """Root of managed persona parquet assets; resolved in ``__post_init__`` when unset."""
     dominant_pattern_min_coverage: float = 85.0
     """Minimum percent of non-null values matching the dominant pattern for structured columns."""
+    name_fuzzy_threshold: float = 0.86
+    """Acceptance threshold for fuzzy column-name matching."""
     pattern_class_max: int = 6
     """Max distinct chars for a template position before it widens to a family token.
 
@@ -136,42 +145,96 @@ class EntitySpec:
     """
     requires_value_match: bool = False
     """Discovery: values must classify as this entity before the column is allocated."""
+    name_shape_gates: bool = False
+    """Discovery: reject multi-person or org-shaped samples (person-name labels)."""
     name_patterns: tuple[str, ...] = ()
     """Regex fragments matched against normalized column headers."""
+    strong_name_patterns: tuple[str, ...] = ()
+    """Subset of ``name_patterns`` that skip weak-name content gates.
+
+    Empty means every name match is treated as strong (no weak tier). When set,
+    a header that matches ``name_patterns`` but none of these is a weak match and
+    the entity handler may require extra value evidence (e.g. dominant template).
+    """
+    fuzzy_keywords: tuple[str, ...] = ()
+    """Tokens used for fuzzy header matching when exact regexes miss."""
+    role_strip_tokens: tuple[str, ...] = ()
+    """Extra column-name tokens stripped when deriving a person role prefix.
+
+    Label path segments (``first_name`` → ``first``, ``name``) are always
+    included by ``ROLE_STRIP_TOKENS``. Use this for aliases that are not in the
+    label (``fname``, ``dob``, ``telephone``, …). Do not list role words that
+    appear in ``name_patterns`` (``patient``, ``provider``, …).
+    """
 
 
 def _build_registry() -> dict[EntityType, EntitySpec]:
+    unique_id_strong_name_patterns = (
+        r"\buuid\b",
+        r"\bguid\b",
+        r"\bmrn\b",
+        r"(?:^|[_ ])id$",
+        r"\w+[_ ]id$",
+        r"identifier",
+        r"(?:^|_)key$",
+        r"(?:^|_)ref$",
+    )
+    unique_id_weak_name_pattern = r"\b\w*_?id$"
+
     specs: list[EntitySpec] = [
         EntitySpec(
             label=EntityType.first_name,
             apply_path="persona",
+            name_shape_gates=True,
             name_patterns=(
                 "first[_ ]?name",
                 "^fname$",
                 "given[_ ]?name",
             ),
+            fuzzy_keywords=(
+                "firstname",
+                "fname",
+                "givenname",
+                "forename",
+            ),
+            role_strip_tokens=("given", "forename", "fname", "names"),
         ),
         EntitySpec(
             label=EntityType.last_name,
             apply_path="persona",
+            name_shape_gates=True,
             name_patterns=(
                 "last[_ ]?name",
                 "^lname$",
                 "surname",
                 "family[_ ]?name",
             ),
+            fuzzy_keywords=(
+                "lastname",
+                "lname",
+                "surname",
+                "familyname",
+            ),
+            role_strip_tokens=("family", "surname", "lname", "names"),
         ),
         EntitySpec(
             label=EntityType.middle_name,
             apply_path="persona",
+            name_shape_gates=True,
             name_patterns=(
                 "middle[_ ]?name",
                 "^mname$",
             ),
+            fuzzy_keywords=(
+                "middlename",
+                "mname",
+            ),
+            role_strip_tokens=("mname", "names"),
         ),
         EntitySpec(
             label=EntityType.full_name,
             apply_path="persona",
+            name_shape_gates=True,
             name_patterns=(
                 "full[_ ]?name",
                 "legal[_ ]?name",
@@ -239,12 +302,69 @@ def _build_registry() -> dict[EntityType, EntitySpec]:
                 "instructor[_ ]?name",
                 "(?<![a-z])instructor(?![a-z_])",
             ),
+            fuzzy_keywords=(
+                "fullname",
+                "patientname",
+                "providername",
+                "personname",
+                "customername",
+                "clientname",
+                "employeename",
+                "physicianname",
+                "legalname",
+                "subscribername",
+                "claimant",
+                "enrollee",
+                "beneficiary",
+                "surgeonname",
+                "attendingname",
+                "contactname",
+                "primarycontact",
+                "emergencycontact",
+                "nextofkin",
+                "guardianname",
+                "spousename",
+                "dependentname",
+                "policyholder",
+                "insuredname",
+                "membername",
+                "accountholder",
+                "accountowner",
+                "cardholder",
+                "applicantname",
+                "borrowername",
+                "coborrower",
+                "cosigner",
+                "guarantorname",
+                "managername",
+                "supervisorname",
+                "agentname",
+                "attorneyname",
+                "witnessname",
+                "plaintiffname",
+                "defendantname",
+                "recipientname",
+                "sendername",
+                "passengername",
+                "guestname",
+                "drivername",
+                "studentname",
+                "teachername",
+                "instructorname",
+            ),
+            role_strip_tokens=("names",),
         ),
         EntitySpec(
             label=EntityType.email,
             apply_path="persona",
             requires_value_match=True,
             name_patterns=("e[-_ ]?mail",),
+            fuzzy_keywords=(
+                "email",
+                "emailaddress",
+                "emailaddr",
+            ),
+            role_strip_tokens=("mail",),
         ),
         EntitySpec(
             label=EntityType.phone_number,
@@ -256,6 +376,13 @@ def _build_registry() -> dict[EntityType, EntitySpec]:
                 "telephone",
                 "\\bfax\\b",
             ),
+            fuzzy_keywords=(
+                "phonenumber",
+                "telephone",
+                "mobilephone",
+                "phoneno",
+            ),
+            role_strip_tokens=("telephone", "mobile", "cell", "fax", "num", "no"),
         ),
         EntitySpec(
             label=EntityType.date_of_birth,
@@ -270,6 +397,17 @@ def _build_registry() -> dict[EntityType, EntitySpec]:
                 "fecha[_ ]?nacimiento",
                 "dob[_ ]?dt",
             ),
+            fuzzy_keywords=(
+                "dateofbirth",
+                "birthdate",
+                "birthday",
+                "bornon",
+                "birthdt",
+                "birthymd",
+                "fechanacimiento",
+                "dobdt",
+            ),
+            role_strip_tokens=("dob", "birthday", "born"),
         ),
         EntitySpec(
             label=EntityType.street_address,
@@ -279,6 +417,12 @@ def _build_registry() -> dict[EntityType, EntitySpec]:
                 "(?<!ip)(?<!ip[_ ])address",
                 "(?<![a-z])addr(?![a-z_])",
             ),
+            fuzzy_keywords=(
+                "streetaddress",
+                "homeaddress",
+                "mailingaddress",
+            ),
+            role_strip_tokens=("addr",),
         ),
         EntitySpec(
             label=EntityType.city,
@@ -286,6 +430,12 @@ def _build_registry() -> dict[EntityType, EntitySpec]:
                 "^city$",
                 "\\btown\\b",
             ),
+            fuzzy_keywords=(
+                "city",
+                "town",
+                "cityname",
+            ),
+            role_strip_tokens=("town",),
         ),
         EntitySpec(
             label=EntityType.state,
@@ -293,6 +443,12 @@ def _build_registry() -> dict[EntityType, EntitySpec]:
                 "^state$",
                 "province",
             ),
+            fuzzy_keywords=(
+                "state",
+                "province",
+                "statename",
+            ),
+            role_strip_tokens=("province",),
         ),
         EntitySpec(
             label=EntityType.zipcode,
@@ -301,6 +457,13 @@ def _build_registry() -> dict[EntityType, EntitySpec]:
                 "postcode",
                 "postal",
             ),
+            fuzzy_keywords=(
+                "zipcode",
+                "zip",
+                "postalcode",
+                "postcode",
+            ),
+            role_strip_tokens=("zip", "postal", "postcode"),
         ),
         EntitySpec(
             label=EntityType.ssn,
@@ -310,6 +473,11 @@ def _build_registry() -> dict[EntityType, EntitySpec]:
                 "\\bssn\\b",
                 "social[_ ]?security",
             ),
+            fuzzy_keywords=(
+                "socialsecurity",
+                "socialsecuritynumber",
+            ),
+            role_strip_tokens=("social",),
         ),
         EntitySpec(
             label=EntityType.national_id,
@@ -326,6 +494,14 @@ def _build_registry() -> dict[EntityType, EntitySpec]:
                 "cedula",
                 "\\bc\u00e9dula\\b",
             ),
+            fuzzy_keywords=(
+                "nationalid",
+                "passportnumber",
+                "taxid",
+                "aadhaar",
+                "dni",
+                "cedula",
+            ),
         ),
         EntitySpec(
             label=EntityType.credit_debit_card,
@@ -338,11 +514,16 @@ def _build_registry() -> dict[EntityType, EntitySpec]:
                 "\\bccn\\b",
                 "\\bpan\\b",
             ),
+            fuzzy_keywords=(
+                "creditcard",
+                "debitcard",
+                "cardnumber",
+            ),
+            role_strip_tokens=("card", "ccn", "pan", "num", "no"),
         ),
         EntitySpec(
             label=EntityType.api_key,
             apply_path="standalone_map",
-            requires_value_match=True,
             name_patterns=(
                 "api[_ ]?key",
                 "secret[_ ]?key",
@@ -350,6 +531,15 @@ def _build_registry() -> dict[EntityType, EntitySpec]:
                 "(?<![a-z])token(?![a-z])",
                 "\\bapikey\\b",
             ),
+            fuzzy_keywords=(
+                "apikey",
+                "secretkey",
+                "accesskey",
+                "apitoken",
+                "accesstoken",
+                "secrettoken",
+            ),
+            role_strip_tokens=("secret", "token", "access"),
         ),
         EntitySpec(
             label=EntityType.ipv4,
@@ -361,28 +551,36 @@ def _build_registry() -> dict[EntityType, EntitySpec]:
                 "^ip$",
                 "ip[_ ]?address",
             ),
+            fuzzy_keywords=(
+                "ipaddress",
+                "ipaddr",
+            ),
+            role_strip_tokens=("ip", "addr"),
         ),
         EntitySpec(
             label=EntityType.ipv6,
             apply_path="standalone_map",
             requires_value_match=True,
             name_patterns=("ipv6",),
+            fuzzy_keywords=(
+                "ipv6",
+                "ipv6address",
+            ),
+            role_strip_tokens=("ip",),
         ),
         EntitySpec(
             label=EntityType.unique_identifier,
             apply_path="standalone_map",
-            # Known limitation: columns like ``userid`` / ``valid`` are not
-            # auto-discovered as unique_identifier. Use hand-plan / LLM mode.
-            name_patterns=(
-                r"\buuid\b",
-                r"\bguid\b",
-                r"\bmrn\b",
-                r"(?:^|[_ ])id$",
-                r"\w+[_ ]id$",
-                r"identifier",
-                r"(?:^|_)key$",
-                r"(?:^|_)ref$",
+            # Strong names skip the weak-``*id`` dominant-template gate; the catch-all
+            # weak pattern still matches English leftovers (``valid``, ``userid``) but
+            # ``UniqueIdentifierHandler`` requires a dominant identifier template then.
+            strong_name_patterns=unique_id_strong_name_patterns,
+            name_patterns=unique_id_strong_name_patterns + (unique_id_weak_name_pattern,),
+            fuzzy_keywords=(
+                "uniqueidentifier",
+                "mrn",
             ),
+            role_strip_tokens=("uuid", "guid", "id", "key", "ref", "mrn"),
         ),
         EntitySpec(
             label=EntityType.date,
@@ -409,7 +607,8 @@ def _validate_apply_paths(registry: Mapping[EntityType, EntitySpec]) -> None:
             )
         if apply_path is None and action is EntityAction.replace:
             raise InternalError(
-                f"EntitySpec {entity_type!r} is replaceable but apply_path is None; set 'persona' or 'standalone_map'."
+                f"EntitySpec {entity_type!r} is replaceable but apply_path is None; "
+                "set 'persona' or 'standalone_map'."
             )
 
 
@@ -436,12 +635,103 @@ def is_propagate(label: str) -> bool:
     return entity_type is not None and ENTITY_BY_TYPE[entity_type].action is EntityAction.propagate
 
 
-# Name match tables derived from the registry (detect still consumes these).
+# ===========================================================================
+# Entity behavior base
+# ===========================================================================
+class EntityHandler(ABC):
+    """Discovery attach point for a label: when a name-matched column may allocate.
+
+    ``EntitySpec`` is data (replace routing, discovery gates). Handlers add
+    ``skip_reason`` behavior. Apply-time methods (``generate``, ``persona_value``,
+    ``plan_pattern_rejection``, ``match_value``) are restored in the execution PR
+    — see ``pii_replacement_plan_spec.md``.
+    """
+
+    label: str
+    """Engine entity name this handler speaks for."""
+
+    @abstractmethod
+    def skip_reason(
+        self,
+        series: pd.Series,
+        value_entity: str | None,
+        apply_path: str,
+        *,
+        column_name: str | None = None,
+        cfg: Config | None = None,
+    ) -> str | None:
+        """Return why discovery must not allocate this name-matched column.
+
+        Args:
+            series: Column values under consideration.
+            value_entity: Entity inferred from values, if any.
+            apply_path: Effective apply path for this label.
+            column_name: Header for entity-specific name tiers (e.g. strong/weak).
+            cfg: Engine configuration for entity-specific content gates.
+
+        Returns:
+            A human-readable skip reason, or ``None`` when the column may allocate.
+        """
+
+
+# Name / fuzzy match tables derived from the registry (detect still consumes these).
 # Keys are ``EntityType.value`` strings so header matchers stay string-keyed.
 ENTITY_NAME_PATTERNS: dict[str, list[str]] = {
     s.label.value: list(s.name_patterns) for s in ENTITY_REGISTRY.values() if s.name_patterns
 }
+FUZZY_KEYWORDS: dict[str, list[str]] = {
+    s.label.value: list(s.fuzzy_keywords) for s in ENTITY_REGISTRY.values() if s.fuzzy_keywords
+}
 
+# Function words dropped when splitting entity labels into role-strip tokens
+# (``date_of_birth`` → ``date``, ``birth``, not ``of``).
+_ROLE_LABEL_STOPWORDS = frozenset({"of", "the", "a", "an", "and", "or", "to", "for"})
+
+# Weak column qualifiers that are never person role prefixes.
+_ROLE_WEAK_QUALIFIERS = frozenset(
+    {
+        "primary",
+        "secondary",
+        "main",
+        "other",
+        "alt",
+        "alternate",
+        "additional",
+    }
+)
+
+# Demographic column tokens (read-only ``depends_on`` sources), plus common aliases.
+_ROLE_DEMO_STRIP_TOKENS = frozenset(
+    {
+        "sex",
+        "gender",
+        "race",
+        "ethnic",
+        "ethnicity",
+        "background",
+    }
+)
+
+
+def _build_role_strip_tokens() -> frozenset[str]:
+    """Suffix lexicon for person role-prefix derivation from column names.
+
+    Built from entity labels + per-entity ``role_strip_tokens`` aliases, demographic
+    tokens, and weak qualifiers. Deliberately does **not** harvest ``name_patterns`` /
+    ``fuzzy_keywords``, which include role words (``patient``, ``provider``, …).
+    """
+    tokens: set[str] = set(_ROLE_WEAK_QUALIFIERS) | set(_ROLE_DEMO_STRIP_TOKENS)
+    for s in ENTITY_REGISTRY.values():
+        if is_propagate(s.label.value):
+            continue
+        tokens.update(
+            part for part in s.label.value.split("_") if part and part not in _ROLE_LABEL_STOPWORDS
+        )
+        tokens.update(s.role_strip_tokens)
+    return frozenset(tokens)
+
+
+ROLE_STRIP_TOKENS: frozenset[str] = _build_role_strip_tokens()
 
 # Only gender and ethnic_background are used to condition synthetic-name generation.
 # Faker only conditions given names on gender, so ethnic_background is omitted for that backend.
@@ -462,6 +752,37 @@ DEMO_LABEL_PATTERNS: dict[str, list[str]] = {
     "gender": [r"^sex$", r"gender"],
     "ethnic_background": [r"race", r"ethnic"],
 }
+
+# Keyword spellings for fuzzy resolution when a header matches both an entity and a
+# demographic label (or multiple demos). Kept separate from ``FUZZY_KEYWORDS`` so the
+# no-regex fuzzy backstop can still prefer entity typos over bare demographic words.
+DEMO_FUZZY_KEYWORDS: dict[str, list[str]] = {
+    "gender": ["sex", "gender"],
+    "ethnic_background": ["race", "ethnic", "ethnicity", "ethnicbackground"],
+}
+
+ORG_KEYWORDS = [
+    "hospital",
+    "clinic",
+    "center",
+    "centre",
+    "health",
+    "medical",
+    "institute",
+    "department",
+    "dept",
+    "university",
+    "inc",
+    "llc",
+    "ltd",
+    "corp",
+    "system",
+    "associates",
+    "partners",
+    "regional",
+    "group",
+    "services",
+]
 
 
 def sval(value: object) -> str | None:

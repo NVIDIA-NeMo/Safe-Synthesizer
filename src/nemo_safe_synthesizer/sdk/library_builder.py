@@ -446,7 +446,7 @@ class SafeSynthesizer(ConfigBuilder):
             assert self._workdir is not None
             self._workdir.ensure_directories()
             t0 = time.monotonic()
-            plan, depends_on_hints = resolve_plan(
+            plan = resolve_plan(
                 self._nss_config.replace_pii,
                 self._training_df,
                 group_key=self._nss_config.data.group_training_examples_by,
@@ -454,7 +454,6 @@ class SafeSynthesizer(ConfigBuilder):
             plan_path = save_plan_to_path(
                 plan,
                 self._workdir.run_dir / PII_REPLACEMENT_PLAN_FILENAME,
-                depends_on_hints=depends_on_hints,
             )
             self._pii_replacer_time = time.monotonic() - t0
             self._column_statistics = {}

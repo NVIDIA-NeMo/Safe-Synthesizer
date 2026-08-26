@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import pandas as pd
 
+import pytest
 from nemo_safe_synthesizer.config.replace_pii import (
     EntityType,
     PiiReplacementScope,
@@ -15,7 +16,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     ReplacePiiConfig,
 )
 from nemo_safe_synthesizer.pii_replacer.entities import Config, config_from_replace_pii
-from nemo_safe_synthesizer.pii_replacer.planning import discover_plan, discover_plan_with_hints
+from nemo_safe_synthesizer.pii_replacer.planning import discover_plan
 from tests.pii_replacer.helpers import PHONE_MINORITY, column_spec, depends_on_columns
 
 
@@ -63,14 +64,13 @@ def test_detected_to_plan_warns_on_unmapped_entity_label(caplog):
     from nemo_safe_synthesizer.pii_replacer.planning.discovery import _detected_to_plan
 
     caplog.set_level(logging.WARNING)
-    plan, hints = _detected_to_plan(
+    plan = _detected_to_plan(
         DiscoveryResult.from_dict(
             {
                 "same_person_bundles": [
                     {
-                        "bundle_id": "person",
+                        "bundle_id": "person_1",
                         "fields": {"not_a_real_entity": {"column": "weird_col", "pattern": None}},
-                        "demographics": {},
                     }
                 ],
                 "standalone_columns": [],
@@ -79,9 +79,9 @@ def test_detected_to_plan_warns_on_unmapped_entity_label(caplog):
             }
         ),
         scope=PiiReplacementScope.dataframe,
+        df=pd.DataFrame({"weird_col": ["x"]}),
     )
     assert plan.columns_to_replace == []
-    assert hints == []
     assert any("not_a_real_entity" in r.getMessage() for r in caplog.records)
 
 
@@ -209,13 +209,14 @@ def test_name_parts_prefer_full_name_over_demographics():
     assert "gender" not in depends_on_columns(first)
 
 
-def test_prefix_free_columns_still_link_full_name_depends_on():
-    """Distinct headers still emit first/last → full_name edges under one subject."""
+def test_prefix_free_name_agreement_links_full_name_depends_on():
+    """Name-agreement (no shared role prefix) still emits first/last → full_name edges."""
     n = 40
     df = pd.DataFrame(
         {
             "first_name": [f"Alice{i}" for i in range(n)],
             "last_name": [f"Smith{i}" for i in range(n)],
+            # ``legal_name`` → full_name; role prefix ``legal`` ≠ bare first/last.
             "legal_name": [f"Alice{i} Smith{i}" for i in range(n)],
             "gender": (["Female", "Male"] * (n // 2))[:n],
         }
@@ -251,32 +252,27 @@ def test_email_prefers_name_parts_over_full_name():
     assert "full_name" not in deps
 
 
-def test_duplicate_persona_columns_emit_unlinked_plan_with_hints():
-    """Duplicate persona entity types → flat plan, empty depends_on, YAML hints."""
+def test_demographics_consumed_once_per_column():
+    """Bare gender/ethnicity attach to the first same-person column bundle only (subject, not spouse)."""
     n = 40
     df = pd.DataFrame(
         {
             "first_name": [f"Alice{i}" for i in range(n)],
             "spouse_first_name": [f"Bob{i}" for i in range(n)],
-            "full_name": [f"Alice{i} Smith{i}" for i in range(n)],
             "gender": (["Female", "Male"] * (n // 2))[:n],
+            "spouse_gender": (["Male", "Female"] * (n // 2))[:n],
+            "ethnicity": (["White", "Black"] * (n // 2))[:n],
         }
     )
     config, cfg = _cfg()
-    plan, hints = discover_plan_with_hints(df, None, cfg, config)
-    cols = {spec.column_name for spec in plan.columns_to_replace}
-    assert cols == {"first_name", "spouse_first_name", "full_name"}
-    assert all(not spec.depends_on for spec in plan.columns_to_replace)
-    # name parts prefer full_name when present; full_name can depend on gender
-    assert any("first_name (first_name) can depends_on full_name" in h for h in hints)
-    assert any("spouse_first_name (first_name) can depends_on full_name" in h for h in hints)
-    assert any("full_name (full_name) can depends_on gender" in h for h in hints)
-
-    from nemo_safe_synthesizer.pii_replacer.planning import plan_to_commented_yaml
-
-    yaml_text = plan_to_commented_yaml(plan, depends_on_hints=hints)
-    assert "# depends_on omitted:" in yaml_text
-    assert "#   - first_name (first_name) can depends_on full_name" in yaml_text
+    plan = discover_plan(df, None, cfg, config)
+    subject = column_spec(plan, "first_name")
+    spouse = column_spec(plan, "spouse_first_name")
+    assert subject is not None and spouse is not None
+    assert "gender" in depends_on_columns(subject)
+    assert "ethnicity" in depends_on_columns(subject)
+    assert "spouse_gender" in depends_on_columns(spouse)
+    assert "ethnicity" not in depends_on_columns(spouse)
 
 
 def test_discover_plan_falls_back_to_dataframe_scope_when_group_key_missing(caplog):

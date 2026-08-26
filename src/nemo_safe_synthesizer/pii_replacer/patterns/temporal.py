@@ -158,6 +158,21 @@ def match_duration_format(value: object) -> str | None:
     return None
 
 
+def detect_date_format(sample: str) -> str:
+    """Return the best strftime format for one date/datetime sample.
+
+    Args:
+        sample: One date or datetime string.
+
+    Returns:
+        A strftime format string; unparseable samples default to ``"%Y-%m-%d"``.
+
+    Example:
+        ``"03/15/2020"`` -> ``"%m/%d/%Y"``.
+    """
+    return match_datetime_format(sample) or match_date_format(sample) or "%Y-%m-%d"
+
+
 def date_patterns(values: pd.Series, *, min_coverage: float | None = None) -> list[str]:
     """Return zero or one strftime format for plan emission.
 

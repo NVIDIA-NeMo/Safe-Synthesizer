@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
 from pathlib import Path
 
 import pandas as pd
@@ -70,28 +69,17 @@ def load_plan_from_path(path: str) -> PiiReplacementPlan:
         raise ParameterError(f"Invalid PII replacement plan in {path!r}: {exc}") from exc
 
 
-def plan_to_commented_yaml(
-    plan: PiiReplacementPlan,
-    *,
-    depends_on_hints: Sequence[str] | None = None,
-) -> str:
+def plan_to_commented_yaml(plan: PiiReplacementPlan) -> str:
     """Serialize a plan to YAML with a header and per-section explanations.
 
     Args:
         plan: Replacement plan to serialize.
-        depends_on_hints: Optional comment lines (no leading ``#``) suggesting
-            ``depends_on`` edits when auto-discovery left edges empty.
 
     Returns:
         YAML string with header comments and section explanations.
     """
     data = json.loads(plan.model_dump_json(exclude_none=True, exclude_defaults=True))
     dumped = yaml.safe_dump(data, sort_keys=False)
-
-    header = PLAN_YAML_HEADER
-    if depends_on_hints:
-        hint_block = "\n".join(f"# {line}" if line else "#" for line in depends_on_hints)
-        header = PLAN_YAML_HEADER + hint_block + "\n\n"
 
     lines: list[str] = []
     for line in dumped.splitlines():
@@ -102,28 +90,22 @@ def plan_to_commented_yaml(
                 lines.append("")
             lines.append(comment.rstrip("\n"))
         lines.append(line)
-    return header + "\n".join(lines) + "\n"
+    return PLAN_YAML_HEADER + "\n".join(lines) + "\n"
 
 
-def save_plan_to_path(
-    plan: PiiReplacementPlan,
-    path: str | Path,
-    *,
-    depends_on_hints: Sequence[str] | None = None,
-) -> Path:
+def save_plan_to_path(plan: PiiReplacementPlan, path: str | Path) -> Path:
     """Write a replacement plan as YAML, omitting null and default values.
 
     Args:
         plan: Replacement plan to persist.
         path: Output file path; parent directories are created as needed.
-        depends_on_hints: Optional ``depends_on`` suggestion lines for the header.
 
     Returns:
         Resolved output ``Path``.
     """
     out = Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(plan_to_commented_yaml(plan, depends_on_hints=depends_on_hints))
+    out.write_text(plan_to_commented_yaml(plan))
     return out
 
 
@@ -132,7 +114,7 @@ def resolve_plan(
     df: pd.DataFrame,
     *,
     group_key: str | None,
-) -> tuple[PiiReplacementPlan, list[str]]:
+) -> PiiReplacementPlan:
     """Resolve a replacement plan from auto-discovery, file, or inline config.
 
     Validation and protected-column stripping land in follow-up PRs. This path
@@ -144,25 +126,24 @@ def resolve_plan(
         group_key: Training group column name, or ``None`` for dataframe scope.
 
     Returns:
-        ``(plan, depends_on_hints)``. Hints are non-empty only for ambiguous
-        auto-discovery; file/inline sources return an empty hint list.
+        ``PiiReplacementPlan`` from discovery, a plan file, or an inline plan.
 
     Raises:
         ParameterError: When the plan source is missing or invalid.
     """
     if config.is_auto_discovery:
-        from .discovery import discover_plan_with_hints
+        from .discovery import discover_plan
 
-        return discover_plan_with_hints(
+        return discover_plan(
             df,
             group_key,
             entities.config_from_replace_pii(config),
             config,
         )
     if config.plan_path is not None:
-        return load_plan_from_path(config.plan_path), []
+        return load_plan_from_path(config.plan_path)
     if config.inline_plan is not None:
-        return config.inline_plan, []
+        return config.inline_plan
     raise ParameterError(
         "replace_pii.replacement_plan must be 'auto_discovery', a path to a plan file, or an inline plan"
     )
