@@ -25,9 +25,8 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiSamplerConfig,
     ReplacePiiConfig,
 )
-from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.pii_replacer.entities import config_from_replace_pii
-from nemo_safe_synthesizer.pii_replacer.planning import discover_plan
+from nemo_safe_synthesizer.pii_replacer.planning import discover_plan, discover_plan_with_hints
 
 _STUB = Path(__file__).resolve().parents[1] / "stub_datasets"
 _GOLDEN = Path(__file__).resolve().parent / "golden"
@@ -59,10 +58,13 @@ def test_discover_plan_matches_golden(stem: str, csv_name: str, group_key: str |
     assert _plan_fingerprint(discovered) == _plan_fingerprint(expected)
 
 
-def test_patient_events_multi_person_raises():
-    """Heuristics mode refuses multi-person stubs (patient + provider names)."""
+def test_patient_events_multi_person_emits_unlinked_plan():
+    """Heuristics mode flattens multi-person stubs (patient + provider names)."""
     config = ReplacePiiConfig(sampler=PiiSamplerConfig(backend=PiiSamplerBackend.faker))
     cfg = config_from_replace_pii(config)
     df = pd.read_csv(_STUB / "sample-patient-events-12groups-200-records.csv")
-    with pytest.raises(ParameterError, match="more than one person"):
-        discover_plan(df, group_key="patient_id", cfg=cfg, config=config)
+    plan, hints = discover_plan_with_hints(df, group_key="patient_id", cfg=cfg, config=config)
+    assert plan.scope is not None
+    assert all(not spec.depends_on for spec in plan.columns_to_replace)
+    assert hints
+    assert any("depends_on omitted" in h for h in hints)

@@ -61,9 +61,10 @@ class DetectedField:
 class SamePersonBundle:
     """Columns that describe one person (persona-backed fields + demographics).
 
-    Heuristics discovery does not cluster columns into roles; it places every
-    allocated persona field into a single bundle (or errors on duplicate entity
-    types). LLM mode may emit multiple bundles later.
+    Heuristics discovery does not cluster columns into roles. When every
+    persona-backed entity type appears at most once, fields go here as a single
+    bundle. Duplicate entity types flatten to standalone columns instead (see
+    ``DiscoveryResult.person_link_ambiguous``). LLM mode may emit multiple bundles later.
     """
 
     bundle_id: str
@@ -126,8 +127,10 @@ class DiscoveryResult:
     same_person_bundles: list[SamePersonBundle] = field(default_factory=list)
     """Same-person column bundles with demographic conditioners.
 
-    Heuristics-only mode allows at most one bundle (a second persona-backed
-    column of the same entity type raises). LLM mode may produce multiple.
+    Heuristics emits at most one bundle when entity types are unique. When the
+    same persona entity type appears on multiple columns, bundles stay empty and
+    those columns are listed under ``standalone_columns`` with
+    ``person_link_ambiguous=True``.
     """
     standalone_columns: list[DetectedStandalone] = field(default_factory=list)
     """Columns replaced independently of any same-person bundle."""
@@ -135,6 +138,10 @@ class DiscoveryResult:
     """Column names detected but excluded from replacement (identify-only temporals)."""
     free_text_columns: list[str] = field(default_factory=list)
     """Prose columns selected for free-text PII propagation."""
+    person_link_ambiguous: bool = False
+    """True when duplicate persona entity types prevented same-person linking."""
+    conditioning_demographics: dict[DemographicAttribute, str] = field(default_factory=dict)
+    """Gender / ethnicity columns kept for depends_on hints when linking is ambiguous."""
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -142,6 +149,8 @@ class DiscoveryResult:
             "standalone_columns": [s.to_dict() for s in self.standalone_columns],
             "identified_not_replaced": list(self.identified_not_replaced),
             "free_text_columns": list(self.free_text_columns),
+            "person_link_ambiguous": self.person_link_ambiguous,
+            "conditioning_demographics": dict(self.conditioning_demographics),
         }
 
     @classmethod
@@ -150,9 +159,14 @@ class DiscoveryResult:
         standalone_raw = cast(Sequence[Mapping[str, object]], raw.get("standalone_columns") or [])
         identified = cast(Sequence[object], raw.get("identified_not_replaced") or [])
         free_text = cast(Sequence[object], raw.get("free_text_columns") or [])
+        demos_raw = cast(Mapping[str, object], raw.get("conditioning_demographics") or {})
         return cls(
             same_person_bundles=[SamePersonBundle.from_dict(b) for b in bundles_raw],
             standalone_columns=[DetectedStandalone.from_dict(s) for s in standalone_raw],
             identified_not_replaced=[str(c) for c in identified],
             free_text_columns=[str(c) for c in free_text],
+            person_link_ambiguous=bool(raw.get("person_link_ambiguous", False)),
+            conditioning_demographics={
+                cast(DemographicAttribute, str(k)): str(v) for k, v in demos_raw.items()
+            },
         )

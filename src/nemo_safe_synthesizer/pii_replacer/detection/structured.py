@@ -5,9 +5,10 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
+
 import pandas as pd
 
-from ...errors import ParameterError
 from ...observability import get_logger
 from ..entities import (
     DEMO_LABEL_PATTERNS,
@@ -31,11 +32,6 @@ from .column_names import match_column_header, name_supports_value_entity
 from .value_recognizers import analyze_column_patterns, probe_numeric_column
 
 logger = get_logger(__name__)
-
-_MULTI_PERSON_MSG = (
-    "Looks like there is more than one person in the dataset. "
-    "Heuristic auto-discovery supports a single subject; use LLM mode for multi-person data."
-)
 
 
 def allocation_skip_reason(entity_spec: EntitySpec, value_entity: str | None) -> str | None:
@@ -61,9 +57,10 @@ def allocation_skip_reason(entity_spec: EntitySpec, value_entity: str | None) ->
 def detect_structured_columns(df_subset: pd.DataFrame, cfg: Config) -> DiscoveryResult:
     """Detect persona-backed and standalone PII columns.
 
-    Heuristics mode assumes a single subject: at most one column per
-    persona-backed entity type (``apply_path="persona"``). Duplicates raise
-    ``ParameterError`` pointing at LLM mode.
+    When every persona-backed entity type (``apply_path="persona"``) appears on
+    at most one column, those fields form a single same-person bundle. Duplicate
+    entity types flatten all persona columns into ``standalone_columns`` with
+    ``person_link_ambiguous=True`` so plan emission can omit ``depends_on``.
 
     Args:
         df_subset: Dataframe whose columns are classified.
@@ -73,7 +70,7 @@ def detect_structured_columns(df_subset: pd.DataFrame, cfg: Config) -> Discovery
         Typed discovery result. ``free_text_columns`` is always empty here;
         discovery fills it via ``select_free_text_columns``.
     """
-    person_fields: dict[str, str] = {}
+    person_fields: dict[str, list[str]] = defaultdict(list)
     demo_cols: dict[str, str] = {}
     standalone: list[DetectedStandalone] = []
     identified_not_replaced: list[str] = []
@@ -86,10 +83,7 @@ def detect_structured_columns(df_subset: pd.DataFrame, cfg: Config) -> Discovery
         )
 
     def _add_person_field(col: str, label: str) -> None:
-        if label in person_fields:
-            prior = person_fields[label]
-            raise ParameterError(f"{_MULTI_PERSON_MSG} Found multiple {label!r} columns ({prior!r} and {col!r}).")
-        person_fields[label] = col
+        person_fields[label].append(col)
         logger.runtime.info(f"[PII Replacement] Same-person column {col!r} (entity={label})")
 
     def _gather(col: str) -> ColumnEvidence:
@@ -177,20 +171,39 @@ def detect_structured_columns(df_subset: pd.DataFrame, cfg: Config) -> Discovery
                 "excluded from replacement plan"
             )
 
+    demographics: dict[DemographicAttribute, str] = {}
+    for attr in demo_keys_for_backend(cfg.sampler_backend):
+        if not demo_cols.get(attr):
+            continue
+        if attr in {"gender", "ethnic_background"}:
+            demographics[attr] = demo_cols[attr]
+
+    ambiguous = any(len(cols) > 1 for cols in person_fields.values())
     same_person_bundles: list[SamePersonBundle] = []
-    if person_fields or demo_cols:
-        demographics: dict[DemographicAttribute, str] = {}
-        for attr in demo_keys_for_backend(cfg.sampler_backend):
-            if not demo_cols.get(attr):
-                continue
-            if attr in {"gender", "ethnic_background"}:
-                demographics[attr] = demo_cols[attr]
+    conditioning_demographics: dict[DemographicAttribute, str] = {}
+
+    if ambiguous:
+        dup_desc = ", ".join(
+            f"{label} ({', '.join(repr(c) for c in cols)})"
+            for label, cols in sorted(person_fields.items())
+            if len(cols) > 1
+        )
+        logger.user.warning(
+            "[PII Replacement] Multiple columns share the same person-related entity type "
+            f"({dup_desc}). Heuristic discovery cannot link them to one subject, so the "
+            "plan has no depends_on edges. Suggested depends_on edits are commented in the "
+            "plan YAML; or use LLM mode for multi-person data."
+        )
+        for label, cols in person_fields.items():
+            for col in cols:
+                standalone.append(DetectedStandalone(column=col, entity=label))
+        conditioning_demographics = demographics
+    elif person_fields or demographics:
         # Demographics-only (no persona fields) is dropped at plan emission.
-        # Heuristics mode emits at most one bundle; LLM mode may emit more later.
         same_person_bundles.append(
             SamePersonBundle(
                 bundle_id="person",
-                fields={label: DetectedField(column=col) for label, col in person_fields.items()},
+                fields={label: DetectedField(column=cols[0]) for label, cols in person_fields.items()},
                 demographics=demographics,
             )
         )
@@ -200,4 +213,6 @@ def detect_structured_columns(df_subset: pd.DataFrame, cfg: Config) -> Discovery
         free_text_columns=[],
         standalone_columns=standalone,
         identified_not_replaced=identified_not_replaced,
+        person_link_ambiguous=ambiguous,
+        conditioning_demographics=conditioning_demographics,
     )

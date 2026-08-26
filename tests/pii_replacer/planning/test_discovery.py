@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import pandas as pd
-import pytest
 
 from nemo_safe_synthesizer.config.replace_pii import (
     EntityType,
@@ -15,9 +14,8 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiSamplerConfig,
     ReplacePiiConfig,
 )
-from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.pii_replacer.entities import Config, config_from_replace_pii
-from nemo_safe_synthesizer.pii_replacer.planning import discover_plan
+from nemo_safe_synthesizer.pii_replacer.planning import discover_plan, discover_plan_with_hints
 from tests.pii_replacer.helpers import PHONE_MINORITY, column_spec, depends_on_columns
 
 
@@ -65,7 +63,7 @@ def test_detected_to_plan_warns_on_unmapped_entity_label(caplog):
     from nemo_safe_synthesizer.pii_replacer.planning.discovery import _detected_to_plan
 
     caplog.set_level(logging.WARNING)
-    plan = _detected_to_plan(
+    plan, hints = _detected_to_plan(
         DiscoveryResult.from_dict(
             {
                 "same_person_bundles": [
@@ -83,6 +81,7 @@ def test_detected_to_plan_warns_on_unmapped_entity_label(caplog):
         scope=PiiReplacementScope.dataframe,
     )
     assert plan.columns_to_replace == []
+    assert hints == []
     assert any("not_a_real_entity" in r.getMessage() for r in caplog.records)
 
 
@@ -252,19 +251,32 @@ def test_email_prefers_name_parts_over_full_name():
     assert "full_name" not in deps
 
 
-def test_duplicate_persona_columns_raise_multi_person():
-    """Heuristics mode supports one subject; duplicate persona entity types error."""
+def test_duplicate_persona_columns_emit_unlinked_plan_with_hints():
+    """Duplicate persona entity types → flat plan, empty depends_on, YAML hints."""
     n = 40
     df = pd.DataFrame(
         {
             "first_name": [f"Alice{i}" for i in range(n)],
             "spouse_first_name": [f"Bob{i}" for i in range(n)],
+            "full_name": [f"Alice{i} Smith{i}" for i in range(n)],
             "gender": (["Female", "Male"] * (n // 2))[:n],
         }
     )
     config, cfg = _cfg()
-    with pytest.raises(ParameterError, match="more than one person"):
-        discover_plan(df, None, cfg, config)
+    plan, hints = discover_plan_with_hints(df, None, cfg, config)
+    cols = {spec.column_name for spec in plan.columns_to_replace}
+    assert cols == {"first_name", "spouse_first_name", "full_name"}
+    assert all(not spec.depends_on for spec in plan.columns_to_replace)
+    # name parts prefer full_name when present; full_name can depend on gender
+    assert any("first_name (first_name) can depends_on full_name" in h for h in hints)
+    assert any("spouse_first_name (first_name) can depends_on full_name" in h for h in hints)
+    assert any("full_name (full_name) can depends_on gender" in h for h in hints)
+
+    from nemo_safe_synthesizer.pii_replacer.planning import plan_to_commented_yaml
+
+    yaml_text = plan_to_commented_yaml(plan, depends_on_hints=hints)
+    assert "# depends_on omitted:" in yaml_text
+    assert "#   - first_name (first_name) can depends_on full_name" in yaml_text
 
 
 def test_discover_plan_falls_back_to_dataframe_scope_when_group_key_missing(caplog):

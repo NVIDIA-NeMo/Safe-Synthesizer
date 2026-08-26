@@ -6,26 +6,31 @@
 from __future__ import annotations
 
 import pandas as pd
-import pytest
 
 from nemo_safe_synthesizer.config.replace_pii import PiiSamplerBackend, PiiSamplerConfig, ReplacePiiConfig
-from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.pii_replacer.entities import config_from_replace_pii
 from tests.pii_replacer.helpers import column_spec, depends_on_columns
 
 
-def test_duplicate_full_name_columns_raise_multi_person():
-    from nemo_safe_synthesizer.pii_replacer.planning import discover_plan
+def test_duplicate_full_name_columns_emit_unlinked_plan():
+    from nemo_safe_synthesizer.pii_replacer.planning import discover_plan, discover_plan_with_hints
 
     n = 30
     df = pd.DataFrame(
         {
             "attending_name": [f"Dr Attending{i}" for i in range(n)],
             "surgeon_name": [f"Dr Surgeon{i}" for i in range(n)],
+            "gender": (["Female", "Male"] * (n // 2))[:n],
         }
     )
-    with pytest.raises(ParameterError, match="more than one person"):
-        discover_plan(df, None, config_from_replace_pii(ReplacePiiConfig()), ReplacePiiConfig())
+    cfg = config_from_replace_pii(ReplacePiiConfig())
+    plan, hints = discover_plan_with_hints(df, None, cfg, ReplacePiiConfig())
+    assert {s.column_name for s in plan.columns_to_replace} == {"attending_name", "surgeon_name"}
+    assert all(not s.depends_on for s in plan.columns_to_replace)
+    assert any("attending_name" in h and "gender" in h for h in hints)
+    assert any("surgeon_name" in h and "gender" in h for h in hints)
+    # discover_plan stays a thin wrapper
+    assert discover_plan(df, None, cfg, ReplacePiiConfig()).columns_to_replace
 
 
 def test_non_medical_name_roles_still_match_full_name():

@@ -146,7 +146,7 @@ class TestProcessDataPiiSeparation:
         from nemo_safe_synthesizer.config.replace_pii import ReplacePiiConfig
         from nemo_safe_synthesizer.pii_replacer.planning import PII_REPLACEMENT_PLAN_FILENAME
 
-        # Single-subject frame so heuristic discovery succeeds (no multi-person error).
+        # Single-subject frame so heuristic discovery links depends_on normally.
         original_df = pd.DataFrame(
             {
                 "first_name": ["Ada", "Grace"],

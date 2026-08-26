@@ -6,13 +6,11 @@
 from __future__ import annotations
 
 import pandas as pd
-import pytest
 
 from nemo_safe_synthesizer.config.replace_pii import (
     EntityType,
     ReplacePiiConfig,
 )
-from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.pii_replacer.entities import config_from_replace_pii
 from tests.pii_replacer.helpers import column_spec
 
@@ -120,7 +118,7 @@ def test_compound_street_header_planned_as_street_address():
     assert street is not None and street.entity_type == EntityType.street_address
 
 
-def test_duplicate_street_columns_raise_multi_person():
+def test_duplicate_street_columns_emit_unlinked_plan():
     from nemo_safe_synthesizer.pii_replacer.planning import discover_plan
 
     n = 20
@@ -130,8 +128,9 @@ def test_duplicate_street_columns_raise_multi_person():
             "AddressLine1": [f"{200 + i} Orchard Road" for i in range(n)],
         }
     )
-    with pytest.raises(ParameterError, match="more than one person"):
-        discover_plan(df, None, config_from_replace_pii(ReplacePiiConfig()), ReplacePiiConfig())
+    plan = discover_plan(df, None, config_from_replace_pii(ReplacePiiConfig()), ReplacePiiConfig())
+    assert {s.column_name for s in plan.columns_to_replace} == {"MailingStreet", "AddressLine1"}
+    assert all(not s.depends_on for s in plan.columns_to_replace)
 
 
 def test_normalize_column_name_preserves_underscores():
