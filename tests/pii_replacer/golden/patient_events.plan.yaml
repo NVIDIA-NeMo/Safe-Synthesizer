@@ -1,0 +1,30 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# PII replacement plan for this dataset. Edit and pass back via
+# replace_pii.replacement_plan to override auto-discovery.
+
+# How widely one original value keeps the same synthetic value:
+# record (per row), group (per training group), or dataframe (whole dataset).
+
+# Flat columns_to_replace with optional depends_on / pattern.
+# Identify-only conditioners (gender, …) appear only as depends_on.
+
+scope: group
+columns_to_replace:
+- column_name: patient_name
+  entity_type: full_name
+  pattern: '{First} {Last}'
+  depends_on:
+  - column_name: sex
+    entity_type: gender
+- column_name: provider_name
+  entity_type: full_name
+- column_name: patient_id
+  entity_type: unique_identifier
+  pattern: pmc-[68]######-[123]
+- column_name: date_of_birth
+  entity_type: date_of_birth
+  pattern: '%m/%d/%Y'
+- column_name: event_name
+  entity_type: free_text

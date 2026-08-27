@@ -528,7 +528,6 @@ class PiiReplacementSettings(NSSBaseModel):
 
 
 class PiiSamplerBackend(StrEnum):
-    # pgm = "pgm" # Internal generator
     managed = "managed"
     faker = "faker"
 

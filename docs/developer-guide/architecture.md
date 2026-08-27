@@ -297,7 +297,7 @@ Path: `src/nemo_safe_synthesizer/config/`
 - TrainingHyperparams: training settings (learning rate, epochs, batch size, etc.)
 - GenerateParameters: generation settings (temperature, top_p, num_records, etc.)
 - EvaluationParameters: evaluation component toggles and settings
-- ReplacePiiConfig: placeholder for PII replacement v3
+- ReplacePiiConfig: PII replacement v3 config; plan discovery writes YAML (replacement no-op)
 - DifferentialPrivacyHyperparams: DP training parameters (epsilon, delta, clipping norm)
 
 ### 2. Data Processing Pipeline
@@ -305,7 +305,7 @@ Path: `src/nemo_safe_synthesizer/config/`
 Path: `src/nemo_safe_synthesizer/data_processing/`
 
 - Holdout (`holdout/`): splits data into train/test sets with stratification support
-- `pii_replacer/`: placeholder for PII replacement v3; only evaluation result models remain
+- `pii_replacer/`: PII replacement v3 discovery and plan IO; value replacement lands later
 - ActionExecutor (`actions/`): executes data transformations (date normalization, distributions)
 - ExampleAssembler (`assembler.py`): converts records to JSON format, tokenizes for model training, handles truncation and padding
 

@@ -1,6 +1,12 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Post-replacement result shapes shared with evaluation.
+
+Not used by heuristic discovery. ``ColumnStatistics`` / ``TransformResult`` are
+consumed by evaluation after a replacement run (and by the forthcoming apply PR).
+"""
+
 from __future__ import annotations
 
 import pandas as pd
