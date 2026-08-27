@@ -30,7 +30,7 @@ class ColumnEvidence:
     name_label: str | None
     """Entity label inferred from the column header, or ``None`` when no name match."""
     value_entity: str | None
-    """Dominant entity label inferred from cell values, or ``None`` when unstructured."""
+    """Best-covered entity the header allows, or ``None`` when content is unstructured."""
     analysis: dict[str, object]
     """Pattern analysis dict from ``analyze_column_patterns`` (entity, coverage, …)."""
     demo_label: str | None

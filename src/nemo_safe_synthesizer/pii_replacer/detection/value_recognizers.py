@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import re
 from collections import Counter
+from collections.abc import Mapping
+from dataclasses import dataclass
 
 import pandas as pd
 
@@ -20,6 +22,25 @@ from ..patterns import (
     pattern_evidence_values,
     value_matches_template,
     value_patterns,
+)
+from .column_names import name_supports_value_entity
+
+# Labels whose match carries a concrete strftime/template format, which
+# ``entity_coverage`` requires before it counts the match.
+_TEMPORAL_LABELS: tuple[str, ...] = ("datetime", "date", "time", "duration")
+
+# Every label ``collect_value_entities`` can emit, most specific first. The order
+# only breaks ties between candidates with identical coverage.
+_VALUE_ENTITY_LABELS: tuple[str, ...] = (
+    "email",
+    "ipv4",
+    "ipv6",
+    "unique_identifier",
+    "ssn",
+    *_TEMPORAL_LABELS,
+    "api_key",
+    "credit_debit_card",
+    "phone_number",
 )
 
 
@@ -86,19 +107,92 @@ def _looks_like_phone_punctuation(s: str) -> bool:
     return bool(re.search(r"[\s\-\.\(\)+]", s))
 
 
-# Ordered strftime formats for temporal value detection. First match wins.
-# Datetime/time are checked before date-only formats. All date entries carry a
-# separator so plain integers never match (compact YYYYMMDD is handled separately).
-def match_value_entity(value: object, *, phone_min_digits: int = 10) -> str | None:
-    """Return the best entity label for one cell value via anchored regexes.
+# Issuer identification numbers paired with the digit lengths each brand issues.
+# Luhn alone passes roughly 1 in 10 arbitrary numbers, so the prefix/length
+# pairing is what keeps phone-shaped 13-15 digit values out of the card bucket.
+_CARD_BRAND_RULES: tuple[tuple[str, re.Pattern[str], frozenset[int]], ...] = (
+    ("visa", re.compile(r"4"), frozenset({13, 16, 19})),
+    ("amex", re.compile(r"3[47]"), frozenset({15})),
+    # Diners Club issues 14-digit cards and, on the Discover network, 16-19 digit ones.
+    ("diners", re.compile(r"36|3[89]|30[0-5]|3095"), frozenset({14, 16, 17, 18, 19})),
+    ("mastercard", re.compile(r"5[1-5]|2(?:2[2-9]|[3-6]\d|7[01]|720)"), frozenset({16})),
+    ("discover", re.compile(r"6011|65|64[4-9]"), frozenset({16, 19})),
+    ("jcb", re.compile(r"35"), frozenset({16, 17, 18, 19})),
+    ("unionpay", re.compile(r"62"), frozenset({16, 17, 18, 19})),
+)
 
-    Order matters (specific to general). Used for column classification and
-    single-pattern structured columns.
+# Entities whose shape a phone number can never legitimately take. A value that
+# is a valid dotted quad, a strict 3-2-4 SSN, or a parseable temporal is not a
+# phone even when its digits and separators satisfy ``_PHONE_RE``.
+_PHONE_EXCLUSIVE_LABELS = frozenset({"ipv4", "ipv6", "ssn", "date", "datetime", "time", "duration"})
+
+
+def card_brand(digits: str) -> str | None:
+    """Return the card brand for a bare digit string, or ``None`` when none match.
 
     Example:
-        ``"jane@acme.com"`` -> ``"email"``
-        ``"415-555-0100"`` -> ``"phone_number"``
-        ``"12345"`` -> ``None``
+        ``"378282246310005"`` -> ``"amex"``
+        ``"7111111111111111"`` -> ``None``
+
+    Args:
+        digits: Digits-only card number (separators already stripped).
+
+    Returns:
+        Brand name when the issuer prefix and digit length agree, else ``None``.
+    """
+    length = len(digits)
+    for brand, prefix_re, lengths in _CARD_BRAND_RULES:
+        if length in lengths and prefix_re.match(digits):
+            return brand
+    return None
+
+
+def _looks_like_jwt_opaque(s: str) -> bool:
+    """True for JWT-like ``a.b.c`` tokens, not digit-only dotted phones.
+
+    ``818.470.1711`` matches the three-segment JWT shape but is a phone number.
+    Require at least one alphabetic character and reject all-digit segments.
+    """
+    if not _JWT_OPAQUE_RE.match(s):
+        return False
+    parts = s.split(".")
+    if len(parts) != 3:
+        return False
+    if all(p.isdigit() for p in parts):
+        return False
+    return any(c.isalpha() for c in s)
+
+
+def _normalize_value_string(value: object) -> str | None:
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return None
+    s = str(value).strip()
+    return s or None
+
+
+def collect_value_entities(value: object, *, phone_min_digits: int = 10) -> list[str]:
+    """Return every entity label whose shape ``value`` satisfies.
+
+    Each recognizer is evaluated independently, so nothing here decides what a
+    column *is*: this reports all shapes a value could be, and
+    ``analyze_column_patterns`` scores the entities its header allows. One pass
+    per value answers that for every entity at once, which is why the return type
+    is a list rather than a per-entity predicate.
+
+    Two shapes are mutually exclusive rather than reported side by side, because
+    no real value is both:
+
+    - A card-shaped value that is not a valid PAN and lacks phone-like
+      punctuation is treated as non-PII and stops further phone/api matching.
+    - ``phone_number`` is suppressed when the value already matched a shape a
+      phone cannot take (``_PHONE_EXCLUSIVE_LABELS``), such as a dotted quad,
+      a strict 3-2-4 SSN, or a parseable date. Answering "is this a phone?"
+      therefore requires evaluating those other recognizers regardless.
+
+    Example:
+        ``"3782-822463-10005"`` -> ``["credit_debit_card", "phone_number"]``
+        ``"818.470.1711"`` -> ``["phone_number"]``
+        ``"255.255.255.0"`` -> ``["ipv4"]``
 
     Args:
         value: Cell value to classify.
@@ -106,33 +200,39 @@ def match_value_entity(value: object, *, phone_min_digits: int = 10) -> str | No
             column header is already phone-like so short national numbers can match.
 
     Returns:
-        Entity label string, or ``None`` when no pattern matches.
+        Deduplicated entity labels, most specific first. Empty when nothing
+        matches. The order carries no decision weight; see ``_VALUE_ENTITY_LABELS``
+        for the order used to break coverage ties.
     """
-    if value is None or (isinstance(value, float) and pd.isna(value)):
-        return None
-    s = str(value).strip()
-    if not s:
-        return None
+    s = _normalize_value_string(value)
+    if s is None:
+        return []
+
+    matches: list[str] = []
+
     if _EMAIL_RE.match(s):
-        return "email"
+        matches.append("email")
     if _IPV4_RE.match(s):
-        return "ipv4"
+        matches.append("ipv4")
     if _IPV6_RE.match(s) and s.count(":") >= 2:
         # Guard against HH:MM:SS time strings (2 colons, all-decimal, no '::'):
         # require real ipv6 structure -- '::' compression, a hex letter, or 3+ colons.
         if "::" in s or s.count(":") >= 3 or re.search(r"[A-Fa-f]", s):
-            return "ipv6"
-    if UUID_RE.match(s):
-        return "unique_identifier"
-    if _HEX_OPAQUE_RE.match(s) or _JWT_OPAQUE_RE.match(s):
-        return "unique_identifier"
-    if _BASE64_OPAQUE_RE.match(s) and any(c.isdigit() for c in s) and any(c.isalpha() for c in s):
-        # Prefer opaque unique_identifier over api_key for long base64-like blobs
-        # without a known API prefix.
-        if not any(s.startswith(p) for p in API_PREFIXES):
-            return "unique_identifier"
-    # Long composite job/record ids (prefix + timestamp + uuid + epoch, etc.).
-    if (
+            matches.append("ipv6")
+
+    opaque = False
+    if UUID_RE.match(s) or _HEX_OPAQUE_RE.match(s) or _looks_like_jwt_opaque(s):
+        opaque = True
+    elif (
+        _BASE64_OPAQUE_RE.match(s)
+        and any(c.isdigit() for c in s)
+        and any(c.isalpha() for c in s)
+        and not any(s.startswith(p) for p in API_PREFIXES)
+    ):
+        # Long base64-like blobs without a known API prefix. These also satisfy
+        # the api_key shape below; both are reported and the header decides.
+        opaque = True
+    elif (
         len(s) >= 24
         and re.fullmatch(r"[A-Za-z0-9_\-.:]+", s)
         and any(c.isdigit() for c in s)
@@ -140,67 +240,150 @@ def match_value_entity(value: object, *, phone_min_digits: int = 10) -> str | No
         and any(c in "-_.:/" for c in s)
         and not any(s.startswith(p) for p in API_PREFIXES)
     ):
-        return "unique_identifier"
+        # Long composite job/record ids (prefix + timestamp + uuid + epoch, etc.).
+        opaque = True
+    if opaque:
+        matches.append("unique_identifier")
+
     if _SSN_RE.match(s):
-        return "ssn"
-    if match_datetime_format(s):
-        return "datetime"
-    if match_date_format(s):
-        return "date"
-    if match_time_format(s):
-        return "time"
-    if match_duration_format(s):
-        return "duration"
+        matches.append("ssn")
+    # Every temporal format table entry carries a separator, so plain integers
+    # never match here (compact YYYYMMDD is handled separately).
+    matches.extend(label for label in _TEMPORAL_LABELS if temporal_format(s, label))
     if any(s.startswith(p) for p in API_PREFIXES):
-        return "api_key"
+        matches.append("api_key")
+
     phone_s = _strip_phone_extension(s)
     d = _digits(phone_s)
-    if _CARD_RE.match(s) and 13 <= len(_digits(s)) <= 19:
-        if _luhn_ok(_digits(s)):
-            return "credit_debit_card"
-        # Failed Luhn: only fall through to phone when punctuation looks phone-like.
-        if not _looks_like_phone_punctuation(phone_s):
+    card_digits = _digits(s)
+    if _CARD_RE.match(s) and 13 <= len(card_digits) <= 19:
+        if _luhn_ok(card_digits) and card_brand(card_digits) is not None:
+            matches.append("credit_debit_card")
+        elif not _looks_like_phone_punctuation(phone_s):
+            # Bare digit run that is not a valid PAN: not card, not phone/api.
+            return matches
+
+    if (
+        _PHONE_EXCLUSIVE_LABELS.isdisjoint(matches)
+        and _PHONE_RE.match(phone_s)
+        and phone_min_digits <= len(d) <= 15
+        and _looks_like_phone_punctuation(phone_s)
+    ):
+        matches.append("phone_number")
+    if "api_key" not in matches and _API_RE.match(s) and any(c.isdigit() for c in s) and any(c.isalpha() for c in s):
+        matches.append("api_key")
+
+    return matches
+
+
+def temporal_format(value: object, label: str) -> str | None:
+    """Return the concrete strftime/template format for a temporal ``label``."""
+    match label:
+        case "datetime":
+            return match_datetime_format(value)
+        case "date":
+            return match_date_format(value)
+        case "time":
+            return match_time_format(value)
+        case "duration":
+            return match_duration_format(value)
+        case _:
             return None
-    if _PHONE_RE.match(phone_s) and phone_min_digits <= len(d) <= 15 and _looks_like_phone_punctuation(phone_s):
-        return "phone_number"
-    if _API_RE.match(s) and any(c.isdigit() for c in s) and any(c.isalpha() for c in s):
-        return "api_key"
-    return None
 
 
-def match_value_pattern(value: object, *, phone_min_digits: int = 10) -> tuple[str | None, str | None]:
-    """Return ``(entity, concrete_pattern)`` for one cell value.
+@dataclass(frozen=True)
+class EntityCoverage:
+    """Per-entity match counts for one column.
+
+    Every entity is counted independently, so a value matching two entities
+    counts toward both and the coverages do not sum to 100. That is the point:
+    it removes any ordering in which one entity's regex shadows another's.
+    """
+
+    total: int
+    """Number of sampled non-null values."""
+    counts: Mapping[str, int]
+    """Entity label to number of sampled values matching it."""
+    patterns: Mapping[str, str | None]
+    """Entity label to its most common concrete temporal format, when applicable."""
+
+    def coverage(self, label: str) -> float:
+        """Percent of sampled values matching ``label``."""
+        if not self.total:
+            return 0.0
+        return round(self.counts.get(label, 0) / self.total * 100, 1)
+
+    def pattern(self, label: str) -> str | None:
+        """Dominant concrete format for ``label``, or ``None`` when not temporal."""
+        return self.patterns.get(label)
+
+
+def entity_coverage(
+    series: pd.Series,
+    sample: int = PATTERN_SAMPLE_SIZE,
+    *,
+    phone_min_digits: int = 10,
+) -> EntityCoverage:
+    """Score every entity independently against a column's values.
 
     Example:
-        ``"03/15/2020"`` -> ``("date", "%m/%d/%Y")``
-        ``"jane@acme.com"`` -> ``("email", None)``
+        A column of ``818.470.1711``-style values ->
+        ``coverage("phone_number") == 100.0``, regardless of which other
+        recognizers those values also satisfy.
 
     Args:
-        value: Cell value to classify.
-        phone_min_digits: Minimum digit count forwarded to ``match_value_entity``.
+        series: Column values to analyze.
+        sample: Maximum non-null values to sample.
+        phone_min_digits: Minimum digit count for phone matches.
 
     Returns:
-        Tuple of entity label and concrete strftime or template pattern; both
-        ``None`` when the value does not match any entity.
+        ``EntityCoverage`` for the sampled values.
     """
-    entity = match_value_entity(value, phone_min_digits=phone_min_digits)
-    match entity:
-        case None:
-            return None, None
-        case "date":
-            fmt = match_date_format(value)
-            return ("date", fmt) if fmt else (None, None)
-        case "datetime":
-            fmt = match_datetime_format(value)
-            return ("datetime", fmt) if fmt else (None, None)
-        case "time":
-            fmt = match_time_format(value)
-            return ("time", fmt) if fmt else (None, None)
-        case "duration":
-            fmt = match_duration_format(value)
-            return ("duration", fmt) if fmt else (None, None)
-        case _:
-            return entity, None
+    non_null = series.dropna()
+    if non_null.empty:
+        return EntityCoverage(total=0, counts={}, patterns={})
+    if len(non_null) > sample:
+        non_null = non_null.sample(sample, random_state=0)
+
+    counts: Counter = Counter()
+    formats: dict[str, Counter] = {}
+    for value in non_null:
+        for label in collect_value_entities(value, phone_min_digits=phone_min_digits):
+            if label in _TEMPORAL_LABELS:
+                # Temporals only count when a concrete format is recoverable,
+                # since the plan attaches that format to the column.
+                fmt = temporal_format(value, label)
+                if fmt is None:
+                    continue
+                formats.setdefault(label, Counter())[fmt] += 1
+            counts[label] += 1
+
+    patterns = {label: max(by_format, key=lambda f: by_format[f]) for label, by_format in formats.items()}
+    return EntityCoverage(total=len(non_null), counts=dict(counts), patterns=patterns)
+
+
+def candidate_entities(name_label: str | None) -> list[str]:
+    """Entities a column may be assigned, named entity first so it wins ties.
+
+    Delegates the policy to ``name_supports_value_entity``: the header's own
+    entity, plus identify-not-replaced temporals, which are the only entities
+    allowed to be inferred from values alone.
+
+    Example:
+        ``"phone_number"`` -> ``["phone_number", "datetime", "date", "time", "duration"]``
+        ``None`` -> ``["datetime", "date", "time", "duration"]``
+
+    Args:
+        name_label: Entity label inferred from the column header, or ``None``.
+
+    Returns:
+        Candidate entity labels in tie-break order.
+    """
+    supported = [label for label in _VALUE_ENTITY_LABELS if name_supports_value_entity(name_label, label)]
+    if name_label in supported:
+        supported.remove(name_label)
+        return [name_label, *supported]
+    return supported
 
 
 def analyze_column_patterns(
@@ -209,60 +392,51 @@ def analyze_column_patterns(
     sample: int = PATTERN_SAMPLE_SIZE,
     *,
     phone_min_digits: int = 10,
+    name_label: str | None = None,
 ) -> dict:
-    """Compute dominant entity, pattern, and coverage for a column.
+    """Verify a column's content against the entities its header allows.
 
-    Coverage is aggregated by entity so mixed formats of the same entity still
-    qualify as structured.
+    Each candidate entity is scored independently (see ``entity_coverage``), then
+    the best-covered candidate is returned. Because the structured threshold is
+    above 50%, at most one entity can clear it, so scoring candidates separately
+    cannot disagree with picking a single winner -- but it does prevent one
+    entity's regex from shadowing another's on individual values.
+
+    Candidates come from ``candidate_entities``: the header's entity, plus
+    identify-not-replaced temporals. Replaceable entities are never inferred from
+    values alone.
 
     Example:
-        A column that is 90% emails ->
-        ``{entity: "email", coverage: 90.0, structured: True}``.
+        A ``phone_number`` column of ``818.470.1711`` values ->
+        ``{entity: "phone_number", coverage: 100.0, structured: True}``, even
+        though those values also satisfy an opaque-token shape.
 
     Args:
         series: Column values to analyze.
         cfg: Engine configuration with ``dominant_pattern_min_coverage`` threshold.
         sample: Maximum non-null values to sample for analysis.
-        phone_min_digits: Minimum digit count forwarded to ``match_value_pattern``.
+        phone_min_digits: Minimum digit count forwarded to value matching.
+        name_label: Entity label inferred from the column header, or ``None``.
 
     Returns:
         Dict with ``entity``, ``pattern``, ``coverage``, and ``structured`` keys.
     """
-    non_null = series.dropna()
-    if non_null.empty:
+    table = entity_coverage(series, sample, phone_min_digits=phone_min_digits)
+
+    best_label: str | None = None
+    best_coverage = 0.0
+    for label in candidate_entities(name_label):
+        label_coverage = table.coverage(label)
+        if label_coverage > best_coverage:
+            best_label, best_coverage = label, label_coverage
+
+    if best_label is None:
         return {"entity": None, "pattern": None, "coverage": 0.0, "structured": False}
-
-    if len(non_null) > sample:
-        non_null = non_null.sample(sample, random_state=0)
-    total = len(non_null)
-    counts: Counter = Counter()
-    for v in non_null:
-        entity, pattern = match_value_pattern(v, phone_min_digits=phone_min_digits)
-        if entity is None:
-            counts[("__unmatched__", None)] += 1
-        else:
-            counts[(entity, pattern)] += 1
-
-    typed = {k: c for k, c in counts.items() if k[0] != "__unmatched__"}
-    if not typed:
-        return {"entity": None, "pattern": None, "coverage": 0.0, "structured": False}
-
-    # Coverage is by entity across all of its patterns (mixed formats of the same
-    # entity still count as structured), while ``pattern`` remains the single
-    # most common concrete format for template attachment.
-    entity_totals: Counter = Counter()
-    for (entity, _pattern), count in typed.items():
-        entity_totals[entity] += count
-    entity, entity_count = max(entity_totals.items(), key=lambda kv: kv[1])
-    coverage = round(entity_count / total * 100, 1)
-    structured = coverage >= cfg.dominant_pattern_min_coverage
-    pattern_counts = {pat: c for (ent, pat), c in typed.items() if ent == entity}
-    pattern = max(pattern_counts, key=lambda pat: pattern_counts[pat]) if pattern_counts else None
     return {
-        "entity": entity,
-        "pattern": pattern,
-        "coverage": coverage,
-        "structured": structured,
+        "entity": best_label,
+        "pattern": table.pattern(best_label),
+        "coverage": best_coverage,
+        "structured": best_coverage >= cfg.dominant_pattern_min_coverage,
     }
 
 
@@ -361,7 +535,7 @@ def looks_like_api_key_value(value: object) -> bool:
         return False
     if any(s.startswith(p) for p in API_PREFIXES):
         return True
-    if _JWT_OPAQUE_RE.match(s):
+    if _looks_like_jwt_opaque(s):
         return True
     if _API_RE.match(s) and any(c.isdigit() for c in s) and any(c.isalpha() for c in s):
         return True

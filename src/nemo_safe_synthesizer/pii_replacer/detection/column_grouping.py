@@ -33,7 +33,6 @@ from ..models import (
 from ..patterns import date_patterns, split_full_name
 from .column_names import (
     match_column_header,
-    name_supports_value_entity,
     normalize_column_name_for_match,
 )
 from .value_recognizers import (
@@ -305,12 +304,10 @@ def detect_structured_columns(df_subset: pd.DataFrame, stats: dict, cfg: Config)
             col, ENTITY_NAME_PATTERNS, DEMO_LABEL_PATTERNS, cfg.name_fuzzy_threshold
         )
         phone_min = 7 if name_label == "phone_number" else 10
-        analysis = analyze_column_patterns(series, cfg, phone_min_digits=phone_min)
+        # Candidate entities are already restricted to what this header supports,
+        # so a structured result never needs a second name-agreement check.
+        analysis = analyze_column_patterns(series, cfg, phone_min_digits=phone_min, name_label=name_label)
         value_entity = analysis["entity"] if analysis["structured"] else None
-        # Never assign *replaceable* entities from values alone. Temporals
-        # (identify-not-replaced) keep value evidence without a name match.
-        if value_entity is not None and not name_supports_value_entity(name_label, value_entity):
-            value_entity = None
         return ColumnEvidence(col, series, name_label, value_entity, analysis, demo_label, grain=_column_grain(col))
 
     for col in df_subset.columns:

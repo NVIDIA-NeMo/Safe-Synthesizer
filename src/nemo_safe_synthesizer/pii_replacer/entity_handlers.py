@@ -58,7 +58,7 @@ def skip_reason_named_column(
     Args:
         entity_spec: Registry entry for the name-matched entity.
         series: Column values used for content gates.
-        value_entity: Dominant value-derived entity label, or ``None``.
+        value_entity: Entity verified against the column's content, or ``None``.
 
     Returns:
         Human-readable skip reason, or ``None`` when the column may be allocated.
@@ -97,7 +97,7 @@ class DefaultHandler(EntityHandler):
 
         Args:
             series: Column values under consideration.
-            value_entity: Dominant value-derived entity label, or ``None``.
+            value_entity: Entity verified against the column's content, or ``None``.
             apply_path: Resolved apply path for this label.
             column_name: Unused by the default gates (entity-specific handlers may use it).
             cfg: Unused by the default gates (entity-specific handlers may use it).

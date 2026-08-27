@@ -79,12 +79,16 @@ def match_label(col: str, patterns: Mapping[str, list[str]]) -> str | None:
 
 
 def name_supports_value_entity(name_label: str | None, value_entity: str) -> bool:
-    """Whether a column header supports using this value-derived entity for replacement.
+    """Whether a column header allows this value-derived entity to be used.
 
-    Replaceable entities are never assigned from values alone: value evidence is kept
-    only when the header already names the same entity (or a compatible one, e.g.
+    Replaceable entities are never assigned from values alone: they are allowed only
+    when the header already names the same entity (or a compatible one, e.g.
     ``date_of_birth`` headers with date-shaped values). Identify-not-replaced
-    temporals are exempt and keep value evidence without a name match.
+    temporals are exempt and may be inferred without a name match.
+
+    This is the single statement of that policy. ``candidate_entities`` calls it to
+    build the set of entities a column's content is scored against, so a column can
+    never be assigned an entity its header does not support.
 
     Example:
         ``("email", "email")`` -> ``True``
@@ -93,10 +97,10 @@ def name_supports_value_entity(name_label: str | None, value_entity: str) -> boo
 
     Args:
         name_label: Entity label inferred from the column header, or ``None``.
-        value_entity: Dominant entity label inferred from cell values.
+        value_entity: Candidate entity label derived from cell values.
 
     Returns:
-        ``True`` when value evidence may be used for this column.
+        ``True`` when this entity may be used for this column.
     """
     if is_identify_only(value_entity):
         return True
