@@ -3083,6 +3083,8 @@
       
         
       
+        
+      
     
     
     
@@ -3405,6 +3407,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../data_processing/prompt_tokens/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    prompt_tokens
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../data_processing/record_utils/" class="md-nav__link">
         
   
@@ -3460,10 +3490,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_1_5_6" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_1_5_7" >
         
           
-          <label class="md-nav__link" for="__nav_5_7_1_5_6" id="__nav_5_7_1_5_6_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_5_7_1_5_7" id="__nav_5_7_1_5_7_label" tabindex="0">
             
   
   
@@ -3481,8 +3511,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_5_7_1_5_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_7_1_5_6">
+        <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_5_7_1_5_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_7_1_5_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -4991,6 +5021,8 @@
       
         
       
+        
+      
     
     
     
@@ -5221,6 +5253,34 @@
     
   
     timeseries_backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../generation/timeseries_prompting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    timeseries_prompting
   
 
     
@@ -10314,8 +10374,8 @@ Falls back to with_data_source() data only if cached files are missing.</p>
 </span><span id="__span-0-325"><a id="__codelineno-0-325" name="__codelineno-0-325"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_evaluation_config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_nss_config</span><span class="o">.</span><span class="n">evaluation</span>
 </span><span id="__span-0-326"><a id="__codelineno-0-326" name="__codelineno-0-326"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_emit_telemetry_config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_nss_config</span><span class="o">.</span><span class="n">emit_telemetry</span>
 </span><span id="__span-0-327"><a id="__codelineno-0-327" name="__codelineno-0-327"></a>
-</span><span id="__span-0-328"><a id="__codelineno-0-328" name="__codelineno-0-328"></a>    <span class="c1"># Load model metadata from saved file (contains initial_prefill for timeseries)</span>
-</span><span id="__span-0-329"><a id="__codelineno-0-329" name="__codelineno-0-329"></a>    <span class="c1"># rather than creating new metadata from config</span>
+</span><span id="__span-0-328"><a id="__codelineno-0-328" name="__codelineno-0-328"></a>    <span class="c1"># Load model metadata from the saved file (including the time-series</span>
+</span><span id="__span-0-329"><a id="__codelineno-0-329" name="__codelineno-0-329"></a>    <span class="c1"># group registry) rather than creating new metadata from config.</span>
 </span><span id="__span-0-330"><a id="__codelineno-0-330" name="__codelineno-0-330"></a>    <span class="n">metadata_file</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_workdir</span><span class="o">.</span><span class="n">metadata_file</span>
 </span><span id="__span-0-331"><a id="__codelineno-0-331" name="__codelineno-0-331"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">metadata_file</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
 </span><span id="__span-0-332"><a id="__codelineno-0-332" name="__codelineno-0-332"></a>        <span class="k">raise</span> <span class="ne">FileNotFoundError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Metadata file not found: </span><span class="si">{</span><span class="n">metadata_file</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>

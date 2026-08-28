@@ -1648,10 +1648,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#initial-prefill" class="md-nav__link">
+  <a href="#time-series-group-registry" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Initial prefill
+        Time-series group registry
       
     </span>
   </a>
@@ -3557,6 +3557,8 @@
       
         
       
+        
+      
     
     
     
@@ -3879,6 +3881,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../reference/nemo_safe_synthesizer/data_processing/prompt_tokens/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    prompt_tokens
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../reference/nemo_safe_synthesizer/data_processing/record_utils/" class="md-nav__link">
         
   
@@ -3934,10 +3964,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_1_5_6" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_1_5_7" >
         
           
-          <label class="md-nav__link" for="__nav_5_7_1_5_6" id="__nav_5_7_1_5_6_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_5_7_1_5_7" id="__nav_5_7_1_5_7_label" tabindex="0">
             
   
   
@@ -3955,8 +3985,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_5_7_1_5_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_7_1_5_6">
+        <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_5_7_1_5_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_7_1_5_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -5465,6 +5495,8 @@
       
         
       
+        
+      
     
     
     
@@ -5695,6 +5727,34 @@
     
   
     timeseries_backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/nemo_safe_synthesizer/generation/timeseries_prompting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    timeseries_prompting
   
 
     
@@ -9740,10 +9800,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#initial-prefill" class="md-nav__link">
+  <a href="#time-series-group-registry" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Initial prefill
+        Time-series group registry
       
     </span>
   </a>
@@ -10282,11 +10342,10 @@ these conditions are met:</p>
 <li>Token budget exceeded -- the accumulated tokens reach the randomized budget</li>
 <li><code>max_sequences_per_example</code> reached</li>
 </ul>
-<h3 id="initial-prefill">Initial prefill<a class="headerlink" href="#initial-prefill" title="Permanent link">&para;</a></h3>
-<p>For each group, the first 3 training records are stored as <code>initial_prefill</code> --
-a dictionary mapping group IDs to seed text. During generation, the
-time-series backend uses these prefill strings to prime the model's context for
-each group.</p>
+<h3 id="time-series-group-registry">Time-series group registry<a class="headerlink" href="#time-series-group-registry" title="Permanent link">&para;</a></h3>
+<p>The artifact stores each typed group value in <code>timeseries_group_values</code>.
+Generation uses this registry to initialize one stream per training group.
+Each stream starts with a generated prefix as described below.</p>
 <h3 id="concrete-example_2">Concrete example<a class="headerlink" href="#concrete-example_2" title="Permanent link">&para;</a></h3>
 <p>Given eight records for two devices:</p>
 <div class="language-json highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="p">{</span><span class="nt">&quot;device_id&quot;</span><span class="p">:</span><span class="s2">&quot;sensor-A&quot;</span><span class="p">,</span><span class="nt">&quot;timestamp&quot;</span><span class="p">:</span><span class="s2">&quot;2024-01-15T00:00&quot;</span><span class="p">,</span><span class="nt">&quot;temp&quot;</span><span class="p">:</span><span class="mf">21.3</span><span class="p">,</span><span class="nt">&quot;status&quot;</span><span class="p">:</span><span class="s2">&quot;ok&quot;</span><span class="p">}</span>
@@ -10469,22 +10528,30 @@ included so the parser can match the BOS/EOS pair.</p>
 <p class="admonition-title">Experimental</p>
 <p>Time-series generation is experimental and its API may change.</p>
 </div>
-<p>The <code>TimeseriesBackend</code> generates one group at a time using a sliding-window
-strategy:</p>
+<p>The <code>TimeseriesBackend</code> generates each group using a sliding history:</p>
 <ol>
-<li>Generation is seeded with an <code>initial_prefill</code> -- the first 3 records from
-   training data for that group.</li>
-<li>The model generates a continuation. Valid records are appended to the
-   group's context window.</li>
-<li>The updated context (most recent records) becomes the prefill for the
-   next prompt.</li>
+<li>The model receives up to the three most recently accepted records as
+   history and may generate one or more new records.</li>
+<li>The backend parses and validates each candidate, retains one response, and
+   appends its exact accepted record text to the history.</li>
 <li>This repeats until the target time range is covered or retries are
    exhausted.</li>
 </ol>
+<p>The first iteration is a special case because no generated history exists yet.
+The backend uses a prefix: an incomplete JSON record containing the group
+ID (for grouped data), configured start timestamp, and opening quote of the
+next field name. The model may complete that record and generate additional
+records. Before parsing, the backend prepends the prefix to each completion.
+After the first record is accepted, subsequent iterations use history only.</p>
 <p>Because each prompt sees the model's own prior output, sequential mode
 preserves temporal continuity -- timestamps, intervals, and trends carry
 forward naturally. The trade-off is that generation is inherently serial per
 group (though multiple groups are processed in parallel batches).</p>
+<p>Preprocessing places the group and timestamp columns first in the persisted
+schema and training JSONL. This lets the partial record match the field order
+seen during training. Older artifacts whose saved schema uses another order
+must be retrained; generation fails explicitly instead of silently changing
+prompting behavior.</p>
 <hr />
 <h2 id="grouped-generation-validation-knobs">Grouped Generation: Validation Knobs<a class="headerlink" href="#grouped-generation-validation-knobs" title="Permanent link">&para;</a></h2>
 <p>When parsing grouped output, four boolean parameters control how strictly the

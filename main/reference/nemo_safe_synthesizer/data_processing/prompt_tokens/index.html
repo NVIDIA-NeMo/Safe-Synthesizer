@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://nvidia-nemo.github.io/Safe-Synthesizer/main/reference/nemo_safe_synthesizer/config/job/">
+        <link rel="canonical" href="https://nvidia-nemo.github.io/Safe-Synthesizer/main/reference/nemo_safe_synthesizer/data_processing/prompt_tokens/">
       
       
-        <link rel="prev" href="../internal_results/">
+        <link rel="prev" href="../dataset/">
       
       
-        <link rel="next" href="../parameters/">
+        <link rel="next" href="../record_utils/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>job - NeMo Safe Synthesizer</title>
+        <title>prompt_tokens - NeMo Safe Synthesizer</title>
       
     
     
@@ -84,7 +84,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#nemo_safe_synthesizer.config.job" class="md-skip">
+        <a href="#nemo_safe_synthesizer.data_processing.prompt_tokens" class="md-skip">
           Skip to content
         </a>
       
@@ -122,7 +122,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              job
+              prompt_tokens
             
           </span>
         </div>
@@ -2242,10 +2242,8 @@
                 
   
   
-    
   
   
-  
     
     
       
@@ -2292,11 +2290,13 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_7_1_3" checked>
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_1_3" >
         
           
           <label class="md-nav__link" for="__nav_5_7_1_3" id="__nav_5_7_1_3_label" tabindex="0">
@@ -2317,7 +2317,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_5_7_1_3_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_5_7_1_3_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_5_7_1_3">
             <span class="md-nav__icon md-icon"></span>
             
@@ -2335,7 +2335,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../autoconfig/" class="md-nav__link">
+      <a href="../../config/autoconfig/" class="md-nav__link">
         
   
   
@@ -2363,7 +2363,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../base/" class="md-nav__link">
+      <a href="../../config/base/" class="md-nav__link">
         
   
   
@@ -2391,7 +2391,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../data/" class="md-nav__link">
+      <a href="../../config/data/" class="md-nav__link">
         
   
   
@@ -2419,7 +2419,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../differential_privacy/" class="md-nav__link">
+      <a href="../../config/differential_privacy/" class="md-nav__link">
         
   
   
@@ -2447,7 +2447,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../evaluate/" class="md-nav__link">
+      <a href="../../config/evaluate/" class="md-nav__link">
         
   
   
@@ -2475,7 +2475,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../external_results/" class="md-nav__link">
+      <a href="../../config/external_results/" class="md-nav__link">
         
   
   
@@ -2503,7 +2503,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../generate/" class="md-nav__link">
+      <a href="../../config/generate/" class="md-nav__link">
         
   
   
@@ -2531,7 +2531,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../internal_results/" class="md-nav__link">
+      <a href="../../config/internal_results/" class="md-nav__link">
         
   
   
@@ -2556,35 +2556,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    job
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../config/job/" class="md-nav__link">
         
   
   
@@ -2600,91 +2575,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.config.job" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-module"></code>&nbsp;job
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label=" job">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;SafeSynthesizerJobConfig
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label=" SafeSynthesizerJobConfig">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.data_source" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;data_source
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.config" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;config
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.hf_token_secret" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;hf_token_secret
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -2697,7 +2587,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../parameters/" class="md-nav__link">
+      <a href="../../config/parameters/" class="md-nav__link">
         
   
   
@@ -2725,7 +2615,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../patch/" class="md-nav__link">
+      <a href="../../config/patch/" class="md-nav__link">
         
   
   
@@ -2753,7 +2643,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../preflight/" class="md-nav__link">
+      <a href="../../config/preflight/" class="md-nav__link">
         
   
   
@@ -2781,7 +2671,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../replace_pii/" class="md-nav__link">
+      <a href="../../config/replace_pii/" class="md-nav__link">
         
   
   
@@ -2809,7 +2699,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../time_series/" class="md-nav__link">
+      <a href="../../config/time_series/" class="md-nav__link">
         
   
   
@@ -2837,7 +2727,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../training/" class="md-nav__link">
+      <a href="../../config/training/" class="md-nav__link">
         
   
   
@@ -2865,7 +2755,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../types/" class="md-nav__link">
+      <a href="../../config/types/" class="md-nav__link">
         
   
   
@@ -2893,7 +2783,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../unknown_fields/" class="md-nav__link">
+      <a href="../../config/unknown_fields/" class="md-nav__link">
         
   
   
@@ -3170,8 +3060,10 @@
                 
   
   
+    
   
   
+  
     
     
       
@@ -3204,13 +3096,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_1_5" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_7_1_5" checked>
         
           
           <label class="md-nav__link" for="__nav_5_7_1_5" id="__nav_5_7_1_5_label" tabindex="0">
@@ -3231,7 +3121,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_5_7_1_5_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_5_7_1_5_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_5_7_1_5">
             <span class="md-nav__icon md-icon"></span>
             
@@ -3313,7 +3203,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../data_processing/actions/data_actions/" class="md-nav__link">
+      <a href="../actions/data_actions/" class="md-nav__link">
         
   
   
@@ -3341,7 +3231,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../data_processing/actions/dates/" class="md-nav__link">
+      <a href="../actions/dates/" class="md-nav__link">
         
   
   
@@ -3369,7 +3259,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../data_processing/actions/distributions/" class="md-nav__link">
+      <a href="../actions/distributions/" class="md-nav__link">
         
   
   
@@ -3397,7 +3287,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../data_processing/actions/utils/" class="md-nav__link">
+      <a href="../actions/utils/" class="md-nav__link">
         
   
   
@@ -3433,7 +3323,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../data_processing/assembler/" class="md-nav__link">
+      <a href="../assembler/" class="md-nav__link">
         
   
   
@@ -3461,7 +3351,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../data_processing/budget/" class="md-nav__link">
+      <a href="../budget/" class="md-nav__link">
         
   
   
@@ -3489,7 +3379,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../data_processing/dataset/" class="md-nav__link">
+      <a href="../dataset/" class="md-nav__link">
         
   
   
@@ -3514,10 +3404,35 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../data_processing/prompt_tokens/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    prompt_tokens
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -3533,6 +3448,91 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.data_processing.prompt_tokens" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-module"></code>&nbsp;prompt_tokens
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" prompt_tokens">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.data_processing.prompt_tokens.EncodeOnlyTokenizer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;EncodeOnlyTokenizer
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" EncodeOnlyTokenizer">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.data_processing.prompt_tokens.EncodeOnlyTokenizer.encode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;encode
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.data_processing.prompt_tokens.encode_prompt_token_ids" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;encode_prompt_token_ids
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.data_processing.prompt_tokens.wrap_sequence_token_ids" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;wrap_sequence_token_ids
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -3545,7 +3545,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../data_processing/record_utils/" class="md-nav__link">
+      <a href="../record_utils/" class="md-nav__link">
         
   
   
@@ -3639,7 +3639,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../data_processing/records/base/" class="md-nav__link">
+      <a href="../records/base/" class="md-nav__link">
         
   
   
@@ -3667,7 +3667,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../data_processing/records/fragment/" class="md-nav__link">
+      <a href="../records/fragment/" class="md-nav__link">
         
   
   
@@ -3695,7 +3695,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../data_processing/records/json_record/" class="md-nav__link">
+      <a href="../records/json_record/" class="md-nav__link">
         
   
   
@@ -3723,7 +3723,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../data_processing/records/json_types/" class="md-nav__link">
+      <a href="../records/json_types/" class="md-nav__link">
         
   
   
@@ -3751,7 +3751,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../data_processing/records/value_path/" class="md-nav__link">
+      <a href="../records/value_path/" class="md-nav__link">
         
   
   
@@ -3787,7 +3787,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../data_processing/stats/" class="md-nav__link">
+      <a href="../stats/" class="md-nav__link">
         
   
   
@@ -3815,7 +3815,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../data_processing/timeseries_validation/" class="md-nav__link">
+      <a href="../timeseries_validation/" class="md-nav__link">
         
   
   
@@ -3843,7 +3843,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../data_processing/validation/" class="md-nav__link">
+      <a href="../validation/" class="md-nav__link">
         
   
   
@@ -9256,56 +9256,34 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.config.job" class="md-nav__link">
+  <a href="#nemo_safe_synthesizer.data_processing.prompt_tokens" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-module"></code>&nbsp;job
+        <code class="doc-symbol doc-symbol-toc doc-symbol-module"></code>&nbsp;prompt_tokens
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label=" job">
+    <nav class="md-nav" aria-label=" prompt_tokens">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig" class="md-nav__link">
+  <a href="#nemo_safe_synthesizer.data_processing.prompt_tokens.EncodeOnlyTokenizer" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;SafeSynthesizerJobConfig
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;EncodeOnlyTokenizer
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label=" SafeSynthesizerJobConfig">
+    <nav class="md-nav" aria-label=" EncodeOnlyTokenizer">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.data_source" class="md-nav__link">
+  <a href="#nemo_safe_synthesizer.data_processing.prompt_tokens.EncodeOnlyTokenizer.encode" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;data_source
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.config" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;config
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.hf_token_secret" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;hf_token_secret
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;encode
       
     </span>
   </a>
@@ -9314,6 +9292,28 @@
         
       </ul>
     </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.data_processing.prompt_tokens.encode_prompt_token_ids" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;encode_prompt_token_ids
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.data_processing.prompt_tokens.wrap_sequence_token_ids" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;wrap_sequence_token_ids
+      
+    </span>
+  </a>
   
 </li>
         
@@ -9458,15 +9458,23 @@
   
     
     
+      
+  
+  
+    
+    
       <li class="md-path__item">
-        <a href="../autoconfig/" class="md-path__link">
+        <a href="../actions/data_actions/" class="md-path__link">
           
   <span class="md-ellipsis">
-    config
+    data_processing
   </span>
 
         </a>
       </li>
+    
+  
+
     
   
 
@@ -9484,19 +9492,21 @@
   
 
 
-  <h1>job</h1>
+  <h1>prompt_tokens</h1>
 
 <div class="doc doc-object doc-module">
 
 
 
-<h2 id="nemo_safe_synthesizer.config.job" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-module"></code>            <code>job</code>
+<h2 id="nemo_safe_synthesizer.data_processing.prompt_tokens" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-module"></code>            <code>prompt_tokens</code>
 
 
-<a href="#nemo_safe_synthesizer.config.job" class="headerlink" title="Permanent link">&para;</a></h2>
+<a href="#nemo_safe_synthesizer.data_processing.prompt_tokens" class="headerlink" title="Permanent link">&para;</a></h2>
 
     <div class="doc doc-contents first">
+
+        <p>Shared prompt and sequence token-boundary assembly.</p>
 
 
 
@@ -9517,15 +9527,10 @@
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            SafeSynthesizerJobConfig
-
-
-  
-      pydantic-model
-   (nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig)" href="#nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig">SafeSynthesizerJobConfig</a></code></td>
+            <td><code><a class="autorefs autorefs-internal" title="            EncodeOnlyTokenizer (nemo_safe_synthesizer.data_processing.prompt_tokens.EncodeOnlyTokenizer)" href="#nemo_safe_synthesizer.data_processing.prompt_tokens.EncodeOnlyTokenizer">EncodeOnlyTokenizer</a></code></td>
             <td>
               <div class="doc-md-description">
-                <p>Configuration model for Safe Synthesizer jobs.</p>
+                <p>Tokenizer interface required for prompt construction.</p>
               </div>
             </td>
           </tr>
@@ -9533,6 +9538,35 @@
     </table>
 
 
+
+
+<p><span class="doc-section-title">Functions:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="            encode_prompt_token_ids(prompt, *, tokenizer, prompt_config) (nemo_safe_synthesizer.data_processing.prompt_tokens.encode_prompt_token_ids)" href="#nemo_safe_synthesizer.data_processing.prompt_tokens.encode_prompt_token_ids">encode_prompt_token_ids</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Encode a prompt with its configured BOS and EOS boundaries.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="            wrap_sequence_token_ids(token_ids, *, prompt_config, include_eos) (nemo_safe_synthesizer.data_processing.prompt_tokens.wrap_sequence_token_ids)" href="#nemo_safe_synthesizer.data_processing.prompt_tokens.wrap_sequence_token_ids">wrap_sequence_token_ids</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Return sequence IDs with a leading BOS and an optional trailing EOS.</p>
+                </div>
+              </td>
+            </tr>
+      </tbody>
+    </table>
 
 
 
@@ -9552,64 +9586,53 @@
 
 
 
-<h3 id="nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <code>SafeSynthesizerJobConfig</code>
+<h3 id="nemo_safe_synthesizer.data_processing.prompt_tokens.EncodeOnlyTokenizer" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <code>EncodeOnlyTokenizer</code>
 
 
-  <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-pydantic-model"><code>pydantic-model</code></small>
-  </span>
-
-<a href="#nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig" class="headerlink" title="Permanent link">&para;</a></h3>
+<a href="#nemo_safe_synthesizer.data_processing.prompt_tokens.EncodeOnlyTokenizer" class="headerlink" title="Permanent link">&para;</a></h3>
 
 
     <div class="doc doc-contents ">
             <p class="doc doc-class-bases">
-              Bases: <code><a class="autorefs autorefs-internal" title="            NSSBaseModel
+              Bases: <code><span title="typing.Protocol">Protocol</span></code></p>
 
 
-  
-      pydantic-model
-   (nemo_safe_synthesizer.config.base.NSSBaseModel)" href="../base/#nemo_safe_synthesizer.config.base.NSSBaseModel">NSSBaseModel</a></code></p>
 
-        <p>Configuration model for Safe Synthesizer jobs.</p>
-<p>Used primarily internally to configure a run submitted to the NeMo Jobs
-Microservice.</p>
-
-    
-
-        <p>Fields:</p>
-        <ul>
-            <li>
-              <code><a class="autorefs autorefs-internal" title="            data_source
-
-  
-      pydantic-field
-   (nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.data_source)" href="#nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.data_source">data_source</a></code>
-                (<code><span title="str">str</span></code>)
-            </li>
-            <li>
-              <code><a class="autorefs autorefs-internal" title="            config
-
-  
-      pydantic-field
-   (nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.config)" href="#nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.config">config</a></code>
-                (<code><a class="autorefs autorefs-internal" title="            SafeSynthesizerParameters
+        <p>Tokenizer interface required for prompt construction.</p>
 
 
-  
-      pydantic-model
-   (nemo_safe_synthesizer.config.parameters.SafeSynthesizerParameters)" href="../parameters/#nemo_safe_synthesizer.config.parameters.SafeSynthesizerParameters">SafeSynthesizerParameters</a></code>)
-            </li>
-            <li>
-              <code><a class="autorefs autorefs-internal" title="            hf_token_secret = None
 
-  
-      pydantic-field
-   (nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.hf_token_secret)" href="#nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.hf_token_secret">hf_token_secret</a></code>
-                (<code><span title="str">str</span> | None</code>)
-            </li>
-        </ul>
+
+
+
+
+
+
+
+
+
+<p><span class="doc-section-title">Methods:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="            encode(text, *, add_special_tokens) (nemo_safe_synthesizer.data_processing.prompt_tokens.EncodeOnlyTokenizer.encode)" href="#nemo_safe_synthesizer.data_processing.prompt_tokens.EncodeOnlyTokenizer.encode">encode</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Encode text while explicitly controlling tokenizer special tokens.</p>
+                </div>
+              </td>
+            </tr>
+      </tbody>
+    </table>
+
+
 
 
 
@@ -9622,74 +9645,33 @@ Microservice.</p>
 
 
 
-<div class="doc doc-object doc-attribute">
 
 
 
-<h4 id="nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.data_source" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">data_source</span></code>
-
-  <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
-  </span>
-
-<a href="#nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.data_source" class="headerlink" title="Permanent link">&para;</a></h4>
+<div class="doc doc-object doc-function">
 
 
-    <div class="doc doc-contents ">
+<h4 id="nemo_safe_synthesizer.data_processing.prompt_tokens.EncodeOnlyTokenizer.encode" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">encode</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">add_special_tokens</span><span class="p">)</span></code>
 
-        <p>The data source for the job.</p>
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-attribute">
-
-
-
-<h4 id="nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.config" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">config</span></code>
-
-  <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
-  </span>
-
-<a href="#nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.config" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nemo_safe_synthesizer.data_processing.prompt_tokens.EncodeOnlyTokenizer.encode" class="headerlink" title="Permanent link">&para;</a></h4>
 
 
     <div class="doc doc-contents ">
 
-        <p>The Safe Synthesizer parameters configuration.</p>
+        <p>Encode text while explicitly controlling tokenizer special tokens.</p>
 
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/nemo_safe_synthesizer/data_processing/prompt_tokens.py</code></summary>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-24">24</a></span>
+<span class="normal"><a href="#__codelineno-0-25">25</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24"></a><span class="k">def</span><span class="w"> </span><span class="nf">encode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">add_special_tokens</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Encode text while explicitly controlling tokenizer special tokens.&quot;&quot;&quot;</span>
+</span></code></pre></div></td></tr></table></div>
+            </details>
     </div>
 
 </div>
-
-<div class="doc doc-object doc-attribute">
-
-
-
-<h4 id="nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.hf_token_secret" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">hf_token_secret</span> <span class="o">=</span> <span class="kc">None</span></code>
-
-  <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
-  </span>
-
-<a href="#nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.hf_token_secret" class="headerlink" title="Permanent link">&para;</a></h4>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Name of platform secret containing the HuggingFace token. Must exist in the same workspace as the job.</p>
-
-    </div>
-
-</div>
-
-
-
 
 
 
@@ -9699,6 +9681,96 @@ Microservice.</p>
 
 </div>
 
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="nemo_safe_synthesizer.data_processing.prompt_tokens.encode_prompt_token_ids" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">encode_prompt_token_ids</span><span class="p">(</span><span class="n">prompt</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">tokenizer</span><span class="p">,</span> <span class="n">prompt_config</span><span class="p">)</span></code>
+
+<a href="#nemo_safe_synthesizer.data_processing.prompt_tokens.encode_prompt_token_ids" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Encode a prompt with its configured BOS and EOS boundaries.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/nemo_safe_synthesizer/data_processing/prompt_tokens.py</code></summary>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-28">28</a></span>
+<span class="normal"><a href="#__codelineno-0-29">29</a></span>
+<span class="normal"><a href="#__codelineno-0-30">30</a></span>
+<span class="normal"><a href="#__codelineno-0-31">31</a></span>
+<span class="normal"><a href="#__codelineno-0-32">32</a></span>
+<span class="normal"><a href="#__codelineno-0-33">33</a></span>
+<span class="normal"><a href="#__codelineno-0-34">34</a></span>
+<span class="normal"><a href="#__codelineno-0-35">35</a></span>
+<span class="normal"><a href="#__codelineno-0-36">36</a></span>
+<span class="normal"><a href="#__codelineno-0-37">37</a></span>
+<span class="normal"><a href="#__codelineno-0-38">38</a></span>
+<span class="normal"><a href="#__codelineno-0-39">39</a></span>
+<span class="normal"><a href="#__codelineno-0-40">40</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28"></a><span class="k">def</span><span class="w"> </span><span class="nf">encode_prompt_token_ids</span><span class="p">(</span>
+</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29"></a>    <span class="n">prompt</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30"></a>    <span class="o">*</span><span class="p">,</span>
+</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31"></a>    <span class="n">tokenizer</span><span class="p">:</span> <span class="n">EncodeOnlyTokenizer</span><span class="p">,</span>
+</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32"></a>    <span class="n">prompt_config</span><span class="p">:</span> <span class="n">LLMPromptConfig</span><span class="p">,</span>
+</span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+</span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Encode a prompt with its configured BOS and EOS boundaries.&quot;&quot;&quot;</span>
+</span><span id="__span-0-35"><a id="__codelineno-0-35" name="__codelineno-0-35"></a>    <span class="n">prompt_ids</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">prompt</span><span class="p">,</span> <span class="n">add_special_tokens</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span>
+</span><span id="__span-0-36"><a id="__codelineno-0-36" name="__codelineno-0-36"></a>    <span class="k">if</span> <span class="n">prompt_config</span><span class="o">.</span><span class="n">add_bos_token_to_prompt</span><span class="p">:</span>
+</span><span id="__span-0-37"><a id="__codelineno-0-37" name="__codelineno-0-37"></a>        <span class="n">prompt_ids</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">prompt_config</span><span class="o">.</span><span class="n">bos_token_id</span><span class="p">)</span>
+</span><span id="__span-0-38"><a id="__codelineno-0-38" name="__codelineno-0-38"></a>    <span class="k">if</span> <span class="n">prompt_config</span><span class="o">.</span><span class="n">add_eos_token_to_prompt</span><span class="p">:</span>
+</span><span id="__span-0-39"><a id="__codelineno-0-39" name="__codelineno-0-39"></a>        <span class="n">prompt_ids</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">prompt_config</span><span class="o">.</span><span class="n">eos_token_id</span><span class="p">)</span>
+</span><span id="__span-0-40"><a id="__codelineno-0-40" name="__codelineno-0-40"></a>    <span class="k">return</span> <span class="n">prompt_ids</span>
+</span></code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="nemo_safe_synthesizer.data_processing.prompt_tokens.wrap_sequence_token_ids" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">wrap_sequence_token_ids</span><span class="p">(</span><span class="n">token_ids</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">prompt_config</span><span class="p">,</span> <span class="n">include_eos</span><span class="p">)</span></code>
+
+<a href="#nemo_safe_synthesizer.data_processing.prompt_tokens.wrap_sequence_token_ids" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Return sequence IDs with a leading BOS and an optional trailing EOS.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/nemo_safe_synthesizer/data_processing/prompt_tokens.py</code></summary>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-43">43</a></span>
+<span class="normal"><a href="#__codelineno-0-44">44</a></span>
+<span class="normal"><a href="#__codelineno-0-45">45</a></span>
+<span class="normal"><a href="#__codelineno-0-46">46</a></span>
+<span class="normal"><a href="#__codelineno-0-47">47</a></span>
+<span class="normal"><a href="#__codelineno-0-48">48</a></span>
+<span class="normal"><a href="#__codelineno-0-49">49</a></span>
+<span class="normal"><a href="#__codelineno-0-50">50</a></span>
+<span class="normal"><a href="#__codelineno-0-51">51</a></span>
+<span class="normal"><a href="#__codelineno-0-52">52</a></span>
+<span class="normal"><a href="#__codelineno-0-53">53</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-43"><a id="__codelineno-0-43" name="__codelineno-0-43"></a><span class="k">def</span><span class="w"> </span><span class="nf">wrap_sequence_token_ids</span><span class="p">(</span>
+</span><span id="__span-0-44"><a id="__codelineno-0-44" name="__codelineno-0-44"></a>    <span class="n">token_ids</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span>
+</span><span id="__span-0-45"><a id="__codelineno-0-45" name="__codelineno-0-45"></a>    <span class="o">*</span><span class="p">,</span>
+</span><span id="__span-0-46"><a id="__codelineno-0-46" name="__codelineno-0-46"></a>    <span class="n">prompt_config</span><span class="p">:</span> <span class="n">LLMPromptConfig</span><span class="p">,</span>
+</span><span id="__span-0-47"><a id="__codelineno-0-47" name="__codelineno-0-47"></a>    <span class="n">include_eos</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+</span><span id="__span-0-48"><a id="__codelineno-0-48" name="__codelineno-0-48"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+</span><span id="__span-0-49"><a id="__codelineno-0-49" name="__codelineno-0-49"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return sequence IDs with a leading BOS and an optional trailing EOS.&quot;&quot;&quot;</span>
+</span><span id="__span-0-50"><a id="__codelineno-0-50" name="__codelineno-0-50"></a>    <span class="n">sequence_ids</span> <span class="o">=</span> <span class="p">[</span><span class="n">prompt_config</span><span class="o">.</span><span class="n">bos_token_id</span><span class="p">,</span> <span class="o">*</span><span class="n">token_ids</span><span class="p">]</span>
+</span><span id="__span-0-51"><a id="__codelineno-0-51" name="__codelineno-0-51"></a>    <span class="k">if</span> <span class="n">include_eos</span><span class="p">:</span>
+</span><span id="__span-0-52"><a id="__codelineno-0-52" name="__codelineno-0-52"></a>        <span class="n">sequence_ids</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">prompt_config</span><span class="o">.</span><span class="n">eos_token_id</span><span class="p">)</span>
+</span><span id="__span-0-53"><a id="__codelineno-0-53" name="__codelineno-0-53"></a>    <span class="k">return</span> <span class="n">sequence_ids</span>
+</span></code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
 
 
 
@@ -9744,7 +9816,7 @@ Microservice.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../internal_results/" class="md-footer__link md-footer__link--prev" aria-label="Previous: internal_results">
+          <a href="../dataset/" class="md-footer__link md-footer__link--prev" aria-label="Previous: dataset">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -9754,20 +9826,20 @@ Microservice.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                internal_results
+                dataset
               </div>
             </div>
           </a>
         
         
           
-          <a href="../parameters/" class="md-footer__link md-footer__link--next" aria-label="Next: parameters">
+          <a href="../record_utils/" class="md-footer__link md-footer__link--next" aria-label="Next: record_utils">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                parameters
+                record_utils
               </div>
             </div>
             <div class="md-footer__button md-icon">

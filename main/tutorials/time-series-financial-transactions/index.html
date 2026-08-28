@@ -3270,6 +3270,8 @@
       
         
       
+        
+      
     
     
     
@@ -3592,6 +3594,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../reference/nemo_safe_synthesizer/data_processing/prompt_tokens/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    prompt_tokens
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../reference/nemo_safe_synthesizer/data_processing/record_utils/" class="md-nav__link">
         
   
@@ -3647,10 +3677,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_1_5_6" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_1_5_7" >
         
           
-          <label class="md-nav__link" for="__nav_5_7_1_5_6" id="__nav_5_7_1_5_6_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_5_7_1_5_7" id="__nav_5_7_1_5_7_label" tabindex="0">
             
   
   
@@ -3668,8 +3698,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_5_7_1_5_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_7_1_5_6">
+        <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_5_7_1_5_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_7_1_5_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -5178,6 +5208,8 @@
       
         
       
+        
+      
     
     
     
@@ -5408,6 +5440,34 @@
     
   
     timeseries_backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/nemo_safe_synthesizer/generation/timeseries_prompting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    timeseries_prompting
   
 
     
@@ -10555,7 +10615,7 @@ display(pd.DataFrame({
 <span class="n">builder</span> <span class="o">=</span> <span class="p">(</span>
     <span class="n">SafeSynthesizer</span><span class="p">(</span><span class="n">save_path</span><span class="o">=</span><span class="n">ARTIFACT_ROOT</span><span class="p">)</span>
     <span class="o">.</span><span class="n">with_data_source</span><span class="p">(</span><span class="n">source_df</span><span class="p">)</span>
-    <span class="o">.</span><span class="n">with_replace_pii</span><span class="p">(</span><span class="n">enable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">with_replace_pii</span><span class="p">(</span><span class="n">enable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
     <span class="o">.</span><span class="n">with_time_series</span><span class="p">(</span>
         <span class="n">is_timeseries</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
         <span class="n">timestamp_column</span><span class="o">=</span><span class="s2">"txn_index"</span><span class="p">,</span>
@@ -10567,7 +10627,7 @@ display(pd.DataFrame({
     <span class="p">)</span>
     <span class="o">.</span><span class="n">with_train</span><span class="p">(</span>
         <span class="n">pretrained_model</span><span class="o">=</span><span class="s2">"HuggingFaceTB/SmolLM3-3B"</span><span class="p">,</span>
-        <span class="n">num_input_records_to_sample</span><span class="o">=</span><span class="mi">60_000</span><span class="p">,</span>
+        <span class="n">num_input_records_to_sample</span><span class="o">=</span><span class="mi">90_000</span><span class="p">,</span>
         <span class="n">learning_rate</span><span class="o">=</span><span class="mf">5.0e-4</span><span class="p">,</span>
         <span class="n">lora_r</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span>
     <span class="p">)</span>
@@ -10591,7 +10651,7 @@ display(pd.DataFrame({
 builder = (
     SafeSynthesizer(save_path=ARTIFACT_ROOT)
     .with_data_source(source_df)
-    .with_replace_pii(enable=False)
+    .with_replace_pii(enable=True)
     .with_time_series(
         is_timeseries=True,
         timestamp_column="txn_index",
@@ -10603,7 +10663,7 @@ builder = (
     )
     .with_train(
         pretrained_model="HuggingFaceTB/SmolLM3-3B",
-        num_input_records_to_sample=60_000,
+        num_input_records_to_sample=90_000,
         learning_rate=5.0e-4,
         lora_r=32,
     )
