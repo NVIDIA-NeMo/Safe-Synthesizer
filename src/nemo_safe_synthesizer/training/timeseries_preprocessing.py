@@ -14,6 +14,31 @@ from ..observability import get_logger
 logger = get_logger(__name__)
 
 
+def _reorder_timeseries_columns(
+    dataframe: pd.DataFrame,
+    group_by_column: str,
+    timestamp_column: str,
+) -> pd.DataFrame:
+    """Put time-series identity columns first in the persisted schema order.
+
+    The resulting order is shared by the prompt schema, training JSONL, and
+    partial-record generation prefix. The pseudo-group remains internal and is
+    excluded later when the persisted schema is built.
+
+    Args:
+        dataframe: Validated and chronologically sorted training data.
+        group_by_column: Real or pseudo group column.
+        timestamp_column: Resolved timestamp column.
+
+    Returns:
+        A view with group and timestamp columns first, followed by all remaining
+        columns in their original relative order.
+    """
+    leading_columns = [group_by_column, timestamp_column]
+    remaining_columns = [column for column in dataframe.columns if column not in leading_columns]
+    return dataframe.loc[:, [*leading_columns, *remaining_columns]]
+
+
 def process_timeseries_data(
     training_df: pd.DataFrame,
     config: SafeSynthesizerParameters,
@@ -33,6 +58,7 @@ def process_timeseries_data(
     4. Infers timestamp_format from the data
     5. Validates or infers timestamp_interval_seconds
     6. Sets start_timestamp and stop_timestamp
+    7. Orders group and timestamp columns first for partial-prefix generation
 
     Args:
         training_df: The training DataFrame.
@@ -82,4 +108,9 @@ def process_timeseries_data(
             ts_config.timestamp_format
         )
 
+    training_df = _reorder_timeseries_columns(
+        training_df,
+        validation.group_by_column,
+        validation.timestamp_column,
+    )
     return training_df, config

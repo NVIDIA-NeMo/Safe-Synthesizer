@@ -41,9 +41,10 @@ from ..errors import (
     ParameterError,
 )
 from ..holdout.holdout import grouped_train_test_split, naive_train_test_split
-from ..llm.metadata import ModelMetadata
+from ..llm.metadata import ModelMetadata, TimeSeriesGroupValue
 from ..observability import get_logger
 from .budget import NUM_SPECIAL_TOKENS, compute_max_new_tokens
+from .prompt_tokens import encode_prompt_token_ids, wrap_sequence_token_ids
 
 logger = get_logger(__name__)
 
@@ -170,12 +171,11 @@ class Example:
         self.tokenizer = tokenizer
         self.metadata = metadata
 
-        self.input_ids = self.tokenizer.encode(prompt, add_special_tokens=False)
-
-        if self.metadata.prompt_config.add_bos_token_to_prompt:
-            self.input_ids = [self.metadata.prompt_config.bos_token_id] + self.input_ids
-        if self.metadata.prompt_config.add_eos_token_to_prompt:
-            self.input_ids = self.input_ids + [self.metadata.prompt_config.eos_token_id]
+        self.input_ids = encode_prompt_token_ids(
+            prompt,
+            tokenizer=self.tokenizer,
+            prompt_config=self.metadata.prompt_config,
+        )
 
         # We use -100 to ignore the prompt tokens when calculating the loss.
         self.labels = [-100] * len(self.input_ids)
@@ -199,7 +199,11 @@ class Example:
             GenerationError: If the number of tokens in the example exceeds the context length.
         """
         input_ids = (
-            [self.metadata.prompt_config.bos_token_id] + seq["input_ids"] + [self.metadata.prompt_config.eos_token_id]
+            wrap_sequence_token_ids(
+                seq["input_ids"],
+                prompt_config=self.metadata.prompt_config,
+                include_eos=True,
+            )
             if add_special_tokens
             else seq["input_ids"]
         )
@@ -742,10 +746,9 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
         - Pseudo-Group Handling: When no group column is specified, preprocessing
           adds a PSEUDO_GROUP_COLUMN so ungrouped time series is treated as a single
           group. This unifies the grouped and ungrouped code paths.
-        - Initial Prefill: For each group, the first 3 records are stored in
-          `model_metadata.initial_prefill` as a dict mapping group_id -> prefill string.
-          This is used by TimeseriesBackend during generation to seed each group's
-          context.
+        - Group Registry: Typed group values are stored in model metadata so
+          generation can initialize one stream per training group without
+          copying training records into prompts.
 
     Processing Flow:
         1. Initialization:
@@ -957,40 +960,29 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
         """Number of unique groups in the validation split."""
         return self._count_groups(self.validation_dataset)
 
-    def _get_initial_prefill(self) -> dict[str, str]:
-        """Return sample records from the training dataset for each group.
-
-        Returns a dictionary mapping each group_id to its prefill string (first 3 samples per group).
-        For pseudo-grouped single sequences, returns a dict with one key.
-
-        Note:
-            This method assumes the dataset is already ordered by the timestamp/order column
-            within each group (done by _prepare_dataset_for_training).
-
-        Returns:
-            Dict mapping group values to prefill strings (first 3 samples per group).
-        """
+    def _get_timeseries_group_values(self) -> list[TimeSeriesGroupValue]:
+        """Return distinct typed group values in training-dataset order."""
         if self.training_dataset is None or len(self.training_dataset) == 0:
-            return {}
+            return []
 
         if self.group_by_column not in self.training_dataset.column_names:
-            return {}
+            return []
 
-        # Get first 3 samples from each group, return as dict
-        # Use the preserved 'text' column directly to avoid encode/decode roundtrip issues
-        seen_groups: dict[str, list[str]] = {}
-        for record in self.training_dataset:
-            group_value = record[self.group_by_column]
-            if group_value not in seen_groups:
-                seen_groups[group_value] = []
-            if len(seen_groups[group_value]) < 3:
-                seen_groups[group_value].append(record["text"])
-
-        # Each sample line is already newline-terminated (see
-        # _convert_records_to_jsonl), so concatenate directly: joining with
-        # "\n" would insert blank lines between records, a shape that never
-        # occurs in training examples.
-        return {group: " " + "".join(samples) for group, samples in seen_groups.items()}
+        group_values: list[TimeSeriesGroupValue] = []
+        seen_values: set[TimeSeriesGroupValue] = set()
+        for raw_value in self.training_dataset[self.group_by_column]:
+            value = raw_value.item() if isinstance(raw_value, np.generic) else raw_value
+            if not isinstance(value, (str, int, float, bool)) or (
+                isinstance(value, float) and not math.isfinite(value)
+            ):
+                raise ParameterError(
+                    f"Time-series group value {value!r} cannot be represented as a finite JSON scalar."
+                )
+            if value in seen_values:
+                continue
+            seen_values.add(value)
+            group_values.append(value)
+        return group_values
 
     def _apply_train_test_split(self, dataset: Dataset) -> None:
         """Override split logic to preserve record order and split along group boundaries."""

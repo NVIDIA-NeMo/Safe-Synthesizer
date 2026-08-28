@@ -776,12 +776,12 @@ def test_sequential_assembler_token_budget(
     assert budget_val == max_tokens  # Validation: always max
 
 
-def test_sequential_assembler_initial_prefill(
+def test_sequential_assembler_group_values(
     fixture_tokenizer: PreTrainedTokenizer,
     fixture_session_cache_dir: str,
     fixture_sequential_metadata: ModelMetadata,
 ):
-    """Test that SequentialExampleAssembler returns correct prefill for each group."""
+    """Test that SequentialExampleAssembler returns typed group values in order."""
     # Create a small, controlled dataset with 2 groups and known values
     df = pd.DataFrame(
         {
@@ -802,22 +802,7 @@ def test_sequential_assembler_initial_prefill(
         seed=42,
     )
 
-    prefill = assembler._get_initial_prefill()
-
-    # Should have exactly 2 groups
-    assert len(prefill) == 2
-    assert "A" in prefill
-    assert "B" in prefill
-
-    # Pin the exact byte shape: a leading space, then newline-terminated
-    # training-dialect (pandas to_json) records with single newlines between
-    # them -- the same shape training examples use. Blank lines or Python
-    # json.dumps spacing here would put the generation prompt in a dialect
-    # the model never saw in training.
-    assert prefill["A"] == (
-        ' {"group":"A","time":1,"value":10}\n{"group":"A","time":2,"value":20}\n{"group":"A","time":3,"value":30}\n'
-    )
-    assert prefill["B"] == ' {"group":"B","time":1,"value":100}\n{"group":"B","time":2,"value":200}\n'
+    assert assembler._get_timeseries_group_values() == ["A", "B"]
 
 
 def test_should_flush_example_boundary_conditions():

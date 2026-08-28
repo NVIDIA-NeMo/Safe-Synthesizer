@@ -657,6 +657,7 @@ class HuggingFaceBackend(TrainingBackend):
             return df
 
         logger.info("Processing time series data")
+        self.model_metadata.timeseries_source_columns = list(df.columns)
         df, self.params = process_timeseries_data(df, self.params)
         return df
 
@@ -758,7 +759,9 @@ class HuggingFaceBackend(TrainingBackend):
         self.true_dataset_size = len(assembler.training_dataset)
 
         if self.params.time_series.is_timeseries:
-            self.model_metadata.initial_prefill = assembler._get_initial_prefill()  # ty: ignore[unresolved-attribute]
+            self.model_metadata.timeseries_group_values = (
+                assembler._get_timeseries_group_values()  # ty: ignore[unresolved-attribute]
+            )
 
         self._propagate_max_tokens_per_example()
         self._propagate_max_records_per_group()

@@ -325,8 +325,8 @@ class SafeSynthesizer(ConfigBuilder):
         self._evaluation_config = self._nss_config.evaluation
         self._emit_telemetry_config = self._nss_config.emit_telemetry
 
-        # Load model metadata from saved file (contains initial_prefill for timeseries)
-        # rather than creating new metadata from config
+        # Load model metadata from the saved file (including the time-series
+        # group registry) rather than creating new metadata from config.
         metadata_file = self._workdir.metadata_file
         if not metadata_file.exists():
             raise FileNotFoundError(f"Metadata file not found: {metadata_file}")

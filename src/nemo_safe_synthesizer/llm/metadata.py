@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import importlib
 from pathlib import Path
-from typing import Any, ClassVar, Literal
+from typing import Any, ClassVar, Literal, TypeAlias
 
 from pydantic import (
     BaseModel,
@@ -41,6 +41,9 @@ GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER = 1.2
 ``SamplingParams.max_tokens``. The stat is the actual tokenized max
 observed during training, so a small jitter margin is sufficient."""
 
+TimeSeriesGroupValue: TypeAlias = str | int | float | bool
+"""JSON-compatible, non-null value identifying a time-series group."""
+
 
 class LLMPromptConfig(BaseModel):
     """Prompt template and special-token settings for an LLM.
@@ -58,7 +61,7 @@ class LLMPromptConfig(BaseModel):
     * ``{schema}`` -- column schema fragment listing expected output fields,
       typically formatted as ``"col":<unk>,"col2":<unk>``.
     * ``{prefill}`` -- optional text injected at the start of the model's
-      response to steer generation, currently used for time series data.
+      response by prompt-template consumers.
     """
 
     add_bos_token_to_prompt: bool
@@ -344,10 +347,15 @@ class ModelMetadata(BaseModel):
         description="Where to read RoPE parameters from: autoconfig or automodel.",
     )
 
-    initial_prefill: dict[str, str] | str | None = Field(
-        default=None, description="Optional prefill text for generation."
+    timeseries_group_values: list[TimeSeriesGroupValue] | None = Field(
+        default=None,
+        description="Typed time-series group values used to initialize one generation stream per group.",
     )
-    """Currently used for time series data. May be a single string or a per-column dict."""
+
+    timeseries_source_columns: list[str] | None = Field(
+        default=None,
+        description="Original time-series input column order restored on generated output.",
+    )
 
     max_tokens_per_example: int | None = Field(
         default=None,

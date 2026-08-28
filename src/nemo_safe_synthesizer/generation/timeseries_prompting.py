@@ -1,0 +1,219 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+"""Prompt construction helpers for time-series generation."""
+
+from __future__ import annotations
+
+from collections.abc import Mapping, Sequence
+from typing import cast
+
+from ..data_processing.prompt_tokens import EncodeOnlyTokenizer, encode_prompt_token_ids, wrap_sequence_token_ids
+from ..data_processing.record_utils import ParsedRecord, records_to_jsonl
+from ..defaults import PSEUDO_GROUP_COLUMN
+from ..errors import GenerationError
+from ..llm.metadata import LLMPromptConfig
+
+__all__ = [
+    "build_partial_record_prefix",
+    "build_record_history",
+    "build_training_compatible_prompt_token_ids",
+]
+
+
+def _schema_types(schema: Mapping[str, object], column: str) -> list[str]:
+    """Return the declared JSON types for a schema column.
+
+    Prefix seed values do not always retain their training-data types: group
+    IDs become strings when stored as dictionary keys, and configured
+    timestamps may be strings even when the schema expects a number. Reading
+    and normalizing both scalar and list-valued JSON Schema ``type`` fields
+    lets the caller restore those values to the training-compatible JSON type.
+
+    Args:
+        schema: Saved JSON schema containing a ``properties`` mapping.
+        column: Column whose declared types should be returned.
+
+    Returns:
+        Declared type names, or an empty list when the column has no standard
+        string or list-valued ``type`` declaration.
+
+    Raises:
+        GenerationError: If the schema has no properties mapping or does not
+            define the requested column.
+    """
+    properties_value = schema.get("properties")
+    if not isinstance(properties_value, Mapping):
+        raise GenerationError("The saved schema has no valid 'properties' mapping.")
+    properties = cast(Mapping[str, object], properties_value)
+    column_schema_value = properties.get(column)
+    if not isinstance(column_schema_value, Mapping):
+        raise GenerationError(f"The saved schema has no definition for time-series prefix column {column!r}.")
+    column_schema = cast(Mapping[str, object], column_schema_value)
+    schema_type = column_schema.get("type")
+    if isinstance(schema_type, str):
+        return [schema_type]
+    if isinstance(schema_type, list) and all(isinstance(item, str) for item in schema_type):
+        return cast(list[str], schema_type)
+    return []
+
+
+def _coerce_prefix_value(schema: Mapping[str, object], column: str, value: object) -> object:
+    """Coerce a known prefix value to the column's JSON schema type.
+
+    Args:
+        schema: Saved JSON schema used to determine the target type.
+        column: Prefix column receiving the value.
+        value: Group or timestamp value to serialize.
+
+    Returns:
+        The value converted to the declared integer, number, or string type.
+        Values with other or unspecified schema types are returned unchanged.
+
+    Raises:
+        GenerationError: If schema lookup fails or a numeric conversion is not
+            possible.
+    """
+    schema_types = _schema_types(schema, column)
+    try:
+        if "integer" in schema_types:
+            return int(value)  # ty: ignore[invalid-argument-type]
+        if "number" in schema_types:
+            return float(value)  # ty: ignore[invalid-argument-type]
+    except (TypeError, ValueError) as exc:
+        raise GenerationError(
+            f"Could not serialize value {value!r} for time-series prefix column {column!r} as {schema_types!r}."
+        ) from exc
+    if "string" in schema_types and value is not None:
+        return str(value)
+    return value
+
+
+def build_partial_record_prefix(
+    *,
+    columns: Sequence[str],
+    schema: Mapping[str, object],
+    group_column: str,
+    group_id: object,
+    timestamp_column: str,
+    start_timestamp: str | int,
+) -> str:
+    """Build an incomplete first record matching the training serialization.
+
+    Args:
+        columns: Saved JSON schema columns in generation order.
+        schema: Saved JSON schema used to coerce known values.
+        group_column: Configured group column, including the pseudo-group value.
+        group_id: Group value for this generation stream.
+        timestamp_column: Configured timestamp column.
+        start_timestamp: First timestamp to generate.
+
+    Returns:
+        An incomplete JSON record ending with the opening quote of the next
+        field name. Including the training ``,"`` token keeps the standalone
+        prefix tokenization identical to the beginning of a complete training
+        record. The record begins directly with ``{`` because training places
+        the sequence BOS token immediately before the first JSON byte.
+
+    Examples:
+        Given columns beginning with ``acct_id``, ``txn_index``, and
+        ``cardholder``, a group ID of ``"ACCT-001"``, and a starting transaction
+        index of ``1``, the returned prefix is::
+
+            {"acct_id":"ACCT-001","txn_index":1,"
+
+        The model completes the next field name and the rest of the record.
+
+    Raises:
+        GenerationError: If the saved artifact cannot support a partial prefix.
+    """
+    seed_values: dict[str, object] = {}
+    # The pseudo-group is internal bookkeeping for an originally ungrouped
+    # dataset, so it must not appear in the generated record prefix.
+    if group_column != PSEUDO_GROUP_COLUMN:
+        seed_values[group_column] = group_id
+    seed_values[timestamp_column] = start_timestamp
+
+    prefix_columns = [column for column in columns if column in seed_values]
+    expected_prefix_columns = (
+        [timestamp_column] if group_column == PSEUDO_GROUP_COLUMN else [group_column, timestamp_column]
+    )
+    if (
+        prefix_columns != expected_prefix_columns
+        or list(columns[: len(expected_prefix_columns)]) != expected_prefix_columns
+    ):
+        raise GenerationError(
+            "The saved time-series schema does not begin with the configured group and timestamp columns. "
+            "Retrain the model with the current time-series preprocessing before generating."
+        )
+
+    ordered_values = {column: _coerce_prefix_value(schema, column, seed_values[column]) for column in prefix_columns}
+    serialized = records_to_jsonl([ordered_values]).rstrip("\n")
+    if not serialized.endswith("}"):
+        raise GenerationError("Could not serialize the initial time-series partial record.")
+    return f'{serialized[:-1]},"'
+
+
+def build_record_history(records: Sequence[ParsedRecord]) -> str:
+    """Build prompt history from exact model-emitted record text.
+
+    Training inserts the sequence BOS token immediately before the first record,
+    with no intervening whitespace. The caller adds that BOS token separately,
+    so this helper returns only the exact newline-terminated record bytes.
+
+    Args:
+        records: Accepted records in chronological order.
+
+    Returns:
+        A sequence of newline-terminated records, or an empty string when no
+        records are provided.
+    """
+    if not records:
+        return ""
+    return "".join(f"{record.text}\n" for record in records)
+
+
+def build_training_compatible_prompt_token_ids(
+    *,
+    tokenizer: EncodeOnlyTokenizer,
+    prompt_config: LLMPromptConfig,
+    prompt: str,
+    record_context: str | Sequence[str],
+) -> list[int]:
+    """Build the token prefix seen before record continuation during training.
+
+    This mirrors ``Example`` construction: encode the schema prompt without
+    tokenizer-defined special tokens, apply the configured prompt BOS/EOS
+    tokens, add the sequence BOS token, then append the prefix or history
+    record context. Building IDs explicitly is necessary for tokenizers such as
+    SmolLM3's, which do not add ``<|im_start|>`` automatically at inference.
+
+    Args:
+        tokenizer: Tokenizer used by the generation engine.
+        prompt_config: Saved special-token settings.
+        prompt: Schema prompt text used during training.
+        record_context: Partial first record, or separately encoded history records.
+            Encoding history records individually mirrors training, which
+            tokenizes each newline-terminated JSON record before concatenation.
+
+    Returns:
+        Prompt token IDs whose boundary exactly matches a training example.
+    """
+    prompt_ids = encode_prompt_token_ids(
+        prompt,
+        tokenizer=tokenizer,
+        prompt_config=prompt_config,
+    )
+
+    context_ids: list[int] = []
+    context_segments = [record_context] if isinstance(record_context, str) else record_context
+    for segment in context_segments:
+        context_ids.extend(tokenizer.encode(segment, add_special_tokens=False))
+    return [
+        *prompt_ids,
+        *wrap_sequence_token_ids(
+            context_ids,
+            prompt_config=prompt_config,
+            include_eos=False,
+        ),
+    ]

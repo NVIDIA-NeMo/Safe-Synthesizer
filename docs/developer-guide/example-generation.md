@@ -259,12 +259,11 @@ these conditions are met:
 - Token budget exceeded -- the accumulated tokens reach the randomized budget
 - `max_sequences_per_example` reached
 
-### Initial prefill
+### Time-series group registry
 
-For each group, the first 3 training records are stored as `initial_prefill` --
-a dictionary mapping group IDs to seed text. During generation, the
-time-series backend uses these prefill strings to prime the model's context for
-each group.
+The artifact stores each typed group value in `timeseries_group_values`.
+Generation uses this registry to initialize one stream per training group.
+Each stream starts with a generated prefix as described below.
 
 ### Concrete example
 
@@ -446,22 +445,32 @@ When no BOS/EOS delimiters are found, behavior depends on
 !!! warning "Experimental"
     Time-series generation is experimental and its API may change.
 
-The `TimeseriesBackend` generates one group at a time using a sliding-window
-strategy:
+The `TimeseriesBackend` generates each group using a sliding history:
 
-1. Generation is seeded with an `initial_prefill` -- the first 3 records from
-   training data for that group.
-2. The model generates a continuation. Valid records are appended to the
-   group's context window.
-3. The updated context (most recent records) becomes the prefill for the
-   next prompt.
-4. This repeats until the target time range is covered or retries are
+1. The model receives up to the three most recently accepted records as
+   history and may generate one or more new records.
+2. The backend parses and validates each candidate, retains one response, and
+   appends its exact accepted record text to the history.
+3. This repeats until the target time range is covered or retries are
    exhausted.
+
+The first iteration is a special case because no generated history exists yet.
+The backend uses a prefix: an incomplete JSON record containing the group
+ID (for grouped data), configured start timestamp, and opening quote of the
+next field name. The model may complete that record and generate additional
+records. Before parsing, the backend prepends the prefix to each completion.
+After the first record is accepted, subsequent iterations use history only.
 
 Because each prompt sees the model's own prior output, sequential mode
 preserves temporal continuity -- timestamps, intervals, and trends carry
 forward naturally. The trade-off is that generation is inherently serial per
 group (though multiple groups are processed in parallel batches).
+
+Preprocessing places the group and timestamp columns first in the persisted
+schema and training JSONL. This lets the partial record match the field order
+seen during training. Older artifacts whose saved schema uses another order
+must be retrained; generation fails explicitly instead of silently changing
+prompting behavior.
 
 ---
 
