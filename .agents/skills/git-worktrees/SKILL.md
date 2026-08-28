@@ -2,53 +2,67 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 name: git-worktrees
-description: "Create, manage, and clean up git worktrees for isolated development, PR review, and A/B testing of agent configurations. Trigger keywords - worktree, worktrees, git worktree, parallel branches, isolated workspace, worktree cleanup, worktree prune, PR review, address PR comments, work on branch, work on PR."
+description: "Create, clean up, or prune isolated Safe-Synthesizer git worktrees for feature development, PR review, and parallel branches across Cursor, Claude Code, Codex, and plain shells."
 license: Apache-2.0
 ---
 
-# Git Worktrees (Safe-Synthesizer)
+# Git Worktrees
 
-Safe-Synthesizer-specific additions to the base `git-worktrees` skill. Read the base skill first (available globally via agent-stuff), then apply the overrides below.
+This skill is self-contained. Do not load a machine-installed or system
+worktree skill. Apply standard Git behavior except for the repository rules
+below.
 
-## Virtual Environments
+## Repository rules
 
-### Cursor parallel-agent worktrees (automatic)
+- Preserve unrelated changes. Do not stash, move, or discard them to create a
+  worktree.
+- Do not depend on client hooks. Cursor invokes
+  `scripts/setup-worktree.sh` through `.cursor/worktrees.json`. Other clients
+  can run the same script after creating a worktree. Inspect the actual
+  environment and machine-local configuration without printing secrets.
+- Codex does not read `.cursor/worktrees.json`; configure its local environment
+  to invoke `scripts/setup-worktree.sh`, or run the script manually.
+- Keep machine-local configuration local to each checkout. Worktree hooks do
+  not copy `.env`, `.env.local`, `mise.local.toml`, or `.local.envrc` from
+  another checkout.
 
-Cursor parallel-agent worktrees created via the IDE run `.cursor/setup-worktree.sh` automatically at creation time. This script runs `uv sync --frozen` unconditionally, producing a local `.venv` in the worktree. No manual setup needed.
+## Python environment
 
-The `sessionStart` hook (`.cursor/hooks/session_context.sh`) also runs `uv sync --frozen` if `.venv` is absent at session start, covering Claude Code worktree sessions.
-
-### Manual worktrees (agent-created)
-
-When creating a worktree manually (e.g., for PR review or feature work), always run `uv sync --frozen` after creation:
+Run the setup script from a new worktree if the client did not run it:
 
 ```bash
-cd "$SS_WORKTREE_DIR/ss-wt-<name>"
-uv sync --frozen
+.agents/skills/git-worktrees/scripts/setup-worktree.sh
 ```
 
-This creates a local `.venv` in the worktree. With uv's cache the install takes ~2-3 seconds on a warm cache.
-
-If you need different extras (e.g. `cu129` vs `cpu`), pass them explicitly:
+It creates a base local `.venv`. Select the complete dependency profile needed
+for development:
 
 ```bash
-uv sync --frozen --extra cu129 --extra engine --group dev
+unset UV_PROJECT_ENVIRONMENT UV_NO_SYNC PYTHONPATH VIRTUAL_ENV UV_PROJECT_DIR
+mise run setup
+mise run bootstrap-nss cpu  # or cu129
 ```
 
-Never run bare `uv sync` without `--frozen` -- it re-locks `uv.lock` and creates dirty state.
+Bare `uv sync --frozen` installs only the base environment. It does not support
+all type checks, import checks, or GPU tests.
 
-Note: The base skill describes sharing the main repo's `.venv` via `UV_PROJECT_ENVIRONMENT` as the default. In this repo, the Cursor worktree automation always creates a local `.venv`, so `UV_PROJECT_ENVIRONMENT` is not needed for Cursor-managed worktrees. Use it only for quick throwaway sessions where you know the deps are identical.
+Share the main checkout's environment only when the lock and dependency
+profile match:
 
-## Commit Requirements
+```bash
+SS_MAIN_CHECKOUT="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
+export UV_PROJECT_ENVIRONMENT="$SS_MAIN_CHECKOUT/.venv"
+export UV_NO_SYNC=1
+export PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
+```
 
-Every commit requires both DCO sign-off and GPG signing. The `enforce-signoff.sh` hook blocks commits that omit either:
+The main checkout owns synchronization of a shared environment. Do not run
+`uv sync` or a bootstrap task from a worktree that points to it.
+
+## Commits
+
+Commits require DCO sign-off and GPG signing:
 
 ```bash
 git commit --signoff --gpg-sign -m "message"
-# or short flags:
-git commit -s -S -m "message"
 ```
-
-Never hand-write the `Signed-off-by` trailer -- it must come from `--signoff` so it matches `git config user.name` / `user.email` exactly.
-
-GitHub marks commits as "Verified" when the signing key matches a key registered in your GitHub account (Settings → SSH and GPG keys). Commits squash-merged by GitHub are signed by GitHub's own key -- only locally-created commits need your personal key.

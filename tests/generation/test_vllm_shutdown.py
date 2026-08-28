@@ -52,6 +52,8 @@ class TestTeardownIdempotency:
     def test_first_teardown_runs_cleanup(self, backend, _mock_vllm_cleanup):
         mock_dist, mock_mem = _mock_vllm_cleanup
         backend.llm = MagicMock()
+        mock_dist.reset_mock()
+        mock_mem.reset_mock()
 
         backend.teardown()
 

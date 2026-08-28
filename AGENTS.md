@@ -11,6 +11,8 @@ This project loads local developer preferences from @AGENTS.local.md. You MUST r
 
 Repo-specific skills live in `.agents/skills/`; see `.agents/README.md` for the catalog. Read a skill when the task matches its scope instead of copying workflow details into this file.
 
+Pull request review comments: before drafting or posting new findings, use the `github-cli` skill and follow its review-comment format, approval, attribution, and handling contract.
+
 Durable implementation guidance belongs with the code it describes: function and class docstrings for public contracts and source comments for local invariants. Test-suite guidance belongs in `tests/TESTING.md`.
 
 ## Repo Conventions
@@ -34,6 +36,8 @@ The CPU/CUDA optional-dependency and `[tool.uv.sources]`/`[[tool.uv.index]]` sec
 Feature branches off `main`. Branch names often include an issue number prefix (e.g., `<author>/123-short-name`).
 
 Do not commit unless the user asks for a commit or PR work. When committing, all commits require DCO sign-off and GPG signing. Always use `git commit --signoff --gpg-sign` (or `-s -S`) -- never write the `Signed-off-by` trailer manually, and never pass `--no-gpg-sign`.
+
+When creating or updating a pull request, complete the Human review section in `.github/PULL_REQUEST_TEMPLATE.md` accurately. Keep its default checkbox unless a human explicitly confirms a higher review level; then select exactly that level and report only review or verification the human confirmed.
 
 Shell scripting: never use `~` inside double-quoted strings -- it does not expand. Use `$HOME` or an absolute path instead.
 

@@ -421,7 +421,7 @@ class HuggingFaceBackend(TrainingBackend):
             learning_rate=self.params.training.learning_rate,
             eval_strategy=evaluation_strategy,
             weight_decay=self.params.training.weight_decay,
-            warmup_ratio=self.params.training.warmup_ratio,
+            warmup_steps=self.params.training.warmup_steps,
             eval_steps=EVAL_STEPS,
             do_eval=self.params.training.validation_ratio > 0,
             disable_tqdm=True,  # The 🤗 progress bar doesn't play nice with our logging.

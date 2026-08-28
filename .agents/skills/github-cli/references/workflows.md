@@ -224,7 +224,7 @@ git stash pop
 
 ## Fetch and Address Review Comments
 
-For "address PR comments" or "pull comments from PR N", use the **CLI helper** first. It returns a single JSON object (inline + top-level comments) and can post replies without the `gh` binary (GitHub API + `GITHUB_TOKEN`).
+For "address PR comments" or "pull comments from PR N", use the **CLI helper** first. It returns a single JSON object covering inline comments, submitted review bodies, and top-level comments. It can also submit approved reviews and post replies without the `gh` binary (GitHub API + `GITHUB_TOKEN`).
 
 ### Use the CLI helper (recommended)
 
@@ -234,8 +234,12 @@ From repo root (or skill dir). If `GITHUB_TOKEN` is not set, set it first: `expo
 # Optional: ensure token for API (helper uses GITHUB_TOKEN or gh auth token)
 export GITHUB_TOKEN=$(gh auth token)
 
-# Fetch all comments (single JSON: pr_number, repo, inline[], top_level[])
+# Fetch all discussion (single JSON: pr_number, repo, inline[], reviews[], top_level[])
 uv run --script .agents/skills/github-cli/scripts/gh_pr_helper.py -- comments <PR_NUMBER>
+
+# Submit an exact, approved, head-pinned review artifact and receive direct URLs
+uv run --script .agents/skills/github-cli/scripts/gh_pr_helper.py -- \
+  submit-review <PR_NUMBER> --review-file path/to/approved-review.json
 
 # Reply to an inline review comment (comment_id from the inline[].id in the JSON above)
 uv run --script .agents/skills/github-cli/scripts/gh_pr_helper.py -- reply <COMMENT_ID> "Fixed in beefcafe"
@@ -253,19 +257,30 @@ Fixed in commit `beefcafe`. The logic now uses the helper and the test was updat
 
 Workflow: you can draft the reply with the user in a file (e.g. `reply.md` or `pr-171-reply.md`), edit it until they’re happy, then run `reply <COMMENT_ID> --reply-file path/to/reply.md` to post it. No need to paste a long body on the command line.
 
+The approved review artifact schema and the exact-approval rules are in
+[review-comments.md](./review-comments.md#submit-an-approved-review). Scan all
+three arrays returned by `comments` before drafting new findings; a submitted
+review body can already contain the same finding or record a decision that
+changes it.
+
 - Omit `PR_NUMBER` to use the current branch’s open PR. Optional: `--repo OWNER/REPO`, `--token` / `-t`.
-- In Agent use `required_permissions: ["all"]` (sandbox blocks network; see [Terminal docs](https://cursor.com/docs/agent/tools/terminal)).
-- For batch-verifying many comment locations in parallel, consider an [explore subagent](https://cursor.com/docs/subagents).
+- Request network access through the active client or harness when sandboxing
+  blocks the GitHub API.
+- For large batches, use parallel agent work only when the active client
+  supports it and the user has authorized delegation.
 
 ### Alternative: raw gh / gh api
 
 When the helper is not available or you need raw API JSON:
 
-**Get all comments (inline + top-level):**
+**Get all discussion (inline + review summaries + top-level):**
 
 ```bash
 # Inline code review comments (not in gh pr view --json comments)
 gh api repos/NVIDIA-NeMo/Safe-Synthesizer/pulls/<number>/comments
+
+# Submitted review summaries
+gh api repos/NVIDIA-NeMo/Safe-Synthesizer/pulls/<number>/reviews
 
 # Top-level PR conversation
 gh pr view <number> --json comments -q '.comments[] | "\(.author.login): \(.body)"'

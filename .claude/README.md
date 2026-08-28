@@ -10,7 +10,9 @@ Claude Code-specific agent configuration: hook registrations and slash commands.
 ```
 .claude/
 ├── settings.json   # Hook registrations for Claude Code (mirrors .cursor/hooks.json for Cursor)
-└── commands/       # Slash commands -- invoked as /command-name in Claude Code
+├── hooks/
+│   └── enforce-signoff.sh@  # Symlink to the shared signing hook
+└── commands@       # Symlink to ../.agents/commands; invoked as /command-name
     ├── bootstrap.md
     ├── build-docs.md
     ├── build-wheel.md
@@ -25,16 +27,27 @@ Claude Code-specific agent configuration: hook registrations and slash commands.
 
 ## settings.json
 
-Registers hook scripts against Claude Code lifecycle events. The hook scripts themselves live in `.cursor/hooks/` and are shared with Cursor.
+Registers the shared signing hook against Claude Code lifecycle events.
 
 | Event | Script | Purpose |
 |-------|--------|---------|
-| `SessionStart` | `session_context.sh` | Reports venv state; runs `uv sync --frozen` if `.venv` absent |
-| `PreToolUse` (Bash) | `enforce-signoff.sh` | Blocks commits missing `--signoff` or `--gpg-sign` |
+| `PreToolUse` (Bash) | `enforce-signoff.sh` | Blocks recognized direct Git commits missing `--signoff` or `--gpg-sign` |
+
+The shared hook is a best-effort guardrail for direct Git commands. Nested
+interpreters and other process wrappers are outside its scope. Trust the
+project before relying on its settings, and use `/hooks` to verify that the
+registration is active.
+
+Use staged commits with standalone signing flags, such as
+`git commit -s -S -m "message"`. The guard rejects non-message quoted arguments
+and explicit signing negations rather than attempting to interpret them.
 
 ## commands/
 
-Each file is a slash command available in Claude Code as `/command-name` (filename without `.md`). Commands map common development tasks to the correct mise tasks and tool invocations for this repo. The `claude-commands.mdc` rule in `.cursor/rules/` also surfaces these to Cursor agents by keyword.
+Each file is a slash command available in Claude Code as `/command-name`
+(filename without `.md`). Commands map common development tasks to the correct
+mise tasks and tool invocations for this repo. The `agent-commands.mdc` rule in
+`.cursor/rules/` also surfaces them to Cursor agents by keyword.
 
 | Command | Task |
 |---------|------|

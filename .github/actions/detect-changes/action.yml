@@ -81,9 +81,11 @@ runs:
           pytest_ini:
             - 'pytest.ini'
           ci:
+            - '.agents/skills/github-cli/**'
             - '.github/workflows/**'
             - '.github/actions/**'
             - '.mise.toml'
+            - '.mise.*.toml'
             - '.mise/tasks/**'
             - '.dockerignore'
             - 'containers/Dockerfile.test_ci'

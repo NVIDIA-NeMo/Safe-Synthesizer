@@ -1,13 +1,14 @@
 ---
 alwaysApply: true
-description: Index of available Claude command files. Use when user asks about available commands, workflows, or tasks like running tests, building docs, formatting, or syncing.
+description: Index of shared agent command files. Use when user asks about available commands, workflows, or tasks like running tests, building docs, formatting, or syncing.
 globs:
-  - .claude/commands/**
+  - .agents/commands/**
 ---
 
-# Claude Commands
+# Agent Commands
 
-Pre-defined command files live in `.claude/commands/`. When a user asks about a development task, read the corresponding file for instructions.
+Shared command files live in `.agents/commands/`. When a user asks about a
+development task, read the corresponding file for instructions.
 
 | Command | Task |
 |---------|------|

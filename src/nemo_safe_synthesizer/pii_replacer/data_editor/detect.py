@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import logging
 import os
+import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
@@ -39,15 +40,20 @@ class DefaultLLMConfig:
     Attributes:
         SYSTEM_PROMPT: System message describing the column-type annotation task
             sent to the LLM.
-        MAX_OUTPUT_TOKENS: Maximum number of tokens allowed in the LLM response
-            (default 2048).
         TEMPERATURE: Sampling temperature for LLM generation (default 0.2).
             Lower values give more deterministic output.
+
+    Note:
+        No ``max_tokens`` is sent with the request. The default classifier is a
+        reasoning model, and ``max_tokens`` budgets reasoning and visible output
+        together, so any cap large enough for the reasoning trace on a wide
+        frame is not a meaningful guard anyway. A cut-off response is instead
+        detected from ``finish_reason`` (see ``INCOMPLETE_FINISH_REASONS``) and,
+        as a backstop, from the column-coverage check in ``classify_columns``.
     """
 
     DEFAULT_CONFIG_ID = "nvidia/nemotron-3-ultra-550b-a55b"
     SYSTEM_PROMPT = "You are a helpful AI that annotates columns in datasets with their respective types. "
-    MAX_OUTPUT_TOKENS = 2048
     TEMPERATURE = 0.2
 
     @classmethod
@@ -87,6 +93,13 @@ DEFAULT_ENTITIES: set[str] = {
 UNKNOWN_ENTITY: str = "none"
 
 MAX_COL_STR_LEN = 128
+
+# ``finish_reason`` values that mean the completion stopped before the model was
+# done, so any JSON it contains describes only part of the frame. The OpenAI
+# schema also defines "tool_calls" and "function_call"; neither can occur here
+# because no tools are sent, and both leave ``content`` empty, which the
+# no-content guard in ``classify_columns`` catches.
+INCOMPLETE_FINISH_REASONS = frozenset({"length", "content_filter"})
 
 TEMPLATE = """Valid types are: [
 {valid_types_str}
@@ -131,19 +144,21 @@ Output:
 
 
 def _format_prompt(
-    df: pd.DataFrame,
+    column_samples: dict[str, pd.Series],
     entities: set[str],
-    num_samples: Optional[int],
 ) -> Optional[str]:
     """Build the LLM prompt for column classification from sampled DataFrame columns.
 
+    Takes the samples rather than the frame so the caller keeps hold of which
+    columns actually reached the prompt -- ``classify_columns`` checks the
+    response against exactly that set.
+
     Args:
-        df: DataFrame to sample from.
+        column_samples: Output of ``sample_columns``: column name to sampled values.
         entities: Set of valid entity type names.
-        num_samples: Number of value samples per column (or ``None`` for default).
 
     Returns:
-        Formatted prompt string, or ``None`` if no sampleable columns.
+        Formatted prompt string, or ``None`` if there are no sampled columns.
     """
     types = [
         "certificate_license_number",
@@ -225,7 +240,6 @@ def _format_prompt(
     # Not actually valid json with notes, but it's what AS team has found to work.
     valid_types_str = "\n".join(f"{t}{notes.get(t, '')}," for t in types)
 
-    column_samples = sample_columns(df, num_samples)
     if not column_samples:
         return None
     prompt_columns = "\n".join([f"{name}: {', '.join(values)}" for name, values in column_samples.items()])
@@ -256,7 +270,10 @@ def classify_columns(
     Returns:
         Map of column name to entity type (or ``UNKNOWN_ENTITY``).
     """
-    formatted_prompt = _format_prompt(df, entities, num_samples)
+    # Sampling drops all-NaN and over-long columns, so this is the set that
+    # actually reaches the prompt -- and the set the response is checked against.
+    column_samples = sample_columns(df, num_samples)
+    formatted_prompt = _format_prompt(column_samples, entities)
     if not formatted_prompt:
         return {}
 
@@ -268,9 +285,9 @@ def classify_columns(
             {"role": "user", "content": formatted_prompt},
         ],
         temperature=DefaultLLMConfig.TEMPERATURE,
-        max_tokens=DefaultLLMConfig.MAX_OUTPUT_TOKENS,
     )
-    entities_str = response.choices[0].message.content
+    choice = response.choices[0]
+    entities_str = choice.message.content
     llm_elapsed = timer() - llm_start
     logger.info(
         f"LLM column classification took {llm_elapsed} seconds.",
@@ -281,8 +298,66 @@ def classify_columns(
         },
     )
 
+    # A cut-off response often still repairs into well-formed JSON covering only
+    # the columns emitted before the cut, which would silently classify part of
+    # the frame and leave the rest unclassified with no error. Treat it as a
+    # failure so the caller falls back instead of trusting partial output.
+    if choice.finish_reason in INCOMPLETE_FINISH_REASONS:
+        logger.error(
+            f"Classification response from the LLM did not run to completion "
+            f"(finish_reason={choice.finish_reason!r}); discarding the partial result.",
+            extra={
+                "ctx": {
+                    "finish_reason": choice.finish_reason,
+                    "num_columns": len(df.columns),
+                    "completion_tokens": getattr(response.usage, "completion_tokens", None),
+                },
+            },
+        )
+        on_validation_error()
+        return {}
+
+    # Only "stop" positively means the model finished on its own. Servers do
+    # return values outside the OpenAI schema, so an unrecognized one is not
+    # treated as fatal -- the coverage check below is what actually catches a
+    # response that came up short.
+    if choice.finish_reason != "stop":
+        logger.warning(
+            f"Classification response reported an unrecognized finish_reason={choice.finish_reason!r}; "
+            "treating it as complete.",
+            extra={"ctx": {"finish_reason": choice.finish_reason}},
+        )
+
+    # Guards the parse below, which raises an opaque TypeError on None. Content
+    # can be absent whenever the model returned something other than a message
+    # (a tool call, or a provider-specific empty completion).
+    if not entities_str or not entities_str.strip():
+        logger.error(
+            f"Classification response from the LLM had no content (finish_reason={choice.finish_reason!r}).",
+            extra={"ctx": {"finish_reason": choice.finish_reason}},
+        )
+        on_validation_error()
+        return {}
+
     col_entities = _try_extract_entities(entities_str, on_validation_error)
-    return {col: ent if ent in entities else UNKNOWN_ENTITY for col, ent in col_entities.items()}
+
+    # A response can be well-formed yet cover only some of the columns it was
+    # asked about. Those columns are indistinguishable downstream from ones the
+    # model deliberately typed as UNKNOWN_ENTITY, so name them here rather than
+    # letting the gap pass silently. The partial result is still used -- it
+    # classifies more than the degraded-mode fallback would.
+    missing = [col for col in column_samples if col not in col_entities]
+    if missing:
+        logger.warning(
+            f"Classification response covered {len(column_samples) - len(missing)} of {len(column_samples)} "
+            f"submitted columns. The rest are treated as unclassified, so PII in them is only caught if "
+            f"NER covers the column: {', '.join(missing)}",
+            extra={"ctx": {"missing_columns": missing}},
+        )
+
+    # Keyed off the submitted columns, so a column the model invented cannot
+    # enter the map and every submitted column gets an explicit entry.
+    return {col: col_entities[col] if col_entities.get(col) in entities else UNKNOWN_ENTITY for col in column_samples}
 
 
 def sample_columns(df: pd.DataFrame, num_samples: int, random_state: Optional[int] = None) -> dict[str, pd.Series]:
@@ -403,7 +478,8 @@ class ColumnClassifierLLM(ColumnClassifier):
     def _on_validation_error(self) -> None:
         raise RuntimeError(
             "There was an error performing classification: "
-            "the classifier LLM failed to return valid JSON. "
+            "the classifier LLM did not return usable JSON (the response was either "
+            "malformed or truncated before it finished). "
             "Please reach out to support if the error recurs."
         )
 
@@ -585,11 +661,15 @@ class EntityExtractorGliner(EntityExtractor):
             f"Loading NER model from filesystem to {map_location}",
         )
 
-        extractor._model = GLiNER.from_pretrained(
-            clsfy_cfg.gliner_model,
-            map_location=map_location,
-            local_files_only=hf_offline_enabled(),
-        )
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore", message="The `resume_download` argument is deprecated", category=UserWarning
+            )
+            extractor._model = GLiNER.from_pretrained(
+                clsfy_cfg.gliner_model,
+                map_location=map_location,
+                local_files_only=hf_offline_enabled(),
+            )
         entity_types = DEFAULT_ENTITIES
         if clsfy_cfg.ner_entities:
             entity_types = clsfy_cfg.ner_entities
@@ -616,17 +696,21 @@ class EntityExtractorGliner(EntityExtractor):
                 flat_ner=False,
             )
 
-        return self._model.batch_predict_entities(
-            [text],
-            entity_labels,
-            threshold=self._ner_threshold,
-            flat_ner=False,
-        )[0]
+        inference = getattr(self._model, "inference", None)
+        if inference is not None:
+            return inference(
+                [text],
+                entity_labels,
+                threshold=self._ner_threshold,
+                flat_ner=False,
+            )[0]
+
+        raise AttributeError("GLiNER model has neither inference nor predict_entities")
 
     def _batch_predict_entities(self, texts: list[str], entity_labels: list[str]) -> list[list[dict]]:
-        batch_predict_entities = getattr(self._model, "batch_predict_entities", None)
-        if batch_predict_entities is not None:
-            return batch_predict_entities(
+        inference = getattr(self._model, "inference", None)
+        if inference is not None:
+            return inference(
                 texts,
                 entity_labels,
                 threshold=self._ner_threshold,
@@ -645,7 +729,7 @@ class EntityExtractorGliner(EntityExtractor):
                 for text in texts
             ]
 
-        raise AttributeError("GLiNER model has neither batch_predict_entities nor predict_entities")
+        raise AttributeError("GLiNER model has neither inference nor predict_entities")
 
     def _detect_entities_chunked(
         self,

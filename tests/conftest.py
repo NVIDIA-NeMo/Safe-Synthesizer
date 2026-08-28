@@ -16,6 +16,8 @@ import pandas as pd
 import pytest
 from datasets import Dataset, load_dataset
 
+pytest_plugins = ("pytester",)
+
 
 def _pytest_live_logging_requested(config: pytest.Config) -> bool:
     """Return whether pytest is configured to stream test logs live."""
@@ -54,13 +56,17 @@ def pytest_configure(config: pytest.Config) -> None:
     initialize_observability()
 
 
-def pytest_collection_modifyitems(config, items):
-    """Auto-mark tests by directory: `/e2e/` -> e2e, `/smoke/` -> smoke, else unit."""
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """Auto-mark test categories and skip GPU tests when CUDA is unavailable."""
     category_markers = {"unit", "e2e", "smoke"}
+    gpu_items = []
 
     for item in items:
         marker_names = {marker.name for marker in item.iter_markers()}
         path_str = str(item.fspath)
+
+        if "requires_gpu" in marker_names:
+            gpu_items.append(item)
 
         if "/e2e/" in path_str:
             if "e2e" not in marker_names:
@@ -74,6 +80,30 @@ def pytest_collection_modifyitems(config, items):
 
         if not marker_names.intersection(category_markers):
             item.add_marker(pytest.mark.unit)
+
+    if not gpu_items:
+        return
+
+    require_cuda = os.environ.get("NSS_REQUIRE_CUDA") == "1"
+
+    try:
+        import torch
+    except ImportError:
+        if require_cuda:
+            raise pytest.UsageError(
+                "GPU CI requires PyTorch with CUDA support, but PyTorch could not be imported."
+            ) from None
+        raise
+
+    if torch.cuda.is_available():
+        return
+
+    if require_cuda:
+        raise pytest.UsageError("GPU CI requires CUDA, but torch.cuda.is_available() returned false.")
+
+    skip_marker = pytest.mark.skip(reason="CUDA is not available")
+    for item in gpu_items:
+        item.add_marker(skip_marker)
 
 
 @pytest.fixture(autouse=True)
@@ -136,7 +166,7 @@ training:
   rope_scaling_factor: auto
   validation_ratio: 0.0
   validation_steps: 15
-  warmup_ratio: 0.05
+  warmup_steps: 0.05
   weight_decay: 0.01
 """
 

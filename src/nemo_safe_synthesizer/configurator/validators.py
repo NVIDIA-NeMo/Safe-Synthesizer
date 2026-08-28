@@ -150,20 +150,26 @@ class ValueValidator:
         return core_schema.with_info_after_validator_function(self.validate, handler(source_type))
 
 
-def range_validator(value: int | float, func: Callable) -> bool:
+def range_validator(value: int | float | str | None, func: Callable) -> bool:
     """Check a numeric value against ``func``, passing ``"auto"`` sentinels unconditionally.
 
     ``func`` is typically a predicate that asserts a numeric range (e.g.
     non-negative, within ``(0, 1)``).
 
     Args:
-        value: The value to validate -- may be a number or the string ``"auto"``.
+        value: The value to validate -- may be a number, ``None``, or the string ``"auto"``.
         func: Predicate applied when ``value`` is numeric (e.g. ``lambda v: v >= 0``).
 
     Returns:
         ``True`` if ``value`` is ``"auto"`` or ``func(value)`` is truthy.
+        ``None`` is rejected cleanly so callers produce a validation error
+        instead of leaking comparison ``TypeError`` exceptions.
     """
-    return True if value == "auto" else func(value)
+    if value == "auto":
+        return True
+    if value is None:
+        return False
+    return func(value)
 
 
 AutoParamRangeValidator = ValueValidator(lambda p: range_validator(p, lambda v: v >= 0))

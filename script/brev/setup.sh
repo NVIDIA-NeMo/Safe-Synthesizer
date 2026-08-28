@@ -21,11 +21,10 @@ readonly REPO_URL="https://github.com/NVIDIA-NeMo/Safe-Synthesizer"
 
 : "${HOME:?HOME is not set}"
 
-# $HOME is the file browser root: only tutorials/ and README.md are visible.
+# $HOME is the file browser root: only customer-facing files stay visible.
 readonly TUTORIALS_DIR="${HOME}/tutorials"
-readonly README_FILE="${HOME}/README.md"
+readonly WELCOME_FILE="${HOME}/welcome.md"
 readonly WAIT_FILE="${HOME}/SETUP-IN-PROGRESS.md"
-readonly WELCOME_STAGED="${HOME}/.nss-welcome.md"
 
 readonly BIN_DIR="${HOME}/.local/bin"
 readonly VENV_DIR="${HOME}/.nss-venv"
@@ -61,7 +60,7 @@ NeMo Safe Synthesizer is still installing -- roughly 5-10 minutes from when
 the instance started. Files appear as it progresses, so a partly-filled file
 browser is expected. Nothing here is ready to run yet.
 
-When setup finishes, this file is replaced by README.md. Refresh to check.
+When setup finishes, this file disappears. Open welcome.md to get started.
 EOF
 
 export PATH="${BIN_DIR}:${PATH}"
@@ -74,6 +73,19 @@ if command -v nvidia-smi >/dev/null 2>&1; then
   nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader || true
 else
   log "WARNING: nvidia-smi not found. Training and generation will not work."
+fi
+
+# Triton needs a C compiler on first GPU use.
+if ! command -v gcc >/dev/null 2>&1 || [[ ! -f /usr/include/stdlib.h ]]; then
+  if ! command -v sudo >/dev/null 2>&1 || ! sudo -n true; then
+    log "ERROR: Triton requires gcc and libc6-dev, but passwordless sudo is unavailable."
+    exit 1
+  fi
+  log "installing Triton runtime compiler"
+  sudo -n apt-get update
+  sudo -n apt-get install -y --no-install-recommends gcc libc6-dev
+else
+  log "Triton runtime compiler already present"
 fi
 
 # uv -- installed into ~/.local/bin, which needs no privileges.
@@ -123,8 +135,8 @@ else
   NSS_VERSION="$(curl -fsSL https://pypi.org/pypi/nemo-safe-synthesizer/json \
     | "${VENV_DIR}/bin/python" -c 'import json, sys; print(json.load(sys.stdin)["info"]["version"])')"
 
-  # Indexes come from the installed release's pyproject. Match both generated
-  # names and URLs because static index names do not enforce the CUDA suffix.
+  # Indexes come from the installed release's pyproject. Match CUDA names and
+  # URLs plus source-mapped indexes whose names are variant-neutral.
   pyproject="$(mktemp)"
   curl -fsSL "${REPO_URL}/raw/v${NSS_VERSION}/pyproject.toml" -o "${pyproject}"
   index_args=()
@@ -140,15 +152,29 @@ import sys
 import tomllib
 
 with open(sys.argv[1], "rb") as handle:
-    indexes = tomllib.load(handle)["tool"]["uv"]["index"]
+    uv_config = tomllib.load(handle)["tool"]["uv"]
 
+indexes = uv_config["index"]
 cuda_extra = os.environ["CUDA_EXTRA"]
+
+# Some indexes carry no CUDA variant in their name or URL. Source config is
+# not wheel metadata, so collect indexes mapped to packages for this extra.
+source_indexes = {
+    entry["index"]
+    for value in uv_config.get("sources", {}).values()
+    for entry in (value if isinstance(value, list) else [value])
+    if isinstance(entry, dict)
+    and entry.get("extra") == cuda_extra
+    and "index" in entry
+}
+
 print(
     "\n".join(
         index["url"]
         for index in indexes
         if index["name"].endswith(f"-{cuda_extra}")
         or f"/{cuda_extra}" in index["url"]
+        or index["name"] in source_indexes
     )
 )
 PY
@@ -208,13 +234,6 @@ else
       # Written last; the guard keys on this, so partial runs are redone.
       : >"${TUTORIALS_DIR}/.fetched"
       log "tutorials extracted from ${ref}"
-      # Same tarball as the tutorials. Non-fatal -- see README.
-      if tar -xzf "${tarball}" -C "${tarball_dir}" --strip-components=3 \
-        "${top}/script/brev/welcome.md" 2>/dev/null; then
-        mv "${tarball_dir}/welcome.md" "${WELCOME_STAGED}"
-      else
-        log "WARNING: welcome.md not present in ${ref}"
-      fi
       fetched=1
       break
     fi
@@ -343,6 +362,12 @@ if [[ "${registered}" -ne 1 ]]; then
   log "WARNING: kernel not registered; notebooks may open on the wrong Python"
 fi
 
+# Pre-compile third-party packages that emit SyntaxWarnings on first import so
+# the warnings go into the setup log rather than appearing in notebook output.
+log "pre-compiling packages"
+"${VENV_DIR}/bin/python" -W ignore::SyntaxWarning \
+  -c "import torchao, range_regex" 2>/dev/null || true
+
 # Smoke check -- fail provisioning loudly rather than handing over a broken VM.
 
 log "verifying install"
@@ -350,12 +375,10 @@ log "verifying install"
 "${VENV_DIR}/bin/python" \
   -c "import torch; print('cuda available:', torch.cuda.is_available())"
 
-# Hand over: swap the "please wait" file for the welcome text.
+# Hand over: the Source-provided welcome stays visible after setup completes.
 
-if [[ -f "${WELCOME_STAGED}" ]]; then
-  mv "${WELCOME_STAGED}" "${README_FILE}"
-else
-  log "WARNING: no welcome.md staged; skipping ${README_FILE}"
+if [[ ! -f "${WELCOME_FILE}" ]]; then
+  log "WARNING: ${WELCOME_FILE} is missing; check the Launchable Source files"
 fi
 rm -f "${WAIT_FILE}"
 
@@ -365,7 +388,7 @@ cat <<EOF
 
   Safe Synthesizer is ready.
 
-  Start here : ${README_FILE}
+  Start here : ${WELCOME_FILE}
   Tutorials  : ${TUTORIALS_DIR}/
   Kernel     : "Safe Synthesizer" -- already the default
   Setup log  : ${LOG_FILE}

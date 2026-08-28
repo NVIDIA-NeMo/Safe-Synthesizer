@@ -19,7 +19,7 @@ import sys
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Literal, Self, TypeAlias
+from typing import Literal, TypeAlias
 
 from packaging.version import InvalidVersion, Version
 
@@ -41,7 +41,7 @@ class StableVersion:
     minor: int
     patch: int
 
-    def bump(self, part: StableBump) -> Self:
+    def bump(self, part: StableBump) -> StableVersion:
         """Return the next stable base version for the requested bump part."""
         match part:
             case "major":

@@ -21,6 +21,7 @@ from nemo_safe_synthesizer.pii_replacer.data_editor.detect import (
     DefaultLLMConfig,
     EntityExtractorGliner,
     _format_prompt,
+    classify_columns,
     merge_subsume,
     redact_from_entities,
     sample_columns,
@@ -66,7 +67,7 @@ def test_gliner_batch_predict_config():
         entity_extractor = EntityExtractorGliner.get_entity_extractor(cfg)
         entity_extractor.batch_update_cache(["abc"], None)
         assert entity_extractor._model is not None
-        entity_extractor._model.batch_predict_entities.assert_not_called()  # ty: ignore[call-non-callable, unresolved-attribute] -- mock object
+        entity_extractor._model.inference.assert_not_called()  # ty: ignore[call-non-callable, unresolved-attribute] -- mock object
 
     cfg = ClassifyConfig(
         valid_entities={"name"},
@@ -84,7 +85,7 @@ def test_gliner_batch_predict_config():
         entity_extractor = EntityExtractorGliner.get_entity_extractor(cfg)
         entity_extractor.batch_update_cache(["abc"], None)
         assert entity_extractor._model is not None
-        entity_extractor._model.batch_predict_entities.assert_called()  # ty: ignore[call-non-callable, unresolved-attribute] -- mock object
+        entity_extractor._model.inference.assert_called()  # ty: ignore[call-non-callable, unresolved-attribute] -- mock object
 
 
 def test_gliner_entity_labels_are_indexable():
@@ -103,14 +104,14 @@ def test_gliner_entity_labels_are_indexable():
     with patch("nemo_safe_synthesizer.pii_replacer.data_editor.detect.GLiNER") as mock_gliner:
         model = mock_gliner.from_pretrained.return_value
         model.predict_entities.return_value = []
-        model.batch_predict_entities.return_value = [[]]
+        model.inference.return_value = [[]]
 
         entity_extractor = EntityExtractorGliner.get_entity_extractor(cfg)
         entity_extractor.extract_ner_predictions("abc", {"name", "email"})
         entity_extractor.batch_update_cache(["abc"], None)
 
         assert model.predict_entities.call_args.args[1] == ["email", "name"]
-        assert model.batch_predict_entities.call_args.args[1] == ["email", "name"]
+        assert model.inference.call_args.args[1] == ["email", "name"]
 
 
 def test_gliner_batch_cache_falls_back_to_predict_entities_api():
@@ -145,8 +146,16 @@ def test_gliner_batch_cache_falls_back_to_predict_entities_api():
         assert model.calls[0][0] == "abc"
         assert model.calls[0][1] == ["email", "name"]
 
+    # A build exposing neither API must fail loudly, not return no entities.
+    with patch("nemo_safe_synthesizer.pii_replacer.data_editor.detect.GLiNER") as mock_gliner:
+        mock_gliner.from_pretrained.return_value = object()
+        entity_extractor = EntityExtractorGliner.get_entity_extractor(cfg)
 
-def test_gliner_single_prediction_falls_back_to_batch_api():
+        with pytest.raises(AttributeError, match="neither inference nor predict_entities"):
+            entity_extractor.batch_update_cache(["abc"], None)
+
+
+def test_gliner_single_prediction_falls_back_to_inference_api():
     cfg = ClassifyConfig(
         valid_entities={"email", "name"},
         ner_threshold=0.8,
@@ -163,7 +172,7 @@ def test_gliner_single_prediction_falls_back_to_batch_api():
         def __init__(self):
             self.calls = []
 
-        def batch_predict_entities(self, texts, labels, **kwargs):
+        def inference(self, texts, labels, **kwargs):
             self.calls.append((texts, labels, kwargs))
             return [[]]
 
@@ -176,6 +185,14 @@ def test_gliner_single_prediction_falls_back_to_batch_api():
 
         assert model.calls[0][0] == ["abc"]
         assert model.calls[0][1] == ["email", "name"]
+
+    # A build exposing neither API must fail loudly, not return no entities.
+    with patch("nemo_safe_synthesizer.pii_replacer.data_editor.detect.GLiNER") as mock_gliner:
+        mock_gliner.from_pretrained.return_value = object()
+        entity_extractor = EntityExtractorGliner.get_entity_extractor(cfg)
+
+        with pytest.raises(AttributeError, match="neither inference nor predict_entities"):
+            entity_extractor.extract_ner_predictions("abc", {"name", "email"})
 
 
 @pytest.mark.parametrize("offline_var", ["HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE"])
@@ -339,7 +356,7 @@ def test_format_prompt_renders_template_and_samples():
             "count_col": [7],
         }
     )
-    prompt = _format_prompt(df, DEFAULT_ENTITIES, num_samples=2)
+    prompt = _format_prompt(sample_columns(df, num_samples=2), DEFAULT_ENTITIES)
     assert prompt is not None
     assert "Valid types are: [" in prompt
     assert "Additional instructions:" in prompt
@@ -359,7 +376,7 @@ def test_format_prompt_includes_custom_entity_types():
     """User-defined entity names are appended to the valid-types list before 'none'."""
     custom = "custom_entity_acme"
     df = pd.DataFrame({"x": [1]})
-    prompt = _format_prompt(df, DEFAULT_ENTITIES | {custom}, num_samples=1)
+    prompt = _format_prompt(sample_columns(df, num_samples=1), DEFAULT_ENTITIES | {custom})
     assert prompt is not None
     assert f"{custom}," in prompt
     none_idx = prompt.index(f"{UNKNOWN_ENTITY},")
@@ -378,7 +395,7 @@ def test_format_prompt_returns_none_without_sampleable_columns():
             "ColC": [np.nan, np.nan, np.nan],
         }
     )
-    assert _format_prompt(df, DEFAULT_ENTITIES, num_samples=3) is None
+    assert _format_prompt(sample_columns(df, num_samples=3), DEFAULT_ENTITIES) is None
 
 
 def test_no_columns_after_filter():
@@ -421,8 +438,12 @@ def test_detect_types_llm_bad_json():
     )
 
     def attach_mock_response(content: str):
+        # finish_reason is set explicitly: `classify_columns` rejects a response
+        # marked "length" as truncated, so a bare MagicMock would leave these
+        # cases passing only because the auto-created attribute happens not to
+        # compare equal to that string.
         open_ai_mock.chat.completions.create.return_value = MagicMock(
-            choices=[MagicMock(message=MagicMock(content=content))]
+            choices=[MagicMock(message=MagicMock(content=content), finish_reason="stop")]
         )
 
     # LLMs sometimes append extra commentary after the output, but the
@@ -450,7 +471,7 @@ def test_detect_types_llm_bad_json():
     attach_mock_response("""[["pii", "pii"], "b", "c"]""")
     with pytest.raises(RuntimeError) as exc:
         llm_classifier.detect_types(df, DEFAULT_ENTITIES)
-    assert "LLM failed" in exc.value.args[0]
+    assert "did not return usable JSON" in exc.value.args[0]
 
     # ensure none of the (private) payload makes it into the error
     validation_err = exc.value.__context__
@@ -466,7 +487,87 @@ def test_detect_types_llm_bad_json():
     """)
     with pytest.raises(RuntimeError) as exc:
         llm_classifier.detect_types(df, DEFAULT_ENTITIES)
-    assert "LLM failed" in exc.value.args[0]
+    assert "did not return usable JSON" in exc.value.args[0]
+
+
+def _completion(content: str | None, finish_reason: str = "stop") -> MagicMock:
+    """Mock one chat completion carrying ``content`` and ``finish_reason``."""
+    return MagicMock(
+        choices=[MagicMock(message=MagicMock(content=content), finish_reason=finish_reason)],
+        usage=MagicMock(completion_tokens=2048),
+    )
+
+
+@pytest.fixture
+def llm_classifier_and_df():
+    """A classifier whose LLM is mocked, plus the frame the tests classify."""
+    classifier = ColumnClassifierLLM()
+    classifier._llm = MagicMock()
+    df = pd.DataFrame({"ColA": ["small string", "ok string"], "ColB": [1, 2]})
+    return classifier, df
+
+
+@pytest.mark.parametrize("finish_reason", ["length", "content_filter"])
+def test_detect_types_rejects_response_cut_short(llm_classifier_and_df, finish_reason):
+    """A response that stopped early is discarded even though its JSON parses.
+
+    ``json_repair`` turns the truncated object below into a valid single-key
+    dict, so without the ``finish_reason`` guard this would silently classify
+    ColA and leave ColB unclassified with no error raised.
+    """
+    classifier, df = llm_classifier_and_df
+    classifier._llm.chat.completions.create.return_value = _completion('{"ColA": "none"', finish_reason)
+
+    with pytest.raises(RuntimeError) as exc:
+        classifier.detect_types(df, DEFAULT_ENTITIES)
+    assert "did not return usable JSON" in exc.value.args[0]
+
+
+@pytest.mark.parametrize("content", [None, "", "   "])
+def test_detect_types_rejects_empty_content(llm_classifier_and_df, content):
+    """Tool-call and empty completions leave content unset; json_repair raises TypeError on None."""
+    classifier, df = llm_classifier_and_df
+    classifier._llm.chat.completions.create.return_value = _completion(content, "tool_calls")
+
+    with pytest.raises(RuntimeError) as exc:
+        classifier.detect_types(df, DEFAULT_ENTITIES)
+    assert "did not return usable JSON" in exc.value.args[0]
+
+
+def test_detect_types_accepts_unrecognized_finish_reason(llm_classifier_and_df):
+    """Servers return reasons outside the OpenAI schema; those are warned about, not rejected."""
+    classifier, df = llm_classifier_and_df
+    classifier._llm.chat.completions.create.return_value = _completion('{"ColA": "none", "ColB": "none"}', "eos_token")
+
+    assert classifier.detect_types(df, DEFAULT_ENTITIES) == {"ColA": "none", "ColB": "none"}
+
+
+def test_classify_columns_warns_when_response_omits_columns():
+    """Columns the model skipped are named in a warning and returned as UNKNOWN_ENTITY.
+
+    Absent keys are indistinguishable downstream from a deliberate "none", so
+    the warning is the only signal that the frame was partly classified.
+    """
+    df = pd.DataFrame({"ColA": ["a string"], "ColB": ["b string"]})
+    client = MagicMock()
+    client.chat.completions.create.return_value = _completion('{"ColA": "none"}')
+    logger = MagicMock()
+
+    result = classify_columns(df, DEFAULT_ENTITIES, 3, client, lambda: None, logger)
+
+    assert result == {"ColA": "none", "ColB": UNKNOWN_ENTITY}
+    logger.warning.assert_called_once()
+    assert "ColB" in logger.warning.call_args.args[0]
+    assert logger.warning.call_args.kwargs["extra"]["ctx"]["missing_columns"] == ["ColB"]
+
+
+def test_classify_columns_drops_columns_that_were_never_submitted():
+    """A column the model invents cannot enter the map."""
+    df = pd.DataFrame({"ColA": ["a string"]})
+    client = MagicMock()
+    client.chat.completions.create.return_value = _completion('{"ColA": "none", "Invented": "name"}')
+
+    assert classify_columns(df, DEFAULT_ENTITIES, 3, client, lambda: None, MagicMock()) == {"ColA": "none"}
 
 
 def test_redact_from_entities():

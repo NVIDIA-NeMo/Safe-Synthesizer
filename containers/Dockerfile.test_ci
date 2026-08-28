@@ -4,7 +4,7 @@ ARG PYTHON_VERSION=3.13.13
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        git curl build-essential make gpg dirmngr gpg-agent && \
+        git curl build-essential make gpg && \
     rm -rf /var/lib/apt/lists/*
 
 # Keep venv outside /workspace so bind mounts don't shadow it
@@ -19,7 +19,8 @@ COPY mise.lock .
 RUN mkdir -p /workspace/tools
 COPY tools/install-mise.sh ./tools/install-mise.sh
 ENV PATH="/root/.local/share/mise/shims:/root/.local/bin:${PATH}"
-RUN MISE_GPG_KEY=24853EC9F655CE80B48E6C3A8B81C9D17413A06D \
+RUN MISE_REQUIRE_SIGNED_INSTALL=1 \
+    MISE_GPG_KEY=24853EC9F655CE80B48E6C3A8B81C9D17413A06D \
     bash tools/install-mise.sh && \
     MISE_YES=1 mise trust && \
     PYTHON_VERSION="${PYTHON_VERSION}" MISE_YES=1 mise run setup

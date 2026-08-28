@@ -10,14 +10,13 @@ Cursor-specific agent configuration: hooks, rules, skills, and worktree setup.
 ```
 .cursor/
 ├── hooks.json          # Hook registrations for Cursor (mirrors .claude/settings.json for Claude Code)
-├── worktrees.json      # Parallel-agent worktree setup script pointer
-├── setup-worktree.sh   # Runs inside each new parallel-agent worktree at creation time
-├── hooks/              # Hook scripts (shared by both Cursor and Claude Code)
-│   ├── session_context.sh   # sessionStart -- reports venv state, runs uv sync if .venv absent
-│   └── enforce-signoff.sh   # beforeShellExecution/PreToolUse(Bash) -- blocks git commit without --signoff/-s and --gpg-sign/-S
+├── worktrees.json      # Points to the agent-neutral worktree setup script
+├── commands@           # Symlink to ../.agents/commands
+├── hooks/
+│   └── enforce-signoff.sh@  # Symlink to the shared signing hook
 ├── rules/              # Always-apply and requestable context rules (.mdc files)
 │   ├── agent-markdown-style.mdc   # alwaysApply -- markdown and docstring style conventions
-│   ├── claude-commands.mdc        # alwaysApply -- maps task keywords to .claude/commands/ files
+│   ├── agent-commands.mdc         # alwaysApply -- maps task keywords to .agents/commands/ files
 │   ├── repo-navigation.mdc        # requestable -- repo layout, skills, tests, config files
 │   └── writing-docs.mdc           # requestable -- documentation writing conventions
 ├── agents/             # Named subagent persona definitions
@@ -31,14 +30,28 @@ Registers hook scripts against Cursor lifecycle events.
 
 | Event | Script | Purpose |
 |-------|--------|---------|
-| `sessionStart` | `session_context.sh` | Reports venv state; runs `uv sync --frozen` if `.venv` absent |
-| `beforeShellExecution` (git commit) | `enforce-signoff.sh` | Blocks commits missing `--signoff` or `--gpg-sign` |
+| `beforeShellExecution` | `enforce-signoff.sh` | Blocks recognized Git commits missing `--signoff` or `--gpg-sign` |
 
-The same hook scripts are registered in `.claude/settings.json` for Claude Code using its `PreToolUse`/`PostToolUse` event model.
+Cursor invokes the hook for every shell command so it can recognize direct Git
+commits after environment assignments, command separators, and Git global
+options. Nested interpreters and other process wrappers are outside this
+best-effort guardrail's scope. The hook exits immediately for other commands
+and requires the repository-pinned `jq` tool. Trust the workspace before
+relying on project hooks, and verify that `.cursor/hooks.json` is active.
+
+Use staged commits with standalone signing flags, such as
+`git commit -s -S -m "message"`. The guard rejects non-message quoted arguments
+and explicit signing negations rather than attempting to interpret them.
+
+The same hook implementation is exposed to Claude Code through a client-local
+symlink and registered directly for Codex in `.codex/hooks.json`.
 
 ## worktrees.json
 
-Points Cursor to `setup-worktree.sh`, which runs inside each new parallel-agent worktree at creation time. Standard JSON -- no JSONC comments supported.
+Points Cursor to the setup script bundled with the `git-worktrees` skill. The
+script creates a local virtual environment but does not copy `.env`,
+`.env.local`, `mise.local.toml`, or other machine-local configuration from
+another checkout. Standard JSON only; JSONC comments are not supported.
 
 ## skills/
 

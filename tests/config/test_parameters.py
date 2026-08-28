@@ -14,7 +14,7 @@ from nemo_safe_synthesizer.config.generate import GenerateParameters, Structured
 from nemo_safe_synthesizer.config.job import SafeSynthesizerJobConfig
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig, StepDefinition
-from nemo_safe_synthesizer.config.training import QuantizationScheme
+from nemo_safe_synthesizer.config.training import QuantizationScheme, TrainingHyperparams
 from nemo_safe_synthesizer.configurator.parameter_paths import (
     AmbiguousParameterName,
     ParameterFieldKind,
@@ -885,3 +885,55 @@ class TestWithRuntimeOverrides:
         assert saved.data.holdout != 0.42
         assert saved.training.batch_size == 8
         assert saved.generation.structured_generation.enabled is True
+
+
+class TestWarmupSteps:
+    """`warmup_steps` mirrors the transformers contract: ratio below 1, whole steps at or above 1."""
+
+    @pytest.mark.parametrize("value", [0, 0.05, 0.5, 0.999, 1, 1.0, 10, 10.0, 500])
+    def test_accepts_ratios_and_whole_step_counts(self, value):
+        """0 is legal and disables warmup, matching how transformers treats it."""
+        assert TrainingHyperparams(warmup_steps=value).warmup_steps == value
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            1.5,  # transformers truncates to 1, so reject rather than silently change the schedule
+            2.7,
+            float("inf"),  # OverflowError once transformers converts it to an int
+            float("-inf"),
+            float("nan"),
+            -1,
+        ],
+    )
+    def test_rejects_fractional_non_finite_and_negative(self, value):
+        with pytest.raises((ParameterError, ValidationError, ValueError)):
+            TrainingHyperparams(warmup_steps=value)
+
+    def test_default_is_a_ratio(self):
+        assert TrainingHyperparams().warmup_steps == 0.05
+
+
+class TestWarmupRatioDeprecation:
+    """`warmup_ratio` stays accepted as a deprecated alias for `warmup_steps`."""
+
+    def test_migrates_to_warmup_steps_and_warns(self):
+        with pytest.warns(DeprecationWarning, match="warmup_ratio is deprecated"):
+            params = TrainingHyperparams(warmup_ratio=0.2)
+        assert params.warmup_steps == 0.2
+
+    def test_explicit_warmup_steps_wins_over_deprecated_alias(self):
+        with pytest.warns(DeprecationWarning):
+            params = TrainingHyperparams(warmup_steps=0.3, warmup_ratio=0.2)
+        assert params.warmup_steps == 0.3
+
+    @pytest.mark.parametrize("value", [1.5, float("inf")])
+    def test_deprecated_alias_is_validated_too(self, value):
+        """The alias assigns to `warmup_steps` after field validation, so it needs its own guard."""
+        with pytest.raises((ParameterError, ValidationError, ValueError)):
+            TrainingHyperparams(warmup_ratio=value)
+
+    def test_not_serialized(self):
+        with pytest.warns(DeprecationWarning):
+            params = TrainingHyperparams(warmup_ratio=0.2)
+        assert "warmup_ratio" not in params.model_dump()
