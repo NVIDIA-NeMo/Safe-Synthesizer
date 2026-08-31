@@ -207,6 +207,12 @@ def test_from_params_merges_section_and_leaf_overrides_order_independently(kwarg
     assert config.generation.temperature == 0.7
 
 
+def test_from_params_resolves_generation_max_num_seqs() -> None:
+    config = SafeSynthesizerParameters.from_params(**{"generation.max_num_seqs": 64})
+
+    assert config.generation.max_num_seqs == 64
+
+
 @pytest.mark.parametrize(
     "kwargs",
     [

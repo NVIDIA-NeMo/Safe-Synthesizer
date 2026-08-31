@@ -56,10 +56,7 @@ NEMOTRON3_NANO_POLICY = ModelPolicy(
     canonical_ids=frozenset({NEMOTRON3_NANO_4B_BF16}),
     uses_rope=False,
     automatic_lora_targets=_NEMOTRON3_NANO_LORA_TARGETS,
-    vllm_kwargs=(
-        ("mamba_ssm_cache_dtype", "float32"),
-        ("max_num_seqs", 8),
-    ),
+    vllm_kwargs=(("mamba_ssm_cache_dtype", "float32"),),
     force_native_transformers=True,
 )
 
@@ -69,7 +66,6 @@ NEMOTRON3_NANO_FP8_POLICY = ModelPolicy(
     automatic_lora_targets=_NEMOTRON3_NANO_LORA_TARGETS,
     vllm_kwargs=(
         ("mamba_ssm_cache_dtype", "float32"),
-        ("max_num_seqs", 8),
         ("kv_cache_dtype", "fp8"),
     ),
     force_native_transformers=True,

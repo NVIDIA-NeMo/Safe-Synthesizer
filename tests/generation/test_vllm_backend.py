@@ -403,7 +403,7 @@ class TestInitializeModelRef:
             backend.initialize()
 
         assert mock_vllm.call_args.kwargs["mamba_ssm_cache_dtype"] == "float32"
-        assert mock_vllm.call_args.kwargs["max_num_seqs"] == 8
+        assert mock_vllm.call_args.kwargs["max_num_seqs"] == 256
         assert mock_vllm.call_args.kwargs["trust_remote_code"] is False
 
     def test_initialize_uses_exact_fp8_generation_sibling_with_required_cache_dtypes(
@@ -431,6 +431,7 @@ class TestInitializeModelRef:
 
         assert mock_vllm.call_args.kwargs["model"] == NEMOTRON_FP8_MODEL_ID
         assert mock_vllm.call_args.kwargs["mamba_ssm_cache_dtype"] == "float32"
+        assert mock_vllm.call_args.kwargs["max_num_seqs"] == 256
         assert mock_vllm.call_args.kwargs["kv_cache_dtype"] == "fp8"
         assert mock_vllm.call_args.kwargs["trust_remote_code"] is False
         assert base_params.training.pretrained_model == NEMOTRON_BF16_MODEL_ID
@@ -533,7 +534,28 @@ class TestInitializeModelRef:
             backend.initialize()
 
         assert mock_vllm.call_args.kwargs["mamba_ssm_cache_dtype"] == "float32"
-        assert mock_vllm.call_args.kwargs["max_num_seqs"] == 8
+        assert mock_vllm.call_args.kwargs["max_num_seqs"] == 256
+
+    def test_initialize_passes_configured_max_num_seqs_to_vllm(
+        self,
+        base_params,
+        mock_model_metadata,
+        mock_schema,
+        mock_workdir,
+    ):
+        base_params.generation.max_num_seqs = 64
+        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
+        mock_llm = MagicMock()
+        mock_llm.get_tokenizer.return_value = MagicMock()
+
+        with (
+            patch("nemo_safe_synthesizer.generation.vllm_backend.vLLM", return_value=mock_llm) as mock_vllm,
+            patch("nemo_safe_synthesizer.generation.vllm_backend.get_max_vram", return_value={0: 0.8}),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.create_processor", return_value=MagicMock()),
+        ):
+            backend.initialize()
+
+        assert mock_vllm.call_args.kwargs["max_num_seqs"] == 64
 
     def test_initialize_passes_cached_snapshot_target_and_trust_to_vllm(
         self,

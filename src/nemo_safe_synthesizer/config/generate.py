@@ -289,6 +289,18 @@ class GenerateParameters(Parameters, BaseModel):
         ),
     ] = 1.2  # mirrors llm.metadata.GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER (kept a literal to avoid a config->llm import cycle)
 
+    max_num_seqs: Annotated[
+        int,
+        ValueValidator(value_func=lambda v: v >= 1),
+        Field(
+            title="max_num_seqs",
+            description=(
+                "Maximum number of sequences vLLM can process concurrently. "
+                "Must be >= 1. Lower values reduce memory use at the cost of throughput."
+            ),
+        ),
+    ] = 256
+
     structured_generation: StructuredGenerationParameters = Field(
         description="Structured generation parameters controlling schema-constrained output.",
         default_factory=StructuredGenerationParameters,

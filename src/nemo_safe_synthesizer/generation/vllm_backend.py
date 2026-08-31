@@ -371,6 +371,7 @@ class VllmBackend(GeneratorBackend):
                 max_model_len=self.model_metadata.max_seq_length,
                 enable_lora=True,
                 max_lora_rank=self.config.training.lora_r,
+                max_num_seqs=self.config.generation.max_num_seqs,
                 structured_outputs_config=structured_outputs_config,
                 attention_config=attention_config,
                 trust_remote_code=generation_model_ref.trust_remote_code,

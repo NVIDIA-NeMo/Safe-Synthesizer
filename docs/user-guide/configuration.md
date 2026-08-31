@@ -297,6 +297,7 @@ for the full API reference.
 | `generation.repetition_penalty` | `1.0` | Penalty for repeated tokens; increase slightly if generation produces repetitive output | 1.0--1.15 typical; start at 1.05 if repetition is a problem |
 | `generation.patience` | `3` | Consecutive bad batches before stopping | Leave at default |
 | `generation.invalid_fraction_threshold` | `0.8` | Invalid record fraction that triggers the patience counter | Leave at default |
+| `generation.max_num_seqs` | `256` | Maximum number of sequences vLLM can process concurrently | Leave at the default for throughput; lower it when generation is constrained by GPU memory |
 | `generation.structured_generation.enabled` | `false` | Enable structured output to constrain record format (typically at the cost of reducing the quality of generated records and increasing generation time; use when the pipeline struggles to produce valid records) | Leave off unless the pipeline cannot produce valid records |
 | `generation.structured_generation.backend` | `"auto"` | vLLM guided-decoding backend | Leave at `"auto"` |
 | `generation.structured_generation.schema_method` | `"auto"` | Schema method (`"auto"`, `"structural_tag"`, `"json_schema"`, or `"regex"`) | Leave at `"auto"`; it picks `"structural_tag"` on xgrammar-capable backends and `"regex"` otherwise |

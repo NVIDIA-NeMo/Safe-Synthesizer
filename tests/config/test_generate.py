@@ -236,3 +236,17 @@ class TestMaxTokensMultiplier:
         """Non-positive and non-finite multipliers are rejected by the validator."""
         with pytest.raises(ValidationError):
             GenerateParameters(max_tokens_multiplier=value)
+
+
+@pytest.mark.unit
+class TestMaxNumSeqs:
+    def test_defaults_to_256(self) -> None:
+        assert GenerateParameters().max_num_seqs == 256
+
+    def test_accepts_positive_override(self) -> None:
+        assert GenerateParameters(max_num_seqs=64).max_num_seqs == 64
+
+    @pytest.mark.parametrize("value", [0, -1])
+    def test_rejects_non_positive(self, value: int) -> None:
+        with pytest.raises(ValidationError):
+            GenerateParameters(max_num_seqs=value)
