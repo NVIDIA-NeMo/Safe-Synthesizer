@@ -75,7 +75,7 @@ def describe_field(field_name: str, data: Series) -> FieldFeatures:
 
     1. ``EMPTY`` -- all values are null.
     2. ``BINARY`` -- exactly two unique non-null values.
-    3. ``NUMERIC`` -- numeric dtype (float or int); integer columns with
+    3. ``FLOAT`` or ``INTEGER`` -- numeric dtype; integer columns with
        <= 10 non-negative unique values are classified as ``CATEGORICAL``.
     4. ``CATEGORICAL`` -- high duplicate ratio (>= 90%, or >= 70% when
        the sample has <= 50 rows).
@@ -122,7 +122,7 @@ def describe_field(field_name: str, data: Series) -> FieldFeatures:
 
     data_type = non_na_data.dtype
     if is_float_dtype(data_type):
-        features.type = FieldType.NUMERIC
+        features.type = FieldType.FLOAT
         features.min_value = floor_power_of_10(float(non_na_data.min()))
         features.max_value = floor_power_of_10(float(non_na_data.max()))
         features.min_precision, features.max_precision = float_precision(non_na_data)
@@ -134,7 +134,7 @@ def describe_field(field_name: str, data: Series) -> FieldFeatures:
             features.type = FieldType.CATEGORICAL
             return features
 
-        features.type = FieldType.NUMERIC
+        features.type = FieldType.INTEGER
         features.min_value = min_value
         features.max_value = floor_power_of_10(int(non_na_data.max()))
         return features

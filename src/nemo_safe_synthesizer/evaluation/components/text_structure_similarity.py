@@ -10,7 +10,6 @@ import numpy as np
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field
 
-from ...artifacts.analyzers.field_features import FieldType
 from ...config.parameters import SafeSynthesizerParameters
 from ...evaluation.components.component import Component
 from ...evaluation.data_model.evaluation_datasets import EvaluationDatasets
@@ -97,9 +96,7 @@ class TextStructureSimilarity(Component):
         evaluation_datasets: EvaluationDatasets, config: SafeSynthesizerParameters | None = None
     ) -> TextStructureSimilarity:
         """Compute text structure similarity across all text columns."""
-        text_fields = [
-            f.name for f in evaluation_datasets.evaluation_fields if f.training_field_features.type == FieldType.TEXT
-        ]
+        text_fields = evaluation_datasets.get_text_columns()
 
         training_df = evaluation_datasets.training
         synthetic_df = evaluation_datasets.synthetic

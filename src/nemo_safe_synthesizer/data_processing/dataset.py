@@ -1,17 +1,14 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""DataFrame normalization and JSON schema inference for training data.
+"""DataFrame column normalization for training and evaluation inputs.
 
-Provides utilities for standardizing DataFrames (type coercion, missing-value
-handling) and deriving JSON schemas used for validating generated records.
+Provides utilities for standardizing DataFrames (type coercion and
+missing-value handling) before profiling or downstream modeling.
 """
 
 from __future__ import annotations
 
-from contextlib import suppress
-
-import numpy as np
 import pandas as pd
 
 CONVERT_TO_STR_TYPES = [
@@ -29,185 +26,6 @@ CONVERT_TO_STR_TYPES = [
 CONVERT_TO_FLOAT_TYPES = [
     "decimal",
 ]
-
-
-JSON_TYPE_MAP = {
-    "str": "string",
-    "int": "integer",
-    "float": "number",
-    "bool": "boolean",
-    "list": "array",
-    "dict": "object",
-}
-
-# schema detection parameters
-SCHEMA_ENUM_MAX_DISTINCT_EXP = 1 / 2
-SCHEMA_ENUM_MAX_SINGLETONS_EXP = 1 / 3
-STRING_LENGTH_MULTIPLE = 1.5
-
-
-def _handle_enum_value(v: object) -> None | int | float | bool | str:
-    """Convert a value to a JSON-safe Python scalar for enum schema entries.
-
-    NumPy scalars and other non-builtin types are narrowed to the most
-    precise builtin equivalent (``bool`` > ``int`` > ``float`` > ``str``).
-    Returns None for NA/NaN values.
-    """
-    if pd.isna(v):  # ty: ignore[no-matching-overload] -- third-party stub mismatch
-        return None
-
-    if isinstance(v, (float, int, bool, str)):
-        return v
-
-    # Anything except builtin python types may cause crashes when we work with
-    # the schema later, so we convert to bool, float, int, or str.
-    if isinstance(v, np.bool_):
-        return bool(v)
-
-    with suppress(TypeError, ValueError, OverflowError):
-        # Convert to python int if possible, but np.float32 and other float
-        # types will be truncated by int(v), so check equality to make sure
-        # we haven't lost precision.
-        t = int(v)  # ty: ignore[invalid-argument-type] -- third-party stub mismatch
-        if t == v:
-            return t
-
-    try:
-        # Convert to python float if possible
-        return float(v)  # ty: ignore[invalid-argument-type] -- third-party stub mismatch
-    except (TypeError, ValueError, OverflowError):
-        # Otherwise, ensure we're using a python str to avoid json encoding errors.
-        return str(v)
-
-
-def check_enum_type(
-    series: pd.Series,
-    max_distinct: int | float | None = None,
-    max_singletons: int | float | None = None,
-) -> dict | None:
-    """Return enum schema if the series is an enum, otherwise return None.
-
-    Args:
-        series: Data object to check for enum type.
-        max_distinct: Maximum number of distinct values to be considered an enum.
-        max_singletons: Maximum number of values with a single occurrence to be
-            considered an enum.
-
-    Returns:
-        The enum schema if the series is an enum, otherwise None.
-    """
-    if max_distinct is None:
-        max_distinct = len(series) ** SCHEMA_ENUM_MAX_DISTINCT_EXP
-    if max_singletons is None:
-        max_singletons = len(series) ** SCHEMA_ENUM_MAX_SINGLETONS_EXP
-
-    value_counts = series.value_counts(dropna=False)
-
-    is_enum = value_counts.count() <= max_distinct and (value_counts == 1).sum() <= max_singletons
-
-    return {"enum": [_handle_enum_value(v) for v in value_counts.index.sort_values()]} if is_enum else None
-
-
-def make_json_schema(df: pd.DataFrame, string_length_multiple: float = STRING_LENGTH_MULTIPLE) -> dict:
-    """Generate a JSON schema from the given DataFrame.
-
-    Inspects each column to determine its JSON type, numeric range, string
-    length bounds, or enum values. See https://json-schema.org for the
-    schema specification.
-
-    Args:
-        df: DataFrame to derive a JSON schema from.
-        string_length_multiple: Multiplier applied to observed string lengths
-            to set ``minLength`` (divided) and ``maxLength`` (multiplied)
-            bounds in the schema.
-
-    Returns:
-        A dictionary representing the JSON schema with ``type``, ``properties``,
-        and ``required`` keys.
-    """
-    schema = {"type": "object", "properties": {}, "required": []}
-
-    for col in df.columns:
-        series = df[col]
-        col_schema = check_enum_type(series) or {}
-
-        if not col_schema:
-            col_types = [JSON_TYPE_MAP.get(t, "string") for t in series.apply(lambda x: type(x).__name__).unique()]
-
-            col_types = list(set(col_types))
-
-            if series.isna().any():
-                col_types.append("null")
-
-            if set(col_types).issubset(["integer", "number"]):
-                col_schema.update(
-                    {
-                        "type": col_types[0],  # actual element instead of list
-                        "minimum": float(series.min()),
-                        "maximum": float(series.max()),
-                    }
-                )
-            elif col_types == ["string"]:
-                str_length = series.astype(str).apply(len)
-                col_schema.update(
-                    {
-                        "type": "string",
-                        "minLength": round(str_length.min() / string_length_multiple),
-                        "maxLength": round(string_length_multiple * str_length.max()),
-                    }
-                )
-            else:
-                col_schema.update({"type": col_types})
-
-        schema["properties"][col] = col_schema
-
-        if not series.isna().any():
-            schema["required"].append(col)
-
-    return schema
-
-
-def relax_numeric_bounds(schema: dict) -> dict:
-    """Return a copy of ``schema`` with float (``number``) range bounds removed.
-
-    ``make_json_schema`` records each numeric column's exact observed
-    ``minimum``/``maximum``. Neither structured-generation backend can enforce a
-    floating-point range (XGrammar and the regex builder bound integers and
-    enums but emit an unconstrained token stream for ``number``), so those bounds
-    act purely as a post-generation validation gate. On wide float tables the
-    per-field rejections compound and can reject nearly every record even though
-    the values are otherwise well-formed. Dropping the ``number`` bounds turns
-    that hard rejection into acceptance while leaving integer and enum
-    constraints -- which the grammar does enforce -- untouched.
-
-    Only ``number``-typed properties are relaxed; a property whose type list
-    includes ``integer`` keeps its (grammar-enforced, whole-number) bounds so the
-    XGrammar constraint stays valid.
-
-    Args:
-        schema: A JSON schema as produced by ``make_json_schema``.
-
-    Returns:
-        A deep-ish copy of ``schema`` with ``minimum``/``maximum`` stripped from
-        pure ``number`` properties. The input is not mutated.
-    """
-    relaxed = dict(schema)
-    properties = relaxed.get("properties")
-    if not isinstance(properties, dict):
-        return relaxed
-
-    new_properties: dict = {}
-    for name, prop in properties.items():
-        if isinstance(prop, dict):
-            types = prop.get("type")
-            types = types if isinstance(types, list) else [types]
-            # Relax only pure floats; keep integer bounds (grammar-enforced and
-            # required to be whole numbers) and enum constraints intact.
-            if "number" in types and "integer" not in types:
-                prop = {k: v for k, v in prop.items() if k not in ("minimum", "maximum")}
-        new_properties[name] = prop
-    relaxed["properties"] = new_properties
-    return relaxed
 
 
 def normalize_dataframe(df: pd.DataFrame) -> pd.DataFrame:

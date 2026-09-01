@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from typing import (
     Annotated,
+    Literal,
 )
 
 from pydantic import (
@@ -19,6 +20,7 @@ from ..configurator.validators import (
     DependsOnValidator,
     ValueValidator,
 )
+from ..data_processing.dataset_profile import DatasetProfile
 from .types import (
     AUTO_STR,
     OptionalAutoInt,
@@ -36,6 +38,14 @@ MIN_HOLDOUT = 10
 
 class DataParameters(Parameters):
     """Configuration for grouping, ordering, and splitting input data for training and evaluation."""
+
+    dataset_profile: Literal["auto_discovery"] | DatasetProfile = Field(
+        default="auto_discovery",
+        description=(
+            "Dataset profile used for generation constraints and evaluation routing. "
+            "Use 'auto_discovery' to infer it from modeled training data."
+        ),
+    )
 
     group_training_examples_by: Annotated[
         str | None,

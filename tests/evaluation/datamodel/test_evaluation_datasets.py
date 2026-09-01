@@ -8,6 +8,7 @@ import pytest
 from nemo_safe_synthesizer.artifacts.analyzers.field_features import (
     FieldType,
 )
+from nemo_safe_synthesizer.data_processing.dataset_profile import discover_dataset_profile
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_datasets import (
     EvaluationDatasets,
 )
@@ -24,9 +25,16 @@ def test_from_dataframes_happy_path(fixture_training_df, fixture_synthetic_df, f
 
     assert len(evaluation_datasets.evaluation_fields) == 8
     for f in evaluation_datasets.evaluation_fields:
-        if f.name in ["num", "num_Int64"]:
-            assert f.training_field_features.type == FieldType.NUMERIC
-            assert f.synthetic_field_features.type == FieldType.NUMERIC
+        if f.name == "num":
+            assert f.training_field_features.type == FieldType.FLOAT
+            assert f.synthetic_field_features.type == FieldType.FLOAT
+            assert f.training_distribution is not None
+            assert len(f.training_distribution) > 0
+            assert f.distribution_distance is not None
+            assert f.distribution_distance > 0.01
+        elif f.name == "num_Int64":
+            assert f.training_field_features.type == FieldType.INTEGER
+            assert f.synthetic_field_features.type == FieldType.INTEGER
             assert f.training_distribution is not None
             assert len(f.training_distribution) > 0
             assert f.distribution_distance is not None
@@ -113,3 +121,26 @@ def test_get_columns_of_type(fixture_training_df):
     )
     assert set(dataset.get_nominal_columns()) == set(["num_cat", "num_cat_Int64", "small_cat", "boolean"])
     assert dataset.get_text_columns() == ["text"]
+
+
+def test_profile_routes_columns_without_reinferring_types():
+    training = pd.DataFrame(
+        {
+            "number": list(range(16)),
+            "label": ["a", "b"] * 8,
+            "text": [f"several words in this text value {index}" for index in range(16)],
+        }
+    )
+    synthetic = training.copy()
+    profile = discover_dataset_profile(training)
+
+    dataset = EvaluationDatasets.from_dataframes(
+        training,
+        synthetic,
+        enable_sampling=False,
+        dataset_profile=profile,
+    )
+
+    assert dataset.get_tabular_columns() == profile.tabular_columns()
+    assert dataset.get_nominal_columns() == profile.nominal_columns()
+    assert dataset.get_text_columns() == profile.text_columns()

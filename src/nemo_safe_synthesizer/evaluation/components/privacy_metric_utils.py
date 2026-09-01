@@ -12,9 +12,10 @@ if TYPE_CHECKING:
     from sentence_transformers import SentenceTransformer
 
 from ...artifacts.analyzers.field_features import describe_field
+from ...data_processing.dataset_profile import DatasetProfile
 
 
-def find_text_fields(df: pd.DataFrame) -> list[str]:
+def find_text_fields(df: pd.DataFrame, dataset_profile: DatasetProfile | None = None) -> list[str]:
     """Identify columns in ``df`` whose content is free-form text.
 
     Each column is passed through ``describe_field``; those classified
@@ -22,10 +23,13 @@ def find_text_fields(df: pd.DataFrame) -> list[str]:
 
     Args:
         df: DataFrame whose columns are inspected.
+        dataset_profile: Training-time profile to use instead of re-inference.
 
     Returns:
         Column names classified as free-form text.
     """
+    if dataset_profile is not None:
+        return [column for column in dataset_profile.text_columns() if column in df.columns]
     text_fields: list[str] = []
     for col in df.columns:
         field_info = describe_field(col, df[col])

@@ -13,8 +13,11 @@ from pydantic import BaseModel, Field
 
 from ...artifacts.analyzers.field_features import (
     FieldFeatures,
-    FieldType,
     describe_field,
+)
+from ...artifacts.base.fields import (
+    HIGHLY_UNIQUE_FIELD_TYPES,
+    NUMERIC_FIELD_TYPES,
 )
 from ...evaluation.data_model.evaluation_score import EvaluationScore
 from ...evaluation.statistics import stats
@@ -22,8 +25,6 @@ from ...observability import get_logger
 from ...pii_replacer.transform_result import ColumnStatistics
 
 logger = get_logger(__name__)
-
-HIGHLY_UNIQUE_TYPES = [FieldType.OTHER, FieldType.TEXT, FieldType.EMPTY]
 
 
 class EvaluationField(BaseModel):
@@ -76,7 +77,7 @@ class EvaluationField(BaseModel):
         #     synthetic_field_features.type = FieldType.CATEGORICAL
 
         # TODO Synthesizer only, but not making conditional until more new config/control is baked up.
-        if training_field_features.type == FieldType.NUMERIC and synthetic_field_features.type == FieldType.NUMERIC:
+        if training_field_features.type in NUMERIC_FIELD_TYPES and synthetic_field_features.type in NUMERIC_FIELD_TYPES:
             bins = stats.get_numeric_distribution_bins(training, synthetic)
             training_distribution = stats.get_numeric_field_distribution(training, bins)
             synthetic_distribution = stats.get_numeric_field_distribution(synthetic, bins)
@@ -96,8 +97,8 @@ class EvaluationField(BaseModel):
             if (
                 training_field_features.count == 0
                 or synthetic_field_features.count == 0
-                or training_field_features.type in HIGHLY_UNIQUE_TYPES
-                or synthetic_field_features.type in HIGHLY_UNIQUE_TYPES
+                or training_field_features.type in HIGHLY_UNIQUE_FIELD_TYPES
+                or synthetic_field_features.type in HIGHLY_UNIQUE_FIELD_TYPES
             ):
                 training_distribution = None
                 synthetic_distribution = None

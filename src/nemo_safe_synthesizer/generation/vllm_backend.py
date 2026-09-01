@@ -31,7 +31,7 @@ from ..config.generate import (
     resolve_structured_generation_schema_method,
     structural_tag_backend_error_message,
 )
-from ..data_processing.dataset import relax_numeric_bounds
+from ..data_processing.dataset_profile import DatasetProfile, relax_numeric_bounds
 from ..defaults import DEFAULT_SAMPLING_PARAMETERS, FIXED_RUNTIME_GENERATE_ARGS
 from ..errors import InternalError, ParameterError
 from ..generation.backend import GeneratorBackend
@@ -249,7 +249,11 @@ class VllmBackend(GeneratorBackend):
         self.config = config
         self.remote = False
         self.workdir = workdir
-        self.schema = load_json(self.workdir.schema_file)
+        profile_path = self.workdir.dataset_profile_file
+        if not profile_path.exists():
+            raise ParameterError(f"Dataset profile is required for generation but was not found: {profile_path}")
+        self.dataset_profile = DatasetProfile.model_validate(load_json(profile_path))
+        self.schema = self.dataset_profile.to_json_schema()
         if not self.config.generation.validation.enforce_numeric_range:
             # Drop float range bounds so out-of-range floating-point values are
             # accepted instead of rejected in post-generation validation. Integer

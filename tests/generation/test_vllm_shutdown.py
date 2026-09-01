@@ -40,9 +40,25 @@ def backend(_mock_vllm_cleanup, fixture_session_cache_dir):
     mock_config.generation.attention_backend = None
 
     mock_workdir = MagicMock()
-    mock_workdir.schema_file = fixture_session_cache_dir / "schema.json"
-    mock_workdir.schema_file.parent.mkdir(parents=True, exist_ok=True)
-    mock_workdir.schema_file.write_text('{"properties": {"col_a": {"type": "string"}}}')
+    mock_workdir.dataset_profile_file = fixture_session_cache_dir / "dataset_profile.json"
+    mock_workdir.dataset_profile_file.parent.mkdir(parents=True, exist_ok=True)
+    mock_workdir.dataset_profile_file.write_text(
+        """
+        {
+          "columns": {
+            "col_a": {
+              "name": "col_a",
+              "nullable": false,
+              "constraints": {
+                "kind": "other",
+                "min_str_length": 1,
+                "max_str_length": 1
+              }
+            }
+          }
+        }
+        """
+    )
     mock_workdir.adapter_path = None
 
     return VllmBackend(config=mock_config, model_metadata=mock_metadata, workdir=mock_workdir)

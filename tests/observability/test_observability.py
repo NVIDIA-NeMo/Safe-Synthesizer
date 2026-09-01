@@ -550,7 +550,7 @@ class TestInitializeObservability:
 
         try:
             _initialize_logging()
-            obs._INITIALIZED_OBSERVABILITY = True
+            monkeypatch.setattr(obs, "_INITIALIZED_OBSERVABILITY", True)
             logger = get_logger("test_mixed_handlers")
             logger.user.info(
                 "Mixed handler table",
