@@ -821,7 +821,8 @@ readonly OUTPUT_DIR="${1:?Usage: $0 <output-dir>}"
 - SPDX copyright headers at top
 - Unquoted values unless special characters require them
 - Newline at end of file
-- GitHub Actions workflows: `#` with dashes for section dividers
+- GitHub Actions workflows: `#` with dashes for section dividers.
+- GitHub Actions `uses:` in workflows and composite `action.yml` files: pin every external repository reference (`owner/repo/...`) to a commit SHA with a full version comment. Local composites (`./.github/actions/...`) and local reusable workflows (`./.github/workflows/...`) stay unpinned. See [`.github/workflows/README.md`](.github/workflows/README.md).
 
 ### TOML
 
