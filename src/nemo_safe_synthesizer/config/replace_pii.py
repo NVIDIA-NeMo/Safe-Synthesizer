@@ -546,19 +546,31 @@ class PiiReplacementPlan(Parameters):
 
 
 class LLMConfig(NSSBaseModel):
-    """Shared LLM settings for discovery and free-text replacement.
+    """OpenAI-compatible inference settings shared by PII planning and replacement.
 
     Presence on ``ReplacePiiConfig.llm`` is itself the enable signal; there is no
-    separate boolean flag. Reserved for future use.
+    separate boolean flag.
     """
 
-    model_provider: str | None = Field(
+    endpoint_url: str | None = Field(
         default=None,
-        description="Reserved: inference provider for LLM-assisted discovery/replacement.",
+        description=(
+            "OpenAI-compatible inference endpoint. When unset, uses NSS_INFERENCE_ENDPOINT or the NSS default endpoint."
+        ),
+    )
+    model_id: str | None = Field(
+        default=None,
+        description=(
+            "Model identifier served by the inference endpoint. When unset, uses "
+            "NSS_INFERENCE_MODEL or the NSS default model."
+        ),
     )
     max_workers: int = Field(
-        default=64,
-        description="Reserved: maximum parallel workers for LLM-assisted operations.",
+        default=8,
+        ge=1,
+        description=(
+            "Maximum concurrent requests for LLM-assisted plan discovery and free-text replacement. Must be at least 1."
+        ),
     )
 
 
@@ -610,11 +622,19 @@ class PiiSamplerConfig(NSSBaseModel):
 class ReplacePiiConfig(Parameters):
     """Top-level ``replace_pii`` config wrapping the replacement plan.
 
-    ``replacement_plan`` is one of:
+    ``replacement_plan`` accepts three forms:
 
-    * ``"auto_discovery"`` (default) -- detect and plan replacements automatically;
-    * a path (string) to a plan file;
-    * an inline ``PiiReplacementPlan``.
+    * ``"auto_discovery"`` (default) detects and plans replacements automatically;
+    * an embedded ``PiiReplacementPlan`` mapping in the main NSS config; or
+    * a string path to a separate plan YAML containing that same mapping.
+
+    ``llm=None`` leaves auto-discovery at the heuristic baseline and disables
+    LLM-assisted free-text replacement. Supplying an ``llm`` mapping enables
+    LLM enhancement after heuristic discovery and provides the same inference
+    settings to replacement-time free-text processing. An embedded plan or plan
+    file bypasses only discovery; it does not disable replacement-time LLM use.
+    The API key remains a runtime secret supplied through ``NSS_INFERENCE_KEY``
+    or the corresponding CLI option; it is never stored in this model.
 
     v2 fields ``globals`` and ``steps`` are rejected with a removal error.
     """
@@ -636,18 +656,17 @@ class ReplacePiiConfig(Parameters):
     replacement_plan: PiiReplacementPlan | str = Field(
         default=AUTO_DISCOVERY,
         description=(
-            f"{AUTO_DISCOVERY!r} to discover the plan from the data, a path to a plan "
-            "file, or an inline plan (YAML/SDK mapping or PiiReplacementPlan). "
-            f"Other strings are treated as paths. The CLI option only accepts the "
+            f"{AUTO_DISCOVERY!r} to discover the plan from the data, an embedded plan "
+            "mapping in the main NSS config, or a path to a separate plan YAML. "
+            "Other strings are treated as paths. The CLI option only accepts the "
             "sentinel or a path."
         ),
     )
     llm: LLMConfig | None = Field(
         default=None,
         description=(
-            "LLM-assisted discovery and free-text replacement settings, or null "
-            "(the default) to run without LLM assistance. Reserved: supplying a "
-            "value is rejected at config validation in this release."
+            "Optional OpenAI-compatible settings shared by plan enhancement and free-text replacement. "
+            "Use an empty mapping to enable NSS inference defaults."
         ),
     )
     replacement: PiiReplacementSettings = Field(
@@ -666,22 +685,12 @@ class ReplacePiiConfig(Parameters):
             raise_if_removed_legacy_fields(cls, cast(Mapping[str, object], value), path=())
         return value
 
-    @field_validator("llm")
-    @classmethod
-    def _reject_unsupported_llm(cls, value: LLMConfig | None) -> LLMConfig | None:
-        if value is not None:
-            raise ParameterError(
-                "replace_pii.llm is not supported in this release; omit it or set "
-                "replace_pii.llm to null (the default)."
-            )
-        return value
-
     @field_validator("replacement_plan", mode="before")
     @classmethod
     def _resolve_replacement_plan(cls, value: object) -> object:
         """Resolve the plan/string union here so errors describe the plan, not the union.
 
-        Left to the union, a malformed inline plan reports the plan's own errors
+        Left to the union, a malformed embedded plan reports the plan's own errors
         *and* "input should be a valid string", which reads as though a file path
         was expected. Validating a mapping as a plan up front keeps the report to
         the fields the user actually got wrong.
@@ -693,13 +702,13 @@ class ReplacePiiConfig(Parameters):
                 details = "; ".join(
                     f"{'.'.join(str(part) for part in error['loc'])}: {error['msg']}" for error in exc.errors()
                 )
-                raise ParameterError(f"invalid inline replacement plan ({details})") from exc
+                raise ParameterError(f"invalid embedded replacement plan ({details})") from exc
         if isinstance(value, Path):
             return str(value)
         if isinstance(value, str | PiiReplacementPlan):
             return value
         raise ParameterError(
-            f"replacement_plan must be {AUTO_DISCOVERY!r}, a path to a plan file, or an inline plan; "
+            f"replacement_plan must be {AUTO_DISCOVERY!r}, an embedded plan, or a path to a plan file; "
             f"got {type(value).__name__}"
         )
 
@@ -716,6 +725,6 @@ class ReplacePiiConfig(Parameters):
         return None
 
     @property
-    def inline_plan(self) -> PiiReplacementPlan | None:
-        """The inline plan, or ``None`` if auto-discovery or a path reference."""
+    def embedded_plan(self) -> PiiReplacementPlan | None:
+        """The embedded plan, or ``None`` for auto-discovery or a plan file."""
         return self.replacement_plan if isinstance(self.replacement_plan, PiiReplacementPlan) else None

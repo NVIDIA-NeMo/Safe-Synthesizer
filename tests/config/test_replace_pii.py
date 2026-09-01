@@ -361,20 +361,21 @@ class TestReplacePiiConfig:
         assert config.replacement_plan == AUTO_DISCOVERY
         assert config.is_auto_discovery
         assert config.plan_path is None
-        assert config.inline_plan is None
+        assert config.embedded_plan is None
+        assert config.llm is None
         assert config.sampler.backend is PiiSamplerBackend.MANAGED
         assert ENTITY_BY_TYPE[EntityType.FREE_TEXT].action is EntityAction.REPLACE_IN_TEXT
 
-    def test_plan_path_and_inline_plan_properties(self) -> None:
+    def test_plan_path_and_embedded_plan_properties(self) -> None:
         path_config = ReplacePiiConfig(replacement_plan="/tmp/plan.yaml")
         assert path_config.plan_path == "/tmp/plan.yaml"
-        assert path_config.inline_plan is None
+        assert path_config.embedded_plan is None
         assert not path_config.is_auto_discovery
 
         plan = PiiReplacementPlan(scope=PiiReplacementScope.RECORD)
-        inline = ReplacePiiConfig(replacement_plan=plan)
-        assert inline.inline_plan is plan
-        assert inline.plan_path is None
+        embedded = ReplacePiiConfig(replacement_plan=plan)
+        assert embedded.embedded_plan is plan
+        assert embedded.plan_path is None
 
     def test_path_object_is_stored_as_string(self) -> None:
         config = ReplacePiiConfig.model_validate({"replacement_plan": Path("plans/pii.yaml")})
@@ -401,20 +402,38 @@ class TestReplacePiiConfig:
                 }
             }
         )
-        assert isinstance(config.inline_plan, PiiReplacementPlan)
-        assert config.inline_plan.scope.value == "record"
+        assert isinstance(config.embedded_plan, PiiReplacementPlan)
+        assert config.embedded_plan.scope.value == "record"
 
-    def test_malformed_inline_plan_raises_parameter_error(self) -> None:
-        with _raises("invalid inline replacement plan"):
+    def test_malformed_embedded_plan_raises_parameter_error(self) -> None:
+        with _raises("invalid embedded replacement plan"):
             ReplacePiiConfig.model_validate({"replacement_plan": {"scope": "galaxy"}})
 
-    def test_llm_defaults_to_none_and_any_value_is_rejected(self) -> None:
-        assert ReplacePiiConfig().llm is None
-        assert ReplacePiiConfig.model_validate({"llm": None}).llm is None
-        with _raises("replace_pii.llm is not supported"):
-            ReplacePiiConfig.model_validate({"llm": {"max_workers": 8}})
-        with _raises("replace_pii.llm is not supported"):
-            ReplacePiiConfig(llm=LLMConfig())
+    def test_llm_mapping_configures_shared_openai_compatible_inference(self) -> None:
+        config = ReplacePiiConfig.model_validate(
+            {
+                "llm": {
+                    "endpoint_url": "http://localhost:8000/v1",
+                    "model_id": "local-model",
+                }
+            }
+        )
+
+        assert config.llm == LLMConfig(
+            endpoint_url="http://localhost:8000/v1",
+            model_id="local-model",
+        )
+        assert config.llm is not None
+        assert config.llm.max_workers == 8
+
+    def test_empty_llm_mapping_enables_inference_defaults(self) -> None:
+        config = ReplacePiiConfig.model_validate({"llm": {}})
+
+        assert config.llm == LLMConfig()
+
+    def test_llm_max_workers_must_be_positive(self) -> None:
+        with _raises("greater than or equal to 1"):
+            ReplacePiiConfig.model_validate({"llm": {"max_workers": 0}})
 
     def test_resolved_managed_assets_path_uses_override(self, tmp_path: Path) -> None:
         config = ReplacePiiConfig.model_validate(
