@@ -37,7 +37,7 @@ class TestEntityCatalog:
         assert set(ENTITY_BY_TYPE) == set(EntityType)
         assert len(ENTITIES) == len(EntityType)
 
-    def test_replace_and_propagate_may_appear_on_columns_to_replace(self) -> None:
+    def test_replace_and_replace_in_text_may_appear_on_columns_to_replace(self) -> None:
         assert is_columns_to_replace_type(EntityType.FIRST_NAME)
         assert is_columns_to_replace_type(EntityType.FREE_TEXT)
         assert not is_columns_to_replace_type(EntityType.GENDER)
@@ -363,7 +363,7 @@ class TestReplacePiiConfig:
         assert config.plan_path is None
         assert config.inline_plan is None
         assert config.sampler.backend is PiiSamplerBackend.MANAGED
-        assert ENTITY_BY_TYPE[EntityType.FREE_TEXT].action is EntityAction.PROPAGATE
+        assert ENTITY_BY_TYPE[EntityType.FREE_TEXT].action is EntityAction.REPLACE_IN_TEXT
 
     def test_plan_path_and_inline_plan_properties(self) -> None:
         path_config = ReplacePiiConfig(replacement_plan="/tmp/plan.yaml")

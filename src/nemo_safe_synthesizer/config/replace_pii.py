@@ -74,7 +74,8 @@ class EntityType(StrEnum):
     IPV6 = "ipv6"
     UNIQUE_IDENTIFIER = "unique_identifier"
 
-    # Propagate already-replaced values into cell text (username/url use this too).
+    # Propagate already-replaced values into spans of cell text (username/url use this too).
+    # Plus fresh NER and replacements when an LLM is available.
     FREE_TEXT = "free_text"
 
     # Identify-only (and often original-value conditioners): discovery may classify
@@ -95,8 +96,13 @@ class EntityAction(Enum):
     REPLACE = auto()
     """Synthesize a new cell value."""
 
-    PROPAGATE = auto()
-    """Scan existing text and substitute values already replaced elsewhere."""
+    REPLACE_IN_TEXT = auto()
+    """Rewrite PII spans inside free-form text, leaving the surrounding text intact.
+
+    Unlike ``REPLACE``, the cell is not itself a single entity value: only the
+    spans within it are rewritten. Spans are sourced from values already
+    replaced in other columns or newly discovered by NER when an LLM is available.
+    """
 
     IDENTIFY_ONLY = auto()
     """Label the column but never write to it.
@@ -222,8 +228,8 @@ ENTITIES: tuple[Entity, ...] = (
         can_condition=False,
         pattern_syntax=PatternSyntax.CHARACTER_MASK,
     ),
-    # Scan cell text and propagate already-replaced values (username/url use this too).
-    Entity(EntityType.FREE_TEXT, action=EntityAction.PROPAGATE, can_condition=False),
+    # Rewrite spans inside cell text (username/url use this too).
+    Entity(EntityType.FREE_TEXT, action=EntityAction.REPLACE_IN_TEXT, can_condition=False),
     # Identify-only.
     Entity(EntityType.DATE, action=EntityAction.IDENTIFY_ONLY, can_condition=False),
     # Identify-only and may condition replacements.
@@ -320,14 +326,15 @@ class ConditioningColumn(NSSBaseModel):
 class PiiColumnPlan(NSSBaseModel):
     """Replacement spec for one named column.
 
-    ``entity_type`` must have action ``replace`` or ``propagate`` (not ``none``).
+    ``entity_type`` must have action ``REPLACE`` or ``REPLACE_IN_TEXT``, not
+    ``IDENTIFY_ONLY``.
     Identify-only types (``date``, ``gender``, ``city``, …) are invalid here.
     ``depends_on`` is allowed only for types in ``ALLOWED_DEPENDS_ON``.
     """
 
     column_name: str = Field(description="Name of the dataframe column to replace or scan.")
     entity_type: EntityType = Field(
-        description="Entity this column holds. Must have action replace or propagate.",
+        description="Entity this column holds. Identify-only entity types are not allowed here.",
     )
     pattern: str | None = Field(
         default=None,
@@ -409,8 +416,8 @@ class PiiReplacementPlan(Parameters):
     """Dataset-specific detection/replacement plan (column-oriented).
 
     Flat ``columns_to_replace`` list; cross-column consistency is expressed only
-    via ``depends_on`` edges (a DAG). Plan-vs-dataframe and graph checks live in
-    ``pii_replacer.planning.validation``.
+    via ``depends_on`` edges (a DAG). Plan-vs-dataframe and graph checks are not
+    performed here; they will live in ``pii_replacer.planning.validation``.
     """
 
     scope: PiiReplacementScope = Field(
@@ -419,7 +426,7 @@ class PiiReplacementPlan(Parameters):
     )
     columns_to_replace: list[PiiColumnPlan] = Field(
         default_factory=list,
-        description="Columns to replace or (for free_text) scan for value propagation.",
+        description="Columns to replace or (for free_text) scan for PII spans to rewrite.",
     )
 
     @model_validator(mode="after")
@@ -564,14 +571,12 @@ class PiiReplacementSettings(NSSBaseModel):
     )
     seed: int | None = Field(
         default=None,
-        description="Seed for synthetic value generation; unset uses PERSON_RANDOM_SEED or 42.",
+        description="Seed for synthetic value generation; when unset the sampler will fall back to PERSON_RANDOM_SEED or 42.",
     )
 
 
 class PiiSamplerBackend(StrEnum):
     """Source of synthetic values for names and related person-like fields."""
-
-    # PGM = "pgm" # Internal generator
 
     MANAGED = "managed"
     """Draw from managed locale assets (see ``PiiSamplerConfig.managed_assets_path``)."""
