@@ -14,6 +14,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     ConditioningColumn,
     EntityAction,
     EntityType,
+    LLMConfig,
     PiiColumnPlan,
     PiiReplacementPlan,
     PiiReplacementScope,
@@ -37,16 +38,16 @@ class TestEntityCatalog:
         assert len(ENTITIES) == len(EntityType)
 
     def test_replace_and_propagate_may_appear_on_columns_to_replace(self) -> None:
-        assert is_columns_to_replace_type(EntityType.first_name)
-        assert is_columns_to_replace_type(EntityType.free_text)
-        assert not is_columns_to_replace_type(EntityType.gender)
-        assert not is_columns_to_replace_type(EntityType.date)
+        assert is_columns_to_replace_type(EntityType.FIRST_NAME)
+        assert is_columns_to_replace_type(EntityType.FREE_TEXT)
+        assert not is_columns_to_replace_type(EntityType.GENDER)
+        assert not is_columns_to_replace_type(EntityType.DATE)
 
     def test_conditioners_match_can_condition_flag(self) -> None:
-        assert can_condition(EntityType.first_name)
-        assert can_condition(EntityType.gender)
-        assert not can_condition(EntityType.email)
-        assert not can_condition(EntityType.free_text)
+        assert can_condition(EntityType.FIRST_NAME)
+        assert can_condition(EntityType.GENDER)
+        assert not can_condition(EntityType.EMAIL)
+        assert not can_condition(EntityType.FREE_TEXT)
 
     def test_depends_on_matrix_only_lists_conditionable_types(self) -> None:
         for sources in ALLOWED_DEPENDS_ON.values():
@@ -58,23 +59,23 @@ class TestEntityCatalog:
 class TestPiiColumnPlan:
     def test_identify_only_entity_type_is_rejected(self) -> None:
         with _raises("identify-only"):
-            PiiColumnPlan(column_name="sex", entity_type=EntityType.gender)
+            PiiColumnPlan(column_name="sex", entity_type=EntityType.GENDER)
 
-    def test_pattern_rejected_when_pattern_kind_is_none(self) -> None:
+    def test_pattern_rejected_when_entity_has_no_pattern_syntax(self) -> None:
         with _raises("does not allow pattern"):
-            PiiColumnPlan(column_name="ssn", entity_type=EntityType.ssn, pattern="###-##-####")
+            PiiColumnPlan(column_name="ssn", entity_type=EntityType.SSN, pattern="###-##-####")
         with _raises("does not allow pattern"):
-            PiiColumnPlan(column_name="addr", entity_type=EntityType.street_address, pattern="#### Main St")
+            PiiColumnPlan(column_name="addr", entity_type=EntityType.STREET_ADDRESS, pattern="#### Main St")
         with _raises("does not allow pattern"):
-            PiiColumnPlan(column_name="notes", entity_type=EntityType.free_text, pattern="{First}")
+            PiiColumnPlan(column_name="notes", entity_type=EntityType.FREE_TEXT, pattern="{First}")
 
     def test_empty_pattern_is_treated_as_omitted(self) -> None:
-        spec = PiiColumnPlan(column_name="dob", entity_type=EntityType.date_of_birth, pattern="  ")
+        spec = PiiColumnPlan(column_name="dob", entity_type=EntityType.DATE_OF_BIRTH, pattern="  ")
         assert spec.pattern is None
 
     def test_strftime_and_name_parts_patterns_are_accepted(self) -> None:
-        dob = PiiColumnPlan(column_name="dob", entity_type=EntityType.date_of_birth, pattern="%d.%m.%y")
-        name = PiiColumnPlan(column_name="first", entity_type=EntityType.first_name, pattern="{First}")
+        dob = PiiColumnPlan(column_name="dob", entity_type=EntityType.DATE_OF_BIRTH, pattern="%d.%m.%y")
+        name = PiiColumnPlan(column_name="first", entity_type=EntityType.FIRST_NAME, pattern="{First}")
         assert dob.pattern == "%d.%m.%y"
         assert name.pattern == "{First}"
 
@@ -82,21 +83,21 @@ class TestPiiColumnPlan:
         with _raises("does not allow depends_on"):
             PiiColumnPlan(
                 column_name="phone",
-                entity_type=EntityType.phone_number,
-                depends_on=[ConditioningColumn(column_name="gender", entity_type=EntityType.gender)],
+                entity_type=EntityType.PHONE_NUMBER,
+                depends_on=[ConditioningColumn(column_name="gender", entity_type=EntityType.GENDER)],
             )
 
     def test_depends_on_rejected_when_type_not_in_allowlist(self) -> None:
         with _raises("is not allowed for entity_type 'last_name'"):
             PiiColumnPlan(
                 column_name="last",
-                entity_type=EntityType.last_name,
-                depends_on=[ConditioningColumn(column_name="gender", entity_type=EntityType.gender)],
+                entity_type=EntityType.LAST_NAME,
+                depends_on=[ConditioningColumn(column_name="gender", entity_type=EntityType.GENDER)],
             )
 
     def test_email_cannot_be_a_conditioner(self) -> None:
         with _raises("cannot be used in depends_on"):
-            ConditioningColumn(column_name="email", entity_type=EntityType.email)
+            ConditioningColumn(column_name="email", entity_type=EntityType.EMAIL)
 
 
 @pytest.mark.unit
@@ -114,7 +115,33 @@ class TestPiiReplacementPlan:
                 ]
             }
         )
-        assert plan.columns_to_replace[1].depends_on[0].entity_type is EntityType.first_name
+        assert plan.columns_to_replace[1].depends_on[0].entity_type is EntityType.FIRST_NAME
+
+    def test_inference_does_not_mutate_a_column_plan_reused_across_plans(self) -> None:
+        email = PiiColumnPlan(
+            column_name="email",
+            entity_type=EntityType.EMAIL,
+            depends_on=[ConditioningColumn(column_name="person")],
+        )
+
+        first = PiiReplacementPlan(
+            columns_to_replace=[
+                PiiColumnPlan(column_name="person", entity_type=EntityType.FIRST_NAME),
+                email,
+            ]
+        )
+        assert first.columns_to_replace[1].depends_on[0].entity_type is EntityType.FIRST_NAME
+        assert email.depends_on[0].entity_type is None
+
+        second = PiiReplacementPlan(
+            columns_to_replace=[
+                PiiColumnPlan(column_name="person", entity_type=EntityType.LAST_NAME),
+                email,
+            ]
+        )
+        assert second.columns_to_replace[1].depends_on[0].entity_type is EntityType.LAST_NAME
+        assert email.depends_on[0].entity_type is None
+        assert first.columns_to_replace[1].depends_on[0].entity_type is EntityType.FIRST_NAME
 
     def test_omitted_type_errors_when_column_is_not_a_replace_target(self) -> None:
         with _raises("omits entity_type but is not listed"):
@@ -335,8 +362,8 @@ class TestReplacePiiConfig:
         assert config.is_auto_discovery
         assert config.plan_path is None
         assert config.inline_plan is None
-        assert config.sampler.backend is PiiSamplerBackend.managed
-        assert ENTITY_BY_TYPE[EntityType.free_text].action is EntityAction.propagate
+        assert config.sampler.backend is PiiSamplerBackend.MANAGED
+        assert ENTITY_BY_TYPE[EntityType.FREE_TEXT].action is EntityAction.PROPAGATE
 
     def test_plan_path_and_inline_plan_properties(self) -> None:
         path_config = ReplacePiiConfig(replacement_plan="/tmp/plan.yaml")
@@ -344,7 +371,7 @@ class TestReplacePiiConfig:
         assert path_config.inline_plan is None
         assert not path_config.is_auto_discovery
 
-        plan = PiiReplacementPlan(scope=PiiReplacementScope.record)
+        plan = PiiReplacementPlan(scope=PiiReplacementScope.RECORD)
         inline = ReplacePiiConfig(replacement_plan=plan)
         assert inline.inline_plan is plan
         assert inline.plan_path is None
@@ -381,9 +408,13 @@ class TestReplacePiiConfig:
         with _raises("invalid inline replacement plan"):
             ReplacePiiConfig.model_validate({"replacement_plan": {"scope": "galaxy"}})
 
-    def test_llm_enhancement_true_is_rejected(self) -> None:
-        with _raises("llm_enhancement=True is not supported"):
-            ReplacePiiConfig(llm_enhancement=True)
+    def test_llm_defaults_to_none_and_any_value_is_rejected(self) -> None:
+        assert ReplacePiiConfig().llm is None
+        assert ReplacePiiConfig.model_validate({"llm": None}).llm is None
+        with _raises("replace_pii.llm is not supported"):
+            ReplacePiiConfig.model_validate({"llm": {"max_workers": 8}})
+        with _raises("replace_pii.llm is not supported"):
+            ReplacePiiConfig(llm=LLMConfig())
 
     def test_resolved_managed_assets_path_uses_override(self, tmp_path: Path) -> None:
         config = ReplacePiiConfig.model_validate(
