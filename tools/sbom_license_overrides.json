@@ -1,0 +1,42 @@
+{
+  "cuda-toolkit": {
+    "license": "LicenseRef-NVIDIA-Proprietary",
+    "project_url": "https://developer.nvidia.com/cuda-toolkit"
+  },
+  "flashinfer-jit-cache": {
+    "license": "Apache-2.0",
+    "project_url": "https://github.com/flashinfer-ai/flashinfer"
+  },
+  "nvidia-cudnn-cu12": {
+    "license": "LicenseRef-NVIDIA-Proprietary",
+    "project_url": "https://pypi.org/project/nvidia-cudnn-cu12/"
+  },
+  "nvidia-nccl-cu12": {
+    "license": "LicenseRef-NVIDIA-Proprietary",
+    "project_url": "https://pypi.org/project/nvidia-nccl-cu12/"
+  },
+  "nvidia-nvshmem-cu12": {
+    "license": "LicenseRef-NVIDIA-Proprietary",
+    "project_url": "https://pypi.org/project/nvidia-nvshmem-cu12/"
+  },
+  "openai-harmony": {
+    "license": "Apache-2.0",
+    "project_url": "https://github.com/openai/harmony"
+  },
+  "prv-accountant": {
+    "license": "MIT",
+    "project_url": "https://github.com/microsoft/prv_accountant"
+  },
+  "quack-kernels": {
+    "license": "Apache-2.0",
+    "project_url": "https://github.com/Dao-AILab/quack"
+  },
+  "sentencepiece": {
+    "license": "Apache-2.0",
+    "project_url": "https://github.com/google/sentencepiece"
+  },
+  "torchao": {
+    "license": "BSD-3-Clause",
+    "project_url": "https://github.com/pytorch/ao"
+  }
+}
