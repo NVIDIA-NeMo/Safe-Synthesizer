@@ -74,6 +74,12 @@ class ModelWithStructuredList(BaseModel):
     group: StepGroup = Field(default_factory=StepGroup)
 
 
+class ModelWithModelStrUnion(BaseModel):
+    """A model with a non-nullable ``BaseModel | str`` field (no disable flag)."""
+
+    plan: Inner | str = Field(default="auto", description="Inline model or a path string.")
+
+
 # ---------------------------------------------------------------------------
 # parse_overrides
 # ---------------------------------------------------------------------------
@@ -346,6 +352,15 @@ def test_collect_params_mixed_plain_and_nullable():
     assert "no_plain" not in names
 
 
+def test_collect_params_no_flag_for_non_nullable_model_str_union():
+    params = _collect_params(ModelWithModelStrUnion)
+    names = {p.name for p in params}
+    assert names == {"plan"}
+    assert isinstance(params[0], LeafParam)
+    assert "no_plan" not in names
+    assert "plan.value" not in names
+
+
 # ---------------------------------------------------------------------------
 # decorator -- param inspection
 # ---------------------------------------------------------------------------
@@ -425,6 +440,8 @@ def test_no_replace_pii_flag_on_nss_params():
 
     param_names = {p.name for p in cmd.params}
     assert "no_replace_pii" in param_names
+    assert "no_replace_pii__replacement_plan" not in param_names
+    assert "replace_pii__replacement_plan" in param_names
 
 
 def test_no_privacy_flag_on_nss_params():
