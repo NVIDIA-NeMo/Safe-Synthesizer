@@ -196,6 +196,7 @@ nav:
       - Example Generation: developer-guide/example-generation.md
       - Observability: developer-guide/observability.md
       - Preflight Plugins: developer-guide/preflight-plugins.md
+      - vLLM Benchmark Harness: developer-guide/vllm-benchmark.md
       - API Reference: reference/
   - Dev Notes:
       - dev-notes/index.md

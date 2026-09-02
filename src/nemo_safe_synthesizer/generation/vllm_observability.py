@@ -5,7 +5,7 @@
 
 Schema-frozen generation-observability events emitted by ``VllmBackend.generate()``
 and consumed by downstream observability surfaces (structured logs, wandb,
-the benchmark harness's per-cell aggregator).
+the benchmark harness's candidate-run aggregator).
 
 Four primitives, all degraded-mode by design:
 
@@ -105,7 +105,7 @@ class GenerationObservability(BaseModel):
       ``logger.runtime.info(...)`` like the rest of PR-1's trace
       telemetry).
     - Wandb (when a run is active) — logged to the current wandb run.
-    - The benchmark harness's per-cell aggregator (composes this into
+    - The benchmark harness's candidate-run aggregator (composes this into
       its richer ``CandidateMetrics`` schema).
 
     Every measurement field is optional; producers should populate what
