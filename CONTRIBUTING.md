@@ -421,7 +421,7 @@ This section is the canonical source. To add, rename, or remove a label, open a 
 3. Make your changes and commit using [conventional commits](#conventional-commits)
 4. Run tests locally:
   ```bash
-   mise run test
+   mise run check ::: test
   ```
 5. Push your branch:
   ```bash
@@ -558,15 +558,14 @@ Use mise tasks instead of running `ruff` or `ty` directly. The tasks use pinned 
 
 ```bash
 mise run format   # auto-fix: dprint TOML + ruff format/import sorting + copyright headers
-mise run check    # read-only local quality checks (format + lint + typecheck + copyright)
+mise run check    # all read-only local quality checks
 mise run test     # unit tests
-# or just
-mise run format && mise run check && mise run test
+mise run check ::: test  # local pre-PR gate: static checks + unit tests
 ```
 
 We use `dprint` for TOML, `ruff` for Python formatting and linting, and `ty` for type checking, wrapped with settings for consistency.
 
-CI calls the same tools through atomic read-only mise tasks. Declarative tasks live in `.mise/tasks/*.toml`; bash-heavy tasks are executable file tasks under `.mise/tasks/`. Shared shell helpers live in `.mise/tasks/_lib.sh`, which is sourced by file tasks but is not executable and does not appear in `mise tasks`. `mise run check` replicates format-check + typecheck locally; `mise run validate` runs the broader pre-PR graph (`check`, `lock-check`, and `test:ci`). Pre-commit hooks (`pre-commit install`) provide faster feedback by checking only staged files, but are not a substitute for the mise tasks.
+CI calls the same tools through atomic read-only `check:*` tasks. Declarative tasks live in `.mise/tasks/*.toml`; bash-heavy tasks are executable file tasks under `.mise/tasks/`. Shared shell helpers live in `.mise/tasks/_lib.sh`, which is sourced by file tasks but is not executable and does not appear in `mise tasks`. `mise run check` aggregates the read-only static checks. The standard local gate is the explicit `mise run check ::: test`; no shorthand alias is defined. Pre-commit hooks (`pre-commit install`) provide faster feedback by checking only staged files, but are not a substitute for the Mise tasks.
 
 Useful task graph commands:
 
@@ -574,7 +573,6 @@ Useful task graph commands:
 mise tasks                # public tasks
 mise tasks --hidden       # helper and legacy alias tasks
 mise tasks deps check     # inspect the quality-check graph
-mise tasks deps validate  # inspect the pre-PR validation graph
 ```
 
 You can also run tools directly on specific files:
@@ -590,11 +588,11 @@ All mise tasks check the entire project. Pre-commit scopes checks to staged file
 
 | Check | CI task | `mise run format` / `mise run check` | Pre-commit |
 |---|---|---|---|
-| dprint TOML format | `mise run format-check` | `format`: auto-fix; `check`: read-only | not run |
-| ruff format + lint | `mise run format-check` | `format`: auto-fix; `check`: read-only | staged files (auto-fix) |
-| ty typecheck | `mise run typecheck` | read-only | all files |
-| copyright headers | `mise run format-check` | `format`: auto-fix; `check`: read-only | staged files (auto-fix) |
-| generated CUDA metadata and uv lock drift | `mise run lock-check` | not checked | on `pyproject.toml` or `cuda_deps.toml` changes |
+| dprint TOML format | `mise run check:format` | `format`: auto-fix; `check`: read-only | not run |
+| ruff format + lint | `mise run check:format` and `mise run check:lint` | `format`: auto-fix; `check`: read-only | staged files (auto-fix) |
+| ty typecheck | `mise run check:type` | read-only | all files |
+| copyright headers | `mise run check:license:headers` | `format`: auto-fix; `check`: read-only | staged files (auto-fix) |
+| generated CUDA metadata and uv lock drift | `mise run check:lock` | read-only | on `pyproject.toml` or `cuda_deps.toml` changes |
 | DCO signoff | branch protection | not checked | commit-msg hook |
 
 ## Documentation
@@ -680,7 +678,7 @@ This project supports AI coding assistants. Configuration is layered so that con
 
 Conventions defined in `AGENTS.md` (code style, markdown style, testing, etc.) apply universally. Durable module-level guidance belongs in Python docstrings and source comments so it appears in the generated API reference; test-suite guidance belongs in `tests/TESTING.md`. Tool-specific config (`.cursor/rules/`, `CLAUDE.md`) reinforces those conventions for its respective tool.
 
-Before contributing, run `mise run format` and `mise run check`. See `AGENTS.md` for full conventions.
+Before contributing, run `mise run format`, review its changes, then run `mise run check ::: test`. See `AGENTS.md` for full conventions.
 
 ## Releasing
 

@@ -40,7 +40,7 @@ else
     #   ty check --fix --exit-zero --force-exclude "${PY_FILES[@]}"
     # --force-exclude so [tool.ty.src.exclude] in pyproject.toml is honored
     # when paths are passed explicitly; --exit-zero so non-fixable diagnostics
-    # don't fail `mise run format` (`mise run typecheck` is the gate). When enabling,
+    # don't fail `mise run format` (`mise run check:type` is the gate). When enabling,
     # also add "./.agents/" to [tool.ty.src.exclude] -- PEP 723 uv scripts
     # there would otherwise show up when PY_FILES is passed on the CLI.
 fi

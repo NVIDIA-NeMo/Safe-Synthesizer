@@ -65,8 +65,8 @@ Project commands run through mise tasks under `.mise/tasks/`: `*.toml` files for
 ```bash
 mise tasks                # list public tasks
 mise tasks --hidden       # include helper and legacy alias tasks
-mise tasks deps validate  # inspect the pre-PR validation graph
-mise run validate         # check + lock-check + CI unit tests
+mise tasks deps check     # inspect the read-only quality-check graph
+mise run check ::: test   # local pre-PR gate: static checks + unit tests
 ```
 
 ### Running

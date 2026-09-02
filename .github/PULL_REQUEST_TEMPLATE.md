@@ -24,8 +24,8 @@ Verification performed:
 
 Ensure that the following pass:
 
-- [ ] `mise run format && mise run check` or via prek validation.
-- [ ] `mise run test` passes locally
+- [ ] `mise run format` leaves only intended formatting changes.
+- [ ] `mise run check ::: test` passes locally.
 - [ ] `mise run test:e2e` passes locally
 - [ ] `mise run test:ci-container` passes locally (recommended)
 - [ ] GPU CI status check passes -- comment `/sync` on this PR to trigger a run (auto-triggers on ready-for-review)

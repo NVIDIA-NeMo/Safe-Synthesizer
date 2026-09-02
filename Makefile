@@ -20,9 +20,9 @@ setup: install-mise ## Install dev tools and create the virtual environment via 
 	MISE_YES=1 mise run setup
 
 .PHONY: run
-run: ## Run a mise task. Usage: make run TASK=format-check [MISE_ARGS="..."] [ARGS="..."]
+run: ## Run a mise task. Usage: make run TASK=check [MISE_ARGS="..."] [ARGS="..."]
 	@if [ -z "$(TASK)" ]; then \
-		echo "Error: missing TASK. Usage: make run TASK=format-check [MISE_ARGS=\"...\"] [ARGS=\"...\"]" >&2; \
+		echo "Error: missing TASK. Usage: make run TASK=check [MISE_ARGS=\"...\"] [ARGS=\"...\"]" >&2; \
 		exit 1; \
 	fi
 	mise run $(MISE_ARGS) "$(TASK)" $(ARGS)
@@ -75,8 +75,6 @@ $(eval $(call deprecated_target,docs-build,docs:build))
 $(eval $(call deprecated_target,docs-deploy,docs:deploy))
 $(eval $(call deprecated_target,docs-serve,docs:serve))
 $(eval $(call deprecated_target,format,format))
-$(eval $(call deprecated_target,format-check,format-check))
-$(eval $(call deprecated_target,lock-check,lock-check))
 $(eval $(call deprecated_target,publish-internal,publish:internal))
 $(eval $(call deprecated_target,publish-pypi,publish:pypi))
 $(eval $(call deprecated_target,test,test))
@@ -98,7 +96,6 @@ $(eval $(call deprecated_target,test-smoke-gpu-timeseries,test:smoke:gpu:timeser
 $(eval $(call deprecated_target,test-smoke-gpu-train-only,test:smoke:gpu:train-only))
 $(eval $(call deprecated_target,test-tool-install,test:tool-install))
 $(eval $(call deprecated_target,test-unit-slow,test:unit-slow))
-$(eval $(call deprecated_target,typecheck,typecheck))
 
 .PHONY: test-nss-%-ci
 test-nss-%-ci:

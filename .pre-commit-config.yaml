@@ -60,10 +60,10 @@ repos:
         files: '\.(py|sh|md|yaml|yml)$'
 
       - id: uv-lock
-        name: Run uv lock and check for uv.lock drift
-        entry: bash -c 'uv lock && git diff --exit-code uv.lock'
+        name: Check generated CUDA metadata and uv.lock
+        entry: mise run check:lock
         language: system
-        files: 'pyproject\.toml$'
+        files: '^(pyproject\.toml|cuda_deps\.toml)$'
         pass_filenames: false
         verbose: true
 

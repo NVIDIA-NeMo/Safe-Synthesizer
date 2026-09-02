@@ -3,11 +3,43 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
+import tomllib
 from pathlib import Path
+from typing import cast
 
 import pytest
+
+QUALITY_TASKS = {
+    "check",
+    "check:format",
+    "check:license:headers",
+    "check:lint",
+    "check:lock",
+    "check:tasks",
+    "check:type",
+    "format",
+    "lock:update",
+}
+REMOVED_QUALITY_TASKS = {"ci", "format-check", "lock-check", "typecheck", "validate"}
+
+
+def _run_mise(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["mise", *args],
+        cwd=repo_root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
+def _mise_tasks(repo_root: Path) -> dict[str, dict[str, object]]:
+    result = _run_mise(repo_root, "tasks", "--json")
+    assert result.returncode == 0, result.stderr
+    return {task["name"]: task for task in json.loads(result.stdout)}
 
 
 @pytest.fixture
@@ -102,3 +134,49 @@ def test_sync_dependencies_propagates_python_resolution_failure(
     assert result.returncode != 0
     assert "PYTHON_VERSION is unset" in result.stderr
     assert result.stdout == ""
+
+
+def test_quality_task_contract(pytestconfig: pytest.Config) -> None:
+    tasks = _mise_tasks(Path(pytestconfig.rootpath))
+
+    assert QUALITY_TASKS <= tasks.keys()
+    assert REMOVED_QUALITY_TASKS.isdisjoint(tasks)
+    aliases = {alias for task in tasks.values() for alias in cast(list[str], task["aliases"])}
+    assert "ci" not in aliases
+    check_dependencies = cast(list[str], tasks["check"]["depends"])
+    assert set(check_dependencies) == QUALITY_TASKS - {"check", "format", "lock:update"}
+
+
+def test_public_tasks_are_valid_and_described(pytestconfig: pytest.Config) -> None:
+    repo_root = Path(pytestconfig.rootpath)
+    result = _run_mise(repo_root, "tasks", "validate")
+
+    assert result.returncode == 0, result.stderr
+    assert all(task["description"] for task in _mise_tasks(repo_root).values())
+
+
+def test_quality_task_commands_preserve_check_contract(pytestconfig: pytest.Config) -> None:
+    repo_root = Path(pytestconfig.rootpath)
+    with (repo_root / ".mise/tasks/quality.toml").open("rb") as quality_file:
+        tasks = tomllib.load(quality_file)
+
+    assert tasks["check:lock"]["run"] == [
+        "uv run --offline --frozen tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml --check",
+        "uv lock --check",
+    ]
+    assert tasks["lock:update"]["run"] == "uv lock"
+
+
+def test_lock_hook_uses_read_only_task_for_both_inputs(pytestconfig: pytest.Config) -> None:
+    config = (Path(pytestconfig.rootpath) / ".pre-commit-config.yaml").read_text()
+    hook = config.split("      - id: uv-lock", maxsplit=1)[1].split("      - id:", maxsplit=1)[0]
+
+    assert "entry: mise run check:lock" in hook
+    assert "pyproject\\.toml" in hook
+    assert "cuda_deps\\.toml" in hook
+
+
+def test_local_gate_composes_check_and_test(pytestconfig: pytest.Config) -> None:
+    result = _run_mise(Path(pytestconfig.rootpath), "run", "--dry-run", "check", ":::", "test")
+
+    assert result.returncode == 0, result.stderr
