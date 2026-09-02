@@ -60,6 +60,34 @@ class TestValidatePlan:
 
         validate_plan(pii_df, plan, data_config=DataParameters())
 
+    def test_accepts_all_documented_character_mask_classes(self) -> None:
+        dataframe = pd.DataFrame({"identifier": ["A7-a8", "Z0-z9"]})
+        plan = PiiReplacementPlan(
+            columns_to_replace=[
+                PiiColumnPlan(
+                    column_name="identifier",
+                    entity_type=EntityType.UNIQUE_IDENTIFIER,
+                    pattern="&&-%%",
+                )
+            ]
+        )
+
+        validate_plan(dataframe, plan, data_config=DataParameters())
+
+    def test_accepts_email_name_parts_pattern_with_digit_token(self) -> None:
+        dataframe = pd.DataFrame({"email": ["ada1@example.com", "grace2@example.com"]})
+        plan = PiiReplacementPlan(
+            columns_to_replace=[
+                PiiColumnPlan(
+                    column_name="email",
+                    entity_type=EntityType.EMAIL,
+                    pattern="{first}#@{domain}",
+                )
+            ]
+        )
+
+        validate_plan(dataframe, plan, data_config=DataParameters())
+
     def test_reports_missing_replacement_and_dependency_columns(self, pii_df: pd.DataFrame) -> None:
         plan = PiiReplacementPlan(
             columns_to_replace=[
@@ -78,17 +106,33 @@ class TestValidatePlan:
         ):
             validate_plan(pii_df, plan, data_config=DataParameters())
 
-    def test_rejects_replacing_a_structural_column(self, pii_df: pd.DataFrame) -> None:
+    def test_allows_replacing_the_group_column(self, pii_df: pd.DataFrame) -> None:
         plan = PiiReplacementPlan(
             scope=PiiReplacementScope.GROUP,
             columns_to_replace=[PiiColumnPlan(column_name="patient_id", entity_type=EntityType.UNIQUE_IDENTIFIER)],
         )
 
-        with pytest.raises(ParameterError, match="structural column 'patient_id' cannot be replaced"):
+        validate_plan(
+            pii_df,
+            plan,
+            data_config=DataParameters(group_training_examples_by="patient_id"),
+        )
+
+    def test_rejects_replacing_an_ordering_column(self, pii_df: pd.DataFrame) -> None:
+        dataframe = pii_df.assign(event_index=[0, 0])
+        plan = PiiReplacementPlan(
+            scope=PiiReplacementScope.GROUP,
+            columns_to_replace=[PiiColumnPlan(column_name="event_index", entity_type=EntityType.UNIQUE_IDENTIFIER)],
+        )
+
+        with pytest.raises(ParameterError, match="structural column 'event_index' cannot be replaced"):
             validate_plan(
-                pii_df,
+                dataframe,
                 plan,
-                data_config=DataParameters(group_training_examples_by="patient_id"),
+                data_config=DataParameters(
+                    group_training_examples_by="patient_id",
+                    order_training_examples_by="event_index",
+                ),
             )
 
     def test_group_scope_requires_a_configured_existing_group_column(self, pii_df: pd.DataFrame) -> None:

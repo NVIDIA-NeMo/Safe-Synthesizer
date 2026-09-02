@@ -131,7 +131,7 @@ def _profile_columns(
         non_null_count = len(non_null)
         unique_count = int(non_null.nunique(dropna=True))
         constancy = _group_constancy(df, column, group_column)
-        if column in structural_columns:
+        if column == group_column or column in structural_columns:
             grain = ColumnGrain.key
         elif constancy is not None and constancy >= GROUP_GRAIN_THRESHOLD:
             grain = ColumnGrain.group

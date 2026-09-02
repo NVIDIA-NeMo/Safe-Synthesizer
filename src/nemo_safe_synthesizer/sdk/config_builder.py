@@ -198,14 +198,15 @@ class ConfigBuilder:
     ) -> Self:
         """Request or disable PII replacement.
 
-        This branch contains only a placeholder configuration. Pass
-        ``enable=False`` to set ``replace_pii=None`` and run the pipeline.
+        The configuration drives :meth:`SafeSynthesizer.plan_pii_replacement`.
+        Replacement execution is deferred; pass ``enable=False`` to set
+        ``replace_pii=None`` and run the synthesis pipeline.
 
         Args:
             config: PII replacement configuration object or raw mapping.
             enable: When ``False``, disables PII replacement entirely
                 and clears any previously set config.
-            **kwargs: Reserved for the replacement configuration added later.
+            **kwargs: Field-level replacement configuration overrides.
 
         Returns:
             This builder instance with PII replacement configured.

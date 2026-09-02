@@ -118,6 +118,7 @@ You can also run stages individually:
 
 - `safe-synthesizer run train` -- train only, saves the adapter
 - `safe-synthesizer run generate` -- generate only (use `--auto-discover-adapter` or `--run-path`)
+- `safe-synthesizer run replace-pii --plan-only` -- resolve a PII replacement plan without entering the pipeline
 - SDK stepwise: `process_data()` → `train()` → `generate()` → `evaluate()`
 
 ## Pre-flight Validation
@@ -203,16 +204,17 @@ safe-synthesizer run --config config.yaml --data-source data.csv
 
 #### Common Options
 
-These options apply to `run` and `run generate`. Only `--data-source` is required;
-all others have defaults or are optional.
+These options apply to `run`, `run train`, `run generate`, and `run replace-pii`.
+Only `--data-source` is required for new runs; all others have defaults or are
+optional.
 
 | Option | Env var | Default | Description |
 |--------|---------|---------|-------------|
 | `--config` | `NSS_CONFIG` | (model defaults) | Path to YAML config file; omit to use all model defaults |
 | `--data-source` | -- | (required) | Dataset path, URL, or name from `--dataset-registry` |
 | `--artifact-path` | `NSS_ARTIFACTS_PATH` | `./safe-synthesizer-artifacts` | Base directory for all runs |
-| `--run-path` | -- | -- | Explicit run directory (for `run generate`, must point to an existing trained run) |
-| `--output-file` | -- | -- | Path to output CSV file |
+| `--run-path` | -- | -- | Explicit run directory (for `run generate`, must point to an existing trained run; for plan-only, receives the plan artifact) |
+| `--output-file` | -- | -- | Path to synthetic output CSV; unused by plan-only |
 | `--log-format` | `NSS_LOG_FORMAT` | `plain` (TTY) / `json` (non-TTY) | Console log format -- auto-detected from TTY; accepts `plain` or `json` |
 | `--log-file` | `NSS_LOG_FILE` | -- | Log file path (defaults to run directory) |
 | `--log-color` / `--no-log-color` | `NSS_LOG_COLOR` | auto | Colorize console output (auto-detected from TTY) |
@@ -274,6 +276,39 @@ Accepts the same common options and synthesis parameter override syntax as `run`
     keep their saved values. `training`, `data`, `privacy`, and `time_series`
     are always inherited from the trained run and cannot be changed at generate
     time, since they describe how the adapter was produced.
+
+### `run replace-pii --plan-only`
+
+Resolve a PII replacement plan against the full input dataframe and exit. This
+does not invoke holdout, model metadata, replacement, training, generation, or
+evaluation.
+
+```bash
+safe-synthesizer run replace-pii --plan-only \
+  --config config.yaml \
+  --data-source data.csv \
+  --run-path ./pii-plan
+```
+
+The command writes `./pii-plan/pii_replacement_plan.yaml`. When `--run-path` is
+omitted, the plan is written to the standard timestamped run directory beneath
+`--artifact-path`. `run replace-pii` without `--plan-only` remains unavailable
+until replacement execution is implemented.
+
+The SDK equivalent returns the plan object. Supplying `output_path` also writes
+the reusable YAML artifact; omitting it performs no plan write.
+
+```python
+from nemo_safe_synthesizer.config import SafeSynthesizerParameters
+from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+
+config = SafeSynthesizerParameters.from_yaml("config.yaml")
+plan = (
+    SafeSynthesizer(config)
+    .with_data_source("data.csv")
+    .plan_pii_replacement(output_path="pii_replacement_plan.yaml")
+)
+```
 
 ### `run --validate`
 
@@ -536,10 +571,19 @@ See [Configuration Reference -- Data](configuration.md#data) for the full parame
 
 ## PII Replacement
 
-PII replacement v3 will be added and documented in a later update.
+PII replacement v3 supports resolving a reviewable plan from the full input
+without entering the synthesis pipeline:
 
-On this branch, set `replace_pii: null`, pass `--no-replace-pii`, or call
-`.with_replace_pii(enable=False)` before running the pipeline.
+```bash
+safe-synthesizer run replace-pii --plan-only \
+  --config config.yaml \
+  --data-source data.csv \
+  --run-path ./pii-plan
+```
+
+Replacement execution is not available on this branch. Set `replace_pii: null`,
+pass `--no-replace-pii`, or call `.with_replace_pii(enable=False)` before running
+the training and generation pipeline.
 
 ---
 

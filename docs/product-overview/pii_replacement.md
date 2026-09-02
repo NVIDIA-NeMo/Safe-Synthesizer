@@ -7,8 +7,8 @@ PII replacement v3 uses a dataset-specific replacement plan. The plan names
 the columns NSS should replace, the entity type in each column, optional format
 patterns, and dependencies between related columns.
 
-This branch provides the configuration and plan-resolution contract. The
-replacement executor and production LLM adapter will be added separately. Until
+This branch provides the configuration and plan-resolution contract plus
+plan-only CLI and SDK workflows. Replacement execution remains deferred. Until
 the executor is available, set `replace_pii: null`, pass `--no-replace-pii`, or
 call `.with_replace_pii(enable=False)` to run the synthesis pipeline.
 
@@ -61,6 +61,40 @@ Embedded plans and plan files are authoritative: NSS validates them against the
 input dataframe but does not run heuristic or LLM discovery. This bypass applies
 only to plan discovery. If `llm` is configured, the replacement executor can
 still use it to replace PII found inside free-text columns named by the plan.
+
+## Plan-only workflow
+
+Resolve and save a plan from the full input dataframe without running holdout,
+model metadata, replacement, training, generation, or evaluation:
+
+```bash
+safe-synthesizer run replace-pii --plan-only \
+  --config config.yaml \
+  --data-source data.csv \
+  --run-path ./pii-plan
+```
+
+The command writes `./pii-plan/pii_replacement_plan.yaml`. Without
+`--run-path`, it writes the same filename in the standard timestamped NSS run
+directory under `--artifact-path`.
+
+The matching SDK interface returns the resolved plan and writes YAML only when
+an output path is supplied:
+
+```python
+from nemo_safe_synthesizer.config import SafeSynthesizerParameters
+from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+
+config = SafeSynthesizerParameters.from_yaml("config.yaml")
+plan = (
+    SafeSynthesizer(config)
+    .with_data_source("data.csv")
+    .plan_pii_replacement("pii_replacement_plan.yaml")
+)
+```
+
+The generated standalone plan can be reviewed, edited, and reused as
+`replace_pii.replacement_plan` in a later run.
 
 ## LLM-assisted planning and free-text replacement
 

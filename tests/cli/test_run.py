@@ -15,6 +15,8 @@ import nemo_safe_synthesizer.sdk.library_builder  # noqa: F401 - ensure submodul
 from nemo_safe_synthesizer.cli.run import run
 from nemo_safe_synthesizer.cli.settings import CLISettings
 from nemo_safe_synthesizer.cli.utils import merge_overrides
+from nemo_safe_synthesizer.config.replace_pii import EntityType
+from nemo_safe_synthesizer.pii_replacer.planning import load_plan
 from nemo_safe_synthesizer.telemetry import DeploymentTypeEnum, TaskStatusEnum
 from nemo_safe_synthesizer.tooling import PreflightRenderContext
 
@@ -54,6 +56,7 @@ def mock_safe_synthesizer() -> MagicMock:
     ss.generate.return_value = ss
     ss.evaluate.return_value = ss
     ss.load_from_save_path.return_value = ss
+    ss.plan_pii_replacement.return_value = MagicMock()
     ss.run.return_value = ss
     ss.save_results.return_value = ss  # Return self for method chaining
     ss.generator.teardown.return_value = None
@@ -638,6 +641,106 @@ class TestValidateMode:
         assert render_context.data_source == str(dummy_csv)
         assert render_context.artifact_dir == mock_workdir.run_dir
 
+
+class TestRunReplacePii:
+    """Tests for the plan-only PII replacement command."""
+
+    @pytest.fixture(autouse=True)
+    def _reset_observability(self, monkeypatch: pytest.MonkeyPatch):
+        """Keep real CLI invocations isolated from global logging state."""
+        obs._INITIALIZED_OBSERVABILITY = False
+        monkeypatch.delenv("NSS_PHASE", raising=False)
+        for name in ("NSS_LOG_LEVEL", "NSS_LOG_FORMAT", "NSS_LOG_FILE", "NSS_LOG_COLOR"):
+            monkeypatch.delenv(name, raising=False)
+
+        yield
+
+        obs._INITIALIZED_OBSERVABILITY = False
+
+    def test_help_exposes_plan_only_command(self, cli_runner: CliRunner) -> None:
+        result = cli_runner.invoke(run, ["replace-pii", "--help"])
+
+        assert result.exit_code == 0
+        assert "--plan-only" in result.output
+
+    def test_plan_only_uses_full_input_without_pipeline_stages(
+        self,
+        cli_runner: CliRunner,
+        dummy_csv: Path,
+        mock_dataframe: MagicMock,
+        mock_workdir: MagicMock,
+        patched_run_dependencies: dict,
+    ) -> None:
+        result = cli_runner.invoke(
+            run,
+            ["replace-pii", "--plan-only", "--data-source", str(dummy_csv)],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0
+        setup_kwargs = patched_run_dependencies["common_setup"].call_args.kwargs
+        assert setup_kwargs["phase"] == "replace_pii"
+        assert setup_kwargs["skip_wandb"] is True
+
+        nss = patched_run_dependencies["safe_synthesizer"]
+        nss.with_data_source.assert_called_once_with(mock_dataframe)
+        nss.plan_pii_replacement.assert_called_once_with(output_path=mock_workdir.run_dir / "pii_replacement_plan.yaml")
+        nss.process_data.assert_not_called()
+        nss.train.assert_not_called()
+        nss.generate.assert_not_called()
+        nss.evaluate.assert_not_called()
+        nss.run.assert_not_called()
+
+    def test_command_requires_plan_only_until_replacement_exists(
+        self,
+        cli_runner: CliRunner,
+        dummy_csv: Path,
+        patched_run_dependencies: dict,
+    ) -> None:
+        result = cli_runner.invoke(run, ["replace-pii", "--data-source", str(dummy_csv)])
+
+        assert result.exit_code != 0
+        assert "requires --plan-only" in result.output
+        patched_run_dependencies["common_setup"].assert_not_called()
+
+    def test_plan_only_writes_reusable_yaml_from_dataset(
+        self,
+        cli_runner: CliRunner,
+        dummy_csv: Path,
+        tmp_path: Path,
+    ) -> None:
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text(
+            "replace_pii:\n"
+            "  replacement_plan:\n"
+            "    scope: dataframe\n"
+            "    columns_to_replace:\n"
+            "      - column_name: col1\n"
+            "        entity_type: unique_identifier\n"
+        )
+        run_path = tmp_path / "plan-run"
+
+        result = cli_runner.invoke(
+            run,
+            [
+                "replace-pii",
+                "--plan-only",
+                "--config",
+                str(config_path),
+                "--data-source",
+                str(dummy_csv),
+                "--run-path",
+                str(run_path),
+            ],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0
+        plan_path = run_path / "pii_replacement_plan.yaml"
+        assert plan_path.exists()
+        plan = load_plan(plan_path)
+        assert plan.columns_to_replace[0].column_name == "col1"
+        assert plan.columns_to_replace[0].entity_type is EntityType.UNIQUE_IDENTIFIER
 
 class TestRunGenerateOptions:
     """Tests for run generate command options."""

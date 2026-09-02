@@ -5,7 +5,15 @@
 
 from __future__ import annotations
 
+from .assembly import (
+    ColumnClassification,
+    DependencyCandidate,
+    apply_dependencies,
+    derive_dependency_candidates,
+    plan_from_classifications,
+)
 from .io import load_plan, save_plan
+from .patterns import pattern_grammar_catalog
 from .resolver import (
     ColumnGrain,
     ColumnProfile,
@@ -18,13 +26,19 @@ from .resolver import (
 from .validation import protected_columns, validate_plan
 
 __all__ = [
+    "ColumnClassification",
     "ColumnGrain",
     "ColumnProfile",
+    "DependencyCandidate",
     "HeuristicPlanDiscoverer",
     "PlanDiscoverer",
     "PlanDiscoveryInput",
     "PlanEnhancer",
+    "apply_dependencies",
+    "derive_dependency_candidates",
     "load_plan",
+    "pattern_grammar_catalog",
+    "plan_from_classifications",
     "protected_columns",
     "resolve_plan",
     "save_plan",

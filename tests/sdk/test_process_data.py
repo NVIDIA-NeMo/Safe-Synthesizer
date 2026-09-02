@@ -106,10 +106,10 @@ def _wire_process_data_mocks(
 class TestProcessDataPiiSeparation:
     """``process_data`` must keep original and PII-replaced DataFrames separate."""
 
-    @patch("nemo_safe_synthesizer.sdk.library_builder.run_preflight", return_value=_EMPTY_PREFLIGHT)
-    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
-    @patch("nemo_safe_synthesizer.sdk.library_builder.AutoConfigResolver")
-    @patch("nemo_safe_synthesizer.sdk.library_builder.Holdout")
+    @patch("nemo_safe_synthesizer.preflight.run_preflight", return_value=_EMPTY_PREFLIGHT)
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
+    @patch("nemo_safe_synthesizer.config.autoconfig.AutoConfigResolver")
+    @patch("nemo_safe_synthesizer.holdout.holdout.Holdout")
     def test_process_data_without_pii_replacement_sets_original_training_df(
         self,
         mock_holdout_cls,
@@ -130,10 +130,10 @@ class TestProcessDataPiiSeparation:
         assert builder._training_df is not None
         pd.testing.assert_frame_equal(builder._training_df, train_split)
 
-    @patch("nemo_safe_synthesizer.sdk.library_builder.run_preflight", return_value=_EMPTY_PREFLIGHT)
-    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
-    @patch("nemo_safe_synthesizer.sdk.library_builder.AutoConfigResolver")
-    @patch("nemo_safe_synthesizer.sdk.library_builder.Holdout")
+    @patch("nemo_safe_synthesizer.preflight.run_preflight", return_value=_EMPTY_PREFLIGHT)
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
+    @patch("nemo_safe_synthesizer.config.autoconfig.AutoConfigResolver")
+    @patch("nemo_safe_synthesizer.holdout.holdout.Holdout")
     def test_process_data_without_pii_replacement_does_not_write_transformed_training(
         self,
         mock_holdout_cls,
@@ -168,10 +168,10 @@ class TestProcessDataPiiSeparation:
 class TestProcessDataMetadataLifecycle:
     """Validate-mode metadata fallback should not persist stub metadata."""
 
-    @patch("nemo_safe_synthesizer.sdk.library_builder.run_preflight", return_value=_EMPTY_PREFLIGHT)
-    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
-    @patch("nemo_safe_synthesizer.sdk.library_builder.AutoConfigResolver")
-    @patch("nemo_safe_synthesizer.sdk.library_builder.Holdout")
+    @patch("nemo_safe_synthesizer.preflight.run_preflight", return_value=_EMPTY_PREFLIGHT)
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
+    @patch("nemo_safe_synthesizer.config.autoconfig.AutoConfigResolver")
+    @patch("nemo_safe_synthesizer.holdout.holdout.Holdout")
     def test_check_only_stub_metadata_not_persisted_for_followup_run(
         self,
         mock_holdout_cls,
@@ -220,8 +220,8 @@ class TestProcessDataMetadataLifecycle:
 class TestEvaluateUsesOriginalTrainingDf:
     """``evaluate()`` passes the original training data to ``Evaluator``."""
 
-    @patch("nemo_safe_synthesizer.sdk.library_builder.make_nss_results")
-    @patch("nemo_safe_synthesizer.sdk.library_builder.Evaluator")
+    @patch("nemo_safe_synthesizer.results.make_nss_results")
+    @patch("nemo_safe_synthesizer.evaluation.evaluator.Evaluator")
     def test_evaluate_uses_original_training_df(
         self,
         mock_evaluator_cls,
@@ -247,7 +247,7 @@ class TestEvaluateUsesOriginalTrainingDf:
         call_kwargs = mock_evaluator_cls.call_args[1]
         pd.testing.assert_frame_equal(call_kwargs["training_df"], train_split)
 
-    @patch("nemo_safe_synthesizer.sdk.library_builder.Evaluator")
+    @patch("nemo_safe_synthesizer.evaluation.evaluator.Evaluator")
     def test_evaluate_disabled_skips_evaluator_and_builds_results(
         self,
         mock_evaluator_cls,
@@ -327,7 +327,7 @@ class TestLoadFromSavePath:
 
         return workdir, train_split, test_split
 
-    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
     def test_load_restores_training_split(
         self,
         mock_metadata_cls,
@@ -350,7 +350,7 @@ class TestLoadFromSavePath:
         assert builder._original_training_df is not None
         pd.testing.assert_frame_equal(builder._original_training_df, train_split)
 
-    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
     def test_load_rejects_unknown_legacy_saved_fields_by_default(
         self,
         mock_metadata_cls,
@@ -376,7 +376,7 @@ class TestLoadFromSavePath:
             builder.load_from_save_path()
 
     @pytest.mark.parametrize("policy_source", ["saved", "builder", "runtime"])
-    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
     def test_load_can_ignore_unknown_legacy_saved_fields(
         self,
         mock_metadata_cls,
@@ -417,7 +417,7 @@ class TestLoadFromSavePath:
         assert builder._nss_config.unknown_fields == "ignore"
         assert not hasattr(builder._nss_config.training, "epoch")
 
-    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
     def test_load_applies_runtime_generation_and_evaluation_config(
         self,
         mock_metadata_cls,
@@ -456,7 +456,7 @@ class TestLoadFromSavePath:
         assert builder._nss_config.generation.structured_generation.schema_method == "auto"
         assert builder._nss_config.evaluation.enabled is False
 
-    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
     def test_load_preserves_saved_generation_when_runtime_config_has_no_overrides(
         self,
         mock_metadata_cls,
@@ -488,7 +488,7 @@ class TestLoadFromSavePath:
         assert builder._nss_config.generation.structured_generation.schema_method == "auto"
         assert builder._nss_config.evaluation.enabled is True
 
-    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
     def test_load_deep_merges_nested_validation_overrides(
         self,
         mock_metadata_cls,
@@ -522,7 +522,7 @@ class TestLoadFromSavePath:
         # Unrelated saved generation field preserved.
         assert builder._nss_config.generation.num_records == 3000
 
-    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
     def test_load_full_runtime_config_replaces_supported_runtime_sections(
         self,
         mock_metadata_cls,
@@ -561,7 +561,7 @@ class TestLoadFromSavePath:
         assert builder._nss_config.generation.structured_generation.schema_method == "auto"
         assert builder._nss_config.evaluation.enabled is False
 
-    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
     def test_load_warns_when_saved_values_differ_from_current_defaults(
         self,
         mock_metadata_cls,
@@ -589,7 +589,7 @@ class TestLoadFromSavePath:
         assert builder._nss_config is not None
         assert builder._nss_config.generation.num_records == 3000
 
-    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
     def test_process_data_skips_when_cached_splits_loaded(
         self,
         mock_metadata_cls,
@@ -613,7 +613,7 @@ class TestLoadFromSavePath:
         assert builder._original_training_df is not None
         pd.testing.assert_frame_equal(builder._original_training_df, train_split)
 
-    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
     def test_train_after_load_from_save_path_raises(
         self,
         mock_metadata_cls,
@@ -635,7 +635,7 @@ class TestLoadFromSavePath:
         with pytest.raises(RuntimeError, match="train.*cannot be called after load_from_save_path"):
             builder.train()
 
-    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
     def test_run_after_load_from_save_path_raises(
         self,
         mock_metadata_cls,
@@ -704,10 +704,10 @@ class TestLoadFromSavePathHoldoutZero:
 
         return workdir, train_split
 
-    @patch("nemo_safe_synthesizer.sdk.library_builder.run_preflight", return_value=_EMPTY_PREFLIGHT)
-    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
-    @patch("nemo_safe_synthesizer.sdk.library_builder.AutoConfigResolver")
-    @patch("nemo_safe_synthesizer.sdk.library_builder.Holdout")
+    @patch("nemo_safe_synthesizer.preflight.run_preflight", return_value=_EMPTY_PREFLIGHT)
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
+    @patch("nemo_safe_synthesizer.config.autoconfig.AutoConfigResolver")
+    @patch("nemo_safe_synthesizer.holdout.holdout.Holdout")
     def test_process_data_no_test_csv_when_holdout_zero(
         self,
         mock_holdout_cls,
@@ -740,7 +740,7 @@ class TestLoadFromSavePathHoldoutZero:
         assert not fixture_workdir.dataset.test.exists()
         assert builder._test_df is None
 
-    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
     def test_load_succeeds_without_test_csv(
         self,
         mock_metadata_cls,
@@ -765,7 +765,7 @@ class TestLoadFromSavePathHoldoutZero:
         assert builder._test_df is None
         assert builder._loaded_from_save_path is True
 
-    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
     def test_load_handles_empty_test_csv_from_old_runs(
         self,
         mock_metadata_cls,
@@ -814,7 +814,7 @@ class TestProcessDataConfigValidation:
     replacement, or any disk I/O.
     """
 
-    @patch("nemo_safe_synthesizer.sdk.library_builder.Holdout")
+    @patch("nemo_safe_synthesizer.holdout.holdout.Holdout")
     def test_invalid_groupby_raises_before_holdout(
         self,
         mock_holdout_cls,
@@ -842,7 +842,7 @@ class TestProcessDataConfigValidation:
         )
         mock_holdout_cls.assert_not_called()
 
-    @patch("nemo_safe_synthesizer.sdk.library_builder.Holdout")
+    @patch("nemo_safe_synthesizer.holdout.holdout.Holdout")
     def test_invalid_orderby_raises_before_holdout(
         self,
         mock_holdout_cls,

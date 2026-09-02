@@ -33,9 +33,8 @@ def protected_columns(
     data_config: DataParameters,
     time_series: TimeSeriesParameters | None = None,
 ) -> frozenset[str]:
-    """Return structural columns that automatic replacement must preserve."""
+    """Return ordering columns that automatic replacement must preserve."""
     candidates = {
-        data_config.group_training_examples_by,
         data_config.order_training_examples_by,
         time_series.timestamp_column if time_series is not None else None,
     }
@@ -46,7 +45,14 @@ def _template_regex(pattern: str) -> tuple[re.Pattern[str] | None, str | None]:
     parts: list[str] = []
     has_variable = False
     index = 0
-    token_regex = {"#": r"\d", "^": "[A-Z]", "@": "[a-z]", "*": "[A-Za-z0-9]"}
+    token_regex = {
+        "#": r"\d",
+        "^": "[A-Z]",
+        "@": "[a-z]",
+        "&": "[A-Z0-9]",
+        "%": "[a-z0-9]",
+        "*": "[A-Za-z0-9]",
+    }
 
     while index < len(pattern):
         char = pattern[index]
@@ -88,7 +94,8 @@ def _name_parts_regex(
     parts: list[str] = []
     cursor = 0
     for match in matches:
-        parts.append(re.escape(pattern[cursor : match.start()]))
+        literal = pattern[cursor : match.start()]
+        parts.append(_name_parts_literal_regex(literal, entity_type))
         token = match.group(1).lower()
         if token not in _NAME_PART_TOKENS:
             return None, f"uses unknown placeholder {match.group(0)!r}"
@@ -103,11 +110,17 @@ def _name_parts_regex(
         else:
             parts.append(r"[^@\s]+")
         cursor = match.end()
-    parts.append(re.escape(pattern[cursor:]))
+    parts.append(_name_parts_literal_regex(pattern[cursor:], entity_type))
 
     if entity_type is EntityType.EMAIL and "@" not in pattern:
         return None, "does not contain '@'"
     return re.compile("".join(parts), re.UNICODE), None
+
+
+def _name_parts_literal_regex(literal: str, entity_type: EntityType) -> str:
+    if entity_type is not EntityType.EMAIL:
+        return re.escape(literal)
+    return "".join(r"\d" if character == "#" else re.escape(character) for character in literal)
 
 
 def _strftime_pattern_error(pattern: str) -> str | None:

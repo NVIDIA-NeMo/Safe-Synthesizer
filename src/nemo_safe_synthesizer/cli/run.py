@@ -18,6 +18,7 @@ from ..configurator.pydantic_click_options import (
     parse_overrides,
     pydantic_options,
 )
+from ..defaults import PII_REPLACEMENT_PLAN_FILENAME
 from ..errors import UserError
 from ..observability import traced_user
 from ..telemetry import DeploymentTypeEnum, TaskStatusEnum
@@ -400,7 +401,8 @@ def run(
     """Run the Safe Synthesizer end-to-end pipeline.
 
     Without a subcommand, runs the full end-to-end pipeline.
-    Use 'run train' or 'run generate' for individual stages.
+    Use 'run train' or 'run generate' for individual stages, or
+    'run replace-pii --plan-only' to resolve a PII replacement plan.
     """
     # If a subcommand is invoked, skip the default behavior
     if ctx.invoked_subcommand is not None:
@@ -450,6 +452,53 @@ def run(
             finally:
                 if hasattr(nss, "generator") and nss.generator is not None:
                     nss.generator.teardown()
+    except UserError as exc:
+        click.secho(str(exc), fg="red", err=True)
+        raise SystemExit(1)
+
+
+@run.command("replace-pii")
+@common_run_options
+@pydantic_options(SafeSynthesizerParameters, field_separator=CLI_NESTED_FIELD_SEPARATOR)
+@click.option(
+    "--plan-only",
+    is_flag=True,
+    default=False,
+    help="Resolve and write the PII replacement plan without running replacement, training, generation, or evaluation.",
+)
+def run_replace_pii(
+    plan_only: bool = False,
+    **kwargs: Any,
+) -> None:
+    """Plan PII replacement for the full input dataset.
+
+    Replacement execution is deferred; this command currently requires
+    ``--plan-only``.
+    """
+    if not plan_only:
+        raise click.UsageError("run replace-pii currently requires --plan-only")
+
+    _set_cli_deployment_type_default()
+    settings = _settings_from_run_kwargs(kwargs)
+    run_logger, config, df, workdir = common_setup(
+        settings=settings,
+        phase="replace_pii",
+        skip_wandb=True,
+    )
+
+    try:
+        with traced_user("SafeSynthesizer"):
+            from ..sdk.library_builder import SafeSynthesizer
+
+            assert df is not None
+            output_path = workdir.run_dir / PII_REPLACEMENT_PLAN_FILENAME
+            nss = SafeSynthesizer(
+                config=config,
+                workdir=workdir,
+                emit_telemetry=config.emit_telemetry,
+            ).with_data_source(df)
+            nss.plan_pii_replacement(output_path=output_path)
+            run_logger.info(f"PII replacement plan saved to: {output_path}")
     except UserError as exc:
         click.secho(str(exc), fg="red", err=True)
         raise SystemExit(1)

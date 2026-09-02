@@ -154,7 +154,7 @@ class TestResolvePlan:
         first_profiles = {profile.column_name: profile for profile in first_input.column_profiles}
         second_profiles = {profile.column_name: profile for profile in second_input.column_profiles}
         assert first_input.scope is PiiReplacementScope.GROUP
-        assert first_input.protected_columns == frozenset({"patient_id", "event_index"})
+        assert first_input.protected_columns == frozenset({"event_index"})
         assert first_profiles["patient_id"].grain is ColumnGrain.key
         assert first_profiles["event_index"].grain is ColumnGrain.key
         assert first_profiles["name"].grain is ColumnGrain.group
