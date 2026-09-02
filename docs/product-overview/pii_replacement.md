@@ -134,9 +134,30 @@ the OpenAI-compatible endpoint at runtime through `NSS_INFERENCE_ENDPOINT` or
 the `--inference-endpoint-url` CLI option. For example, a local vLLM server may
 use `NSS_INFERENCE_ENDPOINT=http://localhost:8000/v1` with its served model ID.
 
+Endpoint and model settings resolve in this order: explicit CLI runtime flags,
+the `replace_pii.llm` mapping, `NSS_INFERENCE_ENDPOINT` and
+`NSS_INFERENCE_MODEL`, then the NSS defaults. The default hosted NVIDIA
+endpoint requires an API key. Keyless operation is supported for local
+OpenAI-compatible endpoints.
+
 Supply the inference API key at runtime through `NSS_INFERENCE_KEY` or the
 `--inference-api-key` CLI option. NSS does not store the key in configuration or
 plan artifacts.
+
+Automatic discovery uses two LLM passes. The first assesses every column in
+bounded batches of at most 32 profiles and 48 KiB of profile evidence. Each
+profile contains deterministic statistics and up to eight distinct cell samples
+truncated to 128 characters. The second pass receives the complete assessment
+inventory, heuristic baseline, entity catalog, and permitted dependencies, then
+returns the final replacement columns and edges. NSS, rather than the model,
+supplies the scope and protected structural columns.
+
+Each request permits up to three attempts for transient transport failures or
+invalid structured responses. Authentication, authorization, and permanent
+configuration failures stop immediately. If structured output remains invalid,
+planning fails instead of falling back to the heuristic baseline. Invalid
+optional patterns receive up to three focused repair attempts; NSS drops only
+the pattern and warns if repair is exhausted.
 
 LLM operations can send bounded raw cell samples during plan enhancement and raw
 free-text values during replacement. Do not enable them unless the endpoint is

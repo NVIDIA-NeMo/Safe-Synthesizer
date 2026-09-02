@@ -165,9 +165,11 @@ def resolve_plan(
         baseline = (discoverer or HeuristicPlanDiscoverer()).discover(discovery_input)
         if config.llm is None:
             plan = baseline
-        elif enhancer is None:
-            raise ParameterError("replace_pii.llm is configured, but no LLM plan enhancer is available in this build")
         else:
+            if enhancer is None:
+                from .llm import LLMPlanEnhancer
+
+                enhancer = LLMPlanEnhancer(config.llm)
             plan = enhancer.enhance(discovery_input, baseline)
 
     validate_plan(

@@ -510,9 +510,8 @@ check of its own.
 | `no_gpu` | error | `gpu.cuda` | No CUDA GPU detected (required for training or generation) |
 | `low_vram` | warning | `gpu.vram` | Free GPU VRAM may be insufficient |
 | `vram_exceeds_capacity` | error | `gpu.vram` | Estimated training VRAM is far above available GPU memory |
-| `inference_key_missing` | warning | `env.inference` | Unused on this branch; `NSS_INFERENCE_KEY` is not consumed |
-| `inference_model_blank` | warning | `env.inference` | Unused on this branch; a blank `NSS_INFERENCE_MODEL` is ignored |
-| `inference_endpoint_invalid` | error | `env.inference` | Unused on this branch; `NSS_INFERENCE_ENDPOINT` is not consumed |
+| `inference_key_missing` | error | `env.inference` | `replace_pii.llm` resolves to the default hosted NVIDIA endpoint but no runtime API key is set |
+| `inference_endpoint_invalid` | error | `env.inference` | The configured PII inference endpoint is not an absolute HTTP(S) URL |
 | `hf_token_missing` | warning | `env.hf_model_availability` | Neither `HF_TOKEN` nor `HUGGING_FACE_HUB_TOKEN` set, and model loading may need online Hugging Face access |
 | `hf_model_not_cached` | warning/error | `env.hf_model_availability` | Hugging Face model is not present in the local cache; severity is error when HF offline mode is enabled |
 | `hf_model_cache_incomplete` | warning/error | `env.hf_model_availability` | Cached Hugging Face model snapshot is missing required config, tokenizer, weights, or shards; severity is error when HF offline mode is enabled |

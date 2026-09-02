@@ -13,6 +13,7 @@ from .assembly import (
     plan_from_classifications,
 )
 from .io import load_plan, save_plan
+from .llm import InferenceSettings, LLMPlanEnhancer, OpenAICompatibleTransport, resolve_inference_settings
 from .patterns import pattern_grammar_catalog
 from .resolver import (
     ColumnProfile,
@@ -29,6 +30,9 @@ __all__ = [
     "ColumnProfile",
     "DependencyCandidate",
     "HeuristicPlanDiscoverer",
+    "InferenceSettings",
+    "LLMPlanEnhancer",
+    "OpenAICompatibleTransport",
     "PlanDiscoverer",
     "PlanDiscoveryInput",
     "PlanEnhancer",
@@ -39,6 +43,7 @@ __all__ = [
     "plan_from_classifications",
     "protected_columns",
     "resolve_plan",
+    "resolve_inference_settings",
     "save_plan",
     "validate_plan",
 ]

@@ -299,12 +299,40 @@ def common_setup(
     # 5. Load config with overrides from settings
     synthesis_overrides = merge_dicts(synthesis_overrides, settings.synthesis_overrides)
     config = merge_overrides(settings.config_path, synthesis_overrides)
+    config = _apply_inference_cli_overrides(config, settings)
 
     # 6. Initialize wandb (uses workdir for run ID files)
     if not skip_wandb:
         initialize_wandb_run(workdir, resume_job_id=wandb_resume_job_id, cfg=config)
 
     return run_logger, config, df, workdir
+
+
+def _apply_inference_cli_overrides(
+    config: SafeSynthesizerParameters,
+    settings: "CLISettings",
+) -> SafeSynthesizerParameters:
+    """Apply explicit inference flags above persisted LLM configuration.
+
+    Environment-loaded values are intentionally excluded here: the LLM
+    adapter resolves persisted config before environment values. The API key
+    remains runtime-only and is propagated through ``NSS_INFERENCE_KEY``.
+    """
+    replace_pii = config.replace_pii
+    if replace_pii is None or replace_pii.llm is None:
+        return config
+
+    updates: dict[str, str] = {}
+    if "inference_endpoint_url" in settings.explicit_cli_fields and settings.inference_endpoint_url is not None:
+        updates["endpoint_url"] = settings.inference_endpoint_url
+    if "inference_model_id" in settings.explicit_cli_fields and settings.inference_model_id is not None:
+        updates["model_id"] = settings.inference_model_id
+    if not updates:
+        return config
+
+    llm = replace_pii.llm.model_copy(update=updates)
+    updated_replace_pii = replace_pii.model_copy(update={"llm": llm})
+    return config.model_copy(update={"replace_pii": updated_replace_pii})
 
 
 def _set_wandb_env_vars(

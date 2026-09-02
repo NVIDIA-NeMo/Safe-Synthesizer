@@ -45,9 +45,9 @@ Grouped by the `Category` column -- `nss`-native settings first, then
 | `NSS_LOG_COLOR` | nss | `--log-color` / `--no-log-color` | CLI / observability | auto (TTY) | Colorize console output | [Running -- Log Format](running.md#log-format) |
 | `NSS_LOG_LEVEL` | nss | `--verbose` (0–2) | observability | `INFO` | Log level (`DEBUG`, `DEBUG_DEPENDENCIES`, etc.) | Set via verbosity, not a direct CLI flag |
 | `NSS_DATASET_REGISTRY` | nss | `--dataset-registry` | CLI | -- | Dataset registry YAML path or URL | [Running -- Dataset Registry](running.md#dataset-registry) |
-| `NSS_INFERENCE_ENDPOINT` | nss | `--inference-endpoint-url` | CLI | NVIDIA integrate URL | Unused until PII replacement v3 | [PII appendix](#pii-replacement) |
-| `NSS_INFERENCE_KEY` | nss | `--inference-api-key` | CLI | -- | Unused until PII replacement v3 | [PII appendix](#pii-replacement) |
-| `NSS_INFERENCE_MODEL` | nss | `--inference-model-id` | CLI | `nvidia/nemotron-3-ultra-550b-a55b` | Unused until PII replacement v3 | [PII appendix](#pii-replacement) |
+| `NSS_INFERENCE_ENDPOINT` | nss | `--inference-endpoint-url` | PII planning | NVIDIA integrate URL | OpenAI-compatible PII inference endpoint | [PII appendix](#pii-replacement) |
+| `NSS_INFERENCE_KEY` | nss | `--inference-api-key` | PII planning | -- | Runtime-only inference credential; required by the default hosted endpoint | [PII appendix](#pii-replacement) |
+| `NSS_INFERENCE_MODEL` | nss | `--inference-model-id` | PII planning | `nvidia/nemotron-3-ultra-550b-a55b` | Model ID served by the PII inference endpoint | [PII appendix](#pii-replacement) |
 | `NSS_WANDB_MODE` | nss | `--wandb-mode` | WandB | `disabled` | WandB run mode | Alias for `WANDB_MODE` |
 | `NSS_WANDB_PROJECT` | nss | `--wandb-project` | WandB | -- | WandB project name | Alias for `WANDB_PROJECT` |
 | `NSS_WANDB_UPLOAD_EVALUATION_REPORT` | nss | `--wandb-upload-evaluation-report` / `--no-wandb-upload-evaluation-report` | WandB | `true` | Upload final evaluation HTML and artifact | Set to `false` to skip HTML and artifact publishing; summary metrics and the scorecard remain enabled |
