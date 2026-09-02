@@ -30,7 +30,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import AliasChoices, Field, field_validator
+from pydantic import AliasChoices, Field, PrivateAttr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from ..defaults import DEFAULT_ARTIFACTS_PATH
@@ -58,6 +58,8 @@ class CLISettings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
     )
+
+    _explicit_cli_fields: frozenset[str] = PrivateAttr(default_factory=frozenset)
 
     observability: NSSObservabilitySettings = Field(
         default_factory=NSSObservabilitySettings, description="Observability sub-settings (log level, format, color)."
@@ -175,26 +177,23 @@ class CLISettings(BaseSettings):
     inference_endpoint_url: str | None = Field(
         default=None,
         validation_alias=AliasChoices("inference_endpoint_url", "NSS_INFERENCE_ENDPOINT"),
-        description="Unused OpenAI-compatible inference endpoint URL (reserved for PII replacement v3)",
+        description="OpenAI-compatible inference endpoint URL for PII replacement",
     )
-    """Unused OpenAI-compatible inference endpoint URL reserved for PII replacement v3
-    (env: ``NSS_INFERENCE_ENDPOINT``)."""
+    """OpenAI-compatible PII inference endpoint (env: ``NSS_INFERENCE_ENDPOINT``)."""
 
     inference_api_key: str | None = Field(
         default=None,
         validation_alias=AliasChoices("inference_api_key", "NSS_INFERENCE_KEY"),
-        description="Unused API key for the inference endpoint (reserved for PII replacement v3)",
+        description="Runtime API key for the PII inference endpoint",
     )
-    """Unused API key for the inference endpoint reserved for PII replacement v3
-    (env: ``NSS_INFERENCE_KEY``)."""
+    """Runtime-only PII inference API key (env: ``NSS_INFERENCE_KEY``)."""
 
     inference_model_id: str | None = Field(
         default=None,
         validation_alias=AliasChoices("inference_model_id", "NSS_INFERENCE_MODEL"),
-        description="Unused model ID for the inference endpoint (reserved for PII replacement v3)",
+        description="Model ID served by the PII inference endpoint",
     )
-    """Unused model ID for the inference endpoint reserved for PII replacement v3
-    (env: ``NSS_INFERENCE_MODEL``)."""
+    """PII inference model ID (env: ``NSS_INFERENCE_MODEL``)."""
 
     huggingface_remote: bool | None = Field(
         default=None,
@@ -243,7 +242,14 @@ class CLISettings(BaseSettings):
         """
         # Filter out None values so env vars can provide defaults
         filtered = {k: v for k, v in kwargs.items() if v is not None}
-        return cls(**filtered)
+        settings = cls(**filtered)
+        settings._explicit_cli_fields = frozenset(filtered)
+        return settings
+
+    @property
+    def explicit_cli_fields(self) -> frozenset[str]:
+        """Fields explicitly supplied by Click rather than loaded from the environment."""
+        return self._explicit_cli_fields
 
     @property
     def effective_artifact_path(self) -> Path:
