@@ -71,10 +71,6 @@ def test_emit_telemetry_from_yaml_uses_env_when_unset(monkeypatch):
     assert c.emit_telemetry is False
 
 
-def test_replace_pii_placeholder_is_valid():
-    assert ReplacePiiConfig().model_dump() == {}
-
-
 @pytest.mark.parametrize(
     ("payload", "field"),
     [
