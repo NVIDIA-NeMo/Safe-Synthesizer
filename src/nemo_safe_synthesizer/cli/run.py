@@ -177,7 +177,7 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
             type=str,
             required=False,
             default=None,
-            help="Unused OpenAI-compatible inference endpoint URL (reserved for PII replacement v3). "
+            help="OpenAI-compatible inference endpoint URL for PII replacement. "
             "Can also be set via NSS_INFERENCE_ENDPOINT env var.",
         )
     )
@@ -187,8 +187,7 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
             type=str,
             required=False,
             default=None,
-            help="Unused API key for the inference endpoint (reserved for PII replacement v3). "
-            "Can also be set via NSS_INFERENCE_KEY env var.",
+            help="Runtime API key for the PII inference endpoint. Can also be set via NSS_INFERENCE_KEY env var.",
         )
     )
     options.append(
@@ -197,7 +196,7 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
             type=str,
             required=False,
             default=None,
-            help="Unused model ID for the inference endpoint (reserved for PII replacement v3). "
+            help="Model ID served by the PII inference endpoint. "
             "Can also be set via NSS_INFERENCE_MODEL env var. "
             "[default: nvidia/nemotron-3-ultra-550b-a55b]",
         )
