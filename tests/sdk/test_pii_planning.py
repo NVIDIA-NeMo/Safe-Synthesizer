@@ -65,10 +65,10 @@ def test_plan_pii_replacement_delegates_full_input_without_pipeline_stages(tmp_p
 
 def test_plan_pii_replacement_persists_when_output_path_is_supplied(tmp_path: Path) -> None:
     dataframe = pd.DataFrame({"email": ["ada@example.com", "grace@example.com"]})
-    embedded_plan = PiiReplacementPlan(
+    inline_plan = PiiReplacementPlan(
         columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
     )
-    config = SafeSynthesizerParameters(replace_pii=ReplacePiiConfig(replacement_plan=embedded_plan))
+    config = SafeSynthesizerParameters(replace_pii=ReplacePiiConfig(replacement_plan=inline_plan))
     output_path = tmp_path / "review" / "pii_replacement_plan.yaml"
 
     result = (
@@ -77,8 +77,8 @@ def test_plan_pii_replacement_persists_when_output_path_is_supplied(tmp_path: Pa
         .plan_pii_replacement(output_path=output_path)
     )
 
-    assert result == embedded_plan
-    assert load_plan(output_path) == embedded_plan
+    assert result == inline_plan
+    assert load_plan(output_path) == inline_plan
 
 
 def test_plan_pii_replacement_rejects_disabled_pii(tmp_path: Path) -> None:

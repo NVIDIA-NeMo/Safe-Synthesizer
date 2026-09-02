@@ -19,7 +19,7 @@ __all__ = ["load_plan", "save_plan"]
 def load_plan(path: str | Path) -> PiiReplacementPlan:
     """Load a replacement plan from a standalone YAML file.
 
-    A plan file contains the same mapping accepted as an embedded
+    A plan file contains the same mapping accepted as an inline
     ``replace_pii.replacement_plan`` value in the main NSS configuration.
 
     Args:

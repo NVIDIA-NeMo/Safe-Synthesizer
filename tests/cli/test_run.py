@@ -742,6 +742,7 @@ class TestRunReplacePii:
         assert plan.columns_to_replace[0].column_name == "col1"
         assert plan.columns_to_replace[0].entity_type is EntityType.UNIQUE_IDENTIFIER
 
+
 class TestRunGenerateOptions:
     """Tests for run generate command options."""
 

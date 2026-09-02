@@ -27,9 +27,9 @@ replace_pii:
   replacement_plan: auto_discovery
 ```
 
-### Embedded plan
+### Inline plan
 
-An embedded plan is written directly under `replacement_plan` in the main NSS
+An inline plan is written directly under `replacement_plan` in the main NSS
 configuration:
 
 ```yaml
@@ -49,7 +49,7 @@ replace_pii:
 
 ### Plan file
 
-A plan file is a separate YAML file containing the same mapping as an embedded
+A plan file is a separate YAML file containing the same mapping as an inline
 plan. Set `replacement_plan` to its path:
 
 ```yaml
@@ -57,7 +57,7 @@ replace_pii:
   replacement_plan: ./pii_replacement_plan.yaml
 ```
 
-Embedded plans and plan files are authoritative: NSS validates them against the
+Inline plans and plan files are authoritative: NSS validates them against the
 input dataframe but does not run heuristic or LLM discovery. This bypass applies
 only to plan discovery. If `llm` is configured, the replacement executor can
 still use it to replace PII found inside free-text columns named by the plan.

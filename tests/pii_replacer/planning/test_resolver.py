@@ -99,7 +99,7 @@ class TestResolvePlan:
                 DataParameters(),
             )
 
-    def test_embedded_plan_bypasses_discovery_but_retains_llm_for_replacement(
+    def test_inline_plan_bypasses_discovery_but_retains_llm_for_replacement(
         self,
         patient_df: pd.DataFrame,
     ) -> None:

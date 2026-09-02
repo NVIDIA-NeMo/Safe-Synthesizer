@@ -361,21 +361,21 @@ class TestReplacePiiConfig:
         assert config.replacement_plan == AUTO_DISCOVERY
         assert config.is_auto_discovery
         assert config.plan_path is None
-        assert config.embedded_plan is None
+        assert config.inline_plan is None
         assert config.llm is None
         assert config.sampler.backend is PiiSamplerBackend.MANAGED
         assert ENTITY_BY_TYPE[EntityType.FREE_TEXT].action is EntityAction.REPLACE_IN_TEXT
 
-    def test_plan_path_and_embedded_plan_properties(self) -> None:
+    def test_plan_path_and_inline_plan_properties(self) -> None:
         path_config = ReplacePiiConfig(replacement_plan="/tmp/plan.yaml")
         assert path_config.plan_path == "/tmp/plan.yaml"
-        assert path_config.embedded_plan is None
+        assert path_config.inline_plan is None
         assert not path_config.is_auto_discovery
 
         plan = PiiReplacementPlan(scope=PiiReplacementScope.RECORD)
-        embedded = ReplacePiiConfig(replacement_plan=plan)
-        assert embedded.embedded_plan is plan
-        assert embedded.plan_path is None
+        inline = ReplacePiiConfig(replacement_plan=plan)
+        assert inline.inline_plan is plan
+        assert inline.plan_path is None
 
     def test_path_object_is_stored_as_string(self) -> None:
         config = ReplacePiiConfig.model_validate({"replacement_plan": Path("plans/pii.yaml")})
@@ -402,11 +402,11 @@ class TestReplacePiiConfig:
                 }
             }
         )
-        assert isinstance(config.embedded_plan, PiiReplacementPlan)
-        assert config.embedded_plan.scope.value == "record"
+        assert isinstance(config.inline_plan, PiiReplacementPlan)
+        assert config.inline_plan.scope.value == "record"
 
-    def test_malformed_embedded_plan_raises_parameter_error(self) -> None:
-        with _raises("invalid embedded replacement plan"):
+    def test_malformed_inline_plan_raises_parameter_error(self) -> None:
+        with _raises("invalid inline replacement plan"):
             ReplacePiiConfig.model_validate({"replacement_plan": {"scope": "galaxy"}})
 
     def test_llm_mapping_configures_shared_openai_compatible_inference(self) -> None:

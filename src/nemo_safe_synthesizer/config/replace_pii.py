@@ -625,13 +625,13 @@ class ReplacePiiConfig(Parameters):
     ``replacement_plan`` accepts three forms:
 
     * ``"auto_discovery"`` (default) detects and plans replacements automatically;
-    * an embedded ``PiiReplacementPlan`` mapping in the main NSS config; or
+    * an inline ``PiiReplacementPlan`` mapping in the main NSS config; or
     * a string path to a separate plan YAML containing that same mapping.
 
     ``llm=None`` leaves auto-discovery at the heuristic baseline and disables
     LLM-assisted free-text replacement. Supplying an ``llm`` mapping enables
     LLM enhancement after heuristic discovery and provides the same inference
-    settings to replacement-time free-text processing. An embedded plan or plan
+    settings to replacement-time free-text processing. An inline plan or plan
     file bypasses only discovery; it does not disable replacement-time LLM use.
     The API key remains a runtime secret supplied through ``NSS_INFERENCE_KEY``
     or the corresponding CLI option; it is never stored in this model.
@@ -656,7 +656,7 @@ class ReplacePiiConfig(Parameters):
     replacement_plan: PiiReplacementPlan | str = Field(
         default=AUTO_DISCOVERY,
         description=(
-            f"{AUTO_DISCOVERY!r} to discover the plan from the data, an embedded plan "
+            f"{AUTO_DISCOVERY!r} to discover the plan from the data, an inline plan "
             "mapping in the main NSS config, or a path to a separate plan YAML. "
             "Other strings are treated as paths. The CLI option only accepts the "
             "sentinel or a path."
@@ -690,7 +690,7 @@ class ReplacePiiConfig(Parameters):
     def _resolve_replacement_plan(cls, value: object) -> object:
         """Resolve the plan/string union here so errors describe the plan, not the union.
 
-        Left to the union, a malformed embedded plan reports the plan's own errors
+        Left to the union, a malformed inline plan reports the plan's own errors
         *and* "input should be a valid string", which reads as though a file path
         was expected. Validating a mapping as a plan up front keeps the report to
         the fields the user actually got wrong.
@@ -702,13 +702,13 @@ class ReplacePiiConfig(Parameters):
                 details = "; ".join(
                     f"{'.'.join(str(part) for part in error['loc'])}: {error['msg']}" for error in exc.errors()
                 )
-                raise ParameterError(f"invalid embedded replacement plan ({details})") from exc
+                raise ParameterError(f"invalid inline replacement plan ({details})") from exc
         if isinstance(value, Path):
             return str(value)
         if isinstance(value, str | PiiReplacementPlan):
             return value
         raise ParameterError(
-            f"replacement_plan must be {AUTO_DISCOVERY!r}, an embedded plan, or a path to a plan file; "
+            f"replacement_plan must be {AUTO_DISCOVERY!r}, an inline plan, or a path to a plan file; "
             f"got {type(value).__name__}"
         )
 
@@ -725,6 +725,6 @@ class ReplacePiiConfig(Parameters):
         return None
 
     @property
-    def embedded_plan(self) -> PiiReplacementPlan | None:
-        """The embedded plan, or ``None`` for auto-discovery or a plan file."""
+    def inline_plan(self) -> PiiReplacementPlan | None:
+        """The inline plan, or ``None`` for auto-discovery or a plan file."""
         return self.replacement_plan if isinstance(self.replacement_plan, PiiReplacementPlan) else None

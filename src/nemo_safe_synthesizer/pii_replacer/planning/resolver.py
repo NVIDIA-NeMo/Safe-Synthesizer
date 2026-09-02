@@ -177,9 +177,9 @@ def _prepare_discovery_input(
 def _configured_plan(config: ReplacePiiConfig) -> PiiReplacementPlan:
     if config.plan_path is not None:
         return load_plan(config.plan_path)
-    if config.embedded_plan is not None:
-        return config.embedded_plan
-    raise ParameterError("replacement_plan must be auto_discovery, an embedded plan, or a path to a plan file")
+    if config.inline_plan is not None:
+        return config.inline_plan
+    raise ParameterError("replacement_plan must be auto_discovery, an inline plan, or a path to a plan file")
 
 
 def resolve_plan(
@@ -194,7 +194,7 @@ def resolve_plan(
 ) -> PiiReplacementPlan:
     """Resolve, validate, and optionally persist one replacement plan.
 
-    Embedded plans and plan files are authoritative and bypass discovery.
+    Inline plans and plan files are authoritative and bypass discovery.
     Auto-discovery always runs the heuristic adapter first, then runs an LLM
     enhancer only when ``config.llm`` is configured. Dataframe-aware validation
     occurs once, after the final plan has been selected.

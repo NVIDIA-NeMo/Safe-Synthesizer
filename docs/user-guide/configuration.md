@@ -291,7 +291,7 @@ for the full API reference.
 
 ## Replacing PII
 
-PII replacement accepts automatic discovery, a plan embedded in the main NSS
+PII replacement accepts automatic discovery, a plan written inline in the main NSS
 configuration, or a path to a separate plan YAML. See
 [PII Replacement](../product-overview/pii_replacement.md) for the plan-source
 definitions, examples, and the shared LLM configuration for plan enhancement and
