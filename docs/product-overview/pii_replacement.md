@@ -7,10 +7,11 @@ PII replacement v3 uses a dataset-specific replacement plan. The plan names
 the columns NSS should replace, the entity type in each column, optional format
 patterns, and dependencies between related columns.
 
-This branch provides the configuration and plan-resolution contract plus
-plan-only CLI and SDK workflows. Replacement execution remains deferred. Until
-the executor is available, set `replace_pii: null`, pass `--no-replace-pii`, or
-call `.with_replace_pii(enable=False)` to run the synthesis pipeline.
+This branch provides the configuration and plan-resolution contract, LLM plan
+enhancement, and plan-only CLI and SDK workflows. Replacement execution remains
+deferred. Until the executor is available, set `replace_pii: null`, pass
+`--no-replace-pii`, or call `.with_replace_pii(enable=False)` to run the
+synthesis pipeline.
 
 ## Replacement plan sources
 
@@ -144,13 +145,17 @@ Supply the inference API key at runtime through `NSS_INFERENCE_KEY` or the
 `--inference-api-key` CLI option. NSS does not store the key in configuration or
 plan artifacts.
 
-Automatic discovery uses two LLM passes. The first assesses every column in
-bounded batches of at most 32 profiles and 48 KiB of profile evidence. Each
-profile contains deterministic statistics and up to eight distinct cell samples
-truncated to 128 characters. The second pass receives the complete assessment
-inventory, heuristic baseline, entity catalog, and permitted dependencies, then
-returns the final replacement columns and edges. NSS, rather than the model,
-supplies the scope and protected structural columns.
+Automatic discovery uses two LLM passes. The first classifies every column's
+semantic entity type and may propose a replacement pattern, in bounded batches
+of at most 32 profiles and 48 KiB of profile evidence. Each profile contains
+deterministic statistics and up to eight distinct cell samples truncated to 128
+characters. The prompt includes the entity catalog and the exact supported
+pattern grammars. NSS then derives replacement columns and all permitted
+dependency candidates deterministically from those classifications. The second
+pass can only select contextually useful dependency candidate IDs. NSS, rather
+than the model, supplies the plan scope, excludes protected ordering and
+timestamp columns, and validates the assembled plan. Grouping columns remain
+eligible for replacement so identifiers such as patient IDs can be anonymized.
 
 Each request permits up to three attempts for transient transport failures or
 invalid structured responses. Authentication, authorization, and permanent

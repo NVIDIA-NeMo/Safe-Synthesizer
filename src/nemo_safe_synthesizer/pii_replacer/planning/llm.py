@@ -5,33 +5,35 @@
 
 from __future__ import annotations
 
+import json
+import os
 from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from enum import StrEnum
-import json
-import os
 from typing import Protocol, TypeVar
 from urllib.parse import urlparse
 
 import httpx
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
-from typing_extensions import Self
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from ...config.replace_pii import (
-    ALLOWED_DEPENDS_ON,
     ENTITIES,
     ENTITY_BY_TYPE,
-    EntityType,
     LLMConfig,
     PiiColumnPlan,
     PiiReplacementPlan,
-    can_condition,
-    is_columns_to_replace_type,
 )
 from ...defaults import DEFAULT_NSS_INFERENCE_ENDPOINT, DEFAULT_NSS_INFERENCE_MODEL
 from ...errors import GenerationError, ParameterError
 from ...observability import get_logger
+from .assembly import (
+    ColumnClassification,
+    DependencyCandidate,
+    apply_dependencies,
+    derive_dependency_candidates,
+    plan_from_classifications,
+)
+from .patterns import pattern_grammar_catalog
 from .resolver import ColumnProfile, PlanDiscoveryInput, PlanEnhancer
 from .validation import _cycle_columns, _iter_pattern_issues
 
@@ -42,8 +44,8 @@ __all__ = [
     "resolve_inference_settings",
 ]
 
-MAX_ASSESSMENT_PROFILES = 32
-MAX_ASSESSMENT_PROFILE_BYTES = 48 * 1024
+MAX_CLASSIFICATION_PROFILES = 32
+MAX_CLASSIFICATION_PROFILE_BYTES = 48 * 1024
 MAX_REQUEST_ATTEMPTS = 3
 _CHAT_COMPLETIONS_PATH = "/chat/completions"
 _TRANSIENT_STATUS_CODES = frozenset({408, 409, 425, 429})
@@ -75,53 +77,12 @@ class _StructuredResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class _AssessmentDisposition(StrEnum):
-    replace = "replace"
-    conditioner = "conditioner"
-    ignore = "ignore"
+class _ClassificationResponse(_StructuredResponse):
+    classifications: list[ColumnClassification]
 
 
-class _ColumnAssessment(_StructuredResponse):
-    column_name: str
-    disposition: _AssessmentDisposition
-    entity_type: EntityType | None
-    pattern: str | None = None
-
-    @model_validator(mode="after")
-    def _validate_disposition(self) -> Self:
-        if self.disposition is _AssessmentDisposition.replace:
-            if self.entity_type is None or not is_columns_to_replace_type(self.entity_type):
-                raise ValueError("replace assessments require a replaceable entity_type")
-            return self
-        if self.disposition is _AssessmentDisposition.conditioner:
-            if self.entity_type is None or not can_condition(self.entity_type):
-                raise ValueError("conditioner assessments require an entity_type that can condition")
-            if self.pattern is not None:
-                raise ValueError("conditioner assessments cannot include a pattern")
-            return self
-        if self.pattern is not None:
-            raise ValueError("ignore assessments cannot include a pattern")
-        return self
-
-
-class _AssessmentResponse(_StructuredResponse):
-    assessments: list[_ColumnAssessment]
-
-
-class _SynthesisDependency(_StructuredResponse):
-    column_name: str
-    entity_type: EntityType | None = None
-
-
-class _SynthesisColumn(_StructuredResponse):
-    column_name: str
-    entity_type: EntityType
-    pattern: str | None = None
-    depends_on: list[_SynthesisDependency] = Field(default_factory=list)
-
-
-class _SynthesisResponse(_StructuredResponse):
-    columns_to_replace: list[_SynthesisColumn]
+class _DependencySelectionResponse(_StructuredResponse):
+    selected_dependency_ids: list[str]
 
 
 class _PatternRepairResponse(_StructuredResponse):
@@ -289,11 +250,11 @@ def _profile_batches(profiles: Sequence[ColumnProfile]) -> list[list[dict[str, o
     current: list[dict[str, object]] = []
     for profile in profiles:
         payload = _profile_payload(profile)
-        if _json_bytes([payload]) > MAX_ASSESSMENT_PROFILE_BYTES:
+        if _json_bytes([payload]) > MAX_CLASSIFICATION_PROFILE_BYTES:
             raise ParameterError(f"Column profile for {profile.column_name!r} exceeds the 48 KiB LLM evidence limit")
         candidate = [*current, payload]
         if current and (
-            len(candidate) > MAX_ASSESSMENT_PROFILES or _json_bytes(candidate) > MAX_ASSESSMENT_PROFILE_BYTES
+            len(candidate) > MAX_CLASSIFICATION_PROFILES or _json_bytes(candidate) > MAX_CLASSIFICATION_PROFILE_BYTES
         ):
             batches.append(current)
             current = [payload]
@@ -320,10 +281,21 @@ def _entity_catalog() -> list[dict[str, object]]:
     ]
 
 
-def _dependency_catalog() -> dict[str, list[str]]:
+def _baseline_payload(
+    baseline: PiiReplacementPlan,
+    batch: Sequence[Mapping[str, object]],
+) -> dict[str, object]:
+    submitted = {str(profile["column_name"]) for profile in batch}
     return {
-        target.value: sorted(source.value for source in sources)
-        for target, sources in ALLOWED_DEPENDS_ON.items()
+        "columns_to_replace": [
+            {
+                "column_name": spec.column_name,
+                "entity_type": spec.entity_type.value,
+                "pattern": spec.pattern,
+            }
+            for spec in baseline.columns_to_replace
+            if spec.column_name in submitted
+        ]
     }
 
 
@@ -338,37 +310,62 @@ def _validation_feedback(exc: Exception) -> str:
     return rendered[:800]
 
 
-def _assessment_messages(batch: Sequence[Mapping[str, object]]) -> list[dict[str, str]]:
-    system = (
-        "Assess every submitted dataframe column for a PII replacement plan. "
-        "Return exactly one assessment per column, using disposition replace, conditioner, or ignore. "
-        "A replace assessment needs a replaceable entity type; a conditioner needs an entity type with "
-        "can_condition=true; ignore may use null when no catalog entity applies. Optional patterns must describe "
-        "the observed whole-column format. Do not omit, duplicate, or invent columns."
-    )
-    user = _compact_json({"entity_catalog": _entity_catalog(), "column_profiles": batch})
-    return [{"role": "system", "content": system}, {"role": "user", "content": user}]
-
-
-def _synthesis_messages(
-    discovery_input: PlanDiscoveryInput,
-    assessments: Sequence[_ColumnAssessment],
+def _classification_messages(
+    batch: Sequence[Mapping[str, object]],
     baseline: PiiReplacementPlan,
 ) -> list[dict[str, str]]:
     system = (
-        "Synthesize the final PII replacement columns and dependency edges. You may add or remove baseline columns "
-        "and revise entity types, patterns, and dependencies. Use only submitted dataframe columns. Never replace a "
-        "protected column. The scope is supplied by NSS and must not appear in your response. Dependencies must follow "
-        "the permitted relationship catalog and form an acyclic graph."
+        "Classify every submitted dataframe column by its semantic entity type and, when useful, propose an "
+        "optional whole-column replacement pattern. Return exactly one classification for every submitted column, "
+        "in the same order. entity_type must be one of the values in entity_catalog, or null when no catalog entity "
+        "accurately describes the column. Classify semantic meaning only. Do not decide whether a column should be "
+        "replaced, used as a conditioner, or ignored; NSS derives those roles deterministically. pattern must be null "
+        "when entity_type is null, the selected entity has no pattern_syntax, or the column is protected. Otherwise, "
+        "emit a pattern only when the observed values have a consistent format worth preserving; do not emit a "
+        "redundant pattern that adds no useful formatting information beyond the entity type. A non-null pattern must "
+        "follow exactly the grammar named by the entity's pattern_syntax and describe the complete cell value. "
+        "Patterns are not regular expressions. Treat heuristic_baseline as fallible prior evidence. Do not omit, "
+        "duplicate, or invent columns."
     )
     user = _compact_json(
         {
-            "scope": discovery_input.scope.value,
-            "protected_columns": sorted(discovery_input.protected_columns),
-            "assessments": [assessment.model_dump(mode="json") for assessment in assessments],
-            "heuristic_baseline": baseline.model_dump(mode="json"),
             "entity_catalog": _entity_catalog(),
-            "permitted_dependencies": _dependency_catalog(),
+            "pattern_grammars": pattern_grammar_catalog(),
+            "heuristic_baseline": _baseline_payload(baseline, batch),
+            "column_profiles": batch,
+        }
+    )
+    return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+
+
+def _dependency_candidate_id(index: int) -> str:
+    return f"dependency_{index}"
+
+
+def _dependency_candidate_payload(index: int, candidate: DependencyCandidate) -> dict[str, str]:
+    return {
+        "id": _dependency_candidate_id(index),
+        "target_column": candidate.target_column,
+        "target_entity_type": candidate.target_entity_type.value,
+        "source_column": candidate.source_column,
+        "source_entity_type": candidate.source_entity_type.value,
+    }
+
+
+def _dependency_selection_messages(candidates: Sequence[DependencyCandidate]) -> list[dict[str, str]]:
+    system = (
+        "Select the contextually useful replacement dependencies from the submitted candidates. A selected dependency "
+        "means that the target column's replacement should be conditioned on the source column. Every submitted "
+        "candidate is permitted by the entity catalog, but permission alone does not make a dependency useful. Select "
+        "a candidate only when the source column provides meaningful semantic context for generating the target "
+        "column. Return only IDs from dependency_candidates. Do not invent IDs, replacement columns, entity types, "
+        "patterns, or dependency relationships. Do not select redundant or conflicting dependencies."
+    )
+    user = _compact_json(
+        {
+            "dependency_candidates": [
+                _dependency_candidate_payload(index, candidate) for index, candidate in enumerate(candidates)
+            ]
         }
     )
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
@@ -382,14 +379,17 @@ def _pattern_repair_messages(
     pattern_syntax = ENTITY_BY_TYPE[spec.entity_type].pattern_syntax
     assert pattern_syntax is not None
     system = (
-        "Repair only the optional whole-column pattern. Return one non-empty pattern compatible with the supplied "
-        "entity pattern syntax and samples. Do not change the column or entity type."
+        "Repair only the optional whole-column pattern. Return one non-empty pattern that follows the supplied pattern "
+        "grammar exactly and describes the complete cell values represented by the samples. Patterns are not regular "
+        "expressions. Do not change the column or entity type."
     )
+    syntax_name = pattern_syntax.name.lower()
     user = _compact_json(
         {
             "column_profile": _profile_payload(profile),
             "entity_type": spec.entity_type.value,
-            "pattern_syntax": pattern_syntax.name.lower(),
+            "pattern_syntax": syntax_name,
+            "pattern_grammar": pattern_grammar_catalog()[syntax_name],
             "invalid_pattern": spec.pattern,
             "validation_issue": issue,
         }
@@ -411,7 +411,7 @@ def _with_feedback(messages: Sequence[Mapping[str, str]], feedback: str | None) 
 
 
 class LLMPlanEnhancer(PlanEnhancer):
-    """Enhance a heuristic plan with bounded assessment and synthesis passes."""
+    """Enhance a heuristic plan with classification and dependency-selection passes."""
 
     def __init__(
         self,
@@ -437,54 +437,98 @@ class LLMPlanEnhancer(PlanEnhancer):
         discovery_input: PlanDiscoveryInput,
         baseline: PiiReplacementPlan,
     ) -> PiiReplacementPlan:
-        """Return an LLM-authored plan or fail without heuristic fallback."""
-        assessments = self._assess_columns(discovery_input.column_profiles)
-        plan: PiiReplacementPlan | None = None
-
-        def validate_synthesis(response: _SynthesisResponse) -> _SynthesisResponse:
-            nonlocal plan
-            plan = self._validate_synthesis(discovery_input, response)
-            return response
-
-        self._request_structured(
-            purpose="PII plan synthesis",
-            messages=_synthesis_messages(discovery_input, assessments, baseline),
-            response_model=_SynthesisResponse,
-            validate=validate_synthesis,
+        """Return a semantically classified, deterministically assembled plan."""
+        classifications = self._classify_columns(discovery_input.column_profiles, baseline)
+        plan = plan_from_classifications(
+            discovery_input.scope,
+            classifications,
+            protected_columns=discovery_input.protected_columns,
         )
-        assert plan is not None
+        candidates = derive_dependency_candidates(plan, classifications)
+        if candidates:
+            plan = self._select_dependencies(plan, candidates)
         return self._repair_invalid_patterns(discovery_input, plan)
 
-    def _assess_columns(self, profiles: Sequence[ColumnProfile]) -> list[_ColumnAssessment]:
+    def _classify_columns(
+        self,
+        profiles: Sequence[ColumnProfile],
+        baseline: PiiReplacementPlan,
+    ) -> list[ColumnClassification]:
         batches = _profile_batches(profiles)
         if not batches:
             return []
 
-        def assess(batch: list[dict[str, object]]) -> list[_ColumnAssessment]:
+        def classify(batch: list[dict[str, object]]) -> list[ColumnClassification]:
             expected = [str(profile["column_name"]) for profile in batch]
+            protected = {str(profile["column_name"]) for profile in batch if bool(profile["protected"])}
 
-            def validate(response: _AssessmentResponse) -> _AssessmentResponse:
-                actual = [assessment.column_name for assessment in response.assessments]
+            def validate(response: _ClassificationResponse) -> _ClassificationResponse:
+                actual = [classification.column_name for classification in response.classifications]
                 if len(actual) != len(expected) or set(actual) != set(expected):
-                    raise ValueError("assessments must contain every submitted column exactly once")
-                by_name = {assessment.column_name: assessment for assessment in response.assessments}
-                response.assessments = [by_name[name] for name in expected]
+                    raise ValueError("classifications must contain every submitted column exactly once")
+                by_name = {classification.column_name: classification for classification in response.classifications}
+                response.classifications = [by_name[name] for name in expected]
+                if any(item.pattern is not None and item.column_name in protected for item in response.classifications):
+                    raise ValueError("protected columns cannot include replacement patterns")
                 return response
 
             response = self._request_structured(
-                purpose="PII column assessment",
-                messages=_assessment_messages(batch),
-                response_model=_AssessmentResponse,
+                purpose="PII column classification",
+                messages=_classification_messages(batch, baseline),
+                response_model=_ClassificationResponse,
                 validate=validate,
             )
-            return response.assessments
+            return response.classifications
 
         if len(batches) == 1:
-            return assess(batches[0])
+            return classify(batches[0])
         worker_count = min(self.settings.max_workers, len(batches))
         with ThreadPoolExecutor(max_workers=worker_count) as executor:
-            results = list(executor.map(assess, batches))
-        return [assessment for batch_result in results for assessment in batch_result]
+            results = list(executor.map(classify, batches))
+        return [classification for batch_result in results for classification in batch_result]
+
+    def _select_dependencies(
+        self,
+        plan: PiiReplacementPlan,
+        candidates: Sequence[DependencyCandidate],
+    ) -> PiiReplacementPlan:
+        selected_plan: PiiReplacementPlan | None = None
+
+        def validate(response: _DependencySelectionResponse) -> _DependencySelectionResponse:
+            nonlocal selected_plan
+            selected_plan = self._apply_dependency_selection(plan, candidates, response)
+            return response
+
+        self._request_structured(
+            purpose="PII dependency selection",
+            messages=_dependency_selection_messages(candidates),
+            response_model=_DependencySelectionResponse,
+            validate=validate,
+        )
+        assert selected_plan is not None
+        return selected_plan
+
+    @staticmethod
+    def _apply_dependency_selection(
+        plan: PiiReplacementPlan,
+        candidates: Sequence[DependencyCandidate],
+        response: _DependencySelectionResponse,
+    ) -> PiiReplacementPlan:
+        selected_ids = response.selected_dependency_ids
+        if len(selected_ids) != len(set(selected_ids)):
+            raise ValueError("selected_dependency_ids must not contain duplicates")
+
+        by_id = {_dependency_candidate_id(index): candidate for index, candidate in enumerate(candidates)}
+        if unknown := sorted(set(selected_ids) - set(by_id)):
+            raise ValueError("selected_dependency_ids contains unknown IDs: " + ", ".join(unknown))
+
+        try:
+            selected_plan = apply_dependencies(plan, [by_id[selected_id] for selected_id in selected_ids])
+        except (ParameterError, ValidationError) as exc:
+            raise ValueError("selected dependencies do not form a valid replacement plan") from exc
+        if _cycle_columns(selected_plan):
+            raise ValueError("selected dependencies form a cycle")
+        return selected_plan
 
     def _request_structured(
         self,
@@ -516,32 +560,6 @@ class LLMPlanEnhancer(PlanEnhancer):
                     ) from None
                 feedback = _validation_feedback(exc)
         raise AssertionError("unreachable")
-
-    @staticmethod
-    def _validate_synthesis(
-        discovery_input: PlanDiscoveryInput,
-        response: _SynthesisResponse,
-    ) -> PiiReplacementPlan:
-        try:
-            plan = PiiReplacementPlan(
-                scope=discovery_input.scope,
-                columns_to_replace=[
-                    PiiColumnPlan.model_validate(spec.model_dump()) for spec in response.columns_to_replace
-                ],
-            )
-        except (ParameterError, ValidationError) as exc:
-            raise ValueError("synthesized columns do not form a valid replacement plan") from exc
-        available = {profile.column_name for profile in discovery_input.column_profiles}
-        for spec in plan.columns_to_replace:
-            if spec.column_name not in available:
-                raise ValueError("synthesis invented a dataframe column")
-            if spec.column_name in discovery_input.protected_columns:
-                raise ValueError("synthesis attempted to replace a protected structural column")
-            if any(dependency.column_name not in available for dependency in spec.depends_on):
-                raise ValueError("synthesis invented a dependency column")
-        if _cycle_columns(plan):
-            raise ValueError("synthesis returned cyclic replacement dependencies")
-        return plan
 
     def _repair_invalid_patterns(
         self,
@@ -587,7 +605,9 @@ class LLMPlanEnhancer(PlanEnhancer):
                 )
                 response = _PatternRepairResponse.model_validate_json(raw)
                 candidate_plan = plan.model_copy(deep=True)
-                candidate = next(item for item in candidate_plan.columns_to_replace if item.column_name == spec.column_name)
+                candidate = next(
+                    item for item in candidate_plan.columns_to_replace if item.column_name == spec.column_name
+                )
                 candidate.pattern = response.pattern
                 next_issue = self._pattern_issue(discovery_input, candidate_plan, spec.column_name)
                 if next_issue is None:
@@ -597,9 +617,7 @@ class LLMPlanEnhancer(PlanEnhancer):
                 raise
             except _TransientInferenceError as exc:
                 if attempt == MAX_REQUEST_ATTEMPTS:
-                    raise GenerationError(
-                        f"PII pattern repair failed after {MAX_REQUEST_ATTEMPTS} attempts"
-                    ) from exc
+                    raise GenerationError(f"PII pattern repair failed after {MAX_REQUEST_ATTEMPTS} attempts") from exc
                 feedback = None
             except (_InvalidInferenceResponse, ValidationError, ValueError) as exc:
                 feedback = _validation_feedback(exc)
