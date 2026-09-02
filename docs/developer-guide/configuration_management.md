@@ -30,7 +30,9 @@ Pydantic model fields -> _collect_params() -> LeafParam / FlagParam -> click.opt
 - Scalar fields become `LeafParam` options and preserve underscores in field
   names, such as `--training__learning_rate`.
 - Nullable sub-model fields (`SomeModel | None`) become nested leaf options
-  plus a disabling `FlagParam`.
+  plus a disabling `FlagParam`. A union that includes a model but not `None`
+  (for example `SomeModel | str`) stays a single leaf option and does not
+  get `--no-*`.
 
 The generated Click options use `Field(description=...)` as CLI help text.
 
@@ -39,7 +41,7 @@ The generated Click options use `Field(description=...)` as CLI help text.
 Optional sub-configs use `None` as the disabled signal. Do not add a second
 boolean flag for the same feature.
 
-For a field such as `replace_pii: PiiReplacerConfig | None`,
+For a field such as `replace_pii: ReplacePiiConfig | None`,
 `pydantic_options()` emits:
 
 ```bash

@@ -43,63 +43,25 @@ def fixture_workdir(tmp_path: Path) -> Workdir:
 @pytest.fixture
 def fixture_process_data_setup_without_pii(
     fixture_sample_patient_dataframe: pd.DataFrame,
-    fixture_sample_patient_redacted_dataframe: pd.DataFrame | None,
     fixture_workdir: Workdir,
 ) -> tuple[SafeSynthesizer, pd.DataFrame, pd.DataFrame, pd.DataFrame | None, MagicMock]:
     """Build a SafeSynthesizer with mocked heavy dependencies (PII disabled).
 
-    Returns the builder *before* calling ``process_data()`` so callers
-    can inspect state at each stage.
-
-    For tests that need PII replacement enabled, use
-    ``fixture_process_data_setup_with_pii``.
+    Returns the builder *before* calling ``process_data()`` so callers can
+    inspect state at each stage.
     """
     return _create_process_data_setup(
         fixture_sample_patient_dataframe,
-        fixture_sample_patient_redacted_dataframe,
         fixture_workdir,
-        replace_pii=False,
-    )
-
-
-@pytest.fixture
-def fixture_process_data_setup_with_pii(
-    fixture_sample_patient_dataframe: pd.DataFrame,
-    fixture_sample_patient_redacted_dataframe: pd.DataFrame | None,
-    fixture_workdir: Workdir,
-) -> tuple[SafeSynthesizer, pd.DataFrame, pd.DataFrame, pd.DataFrame | None, MagicMock]:
-    """Build a SafeSynthesizer with mocked heavy dependencies (PII enabled).
-
-    Returns the builder *before* calling ``process_data()`` so callers
-    can inspect state at each stage.
-    """
-    return _create_process_data_setup(
-        fixture_sample_patient_dataframe,
-        fixture_sample_patient_redacted_dataframe,
-        fixture_workdir,
-        replace_pii=True,
     )
 
 
 def _create_process_data_setup(
     fixture_sample_patient_dataframe: pd.DataFrame,
-    fixture_sample_patient_redacted_dataframe: pd.DataFrame | None,
     fixture_workdir: Workdir,
-    *,
-    replace_pii: bool = True,
 ) -> tuple[SafeSynthesizer, pd.DataFrame, pd.DataFrame, pd.DataFrame | None, MagicMock]:
-    """Shared factory for the ``fixture_process_data_setup_*`` fixtures.
-
-    Builds a ``SafeSynthesizer`` wired with deterministic train/test splits
-    and a pre-built PII replacer mock, bypassing real NER models.  The
-    builder is returned before ``process_data()`` runs so each test
-    controls when -- and whether -- the method is called.
-    """
+    """Build a disabled-PII setup with deterministic train/test splits."""
     original_df = fixture_sample_patient_dataframe.copy()
-    if fixture_sample_patient_redacted_dataframe is not None:
-        pii_replaced_df = fixture_sample_patient_redacted_dataframe.head(100).copy()
-    else:
-        pii_replaced_df = None
 
     # Returns a deterministic train/test split
     train_split = original_df.head(100).copy()
@@ -110,24 +72,11 @@ def _create_process_data_setup(
     builder = SafeSynthesizer(config=config, workdir=fixture_workdir)
     builder._data_source = original_df
     assert builder._nss_config is not None
-    if replace_pii:
-        from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
+    builder._nss_config.replace_pii = None
 
-        builder._nss_config.replace_pii = PiiReplacerConfig.get_default_config()
-    else:
-        builder._nss_config.replace_pii = None
-
-    # Stub just enough of NemoPII's interface to satisfy process_data
+    # Retained in the fixture tuple for tests that inspect transformed state.
     mock_replacer_instance = MagicMock()
-    mock_replacer_instance.result.transformed_df = pii_replaced_df
-    mock_replacer_instance.result.column_statistics = {
-        "patient_name": MagicMock(),
-        "timestamp": MagicMock(),
-        "patient_age": MagicMock(),
-    }
-    mock_replacer_instance.elapsed_time = 1.5
-
-    return builder, train_split, test_split, pii_replaced_df, mock_replacer_instance
+    return builder, train_split, test_split, None, mock_replacer_instance
 
 
 def _wire_process_data_mocks(
@@ -180,71 +129,6 @@ class TestProcessDataPiiSeparation:
         pd.testing.assert_frame_equal(builder._original_training_df, train_split)
         assert builder._training_df is not None
         pd.testing.assert_frame_equal(builder._training_df, train_split)
-
-    @patch("nemo_safe_synthesizer.sdk.library_builder.run_preflight", return_value=_EMPTY_PREFLIGHT)
-    @patch("nemo_safe_synthesizer.sdk.library_builder.NemoPII")
-    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
-    @patch("nemo_safe_synthesizer.sdk.library_builder.AutoConfigResolver")
-    @patch("nemo_safe_synthesizer.sdk.library_builder.Holdout")
-    def test_process_data_with_pii_replacement_preserves_original(
-        self,
-        mock_holdout_cls,
-        mock_resolver_cls,
-        mock_metadata_cls,
-        mock_pii_cls,
-        mock_preflight,
-        fixture_process_data_setup_with_pii,
-    ):
-        """With PII replacement, ``_original_training_df`` preserves the pre-PII data."""
-        builder, train_split, test_split, pii_replaced_df, mock_replacer = fixture_process_data_setup_with_pii
-        _wire_process_data_mocks(
-            mock_holdout_cls, mock_resolver_cls, mock_metadata_cls, builder, train_split, test_split
-        )
-        mock_pii_cls.return_value = mock_replacer
-
-        builder.process_data()
-
-        # Training uses the PII-replaced data; evaluation uses the original
-        pd.testing.assert_frame_equal(builder._training_df, pii_replaced_df)
-        pd.testing.assert_frame_equal(builder._original_training_df, train_split)
-
-    @patch("nemo_safe_synthesizer.sdk.library_builder.run_preflight", return_value=_EMPTY_PREFLIGHT)
-    @patch("nemo_safe_synthesizer.sdk.library_builder.NemoPII")
-    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
-    @patch("nemo_safe_synthesizer.sdk.library_builder.AutoConfigResolver")
-    @patch("nemo_safe_synthesizer.sdk.library_builder.Holdout")
-    def test_process_data_with_pii_replacement_persists_original_and_transformed(
-        self,
-        mock_holdout_cls,
-        mock_resolver_cls,
-        mock_metadata_cls,
-        mock_pii_cls,
-        mock_preflight,
-        fixture_process_data_setup_with_pii,
-        fixture_workdir,
-    ):
-        """``training.csv`` persists the original split; ``transformed_training.csv`` persists the PII-replaced data."""
-        builder, train_split, test_split, pii_replaced_df, mock_replacer = fixture_process_data_setup_with_pii
-        _wire_process_data_mocks(
-            mock_holdout_cls, mock_resolver_cls, mock_metadata_cls, builder, train_split, test_split
-        )
-        mock_pii_cls.return_value = mock_replacer
-
-        builder.process_data()
-
-        training_csv = fixture_workdir.dataset.training
-        transformed_csv = fixture_workdir.dataset.transformed_training
-
-        assert training_csv.exists()
-        assert transformed_csv.exists()
-
-        # ``training.csv`` always contains the original training split
-        saved_training = pd.read_csv(training_csv)
-        pd.testing.assert_frame_equal(saved_training, train_split)
-
-        # ``transformed_training.csv`` contains the PII-replaced data (inspection only)
-        saved_transformed = pd.read_csv(transformed_csv)
-        pd.testing.assert_frame_equal(saved_transformed, pii_replaced_df)
 
     @patch("nemo_safe_synthesizer.sdk.library_builder.run_preflight", return_value=_EMPTY_PREFLIGHT)
     @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
@@ -334,30 +218,18 @@ class TestProcessDataMetadataLifecycle:
 
 
 class TestEvaluateUsesOriginalTrainingDf:
-    """``evaluate()`` must always pass the original (pre-PII) data to ``Evaluator``."""
+    """``evaluate()`` passes the original training data to ``Evaluator``."""
 
-    @pytest.mark.parametrize(
-        "fixture_name",
-        [
-            "fixture_process_data_setup_with_pii",
-            "fixture_process_data_setup_without_pii",
-        ],
-        ids=["with_pii_replacement", "without_pii_replacement"],
-    )
     @patch("nemo_safe_synthesizer.sdk.library_builder.make_nss_results")
     @patch("nemo_safe_synthesizer.sdk.library_builder.Evaluator")
     def test_evaluate_uses_original_training_df(
         self,
         mock_evaluator_cls,
         mock_make_results,
-        fixture_name,
-        request: pytest.FixtureRequest,
+        fixture_process_data_setup_without_pii,
     ):
-        """Evaluate always passes ``_original_training_df`` as ``training_df``."""
-        setup = request.getfixturevalue(fixture_name)
-        builder, train_split, test_split, pii_replaced_df, _ = setup
-        has_pii = fixture_name == "fixture_process_data_setup_with_pii"
-        builder._training_df = pii_replaced_df if has_pii else train_split
+        builder, train_split, test_split, _, _ = fixture_process_data_setup_without_pii
+        builder._training_df = train_split
         builder._original_training_df = train_split
         builder._test_df = test_split
         builder._total_start = 0.0
@@ -436,9 +308,7 @@ class TestLoadFromSavePath:
 
         _, train_split, test_split, _, _ = _create_process_data_setup(
             fixture_sample_patient_dataframe,
-            fixture_sample_patient_redacted_dataframe,
             workdir,
-            replace_pii=False,
         )
 
         train_split.to_csv(workdir.dataset.training, index=False)

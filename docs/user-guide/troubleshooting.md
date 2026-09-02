@@ -5,8 +5,8 @@
 
 Runtime errors, OOM issues, and configuration problems for NeMo Safe
 Synthesizer. Sections are organized by pipeline phase. For output quality
-and evaluation metrics, see [Synthetic Data Quality](evaluating-data.md). For environment variables, model caching, offline setup, NIM endpoint
-configuration, and NER parallelism, see [Environment Variables](environment.md).
+and evaluation metrics, see [Synthetic Data Quality](evaluating-data.md). For environment variables, model caching, offline setup, and inference
+endpoint settings, see [Environment Variables](environment.md).
 
 ---
 
@@ -510,9 +510,9 @@ check of its own.
 | `no_gpu` | error | `gpu.cuda` | No CUDA GPU detected (required for training or generation) |
 | `low_vram` | warning | `gpu.vram` | Free GPU VRAM may be insufficient |
 | `vram_exceeds_capacity` | error | `gpu.vram` | Estimated training VRAM is far above available GPU memory |
-| `inference_key_missing` | warning | `env.inference` | `NSS_INFERENCE_KEY` not set; PII classification degraded |
-| `inference_model_blank` | warning | `env.inference` | `NSS_INFERENCE_MODEL` set but empty; the blank value is ignored and the default model id is used |
-| `inference_endpoint_invalid` | error | `env.inference` | `NSS_INFERENCE_ENDPOINT` set but not a valid http(s) URL; classification requests will fail |
+| `inference_key_missing` | warning | `env.inference` | Unused on this branch; `NSS_INFERENCE_KEY` is not consumed |
+| `inference_model_blank` | warning | `env.inference` | Unused on this branch; a blank `NSS_INFERENCE_MODEL` is ignored |
+| `inference_endpoint_invalid` | error | `env.inference` | Unused on this branch; `NSS_INFERENCE_ENDPOINT` is not consumed |
 | `hf_token_missing` | warning | `env.hf_model_availability` | Neither `HF_TOKEN` nor `HUGGING_FACE_HUB_TOKEN` set, and model loading may need online Hugging Face access |
 | `hf_model_not_cached` | warning/error | `env.hf_model_availability` | Hugging Face model is not present in the local cache; severity is error when HF offline mode is enabled |
 | `hf_model_cache_incomplete` | warning/error | `env.hf_model_availability` | Cached Hugging Face model snapshot is missing required config, tokenizer, weights, or shards; severity is error when HF offline mode is enabled |
@@ -543,49 +543,9 @@ check of its own.
 
 ---
 
-## PII and NER
+## PII Replacement
 
-Model downloads and processing timeouts for PII detection.
-
-### GLiNER Download Fails
-
-The PII replacer downloads the GLiNER NER model on first use. If the download
-fails, it raises an exception immediately.
-
-Pre-download the model by running PII replacement once in an environment
-with internet access. To force offline use after the model is cached, set
-`HF_HUB_OFFLINE=1` or pass `--disable-huggingface-remote`.
-
-### Offline Mode Not Taking Effect
-
-Symptom: `HF_HUB_OFFLINE=1` (or `--disable-huggingface-remote`) is set, yet the
-run still attempts a download, or `--enable-huggingface-remote` does not
-re-enable downloads.
-
-Cause: huggingface_hub reads `HF_HUB_OFFLINE` once, at import time, and caches
-it. If the variable is changed after huggingface_hub has been imported in the
-process, the change is ignored.
-
-Fixes:
-
-- CLI: export `HF_HUB_OFFLINE` before launching `safe-synthesizer`, or use
-  `--enable-huggingface-remote` / `--disable-huggingface-remote`. The CLI
-  applies the flag before huggingface_hub loads, so the flag always wins over
-  an inherited environment value.
-- Programmatic / SDK: set `HF_HUB_OFFLINE` before importing
-  `nemo_safe_synthesizer` (or any library that imports huggingface_hub, such as
-  `transformers` or `datasets`). Setting it afterward has no effect for that
-  process.
-
-### NER Processing Timeouts
-
-NER uses an internal `max_runtime_seconds` timeout. If processing a chunk takes
-too long, it is dropped with a warning in the logs.
-
-Check the logs for timeout warnings. The timeout is not currently
-configurable; for large datasets, reduce the amount of text processed per
-chunk (for example, shorten text fields or split them into smaller pieces) and
-optionally reduce CPU parallelism so each worker has more resources.
+PII replacement v3 troubleshooting guidance will be added in a later update.
 
 ---
 

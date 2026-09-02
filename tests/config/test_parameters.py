@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field, ValidationError, model_validator
 from nemo_safe_synthesizer.config.generate import GenerateParameters, StructuredGenerationParameters
 from nemo_safe_synthesizer.config.job import SafeSynthesizerJobConfig
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
-from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig, StepDefinition
+from nemo_safe_synthesizer.config.replace_pii import ReplacePiiConfig
 from nemo_safe_synthesizer.config.training import QuantizationScheme, TrainingHyperparams
 from nemo_safe_synthesizer.configurator.parameter_paths import (
     AmbiguousParameterName,
@@ -22,7 +22,6 @@ from nemo_safe_synthesizer.configurator.parameter_paths import (
     ParameterSchema,
     ResolvedParameterName,
     UnknownParameterName,
-    classify_parameter_annotation,
 )
 from nemo_safe_synthesizer.configurator.parameters import Parameters
 from nemo_safe_synthesizer.errors import ParameterError
@@ -72,9 +71,28 @@ def test_emit_telemetry_from_yaml_uses_env_when_unset(monkeypatch):
     assert c.emit_telemetry is False
 
 
-def test_pii_replacer_default():
-    with pytest.raises(ValidationError):
-        PiiReplacerConfig()  # ty: ignore[missing-argument] -- intentionally testing validation error
+@pytest.mark.parametrize(
+    ("payload", "field"),
+    [
+        ({"globals": {"seed": 42}}, "replace_pii.globals"),
+        ({"steps": []}, "replace_pii.steps"),
+    ],
+)
+def test_replace_pii_v2_fields_raise_removed_error(payload: dict[str, object], field: str):
+    pattern = rf"PII replacement v2 configuration was removed.*{field}"
+    with pytest.raises((ParameterError, ValidationError), match=pattern):
+        SafeSynthesizerParameters.model_validate({"replace_pii": payload})
+    with pytest.raises((ParameterError, ValidationError), match="PII replacement v2 configuration was removed"):
+        SafeSynthesizerParameters.model_validate({"unknown_fields": "ignore", "replace_pii": payload})
+    with pytest.raises((ParameterError, ValidationError), match="PII replacement v2 configuration was removed"):
+        ReplacePiiConfig.model_validate(payload)
+    with pytest.raises(ParameterError, match="PII replacement v2 configuration was removed"):
+        ReplacePiiConfig.from_config_source(payload)
+
+
+def test_replace_pii_unknown_non_v2_field_uses_generic_error():
+    with pytest.raises(ValidationError, match="Unknown configuration field 'replace_pii.foo'"):
+        SafeSynthesizerParameters.model_validate({"replace_pii": {"foo": 1}})
 
 
 def test_quantization_scheme_from_alias_rejects_invalid_legacy_bit_alias() -> None:
@@ -240,12 +258,6 @@ def test_parameter_schema_reports_ambiguous_bare_names_with_candidates():
     }
 
 
-def test_mapping_valued_step_vars_annotation_is_a_leaf():
-    annotation = StepDefinition.model_fields["vars"].annotation
-
-    assert classify_parameter_annotation(annotation) is ParameterFieldKind.LEAF
-
-
 def test_parameters_queries_remain_instance_based_for_disabled_optional_branch():
     params = SafeSynthesizerParameters(privacy=None)
     schema_result = ParameterSchema.from_model(SafeSynthesizerParameters).resolve("privacy.dp_enabled")
@@ -365,18 +377,6 @@ def test_constructor_applies_unknown_field_policy_recursively():
     )
     assert config.unknown_fields == "ignore"
     assert not hasattr(config.training, "epoch")
-
-
-def test_unknown_field_policy_reaches_models_inside_collections():
-    raw = SafeSynthesizerParameters().model_dump()
-    assert isinstance(raw["replace_pii"], dict)
-    raw["replace_pii"]["steps"][0]["unknown"] = True  # type: ignore[index]
-
-    with pytest.raises(ValidationError, match="unknown"):
-        SafeSynthesizerParameters.model_validate(raw)
-
-    raw["unknown_fields"] = "ignore"
-    assert SafeSynthesizerParameters.model_validate(raw).unknown_fields == "ignore"
 
 
 def test_service_job_config_preserves_dynamic_unknown_field_policy():

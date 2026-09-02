@@ -176,7 +176,7 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
             type=str,
             required=False,
             default=None,
-            help="OpenAI-compatible inference endpoint URL for PII column classification. "
+            help="Unused OpenAI-compatible inference endpoint URL (reserved for PII replacement v3). "
             "Can also be set via NSS_INFERENCE_ENDPOINT env var.",
         )
     )
@@ -186,7 +186,7 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
             type=str,
             required=False,
             default=None,
-            help="API key for the inference endpoint used in PII column classification. "
+            help="Unused API key for the inference endpoint (reserved for PII replacement v3). "
             "Can also be set via NSS_INFERENCE_KEY env var.",
         )
     )
@@ -196,7 +196,7 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
             type=str,
             required=False,
             default=None,
-            help="Model ID sent to the inference endpoint for PII column classification. "
+            help="Unused model ID for the inference endpoint (reserved for PII replacement v3). "
             "Can also be set via NSS_INFERENCE_MODEL env var. "
             "[default: nvidia/nemotron-3-ultra-550b-a55b]",
         )
@@ -207,24 +207,14 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
             "huggingface_remote",
             required=False,
             default=None,
-            help="Allow or block Hugging Face remote downloads for both the base model "
-            "and GLiNER. --disable-huggingface-remote forces a fully offline run by "
-            "setting HF_HUB_OFFLINE and TRANSFORMERS_OFFLINE; both must already be "
+            help="Allow or block Hugging Face remote downloads for Hub assets "
+            "(base model, evaluation embeddings, and similar). "
+            "--disable-huggingface-remote blocks Hugging Face asset downloads by "
+            "setting HF_HUB_OFFLINE and TRANSFORMERS_OFFLINE; required assets must already be "
             "cached. Equivalent to setting HF_HUB_OFFLINE in the environment. When "
             "neither flag is given, the run inherits HF_HUB_OFFLINE/TRANSFORMERS_OFFLINE "
             "from the environment (remote downloads enabled when unset). "
             "[default: --enable-huggingface-remote]",
-        )
-    )
-    options.append(
-        click.option(
-            "--cpu-count",
-            type=int,
-            required=False,
-            default=None,
-            help="Number of CPU worker processes used for NER (PII replacement). "
-            "Can also be set via NSS_PII_REPLACER_CPU_COUNT env var. "
-            "[default: max(1, cpu_count - 1)]",
         )
     )
     # Apply each option decorator in reverse order (decorators apply bottom-up)
