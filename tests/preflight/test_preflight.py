@@ -17,6 +17,7 @@ from transformers import PretrainedConfig, PreTrainedTokenizerBase
 
 from nemo_safe_synthesizer.config.data import DataParameters
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
+from nemo_safe_synthesizer.config.replace_pii import LLMConfig
 from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
 from nemo_safe_synthesizer.config.training import TrainingHyperparams
 from nemo_safe_synthesizer.defaults import DEFAULT_MAX_SEQ_LENGTH, PSEUDO_GROUP_COLUMN
@@ -383,7 +384,7 @@ class TestVRAMHeadroomCheck:
 
 @pytest.mark.unit
 class TestInferenceModelCheck:
-    def test_legacy_pii_inference_check_is_inactive(self, default_config):
+    def test_disabled_llm_skips_inference_environment(self, default_config):
         with patch.dict(
             "os.environ",
             {"NSS_INFERENCE_MODEL": "", "NSS_INFERENCE_ENDPOINT": "not-a-url"},
@@ -391,6 +392,33 @@ class TestInferenceModelCheck:
         ):
             issues = InferenceModelCheck().run(make_ctx(config=default_config))
         assert issues == []
+
+    def test_hosted_llm_requires_runtime_key(self, default_config):
+        default_config.replace_pii.llm = LLMConfig()
+
+        with patch.dict("os.environ", {}, clear=True):
+            issues = InferenceModelCheck().run(make_ctx(config=default_config))
+
+        assert any(issue.code == "inference_key_missing" and issue.severity == "error" for issue in issues)
+
+    def test_local_llm_endpoint_can_be_keyless(self, default_config):
+        default_config.replace_pii.llm = LLMConfig(
+            endpoint_url="http://localhost:8000/v1",
+            model_id="local-model",
+        )
+
+        with patch.dict("os.environ", {}, clear=True):
+            issues = InferenceModelCheck().run(make_ctx(config=default_config))
+
+        assert issues == []
+
+    def test_invalid_llm_endpoint_is_an_error(self, default_config):
+        default_config.replace_pii.llm = LLMConfig(endpoint_url="not-a-url", model_id="model")
+
+        with patch.dict("os.environ", {"NSS_INFERENCE_KEY": "key"}, clear=True):
+            issues = InferenceModelCheck().run(make_ctx(config=default_config))
+
+        assert any(issue.code == "inference_endpoint_invalid" and issue.severity == "error" for issue in issues)
 
 
 @pytest.mark.unit
