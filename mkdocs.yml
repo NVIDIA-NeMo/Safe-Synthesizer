@@ -177,6 +177,7 @@ nav:
       - Safe Synthesizer 101: tutorials/safe-synthesizer-101.ipynb
       - Differential Privacy: tutorials/differential-privacy.ipynb
       - Time-Series Financial Transactions: tutorials/time-series-financial-transactions.ipynb
+      - Healthcare Hospital Readmissions: tutorials/healthcare-hospital-readmissions.ipynb
   - User Guide:
       - Getting Started: user-guide/getting-started.md
       - Running Safe Synthesizer: user-guide/running.md

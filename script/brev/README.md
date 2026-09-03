@@ -66,7 +66,7 @@ there. Everything operational is a dotfile, which the browser hides by default.
 
 ```text
 $HOME/
-  tutorials/                    the three tutorial notebooks and their datasets
+  tutorials/                    the four tutorial notebooks and their datasets
   welcome.md                    where to start, rendered on double-click
   SETUP-IN-PROGRESS.md          present only while setup is running or after failure
 
