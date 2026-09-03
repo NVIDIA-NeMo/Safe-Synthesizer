@@ -107,14 +107,14 @@ free-text columns in the resolved plan.
 replace_pii:
   replacement_plan: auto_discovery
   llm:
-    endpoint_url: https://integrate.api.nvidia.com/v1
     model_id: nvidia/nemotron-3-ultra-550b-a55b
     max_workers: 8
 ```
 
-An empty mapping (`llm: {}`) enables the existing NSS inference defaults. A
-local vLLM OpenAI-compatible server can be selected with an endpoint such as
-`http://localhost:8000/v1` and its served model ID.
+An empty mapping (`llm: {}`) enables the existing NSS inference defaults. Set
+the OpenAI-compatible endpoint at runtime through `NSS_INFERENCE_ENDPOINT` or
+the `--inference-endpoint-url` CLI option. For example, a local vLLM server may
+use `NSS_INFERENCE_ENDPOINT=http://localhost:8000/v1` with its served model ID.
 
 Supply the inference API key at runtime through `NSS_INFERENCE_KEY` or the
 `--inference-api-key` CLI option. NSS does not store the key in configuration or

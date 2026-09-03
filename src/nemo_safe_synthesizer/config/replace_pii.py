@@ -546,18 +546,14 @@ class PiiReplacementPlan(Parameters):
 
 
 class LLMConfig(NSSBaseModel):
-    """OpenAI-compatible inference settings shared by PII planning and replacement.
+    """Inference behavior shared by PII planning and replacement.
 
     Presence on ``ReplacePiiConfig.llm`` is itself the enable signal; there is no
-    separate boolean flag.
+    separate boolean flag. The OpenAI-compatible endpoint is supplied at runtime
+    through ``NSS_INFERENCE_ENDPOINT`` or ``--inference-endpoint-url`` rather than
+    persisted in NSS configuration.
     """
 
-    endpoint_url: str | None = Field(
-        default=None,
-        description=(
-            "OpenAI-compatible inference endpoint. When unset, uses NSS_INFERENCE_ENDPOINT or the NSS default endpoint."
-        ),
-    )
     model_id: str | None = Field(
         default=None,
         description=(
@@ -665,7 +661,8 @@ class ReplacePiiConfig(Parameters):
     llm: LLMConfig | None = Field(
         default=None,
         description=(
-            "Optional OpenAI-compatible settings shared by plan enhancement and free-text replacement. "
+            "Optional inference behavior shared by plan enhancement and free-text replacement. "
+            "The endpoint is configured at runtime through NSS_INFERENCE_ENDPOINT or --inference-endpoint-url. "
             "Use an empty mapping to enable NSS inference defaults."
         ),
     )

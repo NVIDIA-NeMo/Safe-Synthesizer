@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.replace_pii import (
     ALLOWED_DEPENDS_ON,
     AUTO_DISCOVERY,
@@ -409,22 +410,24 @@ class TestReplacePiiConfig:
         with _raises("invalid inline replacement plan"):
             ReplacePiiConfig.model_validate({"replacement_plan": {"scope": "galaxy"}})
 
-    def test_llm_mapping_configures_shared_openai_compatible_inference(self) -> None:
+    def test_llm_mapping_configures_shared_inference_behavior(self) -> None:
         config = ReplacePiiConfig.model_validate(
             {
                 "llm": {
-                    "endpoint_url": "http://localhost:8000/v1",
                     "model_id": "local-model",
                 }
             }
         )
 
-        assert config.llm == LLMConfig(
-            endpoint_url="http://localhost:8000/v1",
-            model_id="local-model",
-        )
+        assert config.llm == LLMConfig(model_id="local-model")
         assert config.llm is not None
         assert config.llm.max_workers == 8
+
+    def test_llm_endpoint_is_runtime_only(self) -> None:
+        with _raises("Unknown configuration field 'replace_pii.llm.endpoint_url'"):
+            SafeSynthesizerParameters.model_validate(
+                {"replace_pii": {"llm": {"endpoint_url": "http://localhost:8000/v1"}}}
+            )
 
     def test_empty_llm_mapping_enables_inference_defaults(self) -> None:
         config = ReplacePiiConfig.model_validate({"llm": {}})
