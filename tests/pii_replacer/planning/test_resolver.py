@@ -51,7 +51,8 @@ class RecordingEnhancer(PlanEnhancer):
 
 
 @pytest.fixture
-def patient_df() -> pd.DataFrame:
+def fixture_patient_df() -> pd.DataFrame:
+    """Return grouped patient rows for replacement-plan discovery tests."""
     return pd.DataFrame(
         {
             "patient_id": [1, 1, 2, 2],
@@ -64,12 +65,12 @@ def patient_df() -> pd.DataFrame:
 
 @pytest.mark.unit
 class TestResolvePlan:
-    def test_auto_discovery_uses_empty_heuristic_by_default(self, patient_df: pd.DataFrame) -> None:
-        plan = resolve_plan(patient_df, ReplacePiiConfig(), DataParameters())
+    def test_auto_discovery_uses_empty_heuristic_by_default(self, fixture_patient_df: pd.DataFrame) -> None:
+        plan = resolve_plan(fixture_patient_df, ReplacePiiConfig(), DataParameters())
 
         assert plan == PiiReplacementPlan(scope=PiiReplacementScope.DATAFRAME)
 
-    def test_llm_enhancer_receives_heuristic_baseline(self, patient_df: pd.DataFrame) -> None:
+    def test_llm_enhancer_receives_heuristic_baseline(self, fixture_patient_df: pd.DataFrame) -> None:
         baseline = PiiReplacementPlan(
             columns_to_replace=[PiiColumnPlan(column_name="name", entity_type=EntityType.FULL_NAME)]
         )
@@ -80,7 +81,7 @@ class TestResolvePlan:
         enhancer = RecordingEnhancer(enhanced)
 
         result = resolve_plan(
-            patient_df,
+            fixture_patient_df,
             ReplacePiiConfig(llm=LLMConfig()),
             DataParameters(),
             discoverer=discoverer,
@@ -91,17 +92,17 @@ class TestResolvePlan:
         assert len(discoverer.inputs) == 1
         assert enhancer.calls == [(discoverer.inputs[0], baseline)]
 
-    def test_configured_llm_without_enhancer_fails(self, patient_df: pd.DataFrame) -> None:
+    def test_configured_llm_without_enhancer_fails(self, fixture_patient_df: pd.DataFrame) -> None:
         with pytest.raises(ParameterError, match="no LLM plan enhancer is available"):
             resolve_plan(
-                patient_df,
+                fixture_patient_df,
                 ReplacePiiConfig(llm=LLMConfig()),
                 DataParameters(),
             )
 
     def test_inline_plan_bypasses_discovery_but_retains_llm_for_replacement(
         self,
-        patient_df: pd.DataFrame,
+        fixture_patient_df: pd.DataFrame,
     ) -> None:
         plan = PiiReplacementPlan(columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)])
         discoverer = RecordingDiscoverer()
@@ -109,7 +110,7 @@ class TestResolvePlan:
         config = ReplacePiiConfig(replacement_plan=plan, llm=LLMConfig())
 
         result = resolve_plan(
-            patient_df,
+            fixture_patient_df,
             config,
             DataParameters(),
             discoverer=discoverer,
@@ -121,13 +122,13 @@ class TestResolvePlan:
         assert discoverer.inputs == []
         assert enhancer.calls == []
 
-    def test_plan_file_bypasses_discovery(self, patient_df: pd.DataFrame, tmp_path: Path) -> None:
+    def test_plan_file_bypasses_discovery(self, fixture_patient_df: pd.DataFrame, tmp_path: Path) -> None:
         path = tmp_path / "plan.yaml"
         path.write_text("scope: dataframe\ncolumns_to_replace:\n  - column_name: email\n    entity_type: email\n")
         discoverer = RecordingDiscoverer()
 
         result = resolve_plan(
-            patient_df,
+            fixture_patient_df,
             ReplacePiiConfig(replacement_plan=str(path)),
             DataParameters(),
             discoverer=discoverer,
@@ -136,9 +137,9 @@ class TestResolvePlan:
         assert result.columns_to_replace[0].column_name == "email"
         assert discoverer.inputs == []
 
-    def test_profiles_are_bounded_deterministic_and_mark_structural_grain(
+    def test_profiles_are_bounded_deterministic_and_separate_key_grain_from_protection(
         self,
-        patient_df: pd.DataFrame,
+        fixture_patient_df: pd.DataFrame,
     ) -> None:
         discoverer = RecordingDiscoverer()
         data_config = DataParameters(
@@ -146,9 +147,14 @@ class TestResolvePlan:
             order_training_examples_by="event_index",
         )
 
-        resolve_plan(patient_df, ReplacePiiConfig(), data_config, discoverer=discoverer)
+        resolve_plan(fixture_patient_df, ReplacePiiConfig(), data_config, discoverer=discoverer)
         first_input = discoverer.inputs[0]
-        resolve_plan(patient_df.sample(frac=1, random_state=7), ReplacePiiConfig(), data_config, discoverer=discoverer)
+        resolve_plan(
+            fixture_patient_df.sample(frac=1, random_state=7),
+            ReplacePiiConfig(),
+            data_config,
+            discoverer=discoverer,
+        )
         second_input = discoverer.inputs[1]
 
         first_profiles = {profile.column_name: profile for profile in first_input.column_profiles}
@@ -156,15 +162,17 @@ class TestResolvePlan:
         assert first_input.scope is PiiReplacementScope.GROUP
         assert first_input.protected_columns == frozenset({"event_index"})
         assert first_profiles["patient_id"].grain is ColumnGrain.key
-        assert first_profiles["event_index"].grain is ColumnGrain.key
+        assert first_profiles["patient_id"].protected is False
+        assert first_profiles["event_index"].grain is ColumnGrain.record
+        assert first_profiles["event_index"].protected is True
         assert first_profiles["name"].grain is ColumnGrain.group
         assert first_profiles["name"].samples == second_profiles["name"].samples
 
-    def test_output_path_persists_the_final_plan(self, patient_df: pd.DataFrame, tmp_path: Path) -> None:
+    def test_output_path_persists_the_final_plan(self, fixture_patient_df: pd.DataFrame, tmp_path: Path) -> None:
         path = tmp_path / "pii_replacement_plan.yaml"
 
         plan = resolve_plan(
-            patient_df,
+            fixture_patient_df,
             ReplacePiiConfig(),
             DataParameters(),
             output_path=path,

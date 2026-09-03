@@ -98,7 +98,15 @@ class HeuristicPlanDiscoverer(PlanDiscoverer):
 
 
 def _stable_samples(series: pd.Series) -> tuple[str, ...]:
+    """Pick a bounded set of distinct raw column values for discovery.
+
+    Nulls are removed, values are converted to truncated strings, and duplicate
+    strings are collapsed. Hash ordering assigns each distinct value a stable,
+    content-based priority, so reordering dataframe rows does not change which
+    values are selected.
+    """
     values = {str(value)[:MAX_PROFILE_SAMPLE_LENGTH] for value in series.dropna().tolist()}
+    # Rank distinct values by their content rather than sampling row positions.
     ordered = sorted(values, key=lambda value: hashlib.sha256(value.encode()).digest())
     return tuple(ordered[:MAX_PROFILE_SAMPLES])
 
@@ -131,8 +139,10 @@ def _profile_columns(
         non_null_count = len(non_null)
         unique_count = int(non_null.nunique(dropna=True))
         constancy = _group_constancy(df, column, group_column)
-        if column == group_column or column in structural_columns:
+        if column == group_column:
             grain = ColumnGrain.key
+        # A threshold below 1 tolerates a small amount of dirty data instead of
+        # treating an otherwise group-constant column as record-level.
         elif constancy is not None and constancy >= GROUP_GRAIN_THRESHOLD:
             grain = ColumnGrain.group
         else:

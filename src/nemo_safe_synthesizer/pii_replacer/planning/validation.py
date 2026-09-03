@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterator
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pandas as pd
 
@@ -125,7 +125,9 @@ def _name_parts_literal_regex(literal: str, entity_type: EntityType) -> str:
 
 def _strftime_pattern_error(pattern: str) -> str | None:
     try:
-        rendered = datetime(2001, 2, 3, 4, 5, 6).strftime(pattern)
+        # Use an aware probe so timezone directives such as ``%z`` and ``%Z``
+        # render values that can be parsed back with the same format.
+        rendered = datetime(2001, 2, 3, 4, 5, 6, tzinfo=timezone.utc).strftime(pattern)
         datetime.strptime(rendered, pattern)
     except ValueError as exc:
         return str(exc)
@@ -204,6 +206,12 @@ def _iter_reference_issues(
 
 
 def _cycle_columns(plan: PiiReplacementPlan) -> list[str]:
+    """Return replacement columns involved in a dependency cycle.
+
+    The current allowed dependency matrix is acyclic, so normally validated
+    plans cannot contain a cycle. Keep this dataframe-aware gate as a defensive
+    check in case that matrix evolves or model validation is bypassed.
+    """
     targets = {spec.column_name for spec in plan.columns_to_replace}
     adjacency: dict[str, set[str]] = {column: set() for column in targets}
     indegree = dict.fromkeys(targets, 0)

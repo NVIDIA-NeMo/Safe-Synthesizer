@@ -17,7 +17,8 @@ from nemo_safe_synthesizer.pii_replacer.planning import validate_plan
 
 
 @pytest.fixture
-def pii_df() -> pd.DataFrame:
+def fixture_pii_df() -> pd.DataFrame:
+    """Return representative structured PII columns for plan validation."""
     return pd.DataFrame(
         {
             "patient_id": [1, 2],
@@ -31,7 +32,7 @@ def pii_df() -> pd.DataFrame:
 
 @pytest.mark.unit
 class TestValidatePlan:
-    def test_accepts_valid_dependencies_and_patterns(self, pii_df: pd.DataFrame) -> None:
+    def test_accepts_valid_dependencies_and_patterns(self, fixture_pii_df: pd.DataFrame) -> None:
         plan = PiiReplacementPlan(
             columns_to_replace=[
                 PiiColumnPlan(
@@ -58,7 +59,21 @@ class TestValidatePlan:
             ]
         )
 
-        validate_plan(pii_df, plan, data_config=DataParameters())
+        validate_plan(fixture_pii_df, plan, data_config=DataParameters())
+
+    def test_accepts_timezone_bearing_strftime_pattern(self) -> None:
+        dataframe = pd.DataFrame({"timestamp": ["2001-02-03+0000", "1999-12-31-0500"]})
+        plan = PiiReplacementPlan(
+            columns_to_replace=[
+                PiiColumnPlan(
+                    column_name="timestamp",
+                    entity_type=EntityType.DATE_OF_BIRTH,
+                    pattern="%Y-%m-%d%z",
+                )
+            ]
+        )
+
+        validate_plan(dataframe, plan, data_config=DataParameters())
 
     def test_accepts_all_documented_character_mask_classes(self) -> None:
         dataframe = pd.DataFrame({"identifier": ["A7-a8", "Z0-z9"]})
@@ -88,7 +103,7 @@ class TestValidatePlan:
 
         validate_plan(dataframe, plan, data_config=DataParameters())
 
-    def test_reports_missing_replacement_and_dependency_columns(self, pii_df: pd.DataFrame) -> None:
+    def test_reports_missing_replacement_and_dependency_columns(self, fixture_pii_df: pd.DataFrame) -> None:
         plan = PiiReplacementPlan(
             columns_to_replace=[
                 PiiColumnPlan(column_name="missing", entity_type=EntityType.EMAIL),
@@ -104,22 +119,22 @@ class TestValidatePlan:
             ParameterError,
             match="(?s)replacement column 'missing'.*depends_on column 'gender'",
         ):
-            validate_plan(pii_df, plan, data_config=DataParameters())
+            validate_plan(fixture_pii_df, plan, data_config=DataParameters())
 
-    def test_allows_replacing_the_group_column(self, pii_df: pd.DataFrame) -> None:
+    def test_allows_replacing_the_group_column(self, fixture_pii_df: pd.DataFrame) -> None:
         plan = PiiReplacementPlan(
             scope=PiiReplacementScope.GROUP,
             columns_to_replace=[PiiColumnPlan(column_name="patient_id", entity_type=EntityType.UNIQUE_IDENTIFIER)],
         )
 
         validate_plan(
-            pii_df,
+            fixture_pii_df,
             plan,
             data_config=DataParameters(group_training_examples_by="patient_id"),
         )
 
-    def test_rejects_replacing_an_ordering_column(self, pii_df: pd.DataFrame) -> None:
-        dataframe = pii_df.assign(event_index=[0, 0])
+    def test_rejects_replacing_an_ordering_column(self, fixture_pii_df: pd.DataFrame) -> None:
+        dataframe = fixture_pii_df.assign(event_index=[0, 0])
         plan = PiiReplacementPlan(
             scope=PiiReplacementScope.GROUP,
             columns_to_replace=[PiiColumnPlan(column_name="event_index", entity_type=EntityType.UNIQUE_IDENTIFIER)],
@@ -135,20 +150,20 @@ class TestValidatePlan:
                 ),
             )
 
-    def test_group_scope_requires_a_configured_existing_group_column(self, pii_df: pd.DataFrame) -> None:
+    def test_group_scope_requires_a_configured_existing_group_column(self, fixture_pii_df: pd.DataFrame) -> None:
         plan = PiiReplacementPlan(scope=PiiReplacementScope.GROUP)
 
         with pytest.raises(ParameterError, match="group_training_examples_by is not configured"):
-            validate_plan(pii_df, plan, data_config=DataParameters())
+            validate_plan(fixture_pii_df, plan, data_config=DataParameters())
 
         with pytest.raises(ParameterError, match="group column 'missing_group' is not present"):
             validate_plan(
-                pii_df,
+                fixture_pii_df,
                 plan,
                 data_config=DataParameters(group_training_examples_by="missing_group"),
             )
 
-    def test_rejects_self_dependency(self, pii_df: pd.DataFrame) -> None:
+    def test_rejects_self_dependency(self, fixture_pii_df: pd.DataFrame) -> None:
         plan = PiiReplacementPlan.model_construct(
             scope=PiiReplacementScope.DATAFRAME,
             columns_to_replace=[
@@ -164,9 +179,9 @@ class TestValidatePlan:
         )
 
         with pytest.raises(ParameterError, match="cannot depend on itself"):
-            validate_plan(pii_df, plan, data_config=DataParameters())
+            validate_plan(fixture_pii_df, plan, data_config=DataParameters())
 
-    def test_rejects_dependency_cycles(self, pii_df: pd.DataFrame) -> None:
+    def test_rejects_dependency_cycles(self, fixture_pii_df: pd.DataFrame) -> None:
         plan = PiiReplacementPlan.model_construct(
             scope=PiiReplacementScope.DATAFRAME,
             columns_to_replace=[
@@ -188,9 +203,9 @@ class TestValidatePlan:
         )
 
         with pytest.raises(ParameterError, match="dependencies contain a cycle"):
-            validate_plan(pii_df, plan, data_config=DataParameters())
+            validate_plan(fixture_pii_df, plan, data_config=DataParameters())
 
-    def test_rejects_pattern_below_coverage_threshold(self, pii_df: pd.DataFrame) -> None:
+    def test_rejects_pattern_below_coverage_threshold(self, fixture_pii_df: pd.DataFrame) -> None:
         plan = PiiReplacementPlan(
             columns_to_replace=[
                 PiiColumnPlan(
@@ -202,4 +217,4 @@ class TestValidatePlan:
         )
 
         with pytest.raises(ParameterError, match="covers 0.0%.*at least 85%"):
-            validate_plan(pii_df, plan, data_config=DataParameters())
+            validate_plan(fixture_pii_df, plan, data_config=DataParameters())
