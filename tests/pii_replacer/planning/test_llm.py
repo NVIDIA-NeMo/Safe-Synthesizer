@@ -14,6 +14,7 @@ import pytest
 
 from nemo_safe_synthesizer.config.data import DataParameters
 from nemo_safe_synthesizer.config.replace_pii import (
+    ConditioningColumn,
     EntityType,
     LLMConfig,
     PiiColumnPlan,
@@ -243,9 +244,10 @@ class TestLLMPlanEnhancer:
 
         classification_messages, classification_model = transport.calls[0]
         classification_payload = json.loads(classification_messages[1]["content"])
-        assert classification_payload["heuristic_baseline"]["columns_to_replace"] == [
+        assert classification_payload["heuristic_classifications"] == [
             {"column_name": "company", "entity_type": "full_name", "pattern": None}
         ]
+        assert "heuristic_baseline" not in classification_payload
         assert "disposition" not in json.dumps(classification_model.model_json_schema())
 
         dependency_messages, dependency_model = transport.calls[1]
@@ -258,10 +260,52 @@ class TestLLMPlanEnhancer:
                     "source_entity_type": "organization",
                     "target_column": "email",
                     "target_entity_type": "email",
+                    "selected_by_heuristic": False,
                 }
             ]
         }
         assert set(dependency_model.model_json_schema()["properties"]) == {"selected_dependency_ids"}
+
+    def test_dependency_candidates_preserve_heuristic_selections_as_prior_evidence(self) -> None:
+        dataframe = pd.DataFrame(
+            {
+                "company": ["Analytical Engines", "US Navy"],
+                "email": ["ada@example.com", "grace@example.com"],
+            }
+        )
+        baseline = PiiReplacementPlan(
+            columns_to_replace=[
+                PiiColumnPlan(
+                    column_name="email",
+                    entity_type=EntityType.EMAIL,
+                    depends_on=[
+                        ConditioningColumn(
+                            column_name="company",
+                            entity_type=EntityType.ORGANIZATION,
+                        )
+                    ],
+                )
+            ]
+        )
+        enhancer, transport = _enhancer(
+            [
+                _classifications({"company": "organization", "email": "email"}),
+                _dependency_selection(),
+            ]
+        )
+
+        resolve_plan(
+            dataframe,
+            ReplacePiiConfig(llm=_local_config()),
+            DataParameters(),
+            discoverer=FixedDiscoverer(baseline),
+            enhancer=enhancer,
+        )
+
+        dependency_messages, _ = transport.calls[1]
+        dependency_payload = json.loads(dependency_messages[1]["content"])
+        assert dependency_payload["dependency_candidates"][0]["selected_by_heuristic"] is True
+        assert "fallible prior evidence" in dependency_messages[0]["content"]
 
     def test_classification_prompt_includes_exact_supported_pattern_grammars(self) -> None:
         dataframe = pd.DataFrame(
@@ -330,6 +374,7 @@ class TestLLMPlanEnhancer:
                 "source_entity_type": "gender",
                 "target_column": "first_name",
                 "target_entity_type": "first_name",
+                "selected_by_heuristic": False,
             }
         ]
 

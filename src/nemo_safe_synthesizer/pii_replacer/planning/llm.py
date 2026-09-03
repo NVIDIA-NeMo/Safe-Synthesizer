@@ -281,22 +281,28 @@ def _entity_catalog() -> list[dict[str, object]]:
     ]
 
 
-def _baseline_payload(
+def _heuristic_classifications_payload(
     baseline: PiiReplacementPlan,
     batch: Sequence[Mapping[str, object]],
-) -> dict[str, object]:
+) -> list[dict[str, object]]:
     submitted = {str(profile["column_name"]) for profile in batch}
-    return {
-        "columns_to_replace": [
-            {
-                "column_name": spec.column_name,
-                "entity_type": spec.entity_type.value,
-                "pattern": spec.pattern,
-            }
-            for spec in baseline.columns_to_replace
-            if spec.column_name in submitted
-        ]
-    }
+    return [
+        {
+            "column_name": spec.column_name,
+            "entity_type": spec.entity_type.value,
+            "pattern": spec.pattern,
+        }
+        for spec in baseline.columns_to_replace
+        if spec.column_name in submitted
+    ]
+
+
+def _heuristic_dependency_edges(baseline: PiiReplacementPlan) -> frozenset[tuple[str, str]]:
+    return frozenset(
+        (spec.column_name, dependency.column_name)
+        for spec in baseline.columns_to_replace
+        for dependency in spec.depends_on
+    )
 
 
 def _validation_feedback(exc: Exception) -> str:
@@ -324,14 +330,15 @@ def _classification_messages(
         "emit a pattern only when the observed values have a consistent format worth preserving; do not emit a "
         "redundant pattern that adds no useful formatting information beyond the entity type. A non-null pattern must "
         "follow exactly the grammar named by the entity's pattern_syntax and describe the complete cell value. "
-        "Patterns are not regular expressions. Treat heuristic_baseline as fallible prior evidence. Do not omit, "
-        "duplicate, or invent columns."
+        "Patterns are not regular expressions. heuristic_classifications is a sparse projection containing only "
+        "columns that the heuristic baseline selected for replacement; treat it as fallible prior evidence, not an "
+        "ignore decision for absent columns. Do not omit, duplicate, or invent columns."
     )
     user = _compact_json(
         {
             "entity_catalog": _entity_catalog(),
             "pattern_grammars": pattern_grammar_catalog(),
-            "heuristic_baseline": _baseline_payload(baseline, batch),
+            "heuristic_classifications": _heuristic_classifications_payload(baseline, batch),
             "column_profiles": batch,
         }
     )
@@ -342,29 +349,46 @@ def _dependency_candidate_id(index: int) -> str:
     return f"dependency_{index}"
 
 
-def _dependency_candidate_payload(index: int, candidate: DependencyCandidate) -> dict[str, str]:
+def _dependency_candidate_payload(
+    index: int,
+    candidate: DependencyCandidate,
+    *,
+    selected_by_heuristic: bool,
+) -> dict[str, str | bool]:
     return {
         "id": _dependency_candidate_id(index),
         "target_column": candidate.target_column,
         "target_entity_type": candidate.target_entity_type.value,
         "source_column": candidate.source_column,
         "source_entity_type": candidate.source_entity_type.value,
+        "selected_by_heuristic": selected_by_heuristic,
     }
 
 
-def _dependency_selection_messages(candidates: Sequence[DependencyCandidate]) -> list[dict[str, str]]:
+def _dependency_selection_messages(
+    candidates: Sequence[DependencyCandidate],
+    baseline: PiiReplacementPlan,
+) -> list[dict[str, str]]:
     system = (
         "Select the contextually useful replacement dependencies from the submitted candidates. A selected dependency "
         "means that the target column's replacement should be conditioned on the source column. Every submitted "
         "candidate is permitted by the entity catalog, but permission alone does not make a dependency useful. Select "
         "a candidate only when the source column provides meaningful semantic context for generating the target "
-        "column. Return only IDs from dependency_candidates. Do not invent IDs, replacement columns, entity types, "
-        "patterns, or dependency relationships. Do not select redundant or conflicting dependencies."
+        "column. selected_by_heuristic indicates that the heuristic baseline chose the same target/source edge; treat "
+        "it as fallible prior evidence, not a requirement. Return only IDs from dependency_candidates. Do not invent "
+        "IDs, replacement columns, entity types, patterns, or dependency relationships. Do not select redundant or "
+        "conflicting dependencies."
     )
+    heuristic_edges = _heuristic_dependency_edges(baseline)
     user = _compact_json(
         {
             "dependency_candidates": [
-                _dependency_candidate_payload(index, candidate) for index, candidate in enumerate(candidates)
+                _dependency_candidate_payload(
+                    index,
+                    candidate,
+                    selected_by_heuristic=(candidate.target_column, candidate.source_column) in heuristic_edges,
+                )
+                for index, candidate in enumerate(candidates)
             ]
         }
     )
@@ -446,7 +470,7 @@ class LLMPlanEnhancer(PlanEnhancer):
         )
         candidates = derive_dependency_candidates(plan, classifications)
         if candidates:
-            plan = self._select_dependencies(plan, candidates)
+            plan = self._select_dependencies(plan, candidates, baseline)
         return self._repair_invalid_patterns(discovery_input, plan)
 
     def _classify_columns(
@@ -491,6 +515,7 @@ class LLMPlanEnhancer(PlanEnhancer):
         self,
         plan: PiiReplacementPlan,
         candidates: Sequence[DependencyCandidate],
+        baseline: PiiReplacementPlan,
     ) -> PiiReplacementPlan:
         selected_plan: PiiReplacementPlan | None = None
 
@@ -501,7 +526,7 @@ class LLMPlanEnhancer(PlanEnhancer):
 
         self._request_structured(
             purpose="PII dependency selection",
-            messages=_dependency_selection_messages(candidates),
+            messages=_dependency_selection_messages(candidates, baseline),
             response_model=_DependencySelectionResponse,
             validate=validate,
         )
