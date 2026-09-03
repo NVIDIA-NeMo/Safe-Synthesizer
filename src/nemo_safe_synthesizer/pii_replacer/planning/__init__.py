@@ -15,7 +15,6 @@ from .assembly import (
 from .io import load_plan, save_plan
 from .patterns import pattern_grammar_catalog
 from .resolver import (
-    ColumnGrain,
     ColumnProfile,
     HeuristicPlanDiscoverer,
     PlanDiscoverer,
@@ -27,7 +26,6 @@ from .validation import protected_columns, validate_plan
 
 __all__ = [
     "ColumnClassification",
-    "ColumnGrain",
     "ColumnProfile",
     "DependencyCandidate",
     "HeuristicPlanDiscoverer",

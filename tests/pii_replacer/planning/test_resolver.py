@@ -17,7 +17,6 @@ from nemo_safe_synthesizer.config.replace_pii import (
 )
 from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.pii_replacer.planning import (
-    ColumnGrain,
     PlanDiscoverer,
     PlanDiscoveryInput,
     PlanEnhancer,
@@ -137,7 +136,7 @@ class TestResolvePlan:
         assert result.columns_to_replace[0].column_name == "email"
         assert discoverer.inputs == []
 
-    def test_profiles_are_bounded_deterministic_and_separate_key_grain_from_protection(
+    def test_profiles_are_bounded_deterministic_and_keep_group_metadata_separate(
         self,
         fixture_patient_df: pd.DataFrame,
     ) -> None:
@@ -160,12 +159,8 @@ class TestResolvePlan:
         first_profiles = {profile.column_name: profile for profile in first_input.column_profiles}
         second_profiles = {profile.column_name: profile for profile in second_input.column_profiles}
         assert first_input.scope is PiiReplacementScope.GROUP
+        assert first_input.group_column == "patient_id"
         assert first_input.protected_columns == frozenset({"event_index"})
-        assert first_profiles["patient_id"].grain is ColumnGrain.key
-        assert first_profiles["patient_id"].protected is False
-        assert first_profiles["event_index"].grain is ColumnGrain.record
-        assert first_profiles["event_index"].protected is True
-        assert first_profiles["name"].grain is ColumnGrain.group
         assert first_profiles["name"].samples == second_profiles["name"].samples
 
     def test_output_path_persists_the_final_plan(self, fixture_patient_df: pd.DataFrame, tmp_path: Path) -> None:

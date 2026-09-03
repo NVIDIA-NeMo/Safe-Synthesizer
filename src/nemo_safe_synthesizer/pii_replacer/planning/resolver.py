@@ -8,7 +8,6 @@ from __future__ import annotations
 import hashlib
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from enum import StrEnum
 from pathlib import Path
 
 import pandas as pd
@@ -21,7 +20,6 @@ from .io import load_plan, save_plan
 from .validation import protected_columns, validate_plan
 
 __all__ = [
-    "ColumnGrain",
     "ColumnProfile",
     "HeuristicPlanDiscoverer",
     "PlanDiscoverer",
@@ -32,29 +30,17 @@ __all__ = [
 
 MAX_PROFILE_SAMPLES = 8
 MAX_PROFILE_SAMPLE_LENGTH = 128
-GROUP_GRAIN_THRESHOLD = 0.95
-
-
-class ColumnGrain(StrEnum):
-    """Observed structural grain of a dataframe column."""
-
-    key = "key"
-    group = "group"
-    record = "record"
 
 
 @dataclass(frozen=True, slots=True)
 class ColumnProfile:
-    """Bounded evidence about one column, shared by plan discoverers."""
+    """Bounded descriptive evidence about one column for plan discovery."""
 
     column_name: str
     dtype: str
     non_null_count: int
     unique_count: int
     unique_ratio: float
-    group_constancy: float | None
-    grain: ColumnGrain
-    protected: bool
     samples: tuple[str, ...]
 
 
@@ -111,42 +97,12 @@ def _stable_samples(series: pd.Series) -> tuple[str, ...]:
     return tuple(ordered[:MAX_PROFILE_SAMPLES])
 
 
-def _group_constancy(df: pd.DataFrame, column: str, group_column: str | None) -> float | None:
-    if group_column is None or group_column not in df.columns or column == group_column:
-        return None
-
-    evidence = pd.DataFrame(
-        {
-            "__group": df[group_column].astype("string"),
-            "__value": df[column].astype("string"),
-        }
-    ).dropna(subset=["__group"])
-    if evidence.empty:
-        return None
-    unique_per_group = evidence.groupby("__group", dropna=False)["__value"].nunique(dropna=True)
-    return float((unique_per_group <= 1).mean())
-
-
-def _profile_columns(
-    df: pd.DataFrame,
-    *,
-    group_column: str | None,
-    structural_columns: frozenset[str],
-) -> tuple[ColumnProfile, ...]:
+def _profile_columns(df: pd.DataFrame) -> tuple[ColumnProfile, ...]:
     profiles: list[ColumnProfile] = []
     for column in df.columns:
         non_null = df[column].dropna().astype(str)
         non_null_count = len(non_null)
         unique_count = int(non_null.nunique(dropna=True))
-        constancy = _group_constancy(df, column, group_column)
-        if column == group_column:
-            grain = ColumnGrain.key
-        # A threshold below 1 tolerates a small amount of dirty data instead of
-        # treating an otherwise group-constant column as record-level.
-        elif constancy is not None and constancy >= GROUP_GRAIN_THRESHOLD:
-            grain = ColumnGrain.group
-        else:
-            grain = ColumnGrain.record
         profiles.append(
             ColumnProfile(
                 column_name=column,
@@ -154,9 +110,6 @@ def _profile_columns(
                 non_null_count=non_null_count,
                 unique_count=unique_count,
                 unique_ratio=unique_count / non_null_count if non_null_count else 0.0,
-                group_constancy=constancy,
-                grain=grain,
-                protected=column in structural_columns,
                 samples=_stable_samples(df[column]),
             )
         )
@@ -176,11 +129,7 @@ def _prepare_discovery_input(
         scope=scope,
         group_column=group_column,
         protected_columns=structural_columns,
-        column_profiles=_profile_columns(
-            df,
-            group_column=group_column,
-            structural_columns=structural_columns,
-        ),
+        column_profiles=_profile_columns(df),
     )
 
 
