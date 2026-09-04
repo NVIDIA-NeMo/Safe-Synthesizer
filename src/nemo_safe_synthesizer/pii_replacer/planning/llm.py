@@ -130,15 +130,15 @@ def resolve_inference_settings(
     api_key: str | None = None,
     environ: Mapping[str, str] | None = None,
 ) -> InferenceSettings:
-    """Resolve CLI overrides, config, environment, and NSS defaults in order.
+    """Resolve runtime overrides, persisted model settings, environment, and defaults.
 
-    The API key is deliberately absent from persisted configuration. It is
-    accepted only as a runtime override or from ``NSS_INFERENCE_KEY``.
+    The endpoint and API key are deliberately absent from persisted
+    configuration. They are accepted only as runtime overrides or through the
+    corresponding ``NSS_INFERENCE_*`` environment variables.
     """
     runtime_env = os.environ if environ is None else environ
     resolved_endpoint = (
         _nonblank(endpoint_url)
-        or _nonblank(config.endpoint_url)
         or _nonblank(runtime_env.get("NSS_INFERENCE_ENDPOINT"))
         or DEFAULT_NSS_INFERENCE_ENDPOINT
     )
@@ -234,9 +234,6 @@ def _profile_payload(profile: ColumnProfile) -> dict[str, object]:
         "non_null_count": profile.non_null_count,
         "unique_count": profile.unique_count,
         "unique_ratio": profile.unique_ratio,
-        "group_constancy": profile.group_constancy,
-        "grain": profile.grain.value,
-        "protected": profile.protected,
         "samples": list(profile.samples),
     }
 
@@ -317,6 +314,7 @@ def _validation_feedback(exc: Exception) -> str:
 
 
 def _classification_messages(
+    discovery_input: PlanDiscoveryInput,
     batch: Sequence[Mapping[str, object]],
     baseline: PiiReplacementPlan,
 ) -> list[dict[str, str]]:
@@ -326,7 +324,10 @@ def _classification_messages(
         "in the same order. entity_type must be one of the values in entity_catalog, or null when no catalog entity "
         "accurately describes the column. Classify semantic meaning only. Do not decide whether a column should be "
         "replaced, used as a conditioner, or ignored; NSS derives those roles deterministically. pattern must be null "
-        "when entity_type is null, the selected entity has no pattern_syntax, or the column is protected. Otherwise, "
+        "when entity_type is null, the selected entity has no pattern_syntax, or the column is listed in "
+        "discovery_context.protected_columns. Protected columns must still receive a semantic classification, but NSS "
+        "will not replace them. The grouping column is not automatically protected and must still be classified. "
+        "Otherwise, "
         "emit a pattern only when the observed values have a consistent format worth preserving; do not emit a "
         "redundant pattern that adds no useful formatting information beyond the entity type. A non-null pattern must "
         "follow exactly the grammar named by the entity's pattern_syntax and describe the complete cell value. "
@@ -336,6 +337,11 @@ def _classification_messages(
     )
     user = _compact_json(
         {
+            "discovery_context": {
+                "scope": discovery_input.scope.value,
+                "group_column": discovery_input.group_column,
+                "protected_columns": sorted(discovery_input.protected_columns),
+            },
             "entity_catalog": _entity_catalog(),
             "pattern_grammars": pattern_grammar_catalog(),
             "heuristic_classifications": _heuristic_classifications_payload(baseline, batch),
@@ -462,7 +468,7 @@ class LLMPlanEnhancer(PlanEnhancer):
         baseline: PiiReplacementPlan,
     ) -> PiiReplacementPlan:
         """Return a semantically classified, deterministically assembled plan."""
-        classifications = self._classify_columns(discovery_input.column_profiles, baseline)
+        classifications = self._classify_columns(discovery_input, baseline)
         plan = plan_from_classifications(
             discovery_input.scope,
             classifications,
@@ -475,16 +481,16 @@ class LLMPlanEnhancer(PlanEnhancer):
 
     def _classify_columns(
         self,
-        profiles: Sequence[ColumnProfile],
+        discovery_input: PlanDiscoveryInput,
         baseline: PiiReplacementPlan,
     ) -> list[ColumnClassification]:
-        batches = _profile_batches(profiles)
+        batches = _profile_batches(discovery_input.column_profiles)
         if not batches:
             return []
 
         def classify(batch: list[dict[str, object]]) -> list[ColumnClassification]:
             expected = [str(profile["column_name"]) for profile in batch]
-            protected = {str(profile["column_name"]) for profile in batch if bool(profile["protected"])}
+            protected = discovery_input.protected_columns.intersection(expected)
 
             def validate(response: _ClassificationResponse) -> _ClassificationResponse:
                 actual = [classification.column_name for classification in response.classifications]
@@ -498,7 +504,7 @@ class LLMPlanEnhancer(PlanEnhancer):
 
             response = self._request_structured(
                 purpose="PII column classification",
-                messages=_classification_messages(batch, baseline),
+                messages=_classification_messages(discovery_input, batch, baseline),
                 response_model=_ClassificationResponse,
                 validate=validate,
             )
