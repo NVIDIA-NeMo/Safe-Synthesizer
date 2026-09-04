@@ -15,7 +15,6 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiReplacementScope,
     ReplacePiiConfig,
 )
-from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.pii_replacer.planning import (
     PlanDiscoverer,
     PlanDiscoveryInput,
@@ -91,13 +90,28 @@ class TestResolvePlan:
         assert len(discoverer.inputs) == 1
         assert enhancer.calls == [(discoverer.inputs[0], baseline)]
 
-    def test_configured_llm_without_enhancer_fails(self, fixture_patient_df: pd.DataFrame) -> None:
-        with pytest.raises(ParameterError, match="no LLM plan enhancer is available"):
-            resolve_plan(
-                fixture_patient_df,
-                ReplacePiiConfig(llm=LLMConfig()),
-                DataParameters(),
-            )
+    def test_configured_llm_constructs_default_enhancer(
+        self,
+        fixture_patient_df: pd.DataFrame,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        expected = PiiReplacementPlan(
+            columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
+        )
+        enhancer = RecordingEnhancer(expected)
+        monkeypatch.setattr(
+            "nemo_safe_synthesizer.pii_replacer.planning.llm.LLMPlanEnhancer",
+            lambda config: enhancer,
+        )
+
+        result = resolve_plan(
+            fixture_patient_df,
+            ReplacePiiConfig(llm=LLMConfig()),
+            DataParameters(),
+        )
+
+        assert result is expected
+        assert len(enhancer.calls) == 1
 
     def test_inline_plan_bypasses_discovery_but_retains_llm_for_replacement(
         self,

@@ -45,9 +45,9 @@ Grouped by the `Category` column -- `nss`-native settings first, then
 | `NSS_LOG_COLOR` | nss | `--log-color` / `--no-log-color` | CLI / observability | auto (TTY) | Colorize console output | [Running -- Log Format](running.md#log-format) |
 | `NSS_LOG_LEVEL` | nss | `--verbose` (0–2) | observability | `INFO` | Log level (`DEBUG`, `DEBUG_DEPENDENCIES`, etc.) | Set via verbosity, not a direct CLI flag |
 | `NSS_DATASET_REGISTRY` | nss | `--dataset-registry` | CLI | -- | Dataset registry YAML path or URL | [Running -- Dataset Registry](running.md#dataset-registry) |
-| `NSS_INFERENCE_ENDPOINT` | nss | `--inference-endpoint-url` | CLI | NVIDIA integrate URL | Unused until PII replacement v3 | [PII appendix](#pii-replacement) |
-| `NSS_INFERENCE_KEY` | nss | `--inference-api-key` | CLI | -- | Unused until PII replacement v3 | [PII appendix](#pii-replacement) |
-| `NSS_INFERENCE_MODEL` | nss | `--inference-model-id` | CLI | `nvidia/nemotron-3-ultra-550b-a55b` | Unused until PII replacement v3 | [PII appendix](#pii-replacement) |
+| `NSS_INFERENCE_ENDPOINT` | nss | `--inference-endpoint-url` | PII planning | NVIDIA integrate URL | OpenAI-compatible PII inference endpoint | [PII appendix](#pii-replacement) |
+| `NSS_INFERENCE_KEY` | nss | `--inference-api-key` | PII planning | -- | Runtime-only inference credential; required by the default hosted endpoint | [PII appendix](#pii-replacement) |
+| `NSS_INFERENCE_MODEL` | nss | `--inference-model-id` | PII planning | `nvidia/nemotron-3-ultra-550b-a55b` | Model ID served by the PII inference endpoint | [PII appendix](#pii-replacement) |
 | `NSS_WANDB_MODE` | nss | `--wandb-mode` | WandB | `disabled` | WandB run mode | Alias for `WANDB_MODE` |
 | `NSS_WANDB_PROJECT` | nss | `--wandb-project` | WandB | -- | WandB project name | Alias for `WANDB_PROJECT` |
 | `NSS_WANDB_UPLOAD_EVALUATION_REPORT` | nss | `--wandb-upload-evaluation-report` / `--no-wandb-upload-evaluation-report` | WandB | `true` | Upload final evaluation HTML and artifact | Set to `false` to skip HTML and artifact publishing; summary metrics and the scorecard remain enabled |
@@ -167,7 +167,25 @@ for the full pre-cache checklist.
 
 ## PII Replacement
 
-PII replacement v3 environment guidance will be added in a later update.
+Adding an `llm` mapping under `replace_pii` enables LLM-assisted plan
+enhancement. The inference endpoint and credential are runtime-only settings:
+
+```bash
+export NSS_INFERENCE_ENDPOINT=http://localhost:8000/v1
+export NSS_INFERENCE_MODEL=gpt-oss-120b
+```
+
+Set `NSS_INFERENCE_KEY` when the endpoint requires authentication. The default
+hosted NVIDIA endpoint always requires it; local OpenAI-compatible endpoints
+may be keyless. The endpoint and key are intentionally rejected in YAML. The
+model ID may instead be persisted as `replace_pii.llm.model_id`.
+
+The equivalent CLI options are `--inference-endpoint-url`,
+`--inference-model-id`, and `--inference-api-key`, which take precedence over
+environment or persisted model settings.
+
+Plan enhancement sends bounded raw cell samples to the configured endpoint.
+Only enable it when that endpoint is approved to receive the input data.
 
 ---
 

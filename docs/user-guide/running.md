@@ -222,9 +222,9 @@ optional.
 | `--wandb-project` | `NSS_WANDB_PROJECT` | -- | WandB project name |
 | `--wandb-upload-evaluation-report` / `--no-wandb-upload-evaluation-report` | `NSS_WANDB_UPLOAD_EVALUATION_REPORT` | `true` | Control evaluation HTML and artifact publishing |
 | `--dataset-registry` | `NSS_DATASET_REGISTRY` | -- | Dataset registry YAML path/URL |
-| `--inference-endpoint-url` | `NSS_INFERENCE_ENDPOINT` | NVIDIA integrate URL | OpenAI-compatible inference endpoint (unused until PII replacement v3) |
-| `--inference-api-key` | `NSS_INFERENCE_KEY` | -- | API key for the inference endpoint (unused until PII replacement v3) |
-| `--inference-model-id` | `NSS_INFERENCE_MODEL` | `nvidia/nemotron-3-ultra-550b-a55b` | Model ID sent to the inference endpoint (unused until PII replacement v3) |
+| `--inference-endpoint-url` | `NSS_INFERENCE_ENDPOINT` | NVIDIA integrate URL | OpenAI-compatible endpoint for PII plan enhancement |
+| `--inference-api-key` | `NSS_INFERENCE_KEY` | -- | Runtime-only API key for the PII inference endpoint |
+| `--inference-model-id` | `NSS_INFERENCE_MODEL` | `nvidia/nemotron-3-ultra-550b-a55b` | Model ID sent to the PII inference endpoint |
 | `-v` / `-vv` | -- | -- | Verbose logging (`-v` debug, `-vv` debug + dependencies) |
 
 #### Synthesis Parameter Overrides
@@ -327,7 +327,7 @@ execute in order (`config` → `dataframe` → `metadata` → `advisory`).
 | Check name | Stage | What it validates |
 |-------|-------|-------------------|
 | `gpu.cuda` | config | PyTorch is importable and a CUDA GPU is visible |
-| `env.inference` | config | Unused on this branch. Placeholder for a future PII inference check (`NSS_INFERENCE_KEY`, `NSS_INFERENCE_MODEL`, `NSS_INFERENCE_ENDPOINT`) |
+| `env.inference` | config | Validates the endpoint and hosted authentication when `replace_pii.llm` is enabled |
 | `env.hf_model_availability` | config | The pretrained model reference is usable locally or can be fetched from Hugging Face; warns about a missing HF token only when online HF access may be needed |
 | `dataset.size` | dataframe | Training split meets the hard minimum row count |
 | `columns.groupby` | dataframe | `group_training_examples_by` column is present and has no nulls |

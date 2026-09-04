@@ -5,8 +5,10 @@
 
 import os
 from pathlib import Path
+from typing import cast
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
 from click.testing import CliRunner
 
@@ -741,6 +743,58 @@ class TestRunReplacePii:
         plan = load_plan(plan_path)
         assert plan.columns_to_replace[0].column_name == "col1"
         assert plan.columns_to_replace[0].entity_type is EntityType.UNIQUE_IDENTIFIER
+
+    def test_plan_only_auto_discovery_sends_full_dataset_profile_to_llm(
+        self,
+        cli_runner: CliRunner,
+        dummy_csv: Path,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text("replace_pii:\n  replacement_plan: auto_discovery\n  llm:\n    model_id: test-model\n")
+        monkeypatch.setenv("NSS_INFERENCE_ENDPOINT", "http://localhost:8000/v1")
+        responses = iter(
+            [
+                '{"classifications":['
+                '{"column_name":"col1","entity_type":null,"pattern":null},'
+                '{"column_name":"col2","entity_type":null,"pattern":null}'
+                "]}",
+            ]
+        )
+        request_payloads: list[dict[str, object]] = []
+
+        def post(url: str, **kwargs: object) -> httpx.Response:
+            assert url == "http://localhost:8000/v1/chat/completions"
+            request_payloads.append(cast(dict[str, object], kwargs["json"]))
+            return httpx.Response(
+                200,
+                json={"choices": [{"message": {"content": next(responses)}}]},
+            )
+
+        monkeypatch.setattr(httpx, "post", post)
+        run_path = tmp_path / "llm-plan-run"
+
+        result = cli_runner.invoke(
+            run,
+            [
+                "replace-pii",
+                "--plan-only",
+                "--config",
+                str(config_path),
+                "--data-source",
+                str(dummy_csv),
+                "--run-path",
+                str(run_path),
+            ],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0
+        assert len(request_payloads) == 1
+        messages = cast(list[dict[str, str]], request_payloads[0]["messages"])
+        assert '"non_null_count":2' in messages[1]["content"]
+        assert (run_path / "pii_replacement_plan.yaml").exists()
 
 
 class TestRunGenerateOptions:

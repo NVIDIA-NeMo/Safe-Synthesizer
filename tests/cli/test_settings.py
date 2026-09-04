@@ -224,6 +224,13 @@ class TestCLISettings:
         settings = CLISettings()
         assert settings.inference_endpoint_url == "https://custom.example/v1"
 
+    def test_explicit_cli_fields_exclude_environment_loaded_values(self, monkeypatch):
+        monkeypatch.setenv("NSS_INFERENCE_ENDPOINT", "https://env.example/v1")
+
+        settings = CLISettings.from_cli_kwargs(inference_model_id="cli-model")
+
+        assert settings.explicit_cli_fields == frozenset({"inference_model_id"})
+
     def test_inference_api_key_from_nss_inference_env(self, monkeypatch):
         """NSS_INFERENCE_KEY loads into inference_api_key."""
         monkeypatch.setenv("NSS_INFERENCE_KEY", "token-from-env")
