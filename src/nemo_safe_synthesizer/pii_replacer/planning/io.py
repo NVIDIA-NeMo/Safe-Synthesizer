@@ -15,7 +15,7 @@ from ...errors import ParameterError
 
 __all__ = ["load_plan", "save_plan"]
 
-_CURRENT_PLAN_SCHEMA_VERSION = 1
+_CURRENT_PLAN_SCHEMA_VERSION = 3
 
 
 def _plan_body(raw: dict[object, object], plan_path: Path) -> dict[object, object]:
@@ -37,7 +37,7 @@ def load_plan(path: str | Path) -> PiiReplacementPlan:
 
     A plan file contains ``schema_version`` metadata followed by the same fields
     accepted as an inline ``replace_pii.replacement_plan`` value. A missing
-    version is interpreted as version 1.
+    version is interpreted as version 3.
 
     Args:
         path: YAML file containing a replacement-plan mapping.

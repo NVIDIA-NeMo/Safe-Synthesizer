@@ -17,7 +17,7 @@ call `.with_replace_pii(enable=False)` to run the synthesis pipeline.
 `replace_pii.replacement_plan` accepts three forms.
 
 The `replace_pii` configuration has an integer `schema_version`. This release
-accepts version `1`; an omitted version is interpreted as version `1`. NSS
+accepts version `3`; an omitted version is interpreted as version `3`. NSS
 includes the version whenever it serializes the configuration.
 
 ### Automatic discovery
@@ -28,7 +28,7 @@ validating the final plan.
 
 ```yaml
 replace_pii:
-  schema_version: 1
+  schema_version: 3
   replacement_plan: auto_discovery
 ```
 
@@ -39,7 +39,7 @@ configuration:
 
 ```yaml
 replace_pii:
-  schema_version: 1
+  schema_version: 3
   replacement_plan:
     scope: dataframe
     columns_to_replace:
@@ -59,7 +59,7 @@ A plan file is a separately versioned YAML document containing
 `schema_version` followed by the same fields as an inline plan:
 
 ```yaml
-schema_version: 1
+schema_version: 3
 scope: dataframe
 columns_to_replace:
   - column_name: email
@@ -70,7 +70,7 @@ Set `replacement_plan` to its path:
 
 ```yaml
 replace_pii:
-  schema_version: 1
+  schema_version: 3
   replacement_plan: ./pii_replacement_plan.yaml
 ```
 
@@ -122,7 +122,7 @@ free-text columns in the resolved plan.
 
 ```yaml
 replace_pii:
-  schema_version: 1
+  schema_version: 3
   replacement_plan: auto_discovery
   llm:
     model_id: nvidia/nemotron-3-ultra-550b-a55b

@@ -60,7 +60,7 @@ __all__ = [
 # Sentinel value for ``ReplacePiiConfig.replacement_plan`` requesting automatic
 # entity discovery instead of an explicit plan.
 AUTO_DISCOVERY = "auto_discovery"
-_CURRENT_REPLACE_PII_SCHEMA_VERSION = 1
+_CURRENT_REPLACE_PII_SCHEMA_VERSION = 3
 
 
 class EntityType(StrEnum):
@@ -650,11 +650,11 @@ class ReplacePiiConfig(Parameters):
         "for the current configuration."
     )
 
-    schema_version: Literal[1] = Field(
+    schema_version: Literal[3] = Field(
         default=_CURRENT_REPLACE_PII_SCHEMA_VERSION,
         description=(
-            "Version of this replace_pii configuration schema. Missing versions are treated as version 1; "
-            "this release accepts only version 1."
+            "Version of this replace_pii configuration schema. Missing versions are treated as version 3; "
+            "this release accepts only version 3."
         ),
     )
     replacement_plan: PiiReplacementPlan | str = Field(
