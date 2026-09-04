@@ -645,7 +645,8 @@ class ReplacePiiConfig(Parameters):
 
     removed_legacy_fields: ClassVar[frozenset[str]] = frozenset({"globals", "steps"})
     removed_legacy_fields_message: ClassVar[str] = (
-        "PII replacement v2 configuration was removed. "
+        "This configuration uses the PII replacement v2 schema, which is not supported by PII replacement v3. "
+        "Configure replace_pii.replacement_plan instead. "
         "See docs/user-guide/configuration.md#replacing-pii "
         "for the current configuration."
     )
