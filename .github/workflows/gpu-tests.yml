@@ -68,7 +68,7 @@ jobs:
         uses: ./.github/actions/detect-changes
 
   gpu-smoke-test:
-    name: GPU Smoke Tests
+    name: GPU Smoke Tests (Python ${{ matrix.python-version }}, ${{ matrix.cuda-extra }})
     needs: changes
     # `changes` is intentionally skipped on workflow_dispatch. `always()` lets
     # manual runs bypass that skipped dependency and run the selected GPU suite.
@@ -87,10 +87,14 @@ jobs:
       }}
     timeout-minutes: 60
     runs-on: linux-amd64-gpu-a100-latest-1
+    # Non-required while the CUDA 13 rollout is validated. Promote to required
+    # once cu130 has container-build coverage (see docs/developer-guide/docker.md).
+    continue-on-error: ${{ matrix.cuda-extra == 'cu130' }}
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.13"]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+        cuda-extra: [cu129, cu130]
     steps:
       - name: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -102,6 +106,7 @@ jobs:
         uses: ./.github/actions/setup-gpu-test-env
         with:
           python-version: ${{ matrix.python-version }}
+          cuda-extra: ${{ matrix.cuda-extra }}
 
       - name: Run GPU unit tests
         timeout-minutes: 30
@@ -132,7 +137,7 @@ jobs:
         run: mise -E gpu-ci run test:smoke:gpu:smollm2
 
   gpu-e2e-test:
-    name: GPU E2E Tests
+    name: GPU E2E Tests (${{ matrix.cuda-extra }})
     needs: changes
     # `changes` is intentionally skipped on workflow_dispatch. `always()` lets
     # manual runs bypass that skipped dependency and run the selected GPU suite.
@@ -151,6 +156,17 @@ jobs:
       }}
     timeout-minutes: 210
     runs-on: linux-amd64-gpu-a100-latest-1
+    continue-on-error: ${{ !matrix.required }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - cuda-extra: cu129
+            required: true
+          # Non-required while the CUDA 13 rollout is validated. Promote to
+          # required once cu130 has container-build coverage (see docs/developer-guide/docker.md).
+          - cuda-extra: cu130
+            required: false
     steps:
       - name: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -160,6 +176,8 @@ jobs:
 
       - name: Setup GPU test environment
         uses: ./.github/actions/setup-gpu-test-env
+        with:
+          cuda-extra: ${{ matrix.cuda-extra }}
 
       - name: Run GPU E2E tests
         run: mise -E gpu-ci run test:e2e:prepared

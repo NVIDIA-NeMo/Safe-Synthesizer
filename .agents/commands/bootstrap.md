@@ -16,6 +16,7 @@ Set up the development environment from scratch.
    ```bash
    mise run bootstrap-nss cpu    # CPU-only (macOS or Linux without GPU)
    mise run bootstrap-nss cuda   # CUDA 12.9 (Linux with NVIDIA GPU)
+   mise run bootstrap-nss cu130  # CUDA 13.0 (Linux with NVIDIA GPU)
    mise run bootstrap-nss engine # Engine dependencies only (no torch)
    mise run bootstrap-nss dev    # Minimal dev dependencies only
    ```

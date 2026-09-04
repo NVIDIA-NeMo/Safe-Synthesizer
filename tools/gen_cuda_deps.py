@@ -309,6 +309,16 @@ class CudaVariant(StrictModel):
     )
     pytorch_index: IndexSpec | None = Field(default=None, description="Optional PyTorch index override.")
     flashinfer_index: IndexSpec | None = Field(default=None, description="Optional FlashInfer index override.")
+    nvidia_index: str | None = Field(
+        default=None,
+        description=(
+            "Optional default index name for this variant's NVIDIA CUDA library packages. "
+            "References an already-declared [[indexes]] entry rather than defining a new one, "
+            "unlike pytorch_index/flashinfer_index. A per-library NvidiaCudaLibrarySpec.index "
+            "override always wins over this; if neither is set, the variant's pytorch index "
+            "is used instead."
+        ),
+    )
 
 
 class CudaDepsConfig(StrictModel):
@@ -480,6 +490,8 @@ class CudaVariantContext(TemplateRenderer):
         match library:
             case NvidiaCudaLibrarySpec(index=str() as index):
                 return self.template(index)
+        if self.variant.nvidia_index is not None:
+            return self.template(self.variant.nvidia_index)
         return self.pytorch_index.name
 
     @property

@@ -36,7 +36,7 @@ torch_wheel_deps = [
     { name = "torchao", version = "0.17.0", local = "{torch_local_version}", sys_platform = "linux", arch = "x86_64", source_kind = "pytorch" },
 ]
 
-managed_extras = ["cpu", "cu129"]
+managed_extras = ["cpu", "cu129", "cu130"]
 conflict_extras = ["cpu"]
 nvidia_cuda_libraries = [
     "cublas",
@@ -74,6 +74,11 @@ url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
 [[indexes]]
+name = "nvidia-pypi-public"
+url = "https://pypi.nvidia.com"
+explicit = true
+
+[[indexes]]
 name = "flashinfer-cubin"
 url = "https://flashinfer.ai/whl/"
 explicit = true
@@ -108,8 +113,25 @@ vllm = [
     { index = "vllm-v0-26-0-cu129", marker = "sys_platform == 'linux'", extra = "cu129" },
 ]
 
+[sources.cu130]
+flashinfer-cubin = [
+    { index = "flashinfer-cubin", marker = "sys_platform == 'linux'" },
+]
+
 [variants.cu129]
 cuda_package_suffix = "cu12"
 dependencies = [
     "vllm==0.26.0+{torch_local_version}; sys_platform == 'linux'",
+]
+
+[variants.cu130]
+cuda_package_suffix = "cu13"
+nvidia_package_suffix = ""
+nvidia_index = "nvidia-pypi-public"
+flashinfer_index = { name = "flashinfer-jit-cache-cu130", url = "https://flashinfer.ai/whl/cu130", explicit = true }
+# No [sources.cu130] vLLM route yet: unlike cu129, there is no CUDA-13-specific
+# wheel build to pin, so this resolves from the default index. Add one here
+# once that exists.
+dependencies = [
+    "vllm==0.26.0; sys_platform == 'linux'",
 ]
