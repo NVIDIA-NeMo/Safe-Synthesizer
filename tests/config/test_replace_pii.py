@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.replace_pii import (
     ALLOWED_DEPENDS_ON,
     AUTO_DISCOVERY,
@@ -357,13 +358,35 @@ class TestPiiReplacementPlan:
 class TestReplacePiiConfig:
     def test_defaults_are_auto_discovery(self) -> None:
         config = ReplacePiiConfig()
-        assert config.schema_version == 1
+        assert config.schema_version == 3
         assert config.replacement_plan == AUTO_DISCOVERY
         assert config.is_auto_discovery
         assert config.plan_path is None
         assert config.inline_plan is None
+        assert config.llm is None
         assert config.sampler.backend is PiiSamplerBackend.MANAGED
         assert ENTITY_BY_TYPE[EntityType.FREE_TEXT].action is EntityAction.REPLACE_IN_TEXT
+
+    def test_missing_schema_version_is_v3_and_sparse_serialization_includes_it(self) -> None:
+        config = ReplacePiiConfig.model_validate({})
+
+        assert config.schema_version == 3
+        assert config.model_dump(exclude_unset=True)["schema_version"] == 3
+
+    def test_sparse_parent_serialization_includes_schema_version(self) -> None:
+        config = SafeSynthesizerParameters(replace_pii=ReplacePiiConfig())
+
+        assert config.model_dump(exclude_unset=True)["replace_pii"]["schema_version"] == 3
+
+    @pytest.mark.parametrize("schema_version", [1, 2, 0, -1])
+    def test_unsupported_schema_version_is_rejected(self, schema_version: int) -> None:
+        with _raises(f"schema version {schema_version} is unsupported.*supports version 3"):
+            ReplacePiiConfig.model_validate({"schema_version": schema_version})
+
+    @pytest.mark.parametrize("schema_version", [True, 1.0, "1", None])
+    def test_non_integer_schema_version_is_rejected(self, schema_version: object) -> None:
+        with _raises("schema_version must be an integer"):
+            ReplacePiiConfig.model_validate({"schema_version": schema_version})
 
     def test_plan_path_and_inline_plan_properties(self) -> None:
         path_config = ReplacePiiConfig(replacement_plan="/tmp/plan.yaml")
@@ -408,13 +431,33 @@ class TestReplacePiiConfig:
         with _raises("invalid inline replacement plan"):
             ReplacePiiConfig.model_validate({"replacement_plan": {"scope": "galaxy"}})
 
-    def test_llm_defaults_to_none_and_any_value_is_rejected(self) -> None:
-        assert ReplacePiiConfig().llm is None
-        assert ReplacePiiConfig.model_validate({"llm": None}).llm is None
-        with _raises("replace_pii.llm is not supported"):
-            ReplacePiiConfig.model_validate({"llm": {"max_workers": 8}})
-        with _raises("replace_pii.llm is not supported"):
-            ReplacePiiConfig(llm=LLMConfig())
+    def test_llm_mapping_configures_shared_inference_behavior(self) -> None:
+        config = ReplacePiiConfig.model_validate(
+            {
+                "llm": {
+                    "model_id": "local-model",
+                }
+            }
+        )
+
+        assert config.llm == LLMConfig(model_id="local-model")
+        assert config.llm is not None
+        assert config.llm.max_workers == 8
+
+    def test_llm_endpoint_is_runtime_only(self) -> None:
+        with _raises("Unknown configuration field 'replace_pii.llm.endpoint_url'"):
+            SafeSynthesizerParameters.model_validate(
+                {"replace_pii": {"llm": {"endpoint_url": "http://localhost:8000/v1"}}}
+            )
+
+    def test_empty_llm_mapping_enables_inference_defaults(self) -> None:
+        config = ReplacePiiConfig.model_validate({"llm": {}})
+
+        assert config.llm == LLMConfig()
+
+    def test_llm_max_workers_must_be_positive(self) -> None:
+        with _raises("greater than or equal to 1"):
+            ReplacePiiConfig.model_validate({"llm": {"max_workers": 0}})
 
     def test_resolved_managed_assets_path_uses_override(self, tmp_path: Path) -> None:
         config = ReplacePiiConfig.model_validate(

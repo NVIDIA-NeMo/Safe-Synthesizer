@@ -78,15 +78,16 @@ def test_emit_telemetry_from_yaml_uses_env_when_unset(monkeypatch):
         ({"steps": []}, "replace_pii.steps"),
     ],
 )
-def test_replace_pii_v2_fields_raise_removed_error(payload: dict[str, object], field: str):
-    pattern = rf"PII replacement v2 configuration was removed.*{field}"
+def test_replace_pii_v2_fields_raise_schema_compatibility_error(payload: dict[str, object], field: str):
+    message = "configuration uses the PII replacement v2 schema.*Configure replace_pii.replacement_plan instead"
+    pattern = rf"{message}.*{field}"
     with pytest.raises((ParameterError, ValidationError), match=pattern):
         SafeSynthesizerParameters.model_validate({"replace_pii": payload})
-    with pytest.raises((ParameterError, ValidationError), match="PII replacement v2 configuration was removed"):
+    with pytest.raises((ParameterError, ValidationError), match=message):
         SafeSynthesizerParameters.model_validate({"unknown_fields": "ignore", "replace_pii": payload})
-    with pytest.raises((ParameterError, ValidationError), match="PII replacement v2 configuration was removed"):
+    with pytest.raises((ParameterError, ValidationError), match=message):
         ReplacePiiConfig.model_validate(payload)
-    with pytest.raises(ParameterError, match="PII replacement v2 configuration was removed"):
+    with pytest.raises(ParameterError, match=message):
         ReplacePiiConfig.from_config_source(payload)
 
 

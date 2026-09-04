@@ -291,8 +291,15 @@ for the full API reference.
 
 ## Replacing PII
 
-PII replacement v3 will be added and documented in a later update. On this
-branch, set `replace_pii: null` or use `--no-replace-pii`.
+PII replacement accepts automatic discovery, a plan written inline in the main NSS
+configuration, or a path to a separate plan YAML. See
+[PII Replacement](../product-overview/pii_replacement.md) for the plan-source
+definitions, examples, and the shared LLM configuration for plan enhancement and
+free-text replacement.
+
+The replacement executor is not available on this branch. Set
+`replace_pii: null` or use `--no-replace-pii` when running the synthesis
+pipeline.
 
 ---
 

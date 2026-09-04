@@ -19,7 +19,14 @@ from enum import Enum, StrEnum, auto
 from pathlib import Path
 from typing import ClassVar, Literal, Self, cast
 
-from pydantic import Field, ValidationError, field_validator, model_validator
+from pydantic import (
+    Field,
+    SerializerFunctionWrapHandler,
+    ValidationError,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 
 from ..configurator.parameters import Parameters
 from ..defaults import NSS_MANAGED_ASSETS_PATH_ENV, default_managed_assets_path
@@ -53,6 +60,7 @@ __all__ = [
 # Sentinel value for ``ReplacePiiConfig.replacement_plan`` requesting automatic
 # entity discovery instead of an explicit plan.
 AUTO_DISCOVERY = "auto_discovery"
+_CURRENT_REPLACE_PII_SCHEMA_VERSION = 3
 
 
 class EntityType(StrEnum):
@@ -546,19 +554,27 @@ class PiiReplacementPlan(Parameters):
 
 
 class LLMConfig(NSSBaseModel):
-    """Shared LLM settings for discovery and free-text replacement.
+    """Inference behavior shared by PII planning and replacement.
 
     Presence on ``ReplacePiiConfig.llm`` is itself the enable signal; there is no
-    separate boolean flag. Reserved for future use.
+    separate boolean flag. The OpenAI-compatible endpoint is supplied at runtime
+    through ``NSS_INFERENCE_ENDPOINT`` or ``--inference-endpoint-url`` rather than
+    persisted in NSS configuration.
     """
 
-    model_provider: str | None = Field(
+    model_id: str | None = Field(
         default=None,
-        description="Reserved: inference provider for LLM-assisted discovery/replacement.",
+        description=(
+            "Model identifier served by the inference endpoint. When unset, uses "
+            "NSS_INFERENCE_MODEL or the NSS default model."
+        ),
     )
     max_workers: int = Field(
-        default=64,
-        description="Reserved: maximum parallel workers for LLM-assisted operations.",
+        default=8,
+        ge=1,
+        description=(
+            "Maximum concurrent requests for LLM-assisted plan discovery and free-text replacement. Must be at least 1."
+        ),
     )
 
 
@@ -610,44 +626,53 @@ class PiiSamplerConfig(NSSBaseModel):
 class ReplacePiiConfig(Parameters):
     """Top-level ``replace_pii`` config wrapping the replacement plan.
 
-    ``replacement_plan`` is one of:
+    ``replacement_plan`` accepts three forms:
 
-    * ``"auto_discovery"`` (default) -- detect and plan replacements automatically;
-    * a path (string) to a plan file;
-    * an inline ``PiiReplacementPlan``.
+    * ``"auto_discovery"`` (default) detects and plans replacements automatically;
+    * an inline ``PiiReplacementPlan`` mapping in the main NSS config; or
+    * a string path to a separate plan YAML containing that same mapping.
+
+    ``llm=None`` leaves auto-discovery at the heuristic baseline and disables
+    LLM-assisted free-text replacement. Supplying an ``llm`` mapping enables
+    LLM enhancement after heuristic discovery and provides the same inference
+    settings to replacement-time free-text processing. An inline plan or plan
+    file bypasses only discovery; it does not disable replacement-time LLM use.
+    The API key remains a runtime secret supplied through ``NSS_INFERENCE_KEY``
+    or the corresponding CLI option; it is never stored in this model.
 
     v2 fields ``globals`` and ``steps`` are rejected with a removal error.
     """
 
     removed_legacy_fields: ClassVar[frozenset[str]] = frozenset({"globals", "steps"})
     removed_legacy_fields_message: ClassVar[str] = (
-        "PII replacement v2 configuration was removed. "
+        "This configuration uses the PII replacement v2 schema, which is not supported by PII replacement v3. "
+        "Configure replace_pii.replacement_plan instead. "
         "See docs/user-guide/configuration.md#replacing-pii "
         "for the current configuration."
     )
 
-    schema_version: Literal[1] = Field(
-        default=1,
+    schema_version: Literal[3] = Field(
+        default=_CURRENT_REPLACE_PII_SCHEMA_VERSION,
         description=(
-            "Version of this replace_pii config shape. Bump when fields or plan "
-            "semantics change incompatibly; only 1 is accepted in this release."
+            "Version of this replace_pii configuration schema. Missing versions are treated as version 3; "
+            "this release accepts only version 3."
         ),
     )
     replacement_plan: PiiReplacementPlan | str = Field(
         default=AUTO_DISCOVERY,
         description=(
-            f"{AUTO_DISCOVERY!r} to discover the plan from the data, a path to a plan "
-            "file, or an inline plan (YAML/SDK mapping or PiiReplacementPlan). "
-            f"Other strings are treated as paths. The CLI option only accepts the "
+            f"{AUTO_DISCOVERY!r} to discover the plan from the data, an inline plan "
+            "mapping in the main NSS config, or a path to a separate plan YAML. "
+            "Other strings are treated as paths. The CLI option only accepts the "
             "sentinel or a path."
         ),
     )
     llm: LLMConfig | None = Field(
         default=None,
         description=(
-            "LLM-assisted discovery and free-text replacement settings, or null "
-            "(the default) to run without LLM assistance. Reserved: supplying a "
-            "value is rejected at config validation in this release."
+            "Optional inference behavior shared by plan enhancement and free-text replacement. "
+            "The endpoint is configured at runtime through NSS_INFERENCE_ENDPOINT or --inference-endpoint-url. "
+            "Use an empty mapping to enable NSS inference defaults."
         ),
     )
     replacement: PiiReplacementSettings = Field(
@@ -666,15 +691,29 @@ class ReplacePiiConfig(Parameters):
             raise_if_removed_legacy_fields(cls, cast(Mapping[str, object], value), path=())
         return value
 
-    @field_validator("llm")
+    @model_validator(mode="before")
     @classmethod
-    def _reject_unsupported_llm(cls, value: LLMConfig | None) -> LLMConfig | None:
-        if value is not None:
+    def _validate_schema_version(cls, value: object) -> object:
+        """Reject invalid or unsupported versions before validating the schema body."""
+        if not isinstance(value, Mapping):
+            return value
+        mapping = cast(Mapping[str, object], value)
+        version = mapping.get("schema_version", _CURRENT_REPLACE_PII_SCHEMA_VERSION)
+        if type(version) is not int:
+            raise ParameterError("replace_pii.schema_version must be an integer")
+        if version != _CURRENT_REPLACE_PII_SCHEMA_VERSION:
             raise ParameterError(
-                "replace_pii.llm is not supported in this release; omit it or set "
-                "replace_pii.llm to null (the default)."
+                f"replace_pii schema version {version} is unsupported; "
+                f"this NSS release supports version {_CURRENT_REPLACE_PII_SCHEMA_VERSION}"
             )
         return value
+
+    @model_serializer(mode="wrap")
+    def _serialize_schema_version(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        """Include the current schema version even in sparse serialization."""
+        serialized = cast(dict[str, object], handler(self))
+        serialized["schema_version"] = _CURRENT_REPLACE_PII_SCHEMA_VERSION
+        return serialized
 
     @field_validator("replacement_plan", mode="before")
     @classmethod
@@ -699,7 +738,7 @@ class ReplacePiiConfig(Parameters):
         if isinstance(value, str | PiiReplacementPlan):
             return value
         raise ParameterError(
-            f"replacement_plan must be {AUTO_DISCOVERY!r}, a path to a plan file, or an inline plan; "
+            f"replacement_plan must be {AUTO_DISCOVERY!r}, an inline plan, or a path to a plan file; "
             f"got {type(value).__name__}"
         )
 
@@ -717,5 +756,5 @@ class ReplacePiiConfig(Parameters):
 
     @property
     def inline_plan(self) -> PiiReplacementPlan | None:
-        """The inline plan, or ``None`` if auto-discovery or a path reference."""
+        """The inline plan, or ``None`` for auto-discovery or a plan file."""
         return self.replacement_plan if isinstance(self.replacement_plan, PiiReplacementPlan) else None
