@@ -402,20 +402,25 @@ class TestInferenceModelCheck:
         assert any(issue.code == "inference_key_missing" and issue.severity == "error" for issue in issues)
 
     def test_local_llm_endpoint_can_be_keyless(self, default_config):
-        default_config.replace_pii.llm = LLMConfig(
-            endpoint_url="http://localhost:8000/v1",
-            model_id="local-model",
-        )
+        default_config.replace_pii.llm = LLMConfig(model_id="local-model")
 
-        with patch.dict("os.environ", {}, clear=True):
+        with patch.dict(
+            "os.environ",
+            {"NSS_INFERENCE_ENDPOINT": "http://localhost:8000/v1"},
+            clear=True,
+        ):
             issues = InferenceModelCheck().run(make_ctx(config=default_config))
 
         assert issues == []
 
     def test_invalid_llm_endpoint_is_an_error(self, default_config):
-        default_config.replace_pii.llm = LLMConfig(endpoint_url="not-a-url", model_id="model")
+        default_config.replace_pii.llm = LLMConfig(model_id="model")
 
-        with patch.dict("os.environ", {"NSS_INFERENCE_KEY": "key"}, clear=True):
+        with patch.dict(
+            "os.environ",
+            {"NSS_INFERENCE_ENDPOINT": "not-a-url", "NSS_INFERENCE_KEY": "key"},
+            clear=True,
+        ):
             issues = InferenceModelCheck().run(make_ctx(config=default_config))
 
         assert any(issue.code == "inference_endpoint_invalid" and issue.severity == "error" for issue in issues)

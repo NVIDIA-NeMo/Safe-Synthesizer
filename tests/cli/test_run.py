@@ -752,12 +752,7 @@ class TestRunReplacePii:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         config_path = tmp_path / "config.yaml"
-        config_path.write_text(
-            "replace_pii:\n"
-            "  replacement_plan: auto_discovery\n"
-            "  llm:\n"
-            "    model_id: test-model\n"
-        )
+        config_path.write_text("replace_pii:\n  replacement_plan: auto_discovery\n  llm:\n    model_id: test-model\n")
         monkeypatch.setenv("NSS_INFERENCE_ENDPOINT", "http://localhost:8000/v1")
         responses = iter(
             [
@@ -800,6 +795,7 @@ class TestRunReplacePii:
         messages = cast(list[dict[str, str]], request_payloads[0]["messages"])
         assert '"non_null_count":2' in messages[1]["content"]
         assert (run_path / "pii_replacement_plan.yaml").exists()
+
 
 class TestRunGenerateOptions:
     """Tests for run generate command options."""

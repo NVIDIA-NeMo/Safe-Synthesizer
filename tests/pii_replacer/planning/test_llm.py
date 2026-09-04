@@ -70,7 +70,7 @@ class FixedDiscoverer(PlanDiscoverer):
 
 
 def _local_config(*, max_workers: int = 8) -> LLMConfig:
-    return LLMConfig(endpoint_url="http://localhost:8000/v1", model_id="local-model", max_workers=max_workers)
+    return LLMConfig(model_id="local-model", max_workers=max_workers)
 
 
 def _classifications(
@@ -105,6 +105,7 @@ def _enhancer(
     transport = ScriptedTransport(responses)
     enhancer = LLMPlanEnhancer(
         _local_config(max_workers=max_workers),
+        endpoint_url="http://localhost:8000/v1",
         transport=transport,
         environ={},
     )
@@ -113,9 +114,9 @@ def _enhancer(
 
 @pytest.mark.unit
 class TestInferenceSettings:
-    def test_explicit_overrides_precede_config_and_environment(self) -> None:
+    def test_explicit_overrides_precede_persisted_model_and_environment(self) -> None:
         settings = resolve_inference_settings(
-            LLMConfig(endpoint_url="https://config.example/v1", model_id="config-model"),
+            LLMConfig(model_id="config-model"),
             endpoint_url="http://localhost:9000/v1",
             model_id="cli-model",
             api_key="runtime-key",  # pragma: allowlist secret
@@ -130,16 +131,16 @@ class TestInferenceSettings:
         assert settings.model_id == "cli-model"
         assert settings.api_key == "runtime-key"  # pragma: allowlist secret
 
-    def test_config_precedes_environment(self) -> None:
+    def test_persisted_model_precedes_environment_model(self) -> None:
         settings = resolve_inference_settings(
-            LLMConfig(endpoint_url="http://config.example/v1", model_id="config-model"),
+            LLMConfig(model_id="config-model"),
             environ={
                 "NSS_INFERENCE_ENDPOINT": "https://env.example/v1",
                 "NSS_INFERENCE_MODEL": "env-model",
             },
         )
 
-        assert settings.endpoint_url == "http://config.example/v1"
+        assert settings.endpoint_url == "https://env.example/v1"
         assert settings.model_id == "config-model"
 
     def test_environment_precedes_defaults(self) -> None:
@@ -168,13 +169,18 @@ class TestInferenceSettings:
             resolve_inference_settings(LLMConfig(), environ={})
 
     def test_local_openai_compatible_endpoint_can_be_keyless(self) -> None:
-        settings = resolve_inference_settings(_local_config(), environ={})
+        settings = resolve_inference_settings(
+            _local_config(),
+            endpoint_url="http://localhost:8000/v1",
+            environ={},
+        )
 
         assert settings.api_key is None
 
     def test_api_key_is_redacted_from_repr(self) -> None:
         settings = resolve_inference_settings(
             _local_config(),
+            endpoint_url="http://localhost:8000/v1",
             api_key="do-not-render",  # pragma: allowlist secret
             environ={},
         )
@@ -183,12 +189,13 @@ class TestInferenceSettings:
 
     def test_invalid_endpoint_fails_without_transport(self) -> None:
         with pytest.raises(ParameterError, match="absolute HTTP"):
-            resolve_inference_settings(LLMConfig(endpoint_url="localhost:8000"), environ={})
+            resolve_inference_settings(LLMConfig(), endpoint_url="localhost:8000", environ={})
 
     def test_endpoint_rejects_embedded_credentials(self) -> None:
         with pytest.raises(ParameterError, match="must not contain credentials"):
             resolve_inference_settings(
-                LLMConfig(endpoint_url="https://user:password@example.com/v1"),  # pragma: allowlist secret
+                LLMConfig(),
+                endpoint_url="https://user:password@example.com/v1",  # pragma: allowlist secret
                 environ={},
             )
 
@@ -244,6 +251,19 @@ class TestLLMPlanEnhancer:
 
         classification_messages, classification_model = transport.calls[0]
         classification_payload = json.loads(classification_messages[1]["content"])
+        assert classification_payload["discovery_context"] == {
+            "scope": "dataframe",
+            "group_column": None,
+            "protected_columns": [],
+        }
+        assert set(classification_payload["column_profiles"][0]) == {
+            "column_name",
+            "dtype",
+            "non_null_count",
+            "unique_count",
+            "unique_ratio",
+            "samples",
+        }
         assert classification_payload["heuristic_classifications"] == [
             {"column_name": "company", "entity_type": "full_name", "pattern": None}
         ]
@@ -366,6 +386,12 @@ class TestLLMPlanEnhancer:
         )
 
         assert [spec.column_name for spec in plan.columns_to_replace] == ["patient_id", "first_name"]
+        classification_payload = json.loads(transport.calls[0][0][1]["content"])
+        assert classification_payload["discovery_context"] == {
+            "scope": "group",
+            "group_column": "patient_id",
+            "protected_columns": ["event_index"],
+        }
         dependency_payload = json.loads(transport.calls[1][0][1]["content"])
         assert dependency_payload["dependency_candidates"] == [
             {
@@ -709,6 +735,7 @@ class TestOpenAICompatibleTransport:
     ) -> None:
         settings = resolve_inference_settings(
             _local_config(),
+            endpoint_url="http://localhost:8000/v1",
             api_key="runtime-key",  # pragma: allowlist secret
             environ={},
         )
@@ -746,6 +773,7 @@ class TestOpenAICompatibleTransport:
     ) -> None:
         settings = resolve_inference_settings(
             _local_config(),
+            endpoint_url="http://localhost:8000/v1",
             api_key="private-key",  # pragma: allowlist secret
             environ={},
         )

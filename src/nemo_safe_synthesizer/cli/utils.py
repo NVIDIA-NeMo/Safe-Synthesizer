@@ -312,19 +312,17 @@ def _apply_inference_cli_overrides(
     config: SafeSynthesizerParameters,
     settings: "CLISettings",
 ) -> SafeSynthesizerParameters:
-    """Apply explicit inference flags above persisted LLM configuration.
+    """Apply the explicit model flag above persisted LLM configuration.
 
-    Environment-loaded values are intentionally excluded here: the LLM
-    adapter resolves persisted config before environment values. The API key
-    remains runtime-only and is propagated through ``NSS_INFERENCE_KEY``.
+    Environment-loaded model values are intentionally excluded here because
+    persisted model configuration takes precedence. The endpoint and API key
+    remain runtime-only and are propagated through ``NSS_INFERENCE_*``.
     """
     replace_pii = config.replace_pii
     if replace_pii is None or replace_pii.llm is None:
         return config
 
     updates: dict[str, str] = {}
-    if "inference_endpoint_url" in settings.explicit_cli_fields and settings.inference_endpoint_url is not None:
-        updates["endpoint_url"] = settings.inference_endpoint_url
     if "inference_model_id" in settings.explicit_cli_fields and settings.inference_model_id is not None:
         updates["model_id"] = settings.inference_model_id
     if not updates:

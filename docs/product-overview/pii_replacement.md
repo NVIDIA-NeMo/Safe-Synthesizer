@@ -135,11 +135,12 @@ the OpenAI-compatible endpoint at runtime through `NSS_INFERENCE_ENDPOINT` or
 the `--inference-endpoint-url` CLI option. For example, a local vLLM server may
 use `NSS_INFERENCE_ENDPOINT=http://localhost:8000/v1` with its served model ID.
 
-Endpoint and model settings resolve in this order: explicit CLI runtime flags,
-the `replace_pii.llm` mapping, `NSS_INFERENCE_ENDPOINT` and
-`NSS_INFERENCE_MODEL`, then the NSS defaults. The default hosted NVIDIA
-endpoint requires an API key. Keyless operation is supported for local
-OpenAI-compatible endpoints.
+The endpoint resolves from the explicit CLI runtime flag, then
+`NSS_INFERENCE_ENDPOINT`, then the NSS default; it is never persisted in NSS
+configuration. The model resolves from the explicit CLI runtime flag, then
+`replace_pii.llm.model_id`, `NSS_INFERENCE_MODEL`, and finally the NSS default.
+The default hosted NVIDIA endpoint requires an API key. Keyless operation is
+supported for local OpenAI-compatible endpoints.
 
 Supply the inference API key at runtime through `NSS_INFERENCE_KEY` or the
 `--inference-api-key` CLI option. NSS does not store the key in configuration or
@@ -150,10 +151,12 @@ semantic entity type and may propose a replacement pattern, in bounded batches
 of at most 32 profiles and 48 KiB of profile evidence. Each profile contains
 deterministic statistics and up to eight distinct cell samples truncated to 128
 characters. The prompt includes the entity catalog and the exact supported
-pattern grammars. NSS then derives replacement columns and all permitted
-dependency candidates deterministically from those classifications. The second
-pass can only select contextually useful dependency candidate IDs. Candidates
-identify edges selected by the heuristic baseline so that choice remains
+pattern grammars. Scope, grouping-column, and protected-column metadata is sent
+once as discovery context rather than duplicated in every column profile. NSS
+then derives replacement columns and all permitted dependency candidates
+deterministically from those classifications. The second pass can only select
+contextually useful dependency candidate IDs. Candidates identify edges
+selected by the heuristic baseline so that choice remains
 available as fallible prior evidence. NSS, rather than the model, supplies the
 plan scope, excludes protected ordering and timestamp columns, and validates the
 assembled plan. Grouping columns remain eligible for replacement so identifiers

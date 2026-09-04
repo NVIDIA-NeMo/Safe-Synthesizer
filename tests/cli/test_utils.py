@@ -440,36 +440,26 @@ class TestPropagateRuntimeSettingsToEnv:
         assert os.environ["HF_HUB_OFFLINE"] == "1"
         assert os.environ["TRANSFORMERS_OFFLINE"] == "1"
 
-    def test_explicit_cli_inference_settings_override_persisted_llm_config(self):
-        config = SafeSynthesizerParameters(
-            replace_pii=ReplacePiiConfig(
-                llm=LLMConfig(endpoint_url="https://config.example/v1", model_id="config-model")
-            )
-        )
-        settings = CLISettings.from_cli_kwargs(
-            inference_endpoint_url="http://localhost:8000/v1",
-            inference_model_id="cli-model",
-        )
+    def test_explicit_cli_model_overrides_persisted_llm_config(self):
+        config = SafeSynthesizerParameters(replace_pii=ReplacePiiConfig(llm=LLMConfig(model_id="config-model")))
+        settings = CLISettings.from_cli_kwargs(inference_model_id="cli-model")
 
         result = _apply_inference_cli_overrides(config, settings)
 
         assert result.replace_pii is not None
         assert result.replace_pii.llm is not None
-        assert result.replace_pii.llm.endpoint_url == "http://localhost:8000/v1"
         assert result.replace_pii.llm.model_id == "cli-model"
 
-    def test_environment_inference_settings_do_not_override_persisted_llm_config(self, monkeypatch):
-        monkeypatch.setenv("NSS_INFERENCE_ENDPOINT", "https://env.example/v1")
-        config = SafeSynthesizerParameters(
-            replace_pii=ReplacePiiConfig(llm=LLMConfig(endpoint_url="https://config.example/v1"))
-        )
+    def test_environment_model_does_not_override_persisted_llm_config(self, monkeypatch):
+        monkeypatch.setenv("NSS_INFERENCE_MODEL", "env-model")
+        config = SafeSynthesizerParameters(replace_pii=ReplacePiiConfig(llm=LLMConfig(model_id="config-model")))
         settings = CLISettings()
 
         result = _apply_inference_cli_overrides(config, settings)
 
         assert result.replace_pii is not None
         assert result.replace_pii.llm is not None
-        assert result.replace_pii.llm.endpoint_url == "https://config.example/v1"
+        assert result.replace_pii.llm.model_id == "config-model"
 
     def test_enabling_huggingface_remote_disables_offline_env(self, monkeypatch):
         """--enable-huggingface-remote sets the HF offline vars to 0, overriding inherited offline env."""
