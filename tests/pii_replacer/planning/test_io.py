@@ -4,6 +4,7 @@
 from pathlib import Path
 
 import pytest
+import yaml
 
 from nemo_safe_synthesizer.config.replace_pii import EntityType, PiiColumnPlan, PiiReplacementPlan
 from nemo_safe_synthesizer.errors import ParameterError
@@ -18,7 +19,38 @@ class TestPlanIo:
         path = save_plan(plan, tmp_path / "nested" / "plan.yaml")
 
         assert path == tmp_path / "nested" / "plan.yaml"
+        assert yaml.safe_load(path.read_text())["schema_version"] == 1
         assert load_plan(path) == plan
+
+    def test_load_treats_missing_schema_version_as_v1(self, tmp_path: Path) -> None:
+        path = tmp_path / "plan.yaml"
+        path.write_text("scope: dataframe\ncolumns_to_replace: []\n")
+
+        assert load_plan(path) == PiiReplacementPlan()
+
+    @pytest.mark.parametrize("schema_version", [2, 0, -1])
+    def test_load_rejects_unsupported_schema_version(self, tmp_path: Path, schema_version: int) -> None:
+        path = tmp_path / "plan.yaml"
+        path.write_text(f"schema_version: {schema_version}\nscope: dataframe\ncolumns_to_replace: []\n")
+
+        with pytest.raises(ParameterError, match=f"unsupported schema version {schema_version}.*supports version 1"):
+            load_plan(path)
+
+    @pytest.mark.parametrize("schema_version", [True, 1.0, "1", None])
+    def test_load_rejects_non_integer_schema_version(self, tmp_path: Path, schema_version: object) -> None:
+        path = tmp_path / "plan.yaml"
+        path.write_text(
+            yaml.safe_dump(
+                {
+                    "schema_version": schema_version,
+                    "scope": "dataframe",
+                    "columns_to_replace": [],
+                }
+            )
+        )
+
+        with pytest.raises(ParameterError, match="schema_version must be an integer"):
+            load_plan(path)
 
     def test_load_rejects_non_mapping_yaml(self, tmp_path: Path) -> None:
         path = tmp_path / "plan.yaml"

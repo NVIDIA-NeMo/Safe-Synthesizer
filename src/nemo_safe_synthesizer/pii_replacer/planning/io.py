@@ -15,12 +15,29 @@ from ...errors import ParameterError
 
 __all__ = ["load_plan", "save_plan"]
 
+_CURRENT_PLAN_SCHEMA_VERSION = 1
+
+
+def _plan_body(raw: dict[object, object], plan_path: Path) -> dict[object, object]:
+    """Validate document metadata and return the unversioned runtime plan body."""
+    body = dict(raw)
+    version = body.pop("schema_version", _CURRENT_PLAN_SCHEMA_VERSION)
+    if type(version) is not int:
+        raise ParameterError(f"PII replacement plan file {str(plan_path)!r} schema_version must be an integer")
+    if version != _CURRENT_PLAN_SCHEMA_VERSION:
+        raise ParameterError(
+            f"PII replacement plan file {str(plan_path)!r} uses unsupported schema version {version}; "
+            f"this NSS release supports version {_CURRENT_PLAN_SCHEMA_VERSION}"
+        )
+    return body
+
 
 def load_plan(path: str | Path) -> PiiReplacementPlan:
     """Load a replacement plan from a standalone YAML file.
 
-    A plan file contains the same mapping accepted as an inline
-    ``replace_pii.replacement_plan`` value in the main NSS configuration.
+    A plan file contains ``schema_version`` metadata followed by the same fields
+    accepted as an inline ``replace_pii.replacement_plan`` value. A missing
+    version is interpreted as version 1.
 
     Args:
         path: YAML file containing a replacement-plan mapping.
@@ -43,14 +60,18 @@ def load_plan(path: str | Path) -> PiiReplacementPlan:
         raise ParameterError(f"PII replacement plan file {str(plan_path)!r} must contain a mapping")
 
     try:
-        return PiiReplacementPlan.model_validate(raw)
+        return PiiReplacementPlan.model_validate(_plan_body(raw, plan_path))
     except ValidationError as exc:
         raise ParameterError(f"Invalid PII replacement plan in {str(plan_path)!r}: {exc}") from exc
 
 
 def save_plan(plan: PiiReplacementPlan, path: str | Path) -> Path:
-    """Save a replacement plan as reusable standalone YAML."""
+    """Save a replacement plan as a versioned reusable standalone YAML document."""
     plan_path = Path(path)
     plan_path.parent.mkdir(parents=True, exist_ok=True)
-    plan.to_yaml(plan_path, exclude_unset=False)
+    document = {
+        "schema_version": _CURRENT_PLAN_SCHEMA_VERSION,
+        **plan.model_dump(mode="json", exclude_unset=False),
+    }
+    plan_path.write_text(yaml.safe_dump(document, sort_keys=False))
     return plan_path

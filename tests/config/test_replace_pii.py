@@ -367,6 +367,27 @@ class TestReplacePiiConfig:
         assert config.sampler.backend is PiiSamplerBackend.MANAGED
         assert ENTITY_BY_TYPE[EntityType.FREE_TEXT].action is EntityAction.REPLACE_IN_TEXT
 
+    def test_missing_schema_version_is_v1_and_sparse_serialization_includes_it(self) -> None:
+        config = ReplacePiiConfig.model_validate({})
+
+        assert config.schema_version == 1
+        assert config.model_dump(exclude_unset=True)["schema_version"] == 1
+
+    def test_sparse_parent_serialization_includes_schema_version(self) -> None:
+        config = SafeSynthesizerParameters(replace_pii=ReplacePiiConfig())
+
+        assert config.model_dump(exclude_unset=True)["replace_pii"]["schema_version"] == 1
+
+    @pytest.mark.parametrize("schema_version", [2, 0, -1])
+    def test_unsupported_schema_version_is_rejected(self, schema_version: int) -> None:
+        with _raises(f"schema version {schema_version} is unsupported.*supports version 1"):
+            ReplacePiiConfig.model_validate({"schema_version": schema_version})
+
+    @pytest.mark.parametrize("schema_version", [True, 1.0, "1", None])
+    def test_non_integer_schema_version_is_rejected(self, schema_version: object) -> None:
+        with _raises("schema_version must be an integer"):
+            ReplacePiiConfig.model_validate({"schema_version": schema_version})
+
     def test_plan_path_and_inline_plan_properties(self) -> None:
         path_config = ReplacePiiConfig(replacement_plan="/tmp/plan.yaml")
         assert path_config.plan_path == "/tmp/plan.yaml"

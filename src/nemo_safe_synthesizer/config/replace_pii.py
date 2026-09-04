@@ -19,7 +19,14 @@ from enum import Enum, StrEnum, auto
 from pathlib import Path
 from typing import ClassVar, Literal, Self, cast
 
-from pydantic import Field, ValidationError, field_validator, model_validator
+from pydantic import (
+    Field,
+    SerializerFunctionWrapHandler,
+    ValidationError,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 
 from ..configurator.parameters import Parameters
 from ..defaults import NSS_MANAGED_ASSETS_PATH_ENV, default_managed_assets_path
@@ -53,6 +60,7 @@ __all__ = [
 # Sentinel value for ``ReplacePiiConfig.replacement_plan`` requesting automatic
 # entity discovery instead of an explicit plan.
 AUTO_DISCOVERY = "auto_discovery"
+_CURRENT_REPLACE_PII_SCHEMA_VERSION = 1
 
 
 class EntityType(StrEnum):
@@ -643,10 +651,10 @@ class ReplacePiiConfig(Parameters):
     )
 
     schema_version: Literal[1] = Field(
-        default=1,
+        default=_CURRENT_REPLACE_PII_SCHEMA_VERSION,
         description=(
-            "Version of this replace_pii config shape. Bump when fields or plan "
-            "semantics change incompatibly; only 1 is accepted in this release."
+            "Version of this replace_pii configuration schema. Missing versions are treated as version 1; "
+            "this release accepts only version 1."
         ),
     )
     replacement_plan: PiiReplacementPlan | str = Field(
@@ -681,6 +689,30 @@ class ReplacePiiConfig(Parameters):
         if isinstance(value, Mapping):
             raise_if_removed_legacy_fields(cls, cast(Mapping[str, object], value), path=())
         return value
+
+    @model_validator(mode="before")
+    @classmethod
+    def _validate_schema_version(cls, value: object) -> object:
+        """Reject invalid or unsupported versions before validating the schema body."""
+        if not isinstance(value, Mapping):
+            return value
+        mapping = cast(Mapping[str, object], value)
+        version = mapping.get("schema_version", _CURRENT_REPLACE_PII_SCHEMA_VERSION)
+        if type(version) is not int:
+            raise ParameterError("replace_pii.schema_version must be an integer")
+        if version != _CURRENT_REPLACE_PII_SCHEMA_VERSION:
+            raise ParameterError(
+                f"replace_pii schema version {version} is unsupported; "
+                f"this NSS release supports version {_CURRENT_REPLACE_PII_SCHEMA_VERSION}"
+            )
+        return value
+
+    @model_serializer(mode="wrap")
+    def _serialize_schema_version(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        """Include the current schema version even in sparse serialization."""
+        serialized = cast(dict[str, object], handler(self))
+        serialized["schema_version"] = _CURRENT_REPLACE_PII_SCHEMA_VERSION
+        return serialized
 
     @field_validator("replacement_plan", mode="before")
     @classmethod
