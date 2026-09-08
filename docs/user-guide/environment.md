@@ -25,7 +25,7 @@ For output quality and evaluation metrics, see
 | Run offline or air-gapped | [HF cache and offline](#hugging-face-cache-and-offline) · [Running in Offline Environments](running.md#running-in-offline-environments) |
 | Docker / container mounts | [Containers](#containers) · [Docker](docker.md) |
 | Logging and WandB | [Running -- Logging and Experiment Tracking](running.md#logging-and-experiment-tracking) |
-| Inference endpoint and API key (unused) | [PII Replacement](#pii-replacement) · [PII Replacement](../product-overview/pii_replacement.md) |
+| Inference endpoint and API key | [PII Replacement](#pii-replacement) · [PII Replacement](../product-overview/pii_replacement.md) |
 | Disable telemetry | [Telemetry](#telemetry) |
 | Resolve CLI vs env vs defaults | [Precedence](#precedence) |
 
@@ -182,7 +182,9 @@ model ID may instead be persisted as `replace_pii.llm.model_id`.
 
 The equivalent CLI options are `--inference-endpoint-url`,
 `--inference-model-id`, and `--inference-api-key`, which take precedence over
-environment or persisted model settings.
+environment or persisted model settings. For the model ID, the complete order
+is CLI option, environment variable, persisted `replace_pii.llm.model_id`, then
+the NSS default.
 
 Plan enhancement sends bounded raw cell samples to the configured endpoint.
 Only enable it when that endpoint is approved to receive the input data.

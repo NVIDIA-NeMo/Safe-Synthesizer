@@ -131,7 +131,7 @@ class TestInferenceSettings:
         assert settings.model_id == "cli-model"
         assert settings.api_key == "runtime-key"  # pragma: allowlist secret
 
-    def test_persisted_model_precedes_environment_model(self) -> None:
+    def test_environment_model_precedes_persisted_model(self) -> None:
         settings = resolve_inference_settings(
             LLMConfig(model_id="config-model"),
             environ={
@@ -141,6 +141,14 @@ class TestInferenceSettings:
         )
 
         assert settings.endpoint_url == "https://env.example/v1"
+        assert settings.model_id == "env-model"
+
+    def test_persisted_model_precedes_default(self) -> None:
+        settings = resolve_inference_settings(
+            LLMConfig(model_id="config-model"),
+            environ={"NSS_INFERENCE_ENDPOINT": "http://localhost:8080/v1"},
+        )
+
         assert settings.model_id == "config-model"
 
     def test_environment_precedes_defaults(self) -> None:
