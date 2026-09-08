@@ -16,7 +16,7 @@ All workflows that use `.github/actions/setup-python-env` now default to the ver
 | [container-build.yml](container-build.yml)         | `v*`, manual                 | Builds the extra-driven GPU container image and publishes GHCR tags for release tags                       |
 | [conventional-commit.yml](conventional-commit.yml) | PRs                         | Validates PR titles follow conventional commit format                                                      |
 | [docs.yml](docs.yml)                               | Push to `main` (docs paths) | Publishes `main` docs as the `latest` GitHub Pages version                                                 |
-| [release.yml](release.yml)                         | Push tags to `v*`           | Builds and publishes package to Test PyPI/PyPI, creates a GitHub release, and publishes versioned docs     |
+| [release.yml](release.yml)                         | Push tags to `v*`           | Publishes the package, release-coupled installer, a GitHub release, and versioned docs                      |
 | [secrets-detector.yml](secrets-detector.yml)       | PRs                         | Scans for accidentally committed secrets                                                                   |
 
 ## Pull Request Testing
@@ -216,8 +216,9 @@ Scans PRs for accidentally committed secrets. False positives can be added to `.
 ## Release Workflow (Production)
 
 The production release workflow verifies and publishes the wheel to Test PyPI
-and PyPI, creates a GitHub release, and publishes versioned documentation for
-final releases.
+and PyPI, creates a GitHub release with a version-pinned installer that uses
+the tagged constraints, and publishes versioned documentation for final
+releases.
 
 ### How to Release
 
@@ -234,7 +235,7 @@ The workflow performs the following steps:
 2. Verify the wheel installs in a clean end-user container
 3. Push to test PyPI
 4. Publish to PyPI - Uploads to PyPI
-5. Create GitHub release
+5. Create a GitHub release with the wheel and installer
 6. Publish versioned documentation for final releases
 
 ## Third-party action pinning
