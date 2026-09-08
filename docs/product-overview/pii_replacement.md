@@ -133,7 +133,7 @@ use `NSS_INFERENCE_ENDPOINT=http://localhost:8000/v1` with its served model ID.
 The endpoint resolves from the explicit CLI runtime flag, then
 `NSS_INFERENCE_ENDPOINT`, then the NSS default; it is never persisted in NSS
 configuration. The model resolves from the explicit CLI runtime flag, then
-`replace_pii.llm.model_id`, `NSS_INFERENCE_MODEL`, and finally the NSS default.
+`NSS_INFERENCE_MODEL`, `replace_pii.llm.model_id`, and finally the NSS default.
 The default hosted NVIDIA endpoint requires an API key. Keyless operation is
 supported for local OpenAI-compatible endpoints.
 
