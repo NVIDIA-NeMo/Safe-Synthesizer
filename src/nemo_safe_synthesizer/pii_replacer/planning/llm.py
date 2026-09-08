@@ -130,7 +130,7 @@ def resolve_inference_settings(
     api_key: str | None = None,
     environ: Mapping[str, str] | None = None,
 ) -> InferenceSettings:
-    """Resolve runtime overrides, persisted model settings, environment, and defaults.
+    """Resolve runtime overrides, environment, persisted model settings, and defaults.
 
     The endpoint and API key are deliberately absent from persisted
     configuration. They are accepted only as runtime overrides or through the
@@ -144,8 +144,8 @@ def resolve_inference_settings(
     )
     resolved_model = (
         _nonblank(model_id)
-        or _nonblank(config.model_id)
         or _nonblank(runtime_env.get("NSS_INFERENCE_MODEL"))
+        or _nonblank(config.model_id)
         or DEFAULT_NSS_INFERENCE_MODEL
     )
     resolved_key = _nonblank(api_key) or _nonblank(runtime_env.get("NSS_INFERENCE_KEY"))

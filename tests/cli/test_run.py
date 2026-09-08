@@ -765,7 +765,7 @@ class TestRunReplacePii:
         assert plan.columns_to_replace[0].column_name == "col1"
         assert plan.columns_to_replace[0].entity_type is EntityType.UNIQUE_IDENTIFIER
 
-    def test_plan_only_auto_discovery_sends_full_dataset_profile_to_llm(
+    def test_plan_only_auto_discovery_uses_runtime_inference_settings(
         self,
         cli_runner: CliRunner,
         dummy_csv: Path,
@@ -775,6 +775,7 @@ class TestRunReplacePii:
         config_path = tmp_path / "config.yaml"
         config_path.write_text("replace_pii:\n  replacement_plan: auto_discovery\n  llm:\n    model_id: test-model\n")
         monkeypatch.setenv("NSS_INFERENCE_ENDPOINT", "http://localhost:8000/v1")
+        monkeypatch.setenv("NSS_INFERENCE_MODEL", "env-model")
         responses = iter(
             [
                 '{"classifications":['
@@ -813,6 +814,7 @@ class TestRunReplacePii:
 
         assert result.exit_code == 0
         assert len(request_payloads) == 1
+        assert request_payloads[0]["model"] == "env-model"
         messages = cast(list[dict[str, str]], request_payloads[0]["messages"])
         assert '"non_null_count":2' in messages[1]["content"]
         assert (run_path / "pii_replacement_plan.yaml").exists()
