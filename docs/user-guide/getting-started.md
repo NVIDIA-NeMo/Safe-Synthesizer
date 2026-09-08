@@ -15,6 +15,7 @@ does at each stage.
 ### Prerequisites
 
 - Python 3.11–3.14 (dev tooling pins 3.13 via `.python-version` in the repo root)
+- [uv](https://docs.astral.sh/uv/)
 - CUDA runtime 12.9+
 - NVIDIA GPU (A100 or larger) for training and generation
 
@@ -34,18 +35,23 @@ does at each stage.
     notebooks. Useful for evaluating Safe Synthesizer without a local NVIDIA GPU. The
     instance bills continuously and cannot be paused -- delete it when you are finished.
 
-From a source checkout, use the installation helper to select a supported
-runtime and its package indexes:
+For most installations, download the installer from the latest stable GitHub
+release. Each released script pins the package version, constraints, and
+package indexes that were tested together.
 
 ```bash
+curl -fsSLO https://github.com/NVIDIA-NeMo/Safe-Synthesizer/releases/latest/download/install_nss.sh
+chmod +x install_nss.sh
+
 ./install_nss.sh             # CUDA 12.9 (default)
 CUDA=130 ./install_nss.sh    # CUDA 13.0
 CUDA=cpu ./install_nss.sh    # CPU-only development and validation
 ```
 
-The helper requires [uv](https://docs.astral.sh/uv/) and accepts `DRY_RUN=1`
-to print its command without installing. CUDA 13.0 requires an NVIDIA driver
-version 580.65.06 or newer.
+Use `DRY_RUN=1` to inspect the installation command without running it. CUDA
+13.0 requires an NVIDIA driver version 580.65.06 or newer. Use the manual
+commands below when you need to customize the package source or installation
+command.
 
 The CUDA and CPU extras depend on packages (PyTorch, FlashInfer) hosted on
 indexes outside PyPI. You must pass the extra index URLs shown below.

@@ -7,6 +7,8 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 readonly REPO_ROOT
 readonly INSTALLER="${REPO_ROOT}/install_nss.sh"
+readonly RELEASE_INSTALLER_BUILDER="${REPO_ROOT}/tools/build_release_installer.sh"
+readonly RELEASE_WORKFLOW="${REPO_ROOT}/.github/workflows/release.yml"
 
 assert_contains() {
     local actual="$1"
@@ -55,6 +57,8 @@ fi
 
 help_output="$(DRY_RUN=1 CUDA=help "$INSTALLER")"
 assert_contains "$help_output" "Usage:"
+assert_not_contains "$help_output" "PACKAGE_VERSION"
+assert_not_contains "$help_output" "Default: the main branch"
 assert_not_contains "$help_output" "Installing with:"
 
 if DRY_RUN=1 CUDA=unsupported "$INSTALLER" >/dev/null 2>&1; then
@@ -82,6 +86,38 @@ if [[ "${1:-}" == "venv" ]]; then
 fi
 EOF
 chmod +x "${fake_bin}/uv"
+
+local_wheel_output="$(
+    PATH="${fake_bin}:$PATH" \
+        DRY_RUN=1 \
+        CUDA=cpu \
+        PACKAGE_WHEEL=/tmp/nemo_safe_synthesizer-1.2.3-py3-none-any.whl \
+        "$INSTALLER"
+)"
+assert_contains "$local_wheel_output" \
+    "nemo-safe-synthesizer\[engine\,cpu\]\ @\ file:///tmp/nemo_safe_synthesizer-1.2.3-py3-none-any.whl"
+
+release_dir="${test_dir}/release"
+bash "$RELEASE_INSTALLER_BUILDER" 1.2.3 "$release_dir"
+release_installer="${release_dir}/install_nss.sh"
+release_output="$(PATH="${fake_bin}:$PATH" DRY_RUN=1 CUDA=129 "$release_installer")"
+assert_contains "$release_output" "nemo-safe-synthesizer\[engine\,cu129\]==1.2.3"
+assert_contains "$release_output" \
+    "https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/v1.2.3/constraints.txt"
+[[ ! -e "${release_dir}/constraints.txt" ]] || {
+    echo "Release builder unexpectedly copied constraints.txt" >&2
+    exit 1
+}
+
+release_workflow="$(<"$RELEASE_WORKFLOW")"
+assert_contains "$release_workflow" 'bash tools/build_release_installer.sh "$VERSION" dist'
+assert_contains "$release_workflow" "dist/install_nss.sh"
+assert_not_contains "$release_workflow" "dist/constraints.txt"
+
+if bash "$RELEASE_INSTALLER_BUILDER" invalid/version "${test_dir}/invalid" >/dev/null 2>&1; then
+    echo "Invalid release version unexpectedly succeeded" >&2
+    exit 1
+fi
 
 dry_venv="${test_dir}/dry-venv"
 dry_output="$(

@@ -5,7 +5,9 @@
 set -euo pipefail
 
 readonly PACKAGE_NAME="${PACKAGE_NAME:-nemo-safe-synthesizer}"
-readonly PACKAGE_VERSION="${PACKAGE_VERSION:-}"
+readonly PACKAGE_WHEEL="${PACKAGE_WHEEL:-}"
+# The release workflow replaces this value in the published installer asset.
+readonly RELEASE_VERSION=""
 readonly CUDA="${CUDA:-129}"
 readonly DRY_RUN="${DRY_RUN:-0}"
 readonly CONSTRAINTS_URL="${CONSTRAINTS_URL:-https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/main/constraints.txt}"
@@ -44,8 +46,7 @@ Usage:
 
 Environment:
   CUDA=129|130|cpu|help   Runtime extra to install. Default: 129.
-  PACKAGE_VERSION=<spec>  Optional version specifier, for example ==0.1.0.
-  CONSTRAINTS_URL=<url>   Constraints file URL. Default: the main branch.
+  CONSTRAINTS_URL=<url>   Override the installer-compatible constraints URL.
   DRY_RUN=1               Print the uv command without running it.
   UV_PROJECT_ENVIRONMENT=<path>
                           Virtual environment to create or reuse.
@@ -124,7 +125,14 @@ runtime_indexes() {
 }
 
 package_spec() {
-    printf '%s[engine,%s]%s' "$PACKAGE_NAME" "$1" "$PACKAGE_VERSION"
+    local suffix=""
+    if [[ -n "$PACKAGE_WHEEL" ]]; then
+        [[ "$PACKAGE_WHEEL" == /* ]] || die "PACKAGE_WHEEL must be an absolute path"
+        suffix=" @ file://${PACKAGE_WHEEL}"
+    elif [[ -n "$RELEASE_VERSION" ]]; then
+        suffix="==${RELEASE_VERSION}"
+    fi
+    printf '%s[engine,%s]%s' "$PACKAGE_NAME" "$1" "$suffix"
 }
 
 resolve_venv_path() {

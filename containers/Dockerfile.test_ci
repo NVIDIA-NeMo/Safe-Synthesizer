@@ -38,7 +38,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     wheel="$(find /tmp/dist -maxdepth 1 -type f -name '*.whl')" && \
     CUDA=cpu \
         UV_PROJECT_ENVIRONMENT=/opt/wheel-cpu \
-        PACKAGE_VERSION=" @ file://${wheel}" \
+        PACKAGE_WHEEL="${wheel}" \
         ./install_nss.sh && \
     uv --no-config pip check --python /opt/wheel-cpu/bin/python && \
     /opt/wheel-cpu/bin/python -c \
