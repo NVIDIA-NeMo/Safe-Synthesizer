@@ -147,9 +147,9 @@ of at most 32 profiles and 48 KiB of profile evidence. Each profile contains
 deterministic statistics and up to eight distinct cell samples truncated to 128
 characters. The prompt includes the entity catalog and the exact supported
 pattern grammars. Scope, grouping-column, and protected-column metadata is sent
-once as discovery context rather than duplicated in every column profile. NSS
-then derives replacement columns and all permitted dependency candidates
-deterministically from those classifications. The second pass can only select
+as discovery context. NSS then derives replacement columns and all permitted
+dependency candidates deterministically from those classifications. The second
+pass can only select
 contextually useful dependency candidate IDs. Candidates identify edges
 selected by the heuristic baseline so that choice remains
 available as fallible prior evidence. NSS, rather than the model, supplies the
