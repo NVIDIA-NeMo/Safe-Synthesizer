@@ -15,7 +15,7 @@ from typing_extensions import override
 from ...errors import ParameterError
 from ...llm.utils import ModelRef
 from ...observability import get_logger
-from ...pii_replacer.planning.llm import resolve_inference_settings
+from ...pii_replacer.llm_client import resolve_inference_settings
 from ...utils import hf_offline_enabled
 from ..base import ConfigCheck, IssueCollector, MetadataCheck
 from ..helpers import require_import

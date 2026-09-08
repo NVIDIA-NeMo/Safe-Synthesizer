@@ -14,7 +14,7 @@ from .plan_builder import (
     derive_dependency_candidates,
     plan_from_classifications,
 )
-from .llm import InferenceSettings, LLMPlanEnhancer, OpenAICompatibleTransport, resolve_inference_settings
+from .llm import LLMPlanEnhancer
 from .resolver import (
     ColumnProfile,
     HeuristicPlanDiscoverer,
@@ -30,9 +30,7 @@ __all__ = [
     "ColumnProfile",
     "DependencyCandidate",
     "HeuristicPlanDiscoverer",
-    "InferenceSettings",
     "LLMPlanEnhancer",
-    "OpenAICompatibleTransport",
     "PlanDiscoverer",
     "PlanDiscoveryInput",
     "PlanEnhancer",
@@ -43,7 +41,6 @@ __all__ = [
     "plan_from_classifications",
     "get_protected_columns",
     "resolve_plan",
-    "resolve_inference_settings",
     "save_plan",
     "validate_plan",
 ]
