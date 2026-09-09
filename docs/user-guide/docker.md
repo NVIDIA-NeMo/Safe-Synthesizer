@@ -16,23 +16,30 @@ The public image is available from [GitHub Container Registry (GHCR)](https://gi
 ghcr.io/nvidia-nemo/safe-synthesizer
 ```
 
-Use `latest-cu129` to evaluate the current CUDA 12.9 release:
+Select the tag for the CUDA dependency variant you need:
+
+| Variant | Evaluation tag | Versioned tag |
+|---------|----------------|---------------|
+| CUDA 12.9 | `latest-cu129` | `<version>-cu129` |
+| CUDA 13.0 | `latest-cu130` | `<version>-cu130` |
+
+For example, pull the CUDA 12.9 image:
 
 ```bash
 docker pull ghcr.io/nvidia-nemo/safe-synthesizer:latest-cu129
 ```
 
-For a reproducible workload, replace that tag with an approved versioned
-`<version>-cu129` tag or, preferably, pin the resolved manifest digest:
+For a reproducible workload, replace the evaluation tag with an approved
+versioned tag or, preferably, pin the resolved manifest digest:
 
 ```text
-ghcr.io/nvidia-nemo/safe-synthesizer:<version>-cu129
+ghcr.io/nvidia-nemo/safe-synthesizer:<version>-<variant>
 ghcr.io/nvidia-nemo/safe-synthesizer@sha256:<digest>
 ```
 
 Release tags can be easier to audit; a digest identifies immutable image
-content. Keep the `cu129` suffix when selecting a version tag because it names
-the CUDA dependency variant.
+content. Keep the `cu129` or `cu130` suffix when selecting a version tag
+because it names the CUDA dependency variant.
 
 ## Prerequisites
 
