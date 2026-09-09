@@ -161,7 +161,8 @@ def test_quality_task_commands_preserve_check_contract(pytestconfig: pytest.Conf
         tasks = tomllib.load(quality_file)
 
     assert tasks["check:lock"]["run"] == [
-        "uv run --offline --frozen tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml --check",
+        "uv run --offline --frozen tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml "
+        "--installer install_nss.sh --check",
         "uv lock --check",
     ]
     assert tasks["lock:update"]["run"] == "uv lock"
