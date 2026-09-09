@@ -136,20 +136,25 @@ class TestResolvePlan:
         assert result.columns_to_replace[0].column_name == "email"
         assert discoverer.inputs == []
 
-    def test_profiles_are_bounded_deterministic_and_keep_group_metadata_separate(
-        self,
-        fixture_patient_df: pd.DataFrame,
-    ) -> None:
+    def test_profiles_select_a_stable_bounded_set_in_dataframe_order(self) -> None:
+        dataframe = pd.DataFrame(
+            {
+                "patient_id": [index // 2 for index in range(12)],
+                "event_index": list(range(12)),
+                "name": [f"person-{index}" for index in range(12)],
+            }
+        )
+        shuffled = dataframe.sample(frac=1, random_state=7)
         discoverer = RecordingDiscoverer()
         data_config = DataParameters(
             group_training_examples_by="patient_id",
             order_training_examples_by="event_index",
         )
 
-        resolve_plan(fixture_patient_df, ReplacePiiConfig(), data_config, discoverer=discoverer)
+        resolve_plan(dataframe, ReplacePiiConfig(), data_config, discoverer=discoverer)
         first_input = discoverer.inputs[0]
         resolve_plan(
-            fixture_patient_df.sample(frac=1, random_state=7),
+            shuffled,
             ReplacePiiConfig(),
             data_config,
             discoverer=discoverer,
@@ -161,7 +166,12 @@ class TestResolvePlan:
         assert first_input.scope is PiiReplacementScope.GROUP
         assert first_input.group_column == "patient_id"
         assert first_input.protected_columns == frozenset({"event_index"})
-        assert first_profiles["name"].samples == second_profiles["name"].samples
+        first_samples = first_profiles["name"].samples
+        second_samples = second_profiles["name"].samples
+        assert len(first_samples) == 8
+        assert set(first_samples) == set(second_samples)
+        assert first_samples == tuple(value for value in dataframe["name"] if value in set(first_samples))
+        assert second_samples == tuple(value for value in shuffled["name"] if value in set(second_samples))
 
     def test_output_path_persists_the_final_plan(self, fixture_patient_df: pd.DataFrame, tmp_path: Path) -> None:
         path = tmp_path / "pii_replacement_plan.yaml"

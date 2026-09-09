@@ -20,16 +20,17 @@ from ...config.replace_pii import (
     PiiReplacementScope,
 )
 from ...config.time_series import TimeSeriesParameters
-from ...errors import ParameterError
+from ...errors import InternalError, ParameterError
+from .patterns import CHARACTER_MASK_ESCAPABLE_CHARACTERS, CHARACTER_MASK_TOKENS
 
-__all__ = ["protected_columns", "validate_plan"]
+__all__ = ["get_protected_columns", "validate_plan"]
 
 MIN_PATTERN_COVERAGE = 0.85
 _NAME_PART_PATTERN = re.compile(r"\{([^{}]+)\}")
 _NAME_PART_TOKENS = frozenset({"first", "middle", "last", "domain", "f", "m", "l"})
 
 
-def protected_columns(
+def get_protected_columns(
     data_config: DataParameters,
     time_series: TimeSeriesParameters | None = None,
 ) -> frozenset[str]:
@@ -45,30 +46,26 @@ def _template_regex(pattern: str) -> tuple[re.Pattern[str] | None, str | None]:
     parts: list[str] = []
     has_variable = False
     index = 0
-    token_regex = {
-        "#": r"\d",
-        "^": "[A-Z]",
-        "@": "[a-z]",
-        "&": "[A-Z0-9]",
-        "%": "[a-z0-9]",
-        "*": "[A-Za-z0-9]",
-    }
 
     while index < len(pattern):
         char = pattern[index]
-        if char == "\\" and index + 1 < len(pattern):
+        if char == "\\":
+            if index + 1 >= len(pattern):
+                return None, "ends with a trailing '\\'"
             index += 1
+            escaped = pattern[index]
+            if escaped not in CHARACTER_MASK_ESCAPABLE_CHARACTERS:
+                allowed = " ".join(sorted(CHARACTER_MASK_ESCAPABLE_CHARACTERS))
+                return None, f"escapes unsupported character {escaped!r}; only {allowed} may be escaped"
             parts.append(re.escape(pattern[index]))
-        elif char in token_regex:
-            parts.append(token_regex[char])
+        elif char in CHARACTER_MASK_TOKENS:
+            parts.append(CHARACTER_MASK_TOKENS[char].regex)
             has_variable = True
         elif char == "[":
-            end = pattern.find("]", index + 1)
-            if end < 0:
-                return None, "has an unclosed '[' character class"
-            choices = pattern[index + 1 : end]
-            if not choices:
-                return None, "has an empty '[]' character class"
+            choices, end, error = _character_class(pattern, index)
+            if error is not None:
+                return None, error
+            assert choices is not None
             parts.append("[" + re.escape(choices) + "]")
             has_variable = True
             index = end
@@ -79,6 +76,29 @@ def _template_regex(pattern: str) -> tuple[re.Pattern[str] | None, str | None]:
     if not has_variable:
         return None, "has no variable placeholder"
     return re.compile("".join(parts)), None
+
+
+def _character_class(pattern: str, start: int) -> tuple[str | None, int, str | None]:
+    """Parse one literal-choice class, honoring the same restricted escapes."""
+    choices: list[str] = []
+    index = start + 1
+    while index < len(pattern):
+        char = pattern[index]
+        if char == "]":
+            if not choices:
+                return None, index, "has an empty '[]' character class"
+            return "".join(choices), index, None
+        if char == "\\":
+            if index + 1 >= len(pattern):
+                return None, index, "ends with a trailing '\\'"
+            index += 1
+            char = pattern[index]
+            if char not in CHARACTER_MASK_ESCAPABLE_CHARACTERS:
+                allowed = " ".join(sorted(CHARACTER_MASK_ESCAPABLE_CHARACTERS))
+                return None, index, f"escapes unsupported character {char!r}; only {allowed} may be escaped"
+        choices.append(char)
+        index += 1
+    return None, index, "has an unclosed '[' character class"
 
 
 def _name_parts_regex(
@@ -165,7 +185,9 @@ def _iter_pattern_issues(df: pd.DataFrame, plan: PiiReplacementPlan) -> Iterator
                 yield f"column {spec.column_name!r}: pattern {pattern!r} {error}"
                 continue
             if matcher is None:
-                continue
+                raise InternalError(
+                    f"Pattern syntax {pattern_syntax!r} for entity_type {spec.entity_type.value!r} has no matcher"
+                )
             matches = sum(matcher.fullmatch(value) is not None for value in values)
 
         if values and matches / len(values) < MIN_PATTERN_COVERAGE:
@@ -187,56 +209,20 @@ def _parses_datetime(value: str, pattern: str) -> bool:
 def _iter_reference_issues(
     df: pd.DataFrame,
     plan: PiiReplacementPlan,
-    structural_columns: frozenset[str],
+    protected_columns: frozenset[str],
 ) -> Iterator[str]:
     dataframe_columns = set(df.columns)
     for spec in plan.columns_to_replace:
         if spec.column_name not in dataframe_columns:
             yield f"replacement column {spec.column_name!r} is not present in the dataframe"
-        if spec.column_name in structural_columns:
-            yield f"structural column {spec.column_name!r} cannot be replaced"
+        if spec.column_name in protected_columns:
+            yield f"protected column {spec.column_name!r} cannot be replaced"
         for dependency in spec.depends_on:
             if dependency.column_name not in dataframe_columns:
                 yield (
                     f"column {spec.column_name!r}: depends_on column "
                     f"{dependency.column_name!r} is not present in the dataframe"
                 )
-            if dependency.column_name == spec.column_name:
-                yield f"column {spec.column_name!r} cannot depend on itself"
-
-
-def _cycle_columns(plan: PiiReplacementPlan) -> list[str]:
-    """Return replacement columns involved in a dependency cycle.
-
-    The current allowed dependency matrix is acyclic, so normally validated
-    plans cannot contain a cycle. Keep this dataframe-aware gate as a defensive
-    check in case that matrix evolves or model validation is bypassed.
-    """
-    targets = {spec.column_name for spec in plan.columns_to_replace}
-    adjacency: dict[str, set[str]] = {column: set() for column in targets}
-    indegree = dict.fromkeys(targets, 0)
-
-    for spec in plan.columns_to_replace:
-        for dependency in spec.depends_on:
-            source = dependency.column_name
-            if source not in targets or source == spec.column_name or spec.column_name in adjacency[source]:
-                continue
-            adjacency[source].add(spec.column_name)
-            indegree[spec.column_name] += 1
-
-    ready = [column for column, degree in indegree.items() if degree == 0]
-    visited = 0
-    while ready:
-        source = ready.pop()
-        visited += 1
-        for target in adjacency[source]:
-            indegree[target] -= 1
-            if indegree[target] == 0:
-                ready.append(target)
-
-    if visited == len(targets):
-        return []
-    return sorted(column for column, degree in indegree.items() if degree > 0)
 
 
 def validate_plan(
@@ -246,7 +232,7 @@ def validate_plan(
     data_config: DataParameters,
     time_series: TimeSeriesParameters | None = None,
 ) -> None:
-    """Validate the selected final plan against the dataframe and structural config.
+    """Validate the selected final plan against the dataframe and data configuration.
 
     This is the resolver's single dataframe-aware validation gate. Pydantic
     model construction and LLM response parsing are separate, context-free
@@ -260,9 +246,7 @@ def validate_plan(
         elif group_column not in df.columns:
             issues.append(f"group column {group_column!r} is not present in the dataframe")
 
-    issues.extend(_iter_reference_issues(df, plan, protected_columns(data_config, time_series)))
-    if cycles := _cycle_columns(plan):
-        issues.append("replacement dependencies contain a cycle involving: " + ", ".join(repr(name) for name in cycles))
+    issues.extend(_iter_reference_issues(df, plan, get_protected_columns(data_config, time_series)))
     issues.extend(_iter_pattern_issues(df, plan))
 
     if issues:

@@ -87,13 +87,11 @@ model metadata, replacement, training, generation, or evaluation:
 ```bash
 safe-synthesizer run replace-pii --plan-only \
   --config config.yaml \
-  --data-source data.csv \
-  --run-path ./pii-plan
+  --data-source data.csv
 ```
 
-The command writes `./pii-plan/pii_replacement_plan.yaml`. Without
-`--run-path`, it writes the same filename in the standard timestamped NSS run
-directory under `--artifact-path`.
+The command writes `pii_replacement_plan.yaml` in the standard timestamped NSS
+run directory under `--artifact-path`.
 
 The matching SDK interface returns the resolved plan and writes YAML only when
 an output path is supplied:

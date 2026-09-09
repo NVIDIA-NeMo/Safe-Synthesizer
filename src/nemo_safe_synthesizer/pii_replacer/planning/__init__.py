@@ -22,7 +22,7 @@ from .resolver import (
     PlanEnhancer,
     resolve_plan,
 )
-from .validation import protected_columns, validate_plan
+from .validation import get_protected_columns, validate_plan
 
 __all__ = [
     "ColumnClassification",
@@ -37,7 +37,7 @@ __all__ = [
     "load_plan",
     "pattern_grammar_catalog",
     "plan_from_classifications",
-    "protected_columns",
+    "get_protected_columns",
     "resolve_plan",
     "save_plan",
     "validate_plan",

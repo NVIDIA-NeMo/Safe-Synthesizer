@@ -13,13 +13,14 @@ from pydantic import BaseModel, ConfigDict, model_validator
 
 from ...config.replace_pii import (
     ALLOWED_DEPENDS_ON,
-    ENTITY_BY_TYPE,
     ConditioningColumn,
     EntityType,
     PiiColumnPlan,
     PiiReplacementPlan,
     PiiReplacementScope,
     is_columns_to_replace_type,
+    validate_dependency_relationship,
+    validate_pattern_eligibility,
 )
 from ...errors import ParameterError
 
@@ -43,35 +44,61 @@ class ColumnClassification(BaseModel):
 
     @model_validator(mode="after")
     def _validate_pattern_eligibility(self) -> Self:
-        if self.pattern is None:
-            return self
-        if not self.pattern.strip():
-            raise ValueError("patterns must be non-empty when provided")
-        if self.entity_type is None:
-            raise ValueError("unclassified columns cannot include a pattern")
-        if ENTITY_BY_TYPE[self.entity_type].pattern_syntax is None:
-            raise ValueError("the classified entity_type does not support patterns")
+        validate_pattern_eligibility(self.entity_type, self.pattern)
         return self
 
 
 @dataclass(frozen=True, slots=True)
 class DependencyCandidate:
-    """One catalog-permitted dependency that a planner may select."""
+    """One proposed dependency edge identified only by dataframe columns.
+
+    Entity types deliberately remain in ``ColumnClassification`` as the single
+    source of truth. ``apply_dependencies`` validates this edge against those
+    classifications and the target plan before constructing the final plan.
+    """
 
     target_column: str
-    target_entity_type: EntityType
     source_column: str
-    source_entity_type: EntityType
 
     def __post_init__(self) -> None:
         if self.target_column == self.source_column:
             raise ParameterError("a dependency candidate cannot target and source the same column")
-        allowed_sources = ALLOWED_DEPENDS_ON.get(self.target_entity_type, frozenset())
-        if self.source_entity_type not in allowed_sources:
+
+
+def _classifications_by_column(
+    classifications: Sequence[ColumnClassification],
+) -> dict[str, ColumnClassification]:
+    """Index classifications and reject ambiguous duplicate column entries."""
+    by_column: dict[str, ColumnClassification] = {}
+    duplicates: list[str] = []
+    for classification in classifications:
+        if classification.column_name in by_column:
+            duplicates.append(classification.column_name)
+        by_column[classification.column_name] = classification
+    if duplicates:
+        raise ParameterError(
+            "classifications has duplicate column_name values: " + ", ".join(repr(column) for column in duplicates)
+        )
+    return by_column
+
+
+def _validate_plan_classifications(
+    plan: PiiReplacementPlan,
+    classifications_by_column: dict[str, ColumnClassification],
+) -> dict[str, PiiColumnPlan]:
+    """Ensure replacement targets agree with their semantic classifications."""
+    targets = {spec.column_name: spec for spec in plan.columns_to_replace}
+    for target in targets.values():
+        classification = classifications_by_column.get(target.column_name)
+        if classification is None:
+            raise ParameterError(f"replacement column {target.column_name!r} is missing from classifications")
+        if classification.entity_type is not target.entity_type:
+            classified_as = classification.entity_type.value if classification.entity_type is not None else None
             raise ParameterError(
-                f"entity_type {self.source_entity_type.value!r} cannot condition "
-                f"entity_type {self.target_entity_type.value!r}"
+                f"replacement column {target.column_name!r} is classified as {classified_as!r}, "
+                f"but the plan uses {target.entity_type.value!r}"
             )
+    return targets
 
 
 def plan_from_classifications(
@@ -81,6 +108,7 @@ def plan_from_classifications(
     protected_columns: Set[str] = frozenset(),
 ) -> PiiReplacementPlan:
     """Build replacement membership deterministically from semantic classifications."""
+    _classifications_by_column(classifications)
     columns_to_replace: list[PiiColumnPlan] = []
     for classification in classifications:
         entity_type = classification.entity_type
@@ -105,6 +133,8 @@ def derive_dependency_candidates(
     classifications: Sequence[ColumnClassification],
 ) -> list[DependencyCandidate]:
     """Return every dependency permitted by the entity relationship catalog."""
+    classifications_by_column = _classifications_by_column(classifications)
+    _validate_plan_classifications(plan, classifications_by_column)
     candidates: list[DependencyCandidate] = []
     for target in plan.columns_to_replace:
         allowed_sources = ALLOWED_DEPENDS_ON.get(target.entity_type, frozenset())
@@ -118,9 +148,7 @@ def derive_dependency_candidates(
             candidates.append(
                 DependencyCandidate(
                     target_column=target.column_name,
-                    target_entity_type=target.entity_type,
                     source_column=source.column_name,
-                    source_entity_type=source.entity_type,
                 )
             )
     return candidates
@@ -129,25 +157,35 @@ def derive_dependency_candidates(
 def apply_dependencies(
     plan: PiiReplacementPlan,
     dependencies: Sequence[DependencyCandidate],
+    *,
+    classifications: Sequence[ColumnClassification],
 ) -> PiiReplacementPlan:
-    """Return ``plan`` with the selected catalog-derived dependencies applied."""
+    """Validate and apply selected dependency edges using classified entity types."""
     dependencies_by_target: dict[str, list[ConditioningColumn]] = {}
-    targets = {spec.column_name: spec for spec in plan.columns_to_replace}
+    classifications_by_column = _classifications_by_column(classifications)
+    targets = _validate_plan_classifications(plan, classifications_by_column)
     for dependency in dependencies:
         target = targets.get(dependency.target_column)
         if target is None:
             raise ParameterError(f"dependency targets unknown replacement column {dependency.target_column!r}")
-        if target.entity_type is not dependency.target_entity_type:
-            raise ParameterError(
-                f"dependency target {dependency.target_column!r} is classified as "
-                f"{dependency.target_entity_type.value!r}, but the plan uses {target.entity_type.value!r}"
-            )
-        dependencies_by_target.setdefault(dependency.target_column, []).append(
-            ConditioningColumn(
-                column_name=dependency.source_column,
-                entity_type=dependency.source_entity_type,
-            )
+        source = classifications_by_column.get(dependency.source_column)
+        if source is None:
+            raise ParameterError(f"dependency sources unknown classified column {dependency.source_column!r}")
+        if source.entity_type is None:
+            raise ParameterError(f"dependency source {dependency.source_column!r} is unclassified")
+        validate_dependency_relationship(
+            target.entity_type,
+            source.entity_type,
+            target_column=target.column_name,
         )
+        # Replacement sources omit entity_type so PiiReplacementPlan infers it
+        # from the source node. Read-only sources retain their explicit type.
+        conditioner = (
+            ConditioningColumn(column_name=source.column_name)
+            if source.column_name in targets
+            else ConditioningColumn(column_name=source.column_name, entity_type=source.entity_type)
+        )
+        dependencies_by_target.setdefault(dependency.target_column, []).append(conditioner)
 
     return PiiReplacementPlan(
         scope=plan.scope,

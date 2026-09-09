@@ -213,8 +213,8 @@ optional.
 | `--config` | `NSS_CONFIG` | (model defaults) | Path to YAML config file; omit to use all model defaults |
 | `--data-source` | -- | (required) | Dataset path, URL, or name from `--dataset-registry` |
 | `--artifact-path` | `NSS_ARTIFACTS_PATH` | `./safe-synthesizer-artifacts` | Base directory for all runs |
-| `--run-path` | -- | -- | Explicit run directory (for `run generate`, must point to an existing trained run; for plan-only, receives the plan artifact) |
-| `--output-file` | -- | -- | Path to synthetic output CSV; unused by plan-only |
+| `--run-path` | -- | -- | Explicit run directory (for `run generate`, must point to an existing trained run) |
+| `--output-file` | -- | -- | Path to output CSV file |
 | `--log-format` | `NSS_LOG_FORMAT` | `plain` (TTY) / `json` (non-TTY) | Console log format -- auto-detected from TTY; accepts `plain` or `json` |
 | `--log-file` | `NSS_LOG_FILE` | -- | Log file path (defaults to run directory) |
 | `--log-color` / `--no-log-color` | `NSS_LOG_COLOR` | auto | Colorize console output (auto-detected from TTY) |
@@ -286,14 +286,12 @@ evaluation.
 ```bash
 safe-synthesizer run replace-pii --plan-only \
   --config config.yaml \
-  --data-source data.csv \
-  --run-path ./pii-plan
+  --data-source data.csv
 ```
 
-The command writes `./pii-plan/pii_replacement_plan.yaml`. When `--run-path` is
-omitted, the plan is written to the standard timestamped run directory beneath
-`--artifact-path`. `run replace-pii` without `--plan-only` remains unavailable
-until replacement execution is implemented.
+The command writes `pii_replacement_plan.yaml` in the standard timestamped run
+directory beneath `--artifact-path`. `run replace-pii` without `--plan-only`
+remains unavailable until replacement execution is implemented.
 
 The SDK equivalent returns the plan object. Supplying `output_path` also writes
 the reusable YAML artifact; omitting it performs no plan write.
@@ -577,8 +575,7 @@ without entering the synthesis pipeline:
 ```bash
 safe-synthesizer run replace-pii --plan-only \
   --config config.yaml \
-  --data-source data.csv \
-  --run-path ./pii-plan
+  --data-source data.csv
 ```
 
 Replacement execution is not available on this branch. Set `replace_pii: null`,

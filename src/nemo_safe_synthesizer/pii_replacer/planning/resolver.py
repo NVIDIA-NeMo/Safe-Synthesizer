@@ -17,7 +17,7 @@ from ...config.replace_pii import PiiReplacementPlan, PiiReplacementScope, Repla
 from ...config.time_series import TimeSeriesParameters
 from ...errors import ParameterError
 from .io import load_plan, save_plan
-from .validation import protected_columns, validate_plan
+from .validation import get_protected_columns, validate_plan
 
 __all__ = [
     "ColumnProfile",
@@ -87,14 +87,16 @@ def _stable_samples(series: pd.Series) -> tuple[str, ...]:
     """Pick a bounded set of distinct raw column values for discovery.
 
     Nulls are removed, values are converted to truncated strings, and duplicate
-    strings are collapsed. Hash ordering assigns each distinct value a stable,
-    content-based priority, so reordering dataframe rows does not change which
-    values are selected.
+    strings are collapsed. Content hashes assign each distinct value a stable
+    priority, so reordering dataframe rows does not change which values are
+    selected. The selected values are returned in dataframe order.
     """
-    values = {str(value)[:MAX_PROFILE_SAMPLE_LENGTH] for value in series.dropna().tolist()}
-    # Rank distinct values by their content rather than sampling row positions.
-    ordered = sorted(values, key=lambda value: hashlib.sha256(value.encode()).digest())
-    return tuple(ordered[:MAX_PROFILE_SAMPLES])
+    values = list(dict.fromkeys(str(value)[:MAX_PROFILE_SAMPLE_LENGTH] for value in series.dropna().tolist()))
+    # Rank distinct values by content to choose a row-order-independent subset,
+    # then present that subset in first-occurrence dataframe order. The hashes
+    # select values deterministically; they do not anonymize the returned text.
+    selected = set(sorted(values, key=lambda value: hashlib.sha256(value.encode()).digest())[:MAX_PROFILE_SAMPLES])
+    return tuple(value for value in values if value in selected)
 
 
 def _profile_columns(df: pd.DataFrame) -> tuple[ColumnProfile, ...]:
@@ -123,12 +125,12 @@ def _prepare_discovery_input(
 ) -> PlanDiscoveryInput:
     group_column = data_config.group_training_examples_by
     scope = PiiReplacementScope.GROUP if group_column is not None else PiiReplacementScope.DATAFRAME
-    structural_columns = protected_columns(data_config, time_series)
+    protected_columns = get_protected_columns(data_config, time_series)
     return PlanDiscoveryInput(
         dataframe=df,
         scope=scope,
         group_column=group_column,
-        protected_columns=structural_columns,
+        protected_columns=protected_columns,
         column_profiles=_profile_columns(df),
     )
 

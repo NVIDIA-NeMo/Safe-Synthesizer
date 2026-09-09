@@ -1,18 +1,21 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+from dataclasses import replace
+
 import pandas as pd
 import pytest
 
 from nemo_safe_synthesizer.config.data import DataParameters
 from nemo_safe_synthesizer.config.replace_pii import (
+    ENTITY_BY_TYPE,
     ConditioningColumn,
     EntityType,
     PiiColumnPlan,
     PiiReplacementPlan,
     PiiReplacementScope,
 )
-from nemo_safe_synthesizer.errors import ParameterError
+from nemo_safe_synthesizer.errors import InternalError, ParameterError
 from nemo_safe_synthesizer.pii_replacer.planning import validate_plan
 
 
@@ -75,14 +78,71 @@ class TestValidatePlan:
 
         validate_plan(dataframe, plan, data_config=DataParameters())
 
-    def test_accepts_all_documented_character_mask_classes(self) -> None:
-        dataframe = pd.DataFrame({"identifier": ["A7-a8", "Z0-z9"]})
+    @pytest.mark.parametrize(
+        ("pattern", "value"),
+        [
+            ("#", "7"),
+            ("^", "A"),
+            ("@", "a"),
+            ("&", "7"),
+            ("%", "a"),
+            ("*", "Z"),
+            ("[abc]", "b"),
+        ],
+    )
+    def test_accepts_every_documented_character_mask_token(self, pattern: str, value: str) -> None:
+        dataframe = pd.DataFrame({"identifier": [value]})
         plan = PiiReplacementPlan(
             columns_to_replace=[
                 PiiColumnPlan(
                     column_name="identifier",
                     entity_type=EntityType.UNIQUE_IDENTIFIER,
-                    pattern="&&-%%",
+                    pattern=pattern,
+                )
+            ]
+        )
+
+        validate_plan(dataframe, plan, data_config=DataParameters())
+
+    @pytest.mark.parametrize("escaped", ["#", "^", "@", "%", "&", "*", "[", "]", "\\"])
+    def test_accepts_every_documented_character_mask_escape(self, escaped: str) -> None:
+        dataframe = pd.DataFrame({"identifier": [f"{escaped}7"]})
+        plan = PiiReplacementPlan(
+            columns_to_replace=[
+                PiiColumnPlan(
+                    column_name="identifier",
+                    entity_type=EntityType.UNIQUE_IDENTIFIER,
+                    pattern=f"\\{escaped}#",
+                )
+            ]
+        )
+
+        validate_plan(dataframe, plan, data_config=DataParameters())
+
+    @pytest.mark.parametrize("pattern", [r"\d#", r"\s#", "#\\"])
+    def test_rejects_unsupported_or_incomplete_character_mask_escape(self, pattern: str) -> None:
+        dataframe = pd.DataFrame({"identifier": ["d7"]})
+        plan = PiiReplacementPlan(
+            columns_to_replace=[
+                PiiColumnPlan(
+                    column_name="identifier",
+                    entity_type=EntityType.UNIQUE_IDENTIFIER,
+                    pattern=pattern,
+                )
+            ]
+        )
+
+        with pytest.raises(ParameterError, match="unsupported character|trailing"):
+            validate_plan(dataframe, plan, data_config=DataParameters())
+
+    def test_accepts_uppercase_name_initial_placeholders(self) -> None:
+        dataframe = pd.DataFrame({"name": ["AGH"]})
+        plan = PiiReplacementPlan(
+            columns_to_replace=[
+                PiiColumnPlan(
+                    column_name="name",
+                    entity_type=EntityType.FULL_NAME,
+                    pattern="{F}{M}{L}",
                 )
             ]
         )
@@ -140,7 +200,7 @@ class TestValidatePlan:
             columns_to_replace=[PiiColumnPlan(column_name="event_index", entity_type=EntityType.UNIQUE_IDENTIFIER)],
         )
 
-        with pytest.raises(ParameterError, match="structural column 'event_index' cannot be replaced"):
+        with pytest.raises(ParameterError, match="protected column 'event_index' cannot be replaced"):
             validate_plan(
                 dataframe,
                 plan,
@@ -163,48 +223,6 @@ class TestValidatePlan:
                 data_config=DataParameters(group_training_examples_by="missing_group"),
             )
 
-    def test_rejects_self_dependency(self, fixture_pii_df: pd.DataFrame) -> None:
-        plan = PiiReplacementPlan.model_construct(
-            scope=PiiReplacementScope.DATAFRAME,
-            columns_to_replace=[
-                PiiColumnPlan.model_construct(
-                    column_name="name",
-                    entity_type=EntityType.FULL_NAME,
-                    pattern=None,
-                    depends_on=[
-                        ConditioningColumn.model_construct(column_name="name", entity_type=EntityType.FULL_NAME)
-                    ],
-                )
-            ],
-        )
-
-        with pytest.raises(ParameterError, match="cannot depend on itself"):
-            validate_plan(fixture_pii_df, plan, data_config=DataParameters())
-
-    def test_rejects_dependency_cycles(self, fixture_pii_df: pd.DataFrame) -> None:
-        plan = PiiReplacementPlan.model_construct(
-            scope=PiiReplacementScope.DATAFRAME,
-            columns_to_replace=[
-                PiiColumnPlan.model_construct(
-                    column_name="name",
-                    entity_type=EntityType.FULL_NAME,
-                    pattern=None,
-                    depends_on=[ConditioningColumn.model_construct(column_name="email", entity_type=EntityType.EMAIL)],
-                ),
-                PiiColumnPlan.model_construct(
-                    column_name="email",
-                    entity_type=EntityType.EMAIL,
-                    pattern=None,
-                    depends_on=[
-                        ConditioningColumn.model_construct(column_name="name", entity_type=EntityType.FULL_NAME)
-                    ],
-                ),
-            ],
-        )
-
-        with pytest.raises(ParameterError, match="dependencies contain a cycle"):
-            validate_plan(fixture_pii_df, plan, data_config=DataParameters())
-
     def test_rejects_pattern_below_coverage_threshold(self, fixture_pii_df: pd.DataFrame) -> None:
         plan = PiiReplacementPlan(
             columns_to_replace=[
@@ -218,3 +236,22 @@ class TestValidatePlan:
 
         with pytest.raises(ParameterError, match="covers 0.0%.*at least 85%"):
             validate_plan(fixture_pii_df, plan, data_config=DataParameters())
+
+    def test_missing_matcher_is_an_internal_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        entity = ENTITY_BY_TYPE[EntityType.UNIQUE_IDENTIFIER]
+        monkeypatch.setitem(ENTITY_BY_TYPE, EntityType.UNIQUE_IDENTIFIER, replace(entity, pattern_syntax=None))
+        dataframe = pd.DataFrame({"identifier": ["7"]})
+        plan = PiiReplacementPlan.model_construct(
+            scope=PiiReplacementScope.DATAFRAME,
+            columns_to_replace=[
+                PiiColumnPlan.model_construct(
+                    column_name="identifier",
+                    entity_type=EntityType.UNIQUE_IDENTIFIER,
+                    pattern="#",
+                    depends_on=[],
+                )
+            ],
+        )
+
+        with pytest.raises(InternalError, match="has no matcher"):
+            validate_plan(dataframe, plan, data_config=DataParameters())

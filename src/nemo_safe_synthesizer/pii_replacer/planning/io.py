@@ -11,6 +11,7 @@ import yaml
 from pydantic import ValidationError
 
 from ...config.replace_pii import PiiReplacementPlan
+from ...config.validation import format_pydantic_validation_error
 from ...errors import ParameterError
 
 __all__ = ["load_plan", "save_plan"]
@@ -62,16 +63,39 @@ def load_plan(path: str | Path) -> PiiReplacementPlan:
     try:
         return PiiReplacementPlan.model_validate(_plan_body(raw, plan_path))
     except ValidationError as exc:
-        raise ParameterError(f"Invalid PII replacement plan in {str(plan_path)!r}: {exc}") from exc
+        details = format_pydantic_validation_error(exc)
+        raise ParameterError(f"Invalid PII replacement plan in {str(plan_path)!r} ({details})") from exc
+
+
+def _plan_document(plan: PiiReplacementPlan) -> dict[str, object]:
+    """Return canonical sparse YAML data while preserving inferred-type omission."""
+    columns: list[dict[str, object]] = []
+    for spec in plan.columns_to_replace:
+        serialized_spec: dict[str, object] = {
+            "column_name": spec.column_name,
+            "entity_type": spec.entity_type.value,
+        }
+        if spec.pattern is not None:
+            serialized_spec["pattern"] = spec.pattern
+        if spec.depends_on:
+            dependencies: list[dict[str, object]] = []
+            for dependency in spec.depends_on:
+                serialized_dependency: dict[str, object] = {"column_name": dependency.column_name}
+                if "entity_type" in dependency.model_fields_set and dependency.entity_type is not None:
+                    serialized_dependency["entity_type"] = dependency.entity_type.value
+                dependencies.append(serialized_dependency)
+            serialized_spec["depends_on"] = dependencies
+        columns.append(serialized_spec)
+    return {
+        "schema_version": _CURRENT_PLAN_SCHEMA_VERSION,
+        "scope": plan.scope.value,
+        "columns_to_replace": columns,
+    }
 
 
 def save_plan(plan: PiiReplacementPlan, path: str | Path) -> Path:
     """Save a replacement plan as a versioned reusable standalone YAML document."""
     plan_path = Path(path)
     plan_path.parent.mkdir(parents=True, exist_ok=True)
-    document = {
-        "schema_version": _CURRENT_PLAN_SCHEMA_VERSION,
-        **plan.model_dump(mode="json", exclude_unset=False),
-    }
-    plan_path.write_text(yaml.safe_dump(document, sort_keys=False))
+    plan_path.write_text(yaml.safe_dump(_plan_document(plan), sort_keys=False))
     return plan_path
