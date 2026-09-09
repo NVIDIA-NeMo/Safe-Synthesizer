@@ -201,11 +201,11 @@ Current image name:
 ghcr.io/nvidia-nemo/safe-synthesizer
 ```
 
-On release tags, current `cu129` tags include:
+On release tags, each variant (`cu129` and `cu130`) receives:
 
-- `cu129` and `latest-cu129`
-- `<version>-cu129` and `<major>.<minor>-cu129` on `v*` tags
-- `sha-<short-sha>-cu129` for traceability
+- `<variant>` and `latest-<variant>`
+- `<version>-<variant>` and `<major>.<minor>-<variant>` on `v*` tags
+- `sha-<short-sha>-<variant>` for traceability
 
 The workflow passes `PACKAGE_VERSION` into the Docker build. On release tags,
 this is the tag without the leading `v`; on non-tag builds, it is
