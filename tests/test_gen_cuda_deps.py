@@ -44,7 +44,7 @@ torch_runtime_deps = [
 cuda_runtime_deps = [
   { name = "flashinfer-python", version = "0.6.6", sys_platform = "linux", source_kind = "flashinfer" },
   { name = "flashinfer-jit-cache", version = "0.6.6", local = "{torch_local_version}", sys_platform = "linux", source_kind = "flashinfer", variants = ["cu129"] },
-  { name = "nvidia-cublas", sys_platform = "linux" },
+  { name = "nvidia-cublas{nvidia_package_suffix}", sys_platform = "linux" },
 ]
 torch_wheel_deps = [
   { name = "torch", version = "3.0.0", local = "{torch_local_version}", sys_platform = "linux", source_kind = "pytorch" },
@@ -342,9 +342,15 @@ def test_repository_cuda_variant_dependencies_and_sources(pytestconfig: pytest.C
     parsed = tomllib.loads(generated.text)
 
     assert "vllm==0.27.0+cu129; sys_platform == 'linux'" in parsed["project"]["optional-dependencies"]["cu129"]
-    assert "vllm==0.26.0; sys_platform == 'linux'" in parsed["project"]["optional-dependencies"]["cu130"]
+    assert "vllm==0.27.0; sys_platform == 'linux'" in parsed["project"]["optional-dependencies"]["cu130"]
+    assert "nvidia-cublas; sys_platform == 'linux'" in parsed["project"]["optional-dependencies"]["cu130"]
+    assert all(
+        not dependency.startswith("nvidia-cublas-cu13")
+        for dependency in parsed["project"]["optional-dependencies"]["cu130"]
+    )
     assert parsed["tool"]["uv"]["sources"]["vllm"] == [
-        {"index": "vllm-v0-27-0-cu129", "marker": "sys_platform == 'linux'", "extra": "cu129"}
+        {"index": "vllm-v0-27-0-cu129", "marker": "sys_platform == 'linux'", "extra": "cu129"},
+        {"index": "vllm-v0-27-0-cu130", "marker": "sys_platform == 'linux'", "extra": "cu130"},
     ]
     assert parsed["tool"]["uv"]["sources"]["flashinfer-jit-cache"] == [
         {"index": "flashinfer-jit-cache-cu129", "marker": "sys_platform == 'linux'", "extra": "cu129"},
@@ -354,6 +360,7 @@ def test_repository_cuda_variant_dependencies_and_sources(pytestconfig: pytest.C
     indexes = {index["name"]: index["url"] for index in parsed["tool"]["uv"]["index"]}
     assert indexes["flashinfer-jit-cache-cu129"] == "https://flashinfer.ai/whl/cu129"
     assert indexes["flashinfer-jit-cache-cu130"] == "https://flashinfer.ai/whl/cu130"
+    assert indexes["vllm-v0-27-0-cu130"] == "https://wheels.vllm.ai/0.27.0/cu130"
 
 
 def test_click_cli_updates_pyproject_and_checks_drift(tmp_path: Path, generator: ModuleType) -> None:

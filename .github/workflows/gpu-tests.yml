@@ -161,11 +161,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - cuda-extra: cu129
+          - python-version: "3.13"
+            cuda-extra: cu129
             required: true
           # Non-required while the CUDA 13 rollout is validated. Promote to
           # required once cu130 has container-build coverage (see docs/developer-guide/docker.md).
-          - cuda-extra: cu130
+          - python-version: "3.13"
+            cuda-extra: cu130
             required: false
     steps:
       - name: checkout
@@ -177,6 +179,7 @@ jobs:
       - name: Setup GPU test environment
         uses: ./.github/actions/setup-gpu-test-env
         with:
+          python-version: ${{ matrix.python-version }}
           cuda-extra: ${{ matrix.cuda-extra }}
 
       - name: Run GPU E2E tests
