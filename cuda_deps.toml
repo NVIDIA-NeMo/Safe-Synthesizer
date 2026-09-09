@@ -8,8 +8,8 @@ base_runtime_deps = []
 torch_runtime_deps = [
     "accelerate>=1.1.0",
     "bitsandbytes>=0.46.1",
-    "flashinfer-python==0.6.14; sys_platform == 'linux'",
-    "flashinfer-cubin==0.6.14; sys_platform == 'linux'",
+    "flashinfer-python==0.6.16.post3; sys_platform == 'linux'",
+    "flashinfer-cubin==0.6.16.post3; sys_platform == 'linux'",
     "gliner",
     "kernels>=0.12.1,<0.15",
     "opacus",
@@ -21,7 +21,7 @@ torch_runtime_deps = [
 ]
 
 cuda_runtime_deps = [
-    { name = "flashinfer-jit-cache", version = "0.6.14", local = "{torch_local_version}", sys_platform = "linux", source_kind = "flashinfer" },
+    { name = "flashinfer-jit-cache", version = "0.6.16.post3", local = "{torch_local_version}", sys_platform = "linux", source_kind = "flashinfer" },
     { name = "nvidia-cublas-{cuda_package_suffix}", sys_platform = "linux" },
     "nvidia-ml-py; sys_platform == 'linux'",
     "torch-c-dlpack-ext",
@@ -30,9 +30,9 @@ cuda_runtime_deps = [
 ]
 
 torch_wheel_deps = [
-    { name = "torch", version = "2.11.0", local = "{torch_local_version}", sys_platform = "linux", source_kind = "pytorch" },
+    { name = "torch", version = "2.13.0", local = "{torch_local_version}", sys_platform = "linux", source_kind = "pytorch" },
     { name = "torchaudio", version = "2.11.0", local = "{torch_local_version}", sys_platform = "linux", source_kind = "pytorch" },
-    { name = "torchvision", version = "0.26.0", local = "{torch_local_version}", sys_platform = "linux", source_kind = "pytorch" },
+    { name = "torchvision", version = "0.28.0", local = "{torch_local_version}", sys_platform = "linux", source_kind = "pytorch" },
     { name = "torchao", version = "0.17.0", local = "{torch_local_version}", sys_platform = "linux", arch = "x86_64", source_kind = "pytorch" },
 ]
 
@@ -56,16 +56,16 @@ nvidia_cuda_libraries = [
 
 [cpu]
 dependencies = [
-    { name = "torch", version = "2.11.0", sys_platform = "darwin" },
-    { name = "torch", version = "2.11.0", local = "cpu", sys_platform = "linux", index = "pytorch-cpu" },
+    { name = "torch", version = "2.13.0", sys_platform = "darwin" },
+    { name = "torch", version = "2.13.0", local = "cpu", sys_platform = "linux", index = "pytorch-cpu" },
     { name = "torchaudio", version = "2.11.0", sys_platform = "darwin" },
     { name = "torchaudio", version = "2.11.0", local = "cpu", sys_platform = "linux", index = "pytorch-cpu" },
-    { name = "torchvision", version = "0.26.0", sys_platform = "darwin" },
-    { name = "torchvision", version = "0.26.0", local = "cpu", sys_platform = "linux", index = "pytorch-cpu" },
+    { name = "torchvision", version = "0.28.0", sys_platform = "darwin" },
+    { name = "torchvision", version = "0.28.0", local = "cpu", sys_platform = "linux", index = "pytorch-cpu" },
     "torchao==0.17.0",
     "transformers==5.12.0",
     "triton>=2.0.0; sys_platform=='linux'",
-    "vllm==0.26.0; sys_platform=='linux'",
+    "vllm==0.27.0; sys_platform=='linux'",
 ]
 
 [[indexes]]
@@ -79,8 +79,8 @@ url = "https://flashinfer.ai/whl/"
 explicit = true
 
 [[indexes]]
-name = "vllm-v0-26-0-cu129"
-url = "https://wheels.vllm.ai/0.26.0/cu129"
+name = "vllm-v0-27-0-cu129"
+url = "https://wheels.vllm.ai/0.27.0/cu129"
 explicit = true
 
 [cuda_indexes.pytorch]
@@ -105,11 +105,11 @@ flashinfer-cubin = [
     { index = "flashinfer-cubin", marker = "sys_platform == 'linux'" },
 ]
 vllm = [
-    { index = "vllm-v0-26-0-cu129", marker = "sys_platform == 'linux'", extra = "cu129" },
+    { index = "vllm-v0-27-0-cu129", marker = "sys_platform == 'linux'", extra = "cu129" },
 ]
 
 [variants.cu129]
 cuda_package_suffix = "cu12"
 dependencies = [
-    "vllm==0.26.0+{torch_local_version}; sys_platform == 'linux'",
+    "vllm==0.27.0+{torch_local_version}; sys_platform == 'linux'",
 ]

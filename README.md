@@ -31,7 +31,7 @@ uv pip install "nemo-safe-synthesizer[cu129,engine]" \
   --index https://flashinfer.ai/whl/cu129 \
   --index https://flashinfer.ai/whl/ \
   --index https://download.pytorch.org/whl/cu129 \
-  --index https://wheels.vllm.ai/0.26.0/cu129 \
+  --index https://wheels.vllm.ai/0.27.0/cu129 \
   --index-strategy unsafe-best-match
 
 # With pip:
@@ -39,7 +39,7 @@ pip install "nemo-safe-synthesizer[cu129,engine]" \
   --extra-index-url https://download.pytorch.org/whl/cu129 \
   --extra-index-url https://flashinfer.ai/whl/cu129 \
   --extra-index-url https://flashinfer.ai/whl/ \
-  --extra-index-url https://wheels.vllm.ai/0.26.0/cu129
+  --extra-index-url https://wheels.vllm.ai/0.27.0/cu129
 ```
 
 Or install from source:
