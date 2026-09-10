@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 from .io import load_plan, save_plan
+from .llm import LLMPlanEnhancer
 from .patterns import pattern_grammar_catalog
 from .plan_builder import (
     ColumnClassification,
@@ -14,7 +15,6 @@ from .plan_builder import (
     derive_dependency_candidates,
     plan_from_classifications,
 )
-from .llm import LLMPlanEnhancer
 from .resolver import (
     ColumnProfile,
     HeuristicPlanDiscoverer,
