@@ -116,7 +116,7 @@ class TestClassificationBatching:
         class CapturingDiscoverer(PlanDiscoverer):
             def discover(self, discovery_input: PlanDiscoveryInput) -> PiiReplacementPlan:
                 captured.append(discovery_input)
-                return PiiReplacementPlan(scope=discovery_input.scope)
+                return PiiReplacementPlan()
 
         resolve_plan(dataframe, ReplacePiiConfig(), DataParameters(), discoverer=CapturingDiscoverer())
         batches = _profile_batches(captured[0].column_profiles)
@@ -159,7 +159,6 @@ class TestLLMPlanEnhancer:
         classification_messages, classification_model = transport.calls[0]
         classification_payload = json.loads(classification_messages[1]["content"])
         assert classification_payload["discovery_context"] == {
-            "scope": "dataframe",
             "group_column": None,
             "protected_columns": [],
         }
@@ -295,7 +294,6 @@ class TestLLMPlanEnhancer:
         assert [spec.column_name for spec in plan.columns_to_replace] == ["patient_id", "first_name"]
         classification_payload = json.loads(transport.calls[0][0][1]["content"])
         assert classification_payload["discovery_context"] == {
-            "scope": "group",
             "group_column": "patient_id",
             "protected_columns": ["event_index"],
         }
