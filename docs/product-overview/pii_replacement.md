@@ -146,16 +146,17 @@ semantic entity type and may propose a replacement pattern, in bounded batches
 of at most 32 profiles and 48 KiB of profile evidence. Each profile contains
 deterministic statistics and up to eight distinct cell samples truncated to 128
 characters. The prompt includes the entity catalog and the exact supported
-pattern grammars. Scope, grouping-column, and protected-column metadata is sent
-as discovery context. NSS then derives replacement columns and all permitted
+pattern grammars. Grouping-column and protected-column metadata is sent as
+discovery context. NSS then derives replacement columns and all permitted
 dependency candidates deterministically from those classifications. The second
 pass can only select
 contextually useful dependency candidate IDs. Candidates identify edges
 selected by the heuristic baseline so that choice remains
-available as fallible prior evidence. NSS, rather than the model, supplies the
-plan scope, excludes protected ordering and timestamp columns, and validates the
-assembled plan. Grouping columns remain eligible for replacement so identifiers
-such as patient IDs can be anonymized.
+available as fallible prior evidence. NSS, rather than the model, derives
+group-consistent or record-consistent replacement behavior from the configured
+grouping column, excludes protected ordering and timestamp columns, and validates
+the assembled plan. Grouping columns remain eligible for replacement so
+identifiers such as patient IDs can be anonymized.
 
 Each request permits up to three attempts for transient transport failures or
 invalid structured responses. Authentication, authorization, and permanent
