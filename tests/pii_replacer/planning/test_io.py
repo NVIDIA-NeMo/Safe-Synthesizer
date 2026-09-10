@@ -5,14 +5,12 @@ from pathlib import Path
 
 import pytest
 import yaml
-from pydantic import ValidationError
 
 from nemo_safe_synthesizer.config.replace_pii import (
     ConditioningColumn,
     EntityType,
     PiiColumnPlan,
     PiiReplacementPlan,
-    ReplacePiiConfig,
 )
 from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.pii_replacer.planning import load_plan, save_plan
@@ -47,7 +45,6 @@ class TestPlanIo:
 
         assert yaml.safe_load(path.read_text()) == {
             "schema_version": 3,
-            "scope": "dataframe",
             "columns_to_replace": [
                 {"column_name": "first", "entity_type": "first_name"},
                 {
@@ -75,20 +72,19 @@ class TestPlanIo:
 
         assert yaml.safe_load(path.read_text()) == {
             "schema_version": 3,
-            "scope": "dataframe",
             "columns_to_replace": [],
         }
 
     def test_load_treats_missing_schema_version_as_v3(self, tmp_path: Path) -> None:
         path = tmp_path / "plan.yaml"
-        path.write_text("scope: dataframe\ncolumns_to_replace: []\n")
+        path.write_text("columns_to_replace: []\n")
 
         assert load_plan(path) == PiiReplacementPlan()
 
     @pytest.mark.parametrize("schema_version", [1, 2, 0, -1])
     def test_load_rejects_unsupported_schema_version(self, tmp_path: Path, schema_version: int) -> None:
         path = tmp_path / "plan.yaml"
-        path.write_text(f"schema_version: {schema_version}\nscope: dataframe\ncolumns_to_replace: []\n")
+        path.write_text(f"schema_version: {schema_version}\ncolumns_to_replace: []\n")
 
         with pytest.raises(ParameterError, match=f"unsupported schema version {schema_version}.*supports version 3"):
             load_plan(path)
@@ -100,7 +96,6 @@ class TestPlanIo:
             yaml.safe_dump(
                 {
                     "schema_version": schema_version,
-                    "scope": "dataframe",
                     "columns_to_replace": [],
                 }
             )
@@ -120,13 +115,9 @@ class TestPlanIo:
         with pytest.raises(ParameterError, match="Could not read PII replacement plan file"):
             load_plan(tmp_path / "missing.yaml")
 
-    def test_inline_and_file_errors_share_compact_validation_details(self, tmp_path: Path) -> None:
-        invalid = {"scope": "galaxy"}
+    def test_load_rejects_unknown_plan_fields(self, tmp_path: Path) -> None:
         path = tmp_path / "plan.yaml"
-        path.write_text(yaml.safe_dump(invalid))
-        detail = "scope: Input should be 'record', 'group' or 'dataframe'"
+        path.write_text(yaml.safe_dump({"scope": "group"}))
 
-        with pytest.raises(ValidationError, match=detail):
-            ReplacePiiConfig.model_validate({"replacement_plan": invalid})
-        with pytest.raises(ParameterError, match=detail):
+        with pytest.raises(ParameterError, match="Unknown configuration field 'scope'"):
             load_plan(path)

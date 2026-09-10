@@ -713,7 +713,6 @@ class TestRunReplacePii:
         config_path.write_text(
             "replace_pii:\n"
             "  replacement_plan:\n"
-            "    scope: dataframe\n"
             "    columns_to_replace:\n"
             "      - column_name: col1\n"
             "        entity_type: unique_identifier\n"

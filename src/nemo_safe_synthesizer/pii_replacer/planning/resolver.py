@@ -13,7 +13,7 @@ from pathlib import Path
 import pandas as pd
 
 from ...config.data import DataParameters
-from ...config.replace_pii import PiiReplacementPlan, PiiReplacementScope, ReplacePiiConfig
+from ...config.replace_pii import PiiReplacementPlan, ReplacePiiConfig
 from ...config.time_series import TimeSeriesParameters
 from ...errors import ParameterError
 from .io import load_plan, save_plan
@@ -46,10 +46,15 @@ class ColumnProfile:
 
 @dataclass(frozen=True, slots=True)
 class PlanDiscoveryInput:
-    """Data and deterministic preparation supplied to discovery adapters."""
+    """Data and deterministic preparation supplied to discovery adapters.
+
+    ``group_column`` is the runtime consistency signal: a configured column
+    means replacements remain consistent within each group; ``None`` means
+    each record is replaced independently. This derived choice is intentionally
+    not part of the reusable replacement plan.
+    """
 
     dataframe: pd.DataFrame
-    scope: PiiReplacementScope
     group_column: str | None
     protected_columns: frozenset[str]
     column_profiles: tuple[ColumnProfile, ...]
@@ -79,8 +84,8 @@ class HeuristicPlanDiscoverer(PlanDiscoverer):
     """Initial no-op heuristic adapter, ready for later rule discovery."""
 
     def discover(self, discovery_input: PlanDiscoveryInput) -> PiiReplacementPlan:
-        """Return an empty plan while preserving the deterministically resolved scope."""
-        return PiiReplacementPlan(scope=discovery_input.scope)
+        """Return an empty plan for later heuristic discovery."""
+        return PiiReplacementPlan()
 
 
 def _stable_samples(series: pd.Series) -> tuple[str, ...]:
@@ -124,11 +129,9 @@ def _prepare_discovery_input(
     time_series: TimeSeriesParameters | None,
 ) -> PlanDiscoveryInput:
     group_column = data_config.group_training_examples_by
-    scope = PiiReplacementScope.GROUP if group_column is not None else PiiReplacementScope.DATAFRAME
     protected_columns = get_protected_columns(data_config, time_series)
     return PlanDiscoveryInput(
         dataframe=df,
-        scope=scope,
         group_column=group_column,
         protected_columns=protected_columns,
         column_profiles=_profile_columns(df),

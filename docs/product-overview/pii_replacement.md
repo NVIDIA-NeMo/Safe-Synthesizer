@@ -41,7 +41,6 @@ configuration:
 replace_pii:
   schema_version: 3
   replacement_plan:
-    scope: dataframe
     columns_to_replace:
       - column_name: full_name
         entity_type: full_name
@@ -60,7 +59,6 @@ A plan file is a separately versioned YAML document containing
 
 ```yaml
 schema_version: 3
-scope: dataframe
 columns_to_replace:
   - column_name: email
     entity_type: email

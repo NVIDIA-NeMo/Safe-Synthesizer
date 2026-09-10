@@ -8,7 +8,6 @@ from nemo_safe_synthesizer.config.replace_pii import (
     EntityType,
     PiiColumnPlan,
     PiiReplacementPlan,
-    PiiReplacementScope,
 )
 from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.pii_replacer.planning import (
@@ -25,7 +24,6 @@ from nemo_safe_synthesizer.pii_replacer.planning import (
 class TestPlanAssembly:
     def test_replacement_membership_is_derived_from_entity_metadata(self) -> None:
         plan = plan_from_classifications(
-            PiiReplacementScope.GROUP,
             [
                 ColumnClassification(column_name="patient_id", entity_type=EntityType.UNIQUE_IDENTIFIER),
                 ColumnClassification(column_name="email", entity_type=EntityType.EMAIL),
@@ -35,7 +33,6 @@ class TestPlanAssembly:
             protected_columns=frozenset({"email"}),
         )
 
-        assert plan.scope is PiiReplacementScope.GROUP
         assert [spec.column_name for spec in plan.columns_to_replace] == ["patient_id"]
 
     def test_dependency_candidates_are_derived_from_catalog_relationships(self) -> None:
@@ -45,7 +42,7 @@ class TestPlanAssembly:
             ColumnClassification(column_name="company", entity_type=EntityType.ORGANIZATION),
             ColumnClassification(column_name="gender", entity_type=EntityType.GENDER),
         ]
-        plan = plan_from_classifications(PiiReplacementScope.DATAFRAME, classifications)
+        plan = plan_from_classifications(classifications)
 
         candidates = derive_dependency_candidates(plan, classifications)
 
@@ -69,7 +66,7 @@ class TestPlanAssembly:
             ColumnClassification(column_name="email", entity_type=EntityType.EMAIL),
             ColumnClassification(column_name="company", entity_type=EntityType.ORGANIZATION),
         ]
-        plan = plan_from_classifications(PiiReplacementScope.DATAFRAME, classifications)
+        plan = plan_from_classifications(classifications)
         candidate = derive_dependency_candidates(plan, classifications)[0]
 
         result = apply_dependencies(plan, [candidate], classifications=classifications)
@@ -86,7 +83,6 @@ class TestPlanAssembly:
 
     def test_dependencies_must_match_a_replacement_target(self) -> None:
         plan = plan_from_classifications(
-            PiiReplacementScope.DATAFRAME,
             [ColumnClassification(column_name="email", entity_type=EntityType.EMAIL)],
         )
         candidate = DependencyCandidate(
@@ -106,7 +102,7 @@ class TestPlanAssembly:
 
     def test_dependencies_reject_unknown_and_unclassified_sources(self) -> None:
         classifications = [ColumnClassification(column_name="email", entity_type=EntityType.EMAIL)]
-        plan = plan_from_classifications(PiiReplacementScope.DATAFRAME, classifications)
+        plan = plan_from_classifications(classifications)
 
         with pytest.raises(ParameterError, match="unknown classified column 'missing'"):
             apply_dependencies(
@@ -140,7 +136,7 @@ class TestPlanAssembly:
             ColumnClassification(column_name="email", entity_type=EntityType.EMAIL),
             ColumnClassification(column_name="gender", entity_type=EntityType.GENDER),
         ]
-        plan = plan_from_classifications(PiiReplacementScope.DATAFRAME, classifications)
+        plan = plan_from_classifications(classifications)
 
         with pytest.raises(ParameterError, match="is not allowed for entity_type 'email'"):
             apply_dependencies(
@@ -155,7 +151,7 @@ class TestPlanAssembly:
             ColumnClassification(column_name="first", entity_type=EntityType.FIRST_NAME),
             ColumnClassification(column_name="full", entity_type=EntityType.FULL_NAME),
         ]
-        plan = plan_from_classifications(PiiReplacementScope.DATAFRAME, classifications)
+        plan = plan_from_classifications(classifications)
         candidates = derive_dependency_candidates(plan, classifications)
 
         assert DependencyCandidate(target_column="email", source_column="first") in candidates
@@ -177,7 +173,7 @@ class TestPlanAssembly:
             ColumnClassification(column_name="first", entity_type=EntityType.FIRST_NAME),
             ColumnClassification(column_name="company", entity_type=EntityType.ORGANIZATION),
         ]
-        plan = plan_from_classifications(PiiReplacementScope.DATAFRAME, classifications)
+        plan = plan_from_classifications(classifications)
 
         result = apply_dependencies(
             plan,
@@ -204,7 +200,7 @@ class TestPlanAssembly:
 
         with pytest.raises(ParameterError, match="duplicate column_name"):
             if operation == "plan":
-                plan_from_classifications(PiiReplacementScope.DATAFRAME, classifications)
+                plan_from_classifications(classifications)
             elif operation == "derive":
                 derive_dependency_candidates(plan, classifications)
             else:

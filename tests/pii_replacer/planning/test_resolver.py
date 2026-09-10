@@ -12,7 +12,6 @@ from nemo_safe_synthesizer.config.replace_pii import (
     LLMConfig,
     PiiColumnPlan,
     PiiReplacementPlan,
-    PiiReplacementScope,
     ReplacePiiConfig,
 )
 from nemo_safe_synthesizer.errors import ParameterError
@@ -32,7 +31,7 @@ class RecordingDiscoverer(PlanDiscoverer):
 
     def discover(self, discovery_input: PlanDiscoveryInput) -> PiiReplacementPlan:
         self.inputs.append(discovery_input)
-        return self.plan or PiiReplacementPlan(scope=discovery_input.scope)
+        return self.plan or PiiReplacementPlan()
 
 
 class RecordingEnhancer(PlanEnhancer):
@@ -67,7 +66,7 @@ class TestResolvePlan:
     def test_auto_discovery_uses_empty_heuristic_by_default(self, fixture_patient_df: pd.DataFrame) -> None:
         plan = resolve_plan(fixture_patient_df, ReplacePiiConfig(), DataParameters())
 
-        assert plan == PiiReplacementPlan(scope=PiiReplacementScope.DATAFRAME)
+        assert plan == PiiReplacementPlan()
 
     def test_llm_enhancer_receives_heuristic_baseline(self, fixture_patient_df: pd.DataFrame) -> None:
         baseline = PiiReplacementPlan(
@@ -123,7 +122,7 @@ class TestResolvePlan:
 
     def test_plan_file_bypasses_discovery(self, fixture_patient_df: pd.DataFrame, tmp_path: Path) -> None:
         path = tmp_path / "plan.yaml"
-        path.write_text("scope: dataframe\ncolumns_to_replace:\n  - column_name: email\n    entity_type: email\n")
+        path.write_text("columns_to_replace:\n  - column_name: email\n    entity_type: email\n")
         discoverer = RecordingDiscoverer()
 
         result = resolve_plan(
@@ -163,7 +162,6 @@ class TestResolvePlan:
 
         first_profiles = {profile.column_name: profile for profile in first_input.column_profiles}
         second_profiles = {profile.column_name: profile for profile in second_input.column_profiles}
-        assert first_input.scope is PiiReplacementScope.GROUP
         assert first_input.group_column == "patient_id"
         assert first_input.protected_columns == frozenset({"event_index"})
         first_samples = first_profiles["name"].samples
@@ -172,6 +170,16 @@ class TestResolvePlan:
         assert set(first_samples) == set(second_samples)
         assert first_samples == tuple(value for value in dataframe["name"] if value in set(first_samples))
         assert second_samples == tuple(value for value in shuffled["name"] if value in set(second_samples))
+
+    def test_discovery_input_uses_no_group_column_for_record_consistency(
+        self,
+        fixture_patient_df: pd.DataFrame,
+    ) -> None:
+        discoverer = RecordingDiscoverer()
+
+        resolve_plan(fixture_patient_df, ReplacePiiConfig(), DataParameters(), discoverer=discoverer)
+
+        assert discoverer.inputs[0].group_column is None
 
     def test_output_path_persists_the_final_plan(self, fixture_patient_df: pd.DataFrame, tmp_path: Path) -> None:
         path = tmp_path / "pii_replacement_plan.yaml"

@@ -51,7 +51,6 @@ __all__ = [
     "PatternSyntax",
     "PiiColumnPlan",
     "PiiReplacementPlan",
-    "PiiReplacementScope",
     "PiiReplacementSettings",
     "PiiSamplerBackend",
     "PiiSamplerConfig",
@@ -432,32 +431,15 @@ class PiiColumnPlan(NSSBaseModel):
         return self
 
 
-class PiiReplacementScope(StrEnum):
-    """Unit at which original→synthetic mappings stay consistent."""
-
-    RECORD = "record"
-    """Map each row independently; one original may differ across rows."""
-
-    GROUP = "group"
-    """One mapping per group, keyed by ``data.group_training_examples_by``."""
-
-    DATAFRAME = "dataframe"
-    """One mapping dataset-wide; an original always yields the same value."""
-
-
 class PiiReplacementPlan(Parameters):
     """Dataset-specific detection/replacement plan (column-oriented).
 
-    Flat ``columns_to_replace`` list; cross-column consistency is expressed only
+    Flat ``columns_to_replace`` list; cross-column relationships are expressed
     via ``depends_on`` edges (a DAG). Context-free dependency and graph checks
     are enforced here; plan-vs-dataframe checks live in
     ``pii_replacer.planning.validation``.
     """
 
-    scope: PiiReplacementScope = Field(
-        default=PiiReplacementScope.DATAFRAME,
-        description="How widely one original value keeps the same synthetic value: record, group, or dataframe.",
-    )
     columns_to_replace: list[PiiColumnPlan] = Field(
         default_factory=list,
         description="Columns to replace or (for free_text) scan for PII spans to rewrite.",

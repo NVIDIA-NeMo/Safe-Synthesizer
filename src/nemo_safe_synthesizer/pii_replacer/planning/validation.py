@@ -17,7 +17,6 @@ from ...config.replace_pii import (
     EntityType,
     PatternSyntax,
     PiiReplacementPlan,
-    PiiReplacementScope,
 )
 from ...config.time_series import TimeSeriesParameters
 from ...errors import InternalError, ParameterError
@@ -240,11 +239,11 @@ def validate_plan(
     """
     issues: list[str] = []
     group_column = data_config.group_training_examples_by
-    if plan.scope is PiiReplacementScope.GROUP:
-        if group_column is None:
-            issues.append("plan scope is 'group' but data.group_training_examples_by is not configured")
-        elif group_column not in df.columns:
-            issues.append(f"group column {group_column!r} is not present in the dataframe")
+    # Replacement consistency is derived from data configuration rather than
+    # stored in the reusable plan: configured groups use group consistency;
+    # otherwise every record is replaced independently.
+    if group_column is not None and group_column not in df.columns:
+        issues.append(f"group column {group_column!r} is not present in the dataframe")
 
     issues.extend(_iter_reference_issues(df, plan, get_protected_columns(data_config, time_series)))
     issues.extend(_iter_pattern_issues(df, plan))

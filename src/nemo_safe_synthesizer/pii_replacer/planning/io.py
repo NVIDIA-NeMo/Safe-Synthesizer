@@ -6,11 +6,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 
 import yaml
 from pydantic import ValidationError
 
 from ...config.replace_pii import PiiReplacementPlan
+from ...config.unknown_fields import normalize_unknown_fields
 from ...config.validation import format_pydantic_validation_error
 from ...errors import ParameterError
 
@@ -60,11 +62,19 @@ def load_plan(path: str | Path) -> PiiReplacementPlan:
     if not isinstance(raw, dict):
         raise ParameterError(f"PII replacement plan file {str(plan_path)!r} must contain a mapping")
 
+    body = _plan_body(raw, plan_path)
     try:
-        return PiiReplacementPlan.model_validate(_plan_body(raw, plan_path))
+        normalized = normalize_unknown_fields(
+            PiiReplacementPlan,
+            cast(dict[str, object], body),
+            "reject",
+        )
+        return PiiReplacementPlan.model_validate(normalized)
     except ValidationError as exc:
         details = format_pydantic_validation_error(exc)
         raise ParameterError(f"Invalid PII replacement plan in {str(plan_path)!r} ({details})") from exc
+    except ParameterError as exc:
+        raise ParameterError(f"Invalid PII replacement plan in {str(plan_path)!r} ({exc})") from exc
 
 
 def _plan_document(plan: PiiReplacementPlan) -> dict[str, object]:
@@ -88,7 +98,6 @@ def _plan_document(plan: PiiReplacementPlan) -> dict[str, object]:
         columns.append(serialized_spec)
     return {
         "schema_version": _CURRENT_PLAN_SCHEMA_VERSION,
-        "scope": plan.scope.value,
         "columns_to_replace": columns,
     }
 

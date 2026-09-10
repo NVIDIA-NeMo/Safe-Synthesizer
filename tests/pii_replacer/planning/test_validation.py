@@ -13,7 +13,6 @@ from nemo_safe_synthesizer.config.replace_pii import (
     EntityType,
     PiiColumnPlan,
     PiiReplacementPlan,
-    PiiReplacementScope,
 )
 from nemo_safe_synthesizer.errors import InternalError, ParameterError
 from nemo_safe_synthesizer.pii_replacer.planning import validate_plan
@@ -183,7 +182,6 @@ class TestValidatePlan:
 
     def test_allows_replacing_the_group_column(self, fixture_pii_df: pd.DataFrame) -> None:
         plan = PiiReplacementPlan(
-            scope=PiiReplacementScope.GROUP,
             columns_to_replace=[PiiColumnPlan(column_name="patient_id", entity_type=EntityType.UNIQUE_IDENTIFIER)],
         )
 
@@ -196,7 +194,6 @@ class TestValidatePlan:
     def test_rejects_replacing_an_ordering_column(self, fixture_pii_df: pd.DataFrame) -> None:
         dataframe = fixture_pii_df.assign(event_index=[0, 0])
         plan = PiiReplacementPlan(
-            scope=PiiReplacementScope.GROUP,
             columns_to_replace=[PiiColumnPlan(column_name="event_index", entity_type=EntityType.UNIQUE_IDENTIFIER)],
         )
 
@@ -210,11 +207,11 @@ class TestValidatePlan:
                 ),
             )
 
-    def test_group_scope_requires_a_configured_existing_group_column(self, fixture_pii_df: pd.DataFrame) -> None:
-        plan = PiiReplacementPlan(scope=PiiReplacementScope.GROUP)
+    def test_configured_group_column_must_exist(self, fixture_pii_df: pd.DataFrame) -> None:
+        plan = PiiReplacementPlan()
 
-        with pytest.raises(ParameterError, match="group_training_examples_by is not configured"):
-            validate_plan(fixture_pii_df, plan, data_config=DataParameters())
+        # With no group column, record-consistent replacement needs no group validation.
+        validate_plan(fixture_pii_df, plan, data_config=DataParameters())
 
         with pytest.raises(ParameterError, match="group column 'missing_group' is not present"):
             validate_plan(
@@ -242,7 +239,6 @@ class TestValidatePlan:
         monkeypatch.setitem(ENTITY_BY_TYPE, EntityType.UNIQUE_IDENTIFIER, replace(entity, pattern_syntax=None))
         dataframe = pd.DataFrame({"identifier": ["7"]})
         plan = PiiReplacementPlan.model_construct(
-            scope=PiiReplacementScope.DATAFRAME,
             columns_to_replace=[
                 PiiColumnPlan.model_construct(
                     column_name="identifier",

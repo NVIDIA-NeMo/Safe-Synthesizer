@@ -17,7 +17,6 @@ from ...config.replace_pii import (
     EntityType,
     PiiColumnPlan,
     PiiReplacementPlan,
-    PiiReplacementScope,
     is_columns_to_replace_type,
     validate_dependency_relationship,
     validate_pattern_eligibility,
@@ -102,7 +101,6 @@ def _validate_plan_classifications(
 
 
 def plan_from_classifications(
-    scope: PiiReplacementScope,
     classifications: Sequence[ColumnClassification],
     *,
     protected_columns: Set[str] = frozenset(),
@@ -125,7 +123,7 @@ def plan_from_classifications(
                 pattern=classification.pattern,
             )
         )
-    return PiiReplacementPlan(scope=scope, columns_to_replace=columns_to_replace)
+    return PiiReplacementPlan(columns_to_replace=columns_to_replace)
 
 
 def derive_dependency_candidates(
@@ -188,7 +186,6 @@ def apply_dependencies(
         dependencies_by_target.setdefault(dependency.target_column, []).append(conditioner)
 
     return PiiReplacementPlan(
-        scope=plan.scope,
         columns_to_replace=[
             PiiColumnPlan(
                 column_name=spec.column_name,

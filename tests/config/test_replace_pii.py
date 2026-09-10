@@ -19,7 +19,6 @@ from nemo_safe_synthesizer.config.replace_pii import (
     LLMConfig,
     PiiColumnPlan,
     PiiReplacementPlan,
-    PiiReplacementScope,
     PiiSamplerBackend,
     ReplacePiiConfig,
     can_condition,
@@ -427,7 +426,7 @@ class TestReplacePiiConfig:
         assert path_config.inline_plan is None
         assert not path_config.is_auto_discovery
 
-        plan = PiiReplacementPlan(scope=PiiReplacementScope.RECORD)
+        plan = PiiReplacementPlan()
         inline = ReplacePiiConfig(replacement_plan=plan)
         assert inline.inline_plan is plan
         assert inline.plan_path is None
@@ -450,7 +449,6 @@ class TestReplacePiiConfig:
         config = ReplacePiiConfig.model_validate(
             {
                 "replacement_plan": {
-                    "scope": "record",
                     "columns_to_replace": [
                         {"column_name": "phone", "entity_type": "phone_number"},
                     ],
@@ -458,7 +456,7 @@ class TestReplacePiiConfig:
             }
         )
         assert isinstance(config.inline_plan, PiiReplacementPlan)
-        assert config.inline_plan.scope.value == "record"
+        assert config.inline_plan.columns_to_replace[0].column_name == "phone"
 
     def test_parsed_inline_plan_skips_redundant_union_validation(self) -> None:
         annotation = ReplacePiiConfig.model_fields["replacement_plan"].annotation
@@ -467,9 +465,12 @@ class TestReplacePiiConfig:
         assert get_args(plan_arm)[0] is PiiReplacementPlan
         assert any(type(metadata).__name__ == "SkipValidation" for metadata in get_args(plan_arm)[1:])
 
-    def test_malformed_inline_plan_raises_validation_error_with_compact_details(self) -> None:
-        with pytest.raises(ValidationError, match="invalid inline replacement plan.*scope"):
-            ReplacePiiConfig.model_validate({"replacement_plan": {"scope": "galaxy"}})
+    def test_full_config_rejects_scope_as_an_unknown_plan_field(self) -> None:
+        with pytest.raises(
+            ValidationError,
+            match="Unknown configuration field 'replace_pii.replacement_plan.scope'",
+        ):
+            SafeSynthesizerParameters.model_validate({"replace_pii": {"replacement_plan": {"scope": "group"}}})
 
     def test_llm_mapping_configures_shared_inference_behavior(self) -> None:
         config = ReplacePiiConfig.model_validate(
