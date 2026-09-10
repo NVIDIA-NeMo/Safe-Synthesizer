@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Internal interface for synthetic replacement value generation."""
+"""Interface for synthetic replacement value generation."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 from ...config.replace_pii import EntityType
-from ._types import CanonicalValue, EffectiveDependencyTuple
+from .types import CanonicalValue, EffectiveDependencyTuple
 
 
 @dataclass(frozen=True, slots=True)

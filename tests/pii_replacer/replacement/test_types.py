@@ -7,7 +7,7 @@ from typing import cast
 import pytest
 
 from nemo_safe_synthesizer.config.replace_pii import EntityType
-from nemo_safe_synthesizer.pii_replacer.replacement._types import (
+from nemo_safe_synthesizer.pii_replacer.replacement.types import (
     DetectedSpan,
     DetectionCell,
     DetectionCellId,

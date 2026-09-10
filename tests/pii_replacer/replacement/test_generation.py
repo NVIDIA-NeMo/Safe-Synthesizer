@@ -6,7 +6,7 @@ from dataclasses import FrozenInstanceError
 import pytest
 
 from nemo_safe_synthesizer.config.replace_pii import EntityType
-from nemo_safe_synthesizer.pii_replacer.replacement._generation import (
+from nemo_safe_synthesizer.pii_replacer.replacement.generation import (
     ReplacementGenerationRequest,
     ReplacementGenerator,
 )
