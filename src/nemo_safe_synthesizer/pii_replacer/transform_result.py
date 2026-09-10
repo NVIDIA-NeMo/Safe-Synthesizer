@@ -6,6 +6,10 @@ from __future__ import annotations
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field
 
+from ..config.replace_pii import PiiReplacementPlan
+
+__all__ = ["ColumnStatistics", "TransformResult"]
+
 
 class ColumnStatistics(BaseModel):
     """Metadata and statistics for transformations and detected entities in a column.
@@ -51,4 +55,11 @@ class TransformResult(BaseModel):
     )
     column_statistics: dict[str, ColumnStatistics] = Field(
         description="Column name to ``ColumnStatistics`` for that column.",
+    )
+    replacement_plan: PiiReplacementPlan = Field(
+        description="Resolved replacement plan executed for this result.",
+    )
+    elapsed_time_seconds: float = Field(
+        ge=0,
+        description="Elapsed wall-clock time spent replacing PII, in seconds.",
     )
