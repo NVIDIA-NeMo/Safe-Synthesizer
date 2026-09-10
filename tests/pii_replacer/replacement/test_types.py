@@ -8,6 +8,7 @@ import pytest
 
 from nemo_safe_synthesizer.config.replace_pii import EntityType
 from nemo_safe_synthesizer.pii_replacer.replacement.types import (
+    CanonicalValue,
     DetectedSpan,
     DetectionCell,
     DetectionCellId,
@@ -16,7 +17,7 @@ from nemo_safe_synthesizer.pii_replacer.replacement.types import (
     GroupDependencyDrift,
     GroupMappingKey,
     GroupMappingProvenance,
-    NonGroupMappingKey,
+    RecordMappingKey,
     detected_text,
     free_text_mapping_key,
 )
@@ -111,50 +112,74 @@ class TestDetectionContracts:
 
 @pytest.mark.unit
 class TestMappingContracts:
-    def test_repeated_free_text_value_in_one_cell_reuses_the_same_mapping(self) -> None:
-        cell = DetectionCell(
-            cell_id=DetectionCellId(row_position=3, column_name="notes"),
+    def test_repeated_free_text_value_in_one_row_reuses_mapping_across_columns(self) -> None:
+        first_cell = DetectionCell(
+            cell_id=DetectionCellId(row_position=3, column_name="notes_primary"),
             text="Ada met Ada",
             allowed_entity_types=frozenset({EntityType.FIRST_NAME}),
         )
-        first_span = DetectedSpan(cell.cell_id, 0, 3, EntityType.FIRST_NAME, "gliner", 0.9)
-        second_span = DetectedSpan(cell.cell_id, 8, 11, EntityType.FIRST_NAME, "gliner", 0.8)
+        second_cell = DetectionCell(
+            cell_id=DetectionCellId(row_position=3, column_name="notes_secondary"),
+            text="Call Ada",
+            allowed_entity_types=frozenset({EntityType.FIRST_NAME}),
+        )
+        first_span = DetectedSpan(first_cell.cell_id, 0, 3, EntityType.FIRST_NAME, "gliner", 0.9)
+        repeated_span = DetectedSpan(first_cell.cell_id, 8, 11, EntityType.FIRST_NAME, "gliner", 0.8)
+        other_column_span = DetectedSpan(second_cell.cell_id, 5, 8, EntityType.FIRST_NAME, "gliner", 0.7)
 
-        first_key = free_text_mapping_key(cell, first_span, scope_identity=cell.cell_id.row_position)
-        second_key = free_text_mapping_key(cell, second_span, scope_identity=cell.cell_id.row_position)
+        first_key = free_text_mapping_key(first_cell, first_span, scope_identity=first_cell.cell_id.row_position)
+        repeated_key = free_text_mapping_key(first_cell, repeated_span, scope_identity=first_cell.cell_id.row_position)
+        other_column_key = free_text_mapping_key(
+            second_cell,
+            other_column_span,
+            scope_identity=second_cell.cell_id.row_position,
+        )
 
-        assert first_key == second_key
-        assert first_key == FreeTextMappingKey("notes", 3, EntityType.FIRST_NAME, "Ada")
+        assert first_key == repeated_key == other_column_key
+        assert first_key == FreeTextMappingKey(3, EntityType.FIRST_NAME, "Ada")
         assert "Ada" not in repr(first_key)
 
-    def test_non_group_identity_includes_effective_dependencies(self) -> None:
-        base = NonGroupMappingKey(
+    def test_canonical_structured_value_is_type_tagged_and_hides_pii(self) -> None:
+        integer = CanonicalValue(type_tag="integer", normalized_value="1")
+        string = CanonicalValue(type_tag="string", normalized_value="1")
+
+        assert integer != string
+        assert "1" not in repr(integer)
+
+    def test_record_identity_uses_stable_row_position_without_dependencies(self) -> None:
+        original_value = CanonicalValue(type_tag="string", normalized_value="ada@example.com")
+        base = RecordMappingKey(
             target_column="email",
-            scope_identity=0,
-            canonical_original_value="ada@example.com",
-            effective_dependency_tuple=((EntityType.ORGANIZATION, "example"),),
+            row_position=0,
+            canonical_original_value=original_value,
         )
-        changed_dependency = NonGroupMappingKey(
+        duplicate_index_peer = RecordMappingKey(
             target_column="email",
-            scope_identity=0,
-            canonical_original_value="ada@example.com",
-            effective_dependency_tuple=((EntityType.ORGANIZATION, "different"),),
+            row_position=1,
+            canonical_original_value=original_value,
         )
 
-        assert base != changed_dependency
+        assert base != duplicate_index_peer
+        assert {field.name for field in fields(RecordMappingKey)} == {
+            "target_column",
+            "row_position",
+            "canonical_original_value",
+        }
         assert "ada@example.com" not in repr(base)
-        assert "example" not in repr(base)
 
     def test_group_identity_excludes_dependencies_and_records_first_provenance_separately(self) -> None:
+        original_value = CanonicalValue(type_tag="string", normalized_value="ada@example.com")
+        first_dependency = CanonicalValue(type_tag="string", normalized_value="example")
+        later_dependency = CanonicalValue(type_tag="string", normalized_value="different")
         key = GroupMappingKey(
             target_column="email",
             original_group_identity="patient-1",
-            canonical_original_value="ada@example.com",
+            canonical_original_value=original_value,
         )
-        first = GroupMappingProvenance(((EntityType.ORGANIZATION, "example"),))
-        later = GroupMappingProvenance(((EntityType.ORGANIZATION, "different"),))
+        first = GroupMappingProvenance(((EntityType.ORGANIZATION, first_dependency),))
+        later = GroupMappingProvenance(((EntityType.ORGANIZATION, later_dependency),))
 
-        assert key == GroupMappingKey("email", "patient-1", "ada@example.com")
+        assert key == GroupMappingKey("email", "patient-1", original_value)
         assert first != later
         assert "patient-1" not in repr(key)
         assert "ada@example.com" not in repr(key)

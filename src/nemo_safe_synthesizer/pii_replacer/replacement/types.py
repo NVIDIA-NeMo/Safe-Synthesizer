@@ -16,7 +16,36 @@ from typing import Literal, TypeAlias
 from ...config.replace_pii import EntityType
 
 DetectionSource: TypeAlias = Literal["gliner", "regex"]
-CanonicalValue: TypeAlias = str
+
+
+@dataclass(frozen=True, slots=True)
+class CanonicalValue:
+    """Type-tagged, normalized identity for an original structured scalar.
+
+    The replacement executor creates this value only after excluding missing
+    values. ``type_tag`` identifies the scalar's semantic type, while
+    ``normalized_value`` is its deterministic, locale-independent string
+    representation. The tag prevents unlike values such as integer ``1`` and
+    string ``"1"`` from sharing a mapping. Canonicalization means stable typed
+    serialization, not text cleanup: it must not trim, case-fold, or otherwise
+    alter string content. Equivalent Python, NumPy, or pandas scalars must
+    produce the same pair; different semantic scalar types must not.
+
+    The normalized value is excluded from ``repr`` because it may contain PII.
+    """
+
+    type_tag: str
+    normalized_value: str = field(repr=False)
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.type_tag, str):
+            raise TypeError("canonical value type_tag must be a string")
+        if not self.type_tag:
+            raise ValueError("canonical value type_tag must be a nonempty string")
+        if not isinstance(self.normalized_value, str):
+            raise TypeError("canonical normalized_value must be a string")
+
+
 EffectiveDependencyTuple: TypeAlias = tuple[tuple[EntityType, CanonicalValue | None], ...]
 
 
@@ -105,35 +134,41 @@ def detected_text(cell: DetectionCell, span: DetectedSpan) -> str:
 
 
 @dataclass(frozen=True, slots=True)
-class NonGroupMappingKey:
-    """Mapping identity for record and dataframe scopes.
+class RecordMappingKey:
+    """Mapping identity for a structured value in record scope.
 
-    Identity includes the target column, scope identity, canonical original
-    value, and effective dependency tuple. Sensitive values are excluded from
-    ``repr`` so accidental diagnostics do not disclose them.
+    Stable positional row identity keeps duplicate dataframe indexes safe.
+    Dependencies affect generation but not mapping identity because every row
+    has one effective dependency tuple for a given target. Sensitive values are
+    excluded from ``repr`` so accidental diagnostics do not disclose them.
     """
 
     target_column: str
-    scope_identity: Hashable = field(repr=False)
+    row_position: int
     canonical_original_value: CanonicalValue = field(repr=False)
-    effective_dependency_tuple: EffectiveDependencyTuple = field(repr=False)
+
+    def __post_init__(self) -> None:
+        if type(self.row_position) is not int:
+            raise TypeError("record mapping row_position must be an integer")
+        if self.row_position < 0:
+            raise ValueError("record mapping row_position must be nonnegative")
 
 
 @dataclass(frozen=True, slots=True)
 class FreeTextMappingKey:
-    """Mapping identity for a detected value inside a free-text cell.
+    """Mapping identity for a detected value within the configured scope.
 
     The replacement executor looks up every accepted span by this key before
     calling the replacement generator. Repeated occurrences of the same entity
-    and canonical value in one row and column therefore reuse one replacement,
-    independently of propagation mappings. ``scope_identity`` may widen that
-    reuse for group or dataframe scope.
+    and exact original value in any planned free-text column therefore reuse one
+    replacement within the scope, independently of propagation mappings. In
+    record scope, ``scope_identity`` is the stable row position; a group
+    identity widens reuse across rows.
     """
 
-    target_column: str
     scope_identity: Hashable = field(repr=False)
     entity_type: EntityType
-    canonical_original_value: CanonicalValue = field(repr=False)
+    original_value: str = field(repr=False)
 
 
 def free_text_mapping_key(
@@ -144,10 +179,9 @@ def free_text_mapping_key(
 ) -> FreeTextMappingKey:
     """Build the cache key for one accepted free-text detection."""
     return FreeTextMappingKey(
-        target_column=cell.cell_id.column_name,
         scope_identity=scope_identity,
         entity_type=span.entity_type,
-        canonical_original_value=detected_text(cell, span),
+        original_value=detected_text(cell, span),
     )
 
 
