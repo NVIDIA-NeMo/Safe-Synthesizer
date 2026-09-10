@@ -711,7 +711,6 @@ class ReplacePiiConfig(Parameters):
     ``llm=None`` leaves auto-discovery at the heuristic baseline. Supplying an
     ``llm`` mapping enables LLM enhancement after heuristic discovery. An
     inline plan or plan file bypasses discovery, so it does not require an LLM.
-    Free-text replacement uses ``free_text_detection`` instead of this LLM.
     The API key remains a runtime secret supplied through ``NSS_INFERENCE_KEY``
     or the corresponding CLI option; it is never stored in this model.
 

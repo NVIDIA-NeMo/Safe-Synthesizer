@@ -9,7 +9,7 @@ from pydantic import ValidationError
 
 from nemo_safe_synthesizer.config.data import DataParameters
 from nemo_safe_synthesizer.config.replace_pii import PiiReplacementPlan, ReplacePiiConfig
-from nemo_safe_synthesizer.pii_replacer import TabularPiiReplacer
+from nemo_safe_synthesizer.pii_replacer import ReplacementGenerationStatistics, TabularPiiReplacer
 from nemo_safe_synthesizer.pii_replacer.transform_result import TransformResult
 
 
@@ -35,26 +35,57 @@ class TestTabularPiiReplacerInterface:
 
 @pytest.mark.unit
 class TestTransformResult:
-    def test_result_includes_resolved_plan_and_elapsed_time(self) -> None:
+    def test_result_includes_plan_and_replacement_timing_statistics(self) -> None:
         dataframe = pd.DataFrame({"email": ["synthetic@example.com"]})
         plan = PiiReplacementPlan()
+        generation_statistics = ReplacementGenerationStatistics(
+            generated_replacement_count=2,
+            elapsed_time_seconds=0.1,
+        )
 
         result = TransformResult(
             transformed_df=dataframe,
             column_statistics={},
             replacement_plan=plan,
+            generation_statistics=generation_statistics,
             elapsed_time_seconds=0.25,
         )
 
         assert result.transformed_df is dataframe
         assert result.replacement_plan is plan
+        assert result.generation_statistics is generation_statistics
         assert result.elapsed_time_seconds == 0.25
 
-    def test_elapsed_time_cannot_be_negative(self) -> None:
+    @pytest.mark.parametrize(
+        "field_overrides",
+        [
+            {"elapsed_time_seconds": -0.1},
+            {
+                "generation_statistics": {
+                    "generated_replacement_count": 1,
+                    "elapsed_time_seconds": -0.1,
+                }
+            },
+            {
+                "generation_statistics": {
+                    "generated_replacement_count": -1,
+                    "elapsed_time_seconds": 0.1,
+                }
+            },
+        ],
+    )
+    def test_elapsed_times_and_generation_count_cannot_be_negative(self, field_overrides: dict[str, object]) -> None:
+        values: dict[str, object] = {
+            "transformed_df": pd.DataFrame(),
+            "column_statistics": {},
+            "replacement_plan": PiiReplacementPlan(),
+            "generation_statistics": {
+                "generated_replacement_count": 1,
+                "elapsed_time_seconds": 0.1,
+            },
+            "elapsed_time_seconds": 0.2,
+        }
+        values.update(field_overrides)
+
         with pytest.raises(ValidationError, match="greater than or equal to 0"):
-            TransformResult(
-                transformed_df=pd.DataFrame(),
-                column_statistics={},
-                replacement_plan=PiiReplacementPlan(),
-                elapsed_time_seconds=-0.1,
-            )
+            TransformResult.model_validate(values)

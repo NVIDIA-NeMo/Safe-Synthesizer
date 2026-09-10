@@ -8,15 +8,17 @@ import pytest
 
 from nemo_safe_synthesizer.config.replace_pii import EntityType
 from nemo_safe_synthesizer.pii_replacer.replacement._types import (
+    DetectedSpan,
     DetectionCell,
     DetectionCellId,
-    DetectedSpan,
     DetectionSource,
+    FreeTextMappingKey,
     GroupDependencyDrift,
     GroupMappingKey,
     GroupMappingProvenance,
     NonGroupMappingKey,
     detected_text,
+    free_text_mapping_key,
 )
 
 
@@ -109,6 +111,22 @@ class TestDetectionContracts:
 
 @pytest.mark.unit
 class TestMappingContracts:
+    def test_repeated_free_text_value_in_one_cell_reuses_the_same_mapping(self) -> None:
+        cell = DetectionCell(
+            cell_id=DetectionCellId(row_position=3, column_name="notes"),
+            text="Ada met Ada",
+            allowed_entity_types=frozenset({EntityType.FIRST_NAME}),
+        )
+        first_span = DetectedSpan(cell.cell_id, 0, 3, EntityType.FIRST_NAME, "gliner", 0.9)
+        second_span = DetectedSpan(cell.cell_id, 8, 11, EntityType.FIRST_NAME, "gliner", 0.8)
+
+        first_key = free_text_mapping_key(cell, first_span, scope_identity=cell.cell_id.row_position)
+        second_key = free_text_mapping_key(cell, second_span, scope_identity=cell.cell_id.row_position)
+
+        assert first_key == second_key
+        assert first_key == FreeTextMappingKey("notes", 3, EntityType.FIRST_NAME, "Ada")
+        assert "Ada" not in repr(first_key)
+
     def test_non_group_identity_includes_effective_dependencies(self) -> None:
         base = NonGroupMappingKey(
             target_column="email",

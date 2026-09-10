@@ -5,12 +5,15 @@
 
 from __future__ import annotations
 
-import pandas as pd
+from typing import TYPE_CHECKING
 
 from ..config.data import DataParameters
 from ..config.replace_pii import ReplacePiiConfig
 from ..config.time_series import TimeSeriesParameters
 from .transform_result import TransformResult
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 __all__ = ["TabularPiiReplacer"]
 
@@ -26,6 +29,13 @@ class TabularPiiReplacer:
 
     Replacement execution is intentionally deferred from this interface-only
     implementation.
+
+    Args:
+        config: PII replacement configuration, including the plan source.
+        data_config: Input data configuration used to validate and execute the
+            resolved plan.
+        time_series: Optional time-series configuration used to protect ordering
+            and grouping columns.
     """
 
     def __init__(

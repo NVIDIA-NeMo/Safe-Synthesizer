@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ..config.replace_pii import PiiReplacementPlan
 
-__all__ = ["ColumnStatistics", "TransformResult"]
+__all__ = ["ColumnStatistics", "ReplacementGenerationStatistics", "TransformResult"]
 
 
 class ColumnStatistics(BaseModel):
@@ -42,6 +42,19 @@ class ColumnStatistics(BaseModel):
     )
 
 
+class ReplacementGenerationStatistics(BaseModel):
+    """Aggregate statistics for the synthetic replacement generation phase."""
+
+    generated_replacement_count: int = Field(
+        ge=0,
+        description="Number of distinct replacement values generated after cache reuse.",
+    )
+    elapsed_time_seconds: float = Field(
+        ge=0,
+        description="Elapsed wall-clock time spent generating replacement values, in seconds.",
+    )
+
+
 class TransformResult(BaseModel):
     """Result of PII replacement: transformed data and per-column statistics.
 
@@ -58,6 +71,9 @@ class TransformResult(BaseModel):
     )
     replacement_plan: PiiReplacementPlan = Field(
         description="Resolved replacement plan executed for this result.",
+    )
+    generation_statistics: ReplacementGenerationStatistics = Field(
+        description="Aggregate timing and count statistics for replacement generation.",
     )
     elapsed_time_seconds: float = Field(
         ge=0,

@@ -1,7 +1,11 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Immutable contracts internal to tabular PII replacement."""
+"""Contracts shared by replacement detection, mapping, and generation adapters.
+
+The execution engine composes these types to keep positional identity separate
+from sensitive values and to keep sensitive mapping inputs out of diagnostics.
+"""
 
 from __future__ import annotations
 
@@ -113,6 +117,38 @@ class NonGroupMappingKey:
     scope_identity: Hashable = field(repr=False)
     canonical_original_value: CanonicalValue = field(repr=False)
     effective_dependency_tuple: EffectiveDependencyTuple = field(repr=False)
+
+
+@dataclass(frozen=True, slots=True)
+class FreeTextMappingKey:
+    """Mapping identity for a detected value inside a free-text cell.
+
+    The replacement executor looks up every accepted span by this key before
+    calling the replacement generator. Repeated occurrences of the same entity
+    and canonical value in one row and column therefore reuse one replacement,
+    independently of propagation mappings. ``scope_identity`` may widen that
+    reuse for group or dataframe scope.
+    """
+
+    target_column: str
+    scope_identity: Hashable = field(repr=False)
+    entity_type: EntityType
+    canonical_original_value: CanonicalValue = field(repr=False)
+
+
+def free_text_mapping_key(
+    cell: DetectionCell,
+    span: DetectedSpan,
+    *,
+    scope_identity: Hashable,
+) -> FreeTextMappingKey:
+    """Build the cache key for one accepted free-text detection."""
+    return FreeTextMappingKey(
+        target_column=cell.cell_id.column_name,
+        scope_identity=scope_identity,
+        entity_type=span.entity_type,
+        canonical_original_value=detected_text(cell, span),
+    )
 
 
 @dataclass(frozen=True, slots=True)
