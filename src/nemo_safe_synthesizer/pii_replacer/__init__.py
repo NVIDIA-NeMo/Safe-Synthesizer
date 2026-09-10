@@ -4,6 +4,6 @@
 from __future__ import annotations
 
 from .replacer import TabularPiiReplacer
-from .transform_result import ColumnStatistics, TransformResult
+from .transform_result import ColumnStatistics, ReplacementGenerationStatistics, TransformResult
 
-__all__ = ["ColumnStatistics", "TabularPiiReplacer", "TransformResult"]
+__all__ = ["ColumnStatistics", "ReplacementGenerationStatistics", "TabularPiiReplacer", "TransformResult"]

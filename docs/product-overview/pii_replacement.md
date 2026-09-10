@@ -72,10 +72,7 @@ replace_pii:
 ```
 
 Inline plans and plan files are authoritative: NSS validates them against the
-input dataframe but does not run heuristic or LLM discovery for the plan. This
-bypass applies only to plan discovery. If `llm` is configured, the replacement
-executor can still use it to replace PII found inside free-text columns named by
-the plan.
+input dataframe but does not run heuristic or LLM discovery.
 
 ## Plan-only workflow
 
@@ -112,8 +109,7 @@ The generated standalone plan can be reviewed, edited, and reused as
 ## LLM-assisted planning
 
 The `llm` mapping configures the OpenAI-compatible inference service used for
-automatic plan enhancement. It is planning-only: free-text replacement does not
-use this LLM, and an explicit replacement plan does not require one.
+automatic plan enhancement.
 
 ```yaml
 replace_pii:
@@ -141,8 +137,7 @@ Supply the inference API key at runtime through `NSS_INFERENCE_KEY` or the
 plan artifacts.
 
 Free-text columns use GLiNER2 plus applicable deterministic built-in regex
-rules. The initial detector interface is configured independently from plan
-discovery:
+rules:
 
 ```yaml
 replace_pii:
@@ -180,6 +175,5 @@ the pattern and warns if repair is exhausted.
 
 !!! warning "Inference endpoints receive source data"
     Plan enhancement can send bounded raw cell samples from the full input
-    dataframe, including rows that may later be assigned to a holdout set.
-    Free-text replacement can send raw cell values. Enable these operations
-    only when the endpoint is approved to receive the input data.
+    dataframe, including rows that may later be assigned to a holdout set. Enable
+    it only when the endpoint is approved to receive the input data.
