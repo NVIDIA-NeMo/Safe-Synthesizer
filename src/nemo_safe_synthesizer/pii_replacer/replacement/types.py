@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Contracts shared by replacement detection, mapping, and generation adapters.
+"""Contracts shared by PII replacement detection, mapping, and generation adapters.
 
 The execution engine composes these types to keep positional identity separate
 from sensitive values and to keep sensitive mapping inputs out of diagnostics.
