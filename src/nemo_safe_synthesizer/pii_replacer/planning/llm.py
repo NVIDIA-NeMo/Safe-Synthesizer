@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 from ...config.replace_pii import (
     ENTITIES,
     ENTITY_BY_TYPE,
+    EntityType,
     LLMConfig,
     PiiColumnPlan,
     PiiReplacementPlan,
@@ -28,16 +29,16 @@ from ..llm_client import (
     TransientInferenceError,
     resolve_inference_settings,
 )
-from .assembly import (
+from .patterns import pattern_grammar_catalog
+from .plan_builder import (
     ColumnClassification,
     DependencyCandidate,
     apply_dependencies,
     derive_dependency_candidates,
     plan_from_classifications,
 )
-from .patterns import pattern_grammar_catalog
 from .resolver import ColumnProfile, PlanDiscoveryInput, PlanEnhancer
-from .validation import _cycle_columns, _iter_pattern_issues
+from .validation import _iter_pattern_issues
 
 __all__ = [
     "LLMPlanEnhancer",
@@ -183,7 +184,6 @@ def _classification_messages(
     user = _compact_json(
         {
             "discovery_context": {
-                "scope": discovery_input.scope.value,
                 "group_column": discovery_input.group_column,
                 "protected_columns": sorted(discovery_input.protected_columns),
             },
@@ -204,14 +204,15 @@ def _dependency_candidate_payload(
     index: int,
     candidate: DependencyCandidate,
     *,
+    entity_types: Mapping[str, EntityType],
     selected_by_heuristic: bool,
 ) -> dict[str, str | bool]:
     return {
         "id": _dependency_candidate_id(index),
         "target_column": candidate.target_column,
-        "target_entity_type": candidate.target_entity_type.value,
+        "target_entity_type": entity_types[candidate.target_column].value,
         "source_column": candidate.source_column,
-        "source_entity_type": candidate.source_entity_type.value,
+        "source_entity_type": entity_types[candidate.source_column].value,
         "selected_by_heuristic": selected_by_heuristic,
     }
 
@@ -219,6 +220,7 @@ def _dependency_candidate_payload(
 def _dependency_selection_messages(
     candidates: Sequence[DependencyCandidate],
     baseline: PiiReplacementPlan,
+    classifications: Sequence[ColumnClassification],
 ) -> list[dict[str, str]]:
     system = (
         "Select the contextually useful replacement dependencies from the submitted candidates. A selected dependency "
@@ -231,12 +233,18 @@ def _dependency_selection_messages(
         "conflicting dependencies."
     )
     heuristic_edges = _heuristic_dependency_edges(baseline)
+    entity_types = {
+        classification.column_name: classification.entity_type
+        for classification in classifications
+        if classification.entity_type is not None
+    }
     user = _compact_json(
         {
             "dependency_candidates": [
                 _dependency_candidate_payload(
                     index,
                     candidate,
+                    entity_types=entity_types,
                     selected_by_heuristic=(candidate.target_column, candidate.source_column) in heuristic_edges,
                 )
                 for index, candidate in enumerate(candidates)
@@ -314,14 +322,19 @@ class LLMPlanEnhancer(PlanEnhancer):
     ) -> PiiReplacementPlan:
         """Return a semantically classified, deterministically assembled plan."""
         classifications = self._classify_columns(discovery_input, baseline)
+        expected_columns = {profile.column_name for profile in discovery_input.column_profiles}
         plan = plan_from_classifications(
-            discovery_input.scope,
             classifications,
+            expected_columns=expected_columns,
             protected_columns=discovery_input.protected_columns,
         )
-        candidates = derive_dependency_candidates(plan, classifications)
+        candidates = derive_dependency_candidates(
+            classifications,
+            expected_columns=expected_columns,
+            protected_columns=discovery_input.protected_columns,
+        )
         if candidates:
-            plan = self._select_dependencies(plan, candidates, baseline)
+            plan = self._select_dependencies(plan, candidates, baseline, classifications)
         return self._repair_invalid_patterns(discovery_input, plan)
 
     def _classify_columns(
@@ -367,17 +380,18 @@ class LLMPlanEnhancer(PlanEnhancer):
         plan: PiiReplacementPlan,
         candidates: Sequence[DependencyCandidate],
         baseline: PiiReplacementPlan,
+        classifications: Sequence[ColumnClassification],
     ) -> PiiReplacementPlan:
         selected_plan: PiiReplacementPlan | None = None
 
         def validate(response: _DependencySelectionResponse) -> _DependencySelectionResponse:
             nonlocal selected_plan
-            selected_plan = self._apply_dependency_selection(plan, candidates, response)
+            selected_plan = self._apply_dependency_selection(plan, candidates, classifications, response)
             return response
 
         self._request_structured(
             purpose="PII dependency selection",
-            messages=_dependency_selection_messages(candidates, baseline),
+            messages=_dependency_selection_messages(candidates, baseline, classifications),
             response_model=_DependencySelectionResponse,
             validate=validate,
         )
@@ -388,6 +402,7 @@ class LLMPlanEnhancer(PlanEnhancer):
     def _apply_dependency_selection(
         plan: PiiReplacementPlan,
         candidates: Sequence[DependencyCandidate],
+        classifications: Sequence[ColumnClassification],
         response: _DependencySelectionResponse,
     ) -> PiiReplacementPlan:
         selected_ids = response.selected_dependency_ids
@@ -399,12 +414,13 @@ class LLMPlanEnhancer(PlanEnhancer):
             raise ValueError("selected_dependency_ids contains unknown IDs: " + ", ".join(unknown))
 
         try:
-            selected_plan = apply_dependencies(plan, [by_id[selected_id] for selected_id in selected_ids])
+            return apply_dependencies(
+                plan,
+                [by_id[selected_id] for selected_id in selected_ids],
+                classifications=classifications,
+            )
         except (ParameterError, ValidationError) as exc:
             raise ValueError("selected dependencies do not form a valid replacement plan") from exc
-        if _cycle_columns(selected_plan):
-            raise ValueError("selected dependencies form a cycle")
-        return selected_plan
 
     def _request_structured(
         self,
