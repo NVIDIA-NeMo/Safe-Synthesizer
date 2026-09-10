@@ -11,11 +11,13 @@ from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.replace_pii import (
     ALLOWED_DEPENDS_ON,
     AUTO_DISCOVERY,
+    DEFAULT_GLINER2_MODEL_ID,
     ENTITIES,
     ENTITY_BY_TYPE,
     ConditioningColumn,
     EntityAction,
     EntityType,
+    FreeTextDetectionConfig,
     LLMConfig,
     PiiColumnPlan,
     PiiReplacementPlan,
@@ -488,7 +490,7 @@ class TestReplacePiiConfig:
         ):
             SafeSynthesizerParameters.model_validate({"replace_pii": {"replacement_plan": {"unexpected": True}}})
 
-    def test_llm_mapping_configures_shared_inference_behavior(self) -> None:
+    def test_llm_mapping_configures_planning_inference_behavior(self) -> None:
         config = ReplacePiiConfig.model_validate(
             {
                 "llm": {
@@ -515,6 +517,55 @@ class TestReplacePiiConfig:
     def test_llm_max_workers_must_be_positive(self) -> None:
         with pytest.raises(ValidationError, match="greater than or equal to 1"):
             ReplacePiiConfig.model_validate({"llm": {"max_workers": 0}})
+
+    def test_free_text_detection_defaults_and_serialization(self) -> None:
+        config = ReplacePiiConfig()
+
+        assert config.free_text_detection == FreeTextDetectionConfig(
+            model_id=DEFAULT_GLINER2_MODEL_ID,
+            threshold=0.3,
+            batch_size=8,
+            chunk_length=384,
+            chunk_overlap=128,
+        )
+        assert config.model_dump(mode="json")["free_text_detection"] == {
+            "model_id": DEFAULT_GLINER2_MODEL_ID,
+            "threshold": 0.3,
+            "batch_size": 8,
+            "chunk_length": 384,
+            "chunk_overlap": 128,
+        }
+
+    @pytest.mark.parametrize("threshold", [-0.01, 1.01])
+    def test_free_text_detection_threshold_must_be_in_closed_unit_interval(self, threshold: float) -> None:
+        with pytest.raises(ValidationError, match="less than or equal|greater than or equal"):
+            FreeTextDetectionConfig(threshold=threshold)
+
+    @pytest.mark.parametrize("field", ["batch_size", "chunk_length"])
+    def test_free_text_detection_batch_and_chunk_values_must_be_positive(self, field: str) -> None:
+        with pytest.raises(ValidationError, match="greater than 0"):
+            FreeTextDetectionConfig.model_validate({field: 0})
+
+    def test_free_text_detection_overlap_must_be_nonnegative_and_smaller_than_chunk(self) -> None:
+        with pytest.raises(ValidationError, match="greater than or equal to 0"):
+            FreeTextDetectionConfig(chunk_overlap=-1)
+        with pytest.raises(ValidationError, match="must be smaller than chunk_length"):
+            FreeTextDetectionConfig(chunk_length=32, chunk_overlap=32)
+
+        assert FreeTextDetectionConfig(chunk_length=32, chunk_overlap=0).chunk_overlap == 0
+
+    def test_llm_documentation_is_planning_only(self) -> None:
+        llm_description = ReplacePiiConfig.model_fields["llm"].description
+        free_text_description = ReplacePiiConfig.model_fields["free_text_detection"].description
+
+        assert LLMConfig.__doc__ is not None
+        assert "plan discovery" in LLMConfig.__doc__
+        assert llm_description is not None
+        assert "plan discovery" in llm_description
+        assert "replacement" not in llm_description
+        assert free_text_description is not None
+        assert "GLiNER2" in free_text_description
+        assert "regex" in free_text_description
 
     def test_resolved_managed_assets_path_uses_override(self, tmp_path: Path) -> None:
         config = ReplacePiiConfig.model_validate(

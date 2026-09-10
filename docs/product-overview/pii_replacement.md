@@ -109,12 +109,11 @@ plan = (
 The generated standalone plan can be reviewed, edited, and reused as
 `replace_pii.replacement_plan` in a later run.
 
-## LLM-assisted planning and free-text replacement
+## LLM-assisted planning
 
-The `llm` mapping configures the OpenAI-compatible inference service shared by
-plan enhancement and free-text replacement. During automatic discovery, the LLM
-enhances the heuristic plan. During execution, the same service processes
-free-text columns in the resolved plan.
+The `llm` mapping configures the OpenAI-compatible inference service used for
+automatic plan enhancement. It is planning-only: free-text replacement does not
+use this LLM, and an explicit replacement plan does not require one.
 
 ```yaml
 replace_pii:
@@ -140,6 +139,20 @@ supported for local OpenAI-compatible endpoints.
 Supply the inference API key at runtime through `NSS_INFERENCE_KEY` or the
 `--inference-api-key` CLI option. NSS does not store the key in configuration or
 plan artifacts.
+
+Free-text columns use GLiNER2 plus applicable deterministic built-in regex
+rules. The initial detector interface is configured independently from plan
+discovery:
+
+```yaml
+replace_pii:
+  free_text_detection:
+    model_id: fastino/gliner2.5-base-v1
+    threshold: 0.3
+    batch_size: 8
+    chunk_length: 384
+    chunk_overlap: 128
+```
 
 Automatic discovery uses two LLM passes. The first classifies every column's
 semantic entity type and may propose a replacement pattern, in bounded batches

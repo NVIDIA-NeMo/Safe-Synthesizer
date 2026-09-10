@@ -41,12 +41,14 @@ __all__ = [
     "ALLOWED_DEPENDS_ON",
     "AUTO_DISCOVERY",
     "ConditioningColumn",
+    "DEFAULT_GLINER2_MODEL_ID",
     "ENTITIES",
     "ENTITY_BY_TYPE",
     "EXCLUSIVE_DEPENDS_ON_GROUPS",
     "Entity",
     "EntityAction",
     "EntityType",
+    "FreeTextDetectionConfig",
     "LLMConfig",
     "PatternSyntax",
     "PiiColumnPlan",
@@ -64,6 +66,7 @@ __all__ = [
 # Sentinel value for ``ReplacePiiConfig.replacement_plan`` requesting automatic
 # entity discovery instead of an explicit plan.
 AUTO_DISCOVERY = "auto_discovery"
+DEFAULT_GLINER2_MODEL_ID = "fastino/gliner2.5-base-v1"
 # Unversioned configurations are permanently interpreted as v3. Adding a new
 # schema may expand the supported set, but must not advance this implicit value.
 _IMPLICIT_REPLACE_PII_SCHEMA_VERSION = 3
@@ -71,7 +74,12 @@ _SUPPORTED_REPLACE_PII_SCHEMA_VERSIONS = frozenset({3})
 
 
 class EntityType(StrEnum):
-    """Closed vocabulary for discovery and plan ``entity_type`` fields."""
+    """Closed vocabulary for discovery and plan ``entity_type`` fields.
+
+    ``FREE_TEXT`` marks columns whose accepted PII spans are detected by
+    GLiNER2 and applicable deterministic regex rules, then replaced without
+    changing the surrounding text.
+    """
 
     FIRST_NAME = "first_name"
     MIDDLE_NAME = "middle_name"
@@ -89,8 +97,8 @@ class EntityType(StrEnum):
     IPV6 = "ipv6"
     UNIQUE_IDENTIFIER = "unique_identifier"
 
-    # Propagate already-replaced values into spans of cell text (username/url use this too).
-    # Plus fresh NER and replacements when an LLM is available.
+    # Detect and replace PII spans in free-form text with GLiNER2 plus the
+    # applicable deterministic built-in regex rules.
     FREE_TEXT = "free_text"
 
     # Identify-only (and often original-value conditioners): discovery may classify
@@ -115,8 +123,8 @@ class EntityAction(Enum):
     """Rewrite PII spans inside free-form text, leaving the surrounding text intact.
 
     Unlike ``REPLACE``, the cell is not itself a single entity value: only the
-    spans within it are rewritten. Spans are sourced from values already
-    replaced in other columns or newly discovered by NER when an LLM is available.
+    spans accepted from GLiNER2 and applicable deterministic regex rules are
+    rewritten. Existing structured values and mappings do not create spans.
     """
 
     IDENTIFY_ONLY = auto()
@@ -588,7 +596,7 @@ class PiiReplacementPlan(Parameters):
 
 
 class LLMConfig(NSSBaseModel):
-    """Inference behavior shared by PII planning and replacement.
+    """Inference behavior for LLM-assisted PII plan discovery.
 
     LLM behavior is disabled when ``ReplacePiiConfig.llm`` is ``None``. The
     OpenAI-compatible endpoint is supplied at runtime through
@@ -606,10 +614,44 @@ class LLMConfig(NSSBaseModel):
     max_workers: int = Field(
         default=8,
         ge=1,
-        description=(
-            "Maximum concurrent requests for LLM-assisted plan discovery and free-text replacement. Must be at least 1."
-        ),
+        description=("Maximum concurrent requests for LLM-assisted plan discovery. Must be at least 1."),
     )
+
+
+class FreeTextDetectionConfig(NSSBaseModel):
+    """GLiNER2 and deterministic regex settings for free-text PII detection."""
+
+    model_id: str = Field(
+        default=DEFAULT_GLINER2_MODEL_ID,
+        description="GLiNER2 model identifier used to detect PII spans in free-text columns.",
+    )
+    threshold: float = Field(
+        default=0.3,
+        ge=0,
+        le=1,
+        description="Minimum GLiNER2 confidence score to accept. Must be between 0 and 1, inclusive.",
+    )
+    batch_size: int = Field(
+        default=8,
+        gt=0,
+        description="Number of text chunks processed in one GLiNER2 inference batch. Must be positive.",
+    )
+    chunk_length: int = Field(
+        default=384,
+        gt=0,
+        description="Maximum length of each GLiNER2 text chunk. Must be positive.",
+    )
+    chunk_overlap: int = Field(
+        default=128,
+        ge=0,
+        description="Overlap between adjacent GLiNER2 text chunks. Must be nonnegative and smaller than chunk_length.",
+    )
+
+    @model_validator(mode="after")
+    def _validate_chunk_overlap(self) -> Self:
+        if self.chunk_overlap >= self.chunk_length:
+            raise ParameterError("free_text_detection.chunk_overlap must be smaller than chunk_length")
+        return self
 
 
 class PiiReplacementSettings(NSSBaseModel):
@@ -666,11 +708,10 @@ class ReplacePiiConfig(Parameters):
     * an inline ``PiiReplacementPlan`` mapping in the main NSS config; or
     * a string path to a separate plan YAML containing that same mapping.
 
-    ``llm=None`` leaves auto-discovery at the heuristic baseline and disables
-    LLM-assisted free-text replacement. Supplying an ``llm`` mapping enables
-    LLM enhancement after heuristic discovery and provides the same inference
-    settings to replacement-time free-text processing. An inline plan or plan
-    file bypasses only discovery; it does not disable replacement-time LLM use.
+    ``llm=None`` leaves auto-discovery at the heuristic baseline. Supplying an
+    ``llm`` mapping enables LLM enhancement after heuristic discovery. An
+    inline plan or plan file bypasses discovery, so it does not require an LLM.
+    Free-text replacement uses ``free_text_detection`` instead of this LLM.
     The API key remains a runtime secret supplied through ``NSS_INFERENCE_KEY``
     or the corresponding CLI option; it is never stored in this model.
 
@@ -704,10 +745,14 @@ class ReplacePiiConfig(Parameters):
     llm: LLMConfig | None = Field(
         default=None,
         description=(
-            "Optional inference behavior shared by plan enhancement and free-text replacement. "
+            "Optional inference behavior for LLM-assisted plan discovery. "
             "The endpoint is configured at runtime through NSS_INFERENCE_ENDPOINT or --inference-endpoint-url. "
             "Use an empty mapping to enable NSS inference defaults."
         ),
+    )
+    free_text_detection: FreeTextDetectionConfig = Field(
+        default_factory=FreeTextDetectionConfig,
+        description=("GLiNER2 and deterministic built-in regex settings for detecting PII spans in free-text columns."),
     )
     replacement: PiiReplacementSettings = Field(
         default_factory=PiiReplacementSettings,
