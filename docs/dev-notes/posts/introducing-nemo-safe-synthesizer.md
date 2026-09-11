@@ -88,7 +88,7 @@ pip install "nemo-safe-synthesizer[cu129,engine]" \
   --extra-index-url https://download.pytorch.org/whl/cu129 \
   --extra-index-url https://flashinfer.ai/whl/cu129 \
   --extra-index-url https://flashinfer.ai/whl/ \
-  --extra-index-url https://wheels.vllm.ai/0.26.0/cu129
+  --extra-index-url https://wheels.vllm.ai/0.27.0/cu129
 ```
 
 The quickest way to run your first pipeline is the CLI:

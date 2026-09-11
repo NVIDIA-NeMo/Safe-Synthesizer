@@ -126,7 +126,7 @@ if [[ -n "${NSS_VERSION:-}" ]]; then
         --index https://flashinfer.ai/whl/cu129 \
         --index https://flashinfer.ai/whl/ \
         --index https://download.pytorch.org/whl/cu129 \
-        --index https://wheels.vllm.ai/0.26.0/cu129 \
+        --index https://wheels.vllm.ai/0.27.0/cu129 \
         --index-strategy unsafe-best-match
     NSS_RUN_CMD="${PYPI_VENV}/bin/safe-synthesizer"
     echo "[NSS SLURM] Using PyPI install: nemo-safe-synthesizer==${NSS_VERSION} on Python ${NSS_PYTHON_VERSION}"
