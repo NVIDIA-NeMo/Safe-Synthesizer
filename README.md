@@ -42,6 +42,11 @@ pip install "nemo-safe-synthesizer[cu129,engine]" \
   --extra-index-url https://wheels.vllm.ai/0.27.0/cu129
 ```
 
+> [!NOTE]
+> This project will download and install additional third-party open source
+> software projects. Review the license terms of these open source projects
+> before use.
+
 Or install from source:
 
 ```bash

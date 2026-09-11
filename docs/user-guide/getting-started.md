@@ -37,6 +37,11 @@ does at each stage.
 The CUDA and CPU extras depend on packages (PyTorch, FlashInfer) hosted on
 indexes outside PyPI. You must pass the extra index URLs shown below.
 
+!!! note
+    This project will download and install additional third-party open source
+    software projects. Review the license terms of these open source projects
+    before use.
+
 === "CUDA 12.9 (Linux with NVIDIA GPU)"
 
     === "pip"
