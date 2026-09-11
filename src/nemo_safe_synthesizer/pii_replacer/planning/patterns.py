@@ -8,13 +8,16 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
+from typing import Literal
 
 from ...config.replace_pii import PatternSyntax
 
 __all__ = [
     "CHARACTER_MASK_ESCAPABLE_CHARACTERS",
     "CHARACTER_MASK_TOKENS",
+    "NAME_PART_PLACEHOLDERS",
     "CharacterMaskToken",
+    "NamePartPlaceholder",
     "pattern_grammar_catalog",
 ]
 
@@ -41,28 +44,45 @@ _CHARACTER_MASK_ESCAPE_ORDER = (*CHARACTER_MASK_TOKENS, "[", "]", "\\")
 CHARACTER_MASK_ESCAPABLE_CHARACTERS = frozenset(_CHARACTER_MASK_ESCAPE_ORDER)
 
 
+@dataclass(frozen=True, slots=True)
+class NamePartPlaceholder:
+    """Meaning and presentation of one accepted name-part placeholder."""
+
+    part: Literal["first", "middle", "last", "domain"]
+    capitalization: Literal["lower", "title", "upper"] | None
+    initial: bool
+    description: str
+
+
+NAME_PART_PLACEHOLDERS: Mapping[str, NamePartPlaceholder] = MappingProxyType(
+    {
+        "{first}": NamePartPlaceholder("first", "lower", False, "first name"),
+        "{middle}": NamePartPlaceholder("middle", "lower", False, "middle name"),
+        "{last}": NamePartPlaceholder("last", "lower", False, "last name"),
+        "{f}": NamePartPlaceholder("first", "lower", True, "first-name initial"),
+        "{m}": NamePartPlaceholder("middle", "lower", True, "middle-name initial"),
+        "{l}": NamePartPlaceholder("last", "lower", True, "last-name initial"),
+        "{F}": NamePartPlaceholder("first", "upper", True, "uppercase first-name initial"),
+        "{M}": NamePartPlaceholder("middle", "upper", True, "uppercase middle-name initial"),
+        "{L}": NamePartPlaceholder("last", "upper", True, "uppercase last-name initial"),
+        "{First}": NamePartPlaceholder("first", "title", False, "title-case first name"),
+        "{Middle}": NamePartPlaceholder("middle", "title", False, "title-case middle name"),
+        "{Last}": NamePartPlaceholder("last", "title", False, "title-case last name"),
+        "{FIRST}": NamePartPlaceholder("first", "upper", False, "uppercase first name"),
+        "{MIDDLE}": NamePartPlaceholder("middle", "upper", False, "uppercase middle name"),
+        "{LAST}": NamePartPlaceholder("last", "upper", False, "uppercase last name"),
+        "{domain}": NamePartPlaceholder("domain", None, False, "email domain; email entities only"),
+    }
+)
+
+
 def pattern_grammar_catalog() -> dict[str, dict[str, object]]:
     """Return structured grammar documentation keyed by pattern syntax name."""
     return {
         PatternSyntax.NAME_PARTS.name.lower(): {
             "description": "Whole-value templates composed of literals and name-part placeholders.",
             "placeholders": {
-                "{first}": "first name",
-                "{middle}": "middle name",
-                "{last}": "last name",
-                "{f}": "first-name initial",
-                "{m}": "middle-name initial",
-                "{l}": "last-name initial",
-                "{F}": "uppercase first-name initial",
-                "{M}": "uppercase middle-name initial",
-                "{L}": "uppercase last-name initial",
-                "{First}": "title-case first name",
-                "{Middle}": "title-case middle name",
-                "{Last}": "title-case last name",
-                "{FIRST}": "uppercase first name",
-                "{MIDDLE}": "uppercase middle name",
-                "{LAST}": "uppercase last name",
-                "{domain}": "email domain; email entities only",
+                placeholder: definition.description for placeholder, definition in NAME_PART_PLACEHOLDERS.items()
             },
             "rules": [
                 "Literal separators and punctuation are preserved.",

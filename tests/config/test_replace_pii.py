@@ -408,6 +408,22 @@ class TestReplacePiiConfig:
 
         assert config.model_dump(exclude_unset=True)["replace_pii"]["schema_version"] == 3
 
+    def test_config_serialization_omits_explicitly_empty_dependencies(self) -> None:
+        plan = PiiReplacementPlan(
+            columns_to_replace=[
+                PiiColumnPlan(
+                    column_name="email",
+                    entity_type=EntityType.EMAIL,
+                    depends_on=[],
+                )
+            ]
+        )
+        serialized = ReplacePiiConfig(replacement_plan=plan).model_dump()
+        replacement_plan = serialized["replacement_plan"]
+
+        assert isinstance(replacement_plan, dict)
+        assert "depends_on" not in replacement_plan["columns_to_replace"][0]
+
     @pytest.mark.parametrize("schema_version", [1, 2, 0, -1])
     def test_unsupported_schema_version_is_rejected(self, schema_version: int) -> None:
         with pytest.raises(

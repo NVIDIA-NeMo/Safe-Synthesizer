@@ -125,30 +125,16 @@ class EntityAction(Enum):
 
 
 class PatternSyntax(Enum):
-    """Notation ``PiiColumnPlan.pattern`` is written in for this entity type.
-
-    An entity with no syntax (``None``) accepts no ``pattern`` at all.
-    """
+    """Grammar used by ``PiiColumnPlan.pattern`` for an entity type."""
 
     STRFTIME = auto()
     """Python ``strftime`` codes, e.g. ``%m/%d/%Y`` or ``%d.%m.%y``."""
 
     CHARACTER_MASK = auto()
-    r"""One drawn character per token, e.g. ``pmc-######`` or ``CUST-10[01]###``.
-
-    ``#`` digit, ``^`` A-Z, ``@`` a-z, ``&`` 0-9A-Z, ``%`` 0-9a-z, ``*``
-    0-9A-Za-z, ``[abc]`` one of the listed characters, and ``\x`` an escaped
-    special character such as ``\#`` or ``\[``.
-    Note ``[...]`` is a literal set rather than a range, so ``[0-9]`` draws from
-    ``0``, ``-``, ``9``.
-    """
+    """One drawn character per token, e.g. ``pmc-######`` or ``CUST-10[01]###``."""
 
     NAME_PARTS = auto()
-    """``{first}`` / ``{middle}`` / ``{last}`` placeholders for names and email.
-
-    Case variants ``{First}`` (title), ``{FIRST}`` (upper), and ``{f}`` / ``{F}``
-    (initial) apply to each part. Email also takes ``{domain}`` and ``#``.
-    """
+    """Whole-value templates composed of literals and name-part placeholders."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -390,11 +376,8 @@ class PiiColumnPlan(NSSBaseModel):
     pattern: str | None = Field(
         default=None,
         description=(
-            "Format this column writes the entity in: strftime for birth "
-            "dates (%m/%d/%Y), character templates for identifiers/phones (pmc-######, "
-            "+1-###-555-####), or person-part placeholders for names/emails ({LAST}, {First}, "
-            "{f}.{last}@{domain}). Only "
-            "entity types that define a pattern syntax may set this. "
+            "Optional whole-value format using the grammar associated with this entity type. "
+            "Only entity types that define a pattern syntax may set this. "
             "When provided, the whole column is replaced with the pattern if it "
             "covers at least 85% of non-null values (checked against the dataframe, "
             "not here)."
@@ -402,6 +385,7 @@ class PiiColumnPlan(NSSBaseModel):
     )
     depends_on: list[ConditioningColumn] = Field(
         default_factory=list,
+        exclude_if=lambda dependencies: not dependencies,
         description=(
             "Columns that condition the replacement of this column. "
             "Only entity types in ALLOWED_DEPENDS_ON may set this. Can omit "

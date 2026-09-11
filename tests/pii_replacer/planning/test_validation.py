@@ -16,6 +16,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
 )
 from nemo_safe_synthesizer.errors import InternalError, ParameterError
 from nemo_safe_synthesizer.pii_replacer.planning import validate_plan
+from nemo_safe_synthesizer.pii_replacer.planning.patterns import NAME_PART_PLACEHOLDERS
 
 
 @pytest.fixture
@@ -134,19 +135,39 @@ class TestValidatePlan:
         with pytest.raises(ParameterError, match="unsupported character|trailing"):
             validate_plan(dataframe, plan, data_config=DataParameters())
 
-    def test_accepts_uppercase_name_initial_placeholders(self) -> None:
-        dataframe = pd.DataFrame({"name": ["AGH"]})
+    @pytest.mark.parametrize("placeholder", NAME_PART_PLACEHOLDERS)
+    def test_accepts_every_documented_name_part_placeholder(self, placeholder: str) -> None:
+        definition = NAME_PART_PLACEHOLDERS[placeholder]
+        is_domain = definition.part == "domain"
+        pattern = f"x@{placeholder}" if is_domain else placeholder
+        value = "x@example.com" if is_domain else ("A" if definition.initial else "Ada")
+        dataframe = pd.DataFrame({"value": [value]})
         plan = PiiReplacementPlan(
             columns_to_replace=[
                 PiiColumnPlan(
-                    column_name="name",
-                    entity_type=EntityType.FULL_NAME,
-                    pattern="{F}{M}{L}",
+                    column_name="value",
+                    entity_type=EntityType.EMAIL if is_domain else EntityType.FULL_NAME,
+                    pattern=pattern,
                 )
             ]
         )
 
         validate_plan(dataframe, plan, data_config=DataParameters())
+
+    def test_rejects_undocumented_name_part_case_variant(self) -> None:
+        dataframe = pd.DataFrame({"name": ["Ada"]})
+        plan = PiiReplacementPlan(
+            columns_to_replace=[
+                PiiColumnPlan(
+                    column_name="name",
+                    entity_type=EntityType.FULL_NAME,
+                    pattern="{fIrSt}",
+                )
+            ]
+        )
+
+        with pytest.raises(ParameterError, match="unknown placeholder"):
+            validate_plan(dataframe, plan, data_config=DataParameters())
 
     def test_accepts_email_name_parts_pattern_with_digit_token(self) -> None:
         dataframe = pd.DataFrame({"email": ["ada1@example.com", "grace2@example.com"]})

@@ -20,13 +20,12 @@ from ...config.replace_pii import (
 )
 from ...config.time_series import TimeSeriesParameters
 from ...errors import InternalError, ParameterError
-from .patterns import CHARACTER_MASK_ESCAPABLE_CHARACTERS, CHARACTER_MASK_TOKENS
+from .patterns import CHARACTER_MASK_ESCAPABLE_CHARACTERS, CHARACTER_MASK_TOKENS, NAME_PART_PLACEHOLDERS
 
 __all__ = ["get_protected_columns", "validate_plan"]
 
 MIN_PATTERN_COVERAGE = 0.85
 _NAME_PART_PATTERN = re.compile(r"\{([^{}]+)\}")
-_NAME_PART_TOKENS = frozenset({"first", "middle", "last", "domain", "f", "m", "l"})
 
 
 def get_protected_columns(
@@ -115,14 +114,14 @@ def _name_parts_regex(
     for match in matches:
         literal = pattern[cursor : match.start()]
         parts.append(_name_parts_literal_regex(literal, entity_type))
-        token = match.group(1).lower()
-        if token not in _NAME_PART_TOKENS:
+        placeholder = NAME_PART_PLACEHOLDERS.get(match.group(0))
+        if placeholder is None:
             return None, f"uses unknown placeholder {match.group(0)!r}"
-        if token == "domain" and entity_type is not EntityType.EMAIL:
+        if placeholder.part == "domain" and entity_type is not EntityType.EMAIL:
             return None, "uses {domain} outside an email pattern"
-        if token == "domain":
+        if placeholder.part == "domain":
             parts.append(r"[^@\s]+")
-        elif token in {"f", "m", "l"}:
+        elif placeholder.initial:
             parts.append(r"[^\W\d_]")
         elif entity_type is EntityType.EMAIL:
             parts.append(r"[^@\s.]+")
