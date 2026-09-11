@@ -356,8 +356,15 @@ def test_repository_cuda_variant_dependencies_and_sources(pytestconfig: pytest.C
         {"index": "flashinfer-jit-cache-cu129", "marker": "sys_platform == 'linux'", "extra": "cu129"},
         {"index": "flashinfer-jit-cache-cu130", "marker": "sys_platform == 'linux'", "extra": "cu130"},
     ]
+    assert parsed["tool"]["uv"]["sources"]["flashinfer-cubin"] == [
+        {"index": "flashinfer-cubin", "marker": "sys_platform == 'linux'", "extra": "cpu"},
+        {"index": "flashinfer-cubin", "marker": "sys_platform == 'linux'", "extra": "cu129"},
+        {"index": "flashinfer-cubin", "marker": "sys_platform == 'linux'", "extra": "cu130"},
+    ]
     assert parsed["tool"]["uv"]["sources"]["nvidia-cublas"] == [{"index": "nvidia-pypi-public"}]
     indexes = {index["name"]: index["url"] for index in parsed["tool"]["uv"]["index"]}
+    assert indexes["nvidia-pypi-public"] == "https://pypi.nvidia.com"
+    assert indexes["flashinfer-cubin"] == "https://flashinfer.ai/whl/"
     assert indexes["flashinfer-jit-cache-cu129"] == "https://flashinfer.ai/whl/cu129"
     assert indexes["flashinfer-jit-cache-cu130"] == "https://flashinfer.ai/whl/cu130"
     assert indexes["vllm-v0-27-0-cu130"] == "https://wheels.vllm.ai/0.27.0/cu130"

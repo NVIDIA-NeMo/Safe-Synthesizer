@@ -139,6 +139,9 @@ jobs:
   gpu-e2e-test:
     name: GPU E2E Tests (${{ matrix.cuda-extra }})
     needs: changes
+    outputs:
+      cu129_result: ${{ steps.record_result.outputs.cu129_result }}
+      cu130_result: ${{ steps.record_result.outputs.cu130_result }}
     # `changes` is intentionally skipped on workflow_dispatch. `always()` lets
     # manual runs bypass that skipped dependency and run the selected GPU suite.
     if: >-
@@ -156,7 +159,6 @@ jobs:
       }}
     timeout-minutes: 210
     runs-on: linux-amd64-gpu-a100-latest-1
-    continue-on-error: ${{ !matrix.required }}
     strategy:
       fail-fast: false
       matrix:
@@ -183,8 +185,17 @@ jobs:
           cuda-extra: ${{ matrix.cuda-extra }}
 
       - name: Run GPU E2E tests
+        id: e2e_tests
+        continue-on-error: ${{ !matrix.required }}
         run: mise -E gpu-ci run test:e2e:prepared
         timeout-minutes: 190
+
+      - name: Record GPU E2E result
+        id: record_result
+        if: always()
+        env:
+          E2E_RESULT: ${{ steps.e2e_tests.outcome }}
+        run: echo "${{ matrix.cuda-extra }}_result=${E2E_RESULT}" >> "$GITHUB_OUTPUT"
 
   # ---------------------------------------------------------------------------
   # Single required status check for branch protection.
@@ -201,6 +212,8 @@ jobs:
           echo "changes:        ${{ needs.changes.result }}"
           echo "gpu-smoke-test: ${{ needs.gpu-smoke-test.result }}"
           echo "gpu-e2e-test:   ${{ needs.gpu-e2e-test.result }}"
+          echo "gpu-e2e-cu129:  ${{ needs.gpu-e2e-test.outputs.cu129_result }}"
+          echo "gpu-e2e-cu130:  ${{ needs.gpu-e2e-test.outputs.cu130_result }}"
 
           if [[ "${{ needs.changes.result }}" == "failure" ]]; then
             echo "::error::Change detection failed"
@@ -212,7 +225,9 @@ jobs:
             exit 1
           fi
 
-          if [[ "${{ needs.gpu-e2e-test.result }}" == "failure" ]]; then
+          if [[ "${{ needs.gpu-e2e-test.result }}" == "failure" ||
+                "${{ needs.gpu-e2e-test.outputs.cu129_result }}" == "failure" ||
+                "${{ needs.gpu-e2e-test.outputs.cu130_result }}" == "failure" ]]; then
             echo "::warning::GPU E2E tests failed (informational, does not block merge)"
           fi
 
