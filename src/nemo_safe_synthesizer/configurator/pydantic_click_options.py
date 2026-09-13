@@ -22,6 +22,7 @@ import inspect
 import json
 import re
 import types
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Annotated, Any, Literal, Union, get_args, get_origin
 
@@ -47,20 +48,29 @@ _LEGACY_CLI_OPTION_PATHS: dict[str, tuple[str, ...]] = {
 """Hidden compatibility aliases for renamed generated CLI options."""
 
 
-def _normalize_list_value(items: tuple[Any, ...] | list[Any]) -> list[Any]:
+def _normalize_list_value(items: Sequence[Any]) -> list[Any]:
     r"""Normalize CLI list inputs into a clean list.
 
     Handles repeated flags, comma-separated strings, and JSON- or bracket-encoded lists.
     When multiple flags are passed (repeated options), each value is preserved
-    as an individual entry without splitting on commas. When a single flag
-    contains commas, it is split on unescaped commas (with ``\,`` supported
-    for escaping).
+    verbatim as an individual entry without delimiter splitting or bracket stripping.
+    When a single flag contains commas, it is split on unescaped commas (with ``\,``
+    supported for escaping). Bracketed strings are decoded as JSON arrays or unpacked,
+    while literal brackets can be preserved using backslash escaping (e.g. ``\[customer\]``)
+    or standard JSON string lists (e.g. ``'["[customer]"]'``).
     """
     result: list[Any] = []
     is_repeated = len(items) > 1
     for item in items:
         if isinstance(item, str):
             item_str = item.strip()
+            # Repeated options preserve each argument as an atomic value
+            if is_repeated:
+                cleaned = item_str.replace(r"\,", ",").replace(r"\[", "[").replace(r"\]", "]")
+                if cleaned:
+                    result.append(cleaned)
+                continue
+
             if item_str.startswith("[") and item_str.endswith("]"):
                 try:
                     parsed = json.loads(item_str)
@@ -74,13 +84,21 @@ def _normalize_list_value(items: tuple[Any, ...] | list[Any]) -> list[Any]:
                 if not inner:
                     continue
                 parts = re.split(r"(?<!\\),", inner)
-                result.extend([p.replace(r"\,", ",").strip().strip("'\"") for p in parts if p.strip()])
+                result.extend(
+                    [
+                        p.replace(r"\,", ",").replace(r"\[", "[").replace(r"\]", "]").strip().strip("'\"")
+                        for p in parts
+                        if p.strip()
+                    ]
+                )
                 continue
-            if not is_repeated and re.search(r"(?<!\\),", item_str):
+            if re.search(r"(?<!\\),", item_str):
                 parts = re.split(r"(?<!\\),", item_str)
-                result.extend([p.replace(r"\,", ",").strip() for p in parts if p.strip()])
+                result.extend(
+                    [p.replace(r"\,", ",").replace(r"\[", "[").replace(r"\]", "]").strip() for p in parts if p.strip()]
+                )
             else:
-                cleaned = item_str.replace(r"\,", ",")
+                cleaned = item_str.replace(r"\,", ",").replace(r"\[", "[").replace(r"\]", "]")
                 if cleaned:
                     result.append(cleaned)
         else:
