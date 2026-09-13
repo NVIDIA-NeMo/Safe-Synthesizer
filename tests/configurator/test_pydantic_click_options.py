@@ -548,6 +548,7 @@ def test_structured_generation_legacy_options_end_to_end_via_click_runner(
 
 
 def test_is_list_type():
+    """Verify list type detection across list types, unions, and Annotated types."""
     assert _is_list_type(list) is True
     assert _is_list_type(list[str]) is True
     assert _is_list_type(list[int]) is True
@@ -560,6 +561,7 @@ def test_is_list_type():
 
 
 def test_normalize_list_value():
+    """Verify normalization of CLI list inputs across formats."""
     assert _normalize_list_value(("item",)) == ["item"]
     assert _normalize_list_value(("a", "b")) == ["a", "b"]
     assert _normalize_list_value(("a,b",)) == ["a", "b"]
@@ -567,16 +569,21 @@ def test_normalize_list_value():
     assert _normalize_list_value((r"last\, first",)) == ["last, first"]
     assert _normalize_list_value((r"last\, first, other",)) == ["last, first", "other"]
     assert _normalize_list_value(('["a", "b"]',)) == ["a", "b"]
+    assert _normalize_list_value(("[timeseries.shape]",)) == ["timeseries.shape"]
+    assert _normalize_list_value(("[timeseries.shape, gpu.vram]",)) == ["timeseries.shape", "gpu.vram"]
+    assert _normalize_list_value(("['timeseries.shape', 'gpu.vram']",)) == ["timeseries.shape", "gpu.vram"]
     assert _normalize_list_value(("[]",)) == []
     assert _normalize_list_value(("",)) == []
     assert _normalize_list_value(["a", "b"]) == ["a", "b"]
 
 
 def test_parse_overrides_empty_tuple_dropped():
+    """Verify empty tuples from unset multi-options are dropped."""
     assert parse_overrides({"preflight__disabled_checks": ()}) == {}
 
 
 def test_parse_overrides_list_tuples():
+    """Verify multi-option tuples are normalized into lists in nested overrides."""
     result = parse_overrides({"preflight__disabled_checks": ("timeseries.shape", "gpu.vram")})
     assert result == {"preflight": {"disabled_checks": ["timeseries.shape", "gpu.vram"]}}
 
@@ -608,6 +615,14 @@ def test_parse_overrides_list_tuples():
             ["--preflight__disabled_checks", '["timeseries.shape", "gpu.vram"]'],
             ["timeseries.shape", "gpu.vram"],
         ),
+        (
+            ["--preflight__disabled_checks", "[timeseries.shape]"],
+            ["timeseries.shape"],
+        ),
+        (
+            ["--preflight__disabled_checks", ""],
+            [],
+        ),
     ],
 )
 def test_cli_list_parameters_end_to_end(cli_args: list[str], expected: list[str]):
@@ -617,10 +632,12 @@ def test_cli_list_parameters_end_to_end(cli_args: list[str], expected: list[str]
     @pydantic_options(SafeSynthesizerParameters, field_separator="__")
     @click.command()
     def cmd(**kwargs):
+        """Capture parsed CLI overrides."""
         captured.update(parse_overrides(kwargs))
 
     result = CliRunner().invoke(cmd, cli_args)
     assert result.exit_code == 0, result.output
+    assert captured["preflight"]["disabled_checks"] == expected
     params = SafeSynthesizerParameters.model_validate(captured)
     assert params.preflight.disabled_checks == expected
 
@@ -632,6 +649,7 @@ def test_cli_list_parameters_omitted_preserves_default():
     @pydantic_options(SafeSynthesizerParameters, field_separator="__")
     @click.command()
     def cmd(**kwargs):
+        """Capture parsed CLI overrides."""
         captured.update(parse_overrides(kwargs))
 
     result = CliRunner().invoke(cmd, [])

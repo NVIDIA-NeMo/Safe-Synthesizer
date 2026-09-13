@@ -50,7 +50,7 @@ _LEGACY_CLI_OPTION_PATHS: dict[str, tuple[str, ...]] = {
 def _normalize_list_value(items: tuple[Any, ...] | list[Any]) -> list[Any]:
     r"""Normalize CLI list inputs into a clean list.
 
-    Handles repeated flags, comma-separated strings, and JSON-encoded lists.
+    Handles repeated flags, comma-separated strings, and JSON- or bracket-encoded lists.
     When multiple flags are passed (repeated options), each value is preserved
     as an individual entry without splitting on commas. When a single flag
     contains commas, it is split on unescaped commas (with ``\,`` supported
@@ -69,6 +69,13 @@ def _normalize_list_value(items: tuple[Any, ...] | list[Any]) -> list[Any]:
                 if isinstance(parsed, list):
                     result.extend(parsed)
                     continue
+                # Handle bracketed unquoted strings (e.g., [timeseries.shape] or [a, b])
+                inner = item_str[1:-1].strip()
+                if not inner:
+                    continue
+                parts = re.split(r"(?<!\\),", inner)
+                result.extend([p.replace(r"\,", ",").strip().strip("'\"") for p in parts if p.strip()])
+                continue
             if not is_repeated and re.search(r"(?<!\\),", item_str):
                 parts = re.split(r"(?<!\\),", item_str)
                 result.extend([p.replace(r"\,", ",").strip() for p in parts if p.strip()])
@@ -367,6 +374,7 @@ def pydantic_options(model_class: type[BaseModel], field_separator: str = "__"):
     """
 
     def apply_leaf_option(f, name: str, field: FieldInfo, *, hidden: bool = False):
+        """Apply a single leaf option to command function f."""
         names = _option_names(name, field_separator)
         if _is_list_type(field.annotation):
             return click.option(
