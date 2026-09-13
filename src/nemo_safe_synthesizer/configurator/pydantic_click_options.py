@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import inspect
 import json
+import re
 import types
 from dataclasses import dataclass
 from typing import Annotated, Any, Literal, Union, get_args, get_origin
@@ -47,11 +48,16 @@ _LEGACY_CLI_OPTION_PATHS: dict[str, tuple[str, ...]] = {
 
 
 def _normalize_list_value(items: tuple[Any, ...] | list[Any]) -> list[Any]:
-    """Normalize CLI list inputs into a clean list.
+    r"""Normalize CLI list inputs into a clean list.
 
     Handles repeated flags, comma-separated strings, and JSON-encoded lists.
+    When multiple flags are passed (repeated options), each value is preserved
+    as an individual entry without splitting on commas. When a single flag
+    contains commas, it is split on unescaped commas (with ``\,`` supported
+    for escaping).
     """
     result: list[Any] = []
+    is_repeated = len(items) > 1
     for item in items:
         if isinstance(item, str):
             item_str = item.strip()
@@ -63,10 +69,13 @@ def _normalize_list_value(items: tuple[Any, ...] | list[Any]) -> list[Any]:
                 if isinstance(parsed, list):
                     result.extend(parsed)
                     continue
-            if "," in item_str:
-                result.extend([part.strip() for part in item_str.split(",") if part.strip()])
-            elif item_str:
-                result.append(item_str)
+            if not is_repeated and re.search(r"(?<!\\),", item_str):
+                parts = re.split(r"(?<!\\),", item_str)
+                result.extend([p.replace(r"\,", ",").strip() for p in parts if p.strip()])
+            else:
+                cleaned = item_str.replace(r"\,", ",")
+                if cleaned:
+                    result.append(cleaned)
         else:
             result.append(item)
     return result

@@ -563,7 +563,9 @@ def test_normalize_list_value():
     assert _normalize_list_value(("item",)) == ["item"]
     assert _normalize_list_value(("a", "b")) == ["a", "b"]
     assert _normalize_list_value(("a,b",)) == ["a", "b"]
-    assert _normalize_list_value(("a, b", "c")) == ["a", "b", "c"]
+    assert _normalize_list_value(("last, first", "other_col")) == ["last, first", "other_col"]
+    assert _normalize_list_value((r"last\, first",)) == ["last, first"]
+    assert _normalize_list_value((r"last\, first, other",)) == ["last, first", "other"]
     assert _normalize_list_value(('["a", "b"]',)) == ["a", "b"]
     assert _normalize_list_value(("[]",)) == []
     assert _normalize_list_value(("",)) == []
@@ -591,8 +593,16 @@ def test_parse_overrides_list_tuples():
             ["timeseries.shape", "gpu.vram"],
         ),
         (
+            ["--preflight__disabled_checks", "last, first", "--preflight__disabled_checks", "other_col"],
+            ["last, first", "other_col"],
+        ),
+        (
             ["--preflight__disabled_checks", "timeseries.shape,gpu.vram"],
             ["timeseries.shape", "gpu.vram"],
+        ),
+        (
+            ["--preflight__disabled_checks", r"last\, first, other_col"],
+            ["last, first", "other_col"],
         ),
         (
             ["--preflight__disabled_checks", '["timeseries.shape", "gpu.vram"]'],
