@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+from typing import Annotated
+
 import click
 import pytest
 from click.testing import CliRunner
@@ -18,6 +20,8 @@ from nemo_safe_synthesizer.configurator.pydantic_click_options import (
     LeafParam,
     _click_type,
     _collect_params,
+    _is_list_type,
+    _normalize_list_value,
     parse_overrides,
     pydantic_options,
 )
@@ -536,3 +540,92 @@ def test_structured_generation_legacy_options_end_to_end_via_click_runner(
     result = CliRunner().invoke(cmd, [option, value])
     assert result.exit_code == 0, result.output
     assert captured["generation"][legacy_key] == expected
+
+
+# ---------------------------------------------------------------------------
+# List option support
+# ---------------------------------------------------------------------------
+
+
+def test_is_list_type():
+    assert _is_list_type(list) is True
+    assert _is_list_type(list[str]) is True
+    assert _is_list_type(list[int]) is True
+    assert _is_list_type(list[float]) is True
+    assert _is_list_type(list[str] | None) is True
+    assert _is_list_type(Annotated[list[str], Field(description="desc")]) is True
+    assert _is_list_type(str) is False
+    assert _is_list_type(int | None) is False
+    assert _is_list_type(dict[str, str]) is False
+
+
+def test_normalize_list_value():
+    assert _normalize_list_value(("item",)) == ["item"]
+    assert _normalize_list_value(("a", "b")) == ["a", "b"]
+    assert _normalize_list_value(("a,b",)) == ["a", "b"]
+    assert _normalize_list_value(("a, b", "c")) == ["a", "b", "c"]
+    assert _normalize_list_value(('["a", "b"]',)) == ["a", "b"]
+    assert _normalize_list_value(("[]",)) == []
+    assert _normalize_list_value(("",)) == []
+    assert _normalize_list_value(["a", "b"]) == ["a", "b"]
+
+
+def test_parse_overrides_empty_tuple_dropped():
+    assert parse_overrides({"preflight__disabled_checks": ()}) == {}
+
+
+def test_parse_overrides_list_tuples():
+    result = parse_overrides({"preflight__disabled_checks": ("timeseries.shape", "gpu.vram")})
+    assert result == {"preflight": {"disabled_checks": ["timeseries.shape", "gpu.vram"]}}
+
+
+@pytest.mark.parametrize(
+    ("cli_args", "expected"),
+    [
+        (
+            ["--preflight__disabled_checks", "timeseries.shape"],
+            ["timeseries.shape"],
+        ),
+        (
+            ["--preflight__disabled_checks", "timeseries.shape", "--preflight__disabled_checks", "gpu.vram"],
+            ["timeseries.shape", "gpu.vram"],
+        ),
+        (
+            ["--preflight__disabled_checks", "timeseries.shape,gpu.vram"],
+            ["timeseries.shape", "gpu.vram"],
+        ),
+        (
+            ["--preflight__disabled_checks", '["timeseries.shape", "gpu.vram"]'],
+            ["timeseries.shape", "gpu.vram"],
+        ),
+    ],
+)
+def test_cli_list_parameters_end_to_end(cli_args: list[str], expected: list[str]):
+    """List parameters passed via CLI parse into lists and validate against model."""
+    captured: dict = {}
+
+    @pydantic_options(SafeSynthesizerParameters, field_separator="__")
+    @click.command()
+    def cmd(**kwargs):
+        captured.update(parse_overrides(kwargs))
+
+    result = CliRunner().invoke(cmd, cli_args)
+    assert result.exit_code == 0, result.output
+    params = SafeSynthesizerParameters.model_validate(captured)
+    assert params.preflight.disabled_checks == expected
+
+
+def test_cli_list_parameters_omitted_preserves_default():
+    """Omitting a list parameter drops the key so model default is retained."""
+    captured: dict = {}
+
+    @pydantic_options(SafeSynthesizerParameters, field_separator="__")
+    @click.command()
+    def cmd(**kwargs):
+        captured.update(parse_overrides(kwargs))
+
+    result = CliRunner().invoke(cmd, [])
+    assert result.exit_code == 0, result.output
+    assert "preflight" not in captured or "disabled_checks" not in captured.get("preflight", {})
+    params = SafeSynthesizerParameters.model_validate(captured)
+    assert params.preflight.disabled_checks == []

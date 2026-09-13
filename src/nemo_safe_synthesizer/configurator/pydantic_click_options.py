@@ -19,6 +19,7 @@ nested keys like ``data__holdout`` will not be reconstructed correctly.
 from __future__ import annotations
 
 import inspect
+import json
 import types
 from dataclasses import dataclass
 from typing import Annotated, Any, Literal, Union, get_args, get_origin
@@ -45,12 +46,39 @@ _LEGACY_CLI_OPTION_PATHS: dict[str, tuple[str, ...]] = {
 """Hidden compatibility aliases for renamed generated CLI options."""
 
 
+def _normalize_list_value(items: tuple[Any, ...] | list[Any]) -> list[Any]:
+    """Normalize CLI list inputs into a clean list.
+
+    Handles repeated flags, comma-separated strings, and JSON-encoded lists.
+    """
+    result: list[Any] = []
+    for item in items:
+        if isinstance(item, str):
+            item_str = item.strip()
+            if item_str.startswith("[") and item_str.endswith("]"):
+                try:
+                    parsed = json.loads(item_str)
+                except (json.JSONDecodeError, ValueError):
+                    parsed = None
+                if isinstance(parsed, list):
+                    result.extend(parsed)
+                    continue
+            if "," in item_str:
+                result.extend([part.strip() for part in item_str.split(",") if part.strip()])
+            elif item_str:
+                result.append(item_str)
+        else:
+            result.append(item)
+    return result
+
+
 def parse_overrides(values: dict[str, Any] | None = None, field_sep: str = "__") -> dict[str, Any]:
     """Parse Click kwargs into a nested override dict.
 
     ``no_<field>=True`` injects ``{field: None}`` to disable a nullable-model
     field.  ``no_<field>=False`` (unset is-flag) is silently dropped.
-    ``None`` values (unset regular options) are also dropped.
+    ``None`` values (unset regular options) and empty tuples (unset multi-options)
+    are also dropped.
 
     Args:
         values: Flat dictionary of command line arguments from Click. (``None``-valued keys are dropped).
@@ -75,8 +103,10 @@ def parse_overrides(values: dict[str, Any] | None = None, field_sep: str = "__")
                     overrides, split_parameter_path(k.removeprefix(_NEGATION_PREFIX), field_sep), None
                 )
             continue
-        if v is None:
+        if v is None or v == ():
             continue
+        if isinstance(v, (tuple, list)):
+            v = _normalize_list_value(v)
         try:
             path = split_parameter_path(k, field_sep)
         except ValueError as error:
@@ -116,6 +146,19 @@ ClickParam = LeafParam | FlagParam
 
 def _is_basemodel(t: Any) -> TypeIs[type[BaseModel]]:
     return inspect.isclass(t) and issubclass(t, BaseModel)
+
+
+def _is_list_type(annotation: Any) -> bool:
+    """Check if an annotation represents a list container."""
+    t = annotation
+    if get_origin(t) is Annotated:
+        t = get_args(t)[0]
+    if get_origin(t) in (Union, types.UnionType):
+        args = [a for a in get_args(t) if a is not type(None)]
+        return any(_is_list_type(a) for a in args)
+    if t is list:
+        return True
+    return get_origin(t) is list
 
 
 def _nullable_model_arg(union_args: tuple) -> type[BaseModel] | None:
@@ -316,6 +359,14 @@ def pydantic_options(model_class: type[BaseModel], field_separator: str = "__"):
 
     def apply_leaf_option(f, name: str, field: FieldInfo, *, hidden: bool = False):
         names = _option_names(name, field_separator)
+        if _is_list_type(field.annotation):
+            return click.option(
+                *names,
+                type=click.STRING,
+                multiple=True,
+                help=field.description or "",
+                hidden=hidden,
+            )(f)
         return click.option(
             *names,
             type=_click_type(field.annotation),
