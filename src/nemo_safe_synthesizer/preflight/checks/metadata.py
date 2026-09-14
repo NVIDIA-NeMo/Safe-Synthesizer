@@ -67,6 +67,18 @@ class TokenBudgetCheck(MetadataCheck):
         # column is actually present (GroupbyColumnCheck may have flagged
         # a missing column as an error but we still want schema/record
         # checks to run; guarding here keeps them independent).
+        # Time-series mode uses `SequentialExampleAssembler` which streams
+        # groups across multiple context windows, so `group_exceeds_context`
+        # is skipped; `check_sampled_record_budget` on line 64 already
+        # provides bounded individual-record validation.
         group_col = config.data.group_training_examples_by
-        if group_col is not None and group_col in data.columns:
-            check_group_budget(collector, data, group_col, metadata, max_new_tokens, top_n=self.top_groups_to_check)
+        is_timeseries = bool(config.time_series and config.time_series.is_timeseries)
+        if group_col is not None and group_col in data.columns and not is_timeseries:
+            check_group_budget(
+                collector,
+                data,
+                group_col,
+                metadata,
+                max_new_tokens,
+                top_n=self.top_groups_to_check,
+            )
