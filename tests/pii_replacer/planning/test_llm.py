@@ -188,8 +188,17 @@ class TestLLMPlanEnhancer:
                     "target_entity_type": "email",
                     "selected_by_heuristic": False,
                 }
-            ]
+            ],
+            "exclusive_dependency_groups": [
+                [["first_name", "last_name", "middle_name"], ["full_name"]],
+                [["full_name"], ["ethnic_background", "gender"]],
+                [["zipcode"], ["city", "country", "state"]],
+            ],
         }
+        assert (
+            "selected source_entity_types for one target may intersect at most one inner group"
+            in dependency_messages[0]["content"]
+        )
         assert set(dependency_model.model_json_schema()["properties"]) == {"selected_dependency_ids"}
 
     def test_dependency_candidates_preserve_heuristic_selections_as_prior_evidence(self) -> None:
