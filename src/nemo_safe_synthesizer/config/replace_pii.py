@@ -42,6 +42,7 @@ __all__ = [
     "AUTO_DISCOVERY",
     "ConditioningColumn",
     "DEFAULT_GLINER2_MODEL_ID",
+    "DependencyValueMappings",
     "ENTITIES",
     "ENTITY_BY_TYPE",
     "EXCLUSIVE_DEPENDS_ON_GROUPS",
@@ -111,6 +112,10 @@ class EntityType(StrEnum):
     ZIPCODE = "zipcode"
     COUNTRY = "country"
     ORGANIZATION = "organization"
+
+
+DependencyValueMappings = dict[EntityType, dict[str, list[str] | None]]
+"""Input dependency labels mapped to labels understood by the configured sampler."""
 
 
 class EntityAction(Enum):
@@ -671,26 +676,72 @@ class PiiSamplerBackend(StrEnum):
     """Source of synthetic values for names and related person-like fields."""
 
     MANAGED = "managed"
-    """Draw from managed locale assets (see ``PiiSamplerConfig.managed_assets_path``)."""
+    """Draw from downloaded Nemotron Personas locale assets."""
 
     FAKER = "faker"
     """Draw from the Faker library; ignores ``ethnic_background`` conditioners."""
 
 
 class PiiSamplerConfig(NSSBaseModel):
-    """Settings for the synthetic value sampler (names and related person-like fields)."""
+    """Settings for Nemotron Personas or Faker-backed person sampling."""
 
     backend: PiiSamplerBackend = Field(
         default=PiiSamplerBackend.MANAGED,
-        description="Synthetic value sampler backend: managed assets or Faker.",
+        description="Person sampler backend: downloaded Nemotron Personas assets or Faker.",
     )
     managed_assets_path: str | None = Field(
         default=None,
         description=(
-            "Root directory containing a datasets/ folder of locale parquet files. "
+            "Root directory containing downloaded Nemotron Personas files as datasets/{locale}.parquet. "
             f"Defaults to {NSS_MANAGED_ASSETS_PATH_ENV} or ~/.data-designer/managed-assets."
         ),
     )
+    dependency_value_mappings: DependencyValueMappings = Field(
+        default_factory=dict,
+        description=(
+            "Dataset-specific, case-insensitive dependency-label overrides. A list maps one input label to "
+            "acceptable sampler labels; null disables that dependency condition. Unmapped labels use "
+            "case-insensitive identity matching."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _validate_dependency_value_mappings(self) -> Self:
+        for entity_type, mappings in self.dependency_value_mappings.items():
+            if not can_condition(entity_type):
+                raise ParameterError(
+                    f"dependency_value_mappings key {entity_type.value!r} is not a conditioner entity type"
+                )
+
+            seen_sources: set[str] = set()
+            for source, targets in mappings.items():
+                source_key = source.casefold()
+                if not source.strip():
+                    raise ParameterError("dependency_value_mappings source labels must be non-empty")
+                if source_key in seen_sources:
+                    raise ParameterError(
+                        f"dependency_value_mappings for {entity_type.value!r} contains duplicate "
+                        "source labels after case-folding"
+                    )
+                seen_sources.add(source_key)
+
+                if targets is None:
+                    continue
+                if not targets:
+                    raise ParameterError("dependency_value_mappings target lists must be non-empty")
+
+                seen_targets: set[str] = set()
+                for target in targets:
+                    target_key = target.casefold()
+                    if not target.strip():
+                        raise ParameterError("dependency_value_mappings target labels must be non-empty")
+                    if target_key in seen_targets:
+                        raise ParameterError(
+                            f"dependency_value_mappings for {entity_type.value!r} contains duplicate "
+                            "target labels after case-folding"
+                        )
+                    seen_targets.add(target_key)
+        return self
 
     def resolved_managed_assets_path(self) -> Path:
         """Return ``managed_assets_path`` if set, else the environment or built-in default."""

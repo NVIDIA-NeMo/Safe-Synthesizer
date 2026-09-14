@@ -22,6 +22,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiColumnPlan,
     PiiReplacementPlan,
     PiiSamplerBackend,
+    PiiSamplerConfig,
     ReplacePiiConfig,
     can_condition,
     is_columns_to_replace_type,
@@ -572,6 +573,57 @@ class TestReplacePiiConfig:
             {"sampler": {"backend": "faker", "managed_assets_path": str(tmp_path)}}
         )
         assert config.sampler.resolved_managed_assets_path() == tmp_path
+
+    def test_sampler_documentation_identifies_nemotron_personas_asset_layout(self) -> None:
+        backend_description = PiiSamplerConfig.model_fields["backend"].description
+        path_description = PiiSamplerConfig.model_fields["managed_assets_path"].description
+
+        assert backend_description is not None
+        assert "Nemotron Personas" in backend_description
+        assert path_description is not None
+        assert "Nemotron Personas" in path_description
+        assert "datasets/{locale}.parquet" in path_description
+
+    def test_sampler_accepts_dependency_value_mappings_for_faker(self) -> None:
+        sampler = PiiSamplerConfig.model_validate(
+            {
+                "backend": "faker",
+                "dependency_value_mappings": {
+                    "gender": {"Woman": ["female"], "Non-binary": None},
+                    "ethnic_background": {"Asian": ["east asian", "south asian"]},
+                },
+            }
+        )
+
+        assert sampler.dependency_value_mappings == {
+            EntityType.GENDER: {"Woman": ["female"], "Non-binary": None},
+            EntityType.ETHNIC_BACKGROUND: {"Asian": ["east asian", "south asian"]},
+        }
+
+    @pytest.mark.parametrize(
+        ("mappings", "error"),
+        [
+            ({"email": {"work": ["personal"]}}, "is not a conditioner entity type"),
+            ({"gender": {"": ["female"]}}, "source labels must be non-empty"),
+            ({"gender": {"Woman": []}}, "target lists must be non-empty"),
+            ({"gender": {"Woman": [" "]}}, "target labels must be non-empty"),
+            (
+                {"gender": {"Woman": ["female"], "woman": ["female"]}},
+                "duplicate source labels after case-folding",
+            ),
+            (
+                {"gender": {"Woman": ["female", "FEMALE"]}},
+                "duplicate target labels after case-folding",
+            ),
+        ],
+    )
+    def test_sampler_rejects_invalid_dependency_value_mappings(
+        self,
+        mappings: object,
+        error: str,
+    ) -> None:
+        with pytest.raises(ValidationError, match=error):
+            PiiSamplerConfig.model_validate({"dependency_value_mappings": mappings})
 
     def test_default_managed_assets_path_uses_env_then_home(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

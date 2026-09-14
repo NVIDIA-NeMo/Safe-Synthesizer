@@ -7,9 +7,95 @@ PII replacement v3 uses a dataset-specific replacement plan. The plan names
 the columns NSS should replace, the entity type in each column, optional format
 patterns, and dependencies between related columns.
 
+NSS applies structured-column replacements before training. Free-text named
+entity detection and span replacement are not yet part of replacement
+execution.
+
 Set `replace_pii: null`, pass `--no-replace-pii`, or call
 `.with_replace_pii(enable=False)` to run the synthesis pipeline without
 replacement.
+
+## Managed person sampling
+
+The default `managed` sampler draws names, email addresses, phone numbers, and
+street-address components from the extended Nemotron Personas locale datasets.
+Choose the NGC resource matching `replace_pii.replacement.locale`. Locale
+resources are versioned independently, so use the version published for the
+selected language and country. For example, download version `0.0.2` of the
+`en_US` resource after installing and authenticating the NGC CLI:
+
+```bash
+ngc registry resource download-version \
+  nvidia/nemotron-personas/nemotron-personas-dataset-en_us:0.0.2
+```
+
+Place the downloaded parquet files in the default managed-assets directory:
+
+```bash
+mkdir -p "${HOME}/.data-designer/managed-assets/datasets"
+cp nemotron-personas-dataset-*/*.parquet \
+  "${HOME}/.data-designer/managed-assets/datasets/"
+```
+
+The sampler loads `<managed-assets>/datasets/<locale>.parquet`. The locale in
+the configuration must match the downloaded parquet filename; for the example
+above, that is `en_US.parquet`:
+
+```yaml
+replace_pii:
+  replacement:
+    locale: en_US
+  sampler:
+    backend: managed
+```
+
+To store the files elsewhere, set `replace_pii.sampler.managed_assets_path` to
+the directory containing `datasets/`, or set `NSS_MANAGED_ASSETS_PATH`:
+
+```yaml
+replace_pii:
+  sampler:
+    backend: managed
+    managed_assets_path: /path/to/managed-assets
+```
+
+When an applicable locale asset or required field is unavailable, NSS warns and
+uses Faker for that value. Set `backend: faker` to use Faker directly without a
+managed dataset. See NVIDIA's
+[person-sampling setup](https://docs.nvidia.com/nemo/datadesigner/concepts/person-sampling)
+to select a locale resource and the
+[`en_US` NGC resource](https://catalog.ngc.nvidia.com/orgs/nvidia/nemotron-personas/resources/nemotron-personas-dataset-en_us/-)
+for the example above.
+
+### Dependency label mappings
+
+Dependency values are matched to sampler labels case-insensitively, so values
+such as `Female` and `female` need no configuration. When the input dataset and
+sampler use different label vocabularies, add sparse overrides under the
+sampler:
+
+```yaml
+replace_pii:
+  sampler:
+    backend: managed
+    dependency_value_mappings:
+      gender:
+        Non-binary: null
+      ethnic_background:
+        Asian:
+          - east asian
+          - south asian
+          - southeast asian
+        Black or African American:
+          - black
+```
+
+Each nonempty list selects the union of managed-asset rows with those labels.
+An explicit `null` disables that condition for the matching input value. If no
+override exists, NSS uses case-insensitive identity matching and reports an
+error when the managed asset has no matching candidates. Faker accepts the same
+configuration and applies mappings for attributes it supports, such as gender;
+unsupported attributes are ignored.
 
 ## Replacement plan sources
 

@@ -162,6 +162,10 @@ LLM span-detection experiment.
 - `ManagedReplacementGenerator` and `FakerReplacementGenerator` are the two adapters at the replacement-generator
   seam.
 - The flat `depends_on` DAG is the execution architecture.
+- Dataset-specific dependency-label adaptation belongs to `PiiSamplerConfig`, not `PiiReplacementPlan` or individual
+  `depends_on` edges.
+- Dependency value mappings are sparse, case-insensitive overrides. An input label that differs only in case from a
+  sampler label needs no explicit mapping.
 - Record mappings use stable positional row identity. Dependencies are generation inputs, not record mapping identity.
 - For group-scoped mappings, group consistency wins over dependency consistency.
 - The first group occurrence establishes the replacement. If later dependency values differ, reuse the first
@@ -228,6 +232,83 @@ the replacement executor.
 `ManagedReplacementGenerator` and `FakerReplacementGenerator` are the two adapters. Each declares its
 `PiiSamplerBackend` and accepts `PiiReplacementSettings` plus `PiiSamplerConfig` at construction. Implement their
 generation behavior in the follow-up without widening the public `TabularPiiReplacer` constructor.
+
+### Dependency value mappings
+
+Add dataset-specific label adaptation to the sampler configuration:
+
+```python
+DependencyValueMappings = dict[EntityType, dict[str, list[str] | None]]
+
+
+class PiiSamplerConfig(NSSBaseModel):
+    backend: PiiSamplerBackend = PiiSamplerBackend.MANAGED
+    managed_assets_path: str | None = None
+    dependency_value_mappings: DependencyValueMappings = Field(default_factory=dict)
+```
+
+The YAML interface is:
+
+```yaml
+replace_pii:
+  sampler:
+    backend: managed
+    dependency_value_mappings:
+      gender:
+        Non-binary: null
+      ethnic_background:
+        Asian:
+          - east asian
+          - south asian
+          - southeast asian
+          - central asian
+          - asian other
+        Black or African American:
+          - black
+        Hispanic:
+          - mexican
+          - puerto rican
+          - cuban
+          - spanish
+          - hispanic or latino other
+        American Indian or Alaska Native:
+          - american indian
+          - alaska native
+        Native Hawaiian or Other Pacific Islander:
+          - pacific islander
+          - polynesian
+          - melanesian
+          - micronesian
+        Other: null
+```
+
+This mapping adapts labels from the input dataset to labels understood by the selected sampler. It is sampler
+configuration because it changes candidate selection, not the replacement plan's dependency graph. It remains valid
+when users switch between managed and Faker backends.
+
+Resolve each dependency value as follows:
+
+1. Match explicit source-label keys case-insensitively. An explicit entry takes precedence over identity matching.
+2. A nonempty list selects the union of candidates carrying any listed sampler label. Preserve the asset's natural row
+   frequency within that union; do not add per-label weights initially.
+3. `null` explicitly removes that condition for the matching source label.
+4. Without an explicit entry, compare the original dependency value directly to sampler labels case-insensitively.
+   Therefore values such as `Female`/`female` and `White`/`white` require no mapping.
+5. For managed sampling, fail when neither an explicit mapping nor the implicit identity value selects any asset
+   candidates. Do not silently discard the condition. Report only the conditioner entity type and aggregate count,
+   never the raw dependency value.
+
+Reject empty target lists, empty labels, and source or target labels duplicated after case-folding. Mapping keys must be
+conditioner entity types. Applying a mapping must not alter `CanonicalValue`, mapping identity, dependency-drift
+comparison, or persisted source data; case-folding exists only inside sampler candidate selection.
+
+Both adapters accept the configuration. Faker applies mapped labels to dependency attributes it supports, such as
+gender, and continues to ignore unsupported attributes such as ethnic background. Do not reject the configuration or
+warn merely because the active backend does not use one of its mapped entity types.
+
+Compile mappings and candidate indexes once when a managed locale asset is loaded. Read only columns needed for
+sampling, filtering, and rendering; do not load the large persona-description columns. A generation call must select
+from pre-indexed candidate rows rather than case-folding and scanning the complete asset for every replacement.
 
 ### Free-text configuration
 
@@ -390,7 +471,11 @@ quality information, not invalid configuration.
 - Given the same plan, accepted detector spans, and seed, output must be deterministic.
 - Support managed and Faker person sampling, name patterns, character masks, plus-or-minus 365-day birth-date shifts,
   Luhn-valid cards, IP addresses, and collision-resistant identifiers.
-- If managed sampling fails, warn once per affected category and fall back deterministically to Faker.
+- Apply configured dependency value mappings and case-insensitive identity matching before sampler candidate
+  selection.
+- If a managed asset or required generated field is unavailable, warn once per affected category and fall back
+  deterministically to Faker. A configured or implicit dependency label that selects no managed candidates is a
+  configuration error, not a fallback condition.
 - Require generated values to differ from originals and satisfy entity-specific constraints.
 - Use one pattern parser for validation and rendering so their grammars cannot drift.
 
@@ -539,7 +624,7 @@ make it explicit opt-in, label the artifact as sensitive, and define access cont
    `fastino/gliner2-privacy-filter-PII-multi`; add its model adapter; and adapt the deterministic regex layer from
    Anonymizer PR 265.
 2. Implement the deep `TabularPiiReplacer` module, DAG compiler, scopes, deterministic mapping keys, group conflict
-   handling, and programmatic entity generators.
+   handling, sampler dependency value mappings, indexed managed-asset loading, and programmatic entity generators.
 3. Implement span normalization, cross-source overlap resolution, component-map reuse, and one-pass text construction.
 4. Integrate the replacer after holdout, return the expanded result, persist the resolved plan, and populate statistics.
 5. Add focused unit tests, pipeline integration tests, and opt-in live-model evaluations.
@@ -564,6 +649,10 @@ make it explicit opt-in, label the artifact as sensitive, and define access cont
   aggregate warning/count without raw values.
 - Test deterministic seeds, managed fallback, supported generators, patterns, email-domain behavior, organization
   normalization, masks, birth dates, Luhn cards, original inequality, and collision retries.
+- Test sparse case-insensitive dependency mappings, implicit identity matching, one-to-many candidate unions, explicit
+  `null`, missing managed candidates, mapping validation, and acceptance by both managed and Faker configurations.
+- Test that managed assets load only required columns and build reusable candidate indexes rather than scanning the
+  complete asset per generated value.
 - Test component replacement reuse only for independently detected spans.
 - Test generation elapsed time and distinct-generation counts after cache reuse.
 

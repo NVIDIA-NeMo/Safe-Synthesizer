@@ -1,14 +1,16 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Interface for synthetic replacement value generation."""
+"""Contract and compatibility exports for replacement value generation."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import ClassVar, Protocol
 
-from ...config.replace_pii import EntityType, PiiReplacementSettings, PiiSamplerBackend, PiiSamplerConfig
+from ...config.replace_pii import EntityType, PiiSamplerBackend
+from .generators import FakerReplacementGenerator, ManagedReplacementGenerator
+from .generators._common import generated_value_is_valid
 from .types import EffectiveDependencyTuple
 
 __all__ = [
@@ -16,6 +18,7 @@ __all__ = [
     "ManagedReplacementGenerator",
     "ReplacementGenerationRequest",
     "ReplacementGenerator",
+    "generated_value_is_valid",
 ]
 
 
@@ -60,51 +63,3 @@ class ReplacementGenerator(Protocol):
 
     def generate(self, request: ReplacementGenerationRequest) -> str:
         """Return one synthetic value satisfying ``request``."""
-
-
-class ManagedReplacementGenerator(ReplacementGenerator):
-    """Generate replacements using managed person-sampling assets.
-
-    Args:
-        settings: Locale and seed configuration shared by replacement
-            generators.
-        sampler: Managed sampler configuration, including its asset path.
-
-    Replacement execution is introduced by a follow-up change.
-    """
-
-    backend: ClassVar[PiiSamplerBackend] = PiiSamplerBackend.MANAGED
-
-    def __init__(self, *, settings: PiiReplacementSettings, sampler: PiiSamplerConfig) -> None:
-        if sampler.backend is not self.backend:
-            raise ValueError("ManagedReplacementGenerator requires the managed sampler backend")
-        self._settings = settings
-        self._sampler = sampler
-
-    def generate(self, request: ReplacementGenerationRequest) -> str:
-        """Generate a managed-asset replacement for ``request``."""
-        raise NotImplementedError("managed replacement generation is not implemented")
-
-
-class FakerReplacementGenerator(ReplacementGenerator):
-    """Generate replacements using Faker for person-like values.
-
-    Args:
-        settings: Locale and seed configuration shared by replacement
-            generators.
-        sampler: Faker sampler configuration.
-
-    Replacement execution is introduced by a follow-up change.
-    """
-
-    backend: ClassVar[PiiSamplerBackend] = PiiSamplerBackend.FAKER
-
-    def __init__(self, *, settings: PiiReplacementSettings, sampler: PiiSamplerConfig) -> None:
-        if sampler.backend is not self.backend:
-            raise ValueError("FakerReplacementGenerator requires the faker sampler backend")
-        self._settings = settings
-        self._sampler = sampler
-
-    def generate(self, request: ReplacementGenerationRequest) -> str:
-        """Generate a Faker-backed replacement for ``request``."""
-        raise NotImplementedError("Faker replacement generation is not implemented")

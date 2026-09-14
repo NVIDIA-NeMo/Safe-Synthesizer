@@ -579,9 +579,10 @@ safe-synthesizer run replace-pii --plan-only \
   --data-source data.csv
 ```
 
-The training and generation pipeline currently requires PII replacement to be
-disabled. Set `replace_pii: null`, pass `--no-replace-pii`, or call
-`.with_replace_pii(enable=False)` before running it.
+During the normal synthesis pipeline, NSS applies structured-column replacements
+from the resolved plan before training. See
+[PII Replacement](../product-overview/pii_replacement.md) for managed Nemotron
+Personas setup and current free-text limitations.
 
 ---
 

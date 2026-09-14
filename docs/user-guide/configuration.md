@@ -294,11 +294,11 @@ for the full API reference.
 PII replacement accepts automatic discovery, a plan written inline in the main NSS
 configuration, or a path to a separate plan YAML. See
 [PII Replacement](../product-overview/pii_replacement.md) for the plan-source
-definitions, examples, and the shared LLM configuration for plan enhancement and
-free-text replacement.
+definitions, examples, managed Nemotron Personas download instructions, and the
+shared LLM configuration for plan enhancement and free-text detection.
 
-The synthesis pipeline currently requires PII replacement to be disabled. Set
-`replace_pii: null` or use `--no-replace-pii` when running it.
+Structured-column replacements run before training. Free-text named entity
+detection and span replacement are not yet executed.
 
 ---
 

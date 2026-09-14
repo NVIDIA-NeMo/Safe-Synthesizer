@@ -8,7 +8,15 @@ import pytest
 from pydantic import ValidationError
 
 from nemo_safe_synthesizer.config.data import DataParameters
-from nemo_safe_synthesizer.config.replace_pii import PiiReplacementPlan, ReplacePiiConfig
+from nemo_safe_synthesizer.config.replace_pii import (
+    EntityType,
+    PiiColumnPlan,
+    PiiReplacementPlan,
+    PiiSamplerBackend,
+    PiiSamplerConfig,
+    ReplacePiiConfig,
+)
+from nemo_safe_synthesizer.errors import GenerationError
 from nemo_safe_synthesizer.pii_replacer import ReplacementGenerationStatistics, TabularPiiReplacer
 from nemo_safe_synthesizer.pii_replacer.transform_result import TransformResult
 
@@ -22,13 +30,53 @@ class TestTabularPiiReplacerInterface:
         assert signature.parameters["data_config"].kind is inspect.Parameter.KEYWORD_ONLY
         assert signature.parameters["time_series"].default is None
 
-    def test_interface_stub_does_not_mutate_the_caller_dataframe(self) -> None:
+    def test_empty_plan_returns_a_copy_without_mutating_the_caller_dataframe(self) -> None:
         dataframe = pd.DataFrame({"email": ["ada@example.com"]}, index=[7])
         original = dataframe.copy(deep=True)
         replacer = TabularPiiReplacer(ReplacePiiConfig(), data_config=DataParameters())
 
-        with pytest.raises(NotImplementedError, match="execution is not implemented"):
-            replacer.replace(dataframe)
+        result = replacer.replace(dataframe)
+
+        pd.testing.assert_frame_equal(dataframe, original)
+        pd.testing.assert_frame_equal(result.transformed_df, original)
+        assert result.transformed_df is not dataframe
+        assert result.generation_statistics.generated_replacement_count == 0
+
+    def test_replace_executes_an_explicit_structured_plan(self) -> None:
+        dataframe = pd.DataFrame({"identifier": ["USER-001", "USER-002"]}, index=[3, 3])
+        config = ReplacePiiConfig(
+            replacement_plan=PiiReplacementPlan(
+                columns_to_replace=[
+                    PiiColumnPlan(
+                        column_name="identifier",
+                        entity_type=EntityType.UNIQUE_IDENTIFIER,
+                        pattern="USER-###",
+                    )
+                ]
+            ),
+            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+        )
+
+        first = TabularPiiReplacer(config, data_config=DataParameters()).replace(dataframe)
+        second = TabularPiiReplacer(config, data_config=DataParameters()).replace(dataframe)
+
+        assert first.transformed_df.equals(second.transformed_df)
+        assert first.transformed_df.index.tolist() == [3, 3]
+        assert first.transformed_df["identifier"].str.fullmatch(r"USER-\d{3}").all()
+        assert first.generation_statistics.generated_replacement_count == 2
+
+    def test_free_text_replacement_is_explicitly_deferred(self) -> None:
+        dataframe = pd.DataFrame({"notes": ["Ada called"]})
+        original = dataframe.copy(deep=True)
+        config = ReplacePiiConfig(
+            replacement_plan=PiiReplacementPlan(
+                columns_to_replace=[PiiColumnPlan(column_name="notes", entity_type=EntityType.FREE_TEXT)]
+            ),
+            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+        )
+
+        with pytest.raises(GenerationError, match="detector and span-resolution"):
+            TabularPiiReplacer(config, data_config=DataParameters()).replace(dataframe)
 
         pd.testing.assert_frame_equal(dataframe, original)
 
