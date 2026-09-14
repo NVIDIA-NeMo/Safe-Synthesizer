@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 from ...config.replace_pii import (
     ENTITIES,
     ENTITY_BY_TYPE,
+    EXCLUSIVE_DEPENDS_ON_GROUPS,
     EntityType,
     LLMConfig,
     PiiColumnPlan,
@@ -148,6 +149,13 @@ def _heuristic_dependency_edges(baseline: PiiReplacementPlan) -> frozenset[tuple
     )
 
 
+def _exclusive_dependency_groups_payload() -> list[list[list[str]]]:
+    return [
+        [sorted(entity_type.value for entity_type in group) for group in family]
+        for family in EXCLUSIVE_DEPENDS_ON_GROUPS
+    ]
+
+
 def _validation_feedback(exc: Exception) -> str:
     if isinstance(exc, ValidationError):
         details = exc.errors(include_input=False, include_url=False)[:5]
@@ -229,8 +237,10 @@ def _dependency_selection_messages(
         "a candidate only when the source column provides meaningful semantic context for generating the target "
         "column. selected_by_heuristic indicates that the heuristic baseline chose the same target/source edge; treat "
         "it as fallible prior evidence, not a requirement. Return only IDs from dependency_candidates. Do not invent "
-        "IDs, replacement columns, entity types, patterns, or dependency relationships. Do not select redundant or "
-        "conflicting dependencies."
+        "IDs, replacement columns, entity types, patterns, or dependency relationships. Apply "
+        "exclusive_dependency_groups independently to every target column: within each outer family, the selected "
+        "source_entity_types for one target may intersect at most one inner group. Multiple source entity types from "
+        "the same inner group are allowed. Do not select redundant dependencies."
     )
     heuristic_edges = _heuristic_dependency_edges(baseline)
     entity_types = {
@@ -248,7 +258,8 @@ def _dependency_selection_messages(
                     selected_by_heuristic=(candidate.target_column, candidate.source_column) in heuristic_edges,
                 )
                 for index, candidate in enumerate(candidates)
-            ]
+            ],
+            "exclusive_dependency_groups": _exclusive_dependency_groups_payload(),
         }
     )
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
