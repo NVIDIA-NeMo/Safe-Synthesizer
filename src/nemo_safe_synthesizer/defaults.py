@@ -74,6 +74,7 @@ DEFAULT_EXCLUDE_COLUMNS: tuple[str, ...] = (PSEUDO_GROUP_COLUMN,)
 
 # Unused default LLM inference endpoint (reserved for PII replacement v3).
 DEFAULT_NSS_INFERENCE_ENDPOINT = "https://integrate.api.nvidia.com/v1"
+PII_REPLACEMENT_PLAN_FILENAME = "pii_replacement_plan.yaml"
 
 # Managed parquet assets for the PII sampler (``datasets/{locale}.parquet``).
 NSS_MANAGED_ASSETS_PATH_ENV = "NSS_MANAGED_ASSETS_PATH"
