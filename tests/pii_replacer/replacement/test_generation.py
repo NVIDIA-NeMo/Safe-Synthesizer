@@ -6,6 +6,7 @@ from dataclasses import FrozenInstanceError
 from datetime import datetime
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -531,6 +532,69 @@ class TestReplacementGenerator:
 
         assert generator.generate(request) == "South"
 
+    def test_nemotron_personas_generator_caches_positions_by_resolved_dependency_values(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        asset_path = tmp_path / "datasets" / "en_US.parquet"
+        asset_path.parent.mkdir()
+        asset_path.touch()
+        people = pd.DataFrame(
+            {
+                "first_name": ["EastWoman", "SouthWoman", "EastMan", "OtherWoman"],
+                "sex": ["female", "female", "male", "female"],
+                "ethnic_background": ["east asian", "south asian", "east asian", "white"],
+            }
+        )
+        monkeypatch.setattr(pd, "read_parquet", lambda _path: people)
+        original_intersect = np.intersect1d
+        intersection_count = 0
+
+        def count_intersection(
+            first: np.ndarray,
+            second: np.ndarray,
+            *,
+            assume_unique: bool = False,
+        ) -> np.ndarray:
+            nonlocal intersection_count
+            intersection_count += 1
+            return original_intersect(first, second, assume_unique=assume_unique)
+
+        monkeypatch.setattr(np, "intersect1d", count_intersection)
+        mapped_labels = ["east asian", "south asian"]
+        generator = NemotronPersonasReplacementGenerator(
+            settings=PiiReplacementSettings(),
+            sampler=PiiSamplerConfig(
+                backend=PiiSamplerBackend.NEMOTRON_PERSONAS,
+                nemotron_personas_path=str(tmp_path),
+                data_to_sampler_value_mapping={
+                    EntityType.ETHNIC_BACKGROUND: {
+                        "Asian": mapped_labels,
+                        "AAPI": mapped_labels,
+                    }
+                },
+            ),
+        )
+
+        def generate(dataset_value: str, seed: int) -> str:
+            return generator.generate(
+                ReplacementGenerationRequest(
+                    entity_type=EntityType.FIRST_NAME,
+                    original_value="Ada",
+                    effective_dependency_tuple=(
+                        (EntityType.GENDER, CanonicalValue("string", "female")),
+                        (EntityType.ETHNIC_BACKGROUND, CanonicalValue("string", dataset_value)),
+                    ),
+                    pattern=None,
+                    seed=seed,
+                )
+            )
+
+        assert generate("Asian", 0) == "EastWoman"
+        assert generate("AAPI", 1) == "SouthWoman"
+        assert intersection_count == 1
+
     def test_nemotron_personas_generator_null_mapping_disables_the_dependency_condition(
         self,
         tmp_path: Path,
@@ -604,14 +668,16 @@ class TestReplacementGenerator:
         asset_path.parent.mkdir()
         asset_path.touch()
         read_columns: list[list[str]] = []
+        read_dtype_backends: list[str] = []
 
         monkeypatch.setattr(
             "nemo_safe_synthesizer.pii_replacer.replacement.generators.nemotron_personas._available_parquet_columns",
             lambda _path: frozenset({"first_name", "sex", "persona", "detailed_persona"}),
         )
 
-        def read_parquet(_path: Path, *, columns: list[str]) -> pd.DataFrame:
+        def read_parquet(_path: Path, *, columns: list[str], dtype_backend: str) -> pd.DataFrame:
             read_columns.append(columns)
+            read_dtype_backends.append(dtype_backend)
             return pd.DataFrame(
                 {
                     "first_name": ["Selected", "NotSelected"],
@@ -638,6 +704,44 @@ class TestReplacementGenerator:
         assert generator.generate(request) == "Selected"
         assert generator.generate(request) == "Selected"
         assert read_columns == [["first_name", "sex"]]
+        assert read_dtype_backends == ["pyarrow"]
+
+    def test_nemotron_personas_generator_combines_casefolded_arrow_dependency_values(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        asset_path = tmp_path / "datasets" / "en_US.parquet"
+        asset_path.parent.mkdir()
+        asset_path.touch()
+        people = pd.DataFrame(
+            {
+                "first_name": ["First", "Second", "NotSelected"],
+                "sex": ["Female", "FEMALE", None],
+            }
+        ).convert_dtypes(dtype_backend="pyarrow")
+        monkeypatch.setattr(pd, "read_parquet", lambda _path: people)
+        generator = NemotronPersonasReplacementGenerator(
+            settings=PiiReplacementSettings(),
+            sampler=PiiSamplerConfig(
+                backend=PiiSamplerBackend.NEMOTRON_PERSONAS,
+                nemotron_personas_path=str(tmp_path),
+            ),
+        )
+
+        def generate(seed: int) -> str:
+            return generator.generate(
+                ReplacementGenerationRequest(
+                    entity_type=EntityType.FIRST_NAME,
+                    original_value="Ada",
+                    effective_dependency_tuple=((EntityType.GENDER, CanonicalValue("string", "female")),),
+                    pattern=None,
+                    seed=seed,
+                )
+            )
+
+        assert generate(0) == "First"
+        assert generate(1) == "Second"
 
     def test_nemotron_personas_generator_leaves_unchanged_candidate_for_executor_to_resample(
         self,
