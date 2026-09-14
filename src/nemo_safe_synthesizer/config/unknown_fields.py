@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import types
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Annotated, Literal, TypeAlias, Union, cast, get_args, get_origin
 
 from pydantic import BaseModel, TypeAdapter
@@ -23,6 +23,28 @@ _UNKNOWN_FIELDS_ADAPTER: TypeAdapter[UnknownFieldBehavior] = TypeAdapter(Unknown
 def validate_unknown_fields(value: object) -> UnknownFieldBehavior:
     """Validate one user-facing unknown-field policy value."""
     return _UNKNOWN_FIELDS_ADAPTER.validate_python(value)
+
+
+def raise_if_removed_legacy_fields(
+    model_type: type[BaseModel],
+    names: Iterable[str],
+    *,
+    path: tuple[str, ...] = (),
+) -> None:
+    """Raise when a mapping uses fields a model has explicitly retired."""
+    removed = getattr(model_type, "removed_legacy_fields", None)
+    if not removed:
+        return
+    found = sorted(name for name in names if name in removed)
+    if not found:
+        return
+    locations = ", ".join(repr(".".join((*path, name)) if path else name) for name in found)
+    message = getattr(
+        model_type,
+        "removed_legacy_fields_message",
+        "Removed configuration field(s) are no longer valid.",
+    )
+    raise ParameterError(f"{message} Unrecognized field(s): {locations}.")
 
 
 def normalize_unknown_fields(
@@ -44,6 +66,7 @@ def _normalize_model_mapping(
     for name, value in source.items():
         field = model_type.model_fields.get(name)
         if field is None:
+            raise_if_removed_legacy_fields(model_type, (name,), path=path)
             if unknown_fields == "reject":
                 location = ".".join((*path, name))
                 raise ParameterError(f"Unknown configuration field {location!r}.")
