@@ -13,9 +13,17 @@ from typing import ClassVar, Protocol
 
 from ...config.replace_pii import EntityType, PiiSamplerBackend
 from ...errors import InternalError
+from .generators import FakerReplacementGenerator, NemotronPersonasReplacementGenerator
+from .generators._common import generated_value_is_valid
 from .types import EffectiveDependencyTuple, require_effective_dependency_tuple
 
-__all__ = ["ReplacementGenerationRequest", "ReplacementGenerator"]
+__all__ = [
+    "FakerReplacementGenerator",
+    "NemotronPersonasReplacementGenerator",
+    "ReplacementGenerationRequest",
+    "ReplacementGenerator",
+    "generated_value_is_valid",
+]
 
 ResolvedDependencyValues = tuple[tuple[EntityType, tuple[str, ...]], ...]
 
