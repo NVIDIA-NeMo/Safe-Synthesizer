@@ -7,8 +7,9 @@ This is the declarative, column-oriented plan a user (or an upstream detector)
 provides to describe *how* to replace PII in a dataset.
 
 Every label is an ``Entity`` with an ``EntityAction`` and whether it
-``can_condition`` other columns. User-facing plans name them with
-``entity_type`` on both replace targets and ``depends_on`` entries.
+``can_condition`` other columns. User-facing plans name the entity on each
+replace target and on read-only ``depends_on`` entries. A conditioner that is
+also a replace target inherits the entity from that target.
 """
 
 from __future__ import annotations
@@ -19,13 +20,22 @@ from enum import Enum, StrEnum, auto
 from pathlib import Path
 from typing import ClassVar, Literal, Self, cast
 
-from pydantic import Field, ValidationError, field_validator, model_validator
+from pydantic import (
+    Field,
+    SerializerFunctionWrapHandler,
+    SkipValidation,
+    ValidationError,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 
 from ..configurator.parameters import Parameters
 from ..defaults import NSS_MANAGED_ASSETS_PATH_ENV, default_managed_assets_path
 from ..errors import ParameterError
 from .base import NSSBaseModel
 from .unknown_fields import raise_if_removed_legacy_fields
+from .validation import format_pydantic_validation_error
 
 __all__ = [
     "ALLOWED_DEPENDS_ON",
@@ -41,18 +51,23 @@ __all__ = [
     "PatternSyntax",
     "PiiColumnPlan",
     "PiiReplacementPlan",
-    "PiiReplacementScope",
     "PiiReplacementSettings",
     "PiiSamplerBackend",
     "PiiSamplerConfig",
     "ReplacePiiConfig",
     "can_condition",
     "is_columns_to_replace_type",
+    "validate_dependency_relationship",
+    "validate_pattern_eligibility",
 ]
 
 # Sentinel value for ``ReplacePiiConfig.replacement_plan`` requesting automatic
 # entity discovery instead of an explicit plan.
 AUTO_DISCOVERY = "auto_discovery"
+# Unversioned configurations are permanently interpreted as v3. Adding a new
+# schema may expand the supported set, but must not advance this implicit value.
+_IMPLICIT_REPLACE_PII_SCHEMA_VERSION = 3
+_SUPPORTED_REPLACE_PII_SCHEMA_VERSIONS = frozenset({3})
 
 
 class EntityType(StrEnum):
@@ -113,29 +128,16 @@ class EntityAction(Enum):
 
 
 class PatternSyntax(Enum):
-    """Notation ``PiiColumnPlan.pattern`` is written in for this entity type.
-
-    An entity with no syntax (``None``) accepts no ``pattern`` at all.
-    """
+    """Grammar used by ``PiiColumnPlan.pattern`` for an entity type."""
 
     STRFTIME = auto()
     """Python ``strftime`` codes, e.g. ``%m/%d/%Y`` or ``%d.%m.%y``."""
 
     CHARACTER_MASK = auto()
-    r"""One drawn character per token, e.g. ``pmc-######`` or ``CUST-10[01]###``.
-
-    ``#`` digit, ``^`` A-Z, ``@`` a-z, ``&`` 0-9A-Z, ``%`` 0-9a-z, ``*``
-    0-9A-Za-z, ``[abc]`` one of the listed characters, ``\x`` a literal ``x``.
-    Note ``[...]`` is a literal set rather than a range, so ``[0-9]`` draws from
-    ``0``, ``-``, ``9``.
-    """
+    """One drawn character per token, e.g. ``pmc-######`` or ``CUST-10[01]###``."""
 
     NAME_PARTS = auto()
-    """``{first}`` / ``{middle}`` / ``{last}`` placeholders for names and email.
-
-    Case variants ``{First}`` (title), ``{FIRST}`` (upper), and ``{f}``
-    (initial) apply to each part. Email also takes ``{domain}`` and ``#``.
-    """
+    """Whole-value templates composed of literals and name-part placeholders."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -291,6 +293,44 @@ def can_condition(entity_type: EntityType) -> bool:
     return ENTITY_BY_TYPE[entity_type].can_condition
 
 
+def validate_pattern_eligibility(entity_type: EntityType | None, pattern: str | None) -> None:
+    """Validate context-free eligibility of a classification or plan pattern."""
+    if pattern is None:
+        return
+    if not pattern.strip():
+        raise ParameterError("pattern must be non-empty when provided")
+    if entity_type is None:
+        raise ParameterError("unclassified columns cannot include a pattern")
+    if ENTITY_BY_TYPE[entity_type].pattern_syntax is None:
+        raise ParameterError(f"entity_type {entity_type.value!r} does not allow pattern")
+
+
+def validate_dependency_relationship(
+    target_entity_type: EntityType,
+    source_entity_type: EntityType | None,
+    *,
+    target_column: str,
+) -> None:
+    """Validate one dependency edge against the entity relationship catalog.
+
+    A missing source type is deferred until ``PiiReplacementPlan`` can infer it
+    from the complete replacement graph; the target must still support
+    dependencies at this earlier validation seam.
+    """
+    allowed = ALLOWED_DEPENDS_ON.get(target_entity_type, frozenset())
+    if not allowed:
+        raise ParameterError(
+            f"column {target_column!r}: entity_type {target_entity_type.value!r} does not allow depends_on"
+        )
+    if source_entity_type is None or source_entity_type in allowed:
+        return
+    raise ParameterError(
+        f"column {target_column!r}: depends_on entity_type "
+        f"{source_entity_type.value!r} is not allowed for entity_type "
+        f"{target_entity_type.value!r} (allowed: {sorted(entity.value for entity in allowed)})"
+    )
+
+
 class ConditioningColumn(NSSBaseModel):
     """An existing column that conditions the replacement of another column.
 
@@ -339,11 +379,8 @@ class PiiColumnPlan(NSSBaseModel):
     pattern: str | None = Field(
         default=None,
         description=(
-            "Format this column writes the entity in: strftime for birth "
-            "dates (%m/%d/%Y), character templates for identifiers/phones (pmc-######, "
-            "+1-###-555-####), or person-part placeholders for names/emails ({LAST}, {First}, "
-            "{f}.{last}@{domain}). Empty string is treated as omitted. Only "
-            "entity types that define a pattern syntax may set this. "
+            "Optional whole-value format using the grammar associated with this entity type. "
+            "Only entity types that define a pattern syntax may set this. "
             "When provided, the whole column is replaced with the pattern if it "
             "covers at least 85% of non-null values (checked against the dataframe, "
             "not here)."
@@ -351,6 +388,7 @@ class PiiColumnPlan(NSSBaseModel):
     )
     depends_on: list[ConditioningColumn] = Field(
         default_factory=list,
+        exclude_if=lambda dependencies: not dependencies,
         description=(
             "Columns that condition the replacement of this column. "
             "Only entity types in ALLOWED_DEPENDS_ON may set this. Can omit "
@@ -360,13 +398,6 @@ class PiiColumnPlan(NSSBaseModel):
         ),
     )
 
-    @field_validator("pattern", mode="before")
-    @classmethod
-    def _empty_pattern_is_omitted(cls, value: object) -> object:
-        if isinstance(value, str) and value.strip() == "":
-            return None
-        return value
-
     @model_validator(mode="after")
     def _validate_entity_and_depends_on(self) -> Self:
         entity = ENTITY_BY_TYPE[self.entity_type]
@@ -375,55 +406,27 @@ class PiiColumnPlan(NSSBaseModel):
                 f"column {self.column_name!r}: entity_type {self.entity_type.value!r} is "
                 "identify-only (or otherwise not replaceable); omit it from columns_to_replace "
             )
-        if self.pattern is not None and entity.pattern_syntax is None:
-            raise ParameterError(
-                f"column {self.column_name!r}: entity_type {self.entity_type.value!r} does "
-                "not allow pattern; omit pattern (replacement uses the entity generator)"
+        validate_pattern_eligibility(self.entity_type, self.pattern)
+        for dependency in self.depends_on:
+            if dependency.column_name == self.column_name:
+                raise ParameterError(f"column {self.column_name!r} cannot depend on itself")
+            validate_dependency_relationship(
+                self.entity_type,
+                dependency.entity_type,
+                target_column=self.column_name,
             )
-        if self.depends_on:
-            allowed = ALLOWED_DEPENDS_ON.get(self.entity_type, frozenset())
-            if not allowed:
-                raise ParameterError(
-                    f"column {self.column_name!r}: entity_type {self.entity_type.value!r} does not allow depends_on"
-                )
-            for dep in self.depends_on:
-                if dep.entity_type is None:
-                    continue
-                if dep.entity_type not in allowed:
-                    raise ParameterError(
-                        f"column {self.column_name!r}: depends_on entity_type "
-                        f"{dep.entity_type.value!r} is not allowed for entity_type "
-                        f"{self.entity_type.value!r} (allowed: "
-                        f"{sorted(k.value for k in allowed)})"
-                    )
         return self
-
-
-class PiiReplacementScope(StrEnum):
-    """Unit at which original→synthetic mappings stay consistent."""
-
-    RECORD = "record"
-    """Map each row independently; one original may differ across rows."""
-
-    GROUP = "group"
-    """One mapping per group, keyed by ``data.group_training_examples_by``."""
-
-    DATAFRAME = "dataframe"
-    """One mapping dataset-wide; an original always yields the same value."""
 
 
 class PiiReplacementPlan(Parameters):
     """Dataset-specific detection/replacement plan (column-oriented).
 
-    Flat ``columns_to_replace`` list; cross-column consistency is expressed only
-    via ``depends_on`` edges (a DAG). Plan-vs-dataframe and graph checks are not
-    performed here; they will live in ``pii_replacer.planning.validation``.
+    Flat ``columns_to_replace`` list; cross-column relationships are expressed
+    via ``depends_on`` edges (a DAG). Context-free dependency and graph checks
+    are enforced here; plan-vs-dataframe checks live in
+    ``pii_replacer.planning.validation``.
     """
 
-    scope: PiiReplacementScope = Field(
-        default=PiiReplacementScope.DATAFRAME,
-        description="How widely one original value keeps the same synthetic value: record, group, or dataframe.",
-    )
     columns_to_replace: list[PiiColumnPlan] = Field(
         default_factory=list,
         description="Columns to replace or (for free_text) scan for PII spans to rewrite.",
@@ -451,25 +454,23 @@ class PiiReplacementPlan(Parameters):
         across plans, where the same instance would otherwise carry one plan's
         inferred types into the next.
         """
-        by_name = {spec.column_name: spec for spec in self.columns_to_replace}
+        targets = {spec.column_name: spec for spec in self.columns_to_replace}
         updated: list[PiiColumnPlan] = []
         for spec in self.columns_to_replace:
             if not spec.depends_on:
                 updated.append(spec)
                 continue
-            allowed = ALLOWED_DEPENDS_ON.get(spec.entity_type, frozenset())
             resolved: list[ConditioningColumn] = []
             inferred_any = False
             for dep in spec.depends_on:
-                entity_type = dep.entity_type
-                if entity_type is None:
-                    source = by_name.get(dep.column_name)
-                    if source is None:
+                source = targets.get(dep.column_name)
+                explicitly_typed = "entity_type" in dep.model_fields_set
+                if source is not None:
+                    if explicitly_typed:
                         raise ParameterError(
                             f"column {spec.column_name!r}: depends_on column "
-                            f"{dep.column_name!r} omits entity_type but is not listed in "
-                            "columns_to_replace; set entity_type for read-only conditioners "
-                            "(e.g. gender, ethnic_background, city)"
+                            f"{dep.column_name!r} is listed in columns_to_replace; omit its "
+                            "entity_type because it is inferred from that replacement entry"
                         )
                     inferred = source.entity_type
                     if not can_condition(inferred):
@@ -478,28 +479,36 @@ class PiiReplacementPlan(Parameters):
                             f"{dep.column_name!r} has entity_type {inferred.value!r}, which "
                             "cannot be used as a conditioner"
                         )
-                    if inferred not in allowed:
-                        raise ParameterError(
-                            f"column {spec.column_name!r}: depends_on column "
-                            f"{dep.column_name!r} (entity_type {inferred.value!r}) is not "
-                            f"allowed for entity_type {spec.entity_type.value!r} (allowed: "
-                            f"{sorted(k.value for k in allowed)})"
-                        )
-                    dep = dep.model_copy(update={"entity_type": inferred})
+                    validate_dependency_relationship(
+                        spec.entity_type,
+                        inferred,
+                        target_column=spec.column_name,
+                    )
+                    # Keep entity_type out of model_fields_set so canonical plan
+                    # serialization omits this runtime-inferred value.
+                    dep = ConditioningColumn.model_construct(
+                        _fields_set=set(dep.model_fields_set),
+                        column_name=dep.column_name,
+                        entity_type=inferred,
+                    )
                     inferred_any = True
-                elif dep.column_name in by_name:
-                    planned = by_name[dep.column_name].entity_type
-                    if planned != entity_type:
-                        raise ParameterError(
-                            f"column {spec.column_name!r}: depends_on column "
-                            f"{dep.column_name!r} has entity_type {entity_type.value!r} but "
-                            f"columns_to_replace lists entity_type {planned.value!r}"
-                        )
-                elif is_columns_to_replace_type(entity_type):
+                elif not explicitly_typed or dep.entity_type is None:
                     raise ParameterError(
                         f"column {spec.column_name!r}: depends_on column "
-                        f"{dep.column_name!r} has entity_type {entity_type.value!r}, which is "
+                        f"{dep.column_name!r} is missing entity_type; set entity_type "
+                        "for read-only conditioners (e.g. gender, ethnic_background)"
+                    )
+                elif is_columns_to_replace_type(dep.entity_type):
+                    raise ParameterError(
+                        f"column {spec.column_name!r}: depends_on column "
+                        f"{dep.column_name!r} has entity_type {dep.entity_type.value!r}, which is "
                         "a replace target; list it in columns_to_replace"
+                    )
+                else:
+                    validate_dependency_relationship(
+                        spec.entity_type,
+                        dep.entity_type,
+                        target_column=spec.column_name,
                     )
                 resolved.append(dep)
             updated.append(spec.model_copy(update={"depends_on": resolved}) if inferred_any else spec)
@@ -544,21 +553,62 @@ class PiiReplacementPlan(Parameters):
                 )
         return self
 
+    @model_validator(mode="after")
+    def _reject_dependency_cycles(self) -> Self:
+        """Reject cycles defensively even though the current catalog is acyclic."""
+        targets = {spec.column_name for spec in self.columns_to_replace}
+        adjacency: dict[str, set[str]] = {column: set() for column in targets}
+        indegree = dict.fromkeys(targets, 0)
+
+        for spec in self.columns_to_replace:
+            for dependency in spec.depends_on:
+                source = dependency.column_name
+                if source not in targets or spec.column_name in adjacency[source]:
+                    continue
+                adjacency[source].add(spec.column_name)
+                indegree[spec.column_name] += 1
+
+        ready = [column for column, degree in indegree.items() if degree == 0]
+        visited = 0
+        while ready:
+            source = ready.pop()
+            visited += 1
+            for target in adjacency[source]:
+                indegree[target] -= 1
+                if indegree[target] == 0:
+                    ready.append(target)
+
+        if visited != len(targets):
+            cycle_columns = sorted(column for column, degree in indegree.items() if degree > 0)
+            raise ParameterError(
+                "replacement dependencies contain a cycle involving: "
+                + ", ".join(repr(column) for column in cycle_columns)
+            )
+        return self
+
 
 class LLMConfig(NSSBaseModel):
-    """Shared LLM settings for discovery and free-text replacement.
+    """Inference behavior shared by PII planning and replacement.
 
-    Presence on ``ReplacePiiConfig.llm`` is itself the enable signal; there is no
-    separate boolean flag. Reserved for future use.
+    LLM behavior is disabled when ``ReplacePiiConfig.llm`` is ``None``. The
+    OpenAI-compatible endpoint is supplied at runtime through
+    ``NSS_INFERENCE_ENDPOINT`` or ``--inference-endpoint-url`` rather than persisted
+    in NSS configuration.
     """
 
-    model_provider: str | None = Field(
+    model_id: str | None = Field(
         default=None,
-        description="Reserved: inference provider for LLM-assisted discovery/replacement.",
+        description=(
+            "Model identifier served by the inference endpoint. When unset, uses "
+            "NSS_INFERENCE_MODEL or the NSS default model."
+        ),
     )
     max_workers: int = Field(
-        default=64,
-        description="Reserved: maximum parallel workers for LLM-assisted operations.",
+        default=8,
+        ge=1,
+        description=(
+            "Maximum concurrent requests for LLM-assisted plan discovery and free-text replacement. Must be at least 1."
+        ),
     )
 
 
@@ -610,44 +660,53 @@ class PiiSamplerConfig(NSSBaseModel):
 class ReplacePiiConfig(Parameters):
     """Top-level ``replace_pii`` config wrapping the replacement plan.
 
-    ``replacement_plan`` is one of:
+    ``replacement_plan`` accepts three forms:
 
-    * ``"auto_discovery"`` (default) -- detect and plan replacements automatically;
-    * a path (string) to a plan file;
-    * an inline ``PiiReplacementPlan``.
+    * ``"auto_discovery"`` (default) detects and plans replacements automatically;
+    * an inline ``PiiReplacementPlan`` mapping in the main NSS config; or
+    * a string path to a separate plan YAML containing that same mapping.
+
+    ``llm=None`` leaves auto-discovery at the heuristic baseline and disables
+    LLM-assisted free-text replacement. Supplying an ``llm`` mapping enables
+    LLM enhancement after heuristic discovery and provides the same inference
+    settings to replacement-time free-text processing. An inline plan or plan
+    file bypasses only discovery; it does not disable replacement-time LLM use.
+    The API key remains a runtime secret supplied through ``NSS_INFERENCE_KEY``
+    or the corresponding CLI option; it is never stored in this model.
 
     v2 fields ``globals`` and ``steps`` are rejected with a removal error.
     """
 
     removed_legacy_fields: ClassVar[frozenset[str]] = frozenset({"globals", "steps"})
     removed_legacy_fields_message: ClassVar[str] = (
-        "PII replacement v2 configuration was removed. "
+        "This configuration uses the PII replacement v2 schema, which is not supported by PII replacement v3. "
+        "Configure replace_pii.replacement_plan instead. "
         "See docs/user-guide/configuration.md#replacing-pii "
         "for the current configuration."
     )
 
-    schema_version: Literal[1] = Field(
-        default=1,
+    schema_version: Literal[3] = Field(
+        default=_IMPLICIT_REPLACE_PII_SCHEMA_VERSION,
         description=(
-            "Version of this replace_pii config shape. Bump when fields or plan "
-            "semantics change incompatibly; only 1 is accepted in this release."
+            "Version of this replace_pii configuration schema. Missing versions are treated as version 3; "
+            "this release accepts only version 3."
         ),
     )
-    replacement_plan: PiiReplacementPlan | str = Field(
+    replacement_plan: SkipValidation[PiiReplacementPlan] | str = Field(
         default=AUTO_DISCOVERY,
         description=(
-            f"{AUTO_DISCOVERY!r} to discover the plan from the data, a path to a plan "
-            "file, or an inline plan (YAML/SDK mapping or PiiReplacementPlan). "
-            f"Other strings are treated as paths. The CLI option only accepts the "
+            f"{AUTO_DISCOVERY!r} to discover the plan from the data, an inline plan "
+            "mapping in the main NSS config, or a path to a separate plan YAML. "
+            "Other strings are treated as paths. The CLI option only accepts the "
             "sentinel or a path."
         ),
     )
     llm: LLMConfig | None = Field(
         default=None,
         description=(
-            "LLM-assisted discovery and free-text replacement settings, or null "
-            "(the default) to run without LLM assistance. Reserved: supplying a "
-            "value is rejected at config validation in this release."
+            "Optional inference behavior shared by plan enhancement and free-text replacement. "
+            "The endpoint is configured at runtime through NSS_INFERENCE_ENDPOINT or --inference-endpoint-url. "
+            "Use an empty mapping to enable NSS inference defaults."
         ),
     )
     replacement: PiiReplacementSettings = Field(
@@ -666,15 +725,29 @@ class ReplacePiiConfig(Parameters):
             raise_if_removed_legacy_fields(cls, cast(Mapping[str, object], value), path=())
         return value
 
-    @field_validator("llm")
+    @model_validator(mode="before")
     @classmethod
-    def _reject_unsupported_llm(cls, value: LLMConfig | None) -> LLMConfig | None:
-        if value is not None:
+    def _validate_schema_version(cls, value: object) -> object:
+        """Reject invalid or unsupported versions before validating the schema body."""
+        if not isinstance(value, Mapping):
+            return value
+        mapping = cast(Mapping[str, object], value)
+        version = mapping.get("schema_version", _IMPLICIT_REPLACE_PII_SCHEMA_VERSION)
+        if type(version) is not int:
+            raise ParameterError("replace_pii.schema_version must be an integer")
+        if version not in _SUPPORTED_REPLACE_PII_SCHEMA_VERSIONS:
+            supported = ", ".join(str(item) for item in sorted(_SUPPORTED_REPLACE_PII_SCHEMA_VERSIONS))
             raise ParameterError(
-                "replace_pii.llm is not supported in this release; omit it or set "
-                "replace_pii.llm to null (the default)."
+                f"replace_pii schema version {version} is unsupported; this NSS release supports version {supported}"
             )
         return value
+
+    @model_serializer(mode="wrap")
+    def _serialize_schema_version(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        """Include the selected schema version even in sparse serialization."""
+        serialized = cast(dict[str, object], handler(self))
+        serialized["schema_version"] = self.schema_version
+        return serialized
 
     @field_validator("replacement_plan", mode="before")
     @classmethod
@@ -690,16 +763,14 @@ class ReplacePiiConfig(Parameters):
             try:
                 return PiiReplacementPlan.model_validate(value)
             except ValidationError as exc:
-                details = "; ".join(
-                    f"{'.'.join(str(part) for part in error['loc'])}: {error['msg']}" for error in exc.errors()
-                )
+                details = format_pydantic_validation_error(exc)
                 raise ParameterError(f"invalid inline replacement plan ({details})") from exc
         if isinstance(value, Path):
             return str(value)
         if isinstance(value, str | PiiReplacementPlan):
             return value
         raise ParameterError(
-            f"replacement_plan must be {AUTO_DISCOVERY!r}, a path to a plan file, or an inline plan; "
+            f"replacement_plan must be {AUTO_DISCOVERY!r}, an inline plan, or a path to a plan file; "
             f"got {type(value).__name__}"
         )
 
@@ -717,5 +788,5 @@ class ReplacePiiConfig(Parameters):
 
     @property
     def inline_plan(self) -> PiiReplacementPlan | None:
-        """The inline plan, or ``None`` if auto-discovery or a path reference."""
+        """The inline plan, or ``None`` for auto-discovery or a plan file."""
         return self.replacement_plan if isinstance(self.replacement_plan, PiiReplacementPlan) else None
