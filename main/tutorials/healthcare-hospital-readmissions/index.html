@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://nvidia-nemo.github.io/Safe-Synthesizer/main/tutorials/time-series-financial-transactions/">
+        <link rel="canonical" href="https://nvidia-nemo.github.io/Safe-Synthesizer/main/tutorials/healthcare-hospital-readmissions/">
       
       
-        <link rel="prev" href="../differential-privacy/">
+        <link rel="prev" href="../time-series-financial-transactions/">
       
       
-        <link rel="next" href="../healthcare-hospital-readmissions/">
+        <link rel="next" href="../../user-guide/getting-started/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Time-Series Financial Transactions - NeMo Safe Synthesizer</title>
+        <title>Healthcare Hospital Readmissions - NeMo Safe Synthesizer</title>
       
     
     
@@ -84,7 +84,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#nemo-safe-synthesizer-tutorial-time-series-financial-transactions" class="md-skip">
+        <a href="#privacy-aware-hospital-readmission-analysis-and-prediction-with-safe-synthesizer" class="md-skip">
           Skip to content
         </a>
       
@@ -122,7 +122,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Time-Series Financial Transactions
+              Healthcare Hospital Readmissions
             
           </span>
         </div>
@@ -755,6 +755,34 @@
                 
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../time-series-financial-transactions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Time-Series Financial Transactions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
     
   
   
@@ -774,7 +802,7 @@
   <span class="md-ellipsis">
     
   
-    Time-Series Financial Transactions
+    Healthcare Hospital Readmissions
   
 
     
@@ -792,7 +820,7 @@
   <span class="md-ellipsis">
     
   
-    Time-Series Financial Transactions
+    Healthcare Hospital Readmissions
   
 
     
@@ -829,10 +857,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#prerequisites" class="md-nav__link">
+  <a href="#1-environment" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Prerequisites
+        1. Environment
       
     </span>
   </a>
@@ -840,10 +868,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#install-safe-synthesizer" class="md-nav__link">
+  <a href="#2-load-the-admissions-data" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Install Safe Synthesizer
+        2. Load the admissions data
       
     </span>
   </a>
@@ -851,10 +879,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#load-the-financial-transactions-dataset" class="md-nav__link">
+  <a href="#3-configure-healthcare-sensitive-data-replacement" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Load the Financial Transactions Dataset
+        3. Configure healthcare sensitive-data replacement
       
     </span>
   </a>
@@ -862,10 +890,138 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#preview-the-original-dataset" class="md-nav__link">
+  <a href="#4-train-generate-and-evaluate" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Preview the Original Dataset
+        4. Train, generate, and evaluate
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Train, generate, and evaluate">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#built-in-sqs-dps-and-html-report" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Built-in SQS, DPS, and HTML report
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-healthcare-utility-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Healthcare utility checks
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Healthcare utility checks">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#overall-30-day-readmission-prevalence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overall 30-day readmission prevalence
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#readmission-patterns-across-cohorts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Readmission patterns across cohorts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#insurance-mix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Insurance mix
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#length-of-stay-and-total-charges" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Length of stay and total charges
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#clinical-relationship-and-chronology-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Clinical relationship and chronology checks
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Clinical relationship and chronology checks">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#diagnosis-mapping-agreement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Diagnosis mapping agreement
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#record-level-clinical-and-chronological-integrity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Record-level clinical and chronological integrity
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-train-on-synthetic-test-on-real-tstr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Train on Synthetic, Test on Real (TSTR)
       
     </span>
   </a>
@@ -873,87 +1029,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#configure-and-run-safe-synthesizer" class="md-nav__link">
+  <a href="#try-this-workflow-with-your-own-data" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Configure and Run Safe Synthesizer
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#review-the-built-in-evaluation-report" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Review the Built-In Evaluation Report
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#retrieve-synthetic-data" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Retrieve Synthetic Data
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#prepare-data-for-analysis" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Prepare Data for Analysis
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#visual-comparison-category-mix" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Visual Comparison: Category Mix
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#visual-comparison-amount-distributions" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Visual Comparison: Amount Distributions
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#visual-comparison-time-of-day-patterns" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Visual Comparison: Time-of-Day Patterns
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#interpreting-results-and-next-steps" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Interpreting Results and Next Steps
+        Try this workflow with your own data
       
     </span>
   </a>
@@ -964,34 +1043,6 @@
   
 </nav>
       
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../healthcare-hospital-readmissions/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Healthcare Hospital Readmissions
-  
-
-    
-  </span>
-  
-  
-
-      </a>
     </li>
   
 
@@ -9376,10 +9427,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#prerequisites" class="md-nav__link">
+  <a href="#1-environment" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Prerequisites
+        1. Environment
       
     </span>
   </a>
@@ -9387,10 +9438,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#install-safe-synthesizer" class="md-nav__link">
+  <a href="#2-load-the-admissions-data" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Install Safe Synthesizer
+        2. Load the admissions data
       
     </span>
   </a>
@@ -9398,10 +9449,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#load-the-financial-transactions-dataset" class="md-nav__link">
+  <a href="#3-configure-healthcare-sensitive-data-replacement" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Load the Financial Transactions Dataset
+        3. Configure healthcare sensitive-data replacement
       
     </span>
   </a>
@@ -9409,10 +9460,138 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#preview-the-original-dataset" class="md-nav__link">
+  <a href="#4-train-generate-and-evaluate" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Preview the Original Dataset
+        4. Train, generate, and evaluate
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Train, generate, and evaluate">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#built-in-sqs-dps-and-html-report" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Built-in SQS, DPS, and HTML report
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-healthcare-utility-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Healthcare utility checks
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Healthcare utility checks">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#overall-30-day-readmission-prevalence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overall 30-day readmission prevalence
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#readmission-patterns-across-cohorts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Readmission patterns across cohorts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#insurance-mix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Insurance mix
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#length-of-stay-and-total-charges" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Length of stay and total charges
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#clinical-relationship-and-chronology-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Clinical relationship and chronology checks
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Clinical relationship and chronology checks">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#diagnosis-mapping-agreement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Diagnosis mapping agreement
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#record-level-clinical-and-chronological-integrity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Record-level clinical and chronological integrity
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-train-on-synthetic-test-on-real-tstr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Train on Synthetic, Test on Real (TSTR)
       
     </span>
   </a>
@@ -9420,87 +9599,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#configure-and-run-safe-synthesizer" class="md-nav__link">
+  <a href="#try-this-workflow-with-your-own-data" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Configure and Run Safe Synthesizer
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#review-the-built-in-evaluation-report" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Review the Built-In Evaluation Report
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#retrieve-synthetic-data" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Retrieve Synthetic Data
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#prepare-data-for-analysis" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Prepare Data for Analysis
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#visual-comparison-category-mix" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Visual Comparison: Category Mix
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#visual-comparison-amount-distributions" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Visual Comparison: Amount Distributions
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#visual-comparison-time-of-day-patterns" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Visual Comparison: Time-of-Day Patterns
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#interpreting-results-and-next-steps" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Interpreting Results and Next Steps
+        Try this workflow with your own data
       
     </span>
   </a>
@@ -10297,51 +10399,41 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </style>
 <!-- End of mermaid configuration --><div class="jupyter-wrapper">
 <div class="jp-Notebook" data-jp-theme-light="true" data-jp-theme-name="JupyterLab Light">
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=3171a6f3">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=a06a0efa">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h1 id="nemo-safe-synthesizer-tutorial-time-series-financial-transactions">NeMo Safe Synthesizer Tutorial: Time-Series Financial Transactions<a class="anchor-link" href="#nemo-safe-synthesizer-tutorial-time-series-financial-transactions">¶</a></h1><h4 id="what-youll-learn">What you'll learn<a class="anchor-link" href="#what-youll-learn">¶</a></h4><p>In this notebook, we'll explore how to use NeMo Safe Synthesizer for generating a financial transaction time series: loading an account-level transaction dataset, configuring the synthesizer for grouped temporal data, generating synthetic transaction histories, and checking whether the synthetic data preserves privacy and transaction patterns.</p>
-<p>We will answer two questions:</p>
+<h1 id="privacy-aware-hospital-readmission-analysis-and-prediction-with-safe-synthesizer">Privacy-Aware Hospital Readmission Analysis and Prediction with Safe Synthesizer<a class="anchor-link" href="#privacy-aware-hospital-readmission-analysis-and-prediction-with-safe-synthesizer">¶</a></h1><h4 id="what-youll-learn">What you'll learn<a class="anchor-link" href="#what-youll-learn">¶</a></h4><p>In this notebook, we'll build a privacy-aware hospital readmissions workflow with NeMo Safe Synthesizer. You'll learn how to manually configure replacement for columns that commonly contain sensitive healthcare data, generate synthetic admissions, interpret built-in quality and privacy evaluations, inspect healthcare-specific relationships, and test whether the generated data supports downstream readmission modeling.</p>
+<p>We will answer three questions:</p>
 <ol>
-<li>Does the synthetic data avoid direct memorization of transaction rows?</li>
-<li>Does it preserve the data structure and behavioral patterns that matter for financial analytics?</li>
+<li>Does the Synthetic data preserve the utilization, payer, and clinical patterns found in the Original data?</li>
+<li>What do the built-in quality and privacy evaluations tell us about the generated data?</li>
+<li>Can a model trained on Synthetic data transfer to a held-out Original cohort?</li>
 </ol>
-<p>A full run takes about 20 minutes on an A100. If you have not yet completed the <a href="https://nvidia-nemo.github.io/Safe-Synthesizer/main/tutorials/safe-synthesizer-101/">Safe Synthesizer 101</a> tutorial, consider starting there first.</p>
-<h3 id="prerequisites">Prerequisites<a class="anchor-link" href="#prerequisites">¶</a></h3><p>This notebook requires:</p>
-<ul>
-<li>A Linux machine with an NVIDIA GPU (H100 recommended, A100 minimum) and CUDA 12.9+. It will not run on macOS, Windows, or Apple Silicon.</li>
-<li>The <code>docs/tutorials/datasets/financial_transactions_DD_0526.csv</code> dataset.</li>
-</ul>
+<blockquote>
+<p>Runtime: Running the complete notebook took about an hour on an NVIDIA A100. A first run may take longer while model files are downloaded.</p>
+</blockquote>
+<blockquote>
+<p>Important terminology: the Original dataset provided with this notebook was generated with <a href="https://docs.nvidia.com/nemo/datadesigner/getting-started/welcome">NVIDIA NeMo Data Designer</a>, is entirely simulated, and contains no real patient data. This public, non-sensitive dataset lets anyone run the tutorial. In a Safe Synthesizer deployment, Original would instead mean your private, internal dataset; NeMo Data Designer is not required. Throughout this tutorial and its plots, Original means the input dataset, while Synthetic means the new dataset generated from it by Safe Synthesizer.</p>
+</blockquote>
 </div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=26e14ebc">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=e4f564f8">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h3 id="install-safe-synthesizer">Install Safe Synthesizer<a class="anchor-link" href="#install-safe-synthesizer">¶</a></h3><p>Run the cell below to install NeMo Safe Synthesizer with the engine and CUDA 12.9 extras.</p>
-</div>
-</div>
-</div>
-</div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=ac506782">
-<div class="jp-Cell-inputWrapper" tabindex="0">
-<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
-</div>
-<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
-</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p>If NeMo Safe Synthesizer is already installed in your notebook environment, you can skip this cell.</p>
+<h2 id="1-environment">1. Environment<a class="anchor-link" href="#1-environment">¶</a></h2><p>Run the cell below to install NeMo Safe Synthesizer with the engine and CUDA 12.9 extras. If it is already installed in your notebook environment, you can skip this cell. A GPU that supports CUDA 12.9 is required for training and generation.</p>
 </div>
 </div>
 </div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=049772a5">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=install-nss">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -10364,14 +10456,14 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 <span class="c1"># SPDX-License-Identifier: Apache-2.0</span>
 
 <span class="k">if</span> <span class="n">command</span> <span class="o">-</span><span class="n">v</span> <span class="n">uv</span> <span class="o">&gt;</span> <span class="o">/</span><span class="n">dev</span><span class="o">/</span><span class="n">null</span> <span class="mi">2</span><span class="o">&gt;&amp;</span><span class="mi">1</span><span class="p">;</span> <span class="n">then</span>
-    <span class="n">uv</span> <span class="n">pip</span> <span class="n">install</span> <span class="s2">"nemo-safe-synthesizer[engine,cu129]"</span> \
+    <span class="n">uv</span> <span class="n">pip</span> <span class="n">install</span> <span class="s2">"nemo-safe-synthesizer[engine,cu129]"</span> <span class="n">xgboost</span> \
         <span class="o">--</span><span class="n">index</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">flashinfer</span><span class="o">.</span><span class="n">ai</span><span class="o">/</span><span class="n">whl</span><span class="o">/</span><span class="n">cu129</span> \
-        <span class="o">--</span><span class="n">index</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">flashinfer</span><span class="o">.</span><span class="n">ai</span><span class="o">/</span><span class="n">whl</span><span class="o">/</span>\
+        <span class="o">--</span><span class="n">index</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">flashinfer</span><span class="o">.</span><span class="n">ai</span><span class="o">/</span><span class="n">whl</span><span class="o">/</span> \
         <span class="o">--</span><span class="n">index</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">download</span><span class="o">.</span><span class="n">pytorch</span><span class="o">.</span><span class="n">org</span><span class="o">/</span><span class="n">whl</span><span class="o">/</span><span class="n">cu129</span> \
         <span class="o">--</span><span class="n">index</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">wheels</span><span class="o">.</span><span class="n">vllm</span><span class="o">.</span><span class="n">ai</span><span class="o">/</span><span class="mf">0.26.0</span><span class="o">/</span><span class="n">cu129</span> \
         <span class="o">--</span><span class="n">index</span><span class="o">-</span><span class="n">strategy</span> <span class="n">unsafe</span><span class="o">-</span><span class="n">best</span><span class="o">-</span><span class="n">match</span> <span class="o">--</span><span class="n">quiet</span>
 <span class="k">else</span>
-    <span class="n">pip</span> <span class="n">install</span> <span class="s2">"nemo-safe-synthesizer[engine,cu129]"</span> \
+    <span class="n">pip</span> <span class="n">install</span> <span class="s2">"nemo-safe-synthesizer[engine,cu129]"</span> <span class="n">xgboost</span> \
         <span class="o">--</span><span class="n">extra</span><span class="o">-</span><span class="n">index</span><span class="o">-</span><span class="n">url</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">flashinfer</span><span class="o">.</span><span class="n">ai</span><span class="o">/</span><span class="n">whl</span><span class="o">/</span><span class="n">cu129</span> \
         <span class="o">--</span><span class="n">extra</span><span class="o">-</span><span class="n">index</span><span class="o">-</span><span class="n">url</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">flashinfer</span><span class="o">.</span><span class="n">ai</span><span class="o">/</span><span class="n">whl</span><span class="o">/</span> \
         <span class="o">--</span><span class="n">extra</span><span class="o">-</span><span class="n">index</span><span class="o">-</span><span class="n">url</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">download</span><span class="o">.</span><span class="n">pytorch</span><span class="o">.</span><span class="n">org</span><span class="o">/</span><span class="n">whl</span><span class="o">/</span><span class="n">cu129</span> \
@@ -10383,14 +10475,14 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 # SPDX-License-Identifier: Apache-2.0
 
 if command -v uv &gt; /dev/null 2&gt;&amp;1; then
-    uv pip install "nemo-safe-synthesizer[engine,cu129]" \
+    uv pip install "nemo-safe-synthesizer[engine,cu129]" xgboost \
         --index https://flashinfer.ai/whl/cu129 \
-        --index https://flashinfer.ai/whl/\
+        --index https://flashinfer.ai/whl/ \
         --index https://download.pytorch.org/whl/cu129 \
         --index https://wheels.vllm.ai/0.26.0/cu129 \
         --index-strategy unsafe-best-match --quiet
 else
-    pip install "nemo-safe-synthesizer[engine,cu129]" \
+    pip install "nemo-safe-synthesizer[engine,cu129]" xgboost \
         --extra-index-url https://flashinfer.ai/whl/cu129 \
         --extra-index-url https://flashinfer.ai/whl/ \
         --extra-index-url https://download.pytorch.org/whl/cu129 \
@@ -10402,7 +10494,7 @@ fi</div>
 </div>
 </div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=fb878910">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=dc4ed27e">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -10420,87 +10512,43 @@ fi</div>
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">base64</span>
 
-<span class="kn">import</span><span class="w"> </span><span class="nn">base64</span>
-<span class="kn">import</span><span class="w"> </span><span class="nn">hashlib</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
-
-<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
-<span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">matplotlib.colors</span><span class="w"> </span><span class="kn">import</span> <span class="n">LinearSegmentedColormap</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">IPython.display</span><span class="w"> </span><span class="kn">import</span> <span class="n">IFrame</span><span class="p">,</span> <span class="n">Markdown</span><span class="p">,</span> <span class="n">display</span>
 
 <span class="n">NVIDIA_GREEN</span> <span class="o">=</span> <span class="s2">"#76B900"</span>
-<span class="n">NVIDIA_DARK</span> <span class="o">=</span> <span class="s2">"#111111"</span>
-<span class="n">NVIDIA_GRAY</span> <span class="o">=</span> <span class="s2">"#7A7A7A"</span>
-<span class="n">NVIDIA_HEATMAP</span> <span class="o">=</span> <span class="n">LinearSegmentedColormap</span><span class="o">.</span><span class="n">from_list</span><span class="p">(</span>
-    <span class="s2">"nvidia_heatmap"</span><span class="p">,</span>
-    <span class="p">[</span><span class="s2">"#F7F7F7"</span><span class="p">,</span> <span class="s2">"#D7F2B0"</span><span class="p">,</span> <span class="n">NVIDIA_GREEN</span><span class="p">,</span> <span class="s2">"#254A00"</span><span class="p">],</span>
-<span class="p">)</span>
-
-<span class="n">plt</span><span class="o">.</span><span class="n">rcParams</span><span class="o">.</span><span class="n">update</span><span class="p">({</span>
-    <span class="s2">"figure.figsize"</span><span class="p">:</span> <span class="p">(</span><span class="mi">11</span><span class="p">,</span> <span class="mi">5</span><span class="p">),</span>
-    <span class="s2">"axes.grid"</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
-    <span class="s2">"grid.alpha"</span><span class="p">:</span> <span class="mf">0.25</span><span class="p">,</span>
-    <span class="s2">"axes.spines.top"</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
-    <span class="s2">"axes.spines.right"</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
-    <span class="s2">"axes.prop_cycle"</span><span class="p">:</span> <span class="n">plt</span><span class="o">.</span><span class="n">cycler</span><span class="p">(</span><span class="n">color</span><span class="o">=</span><span class="p">[</span><span class="n">NVIDIA_GREEN</span><span class="p">,</span> <span class="n">NVIDIA_DARK</span><span class="p">,</span> <span class="n">NVIDIA_GRAY</span><span class="p">]),</span>
-<span class="p">})</span>
-
-<span class="n">pd</span><span class="o">.</span><span class="n">set_option</span><span class="p">(</span><span class="s2">"display.max_columns"</span><span class="p">,</span> <span class="mi">80</span><span class="p">)</span>
-<span class="n">pd</span><span class="o">.</span><span class="n">set_option</span><span class="p">(</span><span class="s2">"display.width"</span><span class="p">,</span> <span class="mi">160</span><span class="p">)</span>
+<span class="n">NVIDIA_DARK</span> <span class="o">=</span> <span class="s2">"#1A1A1A"</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">rcParams</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="s2">"figure.figsize"</span><span class="p">:</span> <span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">5</span><span class="p">),</span> <span class="s2">"axes.spines.top"</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">"axes.spines.right"</span><span class="p">:</span> <span class="kc">False</span><span class="p">})</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-2">from __future__ import annotations
+<div class="clipboard-copy-txt" id="cell-2">import base64
 
-import base64
-import hashlib
-from pathlib import Path
-
-import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib.colors import LinearSegmentedColormap
+import pandas as pd
 from IPython.display import IFrame, Markdown, display
 
 NVIDIA_GREEN = "#76B900"
-NVIDIA_DARK = "#111111"
-NVIDIA_GRAY = "#7A7A7A"
-NVIDIA_HEATMAP = LinearSegmentedColormap.from_list(
-    "nvidia_heatmap",
-    ["#F7F7F7", "#D7F2B0", NVIDIA_GREEN, "#254A00"],
-)
-
-plt.rcParams.update({
-    "figure.figsize": (11, 5),
-    "axes.grid": True,
-    "grid.alpha": 0.25,
-    "axes.spines.top": False,
-    "axes.spines.right": False,
-    "axes.prop_cycle": plt.cycler(color=[NVIDIA_GREEN, NVIDIA_DARK, NVIDIA_GRAY]),
-})
-
-pd.set_option("display.max_columns", 80)
-pd.set_option("display.width", 160)</div>
+NVIDIA_DARK = "#1A1A1A"
+plt.rcParams.update({"figure.figsize": (10, 5), "axes.spines.top": False, "axes.spines.right": False})</div>
 </div>
 </div>
 </div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=8101e0eb">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=23f35094">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h3 id="load-the-financial-transactions-dataset">Load the Financial Transactions Dataset<a class="anchor-link" href="#load-the-financial-transactions-dataset">¶</a></h3><p>Load <code>financial_transactions_DD_0526.csv</code> and confirm the expected row and column counts. The dataset is already in the long format that NeMo Safe Synthesizer expects for time-series synthesis: rows sharing the same <code>acct_id</code> form one transaction sequence, and <code>txn_index</code> provides the ordering within each account.</p>
+<h2 id="2-load-the-admissions-data">2. Load the admissions data<a class="anchor-link" href="#2-load-the-admissions-data">¶</a></h2><p>The Original dataset is provided with this tutorial. Pandas infers quoted numeric CSV fields as integers, so the explicit string dtype below preserves leading zeros in postal codes.</p>
 </div>
 </div>
 </div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=5777391c">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=79d178fa">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -10518,51 +10566,26 @@ pd.set_option("display.width", 160)</div>
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">ORIGINAL_CSV</span> <span class="o">=</span> <span class="s2">"https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/main/docs/tutorials/datasets/financial_transactions_DD_0526.csv"</span>
-<span class="n">ARTIFACT_ROOT</span> <span class="o">=</span> <span class="s2">"safe-synthesizer-artifacts"</span>
-
-<span class="n">source_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="n">ORIGINAL_CSV</span><span class="p">)</span>
-
-<span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span>
-    <span class="p">[{</span>
-        <span class="s2">"input"</span><span class="p">:</span> <span class="s2">"Original CSV"</span><span class="p">,</span>
-        <span class="s2">"path"</span><span class="p">:</span> <span class="n">ORIGINAL_CSV</span><span class="p">,</span>
-        <span class="s2">"rows"</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">source_df</span><span class="p">),</span>
-        <span class="s2">"columns"</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">source_df</span><span class="o">.</span><span class="n">columns</span><span class="p">),</span>
-    <span class="p">}]</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">source_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span>
+    <span class="s2">"datasets/hospital_readmissions_synthetic_2026_08_18.csv"</span><span class="p">,</span>
+    <span class="n">dtype</span><span class="o">=</span><span class="p">{</span><span class="s2">"postal_code"</span><span class="p">:</span> <span class="s2">"string"</span><span class="p">},</span>
 <span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Loaded </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">source_df</span><span class="p">)</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2"> Original admissions with </span><span class="si">{</span><span class="n">source_df</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2"> fields."</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-3">ORIGINAL_CSV = "https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/main/docs/tutorials/datasets/financial_transactions_DD_0526.csv"
-ARTIFACT_ROOT = "safe-synthesizer-artifacts"
+<div class="clipboard-copy-txt" id="cell-3">source_df = pd.read_csv(
+    "datasets/hospital_readmissions_synthetic_2026_08_18.csv",
+    dtype={"postal_code": "string"},
+)
 
-source_df = pd.read_csv(ORIGINAL_CSV)
-
-pd.DataFrame(
-    [{
-        "input": "Original CSV",
-        "path": ORIGINAL_CSV,
-        "rows": len(source_df),
-        "columns": len(source_df.columns),
-    }]
-)</div>
+print(f"Loaded {len(source_df):,} Original admissions with {source_df.shape[1]} fields.")</div>
 </div>
 </div>
-</div>
-</div>
-</div>
-</div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=abac7870">
-<div class="jp-Cell-inputWrapper" tabindex="0">
-<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
-</div>
-<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
-</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h3 id="preview-the-original-dataset">Preview the Original Dataset<a class="anchor-link" href="#preview-the-original-dataset">¶</a></h3><p>The source data is a transaction ledger: repeated account-level fields, a chronological transaction index, merchant category/name, timestamp, and amount. Direct identifiers such as <code>acct_id</code> and <code>cardholder</code> are useful for demonstrating privacy checks, but should be treated carefully in production synthetic-data workflows.</p>
 </div>
 </div>
 </div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=fc8086ab">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=192d2e3c">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -10580,49 +10603,47 @@ pd.DataFrame(
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">display</span><span class="p">(</span><span class="n">source_df</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">5</span><span class="p">))</span>
-
-<span class="n">display</span><span class="p">(</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span>
-    <span class="s2">"column"</span><span class="p">:</span> <span class="n">source_df</span><span class="o">.</span><span class="n">columns</span><span class="p">,</span>
-    <span class="s2">"dtype"</span><span class="p">:</span> <span class="n">source_df</span><span class="o">.</span><span class="n">dtypes</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span><span class="o">.</span><span class="n">values</span><span class="p">,</span>
-    <span class="s2">"non_null"</span><span class="p">:</span> <span class="n">source_df</span><span class="o">.</span><span class="n">notna</span><span class="p">()</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span><span class="o">.</span><span class="n">values</span><span class="p">,</span>
-    <span class="s2">"unique_values"</span><span class="p">:</span> <span class="n">source_df</span><span class="o">.</span><span class="n">nunique</span><span class="p">(</span><span class="n">dropna</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">values</span><span class="p">,</span>
-<span class="p">}))</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">PREVIEW_COLUMNS</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s2">"age"</span><span class="p">,</span> <span class="s2">"sex"</span><span class="p">,</span> <span class="s2">"insurance_type"</span><span class="p">,</span> <span class="s2">"encounter_type"</span><span class="p">,</span>
+    <span class="s2">"primary_diagnosis"</span><span class="p">,</span> <span class="s2">"icd10_code"</span><span class="p">,</span> <span class="s2">"primary_lab_name"</span><span class="p">,</span>
+    <span class="s2">"primary_lab_value"</span><span class="p">,</span> <span class="s2">"primary_lab_unit"</span><span class="p">,</span> <span class="s2">"primary_lab_flag"</span><span class="p">,</span>
+    <span class="s2">"length_of_stay_days"</span><span class="p">,</span> <span class="s2">"discharge_disposition"</span><span class="p">,</span>
+    <span class="s2">"total_charge_usd"</span><span class="p">,</span> <span class="s2">"readmitted_within_30_days"</span><span class="p">,</span>
+<span class="p">]</span>
+<span class="n">source_df</span><span class="p">[</span><span class="n">PREVIEW_COLUMNS</span><span class="p">]</span><span class="o">.</span><span class="n">head</span><span class="p">()</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-4">display(source_df.head(5))
-
-display(pd.DataFrame({
-    "column": source_df.columns,
-    "dtype": source_df.dtypes.astype(str).values,
-    "non_null": source_df.notna().sum().values,
-    "unique_values": source_df.nunique(dropna=True).values,
-}))</div>
+<div class="clipboard-copy-txt" id="cell-4">PREVIEW_COLUMNS = [
+    "age", "sex", "insurance_type", "encounter_type",
+    "primary_diagnosis", "icd10_code", "primary_lab_name",
+    "primary_lab_value", "primary_lab_unit", "primary_lab_flag",
+    "length_of_stay_days", "discharge_disposition",
+    "total_charge_usd", "readmitted_within_30_days",
+]
+source_df[PREVIEW_COLUMNS].head()</div>
 </div>
 </div>
 </div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=73bbf95a">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=8972a9ae">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h3 id="configure-and-run-safe-synthesizer">Configure and Run Safe Synthesizer<a class="anchor-link" href="#configure-and-run-safe-synthesizer">¶</a></h3><p>Create the Safe Synthesizer builder and configure it for financial transaction time-series synthesis:</p>
-<ul>
-<li><code>with_replace_pii(enable=False)</code> explicitly disables the PII replacement stage for this dataset.</li>
-<li><code>with_time_series</code> enables time-series mode and uses <code>txn_index</code> as the sequence timestamp.</li>
-<li><code>with_data</code> tells the synthesizer that rows sharing the same <code>acct_id</code> belong to one account history, ordered by <code>txn_index</code>.</li>
-<li><code>with_train</code> sets demo-specific training hyperparameters for the <code>HuggingFaceTB/SmolLM3-3B</code> base model.</li>
-</ul>
-<p>In time-series mode, generation follows the learned group and timestamp structure rather than treating <code>num_records</code> as a row-count target.</p>
-<p>Refer to the <a href="https://nvidia-nemo.github.io/Safe-Synthesizer/main/user-guide/configuration/">configuration docs</a> for the full list of options.</p>
+<h2 id="3-configure-healthcare-sensitive-data-replacement">3. Configure healthcare sensitive-data replacement<a class="anchor-link" href="#3-configure-healthcare-sensitive-data-replacement">¶</a></h2><p>Healthcare records may contain personally identifiable information (PII), and identifiable information about a person's health or care may be protected health information (PHI). Although this tutorial uses simulated data, its columns resemble fields that would require careful handling in a real healthcare workflow.</p>
+<p>NeMo Safe Synthesizer can ask a large language model (LLM) to identify structured columns that may contain sensitive values. That automatic option requires credentials for the configured LLM service. Because the columns and their meanings are already known here, this tutorial lists them manually instead. The resulting policy is easy to review and column classification does not require an external service.</p>
+<blockquote>
+<p>Important: If you load a different Original dataset, update this PII configuration before running the pipeline. The rules below are specific to this tutorial's schema; an incomplete mapping could leave sensitive columns unprotected.</p>
+</blockquote>
+<p>Structured columns and free-form text need different rules. The explicit rules below replace patient and admission identifiers, medical record numbers (MRNs), names, contact details, locations, and dates. A named-entity recognition (NER) model running in the notebook environment finds names, MRNs, and dates embedded in discharge summaries. The NER model may download its files the first time it is used, but it does not use the LLM column-classification service.</p>
+<p>Repeated identifiers map to the same replacements, and each patient receives a consistent name and email. Date of birth (DOB), admission, and discharge dates move by the same 7–90-day patient-specific offset, preserving age, visit order, and length of stay. PII replacement runs before fine-tuning, so the identifiers in the Original data are replaced before the model is trained.</p>
 </div>
 </div>
 </div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=18e90015">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=e4f64ee8">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -10640,95 +10661,121 @@ display(pd.DataFrame({
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">nemo_safe_synthesizer.sdk.library_builder</span><span class="w"> </span><span class="kn">import</span> <span class="n">SafeSynthesizer</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">nemo_safe_synthesizer.config.replace_pii</span><span class="w"> </span><span class="kn">import</span> <span class="n">PiiReplacerConfig</span><span class="p">,</span> <span class="n">Row</span>
 
-<span class="n">builder</span> <span class="o">=</span> <span class="p">(</span>
-    <span class="n">SafeSynthesizer</span><span class="p">(</span><span class="n">save_path</span><span class="o">=</span><span class="n">ARTIFACT_ROOT</span><span class="p">)</span>
-    <span class="o">.</span><span class="n">with_data_source</span><span class="p">(</span><span class="n">source_df</span><span class="p">)</span>
-    <span class="o">.</span><span class="n">with_replace_pii</span><span class="p">(</span><span class="n">enable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-    <span class="o">.</span><span class="n">with_time_series</span><span class="p">(</span>
-        <span class="n">is_timeseries</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-        <span class="n">timestamp_column</span><span class="o">=</span><span class="s2">"txn_index"</span><span class="p">,</span>
-    <span class="p">)</span>
-    <span class="o">.</span><span class="n">with_data</span><span class="p">(</span>
-        <span class="n">holdout</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
-        <span class="n">group_training_examples_by</span><span class="o">=</span><span class="s2">"acct_id"</span><span class="p">,</span>
-        <span class="n">order_training_examples_by</span><span class="o">=</span><span class="s2">"txn_index"</span><span class="p">,</span>
-    <span class="p">)</span>
-    <span class="o">.</span><span class="n">with_train</span><span class="p">(</span>
-        <span class="n">pretrained_model</span><span class="o">=</span><span class="s2">"HuggingFaceTB/SmolLM3-3B"</span><span class="p">,</span>
-        <span class="n">num_input_records_to_sample</span><span class="o">=</span><span class="mi">90_000</span><span class="p">,</span>
-        <span class="n">learning_rate</span><span class="o">=</span><span class="mf">5.0e-4</span><span class="p">,</span>
-        <span class="n">lora_r</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span>
-    <span class="p">)</span>
-<span class="p">)</span>
+<span class="c1"># Keep the data split and generated replacements reproducible across tutorial runs.</span>
+<span class="n">SPLIT_SEED</span> <span class="o">=</span> <span class="mi">318</span>
+<span class="c1"># Extra fixed input to deterministic identifier hashes; use an approved value in production.</span>
+<span class="n">HASH_SALT</span> <span class="o">=</span> <span class="s2">"nss-healthcare-readmissions-demo-2026"</span>
 
-<span class="n">builder</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>
-<span class="n">results</span> <span class="o">=</span> <span class="n">builder</span><span class="o">.</span><span class="n">results</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">build_healthcare_pii_config</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">PiiReplacerConfig</span><span class="p">:</span>
+    <span class="n">config</span> <span class="o">=</span> <span class="n">PiiReplacerConfig</span><span class="o">.</span><span class="n">get_default_config</span><span class="p">()</span>
+    <span class="n">config</span><span class="o">.</span><span class="n">globals</span><span class="o">.</span><span class="n">seed</span> <span class="o">=</span> <span class="n">SPLIT_SEED</span>
+    <span class="c1"># The structured columns are listed below, so LLM-based classification is unnecessary.</span>
+    <span class="n">config</span><span class="o">.</span><span class="n">globals</span><span class="o">.</span><span class="n">classify</span><span class="o">.</span><span class="n">enable_classify</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">config</span><span class="o">.</span><span class="n">globals</span><span class="o">.</span><span class="n">ner</span><span class="o">.</span><span class="n">ner_entities</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="s2">"first_name"</span><span class="p">,</span> <span class="s2">"last_name"</span><span class="p">,</span> <span class="s2">"name"</span><span class="p">,</span>
+        <span class="s2">"medical_record_number"</span><span class="p">,</span> <span class="s2">"date"</span><span class="p">,</span> <span class="s2">"date_time"</span><span class="p">,</span>
+    <span class="p">]</span>
 
-<span class="n">RUN_PATH</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">builder</span><span class="o">.</span><span class="n">_workdir</span><span class="o">.</span><span class="n">generate</span><span class="o">.</span><span class="n">path</span><span class="p">)</span><span class="o">.</span><span class="n">parent</span>
+    <span class="n">stable_hash</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"(this | hash(salt='</span><span class="si">{</span><span class="n">HASH_SALT</span><span class="si">}</span><span class="s2">'))"</span>
+    <span class="n">uuid_parts</span> <span class="o">=</span> <span class="p">[(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">8</span><span class="p">),</span> <span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">12</span><span class="p">),</span> <span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="mi">16</span><span class="p">),</span> <span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">20</span><span class="p">),</span> <span class="p">(</span><span class="mi">20</span><span class="p">,</span> <span class="mi">32</span><span class="p">)]</span>
+    <span class="n">patient_uuid</span> <span class="o">=</span> <span class="s2">" + '-' + "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">stable_hash</span><span class="si">}</span><span class="s2">[</span><span class="si">{</span><span class="n">start</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">end</span><span class="si">}</span><span class="s2">]"</span> <span class="k">for</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span> <span class="ow">in</span> <span class="n">uuid_parts</span><span class="p">)</span>
+    <span class="n">patient_seed</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"(row.patient_id | hash(salt='</span><span class="si">{</span><span class="n">HASH_SALT</span><span class="si">}</span><span class="s2">'))"</span>
+    <span class="n">persona</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"fake.persona(row_index=</span><span class="si">{</span><span class="n">patient_seed</span><span class="si">}</span><span class="s2">, gender=row.sex)"</span>
+    <span class="n">date_offset</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"7 + (((</span><span class="si">{</span><span class="n">patient_seed</span><span class="si">}</span><span class="s2">[0:8]) | int(base=16)) % 84)"</span>
+    <span class="n">shifted_date</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"((this | date_parse) + timedelta(days=</span><span class="si">{</span><span class="n">date_offset</span><span class="si">}</span><span class="s2">))"</span>
 
-<span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span>
-    <span class="p">[{</span>
-        <span class="s2">"artifact"</span><span class="p">:</span> <span class="s2">"Safe Synthesizer run path"</span><span class="p">,</span>
-        <span class="s2">"path"</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">RUN_PATH</span><span class="p">),</span>
-        <span class="s2">"synthetic_rows"</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="o">.</span><span class="n">synthetic_data</span><span class="p">),</span>
-    <span class="p">}]</span>
-<span class="p">)</span>
+    <span class="n">config</span><span class="o">.</span><span class="n">steps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">rows</span><span class="o">.</span><span class="n">update</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">Row</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">"admission_id"</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="sa">f</span><span class="s2">"'ADM-' + (</span><span class="si">{</span><span class="n">stable_hash</span><span class="si">}</span><span class="s2">[0:16] | upper)"</span><span class="p">),</span>
+        <span class="n">Row</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">"patient_id"</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="n">patient_uuid</span><span class="p">),</span>
+        <span class="n">Row</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">"mrn"</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="sa">f</span><span class="s2">"'MRN-' + (</span><span class="si">{</span><span class="n">stable_hash</span><span class="si">}</span><span class="s2">[0:12] | upper)"</span><span class="p">),</span>
+        <span class="n">Row</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">"full_name"</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">persona</span><span class="si">}</span><span class="s2">.first_name + ' ' + </span><span class="si">{</span><span class="n">persona</span><span class="si">}</span><span class="s2">.last_name"</span><span class="p">),</span>
+        <span class="n">Row</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">"email"</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">persona</span><span class="si">}</span><span class="s2">.email"</span><span class="p">),</span>
+        <span class="n">Row</span><span class="p">(</span>
+            <span class="n">name</span><span class="o">=</span><span class="s2">"phone"</span><span class="p">,</span>
+            <span class="n">value</span><span class="o">=</span><span class="s2">"(fake.random_number(digits=3) | string) + '-' + (fake.random_number(digits=3) | string) + '-' + (fake.random_number(digits=4) | string)"</span><span class="p">,</span>
+        <span class="p">),</span>
+        <span class="n">Row</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">"address"</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="s2">"'street_address' | fake"</span><span class="p">),</span>
+        <span class="n">Row</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">"city"</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="s2">"'city' | fake"</span><span class="p">),</span>
+        <span class="n">Row</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">"state"</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="s2">"'state_abbr' | fake"</span><span class="p">),</span>
+        <span class="n">Row</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">"postal_code"</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="s2">"'postcode' | fake"</span><span class="p">),</span>
+        <span class="n">Row</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">"date_of_birth"</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">shifted_date</span><span class="si">}</span><span class="s2"> | date_format"</span><span class="p">),</span>
+        <span class="n">Row</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">"admission_datetime"</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">shifted_date</span><span class="si">}</span><span class="s2"> | date_time_format(format='%Y-%m-%dT%H:%M:%S')"</span><span class="p">),</span>
+        <span class="n">Row</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">"discharge_datetime"</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">shifted_date</span><span class="si">}</span><span class="s2"> | date_time_format(format='%Y-%m-%dT%H:%M:%S')"</span><span class="p">),</span>
+        <span class="n">Row</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">"discharge_summary"</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="s2">"this | fake_entities(on_error='hash')"</span><span class="p">),</span>
+    <span class="p">]</span>
+    <span class="k">return</span> <span class="n">config</span>
+
+<span class="n">pii_config</span> <span class="o">=</span> <span class="n">build_healthcare_pii_config</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Configured </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">pii_config</span><span class="o">.</span><span class="n">steps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">rows</span><span class="o">.</span><span class="n">update</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="p">[])</span><span class="si">}</span><span class="s2"> PII replacement rules."</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-5">from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+<div class="clipboard-copy-txt" id="cell-5">from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig, Row
 
-builder = (
-    SafeSynthesizer(save_path=ARTIFACT_ROOT)
-    .with_data_source(source_df)
-    .with_replace_pii(enable=True)
-    .with_time_series(
-        is_timeseries=True,
-        timestamp_column="txn_index",
-    )
-    .with_data(
-        holdout=0,
-        group_training_examples_by="acct_id",
-        order_training_examples_by="txn_index",
-    )
-    .with_train(
-        pretrained_model="HuggingFaceTB/SmolLM3-3B",
-        num_input_records_to_sample=90_000,
-        learning_rate=5.0e-4,
-        lora_r=32,
-    )
-)
+# Keep the data split and generated replacements reproducible across tutorial runs.
+SPLIT_SEED = 318
+# Extra fixed input to deterministic identifier hashes; use an approved value in production.
+HASH_SALT = "nss-healthcare-readmissions-demo-2026"
 
-builder.run()
-results = builder.results
+def build_healthcare_pii_config() -&gt; PiiReplacerConfig:
+    config = PiiReplacerConfig.get_default_config()
+    config.globals.seed = SPLIT_SEED
+    # The structured columns are listed below, so LLM-based classification is unnecessary.
+    config.globals.classify.enable_classify = False
+    config.globals.ner.ner_entities = [
+        "first_name", "last_name", "name",
+        "medical_record_number", "date", "date_time",
+    ]
 
-RUN_PATH = Path(builder._workdir.generate.path).parent
+    stable_hash = f"(this | hash(salt='{HASH_SALT}'))"
+    uuid_parts = [(0, 8), (8, 12), (12, 16), (16, 20), (20, 32)]
+    patient_uuid = " + '-' + ".join(f"{stable_hash}[{start}:{end}]" for start, end in uuid_parts)
+    patient_seed = f"(row.patient_id | hash(salt='{HASH_SALT}'))"
+    persona = f"fake.persona(row_index={patient_seed}, gender=row.sex)"
+    date_offset = f"7 + ((({patient_seed}[0:8]) | int(base=16)) % 84)"
+    shifted_date = f"((this | date_parse) + timedelta(days={date_offset}))"
 
-pd.DataFrame(
-    [{
-        "artifact": "Safe Synthesizer run path",
-        "path": str(RUN_PATH),
-        "synthetic_rows": len(results.synthetic_data),
-    }]
-)</div>
+    config.steps[0].rows.update = [
+        Row(name="admission_id", value=f"'ADM-' + ({stable_hash}[0:16] | upper)"),
+        Row(name="patient_id", value=patient_uuid),
+        Row(name="mrn", value=f"'MRN-' + ({stable_hash}[0:12] | upper)"),
+        Row(name="full_name", value=f"{persona}.first_name + ' ' + {persona}.last_name"),
+        Row(name="email", value=f"{persona}.email"),
+        Row(
+            name="phone",
+            value="(fake.random_number(digits=3) | string) + '-' + (fake.random_number(digits=3) | string) + '-' + (fake.random_number(digits=4) | string)",
+        ),
+        Row(name="address", value="'street_address' | fake"),
+        Row(name="city", value="'city' | fake"),
+        Row(name="state", value="'state_abbr' | fake"),
+        Row(name="postal_code", value="'postcode' | fake"),
+        Row(name="date_of_birth", value=f"{shifted_date} | date_format"),
+        Row(name="admission_datetime", value=f"{shifted_date} | date_time_format(format='%Y-%m-%dT%H:%M:%S')"),
+        Row(name="discharge_datetime", value=f"{shifted_date} | date_time_format(format='%Y-%m-%dT%H:%M:%S')"),
+        Row(name="discharge_summary", value="this | fake_entities(on_error='hash')"),
+    ]
+    return config
+
+pii_config = build_healthcare_pii_config()
+print(f"Configured {len(pii_config.steps[0].rows.update or [])} PII replacement rules.")</div>
 </div>
 </div>
 </div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=e30911a0">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=060a9b3b">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h3 id="review-the-built-in-evaluation-report">Review the Built-In Evaluation Report<a class="anchor-link" href="#review-the-built-in-evaluation-report">¶</a></h3><p>Safe Synthesizer generates a built-in evaluation report as part of <code>builder.run()</code>. Review this first for the standard quality and privacy assessment before moving into the transaction-specific analysis below.</p>
+<h2 id="4-train-generate-and-evaluate">4. Train, generate, and evaluate<a class="anchor-link" href="#4-train-generate-and-evaluate">¶</a></h2><p>The next cell runs the complete Safe Synthesizer pipeline. It sets aside 499 Original records for evaluation, applies the PII replacement policy to the remaining 9,498 records before fine-tuning the default SmolLM3 model, generates 5,000 Synthetic records, and evaluates the result. The generated data, trained model adapter (the learned model update), metrics, and HTML report are saved automatically under <code>ARTIFACT_ROOT</code>. The adapter can be reused for later generation without repeating fine-tuning.</p>
 </div>
 </div>
 </div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=1bdc0a56">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=a4cecc4e">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -10746,37 +10793,48 @@ pd.DataFrame(
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">report_html</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">evaluation_report_html</span>
-<span class="k">if</span> <span class="n">report_html</span><span class="p">:</span>
-    <span class="n">data_url</span> <span class="o">=</span> <span class="s2">"data:text/html;base64,"</span> <span class="o">+</span> <span class="n">base64</span><span class="o">.</span><span class="n">b64encode</span><span class="p">(</span><span class="n">report_html</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">))</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">"ascii"</span><span class="p">)</span>
-    <span class="n">display</span><span class="p">(</span><span class="n">IFrame</span><span class="p">(</span><span class="n">src</span><span class="o">=</span><span class="n">data_url</span><span class="p">,</span> <span class="n">width</span><span class="o">=</span><span class="s2">"100%"</span><span class="p">,</span> <span class="n">height</span><span class="o">=</span><span class="mi">800</span><span class="p">))</span>
-<span class="k">else</span><span class="p">:</span>
-    <span class="n">display</span><span class="p">(</span><span class="n">Markdown</span><span class="p">(</span><span class="s2">"Safe Synthesizer did not return an HTML evaluation report for this run."</span><span class="p">))</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">nemo_safe_synthesizer.sdk.library_builder</span><span class="w"> </span><span class="kn">import</span> <span class="n">SafeSynthesizer</span>
+
+<span class="n">ARTIFACT_ROOT</span> <span class="o">=</span> <span class="s2">"safe-synthesizer-healthcare-artifacts"</span>
+<span class="n">builder</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="n">SafeSynthesizer</span><span class="p">(</span><span class="n">save_path</span><span class="o">=</span><span class="n">ARTIFACT_ROOT</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">with_data_source</span><span class="p">(</span><span class="n">source_df</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">with_replace_pii</span><span class="p">(</span><span class="n">config</span><span class="o">=</span><span class="n">pii_config</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">with_data</span><span class="p">(</span><span class="n">random_state</span><span class="o">=</span><span class="n">SPLIT_SEED</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">with_generate</span><span class="p">(</span><span class="n">num_records</span><span class="o">=</span><span class="mi">5_000</span><span class="p">)</span>
+<span class="p">)</span>
+
+<span class="n">builder</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>
+<span class="n">results</span> <span class="o">=</span> <span class="n">builder</span><span class="o">.</span><span class="n">results</span>
+<span class="n">synthetic_df</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">synthetic_data</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+<span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">synthetic_df</span><span class="p">)</span> <span class="o">==</span> <span class="mi">5_000</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"Expected 5,000 generated records, found </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">synthetic_df</span><span class="p">)</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2">."</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Generated </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">synthetic_df</span><span class="p">)</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2"> synthetic admissions."</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-6">report_html = results.evaluation_report_html
-if report_html:
-    data_url = "data:text/html;base64," + base64.b64encode(report_html.encode("utf-8")).decode("ascii")
-    display(IFrame(src=data_url, width="100%", height=800))
-else:
-    display(Markdown("Safe Synthesizer did not return an HTML evaluation report for this run."))</div>
+<div class="clipboard-copy-txt" id="cell-6">from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+
+ARTIFACT_ROOT = "safe-synthesizer-healthcare-artifacts"
+builder = (
+    SafeSynthesizer(save_path=ARTIFACT_ROOT)
+    .with_data_source(source_df)
+    .with_replace_pii(config=pii_config)
+    .with_data(random_state=SPLIT_SEED)
+    .with_generate(num_records=5_000)
+)
+
+builder.run()
+results = builder.results
+synthetic_df = results.synthetic_data.copy()
+
+assert len(synthetic_df) == 5_000, f"Expected 5,000 generated records, found {len(synthetic_df):,}."
+print(f"Generated {len(synthetic_df):,} synthetic admissions.")</div>
 </div>
 </div>
-</div>
-</div>
-</div>
-</div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=80c26b8a">
-<div class="jp-Cell-inputWrapper" tabindex="0">
-<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
-</div>
-<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
-</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h3 id="retrieve-synthetic-data">Retrieve Synthetic Data<a class="anchor-link" href="#retrieve-synthetic-data">¶</a></h3><p>After the run completes, Safe Synthesizer exposes the generated dataset on <code>builder.results</code>. The rest of the notebook uses this in-memory result directly.</p>
 </div>
 </div>
 </div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=6fee5e91">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=2d38868c">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -10794,35 +10852,27 @@ else:
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">synthetic_output</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">synthetic_data</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
-
-<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Number of synthetic rows: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">synthetic_output</span><span class="p">)</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-<span class="n">display</span><span class="p">(</span><span class="n">synthetic_output</span><span class="o">.</span><span class="n">head</span><span class="p">())</span>
-<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Artifacts saved to: </span><span class="si">{</span><span class="n">RUN_PATH</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">display</span><span class="p">(</span><span class="n">synthetic_df</span><span class="p">[</span><span class="n">PREVIEW_COLUMNS</span><span class="p">]</span><span class="o">.</span><span class="n">head</span><span class="p">())</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-7">synthetic_output = results.synthetic_data.copy()
-
-print(f"Number of synthetic rows: {len(synthetic_output):,}")
-display(synthetic_output.head())
-print(f"Artifacts saved to: {RUN_PATH}")</div>
+<div class="clipboard-copy-txt" id="cell-7">display(synthetic_df[PREVIEW_COLUMNS].head())</div>
 </div>
 </div>
 </div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=76e9dbd8">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=12b9d709">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h3 id="prepare-data-for-analysis">Prepare Data for Analysis<a class="anchor-link" href="#prepare-data-for-analysis">¶</a></h3><p>Safe Synthesizer generated a time-series dataset. The result can include padded continuation rows where the account-level context is present but transaction detail fields are empty. We keep the raw DataFrames for schema and missingness checks, then create transaction-valid views for behavioral analysis.</p>
+<h3 id="built-in-sqs-dps-and-html-report">Built-in SQS, DPS, and HTML report<a class="anchor-link" href="#built-in-sqs-dps-and-html-report">¶</a></h3><p>The Synthetic Data Quality Score (SQS) summarizes statistical similarity, while the Data Privacy Score (DPS) summarizes the built-in privacy evaluation. Both use a 0–10 scale, where higher is better. Open the HTML report to inspect the component scores and identify distributions, relationships, or privacy risks that need attention. These results support review; they do not certify compliance or automatically approve the data for sharing.</p>
 </div>
 </div>
 </div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=8c6081d9">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=30941dd7">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -10840,80 +10890,49 @@ print(f"Artifacts saved to: {RUN_PATH}")</div>
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">prepare_transactions</span><span class="p">(</span><span class="n">df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">source</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
-    <span class="n">prepared</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
-    <span class="n">prepared</span><span class="p">[</span><span class="s2">"source"</span><span class="p">]</span> <span class="o">=</span> <span class="n">source</span>
-    <span class="n">prepared</span><span class="p">[</span><span class="s2">"txn_amount"</span><span class="p">]</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">to_numeric</span><span class="p">(</span><span class="n">prepared</span><span class="p">[</span><span class="s2">"txn_amount"</span><span class="p">],</span> <span class="n">errors</span><span class="o">=</span><span class="s2">"coerce"</span><span class="p">)</span>
-    <span class="n">prepared</span><span class="p">[</span><span class="s2">"txn_index"</span><span class="p">]</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">to_numeric</span><span class="p">(</span><span class="n">prepared</span><span class="p">[</span><span class="s2">"txn_index"</span><span class="p">],</span> <span class="n">errors</span><span class="o">=</span><span class="s2">"coerce"</span><span class="p">)</span>
-    <span class="n">prepared</span><span class="p">[</span><span class="s2">"timestamp_dt"</span><span class="p">]</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">to_datetime</span><span class="p">(</span><span class="n">prepared</span><span class="p">[</span><span class="s2">"timestamp"</span><span class="p">],</span> <span class="n">errors</span><span class="o">=</span><span class="s2">"coerce"</span><span class="p">)</span>
-    <span class="n">prepared</span><span class="p">[</span><span class="s2">"hour"</span><span class="p">]</span> <span class="o">=</span> <span class="n">prepared</span><span class="p">[</span><span class="s2">"timestamp_dt"</span><span class="p">]</span><span class="o">.</span><span class="n">dt</span><span class="o">.</span><span class="n">hour</span>
-    <span class="n">prepared</span><span class="p">[</span><span class="s2">"day"</span><span class="p">]</span> <span class="o">=</span> <span class="n">prepared</span><span class="p">[</span><span class="s2">"timestamp_dt"</span><span class="p">]</span><span class="o">.</span><span class="n">dt</span><span class="o">.</span><span class="n">day</span>
-    <span class="k">return</span> <span class="n">prepared</span>
-
-
-<span class="n">original_raw</span> <span class="o">=</span> <span class="n">prepare_transactions</span><span class="p">(</span><span class="n">source_df</span><span class="p">,</span> <span class="s2">"Original"</span><span class="p">)</span>
-<span class="n">synthetic_raw</span> <span class="o">=</span> <span class="n">prepare_transactions</span><span class="p">(</span><span class="n">synthetic_output</span><span class="p">,</span> <span class="s2">"Synthetic"</span><span class="p">)</span>
-
-<span class="n">transaction_detail_cols</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"timestamp"</span><span class="p">,</span> <span class="s2">"merchant_cat"</span><span class="p">,</span> <span class="s2">"merchant"</span><span class="p">,</span> <span class="s2">"txn_amount"</span><span class="p">]</span>
-<span class="n">original</span> <span class="o">=</span> <span class="n">original_raw</span><span class="o">.</span><span class="n">dropna</span><span class="p">(</span><span class="n">subset</span><span class="o">=</span><span class="n">transaction_detail_cols</span><span class="p">)</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
-<span class="n">synthetic</span> <span class="o">=</span> <span class="n">synthetic_raw</span><span class="o">.</span><span class="n">dropna</span><span class="p">(</span><span class="n">subset</span><span class="o">=</span><span class="n">transaction_detail_cols</span><span class="p">)</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
-<span class="n">combined</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">original</span><span class="p">,</span> <span class="n">synthetic</span><span class="p">],</span> <span class="n">ignore_index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="n">raw_combined</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">original_raw</span><span class="p">,</span> <span class="n">synthetic_raw</span><span class="p">],</span> <span class="n">ignore_index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-
-<span class="n">summary</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">([</span>
-    <span class="p">{</span>
-        <span class="s2">"source"</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span>
-        <span class="s2">"valid_transaction_rows"</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">clean</span><span class="p">),</span>
-        <span class="s2">"unique_accounts"</span><span class="p">:</span> <span class="n">raw</span><span class="p">[</span><span class="s2">"acct_id"</span><span class="p">]</span><span class="o">.</span><span class="n">nunique</span><span class="p">(),</span>
-        <span class="s2">"valid_rows_per_account_median"</span><span class="p">:</span> <span class="n">clean</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="s2">"acct_id"</span><span class="p">)</span><span class="o">.</span><span class="n">size</span><span class="p">()</span><span class="o">.</span><span class="n">median</span><span class="p">(),</span>
-    <span class="p">}</span>
-    <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">raw</span><span class="p">,</span> <span class="n">clean</span> <span class="ow">in</span> <span class="p">[</span>
-        <span class="p">(</span><span class="s2">"Original"</span><span class="p">,</span> <span class="n">original_raw</span><span class="p">,</span> <span class="n">original</span><span class="p">),</span>
-        <span class="p">(</span><span class="s2">"Synthetic"</span><span class="p">,</span> <span class="n">synthetic_raw</span><span class="p">,</span> <span class="n">synthetic</span><span class="p">),</span>
-    <span class="p">]</span>
-<span class="p">])</span>
-<span class="n">summary</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">report_html</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">evaluation_report_html</span>
+<span class="k">if</span> <span class="n">report_html</span><span class="p">:</span>
+    <span class="n">report_url</span> <span class="o">=</span> <span class="s2">"data:text/html;base64,"</span> <span class="o">+</span> <span class="n">base64</span><span class="o">.</span><span class="n">b64encode</span><span class="p">(</span><span class="n">report_html</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">))</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">"ascii"</span><span class="p">)</span>
+    <span class="n">display</span><span class="p">(</span><span class="n">IFrame</span><span class="p">(</span><span class="n">src</span><span class="o">=</span><span class="n">report_url</span><span class="p">,</span> <span class="n">width</span><span class="o">=</span><span class="s2">"100%"</span><span class="p">,</span> <span class="n">height</span><span class="o">=</span><span class="mi">850</span><span class="p">))</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="n">display</span><span class="p">(</span><span class="n">Markdown</span><span class="p">(</span><span class="s2">"The run did not return an HTML evaluation report."</span><span class="p">))</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-8">def prepare_transactions(df: pd.DataFrame, source: str) -&gt; pd.DataFrame:
-    prepared = df.copy()
-    prepared["source"] = source
-    prepared["txn_amount"] = pd.to_numeric(prepared["txn_amount"], errors="coerce")
-    prepared["txn_index"] = pd.to_numeric(prepared["txn_index"], errors="coerce")
-    prepared["timestamp_dt"] = pd.to_datetime(prepared["timestamp"], errors="coerce")
-    prepared["hour"] = prepared["timestamp_dt"].dt.hour
-    prepared["day"] = prepared["timestamp_dt"].dt.day
-    return prepared
-
-
-original_raw = prepare_transactions(source_df, "Original")
-synthetic_raw = prepare_transactions(synthetic_output, "Synthetic")
-
-transaction_detail_cols = ["timestamp", "merchant_cat", "merchant", "txn_amount"]
-original = original_raw.dropna(subset=transaction_detail_cols).copy()
-synthetic = synthetic_raw.dropna(subset=transaction_detail_cols).copy()
-combined = pd.concat([original, synthetic], ignore_index=True)
-raw_combined = pd.concat([original_raw, synthetic_raw], ignore_index=True)
-
-summary = pd.DataFrame([
-    {
-        "source": name,
-        "valid_transaction_rows": len(clean),
-        "unique_accounts": raw["acct_id"].nunique(),
-        "valid_rows_per_account_median": clean.groupby("acct_id").size().median(),
-    }
-    for name, raw, clean in [
-        ("Original", original_raw, original),
-        ("Synthetic", synthetic_raw, synthetic),
-    ]
-])
-summary</div>
+<div class="clipboard-copy-txt" id="cell-8">report_html = results.evaluation_report_html
+if report_html:
+    report_url = "data:text/html;base64," + base64.b64encode(report_html.encode("utf-8")).decode("ascii")
+    display(IFrame(src=report_url, width="100%", height=850))
+else:
+    display(Markdown("The run did not return an HTML evaluation report."))</div>
 </div>
 </div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=30db17b7">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<h2 id="5-healthcare-utility-checks">5. Healthcare utility checks<a class="anchor-link" href="#5-healthcare-utility-checks">¶</a></h2><p>These comparisons test whether the Synthetic data preserves patterns from the Original data well enough to support descriptive utilization analysis. The generic similarity from the evaluation report above is useful evidence, but every dataset and use case is different, so these plots compare specific properties that are relevant for hospital readmission data. These checks do not validate causal effects, predictive models, fairness, or clinical decision-making.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=a421d9e0">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<h3 id="overall-30-day-readmission-prevalence">Overall 30-day readmission prevalence<a class="anchor-link" href="#overall-30-day-readmission-prevalence">¶</a></h3><p><strong>What to look for:</strong> The Synthetic readmission rate should be close to the Original rate. Small differences are normal.</p>
+<p><strong>What it means:</strong> A large difference means the Synthetic cohort has a different baseline readmission risk and may not support the same planning or modeling assumptions.</p>
 </div>
 </div>
 </div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=083e76a0">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=2e482095">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -10931,89 +10950,72 @@ summary</div>
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">CATEGORY_ORDER</span> <span class="o">=</span> <span class="p">[</span>
-    <span class="s2">"grocery"</span><span class="p">,</span> <span class="s2">"dining"</span><span class="p">,</span> <span class="s2">"retail"</span><span class="p">,</span> <span class="s2">"e-commerce"</span><span class="p">,</span> <span class="s2">"subscription"</span><span class="p">,</span> <span class="s2">"entertainment"</span><span class="p">,</span>
-    <span class="s2">"gas"</span><span class="p">,</span> <span class="s2">"healthcare"</span><span class="p">,</span> <span class="s2">"utilities"</span><span class="p">,</span> <span class="s2">"automotive"</span><span class="p">,</span> <span class="s2">"ATM"</span><span class="p">,</span> <span class="s2">"travel"</span><span class="p">,</span>
-    <span class="s2">"wire_transfer"</span><span class="p">,</span> <span class="s2">"other"</span><span class="p">,</span>
-<span class="p">]</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">READMISSION</span> <span class="o">=</span> <span class="s2">"readmitted_within_30_days"</span>
+<span class="n">NUMERIC</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"age"</span><span class="p">,</span> <span class="s2">"length_of_stay_days"</span><span class="p">,</span> <span class="s2">"total_charge_usd"</span><span class="p">,</span> <span class="s2">"primary_lab_value"</span><span class="p">]</span>
+<span class="n">DATES</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"admission_datetime"</span><span class="p">,</span> <span class="s2">"discharge_datetime"</span><span class="p">,</span> <span class="s2">"date_of_birth"</span><span class="p">]</span>
 
+<span class="k">def</span><span class="w"> </span><span class="nf">prepare</span><span class="p">(</span><span class="n">frame</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">label</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+    <span class="n">clean</span> <span class="o">=</span> <span class="n">frame</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="n">source</span><span class="o">=</span><span class="n">label</span><span class="p">)</span>
+    <span class="n">clean</span><span class="p">[</span><span class="n">READMISSION</span><span class="p">]</span> <span class="o">=</span> <span class="n">clean</span><span class="p">[</span><span class="n">READMISSION</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s2">"string"</span><span class="p">)</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">map</span><span class="p">({</span><span class="s2">"true"</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">"false"</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">"1"</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">"0"</span><span class="p">:</span> <span class="kc">False</span><span class="p">})</span>
+    <span class="n">clean</span><span class="p">[</span><span class="n">NUMERIC</span><span class="p">]</span> <span class="o">=</span> <span class="n">clean</span><span class="p">[</span><span class="n">NUMERIC</span><span class="p">]</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">pd</span><span class="o">.</span><span class="n">to_numeric</span><span class="p">,</span> <span class="n">errors</span><span class="o">=</span><span class="s2">"coerce"</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">column</span> <span class="ow">in</span> <span class="n">DATES</span><span class="p">:</span>
+        <span class="n">clean</span><span class="p">[</span><span class="n">column</span><span class="p">]</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">to_datetime</span><span class="p">(</span><span class="n">clean</span><span class="p">[</span><span class="n">column</span><span class="p">],</span> <span class="nb">format</span><span class="o">=</span><span class="s2">"mixed"</span><span class="p">,</span> <span class="n">errors</span><span class="o">=</span><span class="s2">"coerce"</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">clean</span>
 
-<span class="k">def</span><span class="w"> </span><span class="nf">pct_by_category</span><span class="p">(</span><span class="n">df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">:</span>
-    <span class="k">return</span> <span class="n">df</span><span class="p">[</span><span class="s2">"merchant_cat"</span><span class="p">]</span><span class="o">.</span><span class="n">value_counts</span><span class="p">(</span><span class="n">normalize</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">reindex</span><span class="p">(</span><span class="n">CATEGORY_ORDER</span><span class="p">,</span> <span class="n">fill_value</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">original</span> <span class="o">=</span> <span class="n">prepare</span><span class="p">(</span><span class="n">source_df</span><span class="p">,</span> <span class="s2">"Original"</span><span class="p">)</span>
+<span class="n">synthetic</span> <span class="o">=</span> <span class="n">prepare</span><span class="p">(</span><span class="n">synthetic_df</span><span class="p">,</span> <span class="s2">"Synthetic"</span><span class="p">)</span>
+<span class="n">combined</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">original</span><span class="p">,</span> <span class="n">synthetic</span><span class="p">],</span> <span class="n">ignore_index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
-
-<span class="k">def</span><span class="w"> </span><span class="nf">row_hashes</span><span class="p">(</span><span class="n">df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">columns</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
-    <span class="n">normalized</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="n">columns</span><span class="p">]</span><span class="o">.</span><span class="n">fillna</span><span class="p">(</span><span class="s2">"&lt;NA&gt;"</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span>
-    <span class="k">return</span> <span class="p">{</span>
-        <span class="n">hashlib</span><span class="o">.</span><span class="n">sha256</span><span class="p">(</span><span class="s2">"||"</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">row</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">))</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">()</span>
-        <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">normalized</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()</span>
-    <span class="p">}</span>
-
-
-<span class="k">def</span><span class="w"> </span><span class="nf">plot_grouped_bars</span><span class="p">(</span><span class="n">frame</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">title</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">ylabel</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">ax</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-    <span class="n">ax</span> <span class="o">=</span> <span class="n">frame</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">kind</span><span class="o">=</span><span class="s2">"bar"</span><span class="p">,</span> <span class="n">ax</span><span class="o">=</span><span class="n">ax</span><span class="p">,</span> <span class="n">width</span><span class="o">=</span><span class="mf">0.82</span><span class="p">)</span>
-    <span class="n">ax</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="n">title</span><span class="p">)</span>
-    <span class="n">ax</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="n">ylabel</span><span class="p">)</span>
-    <span class="n">ax</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s2">""</span><span class="p">)</span>
-    <span class="n">ax</span><span class="o">.</span><span class="n">tick_params</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="s2">"x"</span><span class="p">,</span> <span class="n">rotation</span><span class="o">=</span><span class="mi">45</span><span class="p">)</span>
-    <span class="n">ax</span><span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="n">frameon</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">ax</span>
-
-
-<span class="k">def</span><span class="w"> </span><span class="nf">valid_rate</span><span class="p">(</span><span class="n">raw</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
-    <span class="k">return</span> <span class="n">raw</span><span class="p">[</span><span class="n">transaction_detail_cols</span><span class="p">]</span><span class="o">.</span><span class="n">notna</span><span class="p">()</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
+<span class="n">overall_readmission</span> <span class="o">=</span> <span class="n">combined</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="s2">"source"</span><span class="p">)[</span><span class="n">READMISSION</span><span class="p">]</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="o">.</span><span class="n">mul</span><span class="p">(</span><span class="mi">100</span><span class="p">)</span>
+<span class="n">axis</span> <span class="o">=</span> <span class="n">overall_readmission</span><span class="o">.</span><span class="n">plot</span><span class="o">.</span><span class="n">bar</span><span class="p">(</span><span class="n">color</span><span class="o">=</span><span class="p">[</span><span class="n">NVIDIA_DARK</span><span class="p">,</span> <span class="n">NVIDIA_GREEN</span><span class="p">],</span> <span class="n">title</span><span class="o">=</span><span class="s2">"Overall 30-Day Readmission Rate"</span><span class="p">)</span>
+<span class="n">axis</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s2">"readmission rate (%)"</span><span class="p">)</span>
+<span class="n">axis</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s2">""</span><span class="p">)</span>
+<span class="n">axis</span><span class="o">.</span><span class="n">tick_params</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="s2">"x"</span><span class="p">,</span> <span class="n">rotation</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-9">CATEGORY_ORDER = [
-    "grocery", "dining", "retail", "e-commerce", "subscription", "entertainment",
-    "gas", "healthcare", "utilities", "automotive", "ATM", "travel",
-    "wire_transfer", "other",
-]
+<div class="clipboard-copy-txt" id="cell-9">READMISSION = "readmitted_within_30_days"
+NUMERIC = ["age", "length_of_stay_days", "total_charge_usd", "primary_lab_value"]
+DATES = ["admission_datetime", "discharge_datetime", "date_of_birth"]
 
+def prepare(frame: pd.DataFrame, label: str) -&gt; pd.DataFrame:
+    clean = frame.copy().assign(source=label)
+    clean[READMISSION] = clean[READMISSION].astype("string").str.lower().map({"true": True, "false": False, "1": True, "0": False})
+    clean[NUMERIC] = clean[NUMERIC].apply(pd.to_numeric, errors="coerce")
+    for column in DATES:
+        clean[column] = pd.to_datetime(clean[column], format="mixed", errors="coerce")
+    return clean
 
-def pct_by_category(df: pd.DataFrame) -&gt; pd.Series:
-    return df["merchant_cat"].value_counts(normalize=True).reindex(CATEGORY_ORDER, fill_value=0)
+original = prepare(source_df, "Original")
+synthetic = prepare(synthetic_df, "Synthetic")
+combined = pd.concat([original, synthetic], ignore_index=True)
 
-
-def row_hashes(df: pd.DataFrame, columns: list[str]) -&gt; set[str]:
-    normalized = df[columns].fillna("<na>").astype(str)
-    return {
-        hashlib.sha256("||".join(row).encode("utf-8")).hexdigest()
-        for row in normalized.to_numpy()
-    }
-
-
-def plot_grouped_bars(frame: pd.DataFrame, title: str, ylabel: str, *, ax=None):
-    ax = frame.plot(kind="bar", ax=ax, width=0.82)
-    ax.set_title(title)
-    ax.set_ylabel(ylabel)
-    ax.set_xlabel("")
-    ax.tick_params(axis="x", rotation=45)
-    ax.legend(frameon=False)
-    return ax
-
-
-def valid_rate(raw: pd.DataFrame) -&gt; float:
-    return raw[transaction_detail_cols].notna().all(axis=1).mean()
-
-</na></div>
+overall_readmission = combined.groupby("source")[READMISSION].mean().mul(100)
+axis = overall_readmission.plot.bar(color=[NVIDIA_DARK, NVIDIA_GREEN], title="Overall 30-Day Readmission Rate")
+axis.set_ylabel("readmission rate (%)")
+axis.set_xlabel("")
+axis.tick_params(axis="x", rotation=0)
+plt.tight_layout()
+plt.show()</div>
 </div>
 </div>
 </div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=378b4d30">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=b5f3c8a1">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h3 id="visual-comparison-category-mix">Visual Comparison: Category Mix<a class="anchor-link" href="#visual-comparison-category-mix">¶</a></h3><p>A useful synthetic transaction dataset should preserve the category base rates: grocery and dining should be common, wire transfers should remain rare, and the middle-frequency categories should stay in the same neighborhood.</p>
+<h3 id="readmission-patterns-across-cohorts">Readmission patterns across cohorts<a class="anchor-link" href="#readmission-patterns-across-cohorts">¶</a></h3><p><strong>What to look for:</strong> Compare the relative ordering and broad differences across diagnoses, discharge dispositions, and insurance types, not just exact bar heights.</p>
+<p><strong>What it means:</strong> Similar subgroup patterns indicate that relationships between diagnosis, discharge disposition, insurance, and readmission were preserved. Large or reversed differences identify analyses that may not be reliable on the Synthetic data.</p>
 </div>
 </div>
 </div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=32e39e60">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=7b917973">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -11031,29 +11033,35 @@ def valid_rate(raw: pd.DataFrame) -&gt; float:
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">category_mix</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span>
-    <span class="s2">"Original"</span><span class="p">:</span> <span class="n">pct_by_category</span><span class="p">(</span><span class="n">original</span><span class="p">)</span> <span class="o">*</span> <span class="mi">100</span><span class="p">,</span>
-    <span class="s2">"Synthetic"</span><span class="p">:</span> <span class="n">pct_by_category</span><span class="p">(</span><span class="n">synthetic</span><span class="p">)</span> <span class="o">*</span> <span class="mi">100</span><span class="p">,</span>
-<span class="p">})</span>
-<span class="n">category_delta</span> <span class="o">=</span> <span class="n">category_mix</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span>
-    <span class="n">synthetic_minus_original_pp</span><span class="o">=</span><span class="n">category_mix</span><span class="p">[</span><span class="s2">"Synthetic"</span><span class="p">]</span> <span class="o">-</span> <span class="n">category_mix</span><span class="p">[</span><span class="s2">"Original"</span><span class="p">],</span>
-<span class="p">)</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">readmission_by</span><span class="p">(</span><span class="n">column</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">combined</span><span class="o">.</span><span class="n">groupby</span><span class="p">([</span><span class="n">column</span><span class="p">,</span> <span class="s2">"source"</span><span class="p">])[</span><span class="n">READMISSION</span><span class="p">]</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="o">.</span><span class="n">mul</span><span class="p">(</span><span class="mi">100</span><span class="p">)</span><span class="o">.</span><span class="n">unstack</span><span class="p">()</span>
 
-<span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">13</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
-<span class="n">plot_grouped_bars</span><span class="p">(</span><span class="n">category_mix</span><span class="p">,</span> <span class="s2">"Merchant Category Distribution"</span><span class="p">,</span> <span class="s2">"Share of valid transactions (%)"</span><span class="p">,</span> <span class="n">ax</span><span class="o">=</span><span class="n">ax</span><span class="p">)</span>
+<span class="n">rate_tables</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">"Diagnosis"</span><span class="p">:</span> <span class="n">readmission_by</span><span class="p">(</span><span class="s2">"primary_diagnosis"</span><span class="p">),</span>
+    <span class="s2">"Discharge Disposition"</span><span class="p">:</span> <span class="n">readmission_by</span><span class="p">(</span><span class="s2">"discharge_disposition"</span><span class="p">),</span>
+    <span class="s2">"Insurance"</span><span class="p">:</span> <span class="n">readmission_by</span><span class="p">(</span><span class="s2">"insurance_type"</span><span class="p">),</span>
+<span class="p">}</span>
+<span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">19</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
+<span class="k">for</span> <span class="p">(</span><span class="n">title</span><span class="p">,</span> <span class="n">table</span><span class="p">),</span> <span class="n">axis</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">rate_tables</span><span class="o">.</span><span class="n">items</span><span class="p">(),</span> <span class="n">axes</span><span class="p">,</span> <span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+    <span class="n">table</span><span class="o">.</span><span class="n">plot</span><span class="o">.</span><span class="n">bar</span><span class="p">(</span><span class="n">ax</span><span class="o">=</span><span class="n">axis</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="p">[</span><span class="n">NVIDIA_DARK</span><span class="p">,</span> <span class="n">NVIDIA_GREEN</span><span class="p">],</span> <span class="n">width</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="sa">f</span><span class="s2">"Readmission by </span><span class="si">{</span><span class="n">title</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+    <span class="n">axis</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s2">"readmission rate (%)"</span><span class="p">)</span>
+    <span class="n">axis</span><span class="o">.</span><span class="n">tick_params</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="s2">"x"</span><span class="p">,</span> <span class="n">rotation</span><span class="o">=</span><span class="mi">35</span><span class="p">)</span>
 <span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
 <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-10">category_mix = pd.DataFrame({
-    "Original": pct_by_category(original) * 100,
-    "Synthetic": pct_by_category(synthetic) * 100,
-})
-category_delta = category_mix.assign(
-    synthetic_minus_original_pp=category_mix["Synthetic"] - category_mix["Original"],
-)
+<div class="clipboard-copy-txt" id="cell-10">def readmission_by(column: str) -&gt; pd.DataFrame:
+    return combined.groupby([column, "source"])[READMISSION].mean().mul(100).unstack()
 
-fig, ax = plt.subplots(figsize=(13, 5))
-plot_grouped_bars(category_mix, "Merchant Category Distribution", "Share of valid transactions (%)", ax=ax)
+rate_tables = {
+    "Diagnosis": readmission_by("primary_diagnosis"),
+    "Discharge Disposition": readmission_by("discharge_disposition"),
+    "Insurance": readmission_by("insurance_type"),
+}
+fig, axes = plt.subplots(1, 3, figsize=(19, 5))
+for (title, table), axis in zip(rate_tables.items(), axes, strict=True):
+    table.plot.bar(ax=axis, color=[NVIDIA_DARK, NVIDIA_GREEN], width=0.8, title=f"Readmission by {title}")
+    axis.set_ylabel("readmission rate (%)")
+    axis.tick_params(axis="x", rotation=35)
 plt.tight_layout()
 plt.show()</div>
 </div>
@@ -11062,18 +11070,19 @@ plt.show()</div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=09edad86">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=c6e4d9b2">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h3 id="visual-comparison-amount-distributions">Visual Comparison: Amount Distributions<a class="anchor-link" href="#visual-comparison-amount-distributions">¶</a></h3><p>Financial utility often depends on tails and conditional distributions, not just averages. The plots below use a log-scaled amount axis so daily spend, healthcare/procedure amounts, travel, and wire transfers can be inspected together.</p>
+<h3 id="insurance-mix">Insurance mix<a class="anchor-link" href="#insurance-mix">¶</a></h3><p><strong>What to look for:</strong> The proportions of major insurance categories should be broadly similar between the Original and Synthetic cohorts.</p>
+<p><strong>What it means:</strong> Insurance mix affects payer and access analyses. A shifted mix can bias conclusions even when the overall readmission rate looks similar.</p>
 </div>
 </div>
 </div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=d39a6bda">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=38ebbf54">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -11091,91 +11100,36 @@ plt.show()</div>
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">14</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
-
-<span class="n">bins</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">logspace</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">log10</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">combined</span><span class="p">[</span><span class="s2">"txn_amount"</span><span class="p">]</span><span class="o">.</span><span class="n">min</span><span class="p">())),</span> <span class="n">np</span><span class="o">.</span><span class="n">log10</span><span class="p">(</span><span class="n">combined</span><span class="p">[</span><span class="s2">"txn_amount"</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()),</span> <span class="mi">60</span><span class="p">)</span>
-<span class="k">for</span> <span class="n">source</span><span class="p">,</span> <span class="n">frame</span> <span class="ow">in</span> <span class="n">combined</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="s2">"source"</span><span class="p">):</span>
-    <span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">hist</span><span class="p">(</span><span class="n">frame</span><span class="p">[</span><span class="s2">"txn_amount"</span><span class="p">],</span> <span class="n">bins</span><span class="o">=</span><span class="n">bins</span><span class="p">,</span> <span class="n">density</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">histtype</span><span class="o">=</span><span class="s2">"step"</span><span class="p">,</span> <span class="n">linewidth</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="n">source</span><span class="p">)</span>
-<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_xscale</span><span class="p">(</span><span class="s2">"log"</span><span class="p">)</span>
-<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">"Overall Transaction Amount Distribution"</span><span class="p">)</span>
-<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s2">"transaction amount, log scale"</span><span class="p">)</span>
-<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s2">"density"</span><span class="p">)</span>
-<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="n">frameon</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-
-<span class="n">amount_summary</span> <span class="o">=</span> <span class="p">(</span>
-    <span class="n">combined</span><span class="o">.</span><span class="n">groupby</span><span class="p">([</span><span class="s2">"source"</span><span class="p">,</span> <span class="s2">"merchant_cat"</span><span class="p">])[</span><span class="s2">"txn_amount"</span><span class="p">]</span>
-    <span class="o">.</span><span class="n">median</span><span class="p">()</span>
-    <span class="o">.</span><span class="n">unstack</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
-    <span class="o">.</span><span class="n">reindex</span><span class="p">(</span><span class="n">CATEGORY_ORDER</span><span class="p">)</span>
-<span class="p">)</span>
-<span class="n">amount_summary</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">kind</span><span class="o">=</span><span class="s2">"bar"</span><span class="p">,</span> <span class="n">ax</span><span class="o">=</span><span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">width</span><span class="o">=</span><span class="mf">0.82</span><span class="p">)</span>
-<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">"Median Amount by Merchant Category"</span><span class="p">)</span>
-<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_yscale</span><span class="p">(</span><span class="s2">"log"</span><span class="p">)</span>
-<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s2">"median transaction amount, log scale"</span><span class="p">)</span>
-<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s2">""</span><span class="p">)</span>
-<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">tick_params</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="s2">"x"</span><span class="p">,</span> <span class="n">rotation</span><span class="o">=</span><span class="mi">45</span><span class="p">)</span>
-<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="n">frameon</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">insurance_mix</span> <span class="o">=</span> <span class="n">combined</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="s2">"source"</span><span class="p">)[</span><span class="s2">"insurance_type"</span><span class="p">]</span><span class="o">.</span><span class="n">value_counts</span><span class="p">(</span><span class="n">normalize</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">mul</span><span class="p">(</span><span class="mi">100</span><span class="p">)</span><span class="o">.</span><span class="n">unstack</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">axis</span> <span class="o">=</span> <span class="n">insurance_mix</span><span class="o">.</span><span class="n">plot</span><span class="o">.</span><span class="n">bar</span><span class="p">(</span><span class="n">color</span><span class="o">=</span><span class="p">[</span><span class="n">NVIDIA_DARK</span><span class="p">,</span> <span class="n">NVIDIA_GREEN</span><span class="p">],</span> <span class="n">title</span><span class="o">=</span><span class="s2">"Insurance Mix"</span><span class="p">)</span>
+<span class="n">axis</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s2">"admissions (%)"</span><span class="p">)</span>
 <span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
 <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
-
-<span class="n">display</span><span class="p">(</span>
-    <span class="n">combined</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="s2">"source"</span><span class="p">)[</span><span class="s2">"txn_amount"</span><span class="p">]</span>
-    <span class="o">.</span><span class="n">describe</span><span class="p">(</span><span class="n">percentiles</span><span class="o">=</span><span class="p">[</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.9</span><span class="p">,</span> <span class="mf">0.95</span><span class="p">,</span> <span class="mf">0.99</span><span class="p">])</span>
-    <span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
-<span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-11">fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-
-bins = np.logspace(np.log10(max(1, combined["txn_amount"].min())), np.log10(combined["txn_amount"].max()), 60)
-for source, frame in combined.groupby("source"):
-    axes[0].hist(frame["txn_amount"], bins=bins, density=True, histtype="step", linewidth=2, label=source)
-axes[0].set_xscale("log")
-axes[0].set_title("Overall Transaction Amount Distribution")
-axes[0].set_xlabel("transaction amount, log scale")
-axes[0].set_ylabel("density")
-axes[0].legend(frameon=False)
-
-amount_summary = (
-    combined.groupby(["source", "merchant_cat"])["txn_amount"]
-    .median()
-    .unstack(0)
-    .reindex(CATEGORY_ORDER)
-)
-amount_summary.plot(kind="bar", ax=axes[1], width=0.82)
-axes[1].set_title("Median Amount by Merchant Category")
-axes[1].set_yscale("log")
-axes[1].set_ylabel("median transaction amount, log scale")
-axes[1].set_xlabel("")
-axes[1].tick_params(axis="x", rotation=45)
-axes[1].legend(frameon=False)
-
+<div class="clipboard-copy-txt" id="cell-11">insurance_mix = combined.groupby("source")["insurance_type"].value_counts(normalize=True).mul(100).unstack(0)
+axis = insurance_mix.plot.bar(color=[NVIDIA_DARK, NVIDIA_GREEN], title="Insurance Mix")
+axis.set_ylabel("admissions (%)")
 plt.tight_layout()
-plt.show()
-
-display(
-    combined.groupby("source")["txn_amount"]
-    .describe(percentiles=[0.5, 0.9, 0.95, 0.99])
-    .round(2)
-)</div>
+plt.show()</div>
 </div>
 </div>
 </div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=d15d7bbb">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=d7f5e0c3">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h3 id="visual-comparison-time-of-day-patterns">Visual Comparison: Time-of-Day Patterns<a class="anchor-link" href="#visual-comparison-time-of-day-patterns">¶</a></h3><p>The source data contains strong temporal priors: dining peaks later than healthcare, entertainment is mostly evening, and subscriptions can occur overnight. The heatmaps below compare whether those category-specific temporal signatures survived synthesis.</p>
+<h3 id="length-of-stay-and-total-charges">Length of stay and total charges<a class="anchor-link" href="#length-of-stay-and-total-charges">¶</a></h3><p><strong>What to look for:</strong> Compare the center, spread, skew, and tails of both distributions. The Synthetic data should reproduce the broad shape without copying individual records.</p>
+<p><strong>What it means:</strong> Compressed or exaggerated tails can distort capacity, utilization, and charge analyses even when averages are close.</p>
 </div>
 </div>
 </div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=a02d5935">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=2dd0156d">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -11193,68 +11147,408 @@ display(
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">hour_category_matrix</span><span class="p">(</span><span class="n">df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
-    <span class="n">mat</span> <span class="o">=</span> <span class="p">(</span>
-        <span class="n">df</span><span class="o">.</span><span class="n">pivot_table</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="s2">"merchant_cat"</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="s2">"hour"</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="s2">"txn_amount"</span><span class="p">,</span> <span class="n">aggfunc</span><span class="o">=</span><span class="s2">"size"</span><span class="p">,</span> <span class="n">fill_value</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
-        <span class="o">.</span><span class="n">reindex</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="n">CATEGORY_ORDER</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="nb">range</span><span class="p">(</span><span class="mi">24</span><span class="p">),</span> <span class="n">fill_value</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
-    <span class="p">)</span>
-    <span class="k">return</span> <span class="n">mat</span><span class="o">.</span><span class="n">div</span><span class="p">(</span><span class="n">mat</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">fillna</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
-
-<span class="n">orig_hour</span> <span class="o">=</span> <span class="n">hour_category_matrix</span><span class="p">(</span><span class="n">original</span><span class="p">)</span>
-<span class="n">synth_hour</span> <span class="o">=</span> <span class="n">hour_category_matrix</span><span class="p">(</span><span class="n">synthetic</span><span class="p">)</span>
-
-<span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">15</span><span class="p">,</span> <span class="mi">7</span><span class="p">),</span> <span class="n">sharey</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="k">for</span> <span class="n">ax</span><span class="p">,</span> <span class="n">mat</span><span class="p">,</span> <span class="n">title</span> <span class="ow">in</span> <span class="p">[(</span><span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">orig_hour</span><span class="p">,</span> <span class="s2">"Original"</span><span class="p">),</span> <span class="p">(</span><span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">synth_hour</span><span class="p">,</span> <span class="s2">"Synthetic"</span><span class="p">)]:</span>
-    <span class="n">im</span> <span class="o">=</span> <span class="n">ax</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">mat</span><span class="o">.</span><span class="n">values</span><span class="p">,</span> <span class="n">aspect</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="n">NVIDIA_HEATMAP</span><span class="p">,</span> <span class="n">vmin</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="nb">max</span><span class="p">(</span><span class="n">orig_hour</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="o">.</span><span class="n">max</span><span class="p">(),</span> <span class="n">synth_hour</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="o">.</span><span class="n">max</span><span class="p">()))</span>
-    <span class="n">ax</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">title</span><span class="si">}</span><span class="s2">: Category Hour-of-Day Profile"</span><span class="p">)</span>
-    <span class="n">ax</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s2">"hour of day"</span><span class="p">)</span>
-    <span class="n">ax</span><span class="o">.</span><span class="n">set_xticks</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">24</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
-    <span class="n">ax</span><span class="o">.</span><span class="n">set_yticks</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">CATEGORY_ORDER</span><span class="p">)))</span>
-    <span class="n">ax</span><span class="o">.</span><span class="n">set_yticklabels</span><span class="p">(</span><span class="n">CATEGORY_ORDER</span><span class="p">)</span>
-<span class="n">fig</span><span class="o">.</span><span class="n">colorbar</span><span class="p">(</span><span class="n">im</span><span class="p">,</span> <span class="n">ax</span><span class="o">=</span><span class="n">axes</span><span class="p">,</span> <span class="n">shrink</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s2">"within-category share"</span><span class="p">)</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">14</span><span class="p">,</span> <span class="mf">4.5</span><span class="p">))</span>
+<span class="n">plots</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="n">axes</span><span class="p">,</span> <span class="p">[</span><span class="s2">"length_of_stay_days"</span><span class="p">,</span> <span class="s2">"total_charge_usd"</span><span class="p">],</span> <span class="p">[</span><span class="s2">"Length of Stay"</span><span class="p">,</span> <span class="s2">"Total Charges"</span><span class="p">],</span> <span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">axis</span><span class="p">,</span> <span class="n">column</span><span class="p">,</span> <span class="n">title</span> <span class="ow">in</span> <span class="n">plots</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">label</span><span class="p">,</span> <span class="n">frame</span><span class="p">,</span> <span class="n">color</span> <span class="ow">in</span> <span class="p">[(</span><span class="s2">"Original"</span><span class="p">,</span> <span class="n">original</span><span class="p">,</span> <span class="n">NVIDIA_DARK</span><span class="p">),</span> <span class="p">(</span><span class="s2">"Synthetic"</span><span class="p">,</span> <span class="n">synthetic</span><span class="p">,</span> <span class="n">NVIDIA_GREEN</span><span class="p">)]:</span>
+        <span class="n">axis</span><span class="o">.</span><span class="n">hist</span><span class="p">(</span><span class="n">frame</span><span class="p">[</span><span class="n">column</span><span class="p">]</span><span class="o">.</span><span class="n">dropna</span><span class="p">(),</span> <span class="n">bins</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span> <span class="n">density</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.55</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="n">label</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="n">color</span><span class="p">)</span>
+    <span class="n">axis</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">title</span><span class="si">}</span><span class="s2"> Distribution"</span><span class="p">)</span>
+    <span class="n">axis</span><span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="n">frameon</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
 <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
-
-<span class="n">hour_means</span> <span class="o">=</span> <span class="n">combined</span><span class="o">.</span><span class="n">groupby</span><span class="p">([</span><span class="s2">"source"</span><span class="p">,</span> <span class="s2">"merchant_cat"</span><span class="p">])[</span><span class="s2">"hour"</span><span class="p">]</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="o">.</span><span class="n">unstack</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">reindex</span><span class="p">(</span><span class="n">CATEGORY_ORDER</span><span class="p">)</span>
-<span class="n">hour_means</span><span class="p">[</span><span class="s2">"synthetic_minus_original"</span><span class="p">]</span> <span class="o">=</span> <span class="n">hour_means</span><span class="p">[</span><span class="s2">"Synthetic"</span><span class="p">]</span> <span class="o">-</span> <span class="n">hour_means</span><span class="p">[</span><span class="s2">"Original"</span><span class="p">]</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-12">def hour_category_matrix(df: pd.DataFrame) -&gt; pd.DataFrame:
-    mat = (
-        df.pivot_table(index="merchant_cat", columns="hour", values="txn_amount", aggfunc="size", fill_value=0)
-        .reindex(index=CATEGORY_ORDER, columns=range(24), fill_value=0)
-    )
-    return mat.div(mat.sum(axis=1).replace(0, np.nan), axis=0).fillna(0)
-
-orig_hour = hour_category_matrix(original)
-synth_hour = hour_category_matrix(synthetic)
-
-fig, axes = plt.subplots(1, 2, figsize=(15, 7), sharey=True)
-for ax, mat, title in [(axes[0], orig_hour, "Original"), (axes[1], synth_hour, "Synthetic")]:
-    im = ax.imshow(mat.values, aspect="auto", cmap=NVIDIA_HEATMAP, vmin=0, vmax=max(orig_hour.max().max(), synth_hour.max().max()))
-    ax.set_title(f"{title}: Category Hour-of-Day Profile")
-    ax.set_xlabel("hour of day")
-    ax.set_xticks(range(0, 24, 2))
-    ax.set_yticks(range(len(CATEGORY_ORDER)))
-    ax.set_yticklabels(CATEGORY_ORDER)
-fig.colorbar(im, ax=axes, shrink=0.8, label="within-category share")
-plt.show()
-
-hour_means = combined.groupby(["source", "merchant_cat"])["hour"].mean().unstack(0).reindex(CATEGORY_ORDER)
-hour_means["synthetic_minus_original"] = hour_means["Synthetic"] - hour_means["Original"]</div>
+<div class="clipboard-copy-txt" id="cell-12">fig, axes = plt.subplots(1, 2, figsize=(14, 4.5))
+plots = zip(axes, ["length_of_stay_days", "total_charge_usd"], ["Length of Stay", "Total Charges"], strict=True)
+for axis, column, title in plots:
+    for label, frame, color in [("Original", original, NVIDIA_DARK), ("Synthetic", synthetic, NVIDIA_GREEN)]:
+        axis.hist(frame[column].dropna(), bins=30, density=True, alpha=0.55, label=label, color=color)
+    axis.set_title(f"{title} Distribution")
+    axis.legend(frameon=False)
+plt.tight_layout()
+plt.show()</div>
 </div>
 </div>
 </div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=c5621b8a">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=38af55ce">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h3 id="interpreting-results-and-next-steps">Interpreting Results and Next Steps<a class="anchor-link" href="#interpreting-results-and-next-steps">¶</a></h3><p>NeMo Safe Synthesizer produced novel synthetic rows and transaction sequences while preserving statistical patterns in the source data. The synthetic dataset is best understood as another sample from the same broader transaction population. Individual values will differ from the source sample, but the category mix, timing behavior, and amount distributions should remain within a useful range.</p>
-<p>That is the practical promise of safe synthetic data: not a perfect clone, and not random fake data, but a privacy-aware substitute that retains enough signal for meaningful development, analysis, and model experimentation.</p>
-<p>On your own time-series dataset, use the same workflow: configure grouping and ordering, generate synthetic sequences, review the built-in report, and add domain-specific visual checks for the patterns that matter most. See the <a href="https://nvidia-nemo.github.io/Safe-Synthesizer/main/user-guide/configuration/">configuration docs</a> for the full parameter reference.</p>
+<h3 id="clinical-relationship-and-chronology-checks">Clinical relationship and chronology checks<a class="anchor-link" href="#clinical-relationship-and-chronology-checks">¶</a></h3><p>A useful hospital dataset must preserve more than single-column distributions. The following plots examine diagnosis-to-International Classification of Diseases (ICD) mappings, diagnosis-to-lab relationships, lab flag/reference-range agreement, and admission/discharge chronology.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=e8a6f1d4">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<h4 id="diagnosis-mapping-agreement">Diagnosis mapping agreement<a class="anchor-link" href="#diagnosis-mapping-agreement">¶</a></h4><p><strong>What to look for:</strong> Higher agreement means the Synthetic rows retain the diagnosis-to-ICD and diagnosis-to-primary-lab mappings observed in the Original data.</p>
+<p><strong>What it means:</strong> Plausible individual columns are not sufficient if their combinations are clinically inconsistent. Low agreement would limit code-based or laboratory-specific analyses.</p>
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=b1719995">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [ ]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="CodeMirror cm-s-jupyter">
+<div class="zeroclipboard-container">
+<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-13">
+<div>
+<span class="notice" hidden="">Copied!</span>
+<svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
+<path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+<path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+</svg>
+</div>
+</clipboard-copy>
+</div>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">relationship_agreement</span><span class="p">(</span><span class="n">frame</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">column</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">:</span>
+    <span class="n">expected</span> <span class="o">=</span> <span class="n">original</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="s2">"primary_diagnosis"</span><span class="p">)[</span><span class="n">column</span><span class="p">]</span><span class="o">.</span><span class="n">agg</span><span class="p">(</span><span class="k">lambda</span> <span class="n">values</span><span class="p">:</span> <span class="n">values</span><span class="o">.</span><span class="n">mode</span><span class="p">()</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="n">matches</span> <span class="o">=</span> <span class="n">frame</span><span class="p">[</span><span class="n">column</span><span class="p">]</span><span class="o">.</span><span class="n">eq</span><span class="p">(</span><span class="n">frame</span><span class="p">[</span><span class="s2">"primary_diagnosis"</span><span class="p">]</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">expected</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">matches</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="n">frame</span><span class="p">[</span><span class="s2">"primary_diagnosis"</span><span class="p">])</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="o">.</span><span class="n">mul</span><span class="p">(</span><span class="mi">100</span><span class="p">)</span>
+
+<span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
+<span class="n">relationships</span> <span class="o">=</span> <span class="p">[(</span><span class="s2">"icd10_code"</span><span class="p">,</span> <span class="s2">"Diagnosis to ICD-10"</span><span class="p">),</span> <span class="p">(</span><span class="s2">"primary_lab_name"</span><span class="p">,</span> <span class="s2">"Diagnosis to Primary Lab"</span><span class="p">)]</span>
+<span class="k">for</span> <span class="n">axis</span><span class="p">,</span> <span class="p">(</span><span class="n">column</span><span class="p">,</span> <span class="n">title</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">axes</span><span class="p">,</span> <span class="n">relationships</span><span class="p">,</span> <span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+    <span class="n">agreement</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span>
+        <span class="s2">"Original"</span><span class="p">:</span> <span class="n">relationship_agreement</span><span class="p">(</span><span class="n">original</span><span class="p">,</span> <span class="n">column</span><span class="p">),</span>
+        <span class="s2">"Synthetic"</span><span class="p">:</span> <span class="n">relationship_agreement</span><span class="p">(</span><span class="n">synthetic</span><span class="p">,</span> <span class="n">column</span><span class="p">),</span>
+    <span class="p">})</span>
+    <span class="n">agreement</span><span class="o">.</span><span class="n">plot</span><span class="o">.</span><span class="n">bar</span><span class="p">(</span><span class="n">ax</span><span class="o">=</span><span class="n">axis</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="p">[</span><span class="n">NVIDIA_DARK</span><span class="p">,</span> <span class="n">NVIDIA_GREEN</span><span class="p">],</span> <span class="n">title</span><span class="o">=</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">title</span><span class="si">}</span><span class="s2"> Agreement"</span><span class="p">)</span>
+    <span class="n">axis</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s2">"agreement with source mapping (%)"</span><span class="p">)</span>
+    <span class="n">axis</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s2">""</span><span class="p">)</span>
+    <span class="n">axis</span><span class="o">.</span><span class="n">set_ylim</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">105</span><span class="p">)</span>
+    <span class="n">axis</span><span class="o">.</span><span class="n">tick_params</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="s2">"x"</span><span class="p">,</span> <span class="n">rotation</span><span class="o">=</span><span class="mi">35</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+<div class="clipboard-copy-txt" id="cell-13">def relationship_agreement(frame: pd.DataFrame, column: str) -&gt; pd.Series:
+    expected = original.groupby("primary_diagnosis")[column].agg(lambda values: values.mode().iloc[0])
+    matches = frame[column].eq(frame["primary_diagnosis"].map(expected))
+    return matches.groupby(frame["primary_diagnosis"]).mean().mul(100)
+
+fig, axes = plt.subplots(1, 2, figsize=(16, 5))
+relationships = [("icd10_code", "Diagnosis to ICD-10"), ("primary_lab_name", "Diagnosis to Primary Lab")]
+for axis, (column, title) in zip(axes, relationships, strict=True):
+    agreement = pd.DataFrame({
+        "Original": relationship_agreement(original, column),
+        "Synthetic": relationship_agreement(synthetic, column),
+    })
+    agreement.plot.bar(ax=axis, color=[NVIDIA_DARK, NVIDIA_GREEN], title=f"{title} Agreement")
+    axis.set_ylabel("agreement with source mapping (%)")
+    axis.set_xlabel("")
+    axis.set_ylim(0, 105)
+    axis.tick_params(axis="x", rotation=35)
+plt.tight_layout()
+plt.show()</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=f9b7a2e5">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<h4 id="record-level-clinical-and-chronological-integrity">Record-level clinical and chronological integrity<a class="anchor-link" href="#record-level-clinical-and-chronological-integrity">¶</a></h4><p><strong>What to look for:</strong> Rates near 100% indicate that lab flags agree with reference ranges, discharge follows admission, recorded length of stay matches the timestamps, and age agrees with the dates.</p>
+<p><strong>What it means:</strong> These are basic record-validity checks. Failures can make individual Synthetic admissions unusable even when aggregate distributions appear accurate.</p>
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=a36e7cad">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [ ]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="CodeMirror cm-s-jupyter">
+<div class="zeroclipboard-container">
+<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-14">
+<div>
+<span class="notice" hidden="">Copied!</span>
+<svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
+<path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+<path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+</svg>
+</div>
+</clipboard-copy>
+</div>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">clinical_integrity</span><span class="p">(</span><span class="n">frame</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+    <span class="n">limits</span> <span class="o">=</span> <span class="n">frame</span><span class="p">[</span><span class="s2">"primary_lab_reference_range"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s2">"string"</span><span class="p">)</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">extract</span><span class="p">(</span><span class="sa">r</span><span class="s2">"^\s*(-?\d+(?:\.\d+)?)\s*-\s*(-?\d+(?:\.\d+)?)\s*$"</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">float</span><span class="p">)</span>
+    <span class="n">expected_flag</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="s2">"N"</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">frame</span><span class="o">.</span><span class="n">index</span><span class="p">)</span>
+    <span class="n">expected_flag</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">frame</span><span class="p">[</span><span class="s2">"primary_lab_value"</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">limits</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span> <span class="o">=</span> <span class="s2">"L"</span>
+    <span class="n">expected_flag</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">frame</span><span class="p">[</span><span class="s2">"primary_lab_value"</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">limits</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span> <span class="o">=</span> <span class="s2">"H"</span>
+    <span class="n">stay_days</span> <span class="o">=</span> <span class="p">(</span><span class="n">frame</span><span class="p">[</span><span class="s2">"discharge_datetime"</span><span class="p">]</span> <span class="o">-</span> <span class="n">frame</span><span class="p">[</span><span class="s2">"admission_datetime"</span><span class="p">])</span><span class="o">.</span><span class="n">dt</span><span class="o">.</span><span class="n">total_seconds</span><span class="p">()</span> <span class="o">/</span> <span class="mi">86_400</span>
+    <span class="n">age</span> <span class="o">=</span> <span class="p">(</span><span class="n">frame</span><span class="p">[</span><span class="s2">"admission_datetime"</span><span class="p">]</span> <span class="o">-</span> <span class="n">frame</span><span class="p">[</span><span class="s2">"date_of_birth"</span><span class="p">])</span><span class="o">.</span><span class="n">dt</span><span class="o">.</span><span class="n">days</span> <span class="o">/</span> <span class="mf">365.2425</span>
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s2">"Lab flag matches range"</span><span class="p">:</span> <span class="mi">100</span> <span class="o">*</span> <span class="n">expected_flag</span><span class="o">.</span><span class="n">eq</span><span class="p">(</span><span class="n">frame</span><span class="p">[</span><span class="s2">"primary_lab_flag"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s2">"string"</span><span class="p">)</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">upper</span><span class="p">())</span><span class="o">.</span><span class="n">mean</span><span class="p">(),</span>
+        <span class="s2">"Discharge after admission"</span><span class="p">:</span> <span class="mi">100</span> <span class="o">*</span> <span class="n">stay_days</span><span class="o">.</span><span class="n">ge</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">(),</span>
+        <span class="s2">"Length of stay matches dates"</span><span class="p">:</span> <span class="mi">100</span> <span class="o">*</span> <span class="n">stay_days</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="n">frame</span><span class="p">[</span><span class="s2">"length_of_stay_days"</span><span class="p">])</span><span class="o">.</span><span class="n">abs</span><span class="p">()</span><span class="o">.</span><span class="n">le</span><span class="p">(</span><span class="mf">0.5</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">(),</span>
+        <span class="s2">"Age matches dates"</span><span class="p">:</span> <span class="mi">100</span> <span class="o">*</span> <span class="n">age</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="n">frame</span><span class="p">[</span><span class="s2">"age"</span><span class="p">])</span><span class="o">.</span><span class="n">abs</span><span class="p">()</span><span class="o">.</span><span class="n">le</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">(),</span>
+    <span class="p">}</span>
+
+<span class="n">integrity</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span>
+    <span class="s2">"Original"</span><span class="p">:</span> <span class="n">clinical_integrity</span><span class="p">(</span><span class="n">original</span><span class="p">),</span>
+    <span class="s2">"Synthetic"</span><span class="p">:</span> <span class="n">clinical_integrity</span><span class="p">(</span><span class="n">synthetic</span><span class="p">),</span>
+<span class="p">})</span>
+<span class="n">axis</span> <span class="o">=</span> <span class="n">integrity</span><span class="o">.</span><span class="n">plot</span><span class="o">.</span><span class="n">bar</span><span class="p">(</span><span class="n">color</span><span class="o">=</span><span class="p">[</span><span class="n">NVIDIA_DARK</span><span class="p">,</span> <span class="n">NVIDIA_GREEN</span><span class="p">],</span> <span class="n">title</span><span class="o">=</span><span class="s2">"Clinical Relationship Integrity"</span><span class="p">)</span>
+<span class="n">axis</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s2">"rows passing check (%)"</span><span class="p">)</span>
+<span class="n">axis</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s2">""</span><span class="p">)</span>
+<span class="n">axis</span><span class="o">.</span><span class="n">set_ylim</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">105</span><span class="p">)</span>
+<span class="n">axis</span><span class="o">.</span><span class="n">tick_params</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="s2">"x"</span><span class="p">,</span> <span class="n">rotation</span><span class="o">=</span><span class="mi">25</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+<div class="clipboard-copy-txt" id="cell-14">def clinical_integrity(frame: pd.DataFrame) -&gt; dict:
+    limits = frame["primary_lab_reference_range"].astype("string").str.extract(r"^\s*(-?\d+(?:\.\d+)?)\s*-\s*(-?\d+(?:\.\d+)?)\s*$").astype(float)
+    expected_flag = pd.Series("N", index=frame.index)
+    expected_flag.loc[frame["primary_lab_value"] &lt; limits[0]] = "L"
+    expected_flag.loc[frame["primary_lab_value"] &gt; limits[1]] = "H"
+    stay_days = (frame["discharge_datetime"] - frame["admission_datetime"]).dt.total_seconds() / 86_400
+    age = (frame["admission_datetime"] - frame["date_of_birth"]).dt.days / 365.2425
+    return {
+        "Lab flag matches range": 100 * expected_flag.eq(frame["primary_lab_flag"].astype("string").str.upper()).mean(),
+        "Discharge after admission": 100 * stay_days.ge(0).mean(),
+        "Length of stay matches dates": 100 * stay_days.sub(frame["length_of_stay_days"]).abs().le(0.5).mean(),
+        "Age matches dates": 100 * age.sub(frame["age"]).abs().le(2).mean(),
+    }
+
+integrity = pd.DataFrame({
+    "Original": clinical_integrity(original),
+    "Synthetic": clinical_integrity(synthetic),
+})
+axis = integrity.plot.bar(color=[NVIDIA_DARK, NVIDIA_GREEN], title="Clinical Relationship Integrity")
+axis.set_ylabel("rows passing check (%)")
+axis.set_xlabel("")
+axis.set_ylim(0, 105)
+axis.tick_params(axis="x", rotation=25)
+plt.tight_layout()
+plt.show()</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=949f034e">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<h2 id="6-train-on-synthetic-test-on-real-tstr">6. Train on Synthetic, Test on Real (TSTR)<a class="anchor-link" href="#6-train-on-synthetic-test-on-real-tstr">¶</a></h2><p>Train-on-synthetic, test-on-real (TSTR) measures whether a model learned only from Synthetic records transfers to unseen Original records. Here, real is the conventional name for the test side of TSTR and refers to the held-out Original input. For comparison, train-on-real, test-on-real (TRTR) trains the same XGBoost classifier on the Original training partition. The 499-row holdout was set aside before fine-tuning, and both classifiers are tested on those same rows using the same discharge-time clinical and utilization features.</p>
+<blockquote>
+<p><strong>Utility is broader than matching model scores.</strong> In production, analysts and developers may not be permitted to access or train directly on the Original data because it contains PHI or PII. A governed, privacy-reviewed Synthetic dataset can enable exploration, pipeline development, integration testing, and model prototyping that otherwise could not happen. The comparison below tests whether a model trained on the Synthetic data can make useful predictions on held-out Original data. Similar performance is only one dimension of utility and does not make the Synthetic data automatically safe to share.</p>
+</blockquote>
+<p><strong>What to look for:</strong> Compare the metric bars and receiver operating characteristic (ROC) curves for the Original-trained and Synthetic-trained models. The area under each ROC curve (AUC) summarizes how well a model ranks readmitted admissions above non-readmitted admissions across classification thresholds. Similar scores suggest that the Synthetic data preserved relationships useful for prediction, while a large gap indicates lost signal. Average precision should be read relative to the readmission prevalence, and balanced accuracy depends on the selected classification threshold.</p>
+<p><strong>What it means:</strong> This comparison demonstrates transfer to the held-out Original data; it is not clinical validation. A production study should test on a governed real-data holdout that was never used for synthesis. Direct identifiers, contact details, dates, and discharge-summary text are excluded from both classifiers, and neither model is intended for clinical use.</p>
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=af2d4f01">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [ ]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="CodeMirror cm-s-jupyter">
+<div class="zeroclipboard-container">
+<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-15">
+<div>
+<span class="notice" hidden="">Copied!</span>
+<svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
+<path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+<path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+</svg>
+</div>
+</clipboard-copy>
+</div>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">sklearn.compose</span><span class="w"> </span><span class="kn">import</span> <span class="n">make_column_transformer</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sklearn.metrics</span><span class="w"> </span><span class="kn">import</span> <span class="n">average_precision_score</span><span class="p">,</span> <span class="n">balanced_accuracy_score</span><span class="p">,</span> <span class="n">roc_auc_score</span><span class="p">,</span> <span class="n">roc_curve</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sklearn.model_selection</span><span class="w"> </span><span class="kn">import</span> <span class="n">train_test_split</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sklearn.pipeline</span><span class="w"> </span><span class="kn">import</span> <span class="n">make_pipeline</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sklearn.preprocessing</span><span class="w"> </span><span class="kn">import</span> <span class="n">OneHotEncoder</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">xgboost</span><span class="w"> </span><span class="kn">import</span> <span class="n">XGBClassifier</span>
+
+<span class="n">TSTR_NUMERIC</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"age"</span><span class="p">,</span> <span class="s2">"primary_lab_value"</span><span class="p">,</span> <span class="s2">"length_of_stay_days"</span><span class="p">,</span> <span class="s2">"total_charge_usd"</span><span class="p">]</span>
+<span class="n">TSTR_CATEGORICAL</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s2">"sex"</span><span class="p">,</span> <span class="s2">"race_ethnicity"</span><span class="p">,</span> <span class="s2">"insurance_type"</span><span class="p">,</span> <span class="s2">"encounter_type"</span><span class="p">,</span>
+    <span class="s2">"primary_diagnosis"</span><span class="p">,</span> <span class="s2">"icd10_code"</span><span class="p">,</span> <span class="s2">"comorbidities"</span><span class="p">,</span> <span class="s2">"primary_lab_name"</span><span class="p">,</span>
+    <span class="s2">"primary_lab_unit"</span><span class="p">,</span> <span class="s2">"primary_lab_reference_range"</span><span class="p">,</span> <span class="s2">"primary_lab_flag"</span><span class="p">,</span>
+    <span class="s2">"medication"</span><span class="p">,</span> <span class="s2">"procedure"</span><span class="p">,</span> <span class="s2">"discharge_disposition"</span><span class="p">,</span>
+<span class="p">]</span>
+<span class="n">TSTR_FEATURES</span> <span class="o">=</span> <span class="n">TSTR_NUMERIC</span> <span class="o">+</span> <span class="n">TSTR_CATEGORICAL</span>
+
+<span class="n">original_training_source</span><span class="p">,</span> <span class="n">held_out_source</span> <span class="o">=</span> <span class="n">train_test_split</span><span class="p">(</span>
+    <span class="n">source_df</span><span class="p">,</span> <span class="n">test_size</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">source_df</span><span class="p">)</span> <span class="o">*</span> <span class="mf">0.05</span><span class="p">),</span> <span class="n">random_state</span><span class="o">=</span><span class="n">SPLIT_SEED</span>
+<span class="p">)</span>
+<span class="n">original_training</span> <span class="o">=</span> <span class="n">prepare</span><span class="p">(</span><span class="n">original_training_source</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(</span><span class="n">drop</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span> <span class="s2">"Original training"</span><span class="p">)</span>
+<span class="n">held_out</span> <span class="o">=</span> <span class="n">prepare</span><span class="p">(</span><span class="n">held_out_source</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(</span><span class="n">drop</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span> <span class="s2">"Held-out source"</span><span class="p">)</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">readmission_model</span><span class="p">(</span><span class="n">training</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">):</span>
+    <span class="n">positive_weight</span> <span class="o">=</span> <span class="p">(</span><span class="o">~</span><span class="n">training</span><span class="p">[</span><span class="n">READMISSION</span><span class="p">])</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">/</span> <span class="n">training</span><span class="p">[</span><span class="n">READMISSION</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">make_pipeline</span><span class="p">(</span>
+        <span class="n">make_column_transformer</span><span class="p">(</span>
+            <span class="p">(</span><span class="s2">"passthrough"</span><span class="p">,</span> <span class="n">TSTR_NUMERIC</span><span class="p">),</span>
+            <span class="p">(</span><span class="n">OneHotEncoder</span><span class="p">(</span><span class="n">handle_unknown</span><span class="o">=</span><span class="s2">"ignore"</span><span class="p">),</span> <span class="n">TSTR_CATEGORICAL</span><span class="p">),</span>
+        <span class="p">),</span>
+        <span class="n">XGBClassifier</span><span class="p">(</span>
+            <span class="n">n_estimators</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span>
+            <span class="n">max_depth</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
+            <span class="n">learning_rate</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span>
+            <span class="n">subsample</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span>
+            <span class="n">colsample_bytree</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span>
+            <span class="n">min_child_weight</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+            <span class="n">scale_pos_weight</span><span class="o">=</span><span class="n">positive_weight</span><span class="p">,</span>
+            <span class="n">tree_method</span><span class="o">=</span><span class="s2">"hist"</span><span class="p">,</span>
+            <span class="n">random_state</span><span class="o">=</span><span class="n">SPLIT_SEED</span><span class="p">,</span>
+            <span class="n">n_jobs</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
+        <span class="p">),</span>
+    <span class="p">)</span>
+
+<span class="n">training_sets</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"Original (TRTR)"</span><span class="p">:</span> <span class="n">original_training</span><span class="p">,</span> <span class="s2">"Synthetic (TSTR)"</span><span class="p">:</span> <span class="n">synthetic</span><span class="p">}</span>
+<span class="n">probabilities</span> <span class="o">=</span> <span class="p">{}</span>
+<span class="n">metrics</span> <span class="o">=</span> <span class="p">{}</span>
+<span class="k">for</span> <span class="n">label</span><span class="p">,</span> <span class="n">training</span> <span class="ow">in</span> <span class="n">training_sets</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">readmission_model</span><span class="p">(</span><span class="n">training</span><span class="p">)</span>
+    <span class="n">model</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">training</span><span class="p">[</span><span class="n">TSTR_FEATURES</span><span class="p">],</span> <span class="n">training</span><span class="p">[</span><span class="n">READMISSION</span><span class="p">])</span>
+    <span class="n">probability</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">predict_proba</span><span class="p">(</span><span class="n">held_out</span><span class="p">[</span><span class="n">TSTR_FEATURES</span><span class="p">])[:,</span> <span class="mi">1</span><span class="p">]</span>
+    <span class="n">probabilities</span><span class="p">[</span><span class="n">label</span><span class="p">]</span> <span class="o">=</span> <span class="n">probability</span>
+    <span class="n">metrics</span><span class="p">[</span><span class="n">label</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">"ROC AUC"</span><span class="p">:</span> <span class="n">roc_auc_score</span><span class="p">(</span><span class="n">held_out</span><span class="p">[</span><span class="n">READMISSION</span><span class="p">],</span> <span class="n">probability</span><span class="p">),</span>
+        <span class="s2">"Average precision"</span><span class="p">:</span> <span class="n">average_precision_score</span><span class="p">(</span><span class="n">held_out</span><span class="p">[</span><span class="n">READMISSION</span><span class="p">],</span> <span class="n">probability</span><span class="p">),</span>
+        <span class="s2">"Balanced accuracy"</span><span class="p">:</span> <span class="n">balanced_accuracy_score</span><span class="p">(</span><span class="n">held_out</span><span class="p">[</span><span class="n">READMISSION</span><span class="p">],</span> <span class="n">probability</span> <span class="o">&gt;=</span> <span class="mf">0.5</span><span class="p">),</span>
+    <span class="p">}</span>
+<span class="n">utility_metrics</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">metrics</span><span class="p">)</span>
+
+<span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">14</span><span class="p">,</span> <span class="mf">4.5</span><span class="p">))</span>
+<span class="n">utility_metrics</span><span class="o">.</span><span class="n">plot</span><span class="o">.</span><span class="n">bar</span><span class="p">(</span>
+    <span class="n">ax</span><span class="o">=</span><span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">color</span><span class="o">=</span><span class="p">[</span><span class="n">NVIDIA_DARK</span><span class="p">,</span> <span class="n">NVIDIA_GREEN</span><span class="p">],</span> <span class="n">title</span><span class="o">=</span><span class="s2">"Readmission Utility on Held-Out Source Records"</span>
+<span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s2">"score"</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">set_ylim</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">tick_params</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="s2">"x"</span><span class="p">,</span> <span class="n">rotation</span><span class="o">=</span><span class="mi">20</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">container</span> <span class="ow">in</span> <span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">containers</span><span class="p">:</span>
+    <span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">bar_label</span><span class="p">(</span><span class="n">container</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="s2">"</span><span class="si">%.3f</span><span class="s2">"</span><span class="p">)</span>
+<span class="k">for</span> <span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">probability</span><span class="p">),</span> <span class="n">color</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">probabilities</span><span class="o">.</span><span class="n">items</span><span class="p">(),</span> <span class="p">[</span><span class="n">NVIDIA_DARK</span><span class="p">,</span> <span class="n">NVIDIA_GREEN</span><span class="p">],</span> <span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+    <span class="n">false_positive_rate</span><span class="p">,</span> <span class="n">true_positive_rate</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">roc_curve</span><span class="p">(</span><span class="n">held_out</span><span class="p">[</span><span class="n">READMISSION</span><span class="p">],</span> <span class="n">probability</span><span class="p">)</span>
+    <span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span>
+        <span class="n">false_positive_rate</span><span class="p">,</span> <span class="n">true_positive_rate</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="n">color</span><span class="p">,</span>
+        <span class="n">label</span><span class="o">=</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">: AUC = </span><span class="si">{</span><span class="n">metrics</span><span class="p">[</span><span class="n">label</span><span class="p">][</span><span class="s1">'ROC AUC'</span><span class="p">]</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
+    <span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">plot</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">linestyle</span><span class="o">=</span><span class="s2">"--"</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s2">"#777777"</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s2">"Random guessing"</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="n">title</span><span class="o">=</span><span class="s2">"Readmission ROC Curve"</span><span class="p">,</span> <span class="n">xlabel</span><span class="o">=</span><span class="s2">"false-positive rate"</span><span class="p">,</span> <span class="n">ylabel</span><span class="o">=</span><span class="s2">"true-positive rate"</span><span class="p">)</span>
+<span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="n">frameon</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+<div class="clipboard-copy-txt" id="cell-15">from sklearn.compose import make_column_transformer
+from sklearn.metrics import average_precision_score, balanced_accuracy_score, roc_auc_score, roc_curve
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import OneHotEncoder
+from xgboost import XGBClassifier
+
+TSTR_NUMERIC = ["age", "primary_lab_value", "length_of_stay_days", "total_charge_usd"]
+TSTR_CATEGORICAL = [
+    "sex", "race_ethnicity", "insurance_type", "encounter_type",
+    "primary_diagnosis", "icd10_code", "comorbidities", "primary_lab_name",
+    "primary_lab_unit", "primary_lab_reference_range", "primary_lab_flag",
+    "medication", "procedure", "discharge_disposition",
+]
+TSTR_FEATURES = TSTR_NUMERIC + TSTR_CATEGORICAL
+
+original_training_source, held_out_source = train_test_split(
+    source_df, test_size=int(len(source_df) * 0.05), random_state=SPLIT_SEED
+)
+original_training = prepare(original_training_source.reset_index(drop=True), "Original training")
+held_out = prepare(held_out_source.reset_index(drop=True), "Held-out source")
+
+def readmission_model(training: pd.DataFrame):
+    positive_weight = (~training[READMISSION]).sum() / training[READMISSION].sum()
+    return make_pipeline(
+        make_column_transformer(
+            ("passthrough", TSTR_NUMERIC),
+            (OneHotEncoder(handle_unknown="ignore"), TSTR_CATEGORICAL),
+        ),
+        XGBClassifier(
+            n_estimators=200,
+            max_depth=4,
+            learning_rate=0.05,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            min_child_weight=5,
+            scale_pos_weight=positive_weight,
+            tree_method="hist",
+            random_state=SPLIT_SEED,
+            n_jobs=4,
+        ),
+    )
+
+training_sets = {"Original (TRTR)": original_training, "Synthetic (TSTR)": synthetic}
+probabilities = {}
+metrics = {}
+for label, training in training_sets.items():
+    model = readmission_model(training)
+    model.fit(training[TSTR_FEATURES], training[READMISSION])
+    probability = model.predict_proba(held_out[TSTR_FEATURES])[:, 1]
+    probabilities[label] = probability
+    metrics[label] = {
+        "ROC AUC": roc_auc_score(held_out[READMISSION], probability),
+        "Average precision": average_precision_score(held_out[READMISSION], probability),
+        "Balanced accuracy": balanced_accuracy_score(held_out[READMISSION], probability &gt;= 0.5),
+    }
+utility_metrics = pd.DataFrame(metrics)
+
+fig, axes = plt.subplots(1, 2, figsize=(14, 4.5))
+utility_metrics.plot.bar(
+    ax=axes[0], color=[NVIDIA_DARK, NVIDIA_GREEN], title="Readmission Utility on Held-Out Source Records"
+)
+axes[0].set_ylabel("score")
+axes[0].set_ylim(0, 1)
+axes[0].tick_params(axis="x", rotation=20)
+for container in axes[0].containers:
+    axes[0].bar_label(container, fmt="%.3f")
+for (label, probability), color in zip(probabilities.items(), [NVIDIA_DARK, NVIDIA_GREEN], strict=True):
+    false_positive_rate, true_positive_rate, _ = roc_curve(held_out[READMISSION], probability)
+    axes[1].plot(
+        false_positive_rate, true_positive_rate, color=color,
+        label=f"{label}: AUC = {metrics[label]['ROC AUC']:.3f}",
+    )
+axes[1].plot([0, 1], [0, 1], linestyle="--", color="#777777", label="Random guessing")
+axes[1].set(title="Readmission ROC Curve", xlabel="false-positive rate", ylabel="true-positive rate")
+axes[1].legend(frameon=False)
+plt.tight_layout()
+plt.show()</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=f4a0c7e2">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<h2 id="try-this-workflow-with-your-own-data">Try this workflow with your own data<a class="anchor-link" href="#try-this-workflow-with-your-own-data">¶</a></h2><p>This notebook showed how to replace sensitive fields before training, generate and evaluate synthetic admissions, and test whether they retain useful healthcare patterns. To adapt it to your own data, change the dataset path and replace the manual PII rules, date and identifier handling, generation size, healthcare plots, and TSTR target and features so they match your schema. Run every cell from the beginning and review the quality and privacy report before reusing the generated data.</p>
 </div>
 </div>
 </div>
@@ -11303,7 +11597,7 @@ hour_means["synthetic_minus_original"] = hour_means["Synthetic"] - hour_means["O
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../differential-privacy/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Differential Privacy">
+          <a href="../time-series-financial-transactions/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Time-Series Financial Transactions">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -11313,20 +11607,20 @@ hour_means["synthetic_minus_original"] = hour_means["Synthetic"] - hour_means["O
                 Previous
               </span>
               <div class="md-ellipsis">
-                Differential Privacy
+                Time-Series Financial Transactions
               </div>
             </div>
           </a>
         
         
           
-          <a href="../healthcare-hospital-readmissions/" class="md-footer__link md-footer__link--next" aria-label="Next: Healthcare Hospital Readmissions">
+          <a href="../../user-guide/getting-started/" class="md-footer__link md-footer__link--next" aria-label="Next: Getting Started">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Healthcare Hospital Readmissions
+                Getting Started
               </div>
             </div>
             <div class="md-footer__button md-icon">
