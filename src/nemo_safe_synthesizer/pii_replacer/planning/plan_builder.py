@@ -66,8 +66,10 @@ class DependencyCandidate:
 
 def _classifications_by_column(
     classifications: Sequence[ColumnClassification],
+    *,
+    expected_columns: Set[str] | None = None,
 ) -> dict[str, ColumnClassification]:
-    """Index classifications and reject ambiguous duplicate column entries."""
+    """Index classifications and validate their column coverage when supplied."""
     by_column: dict[str, ColumnClassification] = {}
     duplicates: list[str] = []
     for classification in classifications:
@@ -77,6 +79,20 @@ def _classifications_by_column(
     if duplicates:
         raise ParameterError(
             "classifications has duplicate column_name values: " + ", ".join(repr(column) for column in duplicates)
+        )
+    if expected_columns is None:
+        return by_column
+
+    classified_columns = set(by_column)
+    missing = sorted(expected_columns - classified_columns)
+    unknown = sorted(classified_columns - expected_columns)
+    if missing:
+        raise ParameterError(
+            "classifications is missing expected column_name values: " + ", ".join(repr(column) for column in missing)
+        )
+    if unknown:
+        raise ParameterError(
+            "classifications has unknown column_name values: " + ", ".join(repr(column) for column in unknown)
         )
     return by_column
 
@@ -103,10 +119,16 @@ def _validate_plan_classifications(
 def plan_from_classifications(
     classifications: Sequence[ColumnClassification],
     *,
+    expected_columns: Set[str],
     protected_columns: Set[str] = frozenset(),
 ) -> PiiReplacementPlan:
-    """Build replacement membership deterministically from semantic classifications."""
-    _classifications_by_column(classifications)
+    """Build replacement membership from one classification per expected column.
+
+    A classification with ``entity_type=None`` records that the column was
+    examined but does not contain a supported entity. Protected columns must
+    still be classified, but are omitted from the replacement plan.
+    """
+    _classifications_by_column(classifications, expected_columns=expected_columns)
     columns_to_replace: list[PiiColumnPlan] = []
     for classification in classifications:
         entity_type = classification.entity_type
@@ -127,12 +149,24 @@ def plan_from_classifications(
 
 
 def derive_dependency_candidates(
-    plan: PiiReplacementPlan,
     classifications: Sequence[ColumnClassification],
+    *,
+    expected_columns: Set[str],
+    protected_columns: Set[str] = frozenset(),
 ) -> list[DependencyCandidate]:
-    """Return every dependency permitted by the entity relationship catalog."""
-    classifications_by_column = _classifications_by_column(classifications)
-    _validate_plan_classifications(plan, classifications_by_column)
+    """Return the individually permitted edges for a later selection pass.
+
+    The classifications determine the replacement nodes, including protected
+    column exclusion. This function constructs that node-only plan internally
+    so callers cannot supply a plan that disagrees with the classifications.
+    It intentionally does not filter mutually exclusive candidate groups;
+    exclusivity applies to the set selected in the later dependency pass.
+    """
+    plan = plan_from_classifications(
+        classifications,
+        expected_columns=expected_columns,
+        protected_columns=protected_columns,
+    )
     candidates: list[DependencyCandidate] = []
     for target in plan.columns_to_replace:
         allowed_sources = ALLOWED_DEPENDS_ON.get(target.entity_type, frozenset())
@@ -170,7 +204,9 @@ def apply_dependencies(
         if source is None:
             raise ParameterError(f"dependency sources unknown classified column {dependency.source_column!r}")
         if source.entity_type is None:
-            raise ParameterError(f"dependency source {dependency.source_column!r} is unclassified")
+            raise ParameterError(
+                f"dependency source {dependency.source_column!r} is not classified as one of the supported entities"
+            )
         validate_dependency_relationship(
             target.entity_type,
             source.entity_type,

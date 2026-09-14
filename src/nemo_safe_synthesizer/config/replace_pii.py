@@ -454,7 +454,7 @@ class PiiReplacementPlan(Parameters):
         across plans, where the same instance would otherwise carry one plan's
         inferred types into the next.
         """
-        by_name = {spec.column_name: spec for spec in self.columns_to_replace}
+        targets = {spec.column_name: spec for spec in self.columns_to_replace}
         updated: list[PiiColumnPlan] = []
         for spec in self.columns_to_replace:
             if not spec.depends_on:
@@ -463,7 +463,7 @@ class PiiReplacementPlan(Parameters):
             resolved: list[ConditioningColumn] = []
             inferred_any = False
             for dep in spec.depends_on:
-                source = by_name.get(dep.column_name)
+                source = targets.get(dep.column_name)
                 explicitly_typed = "entity_type" in dep.model_fields_set
                 if source is not None:
                     if explicitly_typed:
@@ -495,9 +495,8 @@ class PiiReplacementPlan(Parameters):
                 elif not explicitly_typed or dep.entity_type is None:
                     raise ParameterError(
                         f"column {spec.column_name!r}: depends_on column "
-                        f"{dep.column_name!r} omits entity_type but is not listed in "
-                        "columns_to_replace; set entity_type for read-only conditioners "
-                        "(e.g. gender, ethnic_background, city)"
+                        f"{dep.column_name!r} is missing entity_type; set entity_type "
+                        "for read-only conditioners (e.g. gender, ethnic_background)"
                     )
                 elif is_columns_to_replace_type(dep.entity_type):
                     raise ParameterError(

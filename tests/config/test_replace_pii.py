@@ -151,7 +151,7 @@ class TestPiiReplacementPlan:
         assert first.columns_to_replace[1].depends_on[0].entity_type is EntityType.FIRST_NAME
 
     def test_omitted_type_errors_when_column_is_not_a_replace_target(self) -> None:
-        with pytest.raises(ValidationError, match="omits entity_type but is not listed"):
+        with pytest.raises(ValidationError, match="'gender' is missing entity_type.*read-only conditioners"):
             PiiReplacementPlan.model_validate(
                 {
                     "columns_to_replace": [
@@ -481,12 +481,12 @@ class TestReplacePiiConfig:
         assert get_args(plan_arm)[0] is PiiReplacementPlan
         assert any(type(metadata).__name__ == "SkipValidation" for metadata in get_args(plan_arm)[1:])
 
-    def test_full_config_rejects_scope_as_an_unknown_plan_field(self) -> None:
+    def test_full_config_rejects_unknown_inline_plan_field(self) -> None:
         with pytest.raises(
             ValidationError,
-            match="Unknown configuration field 'replace_pii.replacement_plan.scope'",
+            match="Unknown configuration field 'replace_pii.replacement_plan.unexpected'",
         ):
-            SafeSynthesizerParameters.model_validate({"replace_pii": {"replacement_plan": {"scope": "group"}}})
+            SafeSynthesizerParameters.model_validate({"replace_pii": {"replacement_plan": {"unexpected": True}}})
 
     def test_llm_mapping_configures_shared_inference_behavior(self) -> None:
         config = ReplacePiiConfig.model_validate(

@@ -725,7 +725,7 @@ class TestRunReplacePii:
         assert "Input data is required to plan PII replacement." in result.output
         patched_run_dependencies["safe_synthesizer_cls"].assert_not_called()
 
-    def test_plan_only_writes_reusable_yaml_from_dataset(
+    def test_plan_only_writes_reusable_yaml(
         self,
         cli_runner: CliRunner,
         dummy_csv: Path,

@@ -30,6 +30,7 @@ class TestPlanBuilder:
                 ColumnClassification(column_name="company", entity_type=EntityType.ORGANIZATION),
                 ColumnClassification(column_name="notes", entity_type=None),
             ],
+            expected_columns=frozenset({"patient_id", "email", "company", "notes"}),
             protected_columns=frozenset({"email"}),
         )
 
@@ -42,9 +43,10 @@ class TestPlanBuilder:
             ColumnClassification(column_name="company", entity_type=EntityType.ORGANIZATION),
             ColumnClassification(column_name="gender", entity_type=EntityType.GENDER),
         ]
-        plan = plan_from_classifications(classifications)
-
-        candidates = derive_dependency_candidates(plan, classifications)
+        candidates = derive_dependency_candidates(
+            classifications,
+            expected_columns=frozenset({"email", "first_name", "company", "gender"}),
+        )
 
         assert candidates == [
             DependencyCandidate(
@@ -61,13 +63,28 @@ class TestPlanBuilder:
             ),
         ]
 
+    def test_dependency_candidates_apply_protected_column_exclusion(self) -> None:
+        classifications = [
+            ColumnClassification(column_name="email", entity_type=EntityType.EMAIL),
+            ColumnClassification(column_name="company", entity_type=EntityType.ORGANIZATION),
+        ]
+
+        candidates = derive_dependency_candidates(
+            classifications,
+            expected_columns=frozenset({"email", "company"}),
+            protected_columns=frozenset({"email"}),
+        )
+
+        assert candidates == []
+
     def test_selected_dependencies_are_applied_to_the_plan(self) -> None:
         classifications = [
             ColumnClassification(column_name="email", entity_type=EntityType.EMAIL),
             ColumnClassification(column_name="company", entity_type=EntityType.ORGANIZATION),
         ]
-        plan = plan_from_classifications(classifications)
-        candidate = derive_dependency_candidates(plan, classifications)[0]
+        expected_columns = frozenset({"email", "company"})
+        plan = plan_from_classifications(classifications, expected_columns=expected_columns)
+        candidate = derive_dependency_candidates(classifications, expected_columns=expected_columns)[0]
 
         result = apply_dependencies(plan, [candidate], classifications=classifications)
 
@@ -84,6 +101,7 @@ class TestPlanBuilder:
     def test_dependencies_must_match_a_replacement_target(self) -> None:
         plan = plan_from_classifications(
             [ColumnClassification(column_name="email", entity_type=EntityType.EMAIL)],
+            expected_columns=frozenset({"email"}),
         )
         candidate = DependencyCandidate(
             target_column="name",
@@ -102,7 +120,7 @@ class TestPlanBuilder:
 
     def test_dependencies_reject_unknown_and_unclassified_sources(self) -> None:
         classifications = [ColumnClassification(column_name="email", entity_type=EntityType.EMAIL)]
-        plan = plan_from_classifications(classifications)
+        plan = plan_from_classifications(classifications, expected_columns=frozenset({"email"}))
 
         with pytest.raises(ParameterError, match="unknown classified column 'missing'"):
             apply_dependencies(
@@ -115,7 +133,7 @@ class TestPlanBuilder:
             *classifications,
             ColumnClassification(column_name="unknown", entity_type=None),
         ]
-        with pytest.raises(ParameterError, match="source 'unknown' is unclassified"):
+        with pytest.raises(ParameterError, match="source 'unknown' is not classified as one of the supported entities"):
             apply_dependencies(
                 plan,
                 [DependencyCandidate(target_column="email", source_column="unknown")],
@@ -136,7 +154,10 @@ class TestPlanBuilder:
             ColumnClassification(column_name="email", entity_type=EntityType.EMAIL),
             ColumnClassification(column_name="gender", entity_type=EntityType.GENDER),
         ]
-        plan = plan_from_classifications(classifications)
+        plan = plan_from_classifications(
+            classifications,
+            expected_columns=frozenset({"email", "gender"}),
+        )
 
         with pytest.raises(ParameterError, match="is not allowed for entity_type 'email'"):
             apply_dependencies(
@@ -151,8 +172,9 @@ class TestPlanBuilder:
             ColumnClassification(column_name="first", entity_type=EntityType.FIRST_NAME),
             ColumnClassification(column_name="full", entity_type=EntityType.FULL_NAME),
         ]
-        plan = plan_from_classifications(classifications)
-        candidates = derive_dependency_candidates(plan, classifications)
+        expected_columns = frozenset({"email", "first", "full"})
+        plan = plan_from_classifications(classifications, expected_columns=expected_columns)
+        candidates = derive_dependency_candidates(classifications, expected_columns=expected_columns)
 
         assert DependencyCandidate(target_column="email", source_column="first") in candidates
         assert DependencyCandidate(target_column="email", source_column="full") in candidates
@@ -173,7 +195,10 @@ class TestPlanBuilder:
             ColumnClassification(column_name="first", entity_type=EntityType.FIRST_NAME),
             ColumnClassification(column_name="company", entity_type=EntityType.ORGANIZATION),
         ]
-        plan = plan_from_classifications(classifications)
+        plan = plan_from_classifications(
+            classifications,
+            expected_columns=frozenset({"email", "first", "company"}),
+        )
 
         result = apply_dependencies(
             plan,
@@ -200,11 +225,39 @@ class TestPlanBuilder:
 
         with pytest.raises(ParameterError, match="duplicate column_name"):
             if operation == "plan":
-                plan_from_classifications(classifications)
+                plan_from_classifications(classifications, expected_columns=frozenset({"email"}))
             elif operation == "derive":
-                derive_dependency_candidates(plan, classifications)
+                derive_dependency_candidates(classifications, expected_columns=frozenset({"email"}))
             else:
                 apply_dependencies(plan, [], classifications=classifications)
+
+    @pytest.mark.parametrize("operation", ["plan", "derive"])
+    def test_classifications_must_cover_every_expected_column(self, operation: str) -> None:
+        classifications = [ColumnClassification(column_name="email", entity_type=EntityType.EMAIL)]
+
+        with pytest.raises(ParameterError, match="missing expected column_name values: 'notes'"):
+            if operation == "plan":
+                plan_from_classifications(
+                    classifications,
+                    expected_columns=frozenset({"email", "notes"}),
+                )
+            else:
+                derive_dependency_candidates(
+                    classifications,
+                    expected_columns=frozenset({"email", "notes"}),
+                )
+
+    def test_classifications_reject_unknown_columns(self) -> None:
+        classifications = [
+            ColumnClassification(column_name="email", entity_type=EntityType.EMAIL),
+            ColumnClassification(column_name="invented", entity_type=None),
+        ]
+
+        with pytest.raises(ParameterError, match="unknown column_name values: 'invented'"):
+            plan_from_classifications(
+                classifications,
+                expected_columns=frozenset({"email"}),
+            )
 
     @pytest.mark.parametrize("pattern", ["", "  "])
     def test_classification_rejects_blank_pattern(self, pattern: str) -> None:
