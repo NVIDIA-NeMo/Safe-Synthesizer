@@ -65,7 +65,12 @@ class NemotronPersonasReplacementGenerator:
             sampler.data_to_sampler_value_mapping
         )
         self._personas: pd.DataFrame | None = None
+        self._persona_value_columns: dict[str, str] = {}
         self._candidate_indexes: dict[EntityType, dict[str, np.ndarray]] = {}
+        self._candidate_position_cache: dict[
+            tuple[tuple[EntityType, tuple[str, ...]], ...],
+            np.ndarray,
+        ] = {}
         self._load_attempted = False
         self._warned_fallbacks: set[EntityType] = set()
 
@@ -93,12 +98,11 @@ class NemotronPersonasReplacementGenerator:
             row_position = request.seed % len(people)
         else:
             row_position = int(candidate_positions[request.seed % len(candidate_positions)])
-        row = people.iloc[row_position]
-        return _persona_row_values(row)
+        return _persona_row_values(people, row_position, self._persona_value_columns)
 
     def _candidate_positions(self, request: ReplacementGenerationRequest) -> np.ndarray | None:
         dependencies = _dependency_values(request.effective_dependency_tuple)
-        candidates: np.ndarray | None = None
+        resolved: list[tuple[EntityType, tuple[str, ...]]] = []
         for entity_type in _MANAGED_DEPENDENCY_COLUMN_ALIASES:
             dependency_value = dependencies.get(entity_type)
             if dependency_value is None:
@@ -110,7 +114,17 @@ class NemotronPersonasReplacementGenerator:
             )
             if sampler_values is None:
                 continue
+            resolved.append((entity_type, sampler_values))
 
+        if not resolved:
+            return None
+        cache_key = tuple(resolved)
+        cached = self._candidate_position_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        candidates: np.ndarray | None = None
+        for entity_type, sampler_values in resolved:
             value_index = self._candidate_indexes.get(entity_type)
             matching = _matching_positions(value_index, sampler_values)
             if matching is None:
@@ -118,6 +132,9 @@ class NemotronPersonasReplacementGenerator:
             candidates = matching if candidates is None else np.intersect1d(candidates, matching, assume_unique=True)
             if not len(candidates):
                 _raise_no_persona_candidates(entity_type)
+        if candidates is None:
+            return None
+        self._candidate_position_cache[cache_key] = candidates
         return candidates
 
     def _load_personas(self) -> pd.DataFrame | None:
@@ -131,6 +148,7 @@ class NemotronPersonasReplacementGenerator:
             people = _read_personas(path)
             self._candidate_indexes, dependency_columns = _build_candidate_indexes(people)
             self._personas = people.drop(columns=dependency_columns)
+            self._persona_value_columns = _persona_value_columns(self._personas)
         except Exception:
             logger.runtime.warning(
                 "Nemotron Personas replacement assets could not be read; affected entities will use Faker",
@@ -190,7 +208,7 @@ def _read_personas(path: Path) -> pd.DataFrame:
         # schema inspection. The ordinary read still produces the same result.
         return pd.read_parquet(path)
     columns = [column for column in _PERSONA_READ_COLUMNS if column in available_columns]
-    return pd.read_parquet(path, columns=columns)
+    return pd.read_parquet(path, columns=columns, dtype_backend="pyarrow")
 
 
 def _available_parquet_columns(path: Path) -> frozenset[str]:
@@ -209,12 +227,55 @@ def _build_candidate_indexes(
         if column is None:
             continue
         dependency_columns.add(column)
-        normalized = people[column].astype("string").str.casefold()
-        indexes[entity_type] = {
-            str(sampler_value): np.asarray(positions, dtype=np.int64)
-            for sampler_value, positions in normalized.groupby(normalized, sort=False, dropna=True).indices.items()
-        }
+        indexes[entity_type] = _build_value_index(people[column])
     return indexes, frozenset(dependency_columns)
+
+
+def _build_value_index(values: pd.Series) -> dict[str, np.ndarray]:
+    if isinstance(values.dtype, pd.ArrowDtype):
+        return _build_arrow_value_index(values)
+
+    # Preserve compatibility with tests and alternate parquet engines that
+    # return ordinary pandas dtypes instead of Arrow-backed columns.
+    normalized = values.astype("string").str.casefold()
+    return {
+        str(sampler_value): np.asarray(positions, dtype=np.int64)
+        for sampler_value, positions in normalized.groupby(normalized, sort=False, dropna=True).indices.items()
+    }
+
+
+def _build_arrow_value_index(values: pd.Series) -> dict[str, np.ndarray]:
+    import pyarrow as pa
+    import pyarrow.compute as pc
+
+    arrow_values = pa.array(values)
+    if isinstance(arrow_values, pa.ChunkedArray):
+        arrow_values = arrow_values.combine_chunks()
+    encoded = arrow_values.dictionary_encode()
+    codes = pc.fill_null(encoded.indices, -1).to_numpy(zero_copy_only=False)
+    if not len(codes):
+        return {}
+
+    # Sort integer dictionary codes once instead of materializing and grouping
+    # one Python string per Nemotron Personas row. Stable sorting keeps each value's row
+    # positions in their original order, preserving deterministic sampling.
+    order = np.argsort(codes, kind="stable")
+    sorted_codes = codes[order]
+    starts = np.concatenate(([0], np.flatnonzero(sorted_codes[1:] != sorted_codes[:-1]) + 1))
+    stops = np.concatenate((starts[1:], [len(codes)]))
+    dictionary = encoded.dictionary.to_pylist()
+    grouped: dict[str, list[np.ndarray]] = {}
+    for start, stop in zip(starts, stops, strict=True):
+        code = int(sorted_codes[start])
+        if code < 0:
+            continue
+        sampler_value = str(dictionary[code]).casefold()
+        grouped.setdefault(sampler_value, []).append(order[start:stop])
+
+    return {
+        sampler_value: positions[0] if len(positions) == 1 else np.sort(np.concatenate(positions))
+        for sampler_value, positions in grouped.items()
+    }
 
 
 def _matching_positions(
@@ -242,13 +303,25 @@ def _first_existing_column(dataframe: pd.DataFrame, aliases: tuple[str, ...]) ->
     return next((column for column in aliases if column in dataframe.columns), None)
 
 
-def _persona_row_values(row: pd.Series) -> dict[str, str]:
+def _persona_value_columns(dataframe: pd.DataFrame) -> dict[str, str]:
+    return {
+        key: column
+        for key, aliases in _PERSONA_COLUMN_ALIASES.items()
+        if (column := _first_existing_column(dataframe, aliases)) is not None
+    }
+
+
+def _persona_row_values(
+    dataframe: pd.DataFrame,
+    row_position: int,
+    columns: Mapping[str, str],
+) -> dict[str, str]:
     values: dict[str, str] = {}
-    for key, aliases in _PERSONA_COLUMN_ALIASES.items():
-        column = next((candidate for candidate in aliases if candidate in row.index), None)
-        if column is None or pd.isna(row[column]):
+    for key, column in columns.items():
+        value = dataframe[column].iat[row_position]
+        if pd.isna(value):
             continue
-        values[key] = str(row[column])
+        values[key] = str(value)
     return values
 
 
