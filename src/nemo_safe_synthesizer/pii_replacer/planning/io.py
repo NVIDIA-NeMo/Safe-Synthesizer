@@ -18,19 +18,24 @@ from ...errors import ParameterError
 
 __all__ = ["load_plan", "save_plan"]
 
-_CURRENT_PLAN_SCHEMA_VERSION = 3
+# Unversioned documents are permanently interpreted as v3. A new schema must
+# opt into a new output version without changing how existing documents load.
+_IMPLICIT_PLAN_SCHEMA_VERSION = 3
+_OUTPUT_PLAN_SCHEMA_VERSION = 3
+_SUPPORTED_PLAN_SCHEMA_VERSIONS = frozenset({3})
 
 
 def _plan_body(raw: dict[object, object], plan_path: Path) -> dict[object, object]:
     """Validate document metadata and return the unversioned runtime plan body."""
     body = dict(raw)
-    version = body.pop("schema_version", _CURRENT_PLAN_SCHEMA_VERSION)
+    version = body.pop("schema_version", _IMPLICIT_PLAN_SCHEMA_VERSION)
     if type(version) is not int:
         raise ParameterError(f"PII replacement plan file {str(plan_path)!r} schema_version must be an integer")
-    if version != _CURRENT_PLAN_SCHEMA_VERSION:
+    if version not in _SUPPORTED_PLAN_SCHEMA_VERSIONS:
+        supported = ", ".join(str(item) for item in sorted(_SUPPORTED_PLAN_SCHEMA_VERSIONS))
         raise ParameterError(
             f"PII replacement plan file {str(plan_path)!r} uses unsupported schema version {version}; "
-            f"this NSS release supports version {_CURRENT_PLAN_SCHEMA_VERSION}"
+            f"this NSS release supports version {supported}"
         )
     return body
 
@@ -97,7 +102,7 @@ def _plan_document(plan: PiiReplacementPlan) -> dict[str, object]:
             serialized_spec["depends_on"] = dependencies
         columns.append(serialized_spec)
     return {
-        "schema_version": _CURRENT_PLAN_SCHEMA_VERSION,
+        "schema_version": _OUTPUT_PLAN_SCHEMA_VERSION,
         "columns_to_replace": columns,
     }
 

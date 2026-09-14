@@ -460,6 +460,9 @@ class SafeSynthesizer(ConfigBuilder):
             summary = "\n".join(f"  {e.code}: {e.message}" for e in preflight.errors)
             raise ParameterError(f"Pre-flight check failed with {len(preflight.errors)} error(s):\n{summary}")
 
+        # Keep replacement-plan discovery before this boundary when execution
+        # is integrated. Plan-only and pipeline runs must inspect the same full
+        # input, while replacement itself applies to the training split.
         holdout = Holdout(self._nss_config)
         original_training_df, self._test_df = holdout.train_test_split(self._data_source)
 
@@ -473,12 +476,11 @@ class SafeSynthesizer(ConfigBuilder):
         resolved_config = resolver()
         self._nss_config = resolved_config
 
-        # PII replacement is intentionally unavailable on this removal-only
-        # branch. Keep validation usable, but require callers running the
-        # pipeline to disable PII explicitly.
+        # Keep validation usable while replacement execution is unavailable,
+        # but require callers running the pipeline to disable PII explicitly.
         if not check_only and self._nss_config.replace_pii is not None:
             raise ParameterError(
-                "PII replacement is not available on this branch. Set replace_pii to null, "
+                "PII replacement execution is not available. Set replace_pii to null, "
                 "pass --no-replace-pii, or call with_replace_pii(enable=False)."
             )
 

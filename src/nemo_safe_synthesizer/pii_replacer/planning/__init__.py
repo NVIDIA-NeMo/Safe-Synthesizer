@@ -5,15 +5,15 @@
 
 from __future__ import annotations
 
-from .assembly import (
+from .io import load_plan, save_plan
+from .patterns import pattern_grammar_catalog
+from .plan_builder import (
     ColumnClassification,
     DependencyCandidate,
     apply_dependencies,
     derive_dependency_candidates,
     plan_from_classifications,
 )
-from .io import load_plan, save_plan
-from .patterns import pattern_grammar_catalog
 from .resolver import (
     ColumnProfile,
     HeuristicPlanDiscoverer,

@@ -7,18 +7,17 @@ PII replacement v3 uses a dataset-specific replacement plan. The plan names
 the columns NSS should replace, the entity type in each column, optional format
 patterns, and dependencies between related columns.
 
-This branch provides the configuration and plan-resolution contract plus
-plan-only CLI and SDK workflows. Replacement execution remains deferred. Until
-the executor is available, set `replace_pii: null`, pass `--no-replace-pii`, or
-call `.with_replace_pii(enable=False)` to run the synthesis pipeline.
+Set `replace_pii: null`, pass `--no-replace-pii`, or call
+`.with_replace_pii(enable=False)` to run the synthesis pipeline without
+replacement.
 
 ## Replacement plan sources
-
-`replace_pii.replacement_plan` accepts three forms.
 
 The `replace_pii` configuration has an integer `schema_version`. This release
 accepts version `3`; an omitted version is interpreted as version `3`. NSS
 includes the version whenever it serializes the configuration.
+
+`replace_pii.replacement_plan` accepts three forms.
 
 ### Automatic discovery
 
@@ -73,9 +72,10 @@ replace_pii:
 ```
 
 Inline plans and plan files are authoritative: NSS validates them against the
-input dataframe but does not run heuristic or LLM discovery. This bypass applies
-only to plan discovery. If `llm` is configured, the replacement executor can
-still use it to replace PII found inside free-text columns named by the plan.
+input dataframe but does not run heuristic or LLM discovery for the plan. This
+bypass applies only to plan discovery. If `llm` is configured, the replacement
+executor can still use it to replace PII found inside free-text columns named by
+the plan.
 
 ## Plan-only workflow
 
@@ -134,6 +134,8 @@ Supply the inference API key at runtime through `NSS_INFERENCE_KEY` or the
 `--inference-api-key` CLI option. NSS does not store the key in configuration or
 plan artifacts.
 
-LLM operations can send bounded raw cell samples during plan enhancement and raw
-free-text values during replacement. Do not enable them unless the endpoint is
-approved to receive the input data.
+!!! warning "Inference endpoints receive source data"
+    Plan enhancement can send bounded raw cell samples from the full input
+    dataframe, including rows that may later be assigned to a holdout set.
+    Free-text replacement can send raw cell values. Enable these operations
+    only when the endpoint is approved to receive the input data.

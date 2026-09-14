@@ -199,8 +199,8 @@ class ConfigBuilder:
         """Request or disable PII replacement.
 
         The configuration drives :meth:`SafeSynthesizer.plan_pii_replacement`.
-        Replacement execution is deferred; pass ``enable=False`` to set
-        ``replace_pii=None`` and run the synthesis pipeline.
+        Pass ``enable=False`` to set ``replace_pii=None`` and run the synthesis
+        pipeline without replacement.
 
         Args:
             config: PII replacement configuration object or raw mapping.

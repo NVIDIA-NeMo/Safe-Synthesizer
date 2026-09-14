@@ -21,7 +21,7 @@ from nemo_safe_synthesizer.pii_replacer.planning import (
 
 
 @pytest.mark.unit
-class TestPlanAssembly:
+class TestPlanBuilder:
     def test_replacement_membership_is_derived_from_entity_metadata(self) -> None:
         plan = plan_from_classifications(
             [

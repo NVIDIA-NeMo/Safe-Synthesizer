@@ -297,9 +297,8 @@ configuration, or a path to a separate plan YAML. See
 definitions, examples, and the shared LLM configuration for plan enhancement and
 free-text replacement.
 
-The replacement executor is not available on this branch. Set
-`replace_pii: null` or use `--no-replace-pii` when running the synthesis
-pipeline.
+The synthesis pipeline currently requires PII replacement to be disabled. Set
+`replace_pii: null` or use `--no-replace-pii` when running it.
 
 ---
 

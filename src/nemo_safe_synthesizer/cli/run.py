@@ -472,8 +472,7 @@ def run_replace_pii(
 ) -> None:
     """Plan PII replacement for the full input dataset.
 
-    Replacement execution is deferred; this command currently requires
-    ``--plan-only``.
+    This command currently requires ``--plan-only``.
     """
     if not plan_only:
         raise click.UsageError("run replace-pii currently requires --plan-only")
@@ -490,7 +489,8 @@ def run_replace_pii(
         with traced_user("SafeSynthesizer"):
             from ..sdk.library_builder import SafeSynthesizer
 
-            assert df is not None
+            if df is None:
+                raise UserError("Input data is required to plan PII replacement.")
             output_path = workdir.run_dir / PII_REPLACEMENT_PLAN_FILENAME
             nss = SafeSynthesizer(
                 config=config,

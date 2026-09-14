@@ -280,8 +280,9 @@ Accepts the same common options and synthesis parameter override syntax as `run`
 ### `run replace-pii --plan-only`
 
 Resolve a PII replacement plan against the full input dataframe and exit. This
-does not invoke holdout, model metadata, replacement, training, generation, or
-evaluation.
+column-level planning operation does not produce a train/test split or any
+replaced rows. It does not invoke holdout, model metadata, replacement,
+training, generation, or evaluation.
 
 ```bash
 safe-synthesizer run replace-pii --plan-only \
@@ -290,8 +291,8 @@ safe-synthesizer run replace-pii --plan-only \
 ```
 
 The command writes `pii_replacement_plan.yaml` in the standard timestamped run
-directory beneath `--artifact-path`. `run replace-pii` without `--plan-only`
-remains unavailable until replacement execution is implemented.
+directory beneath `--artifact-path`. The command currently requires
+`--plan-only`.
 
 The SDK equivalent returns the plan object. Supplying `output_path` also writes
 the reusable YAML artifact; omitting it performs no plan write.
@@ -578,9 +579,9 @@ safe-synthesizer run replace-pii --plan-only \
   --data-source data.csv
 ```
 
-Replacement execution is not available on this branch. Set `replace_pii: null`,
-pass `--no-replace-pii`, or call `.with_replace_pii(enable=False)` before running
-the training and generation pipeline.
+The training and generation pipeline currently requires PII replacement to be
+disabled. Set `replace_pii: null`, pass `--no-replace-pii`, or call
+`.with_replace_pii(enable=False)` before running it.
 
 ---
 

@@ -703,6 +703,28 @@ class TestRunReplacePii:
         assert "requires --plan-only" in result.output
         patched_run_dependencies["common_setup"].assert_not_called()
 
+    def test_plan_only_reports_missing_input_dataframe(
+        self,
+        cli_runner: CliRunner,
+        dummy_csv: Path,
+        mock_logger: MagicMock,
+        mock_config: MagicMock,
+        mock_workdir: MagicMock,
+        patched_run_dependencies: dict,
+    ) -> None:
+        common_setup = patched_run_dependencies["common_setup"]
+        common_setup.side_effect = None
+        common_setup.return_value = (mock_logger, mock_config, None, mock_workdir)
+
+        result = cli_runner.invoke(
+            run,
+            ["replace-pii", "--plan-only", "--data-source", str(dummy_csv)],
+        )
+
+        assert result.exit_code == 1
+        assert "Input data is required to plan PII replacement." in result.output
+        patched_run_dependencies["safe_synthesizer_cls"].assert_not_called()
+
     def test_plan_only_writes_reusable_yaml_from_dataset(
         self,
         cli_runner: CliRunner,

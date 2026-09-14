@@ -64,7 +64,10 @@ __all__ = [
 # Sentinel value for ``ReplacePiiConfig.replacement_plan`` requesting automatic
 # entity discovery instead of an explicit plan.
 AUTO_DISCOVERY = "auto_discovery"
-_CURRENT_REPLACE_PII_SCHEMA_VERSION = 3
+# Unversioned configurations are permanently interpreted as v3. Adding a new
+# schema may expand the supported set, but must not advance this implicit value.
+_IMPLICIT_REPLACE_PII_SCHEMA_VERSION = 3
+_SUPPORTED_REPLACE_PII_SCHEMA_VERSIONS = frozenset({3})
 
 
 class EntityType(StrEnum):
@@ -684,7 +687,7 @@ class ReplacePiiConfig(Parameters):
     )
 
     schema_version: Literal[3] = Field(
-        default=_CURRENT_REPLACE_PII_SCHEMA_VERSION,
+        default=_IMPLICIT_REPLACE_PII_SCHEMA_VERSION,
         description=(
             "Version of this replace_pii configuration schema. Missing versions are treated as version 3; "
             "this release accepts only version 3."
@@ -730,21 +733,21 @@ class ReplacePiiConfig(Parameters):
         if not isinstance(value, Mapping):
             return value
         mapping = cast(Mapping[str, object], value)
-        version = mapping.get("schema_version", _CURRENT_REPLACE_PII_SCHEMA_VERSION)
+        version = mapping.get("schema_version", _IMPLICIT_REPLACE_PII_SCHEMA_VERSION)
         if type(version) is not int:
             raise ParameterError("replace_pii.schema_version must be an integer")
-        if version != _CURRENT_REPLACE_PII_SCHEMA_VERSION:
+        if version not in _SUPPORTED_REPLACE_PII_SCHEMA_VERSIONS:
+            supported = ", ".join(str(item) for item in sorted(_SUPPORTED_REPLACE_PII_SCHEMA_VERSIONS))
             raise ParameterError(
-                f"replace_pii schema version {version} is unsupported; "
-                f"this NSS release supports version {_CURRENT_REPLACE_PII_SCHEMA_VERSION}"
+                f"replace_pii schema version {version} is unsupported; this NSS release supports version {supported}"
             )
         return value
 
     @model_serializer(mode="wrap")
     def _serialize_schema_version(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
-        """Include the current schema version even in sparse serialization."""
+        """Include the selected schema version even in sparse serialization."""
         serialized = cast(dict[str, object], handler(self))
-        serialized["schema_version"] = _CURRENT_REPLACE_PII_SCHEMA_VERSION
+        serialized["schema_version"] = self.schema_version
         return serialized
 
     @field_validator("replacement_plan", mode="before")

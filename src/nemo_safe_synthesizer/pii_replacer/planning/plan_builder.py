@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Deterministic assembly shared by PII plan discoverers and enhancers."""
+"""Build PII replacement plans from semantic column classifications."""
 
 from __future__ import annotations
 
