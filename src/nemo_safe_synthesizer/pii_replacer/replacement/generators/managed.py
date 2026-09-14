@@ -59,11 +59,14 @@ class ManagedReplacementGenerator:
             settings=settings,
             sampler=sampler.model_copy(update={"backend": PiiSamplerBackend.FAKER}),
         )
-        self._dependency_value_mappings = _compile_dependency_value_mappings(
-            sampler.dependency_value_mappings
-        )
+        self._dependency_value_mappings = _compile_dependency_value_mappings(sampler.dependency_value_mappings)
         self._managed_people: pd.DataFrame | None = None
+        self._managed_value_columns: dict[str, str] = {}
         self._candidate_indexes: dict[EntityType, dict[str, np.ndarray]] = {}
+        self._candidate_position_cache: dict[
+            tuple[tuple[EntityType, tuple[str, ...]], ...],
+            np.ndarray,
+        ] = {}
         self._load_attempted = False
         self._warned_fallbacks: set[EntityType] = set()
 
@@ -91,12 +94,11 @@ class ManagedReplacementGenerator:
             row_position = request.seed % len(people)
         else:
             row_position = int(candidate_positions[request.seed % len(candidate_positions)])
-        row = people.iloc[row_position]
-        return _managed_row_values(row)
+        return _managed_row_values(people, row_position, self._managed_value_columns)
 
     def _candidate_positions(self, request: ReplacementGenerationRequest) -> np.ndarray | None:
         dependencies = _dependency_values(request.effective_dependency_tuple)
-        candidates: np.ndarray | None = None
+        resolved: list[tuple[EntityType, tuple[str, ...]]] = []
         for entity_type in _MANAGED_DEPENDENCY_COLUMN_ALIASES:
             dependency_value = dependencies.get(entity_type)
             if dependency_value is None:
@@ -108,7 +110,17 @@ class ManagedReplacementGenerator:
             )
             if labels is None:
                 continue
+            resolved.append((entity_type, labels))
 
+        if not resolved:
+            return None
+        cache_key = tuple(resolved)
+        cached = self._candidate_position_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        candidates: np.ndarray | None = None
+        for entity_type, labels in resolved:
             label_index = self._candidate_indexes.get(entity_type)
             matching = _matching_positions(label_index, labels)
             if matching is None:
@@ -116,6 +128,9 @@ class ManagedReplacementGenerator:
             candidates = matching if candidates is None else np.intersect1d(candidates, matching, assume_unique=True)
             if not len(candidates):
                 _raise_no_managed_candidates(entity_type)
+        if candidates is None:
+            return None
+        self._candidate_position_cache[cache_key] = candidates
         return candidates
 
     def _load_managed_people(self) -> pd.DataFrame | None:
@@ -129,6 +144,7 @@ class ManagedReplacementGenerator:
             people = _read_managed_people(path)
             self._candidate_indexes, dependency_columns = _build_candidate_indexes(people)
             self._managed_people = people.drop(columns=dependency_columns)
+            self._managed_value_columns = _managed_value_columns(self._managed_people)
         except Exception:
             logger.runtime.warning(
                 "Managed PII replacement assets could not be read; affected entities will use Faker",
@@ -188,7 +204,7 @@ def _read_managed_people(path: Path) -> pd.DataFrame:
         # schema inspection. The ordinary read still produces the same result.
         return pd.read_parquet(path)
     columns = [column for column in _MANAGED_READ_COLUMNS if column in available_columns]
-    return pd.read_parquet(path, columns=columns)
+    return pd.read_parquet(path, columns=columns, dtype_backend="pyarrow")
 
 
 def _available_parquet_columns(path: Path) -> frozenset[str]:
@@ -207,12 +223,55 @@ def _build_candidate_indexes(
         if column is None:
             continue
         dependency_columns.add(column)
-        normalized = people[column].astype("string").str.casefold()
-        indexes[entity_type] = {
-            str(label): np.asarray(positions, dtype=np.int64)
-            for label, positions in normalized.groupby(normalized, sort=False, dropna=True).indices.items()
-        }
+        indexes[entity_type] = _build_label_index(people[column])
     return indexes, frozenset(dependency_columns)
+
+
+def _build_label_index(values: pd.Series) -> dict[str, np.ndarray]:
+    if isinstance(values.dtype, pd.ArrowDtype):
+        return _build_arrow_label_index(values)
+
+    # Preserve compatibility with tests and alternate parquet engines that
+    # return ordinary pandas dtypes instead of Arrow-backed columns.
+    normalized = values.astype("string").str.casefold()
+    return {
+        str(label): np.asarray(positions, dtype=np.int64)
+        for label, positions in normalized.groupby(normalized, sort=False, dropna=True).indices.items()
+    }
+
+
+def _build_arrow_label_index(values: pd.Series) -> dict[str, np.ndarray]:
+    import pyarrow as pa
+    import pyarrow.compute as pc
+
+    arrow_values = pa.array(values)
+    if isinstance(arrow_values, pa.ChunkedArray):
+        arrow_values = arrow_values.combine_chunks()
+    encoded = arrow_values.dictionary_encode()
+    codes = pc.fill_null(encoded.indices, -1).to_numpy(zero_copy_only=False)
+    if not len(codes):
+        return {}
+
+    # Sort integer dictionary codes once instead of materializing and grouping
+    # one Python string per managed row. Stable sorting keeps each label's row
+    # positions in their original order, preserving deterministic sampling.
+    order = np.argsort(codes, kind="stable")
+    sorted_codes = codes[order]
+    starts = np.concatenate(([0], np.flatnonzero(sorted_codes[1:] != sorted_codes[:-1]) + 1))
+    stops = np.concatenate((starts[1:], [len(codes)]))
+    dictionary = encoded.dictionary.to_pylist()
+    grouped: dict[str, list[np.ndarray]] = {}
+    for start, stop in zip(starts, stops, strict=True):
+        code = int(sorted_codes[start])
+        if code < 0:
+            continue
+        label = str(dictionary[code]).casefold()
+        grouped.setdefault(label, []).append(order[start:stop])
+
+    return {
+        label: positions[0] if len(positions) == 1 else np.sort(np.concatenate(positions))
+        for label, positions in grouped.items()
+    }
 
 
 def _matching_positions(
@@ -240,13 +299,25 @@ def _first_existing_column(dataframe: pd.DataFrame, aliases: tuple[str, ...]) ->
     return next((column for column in aliases if column in dataframe.columns), None)
 
 
-def _managed_row_values(row: pd.Series) -> dict[str, str]:
+def _managed_value_columns(dataframe: pd.DataFrame) -> dict[str, str]:
+    return {
+        key: column
+        for key, aliases in _MANAGED_COLUMN_ALIASES.items()
+        if (column := _first_existing_column(dataframe, aliases)) is not None
+    }
+
+
+def _managed_row_values(
+    dataframe: pd.DataFrame,
+    row_position: int,
+    columns: Mapping[str, str],
+) -> dict[str, str]:
     values: dict[str, str] = {}
-    for key, aliases in _MANAGED_COLUMN_ALIASES.items():
-        column = next((candidate for candidate in aliases if candidate in row.index), None)
-        if column is None or pd.isna(row[column]):
+    for key, column in columns.items():
+        value = dataframe[column].iat[row_position]
+        if pd.isna(value):
             continue
-        values[key] = str(row[column])
+        values[key] = str(value)
     return values
 
 

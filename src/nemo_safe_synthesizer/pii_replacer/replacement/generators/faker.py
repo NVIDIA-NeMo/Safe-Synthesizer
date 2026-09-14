@@ -55,9 +55,7 @@ class FakerReplacementGenerator:
             raise ValueError("FakerReplacementGenerator requires the faker sampler backend")
         self._settings = settings
         self._sampler = sampler
-        self._dependency_value_mappings = _compile_dependency_value_mappings(
-            sampler.dependency_value_mappings
-        )
+        self._dependency_value_mappings = _compile_dependency_value_mappings(sampler.dependency_value_mappings)
         self._warned_generation_fallbacks: set[str] = set()
 
     def generate(self, request: ReplacementGenerationRequest) -> str:

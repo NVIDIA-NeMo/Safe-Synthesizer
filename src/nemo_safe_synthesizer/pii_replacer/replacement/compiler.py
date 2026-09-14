@@ -47,7 +47,6 @@ def compile_plan(plan: PiiReplacementPlan) -> tuple[PiiColumnPlan, ...]:
     if len(ordered) != len(specs):
         cycle_columns = sorted(column for column, degree in indegree.items() if degree > 0)
         raise ParameterError(
-            "replacement dependencies contain a cycle involving: "
-            + ", ".join(repr(column) for column in cycle_columns)
+            "replacement dependencies contain a cycle involving: " + ", ".join(repr(column) for column in cycle_columns)
         )
     return tuple(ordered)

@@ -90,9 +90,7 @@ class StructuredReplacementExecutor:
         """Return a copy with every structured plan target replaced."""
         self._reset_execution_state()
         free_text_targets = [
-            spec.column_name
-            for spec in self._plan.columns_to_replace
-            if spec.entity_type is EntityType.FREE_TEXT
+            spec.column_name for spec in self._plan.columns_to_replace if spec.entity_type is EntityType.FREE_TEXT
         ]
         if free_text_targets:
             raise GenerationError(
