@@ -118,6 +118,7 @@ You can also run stages individually:
 
 - `safe-synthesizer run train` -- train only, saves the adapter
 - `safe-synthesizer run generate` -- generate only (use `--auto-discover-adapter` or `--run-path`)
+- `safe-synthesizer run replace-pii --plan-only` -- resolve a PII replacement plan without entering the pipeline
 - SDK stepwise: `process_data()` → `train()` → `generate()` → `evaluate()`
 
 ## Pre-flight Validation
@@ -203,8 +204,9 @@ safe-synthesizer run --config config.yaml --data-source data.csv
 
 #### Common Options
 
-These options apply to `run` and `run generate`. Only `--data-source` is required;
-all others have defaults or are optional.
+These options apply to `run`, `run train`, `run generate`, and `run replace-pii`.
+Only `--data-source` is required for new runs; all others have defaults or are
+optional.
 
 | Option | Env var | Default | Description |
 |--------|---------|---------|-------------|
@@ -274,6 +276,38 @@ Accepts the same common options and synthesis parameter override syntax as `run`
     keep their saved values. `training`, `data`, `privacy`, and `time_series`
     are always inherited from the trained run and cannot be changed at generate
     time, since they describe how the adapter was produced.
+
+### `run replace-pii --plan-only`
+
+Resolve a PII replacement plan against the full input dataframe and exit. This
+column-level planning operation does not produce a train/test split or any
+replaced rows. It does not invoke holdout, model metadata, replacement,
+training, generation, or evaluation.
+
+```bash
+safe-synthesizer run replace-pii --plan-only \
+  --config config.yaml \
+  --data-source data.csv
+```
+
+The command writes `pii_replacement_plan.yaml` in the standard timestamped run
+directory beneath `--artifact-path`. The command currently requires
+`--plan-only`.
+
+The SDK equivalent returns the plan object. Supplying `output_path` also writes
+the reusable YAML artifact; omitting it performs no plan write.
+
+```python
+from nemo_safe_synthesizer.config import SafeSynthesizerParameters
+from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+
+config = SafeSynthesizerParameters.from_yaml("config.yaml")
+plan = (
+    SafeSynthesizer(config)
+    .with_data_source("data.csv")
+    .plan_pii_replacement(output_path="pii_replacement_plan.yaml")
+)
+```
 
 ### `run --validate`
 
@@ -536,10 +570,18 @@ See [Configuration Reference -- Data](configuration.md#data) for the full parame
 
 ## PII Replacement
 
-PII replacement v3 will be added and documented in a later update.
+PII replacement v3 supports resolving a reviewable plan from the full input
+without entering the synthesis pipeline:
 
-On this branch, set `replace_pii: null`, pass `--no-replace-pii`, or call
-`.with_replace_pii(enable=False)` before running the pipeline.
+```bash
+safe-synthesizer run replace-pii --plan-only \
+  --config config.yaml \
+  --data-source data.csv
+```
+
+The training and generation pipeline currently requires PII replacement to be
+disabled. Set `replace_pii: null`, pass `--no-replace-pii`, or call
+`.with_replace_pii(enable=False)` before running it.
 
 ---
 
