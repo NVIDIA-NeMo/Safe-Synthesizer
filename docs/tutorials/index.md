@@ -9,7 +9,7 @@ Interactive Jupyter notebook tutorials for NeMo Safe Synthesizer.
 [![Launch on Brev](https://brev-assets.s3.us-west-1.amazonaws.com/nv-lb-light.svg#only-dark)](https://brev.nvidia.com/launchable/deploy/now?launchableID=env-3HBtA2NKQaBukL2TyDphWUcvQ17)
 
 These notebooks need a Linux machine with an NVIDIA GPU. The launchable above provides
-one with Safe Synthesizer and all three notebooks already installed.
+one with Safe Synthesizer and all four notebooks already installed.
 
 !!! warning "The instance bills continuously"
     Most GPU providers on Brev do not support stopping an instance. Billing runs from
@@ -21,6 +21,7 @@ one with Safe Synthesizer and all three notebooks already installed.
 - [Safe Synthesizer 101](safe-synthesizer-101.ipynb) -- learn the fundamentals
 - [Differential Privacy](differential-privacy.ipynb) -- enable differential privacy guarantees
 - [Time-Series Financial Transactions](time-series-financial-transactions.ipynb) -- synthesize grouped transaction histories
+- [Healthcare Hospital Readmissions](healthcare-hospital-readmissions.ipynb) -- explore privacy-aware healthcare utilization analytics
 
 ## Adding a Tutorial
 
