@@ -81,8 +81,6 @@ def _normalize_list_value(items: Sequence[Any]) -> list[Any]:
                     continue
                 # Handle bracketed unquoted strings (e.g., [timeseries.shape] or [a, b])
                 inner = item_str[1:-1].strip()
-                if not inner:
-                    continue
                 parts = re.split(r"(?<!\\),", inner)
                 result.extend(
                     [

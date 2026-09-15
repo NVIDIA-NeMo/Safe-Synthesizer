@@ -580,6 +580,7 @@ def test_normalize_list_value():
     assert _normalize_list_value(("[]",)) == []
     assert _normalize_list_value(("",)) == []
     assert _normalize_list_value(["a", "b"]) == ["a", "b"]
+    assert _normalize_list_value([1, 2]) == [1, 2]
 
 
 def test_parse_overrides_empty_tuple_dropped():
