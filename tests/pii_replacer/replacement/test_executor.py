@@ -54,6 +54,27 @@ class _OriginalThenReplacementGenerator(_RecordingGenerator):
         return request.original_value if len(self.requests) == 1 else "Synthetic"
 
 
+def _target(
+    column_name: str,
+    entity_type: EntityType,
+    *dependencies: tuple[str, EntityType | None],
+) -> PiiColumnPlan:
+    return PiiColumnPlan(
+        column_name=column_name,
+        entity_type=entity_type,
+        depends_on=[
+            ConditioningColumn(column_name=name)
+            if dependency_type is None
+            else ConditioningColumn(column_name=name, entity_type=dependency_type)
+            for name, dependency_type in dependencies
+        ],
+    )
+
+
+def _plan(*targets: PiiColumnPlan) -> PiiReplacementPlan:
+    return PiiReplacementPlan(columns_to_replace=list(targets))
+
+
 def _execute(
     dataframe: pd.DataFrame,
     plan: PiiReplacementPlan,
@@ -74,16 +95,10 @@ def _execute(
 @pytest.mark.unit
 class TestPlanCompiler:
     def test_stable_topological_order_preserves_independent_plan_order(self) -> None:
-        plan = PiiReplacementPlan(
-            columns_to_replace=[
-                PiiColumnPlan(
-                    column_name="email",
-                    entity_type=EntityType.EMAIL,
-                    depends_on=[ConditioningColumn(column_name="first")],
-                ),
-                PiiColumnPlan(column_name="unrelated", entity_type=EntityType.UNIQUE_IDENTIFIER),
-                PiiColumnPlan(column_name="first", entity_type=EntityType.FIRST_NAME),
-            ]
+        plan = _plan(
+            _target("email", EntityType.EMAIL, ("first", None)),
+            _target("unrelated", EntityType.UNIQUE_IDENTIFIER),
+            _target("first", EntityType.FIRST_NAME),
         )
 
         assert [spec.column_name for spec in compile_plan(plan)] == ["unrelated", "first", "email"]
@@ -110,15 +125,7 @@ class TestPlanCompiler:
 class TestStructuredReplacementExecutor:
     def test_resolves_sampler_labels_from_the_dependency_source_column(self) -> None:
         dataframe = pd.DataFrame({"first_name": ["Ada"], "sex": ["Woman"]})
-        plan = PiiReplacementPlan(
-            columns_to_replace=[
-                PiiColumnPlan(
-                    column_name="first_name",
-                    entity_type=EntityType.FIRST_NAME,
-                    depends_on=[ConditioningColumn(column_name="sex", entity_type=EntityType.GENDER)],
-                )
-            ]
-        )
+        plan = _plan(_target("first_name", EntityType.FIRST_NAME, ("sex", EntityType.GENDER)))
         generator = _RecordingGenerator()
 
         _execute(
@@ -136,15 +143,9 @@ class TestStructuredReplacementExecutor:
             index=[7, 7],
         )
         original = dataframe.copy(deep=True)
-        plan = PiiReplacementPlan(
-            columns_to_replace=[
-                PiiColumnPlan(
-                    column_name="email",
-                    entity_type=EntityType.EMAIL,
-                    depends_on=[ConditioningColumn(column_name="first")],
-                ),
-                PiiColumnPlan(column_name="first", entity_type=EntityType.FIRST_NAME),
-            ]
+        plan = _plan(
+            _target("email", EntityType.EMAIL, ("first", None)),
+            _target("first", EntityType.FIRST_NAME),
         )
         generator = _RecordingGenerator()
 
@@ -166,11 +167,7 @@ class TestStructuredReplacementExecutor:
 
     def test_record_scope_uses_row_position_and_preserves_nulls(self) -> None:
         dataframe = pd.DataFrame({"identifier": ["same", "same", None]}, index=[1, 1, 1])
-        plan = PiiReplacementPlan(
-            columns_to_replace=[
-                PiiColumnPlan(column_name="identifier", entity_type=EntityType.UNIQUE_IDENTIFIER),
-            ]
-        )
+        plan = _plan(_target("identifier", EntityType.UNIQUE_IDENTIFIER))
         generator = _RecordingGenerator()
 
         result = _execute(dataframe, plan, generator)
@@ -182,9 +179,7 @@ class TestStructuredReplacementExecutor:
 
     def test_natural_attributes_may_repeat_across_independent_mappings(self) -> None:
         dataframe = pd.DataFrame({"first_name": ["Ada", "Grace"]})
-        plan = PiiReplacementPlan(
-            columns_to_replace=[PiiColumnPlan(column_name="first_name", entity_type=EntityType.FIRST_NAME)]
-        )
+        plan = _plan(_target("first_name", EntityType.FIRST_NAME))
 
         result = _execute(dataframe, plan, _ConstantGenerator())
 
@@ -193,9 +188,7 @@ class TestStructuredReplacementExecutor:
 
     def test_unchanged_candidate_is_resampled_with_a_new_seed(self) -> None:
         dataframe = pd.DataFrame({"first_name": ["Ada"]})
-        plan = PiiReplacementPlan(
-            columns_to_replace=[PiiColumnPlan(column_name="first_name", entity_type=EntityType.FIRST_NAME)]
-        )
+        plan = _plan(_target("first_name", EntityType.FIRST_NAME))
         generator = _OriginalThenReplacementGenerator()
 
         result = _execute(dataframe, plan, generator)
@@ -206,11 +199,7 @@ class TestStructuredReplacementExecutor:
 
     def test_identifier_replacements_remain_collision_resistant(self) -> None:
         dataframe = pd.DataFrame({"identifier": ["USER-1", "USER-2"]})
-        plan = PiiReplacementPlan(
-            columns_to_replace=[
-                PiiColumnPlan(column_name="identifier", entity_type=EntityType.UNIQUE_IDENTIFIER),
-            ]
-        )
+        plan = _plan(_target("identifier", EntityType.UNIQUE_IDENTIFIER))
 
         with pytest.raises(GenerationError, match="could not generate a distinct value"):
             _execute(dataframe, plan, _ConstantGenerator())
@@ -224,20 +213,9 @@ class TestStructuredReplacementExecutor:
             },
             index=[4, 4, 4],
         )
-        plan = PiiReplacementPlan(
-            columns_to_replace=[
-                PiiColumnPlan(column_name="patient", entity_type=EntityType.UNIQUE_IDENTIFIER),
-                PiiColumnPlan(
-                    column_name="email",
-                    entity_type=EntityType.EMAIL,
-                    depends_on=[
-                        ConditioningColumn(
-                            column_name="organization",
-                            entity_type=EntityType.ORGANIZATION,
-                        )
-                    ],
-                ),
-            ]
+        plan = _plan(
+            _target("patient", EntityType.UNIQUE_IDENTIFIER),
+            _target("email", EntityType.EMAIL, ("organization", EntityType.ORGANIZATION)),
         )
         generator = _RecordingGenerator()
 
@@ -258,9 +236,7 @@ class TestStructuredReplacementExecutor:
     def test_free_text_target_fails_before_mutating_the_input(self) -> None:
         dataframe = pd.DataFrame({"notes": ["Ada called"]})
         original = dataframe.copy(deep=True)
-        plan = PiiReplacementPlan(
-            columns_to_replace=[PiiColumnPlan(column_name="notes", entity_type=EntityType.FREE_TEXT)]
-        )
+        plan = _plan(_target("notes", EntityType.FREE_TEXT))
 
         with pytest.raises(GenerationError, match="detector and span-resolution"):
             _execute(dataframe, plan, _RecordingGenerator())
