@@ -22,6 +22,7 @@ from .resolver import (
     PlanDiscoveryInput,
     PlanEnhancer,
     resolve_plan,
+    resolve_replacement_config,
 )
 from .validation import get_protected_columns, validate_plan
 
@@ -41,6 +42,7 @@ __all__ = [
     "plan_from_classifications",
     "get_protected_columns",
     "resolve_plan",
+    "resolve_replacement_config",
     "save_plan",
     "validate_plan",
 ]

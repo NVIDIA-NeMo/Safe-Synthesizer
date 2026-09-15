@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from random import Random
 from typing import TYPE_CHECKING
 
-from ....config.replace_pii import DataToSamplerValueMapping, EntityType
+from ....config.replace_pii import EntityType
 from ....errors import GenerationError
 from ...planning.patterns import parse_character_mask, parse_name_pattern, render_name_pattern
 from ..types import EffectiveDependencyTuple
@@ -23,37 +23,19 @@ if TYPE_CHECKING:
 
 __all__ = ["generated_value_is_valid", "normalize_organization_domain"]
 
-_CompiledDataToSamplerValueMapping = dict[EntityType, dict[str, tuple[str, ...] | None]]
-
 
 def _dependency_values(dependencies: EffectiveDependencyTuple) -> dict[EntityType, str]:
     return {entity_type: value.normalized_value for entity_type, value in dependencies if value is not None}
 
 
-def _compile_data_to_sampler_value_mapping(
-    mappings: DataToSamplerValueMapping,
-) -> _CompiledDataToSamplerValueMapping:
-    """Case-fold validated sampler mappings once for generation-time lookup."""
-    return {
-        entity_type: {
-            source.casefold(): None if targets is None else tuple(target.casefold() for target in targets)
-            for source, targets in entity_mappings.items()
-        }
-        for entity_type, entity_mappings in mappings.items()
-    }
-
-
 def _resolve_dependency_values(
-    mappings: _CompiledDataToSamplerValueMapping,
+    request: ReplacementGenerationRequest,
     entity_type: EntityType,
     value: str,
 ) -> tuple[str, ...] | None:
     """Return sampler values for one dependency, or ``None`` when disabled."""
-    normalized = value.casefold()
-    entity_mappings = mappings.get(entity_type, {})
-    if normalized in entity_mappings:
-        return entity_mappings[normalized]
-    return (normalized,)
+    resolved = dict(request.resolved_dependency_values)
+    return resolved.get(entity_type, (value.casefold(),))
 
 
 def _name_values(
