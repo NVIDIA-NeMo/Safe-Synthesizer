@@ -229,6 +229,33 @@ Any synthesis parameter can be overridden on the command line using
 See [Configuration Reference -- CLI Override Syntax](configuration.md#cli-override-syntax)
 for the full syntax, examples, and precedence rules.
 
+List-valued parameters accept repeated flags, comma-separated values,
+bracketed values, or JSON arrays:
+
+```bash
+# Repeated flags (recommended)
+safe-synthesizer run --data-source data.csv \
+  --preflight__disabled_checks timeseries.shape \
+  --preflight__disabled_checks gpu.vram
+
+# Equivalent single-flag forms
+safe-synthesizer run --data-source data.csv \
+  --preflight__disabled_checks 'timeseries.shape,gpu.vram'
+safe-synthesizer run --data-source data.csv \
+  --preflight__disabled_checks '[timeseries.shape, gpu.vram]'
+safe-synthesizer run --data-source data.csv \
+  --preflight__disabled_checks '["timeseries.shape", "gpu.vram"]'
+```
+
+Use repeated flags when values may contain commas or brackets; each repeated
+argument is preserved as one list item. In a single comma-separated argument,
+escape a literal comma as `\,`, for example
+`--evaluation__pii_replay_columns 'last\, first,account_id'`. To preserve
+literal brackets in a single value, escape them as `\[customer\]` or use a
+JSON string array such as `'["[customer]"]'`. Lists of structured objects,
+such as `replace_pii.steps`, require JSON: repeat the flag with one JSON object
+per item or pass one JSON array.
+
 ### `run train`
 
 Train only -- saves the adapter without generating or evaluating.
@@ -558,17 +585,20 @@ default in both the CLI and SDK. PII on by default means no config flag is neede
     safe-synthesizer run --data-source data.csv
     ```
 
-    Customize (e.g. enable LLM classification and restrict entity types):
-    put the `replace_pii` block in a YAML file and pass it with `--config`.
-    List-typed fields like `entities` cannot be set via CLI flags; use the
-    config file (see Config reference tab) or SDK.
+    Customize (e.g. enable LLM classification and restrict entity types) with
+    nested CLI flags. Repeat a list-valued flag once per entity:
 
     ```bash
-    safe-synthesizer run --config pii_config.yaml --url data.csv
+    safe-synthesizer run \
+      --data-source data.csv \
+      --replace_pii__globals__classify__enable_classify true \
+      --replace_pii__globals__classify__entities email \
+      --replace_pii__globals__classify__entities phone_number
     ```
 
-    To override only non-list PII settings from the CLI, use the `__` syntax,
-    e.g. `--replace_pii__globals__classify__enable_classify true`.
+    See [Synthesis Parameter Overrides](#synthesis-parameter-overrides) for
+    comma-separated, bracketed, escaped, and JSON list forms. YAML and the SDK
+    remain available for larger PII configurations.
 
 === "SDK"
 

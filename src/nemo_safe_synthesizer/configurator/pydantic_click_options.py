@@ -19,7 +19,10 @@ nested keys like ``data__holdout`` will not be reconstructed correctly.
 from __future__ import annotations
 
 import inspect
+import json
+import re
 import types
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Annotated, Any, Literal, Union, get_args, get_origin
 
@@ -45,12 +48,69 @@ _LEGACY_CLI_OPTION_PATHS: dict[str, tuple[str, ...]] = {
 """Hidden compatibility aliases for renamed generated CLI options."""
 
 
+def _normalize_list_value(items: Sequence[object]) -> list[object]:
+    r"""Normalize CLI list inputs into a clean list.
+
+    Handles repeated flags, comma-separated strings, and JSON- or bracket-encoded lists.
+    When multiple flags are passed (repeated options), each value is preserved
+    verbatim as an individual entry without delimiter splitting or bracket stripping.
+    When a single flag contains commas, it is split on unescaped commas (with ``\,``
+    supported for escaping). Bracketed strings are decoded as JSON arrays or unpacked,
+    while literal brackets can be preserved using backslash escaping (e.g. ``\[customer\]``)
+    or standard JSON string lists (e.g. ``'["[customer]"]'``).
+    """
+    result: list[object] = []
+    is_repeated = len(items) > 1
+    for item in items:
+        if isinstance(item, str):
+            item_str = item.strip()
+            # Repeated options preserve each argument as an atomic value
+            if is_repeated:
+                cleaned = item_str.replace(r"\,", ",").replace(r"\[", "[").replace(r"\]", "]")
+                if cleaned:
+                    result.append(cleaned)
+                continue
+
+            if item_str.startswith("[") and item_str.endswith("]"):
+                try:
+                    parsed = json.loads(item_str)
+                except (json.JSONDecodeError, ValueError):
+                    parsed = None
+                if isinstance(parsed, list):
+                    result.extend(parsed)
+                    continue
+                # Handle bracketed unquoted strings (e.g., [timeseries.shape] or [a, b])
+                inner = item_str[1:-1].strip()
+                parts = re.split(r"(?<!\\),", inner)
+                result.extend(
+                    [
+                        p.replace(r"\,", ",").replace(r"\[", "[").replace(r"\]", "]").strip().strip("'\"")
+                        for p in parts
+                        if p.strip()
+                    ]
+                )
+                continue
+            if re.search(r"(?<!\\),", item_str):
+                parts = re.split(r"(?<!\\),", item_str)
+                result.extend(
+                    [p.replace(r"\,", ",").replace(r"\[", "[").replace(r"\]", "]").strip() for p in parts if p.strip()]
+                )
+            else:
+                cleaned = item_str.replace(r"\,", ",").replace(r"\[", "[").replace(r"\]", "]")
+                if cleaned:
+                    result.append(cleaned)
+        else:
+            result.append(item)
+    return result
+
+
 def parse_overrides(values: dict[str, Any] | None = None, field_sep: str = "__") -> dict[str, Any]:
     """Parse Click kwargs into a nested override dict.
 
     ``no_<field>=True`` injects ``{field: None}`` to disable a nullable-model
     field.  ``no_<field>=False`` (unset is-flag) is silently dropped.
-    ``None`` values (unset regular options) are also dropped.
+    ``None`` values (unset regular options) and empty tuples (unset multi-options)
+    are also dropped.
 
     Args:
         values: Flat dictionary of command line arguments from Click. (``None``-valued keys are dropped).
@@ -75,8 +135,10 @@ def parse_overrides(values: dict[str, Any] | None = None, field_sep: str = "__")
                     overrides, split_parameter_path(k.removeprefix(_NEGATION_PREFIX), field_sep), None
                 )
             continue
-        if v is None:
+        if v is None or v == ():
             continue
+        if isinstance(v, (tuple, list)):
+            v = _normalize_list_value(v)
         try:
             path = split_parameter_path(k, field_sep)
         except ValueError as error:
@@ -116,6 +178,39 @@ ClickParam = LeafParam | FlagParam
 
 def _is_basemodel(t: Any) -> TypeIs[type[BaseModel]]:
     return inspect.isclass(t) and issubclass(t, BaseModel)
+
+
+def _is_list_type(annotation: object) -> bool:
+    """Check if an annotation represents a list container."""
+    t = annotation
+    if get_origin(t) is Annotated:
+        t = get_args(t)[0]
+    if get_origin(t) in (Union, types.UnionType):
+        args = [a for a in get_args(t) if a is not type(None)]
+        return any(_is_list_type(a) for a in args)
+    if t is list:
+        return True
+    return get_origin(t) is list
+
+
+def _list_item_type(annotation: object) -> object | None:
+    """Return the item annotation for a list, including optional and annotated lists."""
+    t = annotation
+    if get_origin(t) is Annotated:
+        t = get_args(t)[0]
+    if get_origin(t) in (Union, types.UnionType):
+        return next(
+            (
+                item_type
+                for arg in get_args(t)
+                if arg is not type(None) and (item_type := _list_item_type(arg)) is not None
+            ),
+            None,
+        )
+    if get_origin(t) is list:
+        args = get_args(t)
+        return args[0] if args else object
+    return object if t is list else None
 
 
 def _nullable_model_arg(union_args: tuple) -> type[BaseModel] | None:
@@ -252,6 +347,28 @@ def _click_type(annotation: Any) -> click.ParamType:
     return click.STRING
 
 
+def _parse_structured_list_option(
+    _ctx: click.Context,
+    _param: click.Parameter,
+    values: tuple[str, ...],
+) -> tuple[object, ...]:
+    """Decode JSON objects and arrays supplied for a list of Pydantic models."""
+    if not values:
+        return values
+
+    parsed_items: list[object] = []
+    for value in values:
+        try:
+            parsed = json.loads(value)
+        except (json.JSONDecodeError, ValueError) as error:
+            raise click.BadParameter("must be valid JSON") from error
+        if isinstance(parsed, list):
+            parsed_items.extend(parsed)
+        else:
+            parsed_items.append(parsed)
+    return tuple(parsed_items)
+
+
 def _option_names(name: str, field_separator: str) -> tuple[str, ...]:
     """Build the Click ``*names`` tuple for a given logical field name."""
     cli = f"--{name.replace('.', field_separator)}"
@@ -315,7 +432,18 @@ def pydantic_options(model_class: type[BaseModel], field_separator: str = "__"):
     """
 
     def apply_leaf_option(f, name: str, field: FieldInfo, *, hidden: bool = False):
+        """Apply a single leaf option to command function f."""
         names = _option_names(name, field_separator)
+        if _is_list_type(field.annotation):
+            item_type = _list_item_type(field.annotation)
+            return click.option(
+                *names,
+                type=click.STRING,
+                multiple=True,
+                callback=_parse_structured_list_option if _is_basemodel(item_type) else None,
+                help=field.description or "",
+                hidden=hidden,
+            )(f)
         return click.option(
             *names,
             type=_click_type(field.annotation),

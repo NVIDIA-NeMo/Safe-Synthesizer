@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+from typing import Annotated
+
 import click
 import pytest
 from click.testing import CliRunner
@@ -18,6 +20,9 @@ from nemo_safe_synthesizer.configurator.pydantic_click_options import (
     LeafParam,
     _click_type,
     _collect_params,
+    _is_list_type,
+    _list_item_type,
+    _normalize_list_value,
     parse_overrides,
     pydantic_options,
 )
@@ -536,3 +541,181 @@ def test_structured_generation_legacy_options_end_to_end_via_click_runner(
     result = CliRunner().invoke(cmd, [option, value])
     assert result.exit_code == 0, result.output
     assert captured["generation"][legacy_key] == expected
+
+
+# ---------------------------------------------------------------------------
+# List option support
+# ---------------------------------------------------------------------------
+
+
+def test_is_list_type():
+    """Verify list type detection across list types, unions, and Annotated types."""
+    assert _is_list_type(list) is True
+    assert _is_list_type(list[str]) is True
+    assert _is_list_type(list[int]) is True
+    assert _is_list_type(list[float]) is True
+    assert _is_list_type(list[str] | None) is True
+    assert _is_list_type(Annotated[list[str], Field(description="desc")]) is True
+    assert _is_list_type(str) is False
+    assert _is_list_type(int | None) is False
+    assert _is_list_type(dict[str, str]) is False
+
+
+def test_list_item_type():
+    """Verify list item extraction across list annotations."""
+    assert _list_item_type(list) is object
+    assert _list_item_type(list[str]) is str
+    assert _list_item_type(list[int] | None) is int
+    assert _list_item_type(Annotated[list[float], Field(description="desc")]) is float
+    assert _list_item_type(str) is None
+
+
+def test_normalize_list_value():
+    """Verify normalization of CLI list inputs across formats."""
+    assert _normalize_list_value(("item",)) == ["item"]
+    assert _normalize_list_value(("a", "b")) == ["a", "b"]
+    assert _normalize_list_value(("a,b",)) == ["a", "b"]
+    assert _normalize_list_value(("last, first", "other_col")) == ["last, first", "other_col"]
+    assert _normalize_list_value((r"last\, first",)) == ["last, first"]
+    assert _normalize_list_value((r"last\, first, other",)) == ["last, first", "other"]
+    assert _normalize_list_value(('["a", "b"]',)) == ["a", "b"]
+    assert _normalize_list_value(("[timeseries.shape]",)) == ["timeseries.shape"]
+    assert _normalize_list_value(("[timeseries.shape, gpu.vram]",)) == ["timeseries.shape", "gpu.vram"]
+    assert _normalize_list_value(("['timeseries.shape', 'gpu.vram']",)) == ["timeseries.shape", "gpu.vram"]
+    assert _normalize_list_value(("[customer]", "[order]")) == ["[customer]", "[order]"]
+    assert _normalize_list_value(("[last, first]", "other")) == ["[last, first]", "other"]
+    assert _normalize_list_value((r"\[customer\]",)) == ["[customer]"]
+    assert _normalize_list_value((r"\[last\, first\]",)) == ["[last, first]"]
+    assert _normalize_list_value(('["[customer]"]',)) == ["[customer]"]
+    assert _normalize_list_value(("[]",)) == []
+    assert _normalize_list_value(("",)) == []
+    assert _normalize_list_value(["a", "b"]) == ["a", "b"]
+    assert _normalize_list_value([1, 2]) == [1, 2]
+
+
+def test_parse_overrides_empty_tuple_dropped():
+    """Verify empty tuples from unset multi-options are dropped."""
+    assert parse_overrides({"preflight__disabled_checks": ()}) == {}
+
+
+def test_parse_overrides_list_tuples():
+    """Verify multi-option tuples are normalized into lists in nested overrides."""
+    result = parse_overrides({"preflight__disabled_checks": ("timeseries.shape", "gpu.vram")})
+    assert result == {"preflight": {"disabled_checks": ["timeseries.shape", "gpu.vram"]}}
+
+
+@pytest.mark.parametrize(
+    ("cli_args", "expected"),
+    [
+        (
+            ["--preflight__disabled_checks", "timeseries.shape"],
+            ["timeseries.shape"],
+        ),
+        (
+            ["--preflight__disabled_checks", "timeseries.shape", "--preflight__disabled_checks", "gpu.vram"],
+            ["timeseries.shape", "gpu.vram"],
+        ),
+        (
+            ["--preflight__disabled_checks", "last, first", "--preflight__disabled_checks", "other_col"],
+            ["last, first", "other_col"],
+        ),
+        (
+            ["--preflight__disabled_checks", "timeseries.shape,gpu.vram"],
+            ["timeseries.shape", "gpu.vram"],
+        ),
+        (
+            ["--preflight__disabled_checks", r"last\, first, other_col"],
+            ["last, first", "other_col"],
+        ),
+        (
+            ["--preflight__disabled_checks", '["timeseries.shape", "gpu.vram"]'],
+            ["timeseries.shape", "gpu.vram"],
+        ),
+        (
+            ["--preflight__disabled_checks", "[timeseries.shape]"],
+            ["timeseries.shape"],
+        ),
+        (
+            ["--preflight__disabled_checks", ""],
+            [],
+        ),
+    ],
+)
+def test_cli_list_parameters_end_to_end(cli_args: list[str], expected: list[str]):
+    """List parameters passed via CLI parse into lists and validate against model."""
+    captured: dict = {}
+
+    @pydantic_options(SafeSynthesizerParameters, field_separator="__")
+    @click.command()
+    def cmd(**kwargs):
+        """Capture parsed CLI overrides."""
+        captured.update(parse_overrides(kwargs))
+
+    result = CliRunner().invoke(cmd, cli_args)
+    assert result.exit_code == 0, result.output
+    assert captured["preflight"]["disabled_checks"] == expected
+    params = SafeSynthesizerParameters.model_validate(captured)
+    assert params.preflight.disabled_checks == expected
+
+
+@pytest.mark.parametrize(
+    "cli_args",
+    [
+        [
+            "--replace_pii__steps",
+            '{"vars":{"first":"one"}}',
+            "--replace_pii__steps",
+            '{"vars":{"second":"two"}}',
+        ],
+        [
+            "--replace_pii__steps",
+            '[{"vars":{"first":"one"}},{"vars":{"second":"two"}}]',
+        ],
+    ],
+)
+def test_cli_structured_list_parameters_end_to_end(cli_args: list[str]):
+    """Structured list parameters accept repeated objects and JSON arrays."""
+    captured: dict = {}
+
+    @pydantic_options(SafeSynthesizerParameters, field_separator="__")
+    @click.command()
+    def cmd(**kwargs):
+        """Capture parsed CLI overrides."""
+        captured.update(parse_overrides(kwargs))
+
+    result = CliRunner().invoke(cmd, cli_args)
+    assert result.exit_code == 0, result.output
+    params = SafeSynthesizerParameters.model_validate(captured)
+    replace_pii = params.replace_pii
+    assert replace_pii is not None
+    assert [step.vars for step in replace_pii.steps] == [{"first": "one"}, {"second": "two"}]
+
+
+def test_cli_structured_list_parameters_reject_invalid_json():
+    """Structured list parameters report malformed JSON at the CLI boundary."""
+
+    @pydantic_options(SafeSynthesizerParameters, field_separator="__")
+    @click.command()
+    def cmd(**_kwargs):
+        """Accept generated CLI options."""
+
+    result = CliRunner().invoke(cmd, ["--replace_pii__steps", "not-json"])
+    assert result.exit_code == 2
+    assert "Invalid value for '--replace_pii__steps': must be valid JSON" in result.output
+
+
+def test_cli_list_parameters_omitted_preserves_default():
+    """Omitting a list parameter drops the key so model default is retained."""
+    captured: dict = {}
+
+    @pydantic_options(SafeSynthesizerParameters, field_separator="__")
+    @click.command()
+    def cmd(**kwargs):
+        """Capture parsed CLI overrides."""
+        captured.update(parse_overrides(kwargs))
+
+    result = CliRunner().invoke(cmd, [])
+    assert result.exit_code == 0, result.output
+    assert "preflight" not in captured or "disabled_checks" not in captured.get("preflight", {})
+    params = SafeSynthesizerParameters.model_validate(captured)
+    assert params.preflight.disabled_checks == []
