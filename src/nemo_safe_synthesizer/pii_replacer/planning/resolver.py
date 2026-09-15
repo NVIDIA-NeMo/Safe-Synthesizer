@@ -7,15 +7,18 @@ from __future__ import annotations
 
 import hashlib
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol
 
 import pandas as pd
 
 from ...config.data import DataParameters
-from ...config.replace_pii import PiiReplacementPlan, ReplacePiiConfig
+from ...config.replace_pii import DataToSamplerValueMapping, EntityType, PiiReplacementPlan, ReplacePiiConfig
 from ...config.time_series import TimeSeriesParameters
 from ...errors import ParameterError
+from .dependency_mappings import dependency_columns, mapping_inputs, validate_data_to_sampler_value_mapping
 from .io import load_plan, save_plan
 from .validation import get_protected_columns, validate_plan
 
@@ -25,6 +28,7 @@ __all__ = [
     "PlanDiscoverer",
     "PlanDiscoveryInput",
     "PlanEnhancer",
+    "resolve_replacement_config",
     "resolve_plan",
 ]
 
@@ -78,6 +82,18 @@ class PlanEnhancer(ABC):
         baseline: PiiReplacementPlan,
     ) -> PiiReplacementPlan:
         """Return a context-free valid replacement for ``baseline``."""
+
+
+class DependencyMappingDiscoverer(Protocol):
+    """Discover sampler-specific mappings for dependency-column values."""
+
+    def discover_data_to_sampler_value_mapping(
+        self,
+        dataframe: object,
+        plan: PiiReplacementPlan,
+        catalog: Mapping[EntityType, tuple[str, ...]],
+    ) -> DataToSamplerValueMapping:
+        """Return sparse mappings for non-identity dependency values."""
 
 
 class HeuristicPlanDiscoverer(PlanDiscoverer):
@@ -186,3 +202,62 @@ def resolve_plan(
     if output_path is not None:
         save_plan(plan, output_path)
     return plan
+
+
+def resolve_replacement_config(
+    df: pd.DataFrame,
+    config: ReplacePiiConfig,
+    data_config: DataParameters,
+    time_series: TimeSeriesParameters | None = None,
+    *,
+    discoverer: PlanDiscoverer | None = None,
+    enhancer: PlanEnhancer | None = None,
+    mapping_discoverer: DependencyMappingDiscoverer | None = None,
+    sampler_value_catalog: Mapping[EntityType, tuple[str, ...]] | None = None,
+) -> ReplacePiiConfig:
+    """Resolve the semantic plan and sampler-specific dependency mappings."""
+    default_enhancer: PlanEnhancer | None = None
+    default_mapping_discoverer: DependencyMappingDiscoverer | None = None
+    if config.llm is not None and config.is_auto_discovery and enhancer is None:
+        from .llm import LLMPlanEnhancer
+
+        llm_adapter = LLMPlanEnhancer(config.llm)
+        default_enhancer = llm_adapter
+        default_mapping_discoverer = llm_adapter
+
+    plan = resolve_plan(
+        df,
+        config,
+        data_config,
+        time_series,
+        discoverer=discoverer,
+        enhancer=enhancer or default_enhancer,
+    )
+
+    if sampler_value_catalog is None and dependency_columns(plan):
+        from ..sampler_catalog import load_sampler_value_catalog
+
+        sampler_value_catalog = load_sampler_value_catalog(config.replacement, config.sampler)
+    catalog = dict(sampler_value_catalog or {})
+
+    mappings = config.sampler.inline_data_to_sampler_value_mapping
+    if mappings is None:
+        unresolved = mapping_inputs(df, plan, catalog)
+        if not unresolved:
+            mappings = {}
+        else:
+            active_discoverer = mapping_discoverer or default_mapping_discoverer
+            if active_discoverer is None and config.llm is not None:
+                from .llm import LLMPlanEnhancer
+
+                active_discoverer = LLMPlanEnhancer(config.llm)
+            if active_discoverer is None:
+                raise ParameterError(
+                    "automatic data-to-sampler value mapping found dataset values without case-insensitive sampler "
+                    "matches; configure replace_pii.llm or provide manual data_to_sampler_value_mapping"
+                )
+            mappings = active_discoverer.discover_data_to_sampler_value_mapping(df, plan, catalog)
+
+    validate_data_to_sampler_value_mapping(plan, mappings, catalog)
+    sampler = config.sampler.model_copy(update={"data_to_sampler_value_mapping": mappings})
+    return config.model_copy(update={"replacement_plan": plan, "sampler": sampler})

@@ -210,26 +210,23 @@ class TestReplacementGenerator:
         assert generator.generate(request).startswith("USR-")
 
     @pytest.mark.parametrize(
-        ("dependency_value", "mappings", "expected"),
+        ("dependency_value", "resolved_values", "expected"),
         [
-            ("Female", {}, "FEMALE"),
-            ("Woman", {EntityType.GENDER: {"Woman": ["female"]}}, "FEMALE"),
-            ("Non-binary", {EntityType.GENDER: {"Non-binary": None}}, "GENERIC"),
+            ("Female", (), "FEMALE"),
+            ("Woman", ((EntityType.GENDER, ("female",)),), "FEMALE"),
+            ("Non-binary", ((EntityType.GENDER, None),), "GENERIC"),
         ],
     )
     def test_faker_applies_gender_dependency_mappings(
         self,
         dependency_value: str,
-        mappings: dict[EntityType, dict[str, list[str] | None]],
+        resolved_values: tuple[tuple[EntityType, tuple[str, ...] | None], ...],
         expected: str,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         generator = FakerReplacementGenerator(
             settings=PiiReplacementSettings(),
-            sampler=PiiSamplerConfig(
-                backend=PiiSamplerBackend.FAKER,
-                data_to_sampler_value_mapping=mappings,
-            ),
+            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
         )
         monkeypatch.setattr(generator, "_faker", lambda _seed: _GenderAwareFake())
         request = ReplacementGenerationRequest(
@@ -238,6 +235,7 @@ class TestReplacementGenerator:
             effective_dependency_tuple=((EntityType.GENDER, CanonicalValue("string", dependency_value)),),
             pattern=None,
             seed=42,
+            resolved_dependency_values=resolved_values,
         )
 
         assert generator.generate(request) == expected
@@ -248,12 +246,7 @@ class TestReplacementGenerator:
     ) -> None:
         generator = FakerReplacementGenerator(
             settings=PiiReplacementSettings(),
-            sampler=PiiSamplerConfig(
-                backend=PiiSamplerBackend.FAKER,
-                data_to_sampler_value_mapping={
-                    EntityType.ETHNIC_BACKGROUND: {"Asian": ["east asian"]},
-                },
-            ),
+            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
         )
         monkeypatch.setattr(generator, "_faker", lambda _seed: _GenderAwareFake())
         request = ReplacementGenerationRequest(
@@ -262,6 +255,7 @@ class TestReplacementGenerator:
             effective_dependency_tuple=((EntityType.ETHNIC_BACKGROUND, CanonicalValue("string", "Asian")),),
             pattern=None,
             seed=42,
+            resolved_dependency_values=((EntityType.ETHNIC_BACKGROUND, ("east asian",)),),
         )
 
         assert generator.generate(request) == "GENERIC"
@@ -517,9 +511,6 @@ class TestReplacementGenerator:
             sampler=PiiSamplerConfig(
                 backend=PiiSamplerBackend.NEMOTRON_PERSONAS,
                 nemotron_personas_path=str(tmp_path),
-                data_to_sampler_value_mapping={
-                    EntityType.ETHNIC_BACKGROUND: {"Asian": ["east asian", "south asian"]},
-                },
             ),
         )
         request = ReplacementGenerationRequest(
@@ -528,6 +519,7 @@ class TestReplacementGenerator:
             effective_dependency_tuple=((EntityType.ETHNIC_BACKGROUND, CanonicalValue("string", "Asian")),),
             pattern=None,
             seed=1,
+            resolved_dependency_values=((EntityType.ETHNIC_BACKGROUND, ("east asian", "south asian")),),
         )
 
         assert generator.generate(request) == "South"
@@ -568,12 +560,6 @@ class TestReplacementGenerator:
             sampler=PiiSamplerConfig(
                 backend=PiiSamplerBackend.NEMOTRON_PERSONAS,
                 nemotron_personas_path=str(tmp_path),
-                data_to_sampler_value_mapping={
-                    EntityType.ETHNIC_BACKGROUND: {
-                        "Asian": mapped_labels,
-                        "AAPI": mapped_labels,
-                    }
-                },
             ),
         )
 
@@ -588,6 +574,7 @@ class TestReplacementGenerator:
                     ),
                     pattern=None,
                     seed=seed,
+                    resolved_dependency_values=((EntityType.ETHNIC_BACKGROUND, tuple(mapped_labels)),),
                 )
             )
 
@@ -615,9 +602,6 @@ class TestReplacementGenerator:
             sampler=PiiSamplerConfig(
                 backend=PiiSamplerBackend.NEMOTRON_PERSONAS,
                 nemotron_personas_path=str(tmp_path),
-                data_to_sampler_value_mapping={
-                    EntityType.GENDER: {"Non-binary": None},
-                },
             ),
         )
         request = ReplacementGenerationRequest(
@@ -626,6 +610,7 @@ class TestReplacementGenerator:
             effective_dependency_tuple=((EntityType.GENDER, CanonicalValue("string", "Non-Binary")),),
             pattern=None,
             seed=1,
+            resolved_dependency_values=((EntityType.GENDER, None),),
         )
 
         assert generator.generate(request) == "Second"

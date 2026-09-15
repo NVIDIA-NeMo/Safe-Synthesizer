@@ -60,12 +60,14 @@ def _execute(
     generator: _RecordingGenerator,
     *,
     group_column: str | None = None,
+    data_to_sampler_value_mapping: dict[str, dict[str, list[str] | None]] | None = None,
 ) -> ReplacementExecutionResult:
     return StructuredReplacementExecutor(
         plan,
         generator,
         group_column=group_column,
         base_seed=42,
+        data_to_sampler_value_mapping=data_to_sampler_value_mapping,
     ).execute(dataframe)
 
 
@@ -106,6 +108,28 @@ class TestPlanCompiler:
 
 @pytest.mark.unit
 class TestStructuredReplacementExecutor:
+    def test_resolves_sampler_values_from_the_dependency_source_column(self) -> None:
+        dataframe = pd.DataFrame({"first_name": ["Ada"], "sex": ["Woman"]})
+        plan = PiiReplacementPlan(
+            columns_to_replace=[
+                PiiColumnPlan(
+                    column_name="first_name",
+                    entity_type=EntityType.FIRST_NAME,
+                    depends_on=[ConditioningColumn(column_name="sex", entity_type=EntityType.GENDER)],
+                )
+            ]
+        )
+        generator = _RecordingGenerator()
+
+        _execute(
+            dataframe,
+            plan,
+            generator,
+            data_to_sampler_value_mapping={"sex": {"Woman": ["female"]}},
+        )
+
+        assert generator.requests[0].resolved_dependency_values == ((EntityType.GENDER, ("female",)),)
+
     def test_reads_upstream_replacements_and_preserves_duplicate_indexes(self) -> None:
         dataframe = pd.DataFrame(
             {"first": ["Ada", "Grace"], "email": ["ada@example.com", "grace@example.com"]},
