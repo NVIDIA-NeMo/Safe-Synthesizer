@@ -9,8 +9,9 @@ import pandas as pd
 from plotly.graph_objects import Figure
 from pydantic import BaseModel, Field
 
-from ...artifacts.analyzers.field_features import FieldType
+from ...artifacts.base.fields import NUMERIC_FIELD_TYPES
 from ...config.parameters import SafeSynthesizerParameters
+from ...data_processing.dataset_profile import DatasetProfile
 from ...evaluation.components.component import Component
 from ...evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from ...evaluation.data_model.evaluation_field import EvaluationField
@@ -33,7 +34,10 @@ class ColumnDistributionPlotRow(BaseModel):
     def _get_figure_for_field(f: EvaluationField | None, training: pd.Series, synthetic: pd.Series) -> Figure | None:
         if f is None:
             return None
-        if f.training_field_features.type != FieldType.NUMERIC or f.synthetic_field_features.type != FieldType.NUMERIC:
+        if (
+            f.training_field_features.type not in NUMERIC_FIELD_TYPES
+            or f.synthetic_field_features.type not in NUMERIC_FIELD_TYPES
+        ):
             if f.training_distribution is not None and f.synthetic_distribution is not None:
                 figure = figures.bar_chart(f.training_distribution, f.synthetic_distribution)
             else:
@@ -106,6 +110,9 @@ class ColumnDistribution(Component):
     evaluation_fields: list[EvaluationField] = Field(
         default=list(), description="Per-column evaluation metadata and distribution scores."
     )
+    dataset_profile: DatasetProfile | None = Field(
+        default=None, description="Training-time type profile used for SQS column weighting."
+    )
 
     @cached_property
     def jinja_context(self) -> dict:
@@ -134,10 +141,12 @@ class ColumnDistribution(Component):
                 score=score,
                 column_statistics=evaluation_datasets.column_statistics,
                 evaluation_fields=evaluation_datasets.evaluation_fields,
+                dataset_profile=evaluation_datasets.dataset_profile,
             )
         else:
             return ColumnDistribution(
                 score=EvaluationScore(notes="No tabular columns detected."),
                 column_statistics=evaluation_datasets.column_statistics,
                 evaluation_fields=evaluation_datasets.evaluation_fields,
+                dataset_profile=evaluation_datasets.dataset_profile,
             )

@@ -4,13 +4,19 @@
 from __future__ import annotations
 
 import random
+from collections.abc import Set as AbstractSet
 from typing import Self
 
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from ...artifacts.analyzers.field_features import FieldType
+from ...artifacts.base.fields import (
+    NOMINAL_FIELD_TYPES,
+    TABULAR_FIELD_TYPES,
+    FieldType,
+)
 from ...config.evaluate import DEFAULT_RECORD_COUNT, DEFAULT_SQS_REPORT_COLUMNS
+from ...data_processing.dataset_profile import DatasetProfile
 from ...evaluation.data_model.evaluation_field import EvaluationField
 from ...evaluation.statistics import stats
 from ...observability import get_logger
@@ -45,6 +51,9 @@ class EvaluationDatasets(BaseModel):
     column_statistics: dict[str, ColumnStatistics] | None = Field(
         default=None, description="Per-column PII entity counts and transform metadata."
     )
+    dataset_profile: DatasetProfile | None = Field(
+        default=None, description="Training-time type profile used for evaluation column routing."
+    )
     evaluation_fields: list[EvaluationField] = Field(
         default=list(), description="Per-column evaluation metadata and distribution scores."
     )
@@ -60,7 +69,7 @@ class EvaluationDatasets(BaseModel):
         if df.empty:
             raise ValueError(f"{df_name} is empty!")
 
-    def get_columns_of_type(self, types: set[FieldType], based_on: str = "training") -> list[str]:
+    def get_columns_of_type(self, types: AbstractSet[FieldType], based_on: str = "training") -> list[str]:
         """Return column names whose ``FieldType`` is in ``types``.
 
         Args:
@@ -71,6 +80,17 @@ class EvaluationDatasets(BaseModel):
         Returns:
             List of matching column names.
         """
+        # TODO DO NOT SUBMIT: As is, this could be a behavior change:
+        # we now ignore `based_on` if `dataset_profile` is not None.
+        # Do we really need `based_on` here? Can we standardize the train
+        # and synth datasets elsewhere and then avoid worrying about the
+        # distinction for types within evaluation?
+        if self.dataset_profile is not None:
+            return [
+                name
+                for name in self.dataset_profile.get_columns_of_type(types)
+                if name in self.training.columns and name in self.synthetic.columns
+            ]
         if based_on == "training":
             return [f.name for f in self.evaluation_fields if f.training_field_features.type in types]
         elif based_on == "synthetic":
@@ -85,12 +105,12 @@ class EvaluationDatasets(BaseModel):
             return []
 
     def get_tabular_columns(self, based_on: str = "training") -> list[str]:
-        """Return columns classified as binary, categorical, or numeric."""
-        return self.get_columns_of_type({FieldType.BINARY, FieldType.CATEGORICAL, FieldType.NUMERIC}, based_on)
+        """Return columns classified as binary, categorical, integer, or float."""
+        return self.get_columns_of_type(TABULAR_FIELD_TYPES, based_on)
 
     def get_nominal_columns(self, based_on: str = "training") -> list[str]:
         """Return columns classified as binary or categorical."""
-        return self.get_columns_of_type({FieldType.BINARY, FieldType.CATEGORICAL}, based_on)
+        return self.get_columns_of_type(NOMINAL_FIELD_TYPES, based_on)
 
     def get_text_columns(self, based_on: str = "training") -> list[str]:
         """Return columns classified as free text."""
@@ -227,6 +247,7 @@ class EvaluationDatasets(BaseModel):
         cols: int = DEFAULT_SQS_REPORT_COLUMNS,
         mandatory_columns: list[str] | None = None,
         enable_sampling: bool = True,
+        dataset_profile: DatasetProfile | None = None,
     ) -> EvaluationDatasets:
         """Build an ``EvaluationDatasets`` with optional column/row subsampling.
 
@@ -243,6 +264,7 @@ class EvaluationDatasets(BaseModel):
             cols: Target column count for subsampling.
             mandatory_columns: Columns to always include in subsampling.
             enable_sampling: When ``False``, skip all subsampling.
+            dataset_profile: Training-time profile used for type routing.
 
         Returns:
             A fully initialized ``EvaluationDatasets``.
@@ -259,5 +281,9 @@ class EvaluationDatasets(BaseModel):
             training, synthetic = EvaluationDatasets.subsample_rows(training, synthetic, rows)
 
         return EvaluationDatasets(
-            training=training, synthetic=synthetic, test=test, column_statistics=column_statistics
+            training=training,
+            synthetic=synthetic,
+            test=test,
+            column_statistics=column_statistics,
+            dataset_profile=dataset_profile,
         )

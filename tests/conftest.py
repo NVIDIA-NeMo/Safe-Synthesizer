@@ -471,12 +471,14 @@ def fixture_tokenizer(fixture_smollm3_tokenizer):
 def fixture_lmsys_dataset_jsonl_and_schema(
     fixture_lmsys_chat_non_english_dataset,
 ) -> tuple[str, dict]:
-    """LMSYS non-English chat dataset serialized as JSONL with its inferred JSON schema."""
-    from nemo_safe_synthesizer.data_processing.dataset import make_json_schema
+    """LMSYS non-English chat dataset serialized as JSONL with a matching JSON schema."""
     from nemo_safe_synthesizer.data_processing.record_utils import records_to_jsonl
 
-    return records_to_jsonl(fixture_lmsys_chat_non_english_dataset), make_json_schema(
-        fixture_lmsys_chat_non_english_dataset
+    from .schema_utils import json_schema_with_nested_columns
+
+    return (
+        records_to_jsonl(fixture_lmsys_chat_non_english_dataset),
+        json_schema_with_nested_columns(fixture_lmsys_chat_non_english_dataset),
     )
 
 
@@ -487,9 +489,9 @@ def fixture_valid_iris_dataset_jsonl_and_schema(
     """First 5 Iris rows as JSONL with inferred JSON schema for processor / regex tests."""
     from io import StringIO
 
-    from nemo_safe_synthesizer.data_processing.dataset import make_json_schema
+    from nemo_safe_synthesizer.data_processing.dataset_profile import discover_dataset_profile
 
     sample_df = pd.DataFrame(fixture_iris_dataset[:5])
     str_buffer = StringIO()
     sample_df.to_json(str_buffer, orient="records", lines=True)
-    return str_buffer.getvalue(), make_json_schema(sample_df)
+    return str_buffer.getvalue(), discover_dataset_profile(sample_df).to_json_schema()

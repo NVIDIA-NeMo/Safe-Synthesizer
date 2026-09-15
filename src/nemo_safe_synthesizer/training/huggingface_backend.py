@@ -41,7 +41,7 @@ from .. import utils
 from ..cli.artifact_structure import BoundDir
 from ..config.autoconfig import AutoConfigResolver
 from ..data_processing.assembler import TrainingExampleAssembler
-from ..data_processing.dataset import make_json_schema
+from ..data_processing.dataset_profile import discover_dataset_profile
 from ..defaults import (
     DEFAULT_VALID_RECORD_EVAL_BATCH_SIZE,
     EVAL_STEPS,
@@ -579,19 +579,20 @@ class HuggingFaceBackend(TrainingBackend):
             trainer: The Trainer instance to configure.
             training_args: The training arguments dictionary containing inference_eval_kwargs.
         """
-        if self.dataset_schema is None:
-            raise ParameterError("dataset_schema must be set before configuring inference eval callback")
+        if self.dataset_profile is None:
+            raise ParameterError("dataset_profile must be set before configuring inference eval callback")
+        schema = self.dataset_profile.to_json_schema()
 
         logger.info(
             "👀 Heads up -> Generation eval is enabled ✅",
         )
         trainer.add_callback(
             InferenceEvalCallback(
-                schema=self.dataset_schema,
+                schema=schema,
                 metadata=self.model_metadata,
                 processor=create_processor(
                     config=self.params,
-                    schema=self.dataset_schema,
+                    schema=schema,
                     metadata=self.model_metadata,
                     tokenizer=self.tokenizer,
                 ),
@@ -706,7 +707,7 @@ class HuggingFaceBackend(TrainingBackend):
 
         Validates groupby/orderby columns, resolves auto-config values,
         runs time-series preprocessing, and assembles tokenized training examples.
-        Populates ``training_examples``, ``dataset_schema``,
+        Populates ``training_examples``, ``dataset_profile``,
         ``training_df``, and ``data_fraction``.
 
         Raises:
@@ -732,7 +733,12 @@ class HuggingFaceBackend(TrainingBackend):
         hf_dataset = Dataset.from_pandas(training_df, preserve_index=False)
         # Exclude PSEUDO_GROUP_COLUMN from schema (internal column for ungrouped time series)
         schema_df = training_df.drop(columns=[PSEUDO_GROUP_COLUMN], errors="ignore")
-        self.dataset_schema = make_json_schema(schema_df)
+        configured_profile = self.params.data.dataset_profile
+        if configured_profile == "auto_discovery":
+            self.dataset_profile = discover_dataset_profile(schema_df)
+        else:
+            self.dataset_profile = configured_profile
+            self.dataset_profile.validate_against_dataframe(schema_df)
         self.training_df = training_df
         self.test_df = test_df
 
@@ -832,8 +838,8 @@ class HuggingFaceBackend(TrainingBackend):
         on :class:`TrainingBackend` keeps save and teardown as separate
         lifecycle events).
         """
-        if self.dataset_schema is None:
-            raise ParameterError("dataset_schema must be set before saving model")
+        if self.dataset_profile is None:
+            raise ParameterError("dataset_profile must be set before saving model")
 
         adapter_dir = self.workdir.train.adapter
         if not isinstance(adapter_dir, BoundDir):
@@ -845,8 +851,8 @@ class HuggingFaceBackend(TrainingBackend):
         logger.runtime.debug(stdout.getvalue())
         logger.user.info(f"Saving model metadata to {adapter_dir.metadata}")
         self.model_metadata.save_metadata()
-        logger.user.info(f"Saving dataset schema to {adapter_dir.schema}")
-        write_json(self.dataset_schema, adapter_dir.schema, indent=4)
+        logger.user.info(f"Saving dataset profile to {adapter_dir.dataset_profile}")
+        write_json(self.dataset_profile.model_dump(mode="json"), adapter_dir.dataset_profile, indent=4)
         logger.user.info(f"Saving model parameters to {self.workdir.train.config}")
         write_json(
             self.params.model_dump(mode="json"),

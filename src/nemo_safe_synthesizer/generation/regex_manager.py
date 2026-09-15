@@ -129,11 +129,11 @@ def _enum_regex(instance: dict[str, Any], **kwargs) -> str:
             inner = json.dumps(choice, ensure_ascii=True)[1:-1]
             choices.append(f'"{re.escape(inner)}"')
         elif choice is None:
-            # make_json_schema represents a missing value in an enum type field
-            # as None, but when we create json for this it's encoded as
-            # "field":null (since we don't allow optional fields in the
-            # encoding). So None gets converted to null here. This may not be
-            # standard json schema, but is how TabFT works right now.
+            # DatasetProfile.to_json_schema represents a missing value in an
+            # enum type field as None, but when we create json for this it's
+            # encoded as "field":null (since we don't allow optional fields in
+            # the encoding). So None gets converted to null here. This may not
+            # be standard json schema, but is how TabFT works right now.
             choices.append(NULL)
         else:
             raise NotImplementedError(f"Unsupported type={type(choice)} in enum")
@@ -269,10 +269,11 @@ def _type_regex(instance: dict[str, Any], whitespace_pattern: str, **kwargs) -> 
             # if the specification of the object is not give, even though a JSON
             # object that contains an object here would be valid under the specification.
             # TODO: it appears a list of types can still have additional
-            # constraints like minimum or minLength, but make_json_schema
-            # doesn't emit those right now, would be nice to emit those, but
-            # then the handling here needs to change, alternately we use the
-            # anyOf keyword as at
+            # constraints like minimum or minLength, but
+            # DatasetProfile.to_json_schema doesn't emit those for multi-type
+            # properties right now, would be nice to emit those, but then the
+            # handling here needs to change, alternately we use the anyOf
+            # keyword as at
             # https://cswr.github.io/JsonSchema/spec/multiple_types/
             regexes = [_build_regex({"type": t}, whitespace_pattern) for t in instance_type if t != "object"]
             return rf"({'|'.join(regexes)})"
