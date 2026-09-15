@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for the plan-only PII replacement SDK interface."""
+"""Tests for the standalone PII planning and replacement SDK interfaces."""
 
 import subprocess
 import sys
@@ -100,3 +100,28 @@ def test_plan_pii_replacement_rejects_disabled_pii(tmp_path: Path) -> None:
 
     with pytest.raises(ParameterError, match="PII replacement is disabled"):
         nss.plan_pii_replacement()
+
+
+def test_replace_pii_resolves_and_writes_the_complete_input(tmp_path: Path) -> None:
+    dataframe = pd.DataFrame({"email": ["ada@example.com", "grace@example.com"]})
+    resolved = ReplacePiiConfig(
+        replacement_plan=PiiReplacementPlan(
+            columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
+        ),
+    )
+    data_output = tmp_path / "output" / "pii_replaced.csv"
+    config_output = tmp_path / "output" / "pii_replacement_config.yaml"
+    nss = SafeSynthesizer(
+        config=SafeSynthesizerParameters(replace_pii=resolved),
+        save_path=tmp_path / "artifacts",
+    ).with_data_source(dataframe)
+
+    result = nss.replace_pii(data_output, config_output_path=config_output)
+
+    assert result.replacement_plan == resolved.inline_plan
+    assert result.transformed_df["email"].tolist() != dataframe["email"].tolist()
+    assert result.transformed_df["email"].str.contains("@").all()
+    pd.testing.assert_frame_equal(pd.read_csv(data_output), result.transformed_df)
+    assert SafeSynthesizerParameters.from_yaml(config_output).replace_pii == result.resolved_config
+    assert nss._column_statistics == result.column_statistics
+    assert nss._pii_replacer_time == result.elapsed_time_seconds

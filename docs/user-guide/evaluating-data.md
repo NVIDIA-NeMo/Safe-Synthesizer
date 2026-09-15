@@ -69,7 +69,11 @@ Small datasets cause poor privacy budget utilization. Consider lowering
 
 ## PII Replacement
 
-PII replacement v3 troubleshooting guidance will be added in a later update.
+The synthesis pipeline retains the original training and test splits for
+evaluation while training on the PII-replaced split. PII replay receives the
+replacement engine's per-column statistics, including structured occurrence
+counts and accepted free-text span counts. The complete original-to-replacement
+map is intentionally neither logged nor persisted.
 
 ---
 
