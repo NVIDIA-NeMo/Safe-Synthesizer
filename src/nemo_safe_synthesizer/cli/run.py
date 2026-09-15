@@ -400,8 +400,9 @@ def run(
     """Run the Safe Synthesizer end-to-end pipeline.
 
     Without a subcommand, runs the full end-to-end pipeline.
-    Use 'run train' or 'run generate' for individual stages, or
-    'run replace-pii --plan-only' to resolve a PII replacement configuration.
+    Use 'run train', 'run generate', or 'run replace-pii' for individual
+    stages. Pass '--plan-only' to resolve a PII replacement configuration
+    without replacing data.
     """
     # If a subcommand is invoked, skip the default behavior
     if ctx.invoked_subcommand is not None:
@@ -469,13 +470,7 @@ def run_replace_pii(
     plan_only: bool = False,
     **kwargs: Any,
 ) -> None:
-    """Plan PII replacement for the full input dataset.
-
-    This command currently requires ``--plan-only``.
-    """
-    if not plan_only:
-        raise click.UsageError("run replace-pii currently requires --plan-only")
-
+    """Plan or apply PII replacement to the full input dataset."""
     _set_cli_deployment_type_default()
     settings = _settings_from_run_kwargs(kwargs)
     run_logger, config, df, workdir = common_setup(
@@ -489,15 +484,30 @@ def run_replace_pii(
             from ..sdk.library_builder import SafeSynthesizer
 
             if df is None:
-                raise UserError("Input data is required to plan PII replacement.")
-            output_path = workdir.run_dir / PII_REPLACEMENT_CONFIG_FILENAME
+                raise UserError("Input data is required to plan or apply PII replacement.")
+            config_output_path = workdir.run_dir / PII_REPLACEMENT_CONFIG_FILENAME
             nss = SafeSynthesizer(
                 config=config,
                 workdir=workdir,
                 emit_telemetry=config.emit_telemetry,
             ).with_data_source(df)
-            nss.plan_pii_replacement(output_path=output_path)
-            run_logger.info(f"Resolved PII replacement configuration saved to: {output_path}")
+            if plan_only:
+                nss.plan_pii_replacement(output_path=config_output_path)
+                run_logger.info(f"Resolved PII replacement configuration saved to: {config_output_path}")
+            else:
+                data_output_path = (
+                    Path(settings.output_file)
+                    if settings.output_file
+                    else workdir.run_dir / f"{workdir.dataset_name}_pii_replaced.csv"
+                )
+                result = nss.replace_pii(
+                    output_path=data_output_path,
+                    config_output_path=config_output_path,
+                )
+                run_logger.info(
+                    f"PII replacement complete: {result.generation_statistics.generated_replacement_count} "
+                    f"distinct replacements generated; output saved to: {data_output_path}"
+                )
     except UserError as exc:
         click.secho(str(exc), fg="red", err=True)
         raise SystemExit(1)

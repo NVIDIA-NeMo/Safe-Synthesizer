@@ -9,7 +9,6 @@ import ipaddress
 import re
 import unicodedata
 from collections.abc import Mapping
-from datetime import datetime, timedelta
 from random import Random
 from typing import TYPE_CHECKING
 
@@ -103,32 +102,6 @@ def normalize_organization_domain(value: str) -> str:
     ascii_value = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii")
     normalized = re.sub(r"[^a-z0-9]+", "-", ascii_value.casefold()).strip("-")
     return normalized[:63].rstrip("-")
-
-
-def _shift_birth_date(original: str, pattern: str | None, rng: Random) -> str:
-    parsed, output_pattern = _parse_birth_date(original, pattern)
-    offset = rng.randint(-365, 365)
-    if offset == 0:
-        offset = 1
-    shifted = parsed + timedelta(days=offset)
-    return shifted.strftime(output_pattern) if output_pattern is not None else shifted.date().isoformat()
-
-
-def _parse_birth_date(original: str, pattern: str | None) -> tuple[datetime, str | None]:
-    if pattern is not None:
-        try:
-            return datetime.strptime(original, pattern), pattern
-        except ValueError as exc:
-            raise GenerationError("date_of_birth value does not match its validated pattern") from exc
-    try:
-        return datetime.fromisoformat(original), None
-    except ValueError:
-        for candidate in ("%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y", "%m-%d-%Y", "%d-%m-%Y"):
-            try:
-                return datetime.strptime(original, candidate), candidate
-            except ValueError:
-                continue
-    raise GenerationError("date_of_birth value is not parseable without a configured pattern")
 
 
 def _render_luhn_pattern(pattern: str, rng: Random) -> str:
