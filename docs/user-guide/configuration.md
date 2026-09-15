@@ -292,10 +292,12 @@ for the full API reference.
 ## Replacing PII
 
 PII replacement accepts automatic discovery, a plan written inline in the main NSS
-configuration, or a path to a separate plan YAML. See
+configuration, or a path to a separate plan YAML. Data-to-sampler value
+mappings default to automatic discovery or can be supplied inline. See
 [PII Replacement](../product-overview/pii_replacement.md) for the plan-source
 definitions, examples, Nemotron Personas download instructions, the LLM
-configuration for plan enhancement, and the GLiNER2 settings for free-text detection.
+configuration for plan enhancement and dependency mapping discovery, and the GLiNER2
+settings for free-text detection.
 
 Structured-column replacements run before training. Free-text named entity
 detection and span replacement are not yet executed.
