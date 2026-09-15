@@ -370,28 +370,177 @@ def test_repository_cuda_variant_dependencies_and_sources(pytestconfig: pytest.C
     assert indexes["vllm-v0-27-0-cu130"] == "https://wheels.vllm.ai/0.27.0/cu130"
 
 
-def test_click_cli_updates_pyproject_and_checks_drift(tmp_path: Path, generator: ModuleType) -> None:
+def test_build_cuda_installer_fragment_renders_runtime_index_arrays(
+    pytestconfig: pytest.Config, generator: ModuleType
+) -> None:
+    config = generator.load_cuda_deps_config(pytestconfig.rootpath / "cuda_deps.toml")
+    vllm_url = next(index.url for index in config.indexes if index.name.startswith("vllm-"))
+
+    generated = generator.build_cuda_installer_fragment(config)
+
+    assert (
+        """readonly -a CUDA_INDEXES_CPU=(
+    https://flashinfer.ai/whl/
+    https://download.pytorch.org/whl/cpu
+)"""
+        in generated.text
+    )
+    assert "readonly -a CUDA_INDEXES_CU129=(" in generated.text
+    assert vllm_url in generated.text
+    assert "readonly -a CUDA_INDEXES_CU130=(" in generated.text
+    assert "https://pypi.nvidia.com" in generated.text
+    flashinfer_cu129 = config.cuda_indexes.flashinfer.url.format(extra="cu129")
+    pytorch_cu129 = config.cuda_indexes.pytorch.url.format(extra="cu129")
+    assert generated.text.index(flashinfer_cu129) < generated.text.index(pytorch_cu129) < generated.text.index(vllm_url)
+
+
+def test_apply_cuda_fragment_to_installer_replaces_generated_block(
+    pytestconfig: pytest.Config, generator: ModuleType
+) -> None:
+    config = generator.load_cuda_deps_config(pytestconfig.rootpath / "cuda_deps.toml")
+    vllm_url = next(index.url for index in config.indexes if index.name.startswith("vllm-"))
+    generated = generator.build_cuda_installer_fragment(config)
+    current = (pytestconfig.rootpath / "install_nss.sh").read_text(encoding="utf-8")
+    stale = current.replace(vllm_url, f"{vllm_url}-stale")
+
+    updated = generator.apply_cuda_fragment_to_installer(stale, generated)
+
+    assert updated == current
+    assert generator.apply_cuda_fragment_to_installer(updated, generated) == updated
+
+
+def test_apply_cuda_fragment_to_installer_rejects_duplicate_markers(
+    pytestconfig: pytest.Config, generator: ModuleType
+) -> None:
+    config = generator.load_cuda_deps_config(pytestconfig.rootpath / "cuda_deps.toml")
+    generated = generator.build_cuda_installer_fragment(config)
+    current = (pytestconfig.rootpath / "install_nss.sh").read_text(encoding="utf-8")
+    duplicated = current.replace(
+        generator.INSTALLER_INDEXES_END,
+        f"{generator.INSTALLER_INDEXES_END}\n{generator.INSTALLER_INDEXES_BEGIN}\n"
+        f"stale\n{generator.INSTALLER_INDEXES_END}",
+    )
+
+    with pytest.raises(ValueError, match="exactly one generated CUDA installer index block"):
+        generator.apply_cuda_fragment_to_installer(duplicated, generated)
+
+
+def test_run_generation_command_installer_check_reports_drift(
+    tmp_path: Path, pytestconfig: pytest.Config, generator: ModuleType
+) -> None:
+    config_text = (pytestconfig.rootpath / "cuda_deps.toml").read_text(encoding="utf-8")
+    config_data = tomllib.loads(config_text)
+    vllm_index = next(index for index in config_data["indexes"] if index["name"].startswith("vllm-"))
+    old_url = vllm_index["url"]
+    config_path = tmp_path / "cuda_deps.toml"
+    config_path.write_text(config_text.replace(old_url, f"{old_url}-next"), encoding="utf-8")
+    config = generator.load_cuda_deps_config(config_path)
+    generated_pyproject = generator.build_cuda_pyproject_fragment(config)
+    pyproject_path = tmp_path / "pyproject.toml"
+    pyproject_path.write_text(
+        generator.apply_cuda_fragment_to_pyproject(
+            (pytestconfig.rootpath / "pyproject.toml").read_text(encoding="utf-8"),
+            generated_pyproject,
+        ),
+        encoding="utf-8",
+    )
+
+    result = generator.run_generation_command(
+        config_path,
+        pyproject_path,
+        check=True,
+        installer_path=pytestconfig.rootpath / "install_nss.sh",
+    )
+
+    assert result.status == generator.GenStatus.changed
+    assert "install_nss.sh" in result.message
+
+
+def test_run_generation_command_validates_both_outputs_before_writing(
+    tmp_path: Path, pytestconfig: pytest.Config, generator: ModuleType
+) -> None:
+    config_path = pytestconfig.rootpath / "cuda_deps.toml"
+    pyproject_path = tmp_path / "pyproject.toml"
+    pyproject_path.write_text(PYPROJECT, encoding="utf-8")
+    installer_path = tmp_path / "install_nss.sh"
+    installer_path.write_text("#!/usr/bin/env bash\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="missing generated CUDA installer index markers"):
+        generator.run_generation_command(
+            config_path,
+            pyproject_path,
+            check=False,
+            installer_path=installer_path,
+        )
+
+    assert pyproject_path.read_text(encoding="utf-8") == PYPROJECT
+
+
+def test_click_cli_updates_pyproject_and_checks_drift(
+    tmp_path: Path, pytestconfig: pytest.Config, generator: ModuleType
+) -> None:
     config_path = tmp_path / "cuda_deps.toml"
     pyproject_path = tmp_path / "pyproject.toml"
+    installer_path = tmp_path / "install_nss.sh"
     config_path.write_text(CUDA_DEPS, encoding="utf-8")
     pyproject_path.write_text(PYPROJECT, encoding="utf-8")
+    installer_path.write_text(
+        (pytestconfig.rootpath / "install_nss.sh").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    cli_paths = [
+        str(config_path),
+        "--pyproject",
+        str(pyproject_path),
+        "--installer",
+        str(installer_path),
+    ]
 
-    stale_result = CliRunner().invoke(generator._cli, [str(config_path), "--pyproject", str(pyproject_path), "--check"])
+    stale_result = CliRunner().invoke(generator._cli, [*cli_paths, "--check"])
 
     assert stale_result.exit_code == 1
 
-    result = CliRunner().invoke(generator._cli, [str(config_path), "--pyproject", str(pyproject_path)])
+    result = CliRunner().invoke(generator._cli, cli_paths)
 
     assert result.exit_code == 0
     parsed = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
     assert parsed["project"]["optional-dependencies"]["cu132"] == EXPECTED_CU132_DEPS
     assert parsed["tool"]["uv"]["sources"]["torch"] == EXPECTED_CU132_TORCH_SOURCES
 
-    current_result = CliRunner().invoke(
-        generator._cli, [str(config_path), "--pyproject", str(pyproject_path), "--check"]
-    )
+    current_result = CliRunner().invoke(generator._cli, [*cli_paths, "--check"])
 
     assert current_result.exit_code == 0
+
+
+def test_click_cli_checks_installer_in_working_directory_by_default(
+    tmp_path: Path,
+    pytestconfig: pytest.Config,
+    generator: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pyproject_path = tmp_path / "pyproject.toml"
+    pyproject_path.write_text(
+        (pytestconfig.rootpath / "pyproject.toml").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    (tmp_path / "install_nss.sh").write_text(
+        (pytestconfig.rootpath / "install_nss.sh").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    result = CliRunner().invoke(
+        generator._cli,
+        [
+            str(pytestconfig.rootpath / "cuda_deps.toml"),
+            "--pyproject",
+            str(pyproject_path),
+            "--check",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Generated CUDA installer indexes in install_nss.sh are up to date" in result.output
 
 
 def test_load_cuda_deps_config_rejects_missing_managed_extra(generator: ModuleType) -> None:
