@@ -25,13 +25,13 @@ readonly -a CUDA_INDEXES_CU129=(
     https://flashinfer.ai/whl/cu129
     https://download.pytorch.org/whl/cu129
     https://flashinfer.ai/whl/
-    https://wheels.vllm.ai/0.26.0/cu129
+    https://wheels.vllm.ai/0.27.0/cu129
 )
 readonly -a CUDA_INDEXES_CU130=(
     https://flashinfer.ai/whl/cu130
     https://download.pytorch.org/whl/cu130
     https://flashinfer.ai/whl/
-    https://wheels.vllm.ai/0.26.0/cu130
+    https://wheels.vllm.ai/0.27.0/cu130
     https://pypi.nvidia.com
 )
 # <<< END GENERATED CUDA INSTALLER INDEXES - DO NOT EDIT >>>
