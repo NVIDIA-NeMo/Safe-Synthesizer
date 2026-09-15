@@ -48,7 +48,7 @@ _LEGACY_CLI_OPTION_PATHS: dict[str, tuple[str, ...]] = {
 """Hidden compatibility aliases for renamed generated CLI options."""
 
 
-def _normalize_list_value(items: Sequence[Any]) -> list[Any]:
+def _normalize_list_value(items: Sequence[object]) -> list[object]:
     r"""Normalize CLI list inputs into a clean list.
 
     Handles repeated flags, comma-separated strings, and JSON- or bracket-encoded lists.
@@ -59,7 +59,7 @@ def _normalize_list_value(items: Sequence[Any]) -> list[Any]:
     while literal brackets can be preserved using backslash escaping (e.g. ``\[customer\]``)
     or standard JSON string lists (e.g. ``'["[customer]"]'``).
     """
-    result: list[Any] = []
+    result: list[object] = []
     is_repeated = len(items) > 1
     for item in items:
         if isinstance(item, str):
@@ -180,7 +180,7 @@ def _is_basemodel(t: Any) -> TypeIs[type[BaseModel]]:
     return inspect.isclass(t) and issubclass(t, BaseModel)
 
 
-def _is_list_type(annotation: Any) -> bool:
+def _is_list_type(annotation: object) -> bool:
     """Check if an annotation represents a list container."""
     t = annotation
     if get_origin(t) is Annotated:
@@ -193,7 +193,7 @@ def _is_list_type(annotation: Any) -> bool:
     return get_origin(t) is list
 
 
-def _list_item_type(annotation: Any) -> Any | None:
+def _list_item_type(annotation: object) -> object | None:
     """Return the item annotation for a list, including optional and annotated lists."""
     t = annotation
     if get_origin(t) is Annotated:
@@ -209,8 +209,8 @@ def _list_item_type(annotation: Any) -> Any | None:
         )
     if get_origin(t) is list:
         args = get_args(t)
-        return args[0] if args else Any
-    return Any if t is list else None
+        return args[0] if args else object
+    return object if t is list else None
 
 
 def _nullable_model_arg(union_args: tuple) -> type[BaseModel] | None:
@@ -351,12 +351,12 @@ def _parse_structured_list_option(
     _ctx: click.Context,
     _param: click.Parameter,
     values: tuple[str, ...],
-) -> tuple[Any, ...]:
+) -> tuple[object, ...]:
     """Decode JSON objects and arrays supplied for a list of Pydantic models."""
     if not values:
         return values
 
-    parsed_items: list[Any] = []
+    parsed_items: list[object] = []
     for value in values:
         try:
             parsed = json.loads(value)

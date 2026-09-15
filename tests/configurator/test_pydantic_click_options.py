@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated
 
 import click
 import pytest
@@ -563,7 +563,7 @@ def test_is_list_type():
 
 def test_list_item_type():
     """Verify list item extraction across list annotations."""
-    assert _list_item_type(list) is Any
+    assert _list_item_type(list) is object
     assert _list_item_type(list[str]) is str
     assert _list_item_type(list[int] | None) is int
     assert _list_item_type(Annotated[list[float], Field(description="desc")]) is float
