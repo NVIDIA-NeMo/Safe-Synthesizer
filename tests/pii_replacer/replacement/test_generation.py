@@ -53,6 +53,68 @@ def _generate(generator: ReplacementGenerator, request: ReplacementGenerationReq
     return generator.generate(request)
 
 
+def _request(
+    entity_type: EntityType = EntityType.FIRST_NAME,
+    original_value: str = "Ada",
+    *,
+    dependencies: tuple[tuple[EntityType, CanonicalValue | None], ...] = (),
+    pattern: str | None = None,
+    seed: int = 42,
+    resolved_values: tuple[tuple[EntityType, tuple[str, ...] | None], ...] = (),
+) -> ReplacementGenerationRequest:
+    return ReplacementGenerationRequest(
+        entity_type=entity_type,
+        original_value=original_value,
+        effective_dependency_tuple=dependencies,
+        pattern=pattern,
+        seed=seed,
+        resolved_dependency_values=resolved_values,
+    )
+
+
+def _faker_generator(*, locale: str = "en_US") -> FakerReplacementGenerator:
+    return FakerReplacementGenerator(
+        settings=PiiReplacementSettings(locale=locale),
+        sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+    )
+
+
+def _nemotron_personas_generator(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    people: pd.DataFrame | None = None,
+) -> NemotronPersonasReplacementGenerator:
+    asset_path = tmp_path / "datasets" / "en_US.parquet"
+    asset_path.parent.mkdir(exist_ok=True)
+    asset_path.touch()
+    if people is not None:
+        monkeypatch.setattr(pd, "read_parquet", lambda _path: people)
+    return NemotronPersonasReplacementGenerator(
+        settings=PiiReplacementSettings(),
+        sampler=PiiSamplerConfig(
+            backend=PiiSamplerBackend.NEMOTRON_PERSONAS,
+            nemotron_personas_path=str(tmp_path),
+        ),
+    )
+
+
+def _record_faker_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+    replacement: str,
+) -> list[ReplacementGenerationRequest]:
+    requests: list[ReplacementGenerationRequest] = []
+
+    def generate(
+        _generator: FakerReplacementGenerator,
+        request: ReplacementGenerationRequest,
+    ) -> str:
+        requests.append(request)
+        return replacement
+
+    monkeypatch.setattr(FakerReplacementGenerator, "generate", generate)
+    return requests
+
+
 @pytest.mark.unit
 class TestReplacementGenerator:
     @pytest.mark.parametrize(
@@ -73,15 +135,7 @@ class TestReplacementGenerator:
         )
 
         assert generator.backend is backend
-        generated = generator.generate(
-            ReplacementGenerationRequest(
-                entity_type=EntityType.FIRST_NAME,
-                original_value="Ada",
-                effective_dependency_tuple=(),
-                pattern=None,
-                seed=42,
-            )
-        )
+        generated = generator.generate(_request())
 
         assert generated != "Ada"
 
@@ -104,14 +158,11 @@ class TestReplacementGenerator:
             )
 
     def test_generator_is_a_structural_interface_for_one_replacement(self) -> None:
-        request = ReplacementGenerationRequest(
-            entity_type=EntityType.EMAIL,
-            original_value="ada@example.com",
-            effective_dependency_tuple=(
-                (EntityType.ORGANIZATION, CanonicalValue(type_tag="string", normalized_value="example")),
-            ),
+        request = _request(
+            EntityType.EMAIL,
+            "ada@example.com",
+            dependencies=((EntityType.ORGANIZATION, CanonicalValue(type_tag="string", normalized_value="example")),),
             pattern="{first_name}.{last_name}@example.com",
-            seed=42,
         )
 
         assert _generate(_FakeGenerator(), request) == "synthetic-email"
@@ -137,17 +188,8 @@ class TestReplacementGenerator:
         ],
     )
     def test_faker_supports_every_structured_entity(self, entity_type: EntityType, original: str) -> None:
-        generator = FakerReplacementGenerator(
-            settings=PiiReplacementSettings(),
-            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
-        )
-        request = ReplacementGenerationRequest(
-            entity_type=entity_type,
-            original_value=original,
-            effective_dependency_tuple=(),
-            pattern=None,
-            seed=42,
-        )
+        generator = _faker_generator()
+        request = _request(entity_type, original)
 
         replacement = generator.generate(request)
 
@@ -156,17 +198,15 @@ class TestReplacementGenerator:
         assert generator.generate(request) == replacement
 
     def test_request_is_immutable_and_hides_sensitive_inputs_from_repr(self) -> None:
-        request = ReplacementGenerationRequest(
-            entity_type=EntityType.FULL_NAME,
-            original_value="Ada Lovelace",
-            effective_dependency_tuple=(
+        request = _request(
+            EntityType.FULL_NAME,
+            "Ada Lovelace",
+            dependencies=(
                 (
                     EntityType.ORGANIZATION,
                     CanonicalValue(type_tag="string", normalized_value="Analytical Engines"),
                 ),
             ),
-            pattern=None,
-            seed=42,
         )
 
         with pytest.raises(FrozenInstanceError):
@@ -195,14 +235,10 @@ class TestReplacementGenerator:
             )
 
     def test_faker_generation_is_deterministic_for_equal_requests(self) -> None:
-        generator = FakerReplacementGenerator(
-            settings=PiiReplacementSettings(locale="en_US"),
-            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
-        )
-        request = ReplacementGenerationRequest(
-            entity_type=EntityType.UNIQUE_IDENTIFIER,
-            original_value="USER-ab12",
-            effective_dependency_tuple=(),
+        generator = _faker_generator()
+        request = _request(
+            EntityType.UNIQUE_IDENTIFIER,
+            "USER-ab12",
             pattern="USR-^^####",
             seed=91,
         )
@@ -225,18 +261,11 @@ class TestReplacementGenerator:
         expected: str,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        generator = FakerReplacementGenerator(
-            settings=PiiReplacementSettings(),
-            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
-        )
+        generator = _faker_generator()
         monkeypatch.setattr(generator, "_faker", lambda _seed: _GenderAwareFake())
-        request = ReplacementGenerationRequest(
-            entity_type=EntityType.FIRST_NAME,
-            original_value="Ada",
-            effective_dependency_tuple=((EntityType.GENDER, CanonicalValue("string", dependency_value)),),
-            pattern=None,
-            seed=42,
-            resolved_dependency_values=resolved_values,
+        request = _request(
+            dependencies=((EntityType.GENDER, CanonicalValue("string", dependency_value)),),
+            resolved_values=resolved_values,
         )
 
         assert generator.generate(request) == expected
@@ -245,34 +274,18 @@ class TestReplacementGenerator:
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        generator = FakerReplacementGenerator(
-            settings=PiiReplacementSettings(),
-            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
-        )
+        generator = _faker_generator()
         monkeypatch.setattr(generator, "_faker", lambda _seed: _GenderAwareFake())
-        request = ReplacementGenerationRequest(
-            entity_type=EntityType.FIRST_NAME,
-            original_value="Ada",
-            effective_dependency_tuple=((EntityType.ETHNIC_BACKGROUND, CanonicalValue("string", "Asian")),),
-            pattern=None,
-            seed=42,
-            resolved_dependency_values=((EntityType.ETHNIC_BACKGROUND, ("east asian",)),),
+        request = _request(
+            dependencies=((EntityType.ETHNIC_BACKGROUND, CanonicalValue("string", "Asian")),),
+            resolved_values=((EntityType.ETHNIC_BACKGROUND, ("east asian",)),),
         )
 
         assert generator.generate(request) == "GENERIC"
 
     def test_faker_preserves_uuid_shape(self) -> None:
-        generator = FakerReplacementGenerator(
-            settings=PiiReplacementSettings(),
-            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
-        )
-        request = ReplacementGenerationRequest(
-            entity_type=EntityType.UNIQUE_IDENTIFIER,
-            original_value="550e8400-e29b-41d4-a716-446655440000",
-            effective_dependency_tuple=(),
-            pattern=None,
-            seed=42,
-        )
+        generator = _faker_generator()
+        request = _request(EntityType.UNIQUE_IDENTIFIER, "550e8400-e29b-41d4-a716-446655440000")
 
         assert re.fullmatch(
             r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
@@ -280,29 +293,17 @@ class TestReplacementGenerator:
         )
 
     def test_faker_preserves_unpatterned_api_key_shape(self) -> None:
-        generator = FakerReplacementGenerator(
-            settings=PiiReplacementSettings(),
-            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
-        )
-        request = ReplacementGenerationRequest(
-            entity_type=EntityType.API_KEY,
-            original_value="sk-ABC123",
-            effective_dependency_tuple=(),
-            pattern=None,
-            seed=42,
-        )
+        generator = _faker_generator()
+        request = _request(EntityType.API_KEY, "sk-ABC123")
 
         assert re.fullmatch(r"[a-z]{2}-[A-Z]{3}\d{3}", generator.generate(request))
 
     def test_email_pattern_uses_dependencies_and_normalizes_organization(self) -> None:
-        generator = FakerReplacementGenerator(
-            settings=PiiReplacementSettings(),
-            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
-        )
-        request = ReplacementGenerationRequest(
-            entity_type=EntityType.EMAIL,
-            original_value="ada@original.example",
-            effective_dependency_tuple=(
+        generator = _faker_generator()
+        request = _request(
+            EntityType.EMAIL,
+            "ada@original.example",
+            dependencies=(
                 (EntityType.FIRST_NAME, CanonicalValue("string", "Synthetic")),
                 (EntityType.ORGANIZATION, CanonicalValue("string", "Société ACME, Inc.")),
             ),
@@ -313,16 +314,11 @@ class TestReplacementGenerator:
         assert generator.generate(request) == "synthetic@mail.societe-acme-inc.co.uk"
 
     def test_birth_date_is_shifted_within_one_year_and_preserves_pattern(self) -> None:
-        generator = FakerReplacementGenerator(
-            settings=PiiReplacementSettings(),
-            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
-        )
-        request = ReplacementGenerationRequest(
-            entity_type=EntityType.DATE_OF_BIRTH,
-            original_value="12/10/1815",
-            effective_dependency_tuple=(),
+        generator = _faker_generator()
+        request = _request(
+            EntityType.DATE_OF_BIRTH,
+            "12/10/1815",
             pattern="%m/%d/%Y",
-            seed=42,
         )
 
         replacement = generator.generate(request)
@@ -331,14 +327,10 @@ class TestReplacementGenerator:
         assert 1 <= abs(delta.days) <= 365
 
     def test_card_pattern_produces_a_luhn_valid_number(self) -> None:
-        generator = FakerReplacementGenerator(
-            settings=PiiReplacementSettings(),
-            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
-        )
-        request = ReplacementGenerationRequest(
-            entity_type=EntityType.CREDIT_DEBIT_CARD,
-            original_value="4111-1111-1111-1111",
-            effective_dependency_tuple=(),
+        generator = _faker_generator()
+        request = _request(
+            EntityType.CREDIT_DEBIT_CARD,
+            "4111-1111-1111-1111",
             pattern="####-####-####-####",
             seed=3,
         )
@@ -355,9 +347,6 @@ class TestReplacementGenerator:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        asset_path = tmp_path / "datasets" / "en_US.parquet"
-        asset_path.parent.mkdir()
-        asset_path.touch()
         people = pd.DataFrame(
             {
                 "first_name": ["SyntheticAda"],
@@ -365,128 +354,54 @@ class TestReplacementGenerator:
                 "email_address": ["synthetic@example.test"],
             }
         )
-        monkeypatch.setattr(pd, "read_parquet", lambda _path: people)
-        generator = NemotronPersonasReplacementGenerator(
-            settings=PiiReplacementSettings(),
-            sampler=PiiSamplerConfig(
-                backend=PiiSamplerBackend.NEMOTRON_PERSONAS,
-                nemotron_personas_path=str(tmp_path),
-            ),
-        )
-        request = ReplacementGenerationRequest(
-            entity_type=EntityType.FIRST_NAME,
-            original_value="Ada",
-            effective_dependency_tuple=(),
-            pattern=None,
-            seed=42,
-        )
 
-        assert generator.generate(request) == "SyntheticAda"
+        assert _nemotron_personas_generator(tmp_path, monkeypatch, people).generate(_request()) == "SyntheticAda"
 
     def test_nemotron_personas_generator_uses_address_components_from_the_selected_asset_row(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        asset_path = tmp_path / "datasets" / "en_US.parquet"
-        asset_path.parent.mkdir()
-        asset_path.touch()
         people = pd.DataFrame(
             {
                 "street_number": ["42"],
                 "street_name": ["Analytical Engine Way"],
             }
         )
-        monkeypatch.setattr(pd, "read_parquet", lambda _path: people)
-        generator = NemotronPersonasReplacementGenerator(
-            settings=PiiReplacementSettings(),
-            sampler=PiiSamplerConfig(
-                backend=PiiSamplerBackend.NEMOTRON_PERSONAS,
-                nemotron_personas_path=str(tmp_path),
-            ),
-        )
-        request = ReplacementGenerationRequest(
-            entity_type=EntityType.STREET_ADDRESS,
-            original_value="1 Main Street",
-            effective_dependency_tuple=(),
-            pattern=None,
-            seed=42,
-        )
 
-        assert generator.generate(request) == "42 Analytical Engine Way"
+        generator = _nemotron_personas_generator(tmp_path, monkeypatch, people)
+        assert generator.generate(_request(EntityType.STREET_ADDRESS, "1 Main Street")) == "42 Analytical Engine Way"
 
     def test_nemotron_personas_generator_samples_each_value_independently(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        asset_path = tmp_path / "datasets" / "en_US.parquet"
-        asset_path.parent.mkdir()
-        asset_path.touch()
         people = pd.DataFrame(
             {
                 "first_name": ["FirstRow", "SecondRow"],
                 "last_name": ["FirstLast", "SecondLast"],
             }
         )
-        monkeypatch.setattr(pd, "read_parquet", lambda _path: people)
-        generator = NemotronPersonasReplacementGenerator(
-            settings=PiiReplacementSettings(),
-            sampler=PiiSamplerConfig(
-                backend=PiiSamplerBackend.NEMOTRON_PERSONAS,
-                nemotron_personas_path=str(tmp_path),
-            ),
-        )
+        generator = _nemotron_personas_generator(tmp_path, monkeypatch, people)
 
-        first_name = generator.generate(
-            ReplacementGenerationRequest(
-                entity_type=EntityType.FIRST_NAME,
-                original_value="Ada",
-                effective_dependency_tuple=(),
-                pattern=None,
-                seed=0,
-            )
-        )
-        last_name = generator.generate(
-            ReplacementGenerationRequest(
-                entity_type=EntityType.LAST_NAME,
-                original_value="Lovelace",
-                effective_dependency_tuple=(),
-                pattern=None,
-                seed=1,
-            )
-        )
-
-        assert first_name == "FirstRow"
-        assert last_name == "SecondLast"
+        assert generator.generate(_request(seed=0)) == "FirstRow"
+        assert generator.generate(_request(EntityType.LAST_NAME, "Lovelace", seed=1)) == "SecondLast"
 
     def test_nemotron_personas_generator_matches_dependency_values_case_insensitively(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        asset_path = tmp_path / "datasets" / "en_US.parquet"
-        asset_path.parent.mkdir()
-        asset_path.touch()
         people = pd.DataFrame(
             {
                 "first_name": ["Selected", "NotSelected"],
                 "sex": ["female", "male"],
             }
         )
-        monkeypatch.setattr(pd, "read_parquet", lambda _path: people)
-        generator = NemotronPersonasReplacementGenerator(
-            settings=PiiReplacementSettings(),
-            sampler=PiiSamplerConfig(
-                backend=PiiSamplerBackend.NEMOTRON_PERSONAS,
-                nemotron_personas_path=str(tmp_path),
-            ),
-        )
-        request = ReplacementGenerationRequest(
-            entity_type=EntityType.FIRST_NAME,
-            original_value="Ada",
-            effective_dependency_tuple=((EntityType.GENDER, CanonicalValue("string", "Female")),),
-            pattern=None,
+        generator = _nemotron_personas_generator(tmp_path, monkeypatch, people)
+        request = _request(
+            dependencies=((EntityType.GENDER, CanonicalValue("string", "Female")),),
             seed=1,
         )
 
@@ -497,30 +412,17 @@ class TestReplacementGenerator:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        asset_path = tmp_path / "datasets" / "en_US.parquet"
-        asset_path.parent.mkdir()
-        asset_path.touch()
         people = pd.DataFrame(
             {
                 "first_name": ["East", "Identity", "South"],
                 "ethnic_background": ["east asian", "Asian", "south asian"],
             }
         )
-        monkeypatch.setattr(pd, "read_parquet", lambda _path: people)
-        generator = NemotronPersonasReplacementGenerator(
-            settings=PiiReplacementSettings(),
-            sampler=PiiSamplerConfig(
-                backend=PiiSamplerBackend.NEMOTRON_PERSONAS,
-                nemotron_personas_path=str(tmp_path),
-            ),
-        )
-        request = ReplacementGenerationRequest(
-            entity_type=EntityType.FIRST_NAME,
-            original_value="Ada",
-            effective_dependency_tuple=((EntityType.ETHNIC_BACKGROUND, CanonicalValue("string", "Asian")),),
-            pattern=None,
+        generator = _nemotron_personas_generator(tmp_path, monkeypatch, people)
+        request = _request(
+            dependencies=((EntityType.ETHNIC_BACKGROUND, CanonicalValue("string", "Asian")),),
             seed=1,
-            resolved_dependency_values=((EntityType.ETHNIC_BACKGROUND, ("east asian", "south asian")),),
+            resolved_values=((EntityType.ETHNIC_BACKGROUND, ("east asian", "south asian")),),
         )
 
         assert generator.generate(request) == "South"
@@ -530,9 +432,6 @@ class TestReplacementGenerator:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        asset_path = tmp_path / "datasets" / "en_US.parquet"
-        asset_path.parent.mkdir()
-        asset_path.touch()
         people = pd.DataFrame(
             {
                 "first_name": ["EastWoman", "SouthWoman", "EastMan", "OtherWoman"],
@@ -540,7 +439,6 @@ class TestReplacementGenerator:
                 "ethnic_background": ["east asian", "south asian", "east asian", "white"],
             }
         )
-        monkeypatch.setattr(pd, "read_parquet", lambda _path: people)
         original_intersect = np.intersect1d
         intersection_count = 0
 
@@ -555,27 +453,17 @@ class TestReplacementGenerator:
             return original_intersect(first, second, assume_unique=assume_unique)
 
         monkeypatch.setattr(np, "intersect1d", count_intersection)
-        mapped_labels = ["east asian", "south asian"]
-        generator = NemotronPersonasReplacementGenerator(
-            settings=PiiReplacementSettings(),
-            sampler=PiiSamplerConfig(
-                backend=PiiSamplerBackend.NEMOTRON_PERSONAS,
-                nemotron_personas_path=str(tmp_path),
-            ),
-        )
+        generator = _nemotron_personas_generator(tmp_path, monkeypatch, people)
 
         def generate(dataset_value: str, seed: int) -> str:
             return generator.generate(
-                ReplacementGenerationRequest(
-                    entity_type=EntityType.FIRST_NAME,
-                    original_value="Ada",
-                    effective_dependency_tuple=(
+                _request(
+                    dependencies=(
                         (EntityType.GENDER, CanonicalValue("string", "female")),
                         (EntityType.ETHNIC_BACKGROUND, CanonicalValue("string", dataset_value)),
                     ),
-                    pattern=None,
                     seed=seed,
-                    resolved_dependency_values=((EntityType.ETHNIC_BACKGROUND, tuple(mapped_labels)),),
+                    resolved_values=((EntityType.ETHNIC_BACKGROUND, ("east asian", "south asian")),),
                 )
             )
 
@@ -588,30 +476,17 @@ class TestReplacementGenerator:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        asset_path = tmp_path / "datasets" / "en_US.parquet"
-        asset_path.parent.mkdir()
-        asset_path.touch()
         people = pd.DataFrame(
             {
                 "first_name": ["First", "Second"],
                 "sex": ["female", "male"],
             }
         )
-        monkeypatch.setattr(pd, "read_parquet", lambda _path: people)
-        generator = NemotronPersonasReplacementGenerator(
-            settings=PiiReplacementSettings(),
-            sampler=PiiSamplerConfig(
-                backend=PiiSamplerBackend.NEMOTRON_PERSONAS,
-                nemotron_personas_path=str(tmp_path),
-            ),
-        )
-        request = ReplacementGenerationRequest(
-            entity_type=EntityType.FIRST_NAME,
-            original_value="Ada",
-            effective_dependency_tuple=((EntityType.GENDER, CanonicalValue("string", "Non-Binary")),),
-            pattern=None,
+        generator = _nemotron_personas_generator(tmp_path, monkeypatch, people)
+        request = _request(
+            dependencies=((EntityType.GENDER, CanonicalValue("string", "Non-Binary")),),
             seed=1,
-            resolved_dependency_values=((EntityType.GENDER, None),),
+            resolved_values=((EntityType.GENDER, None),),
         )
 
         assert generator.generate(request) == "Second"
@@ -621,23 +496,10 @@ class TestReplacementGenerator:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        asset_path = tmp_path / "datasets" / "en_US.parquet"
-        asset_path.parent.mkdir()
-        asset_path.touch()
         people = pd.DataFrame({"first_name": ["First"], "sex": ["female"]})
-        monkeypatch.setattr(pd, "read_parquet", lambda _path: people)
-        generator = NemotronPersonasReplacementGenerator(
-            settings=PiiReplacementSettings(),
-            sampler=PiiSamplerConfig(
-                backend=PiiSamplerBackend.NEMOTRON_PERSONAS,
-                nemotron_personas_path=str(tmp_path),
-            ),
-        )
-        request = ReplacementGenerationRequest(
-            entity_type=EntityType.FIRST_NAME,
-            original_value="Ada",
-            effective_dependency_tuple=((EntityType.GENDER, CanonicalValue("string", "Secret Source Label")),),
-            pattern=None,
+        generator = _nemotron_personas_generator(tmp_path, monkeypatch, people)
+        request = _request(
+            dependencies=((EntityType.GENDER, CanonicalValue("string", "Secret Source Label")),),
             seed=1,
         )
 
@@ -650,9 +512,6 @@ class TestReplacementGenerator:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        asset_path = tmp_path / "datasets" / "en_US.parquet"
-        asset_path.parent.mkdir()
-        asset_path.touch()
         read_columns: list[list[str]] = []
         read_dtype_backends: list[str] = []
 
@@ -672,18 +531,9 @@ class TestReplacementGenerator:
             )
 
         monkeypatch.setattr(pd, "read_parquet", read_parquet)
-        generator = NemotronPersonasReplacementGenerator(
-            settings=PiiReplacementSettings(),
-            sampler=PiiSamplerConfig(
-                backend=PiiSamplerBackend.NEMOTRON_PERSONAS,
-                nemotron_personas_path=str(tmp_path),
-            ),
-        )
-        request = ReplacementGenerationRequest(
-            entity_type=EntityType.FIRST_NAME,
-            original_value="Ada",
-            effective_dependency_tuple=((EntityType.GENDER, CanonicalValue("string", "female")),),
-            pattern=None,
+        generator = _nemotron_personas_generator(tmp_path, monkeypatch)
+        request = _request(
+            dependencies=((EntityType.GENDER, CanonicalValue("string", "female")),),
             seed=0,
         )
 
@@ -697,31 +547,18 @@ class TestReplacementGenerator:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        asset_path = tmp_path / "datasets" / "en_US.parquet"
-        asset_path.parent.mkdir()
-        asset_path.touch()
         people = pd.DataFrame(
             {
                 "first_name": ["First", "Second", "NotSelected"],
                 "sex": ["Female", "FEMALE", None],
             }
         ).convert_dtypes(dtype_backend="pyarrow")
-        monkeypatch.setattr(pd, "read_parquet", lambda _path: people)
-        generator = NemotronPersonasReplacementGenerator(
-            settings=PiiReplacementSettings(),
-            sampler=PiiSamplerConfig(
-                backend=PiiSamplerBackend.NEMOTRON_PERSONAS,
-                nemotron_personas_path=str(tmp_path),
-            ),
-        )
+        generator = _nemotron_personas_generator(tmp_path, monkeypatch, people)
 
         def generate(seed: int) -> str:
             return generator.generate(
-                ReplacementGenerationRequest(
-                    entity_type=EntityType.FIRST_NAME,
-                    original_value="Ada",
-                    effective_dependency_tuple=((EntityType.GENDER, CanonicalValue("string", "female")),),
-                    pattern=None,
+                _request(
+                    dependencies=((EntityType.GENDER, CanonicalValue("string", "female")),),
                     seed=seed,
                 )
             )
@@ -734,11 +571,6 @@ class TestReplacementGenerator:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        asset_path = tmp_path / "datasets" / "en_US.parquet"
-        asset_path.parent.mkdir()
-        asset_path.touch()
-        monkeypatch.setattr(pd, "read_parquet", lambda _path: pd.DataFrame({"first_name": ["Ada"]}))
-
         def fail_if_faker_is_used(
             _generator: FakerReplacementGenerator,
             _request: ReplacementGenerationRequest,
@@ -746,20 +578,8 @@ class TestReplacementGenerator:
             pytest.fail("an unchanged Nemotron Personas value should be resampled, not delegated to Faker")
 
         monkeypatch.setattr(FakerReplacementGenerator, "generate", fail_if_faker_is_used)
-        generator = NemotronPersonasReplacementGenerator(
-            settings=PiiReplacementSettings(),
-            sampler=PiiSamplerConfig(
-                backend=PiiSamplerBackend.NEMOTRON_PERSONAS,
-                nemotron_personas_path=str(tmp_path),
-            ),
-        )
-        request = ReplacementGenerationRequest(
-            entity_type=EntityType.FIRST_NAME,
-            original_value="Ada",
-            effective_dependency_tuple=(),
-            pattern=None,
-            seed=42,
-        )
+        generator = _nemotron_personas_generator(tmp_path, monkeypatch, pd.DataFrame({"first_name": ["Ada"]}))
+        request = _request()
 
         assert generator.generate(request) == request.original_value
 
@@ -768,35 +588,10 @@ class TestReplacementGenerator:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        asset_path = tmp_path / "datasets" / "en_US.parquet"
-        asset_path.parent.mkdir()
-        asset_path.touch()
         people = pd.DataFrame({"first_name": ["PersonaFirst"]})
-        delegated_requests: list[ReplacementGenerationRequest] = []
-
-        def generate_with_faker(
-            _generator: FakerReplacementGenerator,
-            delegated_request: ReplacementGenerationRequest,
-        ) -> str:
-            delegated_requests.append(delegated_request)
-            return "Faker Full Name"
-
-        monkeypatch.setattr(pd, "read_parquet", lambda _path: people)
-        monkeypatch.setattr(FakerReplacementGenerator, "generate", generate_with_faker)
-        generator = NemotronPersonasReplacementGenerator(
-            settings=PiiReplacementSettings(),
-            sampler=PiiSamplerConfig(
-                backend=PiiSamplerBackend.NEMOTRON_PERSONAS,
-                nemotron_personas_path=str(tmp_path),
-            ),
-        )
-        request = ReplacementGenerationRequest(
-            entity_type=EntityType.FULL_NAME,
-            original_value="Ada Lovelace",
-            effective_dependency_tuple=(),
-            pattern=None,
-            seed=42,
-        )
+        delegated_requests = _record_faker_fallback(monkeypatch, "Faker Full Name")
+        generator = _nemotron_personas_generator(tmp_path, monkeypatch, people)
+        request = _request(EntityType.FULL_NAME, "Ada Lovelace")
 
         assert generator.generate(request) == "Faker Full Name"
         assert delegated_requests == [request]
@@ -805,26 +600,15 @@ class TestReplacementGenerator:
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        delegated_requests: list[ReplacementGenerationRequest] = []
-
-        def generate_with_faker(
-            _generator: FakerReplacementGenerator,
-            delegated_request: ReplacementGenerationRequest,
-        ) -> str:
-            delegated_requests.append(delegated_request)
-            return "202-555-0101"
-
-        monkeypatch.setattr(FakerReplacementGenerator, "generate", generate_with_faker)
+        delegated_requests = _record_faker_fallback(monkeypatch, "202-555-0101")
         generator = NemotronPersonasReplacementGenerator(
             settings=PiiReplacementSettings(),
             sampler=PiiSamplerConfig(backend=PiiSamplerBackend.NEMOTRON_PERSONAS),
         )
-        request = ReplacementGenerationRequest(
-            entity_type=EntityType.PHONE_NUMBER,
-            original_value="202-555-9999",
-            effective_dependency_tuple=(),
+        request = _request(
+            EntityType.PHONE_NUMBER,
+            "202-555-9999",
             pattern="###-###-####",
-            seed=42,
         )
 
         assert generator.generate(request) == "202-555-0101"
