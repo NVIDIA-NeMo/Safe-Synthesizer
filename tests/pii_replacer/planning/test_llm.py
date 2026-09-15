@@ -238,7 +238,8 @@ class TestLLMPlanEnhancer:
             },
         )
 
-        assert resolved.sampler.data_to_sampler_value_mapping == {
+        assert resolved.inline_plan is not None
+        assert resolved.inline_plan.data_to_sampler_value_mapping == {
             "sex": {"Non-binary": None},
             "race": {"Asian": ["east asian", "south asian"]},
         }

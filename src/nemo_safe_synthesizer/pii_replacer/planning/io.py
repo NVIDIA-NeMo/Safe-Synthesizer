@@ -104,6 +104,7 @@ def _plan_document(plan: PiiReplacementPlan) -> dict[str, object]:
     return {
         "schema_version": _OUTPUT_PLAN_SCHEMA_VERSION,
         "columns_to_replace": columns,
+        "data_to_sampler_value_mapping": plan.data_to_sampler_value_mapping,
     }
 
 
