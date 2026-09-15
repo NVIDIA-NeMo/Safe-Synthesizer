@@ -21,6 +21,8 @@ __all__ = [
     "generated_value_is_valid",
 ]
 
+ResolvedDependencyLabels = tuple[tuple[EntityType, tuple[str, ...] | None], ...]
+
 
 @dataclass(frozen=True, slots=True)
 class ReplacementGenerationRequest:
@@ -37,6 +39,7 @@ class ReplacementGenerationRequest:
     effective_dependency_tuple: EffectiveDependencyTuple = field(repr=False)
     pattern: str | None
     seed: int
+    resolved_dependency_labels: ResolvedDependencyLabels = field(default=(), repr=False)
 
     def __post_init__(self) -> None:
         if not isinstance(self.entity_type, EntityType):
@@ -49,6 +52,8 @@ class ReplacementGenerationRequest:
             raise TypeError("replacement generation pattern must be a string or None")
         if type(self.seed) is not int:
             raise TypeError("replacement generation seed must be an integer")
+        if not isinstance(self.resolved_dependency_labels, tuple):
+            raise TypeError("resolved_dependency_labels must be a tuple")
 
 
 class ReplacementGenerator(Protocol):

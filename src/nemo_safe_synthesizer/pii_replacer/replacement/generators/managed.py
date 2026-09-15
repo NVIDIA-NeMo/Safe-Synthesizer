@@ -16,9 +16,9 @@ import pandas as pd
 from ....config.replace_pii import EntityType, PiiReplacementSettings, PiiSamplerBackend, PiiSamplerConfig
 from ....errors import GenerationError
 from ....observability import get_logger
+from ...dependency_labels import MANAGED_DEPENDENCY_COLUMN_ALIASES
 from ...planning.patterns import render_name_pattern
 from ._common import (
-    _compile_dependency_value_mappings,
     _dependency_values,
     _email_domain,
     _name_values,
@@ -59,7 +59,6 @@ class ManagedReplacementGenerator:
             settings=settings,
             sampler=sampler.model_copy(update={"backend": PiiSamplerBackend.FAKER}),
         )
-        self._dependency_value_mappings = _compile_dependency_value_mappings(sampler.dependency_value_mappings)
         self._managed_people: pd.DataFrame | None = None
         self._managed_value_columns: dict[str, str] = {}
         self._candidate_indexes: dict[EntityType, dict[str, np.ndarray]] = {}
@@ -99,12 +98,12 @@ class ManagedReplacementGenerator:
     def _candidate_positions(self, request: ReplacementGenerationRequest) -> np.ndarray | None:
         dependencies = _dependency_values(request.effective_dependency_tuple)
         resolved: list[tuple[EntityType, tuple[str, ...]]] = []
-        for entity_type in _MANAGED_DEPENDENCY_COLUMN_ALIASES:
+        for entity_type in MANAGED_DEPENDENCY_COLUMN_ALIASES:
             dependency_value = dependencies.get(entity_type)
             if dependency_value is None:
                 continue
             labels = _resolve_dependency_labels(
-                self._dependency_value_mappings,
+                request,
                 entity_type,
                 dependency_value,
             )
@@ -183,14 +182,10 @@ _MANAGED_COLUMN_ALIASES: Mapping[str, tuple[str, ...]] = {
     "street_number": ("street_number", "building_number"),
     "street_name": ("street_name",),
 }
-_MANAGED_DEPENDENCY_COLUMN_ALIASES: Mapping[EntityType, tuple[str, ...]] = {
-    EntityType.GENDER: ("gender", "sex"),
-    EntityType.ETHNIC_BACKGROUND: ("ethnic_background", "ethnicity"),
-}
 _MANAGED_READ_COLUMNS = tuple(
     dict.fromkeys(
         column
-        for aliases in (*_MANAGED_COLUMN_ALIASES.values(), *_MANAGED_DEPENDENCY_COLUMN_ALIASES.values())
+        for aliases in (*_MANAGED_COLUMN_ALIASES.values(), *MANAGED_DEPENDENCY_COLUMN_ALIASES.values())
         for column in aliases
     )
 )
@@ -218,7 +213,7 @@ def _build_candidate_indexes(
 ) -> tuple[dict[EntityType, dict[str, np.ndarray]], frozenset[str]]:
     indexes: dict[EntityType, dict[str, np.ndarray]] = {}
     dependency_columns: set[str] = set()
-    for entity_type, aliases in _MANAGED_DEPENDENCY_COLUMN_ALIASES.items():
+    for entity_type, aliases in MANAGED_DEPENDENCY_COLUMN_ALIASES.items():
         column = _first_existing_column(people, aliases)
         if column is None:
             continue

@@ -64,6 +64,8 @@ class TestTabularPiiReplacerInterface:
         assert first.transformed_df.index.tolist() == [3, 3]
         assert first.transformed_df["identifier"].str.fullmatch(r"USER-\d{3}").all()
         assert first.generation_statistics.generated_replacement_count == 2
+        assert first.resolved_config.inline_plan == config.inline_plan
+        assert first.resolved_config.sampler.dependency_value_mappings == {}
 
     def test_free_text_replacement_is_explicitly_deferred(self) -> None:
         dataframe = pd.DataFrame({"notes": ["Ada called"]})
@@ -95,6 +97,7 @@ class TestTransformResult:
             transformed_df=dataframe,
             column_statistics={},
             replacement_plan=plan,
+            resolved_config=ReplacePiiConfig(replacement_plan=plan),
             generation_statistics=generation_statistics,
             elapsed_time_seconds=0.25,
         )
@@ -127,6 +130,7 @@ class TestTransformResult:
             "transformed_df": pd.DataFrame(),
             "column_statistics": {},
             "replacement_plan": PiiReplacementPlan(),
+            "resolved_config": ReplacePiiConfig(replacement_plan=PiiReplacementPlan()),
             "generation_statistics": {
                 "generated_replacement_count": 1,
                 "elapsed_time_seconds": 0.1,

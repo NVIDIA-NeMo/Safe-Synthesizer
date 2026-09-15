@@ -114,8 +114,8 @@ class EntityType(StrEnum):
     ORGANIZATION = "organization"
 
 
-DependencyValueMappings = dict[EntityType, dict[str, list[str] | None]]
-"""Input dependency labels mapped to labels understood by the configured sampler."""
+DependencyValueMappings = dict[str, dict[str, list[str] | None]]
+"""Dependency-column values mapped to labels understood by one sampler."""
 
 
 class EntityAction(Enum):
@@ -696,23 +696,22 @@ class PiiSamplerConfig(NSSBaseModel):
             f"Defaults to {NSS_MANAGED_ASSETS_PATH_ENV} or ~/.data-designer/managed-assets."
         ),
     )
-    dependency_value_mappings: DependencyValueMappings = Field(
-        default_factory=dict,
+    dependency_value_mappings: DependencyValueMappings | Literal["auto_discovery"] = Field(
+        default=AUTO_DISCOVERY,
         description=(
-            "Dataset-specific, case-insensitive dependency-label overrides. A list maps one input label to "
-            "acceptable sampler labels; null disables that dependency condition. Unmapped labels use "
-            "case-insensitive identity matching."
+            "Either 'auto_discovery' or authoritative dataset-column mappings to labels understood by the sampler. "
+            "A list maps one input label to acceptable sampler labels; null disables that dependency condition. "
+            "Unmapped labels use case-insensitive identity matching."
         ),
     )
 
     @model_validator(mode="after")
     def _validate_dependency_value_mappings(self) -> Self:
-        for entity_type, mappings in self.dependency_value_mappings.items():
-            if not can_condition(entity_type):
-                raise ParameterError(
-                    f"dependency_value_mappings key {entity_type.value!r} is not a conditioner entity type"
-                )
-
+        if self.dependency_value_mappings == AUTO_DISCOVERY:
+            return self
+        for column_name, mappings in self.dependency_value_mappings.items():
+            if not column_name.strip():
+                raise ParameterError("dependency_value_mappings column names must be non-empty")
             seen_sources: set[str] = set()
             for source, targets in mappings.items():
                 source_key = source.casefold()
@@ -720,7 +719,7 @@ class PiiSamplerConfig(NSSBaseModel):
                     raise ParameterError("dependency_value_mappings source labels must be non-empty")
                 if source_key in seen_sources:
                     raise ParameterError(
-                        f"dependency_value_mappings for {entity_type.value!r} contains duplicate "
+                        f"dependency_value_mappings for column {column_name!r} contains duplicate "
                         "source labels after case-folding"
                     )
                 seen_sources.add(source_key)
@@ -737,11 +736,22 @@ class PiiSamplerConfig(NSSBaseModel):
                         raise ParameterError("dependency_value_mappings target labels must be non-empty")
                     if target_key in seen_targets:
                         raise ParameterError(
-                            f"dependency_value_mappings for {entity_type.value!r} contains duplicate "
+                            f"dependency_value_mappings for column {column_name!r} contains duplicate "
                             "target labels after case-folding"
                         )
                     seen_targets.add(target_key)
         return self
+
+    @property
+    def is_dependency_value_mapping_auto_discovery(self) -> bool:
+        """Whether dependency label mappings should be discovered from data and sampler labels."""
+        return self.dependency_value_mappings == AUTO_DISCOVERY
+
+    @property
+    def inline_dependency_value_mappings(self) -> DependencyValueMappings | None:
+        """Return authoritative inline mappings, or ``None`` for automatic discovery."""
+        value = self.dependency_value_mappings
+        return value if isinstance(value, dict) else None
 
     def resolved_managed_assets_path(self) -> Path:
         """Return ``managed_assets_path`` if set, else the environment or built-in default."""

@@ -15,7 +15,6 @@ from ....errors import GenerationError
 from ....observability import get_logger
 from ...planning.patterns import render_character_mask, render_name_pattern
 from ._common import (
-    _compile_dependency_value_mappings,
     _dependency_values,
     _email_domain,
     _looks_like_uuid,
@@ -55,7 +54,6 @@ class FakerReplacementGenerator:
             raise ValueError("FakerReplacementGenerator requires the faker sampler backend")
         self._settings = settings
         self._sampler = sampler
-        self._dependency_value_mappings = _compile_dependency_value_mappings(sampler.dependency_value_mappings)
         self._warned_generation_fallbacks: set[str] = set()
 
     def generate(self, request: ReplacementGenerationRequest) -> str:
@@ -86,7 +84,7 @@ class FakerReplacementGenerator:
         }:
             gender_value = dependencies.get(EntityType.GENDER)
             gender_labels = (
-                _resolve_dependency_labels(self._dependency_value_mappings, EntityType.GENDER, gender_value)
+                _resolve_dependency_labels(request, EntityType.GENDER, gender_value)
                 if gender_value is not None
                 else None
             )

@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 
 import pandas as pd
 
-from ...config.replace_pii import EntityType, PiiColumnPlan, PiiReplacementPlan
+from ...config.replace_pii import DependencyValueMappings, EntityType, PiiColumnPlan, PiiReplacementPlan
 from ...errors import GenerationError, InternalError, ParameterError
 from ...observability import get_logger
 from ..transform_result import ColumnStatistics, ReplacementGenerationStatistics
@@ -34,6 +34,7 @@ __all__ = ["ReplacementExecutionResult", "StructuredReplacementExecutor", "resol
 
 _MAX_GENERATION_ATTEMPTS = 10
 _PERSON_RANDOM_SEED_ENV = "PERSON_RANDOM_SEED"
+_CompiledDependencyValueMappings = dict[str, dict[str, tuple[str, ...] | None]]
 _COLLISION_SENSITIVE_ENTITY_TYPES = frozenset(
     {
         EntityType.EMAIL,
@@ -75,11 +76,13 @@ class StructuredReplacementExecutor:
         *,
         group_column: str | None,
         base_seed: int,
+        dependency_value_mappings: DependencyValueMappings | None = None,
     ) -> None:
         self._plan = plan
         self._generator = generator
         self._group_column = group_column
         self._base_seed = base_seed
+        self._dependency_value_mappings = _compile_dependency_value_mappings(dependency_value_mappings or {})
         self._cache: dict[RecordMappingKey | GroupMappingKey, _CachedReplacement] = {}
         self._reserved_by_target: dict[str, set[str]] = {}
         self._dependency_conflicts: dict[tuple[str, frozenset[EntityType]], int] = {}
@@ -209,6 +212,11 @@ class StructuredReplacementExecutor:
                 effective_dependency_tuple=dependencies,
                 pattern=spec.pattern,
                 seed=_derive_seed(self._base_seed, key, purpose="replacement", attempt=attempt),
+                resolved_dependency_labels=_resolved_dependency_labels(
+                    spec,
+                    dependencies,
+                    self._dependency_value_mappings,
+                ),
             )
             started = time.perf_counter()
             try:
@@ -285,6 +293,33 @@ def _effective_dependencies(
         canonical = None if is_missing_scalar(value) else canonicalize_scalar(value)
         dependencies.append((dependency.entity_type, canonical))
     return tuple(dependencies)
+
+
+def _compile_dependency_value_mappings(
+    mappings: DependencyValueMappings,
+) -> _CompiledDependencyValueMappings:
+    return {
+        column_name: {
+            source.casefold(): None if targets is None else tuple(target.casefold() for target in targets)
+            for source, targets in value_mappings.items()
+        }
+        for column_name, value_mappings in mappings.items()
+    }
+
+
+def _resolved_dependency_labels(
+    spec: PiiColumnPlan,
+    dependencies: EffectiveDependencyTuple,
+    mappings: _CompiledDependencyValueMappings,
+) -> tuple[tuple[EntityType, tuple[str, ...] | None], ...]:
+    resolved: list[tuple[EntityType, tuple[str, ...] | None]] = []
+    for dependency, (entity_type, value) in zip(spec.depends_on, dependencies, strict=True):
+        if value is None:
+            continue
+        source_mappings = mappings.get(dependency.column_name, {})
+        normalized = value.normalized_value.casefold()
+        resolved.append((entity_type, source_mappings.get(normalized, (normalized,))))
+    return tuple(resolved)
 
 
 def _group_identity(value: object) -> CanonicalValue:

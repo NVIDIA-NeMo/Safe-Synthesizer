@@ -164,8 +164,9 @@ LLM span-detection experiment.
 - The flat `depends_on` DAG is the execution architecture.
 - Dataset-specific dependency-label adaptation belongs to `PiiSamplerConfig`, not `PiiReplacementPlan` or individual
   `depends_on` edges.
-- Dependency value mappings are sparse, case-insensitive overrides. An input label that differs only in case from a
-  sampler label needs no explicit mapping.
+- Dependency value mappings default to automatic discovery or accept one authoritative inline map keyed by dependency
+  source column. Automatic results are sparse; an input label that differs only in case from a sampler label needs no
+  explicit mapping.
 - Record mappings use stable positional row identity. Dependencies are generation inputs, not record mapping identity.
 - For group-scoped mappings, group consistency wins over dependency consistency.
 - The first group occurrence establishes the replacement. If later dependency values differ, reuse the first
@@ -206,12 +207,13 @@ The intended contract is:
 - `replace()` returns a new dataframe and does not mutate the caller's frame.
 - The module owns DAG execution, scope keys, generation, detection, overlap handling, and statistics.
 - `replace()` does not write artifacts.
-- The pipeline decides whether and where to persist the resolved plan.
+- The pipeline decides whether and where to persist the resolved configuration.
 
 Extend `TransformResult` with:
 
 ```python
 replacement_plan: PiiReplacementPlan
+resolved_config: ReplacePiiConfig
 generation_statistics: ReplacementGenerationStatistics
 elapsed_time_seconds: float
 ```
@@ -238,25 +240,35 @@ generation behavior in the follow-up without widening the public `TabularPiiRepl
 Add dataset-specific label adaptation to the sampler configuration:
 
 ```python
-DependencyValueMappings = dict[EntityType, dict[str, list[str] | None]]
+DependencyValueMappings = dict[str, dict[str, list[str] | None]]
 
 
 class PiiSamplerConfig(NSSBaseModel):
     backend: PiiSamplerBackend = PiiSamplerBackend.MANAGED
     managed_assets_path: str | None = None
-    dependency_value_mappings: DependencyValueMappings = Field(default_factory=dict)
+    dependency_value_mappings: DependencyValueMappings | Literal["auto_discovery"] = "auto_discovery"
 ```
 
-The YAML interface is:
+The default YAML interface mirrors `replacement_plan`:
+
+```yaml
+replace_pii:
+  sampler:
+    backend: managed
+    dependency_value_mappings: auto_discovery
+```
+
+The authoritative manual form is inline and keyed by dependency source column,
+because dataset columns—not entity types—own the source vocabularies:
 
 ```yaml
 replace_pii:
   sampler:
     backend: managed
     dependency_value_mappings:
-      gender:
+      sex:
         Non-binary: null
-      ethnic_background:
+      race:
         Asian:
           - east asian
           - south asian
@@ -283,30 +295,39 @@ replace_pii:
 ```
 
 This mapping adapts labels from the input dataset to labels understood by the selected sampler. It is sampler
-configuration because it changes candidate selection, not the replacement plan's dependency graph. It remains valid
-when users switch between managed and Faker backends.
+configuration because it changes candidate selection, not the replacement plan's dependency graph. It is
+sampler-specific; switching sampler backends requires rediscovery or review of the inline mapping.
+
+Do not accept a separate mapping file and do not combine automatic discovery with manual overrides. Plan-only writes
+one complete NSS configuration with the resolved plan and sparse inline mapping. Users who want to adjust an automatic
+result edit that generated configuration and run it again.
 
 Resolve each dependency value as follows:
 
-1. Match explicit source-label keys case-insensitively. An explicit entry takes precedence over identity matching.
-2. A nonempty list selects the union of candidates carrying any listed sampler label. Preserve the asset's natural row
+1. Compare input and sampler labels case-insensitively. Identity matches need no persisted mapping.
+2. In automatic mode, send only unmatched distinct source values and the selected sampler's allowed labels to the LLM.
+   Each source value is capped at 128 characters. If unmatched values exist without an LLM, require a manual mapping.
+3. Match inline source-label keys case-insensitively. The inline mapping is authoritative and bypasses mapping discovery.
+4. A nonempty list selects the union of candidates carrying any listed sampler label. Preserve the asset's natural row
    frequency within that union; do not add per-label weights initially.
-3. `null` explicitly removes that condition for the matching source label.
-4. Without an explicit entry, compare the original dependency value directly to sampler labels case-insensitively.
+5. `null` explicitly removes that condition for the matching source label.
+6. Without an explicit entry, compare the original dependency value directly to sampler labels case-insensitively.
    Therefore values such as `Female`/`female` and `White`/`white` require no mapping.
-5. For managed sampling, fail when neither an explicit mapping nor the implicit identity value selects any asset
+7. For managed sampling, fail when neither an explicit mapping nor the implicit identity value selects any asset
    candidates. Do not silently discard the condition. Report only the conditioner entity type and aggregate count,
    never the raw dependency value.
 
-Reject empty target lists, empty labels, and source or target labels duplicated after case-folding. Mapping keys must be
-conditioner entity types. Applying a mapping must not alter `CanonicalValue`, mapping identity, dependency-drift
-comparison, or persisted source data; case-folding exists only inside sampler candidate selection.
+Reject empty target lists, empty labels, source or target labels duplicated after case-folding, columns not used as plan
+dependencies, and labels unsupported by a sampler that exposes a label catalog. Applying a mapping must not alter
+`CanonicalValue`, mapping identity, dependency-drift comparison, or persisted source data; case-folding exists only
+inside sampler candidate selection.
 
 Both adapters accept the configuration. Faker applies mapped labels to dependency attributes it supports, such as
 gender, and continues to ignore unsupported attributes such as ethnic background. Do not reject the configuration or
 warn merely because the active backend does not use one of its mapped entity types.
 
-Compile mappings and candidate indexes once when a managed locale asset is loaded. Read only columns needed for
+Compile mappings once in the executor by dependency source column, then carry resolved sampler labels on each
+generation request. Build candidate indexes once when a managed locale asset is loaded. Read only columns needed for
 sampling, filtering, and rendering; do not load the large persona-description columns. A generation call must select
 from pre-indexed candidate rows rather than case-folding and scanning the complete asset for every replacement.
 
@@ -600,7 +621,8 @@ than a fixed byte limit. The earlier 48 KiB proposal is removed.
 - Automatic LLM plan discovery reads the full input dataset.
 - Replacement runs after holdout and transforms only the training split.
 - Retain original training and test frames for evaluation.
-- Persist the resolved plan as `<run_dir>/pii_replacement_plan.yaml`.
+- Persist one reusable configuration with the resolved plan and sampler mappings as
+  `<run_dir>/pii_replacement_config.yaml`.
 - Populate `ColumnStatistics` for every planned target:
   - Structured counts include every non-missing occurrence.
   - Detected-value sets contain unique originals.
@@ -626,7 +648,8 @@ make it explicit opt-in, label the artifact as sensitive, and define access cont
 2. Implement the deep `TabularPiiReplacer` module, DAG compiler, scopes, deterministic mapping keys, group conflict
    handling, sampler dependency value mappings, indexed managed-asset loading, and programmatic entity generators.
 3. Implement span normalization, cross-source overlap resolution, component-map reuse, and one-pass text construction.
-4. Integrate the replacer after holdout, return the expanded result, persist the resolved plan, and populate statistics.
+4. Integrate the replacer after holdout, return the expanded result, persist the resolved configuration, and populate
+   statistics.
 5. Add focused unit tests, pipeline integration tests, and opt-in live-model evaluations.
 6. Run `mise run check ::: test` before handoff or PR work.
 
@@ -649,8 +672,9 @@ make it explicit opt-in, label the artifact as sensitive, and define access cont
   aggregate warning/count without raw values.
 - Test deterministic seeds, managed fallback, supported generators, patterns, email-domain behavior, organization
   normalization, masks, birth dates, Luhn cards, original inequality, and collision retries.
-- Test sparse case-insensitive dependency mappings, implicit identity matching, one-to-many candidate unions, explicit
-  `null`, missing managed candidates, mapping validation, and acceptance by both managed and Faker configurations.
+- Test automatic and manual sparse dependency mappings, implicit case-insensitive identity matching, one-to-many
+  candidate unions, explicit `null`, missing managed candidates, mapping validation by source column, and acceptance
+  by both managed and Faker configurations.
 - Test that managed assets load only required columns and build reusable candidate indexes rather than scanning the
   complete asset per generated value.
 - Test component replacement reuse only for independently detected spans.
@@ -675,7 +699,8 @@ make it explicit opt-in, label the artifact as sensitive, and define access cont
 - Only the training split is transformed.
 - Original training and test frames remain available to evaluation.
 - PII replay consumes complete `ColumnStatistics`, including planned columns with no matches.
-- The resolved plan is written to the normal run artifact directory.
+- The resolved plan and sampler mappings are written as one reusable configuration in the normal run artifact
+  directory.
 - Output shape and index match the input, protected values remain unchanged, and no unplanned columns change.
 - No raw PII, detector content, dependency values, or replacement map appears in logs or error messages.
 

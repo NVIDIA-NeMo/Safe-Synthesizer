@@ -6,7 +6,7 @@ from __future__ import annotations
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..config.replace_pii import PiiReplacementPlan
+from ..config.replace_pii import PiiReplacementPlan, ReplacePiiConfig
 
 __all__ = ["ColumnStatistics", "ReplacementGenerationStatistics", "TransformResult"]
 
@@ -71,6 +71,9 @@ class TransformResult(BaseModel):
     )
     replacement_plan: PiiReplacementPlan = Field(
         description="Resolved replacement plan executed for this result.",
+    )
+    resolved_config: ReplacePiiConfig = Field(
+        description="Resolved PII configuration containing the executed plan and sampler mappings.",
     )
     generation_statistics: ReplacementGenerationStatistics = Field(
         description="Aggregate timing and count statistics for replacement generation.",

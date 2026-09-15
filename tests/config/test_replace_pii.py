@@ -398,6 +398,7 @@ class TestReplacePiiConfig:
         assert config.inline_plan is None
         assert config.llm is None
         assert config.sampler.backend is PiiSamplerBackend.MANAGED
+        assert config.sampler.dependency_value_mappings == AUTO_DISCOVERY
         assert ENTITY_BY_TYPE[EntityType.FREE_TEXT].action is EntityAction.REPLACE_IN_TEXT
 
     def test_missing_schema_version_is_v3_and_sparse_serialization_includes_it(self) -> None:
@@ -584,35 +585,47 @@ class TestReplacePiiConfig:
         assert "Nemotron Personas" in path_description
         assert "datasets/{locale}.parquet" in path_description
 
-    def test_sampler_accepts_dependency_value_mappings_for_faker(self) -> None:
+    def test_sampler_accepts_manual_dependency_value_mappings(self) -> None:
         sampler = PiiSamplerConfig.model_validate(
             {
                 "backend": "faker",
                 "dependency_value_mappings": {
-                    "gender": {"Woman": ["female"], "Non-binary": None},
-                    "ethnic_background": {"Asian": ["east asian", "south asian"]},
+                    "sex": {"Woman": ["female"], "Non-binary": None},
+                    "race": {"Asian": ["east asian", "south asian"]},
                 },
             }
         )
 
         assert sampler.dependency_value_mappings == {
-            EntityType.GENDER: {"Woman": ["female"], "Non-binary": None},
-            EntityType.ETHNIC_BACKGROUND: {"Asian": ["east asian", "south asian"]},
+            "sex": {"Woman": ["female"], "Non-binary": None},
+            "race": {"Asian": ["east asian", "south asian"]},
         }
+        assert not sampler.is_dependency_value_mapping_auto_discovery
+        assert sampler.inline_dependency_value_mappings == sampler.dependency_value_mappings
+
+    def test_sampler_dependency_value_mappings_default_to_auto_discovery(self) -> None:
+        sampler = PiiSamplerConfig()
+
+        assert sampler.is_dependency_value_mapping_auto_discovery
+        assert sampler.inline_dependency_value_mappings is None
+
+    def test_sampler_rejects_mapping_paths(self) -> None:
+        with pytest.raises(ValidationError, match="dictionary|auto_discovery"):
+            PiiSamplerConfig.model_validate({"dependency_value_mappings": "mappings.yaml"})
 
     @pytest.mark.parametrize(
         ("mappings", "error"),
         [
-            ({"email": {"work": ["personal"]}}, "is not a conditioner entity type"),
-            ({"gender": {"": ["female"]}}, "source labels must be non-empty"),
-            ({"gender": {"Woman": []}}, "target lists must be non-empty"),
-            ({"gender": {"Woman": [" "]}}, "target labels must be non-empty"),
+            ({"": {"work": ["personal"]}}, "column names must be non-empty"),
+            ({"sex": {"": ["female"]}}, "source labels must be non-empty"),
+            ({"sex": {"Woman": []}}, "target lists must be non-empty"),
+            ({"sex": {"Woman": [" "]}}, "target labels must be non-empty"),
             (
-                {"gender": {"Woman": ["female"], "woman": ["female"]}},
+                {"sex": {"Woman": ["female"], "woman": ["female"]}},
                 "duplicate source labels after case-folding",
             ),
             (
-                {"gender": {"Woman": ["female", "FEMALE"]}},
+                {"sex": {"Woman": ["female", "FEMALE"]}},
                 "duplicate target labels after case-folding",
             ),
         ],

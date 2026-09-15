@@ -70,18 +70,29 @@ for the example above.
 ### Dependency label mappings
 
 Dependency values are matched to sampler labels case-insensitively, so values
-such as `Female` and `female` need no configuration. When the input dataset and
-sampler use different label vocabularies, add sparse overrides under the
-sampler:
+such as `Female` and `female` need no mapping. By default,
+`dependency_value_mappings` is `auto_discovery`. After the replacement plan is
+resolved, NSS compares each dependency column's distinct values with the
+selected sampler's labels. If unmatched values remain, the configured LLM maps
+them to that sampler's vocabulary.
+
+Automatic discovery writes a sparse mapping: identity matches are omitted.
+Only unmatched distinct dependency values, each limited to 128 characters,
+and the sampler's allowed labels are sent to the LLM. If no LLM is configured,
+unmatched values produce an error asking for an LLM configuration or a manual
+mapping.
+
+For an authoritative manual mapping, replace `auto_discovery` with an inline
+mapping keyed by the dependency column names from this dataset:
 
 ```yaml
 replace_pii:
   sampler:
     backend: managed
     dependency_value_mappings:
-      gender:
+      sex:
         Non-binary: null
-      ethnic_background:
+      race:
         Asian:
           - east asian
           - south asian
@@ -90,12 +101,17 @@ replace_pii:
           - black
 ```
 
-Each nonempty list selects the union of managed-asset rows with those labels.
-An explicit `null` disables that condition for the matching input value. If no
-override exists, NSS uses case-insensitive identity matching and reports an
-error when the managed asset has no matching candidates. Faker accepts the same
-configuration and applies mappings for attributes it supports, such as gender;
-unsupported attributes are ignored.
+Each nonempty list selects the union of sampler rows with those labels. An
+explicit `null` disables that condition for the matching input value. Omitted
+values continue to use case-insensitive identity matching. Manual mappings are
+validated against the resolved dependency columns and the selected sampler's
+known labels. Faker applies mappings for attributes it supports, such as
+gender; unsupported attributes are ignored.
+
+Mappings are sampler-specific. NSS therefore does not accept a separate mapping
+file or combine automatic discovery with manual overrides. Generate a resolved
+configuration, edit its inline mapping if needed, and run that configuration
+again.
 
 ## Replacement plan sources
 
@@ -162,8 +178,9 @@ input dataframe but does not run heuristic or LLM discovery.
 
 ## Plan-only workflow
 
-Resolve and save a plan from the full input dataframe without running holdout,
-model metadata, replacement, training, generation, or evaluation:
+Resolve and save the plan and sampler-specific dependency mappings from the
+full input dataframe without running holdout, model metadata, replacement,
+training, generation, or evaluation:
 
 ```bash
 safe-synthesizer run replace-pii --plan-only \
@@ -171,31 +188,32 @@ safe-synthesizer run replace-pii --plan-only \
   --data-source data.csv
 ```
 
-The command writes `pii_replacement_plan.yaml` in the standard timestamped NSS
-run directory under `--artifact-path`.
+The command writes `pii_replacement_config.yaml` in the standard timestamped
+NSS run directory under `--artifact-path`. This is a complete NSS configuration
+with the resolved plan and inline dependency mappings, so it can be edited and
+passed directly to a later run with `--config`.
 
-The matching SDK interface returns the resolved plan and writes YAML only when
-an output path is supplied:
+The matching SDK interface returns the resolved `ReplacePiiConfig` and writes
+the complete reusable NSS configuration only when an output path is supplied:
 
 ```python
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
 
 config = SafeSynthesizerParameters.from_yaml("config.yaml")
-plan = (
+resolved_pii = (
     SafeSynthesizer(config)
     .with_data_source("data.csv")
-    .plan_pii_replacement("pii_replacement_plan.yaml")
+    .plan_pii_replacement("pii_replacement_config.yaml")
 )
 ```
 
-The generated standalone plan can be reviewed, edited, and reused as
-`replace_pii.replacement_plan` in a later run.
+The generated configuration can be reviewed, edited, and reused directly.
 
 ## LLM-assisted planning
 
 The `llm` mapping configures the OpenAI-compatible inference service used for
-automatic plan enhancement.
+automatic plan enhancement and dependency-value mapping discovery.
 
 ```yaml
 replace_pii:

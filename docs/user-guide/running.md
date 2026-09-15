@@ -118,7 +118,8 @@ You can also run stages individually:
 
 - `safe-synthesizer run train` -- train only, saves the adapter
 - `safe-synthesizer run generate` -- generate only (use `--auto-discover-adapter` or `--run-path`)
-- `safe-synthesizer run replace-pii --plan-only` -- resolve a PII replacement plan without entering the pipeline
+- `safe-synthesizer run replace-pii --plan-only` -- resolve a PII replacement configuration without entering the
+  pipeline
 - SDK stepwise: `process_data()` → `train()` → `generate()` → `evaluate()`
 
 ## Pre-flight Validation
@@ -279,10 +280,10 @@ Accepts the same common options and synthesis parameter override syntax as `run`
 
 ### `run replace-pii --plan-only`
 
-Resolve a PII replacement plan against the full input dataframe and exit. This
-column-level planning operation does not produce a train/test split or any
-replaced rows. It does not invoke holdout, model metadata, replacement,
-training, generation, or evaluation.
+Resolve a PII replacement plan and sampler-specific dependency mappings against
+the full input dataframe, then exit. This planning operation does not produce a
+train/test split or any replaced rows. It does not invoke holdout, model
+metadata, replacement, training, generation, or evaluation.
 
 ```bash
 safe-synthesizer run replace-pii --plan-only \
@@ -290,22 +291,24 @@ safe-synthesizer run replace-pii --plan-only \
   --data-source data.csv
 ```
 
-The command writes `pii_replacement_plan.yaml` in the standard timestamped run
-directory beneath `--artifact-path`. The command currently requires
-`--plan-only`.
+The command writes `pii_replacement_config.yaml` in the standard timestamped
+run directory beneath `--artifact-path`. The artifact is a complete reusable
+NSS configuration containing the resolved inline plan and dependency mappings.
+The command currently requires `--plan-only`.
 
-The SDK equivalent returns the plan object. Supplying `output_path` also writes
-the reusable YAML artifact; omitting it performs no plan write.
+The SDK equivalent returns the resolved `ReplacePiiConfig`. Supplying
+`output_path` writes the complete reusable NSS configuration; omitting it
+performs no configuration write.
 
 ```python
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
 
 config = SafeSynthesizerParameters.from_yaml("config.yaml")
-plan = (
+resolved_pii = (
     SafeSynthesizer(config)
     .with_data_source("data.csv")
-    .plan_pii_replacement(output_path="pii_replacement_plan.yaml")
+    .plan_pii_replacement(output_path="pii_replacement_config.yaml")
 )
 ```
 
