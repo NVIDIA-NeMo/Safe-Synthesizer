@@ -72,8 +72,7 @@ class TokenBudgetCheck(MetadataCheck):
         # is skipped; `check_sampled_record_budget` on line 64 already
         # provides bounded individual-record validation.
         group_col = config.data.group_training_examples_by
-        is_timeseries = bool(config.time_series and config.time_series.is_timeseries)
-        if group_col is not None and group_col in data.columns and not is_timeseries:
+        if group_col is not None and group_col in data.columns and not config.time_series.is_timeseries:
             check_group_budget(
                 collector,
                 data,
