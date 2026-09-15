@@ -56,11 +56,20 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         --index https://wheels.vllm.ai/0.27.0/cu129 \
         --index-strategy unsafe-best-match \
         "nemo-safe-synthesizer[cu129,engine] @ file://${wheel}" && \
-    CUDA=130 \
-        DRY_RUN=1 \
-        UV_PROJECT_ENVIRONMENT=/opt/wheel-cu130 \
-        ./install_nss.sh && \
-    rm -rf /opt/wheel-cpu /opt/wheel-cu129
+    uv --no-config venv --clear --python /usr/local/bin/python /opt/wheel-cu130 && \
+    uv --no-config pip install \
+        --python /opt/wheel-cu130/bin/python \
+        --no-sources \
+        --dry-run \
+        --default-index https://pypi.org/simple \
+        --index https://flashinfer.ai/whl/cu130 \
+        --index https://flashinfer.ai/whl/ \
+        --index https://download.pytorch.org/whl/cu130 \
+        --index https://wheels.vllm.ai/0.27.0/cu130 \
+        --index https://pypi.nvidia.com \
+        --index-strategy unsafe-best-match \
+        "nemo-safe-synthesizer[cu130,engine] @ file://${wheel}" && \
+    rm -rf /opt/wheel-cpu /opt/wheel-cu129 /opt/wheel-cu130
 
 FROM setup AS install-deps
 # Install Python dependencies (cached until pyproject.toml, uv.lock, or src/ or tests/ change)
