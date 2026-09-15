@@ -67,7 +67,7 @@ __all__ = [
 # Sentinel value for ``ReplacePiiConfig.replacement_plan`` requesting automatic
 # entity discovery instead of an explicit plan.
 AUTO_DISCOVERY = "auto_discovery"
-DEFAULT_GLINER2_MODEL_ID = "fastino/gliner2.5-base-v1"
+DEFAULT_GLINER2_MODEL_ID = "fastino/gliner2-privacy-filter-PII-multi"
 # Unversioned configurations are permanently interpreted as v3. Adding a new
 # schema may expand the supported set, but must not advance this implicit value.
 _IMPLICIT_REPLACE_PII_SCHEMA_VERSION = 3

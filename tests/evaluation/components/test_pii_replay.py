@@ -91,3 +91,30 @@ def test_pii_replay_percentage_rounds_up_to_one_decimal_place():
     pii_replay = PIIReplay.from_evaluation_datasets(evaluation_datasets)
 
     assert pii_replay.pii_replay_data[0].unique_synthetic_data_percentage == 33.4
+
+
+def test_pii_replay_finds_detected_values_embedded_in_free_text():
+    training = pd.DataFrame({"notes": ["Ada met Grace", "Call Ada"]})
+    synthetic = pd.DataFrame({"notes": ["Ada appeared inside a sentence", "Grace and Ada", "No replay here", None]})
+    column_statistics = {
+        "notes": ColumnStatistics(
+            assigned_type="text",
+            assigned_entity="free_text",
+            detected_entity_counts={"first_name": 3},
+            detected_entity_values={"first_name": {"Ada", "Grace"}},
+            is_transformed=True,
+            transform_functions={"gliner"},
+        )
+    }
+    evaluation_datasets = EvaluationDatasets.from_dataframes(
+        training,
+        synthetic,
+        column_statistics=column_statistics,
+        enable_sampling=False,
+    )
+
+    datum = PIIReplay.from_evaluation_datasets(evaluation_datasets).pii_replay_data[0]
+
+    assert datum.total_synthetic_data == 2
+    assert datum.unique_synthetic_data == 2
+    assert datum.unique_synthetic_data_percentage == 100.0

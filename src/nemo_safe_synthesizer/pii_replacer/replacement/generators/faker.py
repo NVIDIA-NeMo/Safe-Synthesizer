@@ -14,6 +14,7 @@ from ....config.replace_pii import EntityType, PiiReplacementSettings, PiiSample
 from ....errors import GenerationError
 from ....observability import get_logger
 from ...planning.patterns import render_character_mask, render_name_pattern
+from ..birth_dates import shift_birth_date
 from ._common import (
     _dependency_values,
     _email_domain,
@@ -25,7 +26,6 @@ from ._common import (
     _required_pattern_values,
     _resolve_dependency_labels,
     _shape_preserving_value,
-    _shift_birth_date,
     normalize_organization_domain,
 )
 
@@ -63,7 +63,7 @@ class FakerReplacementGenerator:
         if entity_type is EntityType.PHONE_NUMBER and request.pattern is not None:
             return render_character_mask(request.pattern, rng)
         if entity_type is EntityType.DATE_OF_BIRTH:
-            return _shift_birth_date(request.original_value, request.pattern, rng)
+            return shift_birth_date(request.original_value, request.pattern, rng)
         if entity_type is EntityType.CREDIT_DEBIT_CARD and request.pattern is not None:
             return _render_luhn_pattern(request.pattern, rng)
         if entity_type in {EntityType.API_KEY, EntityType.UNIQUE_IDENTIFIER}:

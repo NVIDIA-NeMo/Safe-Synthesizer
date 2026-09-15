@@ -22,6 +22,12 @@ from pydantic import ValidationError
 
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
+from nemo_safe_synthesizer.config.replace_pii import (
+    EntityType,
+    PiiColumnPlan,
+    PiiReplacementPlan,
+    ReplacePiiConfig,
+)
 from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.generation.results import GenerateJobResults
 from nemo_safe_synthesizer.generation.utils import GenerationStatus
@@ -158,6 +164,64 @@ class TestProcessDataPiiSeparation:
 
         transformed_csv = fixture_workdir.dataset.transformed_training
         assert not transformed_csv.exists()
+
+    @patch("nemo_safe_synthesizer.preflight.run_preflight", return_value=_EMPTY_PREFLIGHT)
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
+    @patch("nemo_safe_synthesizer.config.autoconfig.AutoConfigResolver")
+    @patch("nemo_safe_synthesizer.holdout.holdout.Holdout")
+    def test_process_data_resolves_full_input_and_replaces_only_training_split(
+        self,
+        mock_holdout_cls,
+        mock_resolver_cls,
+        mock_metadata_cls,
+        mock_preflight,
+        fixture_sample_patient_dataframe: pd.DataFrame,
+        fixture_workdir: Workdir,
+    ) -> None:
+        original_df = fixture_sample_patient_dataframe.copy()
+        train_split = original_df.head(100).copy()
+        test_split = original_df.tail(100).copy()
+        resolved_pii = ReplacePiiConfig(
+            replacement_plan=PiiReplacementPlan(
+                columns_to_replace=[
+                    PiiColumnPlan(
+                        column_name="patient_name",
+                        entity_type=EntityType.FULL_NAME,
+                        pattern="{First} {Last}",
+                    )
+                ]
+            ),
+        )
+        builder = SafeSynthesizer(
+            config=SafeSynthesizerParameters(replace_pii=resolved_pii),
+            workdir=fixture_workdir,
+        ).with_data_source(original_df)
+        mock_holdout_cls.return_value.train_test_split.return_value = (train_split, test_split)
+        configured = builder._nss_config
+        assert configured is not None
+        mock_resolver_cls.return_value.return_value = configured
+        mock_metadata_cls.from_config.return_value = MagicMock()
+
+        builder.process_data()
+
+        assert builder._original_training_df is not None
+        assert builder._training_df is not None
+        assert builder._test_df is not None
+        pd.testing.assert_frame_equal(builder._original_training_df, train_split)
+        pd.testing.assert_frame_equal(builder._test_df, test_split)
+        assert builder._training_df["patient_name"].tolist() != train_split["patient_name"].tolist()
+        assert builder._training_df.drop(columns="patient_name").equals(train_split.drop(columns="patient_name"))
+        assert builder._column_statistics is not None
+        assert builder._column_statistics["patient_name"].detected_entity_counts == {"full_name": len(train_split)}
+        assert builder._pii_replacer_time is not None
+        pd.testing.assert_frame_equal(pd.read_csv(fixture_workdir.dataset.training), train_split)
+        pd.testing.assert_frame_equal(pd.read_csv(fixture_workdir.dataset.transformed_training), builder._training_df)
+        pd.testing.assert_frame_equal(pd.read_csv(fixture_workdir.dataset.test), test_split.reset_index(drop=True))
+        persisted = SafeSynthesizerParameters.from_yaml(
+            fixture_workdir.run_dir / "pii_replacement_config.yaml"
+        ).replace_pii
+        assert persisted is not None
+        assert persisted.inline_plan == resolved_pii.inline_plan
 
 
 # ---------------------------------------------------------------------------

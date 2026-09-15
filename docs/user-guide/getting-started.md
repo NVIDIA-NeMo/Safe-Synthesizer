@@ -271,8 +271,9 @@ Your dataset should have at least 1,000 records (10,000 records if enabling diff
 
 ### 2. PII Replacement
 
-PII replacement v3 will be added in a later update. On this branch, disable PII
-replacement before running the pipeline. See
+PII replacement v3 resolves a dataset-specific plan against the full input,
+then replaces structured and free-text PII only in the post-holdout training
+split. See
 [Configuration -- Replacing PII](configuration.md#replacing-pii) and
 [PII Replacement](../product-overview/pii_replacement.md).
 

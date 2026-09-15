@@ -60,6 +60,7 @@ def mock_safe_synthesizer() -> MagicMock:
     ss.evaluate.return_value = ss
     ss.load_from_save_path.return_value = ss
     ss.plan_pii_replacement.return_value = MagicMock()
+    ss.replace_pii.return_value.generation_statistics.generated_replacement_count = 3
     ss.run.return_value = ss
     ss.save_results.return_value = ss  # Return self for method chaining
     ss.generator.teardown.return_value = None
@@ -646,7 +647,7 @@ class TestValidateMode:
 
 
 class TestRunReplacePii:
-    """Tests for the plan-only PII replacement command."""
+    """Tests for standalone PII planning and replacement."""
 
     @pytest.fixture(autouse=True)
     def _reset_observability(self, monkeypatch: pytest.MonkeyPatch):
@@ -696,17 +697,61 @@ class TestRunReplacePii:
         nss.evaluate.assert_not_called()
         nss.run.assert_not_called()
 
-    def test_command_requires_plan_only_until_replacement_exists(
+    def test_apply_replaces_full_input_without_pipeline_stages(
         self,
         cli_runner: CliRunner,
         dummy_csv: Path,
+        mock_dataframe: MagicMock,
+        mock_workdir: MagicMock,
         patched_run_dependencies: dict,
     ) -> None:
-        result = cli_runner.invoke(run, ["replace-pii", "--data-source", str(dummy_csv)])
+        result = cli_runner.invoke(
+            run,
+            ["replace-pii", "--data-source", str(dummy_csv)],
+            catch_exceptions=False,
+        )
 
-        assert result.exit_code != 0
-        assert "requires --plan-only" in result.output
-        patched_run_dependencies["common_setup"].assert_not_called()
+        assert result.exit_code == 0
+        nss = patched_run_dependencies["safe_synthesizer"]
+        nss.with_data_source.assert_called_once_with(mock_dataframe)
+        nss.replace_pii.assert_called_once_with(
+            output_path=mock_workdir.run_dir / "input_pii_replaced.csv",
+            config_output_path=mock_workdir.run_dir / "pii_replacement_config.yaml",
+        )
+        nss.plan_pii_replacement.assert_not_called()
+        nss.process_data.assert_not_called()
+        nss.train.assert_not_called()
+        nss.generate.assert_not_called()
+        nss.evaluate.assert_not_called()
+        nss.run.assert_not_called()
+
+    def test_apply_honors_output_file(
+        self,
+        cli_runner: CliRunner,
+        dummy_csv: Path,
+        tmp_path: Path,
+        mock_workdir: MagicMock,
+        patched_run_dependencies: dict,
+    ) -> None:
+        output_file = tmp_path / "custom" / "replaced.csv"
+
+        result = cli_runner.invoke(
+            run,
+            [
+                "replace-pii",
+                "--data-source",
+                str(dummy_csv),
+                "--output-file",
+                str(output_file),
+            ],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0
+        patched_run_dependencies["safe_synthesizer"].replace_pii.assert_called_once_with(
+            output_path=output_file,
+            config_output_path=mock_workdir.run_dir / "pii_replacement_config.yaml",
+        )
 
     def test_plan_only_reports_missing_input_dataframe(
         self,
@@ -727,7 +772,7 @@ class TestRunReplacePii:
         )
 
         assert result.exit_code == 1
-        assert "Input data is required to plan PII replacement." in result.output
+        assert "Input data is required to plan or apply PII replacement." in result.output
         patched_run_dependencies["safe_synthesizer_cls"].assert_not_called()
 
     def test_plan_only_writes_reusable_yaml(
