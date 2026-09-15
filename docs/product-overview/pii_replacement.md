@@ -130,9 +130,40 @@ the OpenAI-compatible endpoint at runtime through `NSS_INFERENCE_ENDPOINT` or
 the `--inference-endpoint-url` CLI option. For example, a local vLLM server may
 use `NSS_INFERENCE_ENDPOINT=http://localhost:8000/v1` with its served model ID.
 
+The endpoint resolves from the explicit CLI runtime flag, then
+`NSS_INFERENCE_ENDPOINT`, then the NSS default; it is never persisted in NSS
+configuration. The model resolves from the explicit CLI runtime flag, then
+`NSS_INFERENCE_MODEL`, `replace_pii.llm.model_id`, and finally the NSS default.
+The default hosted NVIDIA endpoint requires an API key. Keyless operation is
+supported for local OpenAI-compatible endpoints.
+
 Supply the inference API key at runtime through `NSS_INFERENCE_KEY` or the
 `--inference-api-key` CLI option. NSS does not store the key in configuration or
 plan artifacts.
+
+Automatic discovery uses two LLM passes. The first classifies every column's
+semantic entity type and may propose a replacement pattern, in bounded batches
+of at most 32 profiles and 48 KiB of profile evidence. Each profile contains
+deterministic statistics and up to eight distinct cell samples truncated to 128
+characters. The prompt includes the entity catalog and the exact supported
+pattern grammars. Grouping-column and protected-column metadata is sent as
+discovery context. NSS then derives replacement columns and all permitted
+dependency candidates deterministically from those classifications. The second
+pass can only select
+contextually useful dependency candidate IDs. Candidates identify edges
+selected by the heuristic baseline so that choice remains
+available as fallible prior evidence. NSS, rather than the model, derives
+group-consistent or record-consistent replacement behavior from the configured
+grouping column, excludes protected ordering and timestamp columns, and validates
+the assembled plan. Grouping columns remain eligible for replacement so
+identifiers such as patient IDs can be anonymized.
+
+Each request permits up to three attempts for transient transport failures or
+invalid structured responses. Authentication, authorization, and permanent
+configuration failures stop immediately. If structured output remains invalid,
+planning fails instead of falling back to the heuristic baseline. Invalid
+optional patterns receive up to three focused repair attempts; NSS drops only
+the pattern and warns if repair is exhausted.
 
 !!! warning "Inference endpoints receive source data"
     Plan enhancement can send bounded raw cell samples from the full input

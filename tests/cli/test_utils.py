@@ -13,7 +13,11 @@ import pandas as pd
 import pytest
 
 from nemo_safe_synthesizer.cli.settings import CLISettings
-from nemo_safe_synthesizer.cli.utils import _propagate_runtime_settings_to_env, common_setup, merge_overrides
+from nemo_safe_synthesizer.cli.utils import (
+    _propagate_runtime_settings_to_env,
+    common_setup,
+    merge_overrides,
+)
 
 
 @pytest.fixture
