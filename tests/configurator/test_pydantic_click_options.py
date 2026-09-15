@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
 import click
 import pytest
@@ -21,6 +21,7 @@ from nemo_safe_synthesizer.configurator.pydantic_click_options import (
     _click_type,
     _collect_params,
     _is_list_type,
+    _list_item_type,
     _normalize_list_value,
     parse_overrides,
     pydantic_options,
@@ -560,6 +561,15 @@ def test_is_list_type():
     assert _is_list_type(dict[str, str]) is False
 
 
+def test_list_item_type():
+    """Verify list item extraction across list annotations."""
+    assert _list_item_type(list) is Any
+    assert _list_item_type(list[str]) is str
+    assert _list_item_type(list[int] | None) is int
+    assert _list_item_type(Annotated[list[float], Field(description="desc")]) is float
+    assert _list_item_type(str) is None
+
+
 def test_normalize_list_value():
     """Verify normalization of CLI list inputs across formats."""
     assert _normalize_list_value(("item",)) == ["item"]
@@ -646,6 +656,52 @@ def test_cli_list_parameters_end_to_end(cli_args: list[str], expected: list[str]
     assert captured["preflight"]["disabled_checks"] == expected
     params = SafeSynthesizerParameters.model_validate(captured)
     assert params.preflight.disabled_checks == expected
+
+
+@pytest.mark.parametrize(
+    "cli_args",
+    [
+        [
+            "--replace_pii__steps",
+            '{"vars":{"first":"one"}}',
+            "--replace_pii__steps",
+            '{"vars":{"second":"two"}}',
+        ],
+        [
+            "--replace_pii__steps",
+            '[{"vars":{"first":"one"}},{"vars":{"second":"two"}}]',
+        ],
+    ],
+)
+def test_cli_structured_list_parameters_end_to_end(cli_args: list[str]):
+    """Structured list parameters accept repeated objects and JSON arrays."""
+    captured: dict = {}
+
+    @pydantic_options(SafeSynthesizerParameters, field_separator="__")
+    @click.command()
+    def cmd(**kwargs):
+        """Capture parsed CLI overrides."""
+        captured.update(parse_overrides(kwargs))
+
+    result = CliRunner().invoke(cmd, cli_args)
+    assert result.exit_code == 0, result.output
+    params = SafeSynthesizerParameters.model_validate(captured)
+    replace_pii = params.replace_pii
+    assert replace_pii is not None
+    assert [step.vars for step in replace_pii.steps] == [{"first": "one"}, {"second": "two"}]
+
+
+def test_cli_structured_list_parameters_reject_invalid_json():
+    """Structured list parameters report malformed JSON at the CLI boundary."""
+
+    @pydantic_options(SafeSynthesizerParameters, field_separator="__")
+    @click.command()
+    def cmd(**_kwargs):
+        """Accept generated CLI options."""
+
+    result = CliRunner().invoke(cmd, ["--replace_pii__steps", "not-json"])
+    assert result.exit_code == 2
+    assert "Invalid value for '--replace_pii__steps': must be valid JSON" in result.output
 
 
 def test_cli_list_parameters_omitted_preserves_default():

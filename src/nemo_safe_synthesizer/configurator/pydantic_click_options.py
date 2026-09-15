@@ -193,6 +193,26 @@ def _is_list_type(annotation: Any) -> bool:
     return get_origin(t) is list
 
 
+def _list_item_type(annotation: Any) -> Any | None:
+    """Return the item annotation for a list, including optional and annotated lists."""
+    t = annotation
+    if get_origin(t) is Annotated:
+        t = get_args(t)[0]
+    if get_origin(t) in (Union, types.UnionType):
+        return next(
+            (
+                item_type
+                for arg in get_args(t)
+                if arg is not type(None) and (item_type := _list_item_type(arg)) is not None
+            ),
+            None,
+        )
+    if get_origin(t) is list:
+        args = get_args(t)
+        return args[0] if args else Any
+    return Any if t is list else None
+
+
 def _nullable_model_arg(union_args: tuple) -> type[BaseModel] | None:
     """Return the BaseModel member of a ``SomeModel | None`` union, or ``None``."""
     return next((a for a in union_args if a is not type(None) and _is_basemodel(a)), None)
@@ -327,6 +347,28 @@ def _click_type(annotation: Any) -> click.ParamType:
     return click.STRING
 
 
+def _parse_structured_list_option(
+    _ctx: click.Context,
+    _param: click.Parameter,
+    values: tuple[str, ...],
+) -> tuple[Any, ...]:
+    """Decode JSON objects and arrays supplied for a list of Pydantic models."""
+    if not values:
+        return values
+
+    parsed_items: list[Any] = []
+    for value in values:
+        try:
+            parsed = json.loads(value)
+        except (json.JSONDecodeError, ValueError) as error:
+            raise click.BadParameter("must be valid JSON") from error
+        if isinstance(parsed, list):
+            parsed_items.extend(parsed)
+        else:
+            parsed_items.append(parsed)
+    return tuple(parsed_items)
+
+
 def _option_names(name: str, field_separator: str) -> tuple[str, ...]:
     """Build the Click ``*names`` tuple for a given logical field name."""
     cli = f"--{name.replace('.', field_separator)}"
@@ -393,10 +435,12 @@ def pydantic_options(model_class: type[BaseModel], field_separator: str = "__"):
         """Apply a single leaf option to command function f."""
         names = _option_names(name, field_separator)
         if _is_list_type(field.annotation):
+            item_type = _list_item_type(field.annotation)
             return click.option(
                 *names,
                 type=click.STRING,
                 multiple=True,
+                callback=_parse_structured_list_option if _is_basemodel(item_type) else None,
                 help=field.description or "",
                 hidden=hidden,
             )(f)
