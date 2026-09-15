@@ -17,8 +17,8 @@ from ....config.replace_pii import EntityType, PiiReplacementSettings, PiiSample
 from ....errors import GenerationError, InternalError
 from ....observability import get_logger
 from ...planning.patterns import render_name_pattern
+from ...sampler_catalog import PERSONA_DEPENDENCY_COLUMN_ALIASES
 from ._common import (
-    _compile_data_to_sampler_value_mapping,
     _dependency_values,
     _email_domain,
     _name_values,
@@ -61,9 +61,6 @@ class NemotronPersonasReplacementGenerator:
             settings=settings,
             sampler=sampler.model_copy(update={"backend": PiiSamplerBackend.FAKER}),
         )
-        self._data_to_sampler_value_mapping = _compile_data_to_sampler_value_mapping(
-            sampler.data_to_sampler_value_mapping
-        )
         self._personas: pd.DataFrame | None = None
         self._persona_value_columns: dict[str, str] = {}
         self._candidate_indexes: dict[EntityType, dict[str, np.ndarray]] = {}
@@ -103,12 +100,12 @@ class NemotronPersonasReplacementGenerator:
     def _candidate_positions(self, request: ReplacementGenerationRequest) -> np.ndarray | None:
         dependencies = _dependency_values(request.effective_dependency_tuple)
         resolved: list[tuple[EntityType, tuple[str, ...]]] = []
-        for entity_type in _MANAGED_DEPENDENCY_COLUMN_ALIASES:
+        for entity_type in PERSONA_DEPENDENCY_COLUMN_ALIASES:
             dependency_value = dependencies.get(entity_type)
             if dependency_value is None:
                 continue
             sampler_values = _resolve_dependency_values(
-                self._data_to_sampler_value_mapping,
+                request,
                 entity_type,
                 dependency_value,
             )
@@ -187,14 +184,10 @@ _PERSONA_COLUMN_ALIASES: Mapping[str, tuple[str, ...]] = {
     "street_number": ("street_number", "building_number"),
     "street_name": ("street_name",),
 }
-_MANAGED_DEPENDENCY_COLUMN_ALIASES: Mapping[EntityType, tuple[str, ...]] = {
-    EntityType.GENDER: ("gender", "sex"),
-    EntityType.ETHNIC_BACKGROUND: ("ethnic_background", "ethnicity"),
-}
 _PERSONA_READ_COLUMNS = tuple(
     dict.fromkeys(
         column
-        for aliases in (*_PERSONA_COLUMN_ALIASES.values(), *_MANAGED_DEPENDENCY_COLUMN_ALIASES.values())
+        for aliases in (*_PERSONA_COLUMN_ALIASES.values(), *PERSONA_DEPENDENCY_COLUMN_ALIASES.values())
         for column in aliases
     )
 )
@@ -222,7 +215,7 @@ def _build_candidate_indexes(
 ) -> tuple[dict[EntityType, dict[str, np.ndarray]], frozenset[str]]:
     indexes: dict[EntityType, dict[str, np.ndarray]] = {}
     dependency_columns: set[str] = set()
-    for entity_type, aliases in _MANAGED_DEPENDENCY_COLUMN_ALIASES.items():
+    for entity_type, aliases in PERSONA_DEPENDENCY_COLUMN_ALIASES.items():
         column = _first_existing_column(people, aliases)
         if column is None:
             continue
