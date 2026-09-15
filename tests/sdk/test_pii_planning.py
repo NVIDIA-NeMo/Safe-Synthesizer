@@ -16,7 +16,6 @@ from nemo_safe_synthesizer.config.replace_pii import (
     EntityType,
     PiiColumnPlan,
     PiiReplacementPlan,
-    PiiSamplerConfig,
     ReplacePiiConfig,
 )
 from nemo_safe_synthesizer.errors import ParameterError
@@ -45,7 +44,6 @@ def test_plan_pii_replacement_delegates_full_input_without_pipeline_stages(tmp_p
     config = SafeSynthesizerParameters(replace_pii=ReplacePiiConfig())
     expected = ReplacePiiConfig(
         replacement_plan=PiiReplacementPlan(),
-        sampler=PiiSamplerConfig(data_to_sampler_value_mapping={}),
     )
     nss = SafeSynthesizer(config=config, save_path=tmp_path).with_data_source(dataframe)
 
@@ -89,7 +87,8 @@ def test_plan_pii_replacement_persists_when_output_path_is_supplied(tmp_path: Pa
     )
 
     assert result.inline_plan == inline_plan
-    assert result.sampler.data_to_sampler_value_mapping == {}
+    assert result.inline_plan is not None
+    assert result.inline_plan.data_to_sampler_value_mapping == {}
     assert SafeSynthesizerParameters.from_yaml(output_path).replace_pii == result
 
 
