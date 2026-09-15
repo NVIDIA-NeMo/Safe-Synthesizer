@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Iterable
 from functools import cached_property
 
+import pandas as pd
 from pydantic import BaseModel, Field
 
 from ...config.parameters import SafeSynthesizerParameters
@@ -113,15 +115,21 @@ class PIIReplay(Component):
                     entity_name
                 ]
 
-            # These are the same in both cases. We want the size of that set of training[col] unique values.
             training_entity_unique_count = len(training_entity_unique_values)
-            # We want the total number of rows in synthetic[column] that contain some value from the training[col] unique values.
             synthetic_col = evaluation_datasets.synthetic[col]
-            synthetic_entity_values = synthetic_col[synthetic_col.isin(training_entity_unique_values)]
-            synthetic_entity_count = len(synthetic_entity_values)
-            # With those query results, we also want the count of unique items in those filtered synthetic results.
-            synthetic_entity_unique_count = len(synthetic_entity_values.unique())
-            replay_percentage = synthetic_entity_unique_count / training_entity_unique_count * 100
+            synthetic_entity_count, synthetic_entity_unique_count = _synthetic_replay_counts(
+                synthetic_col,
+                training_entity_unique_values,
+                substring_match=(
+                    entity_name != UNKNOWN_ENTITY
+                    and evaluation_datasets.column_statistics[col].assigned_entity == "free_text"
+                ),
+            )
+            replay_percentage = (
+                synthetic_entity_unique_count / training_entity_unique_count * 100
+                if training_entity_unique_count
+                else 0
+            )
             replay_percentage = math.ceil(replay_percentage * 10) / 10
 
             pii_replay_data.append(
@@ -143,3 +151,27 @@ class PIIReplay(Component):
             synthetic_total_records=evaluation_datasets.synthetic.shape[0],
             pii_replay_data=pii_replay_data,
         )
+
+
+def _synthetic_replay_counts(
+    synthetic: pd.Series,
+    training_values: Iterable[object],
+    *,
+    substring_match: bool,
+) -> tuple[int, int]:
+    """Count synthetic rows and distinct training PII values that are replayed."""
+    if not substring_match:
+        matches = synthetic[synthetic.isin(training_values)]
+        return len(matches), len(matches.unique())
+
+    candidates = tuple(value for value in training_values if isinstance(value, str) and value)
+    replayed_values: set[str] = set()
+    matching_rows = 0
+    for synthetic_value in synthetic:
+        if not isinstance(synthetic_value, str):
+            continue
+        row_matches = {candidate for candidate in candidates if candidate in synthetic_value}
+        if row_matches:
+            matching_rows += 1
+            replayed_values.update(row_matches)
+    return matching_rows, len(replayed_values)

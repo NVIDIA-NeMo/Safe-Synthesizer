@@ -54,8 +54,8 @@ Before the model sees any data, Safe Synthesizer can detect sensitive values and
 
 In this context, data like addresses, phone numbers, emails, social security numbers, and credit card numbers are referred to as entities, and we include those by default as replacement targets. Dozens of additional entity types are supported, and custom entities are configurable. PII replacement is on by default and can be disabled when your data does not contain PII.
 
-PII replacement v3 will be added in a later update. See
-[PII Replacement](../../product-overview/pii_replacement.md).
+PII replacement v3 supports plan-driven structured and free-text replacement
+before training. See [PII Replacement](../../product-overview/pii_replacement.md).
 
 ### Stage 2: Fine-Tuning
 
