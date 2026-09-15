@@ -299,8 +299,8 @@ definitions, examples, Nemotron-Personas download instructions, the LLM
 configuration for plan enhancement and dependency mapping discovery, and the GLiNER2
 settings for free-text detection.
 
-Structured-column replacements run before training. Free-text named entity
-detection and span replacement are not yet executed.
+Structured-column and free-text replacements run before training. Free-text
+targets combine GLiNER2 detection with built-in validated regex detectors.
 
 ---
 
