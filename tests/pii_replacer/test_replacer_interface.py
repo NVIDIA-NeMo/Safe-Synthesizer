@@ -65,7 +65,8 @@ class TestTabularPiiReplacerInterface:
         assert first.transformed_df["identifier"].str.fullmatch(r"USER-\d{3}").all()
         assert first.generation_statistics.generated_replacement_count == 2
         assert first.resolved_config.inline_plan == config.inline_plan
-        assert first.resolved_config.sampler.dependency_value_mappings == {}
+        assert first.resolved_config.inline_plan is not None
+        assert first.resolved_config.inline_plan.dependency_value_mappings == {}
 
     def test_free_text_replacement_is_explicitly_deferred(self) -> None:
         dataframe = pd.DataFrame({"notes": ["Ada called"]})

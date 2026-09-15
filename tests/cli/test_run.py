@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
+import yaml
 from click.testing import CliRunner
 
 import nemo_safe_synthesizer.observability as obs
@@ -763,6 +764,10 @@ class TestRunReplacePii:
         assert result.exit_code == 0
         resolved_config_path = run_path / "pii_replacement_config.yaml"
         assert resolved_config_path.exists()
+        serialized = yaml.safe_load(resolved_config_path.read_text())["replace_pii"]["replacement_plan"]
+        assert serialized["dependency_value_mappings"] == {}
+        assert "pattern" not in serialized["columns_to_replace"][0]
+        assert "depends_on" not in serialized["columns_to_replace"][0]
         resolved_config = SafeSynthesizerParameters.from_yaml(resolved_config_path)
         assert resolved_config.replace_pii is not None
         plan = resolved_config.replace_pii.inline_plan

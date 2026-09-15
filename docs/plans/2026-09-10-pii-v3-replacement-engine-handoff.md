@@ -162,11 +162,12 @@ LLM span-detection experiment.
 - `ManagedReplacementGenerator` and `FakerReplacementGenerator` are the two adapters at the replacement-generator
   seam.
 - The flat `depends_on` DAG is the execution architecture.
-- Dataset-specific dependency-label adaptation belongs to `PiiSamplerConfig`, not `PiiReplacementPlan` or individual
-  `depends_on` edges.
-- Dependency value mappings default to automatic discovery or accept one authoritative inline map keyed by dependency
-  source column. Automatic results are sparse; an input label that differs only in case from a sampler label needs no
-  explicit mapping.
+- Dataset-specific dependency-label adaptation belongs to `PiiReplacementPlan` beside `columns_to_replace`, not to
+  `PiiSamplerConfig` or individual `depends_on` edges.
+- `replacement_plan: auto_discovery` discovers both columns and dependency value mappings. An explicit plan accepts one
+  authoritative inline map keyed by dependency source column and never runs a separate mapping-discovery pass.
+  Automatic results are sparse; an input label that differs only in case from a sampler label needs no explicit
+  mapping.
 - Record mappings use stable positional row identity. Dependencies are generation inputs, not record mapping identity.
 - For group-scoped mappings, group consistency wins over dependency consistency.
 - The first group occurrence establishes the replacement. If later dependency values differ, reuse the first
@@ -237,25 +238,24 @@ generation behavior in the follow-up without widening the public `TabularPiiRepl
 
 ### Dependency value mappings
 
-Add dataset-specific label adaptation to the sampler configuration:
+Add dataset-specific label adaptation beside the replacement columns it
+describes:
 
 ```python
 DependencyValueMappings = dict[str, dict[str, list[str] | None]]
 
 
-class PiiSamplerConfig(NSSBaseModel):
-    backend: PiiSamplerBackend = PiiSamplerBackend.MANAGED
-    managed_assets_path: str | None = None
-    dependency_value_mappings: DependencyValueMappings | Literal["auto_discovery"] = "auto_discovery"
+class PiiReplacementPlan(Parameters):
+    columns_to_replace: list[PiiColumnPlan] = Field(default_factory=list)
+    dependency_value_mappings: DependencyValueMappings = Field(default_factory=dict)
 ```
 
-The default YAML interface mirrors `replacement_plan`:
+There is one discovery switch. `replacement_plan: auto_discovery` discovers
+both the columns and their dependency mappings:
 
 ```yaml
 replace_pii:
-  sampler:
-    backend: managed
-    dependency_value_mappings: auto_discovery
+  replacement_plan: auto_discovery
 ```
 
 The authoritative manual form is inline and keyed by dependency source column,
@@ -263,8 +263,15 @@ because dataset columns—not entity types—own the source vocabularies:
 
 ```yaml
 replace_pii:
-  sampler:
-    backend: managed
+  replacement_plan:
+    columns_to_replace:
+      - column_name: first_name
+        entity_type: first_name
+        depends_on:
+          - column_name: sex
+            entity_type: gender
+          - column_name: race
+            entity_type: ethnic_background
     dependency_value_mappings:
       sex:
         Non-binary: null
@@ -294,13 +301,14 @@ replace_pii:
         Other: null
 ```
 
-This mapping adapts labels from the input dataset to labels understood by the selected sampler. It is sampler
-configuration because it changes candidate selection, not the replacement plan's dependency graph. It is
-sampler-specific; switching sampler backends requires rediscovery or review of the inline mapping.
+This mapping adapts labels from the input dataset to labels understood by the selected sampler. It remains
+sampler-specific; switching sampler backends requires rediscovery or review of the inline mapping. It lives in the
+dataset-specific plan so the replacement columns, dependency edges, and vocabulary adaptation travel together.
 
-Do not accept a separate mapping file and do not combine automatic discovery with manual overrides. Plan-only writes
-one complete NSS configuration with the resolved plan and sparse inline mapping. Users who want to adjust an automatic
-result edit that generated configuration and run it again.
+Do not accept a separate mapping file, a separate mapping-discovery sentinel, or automatic/manual overrides. An inline
+or file-based plan is authoritative, and an omitted mapping means `{}`. Plan-only writes one complete NSS configuration
+with the resolved plan and sparse inline mapping. Users who want to adjust an automatic result edit that generated
+configuration and run it again.
 
 Resolve each dependency value as follows:
 
@@ -621,7 +629,7 @@ than a fixed byte limit. The earlier 48 KiB proposal is removed.
 - Automatic LLM plan discovery reads the full input dataset.
 - Replacement runs after holdout and transforms only the training split.
 - Retain original training and test frames for evaluation.
-- Persist one reusable configuration with the resolved plan and sampler mappings as
+- Persist one reusable configuration with the resolved plan and its dependency mappings as
   `<run_dir>/pii_replacement_config.yaml`.
 - Populate `ColumnStatistics` for every planned target:
   - Structured counts include every non-missing occurrence.
@@ -672,9 +680,9 @@ make it explicit opt-in, label the artifact as sensitive, and define access cont
   aggregate warning/count without raw values.
 - Test deterministic seeds, managed fallback, supported generators, patterns, email-domain behavior, organization
   normalization, masks, birth dates, Luhn cards, original inequality, and collision retries.
-- Test automatic and manual sparse dependency mappings, implicit case-insensitive identity matching, one-to-many
-  candidate unions, explicit `null`, missing managed candidates, mapping validation by source column, and acceptance
-  by both managed and Faker configurations.
+- Test automatic and manual sparse dependency mappings, the shared plan-discovery switch, implicit case-insensitive
+  identity matching, one-to-many candidate unions, explicit `null`, missing managed candidates, mapping validation by
+  source column, and acceptance by both managed and Faker configurations.
 - Test that managed assets load only required columns and build reusable candidate indexes rather than scanning the
   complete asset per generated value.
 - Test component replacement reuse only for independently detected spans.
@@ -699,7 +707,7 @@ make it explicit opt-in, label the artifact as sensitive, and define access cont
 - Only the training split is transformed.
 - Original training and test frames remain available to evaluation.
 - PII replay consumes complete `ColumnStatistics`, including planned columns with no matches.
-- The resolved plan and sampler mappings are written as one reusable configuration in the normal run artifact
+- The resolved plan and its dependency mappings are written as one reusable configuration in the normal run artifact
   directory.
 - Output shape and index match the input, protected values remain unchanged, and no unplanned columns change.
 - No raw PII, detector content, dependency values, or replacement map appears in logs or error messages.

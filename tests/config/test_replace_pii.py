@@ -398,7 +398,6 @@ class TestReplacePiiConfig:
         assert config.inline_plan is None
         assert config.llm is None
         assert config.sampler.backend is PiiSamplerBackend.MANAGED
-        assert config.sampler.dependency_value_mappings == AUTO_DISCOVERY
         assert ENTITY_BY_TYPE[EntityType.FREE_TEXT].action is EntityAction.REPLACE_IN_TEXT
 
     def test_missing_schema_version_is_v3_and_sparse_serialization_includes_it(self) -> None:
@@ -412,7 +411,7 @@ class TestReplacePiiConfig:
 
         assert config.model_dump(exclude_unset=True)["replace_pii"]["schema_version"] == 3
 
-    def test_config_serialization_omits_explicitly_empty_dependencies(self) -> None:
+    def test_config_serialization_omits_empty_and_null_plan_fields(self) -> None:
         plan = PiiReplacementPlan(
             columns_to_replace=[
                 PiiColumnPlan(
@@ -426,7 +425,34 @@ class TestReplacePiiConfig:
         replacement_plan = serialized["replacement_plan"]
 
         assert isinstance(replacement_plan, dict)
-        assert "depends_on" not in replacement_plan["columns_to_replace"][0]
+        serialized_column = replacement_plan["columns_to_replace"][0]
+        assert "depends_on" not in serialized_column
+        assert "pattern" not in serialized_column
+        assert replacement_plan["dependency_value_mappings"] == {}
+
+    def test_config_serialization_omits_runtime_inferred_dependency_type(self) -> None:
+        plan = PiiReplacementPlan(
+            columns_to_replace=[
+                PiiColumnPlan(column_name="first", entity_type=EntityType.FIRST_NAME),
+                PiiColumnPlan(
+                    column_name="email",
+                    entity_type=EntityType.EMAIL,
+                    depends_on=[
+                        ConditioningColumn(column_name="first"),
+                        ConditioningColumn(column_name="company", entity_type=EntityType.ORGANIZATION),
+                    ],
+                ),
+            ]
+        )
+
+        serialized = ReplacePiiConfig(replacement_plan=plan).model_dump(exclude_unset=False)
+        replacement_plan = serialized["replacement_plan"]
+
+        assert isinstance(replacement_plan, dict)
+        assert replacement_plan["columns_to_replace"][1]["depends_on"] == [
+            {"column_name": "first"},
+            {"column_name": "company", "entity_type": EntityType.ORGANIZATION},
+        ]
 
     @pytest.mark.parametrize("schema_version", [1, 2, 0, -1])
     def test_unsupported_schema_version_is_rejected(self, schema_version: int) -> None:
@@ -585,10 +611,9 @@ class TestReplacePiiConfig:
         assert "Nemotron Personas" in path_description
         assert "datasets/{locale}.parquet" in path_description
 
-    def test_sampler_accepts_manual_dependency_value_mappings(self) -> None:
-        sampler = PiiSamplerConfig.model_validate(
+    def test_plan_accepts_manual_dependency_value_mappings(self) -> None:
+        plan = PiiReplacementPlan.model_validate(
             {
-                "backend": "faker",
                 "dependency_value_mappings": {
                     "sex": {"Woman": ["female"], "Non-binary": None},
                     "race": {"Asian": ["east asian", "south asian"]},
@@ -596,22 +621,14 @@ class TestReplacePiiConfig:
             }
         )
 
-        assert sampler.dependency_value_mappings == {
+        assert plan.dependency_value_mappings == {
             "sex": {"Woman": ["female"], "Non-binary": None},
             "race": {"Asian": ["east asian", "south asian"]},
         }
-        assert not sampler.is_dependency_value_mapping_auto_discovery
-        assert sampler.inline_dependency_value_mappings == sampler.dependency_value_mappings
+        assert plan.model_dump()["dependency_value_mappings"]["sex"]["Non-binary"] is None
 
-    def test_sampler_dependency_value_mappings_default_to_auto_discovery(self) -> None:
-        sampler = PiiSamplerConfig()
-
-        assert sampler.is_dependency_value_mapping_auto_discovery
-        assert sampler.inline_dependency_value_mappings is None
-
-    def test_sampler_rejects_mapping_paths(self) -> None:
-        with pytest.raises(ValidationError, match="dictionary|auto_discovery"):
-            PiiSamplerConfig.model_validate({"dependency_value_mappings": "mappings.yaml"})
+    def test_plan_dependency_value_mappings_default_to_empty(self) -> None:
+        assert PiiReplacementPlan().dependency_value_mappings == {}
 
     @pytest.mark.parametrize(
         ("mappings", "error"),
@@ -630,13 +647,13 @@ class TestReplacePiiConfig:
             ),
         ],
     )
-    def test_sampler_rejects_invalid_dependency_value_mappings(
+    def test_plan_rejects_invalid_dependency_value_mappings(
         self,
         mappings: object,
         error: str,
     ) -> None:
         with pytest.raises(ValidationError, match=error):
-            PiiSamplerConfig.model_validate({"dependency_value_mappings": mappings})
+            PiiReplacementPlan.model_validate({"dependency_value_mappings": mappings})
 
     def test_default_managed_assets_path_uses_env_then_home(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

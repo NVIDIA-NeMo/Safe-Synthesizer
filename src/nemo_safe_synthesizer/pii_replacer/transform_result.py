@@ -73,7 +73,7 @@ class TransformResult(BaseModel):
         description="Resolved replacement plan executed for this result.",
     )
     resolved_config: ReplacePiiConfig = Field(
-        description="Resolved PII configuration containing the executed plan and sampler mappings.",
+        description="Resolved PII configuration containing the executed plan and its dependency mappings.",
     )
     generation_statistics: ReplacementGenerationStatistics = Field(
         description="Aggregate timing and count statistics for replacement generation.",

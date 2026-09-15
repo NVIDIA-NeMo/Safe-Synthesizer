@@ -104,6 +104,7 @@ def _plan_document(plan: PiiReplacementPlan) -> dict[str, object]:
     return {
         "schema_version": _OUTPUT_PLAN_SCHEMA_VERSION,
         "columns_to_replace": columns,
+        "dependency_value_mappings": plan.dependency_value_mappings,
     }
 
 

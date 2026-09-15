@@ -39,7 +39,8 @@ class TestPlanIo:
                         ConditioningColumn(column_name="company", entity_type=EntityType.ORGANIZATION),
                     ],
                 ),
-            ]
+            ],
+            dependency_value_mappings={"company": {"Independent": None}},
         )
         path = save_plan(plan, tmp_path / "plan.yaml")
 
@@ -56,6 +57,7 @@ class TestPlanIo:
                     ],
                 },
             ],
+            "dependency_value_mappings": {"company": {"Independent": None}},
         }
 
         loaded = load_plan(path)
@@ -73,6 +75,7 @@ class TestPlanIo:
         assert yaml.safe_load(path.read_text()) == {
             "schema_version": 3,
             "columns_to_replace": [],
+            "dependency_value_mappings": {},
         }
 
     def test_load_treats_missing_schema_version_as_v3(self, tmp_path: Path) -> None:

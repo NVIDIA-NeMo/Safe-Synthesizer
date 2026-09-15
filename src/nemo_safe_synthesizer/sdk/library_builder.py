@@ -362,12 +362,12 @@ class SafeSynthesizer(ConfigBuilder):
 
     @traced("SafeSynthesizer.plan_pii_replacement", category=LogCategory.RUNTIME)
     def plan_pii_replacement(self, output_path: Path | str | None = None) -> ReplacePiiConfig:
-        """Resolve PII planning and sampler mappings from the full input dataframe.
+        """Resolve a PII plan and its dependency mappings from the full input dataframe.
 
         This plan-only workflow does not split the input or enter model
         metadata, training, generation, replacement, or evaluation stages.
         When ``output_path`` is provided, the complete NSS configuration is
-        written with the resolved plan and dependency value mappings.
+        written with the resolved plan and adjacent dependency value mappings.
 
         Args:
             output_path: Optional destination for the reusable NSS configuration YAML.

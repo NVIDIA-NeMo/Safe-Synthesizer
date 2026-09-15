@@ -306,6 +306,18 @@ class TestReplacementGenerator:
         delta = datetime.strptime(replacement, "%m/%d/%Y") - datetime.strptime(request.original_value, "%m/%d/%Y")
         assert 1 <= abs(delta.days) <= 365
 
+    def test_birth_date_pattern_supports_named_months(self) -> None:
+        request = _request(
+            EntityType.DATE_OF_BIRTH,
+            "December 10, 1815",
+            pattern="%B %d, %Y",
+        )
+
+        replacement = _faker_generator().generate(request)
+
+        datetime.strptime(replacement, "%B %d, %Y")
+        assert replacement != request.original_value
+
     def test_card_pattern_produces_a_luhn_valid_number(self) -> None:
         generator = _faker_generator()
         request = _request(

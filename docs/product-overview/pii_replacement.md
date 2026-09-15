@@ -70,11 +70,11 @@ for the example above.
 ### Dependency label mappings
 
 Dependency values are matched to sampler labels case-insensitively, so values
-such as `Female` and `female` need no mapping. By default,
-`dependency_value_mappings` is `auto_discovery`. After the replacement plan is
-resolved, NSS compares each dependency column's distinct values with the
-selected sampler's labels. If unmatched values remain, the configured LLM maps
-them to that sampler's vocabulary.
+such as `Female` and `female` need no mapping. When `replacement_plan` is
+`auto_discovery`, NSS discovers `columns_to_replace` and
+`dependency_value_mappings` together. It compares each dependency column's
+distinct values with the selected sampler's labels. If unmatched values remain,
+the configured LLM maps them to that sampler's vocabulary.
 
 Automatic discovery writes a sparse mapping: identity matches are omitted.
 Only unmatched distinct dependency values, each limited to 128 characters,
@@ -82,13 +82,20 @@ and the sampler's allowed labels are sent to the LLM. If no LLM is configured,
 unmatched values produce an error asking for an LLM configuration or a manual
 mapping.
 
-For an authoritative manual mapping, replace `auto_discovery` with an inline
-mapping keyed by the dependency column names from this dataset:
+For an authoritative plan, place the mapping beside `columns_to_replace`, keyed
+by dependency column names from this dataset:
 
 ```yaml
 replace_pii:
-  sampler:
-    backend: managed
+  replacement_plan:
+    columns_to_replace:
+      - column_name: first_name
+        entity_type: first_name
+        depends_on:
+          - column_name: sex
+            entity_type: gender
+          - column_name: race
+            entity_type: ethnic_background
     dependency_value_mappings:
       sex:
         Non-binary: null
@@ -99,6 +106,8 @@ replace_pii:
           - southeast asian
         Black or African American:
           - black
+  sampler:
+    backend: managed
 ```
 
 Each nonempty list selects the union of sampler rows with those labels. An
@@ -108,10 +117,12 @@ validated against the resolved dependency columns and the selected sampler's
 known labels. Faker applies mappings for attributes it supports, such as
 gender; unsupported attributes are ignored.
 
-Mappings are sampler-specific. NSS therefore does not accept a separate mapping
-file or combine automatic discovery with manual overrides. Generate a resolved
-configuration, edit its inline mapping if needed, and run that configuration
-again.
+Mappings are sampler-specific even though they live in the dataset-specific
+replacement plan. NSS does not accept a separate mapping file or combine
+automatic discovery with manual overrides. Generate a resolved configuration,
+edit its inline plan if needed, and run that configuration again. An explicit
+inline or file-based plan never runs a separate mapping-discovery pass; an
+omitted mapping is equivalent to `{}`.
 
 ## Replacement plan sources
 
@@ -123,9 +134,10 @@ includes the version whenever it serializes the configuration.
 
 ### Automatic discovery
 
-Use `auto_discovery` to run the heuristic plan discoverer. When `llm` is
-configured, NSS passes the heuristic result to the LLM plan enhancer before
-validating the final plan.
+Use `auto_discovery` to discover both replacement columns and dependency value
+mappings. When `llm` is configured, NSS passes the heuristic result to the LLM
+plan enhancer before validating the final plan and mapping unmatched dependency
+values.
 
 ```yaml
 replace_pii:
@@ -151,6 +163,7 @@ replace_pii:
         pattern: "{f}.{last}@{domain}"
         depends_on:
           - column_name: full_name
+    dependency_value_mappings: {}
 ```
 
 ### Plan file
@@ -163,6 +176,7 @@ schema_version: 3
 columns_to_replace:
   - column_name: email
     entity_type: email
+dependency_value_mappings: {}
 ```
 
 Set `replacement_plan` to its path:
@@ -176,11 +190,16 @@ replace_pii:
 Inline plans and plan files are authoritative: NSS validates them against the
 input dataframe but does not run heuristic or LLM discovery.
 
+Date-of-birth patterns use Python `strptime`/`strftime` syntax. Named-month
+formats such as `%B %d, %Y` match values like `December 10, 1815`; patterns do
+not perform general natural-language date parsing, so prose and ordinal forms
+such as `December tenth` or `December 10th` are not supported automatically.
+
 ## Plan-only workflow
 
-Resolve and save the plan and sampler-specific dependency mappings from the
-full input dataframe without running holdout, model metadata, replacement,
-training, generation, or evaluation:
+Resolve and save the replacement plan—including its sampler-specific dependency
+mappings—from the full input dataframe without running holdout, model metadata,
+replacement, training, generation, or evaluation:
 
 ```bash
 safe-synthesizer run replace-pii --plan-only \

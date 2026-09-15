@@ -181,7 +181,8 @@ class TestLLMPlanEnhancer:
             },
         )
 
-        assert resolved.sampler.dependency_value_mappings == {
+        assert resolved.inline_plan is not None
+        assert resolved.inline_plan.dependency_value_mappings == {
             "sex": {"Non-binary": None},
             "race": {"Asian": ["east asian", "south asian"]},
         }
