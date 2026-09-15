@@ -318,6 +318,23 @@ class TestReplacementGenerator:
         datetime.strptime(replacement, "%B %d, %Y")
         assert replacement != request.original_value
 
+    @pytest.mark.parametrize("original", ["5 April 1990", "April 5th, 1990", "5 avril 1990"])
+    def test_natural_language_birth_date_is_shifted_to_a_safe_complete_date(self, original: str) -> None:
+        generator = _faker_generator()
+        request = _request(EntityType.DATE_OF_BIRTH, original)
+
+        replacement = generator.generate(request)
+
+        parsed_replacement = datetime.fromisoformat(replacement)
+        assert datetime(1989, 4, 5) <= parsed_replacement <= datetime(1991, 4, 5)
+        assert replacement != original
+
+    def test_vague_birth_date_is_not_generation_input(self) -> None:
+        generator = _faker_generator()
+
+        with pytest.raises(GenerationError, match="complete parseable date"):
+            generator.generate(_request(EntityType.DATE_OF_BIRTH, "spring"))
+
     def test_card_pattern_produces_a_luhn_valid_number(self) -> None:
         generator = _faker_generator()
         request = _request(

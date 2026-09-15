@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import inspect
+import sys
+from types import SimpleNamespace
 
 import pandas as pd
 import pytest
@@ -16,9 +18,13 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiSamplerConfig,
     ReplacePiiConfig,
 )
-from nemo_safe_synthesizer.errors import GenerationError
 from nemo_safe_synthesizer.pii_replacer import ReplacementGenerationStatistics, TabularPiiReplacer
 from nemo_safe_synthesizer.pii_replacer.transform_result import TransformResult
+
+
+class _FakeGlinerModel:
+    def batch_extract_entities(self, texts: list[str], labels: list[str], **kwargs: object) -> list[object]:
+        return [{"entities": {"first_name": [{"start": 0, "end": 3, "confidence": 0.9}]}} for _ in texts]
 
 
 @pytest.mark.unit
@@ -68,7 +74,7 @@ class TestTabularPiiReplacerInterface:
         assert first.resolved_config.inline_plan is not None
         assert first.resolved_config.inline_plan.dependency_value_mappings == {}
 
-    def test_free_text_replacement_is_explicitly_deferred(self) -> None:
+    def test_replace_executes_an_explicit_free_text_plan(self, monkeypatch: pytest.MonkeyPatch) -> None:
         dataframe = pd.DataFrame({"notes": ["Ada called"]})
         original = dataframe.copy(deep=True)
         config = ReplacePiiConfig(
@@ -78,10 +84,18 @@ class TestTabularPiiReplacerInterface:
             sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
         )
 
-        with pytest.raises(GenerationError, match="detector and span-resolution"):
-            TabularPiiReplacer(config, data_config=DataParameters()).replace(dataframe)
+        class FakeGliner2:
+            @classmethod
+            def from_pretrained(cls, model_id: str, **kwargs: object) -> _FakeGlinerModel:
+                return _FakeGlinerModel()
+
+        monkeypatch.setitem(sys.modules, "gliner2", SimpleNamespace(GLiNER2=FakeGliner2))
+
+        result = TabularPiiReplacer(config, data_config=DataParameters()).replace(dataframe)
 
         pd.testing.assert_frame_equal(dataframe, original)
+        assert result.transformed_df["notes"].iloc[0] != "Ada called"
+        assert result.transformed_df["notes"].iloc[0].endswith(" called")
 
 
 @pytest.mark.unit

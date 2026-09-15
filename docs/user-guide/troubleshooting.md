@@ -544,7 +544,47 @@ check of its own.
 
 ## PII Replacement
 
-PII replacement v3 troubleshooting guidance will be added in a later update.
+`safe-synthesizer run replace-pii` resolves the plan and applies replacement in
+one run. Add `--plan-only` only when you want to validate and persist the
+resolved plan without replacing rows. Plan, dependency, and pattern errors are
+reported as configuration errors without logging source values.
+
+Free-text targets require the configured GLiNER2 checkpoint. The default is
+`fastino/gliner2-privacy-filter-PII-multi`; allow Hugging Face downloads on the
+first run or pre-populate the model cache before using
+`--disable-huggingface-remote`. A model-load or inference failure stops the run
+instead of silently continuing with regex detection only.
+
+### GLiNER2 Device and Throughput
+
+NSS loads GLiNER2 on CUDA when PyTorch reports an available GPU and otherwise
+uses CPU. Model loading and inference emit completion records and a progress
+heartbeat every 30 seconds; the records include the selected device, chunk
+count, configured batch size, and requested-label count without source text.
+
+Free-text inference deduplicates exact cell values, splits each unique value
+into overlapping character chunks, and sends the flattened chunks through
+GLiNER2's batched API. Start with the defaults (`batch_size: 8`,
+`chunk_length: 384`, and `chunk_overlap: 128`). Reduce `batch_size` to 4, 2, or
+1 after a CUDA out-of-memory error. Increase it gradually only when a GPU has
+headroom; it does not change chunk boundaries or detection semantics.
+
+The default checkpoint's documented languages are English, French, Spanish,
+German, Italian, Portuguese, and Dutch. Natural-language date parsing happens
+only after GLiNER2 detects a birth-date span, so the parser does not extend the
+checkpoint's detection-language coverage.
+
+GLiNER2 birth-date candidates must contain a complete parseable day, month,
+and year. Natural-language and multilingual complete dates are accepted; vague
+phrases such as `spring` are skipped with a PII-free aggregate warning. If a
+complete date is unexpectedly skipped, inspect the aggregate warning count
+with `-v` and report the date format without sharing the original value.
+
+Managed sampling expects `<managed-assets>/datasets/<locale>.parquet`. Set
+`replace_pii.sampler.managed_assets_path` or `NSS_MANAGED_ASSETS_PATH` when the
+assets are stored elsewhere. Missing sampler fields can fall back to Faker,
+but dependency labels that select no managed candidates are configuration
+errors and must be fixed in `dependency_value_mappings`.
 
 ---
 
