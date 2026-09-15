@@ -9,18 +9,22 @@ import pytest
 from nemo_safe_synthesizer.config.data import DataParameters
 from nemo_safe_synthesizer.config.replace_pii import (
     ConditioningColumn,
+    DataToSamplerValueMapping,
     EntityType,
     PiiColumnPlan,
     PiiReplacementPlan,
-    PiiSamplerConfig,
     ReplacePiiConfig,
 )
 from nemo_safe_synthesizer.errors import ParameterError
-from nemo_safe_synthesizer.pii_replacer.planning import resolve_replacement_config
+from nemo_safe_synthesizer.pii_replacer.planning import (
+    PlanDiscoverer,
+    PlanDiscoveryInput,
+    resolve_replacement_config,
+)
 from nemo_safe_synthesizer.pii_replacer.planning.dependency_mappings import mapping_inputs
 
 
-def _plan() -> PiiReplacementPlan:
+def _plan(data_to_sampler_value_mapping: DataToSamplerValueMapping | None = None) -> PiiReplacementPlan:
     return PiiReplacementPlan(
         columns_to_replace=[
             PiiColumnPlan(
@@ -31,8 +35,15 @@ def _plan() -> PiiReplacementPlan:
                     ConditioningColumn(column_name="race", entity_type=EntityType.ETHNIC_BACKGROUND),
                 ],
             )
-        ]
+        ],
+        data_to_sampler_value_mapping=data_to_sampler_value_mapping or {},
     )
+
+
+class _StaticPlanDiscoverer(PlanDiscoverer):
+    def discover(self, discovery_input: PlanDiscoveryInput) -> PiiReplacementPlan:
+        del discovery_input
+        return _plan()
 
 
 @pytest.mark.unit
@@ -75,13 +86,14 @@ class TestDependencyMappings:
 
     def test_auto_mapping_without_llm_fails_only_for_unmatched_values(self) -> None:
         dataframe = pd.DataFrame({"first_name": ["Ada"], "sex": ["Woman"], "race": ["White"]})
-        config = ReplacePiiConfig(replacement_plan=_plan())
+        config = ReplacePiiConfig()
 
-        with pytest.raises(ParameterError, match="configure replace_pii.llm or provide manual"):
+        with pytest.raises(ParameterError, match="configure replace_pii.llm, or generate and edit"):
             resolve_replacement_config(
                 dataframe,
                 config,
                 DataParameters(),
+                discoverer=_StaticPlanDiscoverer(),
                 sampler_value_catalog={
                     EntityType.GENDER: ("female", "male"),
                     EntityType.ETHNIC_BACKGROUND: ("white",),
@@ -93,6 +105,23 @@ class TestDependencyMappings:
 
         resolved = resolve_replacement_config(
             dataframe,
+            ReplacePiiConfig(),
+            DataParameters(),
+            discoverer=_StaticPlanDiscoverer(),
+            sampler_value_catalog={
+                EntityType.GENDER: ("female", "male"),
+                EntityType.ETHNIC_BACKGROUND: ("white",),
+            },
+        )
+
+        assert resolved.inline_plan is not None
+        assert resolved.inline_plan.data_to_sampler_value_mapping == {}
+
+    def test_explicit_plan_does_not_separately_auto_discover_mappings(self) -> None:
+        dataframe = pd.DataFrame({"first_name": ["Ada"], "sex": ["Woman"], "race": ["White"]})
+
+        resolved = resolve_replacement_config(
+            dataframe,
             ReplacePiiConfig(replacement_plan=_plan()),
             DataParameters(),
             sampler_value_catalog={
@@ -101,16 +130,13 @@ class TestDependencyMappings:
             },
         )
 
-        assert resolved.sampler.data_to_sampler_value_mapping == {}
-        assert not resolved.sampler.is_dependency_value_mapping_auto_discovery
+        assert resolved.inline_plan is not None
+        assert resolved.inline_plan.data_to_sampler_value_mapping == {}
 
     def test_manual_mapping_is_authoritative_and_validated_by_dependency_column(self) -> None:
         dataframe = pd.DataFrame({"first_name": ["Ada"], "sex": ["Woman"], "race": ["White"]})
         config = ReplacePiiConfig(
-            replacement_plan=_plan(),
-            sampler=PiiSamplerConfig(
-                data_to_sampler_value_mapping={"sex": {"Woman": ["female"]}},
-            ),
+            replacement_plan=_plan({"sex": {"Woman": ["female"]}}),
         )
 
         resolved = resolve_replacement_config(
@@ -123,7 +149,8 @@ class TestDependencyMappings:
             },
         )
 
-        assert resolved.sampler.data_to_sampler_value_mapping == {"sex": {"Woman": ["female"]}}
+        assert resolved.inline_plan is not None
+        assert resolved.inline_plan.data_to_sampler_value_mapping == {"sex": {"Woman": ["female"]}}
 
     @pytest.mark.parametrize(
         ("mappings", "error"),
@@ -139,8 +166,7 @@ class TestDependencyMappings:
     ) -> None:
         dataframe = pd.DataFrame({"first_name": ["Ada"], "sex": ["Woman"], "race": ["White"]})
         config = ReplacePiiConfig(
-            replacement_plan=_plan(),
-            sampler=PiiSamplerConfig(data_to_sampler_value_mapping=mappings),
+            replacement_plan=_plan(mappings),
         )
 
         with pytest.raises(ParameterError, match=error):

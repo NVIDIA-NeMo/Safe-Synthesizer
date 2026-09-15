@@ -35,7 +35,7 @@ class TabularPiiReplacer:
     and where to persist the resolved configuration.
 
     Args:
-        config: PII replacement configuration, including the plan and mapping sources.
+        config: PII replacement configuration, including the replacement plan.
         data_config: Input data configuration used to validate and execute the
             resolved plan.
         time_series: Optional time-series configuration used to protect ordering
@@ -75,15 +75,14 @@ class TabularPiiReplacer:
             self._time_series,
         )
         plan = resolved_config.inline_plan
-        mappings = resolved_config.sampler.inline_data_to_sampler_value_mapping
-        if plan is None or mappings is None:
+        if plan is None:
             raise InternalError("PII replacement configuration was not fully resolved")
         executor = StructuredReplacementExecutor(
             plan,
             self._replacement_generator(resolved_config),
             group_column=self._data_config.group_training_examples_by,
             base_seed=resolve_base_seed(self._config.replacement.seed),
-            data_to_sampler_value_mapping=mappings,
+            data_to_sampler_value_mapping=plan.data_to_sampler_value_mapping,
         )
         execution = executor.execute(df)
         return TransformResult(

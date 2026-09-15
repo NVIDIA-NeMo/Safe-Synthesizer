@@ -215,10 +215,11 @@ def resolve_replacement_config(
     mapping_discoverer: DependencyMappingDiscoverer | None = None,
     sampler_value_catalog: Mapping[EntityType, tuple[str, ...]] | None = None,
 ) -> ReplacePiiConfig:
-    """Resolve the semantic plan and sampler-specific dependency mappings."""
+    """Resolve one plan, discovering its columns and mappings together when requested."""
+    discover_plan = config.is_auto_discovery
     default_enhancer: PlanEnhancer | None = None
     default_mapping_discoverer: DependencyMappingDiscoverer | None = None
-    if config.llm is not None and config.is_auto_discovery and enhancer is None:
+    if config.llm is not None and discover_plan and enhancer is None:
         from .llm import LLMPlanEnhancer
 
         llm_adapter = LLMPlanEnhancer(config.llm)
@@ -240,8 +241,8 @@ def resolve_replacement_config(
         sampler_value_catalog = load_sampler_value_catalog(config.replacement, config.sampler)
     catalog = dict(sampler_value_catalog or {})
 
-    mappings = config.sampler.inline_data_to_sampler_value_mapping
-    if mappings is None:
+    mappings = plan.data_to_sampler_value_mapping
+    if discover_plan:
         unresolved = mapping_inputs(df, plan, catalog)
         if not unresolved:
             mappings = {}
@@ -254,10 +255,13 @@ def resolve_replacement_config(
             if active_discoverer is None:
                 raise ParameterError(
                     "automatic data-to-sampler value mapping found dataset values without case-insensitive sampler "
-                    "matches; configure replace_pii.llm or provide manual data_to_sampler_value_mapping"
+                    "matches; configure replace_pii.llm, or generate and edit an explicit replacement plan"
                 )
             mappings = active_discoverer.discover_data_to_sampler_value_mapping(df, plan, catalog)
 
     validate_data_to_sampler_value_mapping(plan, mappings, catalog)
-    sampler = config.sampler.model_copy(update={"data_to_sampler_value_mapping": mappings})
-    return config.model_copy(update={"replacement_plan": plan, "sampler": sampler})
+    resolved_plan = PiiReplacementPlan(
+        columns_to_replace=plan.columns_to_replace,
+        data_to_sampler_value_mapping=mappings,
+    )
+    return config.model_copy(update={"replacement_plan": resolved_plan})
