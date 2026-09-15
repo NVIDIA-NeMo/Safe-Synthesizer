@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""OpenAI-compatible two-pass LLM enhancement for PII replacement plans."""
+"""OpenAI-compatible LLM discovery for PII plans and sampler mappings."""
 
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ from ...config.replace_pii import (
     ENTITIES,
     ENTITY_BY_TYPE,
     EXCLUSIVE_DEPENDS_ON_GROUPS,
+    DependencyValueMappings,
     EntityType,
     LLMConfig,
     PiiColumnPlan,
@@ -23,6 +24,7 @@ from ...config.replace_pii import (
 )
 from ...errors import GenerationError, ParameterError
 from ...observability import get_logger
+from ..dependency_labels import DependencyLabelCatalog
 from ..llm_client import (
     InvalidInferenceResponse,
     LLMTransport,
@@ -30,6 +32,7 @@ from ..llm_client import (
     TransientInferenceError,
     resolve_inference_settings,
 )
+from .dependency_mappings import DependencyMappingInput, mapping_inputs
 from .patterns import pattern_grammar_catalog
 from .plan_builder import (
     ColumnClassification,
@@ -48,6 +51,8 @@ __all__ = [
 MAX_CLASSIFICATION_PROFILES = 32
 MAX_CLASSIFICATION_PROFILE_BYTES = 48 * 1024
 MAX_REQUEST_ATTEMPTS = 3
+MAX_MAPPING_SOURCE_VALUES = 256
+MAX_MAPPING_REQUEST_BYTES = 48 * 1024
 
 logger = get_logger(__name__)
 
@@ -68,6 +73,16 @@ class _DependencySelectionResponse(_StructuredResponse):
 
 class _PatternRepairResponse(_StructuredResponse):
     pattern: str
+
+
+class _DependencyValueMapping(_StructuredResponse):
+    column_name: str
+    source_value: str
+    sampler_labels: list[str] | None
+
+
+class _DependencyValueMappingResponse(_StructuredResponse):
+    mappings: list[_DependencyValueMapping]
 
 
 ResponseT = TypeVar("ResponseT", bound=_StructuredResponse)
@@ -291,6 +306,27 @@ def _pattern_repair_messages(
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
+def _dependency_mapping_messages(inputs: Sequence[DependencyMappingInput]) -> list[dict[str, str]]:
+    system = (
+        "Map every submitted dataset value to one or more labels, or null, from the sampler label catalog for the same "
+        "dependency column. Return exactly one mapping for every submitted column_name/source_value pair. "
+        "sampler_labels must contain only labels supplied for that column. Select one or more sampler labels that are "
+        "reasonable semantic subsets of the dataset value. Use null only when no supplied label is appropriate; null "
+        "means that NSS will not filter the sampler for that dataset value. Do not invent columns, source values, or "
+        "sampler labels."
+    )
+    payload = [
+        {
+            "column_name": item.column_name,
+            "entity_type": item.entity_type.value,
+            "dataset_values": list(item.source_values),
+            "sampler_labels": list(item.sampler_labels),
+        }
+        for item in inputs
+    ]
+    return [{"role": "system", "content": system}, {"role": "user", "content": _compact_json(payload)}]
+
+
 def _with_feedback(messages: Sequence[Mapping[str, str]], feedback: str | None) -> list[dict[str, str]]:
     result = [dict(message) for message in messages]
     if feedback is not None:
@@ -305,7 +341,7 @@ def _with_feedback(messages: Sequence[Mapping[str, str]], feedback: str | None) 
 
 
 class LLMPlanEnhancer(PlanEnhancer):
-    """Enhance a heuristic plan with classification and dependency-selection passes."""
+    """Discover plans and sampler mappings through bounded structured requests."""
 
     def __init__(
         self,
@@ -347,6 +383,65 @@ class LLMPlanEnhancer(PlanEnhancer):
         if candidates:
             plan = self._select_dependencies(plan, candidates, baseline, classifications)
         return self._repair_invalid_patterns(discovery_input, plan)
+
+    def discover_dependency_value_mappings(
+        self,
+        dataframe: object,
+        plan: PiiReplacementPlan,
+        catalog: DependencyLabelCatalog,
+    ) -> DependencyValueMappings:
+        """Map non-identity dependency values to labels from one sampler catalog."""
+        import pandas as pd
+
+        if not isinstance(dataframe, pd.DataFrame):
+            raise TypeError("dependency mapping discovery requires a pandas DataFrame")
+        inputs = mapping_inputs(dataframe, plan, catalog)
+        if not inputs:
+            return {}
+        source_value_count = sum(len(item.source_values) for item in inputs)
+        messages = _dependency_mapping_messages(inputs)
+        if source_value_count > MAX_MAPPING_SOURCE_VALUES or _json_bytes(messages) > MAX_MAPPING_REQUEST_BYTES:
+            raise ParameterError(
+                "automatic dependency mapping exceeds its bounded request size; provide manual mappings instead"
+            )
+
+        expected = {
+            (item.column_name, source_value.casefold()): (source_value, item)
+            for item in inputs
+            for source_value in item.source_values
+        }
+        resolved: DependencyValueMappings | None = None
+
+        def validate(response: _DependencyValueMappingResponse) -> _DependencyValueMappingResponse:
+            nonlocal resolved
+            actual_keys = [(item.column_name, item.source_value.casefold()) for item in response.mappings]
+            if len(actual_keys) != len(set(actual_keys)) or set(actual_keys) != set(expected):
+                raise ValueError("mappings must contain every submitted column_name/source_value pair exactly once")
+
+            result: DependencyValueMappings = {}
+            for item in response.mappings:
+                source_value, mapping_input = expected[(item.column_name, item.source_value.casefold())]
+                labels = item.sampler_labels
+                if labels is not None:
+                    if not labels:
+                        raise ValueError("sampler_labels must be non-empty or null")
+                    available = {label.casefold(): label for label in mapping_input.sampler_labels}
+                    normalized = [label.casefold() for label in labels]
+                    if len(normalized) != len(set(normalized)) or any(label not in available for label in normalized):
+                        raise ValueError("sampler_labels must be unique labels supplied for the dependency column")
+                    labels = [available[label] for label in normalized]
+                result.setdefault(item.column_name, {})[source_value] = labels
+            resolved = result
+            return response
+
+        self._request_structured(
+            purpose="PII dependency value mapping",
+            messages=messages,
+            response_model=_DependencyValueMappingResponse,
+            validate=validate,
+        )
+        assert resolved is not None
+        return resolved
 
     def _classify_columns(
         self,

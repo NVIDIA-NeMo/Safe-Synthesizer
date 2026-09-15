@@ -40,7 +40,7 @@ from .config_builder import ConfigBuilder
 logger = get_logger(__name__)
 
 if TYPE_CHECKING:
-    from ..config.replace_pii import PiiReplacementPlan
+    from ..config.replace_pii import ReplacePiiConfig
     from ..evaluation.evaluator import Evaluator
     from ..generation.backend import GeneratorBackend
     from ..llm.metadata import ModelMetadata
@@ -361,19 +361,19 @@ class SafeSynthesizer(ConfigBuilder):
         return self
 
     @traced("SafeSynthesizer.plan_pii_replacement", category=LogCategory.RUNTIME)
-    def plan_pii_replacement(self, output_path: Path | str | None = None) -> PiiReplacementPlan:
-        """Resolve a PII replacement plan from the full input dataframe.
+    def plan_pii_replacement(self, output_path: Path | str | None = None) -> ReplacePiiConfig:
+        """Resolve a PII plan and its dependency mappings from the full input dataframe.
 
         This plan-only workflow does not split the input or enter model
         metadata, training, generation, replacement, or evaluation stages.
-        When ``output_path`` is provided, the resolved plan is also written as
-        reusable YAML.
+        When ``output_path`` is provided, the complete NSS configuration is
+        written with the resolved plan and adjacent dependency value mappings.
 
         Args:
-            output_path: Optional destination for the replacement-plan YAML.
+            output_path: Optional destination for the reusable NSS configuration YAML.
 
         Returns:
-            The dataframe-aware validated replacement plan.
+            The dataframe-aware resolved PII replacement configuration.
 
         Raises:
             ParameterError: If PII replacement is disabled.
@@ -388,15 +388,20 @@ class SafeSynthesizer(ConfigBuilder):
         if replace_pii is None:
             raise ParameterError("PII replacement is disabled; configure replace_pii before planning")
 
-        from ..pii_replacer.planning import resolve_plan
+        from ..pii_replacer.planning import resolve_replacement_config
 
-        return resolve_plan(
+        resolved = resolve_replacement_config(
             self._data_source,
             replace_pii,
             self._nss_config.data,
             self._nss_config.time_series,
-            output_path=output_path,
         )
+        self._nss_config = self._nss_config.model_copy(update={"replace_pii": resolved})
+        if output_path is not None:
+            resolved_output_path = Path(output_path)
+            resolved_output_path.parent.mkdir(parents=True, exist_ok=True)
+            self._nss_config.to_yaml(resolved_output_path, exclude_unset=False)
+        return resolved
 
     @traced("SafeSynthesizer.process_data", category=LogCategory.RUNTIME)
     def process_data(self, check_only: bool = False) -> SafeSynthesizer:

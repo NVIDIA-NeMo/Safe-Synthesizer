@@ -42,6 +42,7 @@ __all__ = [
     "AUTO_DISCOVERY",
     "ConditioningColumn",
     "DEFAULT_GLINER2_MODEL_ID",
+    "DependencyValueMappings",
     "ENTITIES",
     "ENTITY_BY_TYPE",
     "EXCLUSIVE_DEPENDS_ON_GROUPS",
@@ -111,6 +112,10 @@ class EntityType(StrEnum):
     ZIPCODE = "zipcode"
     COUNTRY = "country"
     ORGANIZATION = "organization"
+
+
+DependencyValueMappings = dict[str, dict[str, list[str] | None]]
+"""Dependency-column values mapped to labels understood by one sampler."""
 
 
 class EntityAction(Enum):
@@ -370,6 +375,14 @@ class ConditioningColumn(NSSBaseModel):
             )
         return self
 
+    @model_serializer(mode="wrap")
+    def _omit_inferred_entity_type(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        """Keep runtime-inferred entity types out of reusable plans."""
+        serialized = cast(dict[str, object], handler(self))
+        if "entity_type" not in self.model_fields_set or self.entity_type is None:
+            serialized.pop("entity_type", None)
+        return serialized
+
 
 class PiiColumnPlan(NSSBaseModel):
     """Replacement spec for one named column.
@@ -386,6 +399,7 @@ class PiiColumnPlan(NSSBaseModel):
     )
     pattern: str | None = Field(
         default=None,
+        exclude_if=lambda value: value is None,
         description=(
             "Optional whole-value format using the grammar associated with this entity type. "
             "Only entity types that define a pattern syntax may set this. "
@@ -429,9 +443,9 @@ class PiiColumnPlan(NSSBaseModel):
 class PiiReplacementPlan(Parameters):
     """Dataset-specific detection/replacement plan (column-oriented).
 
-    Flat ``columns_to_replace`` list; cross-column relationships are expressed
-    via ``depends_on`` edges (a DAG). Context-free dependency and graph checks
-    are enforced here; plan-vs-dataframe checks live in
+    Flat ``columns_to_replace`` list with adjacent dataset-value mappings;
+    cross-column relationships are expressed via ``depends_on`` edges (a DAG).
+    Context-free dependency and graph checks are enforced here; plan-vs-dataframe checks live in
     ``pii_replacer.planning.validation``.
     """
 
@@ -439,6 +453,50 @@ class PiiReplacementPlan(Parameters):
         default_factory=list,
         description="Columns to replace or (for free_text) scan for PII spans to rewrite.",
     )
+    dependency_value_mappings: DependencyValueMappings = Field(
+        default_factory=dict,
+        description=(
+            "Authoritative dataset-column mappings to labels understood by the sampler. "
+            "A list maps one input label to acceptable sampler labels; null disables that dependency condition. "
+            "Unmapped labels use case-insensitive identity matching. This mapping is discovered together with "
+            "columns_to_replace when replace_pii.replacement_plan is 'auto_discovery'."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _validate_dependency_value_mappings(self) -> Self:
+        for column_name, mappings in self.dependency_value_mappings.items():
+            if not column_name.strip():
+                raise ParameterError("dependency_value_mappings column names must be non-empty")
+            seen_sources: set[str] = set()
+            for source, targets in mappings.items():
+                source_key = source.casefold()
+                if not source.strip():
+                    raise ParameterError("dependency_value_mappings source labels must be non-empty")
+                if source_key in seen_sources:
+                    raise ParameterError(
+                        f"dependency_value_mappings for column {column_name!r} contains duplicate "
+                        "source labels after case-folding"
+                    )
+                seen_sources.add(source_key)
+
+                if targets is None:
+                    continue
+                if not targets:
+                    raise ParameterError("dependency_value_mappings target lists must be non-empty")
+
+                seen_targets: set[str] = set()
+                for target in targets:
+                    target_key = target.casefold()
+                    if not target.strip():
+                        raise ParameterError("dependency_value_mappings target labels must be non-empty")
+                    if target_key in seen_targets:
+                        raise ParameterError(
+                            f"dependency_value_mappings for column {column_name!r} contains duplicate "
+                            "target labels after case-folding"
+                        )
+                    seen_targets.add(target_key)
+        return self
 
     @model_validator(mode="after")
     def _reject_duplicate_replace_columns(self) -> Self:
@@ -671,23 +729,23 @@ class PiiSamplerBackend(StrEnum):
     """Source of synthetic values for names and related person-like fields."""
 
     MANAGED = "managed"
-    """Draw from managed locale assets (see ``PiiSamplerConfig.managed_assets_path``)."""
+    """Draw from downloaded Nemotron Personas locale assets."""
 
     FAKER = "faker"
     """Draw from the Faker library; ignores ``ethnic_background`` conditioners."""
 
 
 class PiiSamplerConfig(NSSBaseModel):
-    """Settings for the synthetic value sampler (names and related person-like fields)."""
+    """Settings for Nemotron Personas or Faker-backed person sampling."""
 
     backend: PiiSamplerBackend = Field(
         default=PiiSamplerBackend.MANAGED,
-        description="Synthetic value sampler backend: managed assets or Faker.",
+        description="Person sampler backend: downloaded Nemotron Personas assets or Faker.",
     )
     managed_assets_path: str | None = Field(
         default=None,
         description=(
-            "Root directory containing a datasets/ folder of locale parquet files. "
+            "Root directory containing downloaded Nemotron Personas files as datasets/{locale}.parquet. "
             f"Defaults to {NSS_MANAGED_ASSETS_PATH_ENV} or ~/.data-designer/managed-assets."
         ),
     )

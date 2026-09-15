@@ -7,9 +7,122 @@ PII replacement v3 uses a dataset-specific replacement plan. The plan names
 the columns NSS should replace, the entity type in each column, optional format
 patterns, and dependencies between related columns.
 
+NSS applies structured-column replacements before training. Free-text named
+entity detection and span replacement are not yet part of replacement
+execution.
+
 Set `replace_pii: null`, pass `--no-replace-pii`, or call
 `.with_replace_pii(enable=False)` to run the synthesis pipeline without
 replacement.
+
+## Managed person sampling
+
+The default `managed` sampler draws names, email addresses, phone numbers, and
+street-address components from the extended Nemotron Personas locale datasets.
+Choose the NGC resource matching `replace_pii.replacement.locale`. Locale
+resources are versioned independently, so use the version published for the
+selected language and country. For example, download version `0.0.2` of the
+`en_US` resource after installing and authenticating the NGC CLI:
+
+```bash
+ngc registry resource download-version \
+  nvidia/nemotron-personas/nemotron-personas-dataset-en_us:0.0.2
+```
+
+Place the downloaded parquet files in the default managed-assets directory:
+
+```bash
+mkdir -p "${HOME}/.data-designer/managed-assets/datasets"
+cp nemotron-personas-dataset-*/*.parquet \
+  "${HOME}/.data-designer/managed-assets/datasets/"
+```
+
+The sampler loads `<managed-assets>/datasets/<locale>.parquet`. The locale in
+the configuration must match the downloaded parquet filename; for the example
+above, that is `en_US.parquet`:
+
+```yaml
+replace_pii:
+  replacement:
+    locale: en_US
+  sampler:
+    backend: managed
+```
+
+To store the files elsewhere, set `replace_pii.sampler.managed_assets_path` to
+the directory containing `datasets/`, or set `NSS_MANAGED_ASSETS_PATH`:
+
+```yaml
+replace_pii:
+  sampler:
+    backend: managed
+    managed_assets_path: /path/to/managed-assets
+```
+
+When an applicable locale asset or required field is unavailable, NSS warns and
+uses Faker for that value. Set `backend: faker` to use Faker directly without a
+managed dataset. See NVIDIA's
+[person-sampling setup](https://docs.nvidia.com/nemo/datadesigner/concepts/person-sampling)
+to select a locale resource and the
+[`en_US` NGC resource](https://catalog.ngc.nvidia.com/orgs/nvidia/nemotron-personas/resources/nemotron-personas-dataset-en_us/-)
+for the example above.
+
+### Dependency label mappings
+
+Dependency values are matched to sampler labels case-insensitively, so values
+such as `Female` and `female` need no mapping. When `replacement_plan` is
+`auto_discovery`, NSS discovers `columns_to_replace` and
+`dependency_value_mappings` together. It compares each dependency column's
+distinct values with the selected sampler's labels. If unmatched values remain,
+the configured LLM maps them to that sampler's vocabulary.
+
+Automatic discovery writes a sparse mapping: identity matches are omitted.
+Only unmatched distinct dependency values, each limited to 128 characters,
+and the sampler's allowed labels are sent to the LLM. If no LLM is configured,
+unmatched values produce an error asking for an LLM configuration or a manual
+mapping.
+
+For an authoritative plan, place the mapping beside `columns_to_replace`, keyed
+by dependency column names from this dataset:
+
+```yaml
+replace_pii:
+  replacement_plan:
+    columns_to_replace:
+      - column_name: first_name
+        entity_type: first_name
+        depends_on:
+          - column_name: sex
+            entity_type: gender
+          - column_name: race
+            entity_type: ethnic_background
+    dependency_value_mappings:
+      sex:
+        Non-binary: null
+      race:
+        Asian:
+          - east asian
+          - south asian
+          - southeast asian
+        Black or African American:
+          - black
+  sampler:
+    backend: managed
+```
+
+Each nonempty list selects the union of sampler rows with those labels. An
+explicit `null` disables that condition for the matching input value. Omitted
+values continue to use case-insensitive identity matching. Manual mappings are
+validated against the resolved dependency columns and the selected sampler's
+known labels. Faker applies mappings for attributes it supports, such as
+gender; unsupported attributes are ignored.
+
+Mappings are sampler-specific even though they live in the dataset-specific
+replacement plan. NSS does not accept a separate mapping file or combine
+automatic discovery with manual overrides. Generate a resolved configuration,
+edit its inline plan if needed, and run that configuration again. An explicit
+inline or file-based plan never runs a separate mapping-discovery pass; an
+omitted mapping is equivalent to `{}`.
 
 ## Replacement plan sources
 
@@ -21,9 +134,10 @@ includes the version whenever it serializes the configuration.
 
 ### Automatic discovery
 
-Use `auto_discovery` to run the heuristic plan discoverer. When `llm` is
-configured, NSS passes the heuristic result to the LLM plan enhancer before
-validating the final plan.
+Use `auto_discovery` to discover both replacement columns and dependency value
+mappings. When `llm` is configured, NSS passes the heuristic result to the LLM
+plan enhancer before validating the final plan and mapping unmatched dependency
+values.
 
 ```yaml
 replace_pii:
@@ -49,6 +163,7 @@ replace_pii:
         pattern: "{f}.{last}@{domain}"
         depends_on:
           - column_name: full_name
+    dependency_value_mappings: {}
 ```
 
 ### Plan file
@@ -61,6 +176,7 @@ schema_version: 3
 columns_to_replace:
   - column_name: email
     entity_type: email
+dependency_value_mappings: {}
 ```
 
 Set `replacement_plan` to its path:
@@ -74,10 +190,16 @@ replace_pii:
 Inline plans and plan files are authoritative: NSS validates them against the
 input dataframe but does not run heuristic or LLM discovery.
 
+Date-of-birth patterns use Python `strptime`/`strftime` syntax. Named-month
+formats such as `%B %d, %Y` match values like `December 10, 1815`; patterns do
+not perform general natural-language date parsing, so prose and ordinal forms
+such as `December tenth` or `December 10th` are not supported automatically.
+
 ## Plan-only workflow
 
-Resolve and save a plan from the full input dataframe without running holdout,
-model metadata, replacement, training, generation, or evaluation:
+Resolve and save the replacement plan—including its sampler-specific dependency
+mappings—from the full input dataframe without running holdout, model metadata,
+replacement, training, generation, or evaluation:
 
 ```bash
 safe-synthesizer run replace-pii --plan-only \
@@ -85,31 +207,32 @@ safe-synthesizer run replace-pii --plan-only \
   --data-source data.csv
 ```
 
-The command writes `pii_replacement_plan.yaml` in the standard timestamped NSS
-run directory under `--artifact-path`.
+The command writes `pii_replacement_config.yaml` in the standard timestamped
+NSS run directory under `--artifact-path`. This is a complete NSS configuration
+with the resolved plan and inline dependency mappings, so it can be edited and
+passed directly to a later run with `--config`.
 
-The matching SDK interface returns the resolved plan and writes YAML only when
-an output path is supplied:
+The matching SDK interface returns the resolved `ReplacePiiConfig` and writes
+the complete reusable NSS configuration only when an output path is supplied:
 
 ```python
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
 
 config = SafeSynthesizerParameters.from_yaml("config.yaml")
-plan = (
+resolved_pii = (
     SafeSynthesizer(config)
     .with_data_source("data.csv")
-    .plan_pii_replacement("pii_replacement_plan.yaml")
+    .plan_pii_replacement("pii_replacement_config.yaml")
 )
 ```
 
-The generated standalone plan can be reviewed, edited, and reused as
-`replace_pii.replacement_plan` in a later run.
+The generated configuration can be reviewed, edited, and reused directly.
 
 ## LLM-assisted planning
 
 The `llm` mapping configures the OpenAI-compatible inference service used for
-automatic plan enhancement.
+automatic plan enhancement and dependency-value mapping discovery.
 
 ```yaml
 replace_pii:

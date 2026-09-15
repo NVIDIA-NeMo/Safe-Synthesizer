@@ -27,6 +27,7 @@ from nemo_safe_synthesizer.pii_replacer.planning import (
     PlanDiscoverer,
     PlanDiscoveryInput,
     resolve_plan,
+    resolve_replacement_config,
 )
 from nemo_safe_synthesizer.pii_replacer.planning.llm import (
     MAX_CLASSIFICATION_PROFILE_BYTES,
@@ -92,6 +93,21 @@ def _dependency_selection(*candidate_ids: str) -> str:
     return json.dumps({"selected_dependency_ids": list(candidate_ids)})
 
 
+def _dependency_mappings(*mappings: tuple[str, str, list[str] | None]) -> str:
+    return json.dumps(
+        {
+            "mappings": [
+                {
+                    "column_name": column_name,
+                    "source_value": source_value,
+                    "sampler_labels": sampler_labels,
+                }
+                for column_name, source_value, sampler_labels in mappings
+            ]
+        }
+    )
+
+
 def _enhancer(
     responses: Sequence[str | Exception],
     *,
@@ -128,6 +144,93 @@ class TestClassificationBatching:
 
 @pytest.mark.unit
 class TestLLMPlanEnhancer:
+    def test_third_pass_maps_only_non_identity_dependency_values(self) -> None:
+        dataframe = pd.DataFrame(
+            {
+                "first_name": ["Ada", "Grace"],
+                "sex": ["Female", "Non-binary"],
+                "race": ["White", "Asian"],
+            }
+        )
+        enhancer, transport = _enhancer(
+            [
+                _classifications(
+                    {
+                        "first_name": "first_name",
+                        "sex": "gender",
+                        "race": "ethnic_background",
+                    }
+                ),
+                _dependency_selection("dependency_0", "dependency_1"),
+                _dependency_mappings(
+                    ("sex", "Non-binary", None),
+                    ("race", "Asian", ["east asian", "south asian"]),
+                ),
+            ]
+        )
+
+        resolved = resolve_replacement_config(
+            dataframe,
+            ReplacePiiConfig(llm=_local_config()),
+            DataParameters(),
+            enhancer=enhancer,
+            mapping_discoverer=enhancer,
+            dependency_labels={
+                EntityType.GENDER: ("female", "male"),
+                EntityType.ETHNIC_BACKGROUND: ("east asian", "south asian", "white"),
+            },
+        )
+
+        assert resolved.inline_plan is not None
+        assert resolved.inline_plan.dependency_value_mappings == {
+            "sex": {"Non-binary": None},
+            "race": {"Asian": ["east asian", "south asian"]},
+        }
+        assert len(transport.calls) == 3
+        mapping_payload = json.loads(transport.calls[2][0][1]["content"])
+        assert mapping_payload == [
+            {
+                "column_name": "sex",
+                "dataset_values": ["Non-binary"],
+                "entity_type": "gender",
+                "sampler_labels": ["female", "male"],
+            },
+            {
+                "column_name": "race",
+                "dataset_values": ["Asian"],
+                "entity_type": "ethnic_background",
+                "sampler_labels": ["east asian", "south asian", "white"],
+            },
+        ]
+
+    def test_mapping_discovery_retries_empty_target_lists(self) -> None:
+        dataframe = pd.DataFrame({"first_name": ["Ada"], "sex": ["Woman"]})
+        plan = PiiReplacementPlan(
+            columns_to_replace=[
+                PiiColumnPlan(
+                    column_name="first_name",
+                    entity_type=EntityType.FIRST_NAME,
+                    depends_on=[ConditioningColumn(column_name="sex", entity_type=EntityType.GENDER)],
+                )
+            ]
+        )
+        enhancer, transport = _enhancer(
+            [
+                _dependency_mappings(("sex", "Woman", [])),
+                _dependency_mappings(("sex", "Woman", ["female"])),
+            ]
+        )
+
+        mappings = enhancer.discover_dependency_value_mappings(
+            dataframe,
+            plan,
+            {EntityType.GENDER: ("female", "male")},
+        )
+
+        assert mappings == {"sex": {"Woman": ["female"]}}
+        assert len(transport.calls) == 2
+        assert "previous structured response was invalid" in transport.calls[1][0][-1]["content"]
+
     def test_two_pass_enhancement_classifies_then_selects_candidate_ids(self) -> None:
         dataframe = pd.DataFrame(
             {

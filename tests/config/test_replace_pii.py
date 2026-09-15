@@ -22,6 +22,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiColumnPlan,
     PiiReplacementPlan,
     PiiSamplerBackend,
+    PiiSamplerConfig,
     ReplacePiiConfig,
     can_condition,
     is_columns_to_replace_type,
@@ -410,7 +411,7 @@ class TestReplacePiiConfig:
 
         assert config.model_dump(exclude_unset=True)["replace_pii"]["schema_version"] == 3
 
-    def test_config_serialization_omits_explicitly_empty_dependencies(self) -> None:
+    def test_config_serialization_omits_empty_and_null_plan_fields(self) -> None:
         plan = PiiReplacementPlan(
             columns_to_replace=[
                 PiiColumnPlan(
@@ -424,7 +425,34 @@ class TestReplacePiiConfig:
         replacement_plan = serialized["replacement_plan"]
 
         assert isinstance(replacement_plan, dict)
-        assert "depends_on" not in replacement_plan["columns_to_replace"][0]
+        serialized_column = replacement_plan["columns_to_replace"][0]
+        assert "depends_on" not in serialized_column
+        assert "pattern" not in serialized_column
+        assert replacement_plan["dependency_value_mappings"] == {}
+
+    def test_config_serialization_omits_runtime_inferred_dependency_type(self) -> None:
+        plan = PiiReplacementPlan(
+            columns_to_replace=[
+                PiiColumnPlan(column_name="first", entity_type=EntityType.FIRST_NAME),
+                PiiColumnPlan(
+                    column_name="email",
+                    entity_type=EntityType.EMAIL,
+                    depends_on=[
+                        ConditioningColumn(column_name="first"),
+                        ConditioningColumn(column_name="company", entity_type=EntityType.ORGANIZATION),
+                    ],
+                ),
+            ]
+        )
+
+        serialized = ReplacePiiConfig(replacement_plan=plan).model_dump(exclude_unset=False)
+        replacement_plan = serialized["replacement_plan"]
+
+        assert isinstance(replacement_plan, dict)
+        assert replacement_plan["columns_to_replace"][1]["depends_on"] == [
+            {"column_name": "first"},
+            {"column_name": "company", "entity_type": EntityType.ORGANIZATION},
+        ]
 
     @pytest.mark.parametrize("schema_version", [1, 2, 0, -1])
     def test_unsupported_schema_version_is_rejected(self, schema_version: int) -> None:
@@ -572,6 +600,60 @@ class TestReplacePiiConfig:
             {"sampler": {"backend": "faker", "managed_assets_path": str(tmp_path)}}
         )
         assert config.sampler.resolved_managed_assets_path() == tmp_path
+
+    def test_sampler_documentation_identifies_nemotron_personas_asset_layout(self) -> None:
+        backend_description = PiiSamplerConfig.model_fields["backend"].description
+        path_description = PiiSamplerConfig.model_fields["managed_assets_path"].description
+
+        assert backend_description is not None
+        assert "Nemotron Personas" in backend_description
+        assert path_description is not None
+        assert "Nemotron Personas" in path_description
+        assert "datasets/{locale}.parquet" in path_description
+
+    def test_plan_accepts_manual_dependency_value_mappings(self) -> None:
+        plan = PiiReplacementPlan.model_validate(
+            {
+                "dependency_value_mappings": {
+                    "sex": {"Woman": ["female"], "Non-binary": None},
+                    "race": {"Asian": ["east asian", "south asian"]},
+                },
+            }
+        )
+
+        assert plan.dependency_value_mappings == {
+            "sex": {"Woman": ["female"], "Non-binary": None},
+            "race": {"Asian": ["east asian", "south asian"]},
+        }
+        assert plan.model_dump()["dependency_value_mappings"]["sex"]["Non-binary"] is None
+
+    def test_plan_dependency_value_mappings_default_to_empty(self) -> None:
+        assert PiiReplacementPlan().dependency_value_mappings == {}
+
+    @pytest.mark.parametrize(
+        ("mappings", "error"),
+        [
+            ({"": {"work": ["personal"]}}, "column names must be non-empty"),
+            ({"sex": {"": ["female"]}}, "source labels must be non-empty"),
+            ({"sex": {"Woman": []}}, "target lists must be non-empty"),
+            ({"sex": {"Woman": [" "]}}, "target labels must be non-empty"),
+            (
+                {"sex": {"Woman": ["female"], "woman": ["female"]}},
+                "duplicate source labels after case-folding",
+            ),
+            (
+                {"sex": {"Woman": ["female", "FEMALE"]}},
+                "duplicate target labels after case-folding",
+            ),
+        ],
+    )
+    def test_plan_rejects_invalid_dependency_value_mappings(
+        self,
+        mappings: object,
+        error: str,
+    ) -> None:
+        with pytest.raises(ValidationError, match=error):
+            PiiReplacementPlan.model_validate({"dependency_value_mappings": mappings})
 
     def test_default_managed_assets_path_uses_env_then_home(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

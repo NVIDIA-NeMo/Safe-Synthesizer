@@ -231,4 +231,5 @@ def apply_dependencies(
             )
             for spec in plan.columns_to_replace
         ],
+        dependency_value_mappings=plan.dependency_value_mappings,
     )

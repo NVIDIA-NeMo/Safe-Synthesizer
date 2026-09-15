@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
+import yaml
 from click.testing import CliRunner
 
 import nemo_safe_synthesizer.observability as obs
@@ -17,8 +18,8 @@ import nemo_safe_synthesizer.sdk.library_builder  # noqa: F401 - ensure submodul
 from nemo_safe_synthesizer.cli.run import run
 from nemo_safe_synthesizer.cli.settings import CLISettings
 from nemo_safe_synthesizer.cli.utils import merge_overrides
+from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.replace_pii import EntityType
-from nemo_safe_synthesizer.pii_replacer.planning import load_plan
 from nemo_safe_synthesizer.telemetry import DeploymentTypeEnum, TaskStatusEnum
 from nemo_safe_synthesizer.tooling import PreflightRenderContext
 
@@ -686,7 +687,9 @@ class TestRunReplacePii:
 
         nss = patched_run_dependencies["safe_synthesizer"]
         nss.with_data_source.assert_called_once_with(mock_dataframe)
-        nss.plan_pii_replacement.assert_called_once_with(output_path=mock_workdir.run_dir / "pii_replacement_plan.yaml")
+        nss.plan_pii_replacement.assert_called_once_with(
+            output_path=mock_workdir.run_dir / "pii_replacement_config.yaml"
+        )
         nss.process_data.assert_not_called()
         nss.train.assert_not_called()
         nss.generate.assert_not_called()
@@ -759,9 +762,16 @@ class TestRunReplacePii:
         )
 
         assert result.exit_code == 0
-        plan_path = run_path / "pii_replacement_plan.yaml"
-        assert plan_path.exists()
-        plan = load_plan(plan_path)
+        resolved_config_path = run_path / "pii_replacement_config.yaml"
+        assert resolved_config_path.exists()
+        serialized = yaml.safe_load(resolved_config_path.read_text())["replace_pii"]["replacement_plan"]
+        assert serialized["dependency_value_mappings"] == {}
+        assert "pattern" not in serialized["columns_to_replace"][0]
+        assert "depends_on" not in serialized["columns_to_replace"][0]
+        resolved_config = SafeSynthesizerParameters.from_yaml(resolved_config_path)
+        assert resolved_config.replace_pii is not None
+        plan = resolved_config.replace_pii.inline_plan
+        assert plan is not None
         assert plan.columns_to_replace[0].column_name == "col1"
         assert plan.columns_to_replace[0].entity_type is EntityType.UNIQUE_IDENTIFIER
 
@@ -817,7 +827,7 @@ class TestRunReplacePii:
         assert request_payloads[0]["model"] == "env-model"
         messages = cast(list[dict[str, str]], request_payloads[0]["messages"])
         assert '"non_null_count":2' in messages[1]["content"]
-        assert (run_path / "pii_replacement_plan.yaml").exists()
+        assert (run_path / "pii_replacement_config.yaml").exists()
 
 
 class TestRunGenerateOptions:
