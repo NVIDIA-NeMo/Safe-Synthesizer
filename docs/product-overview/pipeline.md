@@ -35,7 +35,9 @@ The pipeline begins by loading your input data (CSV or DataFrame) and preparing 
 
 ### 2. PII Replacement
 
-PII replacement v3 will be added in a later update. On this branch, disable PII replacement with
+PII replacement v3 resolves its plan against the complete input dataset, then
+replaces PII only in the post-holdout training split. The original training and
+test splits remain available for evaluation. Disable replacement with
 `--no-replace-pii` (CLI), `replace_pii: null` (configuration), or
 `.with_replace_pii(enable=False)` (SDK).
 
