@@ -357,6 +357,11 @@ class ModelMetadata(BaseModel):
         description="Original time-series input column order restored on generated output.",
     )
 
+    flexible_timeseries: bool = Field(
+        default=False,
+        description="Whether automatic routing selected flexible time-series processing during training.",
+    )
+
     max_tokens_per_example: int | None = Field(
         default=None,
         description="Maximum tokenized example length observed during training.",

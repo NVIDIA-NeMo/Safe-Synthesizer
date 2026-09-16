@@ -63,12 +63,12 @@ class TokenBudgetCheck(MetadataCheck):
 
         check_sampled_record_budget(collector, data, metadata, max_new_tokens, sample_size_limit=self.token_sample_size)
 
-        # Sequence-termination time series deliberately split a group across
+        # Flexible time series deliberately split a group across
         # multiple SequentialExampleAssembler examples at record boundaries.
         # Requiring the complete group to fit would reject data the actual
         # training path supports. Schema and individual-record checks above
         # remain active in every mode.
-        skip_whole_group_budget = config.time_series.sequence_termination_mode != "none"
+        skip_whole_group_budget = config.time_series.flexible_timeseries
 
         # Only run the per-group budget when group-by is configured, present,
         # and the selected assembler requires each whole group to fit.

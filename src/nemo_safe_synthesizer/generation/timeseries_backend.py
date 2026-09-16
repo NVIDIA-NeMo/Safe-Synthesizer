@@ -21,7 +21,6 @@ from vllm.sampling_params import SamplingParams
 from .. import utils
 from ..config import SafeSynthesizerParameters
 from ..data_processing.record_utils import ParsedRecord, _parse_timestamp_to_seconds
-from ..data_processing.sequence_termination import is_padding_terminal
 from ..defaults import FIXED_RUNTIME_GENERATE_ARGS, LOG_DASHES, PSEUDO_GROUP_COLUMN
 from ..errors import GenerationError
 from ..generation.batch import Batch
@@ -48,15 +47,14 @@ class _ResolvedTimeseriesSettings:
     stop_timestamp: str | int | None
     timestamp_interval_seconds: int | None
     timestamp_format: str
-    sequence_termination_mode: str
+    flexible_timeseries: bool
     sequence_index_column: str
     sequence_marker_column: str
     sequence_max_records: int | None
     sequence_source_columns: list[str] | None
-    sequence_experiment_seed: int | None
 
     @classmethod
-    def from_config(cls, config: SafeSynthesizerParameters) -> Self:
+    def from_config(cls, config: SafeSynthesizerParameters, metadata: ModelMetadata) -> Self:
         """Validate and extract the time-series values required by generation."""
         timestamp_column = config.time_series.timestamp_column
         group_column = config.data.group_training_examples_by
@@ -82,12 +80,11 @@ class _ResolvedTimeseriesSettings:
             stop_timestamp=config.time_series.stop_timestamp,
             timestamp_interval_seconds=config.time_series.timestamp_interval_seconds,
             timestamp_format=config.time_series.timestamp_format or "",
-            sequence_termination_mode=config.time_series.sequence_termination_mode,
+            flexible_timeseries=metadata.flexible_timeseries,
             sequence_index_column=config.time_series.sequence_index_column,
             sequence_marker_column=config.time_series.sequence_marker_column,
             sequence_max_records=config.time_series.sequence_max_records,
             sequence_source_columns=config.time_series.sequence_source_columns,
-            sequence_experiment_seed=config.time_series.sequence_experiment_seed,
         )
 
 
@@ -191,7 +188,7 @@ class GroupState:
     """Consecutive batches that did not advance the accepted timestamp."""
 
     termination_reason: str | None = None
-    """Final experiment outcome: ``terminal``, ``cap``, or ``failure``."""
+    """Final flexible time-series outcome: ``terminal``, ``cap``, or ``failure``."""
 
     total_prompts: int = 0
     """Number of generation prompts attempted for this group."""
@@ -316,22 +313,20 @@ class TimeseriesBackend(VllmBackend):
     """
 
     def __init__(self, config: SafeSynthesizerParameters, model_metadata: ModelMetadata, **kwargs):
-        settings = _ResolvedTimeseriesSettings.from_config(config)
+        settings = _ResolvedTimeseriesSettings.from_config(config, model_metadata)
         super().__init__(config, model_metadata, **kwargs)
 
-        self._sequence_termination_mode = settings.sequence_termination_mode
+        self._flexible_timeseries = settings.flexible_timeseries
         self._sequence_index_column = settings.sequence_index_column
         self._sequence_marker_column = settings.sequence_marker_column
         self._sequence_max_records = settings.sequence_max_records
         self._sequence_source_columns = settings.sequence_source_columns
-        self._sequence_experiment_seed = settings.sequence_experiment_seed
-        self._experiment_enabled = self._sequence_termination_mode != "none"
-        if self._experiment_enabled and (self._sequence_max_records is None or self._sequence_source_columns is None):
+        if self._flexible_timeseries and (self._sequence_max_records is None or self._sequence_source_columns is None):
             raise GenerationError(
-                "Sequence-termination generation requires resolved sequence_max_records and sequence_source_columns. "
-                "Retrain the artifact with experiment preprocessing enabled."
+                "Flexible time-series generation requires resolved sequence_max_records and sequence_source_columns. "
+                "Retrain the artifact with automatic flexible time-series processing enabled."
             )
-        self._samples_per_prompt = 1 if self._experiment_enabled else 5
+        self._samples_per_prompt = 1 if self._flexible_timeseries else 5
         self._max_prompts_per_batch = 100  # max prompts per batch for parallel group generation
         self._history_window_size = 3
         self._time_column = settings.timestamp_column
@@ -342,7 +337,7 @@ class TimeseriesBackend(VllmBackend):
         self._timestamp_interval_seconds = settings.timestamp_interval_seconds
         self._group_column = settings.group_column
         self._raw_generations_path = self.workdir.generate.path / "raw_generations.jsonl"
-        self._sequence_metrics_path = self.workdir.generate.path / "sequence_termination_metrics.json"
+        self._flexible_metrics_path = self.workdir.generate.path / "flexible_timeseries_metrics.json"
         self._internal_output_path = self.workdir.generate.path / "synthetic_data_internal.csv"
         self._sequence_group_states: dict[TimeSeriesGroupValue, GroupState] = {}
 
@@ -629,25 +624,23 @@ class TimeseriesBackend(VllmBackend):
                 if record.is_valid:
                     record.invalidate(error)
 
-    def _trim_sequence_termination_records(
+    def _trim_flexible_timeseries_records(
         self,
         state: GroupState,
         records: list[ParsedRecord],
-    ) -> tuple[list[ParsedRecord], str | None, tuple[str, ParsedRecord] | None]:
+    ) -> tuple[list[ParsedRecord], tuple[str, ParsedRecord] | None]:
         """Structurally trim a contiguous group prefix and identify a tentative accepted-row stop."""
-        if not self._experiment_enabled:
-            return records, None, None
+        if not self._flexible_timeseries:
+            return records, None
         if self._sequence_max_records is None or self._sequence_source_columns is None:
-            raise GenerationError("Sequence-termination settings were not resolved.")
+            raise GenerationError("Flexible time-series settings were not resolved.")
 
         retained: list[ParsedRecord] = []
-        authoritative_reason: str | None = None
         accepted_row_stop: tuple[str, ParsedRecord] | None = None
         prefix_ended = False
-        trimmed_error = ("Record appears after sequence termination", "SequenceTermination")
-        padding_error = ("Full-null padding terminal excluded from output", "SequenceTermination")
-        group_error = ("Record group does not match the active sequence group", "SequenceTermination")
-        index_error = ("Invalid sequence index", "SequenceTermination")
+        trimmed_error = ("Record appears after the final row marker", "FlexibleTimeseries")
+        group_error = ("Record group does not match the active sequence group", "FlexibleTimeseries")
+        index_error = ("Invalid sequence index", "FlexibleTimeseries")
 
         for record in records:
             if prefix_ended:
@@ -666,35 +659,21 @@ class TimeseriesBackend(VllmBackend):
                 prefix_ended = True
                 continue
 
-            if self._sequence_termination_mode == "idx_padding" and is_padding_terminal(
-                parsed,
-                group_column=self._group_column,
-                index_column=self._sequence_index_column,
-                source_columns=self._sequence_source_columns,
-            ):
-                record.invalidate(padding_error)
-                authoritative_reason = "terminal"
-                prefix_ended = True
-                continue
-
             retained.append(record)
-            if self._sequence_termination_mode == "idx_last" and parsed.get(self._sequence_marker_column) is True:
+            if parsed.get(self._sequence_marker_column) is True:
                 accepted_row_stop = ("terminal", record)
                 prefix_ended = True
             elif index_value >= self._sequence_max_records - 1:
                 accepted_row_stop = ("cap", record)
                 prefix_ended = True
 
-        return retained, authoritative_reason, accepted_row_stop
+        return retained, accepted_row_stop
 
     def _resolve_postprocessed_termination(
         self,
-        authoritative_reason: str | None,
         accepted_row_stop: tuple[str, ParsedRecord] | None,
     ) -> str | None:
         """Resolve termination after data actions have accepted or rejected marker/cap rows."""
-        if authoritative_reason is not None:
-            return authoritative_reason
         if accepted_row_stop is None:
             return None
         reason, candidate = accepted_row_stop
@@ -715,7 +694,7 @@ class TimeseriesBackend(VllmBackend):
         records: list[ParsedRecord],
     ) -> None:
         """Invalidate accepted rows whose postprocessed group no longer matches the active stream."""
-        error = ("Postprocessed record group does not match the active sequence group", "SequenceTermination")
+        error = ("Postprocessed record group does not match the active sequence group", "FlexibleTimeseries")
         for record in records:
             if (
                 record.is_valid
@@ -724,22 +703,22 @@ class TimeseriesBackend(VllmBackend):
             ):
                 record.invalidate(error)
 
-    def _prepare_experiment_artifacts(self) -> None:
-        """Reset stale partial artifacts while protecting completed experiment runs."""
-        if not self._experiment_enabled:
+    def _prepare_flexible_timeseries_artifacts(self) -> None:
+        """Reset stale partial artifacts while protecting completed flexible time-series runs."""
+        if not self._flexible_timeseries:
             return
         self._raw_generations_path.parent.mkdir(parents=True, exist_ok=True)
-        if self._sequence_metrics_path.exists():
+        if self._flexible_metrics_path.exists():
             try:
-                existing = utils.load_json(self._sequence_metrics_path)
+                existing = utils.load_json(self._flexible_metrics_path)
             except (OSError, ValueError, TypeError):
                 existing = {}
             if existing.get("status") == "completed":
                 raise GenerationError(
-                    f"Refusing to overwrite completed sequence-termination run at {self._sequence_metrics_path}."
+                    f"Refusing to overwrite completed flexible time-series run at {self._flexible_metrics_path}."
                 )
         self._raw_generations_path.unlink(missing_ok=True)
-        self._sequence_metrics_path.unlink(missing_ok=True)
+        self._flexible_metrics_path.unlink(missing_ok=True)
         self._internal_output_path.unlink(missing_ok=True)
 
     def _write_raw_completion(
@@ -751,8 +730,8 @@ class TimeseriesBackend(VllmBackend):
         completion_tokens: int,
         finish_reason: str,
     ) -> None:
-        """Append one unparsed model completion to the experiment audit log."""
-        if not self._experiment_enabled:
+        """Append one unparsed model completion to the flexible time-series audit log."""
+        if not self._flexible_timeseries:
             return
         payload = {
             "group": state.group_id,
@@ -768,9 +747,9 @@ class TimeseriesBackend(VllmBackend):
             raw_file.write(json.dumps(payload, ensure_ascii=False))
             raw_file.write("\n")
 
-    def _write_sequence_metrics(self) -> None:
-        """Write auditable per-group and aggregate sequence-termination metrics."""
-        if not self._experiment_enabled:
+    def _write_flexible_timeseries_metrics(self) -> None:
+        """Write auditable per-group and aggregate flexible time-series metrics."""
+        if not self._flexible_timeseries:
             return
         groups = [
             {
@@ -790,7 +769,7 @@ class TimeseriesBackend(VllmBackend):
         }
         metrics = {
             "status": "completed",
-            "mode": self._sequence_termination_mode,
+            "flexible_timeseries": True,
             "sequence_max_records": self._sequence_max_records,
             "groups": groups,
             "aggregate": {
@@ -803,7 +782,7 @@ class TimeseriesBackend(VllmBackend):
                 "reason_counts": reason_counts,
             },
         }
-        utils.write_json(metrics, self._sequence_metrics_path, indent=2)
+        utils.write_json(metrics, self._flexible_metrics_path, indent=2)
 
     def _update_group_state(self, group_state: GroupState, records: list[ParsedRecord]) -> None:
         """Update a group's state with new valid records.
@@ -830,7 +809,7 @@ class TimeseriesBackend(VllmBackend):
             group_state.last_timestamp_seconds = timestamp_seconds
 
     def _sort_internal_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Sort accepted rows while preserving experiment control columns."""
+        """Sort accepted rows while preserving flexible time-series control columns."""
         if df.empty:
             return df
         sort_columns = [
@@ -839,9 +818,9 @@ class TimeseriesBackend(VllmBackend):
         return df.sort_values(by=sort_columns).reset_index(drop=True) if sort_columns else df
 
     def _write_internal_output(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Persist accepted experiment rows before internal-column cleanup."""
+        """Persist accepted flexible time-series rows before internal-column cleanup."""
         internal_df = self._sort_internal_dataframe(df)
-        if self._experiment_enabled:
+        if self._flexible_timeseries:
             self._internal_output_path.parent.mkdir(parents=True, exist_ok=True)
             internal_df.to_csv(self._internal_output_path, index=False)
         return internal_df
@@ -863,10 +842,8 @@ class TimeseriesBackend(VllmBackend):
 
         df = self._sort_internal_dataframe(df)
 
-        if self._experiment_enabled:
-            internal_columns = [self._sequence_index_column]
-            if self._sequence_termination_mode == "idx_last":
-                internal_columns.append(self._sequence_marker_column)
+        if self._flexible_timeseries:
+            internal_columns = [self._sequence_index_column, self._sequence_marker_column]
             df = df.drop(columns=internal_columns, errors="ignore")
 
         # Remove pseudo-group column from output (it's only used internally)
@@ -876,7 +853,7 @@ class TimeseriesBackend(VllmBackend):
         source_columns = self.model_metadata.timeseries_source_columns
         if source_columns:
             restored_columns = [column for column in source_columns if column in df.columns]
-            if self._experiment_enabled:
+            if self._flexible_timeseries:
                 return df.loc[:, restored_columns]
             extra_columns = [column for column in df.columns if column not in restored_columns]
             df = df.loc[:, [*restored_columns, *extra_columns]]
@@ -904,7 +881,7 @@ class TimeseriesBackend(VllmBackend):
             GenerationError: If the rolling prompt leaves no context for
                 generation.
         """
-        if self._experiment_enabled:
+        if self._flexible_timeseries:
             effective_samples_per_prompt = 1
         else:
             effective_samples_per_prompt = min(
@@ -954,7 +931,7 @@ class TimeseriesBackend(VllmBackend):
             batch: The batch containing results for this group.
             accepted_records: Retained records that passed data actions.
             invalid_fraction_threshold: Threshold for invalid fraction.
-            termination_reason: Explicit experiment stop reason, when detected.
+            termination_reason: Explicit flexible time-series stop reason, when detected.
 
         Returns:
             GroupProcessingResult enum indicating the group's status.
@@ -1207,15 +1184,10 @@ class TimeseriesBackend(VllmBackend):
                 if self.config.time_series.timestamp_interval_seconds is not None:
                     self._check_chronological_for_group(batch, state)
                 retained_records = self._retain_single_valid_response(batch)
-                retained_records, authoritative_reason, accepted_row_stop = self._trim_sequence_termination_records(
-                    state, retained_records
-                )
+                retained_records, accepted_row_stop = self._trim_flexible_timeseries_records(state, retained_records)
                 batches.postprocess_batch(batch)
                 self._validate_postprocessed_group_identity(state, retained_records)
-                termination_reason = self._resolve_postprocessed_termination(
-                    authoritative_reason,
-                    accepted_row_stop,
-                )
+                termination_reason = self._resolve_postprocessed_termination(accepted_row_stop)
                 accepted_records = [
                     record for record in retained_records if record.is_valid and record.parsed is not None
                 ]
@@ -1248,7 +1220,7 @@ class TimeseriesBackend(VllmBackend):
                     groups_completed += 1
                     completion_message = (
                         "Time-series group completed."
-                        if self._experiment_enabled
+                        if self._flexible_timeseries
                         else "Time-series group completed after reaching the stop timestamp."
                     )
                     logger.info(
@@ -1346,7 +1318,7 @@ class TimeseriesBackend(VllmBackend):
         Returns:
             Generation results object, which includes a DataFrame of generated records.
         """
-        self._prepare_experiment_artifacts()
+        self._prepare_flexible_timeseries_artifacts()
         generation_start = time.monotonic()
         num_records = self.config.generation.num_records
 
@@ -1363,7 +1335,6 @@ class TimeseriesBackend(VllmBackend):
             skip_special_tokens=True,
             include_stop_str_in_output=False,
             ignore_eos=False,
-            seed=self._sequence_experiment_seed if self._experiment_enabled else None,
         )
 
         batches = GenerationBatches(
@@ -1406,6 +1377,6 @@ class TimeseriesBackend(VllmBackend):
         internal_df = self._write_internal_output(self.gen_results.df)
         # Sort by group and timestamp for consistent output (also removes pseudo-group column)
         self.gen_results.df = self._sort_dataframe(internal_df)
-        self._write_sequence_metrics()
+        self._write_flexible_timeseries_metrics()
 
         return self.gen_results

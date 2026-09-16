@@ -22,6 +22,7 @@ from ..config import (
 from ..config.autoconfig import AutoConfigResolver
 from ..config.unknown_fields import UnknownFieldBehavior, normalize_unknown_fields
 from ..configurator.parameters import Parameters
+from ..data_processing.timeseries_validation import resolve_timeseries_routing
 from ..errors import ParameterError
 from ..evaluation.evaluator import Evaluator
 from ..generation.timeseries_backend import TimeseriesBackend
@@ -406,6 +407,8 @@ class SafeSynthesizer(ConfigBuilder):
             assert self._nss_config is not None
             assert isinstance(self._data_source, pd.DataFrame)
 
+        resolve_timeseries_routing(self._data_source, self._nss_config)
+
         # Run the config/dataframe stages before holdout so invalid column
         # settings produce structured preflight issues instead of downstream
         # pandas/sklearn errors. The later full preflight run still uses the
@@ -433,6 +436,7 @@ class SafeSynthesizer(ConfigBuilder):
         resolver = AutoConfigResolver(self._training_df, self._nss_config)
         resolved_config = resolver()
         self._nss_config = resolved_config
+        resolve_timeseries_routing(self._training_df, self._nss_config)
 
         # PII replacement is skipped on the validate path (``check_only=True``).
         # Rationale: the replacer makes network calls to the PII classifier

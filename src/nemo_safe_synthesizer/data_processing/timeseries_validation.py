@@ -18,15 +18,18 @@ from ..config.time_series import TimeSeriesParameters
 from ..defaults import PSEUDO_GROUP_COLUMN
 from ..errors import DataError, ParameterError
 from .actions.utils import guess_datetime_format
-from .sequence_termination import prepare_sequence_termination_data
+from .flexible_timeseries import prepare_flexible_timeseries_data
 from .validation import check_groupby_column, check_no_pseudo_column_collision, check_timestamp_column
 
 __all__ = [
     "TimeSeriesDataValidationError",
     "TimeSeriesGroupTimestampStats",
     "TimeSeriesParameterValidationError",
+    "TimeSeriesRoutingDecision",
     "TimeSeriesValidationReason",
     "TimeSeriesValidationResult",
+    "inspect_timeseries_constraints",
+    "resolve_timeseries_routing",
     "resolve_elapsed_time_column_name",
     "validate_start_stop_consistency",
     "validate_timeseries_data",
@@ -126,6 +129,15 @@ class TimeSeriesValidationResult:
 
     group_stats: tuple[TimeSeriesGroupTimestampStats, ...]
     """Per-group timestamp statistics used to derive the result."""
+
+
+@dataclass(frozen=True)
+class TimeSeriesRoutingDecision:
+    """Automatic selection between deterministic and flexible time-series processing."""
+
+    uses_flexible_timeseries: bool
+    failed_constraints: tuple[str, ...]
+    sequence_max_records: int
 
 
 def _resolve_group_column(data: pd.DataFrame, config: SafeSynthesizerParameters) -> tuple[pd.DataFrame, str]:
@@ -428,11 +440,11 @@ def validate_start_stop_consistency(
     return str(group_stats[0].start_timestamp), str(group_stats[0].stop_timestamp)
 
 
-def _validate_experiment_start_and_stop(
+def _validate_flexible_start_and_stop(
     group_stats: tuple[TimeSeriesGroupTimestampStats, ...],
     ts_config: TimeSeriesParameters,
 ) -> tuple[str, str]:
-    """Validate the common zero start and resolve the shared dataset-level cap."""
+    """Validate the common zero index and resolve the shared dataset-level cap."""
     if not group_stats:
         raise TimeSeriesDataValidationError(
             TimeSeriesValidationReason.TIMESERIES_EMPTY,
@@ -442,14 +454,158 @@ def _validate_experiment_start_and_stop(
     if unique_starts != {0}:
         raise TimeSeriesDataValidationError(
             TimeSeriesValidationReason.TIMESERIES_START_MISMATCH,
-            "Sequence-termination experiment groups must all start at index 0.",
+            "Flexible time-series groups must all start at index 0.",
         )
     if ts_config.sequence_max_records is None:
         raise TimeSeriesParameterValidationError(
             TimeSeriesValidationReason.TIMESERIES_STOP_MISMATCH,
-            "sequence_max_records must be resolved for a sequence-termination experiment.",
+            "sequence_max_records must be resolved for flexible time-series processing.",
         )
     return "0", str(ts_config.sequence_max_records - 1)
+
+
+def _prepare_time_series_stats(
+    data: pd.DataFrame,
+    config: SafeSynthesizerParameters,
+    *,
+    tolerate_interval_mismatch: bool = False,
+) -> tuple[pd.DataFrame, str, str, str, bool, tuple[TimeSeriesGroupTimestampStats, ...]]:
+    """Normalize source timestamps and collect the statistics used by validation and routing."""
+    working_df, group_by_col = _resolve_group_column(data, config)
+    ts_config = config.time_series
+    timestamp_col = ts_config.timestamp_column
+    if timestamp_col is None:
+        working_df, timestamp_col = _add_elapsed_time_column(working_df, ts_config, group_by_col)
+        timestamp_format = "elapsed_seconds"
+        is_elapsed_time = True
+    else:
+        try:
+            check_timestamp_column(working_df, timestamp_col)
+        except ParameterError as exc:
+            raise TimeSeriesParameterValidationError(TimeSeriesValidationReason.TIMESTAMP_NOT_FOUND, str(exc)) from exc
+        except DataError as exc:
+            raise TimeSeriesDataValidationError(TimeSeriesValidationReason.TIMESTAMP_NULLS, str(exc)) from exc
+        is_elapsed_time = _detect_elapsed_seconds_format(working_df, ts_config, timestamp_col)
+        timestamp_format = "elapsed_seconds" if is_elapsed_time else ""
+
+    if group_by_col == timestamp_col:
+        raise TimeSeriesParameterValidationError(
+            TimeSeriesValidationReason.TIMESERIES_IDENTITY_COLUMNS_SAME,
+            "The time-series group and timestamp columns must be different columns.",
+        )
+
+    identity_columns = {group_by_col, timestamp_col}
+    if not any(column not in identity_columns for column in working_df.columns):
+        raise TimeSeriesDataValidationError(
+            TimeSeriesValidationReason.TIMESERIES_NO_VALUE_COLUMNS,
+            "Time-series data must contain at least one value column besides the group and timestamp columns.",
+        )
+
+    if not is_elapsed_time:
+        ts_config_copy = ts_config.model_copy(update={"timestamp_column": timestamp_col})
+        working_df = _infer_and_convert_timestamp_format(working_df, ts_config_copy)
+        timestamp_format = cast(str, ts_config_copy.timestamp_format)
+
+    working_df = _sort_by_group_and_timestamp(working_df, group_by_col, timestamp_col)
+    if tolerate_interval_mismatch:
+        try:
+            group_stats = _collect_group_timestamp_stats(working_df, timestamp_col, group_by_col, is_elapsed_time)
+        except TimeSeriesDataValidationError as exc:
+            if exc.reason is not TimeSeriesValidationReason.TIMESTAMP_INTERVAL_MISMATCH:
+                raise
+            group_stats = tuple(
+                TimeSeriesGroupTimestampStats(
+                    group_name=group_name,
+                    start_timestamp=group[timestamp_col].iloc[0],
+                    stop_timestamp=group[timestamp_col].iloc[-1],
+                    interval_seconds=None,
+                    record_count=len(group),
+                )
+                for group_name, group in working_df.groupby(group_by_col, sort=False)
+            )
+    else:
+        group_stats = _collect_group_timestamp_stats(working_df, timestamp_col, group_by_col, is_elapsed_time)
+    return working_df, group_by_col, timestamp_col, timestamp_format, is_elapsed_time, group_stats
+
+
+def inspect_timeseries_constraints(
+    data: pd.DataFrame,
+    config: SafeSynthesizerParameters,
+) -> TimeSeriesRoutingDecision:
+    """Inspect the four deterministic shape constraints without mutating inputs."""
+    if data.empty:
+        raise TimeSeriesDataValidationError(
+            TimeSeriesValidationReason.TIMESERIES_EMPTY,
+            "Time-series data must contain at least one record.",
+        )
+
+    config_copy = config.model_copy(deep=True)
+    config_copy.time_series.resolve_flexible_timeseries(False)
+    _, _, _, _, _, group_stats = _prepare_time_series_stats(
+        data,
+        config_copy,
+        tolerate_interval_mismatch=True,
+    )
+    failed: list[str] = []
+    if len({stats.record_count for stats in group_stats}) > 1:
+        failed.append("equal group lengths")
+    if len({stats.start_timestamp for stats in group_stats}) > 1:
+        failed.append("common start timestamps")
+    if len({stats.stop_timestamp for stats in group_stats}) > 1:
+        failed.append("common stop timestamps")
+    try:
+        _validate_interval_consistency(config_copy.time_series.timestamp_interval_seconds, group_stats)
+    except TimeSeriesDataValidationError as exc:
+        if exc.reason is not TimeSeriesValidationReason.TIMESTAMP_INTERVAL_MISMATCH:
+            raise
+        failed.append("consistent timestamp intervals")
+
+    maximum = max(stats.record_count for stats in group_stats)
+    return TimeSeriesRoutingDecision(
+        uses_flexible_timeseries=bool(failed),
+        failed_constraints=tuple(failed),
+        sequence_max_records=maximum,
+    )
+
+
+def resolve_timeseries_routing(
+    data: pd.DataFrame,
+    config: SafeSynthesizerParameters,
+) -> TimeSeriesRoutingDecision | None:
+    """Apply automatic routing to a time-series config and return the decision."""
+    if not config.time_series.is_timeseries:
+        return None
+    ts_config = config.time_series
+    if (
+        ts_config.flexible_timeseries
+        and ts_config.sequence_source_columns is not None
+        and ts_config.sequence_index_column in data.columns
+        and ts_config.sequence_marker_column in data.columns
+    ):
+        group_column = config.data.group_training_examples_by
+        if group_column is None:
+            raise TimeSeriesParameterValidationError(
+                TimeSeriesValidationReason.COLUMN_NOT_FOUND,
+                "Prepared flexible time-series data requires a resolved group column.",
+            )
+        maximum = int(data.groupby(group_column, sort=False).size().max())
+        return TimeSeriesRoutingDecision(
+            uses_flexible_timeseries=True,
+            failed_constraints=(),
+            sequence_max_records=maximum,
+        )
+    if ts_config.timestamp_column is None:
+        order_column = config.data.order_training_examples_by
+        if order_column is not None and order_column in data.columns:
+            ts_config.timestamp_column = order_column
+    decision = inspect_timeseries_constraints(data, config)
+    ts_config.resolve_flexible_timeseries(decision.uses_flexible_timeseries)
+    if decision.uses_flexible_timeseries:
+        ts_config.sequence_max_records = decision.sequence_max_records
+    else:
+        ts_config.sequence_max_records = None
+        ts_config.sequence_source_columns = None
+    return decision
 
 
 def validate_timeseries_data(data: pd.DataFrame, config: SafeSynthesizerParameters) -> TimeSeriesValidationResult:
@@ -480,55 +636,19 @@ def validate_timeseries_data(data: pd.DataFrame, config: SafeSynthesizerParamete
         )
 
     ts_config = config.time_series
-    if ts_config.sequence_termination_mode != "none" and ts_config.sequence_index_column not in data.columns:
+    if ts_config.flexible_timeseries and ts_config.sequence_index_column not in data.columns:
         config_copy = config.model_copy(deep=True)
-        prepared, _ = prepare_sequence_termination_data(data, config_copy)
+        prepared, _ = prepare_flexible_timeseries_data(data, config_copy)
         return validate_timeseries_data(prepared, config_copy)
 
-    working_df, group_by_col = _resolve_group_column(data, config)
-
-    timestamp_col = ts_config.timestamp_column
-    if timestamp_col is None:
-        working_df, timestamp_col = _add_elapsed_time_column(working_df, ts_config, group_by_col)
-        timestamp_format = "elapsed_seconds"
-        is_elapsed_time = True
-    else:
-        try:
-            check_timestamp_column(working_df, timestamp_col)
-        except ParameterError as exc:
-            raise TimeSeriesParameterValidationError(TimeSeriesValidationReason.TIMESTAMP_NOT_FOUND, str(exc)) from exc
-        except DataError as exc:
-            raise TimeSeriesDataValidationError(TimeSeriesValidationReason.TIMESTAMP_NULLS, str(exc)) from exc
-
-        is_elapsed_time = _detect_elapsed_seconds_format(working_df, ts_config, timestamp_col)
-
-    if group_by_col == timestamp_col:
-        raise TimeSeriesParameterValidationError(
-            TimeSeriesValidationReason.TIMESERIES_IDENTITY_COLUMNS_SAME,
-            "The time-series group and timestamp columns must be different columns.",
-        )
-
-    identity_columns = {group_by_col, timestamp_col}
-    if not any(column not in identity_columns for column in working_df.columns):
-        raise TimeSeriesDataValidationError(
-            TimeSeriesValidationReason.TIMESERIES_NO_VALUE_COLUMNS,
-            "Time-series data must contain at least one value column besides the group and timestamp columns.",
-        )
-
-    if not is_elapsed_time:
-        ts_config_copy = ts_config.model_copy(update={"timestamp_column": timestamp_col})
-        working_df = _infer_and_convert_timestamp_format(working_df, ts_config_copy)
-        timestamp_format = cast(str, ts_config_copy.timestamp_format)
-    else:
-        timestamp_format = "elapsed_seconds"
-
-    working_df = _sort_by_group_and_timestamp(working_df, group_by_col, timestamp_col)
-    group_stats = _collect_group_timestamp_stats(working_df, timestamp_col, group_by_col, is_elapsed_time)
-    if ts_config.sequence_termination_mode == "none":
+    working_df, group_by_col, timestamp_col, timestamp_format, is_elapsed_time, group_stats = (
+        _prepare_time_series_stats(data, config)
+    )
+    if not ts_config.flexible_timeseries:
         _validate_equal_group_lengths(group_stats)
         start_ts, stop_ts = validate_start_stop_consistency(group_stats)
     else:
-        start_ts, stop_ts = _validate_experiment_start_and_stop(group_stats, ts_config)
+        start_ts, stop_ts = _validate_flexible_start_and_stop(group_stats, ts_config)
     interval_seconds = _validate_interval_consistency(
         ts_config.timestamp_interval_seconds,
         group_stats,

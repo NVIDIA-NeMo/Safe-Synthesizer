@@ -42,7 +42,6 @@ from ..cli.artifact_structure import BoundDir
 from ..config.autoconfig import AutoConfigResolver
 from ..data_processing.assembler import TrainingExampleAssembler
 from ..data_processing.dataset import make_json_schema
-from ..data_processing.sequence_termination import sequence_schema_dataframe
 from ..defaults import (
     DEFAULT_VALID_RECORD_EVAL_BATCH_SIZE,
     EVAL_STEPS,
@@ -428,10 +427,6 @@ class HuggingFaceBackend(TrainingBackend):
             disable_tqdm=True,  # The 🤗 progress bar doesn't play nice with our logging.
             **FIXED_RUNTIME_TRAINING_ARGS,
         )
-        experiment_seed = self.params.time_series.sequence_experiment_seed
-        if self.params.time_series.sequence_termination_mode != "none" and experiment_seed is not None:
-            training_args["seed"] = experiment_seed
-            training_args["data_seed"] = experiment_seed
         return training_args
 
     def _apply_eval_dataset_overrides(self, training_args: dict) -> None:
@@ -668,6 +663,7 @@ class HuggingFaceBackend(TrainingBackend):
         self.model_metadata.timeseries_source_columns = (
             self.params.time_series.sequence_source_columns or source_columns
         )
+        self.model_metadata.flexible_timeseries = self.params.time_series.flexible_timeseries
         return df
 
     def _create_example_assembler(self, hf_dataset: Dataset) -> TrainingExampleAssembler:
@@ -679,15 +675,12 @@ class HuggingFaceBackend(TrainingBackend):
         Returns:
             The configured example assembler.
         """
-        experiment_seed = self.params.time_series.sequence_experiment_seed
-        assembler_seed = experiment_seed if self.params.time_series.sequence_termination_mode != "none" else None
         return TrainingExampleAssembler.from_data(
             config=self.params,
             metadata=self.model_metadata,
             dataset=hf_dataset,
             tokenizer=self.tokenizer,
             cache_file_path=self.training_output_dir,
-            seed=assembler_seed,
             is_timeseries=self.params.time_series.is_timeseries,
             timestamp_column=self.params.time_series.timestamp_column,
         )
@@ -743,8 +736,7 @@ class HuggingFaceBackend(TrainingBackend):
 
         hf_dataset = Dataset.from_pandas(training_df, preserve_index=False)
         # Exclude PSEUDO_GROUP_COLUMN from schema (internal column for ungrouped time series)
-        schema_df = sequence_schema_dataframe(training_df, self.params)
-        schema_df = schema_df.drop(columns=[PSEUDO_GROUP_COLUMN], errors="ignore")
+        schema_df = training_df.drop(columns=[PSEUDO_GROUP_COLUMN], errors="ignore")
         self.dataset_schema = make_json_schema(schema_df)
         self.training_df = training_df
         self.test_df = test_df

@@ -11,6 +11,7 @@ from ...data_processing.timeseries_validation import (
     TimeSeriesDataValidationError,
     TimeSeriesParameterValidationError,
     TimeSeriesValidationReason,
+    inspect_timeseries_constraints,
     validate_timeseries_data,
 )
 from ...data_processing.validation import (
@@ -226,6 +227,15 @@ class TimeSeriesDataShapeCheck(DataFrameCheck):
                 return
 
         try:
+            decision = inspect_timeseries_constraints(ctx.data, ctx.config)
+            if ctx.config.time_series.flexible_timeseries and decision.uses_flexible_timeseries:
+                constraints = ", ".join(decision.failed_constraints)
+                collector.warning(
+                    "flexible_timeseries_routing",
+                    "Time-series source groups do not satisfy the deterministic pipeline constraints "
+                    f"({constraints}); automatically using flexible time-series processing with a "
+                    f"{decision.sequence_max_records}-record safety cap.",
+                )
             validate_timeseries_data(ctx.data, ctx.config)
         except (TimeSeriesDataValidationError, TimeSeriesParameterValidationError) as exc:
             collector.error(self.issue_codes[exc.reason], str(exc))

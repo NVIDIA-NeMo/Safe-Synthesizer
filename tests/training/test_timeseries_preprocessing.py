@@ -7,7 +7,6 @@ import pandas as pd
 import pytest
 
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
-from nemo_safe_synthesizer.data_processing.sequence_termination import sequence_schema_dataframe
 from nemo_safe_synthesizer.defaults import PSEUDO_GROUP_COLUMN
 from nemo_safe_synthesizer.errors import DataError, ParameterError
 from nemo_safe_synthesizer.training.timeseries_preprocessing import process_timeseries_data
@@ -258,77 +257,70 @@ def fixture_variable_length_sequences():
     )
 
 
-def _sequence_config(mode: str) -> SafeSynthesizerParameters:
+def _sequence_config() -> SafeSynthesizerParameters:
     return SafeSynthesizerParameters.from_params(
         is_timeseries=True,
-        sequence_termination_mode=mode,
+        timestamp_column="timestamp",
         group_training_examples_by="group",
         order_training_examples_by="timestamp",
         rope_scaling_factor=1,
     )
 
 
-def test_process_sequence_padding_adds_dataset_level_padding(fixture_variable_length_sequences):
-    config = _sequence_config("idx_padding")
+def test_process_flexible_timeseries_marks_only_final_real_row(fixture_variable_length_sequences):
+    config = _sequence_config()
 
     result, resolved = process_timeseries_data(fixture_variable_length_sequences, config)
 
+    assert resolved.time_series.flexible_timeseries is True
     assert resolved.time_series.sequence_max_records == 4
-    assert resolved.time_series.timestamp_column == "_time_idx"
-    assert resolved.time_series.timestamp_format == "elapsed_seconds"
-    assert resolved.time_series.timestamp_interval_seconds == 1
-    assert resolved.time_series.start_timestamp == 0
-    assert resolved.time_series.stop_timestamp == 3
-    assert list(result.columns) == ["group", "_time_idx", "timestamp", "value"]
-    assert result.groupby("group", sort=False).size().to_dict() == {"A": 4, "B": 4, "C": 4}
-    assert result.groupby("group", sort=False)["_time_idx"].apply(list).to_dict() == {
-        "A": [0, 1, 2, 3],
-        "B": [0, 1, 2, 3],
-        "C": [0, 1, 2, 3],
-    }
-    assert (
-        result.loc[(result["group"] == "A") & (result["_time_idx"] > 0), ["timestamp", "value"]].isna().all(axis=None)
-    )
-
-    schema_df = sequence_schema_dataframe(result, resolved)
-    assert len(schema_df) == 7
-    assert not schema_df[["timestamp", "value"]].isna().all(axis=1).any()
-
-
-def test_process_sequence_last_marks_only_final_real_row(fixture_variable_length_sequences):
-    config = _sequence_config("idx_last")
-
-    result, resolved = process_timeseries_data(fixture_variable_length_sequences, config)
-
     assert list(result.columns) == ["group", "_time_idx", "timestamp", "value", "_is_last_row"]
     assert result.groupby("group", sort=False).size().to_dict() == {"A": 1, "B": 2, "C": 4}
     for _, group in result.groupby("group", sort=False):
         assert group["_is_last_row"].tolist() == [False] * (len(group) - 1) + [True]
 
 
+def test_process_fixed_shape_uses_standard_pipeline():
+    data = pd.DataFrame(
+        {
+            "group": ["A", "A", "B", "B"],
+            "timestamp": [1, 2, 1, 2],
+            "value": [1, 2, 3, 4],
+        }
+    )
+    config = _sequence_config()
+
+    result, resolved = process_timeseries_data(data, config)
+
+    assert resolved.time_series.flexible_timeseries is False
+    assert "_time_idx" not in result.columns
+    assert "_is_last_row" not in result.columns
+    assert list(result.columns) == ["group", "timestamp", "value"]
+
+
 def test_process_sequence_resolves_control_column_collisions():
-    data = pd.DataFrame({"group": ["A"], "_time_idx": [99], "value": [1]})
-    config = _sequence_config("idx_last")
+    data = pd.DataFrame(
+        {
+            "group": ["A", "B", "B"],
+            "timestamp": [1, 1, 2],
+            "_time_idx": [99, 99, 100],
+            "value": [1, 2, 3],
+        }
+    )
+    config = _sequence_config()
 
     result, resolved = process_timeseries_data(data, config)
 
     assert resolved.time_series.sequence_index_column == "_time_idx_1"
-    assert resolved.time_series.sequence_source_columns == ["group", "_time_idx", "value"]
-    assert list(result.columns) == ["group", "_time_idx_1", "_time_idx", "value", "_is_last_row"]
-
-
-def test_process_sequence_padding_rejects_ambiguous_all_null_source_row():
-    data = pd.DataFrame(
-        {
-            "group": ["A", "A"],
-            "timestamp": [1.0, None],
-            "value": [10.0, None],
-        }
-    )
-    config = _sequence_config("idx_padding")
-
-    with pytest.raises(DataError, match="indistinguishable from terminal padding"):
-        process_timeseries_data(data, config)
+    assert resolved.time_series.sequence_source_columns == ["group", "timestamp", "_time_idx", "value"]
+    assert list(result.columns) == [
+        "group",
+        "_time_idx_1",
+        "timestamp",
+        "_time_idx",
+        "value",
+        "_is_last_row",
+    ]
 
 
 def test_process_prepared_last_marker_fails_closed():
@@ -340,7 +332,8 @@ def test_process_prepared_last_marker_fails_closed():
             "_is_last_row": [True, False],
         }
     )
-    config = _sequence_config("idx_last")
+    config = _sequence_config()
+    config.time_series.resolve_flexible_timeseries(True)
     config.time_series.sequence_source_columns = ["group", "value"]
     config.time_series.sequence_max_records = 2
 
