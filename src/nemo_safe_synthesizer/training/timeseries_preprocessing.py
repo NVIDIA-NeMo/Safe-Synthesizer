@@ -8,6 +8,7 @@ from __future__ import annotations
 import pandas as pd
 
 from ..config import SafeSynthesizerParameters
+from ..data_processing.sequence_termination import prepare_sequence_termination_data
 from ..data_processing.timeseries_validation import validate_timeseries_data
 from ..observability import get_logger
 
@@ -73,6 +74,19 @@ def process_timeseries_data(
         DataError: If the timestamp column has missing values or intervals are inconsistent.
     """
     ts_config = config.time_series
+    if ts_config.sequence_termination_mode != "none":
+        training_df, group_column = prepare_sequence_termination_data(training_df, config)
+        validation = validate_timeseries_data(training_df, config)
+        logger.info(
+            "Prepared sequence-termination experiment data.",
+            extra={
+                "mode": ts_config.sequence_termination_mode,
+                "group_column": group_column,
+                "sequence_max_records": ts_config.sequence_max_records,
+            },
+        )
+        return validation.data, config
+
     original_group_column = config.data.group_training_examples_by
     original_timestamp_column = ts_config.timestamp_column
     validation = validate_timeseries_data(training_df, config)
