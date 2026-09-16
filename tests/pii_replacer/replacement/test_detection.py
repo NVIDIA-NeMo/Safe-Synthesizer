@@ -33,12 +33,12 @@ def _cell(text: str = "Contact ada@example.com") -> DetectionCell:
 class _FakeModel:
     def __init__(self, results: list[object]) -> None:
         self.results = results
-        self.calls: list[tuple[list[str], list[str], dict[str, object]]] = []
+        self.calls: list[tuple[list[str], dict[str, dict[str, float]], dict[str, object]]] = []
 
     def batch_extract_entities(
         self,
         texts: list[str],
-        labels: list[str],
+        labels: dict[str, dict[str, float]],
         **kwargs: object,
     ) -> list[object]:
         self.calls.append((texts, labels, kwargs))
@@ -83,15 +83,22 @@ class TestGliner2Detector:
         assert text not in caplog.text
 
     def test_loads_lazily_and_reuses_inference_for_identical_texts(self) -> None:
+        text = "Call +1 202 555 0101"
+        start = text.index("+")
         model = _FakeModel(
-            [{"entities": {"email": [{"text": "ada@example.com", "start": 8, "end": 23, "confidence": 0.9}]}}]
+            [
+                {
+                    "entities": {
+                        "phone_number": [{"text": text[start:], "start": start, "end": len(text), "confidence": 0.9}]
+                    }
+                }
+            ]
         )
         loads: list[str] = []
         detector = Gliner2Detector(
             FreeTextDetectionConfig(),
             model_loader=lambda model_id: loads.append(model_id) or model,
         )
-        text = "Contact ada@example.com"
         cells = [_cell(text), DetectionCell(DetectionCellId(1, "other_notes"), text, _cell().allowed_entity_types)]
 
         assert loads == []
@@ -100,19 +107,80 @@ class TestGliner2Detector:
         assert len(model.calls) == 1
         assert model.calls[0][0] == [text]
         assert "government_id" in model.calls[0][1]
-        assert "ip_address" in model.calls[0][1]
-        assert not {"ssn", "ipv4", "ipv6"} & set(model.calls[0][1])
+        assert not {
+            "email",
+            "payment_card",
+            "card_number",
+            "ip_address",
+            "ssn",
+            "ipv4",
+            "ipv6",
+        } & set(model.calls[0][1])
         assert loads == [FreeTextDetectionConfig().model_id]
         assert [(span.cell_id, span.start, span.end) for span in spans] == [
-            (cells[0].cell_id, 8, 23),
-            (cells[1].cell_id, 8, 23),
+            (cells[0].cell_id, start, len(text)),
+            (cells[1].cell_id, start, len(text)),
         ]
+
+    def test_applies_the_configured_threshold_for_each_entity(self) -> None:
+        texts = ["Mycobacterium marinum", "+1 202 555 0101"]
+        model = _FakeModel(
+            [
+                {"entities": {"person": [{"start": 0, "end": len(texts[0]), "confidence": 0.89}]}},
+                {"entities": {"phone_number": [{"start": 0, "end": len(texts[1]), "confidence": 0.89}]}},
+            ]
+        )
+        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda _: model)
+        cells = [
+            DetectionCell(DetectionCellId(position, "notes"), text, fresh_detection_entity_types())
+            for position, text in enumerate(texts)
+        ]
+
+        spans = detector.detect(cells)
+
+        assert [(span.cell_id.row_position, span.entity_type) for span in spans] == [(1, EntityType.PHONE_NUMBER)]
+        labels = model.calls[0][1]
+        assert labels["first_name"] == {"threshold": 0.9}
+        assert labels["middle_name"] == {"threshold": 0.9}
+        assert labels["last_name"] == {"threshold": 0.9}
+        assert labels["person"] == {"threshold": 0.9}
+        assert labels["phone_number"] == {"threshold": 0.5}
+
+    def test_government_id_uses_the_lower_model_floor_then_the_normalized_entity_threshold(self) -> None:
+        texts = ["123-45-6789", "AB-12345"]
+        model = _FakeModel(
+            [
+                {"entities": {"government_id": [{"start": 0, "end": len(texts[0]), "confidence": 0.7}]}},
+                {"entities": {"government_id": [{"start": 0, "end": len(texts[1]), "confidence": 0.7}]}},
+            ]
+        )
+        entity_thresholds = FreeTextDetectionConfig().entity_thresholds | {
+            EntityType.SSN: 0.8,
+            EntityType.NATIONAL_ID: 0.6,
+        }
+        detector = Gliner2Detector(
+            FreeTextDetectionConfig(entity_thresholds=entity_thresholds),
+            model_loader=lambda _: model,
+        )
+
+        cells = [
+            DetectionCell(DetectionCellId(position, "notes"), text, fresh_detection_entity_types())
+            for position, text in enumerate(texts)
+        ]
+
+        spans = detector.detect(cells)
+
+        assert [(span.cell_id.row_position, span.entity_type) for span in spans] == [
+            (1, EntityType.NATIONAL_ID),
+        ]
+        labels = model.calls[0][1]
+        assert labels["government_id"] == {"threshold": 0.6}
 
     def test_remaps_overlapping_chunk_offsets_to_the_complete_cell(self) -> None:
         model = _FakeModel(
             [
                 {"entities": {}},
-                {"entities": {"person": [{"start": 4, "end": 7, "confidence": 0.8}]}},
+                {"entities": {"person": [{"start": 4, "end": 7, "confidence": 0.99}]}},
             ]
         )
         detector = Gliner2Detector(
@@ -134,7 +202,7 @@ class TestGliner2Detector:
                             {
                                 "start": text.index("Ada"),
                                 "end": len(text) + 1,
-                                "confidence": 0.8,
+                                "confidence": 0.99,
                             }
                         ]
                     }
@@ -235,9 +303,7 @@ class TestGliner2Detector:
             ("first_name", "Ada", EntityType.FIRST_NAME),
             ("middle_name", "Augusta", EntityType.MIDDLE_NAME),
             ("last_name", "Lovelace", EntityType.LAST_NAME),
-            ("full_name", "Ada Lovelace", EntityType.FULL_NAME),
             ("person", "Ada Lovelace", EntityType.FULL_NAME),
-            ("email", "ada@example.com", EntityType.EMAIL),
             ("phone_number", "+1 202 555 0101", EntityType.PHONE_NUMBER),
             ("date_of_birth", "5 April 1990", EntityType.DATE_OF_BIRTH),
             ("street_address", "12 Main Street", EntityType.STREET_ADDRESS),
@@ -245,11 +311,7 @@ class TestGliner2Detector:
             ("government_id", "123-45-6789", EntityType.SSN),
             ("government_id", "AB-12345", EntityType.NATIONAL_ID),
             ("national_id_number", "AB-12345", EntityType.NATIONAL_ID),
-            ("payment_card", "4111111111111111", EntityType.CREDIT_DEBIT_CARD),
-            ("card_number", "4111111111111111", EntityType.CREDIT_DEBIT_CARD),
             ("api_key", "sk-ABC123", EntityType.API_KEY),
-            ("ip_address", "192.0.2.1", EntityType.IPV4),
-            ("ip_address", "2001:db8::1", EntityType.IPV6),
         ],
     )
     def test_normalizes_every_requested_checkpoint_label(
@@ -258,7 +320,7 @@ class TestGliner2Detector:
         value: str,
         expected: EntityType,
     ) -> None:
-        model = _FakeModel([{"entities": {label: [{"start": 0, "end": len(value), "confidence": 0.9}]}}])
+        model = _FakeModel([{"entities": {label: [{"start": 0, "end": len(value), "confidence": 0.99}]}}])
         detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda _: model)
 
         spans = detector.detect([_cell(value)])
@@ -290,7 +352,7 @@ class TestGliner2Detector:
             def batch_extract_entities(
                 self,
                 texts: list[str],
-                labels: list[str],
+                labels: dict[str, dict[str, float]],
                 **kwargs: object,
             ) -> list[object]:
                 raise RuntimeError("raw secret input")
