@@ -15,7 +15,12 @@ from unicodedata import normalize
 
 import regex
 
-from ...config.replace_pii import ENTITIES, EntityAction, EntityType, FreeTextDetectionConfig
+from ...config.replace_pii import (
+    ENTITIES,
+    FREE_TEXT_DETECTION_ENTITY_TYPES,
+    EntityType,
+    FreeTextDetectionConfig,
+)
 from ...errors import GenerationError
 from ...observability import get_logger, heartbeat
 from .birth_dates import birth_date_is_supported
@@ -34,31 +39,28 @@ __all__ = [
     "resolve_overlapping_spans",
 ]
 
-_FRESH_ENTITY_TYPES = frozenset(
-    entity.entity_type
-    for entity in ENTITIES
-    if entity.action is EntityAction.REPLACE and entity.entity_type is not EntityType.UNIQUE_IDENTIFIER
-)
+_FRESH_ENTITY_TYPES = frozenset(FREE_TEXT_DETECTION_ENTITY_TYPES)
 
 # The selected PII checkpoint uses a slightly broader vocabulary than NSS. Only
 # labels with a well-defined v3 replacement type are requested and normalized.
-_GLINER_LABELS: dict[str, EntityType | None] = {
+_GLINER_LABELS: dict[str, EntityType] = {
     "first_name": EntityType.FIRST_NAME,
     "middle_name": EntityType.MIDDLE_NAME,
     "last_name": EntityType.LAST_NAME,
-    "full_name": EntityType.FULL_NAME,
     "person": EntityType.FULL_NAME,
-    "email": EntityType.EMAIL,
     "phone_number": EntityType.PHONE_NUMBER,
     "date_of_birth": EntityType.DATE_OF_BIRTH,
     "street_address": EntityType.STREET_ADDRESS,
     "address": EntityType.STREET_ADDRESS,
-    "government_id": None,
     "national_id_number": EntityType.NATIONAL_ID,
-    "payment_card": EntityType.CREDIT_DEBIT_CARD,
-    "card_number": EntityType.CREDIT_DEBIT_CARD,
     "api_key": EntityType.API_KEY,
-    "ip_address": None,
+}
+_GLINER_UNION_LABELS: dict[str, tuple[EntityType, ...]] = {
+    "government_id": (EntityType.SSN, EntityType.NATIONAL_ID),
+}
+_GLINER_LABEL_ENTITY_TYPES = {
+    **{label: (entity_type,) for label, entity_type in _GLINER_LABELS.items()},
+    **_GLINER_UNION_LABELS,
 }
 _ENTITY_ORDER = {entity.entity_type: position for position, entity in enumerate(ENTITIES)}
 _SOURCE_ORDER = {"regex": 0, "gliner": 1}
@@ -72,7 +74,12 @@ class FreeTextDetector(Protocol):
 
 
 class _GlinerModel(Protocol):
-    def batch_extract_entities(self, texts: list[str], labels: list[str], **kwargs: object) -> list[object]: ...
+    def batch_extract_entities(
+        self,
+        texts: list[str],
+        labels: dict[str, dict[str, float]],
+        **kwargs: object,
+    ) -> list[object]: ...
 
 
 class _RegexMatch(Protocol):
@@ -114,11 +121,11 @@ class Gliner2Detector:
             return ()
 
         chunks = [chunk for text in cells_by_text for chunk in _chunks(text, self._config)]
-        results = self._infer(chunks, _requested_labels(cells))
+        results = self._infer(chunks, _requested_labels(cells, self._config))
         spans: list[DetectedSpan] = []
         rejected_birth_dates = 0
         for chunk, result in zip(chunks, results, strict=True):
-            chunk_spans, rejected_count = _chunk_spans(chunk, result, cells_by_text, self._config.threshold)
+            chunk_spans, rejected_count = _chunk_spans(chunk, result, cells_by_text, self._config)
             spans.extend(chunk_spans)
             rejected_birth_dates += rejected_count
         if rejected_birth_dates:
@@ -128,7 +135,7 @@ class Gliner2Detector:
             )
         return tuple(spans)
 
-    def _infer(self, chunks: list[_Chunk], labels: list[str]) -> Sequence[object]:
+    def _infer(self, chunks: list[_Chunk], labels: dict[str, dict[str, float]]) -> Sequence[object]:
         """Run one bounded GLiNER2 batch call and validate its outer result shape."""
         try:
             model = self._get_model()
@@ -143,7 +150,7 @@ class Gliner2Detector:
                 results = model.batch_extract_entities(
                     [chunk.text for chunk in chunks],
                     labels,
-                    threshold=self._config.threshold,
+                    threshold=min(self._config.entity_thresholds.values()),
                     include_confidence=True,
                     include_spans=True,
                     batch_size=self._config.batch_size,
@@ -255,25 +262,30 @@ def _cells_by_text(cells: Sequence[DetectionCell]) -> dict[str, list[DetectionCe
     return grouped
 
 
-def _requested_labels(cells: Sequence[DetectionCell]) -> list[str]:
-    """Return only checkpoint labels that can map to an allowed fresh entity."""
+def _requested_labels(
+    cells: Sequence[DetectionCell],
+    config: FreeTextDetectionConfig,
+) -> dict[str, dict[str, float]]:
+    """Return applicable checkpoint labels with their effective thresholds."""
     allowed = frozenset(entity_type for cell in cells for entity_type in cell.allowed_entity_types)
-    return sorted(
-        label for label, entity_type in _GLINER_LABELS.items() if entity_type is None or entity_type in allowed
-    )
+    return {
+        label: {"threshold": _model_label_threshold(label, config)}
+        for label, entity_types in sorted(_GLINER_LABEL_ENTITY_TYPES.items())
+        if allowed.intersection(entity_types)
+    }
 
 
 def _chunk_spans(
     chunk: _Chunk,
     result: object,
     cells_by_text: dict[str, list[DetectionCell]],
-    threshold: float,
+    config: FreeTextDetectionConfig,
 ) -> tuple[list[DetectedSpan], int]:
     """Normalize one chunk result into complete-cell spans and a rejected-DOB count."""
     spans: list[DetectedSpan] = []
     rejected_birth_dates = 0
     for raw_span in _result_spans(result):
-        normalized, rejected_birth_date = _normalize_chunk_span(chunk, raw_span, threshold)
+        normalized, rejected_birth_date = _normalize_chunk_span(chunk, raw_span, config)
         rejected_birth_dates += int(rejected_birth_date)
         if normalized is not None:
             spans.extend(_copy_span_to_cells(normalized, cells_by_text[chunk.original_text]))
@@ -283,7 +295,7 @@ def _chunk_spans(
 def _normalize_chunk_span(
     chunk: _Chunk,
     raw_span: tuple[int, int, str, float],
-    threshold: float,
+    config: FreeTextDetectionConfig,
 ) -> tuple[tuple[int, int, EntityType, float] | None, bool]:
     """Validate offsets and normalize one checkpoint label to an NSS entity type."""
     start, end, label, score = raw_span
@@ -301,13 +313,15 @@ def _normalize_chunk_span(
 
     if start < 0 or end <= start or end > len(chunk.text):
         raise GenerationError("GLiNER2 free-text PII inference returned invalid span offsets")
-    if score < threshold:
-        return None, False
-
     value = chunk.text[start:end]
     entity_type = _normalize_gliner_label(label, value)
+    if entity_type is None:
+        return None, False
+    if score < config.entity_thresholds[entity_type]:
+        return None, False
+
     rejected_birth_date = entity_type is EntityType.DATE_OF_BIRTH and not birth_date_is_supported(value)
-    if entity_type is None or rejected_birth_date:
+    if rejected_birth_date:
         return None, rejected_birth_date
 
     original_start = chunk.offset + start
@@ -315,6 +329,15 @@ def _normalize_chunk_span(
     if original_end > len(chunk.original_text):
         raise GenerationError("GLiNER2 free-text PII inference returned invalid span offsets")
     return (original_start, original_end, entity_type, score), False
+
+
+def _model_label_threshold(label: str, config: FreeTextDetectionConfig) -> float:
+    """Return a safe model-side floor for one checkpoint label."""
+    normalized = label.strip().casefold().replace("-", "_").replace(" ", "_")
+    candidates = _GLINER_LABEL_ENTITY_TYPES[normalized]
+    # Union labels are normalized from the returned value, so inference must
+    # preserve candidates accepted by any possible NSS entity type.
+    return min(config.entity_thresholds[entity_type] for entity_type in candidates)
 
 
 def _copy_span_to_cells(
@@ -432,13 +455,7 @@ def _normalize_gliner_label(label: str, value: str) -> EntityType | None:
     entity_type = _GLINER_LABELS.get(normalized)
     if normalized == "government_id":
         return EntityType.SSN if regex.fullmatch(r"\d{3}-\d{2}-\d{4}", value) else EntityType.NATIONAL_ID
-    if normalized != "ip_address":
-        return entity_type
-    try:
-        address = ipaddress.ip_address(value)
-    except ValueError:
-        return None
-    return EntityType.IPV4 if address.version == 4 else EntityType.IPV6
+    return entity_type
 
 
 def _load_gliner2_model(model_id: str) -> _GlinerModel:

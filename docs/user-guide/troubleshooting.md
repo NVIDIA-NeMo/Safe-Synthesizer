@@ -569,6 +569,15 @@ GLiNER2's batched API. Start with the defaults (`batch_size: 8`,
 1 after a CUDA out-of-memory error. Increase it gradually only when a GPU has
 headroom; it does not change chunk boundaries or detection semantics.
 
+The checkpoint favors recall and documents that it can over-predict names.
+`free_text_detection.entity_thresholds` contains one threshold for every
+GLiNER2-detected entity. NSS defaults all name types to `0.9` and the remaining
+model-detected types to `0.5`. Email, payment-card, IPv4, and IPv6 detection is
+owned by structurally validated regex and has no confidence threshold. If
+medical terms, product names, or common nouns are replaced as people, raise the
+relevant name entries. Lower them only after checking both false positives and
+missed real names on a representative development sample.
+
 The default checkpoint's documented languages are English, French, Spanish,
 German, Italian, Portuguese, and Dutch. Natural-language date parsing happens
 only after GLiNER2 detects a birth-date span, so the parser does not extend the
