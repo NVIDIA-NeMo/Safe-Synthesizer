@@ -1129,6 +1129,50 @@ class TestTokenBudgetCheck:
 
         assert not any(i.code == "group_exceeds_context" for i in issues)
 
+    def test_group_budget_skipped_in_timeseries_mode(self):
+        """In time-series mode, groups exceeding the context window do not emit `group_exceeds_context`.
+
+        `SequentialExampleAssembler` streams long time-series groups across multiple
+        context windows, so individual groups exceeding `max_new_tokens` are valid.
+        """
+        config = SafeSynthesizerParameters(
+            data=DataParameters(group_training_examples_by="device_id"),
+            time_series=TimeSeriesParameters(is_timeseries=True, timestamp_column="timestamp"),
+        )
+        df = pd.DataFrame(
+            {
+                "device_id": ["dev-1"] * 50,
+                "timestamp": range(50),
+                "value": range(50),
+            }
+        )
+        tokenizer = MagicMock(spec=PreTrainedTokenizerBase)
+        tokenizer.encode.return_value = list(range(10))
+        tokenizer.return_value = {"input_ids": [list(range(10))] * 50}
+        metadata = self._metadata(tokenizer, max_seq_length=100)
+
+        issues = TokenBudgetCheck().run(make_ctx(config=config, data=df, metadata=metadata))
+        assert not any(i.code == "group_exceeds_context" for i in issues)
+
+    def test_group_budget_checked_when_not_timeseries(self):
+        """In standard grouped mode (not time series), groups exceeding `max_new_tokens` emit `group_exceeds_context`."""
+        config = SafeSynthesizerParameters(
+            data=DataParameters(group_training_examples_by="device_id"),
+        )
+        df = pd.DataFrame(
+            {
+                "device_id": ["dev-1"] * 50,
+                "value": range(50),
+            }
+        )
+        tokenizer = MagicMock(spec=PreTrainedTokenizerBase)
+        tokenizer.encode.return_value = list(range(10))
+        tokenizer.return_value = {"input_ids": [list(range(10))] * 50}
+        metadata = self._metadata(tokenizer, max_seq_length=100)
+
+        issues = TokenBudgetCheck().run(make_ctx(config=config, data=df, metadata=metadata))
+        assert any(i.code == "group_exceeds_context" and i.severity == "error" for i in issues)
+
 
 @pytest.mark.unit
 class TestDatasetSizeCheck:
