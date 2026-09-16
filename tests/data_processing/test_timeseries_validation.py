@@ -353,3 +353,32 @@ def test_validate_timeseries_data_rejects_group_length_mismatch():
         validate_timeseries_data(df, config)
 
     assert exc_info.value.reason is TimeSeriesValidationReason.TIMESERIES_GROUP_LENGTH_MISMATCH
+
+
+def test_validate_timeseries_data_allows_unequal_experiment_lengths_and_stops():
+    """Only explicitly gated experiment mode relaxes equal length and stop checks."""
+    df = pd.DataFrame(
+        {
+            "group": ["A", "B", "B"],
+            "_time_idx": [0, 0, 1],
+            "value": [1, 2, 3],
+            "_is_last_row": [True, False, True],
+        }
+    )
+    config = SafeSynthesizerParameters.from_params(
+        is_timeseries=True,
+        timestamp_column="_time_idx",
+        timestamp_format="elapsed_seconds",
+        timestamp_interval_seconds=1,
+        group_training_examples_by="group",
+        sequence_termination_mode="idx_last",
+        sequence_max_records=2,
+        sequence_source_columns=["group", "value"],
+        rope_scaling_factor=1,
+    )
+
+    result = validate_timeseries_data(df, config)
+
+    assert [stats.record_count for stats in result.group_stats] == [1, 2]
+    assert result.start_timestamp == "0"
+    assert result.stop_timestamp == "1"

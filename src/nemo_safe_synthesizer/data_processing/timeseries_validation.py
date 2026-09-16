@@ -18,6 +18,7 @@ from ..config.time_series import TimeSeriesParameters
 from ..defaults import PSEUDO_GROUP_COLUMN
 from ..errors import DataError, ParameterError
 from .actions.utils import guess_datetime_format
+from .sequence_termination import prepare_sequence_termination_data
 from .validation import check_groupby_column, check_no_pseudo_column_collision, check_timestamp_column
 
 __all__ = [
@@ -427,6 +428,30 @@ def validate_start_stop_consistency(
     return str(group_stats[0].start_timestamp), str(group_stats[0].stop_timestamp)
 
 
+def _validate_experiment_start_and_stop(
+    group_stats: tuple[TimeSeriesGroupTimestampStats, ...],
+    ts_config: TimeSeriesParameters,
+) -> tuple[str, str]:
+    """Validate the common zero start and resolve the shared dataset-level cap."""
+    if not group_stats:
+        raise TimeSeriesDataValidationError(
+            TimeSeriesValidationReason.TIMESERIES_EMPTY,
+            "Time-series data must contain at least one record.",
+        )
+    unique_starts = {stats.start_timestamp for stats in group_stats}
+    if unique_starts != {0}:
+        raise TimeSeriesDataValidationError(
+            TimeSeriesValidationReason.TIMESERIES_START_MISMATCH,
+            "Sequence-termination experiment groups must all start at index 0.",
+        )
+    if ts_config.sequence_max_records is None:
+        raise TimeSeriesParameterValidationError(
+            TimeSeriesValidationReason.TIMESERIES_STOP_MISMATCH,
+            "sequence_max_records must be resolved for a sequence-termination experiment.",
+        )
+    return "0", str(ts_config.sequence_max_records - 1)
+
+
 def validate_timeseries_data(data: pd.DataFrame, config: SafeSynthesizerParameters) -> TimeSeriesValidationResult:
     """Validate time-series data shape and infer timestamp metadata.
 
@@ -455,6 +480,11 @@ def validate_timeseries_data(data: pd.DataFrame, config: SafeSynthesizerParamete
         )
 
     ts_config = config.time_series
+    if ts_config.sequence_termination_mode != "none" and ts_config.sequence_index_column not in data.columns:
+        config_copy = config.model_copy(deep=True)
+        prepared, _ = prepare_sequence_termination_data(data, config_copy)
+        return validate_timeseries_data(prepared, config_copy)
+
     working_df, group_by_col = _resolve_group_column(data, config)
 
     timestamp_col = ts_config.timestamp_column
@@ -494,8 +524,11 @@ def validate_timeseries_data(data: pd.DataFrame, config: SafeSynthesizerParamete
 
     working_df = _sort_by_group_and_timestamp(working_df, group_by_col, timestamp_col)
     group_stats = _collect_group_timestamp_stats(working_df, timestamp_col, group_by_col, is_elapsed_time)
-    _validate_equal_group_lengths(group_stats)
-    start_ts, stop_ts = validate_start_stop_consistency(group_stats)
+    if ts_config.sequence_termination_mode == "none":
+        _validate_equal_group_lengths(group_stats)
+        start_ts, stop_ts = validate_start_stop_consistency(group_stats)
+    else:
+        start_ts, stop_ts = _validate_experiment_start_and_stop(group_stats, ts_config)
     interval_seconds = _validate_interval_consistency(
         ts_config.timestamp_interval_seconds,
         group_stats,

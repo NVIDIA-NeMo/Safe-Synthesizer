@@ -1077,6 +1077,52 @@ class TestTokenBudgetCheck:
 
         assert not any(i.code == "group_exceeds_context" for i in issues)
 
+    def test_ordinary_grouped_mode_still_requires_full_group_to_fit(self):
+        config = SafeSynthesizerParameters(data=DataParameters(group_training_examples_by="grp"))
+        df = pd.DataFrame({"grp": ["A"] * 8, "value": list(range(8))})
+        metadata = self._metadata(_PseudoColumnSensitiveTokenizer(), max_seq_length=10)
+
+        issues = TokenBudgetCheck().run(make_ctx(config=config, data=df, metadata=metadata))
+
+        assert any(i.code == "group_exceeds_context" and i.severity == "error" for i in issues)
+        assert not any(i.code == "record_exceeds_context" for i in issues)
+
+    @pytest.mark.parametrize("mode", ["idx_padding", "idx_last"])
+    def test_sequence_termination_mode_skips_only_full_group_budget(self, mode):
+        config = SafeSynthesizerParameters(
+            data=DataParameters(group_training_examples_by="grp", max_sequences_per_example=1),
+            time_series=TimeSeriesParameters(
+                is_timeseries=True,
+                sequence_termination_mode=mode,
+            ),
+        )
+        df = pd.DataFrame({"grp": ["A"] * 8, "value": list(range(8))})
+        metadata = self._metadata(_PseudoColumnSensitiveTokenizer(), max_seq_length=10)
+
+        issues = TokenBudgetCheck().run(make_ctx(config=config, data=df, metadata=metadata))
+
+        assert not any(i.code == "group_exceeds_context" for i in issues)
+        assert not any(i.code == "record_exceeds_context" for i in issues)
+
+    def test_sequence_termination_mode_still_rejects_oversized_record(self):
+        config = SafeSynthesizerParameters(
+            data=DataParameters(group_training_examples_by="grp"),
+            time_series=TimeSeriesParameters(
+                is_timeseries=True,
+                sequence_termination_mode="idx_last",
+            ),
+        )
+        df = pd.DataFrame({"grp": ["A"], "value": ["oversized"]})
+        tokenizer = MagicMock()
+        tokenizer.encode.return_value = list(range(20))
+        tokenizer.return_value = {"input_ids": [list(range(100))]}
+        metadata = self._metadata(tokenizer, max_seq_length=60)
+
+        issues = TokenBudgetCheck().run(make_ctx(config=config, data=df, metadata=metadata))
+
+        assert any(i.code == "record_exceeds_context" and i.severity == "error" for i in issues)
+        assert not any(i.code == "group_exceeds_context" for i in issues)
+
 
 @pytest.mark.unit
 class TestDatasetSizeCheck:

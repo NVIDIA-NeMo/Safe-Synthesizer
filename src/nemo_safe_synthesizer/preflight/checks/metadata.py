@@ -63,10 +63,15 @@ class TokenBudgetCheck(MetadataCheck):
 
         check_sampled_record_budget(collector, data, metadata, max_new_tokens, sample_size_limit=self.token_sample_size)
 
-        # Only run the per-group budget when group-by is configured AND the
-        # column is actually present (GroupbyColumnCheck may have flagged
-        # a missing column as an error but we still want schema/record
-        # checks to run; guarding here keeps them independent).
+        # Sequence-termination time series deliberately split a group across
+        # multiple SequentialExampleAssembler examples at record boundaries.
+        # Requiring the complete group to fit would reject data the actual
+        # training path supports. Schema and individual-record checks above
+        # remain active in every mode.
+        skip_whole_group_budget = config.time_series.sequence_termination_mode != "none"
+
+        # Only run the per-group budget when group-by is configured, present,
+        # and the selected assembler requires each whole group to fit.
         group_col = config.data.group_training_examples_by
-        if group_col is not None and group_col in data.columns:
+        if not skip_whole_group_budget and group_col is not None and group_col in data.columns:
             check_group_budget(collector, data, group_col, metadata, max_new_tokens, top_n=self.top_groups_to_check)

@@ -25,6 +25,7 @@ import pandas as pd
 
 from ..observability import get_logger
 from .records.json_types import JsonSchema, JsonValue, is_json_object
+from .sequence_termination import is_padding_terminal
 
 RECORD_REGEX_PATTERN = r"{.+?}(?:\n|$)"
 RECORD_REGEX_PATTEN_LOOKAHEAD = r"{.+?}(?=\n|$)"
@@ -516,6 +517,81 @@ def extract_and_validate_timeseries_records(
                     rem_tokens, rem_dt = timed(remaining)
                     tokenization_time += rem_dt
                     records.append(ParsedRecord(text=remaining, error=cascade_error, token_count=rem_tokens))
+                break
+            last_absolute_seconds = absolute_seconds
+
+        records.append(ParsedRecord(text=matched_json, parsed=parsed, token_count=n_tokens))
+
+    return ParsedResponse(records=records, tokenization_time_sec=tokenization_time)
+
+
+def extract_and_validate_padding_timeseries_records(
+    jsonl_string: str,
+    schema: JsonSchema,
+    time_column: str,
+    interval_seconds: int | None,
+    time_format: str,
+    *,
+    group_column: str,
+    source_columns: list[str],
+    encode: Callable[[str], list[int]] | None = None,
+) -> ParsedResponse:
+    """Validate ordinary rows strictly while admitting exact full-null padding terminals."""
+    records: list[ParsedRecord] = []
+    tokenization_time = 0.0
+    timed = timed_encode(encode)
+    matched_records = list(extract_records_from_jsonl_string(jsonl_string))
+    last_absolute_seconds: int | None = None
+    day_offset = 0
+    cascade_error = ("Invalid due to previous record error", "TimeSeries")
+
+    for idx, matched_json in enumerate(matched_records):
+        n_tokens, duration = timed(matched_json)
+        tokenization_time += duration
+        try:
+            raw_record = json.loads(matched_json)
+        except json.JSONDecodeError:
+            raw_record = None
+
+        terminal = isinstance(raw_record, dict) and is_padding_terminal(
+            raw_record,
+            group_column=group_column,
+            index_column=time_column,
+            source_columns=source_columns,
+        )
+        if terminal and is_json_object(raw_record):
+            parsed, error = raw_record, None
+        else:
+            parsed, error = _parse_and_validate_json(matched_json, schema)
+
+        if error is not None or parsed is None:
+            records.append(ParsedRecord(text=matched_json, error=error, token_count=n_tokens))
+            for remaining in matched_records[idx + 1 :]:
+                remaining_tokens, remaining_duration = timed(remaining)
+                tokenization_time += remaining_duration
+                records.append(ParsedRecord(text=remaining, error=cascade_error, token_count=remaining_tokens))
+            break
+
+        timestamp_seconds, error = _extract_timestamp_seconds(parsed, time_column, time_format)
+        if error is not None or timestamp_seconds is None:
+            records.append(ParsedRecord(text=matched_json, error=error, token_count=n_tokens))
+            break
+
+        if interval_seconds is not None:
+            absolute_seconds, day_offset, error = _validate_time_interval(
+                timestamp_seconds,
+                last_absolute_seconds,
+                day_offset,
+                interval_seconds,
+                time_column,
+                allow_rollover=True,
+            )
+            if error is not None:
+                records.append(ParsedRecord(text=matched_json, error=error, token_count=n_tokens))
+                for remaining in matched_records[idx + 1 :]:
+                    remaining_tokens, remaining_duration = timed(remaining)
+                    tokenization_time += remaining_duration
+                    records.append(ParsedRecord(text=remaining, error=cascade_error, token_count=remaining_tokens))
                 break
             last_absolute_seconds = absolute_seconds
 
