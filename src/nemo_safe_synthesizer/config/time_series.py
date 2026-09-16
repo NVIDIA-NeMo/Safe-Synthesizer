@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, field_validator, model_validator
 
@@ -96,11 +96,68 @@ class TimeSeriesParameters(Parameters):
         ),
     ] = None
 
+    sequence_termination_mode: Literal["none", "idx_padding", "idx_last"] = Field(
+        default="none",
+        description=(
+            "Experimental sequence-termination representation. ``idx_padding`` uses a fully null payload row and "
+            "``idx_last`` uses a final boolean marker. ``none`` preserves standard time-series behavior."
+        ),
+    )
+
+    sequence_index_column: str = Field(
+        default="_time_idx",
+        description="Preferred internal zero-based sequence index column for sequence-termination experiments.",
+    )
+
+    sequence_marker_column: str = Field(
+        default="_is_last_row",
+        description="Preferred internal final-row marker column used by ``sequence_termination_mode='idx_last'``.",
+    )
+
+    sequence_max_records: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Dataset-level sequence length cap. Preprocessing resolves this to the maximum observed group length. "
+            "When provided, it must match that observed maximum. Must be >= 1."
+        ),
+    )
+
+    sequence_source_columns: list[str] | None = Field(
+        default=None,
+        description="Original source column order retained for strict schema inference and generated-output cleanup.",
+    )
+
+    sequence_experiment_seed: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Random seed applied to experiment data assembly, HuggingFace training, and vLLM sampling. "
+            "Only valid when sequence_termination_mode is active. Must be >= 0."
+        ),
+    )
+
     @model_validator(mode="after")
     def check_timestamp_column_or_interval_when_timeseries(self) -> Self:
         """Validate that time-series mode has a timestamp source and non-timeseries mode has no `timestamp_column`."""
+        experiment_enabled = self.sequence_termination_mode != "none"
+        if experiment_enabled and not self.is_timeseries:
+            raise ValueError("sequence_termination_mode requires is_timeseries=True.")
+        if not self.sequence_index_column:
+            raise ValueError("sequence_index_column must not be empty.")
+        if not self.sequence_marker_column:
+            raise ValueError("sequence_marker_column must not be empty.")
+        if self.sequence_index_column == self.sequence_marker_column:
+            raise ValueError("sequence_index_column and sequence_marker_column must be different.")
+        if self.sequence_source_columns is not None and len(set(self.sequence_source_columns)) != len(
+            self.sequence_source_columns
+        ):
+            raise ValueError("sequence_source_columns must not contain duplicates.")
+        if self.sequence_experiment_seed is not None and not experiment_enabled:
+            raise ValueError("sequence_experiment_seed requires an active sequence_termination_mode.")
+
         if self.is_timeseries:
-            if self.timestamp_column is None and self.timestamp_interval_seconds is None:
+            if not experiment_enabled and self.timestamp_column is None and self.timestamp_interval_seconds is None:
                 raise ValueError(
                     "At least one of timestamp_column or timestamp_interval_seconds must be provided when is_timeseries is True."
                 )

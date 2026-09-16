@@ -14,6 +14,7 @@ from ..data_processing.record_utils import (
     ParsedRecord,
     ParsedResponse,
     check_if_records_are_ordered,
+    extract_and_validate_padding_timeseries_records,
     extract_and_validate_records,
     extract_and_validate_timeseries_records,
     extract_groups_from_jsonl_string,
@@ -171,6 +172,9 @@ class TimeSeriesDataProcessor(Processor):
         interval_seconds: int | None,
         time_format: str | None,
         tokenizer: EncodeOnlyTokenizer | None = None,
+        sequence_termination_mode: str = "none",
+        group_column: str | None = None,
+        source_columns: list[str] | None = None,
     ):
         super().__init__(schema=schema, config=config, tokenizer=tokenizer)
         if time_column is None:
@@ -188,6 +192,9 @@ class TimeSeriesDataProcessor(Processor):
         self.time_column: str = time_column
         self.interval_seconds = interval_seconds
         self.time_format: str = time_format
+        self.sequence_termination_mode = sequence_termination_mode
+        self.group_column = group_column
+        self.source_columns = source_columns
 
     def _process_text_generation(self, text: str) -> ParsedResponse:
         """Extract, validate, and check temporal ordering of time-series records.
@@ -198,6 +205,19 @@ class TimeSeriesDataProcessor(Processor):
         Returns:
             Parsed response with validated records and error details.
         """
+        if self.sequence_termination_mode == "idx_padding":
+            if self.group_column is None or self.source_columns is None:
+                raise ValueError("Padding-mode processing requires resolved group and source columns.")
+            return extract_and_validate_padding_timeseries_records(
+                text,
+                self.schema,
+                self.time_column,
+                self.interval_seconds,
+                self.time_format,
+                group_column=self.group_column,
+                source_columns=self.source_columns,
+                encode=self._encode,
+            )
         return extract_and_validate_timeseries_records(
             text,
             self.schema,
@@ -405,6 +425,9 @@ def create_processor(
             interval_seconds=config.time_series.timestamp_interval_seconds,
             time_format=config.time_series.timestamp_format,
             tokenizer=tokenizer,
+            sequence_termination_mode=config.time_series.sequence_termination_mode,
+            group_column=config.data.group_training_examples_by,
+            source_columns=config.time_series.sequence_source_columns,
         )
     elif config.data.group_training_examples_by:
         processor = GroupedDataProcessor(

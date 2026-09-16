@@ -3,6 +3,7 @@
 
 """Unit tests for the TimeseriesBackend class private methods."""
 
+import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -177,6 +178,9 @@ def create_timeseries_backend(config: SafeSynthesizerParameters, model_metadata,
         time_column=config.time_series.timestamp_column,
         interval_seconds=config.time_series.timestamp_interval_seconds,
         time_format=config.time_series.timestamp_format,
+        sequence_termination_mode=config.time_series.sequence_termination_mode,
+        group_column=config.data.group_training_examples_by,
+        source_columns=config.time_series.sequence_source_columns,
     )
 
     with (
@@ -733,6 +737,16 @@ class TestBuildModifiedSamplingParamsStopPropagation:
         assert modified.stop == []
         assert modified.stop_token_ids == []
 
+    def test_propagates_sampling_seed(self, timeseries_base_params, timeseries_model_metadata, mock_workdir):
+        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
+
+        modified, _ = backend._build_modified_sampling_params(
+            SamplingParams(max_tokens=10, seed=23),
+            num_active=1,
+        )
+
+        assert modified.seed == 23
+
     def test_clamps_max_tokens_to_current_rolling_prompt(
         self, timeseries_base_params, timeseries_model_metadata, mock_workdir
     ):
@@ -953,6 +967,468 @@ class TestGenerateParallelGroups:
         assert batches.num_length_truncated_completions == 1
 
 
+def _enable_sequence_experiment(params, metadata, mode: str, max_records: int = 4) -> None:
+    params.time_series.sequence_termination_mode = mode
+    params.time_series.sequence_index_column = "_time_idx"
+    params.time_series.sequence_marker_column = "_is_last_row"
+    params.time_series.sequence_max_records = max_records
+    params.time_series.sequence_source_columns = ["group_id", "value"]
+    params.time_series.timestamp_column = "_time_idx"
+    params.time_series.timestamp_format = "elapsed_seconds"
+    params.time_series.timestamp_interval_seconds = 1
+    params.time_series.start_timestamp = 0
+    params.time_series.stop_timestamp = max_records - 1
+    params.data.order_training_examples_by = "_time_idx"
+    metadata.timeseries_source_columns = ["value", "group_id"]
+
+
+class TestSequenceTerminationExperiment:
+    """Focused generation tests for learned terminal and cap behavior."""
+
+    @staticmethod
+    def _schema(mode: str) -> dict:
+        properties = {
+            "group_id": {"type": "string"},
+            "_time_idx": {"type": "integer"},
+            "value": {"type": "integer"},
+        }
+        if mode == "idx_last":
+            properties["_is_last_row"] = {"type": "boolean"}
+        return {"type": "object", "properties": properties, "required": list(properties)}
+
+    def test_padding_parser_bypasses_only_exact_full_null_terminal(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        _enable_sequence_experiment(timeseries_base_params, timeseries_model_metadata, "idx_padding")
+        backend = create_timeseries_backend(
+            timeseries_base_params,
+            timeseries_model_metadata,
+            mock_workdir,
+            self._schema("idx_padding"),
+        )
+        response = backend.processor(
+            0,
+            '{"group_id":"group_A","_time_idx":0,"value":1}\n'
+            '{"group_id":"group_A","_time_idx":1,"value":null}\n'
+            '{"group_id":"group_A","_time_idx":2,"value":2}\n',
+        )
+
+        assert len(response.valid_records) == 3
+        state = backend._init_group_state("group_A")
+        retained, authoritative_reason, accepted_row_stop = backend._trim_sequence_termination_records(
+            state, response.records
+        )
+        assert authoritative_reason == "terminal"
+        assert accepted_row_stop is None
+        assert [record.parsed["_time_idx"] for record in retained] == [0]
+        assert response.records[1].is_valid is False
+        assert response.records[2].is_valid is False
+
+    def test_attempted_tokens_count_prompt_once_and_all_candidates(
+        self,
+        timeseries_base_params,
+        timeseries_model_metadata,
+        mock_workdir,
+        fixture_tokenizer,
+        tmp_path,
+    ):
+        _enable_sequence_experiment(timeseries_base_params, timeseries_model_metadata, "idx_last")
+        timeseries_model_metadata.timeseries_group_values = ["group_A"]
+        backend = create_timeseries_backend(
+            timeseries_base_params,
+            timeseries_model_metadata,
+            mock_workdir,
+            self._schema("idx_last"),
+        )
+        backend._raw_generations_path = tmp_path / "raw_generations.jsonl"
+        backend.llm = MagicMock()
+        backend.llm.get_tokenizer.return_value = fixture_tokenizer
+        backend.llm.generate.return_value = [
+            SimpleNamespace(
+                outputs=[
+                    SimpleNamespace(
+                        finish_reason="stop",
+                        text='value":1,"_is_last_row":true}\n',
+                        token_ids=[1, 2, 3],
+                    ),
+                    SimpleNamespace(
+                        finish_reason="stop",
+                        text='value":2,"_is_last_row":true}\n',
+                        token_ids=[4, 5, 6, 7, 8],
+                    ),
+                ]
+            )
+        ]
+        batches = GenerationBatches(target_num_records=100)
+
+        assert backend._generate_parallel_groups(
+            batches=batches,
+            sampling_params=SamplingParams(max_tokens=10, seed=17),
+            progress_snapshots=[],
+        )
+
+        state = backend._sequence_group_states["group_A"]
+        expected_prompt_tokens = len(backend._build_prompt_token_ids(state.prompt_state.prefix))
+        raw_entries = [
+            json.loads(line) for line in backend._raw_generations_path.read_text(encoding="utf-8").splitlines()
+        ]
+        assert state.total_prompts == 1
+        assert state.total_prompt_tokens == expected_prompt_tokens
+        assert state.total_completion_tokens == 8
+        assert batches.total_completion_tokens == 8
+        assert [entry["prompt_tokens"] for entry in raw_entries] == [expected_prompt_tokens, 0]
+        assert [entry["completion_tokens"] for entry in raw_entries] == [3, 5]
+
+    def test_padding_partial_null_uses_strict_ordinary_schema(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        _enable_sequence_experiment(timeseries_base_params, timeseries_model_metadata, "idx_padding")
+        timeseries_base_params.time_series.sequence_source_columns = ["group_id", "value", "other"]
+        schema = self._schema("idx_padding")
+        schema["properties"]["other"] = {"type": "integer"}
+        schema["required"].append("other")
+        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir, schema)
+
+        response = backend.processor(
+            0,
+            '{"group_id":"group_A","_time_idx":0,"value":null,"other":1}\n',
+        )
+
+        assert response.valid_records == []
+        assert len(response.invalid_records) == 1
+
+    def test_wrong_group_ordinary_row_ends_valid_prefix(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        _enable_sequence_experiment(timeseries_base_params, timeseries_model_metadata, "idx_last")
+        backend = create_timeseries_backend(
+            timeseries_base_params,
+            timeseries_model_metadata,
+            mock_workdir,
+            self._schema("idx_last"),
+        )
+        state = backend._init_group_state("group_A")
+        records = [
+            ParsedRecord(
+                text="wrong",
+                parsed={"group_id": "group_B", "_time_idx": 0, "value": 1, "_is_last_row": False},
+            ),
+            ParsedRecord(
+                text="later",
+                parsed={"group_id": "group_A", "_time_idx": 1, "value": 2, "_is_last_row": True},
+            ),
+        ]
+
+        retained, authoritative_reason, accepted_row_stop = backend._trim_sequence_termination_records(state, records)
+
+        assert retained == []
+        assert authoritative_reason is None
+        assert accepted_row_stop is None
+        assert all(not record.is_valid for record in records)
+
+    def test_wrong_group_padding_row_does_not_terminate(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        _enable_sequence_experiment(timeseries_base_params, timeseries_model_metadata, "idx_padding")
+        backend = create_timeseries_backend(
+            timeseries_base_params,
+            timeseries_model_metadata,
+            mock_workdir,
+            self._schema("idx_padding"),
+        )
+        response = backend.processor(
+            0,
+            '{"group_id":"group_B","_time_idx":0,"value":null}\n',
+        )
+        state = backend._init_group_state("group_A")
+
+        retained, authoritative_reason, accepted_row_stop = backend._trim_sequence_termination_records(
+            state, response.records
+        )
+
+        assert retained == []
+        assert authoritative_reason is None
+        assert accepted_row_stop is None
+        assert response.records[0].is_valid is False
+
+    def test_last_marker_retains_terminal_and_trims_later_rows(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        _enable_sequence_experiment(timeseries_base_params, timeseries_model_metadata, "idx_last")
+        backend = create_timeseries_backend(
+            timeseries_base_params,
+            timeseries_model_metadata,
+            mock_workdir,
+            self._schema("idx_last"),
+        )
+        records = [
+            ParsedRecord(
+                text="row0",
+                parsed={"group_id": "group_A", "_time_idx": 0, "value": 1, "_is_last_row": False},
+            ),
+            ParsedRecord(
+                text="row1",
+                parsed={"group_id": "group_A", "_time_idx": 1, "value": 2, "_is_last_row": True},
+            ),
+            ParsedRecord(
+                text="row2",
+                parsed={"group_id": "group_A", "_time_idx": 2, "value": 3, "_is_last_row": False},
+            ),
+        ]
+
+        state = backend._init_group_state("group_A")
+        retained, authoritative_reason, accepted_row_stop = backend._trim_sequence_termination_records(state, records)
+        reason = backend._resolve_postprocessed_termination(authoritative_reason, accepted_row_stop)
+
+        assert reason == "terminal"
+        assert [record.parsed["_time_idx"] for record in retained] == [0, 1]
+        assert retained[-1].parsed["_is_last_row"] is True
+        assert records[-1].is_valid is False
+
+    def test_cap_retains_only_through_dataset_maximum(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        _enable_sequence_experiment(timeseries_base_params, timeseries_model_metadata, "idx_last", max_records=2)
+        backend = create_timeseries_backend(
+            timeseries_base_params,
+            timeseries_model_metadata,
+            mock_workdir,
+            self._schema("idx_last"),
+        )
+        records = [
+            ParsedRecord(
+                text=f"row{index}",
+                parsed={
+                    "group_id": "group_A",
+                    "_time_idx": index,
+                    "value": index,
+                    "_is_last_row": False,
+                },
+            )
+            for index in range(3)
+        ]
+
+        state = backend._init_group_state("group_A")
+        retained, authoritative_reason, accepted_row_stop = backend._trim_sequence_termination_records(state, records)
+        reason = backend._resolve_postprocessed_termination(authoritative_reason, accepted_row_stop)
+
+        assert reason == "cap"
+        assert [record.parsed["_time_idx"] for record in retained] == [0, 1]
+        assert records[-1].is_valid is False
+
+    @pytest.mark.parametrize(
+        ("max_records", "is_last_row", "candidate_reason"),
+        [
+            pytest.param(4, True, "terminal", id="marker"),
+            pytest.param(1, False, "cap", id="cap"),
+        ],
+    )
+    def test_rejected_marker_or_cap_row_does_not_complete(
+        self,
+        timeseries_base_params,
+        timeseries_model_metadata,
+        mock_workdir,
+        max_records,
+        is_last_row,
+        candidate_reason,
+    ):
+        timeseries_base_params.generation.patience = 2
+        _enable_sequence_experiment(
+            timeseries_base_params,
+            timeseries_model_metadata,
+            "idx_last",
+            max_records=max_records,
+        )
+        backend = create_timeseries_backend(
+            timeseries_base_params,
+            timeseries_model_metadata,
+            mock_workdir,
+            self._schema("idx_last"),
+        )
+        state = backend._init_group_state("group_A")
+        candidate = ParsedRecord(
+            text="candidate",
+            parsed={
+                "group_id": "group_A",
+                "_time_idx": 0,
+                "value": 1,
+                "_is_last_row": is_last_row,
+            },
+        )
+        retained, authoritative_reason, accepted_row_stop = backend._trim_sequence_termination_records(
+            state, [candidate]
+        )
+        assert accepted_row_stop is not None
+        assert accepted_row_stop[0] == candidate_reason
+        candidate.invalidate(("test rejection", "data_config"))
+        termination_reason = backend._resolve_postprocessed_termination(authoritative_reason, accepted_row_stop)
+        batch = MagicMock(spec=Batch)
+        batch.num_valid_records = 0
+        batch.num_invalid_records = 1
+        batch.valid_record_fraction = 0.0
+
+        result = backend._process_group_result(
+            state,
+            batch,
+            [record for record in retained if record.is_valid],
+            invalid_fraction_threshold=0.8,
+            termination_reason=termination_reason,
+        )
+
+        assert result == GroupProcessingResult.IN_PROGRESS
+        assert state.completed is False
+        assert state.termination_reason is None
+        assert state.total_valid_records == 0
+        assert state.no_progress_count == 1
+
+    def test_output_drops_controls_and_restores_exact_source_order(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir, tmp_path
+    ):
+        _enable_sequence_experiment(timeseries_base_params, timeseries_model_metadata, "idx_last")
+        backend = create_timeseries_backend(
+            timeseries_base_params,
+            timeseries_model_metadata,
+            mock_workdir,
+            self._schema("idx_last"),
+        )
+        internal = pd.DataFrame(
+            {
+                "group_id": ["group_A"],
+                "_time_idx": [0],
+                "value": [3],
+                "_is_last_row": [True],
+            }
+        )
+
+        backend._internal_output_path = tmp_path / "synthetic_data_internal.csv"
+        persisted = backend._write_internal_output(internal)
+        result = backend._sort_dataframe(persisted)
+
+        assert backend._internal_output_path.exists()
+        assert list(pd.read_csv(backend._internal_output_path).columns) == [
+            "group_id",
+            "_time_idx",
+            "value",
+            "_is_last_row",
+        ]
+        assert list(result.columns) == ["value", "group_id"]
+        assert result.to_dict("records") == [{"value": 3, "group_id": "group_A"}]
+
+    def test_default_mode_does_not_write_internal_output(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir, tmp_path
+    ):
+        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
+        backend._internal_output_path = tmp_path / "synthetic_data_internal.csv"
+
+        backend._write_internal_output(pd.DataFrame({"group_id": ["A"], "timestamp": ["2024-01-01"], "value": [1]}))
+
+        assert not backend._internal_output_path.exists()
+
+    def test_fresh_attempt_removes_stale_internal_artifact(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir, tmp_path
+    ):
+        _enable_sequence_experiment(timeseries_base_params, timeseries_model_metadata, "idx_last")
+        backend = create_timeseries_backend(
+            timeseries_base_params,
+            timeseries_model_metadata,
+            mock_workdir,
+            self._schema("idx_last"),
+        )
+        backend._raw_generations_path = tmp_path / "raw.jsonl"
+        backend._sequence_metrics_path = tmp_path / "metrics.json"
+        backend._internal_output_path = tmp_path / "internal.csv"
+        backend._raw_generations_path.write_text("stale", encoding="utf-8")
+        backend._sequence_metrics_path.write_text('{"status":"failed"}', encoding="utf-8")
+        backend._internal_output_path.write_text("stale", encoding="utf-8")
+
+        backend._prepare_experiment_artifacts()
+
+        assert not backend._raw_generations_path.exists()
+        assert not backend._sequence_metrics_path.exists()
+        assert not backend._internal_output_path.exists()
+
+    def test_completed_run_preserves_internal_artifact(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir, tmp_path
+    ):
+        _enable_sequence_experiment(timeseries_base_params, timeseries_model_metadata, "idx_last")
+        backend = create_timeseries_backend(
+            timeseries_base_params,
+            timeseries_model_metadata,
+            mock_workdir,
+            self._schema("idx_last"),
+        )
+        backend._sequence_metrics_path = tmp_path / "metrics.json"
+        backend._internal_output_path = tmp_path / "internal.csv"
+        backend._sequence_metrics_path.write_text('{"status":"completed"}', encoding="utf-8")
+        backend._internal_output_path.write_text("preserve", encoding="utf-8")
+
+        with pytest.raises(GenerationError, match="Refusing to overwrite completed"):
+            backend._prepare_experiment_artifacts()
+
+        assert backend._internal_output_path.read_text(encoding="utf-8") == "preserve"
+
+    def test_raw_completions_and_token_metrics_are_auditable(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        _enable_sequence_experiment(timeseries_base_params, timeseries_model_metadata, "idx_last")
+        backend = create_timeseries_backend(
+            timeseries_base_params,
+            timeseries_model_metadata,
+            mock_workdir,
+            self._schema("idx_last"),
+        )
+        backend._prepare_experiment_artifacts()
+        state = backend._init_group_state("group_A")
+        candidate = ParsedRecord(
+            text="candidate",
+            parsed={"group_id": "group_A", "_time_idx": 0, "value": 1, "_is_last_row": True},
+        )
+        retained, authoritative_reason, accepted_row_stop = backend._trim_sequence_termination_records(
+            state, [candidate]
+        )
+        termination_reason = backend._resolve_postprocessed_termination(authoritative_reason, accepted_row_stop)
+        batch = MagicMock(spec=Batch)
+        batch.num_valid_records = 1
+        batch.num_invalid_records = 0
+        batch.valid_record_fraction = 1.0
+        assert (
+            backend._process_group_result(
+                state,
+                batch,
+                retained,
+                invalid_fraction_threshold=0.8,
+                termination_reason=termination_reason,
+            )
+            == GroupProcessingResult.COMPLETED
+        )
+        state.total_prompts = 2
+        state.total_prompt_tokens = 13
+        state.total_completion_tokens = 11
+        backend._sequence_group_states = {"group_A": state}
+
+        backend._write_raw_completion(
+            state,
+            completion_text='value":1,"_is_last_row":true}\ntrailing',
+            prompt_tokens=5,
+            completion_tokens=7,
+            finish_reason="stop",
+        )
+        backend._write_sequence_metrics()
+
+        raw = backend._raw_generations_path.read_text(encoding="utf-8")
+        metrics = pd.read_json(backend._sequence_metrics_path, typ="series")
+        assert "trailing" in raw
+        assert '"prompt_tokens": 5' in raw
+        assert '"completion_tokens": 7' in raw
+        assert '"total_tokens": 12' in raw
+        assert metrics["aggregate"]["prompt_tokens"] == 13
+        assert metrics["aggregate"]["completion_tokens"] == 11
+        assert metrics["aggregate"]["total_tokens"] == 24
+        assert metrics["aggregate"]["rows"] == 1
+        assert metrics["aggregate"]["reason_counts"]["terminal"] == 1
+        assert metrics["groups"][0]["reason"] == "terminal"
+
+
 class TestGenerationMaxTokensPlumbing:
     """``SamplingParams.max_tokens`` is sourced from ``metadata.generation_max_tokens_for``."""
 
@@ -1011,6 +1487,7 @@ class TestGenerationMaxTokensPlumbing:
         expected = timeseries_model_metadata.generation_max_tokens_for(0)
         assert sp.max_tokens == expected
         assert sp.max_tokens == int(1000 * GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER)
+        assert sp.seed is None
 
     def test_falls_back_to_remaining_context_when_stat_unset(
         self, timeseries_base_params, timeseries_model_metadata, mock_workdir
@@ -1023,6 +1500,25 @@ class TestGenerationMaxTokensPlumbing:
 
         # No engine -> prompt-token count is 0 -> clamp gives full window back.
         assert sp.max_tokens == timeseries_model_metadata.max_seq_length
+
+    def test_experiment_seed_reaches_initial_sampling_params(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir, tmp_path
+    ):
+        _enable_sequence_experiment(timeseries_base_params, timeseries_model_metadata, "idx_last")
+        timeseries_base_params.time_series.sequence_experiment_seed = 42
+        backend = create_timeseries_backend(
+            timeseries_base_params,
+            timeseries_model_metadata,
+            mock_workdir,
+            TestSequenceTerminationExperiment._schema("idx_last"),
+        )
+        backend._raw_generations_path = tmp_path / "raw.jsonl"
+        backend._sequence_metrics_path = tmp_path / "metrics.json"
+        backend._internal_output_path = tmp_path / "internal.csv"
+
+        sampling_params = self._capture_sampling_params(backend)
+
+        assert sampling_params.seed == 42
 
     def test_prompt_length_clamps_below_scaled_stat(
         self, timeseries_base_params, timeseries_model_metadata, mock_workdir
