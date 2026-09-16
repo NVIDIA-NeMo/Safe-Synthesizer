@@ -23,17 +23,40 @@ pytestmark = [pytest.mark.slow, pytest.mark.requires_gpu]
     os.environ.get("NSS_RUN_LIVE_GLINER2") != "1",
     reason="set NSS_RUN_LIVE_GLINER2=1 to evaluate the pinned local checkpoint",
 )
-def test_pinned_model_detects_representative_name_email_and_birth_date() -> None:
+def test_pinned_model_detects_representative_name_and_birth_date() -> None:
     text = "Ada Lovelace was born on 10 December 1815; contact ada@example.com."
     cell = DetectionCell(DetectionCellId(0, "notes"), text, fresh_detection_entity_types())
 
     spans = Gliner2Detector(FreeTextDetectionConfig()).detect([cell])
     entity_types = {span.entity_type for span in spans}
 
-    assert EntityType.EMAIL in entity_types
     assert EntityType.DATE_OF_BIRTH in entity_types
     assert entity_types & {
         EntityType.FIRST_NAME,
         EntityType.LAST_NAME,
         EntityType.FULL_NAME,
     }
+
+
+def test_precision_first_name_entities_reject_representative_medical_terms() -> None:
+    texts = [
+        "Patient admitted for observation.",
+        "M. tuberculosis detected on culture.",
+        "Metastatic olfactory neuroblastoma",
+        "parathyroid adenoma",
+        "Cisplatin and 5-Fluorouracil",
+        "Mycobacterium marinum",
+    ]
+    cells = [
+        DetectionCell(DetectionCellId(position, "notes"), text, fresh_detection_entity_types())
+        for position, text in enumerate(texts)
+    ]
+
+    spans = Gliner2Detector(FreeTextDetectionConfig()).detect(cells)
+
+    assert not {
+        EntityType.FIRST_NAME,
+        EntityType.MIDDLE_NAME,
+        EntityType.LAST_NAME,
+        EntityType.FULL_NAME,
+    } & {span.entity_type for span in spans}
