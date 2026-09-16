@@ -48,6 +48,16 @@ _LEGACY_CLI_OPTION_PATHS: dict[str, tuple[str, ...]] = {
 """Hidden compatibility aliases for renamed generated CLI options."""
 
 
+def _unescape_list_token(token: str) -> str:
+    """Unescape backslash-escaped commas and brackets in a CLI list token."""
+    return token.replace(r"\,", ",").replace(r"\[", "[").replace(r"\]", "]")
+
+
+def _split_unescaped_commas(text: str) -> list[str]:
+    """Split text on unescaped commas."""
+    return re.split(r"(?<!\\),", text)
+
+
 def _normalize_list_value(items: Sequence[object]) -> list[object]:
     r"""Normalize CLI list inputs into a clean list.
 
@@ -66,7 +76,7 @@ def _normalize_list_value(items: Sequence[object]) -> list[object]:
             item_str = item.strip()
             # Repeated options preserve each argument as an atomic value
             if is_repeated:
-                cleaned = item_str.replace(r"\,", ",").replace(r"\[", "[").replace(r"\]", "]")
+                cleaned = _unescape_list_token(item_str)
                 if cleaned:
                     result.append(cleaned)
                 continue
@@ -81,22 +91,17 @@ def _normalize_list_value(items: Sequence[object]) -> list[object]:
                     continue
                 # Handle bracketed unquoted strings (e.g., [timeseries.shape] or [a, b])
                 inner = item_str[1:-1].strip()
-                parts = re.split(r"(?<!\\),", inner)
-                result.extend(
-                    [
-                        p.replace(r"\,", ",").replace(r"\[", "[").replace(r"\]", "]").strip().strip("'\"")
-                        for p in parts
-                        if p.strip()
-                    ]
-                )
+                if not inner:
+                    continue
+                parts = _split_unescaped_commas(inner)
+                result.extend([_unescape_list_token(p).strip().strip("'\"") for p in parts if p.strip()])
                 continue
+
             if re.search(r"(?<!\\),", item_str):
-                parts = re.split(r"(?<!\\),", item_str)
-                result.extend(
-                    [p.replace(r"\,", ",").replace(r"\[", "[").replace(r"\]", "]").strip() for p in parts if p.strip()]
-                )
+                parts = _split_unescaped_commas(item_str)
+                result.extend([_unescape_list_token(p).strip() for p in parts if p.strip()])
             else:
-                cleaned = item_str.replace(r"\,", ",").replace(r"\[", "[").replace(r"\]", "]")
+                cleaned = _unescape_list_token(item_str)
                 if cleaned:
                     result.append(cleaned)
         else:
@@ -109,12 +114,13 @@ def parse_overrides(values: dict[str, Any] | None = None, field_sep: str = "__")
 
     ``no_<field>=True`` injects ``{field: None}`` to disable a nullable-model
     field.  ``no_<field>=False`` (unset is-flag) is silently dropped.
-    ``None`` values (unset regular options) and empty tuples (unset multi-options)
-    are also dropped.
+    ``None`` values (unset regular options or omitted list options) and empty
+    tuples are also dropped.
 
     Args:
-        values: Flat dictionary of command line arguments from Click. (``None``-valued keys are dropped).
-        field_sep: Separator used to reconstruct nesting.  For example, ``{"data__holdout": 0.1}`` becomes ``{"data": {"holdout": 0.1}}``.
+        values: Flat dictionary of command line arguments from Click.
+        field_sep: Separator used to reconstruct nesting.  For example,
+            ``{"data__holdout": 0.1}`` becomes ``{"data": {"holdout": 0.1}}``.
 
     Returns:
         A nested dictionary suitable for schema-aware config patching or direct
@@ -137,8 +143,10 @@ def parse_overrides(values: dict[str, Any] | None = None, field_sep: str = "__")
             continue
         if v is None or v == ():
             continue
-        if isinstance(v, (tuple, list)):
+        if isinstance(v, tuple):
             v = _normalize_list_value(v)
+            if v is None:
+                continue
         try:
             path = split_parameter_path(k, field_sep)
         except ValueError as error:
@@ -180,19 +188,6 @@ def _is_basemodel(t: Any) -> TypeIs[type[BaseModel]]:
     return inspect.isclass(t) and issubclass(t, BaseModel)
 
 
-def _is_list_type(annotation: object) -> bool:
-    """Check if an annotation represents a list container."""
-    t = annotation
-    if get_origin(t) is Annotated:
-        t = get_args(t)[0]
-    if get_origin(t) in (Union, types.UnionType):
-        args = [a for a in get_args(t) if a is not type(None)]
-        return any(_is_list_type(a) for a in args)
-    if t is list:
-        return True
-    return get_origin(t) is list
-
-
 def _list_item_type(annotation: object) -> object | None:
     """Return the item annotation for a list, including optional and annotated lists."""
     t = annotation
@@ -211,6 +206,11 @@ def _list_item_type(annotation: object) -> object | None:
         args = get_args(t)
         return args[0] if args else object
     return object if t is list else None
+
+
+def _is_list_type(annotation: object) -> bool:
+    """Check if an annotation represents a list container."""
+    return _list_item_type(annotation) is not None
 
 
 def _nullable_model_arg(union_args: tuple) -> type[BaseModel] | None:
@@ -347,15 +347,8 @@ def _click_type(annotation: Any) -> click.ParamType:
     return click.STRING
 
 
-def _parse_structured_list_option(
-    _ctx: click.Context,
-    _param: click.Parameter,
-    values: tuple[str, ...],
-) -> tuple[object, ...]:
+def _decode_structured_cli_list(values: Sequence[str]) -> list[object]:
     """Decode JSON objects and arrays supplied for a list of Pydantic models."""
-    if not values:
-        return values
-
     parsed_items: list[object] = []
     for value in values:
         try:
@@ -366,7 +359,24 @@ def _parse_structured_list_option(
             parsed_items.extend(parsed)
         else:
             parsed_items.append(parsed)
-    return tuple(parsed_items)
+    return parsed_items
+
+
+def _make_list_callback(is_basemodel: bool):
+    """Create a Click callback for list options, preserving omission as None."""
+
+    def callback(
+        _ctx: click.Context | None,
+        _param: click.Parameter | None,
+        values: tuple[Any, ...] | None,
+    ) -> list[object] | None:
+        if values is None or values == ():
+            return None
+        if is_basemodel:
+            return _decode_structured_cli_list(values)
+        return _normalize_list_value(values)
+
+    return callback
 
 
 def _option_names(name: str, field_separator: str) -> tuple[str, ...]:
@@ -434,13 +444,14 @@ def pydantic_options(model_class: type[BaseModel], field_separator: str = "__"):
     def apply_leaf_option(f, name: str, field: FieldInfo, *, hidden: bool = False):
         """Apply a single leaf option to command function f."""
         names = _option_names(name, field_separator)
-        if _is_list_type(field.annotation):
-            item_type = _list_item_type(field.annotation)
+        item_type = _list_item_type(field.annotation)
+        if item_type is not None:
             return click.option(
                 *names,
                 type=click.STRING,
                 multiple=True,
-                callback=_parse_structured_list_option if _is_basemodel(item_type) else None,
+                default=None,
+                callback=_make_list_callback(is_basemodel=_is_basemodel(item_type)),
                 help=field.description or "",
                 hidden=hidden,
             )(f)

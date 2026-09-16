@@ -10,7 +10,7 @@ from typing import Annotated
 import click
 import pytest
 from click.testing import CliRunner
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 from pydantic.fields import FieldInfo
 
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
@@ -719,3 +719,29 @@ def test_cli_list_parameters_omitted_preserves_default():
     assert "preflight" not in captured or "disabled_checks" not in captured.get("preflight", {})
     params = SafeSynthesizerParameters.model_validate(captured)
     assert params.preflight.disabled_checks == []
+
+
+def test_cli_explicit_empty_structured_list_reaches_model_validation():
+    """An explicit empty structured list reaches model validation while omitted preserves default."""
+    captured: dict = {}
+
+    @pydantic_options(SafeSynthesizerParameters, field_separator="__")
+    @click.command()
+    def cmd(**kwargs):
+        """Capture parsed CLI overrides."""
+        captured.update(parse_overrides(kwargs))
+
+    # 1. Explicit empty structured list reaches model validation and fails min_length constraint
+    result = CliRunner().invoke(cmd, ["--replace_pii__steps", "[]"])
+    assert result.exit_code == 0, result.output
+    assert captured == {"replace_pii": {"steps": []}}
+    with pytest.raises(ValidationError, match="List should have at least 1 item after validation"):
+        SafeSynthesizerParameters.model_validate(captured)
+
+    # 2. Omitted option drops the parameter so model retains default steps
+    captured.clear()
+    result = CliRunner().invoke(cmd, [])
+    assert result.exit_code == 0, result.output
+    assert "replace_pii" not in captured or "steps" not in captured.get("replace_pii", {})
+    params = SafeSynthesizerParameters.model_validate(captured)
+    assert len(params.replace_pii.steps) >= 1
