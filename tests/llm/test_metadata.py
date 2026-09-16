@@ -735,6 +735,7 @@ class TestGenerationMaxTokensFor:
         """Time-series group values must not become strings through dictionary keys."""
         sample_model_metadata.timeseries_group_values = [7, "group-A", 2.5]
         sample_model_metadata.timeseries_source_columns = ["value", "group_id", "timestamp"]
+        sample_model_metadata.flexible_timeseries = True
         sample_model_metadata.save_metadata()
 
         with patch("nemo_safe_synthesizer.llm.metadata.AutoConfig") as mock_ac:
@@ -746,6 +747,7 @@ class TestGenerationMaxTokensFor:
 
         assert reloaded.timeseries_group_values == [7, "group-A", 2.5]
         assert reloaded.timeseries_source_columns == ["value", "group_id", "timestamp"]
+        assert reloaded.flexible_timeseries is True
 
     def test_metadata_max_records_per_group_accepts_none_or_positive(
         self, sample_prompt_config, mock_autoconfig_obj, sample_workdir

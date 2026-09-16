@@ -198,21 +198,6 @@ class SafeSynthesizerParameters(Parameters):
                 )
         return self
 
-    @model_validator(mode="after")
-    def disable_unsafe_padding_structured_generation(self) -> Self:
-        """Disable schema-constrained generation when it cannot express padding terminals."""
-        if self.time_series.sequence_termination_mode != "idx_padding":
-            return self
-        if not self.generation.structured_generation.enabled:
-            return self
-        warnings.warn(
-            "Structured generation was disabled for sequence_termination_mode='idx_padding' because the strict "
-            "ordinary-row schema cannot also represent the full-null terminal bypass.",
-            stacklevel=2,
-        )
-        self.generation.structured_generation.enabled = False
-        return self
-
     @classmethod
     @override
     def from_params(cls, **kwargs: object) -> "SafeSynthesizerParameters":

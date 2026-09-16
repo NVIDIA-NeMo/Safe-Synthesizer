@@ -28,20 +28,9 @@ from nemo_safe_synthesizer.configurator.parameters import Parameters
 from nemo_safe_synthesizer.errors import ParameterError
 
 
-def test_sequence_termination_mode_requires_timeseries():
-    with pytest.raises(ValueError, match="requires is_timeseries=True"):
-        SafeSynthesizerParameters.from_params(sequence_termination_mode="idx_last")
-
-
-def test_padding_mode_disables_structured_generation():
-    with pytest.warns(UserWarning, match="Structured generation was disabled"):
-        config = SafeSynthesizerParameters.from_params(
-            is_timeseries=True,
-            sequence_termination_mode="idx_padding",
-            use_structured_generation=True,
-        )
-
-    assert config.generation.structured_generation.enabled is False
+def test_flexible_timeseries_routing_is_not_a_public_parameter():
+    with pytest.raises(ParameterError, match="Unknown parameter"):
+        SafeSynthesizerParameters.from_params(flexible_timeseries=True)
 
 
 @pytest.mark.parametrize("sequence_max_records", [0, -1])
@@ -49,33 +38,9 @@ def test_sequence_max_records_must_be_positive(sequence_max_records):
     with pytest.raises(ValueError, match="greater than or equal to 1"):
         SafeSynthesizerParameters.from_params(
             is_timeseries=True,
-            sequence_termination_mode="idx_last",
+            timestamp_column="timestamp",
             sequence_max_records=sequence_max_records,
         )
-
-
-def test_sequence_experiment_seed_requires_active_mode():
-    with pytest.raises(ValueError, match="requires an active sequence_termination_mode"):
-        SafeSynthesizerParameters.from_params(sequence_experiment_seed=17)
-
-
-def test_sequence_experiment_seed_must_be_nonnegative():
-    with pytest.raises(ValueError, match="greater than or equal to 0"):
-        SafeSynthesizerParameters.from_params(
-            is_timeseries=True,
-            sequence_termination_mode="idx_last",
-            sequence_experiment_seed=-1,
-        )
-
-
-def test_sequence_experiment_seed_accepts_comparison_seeds():
-    for seed in (17, 23, 42):
-        config = SafeSynthesizerParameters.from_params(
-            is_timeseries=True,
-            sequence_termination_mode="idx_last",
-            sequence_experiment_seed=seed,
-        )
-        assert config.time_series.sequence_experiment_seed == seed
 
 
 def test_safe_synthesizer_parameters(monkeypatch):

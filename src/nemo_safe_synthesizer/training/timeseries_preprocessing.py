@@ -8,8 +8,8 @@ from __future__ import annotations
 import pandas as pd
 
 from ..config import SafeSynthesizerParameters
-from ..data_processing.sequence_termination import prepare_sequence_termination_data
-from ..data_processing.timeseries_validation import validate_timeseries_data
+from ..data_processing.flexible_timeseries import prepare_flexible_timeseries_data
+from ..data_processing.timeseries_validation import resolve_timeseries_routing, validate_timeseries_data
 from ..observability import get_logger
 
 logger = get_logger(__name__)
@@ -73,14 +73,14 @@ def process_timeseries_data(
             is set on a non-numeric column, or if an explicit format fails to parse the data.
         DataError: If the timestamp column has missing values or intervals are inconsistent.
     """
+    resolve_timeseries_routing(training_df, config)
     ts_config = config.time_series
-    if ts_config.sequence_termination_mode != "none":
-        training_df, group_column = prepare_sequence_termination_data(training_df, config)
+    if ts_config.flexible_timeseries:
+        training_df, group_column = prepare_flexible_timeseries_data(training_df, config)
         validation = validate_timeseries_data(training_df, config)
         logger.info(
-            "Prepared sequence-termination experiment data.",
+            "Prepared automatically routed flexible time-series data.",
             extra={
-                "mode": ts_config.sequence_termination_mode,
                 "group_column": group_column,
                 "sequence_max_records": ts_config.sequence_max_records,
             },

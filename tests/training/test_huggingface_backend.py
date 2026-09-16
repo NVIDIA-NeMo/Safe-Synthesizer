@@ -623,40 +623,7 @@ class TestBuildBaseTrainingArgs:
         assert result["eval_strategy"] == IntervalStrategy.STEPS
         assert result["do_eval"] is True
 
-    def test_experiment_seed_reaches_training_arguments(self, backend):
-        backend.params.time_series.is_timeseries = True
-        backend.params.time_series.sequence_termination_mode = "idx_last"
-        backend.params.time_series.sequence_experiment_seed = 17
-        backend.model = MagicMock()
-        backend._configure_standard_training = MagicMock(return_value=MagicMock())
-        backend._create_trainer = MagicMock(return_value=MagicMock())
-        backend._configure_trainer_callbacks = MagicMock()
-
-        with patch(
-            "nemo_safe_synthesizer.training.huggingface_backend.TrainingArguments",
-            return_value=MagicMock(),
-        ) as training_arguments:
-            backend.prepare_params()
-
-        assert training_arguments.call_args.kwargs["seed"] == 17
-        assert training_arguments.call_args.kwargs["data_seed"] == 17
-
-    def test_experiment_seed_reaches_example_assembler(self, backend):
-        backend.params.time_series.is_timeseries = True
-        backend.params.time_series.sequence_termination_mode = "idx_last"
-        backend.params.time_series.sequence_experiment_seed = 23
-        backend.tokenizer = MagicMock()
-        dataset = MagicMock()
-
-        with patch(
-            "nemo_safe_synthesizer.training.huggingface_backend.TrainingExampleAssembler.from_data",
-            return_value=MagicMock(),
-        ) as from_data:
-            backend._create_example_assembler(dataset)
-
-        assert from_data.call_args.kwargs["seed"] == 23
-
-    def test_default_mode_does_not_override_training_seed(self, backend):
+    def test_standard_training_does_not_override_training_seed(self, backend):
         result = backend._build_base_training_args()
 
         assert "seed" not in result

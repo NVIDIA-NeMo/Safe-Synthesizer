@@ -12,11 +12,100 @@ from nemo_safe_synthesizer.data_processing.timeseries_validation import (
     TimeSeriesGroupTimestampStats,
     TimeSeriesParameterValidationError,
     TimeSeriesValidationReason,
+    inspect_timeseries_constraints,
+    resolve_timeseries_routing,
     validate_start_stop_consistency,
     validate_timeseries_data,
 )
 from nemo_safe_synthesizer.defaults import PSEUDO_GROUP_COLUMN
 from nemo_safe_synthesizer.errors import DataError
+
+
+def _routing_config() -> SafeSynthesizerParameters:
+    return SafeSynthesizerParameters.from_params(
+        is_timeseries=True,
+        timestamp_column="ts",
+        timestamp_format="elapsed_seconds",
+        group_training_examples_by="group",
+        rope_scaling_factor=1,
+    )
+
+
+def test_routing_keeps_deterministic_pipeline_when_all_constraints_match():
+    data = pd.DataFrame(
+        {
+            "group": ["A", "A", "A", "B", "B", "B"],
+            "ts": [0, 60, 120, 0, 60, 120],
+            "value": [1, 2, 3, 4, 5, 6],
+        }
+    )
+    config = _routing_config()
+
+    decision = resolve_timeseries_routing(data, config)
+
+    assert decision is not None
+    assert decision.uses_flexible_timeseries is False
+    assert decision.failed_constraints == ()
+    assert config.time_series.flexible_timeseries is False
+    assert config.time_series.sequence_max_records is None
+
+
+def test_routing_uses_flexible_timeseries_and_reports_all_shape_mismatches():
+    data = pd.DataFrame(
+        {
+            "group": ["A", "A", "A", "B", "B"],
+            "ts": [0, 60, 120, 30, 60],
+            "value": [1, 2, 3, 4, 5],
+        }
+    )
+    config = _routing_config()
+
+    decision = resolve_timeseries_routing(data, config)
+
+    assert decision is not None
+    assert decision.uses_flexible_timeseries is True
+    assert decision.failed_constraints == (
+        "equal group lengths",
+        "common start timestamps",
+        "common stop timestamps",
+        "consistent timestamp intervals",
+    )
+    assert decision.sequence_max_records == 3
+    assert config.time_series.flexible_timeseries is True
+    assert config.time_series.sequence_max_records == 3
+
+
+def test_routing_detects_interval_only_mismatch_without_mutating_inspection():
+    data = pd.DataFrame(
+        {
+            "group": ["A", "A", "A", "B", "B", "B"],
+            "ts": [0, 60, 120, 0, 30, 120],
+            "value": [1, 2, 3, 4, 5, 6],
+        }
+    )
+    config = _routing_config()
+
+    decision = inspect_timeseries_constraints(data, config)
+
+    assert decision.failed_constraints == ("consistent timestamp intervals",)
+    assert config.time_series.flexible_timeseries is False
+
+
+def test_routing_does_not_fallback_for_null_timestamps():
+    data = pd.DataFrame(
+        {
+            "group": ["A", "A", "B", "B"],
+            "ts": [0.0, None, 0.0, 60.0],
+            "value": [1, 2, 3, 4],
+        }
+    )
+    config = _routing_config()
+
+    with pytest.raises(TimeSeriesDataValidationError) as exc_info:
+        resolve_timeseries_routing(data, config)
+
+    assert exc_info.value.reason is TimeSeriesValidationReason.TIMESTAMP_NULLS
+    assert config.time_series.flexible_timeseries is False
 
 
 def test_validate_start_stop_consistency_valid():
@@ -355,8 +444,8 @@ def test_validate_timeseries_data_rejects_group_length_mismatch():
     assert exc_info.value.reason is TimeSeriesValidationReason.TIMESERIES_GROUP_LENGTH_MISMATCH
 
 
-def test_validate_timeseries_data_allows_unequal_experiment_lengths_and_stops():
-    """Only explicitly gated experiment mode relaxes equal length and stop checks."""
+def test_validate_timeseries_data_allows_automatically_routed_lengths_and_stops():
+    """Flexible time-series processing relaxes equal length and stop checks."""
     df = pd.DataFrame(
         {
             "group": ["A", "B", "B"],
@@ -371,11 +460,11 @@ def test_validate_timeseries_data_allows_unequal_experiment_lengths_and_stops():
         timestamp_format="elapsed_seconds",
         timestamp_interval_seconds=1,
         group_training_examples_by="group",
-        sequence_termination_mode="idx_last",
         sequence_max_records=2,
         sequence_source_columns=["group", "value"],
         rope_scaling_factor=1,
     )
+    config.time_series.resolve_flexible_timeseries(True)
 
     result = validate_timeseries_data(df, config)
 
