@@ -275,7 +275,17 @@ contains a free-text target.
 replace_pii:
   free_text_detection:
     model_id: fastino/gliner2-privacy-filter-PII-multi
-    threshold: 0.3
+    entity_thresholds:
+      first_name: 0.9
+      middle_name: 0.9
+      last_name: 0.9
+      full_name: 0.9
+      phone_number: 0.5
+      date_of_birth: 0.5
+      street_address: 0.5
+      ssn: 0.5
+      national_id: 0.5
+      api_key: 0.5
     batch_size: 8
     chunk_length: 384
     chunk_overlap: 128
@@ -286,6 +296,23 @@ occurrences, propagate structured values into text, or replace undetected
 aliases. Overlapping detections are resolved deterministically, and repeated
 accepted values reuse replacements within their configured record or group
 scope.
+
+Detector ownership is disjoint. Structurally validated regex exclusively
+detects `email`, `credit_debit_card`, `ipv4`, and `ipv6`; NSS does not request
+those labels from GLiNER2. GLiNER2 detects the remaining semantic and
+contextual entity types. This avoids duplicate model work and prevents a model
+span for one of the deterministic formats from competing with its exact regex
+span.
+
+The checkpoint is optimized for recall and can confuse common or domain terms
+with names. NSS therefore configures a confidence threshold for every
+GLiNER2-detected entity type, with a precision-first `0.9` default for all name
+types and `0.5` for the remaining model-detected types. Regex-owned types have
+no confidence threshold. NSS requests the `person` checkpoint label for
+`full_name` rather than requesting both aliases, which avoids label competition
+that raises medical-term false positives. Checkpoint aliases use the threshold
+of the NSS entity they normalize to. Lower name thresholds only after
+calibrating against representative domain text.
 
 NSS automatically uses CUDA when available and otherwise runs GLiNER2 on CPU.
 It deduplicates identical cell text, flattens overlapping chunks across unique
@@ -346,7 +373,17 @@ rules:
 replace_pii:
   free_text_detection:
     model_id: fastino/gliner2-privacy-filter-PII-multi
-    threshold: 0.3
+    entity_thresholds:
+      first_name: 0.9
+      middle_name: 0.9
+      last_name: 0.9
+      full_name: 0.9
+      phone_number: 0.5
+      date_of_birth: 0.5
+      street_address: 0.5
+      ssn: 0.5
+      national_id: 0.5
+      api_key: 0.5
     batch_size: 8
     chunk_length: 384
     chunk_overlap: 128

@@ -23,7 +23,12 @@ from nemo_safe_synthesizer.pii_replacer.transform_result import TransformResult
 
 
 class _FakeGlinerModel:
-    def batch_extract_entities(self, texts: list[str], labels: list[str], **kwargs: object) -> list[object]:
+    def batch_extract_entities(
+        self,
+        texts: list[str],
+        labels: dict[str, dict[str, float]],
+        **kwargs: object,
+    ) -> list[object]:
         return [{"entities": {"first_name": [{"start": 0, "end": 3, "confidence": 0.9}]}} for _ in texts]
 
 
