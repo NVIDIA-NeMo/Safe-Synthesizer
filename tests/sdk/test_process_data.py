@@ -154,6 +154,58 @@ def _wire_process_data_mocks(
 # ---------------------------------------------------------------------------
 
 
+def test_process_data_reroutes_using_authoritative_training_split(fixture_workdir):
+    source = pd.DataFrame(
+        {
+            "group": ["A", "A", "A", "B", "B"],
+            "timestamp": [0, 60, 120, 0, 60],
+            "value": [1, 2, 3, 4, 5],
+        }
+    )
+    training = pd.DataFrame(
+        {
+            "group": ["A", "A", "B", "B"],
+            "timestamp": [0, 60, 0, 60],
+            "value": [1, 2, 4, 5],
+        }
+    )
+    config = SafeSynthesizerParameters.from_params(
+        is_timeseries=True,
+        timestamp_column="timestamp",
+        timestamp_format="elapsed_seconds",
+        group_training_examples_by="group",
+        rope_scaling_factor=1,
+        replace_pii=None,
+    )
+    builder = SafeSynthesizer(config=config, workdir=fixture_workdir)
+    builder._data_source = source
+    routing_decisions: list[tuple[bool, int | None]] = []
+
+    def capture_preflight(_data, current_config, _metadata, **_kwargs):
+        routing_decisions.append(
+            (
+                current_config.time_series.flexible_timeseries,
+                current_config.time_series.sequence_max_records,
+            )
+        )
+        return _EMPTY_PREFLIGHT
+
+    with (
+        patch("nemo_safe_synthesizer.sdk.library_builder.run_preflight", side_effect=capture_preflight),
+        patch("nemo_safe_synthesizer.sdk.library_builder.Holdout") as holdout_cls,
+        patch("nemo_safe_synthesizer.sdk.library_builder.AutoConfigResolver") as resolver_cls,
+        patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata") as metadata_cls,
+    ):
+        holdout_cls.return_value.train_test_split.return_value = (training, source.iloc[0:0].copy())
+        resolver_cls.return_value.return_value = config
+        metadata_cls.from_config.return_value = MagicMock()
+        builder.process_data()
+
+    assert routing_decisions == [(True, 3), (False, None)]
+    assert builder._nss_config is not None
+    assert builder._nss_config.time_series.flexible_timeseries is False
+
+
 class TestProcessDataPiiSeparation:
     """``process_data`` must keep original and PII-replaced DataFrames separate."""
 
