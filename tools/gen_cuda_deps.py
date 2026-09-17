@@ -599,6 +599,15 @@ class GenerationResult:
     status: GenStatus
     message: str
 
+    def combine(self, *others: Self) -> Self:
+        """Combine generation outcomes while preserving message order."""
+        results = (self, *others)
+        status = GenStatus.changed if any(result.status is GenStatus.changed for result in results) else GenStatus.ok
+        return type(self)(
+            status=status,
+            message="\n".join(result.message for result in results),
+        )
+
 
 # ---------------------------------------------------------------------------
 # High-level API
@@ -662,7 +671,7 @@ def run_generation_command(
 
     pyproject_result = _update_pyproject(pyproject_path, check, generated_pyproject)
     installer_result = _update_installer(installer_path, check, generated_installer)
-    return _combine_generation_results(pyproject_result, installer_result)
+    return pyproject_result.combine(installer_result)
 
 
 def apply_cuda_fragment_to_pyproject(pyproject_text: str, generated: CudaPyprojectFragment) -> str:
@@ -1042,14 +1051,6 @@ def _update_installer(
     return GenerationResult(
         status=GenStatus.ok,
         message=f"Updated generated CUDA installer indexes in {installer_path}",
-    )
-
-
-def _combine_generation_results(*results: GenerationResult) -> GenerationResult:
-    status = GenStatus.changed if any(result.status is GenStatus.changed for result in results) else GenStatus.ok
-    return GenerationResult(
-        status=status,
-        message="\n".join(result.message for result in results),
     )
 
 

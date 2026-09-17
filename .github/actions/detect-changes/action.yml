@@ -49,7 +49,7 @@ outputs:
     description: "'true' if source, test, dependency, CI, or task files changed"
     value: ${{ steps.filter.outputs.src == 'true' || steps.filter.outputs.tests == 'true' || steps.filter.outputs.pytest_ini == 'true' || steps.filter.outputs.pyproject == 'true' || steps.filter.outputs.uv_lock == 'true' || steps.filter.outputs.ci == 'true' }}
   ci:
-    description: "'true' if CI workflow, action, or mise task files changed"
+    description: "'true' if CI, installer, or mise task files changed"
     value: ${{ steps.filter.outputs.ci }}
   any:
     description: "'true' if any source, docs source, test, dependency, CI, or task file changed"
@@ -89,4 +89,7 @@ runs:
             - '.mise/tasks/**'
             - '.dockerignore'
             - 'containers/Dockerfile.test_ci'
+            - 'install_nss.sh'
+            - 'tests/tools/test_install_nss.sh'
+            - 'tools/build_release_installer.sh'
             - 'tools/release_version.py'

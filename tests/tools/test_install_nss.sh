@@ -121,6 +121,7 @@ fi
 
 dry_venv="${test_dir}/dry-venv"
 dry_output="$(
+    unset NSS_INSTALLER_ISOLATED
     PATH="${fake_bin}:$PATH" \
         FAKE_UV_LOG="$fake_uv_log" \
         UV_PROJECT_ENVIRONMENT="$dry_venv" \
@@ -138,6 +139,20 @@ dry_output="$(
 }
 assert_contains "$dry_output" "uv venv --seed $dry_venv"
 assert_contains "$dry_output" "--python $dry_venv/bin/python"
+assert_not_contains "$dry_output" "--no-config"
+assert_not_contains "$dry_output" "--no-sources"
+
+isolated_output="$(
+    PATH="${fake_bin}:$PATH" \
+        DRY_RUN=1 \
+        CUDA=cpu \
+        NSS_INSTALLER_ISOLATED=1 \
+        UV_PROJECT_ENVIRONMENT="${test_dir}/isolated-venv" \
+        "$INSTALLER"
+)"
+assert_contains "$isolated_output" "uv --no-config venv"
+assert_contains "$isolated_output" "uv --no-config pip install"
+assert_contains "$isolated_output" "--no-sources"
 
 install_venv="${test_dir}/install-venv"
 PATH="${fake_bin}:$PATH" \

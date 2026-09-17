@@ -10,6 +10,7 @@ readonly PACKAGE_WHEEL="${PACKAGE_WHEEL:-}"
 readonly RELEASE_VERSION=""
 readonly CUDA="${CUDA:-129}"
 readonly DRY_RUN="${DRY_RUN:-0}"
+readonly NSS_INSTALLER_ISOLATED="${NSS_INSTALLER_ISOLATED:-0}"
 readonly CONSTRAINTS_URL="${CONSTRAINTS_URL:-https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/main/constraints.txt}"
 readonly NVIDIA_DRIVER_MIN_CUDA_13="580.65.06"
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -49,6 +50,8 @@ Environment:
   CUDA=129|130|cpu|help   Runtime extra to install. Default: 129.
   CONSTRAINTS_URL=<url>   Override the installer-compatible constraints URL.
   DRY_RUN=1               Print the uv command without running it.
+  NSS_INSTALLER_ISOLATED=1
+                          Ignore uv configuration and project sources.
   UV_PROJECT_ENVIRONMENT=<path>
                           Virtual environment to create or reuse.
   VIRTUAL_ENV=<path>      Active virtual environment. Used when
@@ -148,7 +151,7 @@ resolve_venv_path() {
 build_venv_command() {
     VENV_CMD=()
     if [[ ! -x "$VENV_PATH/bin/python" ]]; then
-        VENV_CMD=(uv venv --seed "$VENV_PATH")
+        VENV_CMD=("${UV_CMD[@]}" venv --seed "$VENV_PATH")
     fi
 }
 
@@ -157,7 +160,10 @@ build_install_command() {
     local index
 
     runtime_indexes "$extra"
-    INSTALL_CMD=(uv pip install "$(package_spec "$extra")" -c "$CONSTRAINTS_URL" --python "$VENV_PATH/bin/python")
+    INSTALL_CMD=("${UV_CMD[@]}" pip install "$(package_spec "$extra")" -c "$CONSTRAINTS_URL" --python "$VENV_PATH/bin/python")
+    if [[ "$NSS_INSTALLER_ISOLATED" == "1" ]]; then
+        INSTALL_CMD+=(--no-sources)
+    fi
     for index in "${INDEXES[@]}"; do
         INSTALL_CMD+=(--index "$index")
     done
@@ -191,6 +197,10 @@ main() {
     local extra
     extra="$(runtime_extra)"
     require_command uv
+    UV_CMD=(uv)
+    if [[ "$NSS_INSTALLER_ISOLATED" == "1" ]]; then
+        UV_CMD+=(--no-config)
+    fi
     VENV_PATH="$(resolve_venv_path)"
     build_venv_command
     if [[ "$extra" == "cu130" && "$DRY_RUN" != "1" ]]; then
@@ -204,4 +214,5 @@ INDEXES=()
 INSTALL_CMD=()
 VENV_CMD=()
 VENV_PATH=""
+UV_CMD=()
 main "$@"
