@@ -114,6 +114,7 @@ def _execute(
     group_column: str | None = None,
     dependency_value_mappings: dict[str, dict[str, list[str] | None]] | None = None,
     free_text_detector: _StaticDetector | None = None,
+    capture_replacement_map: bool = False,
 ) -> ReplacementExecutionResult:
     return StructuredReplacementExecutor(
         plan,
@@ -122,6 +123,7 @@ def _execute(
         base_seed=42,
         dependency_value_mappings=dependency_value_mappings,
         free_text_detector=free_text_detector,
+        capture_replacement_map=capture_replacement_map,
     ).execute(dataframe)
 
 
@@ -156,6 +158,29 @@ class TestPlanCompiler:
 
 @pytest.mark.unit
 class TestStructuredReplacementExecutor:
+    def test_replacement_map_is_opt_in(self) -> None:
+        dataframe = pd.DataFrame({"identifier": ["USER-1"]})
+        plan = _plan(_target("identifier", EntityType.UNIQUE_IDENTIFIER))
+
+        default_result = _execute(dataframe, plan, _RecordingGenerator())
+        captured_result = _execute(
+            dataframe,
+            plan,
+            _RecordingGenerator(),
+            capture_replacement_map=True,
+        )
+
+        assert default_result.replacement_map is None
+        assert captured_result.replacement_map is not None
+        record = captured_result.replacement_map.structured[0]
+        assert record.row_position == 0
+        assert record.column_name == "identifier"
+        assert record.entity_type is EntityType.UNIQUE_IDENTIFIER
+        assert record.scope == "record"
+        assert record.original_value == "USER-1"
+        assert record.replacement_value == captured_result.dataframe.at[0, "identifier"]
+        assert "USER-1" not in repr(record)
+
     def test_resolves_sampler_labels_from_the_dependency_source_column(self) -> None:
         dataframe = pd.DataFrame({"first_name": ["Ada"], "sex": ["Woman"]})
         plan = _plan(_target("first_name", EntityType.FIRST_NAME, ("sex", EntityType.GENDER)))
@@ -288,7 +313,13 @@ class TestStructuredReplacementExecutor:
         )
         generator = _RecordingGenerator()
 
-        result = _execute(dataframe, plan, generator, free_text_detector=detector)
+        result = _execute(
+            dataframe,
+            plan,
+            generator,
+            free_text_detector=detector,
+            capture_replacement_map=True,
+        )
 
         pd.testing.assert_frame_equal(dataframe, original)
         assert result.dataframe["notes"].iloc[0].startswith("synthetic-first_name-")
@@ -299,6 +330,24 @@ class TestStructuredReplacementExecutor:
             "first_name": {"Ada"},
             "email": {"ada@example.com"},
         }
+        assert result.replacement_map is not None
+        first, email = result.replacement_map.free_text
+        assert first.model_dump(exclude={"original_value", "replacement_value"}) == {
+            "row_position": 0,
+            "column_name": "notes",
+            "start": 0,
+            "end": 3,
+            "entity_type": EntityType.FIRST_NAME,
+            "detection_source": "gliner",
+            "score": 0.9,
+            "scope": "record",
+        }
+        assert first.original_value == "Ada"
+        assert first.replacement_value in str(result.dataframe.at[0, "notes"])
+        assert email.start == 15
+        assert email.end == 30
+        assert email.detection_source == "regex"
+        assert email.score is None
 
     def test_equal_detected_values_reuse_one_replacement_across_free_text_columns(self) -> None:
         dataframe = pd.DataFrame({"primary": ["Ada"], "secondary": ["Call Ada"]})

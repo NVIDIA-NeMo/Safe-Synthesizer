@@ -13,7 +13,12 @@ import pandas as pd
 from ...config.replace_pii import DependencyValueMappings, EntityType, PiiColumnPlan, PiiReplacementPlan
 from ...errors import GenerationError, InternalError, ParameterError
 from ...observability import get_logger
-from ..transform_result import ColumnStatistics, ReplacementGenerationStatistics
+from ..transform_result import (
+    ColumnStatistics,
+    ReplacementGenerationStatistics,
+    ReplacementMap,
+    StructuredReplacementRecord,
+)
 from .canonicalization import canonicalize_scalar, is_missing_scalar
 from .compiler import compile_plan
 from .detection import FreeTextDetector
@@ -58,6 +63,7 @@ class ReplacementExecutionResult:
     column_statistics: dict[str, ColumnStatistics]
     generation_statistics: ReplacementGenerationStatistics
     dependency_drifts: tuple[GroupDependencyDrift, ...]
+    replacement_map: ReplacementMap | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,14 +84,22 @@ class StructuredReplacementExecutor:
         base_seed: int,
         dependency_value_mappings: DependencyValueMappings | None = None,
         free_text_detector: FreeTextDetector | None = None,
+        capture_replacement_map: bool = False,
     ) -> None:
         self._plan = plan
         self._generator = generator
         self._group_column = group_column
         self._base_seed = base_seed
         self._dependency_value_mappings = _compile_dependency_value_mappings(dependency_value_mappings or {})
+        self._capture_replacement_map = capture_replacement_map
         self._cache: dict[RecordMappingKey | GroupMappingKey, _CachedReplacement] = {}
-        self._free_text = FreeTextReplacementExecutor(generator, free_text_detector, base_seed=base_seed)
+        self._free_text = FreeTextReplacementExecutor(
+            generator,
+            free_text_detector,
+            base_seed=base_seed,
+            capture_replacement_map=capture_replacement_map,
+        )
+        self._replacement_records: list[StructuredReplacementRecord] = []
         self._reserved_by_target: dict[str, set[str]] = {}
         self._dependency_conflicts: dict[tuple[str, frozenset[EntityType]], int] = {}
         self._generation_elapsed = 0.0
@@ -132,11 +146,20 @@ class StructuredReplacementExecutor:
                 elapsed_time_seconds=self._generation_elapsed + free_text_result.elapsed_time_seconds,
             ),
             dependency_drifts=drifts,
+            replacement_map=(
+                ReplacementMap(
+                    structured=tuple(self._replacement_records),
+                    free_text=free_text_result.replacement_records,
+                )
+                if self._capture_replacement_map
+                else None
+            ),
         )
 
     def _reset_execution_state(self) -> None:
         self._cache.clear()
         self._free_text.reset()
+        self._replacement_records.clear()
         self._reserved_by_target.clear()
         self._dependency_conflicts.clear()
         self._generation_elapsed = 0.0
@@ -178,6 +201,17 @@ class StructuredReplacementExecutor:
             key = self._mapping_key(spec.column_name, row_position, canonical_original, group_identities)
             replacement = self._replacement_for(key, spec, canonical_original, dependencies)
             working.iat[row_position, column_position] = replacement
+            if self._capture_replacement_map:
+                self._replacement_records.append(
+                    StructuredReplacementRecord(
+                        row_position=row_position,
+                        column_name=spec.column_name,
+                        entity_type=spec.entity_type,
+                        scope="record" if group_identities is None else "group",
+                        original_value=canonical_original.normalized_value,
+                        replacement_value=replacement,
+                    )
+                )
 
     def _mapping_key(
         self,

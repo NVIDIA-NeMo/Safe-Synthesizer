@@ -78,6 +78,31 @@ class TestTabularPiiReplacerInterface:
         assert first.resolved_config.inline_plan == config.inline_plan
         assert first.resolved_config.inline_plan is not None
         assert first.resolved_config.inline_plan.dependency_value_mappings == {}
+        assert first.replacement_map is None
+
+    def test_replace_can_capture_sensitive_replacement_provenance(self) -> None:
+        dataframe = pd.DataFrame({"identifier": ["USER-001"]})
+        config = ReplacePiiConfig(
+            replacement_plan=PiiReplacementPlan(
+                columns_to_replace=[
+                    PiiColumnPlan(
+                        column_name="identifier",
+                        entity_type=EntityType.UNIQUE_IDENTIFIER,
+                        pattern="USER-###",
+                    )
+                ]
+            ),
+            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+        )
+
+        result = TabularPiiReplacer(config, data_config=DataParameters()).replace(
+            dataframe,
+            capture_replacement_map=True,
+        )
+
+        assert result.replacement_map is not None
+        assert result.replacement_map.structured[0].original_value == "USER-001"
+        assert result.replacement_map.structured[0].replacement_value == result.transformed_df.at[0, "identifier"]
 
     def test_replace_executes_an_explicit_free_text_plan(self, monkeypatch: pytest.MonkeyPatch) -> None:
         dataframe = pd.DataFrame({"notes": ["Ada called"]})

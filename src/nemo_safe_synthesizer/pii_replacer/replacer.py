@@ -54,8 +54,15 @@ class TabularPiiReplacer:
         self._data_config = data_config
         self._time_series = time_series
 
-    def replace(self, df: pd.DataFrame) -> TransformResult:
+    def replace(self, df: pd.DataFrame, *, capture_replacement_map: bool = False) -> TransformResult:
         """Return a replacement result for ``df`` without mutating ``df``.
+
+        Args:
+            df: Dataframe whose planned PII values should be replaced.
+            capture_replacement_map: Include sensitive per-occurrence replacement
+                provenance and accepted free-text span traces in the result. The
+                default leaves this data unavailable so ordinary calls do not
+                accidentally persist original PII.
 
         Raises:
             ParameterError: If the configured plan is invalid for ``df``.
@@ -83,6 +90,7 @@ class TabularPiiReplacer:
             base_seed=resolve_base_seed(self._config.replacement.seed),
             dependency_value_mappings=plan.dependency_value_mappings,
             free_text_detector=free_text_detector,
+            capture_replacement_map=capture_replacement_map,
         )
         execution = executor.execute(df)
         return TransformResult(
@@ -92,6 +100,7 @@ class TabularPiiReplacer:
             resolved_config=resolved_config,
             generation_statistics=execution.generation_statistics,
             elapsed_time_seconds=time.perf_counter() - started,
+            replacement_map=execution.replacement_map,
         )
 
     def _replacement_generator(self, config: ReplacePiiConfig) -> ReplacementGenerator:
