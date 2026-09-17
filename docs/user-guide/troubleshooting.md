@@ -31,7 +31,7 @@ configuration, and NER parallelism, see [Environment Variables](environment.md).
 | Low SQS scores | Underfit or too few records | [Review distributions](evaluating-data.md#low-sqs-scores) |
 | PII uses default entities | Classifier failed | [Set entities explicitly](evaluating-data.md#pii-uses-unexpected-entity-types) |
 | "timestamp_column has missing values" | Dirty time series data | Clean NaN/nulls from timestamp column |
-| `flexible_timeseries_routing` warning | Groups have different shapes | [Review flexible routing](#flexible-routing-warning) |
+| `flexible_timeseries_routing` warning | Groups have different shapes | [Details](#flexible-routing-warning) |
 | Pre-flight validation fails | Dataset or config issue | [Pre-flight validation codes](#pre-flight-validation-codes) |
 
 ---
@@ -520,7 +520,7 @@ check of its own.
 | `preflight.check_crash` | error | (crashing check) | A check raised an unexpected exception; the issue's `check` field names the crashing check and other checks continued running |
 | `column_not_found` | error | `columns.groupby` / `columns.orderby` | Required column missing from dataset, or input DataFrame uses unsupported MultiIndex columns |
 | `column_nulls` | error | `columns.groupby` / `columns.orderby` | Required column contains null values |
-| `duplicate_columns` | error | `timeseries.shape` | Time-series input contains duplicate column names; rename or remove the duplicates |
+| `duplicate_columns` | error | `timeseries.shape` | Duplicate column names; rename or remove them |
 | `pseudo_column_collision` | error | `columns.pseudo` | Dataset contains reserved internal column name, or input DataFrame uses unsupported MultiIndex columns |
 | `constant_column` | warning | `columns.constant` | Column has only one unique value |
 | `timestamp_not_found` | error | `timeseries.timestamp` | Timestamp column missing, or input DataFrame uses unsupported MultiIndex columns |
@@ -529,7 +529,7 @@ check of its own.
 | `timestamp_parse_failed` | error | `timeseries.shape` | One or more timestamp values could not be parsed with the inferred or configured timestamp format |
 | `timestamp_elapsed_non_numeric` | error | `timeseries.shape` | `timestamp_format='elapsed_seconds'` was configured for a non-numeric timestamp column |
 | `timestamp_elapsed_invalid` | error | `timeseries.shape` | `timestamp_format='elapsed_seconds'` was configured for boolean or infinite timestamp values |
-| `flexible_timeseries_routing` | warning | `timeseries.shape` | Group lengths, starts, stops, or intervals require automatic flexible time-series processing |
+| `flexible_timeseries_routing` | warning | `timeseries.shape` | Group shapes require flexible processing |
 | `timeseries_empty` | error | `timeseries.shape` | Time-series data contains no records to validate |
 | `tokenizer_unavailable` | warning | `token_budget` | Model tokenizer could not be loaded; token checks skipped |
 | `schema_exceeds_context` | error | `token_budget` | Schema prompt exceeds model context window |
@@ -641,14 +641,14 @@ Missing timestamp values:
     df = df.sort_values(by=["group_column", "timestamp"])
     ```
 
-Flexible-routing warning:
+#### Flexible-routing warning
 
-: If groups differ in length, start timestamp, stop timestamp, or interval,
-  pre-flight reports `flexible_timeseries_routing` and automatically uses
-  flexible processing. Flexible processing generates the source timestamp as
-  payload while validating an internal zero-based sequence index. The warning
-  lists the shape constraints that triggered routing and the maximum source
-  group length used as a safety cap.
+If groups differ in length, start timestamp, stop timestamp, or interval,
+pre-flight reports `flexible_timeseries_routing` and automatically uses
+flexible processing. Flexible processing generates the source timestamp as
+payload while validating an internal zero-based sequence index. The warning
+lists the shape constraints that triggered routing and the maximum source
+group length used as a safety cap.
 
 Invalid timestamp data:
 

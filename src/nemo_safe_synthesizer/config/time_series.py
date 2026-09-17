@@ -125,7 +125,7 @@ class TimeSeriesParameters(Parameters):
 
     @property
     def _resolved_flexible_timeseries_metadata(self) -> FlexibleTimeseriesMetadata | None:
-        """Return internal metadata for the resolved flexible representation."""
+        """The internal metadata for the resolved flexible representation."""
         return self._flexible_timeseries_metadata
 
     def _resolve_flexible_timeseries(self, metadata: FlexibleTimeseriesMetadata | None) -> None:
