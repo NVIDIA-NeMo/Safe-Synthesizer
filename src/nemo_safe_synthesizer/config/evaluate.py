@@ -15,11 +15,63 @@ from ..configurator.parameters import (
     Parameters,
 )
 
-__all__ = ["EvaluationParameters"]
+__all__ = [
+    "AutocorrelationSimilarityParameters",
+    "EvaluationParameters",
+    "TimeSeriesEvaluationParameters",
+]
 
 DEFAULT_SQS_REPORT_COLUMNS: int = 250
 DEFAULT_RECORD_COUNT = 5000
 QUASI_IDENTIFIER_COUNT = 3
+
+
+class AutocorrelationSimilarityParameters(Parameters):
+    """Control autocorrelation similarity evaluation.
+
+    Timestamp ordering always uses the top-level time-series setting. The
+    optional grouping override inherits the top-level data grouping when left
+    unset. The requested lag is capped automatically for short sequences, and
+    undersized or constant training profiles are skipped. A constant synthetic
+    profile paired with varying training data receives zero similarity.
+    """
+
+    enabled: bool | None = Field(
+        default=None,
+        description="Enable this metric; None enables it automatically for time-series data.",
+    )
+    value_columns: list[str] | None = Field(
+        default=None,
+        description="Numeric value columns to evaluate. Defaults to all shared numeric columns.",
+    )
+    group_column: str | None = Field(
+        default=None,
+        description="Optional group column overriding the top-level data grouping column.",
+    )
+    max_lag: int = Field(
+        default=20,
+        ge=1,
+        description="Maximum requested lag; short sequences use a smaller stable lag cap.",
+    )
+    min_points: int = Field(
+        default=4,
+        ge=4,
+        description="Minimum finite observations required in each sequence.",
+    )
+    max_groups: int = Field(
+        default=128,
+        ge=1,
+        description="Maximum shared groups to evaluate in deterministic label order.",
+    )
+
+
+class TimeSeriesEvaluationParameters(Parameters):
+    """Metric-specific time-series evaluation configuration."""
+
+    autocorrelation: AutocorrelationSimilarityParameters = Field(
+        default_factory=AutocorrelationSimilarityParameters,
+        description="Autocorrelation similarity metric parameters.",
+    )
 
 
 class EvaluationParameters(Parameters):
@@ -97,3 +149,8 @@ class EvaluationParameters(Parameters):
             description="List of columns for PII Replay. If not provided, only entities will be used.",
         ),
     ] = None
+
+    time_series: TimeSeriesEvaluationParameters = Field(
+        default_factory=TimeSeriesEvaluationParameters,
+        description="Time-series-specific evaluation settings.",
+    )
