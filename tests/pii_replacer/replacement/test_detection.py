@@ -123,11 +123,12 @@ class TestGliner2Detector:
         ]
 
     def test_applies_the_configured_threshold_for_each_entity(self) -> None:
-        texts = ["Mycobacterium marinum", "+1 202 555 0101"]
+        texts = ["Ada Lovelace", "Mycobacterium marinum", "+1 202 555 0101"]
         model = _FakeModel(
             [
-                {"entities": {"person": [{"start": 0, "end": len(texts[0]), "confidence": 0.99}]}},
-                {"entities": {"phone_number": [{"start": 0, "end": len(texts[1]), "confidence": 0.89}]}},
+                {"entities": {"full_name": [{"start": 0, "end": len(texts[0]), "confidence": 0.99}]}},
+                {"entities": {"person": [{"start": 0, "end": len(texts[1]), "confidence": 0.99}]}},
+                {"entities": {"phone_number": [{"start": 0, "end": len(texts[2]), "confidence": 0.89}]}},
             ]
         )
         detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda _: model)
@@ -138,8 +139,12 @@ class TestGliner2Detector:
 
         spans = detector.detect(cells)
 
-        assert [(span.cell_id.row_position, span.entity_type) for span in spans] == [(1, EntityType.PHONE_NUMBER)]
+        assert [(span.cell_id.row_position, span.entity_type) for span in spans] == [
+            (0, EntityType.FULL_NAME),
+            (2, EntityType.PHONE_NUMBER),
+        ]
         labels = model.calls[0][1]
+        assert labels["full_name"] == {"threshold": 0.9}
         assert labels["first_name"] == {"threshold": 0.9}
         assert labels["middle_name"] == {"threshold": 0.9}
         assert labels["last_name"] == {"threshold": 0.9}
