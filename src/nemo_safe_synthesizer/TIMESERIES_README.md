@@ -156,8 +156,8 @@ Time series preprocessing occurs during training data preparation in `src/nemo_s
 ```
 HuggingFaceBackend._process_timeseries()
     └── process_timeseries_data(df, config)
-            ├── resolve_timeseries_routing()       # Validate source timestamps and inspect shape
-            ├── flexible: prepare_flexible_timeseries_data()
+            ├── _resolve_timeseries_routing()       # Validate source timestamps and inspect shape
+            ├── flexible: _prepare_flexible_timeseries_data()
             │       └── add the generated index and marker columns
             ├── deterministic: validate_timeseries_data()
             │       ├── generated elapsed-seconds timestamp normalization
@@ -247,7 +247,9 @@ Time series generation is handled by `TimeseriesBackend` in `src/nemo_safe_synth
 
 ### Architecture
 
-All time series (including single-sequence) use parallel group generation. Single-sequence data is treated as 1 group via the pseudo-group column added during preprocessing.
+All time series (including single-sequence) use parallel group generation.
+Single-sequence data is treated as 1 group via the pseudo-group column added
+during preprocessing.
 
 ```
 TimeseriesBackend(VllmBackend)
@@ -256,16 +258,32 @@ TimeseriesBackend(VllmBackend)
 
 ### Key Concepts
 
-- Deterministic Time-Range Generation: For fixed-shape inputs, the number of records is determined by `(stop_timestamp - start_timestamp) / interval_seconds`.
-- Flexible Marker Generation: For automatically routed inputs, each accepted row must advance `_time_idx` by one. The row carrying `_is_last_row=true` is retained and completes the group; later rows in the same completion are discarded. If no marker appears, generation stops at the dataset-level maximum source-group length.
-- Internal Control Cleanup: `_time_idx`, `_is_last_row`, and any pseudo-group column are removed before returning final synthetic data.
-- Partial-Record Initialization: Every group starts with an incomplete JSON record containing its known group ID and start timestamp, plus the opening quote of the next field name. Including the complete training `,"` token makes the prefix tokenization identical to a full training record while leaving the field name and value for the model.
-- Training-Dialect Serialization: Constructed prefixes and rolling records use the same compact JSON representation as training, including escaped slashes and schema field order.
-- Training-Compatible Token Boundary: Generation explicitly reproduces the prompt BOS/EOS settings and sequence BOS token used by training. The first JSON byte follows the sequence BOS directly, without added whitespace.
+- Deterministic Time-Range Generation: For fixed-shape inputs, the number of
+  records is determined by `(stop_timestamp - start_timestamp) / interval_seconds`.
+- Flexible Marker Generation: For automatically routed inputs, each accepted
+  row must advance `_time_idx` by one. The row carrying `_is_last_row=true` is
+  retained and completes the group; later rows in the same completion are
+  discarded. If no marker appears, generation stops at the dataset-level
+  maximum source-group length.
+- Internal Control Cleanup: `_time_idx`, `_is_last_row`, and any pseudo-group
+  column are removed before returning final synthetic data.
+- Partial-Record Initialization: Every group starts with an incomplete JSON
+  record containing its known group ID and start timestamp, plus the opening
+  quote of the next field name. Including the complete training `,"` token
+  makes the prefix tokenization identical to a full training record while
+  leaving the field name and value for the model.
+- Training-Dialect Serialization: Constructed prefixes and rolling records use
+  the same compact JSON representation as training, including escaped slashes
+  and schema field order.
+- Training-Compatible Token Boundary: Generation explicitly reproduces the
+  prompt BOS/EOS settings and sequence BOS token used by training. The first
+  JSON byte follows the sequence BOS directly, without added whitespace.
 - Sliding Window: Maintains the three most recent generated records for context continuity.
-- Rolling Context Budget: Each generation batch clamps `max_tokens` against its longest current rolling prompt so prompt plus completion cannot exceed the
-model context.
-- Groups from Training: Groups are the same as those seen during training (from `model_metadata.timeseries_group_values`).
+- Rolling Context Budget: Each generation batch clamps `max_tokens` against its
+  longest current rolling prompt so prompt plus completion cannot exceed the
+  model context.
+- Groups from Training: Groups are the same as those seen during training
+  (from `model_metadata.timeseries_group_values`).
 
 ### Sliding Window Approach
 

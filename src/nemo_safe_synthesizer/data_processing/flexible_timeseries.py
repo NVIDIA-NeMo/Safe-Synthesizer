@@ -5,14 +5,12 @@
 
 from __future__ import annotations
 
-from typing import cast
-
 import pandas as pd
 
 from ..config.parameters import SafeSynthesizerParameters
 from ..config.time_series import FlexibleTimeseriesMetadata
 from ..defaults import PSEUDO_GROUP_COLUMN
-from .timeseries_utils import stable_sort_within_groups, unused_column_name
+from .timeseries_utils import _stable_sort_within_groups, _unused_column_name
 from .validation import (
     check_column_has_no_nulls,
     check_column_present,
@@ -21,13 +19,8 @@ from .validation import (
     check_timestamp_column,
 )
 
-__all__ = [
-    "prepare_flexible_timeseries_data",
-    "resolve_flexible_timeseries_metadata",
-]
 
-
-def resolve_flexible_timeseries_metadata(
+def _resolve_flexible_timeseries_metadata(
     data: pd.DataFrame,
     config: SafeSynthesizerParameters,
     max_records: int,
@@ -38,8 +31,8 @@ def resolve_flexible_timeseries_metadata(
         check_no_pseudo_column_collision(data)
         columns.append(PSEUDO_GROUP_COLUMN)
 
-    index_column = unused_column_name(FlexibleTimeseriesMetadata.DEFAULT_INDEX_COLUMN, columns)
-    marker_column = unused_column_name(
+    index_column = _unused_column_name(FlexibleTimeseriesMetadata.DEFAULT_INDEX_COLUMN, columns)
+    marker_column = _unused_column_name(
         FlexibleTimeseriesMetadata.DEFAULT_MARKER_COLUMN,
         [*columns, index_column],
     )
@@ -66,10 +59,11 @@ def _source_order_column(data: pd.DataFrame, config: SafeSynthesizerParameters) 
     return None
 
 
-def prepare_flexible_timeseries_data(
+def _prepare_flexible_timeseries_data(
     data: pd.DataFrame,
     config: SafeSynthesizerParameters,
     metadata: FlexibleTimeseriesMetadata,
+    source_timestamp_format: str,
 ) -> tuple[pd.DataFrame, str]:
     """Transform raw source data into the internal flexible time-series representation."""
     ts_config = config.time_series
@@ -88,13 +82,13 @@ def prepare_flexible_timeseries_data(
     if (
         order_column is not None
         and order_column == ts_config.timestamp_column
-        and ts_config.timestamp_format != "elapsed_seconds"
+        and source_timestamp_format != "elapsed_seconds"
     ):
         normalized_order = pd.to_datetime(
             working[order_column],
-            format=cast(str, ts_config.timestamp_format),
+            format=source_timestamp_format,
         )
-    working = stable_sort_within_groups(
+    working = _stable_sort_within_groups(
         working,
         group_column,
         order_column,
