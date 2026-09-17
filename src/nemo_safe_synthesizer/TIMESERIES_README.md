@@ -27,10 +27,15 @@ Time series support enables Safe Synthesizer to generate synthetic tabular data 
 ### Key Features
 
 - Unified grouped architecture: All time series are processed through a unified grouped architecture. Single-sequence data is automatically treated as a single group via an internal pseudo-group column, enabling consistent processing paths.
-- Automatic shape routing: Data with equal group lengths, common start and stop timestamps, and consistent intervals uses deterministic time-range generation. Data that does not satisfy any of those shape constraints is routed to flexible marker-based generation.
+- Automatic shape routing: Data with equal group lengths, common start and stop
+  timestamps, and consistent intervals uses deterministic time-range
+  generation. Data that fails one or more of those constraints is routed to
+  flexible marker-based generation.
 - Sliding window generation: Uses a sliding window approach where recently generated records are fed back as context for generating the next batch.
 - Parallel group generation: Multiple groups are processed in parallel batches for efficiency, even single-sequence data uses this optimized path.
-- Shape-aware termination: Deterministic generation uses the configured time range and interval. Flexible generation learns a final-row marker and retains the maximum observed group length as a safety cap.
+- Shape-aware termination: Deterministic generation uses the configured time
+  range and interval. Flexible generation learns a final-row marker and retains
+  the maximum observed group length as a safety cap.
 - Chronological constraint enforcement: Validates that generated timestamps follow the expected interval pattern.
 - Autocorrelation-based evaluation: Measures how well the synthetic data preserves temporal patterns from the original data. (ToDo)
 
@@ -61,7 +66,8 @@ Validation Rules:
 
 ### Automatic Shape Routing
 
-Routing is internal and requires no additional user configuration. The deterministic pipeline is selected only when every source group has:
+Routing is internal and requires no additional user configuration. The
+deterministic pipeline is selected only when every source group has:
 
 - the same number of records;
 - the same start timestamp;
@@ -153,16 +159,16 @@ Time series preprocessing occurs during training data preparation in `src/nemo_s
 
 ### Code Flow
 
-```
+```text
 HuggingFaceBackend._process_timeseries()
     └── process_timeseries_data(df, config)
             ├── _resolve_timeseries_routing()       # Validate source timestamps and inspect shape
             ├── flexible: _prepare_flexible_timeseries_data()
             │       └── add the generated index and marker columns
-            ├── deterministic: validate_timeseries_data()
+            ├── deterministic: reuse routing inspection
             │       ├── generated elapsed-seconds timestamp normalization
             │       ├── timestamp format/parse validation
-            │       └── interval and shared-range validation
+            │       └── _validate_deterministic_inspection()
             ├── order group and timestamp columns first
             └── Return (processed_df, updated_config)
 ```
@@ -348,7 +354,9 @@ class GroupState:
 
 Per-Group Stopping:
 - Deterministic completion: A group completes when an accepted record reaches `stop_timestamp`.
-- Flexible completion: A group completes on the first accepted `_is_last_row=true` row or when `_time_idx` reaches the dataset-level safety cap.
+- Flexible completion: A group completes on the first accepted
+  `_is_last_row=true` row or when `_time_idx` reaches the dataset-level safety
+  cap.
 - Failure (low valid fraction): A group fails after `config.generation.patience` consecutive batches where invalid fraction >= `config.generation.invalid_fraction_threshold`. Failed groups produce no synthetic data.
 
 Global Stopping:

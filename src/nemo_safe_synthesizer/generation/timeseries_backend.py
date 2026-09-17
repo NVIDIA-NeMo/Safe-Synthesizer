@@ -622,7 +622,20 @@ class TimeseriesBackend(VllmBackend):
         state: GroupState,
         records: list[ParsedRecord],
     ) -> tuple[list[ParsedRecord], tuple[str, ParsedRecord] | None]:
-        """Structurally trim a contiguous group prefix and identify a tentative accepted-row stop."""
+        """Retain the structurally valid prefix of a flexible sequence.
+
+        Records must match the active group and advance the generated sequence
+        index contiguously. This method invalidates records after the first
+        structural failure or stopping row. The stopping candidate remains
+        tentative until data actions have accepted it.
+
+        Args:
+            state: Active generation state for the group.
+            records: Parsed records to validate and trim in place.
+
+        Returns:
+            The retained prefix and its tentative marker- or cap-based stop.
+        """
         metadata = self._flexible_metadata
         if metadata is None:
             return records, None
