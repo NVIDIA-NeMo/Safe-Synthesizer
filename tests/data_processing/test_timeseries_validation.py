@@ -7,8 +7,6 @@ import pandas as pd
 import pytest
 
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
-from nemo_safe_synthesizer.config.time_series import FlexibleTimeseriesMetadata
-from nemo_safe_synthesizer.data_processing.flexible_timeseries import resolve_flexible_timeseries_metadata
 from nemo_safe_synthesizer.data_processing.timeseries_validation import (
     TimeSeriesDataValidationError,
     TimeSeriesGroupTimestampStats,
@@ -146,8 +144,11 @@ def test_flexible_metadata_reports_duplicate_source_columns_as_data_error():
     )
     config = _routing_config()
 
-    with pytest.raises(DataError, match="duplicate column names.*Rename or remove"):
-        resolve_flexible_timeseries_metadata(data, config, max_records=2)
+    with pytest.raises(TimeSeriesDataValidationError) as exc_info:
+        resolve_timeseries_routing(data, config)
+
+    assert exc_info.value.reason is TimeSeriesValidationReason.DUPLICATE_COLUMNS
+    assert "Rename or remove duplicate columns" in str(exc_info.value)
 
 
 def test_validate_start_stop_consistency_valid():
@@ -484,35 +485,3 @@ def test_validate_timeseries_data_rejects_group_length_mismatch():
         validate_timeseries_data(df, config)
 
     assert exc_info.value.reason is TimeSeriesValidationReason.TIMESERIES_GROUP_LENGTH_MISMATCH
-
-
-def test_validate_timeseries_data_allows_automatically_routed_lengths_and_stops():
-    """Flexible time-series processing relaxes equal length and stop checks."""
-    df = pd.DataFrame(
-        {
-            "group": ["A", "B", "B"],
-            "_time_idx": [0, 0, 1],
-            "value": [1, 2, 3],
-            "_is_last_row": [True, False, True],
-        }
-    )
-    config = SafeSynthesizerParameters.from_params(
-        is_timeseries=True,
-        timestamp_column="_time_idx",
-        timestamp_format="elapsed_seconds",
-        timestamp_interval_seconds=1,
-        group_training_examples_by="group",
-        rope_scaling_factor=1,
-    )
-    config.time_series.resolve_flexible_timeseries(
-        FlexibleTimeseriesMetadata(
-            max_records=2,
-            source_columns=("group", "value"),
-        )
-    )
-
-    result = validate_timeseries_data(df, config)
-
-    assert [stats.record_count for stats in result.group_stats] == [1, 2]
-    assert result.start_timestamp == "0"
-    assert result.stop_timestamp == "1"

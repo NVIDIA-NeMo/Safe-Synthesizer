@@ -12,7 +12,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
-from typing import Self
+from typing import Self, cast
 
 import pandas as pd
 from vllm.inputs.llm import TokensPrompt
@@ -620,15 +620,14 @@ class TimeseriesBackend(VllmBackend):
         """Structurally trim a contiguous group prefix and identify a tentative accepted-row stop."""
         if not self._flexible_timeseries:
             return records, None
-        if self._sequence_max_records is None:
-            raise GenerationError("Flexible time-series settings were not resolved.")
+        max_records = cast(int, self._sequence_max_records)
 
         retained: list[ParsedRecord] = []
         accepted_row_stop: tuple[str, ParsedRecord] | None = None
         prefix_ended = False
-        trimmed_error = ("Record appears after the final row marker", "FlexibleTimeseries")
-        group_error = ("Record group does not match the active sequence group", "FlexibleTimeseries")
-        index_error = ("Invalid sequence index", "FlexibleTimeseries")
+        trimmed_error = ("Generated row appears after the sequence end marker", "TimeSeries")
+        group_error = ("Generated record group does not match the active time-series group", "TimeSeries")
+        index_error = ("Generated sequence index is not a valid integer", "TimeSeries")
 
         for record in records:
             if prefix_ended:
@@ -651,7 +650,7 @@ class TimeseriesBackend(VllmBackend):
             if parsed.get(self._sequence_marker_column) is True:
                 accepted_row_stop = ("terminal", record)
                 prefix_ended = True
-            elif index_value >= self._sequence_max_records - 1:
+            elif index_value >= max_records - 1:
                 accepted_row_stop = ("cap", record)
                 prefix_ended = True
 
@@ -669,11 +668,11 @@ class TimeseriesBackend(VllmBackend):
             return None
         if reason == "terminal":
             return reason if candidate.parsed.get(self._sequence_marker_column) is True else None
-        if reason == "cap" and self._sequence_max_records is not None:
+        if reason == "cap":
             index_value = candidate.parsed.get(self._sequence_index_column)
             if not isinstance(index_value, int) or isinstance(index_value, bool):
                 return None
-            return reason if index_value >= self._sequence_max_records - 1 else None
+            return reason if index_value >= cast(int, self._sequence_max_records) - 1 else None
         return None
 
     def _validate_postprocessed_group_identity(
@@ -682,7 +681,7 @@ class TimeseriesBackend(VllmBackend):
         records: list[ParsedRecord],
     ) -> None:
         """Invalidate accepted rows whose postprocessed group no longer matches the active stream."""
-        error = ("Postprocessed record group does not match the active sequence group", "FlexibleTimeseries")
+        error = ("Postprocessed record group does not match the active time-series group", "TimeSeries")
         for record in records:
             if (
                 record.is_valid
@@ -703,7 +702,8 @@ class TimeseriesBackend(VllmBackend):
                 existing = {}
             if existing.get("status") == "completed":
                 raise GenerationError(
-                    f"Refusing to overwrite completed flexible time-series run at {self._flexible_metrics_path}."
+                    f"A completed time-series generation run already exists at {self._flexible_metrics_path}. "
+                    "Use a new workdir or remove that run before generating again."
                 )
         self._raw_generations_path.unlink(missing_ok=True)
         self._flexible_metrics_path.unlink(missing_ok=True)
