@@ -94,6 +94,7 @@ class TabularPiiReplacer:
             base_seed=resolve_base_seed(self._config.replacement.seed),
             data_to_sampler_value_mapping=plan.data_to_sampler_value_mapping,
             free_text_detector=free_text_detector,
+            capture_replacement_map=capture_replacement_map,
         )
         execution = executor.execute(df)
         return TransformResult(
@@ -102,7 +103,8 @@ class TabularPiiReplacer:
             replacement_plan=plan,
             resolved_config=resolved_config,
             generation_statistics=execution.generation_statistics,
-            replacement_time_seconds=time.perf_counter() - started,
+            elapsed_time_seconds=time.perf_counter() - started,
+            replacement_map=execution.replacement_map,
         )
 
     def _replacement_generator(self, config: ReplacePiiConfig) -> ReplacementGenerator:
