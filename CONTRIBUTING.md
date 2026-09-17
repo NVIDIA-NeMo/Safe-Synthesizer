@@ -594,6 +594,7 @@ All mise tasks check the entire project. Pre-commit scopes checks to staged file
 | ty typecheck | `mise run check:type` | read-only | all files |
 | copyright headers | `mise run check:license:headers` | `format`: auto-fix; `check`: read-only | staged files (auto-fix) |
 | generated CUDA metadata and uv lock drift | `mise run check:lock` | read-only | on `pyproject.toml` or `cuda_deps.toml` changes |
+| installation helper dry runs | `mise run test:installer` | not checked | all wheel-install CI runs |
 | DCO signoff | branch protection | not checked | commit-msg hook |
 
 ## Documentation

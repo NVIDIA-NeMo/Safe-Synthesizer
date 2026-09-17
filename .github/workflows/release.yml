@@ -118,6 +118,11 @@ jobs:
           name: nemo-safe-synthesizer-${{ needs.publish-wheel.outputs.version }}
           path: dist/
 
+      - name: Build release installer
+        env:
+          VERSION: ${{ needs.publish-wheel.outputs.version }}
+        run: bash tools/build_release_installer.sh "$VERSION" dist
+
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -131,6 +136,7 @@ jobs:
 
           gh release create "v${VERSION}" \
             dist/*.whl \
+            dist/install_nss.sh \
             --title "v${VERSION}" \
             --generate-notes \
             $PRERELEASE_FLAG
