@@ -92,4 +92,5 @@ runs:
             - 'install_nss.sh'
             - 'tests/tools/test_install_nss.sh'
             - 'tools/build_release_installer.sh'
+            - 'tools/gen_cuda_deps.py'
             - 'tools/release_version.py'

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import importlib.util
+import shlex
 import sys
 import tomllib
 from pathlib import Path
@@ -15,6 +16,29 @@ from packaging.markers import InvalidMarker
 from packaging.requirements import InvalidRequirement
 
 pytestmark = pytest.mark.unit
+
+
+def _parse_shell_arrays(text: str) -> dict[str, tuple[str, ...]]:
+    arrays: dict[str, list[str]] = {}
+    current_name: str | None = None
+    for line in text.splitlines():
+        if current_name is not None:
+            if line == ")":
+                current_name = None
+            else:
+                arrays[current_name].extend(shlex.split(line))
+            continue
+        if not line.startswith("readonly -a "):
+            continue
+        name, value = line.removeprefix("readonly -a ").split("=", maxsplit=1)
+        if value == "(":
+            arrays[name] = []
+            current_name = name
+        else:
+            assert value.startswith("(") and value.endswith(")")
+            arrays[name] = shlex.split(value[1:-1])
+    assert current_name is None
+    return {name: tuple(values) for name, values in arrays.items()}
 
 
 def _load_generator(root_path: Path) -> ModuleType:
@@ -374,24 +398,28 @@ def test_build_cuda_installer_fragment_renders_runtime_index_arrays(
     pytestconfig: pytest.Config, generator: ModuleType
 ) -> None:
     config = generator.load_cuda_deps_config(pytestconfig.rootpath / "cuda_deps.toml")
-    vllm_url = next(index.url for index in config.indexes if index.name.startswith("vllm-"))
 
     generated = generator.build_cuda_installer_fragment(config)
 
-    assert (
-        """readonly -a CUDA_INDEXES_CPU=(
-    https://flashinfer.ai/whl/
-    https://download.pytorch.org/whl/cpu
-)"""
-        in generated.text
-    )
-    assert "readonly -a CUDA_INDEXES_CU129=(" in generated.text
-    assert vllm_url in generated.text
-    assert "readonly -a CUDA_INDEXES_CU130=(" in generated.text
-    assert "https://pypi.nvidia.com" in generated.text
-    flashinfer_cu129 = config.cuda_indexes.flashinfer.url.format(extra="cu129")
-    pytorch_cu129 = config.cuda_indexes.pytorch.url.format(extra="cu129")
-    assert generated.text.index(flashinfer_cu129) < generated.text.index(pytorch_cu129) < generated.text.index(vllm_url)
+    assert _parse_shell_arrays(generated.text) == {
+        "CUDA_INDEXES_CPU": (
+            "https://flashinfer.ai/whl/",
+            "https://download.pytorch.org/whl/cpu",
+        ),
+        "CUDA_INDEXES_CU129": (
+            "https://flashinfer.ai/whl/cu129",
+            "https://download.pytorch.org/whl/cu129",
+            "https://flashinfer.ai/whl/",
+            "https://wheels.vllm.ai/0.27.0/cu129",
+        ),
+        "CUDA_INDEXES_CU130": (
+            "https://flashinfer.ai/whl/cu130",
+            "https://download.pytorch.org/whl/cu130",
+            "https://flashinfer.ai/whl/",
+            "https://wheels.vllm.ai/0.27.0/cu130",
+            "https://pypi.nvidia.com",
+        ),
+    }
 
 
 def test_apply_cuda_fragment_to_installer_replaces_generated_block(

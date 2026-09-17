@@ -4,7 +4,8 @@
 
 set -euo pipefail
 
-readonly REPO_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly REPO_ROOT
 readonly VERSION="${1:?Usage: $0 <version> <output-dir>}"
 readonly OUTPUT_DIR="${2:?Usage: $0 <version> <output-dir>}"
 readonly CONSTRAINTS_URL="https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/v${VERSION}/constraints.txt"

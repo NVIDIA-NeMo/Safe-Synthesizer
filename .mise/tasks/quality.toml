@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 [format]
-description = "Format all tracked source files with ruff and SPDX copyright fixer. Modifies files in place; run before committing."
+description = "Format all tracked source files with dprint, Ruff, and the SPDX copyright fixer. Modifies files in place; run before committing."
 run = [
     "dprint fmt --incremental=false",
     "bash tools/codestyle/format.sh",

@@ -39,7 +39,7 @@ For most installations, download the installer from the latest stable GitHub
 release. Each released script pins the package version, constraints, and
 package indexes that were tested together.
 
-```bash
+```bash title="Install Safe Synthesizer" hl_lines="4"
 curl -fsSLO https://github.com/NVIDIA-NeMo/Safe-Synthesizer/releases/latest/download/install_nss.sh
 chmod +x install_nss.sh
 
