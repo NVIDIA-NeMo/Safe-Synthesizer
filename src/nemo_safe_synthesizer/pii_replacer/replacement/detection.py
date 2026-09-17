@@ -45,6 +45,7 @@ _FRESH_ENTITY_TYPES = frozenset(GLINER_DETECTION_ENTITY_TYPES + REGEX_DETECTION_
 # The selected PII checkpoint uses a slightly broader vocabulary than NSS. Only
 # labels with a well-defined v3 replacement type are requested and normalized.
 _GLINER_LABELS: dict[str, EntityType] = {
+    "full_name": EntityType.FULL_NAME,
     "first_name": EntityType.FIRST_NAME,
     "middle_name": EntityType.MIDDLE_NAME,
     "last_name": EntityType.LAST_NAME,

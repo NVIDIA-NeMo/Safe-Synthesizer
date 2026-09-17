@@ -280,13 +280,12 @@ REGEX_DETECTION_ENTITY_TYPES: tuple[EntityType, ...] = (
 GLINER_DETECTION_ENTITY_TYPES: tuple[EntityType, ...] = tuple(
     entity_type
     for entity_type in FREE_TEXT_DETECTION_ENTITY_TYPES
-    if entity_type not in REGEX_DETECTION_ENTITY_TYPES and entity_type is not EntityType.FULL_NAME
+    if entity_type not in REGEX_DETECTION_ENTITY_TYPES
 )
 """Entity types requested from GLiNER2 rather than the built-in regex detector.
 
-``full_name`` is intentionally excluded because the checkpoint exposes it as
-the overly broad ``person`` label. Complete names are detected through their
-specific first, middle, and last-name spans instead.
+The checkpoint's specific ``full_name`` label is used for complete names; its
+broader ``person`` label is intentionally not requested.
 """
 
 _NAME_ENTITY_TYPES = frozenset(
