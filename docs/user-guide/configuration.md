@@ -298,8 +298,10 @@ value mappings default to automatic discovery or can be supplied inline. See
 definitions, examples, managed Nemotron Personas download instructions, and the
 shared LLM configuration for plan enhancement and dependency mapping discovery.
 
-Structured-column replacements run before training. Free-text named entity
-detection and span replacement are not yet executed.
+Structured-column and free-text replacements run before training. Free-text
+targets combine GLiNER2 detection with built-in validated regex detectors.
+Regex exclusively owns email addresses, payment cards, IPv4 addresses, and
+IPv6 addresses; GLiNER2 handles the remaining supported free-text entities.
 
 ---
 

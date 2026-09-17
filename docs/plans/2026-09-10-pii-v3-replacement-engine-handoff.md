@@ -150,6 +150,8 @@ LLM span-detection experiment.
 - Automatic LLM-assisted column classification and plan discovery run against the full input dataset.
 - Replacement runs after holdout creation and transforms only the training split.
 - Initial free-text detection always combines GLiNER2 with applicable deterministic regex rules.
+- Detector ownership is disjoint: regex exclusively detects `credit_debit_card`, `email`, `ipv4`, and `ipv6`; do not
+  request their checkpoint labels from GLiNER2.
 - The configurable default GLiNER2 checkpoint is `fastino/gliner2-privacy-filter-PII-multi`.
 - There is no LLM free-text detection method in the initial implementation.
 - There is no propagation-only mode. Every planned free-text target uses the GLiNER2-plus-regex detector pipeline.
@@ -346,7 +348,9 @@ Replace the old proposal's `llm`/`fast` method union with one initial GLiNER2-pl
 ```python
 class FreeTextDetectionConfig(NSSBaseModel):
     model_id: str = DEFAULT_GLINER2_MODEL_ID
-    threshold: float = 0.3
+    entity_thresholds: dict[EntityType, float] = Field(
+        default_factory=default_gliner_entity_thresholds
+    )
     batch_size: int = 8
     chunk_length: int = 384
     chunk_overlap: int = 128
@@ -358,8 +362,10 @@ class ReplacePiiConfig(Parameters):
 
 PR 741 provisionally uses the base checkpoint. Before implementing model loading, the follow-up must change
 `DEFAULT_GLINER2_MODEL_ID` and the documented configuration example to
-`fastino/gliner2-privacy-filter-PII-multi`. Validate `threshold` within `[0, 1]`, positive batch/chunk values, and a
-nonnegative overlap smaller than the chunk length.
+`fastino/gliner2-privacy-filter-PII-multi`. Require one `[0, 1]` threshold for every GLiNER2-detected entity type,
+positive batch/chunk values, and a nonnegative overlap smaller than the chunk length. Default all name types to the
+precision-first `0.9` threshold and the remaining model-detected types to `0.5`. Regex-owned types have no confidence
+threshold. Normalize checkpoint aliases to NSS entity types before applying the configured threshold.
 
 Built-in regex runs as part of this detector pipeline. Do not expose an LLM method. Whether reviewers want an explicit
 regex disable switch is an open first-PR question; the minimal interface has no switch.
@@ -528,6 +534,10 @@ quality information, not invalid configuration.
 - Run inference over unique original texts using configured batching and overlapping chunks.
 - Convert chunk-relative offsets to original-cell offsets before emitting `DetectedSpan`.
 - Normalize model labels into the v3 `EntityType` catalog.
+- Do not request `email`, `payment_card`, `card_number`, or `ip_address`; their normalized entity types are owned by
+  structurally validated regex.
+- Request only the `person` checkpoint alias for `full_name`; requesting both `person` and `full_name` changes the
+  model's joint-label scores and raises observed medical-term false positives above the `0.9` threshold.
 - Filter results to entity types allowed for fresh replacement by the plan.
 - Exclude `free_text`, identify-only types, and `unique_identifier` unless product policy changes.
 - Raise `GenerationError` on model-load or inference failure; do not silently continue as regex-only.
@@ -548,8 +558,9 @@ Adapt the deterministic portions of Anonymizer PR 265:
 - stable rule identifiers and provenance;
 - exact regex match offsets.
 
-Initial applicable v3 labels are `credit_debit_card`, `email`, `ipv4`, and `ipv6`. Do not add MAC or URL
-silently. Do not claim phone, SSN, or API-key coverage from this PR. Do not enable its optional LLM validation.
+Initial applicable v3 labels are `credit_debit_card`, `email`, `ipv4`, and `ipv6`, and regex is their exclusive
+detection source. Do not add MAC or URL silently. Do not claim phone, SSN, or API-key coverage from this PR. Do not
+enable its optional LLM validation.
 
 ### Overlap resolution
 

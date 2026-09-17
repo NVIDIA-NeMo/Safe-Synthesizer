@@ -18,7 +18,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum, StrEnum, auto
 from pathlib import Path
-from typing import ClassVar, Literal, Self, cast
+from typing import Annotated, ClassVar, Literal, Self, cast
 
 from pydantic import (
     Field,
@@ -46,6 +46,9 @@ __all__ = [
     "ENTITIES",
     "ENTITY_BY_TYPE",
     "EXCLUSIVE_DEPENDS_ON_GROUPS",
+    "FREE_TEXT_DETECTION_ENTITY_TYPES",
+    "GLINER_DETECTION_ENTITY_TYPES",
+    "REGEX_DETECTION_ENTITY_TYPES",
     "Entity",
     "EntityAction",
     "EntityType",
@@ -67,7 +70,7 @@ __all__ = [
 # Sentinel value for ``ReplacePiiConfig.replacement_plan`` requesting automatic
 # entity discovery instead of an explicit plan.
 AUTO_DISCOVERY = "auto_discovery"
-DEFAULT_GLINER2_MODEL_ID = "fastino/gliner2.5-base-v1"
+DEFAULT_GLINER2_MODEL_ID = "fastino/gliner2-privacy-filter-PII-multi"
 # Unversioned configurations are permanently interpreted as v3. Adding a new
 # schema may expand the supported set, but must not advance this implicit value.
 _IMPLICIT_REPLACE_PII_SCHEMA_VERSION = 3
@@ -258,6 +261,47 @@ ENTITIES: tuple[Entity, ...] = (
 )
 
 ENTITY_BY_TYPE: dict[EntityType, Entity] = {entity.entity_type: entity for entity in ENTITIES}
+
+FREE_TEXT_DETECTION_ENTITY_TYPES: tuple[EntityType, ...] = tuple(
+    entity.entity_type
+    for entity in ENTITIES
+    if entity.action is EntityAction.REPLACE and entity.entity_type is not EntityType.UNIQUE_IDENTIFIER
+)
+"""Entity types eligible for fresh detection and replacement inside free text."""
+
+REGEX_DETECTION_ENTITY_TYPES: tuple[EntityType, ...] = (
+    EntityType.EMAIL,
+    EntityType.CREDIT_DEBIT_CARD,
+    EntityType.IPV4,
+    EntityType.IPV6,
+)
+"""Entity types detected exclusively by structurally validated built-in regex rules."""
+
+GLINER_DETECTION_ENTITY_TYPES: tuple[EntityType, ...] = tuple(
+    entity_type for entity_type in FREE_TEXT_DETECTION_ENTITY_TYPES if entity_type not in REGEX_DETECTION_ENTITY_TYPES
+)
+"""Entity types requested from GLiNER2 rather than the built-in regex detector.
+
+The checkpoint's specific ``full_name`` label is used for complete names; its
+broader ``person`` label is intentionally not requested.
+"""
+
+_DEFAULT_NAME_ENTITY_THRESHOLDS = {
+    EntityType.FIRST_NAME: 0.9,
+    EntityType.MIDDLE_NAME: 0.9,
+    EntityType.LAST_NAME: 0.9,
+    EntityType.FULL_NAME: 0.95,
+}
+_ConfidenceThreshold = Annotated[float, Field(ge=0, le=1)]
+
+
+def _default_gliner_entity_thresholds() -> dict[EntityType, float]:
+    """Return a fresh, complete set of precision-first GLiNER2 thresholds."""
+    return {
+        entity_type: _DEFAULT_NAME_ENTITY_THRESHOLDS.get(entity_type, 0.5)
+        for entity_type in GLINER_DETECTION_ENTITY_TYPES
+    }
+
 
 # entity_type → allowed depends_on entity types (optional edges may be omitted).
 ALLOWED_DEPENDS_ON: dict[EntityType, frozenset[EntityType]] = {
@@ -683,11 +727,12 @@ class FreeTextDetectionConfig(NSSBaseModel):
         default=DEFAULT_GLINER2_MODEL_ID,
         description="GLiNER2 model identifier used to detect PII spans in free-text columns.",
     )
-    threshold: float = Field(
-        default=0.3,
-        ge=0,
-        le=1,
-        description="Minimum GLiNER2 confidence score to accept. Must be between 0 and 1, inclusive.",
+    entity_thresholds: dict[EntityType, _ConfidenceThreshold] = Field(
+        default_factory=_default_gliner_entity_thresholds,
+        description=(
+            "Minimum GLiNER2 confidence score for every GLiNER-detected entity type. "
+            "The mapping must contain each GLiNER entity exactly once; regex-owned entity types have no threshold."
+        ),
     )
     batch_size: int = Field(
         default=8,
@@ -704,6 +749,28 @@ class FreeTextDetectionConfig(NSSBaseModel):
         ge=0,
         description="Overlap between adjacent GLiNER2 text chunks. Must be nonnegative and smaller than chunk_length.",
     )
+
+    @field_validator("entity_thresholds")
+    @classmethod
+    def _validate_complete_entity_thresholds(
+        cls,
+        value: dict[EntityType, float],
+    ) -> dict[EntityType, float]:
+        expected = set(GLINER_DETECTION_ENTITY_TYPES)
+        actual = set(value)
+        missing = sorted(entity_type.value for entity_type in expected - actual)
+        unsupported = sorted(entity_type.value for entity_type in actual - expected)
+        if missing or unsupported:
+            details = []
+            if missing:
+                details.append(f"missing: {missing}")
+            if unsupported:
+                details.append(f"unsupported: {unsupported}")
+            raise ParameterError(
+                "free_text_detection.entity_thresholds must contain every GLiNER-detected "
+                f"entity exactly once ({'; '.join(details)})"
+            )
+        return value
 
     @model_validator(mode="after")
     def _validate_chunk_overlap(self) -> Self:

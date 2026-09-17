@@ -9,10 +9,11 @@ import time
 from typing import TYPE_CHECKING
 
 from ..config.data import DataParameters
-from ..config.replace_pii import PiiSamplerBackend, ReplacePiiConfig
+from ..config.replace_pii import EntityType, PiiSamplerBackend, ReplacePiiConfig
 from ..config.time_series import TimeSeriesParameters
 from ..errors import InternalError
 from .planning import resolve_replacement_config
+from .replacement.detection import CompositeFreeTextDetector
 from .replacement.executor import StructuredReplacementExecutor, resolve_base_seed
 from .replacement.generation import ReplacementGenerator
 from .replacement.generators import FakerReplacementGenerator, ManagedReplacementGenerator
@@ -27,12 +28,12 @@ __all__ = ["TabularPiiReplacer"]
 class TabularPiiReplacer:
     """Replace PII in a dataframe through one plan-driven interface.
 
-    The replacement module owns plan resolution and structured DAG execution,
-    positional row identity, scope keys, synthetic value generation, and
-    statistics. Free-text detection and span replacement are deferred.
-    ``replace`` returns a new dataframe and never mutates the caller's frame or
-    writes artifacts. The pipeline remains responsible for deciding whether
-    and where to persist the resolved configuration.
+    The replacement module owns plan resolution, DAG execution, free-text span
+    detection and rewriting, positional row identity, scope keys, synthetic
+    value generation, and statistics. ``replace`` returns a new dataframe and
+    never mutates the caller's frame or writes artifacts. The pipeline remains
+    responsible for deciding whether and where to persist the resolved
+    configuration.
 
     Args:
         config: PII replacement configuration, including the replacement plan.
@@ -53,8 +54,15 @@ class TabularPiiReplacer:
         self._data_config = data_config
         self._time_series = time_series
 
-    def replace(self, df: pd.DataFrame) -> TransformResult:
+    def replace(self, df: pd.DataFrame, *, capture_replacement_map: bool = False) -> TransformResult:
         """Return a replacement result for ``df`` without mutating ``df``.
+
+        Args:
+            df: Dataframe whose planned PII values should be replaced.
+            capture_replacement_map: Include sensitive per-occurrence replacement
+                provenance and accepted free-text span traces in the result. The
+                default leaves this data unavailable so ordinary calls do not
+                accidentally persist original PII.
 
         Raises:
             ParameterError: If the configured plan is invalid for ``df``.
@@ -70,12 +78,19 @@ class TabularPiiReplacer:
         plan = resolved_config.inline_plan
         if plan is None:
             raise InternalError("PII replacement configuration was not fully resolved")
+        free_text_detector = (
+            CompositeFreeTextDetector(resolved_config.free_text_detection)
+            if any(spec.entity_type is EntityType.FREE_TEXT for spec in plan.columns_to_replace)
+            else None
+        )
         executor = StructuredReplacementExecutor(
             plan,
             self._replacement_generator(resolved_config),
             group_column=self._data_config.group_training_examples_by,
             base_seed=resolve_base_seed(self._config.replacement.seed),
             dependency_value_mappings=plan.dependency_value_mappings,
+            free_text_detector=free_text_detector,
+            capture_replacement_map=capture_replacement_map,
         )
         execution = executor.execute(df)
         return TransformResult(
@@ -85,6 +100,7 @@ class TabularPiiReplacer:
             resolved_config=resolved_config,
             generation_statistics=execution.generation_statistics,
             elapsed_time_seconds=time.perf_counter() - started,
+            replacement_map=execution.replacement_map,
         )
 
     def _replacement_generator(self, config: ReplacePiiConfig) -> ReplacementGenerator:

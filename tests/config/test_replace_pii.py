@@ -14,6 +14,8 @@ from nemo_safe_synthesizer.config.replace_pii import (
     DEFAULT_GLINER2_MODEL_ID,
     ENTITIES,
     ENTITY_BY_TYPE,
+    FREE_TEXT_DETECTION_ENTITY_TYPES,
+    GLINER_DETECTION_ENTITY_TYPES,
     ConditioningColumn,
     EntityAction,
     EntityType,
@@ -548,26 +550,69 @@ class TestReplacePiiConfig:
 
     def test_free_text_detection_defaults_and_serialization(self) -> None:
         config = ReplacePiiConfig()
+        expected_thresholds = {
+            EntityType.FULL_NAME: 0.95,
+            EntityType.FIRST_NAME: 0.9,
+            EntityType.MIDDLE_NAME: 0.9,
+            EntityType.LAST_NAME: 0.9,
+            EntityType.PHONE_NUMBER: 0.5,
+            EntityType.DATE_OF_BIRTH: 0.5,
+            EntityType.STREET_ADDRESS: 0.5,
+            EntityType.SSN: 0.5,
+            EntityType.NATIONAL_ID: 0.5,
+            EntityType.API_KEY: 0.5,
+        }
 
         assert config.free_text_detection == FreeTextDetectionConfig(
             model_id=DEFAULT_GLINER2_MODEL_ID,
-            threshold=0.3,
+            entity_thresholds=expected_thresholds,
             batch_size=8,
             chunk_length=384,
             chunk_overlap=128,
         )
         assert config.model_dump(mode="json")["free_text_detection"] == {
             "model_id": DEFAULT_GLINER2_MODEL_ID,
-            "threshold": 0.3,
+            "entity_thresholds": {
+                entity_type.value: threshold for entity_type, threshold in expected_thresholds.items()
+            },
             "batch_size": 8,
             "chunk_length": 384,
             "chunk_overlap": 128,
         }
+        assert tuple(config.free_text_detection.entity_thresholds) == GLINER_DETECTION_ENTITY_TYPES
+        assert set(FREE_TEXT_DETECTION_ENTITY_TYPES) - set(GLINER_DETECTION_ENTITY_TYPES) == {
+            EntityType.EMAIL,
+            EntityType.CREDIT_DEBIT_CARD,
+            EntityType.IPV4,
+            EntityType.IPV6,
+        }
 
     @pytest.mark.parametrize("threshold", [-0.01, 1.01])
-    def test_free_text_detection_threshold_must_be_in_closed_unit_interval(self, threshold: float) -> None:
+    def test_free_text_detection_thresholds_must_be_in_closed_unit_interval(self, threshold: float) -> None:
+        entity_thresholds = FreeTextDetectionConfig().entity_thresholds | {EntityType.PHONE_NUMBER: threshold}
+
         with pytest.raises(ValidationError, match="less than or equal|greater than or equal"):
-            FreeTextDetectionConfig(threshold=threshold)
+            FreeTextDetectionConfig.model_validate({"entity_thresholds": entity_thresholds})
+
+    def test_free_text_detection_requires_a_threshold_for_every_supported_entity(self) -> None:
+        entity_thresholds = FreeTextDetectionConfig().entity_thresholds.copy()
+        del entity_thresholds[EntityType.API_KEY]
+
+        with pytest.raises(ValidationError, match=r"missing: \['api_key'\]"):
+            FreeTextDetectionConfig(entity_thresholds=entity_thresholds)
+
+    @pytest.mark.parametrize(
+        "entity_type",
+        [EntityType.EMAIL, EntityType.CREDIT_DEBIT_CARD, EntityType.IPV4, EntityType.IPV6],
+    )
+    def test_free_text_detection_rejects_thresholds_for_non_gliner_entities(
+        self,
+        entity_type: EntityType,
+    ) -> None:
+        entity_thresholds = FreeTextDetectionConfig().entity_thresholds | {entity_type: 0.5}
+
+        with pytest.raises(ValidationError, match=rf"unsupported: \['{entity_type.value}'\]"):
+            FreeTextDetectionConfig(entity_thresholds=entity_thresholds)
 
     @pytest.mark.parametrize("field", ["batch_size", "chunk_length"])
     def test_free_text_detection_batch_and_chunk_values_must_be_positive(self, field: str) -> None:

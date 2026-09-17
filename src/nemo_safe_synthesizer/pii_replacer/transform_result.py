@@ -3,12 +3,81 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..config.replace_pii import PiiReplacementPlan, ReplacePiiConfig
+from ..config.replace_pii import EntityType, PiiReplacementPlan, ReplacePiiConfig
 
-__all__ = ["ColumnStatistics", "ReplacementGenerationStatistics", "TransformResult"]
+__all__ = [
+    "ColumnStatistics",
+    "FreeTextReplacementRecord",
+    "ReplacementGenerationStatistics",
+    "ReplacementMap",
+    "StructuredReplacementRecord",
+    "TransformResult",
+]
+
+
+class StructuredReplacementRecord(BaseModel):
+    """One structured replacement occurrence captured for explicit evaluation use.
+
+    The original and replacement values can contain sensitive data. They are
+    excluded from ``repr`` but remain available to callers and serialization.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    row_position: int = Field(ge=0, description="Zero-based position of the replaced dataframe row.")
+    column_name: str = Field(description="Name of the structured column that was replaced.")
+    entity_type: EntityType = Field(description="Normalized entity type used to generate the replacement.")
+    scope: Literal["record", "group"] = Field(description="Mapping scope used for replacement reuse.")
+    original_value: str = Field(repr=False, description="Canonical original value. May contain sensitive data.")
+    replacement_value: str = Field(repr=False, description="Generated replacement value.")
+
+
+class FreeTextReplacementRecord(BaseModel):
+    """One accepted free-text span and its applied replacement.
+
+    Offsets are half-open and refer to the complete original cell. The original
+    and replacement values can contain sensitive data. They are excluded from
+    ``repr`` but remain available to callers and serialization.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    row_position: int = Field(ge=0, description="Zero-based position of the replaced dataframe row.")
+    column_name: str = Field(description="Name of the free-text column containing the accepted span.")
+    start: int = Field(ge=0, description="Inclusive start offset in the original cell.")
+    end: int = Field(gt=0, description="Exclusive end offset in the original cell.")
+    entity_type: EntityType = Field(description="Normalized entity type assigned to the accepted span.")
+    detection_source: Literal["gliner", "regex"] = Field(description="Detector that produced the accepted span.")
+    score: float | None = Field(default=None, description="Detector confidence when the detector supplies one.")
+    scope: Literal["record", "group"] = Field(description="Mapping scope used for replacement reuse.")
+    original_value: str = Field(repr=False, description="Exact text covered by the span. May contain sensitive data.")
+    replacement_value: str = Field(repr=False, description="Replacement inserted for the accepted span.")
+
+
+class ReplacementMap(BaseModel):
+    """Sensitive, opt-in replacement provenance for evaluation and auditing.
+
+    Structured records identify each replaced cell. Free-text records are the
+    exact accepted-span trace, including original offsets and detector
+    provenance. Serializing this model persists original PII, so normal
+    replacement calls do not create it unless explicitly requested.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    structured: tuple[StructuredReplacementRecord, ...] = Field(
+        default_factory=tuple,
+        description="Structured replacement occurrences in execution order.",
+    )
+    free_text: tuple[FreeTextReplacementRecord, ...] = Field(
+        default_factory=tuple,
+        description="Accepted free-text spans in stable column and row order.",
+    )
 
 
 class ColumnStatistics(BaseModel):
@@ -81,4 +150,9 @@ class TransformResult(BaseModel):
     elapsed_time_seconds: float = Field(
         ge=0,
         description="Elapsed wall-clock time spent replacing PII, in seconds.",
+    )
+    replacement_map: ReplacementMap | None = Field(
+        default=None,
+        repr=False,
+        description="Sensitive replacement provenance, present only when explicitly requested.",
     )
