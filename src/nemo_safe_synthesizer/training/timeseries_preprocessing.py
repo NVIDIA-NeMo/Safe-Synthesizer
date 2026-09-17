@@ -9,7 +9,10 @@ import pandas as pd
 
 from ..config import SafeSynthesizerParameters
 from ..data_processing.flexible_timeseries import _prepare_flexible_timeseries_data
-from ..data_processing.timeseries_validation import _resolve_timeseries_routing, validate_timeseries_data
+from ..data_processing.timeseries_validation import (
+    _resolve_timeseries_routing,
+    _validate_deterministic_inspection,
+)
 from ..observability import get_logger
 
 logger = get_logger(__name__)
@@ -66,8 +69,11 @@ def process_timeseries_data(
         DataError: If required source values are null or timestamps cannot be parsed.
     """
     routing = _resolve_timeseries_routing(training_df, config)
+    if routing is None:
+        return training_df, config
+
     ts_config = config.time_series
-    if routing is not None and routing.flexible_metadata is not None:
+    if routing.flexible_metadata is not None:
         metadata = routing.flexible_metadata
         training_df, group_column = _prepare_flexible_timeseries_data(
             training_df,
@@ -86,7 +92,10 @@ def process_timeseries_data(
 
     original_group_column = config.data.group_training_examples_by
     original_timestamp_column = ts_config.timestamp_column
-    validation = validate_timeseries_data(training_df, config)
+    validation = _validate_deterministic_inspection(
+        routing.inspection,
+        ts_config.timestamp_interval_seconds,
+    )
     training_df = validation.data
     if original_group_column is None:
         logger.info("No group column specified, treating entire dataset as a single sequence")

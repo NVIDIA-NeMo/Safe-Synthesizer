@@ -761,7 +761,7 @@ class TestOrderbyColumnCheck:
         issues = OrderbyColumnCheck().run(make_ctx(config=config, data=sample_df))
         assert any(i.code == "column_not_found" for i in issues)
 
-    def test_timeseries_with_generated_timestamp_bypasses_missing_order_by(self, sample_df):
+    def test_timeseries_with_generated_timestamp_rejects_missing_order_by(self, sample_df):
         config = SafeSynthesizerParameters(
             data=DataParameters(
                 group_training_examples_by="category",
@@ -770,7 +770,7 @@ class TestOrderbyColumnCheck:
             time_series=TimeSeriesParameters(is_timeseries=True, timestamp_interval_seconds=60),
         )
         issues = OrderbyColumnCheck().run(make_ctx(config=config, data=sample_df))
-        assert not any(i.code == "column_not_found" and "generated_ts" in i.message for i in issues)
+        assert any(i.code == "column_not_found" and "generated_ts" in i.message for i in issues)
 
 
 @pytest.mark.unit
@@ -819,15 +819,6 @@ class TestTimeSeriesDataShapeCheck:
 
     def test_disabled_when_not_timeseries(self, default_config):
         assert TimeSeriesDataShapeCheck().enabled(make_ctx(config=default_config)) is False
-
-    def test_missing_timestamp_prerequisite_is_not_duplicated(self):
-        df = pd.DataFrame({"grp": ["A", "A"], "value": [1, 2]})
-        config = self._make_config()
-
-        assert TimeSeriesDataShapeCheck().enabled(make_ctx(config=config, data=df)) is False
-        issues = TimeSeriesDataShapeCheck().run(make_ctx(config=config, data=df))
-
-        assert issues == []
 
     def test_missing_timestamp_prerequisite_omits_shape_from_full_preflight(self):
         df = pd.DataFrame({"grp": ["A", "A"], "value": [1, 2]})
@@ -942,7 +933,7 @@ class TestTimeSeriesDataShapeCheck:
         assert "3-record safety cap" in warning.message
         assert not any(issue.severity == "error" for issue in issues)
 
-    def test_flexible_source_order_nulls_report_domain_error(self):
+    def test_source_order_nulls_report_domain_error(self):
         df = pd.DataFrame(
             {
                 "grp": ["A", "A", "B"],
@@ -965,9 +956,9 @@ class TestTimeSeriesDataShapeCheck:
 
         report = run_preflight(df, config, MagicMock(spec=ModelMetadata), stages=frozenset({PreflightStage.DATAFRAME}))
 
-        assert config.time_series._uses_flexible_timeseries is True
+        assert config.time_series._uses_flexible_timeseries is False
         assert any(
-            issue.check == "timeseries.shape" and issue.code == "column_nulls" and issue.severity == "error"
+            issue.check == "columns.orderby" and issue.code == "column_nulls" and issue.severity == "error"
             for issue in report.issues
         )
         assert not any(issue.code == "preflight.check_crash" for issue in report.issues)

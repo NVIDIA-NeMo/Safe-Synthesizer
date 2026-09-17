@@ -519,7 +519,7 @@ check of its own.
 | `hf_remote_code_not_cached` | warning/error | `env.hf_model_availability` | Trusted model references remote code that is not cached locally; severity is error when HF offline mode is enabled |
 | `preflight.check_crash` | error | (crashing check) | A check raised an unexpected exception; the issue's `check` field names the crashing check and other checks continued running |
 | `column_not_found` | error | `columns.groupby` / `columns.orderby` | Required column missing from dataset, or input DataFrame uses unsupported MultiIndex columns |
-| `column_nulls` | error | `columns.groupby` | Required column contains null values |
+| `column_nulls` | error | `columns.groupby` / `columns.orderby` | Required column contains null values |
 | `duplicate_columns` | error | `timeseries.shape` | Time-series input contains duplicate column names; rename or remove the duplicates |
 | `pseudo_column_collision` | error | `columns.pseudo` | Dataset contains reserved internal column name, or input DataFrame uses unsupported MultiIndex columns |
 | `constant_column` | warning | `columns.constant` | Column has only one unique value |
