@@ -22,6 +22,7 @@ from pydantic import ValidationError
 from transformers import PretrainedConfig, PreTrainedTokenizerBase, Qwen2Config
 
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
+from nemo_safe_synthesizer.config.time_series import FlexibleTimeseriesMetadata
 from nemo_safe_synthesizer.defaults import (
     DEFAULT_INSTRUCTION,
     MAX_ROPE_SCALING_FACTOR,
@@ -731,11 +732,15 @@ class TestGenerationMaxTokensFor:
         # prompt_len=0 reproduces the old prompt-agnostic budget for round-trip parity.
         assert reloaded.generation_max_tokens_for(0) == int(1500 * GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER)
 
-    def test_timeseries_group_values_preserve_types_through_metadata_json(self, sample_model_metadata):
-        """Time-series group values must not become strings through dictionary keys."""
+    def test_timeseries_metadata_round_trips_through_json(self, sample_model_metadata):
+        """Typed group values and flexible metadata survive artifact persistence."""
         sample_model_metadata.timeseries_group_values = [7, "group-A", 2.5]
-        sample_model_metadata.timeseries_source_columns = ["value", "group_id", "timestamp"]
-        sample_model_metadata.flexible_timeseries = True
+        sample_model_metadata.flexible_timeseries_metadata = FlexibleTimeseriesMetadata(
+            index_column="_time_idx_1",
+            marker_column="_is_last_row_1",
+            max_records=4,
+            source_columns=("value", "group_id", "timestamp"),
+        )
         sample_model_metadata.save_metadata()
 
         with patch("nemo_safe_synthesizer.llm.metadata.AutoConfig") as mock_ac:
@@ -746,8 +751,7 @@ class TestGenerationMaxTokensFor:
             )
 
         assert reloaded.timeseries_group_values == [7, "group-A", 2.5]
-        assert reloaded.timeseries_source_columns == ["value", "group_id", "timestamp"]
-        assert reloaded.flexible_timeseries is True
+        assert reloaded.flexible_timeseries_metadata == sample_model_metadata.flexible_timeseries_metadata
 
     def test_metadata_max_records_per_group_accepts_none_or_positive(
         self, sample_prompt_config, mock_autoconfig_obj, sample_workdir

@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
+from nemo_safe_synthesizer.config.time_series import FlexibleTimeseriesMetadata
 from nemo_safe_synthesizer.defaults import PSEUDO_GROUP_COLUMN
 from nemo_safe_synthesizer.errors import DataError, ParameterError
 from nemo_safe_synthesizer.training.timeseries_preprocessing import process_timeseries_data
@@ -273,7 +274,9 @@ def test_process_flexible_timeseries_marks_only_final_real_row(fixture_variable_
     result, resolved = process_timeseries_data(fixture_variable_length_sequences, config)
 
     assert resolved.time_series.flexible_timeseries is True
-    assert resolved.time_series.sequence_max_records == 4
+    metadata = resolved.time_series.flexible_timeseries_metadata
+    assert metadata is not None
+    assert metadata.max_records == 4
     assert list(result.columns) == ["group", "_time_idx", "timestamp", "value", "_is_last_row"]
     assert result.groupby("group", sort=False).size().to_dict() == {"A": 1, "B": 2, "C": 4}
     for _, group in result.groupby("group", sort=False):
@@ -300,7 +303,9 @@ def test_process_flexible_timeseries_normalizes_timestamp_sort_key():
     result, resolved = process_timeseries_data(data, config)
 
     assert resolved.time_series.flexible_timeseries is True
-    assert resolved.time_series.sequence_source_columns == ["value", "group", "timestamp"]
+    metadata = resolved.time_series.flexible_timeseries_metadata
+    assert metadata is not None
+    assert metadata.source_columns == ("value", "group", "timestamp")
     assert list(result.columns) == ["group", "_time_idx", "value", "timestamp", "_is_last_row"]
     group_a = result[result["group"] == "A"]
     assert group_a["_time_idx"].tolist() == [0, 1]
@@ -365,8 +370,10 @@ def test_process_sequence_resolves_control_column_collisions():
 
     result, resolved = process_timeseries_data(data, config)
 
-    assert resolved.time_series.sequence_index_column == "_time_idx_1"
-    assert resolved.time_series.sequence_source_columns == ["group", "timestamp", "_time_idx", "value"]
+    metadata = resolved.time_series.flexible_timeseries_metadata
+    assert metadata is not None
+    assert metadata.index_column == "_time_idx_1"
+    assert metadata.source_columns == ("group", "timestamp", "_time_idx", "value")
     assert list(result.columns) == [
         "group",
         "_time_idx_1",
@@ -387,9 +394,12 @@ def test_process_prepared_last_marker_fails_closed():
         }
     )
     config = _sequence_config()
-    config.time_series.resolve_flexible_timeseries(True)
-    config.time_series.sequence_source_columns = ["group", "value"]
-    config.time_series.sequence_max_records = 2
+    config.time_series.resolve_flexible_timeseries(
+        FlexibleTimeseriesMetadata(
+            max_records=2,
+            source_columns=("group", "value"),
+        )
+    )
 
     with pytest.raises(DataError, match="exactly one true marker on its final row"):
         process_timeseries_data(data, config)

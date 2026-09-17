@@ -21,6 +21,7 @@ from transformers import AutoConfig, PretrainedConfig, PreTrainedTokenizerBase
 
 from ..cli.artifact_structure import Workdir
 from ..config.parameters import SafeSynthesizerParameters
+from ..config.time_series import FlexibleTimeseriesMetadata
 from ..defaults import (
     DEFAULT_INSTRUCTION,
     MAX_ROPE_SCALING_FACTOR,
@@ -354,12 +355,12 @@ class ModelMetadata(BaseModel):
 
     timeseries_source_columns: list[str] | None = Field(
         default=None,
-        description="Original time-series input column order restored on generated output.",
+        description="Original deterministic time-series input column order restored on generated output.",
     )
 
-    flexible_timeseries: bool = Field(
-        default=False,
-        description="Whether automatic routing selected flexible time-series processing during training.",
+    flexible_timeseries_metadata: FlexibleTimeseriesMetadata | None = Field(
+        default=None,
+        description="Resolved internal metadata when flexible time-series processing was selected during training.",
     )
 
     max_tokens_per_example: int | None = Field(

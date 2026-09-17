@@ -372,6 +372,8 @@ does not hold, preprocessing adds internal sequence-index and final-row marker
 columns so each group can terminate independently. These internal columns are
 removed from final output. Null, unparseable, or otherwise invalid timestamps
 remain configuration or data errors and do not trigger flexible routing.
+Flexible-routing control columns and termination bounds are derived internal
+metadata, not user configuration fields.
 
 See [`TimeSeriesParameters`][nemo_safe_synthesizer.config.time_series.TimeSeriesParameters]
 for the full schema. For detailed descriptions and constraints, see the

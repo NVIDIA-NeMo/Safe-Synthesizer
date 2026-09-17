@@ -78,11 +78,12 @@ def process_timeseries_data(
     if ts_config.flexible_timeseries:
         training_df, group_column = prepare_flexible_timeseries_data(training_df, config)
         validation = validate_timeseries_data(training_df, config)
+        metadata = ts_config.flexible_timeseries_metadata
         logger.info(
             "Prepared automatically routed flexible time-series data.",
             extra={
                 "group_column": group_column,
-                "sequence_max_records": ts_config.sequence_max_records,
+                "sequence_max_records": metadata.max_records if metadata is not None else None,
             },
         )
         return validation.data, config

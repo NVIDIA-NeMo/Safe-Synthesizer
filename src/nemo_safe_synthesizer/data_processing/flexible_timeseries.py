@@ -8,6 +8,7 @@ from __future__ import annotations
 import pandas as pd
 
 from ..config.parameters import SafeSynthesizerParameters
+from ..config.time_series import FlexibleTimeseriesMetadata
 from ..defaults import PSEUDO_GROUP_COLUMN
 from ..errors import DataError, ParameterError
 from .actions.utils import guess_datetime_format
@@ -20,6 +21,7 @@ from .validation import (
 
 __all__ = [
     "prepare_flexible_timeseries_data",
+    "resolve_flexible_timeseries_metadata",
     "validate_prepared_flexible_timeseries_data",
 ]
 
@@ -44,6 +46,30 @@ def _resolve_group(data: pd.DataFrame, config: SafeSynthesizerParameters) -> tup
         return working, PSEUDO_GROUP_COLUMN
     check_groupby_column(working, group_column)
     return working, group_column
+
+
+def resolve_flexible_timeseries_metadata(
+    data: pd.DataFrame,
+    config: SafeSynthesizerParameters,
+    max_records: int,
+) -> FlexibleTimeseriesMetadata:
+    """Resolve internal control columns and source schema for flexible routing."""
+    columns = list(data.columns)
+    if config.data.group_training_examples_by is None:
+        check_no_pseudo_column_collision(data)
+        columns.append(PSEUDO_GROUP_COLUMN)
+
+    index_column = _unused_column_name(FlexibleTimeseriesMetadata.DEFAULT_INDEX_COLUMN, columns)
+    marker_column = _unused_column_name(
+        FlexibleTimeseriesMetadata.DEFAULT_MARKER_COLUMN,
+        [*columns, index_column],
+    )
+    return FlexibleTimeseriesMetadata(
+        index_column=index_column,
+        marker_column=marker_column,
+        max_records=max_records,
+        source_columns=tuple(data.columns),
+    )
 
 
 def _source_order_column(data: pd.DataFrame, config: SafeSynthesizerParameters) -> str | None:
@@ -95,10 +121,10 @@ def _timestamp_sort_key(
 
 def _validate_common_columns(
     data: pd.DataFrame,
-    config: SafeSynthesizerParameters,
+    metadata: FlexibleTimeseriesMetadata,
     group_column: str,
 ) -> None:
-    index_column = config.time_series.sequence_index_column
+    index_column = metadata.index_column
     if index_column not in data.columns:
         raise ParameterError(f"Sequence index column {index_column!r} is not present in prepared data.")
     if data[index_column].isna().any():
@@ -117,10 +143,10 @@ def _validate_common_columns(
 
 def _validate_last_marker_data(
     data: pd.DataFrame,
-    config: SafeSynthesizerParameters,
+    metadata: FlexibleTimeseriesMetadata,
     group_column: str,
 ) -> None:
-    marker_column = config.time_series.sequence_marker_column
+    marker_column = metadata.marker_column
     if marker_column not in data.columns:
         raise ParameterError(f"Last-marker column {marker_column!r} is not present in prepared data.")
     if not pd.api.types.is_bool_dtype(data[marker_column]):
@@ -140,40 +166,38 @@ def validate_prepared_flexible_timeseries_data(
     """Fail closed when prepared flexible time-series rows violate invariants."""
     if data.empty:
         raise DataError("Prepared flexible time-series data must contain at least one row.")
+    metadata = config.time_series.flexible_timeseries_metadata
+    if metadata is None:
+        raise ParameterError("Prepared flexible time-series validation requires resolved internal metadata.")
     check_groupby_column(data, group_column)
-    _validate_common_columns(data, config, group_column)
+    _validate_common_columns(data, metadata, group_column)
+    _validate_last_marker_data(data, metadata, group_column)
 
-    if not config.time_series.flexible_timeseries:
-        raise ParameterError("Prepared flexible time-series validation requires automatic flexible routing.")
-    _validate_last_marker_data(data, config, group_column)
-
-    max_records = config.time_series.sequence_max_records
     observed_max = int(data.groupby(group_column, sort=False).size().max())
-    if max_records != observed_max:
+    if metadata.max_records != observed_max:
         raise DataError(
-            f"sequence_max_records must equal the dataset-level maximum group length {observed_max}; "
-            f"got {max_records!r}."
+            f"Resolved flexible maximum record count must equal the dataset-level maximum group length "
+            f"{observed_max}; got {metadata.max_records!r}."
         )
 
 
 def _reorder_prepared_columns(
     data: pd.DataFrame,
-    config: SafeSynthesizerParameters,
+    metadata: FlexibleTimeseriesMetadata,
     group_column: str,
 ) -> pd.DataFrame:
-    ts_config = config.time_series
-    source_columns = ts_config.sequence_source_columns or []
+    source_columns = metadata.source_columns
     payload_columns = [column for column in source_columns if column != group_column]
-    ordered = [group_column, ts_config.sequence_index_column, *payload_columns, ts_config.sequence_marker_column]
+    ordered = [group_column, metadata.index_column, *payload_columns, metadata.marker_column]
     return data.loc[:, ordered]
 
 
 def _prepare_raw_sequence_data(
     data: pd.DataFrame,
     config: SafeSynthesizerParameters,
+    metadata: FlexibleTimeseriesMetadata,
 ) -> tuple[pd.DataFrame, str]:
     ts_config = config.time_series
-    source_columns = list(data.columns)
     working, group_column = _resolve_group(data, config)
 
     order_column = _source_order_column(working, config)
@@ -195,26 +219,22 @@ def _prepare_raw_sequence_data(
     working = working.sort_values(sort_columns, kind="mergesort").drop(columns=temporary_columns)
     working = working.reset_index(drop=True)
 
-    index_column = _unused_column_name(ts_config.sequence_index_column, list(working.columns))
-    ts_config.sequence_index_column = index_column
+    index_column = metadata.index_column
     working[index_column] = working.groupby(group_column, sort=False).cumcount()
 
     observed_max = int(working.groupby(group_column, sort=False).size().max())
-    if ts_config.sequence_max_records is not None and ts_config.sequence_max_records != observed_max:
+    if metadata.max_records != observed_max:
         raise ParameterError(
-            f"sequence_max_records must match the observed dataset maximum {observed_max}; "
-            f"got {ts_config.sequence_max_records}."
+            f"Resolved flexible maximum record count must match the observed dataset maximum "
+            f"{observed_max}; got {metadata.max_records}."
         )
-    ts_config.sequence_max_records = observed_max
-    ts_config.sequence_source_columns = source_columns
 
-    marker_column = _unused_column_name(ts_config.sequence_marker_column, list(working.columns))
-    ts_config.sequence_marker_column = marker_column
+    marker_column = metadata.marker_column
     working[marker_column] = False
     final_indices = working.groupby(group_column, sort=False).tail(1).index
     working.loc[final_indices, marker_column] = True
 
-    return _reorder_prepared_columns(working, config, group_column), group_column
+    return _reorder_prepared_columns(working, metadata, group_column), group_column
 
 
 def prepare_flexible_timeseries_data(
@@ -223,11 +243,12 @@ def prepare_flexible_timeseries_data(
 ) -> tuple[pd.DataFrame, str]:
     """Prepare raw data or normalize an already prepared flexible time-series table."""
     ts_config = config.time_series
-    source_columns = ts_config.sequence_source_columns
-    index_column = ts_config.sequence_index_column
+    metadata = ts_config.flexible_timeseries_metadata
+    if metadata is None:
+        raise ParameterError("Flexible time-series preparation requires resolved internal metadata.")
 
-    if index_column in data.columns and source_columns is not None:
-        expected_columns = {*source_columns, index_column, ts_config.sequence_marker_column}
+    if metadata.index_column in data.columns:
+        expected_columns = {*metadata.source_columns, metadata.index_column, metadata.marker_column}
         if set(data.columns) != expected_columns:
             raise DataError(
                 "Prepared flexible time-series columns must contain exactly the configured source columns and "
@@ -235,18 +256,21 @@ def prepare_flexible_timeseries_data(
             )
         working, group_column = _resolve_group(data, config)
         observed_max = int(working.groupby(group_column, sort=False).size().max())
-        if ts_config.sequence_max_records is None:
-            ts_config.sequence_max_records = observed_max
-        working = _reorder_prepared_columns(working, config, group_column)
+        if metadata.max_records != observed_max:
+            raise DataError(
+                f"Resolved flexible maximum record count must equal the dataset-level maximum group length "
+                f"{observed_max}; got {metadata.max_records!r}."
+            )
+        working = _reorder_prepared_columns(working, metadata, group_column)
     else:
-        working, group_column = _prepare_raw_sequence_data(data, config)
+        working, group_column = _prepare_raw_sequence_data(data, config, metadata)
 
-    ts_config.timestamp_column = ts_config.sequence_index_column
+    ts_config.timestamp_column = metadata.index_column
     ts_config.timestamp_format = "elapsed_seconds"
     ts_config.timestamp_interval_seconds = 1
     ts_config.start_timestamp = 0
-    ts_config.stop_timestamp = (ts_config.sequence_max_records or 1) - 1
+    ts_config.stop_timestamp = metadata.max_records - 1
     config.data.group_training_examples_by = group_column
-    config.data.order_training_examples_by = ts_config.sequence_index_column
+    config.data.order_training_examples_by = metadata.index_column
     validate_prepared_flexible_timeseries_data(working, config, group_column)
     return working, group_column

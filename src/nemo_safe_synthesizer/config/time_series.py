@@ -4,9 +4,9 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated, Self
+from typing import Annotated, ClassVar, Self
 
-from pydantic import Field, PrivateAttr, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
 
 from ..configurator.parameters import (
     Parameters,
@@ -17,6 +17,33 @@ __all__ = [
 ]
 
 
+class FlexibleTimeseriesMetadata(BaseModel):
+    """Internal values resolved when flexible time-series routing is selected."""
+
+    model_config = ConfigDict(frozen=True)
+
+    DEFAULT_INDEX_COLUMN: ClassVar[str] = "_time_idx"
+    DEFAULT_MARKER_COLUMN: ClassVar[str] = "_is_last_row"
+
+    index_column: str = DEFAULT_INDEX_COLUMN
+    marker_column: str = DEFAULT_MARKER_COLUMN
+    max_records: int = Field(ge=1)
+    source_columns: tuple[str, ...]
+
+    @model_validator(mode="after")
+    def validate_internal_columns(self) -> Self:
+        """Validate the resolved internal schema."""
+        if not self.index_column:
+            raise ValueError("index_column must not be empty.")
+        if not self.marker_column:
+            raise ValueError("marker_column must not be empty.")
+        if self.index_column == self.marker_column:
+            raise ValueError("index_column and marker_column must be different.")
+        if len(set(self.source_columns)) != len(self.source_columns):
+            raise ValueError("source_columns must not contain duplicates.")
+        return self
+
+
 class TimeSeriesParameters(Parameters):
     """Configuration for time-series mode in the Safe Synthesizer pipeline.
 
@@ -25,7 +52,7 @@ class TimeSeriesParameters(Parameters):
     The time-series pipeline is currently experimental.
     """
 
-    _flexible_timeseries: bool = PrivateAttr(default=False)
+    _flexible_timeseries_metadata: FlexibleTimeseriesMetadata | None = PrivateAttr(default=None)
 
     is_timeseries: Annotated[
         bool,
@@ -98,53 +125,23 @@ class TimeSeriesParameters(Parameters):
         ),
     ] = None
 
-    sequence_index_column: str = Field(
-        default="_time_idx",
-        description="Preferred internal zero-based sequence index column for flexible time-series processing.",
-    )
-
-    sequence_marker_column: str = Field(
-        default="_is_last_row",
-        description="Preferred internal final-row marker column for flexible time-series processing.",
-    )
-
-    sequence_max_records: int | None = Field(
-        default=None,
-        ge=1,
-        description=(
-            "Dataset-level sequence length cap. Preprocessing resolves this to the maximum observed group length. "
-            "When provided, it must match that observed maximum. Must be >= 1."
-        ),
-    )
-
-    sequence_source_columns: list[str] | None = Field(
-        default=None,
-        description="Original source column order retained for strict schema inference and generated-output cleanup.",
-    )
-
     @property
     def flexible_timeseries(self) -> bool:
         """Whether automatic routing selected flexible time-series processing."""
-        return self._flexible_timeseries
+        return self._flexible_timeseries_metadata is not None
 
-    def resolve_flexible_timeseries(self, enabled: bool) -> None:
-        """Record the internal automatic-routing decision."""
-        self._flexible_timeseries = enabled
+    @property
+    def flexible_timeseries_metadata(self) -> FlexibleTimeseriesMetadata | None:
+        """Return internal metadata for the resolved flexible representation."""
+        return self._flexible_timeseries_metadata
+
+    def resolve_flexible_timeseries(self, metadata: FlexibleTimeseriesMetadata | None) -> None:
+        """Record or clear the internal automatic-routing result."""
+        self._flexible_timeseries_metadata = metadata
 
     @model_validator(mode="after")
     def check_timestamp_column_or_interval_when_timeseries(self) -> Self:
         """Validate that time-series mode has a timestamp source and non-timeseries mode has no `timestamp_column`."""
-        if not self.sequence_index_column:
-            raise ValueError("sequence_index_column must not be empty.")
-        if not self.sequence_marker_column:
-            raise ValueError("sequence_marker_column must not be empty.")
-        if self.sequence_index_column == self.sequence_marker_column:
-            raise ValueError("sequence_index_column and sequence_marker_column must be different.")
-        if self.sequence_source_columns is not None and len(set(self.sequence_source_columns)) != len(
-            self.sequence_source_columns
-        ):
-            raise ValueError("sequence_source_columns must not contain duplicates.")
-
         if self.is_timeseries:
             if self.timestamp_column is None and self.timestamp_interval_seconds is None:
                 raise ValueError(

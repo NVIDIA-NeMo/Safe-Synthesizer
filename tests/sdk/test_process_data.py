@@ -182,10 +182,11 @@ def test_process_data_reroutes_using_authoritative_training_split(fixture_workdi
     routing_decisions: list[tuple[bool, int | None]] = []
 
     def capture_preflight(_data, current_config, _metadata, **_kwargs):
+        flexible_metadata = current_config.time_series.flexible_timeseries_metadata
         routing_decisions.append(
             (
                 current_config.time_series.flexible_timeseries,
-                current_config.time_series.sequence_max_records,
+                flexible_metadata.max_records if flexible_metadata is not None else None,
             )
         )
         return _EMPTY_PREFLIGHT

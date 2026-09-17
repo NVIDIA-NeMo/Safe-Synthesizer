@@ -20,6 +20,7 @@ from vllm.sampling_params import SamplingParams
 
 from .. import utils
 from ..config import SafeSynthesizerParameters
+from ..config.time_series import FlexibleTimeseriesMetadata
 from ..data_processing.record_utils import ParsedRecord, _parse_timestamp_to_seconds
 from ..defaults import FIXED_RUNTIME_GENERATE_ARGS, LOG_DASHES, PSEUDO_GROUP_COLUMN
 from ..errors import GenerationError
@@ -47,11 +48,7 @@ class _ResolvedTimeseriesSettings:
     stop_timestamp: str | int | None
     timestamp_interval_seconds: int | None
     timestamp_format: str
-    flexible_timeseries: bool
-    sequence_index_column: str
-    sequence_marker_column: str
-    sequence_max_records: int | None
-    sequence_source_columns: list[str] | None
+    flexible_metadata: FlexibleTimeseriesMetadata | None
 
     @classmethod
     def from_config(cls, config: SafeSynthesizerParameters, metadata: ModelMetadata) -> Self:
@@ -80,11 +77,7 @@ class _ResolvedTimeseriesSettings:
             stop_timestamp=config.time_series.stop_timestamp,
             timestamp_interval_seconds=config.time_series.timestamp_interval_seconds,
             timestamp_format=config.time_series.timestamp_format or "",
-            flexible_timeseries=metadata.flexible_timeseries,
-            sequence_index_column=config.time_series.sequence_index_column,
-            sequence_marker_column=config.time_series.sequence_marker_column,
-            sequence_max_records=config.time_series.sequence_max_records,
-            sequence_source_columns=config.time_series.sequence_source_columns,
+            flexible_metadata=metadata.flexible_timeseries_metadata,
         )
 
 
@@ -316,16 +309,11 @@ class TimeseriesBackend(VllmBackend):
         settings = _ResolvedTimeseriesSettings.from_config(config, model_metadata)
         super().__init__(config, model_metadata, **kwargs)
 
-        self._flexible_timeseries = settings.flexible_timeseries
-        self._sequence_index_column = settings.sequence_index_column
-        self._sequence_marker_column = settings.sequence_marker_column
-        self._sequence_max_records = settings.sequence_max_records
-        self._sequence_source_columns = settings.sequence_source_columns
-        if self._flexible_timeseries and (self._sequence_max_records is None or self._sequence_source_columns is None):
-            raise GenerationError(
-                "Flexible time-series generation requires resolved sequence_max_records and sequence_source_columns. "
-                "Retrain the artifact with automatic flexible time-series processing enabled."
-            )
+        flexible_metadata = settings.flexible_metadata
+        self._flexible_timeseries = flexible_metadata is not None
+        self._sequence_index_column = flexible_metadata.index_column if flexible_metadata is not None else ""
+        self._sequence_marker_column = flexible_metadata.marker_column if flexible_metadata is not None else ""
+        self._sequence_max_records = flexible_metadata.max_records if flexible_metadata is not None else None
         self._samples_per_prompt = 1 if self._flexible_timeseries else 5
         self._max_prompts_per_batch = 100  # max prompts per batch for parallel group generation
         self._history_window_size = 3
@@ -632,7 +620,7 @@ class TimeseriesBackend(VllmBackend):
         """Structurally trim a contiguous group prefix and identify a tentative accepted-row stop."""
         if not self._flexible_timeseries:
             return records, None
-        if self._sequence_max_records is None or self._sequence_source_columns is None:
+        if self._sequence_max_records is None:
             raise GenerationError("Flexible time-series settings were not resolved.")
 
         retained: list[ParsedRecord] = []
@@ -850,7 +838,12 @@ class TimeseriesBackend(VllmBackend):
         if PSEUDO_GROUP_COLUMN in df.columns:
             df = df.drop(columns=[PSEUDO_GROUP_COLUMN])
 
-        source_columns = self.model_metadata.timeseries_source_columns
+        flexible_metadata = self.model_metadata.flexible_timeseries_metadata
+        source_columns = (
+            list(flexible_metadata.source_columns)
+            if flexible_metadata is not None
+            else self.model_metadata.timeseries_source_columns
+        )
         if source_columns:
             restored_columns = [column for column in source_columns if column in df.columns]
             if self._flexible_timeseries:

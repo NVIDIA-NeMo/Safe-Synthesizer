@@ -660,10 +660,9 @@ class HuggingFaceBackend(TrainingBackend):
         logger.info("Processing time series data")
         source_columns = list(df.columns)
         df, self.params = process_timeseries_data(df, self.params)
-        self.model_metadata.timeseries_source_columns = (
-            self.params.time_series.sequence_source_columns or source_columns
-        )
-        self.model_metadata.flexible_timeseries = self.params.time_series.flexible_timeseries
+        flexible_metadata = self.params.time_series.flexible_timeseries_metadata
+        self.model_metadata.flexible_timeseries_metadata = flexible_metadata
+        self.model_metadata.timeseries_source_columns = source_columns if flexible_metadata is None else None
         return df
 
     def _create_example_assembler(self, hf_dataset: Dataset) -> TrainingExampleAssembler:

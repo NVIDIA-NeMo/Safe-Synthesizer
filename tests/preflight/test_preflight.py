@@ -17,7 +17,7 @@ from transformers import PretrainedConfig, PreTrainedTokenizerBase
 
 from nemo_safe_synthesizer.config.data import DataParameters
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
-from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
+from nemo_safe_synthesizer.config.time_series import FlexibleTimeseriesMetadata, TimeSeriesParameters
 from nemo_safe_synthesizer.config.training import TrainingHyperparams
 from nemo_safe_synthesizer.data_processing.timeseries_validation import resolve_timeseries_routing
 from nemo_safe_synthesizer.defaults import DEFAULT_MAX_SEQ_LENGTH, PSEUDO_GROUP_COLUMN
@@ -1154,7 +1154,9 @@ class TestTokenBudgetCheck:
                 timestamp_interval_seconds=1,
             ),
         )
-        config.time_series.resolve_flexible_timeseries(True)
+        config.time_series.resolve_flexible_timeseries(
+            FlexibleTimeseriesMetadata(max_records=8, source_columns=("grp", "value"))
+        )
         df = pd.DataFrame({"grp": ["A"] * 8, "value": list(range(8))})
         metadata = self._metadata(_PseudoColumnSensitiveTokenizer(), max_seq_length=10)
 
@@ -1171,7 +1173,9 @@ class TestTokenBudgetCheck:
                 timestamp_interval_seconds=1,
             ),
         )
-        config.time_series.resolve_flexible_timeseries(True)
+        config.time_series.resolve_flexible_timeseries(
+            FlexibleTimeseriesMetadata(max_records=1, source_columns=("grp", "value"))
+        )
         df = pd.DataFrame({"grp": ["A"], "value": ["oversized"]})
         tokenizer = MagicMock()
         tokenizer.encode.return_value = list(range(20))

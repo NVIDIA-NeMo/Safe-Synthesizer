@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
+from nemo_safe_synthesizer.config.time_series import FlexibleTimeseriesMetadata
 from nemo_safe_synthesizer.data_processing.timeseries_validation import (
     TimeSeriesDataValidationError,
     TimeSeriesGroupTimestampStats,
@@ -47,7 +48,7 @@ def test_routing_keeps_deterministic_pipeline_when_all_constraints_match():
     assert decision.uses_flexible_timeseries is False
     assert decision.failed_constraints == ()
     assert config.time_series.flexible_timeseries is False
-    assert config.time_series.sequence_max_records is None
+    assert config.time_series.flexible_timeseries_metadata is None
 
 
 def test_routing_does_not_promote_order_column_to_missing_timestamp():
@@ -95,7 +96,9 @@ def test_routing_uses_flexible_timeseries_and_reports_all_shape_mismatches():
     )
     assert decision.sequence_max_records == 3
     assert config.time_series.flexible_timeseries is True
-    assert config.time_series.sequence_max_records == 3
+    metadata = config.time_series.flexible_timeseries_metadata
+    assert metadata is not None
+    assert metadata.max_records == 3
 
 
 def test_routing_detects_interval_only_mismatch_without_mutating_inspection():
@@ -483,11 +486,14 @@ def test_validate_timeseries_data_allows_automatically_routed_lengths_and_stops(
         timestamp_format="elapsed_seconds",
         timestamp_interval_seconds=1,
         group_training_examples_by="group",
-        sequence_max_records=2,
-        sequence_source_columns=["group", "value"],
         rope_scaling_factor=1,
     )
-    config.time_series.resolve_flexible_timeseries(True)
+    config.time_series.resolve_flexible_timeseries(
+        FlexibleTimeseriesMetadata(
+            max_records=2,
+            source_columns=("group", "value"),
+        )
+    )
 
     result = validate_timeseries_data(df, config)
 
