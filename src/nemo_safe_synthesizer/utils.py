@@ -59,7 +59,7 @@ def hf_offline_enabled() -> bool:
 
     True when ``HF_HUB_OFFLINE`` or ``TRANSFORMERS_OFFLINE`` is set to a truthy
     value. huggingface_hub honors these globally, so when enabled both the base
-    model and GLiNER skip network downloads and resolve from the local cache.
+    model and other Hub assets skip network downloads and resolve from the local cache.
     """
     return any(env_flag_is_true(name) for name in _HF_OFFLINE_ENV_VARS)
 
