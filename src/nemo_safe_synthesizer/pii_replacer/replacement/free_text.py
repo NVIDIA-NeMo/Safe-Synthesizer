@@ -8,12 +8,14 @@ from __future__ import annotations
 import time
 from collections.abc import Hashable
 from dataclasses import dataclass, field
+from typing import Literal
 
 import pandas as pd
 
 from ...config.replace_pii import EntityType, PiiColumnPlan
 from ...errors import GenerationError, ParameterError
 from ..planning.patterns import extract_name_components
+from ..transform_result import FreeTextReplacementRecord
 from .detection import FreeTextDetector, fresh_detection_entity_types, resolve_overlapping_spans
 from .generation import ReplacementGenerationRequest, ReplacementGenerator, generated_value_is_valid
 from .seeding import derive_seed
@@ -51,6 +53,7 @@ class FreeTextExecutionResult:
     column_statistics: dict[str, FreeTextColumnStatistics]
     generated_replacement_count: int
     elapsed_time_seconds: float
+    replacement_records: tuple[FreeTextReplacementRecord, ...]
 
 
 class FreeTextReplacementExecutor:
@@ -69,12 +72,15 @@ class FreeTextReplacementExecutor:
         detector: FreeTextDetector | None,
         *,
         base_seed: int,
+        capture_replacement_map: bool = False,
     ) -> None:
         self._generator = generator
         self._detector = detector
         self._base_seed = base_seed
+        self._capture_replacement_map = capture_replacement_map
         self._cache: dict[FreeTextMappingKey, str] = {}
         self._statistics: dict[str, FreeTextColumnStatistics] = {}
+        self._replacement_records: list[FreeTextReplacementRecord] = []
         self._generation_elapsed = 0.0
         self._generated_count = 0
 
@@ -82,6 +88,7 @@ class FreeTextReplacementExecutor:
         """Discard all mappings and aggregates from an earlier dataframe execution."""
         self._cache.clear()
         self._statistics.clear()
+        self._replacement_records.clear()
         self._generation_elapsed = 0.0
         self._generated_count = 0
 
@@ -123,6 +130,7 @@ class FreeTextReplacementExecutor:
             column_statistics=self._statistics,
             generated_replacement_count=self._generated_count,
             elapsed_time_seconds=self._generation_elapsed,
+            replacement_records=tuple(self._replacement_records),
         )
 
     def register_structured_mapping(
@@ -219,10 +227,12 @@ class FreeTextReplacementExecutor:
             spans = spans_by_cell.get(cell_id, ())
             if spans:
                 scope_identity = row_position if group_identities is None else group_identities[row_position]
+                scope = "record" if group_identities is None else "group"
                 working.iat[row_position, column_position] = self._replace_cell(
                     DetectionCell(cell_id, original, fresh_detection_entity_types()),
                     spans,
                     scope_identity,
+                    scope,
                     statistics,
                 )
 
@@ -231,6 +241,7 @@ class FreeTextReplacementExecutor:
         cell: DetectionCell,
         spans: tuple[DetectedSpan, ...],
         scope_identity: Hashable,
+        scope: Literal["record", "group"],
         statistics: FreeTextColumnStatistics,
     ) -> str:
         """Construct one replacement cell from ascending original-text offsets."""
@@ -242,6 +253,21 @@ class FreeTextReplacementExecutor:
             parts.extend((cell.text[cursor : span.start], replacement))
             cursor = span.end
             _record_detection(statistics, span, value)
+            if self._capture_replacement_map:
+                self._replacement_records.append(
+                    FreeTextReplacementRecord(
+                        row_position=cell.cell_id.row_position,
+                        column_name=cell.cell_id.column_name,
+                        start=span.start,
+                        end=span.end,
+                        entity_type=span.entity_type,
+                        detection_source=span.source,
+                        score=span.score,
+                        scope=scope,
+                        original_value=value,
+                        replacement_value=replacement,
+                    )
+                )
         parts.append(cell.text[cursor:])
         return "".join(parts)
 
