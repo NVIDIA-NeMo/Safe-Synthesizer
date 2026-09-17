@@ -551,7 +551,7 @@ class TestReplacePiiConfig:
     def test_free_text_detection_defaults_and_serialization(self) -> None:
         config = ReplacePiiConfig()
         expected_thresholds = {
-            EntityType.FULL_NAME: 0.9,
+            EntityType.FULL_NAME: 0.95,
             EntityType.FIRST_NAME: 0.9,
             EntityType.MIDDLE_NAME: 0.9,
             EntityType.LAST_NAME: 0.9,

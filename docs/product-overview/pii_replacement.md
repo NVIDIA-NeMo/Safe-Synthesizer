@@ -276,7 +276,7 @@ replace_pii:
   free_text_detection:
     model_id: fastino/gliner2-privacy-filter-PII-multi
     entity_thresholds:
-      full_name: 0.9
+      full_name: 0.95
       first_name: 0.9
       middle_name: 0.9
       last_name: 0.9
@@ -307,11 +307,11 @@ with more specific detections.
 
 The checkpoint is optimized for recall and can confuse common or domain terms
 with names. NSS therefore configures a confidence threshold for every
-GLiNER2-detected entity type, with a precision-first `0.9` default for all name
-types and `0.5` for the remaining model-detected types. Regex-owned types have
-no confidence threshold. Checkpoint aliases use the threshold of the NSS entity
-they normalize to. Lower name thresholds only after calibrating against
-representative domain text.
+GLiNER2-detected entity type, with a precision-first `0.95` default for
+`full_name`, `0.9` for the specific name-part types, and `0.5` for the remaining
+model-detected types. Regex-owned types have no confidence threshold. Checkpoint
+aliases use the threshold of the NSS entity they normalize to. Lower name
+thresholds only after calibrating against representative domain text.
 
 NSS automatically uses CUDA when available and otherwise runs GLiNER2 on CPU.
 It deduplicates identical cell text, flattens overlapping chunks across unique
@@ -373,7 +373,7 @@ replace_pii:
   free_text_detection:
     model_id: fastino/gliner2-privacy-filter-PII-multi
     entity_thresholds:
-      full_name: 0.9
+      full_name: 0.95
       first_name: 0.9
       middle_name: 0.9
       last_name: 0.9

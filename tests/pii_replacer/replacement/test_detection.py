@@ -144,7 +144,7 @@ class TestGliner2Detector:
             (2, EntityType.PHONE_NUMBER),
         ]
         labels = model.calls[0][1]
-        assert labels["full_name"] == {"threshold": 0.9}
+        assert labels["full_name"] == {"threshold": 0.95}
         assert labels["first_name"] == {"threshold": 0.9}
         assert labels["middle_name"] == {"threshold": 0.9}
         assert labels["last_name"] == {"threshold": 0.9}

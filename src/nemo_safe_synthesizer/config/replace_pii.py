@@ -278,9 +278,7 @@ REGEX_DETECTION_ENTITY_TYPES: tuple[EntityType, ...] = (
 """Entity types detected exclusively by structurally validated built-in regex rules."""
 
 GLINER_DETECTION_ENTITY_TYPES: tuple[EntityType, ...] = tuple(
-    entity_type
-    for entity_type in FREE_TEXT_DETECTION_ENTITY_TYPES
-    if entity_type not in REGEX_DETECTION_ENTITY_TYPES
+    entity_type for entity_type in FREE_TEXT_DETECTION_ENTITY_TYPES if entity_type not in REGEX_DETECTION_ENTITY_TYPES
 )
 """Entity types requested from GLiNER2 rather than the built-in regex detector.
 
@@ -288,21 +286,20 @@ The checkpoint's specific ``full_name`` label is used for complete names; its
 broader ``person`` label is intentionally not requested.
 """
 
-_NAME_ENTITY_TYPES = frozenset(
-    {
-        EntityType.FIRST_NAME,
-        EntityType.MIDDLE_NAME,
-        EntityType.LAST_NAME,
-        EntityType.FULL_NAME,
-    }
-)
+_DEFAULT_NAME_ENTITY_THRESHOLDS = {
+    EntityType.FIRST_NAME: 0.9,
+    EntityType.MIDDLE_NAME: 0.9,
+    EntityType.LAST_NAME: 0.9,
+    EntityType.FULL_NAME: 0.95,
+}
 _ConfidenceThreshold = Annotated[float, Field(ge=0, le=1)]
 
 
 def _default_gliner_entity_thresholds() -> dict[EntityType, float]:
     """Return a fresh, complete set of precision-first GLiNER2 thresholds."""
     return {
-        entity_type: 0.9 if entity_type in _NAME_ENTITY_TYPES else 0.5 for entity_type in GLINER_DETECTION_ENTITY_TYPES
+        entity_type: _DEFAULT_NAME_ENTITY_THRESHOLDS.get(entity_type, 0.5)
+        for entity_type in GLINER_DETECTION_ENTITY_TYPES
     }
 
 
