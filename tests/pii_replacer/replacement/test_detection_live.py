@@ -34,7 +34,6 @@ def test_pinned_model_detects_representative_name_and_birth_date() -> None:
     assert entity_types & {
         EntityType.FIRST_NAME,
         EntityType.LAST_NAME,
-        EntityType.FULL_NAME,
     }
 
 
@@ -58,5 +57,4 @@ def test_precision_first_name_entities_reject_representative_medical_terms() -> 
         EntityType.FIRST_NAME,
         EntityType.MIDDLE_NAME,
         EntityType.LAST_NAME,
-        EntityType.FULL_NAME,
     } & {span.entity_type for span in spans}
