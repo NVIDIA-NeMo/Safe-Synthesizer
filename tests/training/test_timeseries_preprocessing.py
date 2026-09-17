@@ -7,9 +7,8 @@ import pandas as pd
 import pytest
 
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
-from nemo_safe_synthesizer.config.time_series import FlexibleTimeseriesMetadata
 from nemo_safe_synthesizer.defaults import PSEUDO_GROUP_COLUMN
-from nemo_safe_synthesizer.errors import DataError, ParameterError
+from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.training.timeseries_preprocessing import process_timeseries_data
 
 
@@ -382,24 +381,3 @@ def test_process_sequence_resolves_control_column_collisions():
         "value",
         "_is_last_row",
     ]
-
-
-def test_process_prepared_last_marker_fails_closed():
-    data = pd.DataFrame(
-        {
-            "group": ["A", "A"],
-            "_time_idx": [0, 1],
-            "value": [1, 2],
-            "_is_last_row": [True, False],
-        }
-    )
-    config = _sequence_config()
-    config.time_series.resolve_flexible_timeseries(
-        FlexibleTimeseriesMetadata(
-            max_records=2,
-            source_columns=("group", "value"),
-        )
-    )
-
-    with pytest.raises(DataError, match="exactly one true marker on its final row"):
-        process_timeseries_data(data, config)
