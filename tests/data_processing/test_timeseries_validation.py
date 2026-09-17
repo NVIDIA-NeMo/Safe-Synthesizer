@@ -50,6 +50,29 @@ def test_routing_keeps_deterministic_pipeline_when_all_constraints_match():
     assert config.time_series.sequence_max_records is None
 
 
+def test_routing_does_not_promote_order_column_to_missing_timestamp():
+    data = pd.DataFrame(
+        {
+            "group": ["A", "A", "B", "B"],
+            "event": ["second", "first", "second", "first"],
+            "value": [2, 1, 4, 3],
+        }
+    )
+    config = SafeSynthesizerParameters.from_params(
+        is_timeseries=True,
+        timestamp_interval_seconds=60,
+        group_training_examples_by="group",
+        order_training_examples_by="event",
+        rope_scaling_factor=1,
+    )
+
+    decision = resolve_timeseries_routing(data, config)
+
+    assert decision is not None
+    assert decision.uses_flexible_timeseries is False
+    assert config.time_series.timestamp_column is None
+
+
 def test_routing_uses_flexible_timeseries_and_reports_all_shape_mismatches():
     data = pd.DataFrame(
         {

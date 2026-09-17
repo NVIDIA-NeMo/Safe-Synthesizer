@@ -27,9 +27,10 @@ Time series support enables Safe Synthesizer to generate synthetic tabular data 
 ### Key Features
 
 - Unified grouped architecture: All time series are processed through a unified grouped architecture. Single-sequence data is automatically treated as a single group via an internal pseudo-group column, enabling consistent processing paths.
+- Automatic shape routing: Data with equal group lengths, common start and stop timestamps, and consistent intervals uses deterministic time-range generation. Data that does not satisfy any of those shape constraints is routed to flexible marker-based generation.
 - Sliding window generation: Uses a sliding window approach where recently generated records are fed back as context for generating the next batch.
 - Parallel group generation: Multiple groups are processed in parallel batches for efficiency, even single-sequence data uses this optimized path.
-- Time-range based generation: The number of records generated is determined by the configured time range and interval `(stop_timestamp - start_timestamp) / interval_seconds`, not by a target count.
+- Shape-aware termination: Deterministic generation uses the configured time range and interval. Flexible generation learns a final-row marker and retains the maximum observed group length as a safety cap.
 - Chronological constraint enforcement: Validates that generated timestamps follow the expected interval pattern.
 - Autocorrelation-based evaluation: Measures how well the synthetic data preserves temporal patterns from the original data. (ToDo)
 
@@ -54,7 +55,25 @@ Validation Rules:
 - When `is_timeseries=True`, at least one of `timestamp_column` or `timestamp_interval_seconds` must be provided.
 - When `is_timeseries=False`, `timestamp_column` cannot be set.
 - For grouped time series, `group_training_examples_by` (in data config) should also be set.
-- All groups must have the same start and stop timestamps (enforced during preprocessing).
+- When a source timestamp column is configured, its values must be present,
+  parseable, and finite. Malformed timestamp data remains an error rather than
+  a flexible-routing condition.
+
+### Automatic Shape Routing
+
+Routing is internal and requires no additional user configuration. The deterministic pipeline is selected only when every source group has:
+
+- the same number of records;
+- the same start timestamp;
+- the same stop timestamp;
+- one consistent positive whole-second interval within and across groups.
+
+If any of these four shape constraints does not hold, preprocessing assigns a
+zero-based `_time_idx` within each group and an `_is_last_row` marker to the
+final source row. A configured source timestamp remains part of the generated
+payload; `_time_idx` becomes the checked generation-time sequence column with
+interval one. Both control columns are removed from final output, and the
+original source-column order is restored.
 
 ### Generation Parameters
 
@@ -118,13 +137,13 @@ Time series preprocessing occurs during training data preparation in `src/nemo_s
    - If `timestamp_interval_seconds` is provided, validates that actual intervals match (with 0.1s tolerance).
    - If not provided, infers the interval only if all groups have consistent intervals.
 
-7. Start/Stop Consistency Validation
-   - Validates that all groups have the same start and stop timestamps.
-   - If timestamps differ across groups, raises a `DataError`.
-   - Sets `start_timestamp` and `stop_timestamp` in config based on validated values.
+7. Shape Routing
+   - Keeps deterministic processing when group lengths, starts, stops, and intervals are consistent.
+   - Otherwise assigns `_time_idx` and `_is_last_row` for flexible processing.
+   - Uses the largest observed group length as a dataset-level generation cap.
 
 8. Identity Column Ordering
-   - Places the group and timestamp columns before all generated value columns.
+   - Places the group and checked timestamp/index columns before all generated value columns.
    - This order is persisted in the schema and training JSONL so generation can begin with those known fields.
    - The pseudo-group remains internal and is excluded from the persisted schema.
 
@@ -133,13 +152,14 @@ Time series preprocessing occurs during training data preparation in `src/nemo_s
 ```
 HuggingFaceBackend._process_timeseries()
     └── process_timeseries_data(df, config)
+            ├── resolve_timeseries_routing()      # Inspect source shape
+            ├── prepare_flexible_timeseries_data()# Add index/marker when routed
             ├── validate_timeseries_data()        # Shared normalization + validation
             │       ├── pseudo-group normalization
             │       ├── generated elapsed-seconds timestamp normalization
             │       ├── timestamp format/parse validation
-            │       ├── group length validation
             │       ├── interval consistency validation
-            │       └── start/stop consistency validation
+            │       └── mode-specific range validation
             ├── order group and timestamp columns first
             └── Return (processed_df, updated_config)
 ```
@@ -233,7 +253,9 @@ TimeseriesBackend(VllmBackend)
 
 ### Key Concepts
 
-- Time-Range Based Generation: The number of records generated is determined by `(stop_timestamp - start_timestamp) / interval_seconds`, not by a target count. The `config.generation.num_records` parameter is used only for progress tracking.
+- Deterministic Time-Range Generation: For fixed-shape inputs, the number of records is determined by `(stop_timestamp - start_timestamp) / interval_seconds`.
+- Flexible Marker Generation: For automatically routed inputs, each accepted row must advance `_time_idx` by one. The row carrying `_is_last_row=true` is retained and completes the group; later rows in the same completion are discarded. If no marker appears, generation stops at the dataset-level maximum source-group length.
+- Internal Control Cleanup: `_time_idx`, `_is_last_row`, and any pseudo-group column are removed before returning final synthetic data.
 - Partial-Record Initialization: Every group starts with an incomplete JSON record containing its known group ID and start timestamp, plus the opening quote of the next field name. Including the complete training `,"` token makes the prefix tokenization identical to a full training record while leaving the field name and value for the model.
 - Training-Dialect Serialization: Constructed prefixes and rolling records use the same compact JSON representation as training, including escaped slashes and schema field order.
 - Training-Compatible Token Boundary: Generation explicitly reproduces the prompt BOS/EOS settings and sequence BOS token used by training. The first JSON byte follows the sequence BOS directly, without added whitespace.
@@ -304,7 +326,8 @@ class GroupState:
 ### Stopping Conditions
 
 Per-Group Stopping:
-- Completion (success): A group completes when any generated record has timestamp >= `stop_timestamp`.
+- Deterministic completion: A group completes when an accepted record reaches `stop_timestamp`.
+- Flexible completion: A group completes on the first accepted `_is_last_row=true` row or when `_time_idx` reaches the dataset-level safety cap.
 - Failure (low valid fraction): A group fails after `config.generation.patience` consecutive batches where invalid fraction >= `config.generation.invalid_fraction_threshold`. Failed groups produce no synthetic data.
 
 Global Stopping:

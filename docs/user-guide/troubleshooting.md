@@ -31,7 +31,7 @@ configuration, and NER parallelism, see [Environment Variables](environment.md).
 | Low SQS scores | Underfit or too few records | [Review distributions](evaluating-data.md#low-sqs-scores) |
 | PII uses default entities | Classifier failed | [Set entities explicitly](evaluating-data.md#pii-uses-unexpected-entity-types) |
 | "timestamp_column has missing values" | Dirty time series data | Clean NaN/nulls from timestamp column |
-| "groups must have same start" | Inconsistent groups | [Align group start timestamps](#groups-must-have-same-start) |
+| `flexible_timeseries_routing` warning | Groups have different shapes | [Review flexible routing](#flexible-routing-warning) |
 | Pre-flight validation fails | Dataset or config issue | [Pre-flight validation codes](#pre-flight-validation-codes) |
 
 ---
@@ -528,11 +528,12 @@ check of its own.
 | `timestamp_parse_failed` | error | `timeseries.shape` | One or more timestamp values could not be parsed with the inferred or configured timestamp format |
 | `timestamp_elapsed_non_numeric` | error | `timeseries.shape` | `timestamp_format='elapsed_seconds'` was configured for a non-numeric timestamp column |
 | `timestamp_elapsed_invalid` | error | `timeseries.shape` | `timestamp_format='elapsed_seconds'` was configured for boolean or infinite timestamp values |
-| `timestamp_interval_mismatch` | error | `timeseries.shape` | Timestamp intervals are inconsistent within or across groups, or do not match `timestamp_interval_seconds` |
+| `flexible_timeseries_routing` | warning | `timeseries.shape` | Group lengths, starts, stops, or intervals require automatic flexible time-series processing |
+| `timestamp_interval_mismatch` | error | `timeseries.shape` | A deterministic or already-prepared time-series input has invalid timestamp intervals |
 | `timeseries_empty` | error | `timeseries.shape` | Time-series data contains no records to validate |
-| `timeseries_group_length_mismatch` | error | `timeseries.shape` | Time-series groups do not contain the same number of records |
-| `timeseries_start_mismatch` | error | `timeseries.shape` | Time-series groups do not share the same start timestamp |
-| `timeseries_stop_mismatch` | error | `timeseries.shape` | Time-series groups do not share the same stop timestamp |
+| `timeseries_group_length_mismatch` | error | `timeseries.shape` | A deterministic or already-prepared input has incompatible group lengths |
+| `timeseries_start_mismatch` | error | `timeseries.shape` | A deterministic or already-prepared input has incompatible start indices |
+| `timeseries_stop_mismatch` | error | `timeseries.shape` | A deterministic or already-prepared input has incompatible stop indices |
 | `tokenizer_unavailable` | warning | `token_budget` | Model tokenizer could not be loaded; token checks skipped |
 | `schema_exceeds_context` | error | `token_budget` | Schema prompt exceeds model context window |
 | `record_exceeds_context` | error | `token_budget` | Individual records exceed context window |
@@ -643,15 +644,20 @@ Missing timestamp values:
     df = df.sort_values(by=["group_column", "timestamp"])
     ```
 
-Interval mismatch:
+Flexible-routing warning:
 
-: If `timestamp_interval_seconds` does not match the actual intervals in your
-  data, pre-flight and training fail with `timestamp_interval_mismatch`.
-  Verify your interval setting matches the data and is a positive whole number
-  of seconds. Fractional/sub-second intervals are not supported; resample or
-  represent the data at whole-second resolution. Time-series synthesis is
-  experimental, and this validation is intentionally strict so mismatches are
-  caught before expensive pipeline stages.
+: If groups differ in length, start timestamp, stop timestamp, or interval,
+  pre-flight reports `flexible_timeseries_routing` and automatically uses
+  flexible processing. Flexible processing generates the source timestamp as
+  payload while validating an internal zero-based sequence index. The warning
+  lists the shape constraints that triggered routing and the maximum source
+  group length used as a safety cap.
+
+Invalid timestamp data:
+
+: Null, non-finite, unparseable, or format-incompatible timestamps remain
+  errors. Flexible routing handles valid but differently shaped sequences; it
+  does not repair malformed timestamps.
 
 Groups skipped during generation:
 
@@ -665,14 +671,12 @@ Out-of-order records:
 : During generation, records are validated for chronological order. Records
   that arrive out of order are marked invalid.
 
-#### Groups must have same start
+#### Groups with different starts or lengths
 
-All groups in the dataset must begin at the same timestamp when
-`time_series.start_timestamp` is `null` (inferred from data). If group
-start timestamps differ, the pipeline raises a `DataError`. Either align
-all group start timestamps in your data, or set
-`time_series.start_timestamp` to an explicit value that applies to all
-groups.
+Groups do not need to share a start timestamp, stop timestamp, or record
+count. Differences in any of these properties select flexible time-series
+processing automatically. Each group learns termination through an internal
+final-row marker and is bounded by the maximum source-group length.
 
 ---
 

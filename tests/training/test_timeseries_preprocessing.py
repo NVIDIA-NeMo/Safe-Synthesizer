@@ -280,6 +280,60 @@ def test_process_flexible_timeseries_marks_only_final_real_row(fixture_variable_
         assert group["_is_last_row"].tolist() == [False] * (len(group) - 1) + [True]
 
 
+def test_process_flexible_timeseries_normalizes_timestamp_sort_key():
+    data = pd.DataFrame(
+        {
+            "value": ["new", "only", "old"],
+            "group": ["A", "B", "A"],
+            "timestamp": ["01/01/2024", "06/01/2024", "12/31/2023"],
+        }
+    )
+    config = SafeSynthesizerParameters.from_params(
+        is_timeseries=True,
+        timestamp_column="timestamp",
+        timestamp_format="%m/%d/%Y",
+        group_training_examples_by="group",
+        order_training_examples_by="timestamp",
+        rope_scaling_factor=1,
+    )
+
+    result, resolved = process_timeseries_data(data, config)
+
+    assert resolved.time_series.flexible_timeseries is True
+    assert resolved.time_series.sequence_source_columns == ["value", "group", "timestamp"]
+    assert list(result.columns) == ["group", "_time_idx", "value", "timestamp", "_is_last_row"]
+    group_a = result[result["group"] == "A"]
+    assert group_a["_time_idx"].tolist() == [0, 1]
+    assert group_a["timestamp"].tolist() == ["12/31/2023", "01/01/2024"]
+    assert group_a["value"].tolist() == ["old", "new"]
+
+
+def test_process_timestamp_less_timeseries_orders_before_generating_elapsed_time():
+    data = pd.DataFrame(
+        {
+            "group": ["B", "A", "B", "A"],
+            "event": ["second", "second", "first", "first"],
+            "value": [4, 2, 3, 1],
+        }
+    )
+    config = SafeSynthesizerParameters.from_params(
+        is_timeseries=True,
+        timestamp_interval_seconds=60,
+        group_training_examples_by="group",
+        order_training_examples_by="event",
+        rope_scaling_factor=1,
+    )
+
+    result, resolved = process_timeseries_data(data, config)
+
+    assert resolved.time_series.flexible_timeseries is False
+    assert resolved.time_series.timestamp_column == "elapsed_seconds"
+    assert resolved.data.order_training_examples_by == "elapsed_seconds"
+    assert result["group"].tolist() == ["A", "A", "B", "B"]
+    assert result["event"].tolist() == ["first", "second", "first", "second"]
+    assert result["elapsed_seconds"].tolist() == [0, 60, 0, 60]
+
+
 def test_process_fixed_shape_uses_standard_pipeline():
     data = pd.DataFrame(
         {
