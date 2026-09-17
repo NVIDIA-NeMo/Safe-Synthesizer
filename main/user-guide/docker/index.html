@@ -9527,23 +9527,45 @@ configuration. Supply those at runtime.</p>
 <p>The public image is available from <a href="https://github.com/NVIDIA-NeMo/Safe-Synthesizer/pkgs/container/safe-synthesizer">GitHub Container Registry (GHCR)</a>:</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>ghcr.io/nvidia-nemo/safe-synthesizer
 </span></code></pre></div>
-<p>Use <code>latest-cu129</code> to evaluate the current CUDA 12.9 release:</p>
+<p>Select the tag for the CUDA dependency variant you need:</p>
+<table>
+<thead>
+<tr>
+<th>Variant</th>
+<th>Evaluation tag</th>
+<th>Versioned tag</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CUDA 12.9</td>
+<td><code>latest-cu129</code></td>
+<td><code>&lt;version&gt;-cu129</code></td>
+</tr>
+<tr>
+<td>CUDA 13.0</td>
+<td><code>latest-cu130</code></td>
+<td><code>&lt;version&gt;-cu130</code></td>
+</tr>
+</tbody>
+</table>
+<p>For example, pull the CUDA 12.9 image:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>docker<span class="w"> </span>pull<span class="w"> </span>ghcr.io/nvidia-nemo/safe-synthesizer:latest-cu129
 </span></code></pre></div>
-<p>For a reproducible workload, replace that tag with an approved versioned
-<code>&lt;version&gt;-cu129</code> tag or, preferably, pin the resolved manifest digest:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>ghcr.io/nvidia-nemo/safe-synthesizer:&lt;version&gt;-cu129
+<p>For a reproducible workload, replace the evaluation tag with an approved
+versioned tag or, preferably, pin the resolved manifest digest:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>ghcr.io/nvidia-nemo/safe-synthesizer:&lt;version&gt;-&lt;variant&gt;
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>ghcr.io/nvidia-nemo/safe-synthesizer@sha256:&lt;digest&gt;
 </span></code></pre></div>
 <p>Release tags can be easier to audit; a digest identifies immutable image
-content. Keep the <code>cu129</code> suffix when selecting a version tag because it names
-the CUDA dependency variant.</p>
+content. Keep the <code>cu129</code> or <code>cu130</code> suffix when selecting a version tag
+because it names the CUDA dependency variant.</p>
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Docker with GPU support</li>
 <li><a href="https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html">NVIDIA Container Toolkit</a>
   installed and configured</li>
-<li>An NVIDIA driver compatible with the image's CUDA 12.9 libraries</li>
+<li>An NVIDIA driver compatible with the selected image's CUDA libraries</li>
 <li>An NVIDIA GPU (A100 or larger recommended)</li>
 </ul>
 <p>Verify that Docker can expose the GPU before running the workload:</p>

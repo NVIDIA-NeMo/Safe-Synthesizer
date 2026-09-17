@@ -9748,7 +9748,7 @@ image.</p>
 <tr>
 <td><code>cu130</code></td>
 <td><code>cu130</code></td>
-<td>Add when the CUDA 13.0 dependency PR lands</td>
+<td>Enabled; non-required in CI while the CUDA 13 rollout is validated</td>
 </tr>
 </tbody>
 </table>
@@ -10021,11 +10021,11 @@ Actions cache quota and slow down cache export.</p>
 <p>Current image name:</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>ghcr.io/nvidia-nemo/safe-synthesizer
 </span></code></pre></div>
-<p>On release tags, current <code>cu129</code> tags include:</p>
+<p>On release tags, each variant (<code>cu129</code> and <code>cu130</code>) receives:</p>
 <ul>
-<li><code>cu129</code> and <code>latest-cu129</code></li>
-<li><code>&lt;version&gt;-cu129</code> and <code>&lt;major&gt;.&lt;minor&gt;-cu129</code> on <code>v*</code> tags</li>
-<li><code>sha-&lt;short-sha&gt;-cu129</code> for traceability</li>
+<li><code>&lt;variant&gt;</code> and <code>latest-&lt;variant&gt;</code></li>
+<li><code>&lt;version&gt;-&lt;variant&gt;</code> and <code>&lt;major&gt;.&lt;minor&gt;-&lt;variant&gt;</code> on <code>v*</code> tags</li>
+<li><code>sha-&lt;short-sha&gt;-&lt;variant&gt;</code> for traceability</li>
 </ul>
 <p>The workflow passes <code>PACKAGE_VERSION</code> into the Docker build. On release tags,
 this is the tag without the leading <code>v</code>; on non-tag builds, it is
