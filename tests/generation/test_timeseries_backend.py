@@ -20,6 +20,7 @@ from nemo_safe_synthesizer.config import (
     TimeSeriesParameters,
     TrainingHyperparams,
 )
+from nemo_safe_synthesizer.config.time_series import FlexibleTimeseriesMetadata
 from nemo_safe_synthesizer.data_processing.actions.utils import MetadataColumns
 from nemo_safe_synthesizer.data_processing.assembler import Example
 from nemo_safe_synthesizer.data_processing.record_utils import ParsedRecord
@@ -966,12 +967,10 @@ class TestGenerateParallelGroups:
 
 
 def _enable_flexible_timeseries(params, metadata, max_records: int = 4) -> None:
-    params.time_series.resolve_flexible_timeseries(True)
-    metadata.flexible_timeseries = True
-    params.time_series.sequence_index_column = "_time_idx"
-    params.time_series.sequence_marker_column = "_is_last_row"
-    params.time_series.sequence_max_records = max_records
-    params.time_series.sequence_source_columns = ["group_id", "value"]
+    metadata.flexible_timeseries_metadata = FlexibleTimeseriesMetadata(
+        max_records=max_records,
+        source_columns=("group_id", "value"),
+    )
     params.time_series.timestamp_column = "_time_idx"
     params.time_series.timestamp_format = "elapsed_seconds"
     params.time_series.timestamp_interval_seconds = 1

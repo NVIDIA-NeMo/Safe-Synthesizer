@@ -14,6 +14,7 @@ from nemo_safe_synthesizer.config.generate import GenerateParameters, Structured
 from nemo_safe_synthesizer.config.job import SafeSynthesizerJobConfig
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig, StepDefinition
+from nemo_safe_synthesizer.config.time_series import FlexibleTimeseriesMetadata
 from nemo_safe_synthesizer.config.training import QuantizationScheme, TrainingHyperparams
 from nemo_safe_synthesizer.configurator.parameter_paths import (
     AmbiguousParameterName,
@@ -28,19 +29,57 @@ from nemo_safe_synthesizer.configurator.parameters import Parameters
 from nemo_safe_synthesizer.errors import ParameterError
 
 
-def test_flexible_timeseries_routing_is_not_a_public_parameter():
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("flexible_timeseries", True),
+        ("sequence_index_column", "_index"),
+        ("sequence_marker_column", "_marker"),
+        ("sequence_max_records", 2),
+        ("sequence_source_columns", ["group", "value"]),
+    ],
+)
+def test_flexible_timeseries_state_is_not_a_public_parameter(name, value):
     with pytest.raises(ParameterError, match="Unknown parameter"):
-        SafeSynthesizerParameters.from_params(flexible_timeseries=True)
+        SafeSynthesizerParameters.from_params(**{name: value})
 
 
-@pytest.mark.parametrize("sequence_max_records", [0, -1])
-def test_sequence_max_records_must_be_positive(sequence_max_records):
-    with pytest.raises(ValueError, match="greater than or equal to 1"):
-        SafeSynthesizerParameters.from_params(
-            is_timeseries=True,
-            timestamp_column="timestamp",
-            sequence_max_records=sequence_max_records,
+@pytest.mark.parametrize("max_records", [0, -1])
+def test_flexible_timeseries_metadata_requires_positive_max_records(max_records):
+    with pytest.raises(ValidationError, match="greater than or equal to 1"):
+        FlexibleTimeseriesMetadata(max_records=max_records, source_columns=("group", "value"))
+
+
+def test_flexible_timeseries_metadata_rejects_invalid_internal_schema():
+    with pytest.raises(ValidationError, match="index_column and marker_column must be different"):
+        FlexibleTimeseriesMetadata(
+            index_column="_control",
+            marker_column="_control",
+            max_records=2,
+            source_columns=("group", "value"),
         )
+
+    with pytest.raises(ValidationError, match="source_columns must not contain duplicates"):
+        FlexibleTimeseriesMetadata(
+            max_records=2,
+            source_columns=("group", "value", "value"),
+        )
+
+
+def test_resolved_flexible_timeseries_metadata_is_not_serialized_as_user_config():
+    config = SafeSynthesizerParameters.from_params(
+        is_timeseries=True,
+        timestamp_column="timestamp",
+    )
+    config.time_series.resolve_flexible_timeseries(
+        FlexibleTimeseriesMetadata(max_records=2, source_columns=("group", "timestamp", "value"))
+    )
+
+    dumped = config.time_series.model_dump()
+
+    assert config.time_series.flexible_timeseries is True
+    assert "flexible_timeseries_metadata" not in dumped
+    assert not any(name.startswith("sequence_") for name in dumped)
 
 
 def test_safe_synthesizer_parameters(monkeypatch):

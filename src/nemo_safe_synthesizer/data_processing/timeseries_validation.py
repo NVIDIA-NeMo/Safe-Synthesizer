@@ -18,7 +18,7 @@ from ..config.time_series import TimeSeriesParameters
 from ..defaults import PSEUDO_GROUP_COLUMN
 from ..errors import DataError, ParameterError
 from .actions.utils import guess_datetime_format
-from .flexible_timeseries import prepare_flexible_timeseries_data
+from .flexible_timeseries import prepare_flexible_timeseries_data, resolve_flexible_timeseries_metadata
 from .validation import (
     check_column_has_no_nulls,
     check_groupby_column,
@@ -481,12 +481,13 @@ def _validate_flexible_start_and_stop(
             TimeSeriesValidationReason.TIMESERIES_START_MISMATCH,
             "Flexible time-series groups must all start at index 0.",
         )
-    if ts_config.sequence_max_records is None:
+    metadata = ts_config.flexible_timeseries_metadata
+    if metadata is None:
         raise TimeSeriesParameterValidationError(
             TimeSeriesValidationReason.TIMESERIES_STOP_MISMATCH,
-            "sequence_max_records must be resolved for flexible time-series processing.",
+            "Flexible time-series metadata must be resolved before validation.",
         )
-    return "0", str(ts_config.sequence_max_records - 1)
+    return "0", str(metadata.max_records - 1)
 
 
 def _prepare_time_series_stats(
@@ -570,7 +571,7 @@ def inspect_timeseries_constraints(
         )
 
     config_copy = config.model_copy(deep=True)
-    config_copy.time_series.resolve_flexible_timeseries(False)
+    config_copy.time_series.resolve_flexible_timeseries(None)
     _, _, _, _, _, group_stats = _prepare_time_series_stats(
         data,
         config_copy,
@@ -606,12 +607,8 @@ def resolve_timeseries_routing(
     if not config.time_series.is_timeseries:
         return None
     ts_config = config.time_series
-    if (
-        ts_config.flexible_timeseries
-        and ts_config.sequence_source_columns is not None
-        and ts_config.sequence_index_column in data.columns
-        and ts_config.sequence_marker_column in data.columns
-    ):
+    metadata = ts_config.flexible_timeseries_metadata
+    if metadata is not None and metadata.index_column in data.columns and metadata.marker_column in data.columns:
         group_column = config.data.group_training_examples_by
         if group_column is None:
             raise TimeSeriesParameterValidationError(
@@ -625,12 +622,12 @@ def resolve_timeseries_routing(
             sequence_max_records=maximum,
         )
     decision = inspect_timeseries_constraints(data, config)
-    ts_config.resolve_flexible_timeseries(decision.uses_flexible_timeseries)
     if decision.uses_flexible_timeseries:
-        ts_config.sequence_max_records = decision.sequence_max_records
+        ts_config.resolve_flexible_timeseries(
+            resolve_flexible_timeseries_metadata(data, config, decision.sequence_max_records)
+        )
     else:
-        ts_config.sequence_max_records = None
-        ts_config.sequence_source_columns = None
+        ts_config.resolve_flexible_timeseries(None)
     return decision
 
 
@@ -662,7 +659,8 @@ def validate_timeseries_data(data: pd.DataFrame, config: SafeSynthesizerParamete
         )
 
     ts_config = config.time_series
-    if ts_config.flexible_timeseries and ts_config.sequence_index_column not in data.columns:
+    metadata = ts_config.flexible_timeseries_metadata
+    if metadata is not None and metadata.index_column not in data.columns:
         config_copy = config.model_copy(deep=True)
         try:
             prepared, _ = prepare_flexible_timeseries_data(data, config_copy)
