@@ -6,22 +6,23 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from enum import Enum, auto
-from typing import Any, cast
+from typing import Any
 
 import pandas as pd
 
 from ..config.parameters import SafeSynthesizerParameters
-from ..config.time_series import TimeSeriesParameters
+from ..config.time_series import FlexibleTimeseriesMetadata, TimeSeriesParameters
 from ..defaults import PSEUDO_GROUP_COLUMN
 from ..errors import DataError, ParameterError
 from .actions.utils import guess_datetime_format
-from .flexible_timeseries import resolve_flexible_timeseries_metadata
-from .timeseries_utils import stable_sort_within_groups
+from .flexible_timeseries import _resolve_flexible_timeseries_metadata
+from .timeseries_utils import _stable_sort_within_groups
 from .validation import (
     check_column_has_no_nulls,
+    check_column_present,
     check_groupby_column,
     check_no_pseudo_column_collision,
     check_timestamp_column,
@@ -31,11 +32,8 @@ __all__ = [
     "TimeSeriesDataValidationError",
     "TimeSeriesGroupTimestampStats",
     "TimeSeriesParameterValidationError",
-    "TimeSeriesRoutingDecision",
     "TimeSeriesValidationReason",
     "TimeSeriesValidationResult",
-    "inspect_timeseries_constraints",
-    "resolve_timeseries_routing",
     "resolve_elapsed_time_column_name",
     "validate_start_stop_consistency",
     "validate_timeseries_data",
@@ -139,13 +137,23 @@ class TimeSeriesValidationResult:
 
 
 @dataclass(frozen=True)
-class TimeSeriesRoutingDecision:
+class _TimeSeriesRoutingDecision:
     """Automatic selection between deterministic and flexible time-series processing."""
 
     uses_flexible_timeseries: bool
+    """Whether source shape requires marker-based flexible processing."""
+
     failed_constraints: tuple[str, ...]
+    """Deterministic shape constraints not satisfied by the source data."""
+
     sequence_max_records: int
+    """Largest source-group length used as the flexible generation cap."""
+
     timestamp_format: str
+    """Validated or inferred format used to order source timestamps."""
+
+    flexible_metadata: FlexibleTimeseriesMetadata | None = None
+    """Internal control-column metadata when flexible routing was applied."""
 
 
 def _resolve_group_column(data: pd.DataFrame, config: SafeSynthesizerParameters) -> tuple[pd.DataFrame, str]:
@@ -203,14 +211,16 @@ def _add_elapsed_time_column(
             "Time-series mode requires either timestamp_column or timestamp_interval_seconds.",
         )
 
-    if order_by_col is not None and order_by_col in data.columns and order_by_col != group_by_col:
+    if order_by_col is not None:
         try:
+            check_column_present(data, order_by_col, role="Order by")
             check_column_has_no_nulls(data, order_by_col, role="Order by")
         except ParameterError as exc:
             raise TimeSeriesParameterValidationError(TimeSeriesValidationReason.COLUMN_NOT_FOUND, str(exc)) from exc
         except DataError as exc:
             raise TimeSeriesDataValidationError(TimeSeriesValidationReason.COLUMN_NULLS, str(exc)) from exc
-        data = stable_sort_within_groups(data, group_by_col, order_by_col)
+        if order_by_col != group_by_col:
+            data = _stable_sort_within_groups(data, group_by_col, order_by_col)
 
     timestamp_col = resolve_elapsed_time_column_name(data.columns)
 
@@ -261,7 +271,10 @@ def _validate_elapsed_seconds_column(column: pd.Series, timestamp_col: str) -> N
         )
 
 
-def _infer_and_convert_timestamp_format(df: pd.DataFrame, ts_config: TimeSeriesParameters) -> pd.DataFrame:
+def _infer_and_convert_timestamp_format(
+    df: pd.DataFrame,
+    ts_config: TimeSeriesParameters,
+) -> tuple[pd.DataFrame, str]:
     """Infer or validate timestamp format and return a converted copy."""
     if len(df) == 0:
         raise TimeSeriesDataValidationError(
@@ -313,7 +326,7 @@ def _infer_and_convert_timestamp_format(df: pd.DataFrame, ts_config: TimeSeriesP
             f"'{timestamp_format}'. Please check your data or provide a valid timestamp_format.",
         )
 
-    return df
+    return df, timestamp_format
 
 
 def _sort_by_group_and_timestamp(df: pd.DataFrame, group_by_col: str, timestamp_col: str) -> pd.DataFrame:
@@ -502,8 +515,7 @@ def _prepare_time_series_stats(
 
     if not is_elapsed_time:
         ts_config_copy = ts_config.model_copy(update={"timestamp_column": timestamp_col})
-        working_df = _infer_and_convert_timestamp_format(working_df, ts_config_copy)
-        timestamp_format = cast(str, ts_config_copy.timestamp_format)
+        working_df, timestamp_format = _infer_and_convert_timestamp_format(working_df, ts_config_copy)
 
     working_df = _sort_by_group_and_timestamp(working_df, group_by_col, timestamp_col)
     if tolerate_interval_mismatch:
@@ -527,10 +539,10 @@ def _prepare_time_series_stats(
     return working_df, group_by_col, timestamp_col, timestamp_format, is_elapsed_time, group_stats
 
 
-def inspect_timeseries_constraints(
+def _inspect_timeseries_constraints(
     data: pd.DataFrame,
     config: SafeSynthesizerParameters,
-) -> TimeSeriesRoutingDecision:
+) -> _TimeSeriesRoutingDecision:
     """Inspect the four deterministic shape constraints without mutating inputs."""
     if data.empty:
         raise TimeSeriesDataValidationError(
@@ -539,7 +551,7 @@ def inspect_timeseries_constraints(
         )
 
     config_copy = config.model_copy(deep=True)
-    config_copy.time_series.resolve_flexible_timeseries(None)
+    config_copy.time_series._resolve_flexible_timeseries(None)
     _, _, _, timestamp_format, _, group_stats = _prepare_time_series_stats(
         data,
         config_copy,
@@ -560,7 +572,7 @@ def inspect_timeseries_constraints(
         failed.append("consistent timestamp intervals")
 
     maximum = max(stats.record_count for stats in group_stats)
-    return TimeSeriesRoutingDecision(
+    return _TimeSeriesRoutingDecision(
         uses_flexible_timeseries=bool(failed),
         failed_constraints=tuple(failed),
         sequence_max_records=maximum,
@@ -568,10 +580,10 @@ def inspect_timeseries_constraints(
     )
 
 
-def resolve_timeseries_routing(
+def _resolve_timeseries_routing(
     data: pd.DataFrame,
     config: SafeSynthesizerParameters,
-) -> TimeSeriesRoutingDecision | None:
+) -> _TimeSeriesRoutingDecision | None:
     """Apply automatic routing to a time-series config and return the decision."""
     if not config.time_series.is_timeseries:
         return None
@@ -584,14 +596,15 @@ def resolve_timeseries_routing(
         )
 
     ts_config = config.time_series
-    decision = inspect_timeseries_constraints(data, config)
+    decision = _inspect_timeseries_constraints(data, config)
     if ts_config.timestamp_format is None:
         ts_config.timestamp_format = decision.timestamp_format
     if decision.uses_flexible_timeseries:
-        metadata = resolve_flexible_timeseries_metadata(data, config, decision.sequence_max_records)
-        ts_config.resolve_flexible_timeseries(metadata)
+        metadata = _resolve_flexible_timeseries_metadata(data, config, decision.sequence_max_records)
+        ts_config._resolve_flexible_timeseries(metadata)
+        decision = replace(decision, flexible_metadata=metadata)
     else:
-        ts_config.resolve_flexible_timeseries(None)
+        ts_config._resolve_flexible_timeseries(None)
     return decision
 
 

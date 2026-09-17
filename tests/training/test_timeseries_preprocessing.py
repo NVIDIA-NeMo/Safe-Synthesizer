@@ -272,8 +272,8 @@ def test_process_flexible_timeseries_marks_only_final_real_row(fixture_variable_
 
     result, resolved = process_timeseries_data(fixture_variable_length_sequences, config)
 
-    assert resolved.time_series.flexible_timeseries is True
-    metadata = resolved.time_series.flexible_timeseries_metadata
+    assert resolved.time_series._uses_flexible_timeseries is True
+    metadata = resolved.time_series._resolved_flexible_timeseries_metadata
     assert metadata is not None
     assert metadata.max_records == 4
     assert list(result.columns) == ["group", "_time_idx", "timestamp", "value", "_is_last_row"]
@@ -300,8 +300,8 @@ def test_process_flexible_timeseries_normalizes_timestamp_sort_key():
 
     result, resolved = process_timeseries_data(data, config)
 
-    assert resolved.time_series.flexible_timeseries is True
-    metadata = resolved.time_series.flexible_timeseries_metadata
+    assert resolved.time_series._uses_flexible_timeseries is True
+    metadata = resolved.time_series._resolved_flexible_timeseries_metadata
     assert metadata is not None
     assert metadata.source_columns == ("value", "group", "timestamp")
     assert list(result.columns) == ["group", "_time_idx", "value", "timestamp", "_is_last_row"]
@@ -329,12 +329,31 @@ def test_process_timestamp_less_timeseries_orders_before_generating_elapsed_time
 
     result, resolved = process_timeseries_data(data, config)
 
-    assert resolved.time_series.flexible_timeseries is False
+    assert resolved.time_series._uses_flexible_timeseries is False
     assert resolved.time_series.timestamp_column == "elapsed_seconds"
     assert resolved.data.order_training_examples_by == "elapsed_seconds"
     assert result["group"].tolist() == ["A", "A", "B", "B"]
     assert result["event"].tolist() == ["first", "second", "first", "second"]
     assert result["elapsed_seconds"].tolist() == [0, 60, 0, 60]
+
+
+def test_process_timestamp_less_timeseries_rejects_missing_order_column():
+    data = pd.DataFrame(
+        {
+            "group": ["A", "A"],
+            "value": [1, 2],
+        }
+    )
+    config = SafeSynthesizerParameters.from_params(
+        is_timeseries=True,
+        timestamp_interval_seconds=60,
+        group_training_examples_by="group",
+        order_training_examples_by="missing",
+        rope_scaling_factor=1,
+    )
+
+    with pytest.raises(ParameterError, match="Order by column 'missing' not found"):
+        process_timeseries_data(data, config)
 
 
 def test_process_fixed_shape_uses_standard_pipeline():
@@ -349,7 +368,7 @@ def test_process_fixed_shape_uses_standard_pipeline():
 
     result, resolved = process_timeseries_data(data, config)
 
-    assert resolved.time_series.flexible_timeseries is False
+    assert resolved.time_series._uses_flexible_timeseries is False
     assert "_time_idx" not in result.columns
     assert "_is_last_row" not in result.columns
     assert list(result.columns) == ["group", "timestamp", "value"]
@@ -368,7 +387,7 @@ def test_process_sequence_resolves_control_column_collisions():
 
     result, resolved = process_timeseries_data(data, config)
 
-    metadata = resolved.time_series.flexible_timeseries_metadata
+    metadata = resolved.time_series._resolved_flexible_timeseries_metadata
     assert metadata is not None
     assert metadata.index_column == "_time_idx_1"
     assert metadata.source_columns == ("group", "timestamp", "_time_idx", "value")

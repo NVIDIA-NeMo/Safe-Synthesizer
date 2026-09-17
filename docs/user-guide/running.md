@@ -297,7 +297,7 @@ execute in order (`config` → `dataframe` → `metadata` → `advisory`).
 | `columns.pseudo` | dataframe | Input does not use the reserved `__nss_sequence_id` column name |
 | `columns.constant` | dataframe | No column is constant (warning only) |
 | `timeseries.timestamp` | dataframe | Timestamp column is present and has no nulls (time-series mode) |
-| `timeseries.shape` | dataframe | Timestamp formats parse cleanly and determines whether group shape uses deterministic or flexible time-series processing |
+| `timeseries.shape` | dataframe | Timestamp formats parse cleanly and group shape selects deterministic or flexible time-series processing |
 | `gpu.vram` | metadata | Free VRAM headroom for the chosen model, quantization load mode, and per-device batch size; emits `low_vram` as a warning and `vram_exceeds_capacity` as an error when the estimate is far above capacity |
 | `token_budget` | metadata | Schema prompt, sampled records, and top groups each fit in the model's context window |
 | `dataset.row_count` | advisory | Training split is above a comfort threshold (warning only) |
