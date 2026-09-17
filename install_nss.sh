@@ -10,6 +10,7 @@ readonly PACKAGE_WHEEL="${PACKAGE_WHEEL:-}"
 readonly RELEASE_VERSION=""
 readonly CUDA="${CUDA:-129}"
 readonly DRY_RUN="${DRY_RUN:-0}"
+readonly NSS_INSTALLER_RESOLVE_INDEXES="${NSS_INSTALLER_RESOLVE_INDEXES:-0}"
 readonly NSS_INSTALLER_ISOLATED="${NSS_INSTALLER_ISOLATED:-0}"
 readonly CONSTRAINTS_URL="${CONSTRAINTS_URL:-https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/main/constraints.txt}"
 readonly PYPI_INDEX_URL="https://pypi.org/simple"
@@ -205,6 +206,11 @@ main() {
 
     local extra
     extra="$(runtime_extra)"
+    if [[ "$NSS_INSTALLER_RESOLVE_INDEXES" == "1" ]]; then
+        runtime_indexes "$extra"
+        printf '%s\n' "${INDEXES[@]}"
+        return
+    fi
     require_command uv
     UV_CMD=(uv)
     if [[ "$NSS_INSTALLER_ISOLATED" == "1" ]]; then

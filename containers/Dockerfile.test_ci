@@ -30,6 +30,8 @@ FROM setup AS wheel-install
 
 ENV UV_LINK_MODE=copy
 
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 COPY dist/*.whl /tmp/dist/
 
 RUN --mount=type=cache,target=/root/.cache/uv \
@@ -45,29 +47,28 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     /opt/wheel-cpu/bin/python -c \
         "from importlib.metadata import version; from nemo_safe_synthesizer.package_info import __version__; assert __version__ == version('nemo-safe-synthesizer')" && \
     /opt/wheel-cpu/bin/safe-synthesizer --help >/dev/null && \
+    CUDA=129 NSS_INSTALLER_RESOLVE_INDEXES=1 ./install_nss.sh > /tmp/cu129-indexes && \
     uv --no-config venv --clear --python /usr/local/bin/python /opt/wheel-cu129 && \
+    mapfile -t cu129_indexes < /tmp/cu129-indexes && \
+    cu129_args=() && for index in "${cu129_indexes[@]}"; do cu129_args+=(--index "${index}"); done && \
     uv --no-config pip install \
         --python /opt/wheel-cu129/bin/python \
         --no-sources \
         --dry-run \
         --default-index https://pypi.org/simple \
-        --index https://flashinfer.ai/whl/cu129 \
-        --index https://flashinfer.ai/whl/ \
-        --index https://download.pytorch.org/whl/cu129 \
-        --index https://wheels.vllm.ai/0.27.0/cu129 \
+        "${cu129_args[@]}" \
         --index-strategy unsafe-best-match \
         "nemo-safe-synthesizer[cu129,engine] @ file://${wheel}" && \
+    CUDA=130 NSS_INSTALLER_RESOLVE_INDEXES=1 ./install_nss.sh > /tmp/cu130-indexes && \
     uv --no-config venv --clear --python /usr/local/bin/python /opt/wheel-cu130 && \
+    mapfile -t cu130_indexes < /tmp/cu130-indexes && \
+    cu130_args=() && for index in "${cu130_indexes[@]}"; do cu130_args+=(--index "${index}"); done && \
     uv --no-config pip install \
         --python /opt/wheel-cu130/bin/python \
         --no-sources \
         --dry-run \
         --default-index https://pypi.org/simple \
-        --index https://flashinfer.ai/whl/cu130 \
-        --index https://flashinfer.ai/whl/ \
-        --index https://download.pytorch.org/whl/cu130 \
-        --index https://wheels.vllm.ai/0.27.0/cu130 \
-        --index https://pypi.nvidia.com \
+        "${cu130_args[@]}" \
         --index-strategy unsafe-best-match \
         "nemo-safe-synthesizer[cu130,engine] @ file://${wheel}" && \
     rm -rf /opt/wheel-cpu /opt/wheel-cu129 /opt/wheel-cu130

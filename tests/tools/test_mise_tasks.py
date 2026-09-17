@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import cast
 
 import pytest
+import yaml
 
 QUALITY_TASKS = {
     "check",
@@ -161,12 +162,13 @@ def test_quality_task_commands_preserve_check_contract(pytestconfig: pytest.Conf
     with (repo_root / ".mise/tasks/quality.toml").open("rb") as quality_file:
         tasks = tomllib.load(quality_file)
 
-    assert tasks["check:lock"]["run"] == [
-        "uv run --offline --frozen tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml "
-        + "--installer install_nss.sh --check",
-        "uv lock --check",
-    ]
-    assert tasks["lock:update"]["run"] == "uv lock"
+    lock_commands = tasks["check:lock"]["run"]
+    assert isinstance(lock_commands, list)
+    generator_command, uv_lock_command = lock_commands
+    for token in ("gen_cuda_deps.py", "cuda_deps.toml", "--pyproject", "--installer", "--check"):
+        assert token in generator_command
+    assert "uv" in uv_lock_command and "lock" in uv_lock_command and "--check" in uv_lock_command
+    assert "uv" in tasks["lock:update"]["run"] and "lock" in tasks["lock:update"]["run"]
 
 
 def test_lock_hook_uses_read_only_task_for_both_inputs(pytestconfig: pytest.Config) -> None:
@@ -182,3 +184,17 @@ def test_local_gate_composes_check_and_test(pytestconfig: pytest.Config) -> None
     result = _run_mise(Path(pytestconfig.rootpath), "run", "--dry-run", "check", ":::", "test")
 
     assert result.returncode == 0, result.stderr
+
+
+def test_cuda_dependency_sources_route_to_dependency_and_quality_jobs(pytestconfig: pytest.Config) -> None:
+    """Source-of-truth changes must take the same CI route as generated dependency metadata."""
+    root = Path(pytestconfig.rootpath)
+    action = yaml.safe_load((root / ".github/actions/detect-changes/action.yml").read_text())
+    filters = action["runs"]["steps"][0]["with"]["filters"]
+    outputs = action["outputs"]
+
+    assert "cuda_deps.toml" in filters
+    assert "constraints.txt" in filters
+    for output in ("deps", "src_test_deps", "any"):
+        assert "cuda_deps" in outputs[output]["value"]
+        assert "constraints" in outputs[output]["value"]

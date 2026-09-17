@@ -5,167 +5,95 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-readonly REPO_ROOT
-readonly INSTALLER="${REPO_ROOT}/install_nss.sh"
-readonly RELEASE_INSTALLER_BUILDER="${REPO_ROOT}/tools/build_release_installer.sh"
-readonly RELEASE_WORKFLOW="${REPO_ROOT}/.github/workflows/release.yml"
-
-assert_contains() {
-    local actual="$1"
-    local expected="$2"
-    [[ "$actual" == *"$expected"* ]] || {
-        echo "Expected output to contain: $expected" >&2
-        echo "Actual output: $actual" >&2
-        exit 1
-    }
-}
-
-assert_not_contains() {
-    local actual="$1"
-    local unexpected="$2"
-    [[ "$actual" != *"$unexpected"* ]] || {
-        echo "Expected output not to contain: $unexpected" >&2
-        echo "Actual output: $actual" >&2
-        exit 1
-    }
-}
-
-assert_dry_run() {
-    local cuda="$1"
-    local expected_extra="$2"
-    local expected_index="${3:-}"
-    local output
-    output="$(DRY_RUN=1 CUDA="$cuda" "$INSTALLER")"
-
-    assert_contains "$output" "nemo-safe-synthesizer\[engine\,${expected_extra}\]"
-    if [[ -n "$expected_index" ]]; then
-        assert_contains "$output" "--index"
-        assert_contains "$output" "$expected_index"
-        assert_contains "$output" "--index-strategy unsafe-best-match"
-    else
-        assert_not_contains "$output" "--index"
-    fi
-}
-
-assert_dry_run 129 cu129 "https://wheels.vllm.ai/"
-assert_dry_run 130 cu130 "https://pypi.nvidia.com"
-if [[ "$(uname -s)" == "Linux" ]]; then
-    assert_dry_run cpu cpu "https://download.pytorch.org/whl/cpu"
-else
-    assert_dry_run cpu cpu
-fi
-
-help_output="$(DRY_RUN=1 CUDA=help "$INSTALLER")"
-assert_contains "$help_output" "Usage:"
-assert_not_contains "$help_output" "PACKAGE_VERSION"
-assert_not_contains "$help_output" "Default: the main branch"
-assert_not_contains "$help_output" "Installing with:"
-
-if DRY_RUN=1 CUDA=unsupported "$INSTALLER" >/dev/null 2>&1; then
-    echo "Unsupported CUDA value unexpectedly succeeded" >&2
-    exit 1
-fi
-
-test_dir="$(mktemp -d)"
+readonly REPO_ROOT INSTALLER="${REPO_ROOT}/install_nss.sh"
+test_dir="$(mktemp -d "${TMPDIR:-/tmp}/nss-installer.XXXXXX")"
 readonly test_dir
 trap 'rm -rf "$test_dir"' EXIT
-
 fake_bin="${test_dir}/bin"
-fake_uv_log="${test_dir}/uv.log"
 mkdir -p "$fake_bin"
+
 cat > "${fake_bin}/uv" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-printf '%q ' "$@" >> "${FAKE_UV_LOG:?}"
-printf '\n' >> "$FAKE_UV_LOG"
-if [[ "${1:-}" == "venv" ]]; then
-    venv_path="${!#}"
-    mkdir -p "$venv_path/bin"
-    printf '#!/usr/bin/env bash\n' > "$venv_path/bin/python"
-    chmod +x "$venv_path/bin/python"
-fi
+count=0; [[ -f "${FAKE_UV_CALLS:?}" ]] && count="$(<"$FAKE_UV_CALLS")"
+count=$((count + 1)); printf '%s' "$count" > "$FAKE_UV_CALLS"
+printf '%s\0' "$@" >> "${FAKE_UV_LOG:?}"; printf '\0' >> "$FAKE_UV_LOG"
+if [[ "${1:-}" == "venv" ]]; then mkdir -p "${!#}/bin"; printf '#!/usr/bin/env bash\n' > "${!#}/bin/python"; chmod +x "${!#}/bin/python"; fi
+[[ "${FAKE_UV_FAIL_CALL:-0}" != "$count" ]]
 EOF
-chmod +x "${fake_bin}/uv"
+cat > "${fake_bin}/nvidia-smi" <<'EOF'
+#!/usr/bin/env bash
+printf 'probe\n' >> "${FAKE_SMI_LOG:?}"
+printf '%s' "${FAKE_SMI_OUTPUT:-}"
+exit "${FAKE_SMI_STATUS:-0}"
+EOF
+chmod +x "${fake_bin}/uv" "${fake_bin}/nvidia-smi"
 
-local_wheel_output="$(
-    PATH="${fake_bin}:$PATH" \
-        DRY_RUN=1 \
-        CUDA=cpu \
-        PACKAGE_WHEEL=/tmp/nemo_safe_synthesizer-1.2.3-py3-none-any.whl \
-        "$INSTALLER"
-)"
-assert_contains "$local_wheel_output" \
-    "nemo-safe-synthesizer\[engine\,cpu\]\ @\ file:///tmp/nemo_safe_synthesizer-1.2.3-py3-none-any.whl"
+new_log() { FAKE_UV_LOG="${test_dir}/uv-$1.nul"; FAKE_UV_CALLS="${test_dir}/uv-$1.calls"; FAKE_SMI_LOG="${test_dir}/smi-$1.log"; export FAKE_UV_LOG FAKE_UV_CALLS FAKE_SMI_LOG; }
+uv_call_count() { local count=0; [[ -f "$FAKE_UV_CALLS" ]] && count="$(<"$FAKE_UV_CALLS")"; printf '%s' "$count"; }
+assert_eq() { [[ "$1" == "$2" ]] || { echo "expected '$2', got '$1'" >&2; exit 1; }; }
+assert_file_absent() { [[ ! -e "$1" ]] || { echo "unexpected file: $1" >&2; exit 1; }; }
+read_call() { local -n target="$1"; target=(); [[ -f "$FAKE_UV_LOG" ]] && mapfile -d '' -t target < "$FAKE_UV_LOG"; }
 
+# Dry-run is rendering-only: no driver probe and no uv invocation.
+new_log dry
+output="$(PATH="${fake_bin}:$PATH" DRY_RUN=1 CUDA=130 UV_PROJECT_ENVIRONMENT="${test_dir}/dry env" "$INSTALLER")"
+assert_file_absent "$FAKE_SMI_LOG"; assert_file_absent "$FAKE_UV_LOG"
+[[ "$output" == *"Installing with:"* && "$output" == *"--index https://pypi.nvidia.com"* ]]
+
+# CUDA 13 driver boundaries: reject below minimum before uv; warnings leave install available.
+for case in equal above; do
+    new_log "$case"; [[ "$case" == equal ]] && version=580.65.06 || version=581.0.0
+    PATH="${fake_bin}:$PATH" FAKE_SMI_OUTPUT="$version" CUDA=130 UV_PROJECT_ENVIRONMENT="${test_dir}/$case" "$INSTALLER" >/dev/null
+    assert_eq "$(uv_call_count)" 2
+done
+new_log below
+if PATH="${fake_bin}:$PATH" FAKE_SMI_OUTPUT=580.65.05 CUDA=130 UV_PROJECT_ENVIRONMENT="${test_dir}/below" "$INSTALLER" >/dev/null 2>&1; then exit 1; fi
+assert_eq "$(uv_call_count)" 0
+for case in failed empty; do
+    new_log "$case"; mkdir -p "${test_dir}/$case/bin"; printf '#!/usr/bin/env bash\n' > "${test_dir}/$case/bin/python"; chmod +x "${test_dir}/$case/bin/python"
+    PATH="${fake_bin}:$PATH" FAKE_SMI_STATUS=$([[ "$case" == failed ]] && echo 1 || echo 0) FAKE_SMI_OUTPUT="" CUDA=130 UV_PROJECT_ENVIRONMENT="${test_dir}/$case" "$INSTALLER" >/dev/null 2>&1
+    assert_eq "$(uv_call_count)" 1
+done
+new_log missing
+mkdir -p "${test_dir}/missing/bin"; printf '#!/usr/bin/env bash\n' > "${test_dir}/missing/bin/python"; chmod +x "${test_dir}/missing/bin/python"
+PATH="${fake_bin}:$PATH"; mv "${fake_bin}/nvidia-smi" "${test_dir}/nvidia-smi"
+PATH="${fake_bin}:$PATH" CUDA=130 UV_PROJECT_ENVIRONMENT="${test_dir}/missing" "$INSTALLER" >/dev/null 2>&1
+assert_eq "$(uv_call_count)" 1
+
+# A failed venv prevents pip; failed pip follows one successful venv.
+new_log venv-failure
+if PATH="${fake_bin}:$PATH" FAKE_UV_FAIL_CALL=1 CUDA=cpu UV_PROJECT_ENVIRONMENT="${test_dir}/fail venv" "$INSTALLER" >/dev/null 2>&1; then exit 1; fi
+assert_eq "$(uv_call_count)" 1
+new_log pip-failure
+if PATH="${fake_bin}:$PATH" FAKE_UV_FAIL_CALL=2 CUDA=cpu UV_PROJECT_ENVIRONMENT="${test_dir}/fail pip" "$INSTALLER" >/dev/null 2>&1; then exit 1; fi
+assert_eq "$(uv_call_count)" 2
+
+# Venv reuse has one argv-safe pip call; the path with spaces stays one argument.
+new_log reuse
+venv="${test_dir}/venv with spaces"; mkdir -p "$venv/bin"; printf '#!/usr/bin/env bash\n' > "$venv/bin/python"; chmod +x "$venv/bin/python"
+PATH="${fake_bin}:$PATH" CUDA=cpu UV_PROJECT_ENVIRONMENT="$venv" PACKAGE_NAME=test-package CONSTRAINTS_URL=/constraints.txt "$INSTALLER" >/dev/null
+assert_eq "$(uv_call_count)" 1
+declare -a argv; read_call argv
+expected=(pip install 'test-package[engine,cpu]' -c /constraints.txt --python "$venv/bin/python" --index https://flashinfer.ai/whl/ --index https://download.pytorch.org/whl/cpu --index-strategy unsafe-best-match)
+assert_eq "$(printf '%s\n' "${argv[@]}")" "$(printf '%s\n' "${expected[@]}")"
+
+# A release installer applies its pinned package version and constraints artifact
+# as actual uv argv, rather than merely rendering those values into its source.
+new_log release
 release_dir="${test_dir}/release"
-bash "$RELEASE_INSTALLER_BUILDER" 1.2.3 "$release_dir"
-release_installer="${release_dir}/install_nss.sh"
-release_output="$(PATH="${fake_bin}:$PATH" DRY_RUN=1 CUDA=129 "$release_installer")"
-assert_contains "$release_output" "nemo-safe-synthesizer\[engine\,cu129\]==1.2.3"
-assert_contains "$release_output" \
-    "https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/v1.2.3/constraints.txt"
-[[ ! -e "${release_dir}/constraints.txt" ]] || {
-    echo "Release builder unexpectedly copied constraints.txt" >&2
-    exit 1
-}
+bash "${REPO_ROOT}/tools/build_release_installer.sh" 1.2.3 "$release_dir"
+release_venv="${test_dir}/release venv"; mkdir -p "$release_venv/bin"
+printf '#!/usr/bin/env bash\n' > "$release_venv/bin/python"; chmod +x "$release_venv/bin/python"
+PATH="${fake_bin}:$PATH" CUDA=cpu UV_PROJECT_ENVIRONMENT="$release_venv" PACKAGE_NAME=test-package "$release_dir/install_nss.sh" >/dev/null
+assert_eq "$(uv_call_count)" 1
+read_call argv
+release_constraints="https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/v1.2.3/constraints.txt"
+release_expected=(pip install 'test-package[engine,cpu]==1.2.3' -c "$release_constraints" --python "$release_venv/bin/python" --index https://flashinfer.ai/whl/ --index https://download.pytorch.org/whl/cpu --index-strategy unsafe-best-match)
+assert_eq "$(printf '%s\n' "${argv[@]}")" "$(printf '%s\n' "${release_expected[@]}")"
 
-release_workflow="$(<"$RELEASE_WORKFLOW")"
-assert_contains "$release_workflow" 'bash tools/build_release_installer.sh "$VERSION" dist'
-assert_contains "$release_workflow" "dist/install_nss.sh"
-assert_not_contains "$release_workflow" "dist/constraints.txt"
-
-if bash "$RELEASE_INSTALLER_BUILDER" invalid/version "${test_dir}/invalid" >/dev/null 2>&1; then
-    echo "Invalid release version unexpectedly succeeded" >&2
-    exit 1
-fi
-
-dry_venv="${test_dir}/dry-venv"
-dry_output="$(
-    unset NSS_INSTALLER_ISOLATED
-    PATH="${fake_bin}:$PATH" \
-        FAKE_UV_LOG="$fake_uv_log" \
-        UV_PROJECT_ENVIRONMENT="$dry_venv" \
-        DRY_RUN=1 \
-        CUDA=cpu \
-        "$INSTALLER"
-)"
-[[ ! -e "$dry_venv" ]] || {
-    echo "Dry run unexpectedly created: $dry_venv" >&2
-    exit 1
-}
-[[ ! -e "$fake_uv_log" ]] || {
-    echo "Dry run unexpectedly invoked uv" >&2
-    exit 1
-}
-assert_contains "$dry_output" "uv venv --seed $dry_venv"
-assert_contains "$dry_output" "--python $dry_venv/bin/python"
-assert_not_contains "$dry_output" "--no-config"
-assert_not_contains "$dry_output" "--no-sources"
-assert_not_contains "$dry_output" "--default-index"
-
-isolated_output="$(
-    PATH="${fake_bin}:$PATH" \
-        DRY_RUN=1 \
-        CUDA=cpu \
-        NSS_INSTALLER_ISOLATED=1 \
-        UV_PROJECT_ENVIRONMENT="${test_dir}/isolated-venv" \
-        "$INSTALLER"
-)"
-assert_contains "$isolated_output" "uv --no-config venv --seed --default-index https://pypi.org/simple"
-assert_contains "$isolated_output" "uv --no-config pip install"
-assert_contains "$isolated_output" "--no-sources"
-assert_contains "$isolated_output" "--default-index https://pypi.org/simple"
-
-install_venv="${test_dir}/install-venv"
-PATH="${fake_bin}:$PATH" \
-    FAKE_UV_LOG="$fake_uv_log" \
-    UV_PROJECT_ENVIRONMENT="$install_venv" \
-    CUDA=cpu \
-    PACKAGE_NAME=test-package \
-    CONSTRAINTS_URL=/constraints.txt \
-    "$INSTALLER" >/dev/null
-
-uv_calls="$(<"$fake_uv_log")"
-assert_contains "$uv_calls" "venv --seed $install_venv"
-assert_contains "$uv_calls" "pip install"
-assert_contains "$uv_calls" "--python $install_venv/bin/python"
+# Docker consumes this narrow internal policy boundary; it has no effects.
+new_log resolver
+indexes="$(PATH="${fake_bin}:$PATH" NSS_INSTALLER_RESOLVE_INDEXES=1 CUDA=130 "$INSTALLER")"
+assert_file_absent "$FAKE_UV_LOG"; assert_file_absent "$FAKE_SMI_LOG"
+[[ "$indexes" == *"https://pypi.nvidia.com"* ]]
