@@ -34,7 +34,7 @@ $(1):
 	@mise run $(2)
 endef
 
-BOOTSTRAP_EXTRAS := dev engine cpu cuda cu129
+BOOTSTRAP_EXTRAS := dev engine cpu cuda cu129 cu130
 $(BOOTSTRAP_EXTRAS):
 	@:
 

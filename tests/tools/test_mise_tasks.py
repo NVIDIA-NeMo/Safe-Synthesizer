@@ -94,6 +94,7 @@ def test_sync_dependencies_passes_requested_python(
         ("cpu", ["--extra", "cpu", "--extra", "engine", "--group", "dev"]),
         ("cuda", ["--extra", "cu129", "--extra", "engine", "--group", "dev"]),
         ("cu129", ["--extra", "cu129", "--extra", "engine", "--group", "dev"]),
+        ("cu130", ["--extra", "cu130", "--extra", "engine", "--group", "dev"]),
     ],
 )
 def test_sync_dependencies_preserves_profile_arguments(

@@ -19,8 +19,8 @@ Dockerfiles for running and testing Safe-Synthesizer in containers.
 
 | Variant | Extra | Status |
 |---------|-------|--------|
-| `cu129` | `cu129` | Built today |
-| `cu130` | `cu130` | Add after the CUDA 13.0 dependency extra lands |
+| `cu129` | `cu129` | Built and published on release tags |
+| `cu130` | `cu130` | Built and published on release tags |
 
 The image does not use `nvidia/cuda` as a base. PyTorch, vLLM, FlashInfer,
 and the NVIDIA CUDA runtime libraries are installed from the locked Python
