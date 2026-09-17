@@ -126,7 +126,7 @@ class TestGliner2Detector:
         texts = ["Mycobacterium marinum", "+1 202 555 0101"]
         model = _FakeModel(
             [
-                {"entities": {"person": [{"start": 0, "end": len(texts[0]), "confidence": 0.89}]}},
+                {"entities": {"person": [{"start": 0, "end": len(texts[0]), "confidence": 0.99}]}},
                 {"entities": {"phone_number": [{"start": 0, "end": len(texts[1]), "confidence": 0.89}]}},
             ]
         )
@@ -143,7 +143,7 @@ class TestGliner2Detector:
         assert labels["first_name"] == {"threshold": 0.9}
         assert labels["middle_name"] == {"threshold": 0.9}
         assert labels["last_name"] == {"threshold": 0.9}
-        assert labels["person"] == {"threshold": 0.9}
+        assert "person" not in labels
         assert labels["phone_number"] == {"threshold": 0.5}
 
     def test_government_id_uses_the_lower_model_floor_then_the_normalized_entity_threshold(self) -> None:
@@ -180,7 +180,7 @@ class TestGliner2Detector:
         model = _FakeModel(
             [
                 {"entities": {}},
-                {"entities": {"person": [{"start": 4, "end": 7, "confidence": 0.99}]}},
+                {"entities": {"first_name": [{"start": 4, "end": 7, "confidence": 0.99}]}},
             ]
         )
         detector = Gliner2Detector(
@@ -190,7 +190,7 @@ class TestGliner2Detector:
 
         spans = detector.detect([_cell("0123456789Ada!xx")])
 
-        assert [(span.start, span.end, span.entity_type) for span in spans] == [(10, 13, EntityType.FULL_NAME)]
+        assert [(span.start, span.end, span.entity_type) for span in spans] == [(10, 13, EntityType.FIRST_NAME)]
 
     def test_clamps_span_over_gliner2_synthetic_terminal_period(self) -> None:
         text = "Contact Ada Lovelace"
@@ -198,7 +198,7 @@ class TestGliner2Detector:
             [
                 {
                     "entities": {
-                        "person": [
+                        "first_name": [
                             {
                                 "start": text.index("Ada"),
                                 "end": len(text) + 1,
@@ -214,7 +214,7 @@ class TestGliner2Detector:
         spans = detector.detect([_cell(text)])
 
         assert [(span.start, span.end, span.entity_type) for span in spans] == [
-            (text.index("Ada"), len(text), EntityType.FULL_NAME)
+            (text.index("Ada"), len(text), EntityType.FIRST_NAME)
         ]
 
     def test_ignores_span_containing_only_gliner2_synthetic_terminal_period(self) -> None:
@@ -223,7 +223,7 @@ class TestGliner2Detector:
             [
                 {
                     "entities": {
-                        "person": [
+                        "first_name": [
                             {
                                 "start": len(text),
                                 "end": len(text) + 1,
@@ -250,7 +250,7 @@ class TestGliner2Detector:
             [
                 {
                     "entities": {
-                        "person": [
+                        "first_name": [
                             {
                                 "start": text.index("Ada"),
                                 "end": end,
@@ -303,7 +303,6 @@ class TestGliner2Detector:
             ("first_name", "Ada", EntityType.FIRST_NAME),
             ("middle_name", "Augusta", EntityType.MIDDLE_NAME),
             ("last_name", "Lovelace", EntityType.LAST_NAME),
-            ("person", "Ada Lovelace", EntityType.FULL_NAME),
             ("phone_number", "+1 202 555 0101", EntityType.PHONE_NUMBER),
             ("date_of_birth", "5 April 1990", EntityType.DATE_OF_BIRTH),
             ("street_address", "12 Main Street", EntityType.STREET_ADDRESS),
