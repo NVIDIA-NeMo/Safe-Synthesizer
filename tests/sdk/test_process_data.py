@@ -22,11 +22,18 @@ from pydantic import ValidationError
 
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
-from nemo_safe_synthesizer.data_processing.timeseries_validation import resolve_timeseries_routing
 from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.generation.results import GenerateJobResults
 from nemo_safe_synthesizer.generation.utils import GenerationStatus
-from nemo_safe_synthesizer.preflight import PreflightReport, PreflightStage
+from nemo_safe_synthesizer.preflight import (
+    PreflightReport,
+    PreflightStage,
+    build_registry,
+    get_registry,
+)
+from nemo_safe_synthesizer.preflight import (
+    run_preflight as run_actual_preflight,
+)
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
 
 _EMPTY_PREFLIGHT = PreflightReport(checks=[])
@@ -181,17 +188,36 @@ def test_process_data_preflight_reroutes_using_authoritative_training_split(fixt
     builder = SafeSynthesizer(config=config, workdir=fixture_workdir)
     builder._data_source = source
     routing_decisions: list[tuple[bool, int | None]] = []
+    registry = get_registry()
+    routing_registry = build_registry(
+        tuple(
+            registry[name]
+            for name in (
+                "columns.groupby",
+                "columns.orderby",
+                "columns.pseudo",
+                "timeseries.timestamp",
+                "timeseries.shape",
+            )
+        )
+    )
 
     def capture_preflight(data, current_config, _metadata, **_kwargs):
-        resolve_timeseries_routing(data, current_config)
-        flexible_metadata = current_config.time_series.flexible_timeseries_metadata
+        report = run_actual_preflight(
+            data,
+            current_config,
+            _metadata,
+            stages=frozenset({PreflightStage.DATAFRAME}),
+            registry=routing_registry,
+        )
+        flexible_metadata = current_config.time_series._resolved_flexible_timeseries_metadata
         routing_decisions.append(
             (
-                current_config.time_series.flexible_timeseries,
+                current_config.time_series._uses_flexible_timeseries,
                 flexible_metadata.max_records if flexible_metadata is not None else None,
             )
         )
-        return _EMPTY_PREFLIGHT
+        return report
 
     with (
         patch("nemo_safe_synthesizer.sdk.library_builder.run_preflight", side_effect=capture_preflight),
@@ -206,7 +232,7 @@ def test_process_data_preflight_reroutes_using_authoritative_training_split(fixt
 
     assert routing_decisions == [(True, 3), (False, None)]
     assert builder._nss_config is not None
-    assert builder._nss_config.time_series.flexible_timeseries is False
+    assert builder._nss_config.time_series._uses_flexible_timeseries is False
 
 
 class TestProcessDataPiiSeparation:

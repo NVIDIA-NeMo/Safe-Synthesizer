@@ -5,17 +5,14 @@
 
 from __future__ import annotations
 
-from typing import cast
-
 from typing_extensions import override
 
-from ...config.time_series import FlexibleTimeseriesMetadata
-from ...data_processing.flexible_timeseries import prepare_flexible_timeseries_data
+from ...data_processing.flexible_timeseries import _prepare_flexible_timeseries_data
 from ...data_processing.timeseries_validation import (
     TimeSeriesDataValidationError,
     TimeSeriesParameterValidationError,
     TimeSeriesValidationReason,
-    resolve_timeseries_routing,
+    _resolve_timeseries_routing,
 )
 from ...data_processing.validation import (
     check_column_has_no_nulls,
@@ -227,10 +224,11 @@ class TimeSeriesDataShapeCheck(DataFrameCheck):
                 return
 
         try:
-            decision = resolve_timeseries_routing(ctx.data, ctx.config)
+            decision = _resolve_timeseries_routing(ctx.data, ctx.config)
             if decision is None:
                 return
-            if decision.uses_flexible_timeseries:
+            metadata = decision.flexible_metadata
+            if metadata is not None:
                 constraints = ", ".join(decision.failed_constraints)
                 collector.warning(
                     "flexible_timeseries_routing",
@@ -250,7 +248,11 @@ class TimeSeriesDataShapeCheck(DataFrameCheck):
                         collector.error("column_nulls", str(exc))
                         return
                 config_copy = ctx.config.model_copy(deep=True)
-                metadata = cast(FlexibleTimeseriesMetadata, ctx.config.time_series.flexible_timeseries_metadata)
-                prepare_flexible_timeseries_data(ctx.data, config_copy, metadata)
+                _prepare_flexible_timeseries_data(
+                    ctx.data,
+                    config_copy,
+                    metadata,
+                    decision.timestamp_format,
+                )
         except (TimeSeriesDataValidationError, TimeSeriesParameterValidationError) as exc:
             collector.error(self.issue_codes[exc.reason], str(exc))

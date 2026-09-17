@@ -5,14 +5,11 @@
 
 from __future__ import annotations
 
-from typing import cast
-
 import pandas as pd
 
 from ..config import SafeSynthesizerParameters
-from ..config.time_series import FlexibleTimeseriesMetadata
-from ..data_processing.flexible_timeseries import prepare_flexible_timeseries_data
-from ..data_processing.timeseries_validation import resolve_timeseries_routing, validate_timeseries_data
+from ..data_processing.flexible_timeseries import _prepare_flexible_timeseries_data
+from ..data_processing.timeseries_validation import _resolve_timeseries_routing, validate_timeseries_data
 from ..observability import get_logger
 
 logger = get_logger(__name__)
@@ -47,40 +44,37 @@ def process_timeseries_data(
     training_df: pd.DataFrame,
     config: SafeSynthesizerParameters,
 ) -> tuple[pd.DataFrame, SafeSynthesizerParameters]:
-    """Process time series data and validate/infer timestamp parameters.
+    """Resolve and prepare deterministic or flexible time-series training data.
 
     Normalizes grouped and ungrouped time series into the same training path.
     When no group column is configured, a reserved pseudo-group column
     (``PSEUDO_GROUP_COLUMN``) is added so the whole dataset is treated as one
-    sequence. Timestamp format and interval metadata inferred here are saved
-    back into the resolved config for generation.
-
-    This function:
-    1. Creates a timestamp column if one doesn't exist
-    2. Validates the timestamp column exists and has no missing values
-    3. Sorts the data by timestamp
-    4. Infers timestamp_format from the data
-    5. Validates or infers timestamp_interval_seconds
-    6. Sets start_timestamp and stop_timestamp
-    7. Orders group and timestamp columns first for partial-prefix generation
+    sequence. Fixed-shape groups retain deterministic time-range processing.
+    Groups with different lengths, ranges, or intervals are automatically
+    transformed to use a generated sequence index and final-row marker.
 
     Args:
         training_df: The training DataFrame.
-        config: The configuration object with time_series settings
+        config: Configuration containing time-series and data settings.
 
     Returns:
-        Tuple of (processed DataFrame, updated config)
+        Processed training data and the resolved configuration.
 
     Raises:
-        ParameterError: If the timestamp column is missing, if ``timestamp_format="elapsed_seconds"``
-            is set on a non-numeric column, or if an explicit format fails to parse the data.
-        DataError: If the timestamp column has missing values or intervals are inconsistent.
+        ParameterError: If a configured timestamp or ordering column is missing,
+            or if the timestamp format is incompatible with the source data.
+        DataError: If required source values are null or timestamps cannot be parsed.
     """
-    resolve_timeseries_routing(training_df, config)
+    routing = _resolve_timeseries_routing(training_df, config)
     ts_config = config.time_series
-    if ts_config.flexible_timeseries:
-        metadata = cast(FlexibleTimeseriesMetadata, ts_config.flexible_timeseries_metadata)
-        training_df, group_column = prepare_flexible_timeseries_data(training_df, config, metadata)
+    if routing is not None and routing.flexible_metadata is not None:
+        metadata = routing.flexible_metadata
+        training_df, group_column = _prepare_flexible_timeseries_data(
+            training_df,
+            config,
+            metadata,
+            routing.timestamp_format,
+        )
         logger.info(
             "Prepared automatically routed flexible time-series data.",
             extra={

@@ -766,6 +766,31 @@ class TestApplyPreprocessing:
         assert "new_col" in result.columns
 
 
+def test_process_timeseries_copies_flexible_metadata_to_model_metadata(backend):
+    data = pd.DataFrame(
+        {
+            "group": ["A", "A", "B"],
+            "timestamp": [0, 1, 0],
+            "value": [1, 2, 3],
+        }
+    )
+    backend.params = SafeSynthesizerParameters.from_params(
+        is_timeseries=True,
+        timestamp_column="timestamp",
+        timestamp_format="elapsed_seconds",
+        group_training_examples_by="group",
+        rope_scaling_factor=1,
+    )
+
+    result = backend._process_timeseries(data)
+
+    metadata = backend.model_metadata.flexible_timeseries_metadata
+    assert metadata is not None
+    assert metadata.max_records == 2
+    assert metadata.source_columns == ("group", "timestamp", "value")
+    assert list(result.columns) == ["group", "_time_idx", "timestamp", "value", "_is_last_row"]
+
+
 class TestPreprocessLogitsForMetrics:
     def test_returns_argmax_predictions(self):
         """Test that argmax of logits is returned."""

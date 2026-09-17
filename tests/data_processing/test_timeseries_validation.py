@@ -12,8 +12,8 @@ from nemo_safe_synthesizer.data_processing.timeseries_validation import (
     TimeSeriesGroupTimestampStats,
     TimeSeriesParameterValidationError,
     TimeSeriesValidationReason,
-    inspect_timeseries_constraints,
-    resolve_timeseries_routing,
+    _inspect_timeseries_constraints,
+    _resolve_timeseries_routing,
     validate_start_stop_consistency,
     validate_timeseries_data,
 )
@@ -41,13 +41,13 @@ def test_routing_keeps_deterministic_pipeline_when_all_constraints_match():
     )
     config = _routing_config()
 
-    decision = resolve_timeseries_routing(data, config)
+    decision = _resolve_timeseries_routing(data, config)
 
     assert decision is not None
     assert decision.uses_flexible_timeseries is False
     assert decision.failed_constraints == ()
-    assert config.time_series.flexible_timeseries is False
-    assert config.time_series.flexible_timeseries_metadata is None
+    assert config.time_series._uses_flexible_timeseries is False
+    assert config.time_series._resolved_flexible_timeseries_metadata is None
 
 
 def test_routing_does_not_promote_order_column_to_missing_timestamp():
@@ -66,7 +66,7 @@ def test_routing_does_not_promote_order_column_to_missing_timestamp():
         rope_scaling_factor=1,
     )
 
-    decision = resolve_timeseries_routing(data, config)
+    decision = _resolve_timeseries_routing(data, config)
 
     assert decision is not None
     assert decision.uses_flexible_timeseries is False
@@ -83,7 +83,7 @@ def test_routing_uses_flexible_timeseries_and_reports_all_shape_mismatches():
     )
     config = _routing_config()
 
-    decision = resolve_timeseries_routing(data, config)
+    decision = _resolve_timeseries_routing(data, config)
 
     assert decision is not None
     assert decision.uses_flexible_timeseries is True
@@ -94,8 +94,8 @@ def test_routing_uses_flexible_timeseries_and_reports_all_shape_mismatches():
         "consistent timestamp intervals",
     )
     assert decision.sequence_max_records == 3
-    assert config.time_series.flexible_timeseries is True
-    metadata = config.time_series.flexible_timeseries_metadata
+    assert config.time_series._uses_flexible_timeseries is True
+    metadata = config.time_series._resolved_flexible_timeseries_metadata
     assert metadata is not None
     assert metadata.max_records == 3
 
@@ -110,10 +110,10 @@ def test_routing_detects_interval_only_mismatch_without_mutating_inspection():
     )
     config = _routing_config()
 
-    decision = inspect_timeseries_constraints(data, config)
+    decision = _inspect_timeseries_constraints(data, config)
 
     assert decision.failed_constraints == ("consistent timestamp intervals",)
-    assert config.time_series.flexible_timeseries is False
+    assert config.time_series._uses_flexible_timeseries is False
 
 
 def test_routing_does_not_fallback_for_null_timestamps():
@@ -127,10 +127,10 @@ def test_routing_does_not_fallback_for_null_timestamps():
     config = _routing_config()
 
     with pytest.raises(TimeSeriesDataValidationError) as exc_info:
-        resolve_timeseries_routing(data, config)
+        _resolve_timeseries_routing(data, config)
 
     assert exc_info.value.reason is TimeSeriesValidationReason.TIMESTAMP_NULLS
-    assert config.time_series.flexible_timeseries is False
+    assert config.time_series._uses_flexible_timeseries is False
 
 
 def test_flexible_metadata_reports_duplicate_source_columns_as_data_error():
@@ -145,7 +145,7 @@ def test_flexible_metadata_reports_duplicate_source_columns_as_data_error():
     config = _routing_config()
 
     with pytest.raises(TimeSeriesDataValidationError) as exc_info:
-        resolve_timeseries_routing(data, config)
+        _resolve_timeseries_routing(data, config)
 
     assert exc_info.value.reason is TimeSeriesValidationReason.DUPLICATE_COLUMNS
     assert "Rename or remove duplicate columns" in str(exc_info.value)

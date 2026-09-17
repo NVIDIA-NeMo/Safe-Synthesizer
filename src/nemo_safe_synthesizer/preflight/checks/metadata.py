@@ -68,7 +68,7 @@ class TokenBudgetCheck(MetadataCheck):
         # Requiring the complete group to fit would reject data the actual
         # training path supports. Schema and individual-record checks above
         # remain active in every mode.
-        skip_whole_group_budget = config.time_series.flexible_timeseries
+        skip_whole_group_budget = config.time_series._uses_flexible_timeseries
 
         # Only run the per-group budget when group-by is configured, present,
         # and the selected assembler requires each whole group to fit.

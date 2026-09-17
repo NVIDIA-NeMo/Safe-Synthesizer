@@ -969,7 +969,7 @@ class TestGenerateParallelGroups:
 def _enable_flexible_timeseries(params, metadata, max_records: int = 4) -> None:
     metadata.flexible_timeseries_metadata = FlexibleTimeseriesMetadata(
         max_records=max_records,
-        source_columns=("group_id", "value"),
+        source_columns=("value", "group_id"),
     )
     params.time_series.timestamp_column = "_time_idx"
     params.time_series.timestamp_format = "elapsed_seconds"
@@ -1075,6 +1075,79 @@ class TestFlexibleTimeseries:
         assert retained == []
         assert accepted_row_stop is None
         assert all(not record.is_valid for record in records)
+
+    @pytest.mark.parametrize("invalid_index", [0, 2], ids=["duplicate", "gap"])
+    def test_noncontiguous_index_ends_valid_prefix(
+        self,
+        timeseries_base_params,
+        timeseries_model_metadata,
+        mock_workdir,
+        invalid_index,
+    ):
+        _enable_flexible_timeseries(timeseries_base_params, timeseries_model_metadata)
+        backend = create_timeseries_backend(
+            timeseries_base_params,
+            timeseries_model_metadata,
+            mock_workdir,
+            self._schema(),
+        )
+        state = backend._init_group_state("group_A")
+        records = [
+            ParsedRecord(
+                text="row0",
+                parsed={"group_id": "group_A", "_time_idx": 0, "value": 1, "_is_last_row": False},
+            ),
+            ParsedRecord(
+                text="invalid",
+                parsed={
+                    "group_id": "group_A",
+                    "_time_idx": invalid_index,
+                    "value": 2,
+                    "_is_last_row": False,
+                },
+            ),
+            ParsedRecord(
+                text="later",
+                parsed={"group_id": "group_A", "_time_idx": 2, "value": 3, "_is_last_row": True},
+            ),
+        ]
+
+        retained, accepted_row_stop = backend._trim_flexible_timeseries_records(state, records)
+
+        assert [record.parsed["_time_idx"] for record in retained] == [0]
+        assert accepted_row_stop is None
+        assert records[1].is_valid is False
+        assert records[2].is_valid is False
+
+    def test_postprocessing_rejection_invalidates_later_sequence_rows(
+        self,
+        timeseries_base_params,
+        timeseries_model_metadata,
+        mock_workdir,
+    ):
+        _enable_flexible_timeseries(timeseries_base_params, timeseries_model_metadata)
+        backend = create_timeseries_backend(
+            timeseries_base_params,
+            timeseries_model_metadata,
+            mock_workdir,
+            self._schema(),
+        )
+        state = backend._init_group_state("group_A")
+        records = [
+            ParsedRecord(
+                text="row0",
+                parsed={"group_id": "group_A", "_time_idx": 0, "value": 1, "_is_last_row": False},
+            ),
+            ParsedRecord(
+                text="row1",
+                parsed={"group_id": "group_A", "_time_idx": 1, "value": 2, "_is_last_row": True},
+            ),
+        ]
+        records[0].invalidate(("test rejection", "data_config"))
+
+        backend._validate_postprocessed_sequence_indices(state, records)
+
+        assert records[1].is_valid is False
 
     def test_last_marker_retains_terminal_and_trims_later_rows(
         self, timeseries_base_params, timeseries_model_metadata, mock_workdir
@@ -1290,7 +1363,7 @@ class TestFlexibleTimeseries:
         assert backend._internal_output_path.read_text(encoding="utf-8") == "preserve"
 
     def test_raw_completions_and_token_metrics_are_auditable(
-        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir, tmp_path
     ):
         _enable_flexible_timeseries(timeseries_base_params, timeseries_model_metadata)
         backend = create_timeseries_backend(
@@ -1299,6 +1372,9 @@ class TestFlexibleTimeseries:
             mock_workdir,
             self._schema(),
         )
+        backend._raw_generations_path = tmp_path / "raw.jsonl"
+        backend._flexible_metrics_path = tmp_path / "metrics.json"
+        backend._internal_output_path = tmp_path / "internal.csv"
         backend._prepare_flexible_timeseries_artifacts()
         state = backend._init_group_state("group_A")
         candidate = ParsedRecord(

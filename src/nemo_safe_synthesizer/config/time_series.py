@@ -25,10 +25,16 @@ class FlexibleTimeseriesMetadata(BaseModel):
     DEFAULT_INDEX_COLUMN: ClassVar[str] = "_time_idx"
     DEFAULT_MARKER_COLUMN: ClassVar[str] = "_is_last_row"
 
-    index_column: str = DEFAULT_INDEX_COLUMN
-    marker_column: str = DEFAULT_MARKER_COLUMN
-    max_records: int
-    source_columns: tuple[str, ...]
+    index_column: str = Field(
+        default=DEFAULT_INDEX_COLUMN,
+        description="Generated zero-based sequence index column.",
+    )
+    marker_column: str = Field(
+        default=DEFAULT_MARKER_COLUMN,
+        description="Generated boolean column marking each sequence's final row.",
+    )
+    max_records: int = Field(description="Largest source-group length used as the generation safety cap.")
+    source_columns: tuple[str, ...] = Field(description="Original source columns in output order.")
 
 
 class TimeSeriesParameters(Parameters):
@@ -113,16 +119,16 @@ class TimeSeriesParameters(Parameters):
     ] = None
 
     @property
-    def flexible_timeseries(self) -> bool:
+    def _uses_flexible_timeseries(self) -> bool:
         """Whether automatic routing selected flexible time-series processing."""
         return self._flexible_timeseries_metadata is not None
 
     @property
-    def flexible_timeseries_metadata(self) -> FlexibleTimeseriesMetadata | None:
+    def _resolved_flexible_timeseries_metadata(self) -> FlexibleTimeseriesMetadata | None:
         """Return internal metadata for the resolved flexible representation."""
         return self._flexible_timeseries_metadata
 
-    def resolve_flexible_timeseries(self, metadata: FlexibleTimeseriesMetadata | None) -> None:
+    def _resolve_flexible_timeseries(self, metadata: FlexibleTimeseriesMetadata | None) -> None:
         """Record or clear the internal automatic-routing result."""
         self._flexible_timeseries_metadata = metadata
 

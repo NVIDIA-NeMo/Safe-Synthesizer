@@ -932,7 +932,7 @@ class TestTimeSeriesDataShapeCheck:
 
         issues = TimeSeriesDataShapeCheck().run(make_ctx(config=config, data=df))
 
-        assert config.time_series.flexible_timeseries is True
+        assert config.time_series._uses_flexible_timeseries is True
         warning = next(issue for issue in issues if issue.code == "flexible_timeseries_routing")
         assert warning.severity == "warning"
         assert "equal group lengths" in warning.message
@@ -965,7 +965,7 @@ class TestTimeSeriesDataShapeCheck:
 
         report = run_preflight(df, config, MagicMock(spec=ModelMetadata), stages=frozenset({PreflightStage.DATAFRAME}))
 
-        assert config.time_series.flexible_timeseries is True
+        assert config.time_series._uses_flexible_timeseries is True
         assert any(
             issue.check == "timeseries.shape" and issue.code == "column_nulls" and issue.severity == "error"
             for issue in report.issues
@@ -1107,7 +1107,7 @@ class TestTokenBudgetCheck:
                 timestamp_interval_seconds=1,
             ),
         )
-        config.time_series.resolve_flexible_timeseries(
+        config.time_series._resolve_flexible_timeseries(
             FlexibleTimeseriesMetadata(max_records=8, source_columns=("grp", "value"))
         )
         df = pd.DataFrame({"grp": ["A"] * 8, "value": list(range(8))})
@@ -1126,7 +1126,7 @@ class TestTokenBudgetCheck:
                 timestamp_interval_seconds=1,
             ),
         )
-        config.time_series.resolve_flexible_timeseries(
+        config.time_series._resolve_flexible_timeseries(
             FlexibleTimeseriesMetadata(max_records=1, source_columns=("grp", "value"))
         )
         df = pd.DataFrame({"grp": ["A"], "value": ["oversized"]})

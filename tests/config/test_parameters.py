@@ -49,13 +49,13 @@ def test_resolved_flexible_timeseries_metadata_is_not_serialized_as_user_config(
         is_timeseries=True,
         timestamp_column="timestamp",
     )
-    config.time_series.resolve_flexible_timeseries(
+    config.time_series._resolve_flexible_timeseries(
         FlexibleTimeseriesMetadata(max_records=2, source_columns=("group", "timestamp", "value"))
     )
 
     dumped = config.time_series.model_dump()
 
-    assert config.time_series.flexible_timeseries is True
+    assert config.time_series._uses_flexible_timeseries is True
     assert "flexible_timeseries_metadata" not in dumped
     assert not any(name.startswith("sequence_") for name in dumped)
 

@@ -12,7 +12,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
-from typing import Self, cast
+from typing import Self
 
 import pandas as pd
 from vllm.inputs.llm import TokensPrompt
@@ -219,20 +219,24 @@ class TimeseriesBackend(VllmBackend):
     ensuring temporal continuity.
 
     Key Concepts:
-        - Time-Range Based Generation: The number of records generated is
+        - Deterministic Time-Range Generation: For fixed-shape training data, the number of records generated is
           determined by the configured time range and interval, not by a target
           count. Specifically: (stop_timestamp - start_timestamp) / interval_seconds.
-          The `config.generation.num_records` parameter is used only for progress
+          The ``config.generation.num_records`` parameter is used only for progress
           tracking, not to limit output.
+        - Flexible Marker Generation: For automatically routed training data,
+          generated rows must have contiguous sequence indices. A final-row marker
+          completes the group, while the largest source-group length provides a
+          safety cap. Internal control columns are removed from final output.
         - Sliding Window: The backend maintains a window of recent records
-          (controlled by `_history_window_size`) that are included in each prompt
+          (controlled by ``_history_window_size``) that are included in each prompt
           to provide context for the LLM, ensuring generated records follow the
           established patterns and timestamps.
         - Parallel Group Generation: Multiple time-series groups (e.g., different
           devices, customers) are processed in parallel batches for efficiency.
           Even single-sequence data uses this path (treated as 1 group via a
           pseudo-group column added during preprocessing). Groups are the same as
-          those seen during training (from `model_metadata.timeseries_group_values`).
+          those seen during training (from ``model_metadata.timeseries_group_values``).
         - Chronological Validation: Each generated record must continue from the
           previous timestamp at the expected interval. Out-of-order records are
           marked invalid.
@@ -260,11 +264,11 @@ class TimeseriesBackend(VllmBackend):
         groups and the overall generation can stop for different reasons:
 
         Per-Group Stopping:
-            - Completion (success): A group completes when any generated record
-              has a timestamp >= `_stop_timestamp_value`. The group is marked as
-              completed and removed from active processing.
+            - Completion (success): A deterministic group completes at
+              ``_stop_timestamp_value``. A flexible group completes at its
+              final-row marker or source-derived record cap.
             - Failure (low valid fraction or no progress): A group fails after
-              `config.generation.patience` consecutive batches where either the
+              ``config.generation.patience`` consecutive batches where either the
               invalid record fraction remains above the configured threshold or
               no accepted timestamp advances. Failed groups are not retried;
               records accepted in earlier batches remain in the partial output.
@@ -281,9 +285,8 @@ class TimeseriesBackend(VllmBackend):
         returns False, and the final generation status reflects partial completion.
 
     Attributes:
-        _samples_per_prompt (int): Number of completion samples to generate per
-            prompt. Multiple samples increase chances of getting valid records.
-            Default: 5.
+        _samples_per_prompt (int): Number of completion samples per prompt.
+            Flexible generation uses one; deterministic generation uses five.
         _max_prompts_per_batch (int): Maximum number of prompts to include in a
             single LLM generation call. Controls parallelism. Default: 100.
         _history_window_size (int): Number of recent records to include in the
@@ -303,6 +306,8 @@ class TimeseriesBackend(VllmBackend):
         _group_prefixes (dict[TimeSeriesGroupValue, str]): Mapping of group IDs to
             incomplete first records used to start generation.
         _groups (list[TimeSeriesGroupValue]): Typed group IDs to generate.
+        _flexible_metadata (FlexibleTimeseriesMetadata | None): Resolved
+            marker-based generation settings.
     """
 
     def __init__(self, config: SafeSynthesizerParameters, model_metadata: ModelMetadata, **kwargs):
@@ -310,10 +315,10 @@ class TimeseriesBackend(VllmBackend):
         super().__init__(config, model_metadata, **kwargs)
 
         flexible_metadata = settings.flexible_metadata
+        self._flexible_metadata = flexible_metadata
         self._flexible_timeseries = flexible_metadata is not None
         self._sequence_index_column = flexible_metadata.index_column if flexible_metadata is not None else ""
         self._sequence_marker_column = flexible_metadata.marker_column if flexible_metadata is not None else ""
-        self._sequence_max_records = flexible_metadata.max_records if flexible_metadata is not None else None
         self._samples_per_prompt = 1 if self._flexible_timeseries else 5
         self._max_prompts_per_batch = 100  # max prompts per batch for parallel group generation
         self._history_window_size = 3
@@ -618,13 +623,14 @@ class TimeseriesBackend(VllmBackend):
         records: list[ParsedRecord],
     ) -> tuple[list[ParsedRecord], tuple[str, ParsedRecord] | None]:
         """Structurally trim a contiguous group prefix and identify a tentative accepted-row stop."""
-        if not self._flexible_timeseries:
+        metadata = self._flexible_metadata
+        if metadata is None:
             return records, None
-        max_records = cast(int, self._sequence_max_records)
 
         retained: list[ParsedRecord] = []
         accepted_row_stop: tuple[str, ParsedRecord] | None = None
         prefix_ended = False
+        expected_index = 0 if state.last_timestamp_seconds is None else state.last_timestamp_seconds + 1
         trimmed_error = ("Generated row appears after the sequence end marker", "TimeSeries")
         group_error = ("Generated record group does not match the active time-series group", "TimeSeries")
         index_error = ("Generated sequence index is not a valid integer", "TimeSeries")
@@ -645,12 +651,22 @@ class TimeseriesBackend(VllmBackend):
                 record.invalidate(index_error)
                 prefix_ended = True
                 continue
+            if index_value != expected_index:
+                record.invalidate(
+                    (
+                        f"Generated sequence index {index_value!r} does not match expected index {expected_index}",
+                        "TimeSeries",
+                    )
+                )
+                prefix_ended = True
+                continue
 
             retained.append(record)
+            expected_index += 1
             if parsed.get(self._sequence_marker_column) is True:
                 accepted_row_stop = ("terminal", record)
                 prefix_ended = True
-            elif index_value >= max_records - 1:
+            elif index_value >= metadata.max_records - 1:
                 accepted_row_stop = ("cap", record)
                 prefix_ended = True
 
@@ -669,10 +685,13 @@ class TimeseriesBackend(VllmBackend):
         if reason == "terminal":
             return reason if candidate.parsed.get(self._sequence_marker_column) is True else None
         if reason == "cap":
+            metadata = self._flexible_metadata
+            if metadata is None:
+                return None
             index_value = candidate.parsed.get(self._sequence_index_column)
             if not isinstance(index_value, int) or isinstance(index_value, bool):
                 return None
-            return reason if index_value >= cast(int, self._sequence_max_records) - 1 else None
+            return reason if index_value >= metadata.max_records - 1 else None
         return None
 
     def _validate_postprocessed_group_identity(
@@ -689,6 +708,34 @@ class TimeseriesBackend(VllmBackend):
                 and record.parsed.get(self._group_column) != state.group_id
             ):
                 record.invalidate(error)
+
+    def _validate_postprocessed_sequence_indices(
+        self,
+        state: GroupState,
+        records: list[ParsedRecord],
+    ) -> None:
+        """Retain only the contiguous postprocessed sequence prefix."""
+        if self._flexible_metadata is None:
+            return
+        expected_index = 0 if state.last_timestamp_seconds is None else state.last_timestamp_seconds + 1
+        prefix_ended = False
+        for record in records:
+            if prefix_ended or not record.is_valid or record.parsed is None:
+                prefix_ended = True
+                if record.is_valid:
+                    record.invalidate(("Generated row follows an invalid sequence row", "TimeSeries"))
+                continue
+            index_value = record.parsed.get(self._sequence_index_column)
+            if not isinstance(index_value, int) or isinstance(index_value, bool) or index_value != expected_index:
+                record.invalidate(
+                    (
+                        f"Postprocessed sequence index {index_value!r} does not match expected index {expected_index}",
+                        "TimeSeries",
+                    )
+                )
+                prefix_ended = True
+                continue
+            expected_index += 1
 
     def _prepare_flexible_timeseries_artifacts(self) -> None:
         """Reset stale partial artifacts while protecting completed flexible time-series runs."""
@@ -737,7 +784,8 @@ class TimeseriesBackend(VllmBackend):
 
     def _write_flexible_timeseries_metrics(self) -> None:
         """Write auditable per-group and aggregate flexible time-series metrics."""
-        if not self._flexible_timeseries:
+        metadata = self._flexible_metadata
+        if metadata is None:
             return
         groups = [
             {
@@ -758,7 +806,7 @@ class TimeseriesBackend(VllmBackend):
         metrics = {
             "status": "completed",
             "flexible_timeseries": True,
-            "sequence_max_records": self._sequence_max_records,
+            "sequence_max_records": metadata.max_records,
             "groups": groups,
             "aggregate": {
                 "groups": len(groups),
@@ -1180,6 +1228,7 @@ class TimeseriesBackend(VllmBackend):
                 retained_records, accepted_row_stop = self._trim_flexible_timeseries_records(state, retained_records)
                 batches.postprocess_batch(batch)
                 self._validate_postprocessed_group_identity(state, retained_records)
+                self._validate_postprocessed_sequence_indices(state, retained_records)
                 termination_reason = self._resolve_postprocessed_termination(accepted_row_stop)
                 accepted_records = [
                     record for record in retained_records if record.is_valid and record.parsed is not None
@@ -1296,14 +1345,14 @@ class TimeseriesBackend(VllmBackend):
         """Generate time-series tabular data using Nemo Safe Synthesizer.
 
         All time series are processed as groups (single-sequence is treated as 1 group
-        via pseudo-group column added during preprocessing).
+        via a pseudo-group column added during preprocessing). Fixed-shape groups stop
+        at the configured time range. Automatically routed flexible groups stop at an
+        accepted final-row marker or the maximum source-group length.
 
         Note:
-            Generation is time-range based, not count-based. The number of records
-            generated is determined by (stop_timestamp - start_timestamp) / interval_seconds
-            for each group. The config.generation.num_records parameter is used for
-            progress tracking but does not limit output. Groups are the same as those
-            seen during training (from model_metadata.timeseries_group_values).
+            ``config.generation.num_records`` is used for progress tracking but
+            does not limit time-series output. Groups are the same as those seen
+            during training in ``model_metadata.timeseries_group_values``.
 
         Args:
             data_actions_fn: Optional function that takes a DataFrame and returns a modified DataFrame.
