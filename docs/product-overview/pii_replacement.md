@@ -279,7 +279,6 @@ replace_pii:
       first_name: 0.9
       middle_name: 0.9
       last_name: 0.9
-      full_name: 0.9
       phone_number: 0.5
       date_of_birth: 0.5
       street_address: 0.5
@@ -300,19 +299,20 @@ scope.
 Detector ownership is disjoint. Structurally validated regex exclusively
 detects `email`, `credit_debit_card`, `ipv4`, and `ipv6`; NSS does not request
 those labels from GLiNER2. GLiNER2 detects the remaining semantic and
-contextual entity types. This avoids duplicate model work and prevents a model
-span for one of the deterministic formats from competing with its exact regex
-span.
+contextual entity types except `full_name`. Complete names are detected through
+the specific `first_name`, `middle_name`, and `last_name` labels; NSS does not
+request the checkpoint's overly broad `person` label. This avoids duplicate
+model work and prevents generic person or deterministic-format spans from
+competing with more specific detections.
 
 The checkpoint is optimized for recall and can confuse common or domain terms
 with names. NSS therefore configures a confidence threshold for every
 GLiNER2-detected entity type, with a precision-first `0.9` default for all name
 types and `0.5` for the remaining model-detected types. Regex-owned types have
-no confidence threshold. NSS requests the `person` checkpoint label for
-`full_name` rather than requesting both aliases, which avoids label competition
-that raises medical-term false positives. Checkpoint aliases use the threshold
-of the NSS entity they normalize to. Lower name thresholds only after
-calibrating against representative domain text.
+no confidence threshold, and `full_name` has no direct model threshold because
+it is not requested. Checkpoint aliases use the threshold of the NSS entity
+they normalize to. Lower name thresholds only after calibrating against
+representative domain text.
 
 NSS automatically uses CUDA when available and otherwise runs GLiNER2 on CPU.
 It deduplicates identical cell text, flattens overlapping chunks across unique
@@ -377,7 +377,6 @@ replace_pii:
       first_name: 0.9
       middle_name: 0.9
       last_name: 0.9
-      full_name: 0.9
       phone_number: 0.5
       date_of_birth: 0.5
       street_address: 0.5

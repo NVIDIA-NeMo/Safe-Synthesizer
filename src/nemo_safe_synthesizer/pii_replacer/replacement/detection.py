@@ -17,7 +17,8 @@ import regex
 
 from ...config.replace_pii import (
     ENTITIES,
-    FREE_TEXT_DETECTION_ENTITY_TYPES,
+    GLINER_DETECTION_ENTITY_TYPES,
+    REGEX_DETECTION_ENTITY_TYPES,
     EntityType,
     FreeTextDetectionConfig,
 )
@@ -39,7 +40,7 @@ __all__ = [
     "resolve_overlapping_spans",
 ]
 
-_FRESH_ENTITY_TYPES = frozenset(FREE_TEXT_DETECTION_ENTITY_TYPES)
+_FRESH_ENTITY_TYPES = frozenset(GLINER_DETECTION_ENTITY_TYPES + REGEX_DETECTION_ENTITY_TYPES)
 
 # The selected PII checkpoint uses a slightly broader vocabulary than NSS. Only
 # labels with a well-defined v3 replacement type are requested and normalized.
@@ -47,7 +48,6 @@ _GLINER_LABELS: dict[str, EntityType] = {
     "first_name": EntityType.FIRST_NAME,
     "middle_name": EntityType.MIDDLE_NAME,
     "last_name": EntityType.LAST_NAME,
-    "person": EntityType.FULL_NAME,
     "phone_number": EntityType.PHONE_NUMBER,
     "date_of_birth": EntityType.DATE_OF_BIRTH,
     "street_address": EntityType.STREET_ADDRESS,

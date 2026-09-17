@@ -554,7 +554,6 @@ class TestReplacePiiConfig:
             EntityType.FIRST_NAME: 0.9,
             EntityType.MIDDLE_NAME: 0.9,
             EntityType.LAST_NAME: 0.9,
-            EntityType.FULL_NAME: 0.9,
             EntityType.PHONE_NUMBER: 0.5,
             EntityType.DATE_OF_BIRTH: 0.5,
             EntityType.STREET_ADDRESS: 0.5,
@@ -581,6 +580,7 @@ class TestReplacePiiConfig:
         }
         assert tuple(config.free_text_detection.entity_thresholds) == GLINER_DETECTION_ENTITY_TYPES
         assert set(FREE_TEXT_DETECTION_ENTITY_TYPES) - set(GLINER_DETECTION_ENTITY_TYPES) == {
+            EntityType.FULL_NAME,
             EntityType.EMAIL,
             EntityType.CREDIT_DEBIT_CARD,
             EntityType.IPV4,
@@ -603,9 +603,9 @@ class TestReplacePiiConfig:
 
     @pytest.mark.parametrize(
         "entity_type",
-        [EntityType.EMAIL, EntityType.CREDIT_DEBIT_CARD, EntityType.IPV4, EntityType.IPV6],
+        [EntityType.FULL_NAME, EntityType.EMAIL, EntityType.CREDIT_DEBIT_CARD, EntityType.IPV4, EntityType.IPV6],
     )
-    def test_free_text_detection_rejects_thresholds_for_regex_owned_entities(
+    def test_free_text_detection_rejects_thresholds_for_non_gliner_entities(
         self,
         entity_type: EntityType,
     ) -> None:
