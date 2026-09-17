@@ -15,7 +15,12 @@ from ...config.replace_pii import DataToSamplerValueMapping, EntityType, PiiColu
 from ...errors import DataError, GenerationError, InternalError, ParameterError, SafeSynthesizerError
 from ...observability import get_logger
 from ..planning.validation import value_matches_pattern
-from ..transform_result import ColumnStatistics, ReplacementGenerationStatistics
+from ..transform_result import (
+    ColumnStatistics,
+    ReplacementGenerationStatistics,
+    ReplacementMap,
+    StructuredReplacementRecord,
+)
 from .canonicalization import canonicalize_scalar, is_missing_scalar, readable_value
 from .collisions import CandidateChooser, ReplacementOutcome, ReplacementPool
 from .compiler import compile_plan
@@ -64,6 +69,9 @@ class ReplacementExecutionResult:
     dependency_drifts: tuple[GroupDependencyDrift, ...]
     """Group mappings reused although their dependency values changed."""
 
+    replacement_map: ReplacementMap | None
+    """Per-occurrence original and replacement values when capture was requested, otherwise ``None``."""
+
 
 @dataclass(frozen=True, slots=True)
 class _CachedReplacement:
@@ -85,14 +93,22 @@ class StructuredReplacementExecutor:
         group_column: str | None,
         base_seed: int,
         free_text_detector: FreeTextDetector | None = None,
+        capture_replacement_map: bool = False,
     ) -> None:
         self._plan = plan
         self._generator = generator
         self._group_column = group_column
         self._base_seed = base_seed
         self._data_to_sampler_value_mapping = _compile_data_to_sampler_value_mapping(plan.data_to_sampler_value_mapping)
+        self._capture_replacement_map = capture_replacement_map
         self._cache: dict[StructuredMappingKey, _CachedReplacement] = {}
-        self._free_text = FreeTextReplacementExecutor(generator, free_text_detector, base_seed=base_seed)
+        self._free_text = FreeTextReplacementExecutor(
+            generator,
+            free_text_detector,
+            base_seed=base_seed,
+            capture_replacement_map=capture_replacement_map,
+        )
+        self._replacement_records: list[StructuredReplacementRecord] = []
         self._shared: dict[_SharedMappingKey, str] = {}
         self._pool = ReplacementPool()
         self._group_replacements: set[str] = set()
@@ -162,11 +178,20 @@ class StructuredReplacementExecutor:
                 dependency_drift_count=sum(drift.conflict_count for drift in drifts),
             ),
             dependency_drifts=drifts,
+            replacement_map=(
+                ReplacementMap(
+                    structured=tuple(self._replacement_records),
+                    free_text=free_text_result.replacement_records,
+                )
+                if self._capture_replacement_map
+                else None
+            ),
         )
 
     def _reset_execution_state(self) -> None:
         self._cache.clear()
         self._free_text.reset()
+        self._replacement_records.clear()
         self._shared.clear()
         self._pool = ReplacementPool()
         self._group_replacements.clear()
@@ -255,8 +280,21 @@ class StructuredReplacementExecutor:
             dependencies = _effective_dependencies(working, row_position, spec)
             key = self._mapping_key(spec, row_position, canonical_original, group_identities)
             original_text = original_texts[row_position]
-            replacement = self._replacement_for(key, spec, original_text, dependencies)
-            working.iat[row_position, column_position] = _in_occurrence_case(spec, original_text, replacement)
+            replacement = _in_occurrence_case(
+                spec, original_text, self._replacement_for(key, spec, original_text, dependencies)
+            )
+            working.iat[row_position, column_position] = replacement
+            if self._capture_replacement_map:
+                self._replacement_records.append(
+                    StructuredReplacementRecord(
+                        row_position=row_position,
+                        column_name=spec.column_name,
+                        entity_type=spec.entity_type,
+                        scope="record" if group_identities is None else "group",
+                        original_value=original_text,
+                        replacement_value=replacement,
+                    )
+                )
 
     def _mapping_key(
         self,
