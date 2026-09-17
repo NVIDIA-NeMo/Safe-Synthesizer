@@ -54,6 +54,13 @@ def resolve_flexible_timeseries_metadata(
     max_records: int,
 ) -> FlexibleTimeseriesMetadata:
     """Resolve internal control columns and source schema for flexible routing."""
+    if data.columns.has_duplicates:
+        duplicates = data.columns[data.columns.duplicated()].unique().tolist()
+        raise DataError(
+            f"Flexible time-series input contains duplicate column names {duplicates!r}. "
+            "Rename or remove duplicate columns before running the pipeline."
+        )
+
     columns = list(data.columns)
     if config.data.group_training_examples_by is None:
         check_no_pseudo_column_collision(data)

@@ -8,6 +8,7 @@ import pytest
 
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.time_series import FlexibleTimeseriesMetadata
+from nemo_safe_synthesizer.data_processing.flexible_timeseries import resolve_flexible_timeseries_metadata
 from nemo_safe_synthesizer.data_processing.timeseries_validation import (
     TimeSeriesDataValidationError,
     TimeSeriesGroupTimestampStats,
@@ -132,6 +133,21 @@ def test_routing_does_not_fallback_for_null_timestamps():
 
     assert exc_info.value.reason is TimeSeriesValidationReason.TIMESTAMP_NULLS
     assert config.time_series.flexible_timeseries is False
+
+
+def test_flexible_metadata_reports_duplicate_source_columns_as_data_error():
+    data = pd.DataFrame(
+        [
+            ["A", 0, 1, 2],
+            ["A", 60, 3, 4],
+            ["B", 0, 5, 6],
+        ],
+        columns=["group", "ts", "value", "value"],
+    )
+    config = _routing_config()
+
+    with pytest.raises(DataError, match="duplicate column names.*Rename or remove"):
+        resolve_flexible_timeseries_metadata(data, config, max_records=2)
 
 
 def test_validate_start_stop_consistency_valid():

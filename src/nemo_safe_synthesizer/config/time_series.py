@@ -27,21 +27,8 @@ class FlexibleTimeseriesMetadata(BaseModel):
 
     index_column: str = DEFAULT_INDEX_COLUMN
     marker_column: str = DEFAULT_MARKER_COLUMN
-    max_records: int = Field(ge=1)
+    max_records: int
     source_columns: tuple[str, ...]
-
-    @model_validator(mode="after")
-    def validate_internal_columns(self) -> Self:
-        """Validate the resolved internal schema."""
-        if not self.index_column:
-            raise ValueError("index_column must not be empty.")
-        if not self.marker_column:
-            raise ValueError("marker_column must not be empty.")
-        if self.index_column == self.marker_column:
-            raise ValueError("index_column and marker_column must be different.")
-        if len(set(self.source_columns)) != len(self.source_columns):
-            raise ValueError("source_columns must not contain duplicates.")
-        return self
 
 
 class TimeSeriesParameters(Parameters):
