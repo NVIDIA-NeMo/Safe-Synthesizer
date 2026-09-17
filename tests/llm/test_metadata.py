@@ -28,7 +28,7 @@ from nemo_safe_synthesizer.defaults import (
     MAX_ROPE_SCALING_FACTOR,
     PROMPT_TEMPLATE,
 )
-from nemo_safe_synthesizer.errors import ParameterError
+from nemo_safe_synthesizer.errors import GenerationError, ParameterError
 from nemo_safe_synthesizer.llm.metadata import (
     DEFAULT_MAX_SEQ_LENGTH,
     GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER,
@@ -627,6 +627,70 @@ class TestModelMetadata:
         assert metadata.rope_scaling and metadata.rope_scaling.factor == 2.0
         assert metadata.max_seq_length == 4096
         assert metadata.workdir == sample_workdir
+
+    @pytest.mark.parametrize(
+        "flexible_metadata",
+        [
+            pytest.param(
+                {
+                    "index_column": "_control",
+                    "marker_column": "_control",
+                    "max_records": 2,
+                    "source_columns": ["group", "value"],
+                },
+                id="overlapping-controls",
+            ),
+            pytest.param(
+                {
+                    "index_column": "_time_idx",
+                    "marker_column": "_is_last_row",
+                    "max_records": 0,
+                    "source_columns": ["group", "value"],
+                },
+                id="invalid-cap",
+            ),
+            pytest.param(
+                {
+                    "index_column": "_time_idx",
+                    "marker_column": "_is_last_row",
+                    "max_records": 2,
+                    "source_columns": ["group", "value", "value"],
+                },
+                id="duplicate-source-columns",
+            ),
+            pytest.param(
+                {
+                    "index_column": "_time_idx",
+                    "marker_column": "_is_last_row",
+                    "max_records": "invalid",
+                    "source_columns": ["group", "value"],
+                },
+                id="invalid-field-type",
+            ),
+        ],
+    )
+    @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
+    @patch("nemo_safe_synthesizer.llm.metadata.load_json")
+    def test_invalid_flexible_metadata_reports_actionable_artifact_error(
+        self,
+        mock_load_json,
+        mock_auto_config,
+        flexible_metadata,
+        sample_prompt_config,
+        mock_autoconfig_obj,
+        tmp_path,
+        sample_workdir,
+    ):
+        mock_auto_config.from_pretrained.return_value = mock_autoconfig_obj
+        mock_load_json.return_value = {
+            "model_name_or_path": "loaded-model",
+            "prompt_config": sample_prompt_config.model_dump(),
+            "base_max_seq_length": 2048,
+            "flexible_timeseries_metadata": flexible_metadata,
+        }
+
+        with pytest.raises(GenerationError, match="Retrain the model or restore a complete artifact"):
+            ModelMetadata.from_metadata_json(tmp_path / "metadata.json", workdir=sample_workdir)
 
     def test_from_str_or_path_raises_for_unknown_model(self):
         """Test from_str_or_path raises ValueError for unknown model names."""

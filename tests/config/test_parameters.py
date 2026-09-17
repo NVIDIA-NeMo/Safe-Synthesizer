@@ -44,28 +44,6 @@ def test_flexible_timeseries_state_is_not_a_public_parameter(name, value):
         SafeSynthesizerParameters.from_params(**{name: value})
 
 
-@pytest.mark.parametrize("max_records", [0, -1])
-def test_flexible_timeseries_metadata_requires_positive_max_records(max_records):
-    with pytest.raises(ValidationError, match="greater than or equal to 1"):
-        FlexibleTimeseriesMetadata(max_records=max_records, source_columns=("group", "value"))
-
-
-def test_flexible_timeseries_metadata_rejects_invalid_internal_schema():
-    with pytest.raises(ValidationError, match="index_column and marker_column must be different"):
-        FlexibleTimeseriesMetadata(
-            index_column="_control",
-            marker_column="_control",
-            max_records=2,
-            source_columns=("group", "value"),
-        )
-
-    with pytest.raises(ValidationError, match="source_columns must not contain duplicates"):
-        FlexibleTimeseriesMetadata(
-            max_records=2,
-            source_columns=("group", "value", "value"),
-        )
-
-
 def test_resolved_flexible_timeseries_metadata_is_not_serialized_as_user_config():
     config = SafeSynthesizerParameters.from_params(
         is_timeseries=True,
