@@ -5,9 +5,12 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import pandas as pd
 
 from ..config import SafeSynthesizerParameters
+from ..config.time_series import FlexibleTimeseriesMetadata
 from ..data_processing.flexible_timeseries import prepare_flexible_timeseries_data
 from ..data_processing.timeseries_validation import resolve_timeseries_routing, validate_timeseries_data
 from ..observability import get_logger
@@ -76,17 +79,16 @@ def process_timeseries_data(
     resolve_timeseries_routing(training_df, config)
     ts_config = config.time_series
     if ts_config.flexible_timeseries:
-        training_df, group_column = prepare_flexible_timeseries_data(training_df, config)
-        validation = validate_timeseries_data(training_df, config)
-        metadata = ts_config.flexible_timeseries_metadata
+        metadata = cast(FlexibleTimeseriesMetadata, ts_config.flexible_timeseries_metadata)
+        training_df, group_column = prepare_flexible_timeseries_data(training_df, config, metadata)
         logger.info(
             "Prepared automatically routed flexible time-series data.",
             extra={
                 "group_column": group_column,
-                "sequence_max_records": metadata.max_records if metadata is not None else None,
+                "sequence_max_records": metadata.max_records,
             },
         )
-        return validation.data, config
+        return training_df, config
 
     original_group_column = config.data.group_training_examples_by
     original_timestamp_column = ts_config.timestamp_column

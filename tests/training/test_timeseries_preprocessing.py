@@ -285,15 +285,14 @@ def test_process_flexible_timeseries_marks_only_final_real_row(fixture_variable_
 def test_process_flexible_timeseries_normalizes_timestamp_sort_key():
     data = pd.DataFrame(
         {
-            "value": ["new", "only", "old"],
-            "group": ["A", "B", "A"],
-            "timestamp": ["01/01/2024", "06/01/2024", "12/31/2023"],
+            "value": ["only", "new", "old"],
+            "group": ["B", "A", "A"],
+            "timestamp": ["06/30/2024", "01/01/2024", "12/31/2023"],
         }
     )
     config = SafeSynthesizerParameters.from_params(
         is_timeseries=True,
         timestamp_column="timestamp",
-        timestamp_format="%m/%d/%Y",
         group_training_examples_by="group",
         order_training_examples_by="timestamp",
         rope_scaling_factor=1,

@@ -5,14 +5,17 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 from typing_extensions import override
 
+from ...config.time_series import FlexibleTimeseriesMetadata
+from ...data_processing.flexible_timeseries import prepare_flexible_timeseries_data
 from ...data_processing.timeseries_validation import (
     TimeSeriesDataValidationError,
     TimeSeriesParameterValidationError,
     TimeSeriesValidationReason,
-    inspect_timeseries_constraints,
-    validate_timeseries_data,
+    resolve_timeseries_routing,
 )
 from ...data_processing.validation import (
     check_column_has_no_nulls,
@@ -181,10 +184,11 @@ class TimeSeriesDataShapeCheck(DataFrameCheck):
 
     name = "timeseries.shape"
     label = "Time-series data shape"
-    requires = ("columns.groupby", "columns.pseudo")
+    requires = ("columns.groupby", "columns.orderby", "columns.pseudo")
     issue_codes = {
         TimeSeriesValidationReason.COLUMN_NOT_FOUND: "column_not_found",
         TimeSeriesValidationReason.COLUMN_NULLS: "column_nulls",
+        TimeSeriesValidationReason.DUPLICATE_COLUMNS: "duplicate_columns",
         TimeSeriesValidationReason.PSEUDO_COLUMN_COLLISION: "pseudo_column_collision",
         TimeSeriesValidationReason.TIMESTAMP_NOT_FOUND: "timestamp_not_found",
         TimeSeriesValidationReason.TIMESTAMP_NULLS: "timestamp_nulls",
@@ -192,13 +196,9 @@ class TimeSeriesDataShapeCheck(DataFrameCheck):
         TimeSeriesValidationReason.TIMESTAMP_PARSE_FAILED: "timestamp_parse_failed",
         TimeSeriesValidationReason.TIMESTAMP_ELAPSED_NON_NUMERIC: "timestamp_elapsed_non_numeric",
         TimeSeriesValidationReason.TIMESTAMP_ELAPSED_INVALID: "timestamp_elapsed_invalid",
-        TimeSeriesValidationReason.TIMESTAMP_INTERVAL_MISMATCH: "timestamp_interval_mismatch",
         TimeSeriesValidationReason.TIMESERIES_EMPTY: "timeseries_empty",
         TimeSeriesValidationReason.TIMESERIES_NO_VALUE_COLUMNS: "timeseries_no_value_columns",
         TimeSeriesValidationReason.TIMESERIES_IDENTITY_COLUMNS_SAME: "timeseries_identity_columns_same",
-        TimeSeriesValidationReason.TIMESERIES_GROUP_LENGTH_MISMATCH: "timeseries_group_length_mismatch",
-        TimeSeriesValidationReason.TIMESERIES_START_MISMATCH: "timeseries_start_mismatch",
-        TimeSeriesValidationReason.TIMESERIES_STOP_MISMATCH: "timeseries_stop_mismatch",
     }
 
     @override
@@ -227,8 +227,10 @@ class TimeSeriesDataShapeCheck(DataFrameCheck):
                 return
 
         try:
-            decision = inspect_timeseries_constraints(ctx.data, ctx.config)
-            if ctx.config.time_series.flexible_timeseries and decision.uses_flexible_timeseries:
+            decision = resolve_timeseries_routing(ctx.data, ctx.config)
+            if decision is None:
+                return
+            if decision.uses_flexible_timeseries:
                 constraints = ", ".join(decision.failed_constraints)
                 collector.warning(
                     "flexible_timeseries_routing",
@@ -236,6 +238,19 @@ class TimeSeriesDataShapeCheck(DataFrameCheck):
                     f"({constraints}); automatically using flexible time-series processing with a "
                     f"{decision.sequence_max_records}-record safety cap.",
                 )
-            validate_timeseries_data(ctx.data, ctx.config)
+                order_column = ctx.config.data.order_training_examples_by
+                if order_column is not None:
+                    try:
+                        check_column_present(ctx.data, order_column, role="Order by")
+                        check_column_has_no_nulls(ctx.data, order_column, role="Order by")
+                    except ParameterError as exc:
+                        collector.error("column_not_found", str(exc))
+                        return
+                    except DataError as exc:
+                        collector.error("column_nulls", str(exc))
+                        return
+                config_copy = ctx.config.model_copy(deep=True)
+                metadata = cast(FlexibleTimeseriesMetadata, ctx.config.time_series.flexible_timeseries_metadata)
+                prepare_flexible_timeseries_data(ctx.data, config_copy, metadata)
         except (TimeSeriesDataValidationError, TimeSeriesParameterValidationError) as exc:
             collector.error(self.issue_codes[exc.reason], str(exc))
