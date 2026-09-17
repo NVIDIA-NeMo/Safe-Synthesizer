@@ -963,6 +963,37 @@ class TestTimeSeriesDataShapeCheck:
         assert "3-record safety cap" in warning.message
         assert not any(issue.severity == "error" for issue in issues)
 
+    def test_flexible_source_order_nulls_report_domain_error(self):
+        df = pd.DataFrame(
+            {
+                "grp": ["A", "A", "B"],
+                "ts": [0, 1, 0],
+                "source_order": [0, None, 0],
+                "value": [1, 2, 3],
+            }
+        )
+        config = SafeSynthesizerParameters(
+            data=DataParameters(
+                group_training_examples_by="grp",
+                order_training_examples_by="source_order",
+            ),
+            time_series=TimeSeriesParameters(
+                is_timeseries=True,
+                timestamp_column="ts",
+                timestamp_format="elapsed_seconds",
+            ),
+        )
+        decision = resolve_timeseries_routing(df, config)
+
+        report = run_preflight(df, config, MagicMock(spec=ModelMetadata), stages=frozenset({PreflightStage.DATAFRAME}))
+
+        assert decision is not None and decision.uses_flexible_timeseries
+        assert any(
+            issue.check == "timeseries.shape" and issue.code == "column_nulls" and issue.severity == "error"
+            for issue in report.issues
+        )
+        assert not any(issue.code == "preflight.check_crash" for issue in report.issues)
+
     def test_group_length_mismatch_reports_error(self):
         df = pd.DataFrame(
             {
