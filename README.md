@@ -25,6 +25,24 @@ Read detailed usage below, or jump to the documentation with [Getting Started](h
 
 ### Installation
 
+For most installations, download the installer from the latest stable GitHub
+release. The released script pins NeMo Safe Synthesizer, its constraints, and
+the package indexes that support that version.
+
+```bash
+curl -fsSLO https://github.com/NVIDIA-NeMo/Safe-Synthesizer/releases/latest/download/install_nss.sh
+chmod +x install_nss.sh
+
+# CUDA 12.9 is the default.
+./install_nss.sh
+CUDA=130 ./install_nss.sh
+CUDA=cpu ./install_nss.sh
+```
+
+The installer requires [uv](https://docs.astral.sh/uv/). Use `DRY_RUN=1` to
+inspect its command without installing. Use the manual commands below when you
+need to customize the package source or installation command.
+
 ```bash
 # With uv (recommended):
 uv pip install "nemo-safe-synthesizer[cu129,engine]" \
