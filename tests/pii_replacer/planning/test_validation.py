@@ -138,15 +138,15 @@ class TestValidatePlan:
     @pytest.mark.parametrize("placeholder", NAME_PART_PLACEHOLDERS)
     def test_accepts_every_documented_name_part_placeholder(self, placeholder: str) -> None:
         definition = NAME_PART_PLACEHOLDERS[placeholder]
-        is_domain = definition.part == "domain"
-        pattern = f"x@{placeholder}" if is_domain else placeholder
-        value = "x@example.com" if is_domain else ("A" if definition.initial else "Ada")
+        is_email_only = definition.part in {"domain", "organization"}
+        pattern = f"x@{placeholder}" if is_email_only else placeholder
+        value = "x@example.com" if is_email_only else ("A" if definition.initial else "Ada")
         dataframe = pd.DataFrame({"value": [value]})
         plan = PiiReplacementPlan(
             columns_to_replace=[
                 PiiColumnPlan(
                     column_name="value",
-                    entity_type=EntityType.EMAIL if is_domain else EntityType.FULL_NAME,
+                    entity_type=EntityType.EMAIL if is_email_only else EntityType.FULL_NAME,
                     pattern=pattern,
                 )
             ]
@@ -177,6 +177,20 @@ class TestValidatePlan:
                     column_name="email",
                     entity_type=EntityType.EMAIL,
                     pattern="{first}#@{domain}",
+                )
+            ]
+        )
+
+        validate_plan(dataframe, plan, data_config=DataParameters())
+
+    def test_accepts_email_organization_placeholder(self) -> None:
+        dataframe = pd.DataFrame({"email": ["ada@mail.example.org"]})
+        plan = PiiReplacementPlan(
+            columns_to_replace=[
+                PiiColumnPlan(
+                    column_name="email",
+                    entity_type=EntityType.EMAIL,
+                    pattern="{first}@mail.{organization}.org",
                 )
             ]
         )

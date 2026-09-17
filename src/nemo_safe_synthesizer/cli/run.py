@@ -18,7 +18,7 @@ from ..configurator.pydantic_click_options import (
     parse_overrides,
     pydantic_options,
 )
-from ..defaults import PII_REPLACEMENT_PLAN_FILENAME
+from ..defaults import PII_REPLACEMENT_CONFIG_FILENAME
 from ..errors import UserError
 from ..observability import traced_user
 from ..telemetry import DeploymentTypeEnum, TaskStatusEnum
@@ -401,7 +401,7 @@ def run(
 
     Without a subcommand, runs the full end-to-end pipeline.
     Use 'run train' or 'run generate' for individual stages, or
-    'run replace-pii --plan-only' to resolve a PII replacement plan.
+    'run replace-pii --plan-only' to resolve a PII replacement configuration.
     """
     # If a subcommand is invoked, skip the default behavior
     if ctx.invoked_subcommand is not None:
@@ -490,14 +490,14 @@ def run_replace_pii(
 
             if df is None:
                 raise UserError("Input data is required to plan PII replacement.")
-            output_path = workdir.run_dir / PII_REPLACEMENT_PLAN_FILENAME
+            output_path = workdir.run_dir / PII_REPLACEMENT_CONFIG_FILENAME
             nss = SafeSynthesizer(
                 config=config,
                 workdir=workdir,
                 emit_telemetry=config.emit_telemetry,
             ).with_data_source(df)
             nss.plan_pii_replacement(output_path=output_path)
-            run_logger.info(f"PII replacement plan saved to: {output_path}")
+            run_logger.info(f"Resolved PII replacement configuration saved to: {output_path}")
     except UserError as exc:
         click.secho(str(exc), fg="red", err=True)
         raise SystemExit(1)
