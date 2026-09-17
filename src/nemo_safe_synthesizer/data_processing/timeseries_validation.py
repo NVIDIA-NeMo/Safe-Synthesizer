@@ -19,7 +19,12 @@ from ..defaults import PSEUDO_GROUP_COLUMN
 from ..errors import DataError, ParameterError
 from .actions.utils import guess_datetime_format
 from .flexible_timeseries import prepare_flexible_timeseries_data
-from .validation import check_groupby_column, check_no_pseudo_column_collision, check_timestamp_column
+from .validation import (
+    check_column_has_no_nulls,
+    check_groupby_column,
+    check_no_pseudo_column_collision,
+    check_timestamp_column,
+)
 
 __all__ = [
     "TimeSeriesDataValidationError",
@@ -186,12 +191,32 @@ def _add_elapsed_time_column(
     data: pd.DataFrame,
     ts_config: TimeSeriesParameters,
     group_by_col: str,
+    order_by_col: str | None = None,
 ) -> tuple[pd.DataFrame, str]:
     """Return a copy with a generated elapsed-seconds timestamp column."""
     if ts_config.timestamp_interval_seconds is None:
         raise TimeSeriesParameterValidationError(
             TimeSeriesValidationReason.TIMESTAMP_NOT_FOUND,
             "Time-series mode requires either timestamp_column or timestamp_interval_seconds.",
+        )
+
+    if order_by_col is not None and order_by_col in data.columns and order_by_col != group_by_col:
+        try:
+            check_column_has_no_nulls(data, order_by_col, role="Order by")
+        except ParameterError as exc:
+            raise TimeSeriesParameterValidationError(TimeSeriesValidationReason.COLUMN_NOT_FOUND, str(exc)) from exc
+        except DataError as exc:
+            raise TimeSeriesDataValidationError(TimeSeriesValidationReason.COLUMN_NULLS, str(exc)) from exc
+        source_position_column = "__nss_source_position"
+        suffix = 1
+        while source_position_column in data.columns:
+            source_position_column = f"__nss_source_position_{suffix}"
+            suffix += 1
+        data[source_position_column] = range(len(data))
+        data = (
+            data.sort_values([group_by_col, order_by_col, source_position_column], kind="mergesort")
+            .drop(columns=[source_position_column])
+            .reset_index(drop=True)
         )
 
     timestamp_col = resolve_elapsed_time_column_name(data.columns)
@@ -475,7 +500,12 @@ def _prepare_time_series_stats(
     ts_config = config.time_series
     timestamp_col = ts_config.timestamp_column
     if timestamp_col is None:
-        working_df, timestamp_col = _add_elapsed_time_column(working_df, ts_config, group_by_col)
+        working_df, timestamp_col = _add_elapsed_time_column(
+            working_df,
+            ts_config,
+            group_by_col,
+            config.data.order_training_examples_by,
+        )
         timestamp_format = "elapsed_seconds"
         is_elapsed_time = True
     else:
@@ -594,10 +624,6 @@ def resolve_timeseries_routing(
             failed_constraints=(),
             sequence_max_records=maximum,
         )
-    if ts_config.timestamp_column is None:
-        order_column = config.data.order_training_examples_by
-        if order_column is not None and order_column in data.columns:
-            ts_config.timestamp_column = order_column
     decision = inspect_timeseries_constraints(data, config)
     ts_config.resolve_flexible_timeseries(decision.uses_flexible_timeseries)
     if decision.uses_flexible_timeseries:
@@ -638,7 +664,14 @@ def validate_timeseries_data(data: pd.DataFrame, config: SafeSynthesizerParamete
     ts_config = config.time_series
     if ts_config.flexible_timeseries and ts_config.sequence_index_column not in data.columns:
         config_copy = config.model_copy(deep=True)
-        prepared, _ = prepare_flexible_timeseries_data(data, config_copy)
+        try:
+            prepared, _ = prepare_flexible_timeseries_data(data, config_copy)
+        except (TimeSeriesDataValidationError, TimeSeriesParameterValidationError):
+            raise
+        except ParameterError as exc:
+            raise TimeSeriesParameterValidationError(TimeSeriesValidationReason.COLUMN_NOT_FOUND, str(exc)) from exc
+        except DataError as exc:
+            raise TimeSeriesDataValidationError(TimeSeriesValidationReason.COLUMN_NULLS, str(exc)) from exc
         return validate_timeseries_data(prepared, config_copy)
 
     working_df, group_by_col, timestamp_col, timestamp_format, is_elapsed_time, group_stats = (

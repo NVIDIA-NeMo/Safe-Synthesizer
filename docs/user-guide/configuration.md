@@ -359,11 +359,20 @@ for the full field list.
 | Field | Default | Description | Guidance |
 |-------|---------|-------------|----------|
 | `time_series.is_timeseries` | `false` | Enable time series mode | Enable for datasets with sequential time-ordered records |
-| `time_series.timestamp_column` | `null` | Timestamp column name | Required when `is_timeseries: true` |
-| `time_series.timestamp_interval_seconds` | `null` | Positive whole-number interval in seconds between timestamps | Set if your data has a regular whole-second sampling interval |
-| `time_series.timestamp_format` | `null` | strftime format or `"elapsed_seconds"` | Required when `is_timeseries: true` |
+| `time_series.timestamp_column` | `null` | Timestamp column name | Required unless `timestamp_interval_seconds` is provided |
+| `time_series.timestamp_interval_seconds` | `null` | Positive whole-number interval in seconds between timestamps | Required when no timestamp column is provided; otherwise optional and inferred when possible |
+| `time_series.timestamp_format` | `null` | strftime format or `"elapsed_seconds"` | Leave `null` to infer it from the timestamp data |
 | `time_series.start_timestamp` | `null` | Override start timestamp for all groups (inferred from data if `null`) | Leave `null` to infer from data |
 | `time_series.stop_timestamp` | `null` | Override stop timestamp for all groups (inferred from data if `null`) | Leave `null` to infer from data |
+
+Safe Synthesizer chooses the generation representation automatically. Groups
+with equal lengths, common start and stop timestamps, and consistent intervals
+use deterministic time-range generation. If any of those shape constraints
+does not hold, preprocessing adds internal sequence-index and final-row marker
+columns so each group can terminate independently. These internal columns are
+removed from final output. Null, unparseable, or otherwise invalid timestamps
+remain configuration or data errors and do not trigger flexible routing.
+
 See [`TimeSeriesParameters`][nemo_safe_synthesizer.config.time_series.TimeSeriesParameters]
 for the full schema. For detailed descriptions and constraints, see the
 [Time Series README](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/src/nemo_safe_synthesizer/TIMESERIES_README.md).

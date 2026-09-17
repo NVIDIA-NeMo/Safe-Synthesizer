@@ -10,7 +10,13 @@ import pandas as pd
 from ..config.parameters import SafeSynthesizerParameters
 from ..defaults import PSEUDO_GROUP_COLUMN
 from ..errors import DataError, ParameterError
-from .validation import check_groupby_column, check_no_pseudo_column_collision, check_timestamp_column
+from .actions.utils import guess_datetime_format
+from .validation import (
+    check_column_has_no_nulls,
+    check_groupby_column,
+    check_no_pseudo_column_collision,
+    check_timestamp_column,
+)
 
 __all__ = [
     "prepare_flexible_timeseries_data",
@@ -48,9 +54,43 @@ def _source_order_column(data: pd.DataFrame, config: SafeSynthesizerParameters) 
     )
     for candidate in candidates:
         if candidate is not None and candidate in data.columns:
-            check_timestamp_column(data, candidate)
+            if candidate == config.data.order_training_examples_by:
+                check_column_has_no_nulls(data, candidate, role="Order by")
+            else:
+                check_timestamp_column(data, candidate)
             return candidate
     return None
+
+
+def _timestamp_sort_key(
+    data: pd.DataFrame,
+    config: SafeSynthesizerParameters,
+    timestamp_column: str,
+) -> pd.Series:
+    """Return normalized timestamp values for chronological source sorting."""
+    timestamps = data[timestamp_column]
+    timestamp_format = config.time_series.timestamp_format
+    if timestamp_format == "elapsed_seconds" or (
+        timestamp_format is None and pd.api.types.is_integer_dtype(timestamps)
+    ):
+        return timestamps
+
+    if timestamp_format is None:
+        timestamp_format = guess_datetime_format(str(timestamps.iloc[0]))
+        if timestamp_format is None:
+            raise ParameterError(
+                f"Could not infer timestamp format from column '{timestamp_column}' "
+                f"(first value: '{timestamps.iloc[0]}')."
+            )
+
+    parsed = pd.to_datetime(timestamps, format=timestamp_format, errors="coerce")
+    invalid_count = int(parsed.isna().sum())
+    if invalid_count:
+        raise DataError(
+            f"Failed to parse {invalid_count} timestamp values from column '{timestamp_column}' "
+            f"using format '{timestamp_format}'."
+        )
+    return parsed
 
 
 def _validate_common_columns(
@@ -137,12 +177,22 @@ def _prepare_raw_sequence_data(
     working, group_column = _resolve_group(data, config)
 
     order_column = _source_order_column(working, config)
-    working["__nss_source_position"] = range(len(working))
+    temporary_columns: list[str] = []
+    source_position_column = _unused_column_name("__nss_source_position", list(working.columns))
+    working[source_position_column] = range(len(working))
+    temporary_columns.append(source_position_column)
+
+    sort_order_column = order_column
+    if order_column is not None and order_column == ts_config.timestamp_column:
+        sort_order_column = _unused_column_name("__nss_source_order", list(working.columns))
+        working[sort_order_column] = _timestamp_sort_key(working, config, order_column)
+        temporary_columns.append(sort_order_column)
+
     sort_columns = [group_column]
-    if order_column is not None and order_column != group_column:
-        sort_columns.append(order_column)
-    sort_columns.append("__nss_source_position")
-    working = working.sort_values(sort_columns, kind="mergesort").drop(columns=["__nss_source_position"])
+    if sort_order_column is not None and sort_order_column != group_column:
+        sort_columns.append(sort_order_column)
+    sort_columns.append(source_position_column)
+    working = working.sort_values(sort_columns, kind="mergesort").drop(columns=temporary_columns)
     working = working.reset_index(drop=True)
 
     index_column = _unused_column_name(ts_config.sequence_index_column, list(working.columns))
@@ -175,9 +225,8 @@ def prepare_flexible_timeseries_data(
     ts_config = config.time_series
     source_columns = ts_config.sequence_source_columns
     index_column = ts_config.sequence_index_column
-    is_prepared = index_column in data.columns and source_columns is not None
 
-    if is_prepared:
+    if index_column in data.columns and source_columns is not None:
         expected_columns = {*source_columns, index_column, ts_config.sequence_marker_column}
         if set(data.columns) != expected_columns:
             raise DataError(
