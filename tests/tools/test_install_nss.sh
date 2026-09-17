@@ -141,6 +141,7 @@ assert_contains "$dry_output" "uv venv --seed $dry_venv"
 assert_contains "$dry_output" "--python $dry_venv/bin/python"
 assert_not_contains "$dry_output" "--no-config"
 assert_not_contains "$dry_output" "--no-sources"
+assert_not_contains "$dry_output" "--default-index"
 
 isolated_output="$(
     PATH="${fake_bin}:$PATH" \
@@ -150,9 +151,10 @@ isolated_output="$(
         UV_PROJECT_ENVIRONMENT="${test_dir}/isolated-venv" \
         "$INSTALLER"
 )"
-assert_contains "$isolated_output" "uv --no-config venv"
+assert_contains "$isolated_output" "uv --no-config venv --seed --default-index https://pypi.org/simple"
 assert_contains "$isolated_output" "uv --no-config pip install"
 assert_contains "$isolated_output" "--no-sources"
+assert_contains "$isolated_output" "--default-index https://pypi.org/simple"
 
 install_venv="${test_dir}/install-venv"
 PATH="${fake_bin}:$PATH" \
