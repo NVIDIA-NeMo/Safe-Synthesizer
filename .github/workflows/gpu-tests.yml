@@ -68,7 +68,7 @@ jobs:
         uses: ./.github/actions/detect-changes
 
   gpu-smoke-test:
-    name: GPU Smoke Tests
+    name: GPU Smoke Tests (Python ${{ matrix.python-version }}, ${{ matrix.cuda-extra }})
     needs: changes
     # `changes` is intentionally skipped on workflow_dispatch. `always()` lets
     # manual runs bypass that skipped dependency and run the selected GPU suite.
@@ -87,10 +87,14 @@ jobs:
       }}
     timeout-minutes: 60
     runs-on: linux-amd64-gpu-a100-latest-1
+    # Non-required until a run of green nightly cu130 results validates the rollout;
+    # container-build and e2e coverage already exist (see docs/developer-guide/docker.md).
+    continue-on-error: ${{ matrix.cuda-extra == 'cu130' }}
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.13"]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+        cuda-extra: [cu129, cu130]
     steps:
       - name: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -102,6 +106,7 @@ jobs:
         uses: ./.github/actions/setup-gpu-test-env
         with:
           python-version: ${{ matrix.python-version }}
+          cuda-extra: ${{ matrix.cuda-extra }}
 
       - name: Run GPU unit tests
         timeout-minutes: 30
@@ -132,8 +137,11 @@ jobs:
         run: mise -E gpu-ci run test:smoke:gpu:smollm2
 
   gpu-e2e-test:
-    name: GPU E2E Tests
+    name: GPU E2E Tests (${{ matrix.cuda-extra }})
     needs: changes
+    outputs:
+      cu129_result: ${{ steps.record_result.outputs.cu129_result }}
+      cu130_result: ${{ steps.record_result.outputs.cu130_result }}
     # `changes` is intentionally skipped on workflow_dispatch. `always()` lets
     # manual runs bypass that skipped dependency and run the selected GPU suite.
     if: >-
@@ -151,6 +159,18 @@ jobs:
       }}
     timeout-minutes: 210
     runs-on: linux-amd64-gpu-a100-latest-1
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - python-version: "3.13"
+            cuda-extra: cu129
+            required: true
+          # Non-required until a run of green nightly cu130 results validates the rollout;
+          # container-build and e2e coverage already exist (see docs/developer-guide/docker.md).
+          - python-version: "3.13"
+            cuda-extra: cu130
+            required: false
     steps:
       - name: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -160,10 +180,22 @@ jobs:
 
       - name: Setup GPU test environment
         uses: ./.github/actions/setup-gpu-test-env
+        with:
+          python-version: ${{ matrix.python-version }}
+          cuda-extra: ${{ matrix.cuda-extra }}
 
       - name: Run GPU E2E tests
-        run: mise -E gpu-ci run test:e2e:prepared
+        id: e2e_tests
+        continue-on-error: ${{ !matrix.required }}
+        run: mise run test:e2e:prepared
         timeout-minutes: 190
+
+      - name: Record GPU E2E result
+        id: record_result
+        if: always()
+        env:
+          E2E_RESULT: ${{ steps.e2e_tests.outcome }}
+        run: echo "${{ matrix.cuda-extra }}_result=${E2E_RESULT}" >> "$GITHUB_OUTPUT"
 
   # ---------------------------------------------------------------------------
   # Single required status check for branch protection.
@@ -180,6 +212,8 @@ jobs:
           echo "changes:        ${{ needs.changes.result }}"
           echo "gpu-smoke-test: ${{ needs.gpu-smoke-test.result }}"
           echo "gpu-e2e-test:   ${{ needs.gpu-e2e-test.result }}"
+          echo "gpu-e2e-cu129:  ${{ needs.gpu-e2e-test.outputs.cu129_result }}"
+          echo "gpu-e2e-cu130:  ${{ needs.gpu-e2e-test.outputs.cu130_result }}"
 
           if [[ "${{ needs.changes.result }}" == "failure" ]]; then
             echo "::error::Change detection failed"
@@ -191,7 +225,9 @@ jobs:
             exit 1
           fi
 
-          if [[ "${{ needs.gpu-e2e-test.result }}" == "failure" ]]; then
+          if [[ "${{ needs.gpu-e2e-test.result }}" == "failure" ||
+                "${{ needs.gpu-e2e-test.outputs.cu129_result }}" == "failure" ||
+                "${{ needs.gpu-e2e-test.outputs.cu130_result }}" == "failure" ]]; then
             echo "::warning::GPU E2E tests failed (informational, does not block merge)"
           fi
 

@@ -61,6 +61,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
    # Install Python dependencies (choose one)
    mise run bootstrap-nss cpu    # CPU-only (macOS or Linux without GPU)
    mise run bootstrap-nss cuda   # CUDA 12.9 (Linux with NVIDIA GPU)
+   mise run bootstrap-nss cu130  # CUDA 13.0 (Linux with NVIDIA GPU)
    mise run bootstrap-nss engine # Engine dependencies only
    mise run bootstrap-nss dev    # Minimal dev dependencies only
   ```

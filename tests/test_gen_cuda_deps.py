@@ -44,7 +44,7 @@ torch_runtime_deps = [
 cuda_runtime_deps = [
   { name = "flashinfer-python", version = "0.6.6", sys_platform = "linux", source_kind = "flashinfer" },
   { name = "flashinfer-jit-cache", version = "0.6.6", local = "{torch_local_version}", sys_platform = "linux", source_kind = "flashinfer", variants = ["cu129"] },
-  { name = "nvidia-cublas", sys_platform = "linux" },
+  { name = "nvidia-cublas{nvidia_package_suffix}", sys_platform = "linux" },
 ]
 torch_wheel_deps = [
   { name = "torch", version = "3.0.0", local = "{torch_local_version}", sys_platform = "linux", source_kind = "pytorch" },
@@ -89,6 +89,7 @@ torch = [
 [variants.cu132]
 cuda_package_suffix = "cu13"
 nvidia_package_suffix = ""
+nvidia_index = "nvidia-pypi-public"
 
 [variants.cu129]
 cuda_package_suffix = "cu12"
@@ -184,7 +185,7 @@ def test_build_cuda_pyproject_fragment_renders_cuda_variant_and_sources(tmp_path
         {"index": "flashinfer-cu129", "extra": "cu129", "marker": "sys_platform == 'linux'"},
     ]
     assert parsed["tool"]["uv"]["sources"]["nvidia-cublas"] == [{"index": "nvidia-pypi-public"}]
-    assert parsed["tool"]["uv"]["sources"]["nvidia-nvtx"] == [{"index": "pytorch-cu132"}]
+    assert parsed["tool"]["uv"]["sources"]["nvidia-nvtx"] == [{"index": "nvidia-pypi-public"}]
     assert parsed["tool"]["uv"]["sources"]["nvidia-nvtx-cu12"] == [{"index": "pytorch-cu129"}]
     assert [index["name"] for index in parsed["tool"]["uv"]["index"]] == [
         "pytorch-cu132",
@@ -335,20 +336,38 @@ def test_cpu_pytorch_wheel_sources_are_linux_only(pytestconfig: pytest.Config, g
         assert cpu_source == {"index": "pytorch-cpu", "extra": "cpu", "marker": "sys_platform == 'linux'"}
 
 
-def test_repository_cu129_variant_dependency_and_source(pytestconfig: pytest.Config, generator: ModuleType) -> None:
+def test_repository_cuda_variant_dependencies_and_sources(pytestconfig: pytest.Config, generator: ModuleType) -> None:
     config_path = pytestconfig.rootpath / "cuda_deps.toml"
     generated = generator.build_cuda_pyproject_fragment(generator.load_cuda_deps_config(config_path))
     parsed = tomllib.loads(generated.text)
 
     assert "vllm==0.27.0+cu129; sys_platform == 'linux'" in parsed["project"]["optional-dependencies"]["cu129"]
+    assert "vllm==0.27.0; sys_platform == 'linux'" in parsed["project"]["optional-dependencies"]["cu130"]
+    assert "nvidia-cublas; sys_platform == 'linux'" in parsed["project"]["optional-dependencies"]["cu130"]
+    assert all(
+        not dependency.startswith("nvidia-cublas-cu13")
+        for dependency in parsed["project"]["optional-dependencies"]["cu130"]
+    )
     assert parsed["tool"]["uv"]["sources"]["vllm"] == [
-        {"index": "vllm-v0-27-0-cu129", "marker": "sys_platform == 'linux'", "extra": "cu129"}
+        {"index": "vllm-v0-27-0-cu129", "marker": "sys_platform == 'linux'", "extra": "cu129"},
+        {"index": "vllm-v0-27-0-cu130", "marker": "sys_platform == 'linux'", "extra": "cu130"},
     ]
     assert parsed["tool"]["uv"]["sources"]["flashinfer-jit-cache"] == [
-        {"index": "flashinfer-jit-cache-cu129", "marker": "sys_platform == 'linux'", "extra": "cu129"}
+        {"index": "flashinfer-jit-cache-cu129", "marker": "sys_platform == 'linux'", "extra": "cu129"},
+        {"index": "flashinfer-jit-cache-cu130", "marker": "sys_platform == 'linux'", "extra": "cu130"},
     ]
+    assert parsed["tool"]["uv"]["sources"]["flashinfer-cubin"] == [
+        {"index": "flashinfer-cubin", "marker": "sys_platform == 'linux'", "extra": "cpu"},
+        {"index": "flashinfer-cubin", "marker": "sys_platform == 'linux'", "extra": "cu129"},
+        {"index": "flashinfer-cubin", "marker": "sys_platform == 'linux'", "extra": "cu130"},
+    ]
+    assert parsed["tool"]["uv"]["sources"]["nvidia-cublas"] == [{"index": "nvidia-pypi-public"}]
     indexes = {index["name"]: index["url"] for index in parsed["tool"]["uv"]["index"]}
+    assert indexes["nvidia-pypi-public"] == "https://pypi.nvidia.com"
+    assert indexes["flashinfer-cubin"] == "https://flashinfer.ai/whl/"
     assert indexes["flashinfer-jit-cache-cu129"] == "https://flashinfer.ai/whl/cu129"
+    assert indexes["flashinfer-jit-cache-cu130"] == "https://flashinfer.ai/whl/cu130"
+    assert indexes["vllm-v0-27-0-cu130"] == "https://wheels.vllm.ai/0.27.0/cu130"
 
 
 def test_click_cli_updates_pyproject_and_checks_drift(tmp_path: Path, generator: ModuleType) -> None:

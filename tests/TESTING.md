@@ -90,6 +90,8 @@ Details:
 
 These tests are GPU-only and intentionally slow. Each model case has a 30-minute timeout, so budget up to 90 minutes for either `mise run test:e2e:default` or `mise run test:e2e:dp`, and up to 3 hours for the full `mise run test:e2e` target in cold-cache environments. Warm Hugging Face caches are expected to finish sooner.
 
+Each e2e target bootstraps `$NSS_GPU_CUDA_EXTRA` (default `cu129`) before running; set it to `cu130` to run against the CUDA 13 stack instead.
+
 ## Pytest Markers
 
 Defined in `pytest.ini` (`--strict-markers` is enabled):
@@ -174,7 +176,7 @@ Tokenizers are function-scoped (expensive to load). Most fixtures are function-s
 
 `ParsedResponse`: `valid_records=[...]`, `invalid_records=[...]`, `errors=[...]`, `prompt_number=int`. Use `fixture_mock_processor` or `fixture_mock_processor_without_valid_records`.
 
-Optional dependencies: use `pytest.importorskip` to gate on packages that require specific extras. E2e tests use this for `sentence_transformers` and `vllm` (require `cu129` extra).
+Optional dependencies: use `pytest.importorskip` to gate on packages that require specific extras. E2e tests use this for `sentence_transformers` and `vllm` (require a supported CUDA extra).
 
 Mock Workdir via `mock_workdir(tmp_path)` in `cli/conftest.py`.
 
