@@ -1284,7 +1284,7 @@ class TestFlexibleTimeseries:
         backend._flexible_metrics_path.write_text('{"status":"completed"}', encoding="utf-8")
         backend._internal_output_path.write_text("preserve", encoding="utf-8")
 
-        with pytest.raises(GenerationError, match="Refusing to overwrite completed"):
+        with pytest.raises(GenerationError, match="Use a new workdir or remove that run"):
             backend._prepare_flexible_timeseries_artifacts()
 
         assert backend._internal_output_path.read_text(encoding="utf-8") == "preserve"

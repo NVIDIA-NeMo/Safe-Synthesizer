@@ -18,7 +18,8 @@ from ..config.time_series import TimeSeriesParameters
 from ..defaults import PSEUDO_GROUP_COLUMN
 from ..errors import DataError, ParameterError
 from .actions.utils import guess_datetime_format
-from .flexible_timeseries import prepare_flexible_timeseries_data, resolve_flexible_timeseries_metadata
+from .flexible_timeseries import resolve_flexible_timeseries_metadata
+from .timeseries_utils import stable_sort_within_groups
 from .validation import (
     check_column_has_no_nulls,
     check_groupby_column,
@@ -46,6 +47,7 @@ class TimeSeriesValidationReason(Enum):
 
     COLUMN_NOT_FOUND = auto()
     COLUMN_NULLS = auto()
+    DUPLICATE_COLUMNS = auto()
     PSEUDO_COLUMN_COLLISION = auto()
     TIMESTAMP_NOT_FOUND = auto()
     TIMESTAMP_NULLS = auto()
@@ -143,6 +145,7 @@ class TimeSeriesRoutingDecision:
     uses_flexible_timeseries: bool
     failed_constraints: tuple[str, ...]
     sequence_max_records: int
+    timestamp_format: str
 
 
 def _resolve_group_column(data: pd.DataFrame, config: SafeSynthesizerParameters) -> tuple[pd.DataFrame, str]:
@@ -207,17 +210,7 @@ def _add_elapsed_time_column(
             raise TimeSeriesParameterValidationError(TimeSeriesValidationReason.COLUMN_NOT_FOUND, str(exc)) from exc
         except DataError as exc:
             raise TimeSeriesDataValidationError(TimeSeriesValidationReason.COLUMN_NULLS, str(exc)) from exc
-        source_position_column = "__nss_source_position"
-        suffix = 1
-        while source_position_column in data.columns:
-            source_position_column = f"__nss_source_position_{suffix}"
-            suffix += 1
-        data[source_position_column] = range(len(data))
-        data = (
-            data.sort_values([group_by_col, order_by_col, source_position_column], kind="mergesort")
-            .drop(columns=[source_position_column])
-            .reset_index(drop=True)
-        )
+        data = stable_sort_within_groups(data, group_by_col, order_by_col)
 
     timestamp_col = resolve_elapsed_time_column_name(data.columns)
 
@@ -465,31 +458,6 @@ def validate_start_stop_consistency(
     return str(group_stats[0].start_timestamp), str(group_stats[0].stop_timestamp)
 
 
-def _validate_flexible_start_and_stop(
-    group_stats: tuple[TimeSeriesGroupTimestampStats, ...],
-    ts_config: TimeSeriesParameters,
-) -> tuple[str, str]:
-    """Validate the common zero index and resolve the shared dataset-level cap."""
-    if not group_stats:
-        raise TimeSeriesDataValidationError(
-            TimeSeriesValidationReason.TIMESERIES_EMPTY,
-            "Time-series data must contain at least one record.",
-        )
-    unique_starts = {stats.start_timestamp for stats in group_stats}
-    if unique_starts != {0}:
-        raise TimeSeriesDataValidationError(
-            TimeSeriesValidationReason.TIMESERIES_START_MISMATCH,
-            "Flexible time-series groups must all start at index 0.",
-        )
-    metadata = ts_config.flexible_timeseries_metadata
-    if metadata is None:
-        raise TimeSeriesParameterValidationError(
-            TimeSeriesValidationReason.TIMESERIES_STOP_MISMATCH,
-            "Flexible time-series metadata must be resolved before validation.",
-        )
-    return "0", str(metadata.max_records - 1)
-
-
 def _prepare_time_series_stats(
     data: pd.DataFrame,
     config: SafeSynthesizerParameters,
@@ -572,7 +540,7 @@ def inspect_timeseries_constraints(
 
     config_copy = config.model_copy(deep=True)
     config_copy.time_series.resolve_flexible_timeseries(None)
-    _, _, _, _, _, group_stats = _prepare_time_series_stats(
+    _, _, _, timestamp_format, _, group_stats = _prepare_time_series_stats(
         data,
         config_copy,
         tolerate_interval_mismatch=True,
@@ -596,6 +564,7 @@ def inspect_timeseries_constraints(
         uses_flexible_timeseries=bool(failed),
         failed_constraints=tuple(failed),
         sequence_max_records=maximum,
+        timestamp_format=timestamp_format,
     )
 
 
@@ -606,33 +575,28 @@ def resolve_timeseries_routing(
     """Apply automatic routing to a time-series config and return the decision."""
     if not config.time_series.is_timeseries:
         return None
+    if data.columns.has_duplicates:
+        duplicates = data.columns[data.columns.duplicated()].unique().tolist()
+        raise TimeSeriesDataValidationError(
+            TimeSeriesValidationReason.DUPLICATE_COLUMNS,
+            f"Input dataset contains duplicate column names {duplicates!r}. "
+            "Rename or remove duplicate columns before running the pipeline.",
+        )
+
     ts_config = config.time_series
-    metadata = ts_config.flexible_timeseries_metadata
-    if metadata is not None and metadata.index_column in data.columns and metadata.marker_column in data.columns:
-        group_column = config.data.group_training_examples_by
-        if group_column is None:
-            raise TimeSeriesParameterValidationError(
-                TimeSeriesValidationReason.COLUMN_NOT_FOUND,
-                "Prepared flexible time-series data requires a resolved group column.",
-            )
-        maximum = int(data.groupby(group_column, sort=False).size().max())
-        return TimeSeriesRoutingDecision(
-            uses_flexible_timeseries=True,
-            failed_constraints=(),
-            sequence_max_records=maximum,
-        )
     decision = inspect_timeseries_constraints(data, config)
+    if ts_config.timestamp_format is None:
+        ts_config.timestamp_format = decision.timestamp_format
     if decision.uses_flexible_timeseries:
-        ts_config.resolve_flexible_timeseries(
-            resolve_flexible_timeseries_metadata(data, config, decision.sequence_max_records)
-        )
+        metadata = resolve_flexible_timeseries_metadata(data, config, decision.sequence_max_records)
+        ts_config.resolve_flexible_timeseries(metadata)
     else:
         ts_config.resolve_flexible_timeseries(None)
     return decision
 
 
 def validate_timeseries_data(data: pd.DataFrame, config: SafeSynthesizerParameters) -> TimeSeriesValidationResult:
-    """Validate time-series data shape and infer timestamp metadata.
+    """Validate deterministic time-series data shape and infer timestamp metadata.
 
     The validator performs the same timestamp normalization checks needed by
     training preprocessing, but operates on copies so preflight can run it
@@ -658,30 +622,13 @@ def validate_timeseries_data(data: pd.DataFrame, config: SafeSynthesizerParamete
             "Time-series data must contain at least one record.",
         )
 
-    ts_config = config.time_series
-    metadata = ts_config.flexible_timeseries_metadata
-    if metadata is not None and metadata.index_column not in data.columns:
-        config_copy = config.model_copy(deep=True)
-        try:
-            prepared, _ = prepare_flexible_timeseries_data(data, config_copy)
-        except (TimeSeriesDataValidationError, TimeSeriesParameterValidationError):
-            raise
-        except ParameterError as exc:
-            raise TimeSeriesParameterValidationError(TimeSeriesValidationReason.COLUMN_NOT_FOUND, str(exc)) from exc
-        except DataError as exc:
-            raise TimeSeriesDataValidationError(TimeSeriesValidationReason.COLUMN_NULLS, str(exc)) from exc
-        return validate_timeseries_data(prepared, config_copy)
-
     working_df, group_by_col, timestamp_col, timestamp_format, is_elapsed_time, group_stats = (
         _prepare_time_series_stats(data, config)
     )
-    if not ts_config.flexible_timeseries:
-        _validate_equal_group_lengths(group_stats)
-        start_ts, stop_ts = validate_start_stop_consistency(group_stats)
-    else:
-        start_ts, stop_ts = _validate_flexible_start_and_stop(group_stats, ts_config)
+    _validate_equal_group_lengths(group_stats)
+    start_ts, stop_ts = validate_start_stop_consistency(group_stats)
     interval_seconds = _validate_interval_consistency(
-        ts_config.timestamp_interval_seconds,
+        config.time_series.timestamp_interval_seconds,
         group_stats,
     )
 

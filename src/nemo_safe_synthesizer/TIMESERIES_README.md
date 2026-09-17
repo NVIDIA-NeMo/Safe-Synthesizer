@@ -156,14 +156,13 @@ Time series preprocessing occurs during training data preparation in `src/nemo_s
 ```
 HuggingFaceBackend._process_timeseries()
     └── process_timeseries_data(df, config)
-            ├── resolve_timeseries_routing()      # Inspect source shape
-            ├── prepare_flexible_timeseries_data()# Add index/marker when routed
-            ├── validate_timeseries_data()        # Shared normalization + validation
-            │       ├── pseudo-group normalization
+            ├── resolve_timeseries_routing()       # Validate source timestamps and inspect shape
+            ├── flexible: prepare_flexible_timeseries_data()
+            │       └── add the generated index and marker columns
+            ├── deterministic: validate_timeseries_data()
             │       ├── generated elapsed-seconds timestamp normalization
             │       ├── timestamp format/parse validation
-            │       ├── interval consistency validation
-            │       └── mode-specific range validation
+            │       └── interval and shared-range validation
             ├── order group and timestamp columns first
             └── Return (processed_df, updated_config)
 ```

@@ -520,6 +520,7 @@ check of its own.
 | `preflight.check_crash` | error | (crashing check) | A check raised an unexpected exception; the issue's `check` field names the crashing check and other checks continued running |
 | `column_not_found` | error | `columns.groupby` / `columns.orderby` | Required column missing from dataset, or input DataFrame uses unsupported MultiIndex columns |
 | `column_nulls` | error | `columns.groupby` | Required column contains null values |
+| `duplicate_columns` | error | `timeseries.shape` | Time-series input contains duplicate column names; rename or remove the duplicates |
 | `pseudo_column_collision` | error | `columns.pseudo` | Dataset contains reserved internal column name, or input DataFrame uses unsupported MultiIndex columns |
 | `constant_column` | warning | `columns.constant` | Column has only one unique value |
 | `timestamp_not_found` | error | `timeseries.timestamp` | Timestamp column missing, or input DataFrame uses unsupported MultiIndex columns |
@@ -529,11 +530,7 @@ check of its own.
 | `timestamp_elapsed_non_numeric` | error | `timeseries.shape` | `timestamp_format='elapsed_seconds'` was configured for a non-numeric timestamp column |
 | `timestamp_elapsed_invalid` | error | `timeseries.shape` | `timestamp_format='elapsed_seconds'` was configured for boolean or infinite timestamp values |
 | `flexible_timeseries_routing` | warning | `timeseries.shape` | Group lengths, starts, stops, or intervals require automatic flexible time-series processing |
-| `timestamp_interval_mismatch` | error | `timeseries.shape` | A deterministic or already-prepared time-series input has invalid timestamp intervals |
 | `timeseries_empty` | error | `timeseries.shape` | Time-series data contains no records to validate |
-| `timeseries_group_length_mismatch` | error | `timeseries.shape` | A deterministic or already-prepared input has incompatible group lengths |
-| `timeseries_start_mismatch` | error | `timeseries.shape` | A deterministic or already-prepared input has incompatible start indices |
-| `timeseries_stop_mismatch` | error | `timeseries.shape` | A deterministic or already-prepared input has incompatible stop indices |
 | `tokenizer_unavailable` | warning | `token_budget` | Model tokenizer could not be loaded; token checks skipped |
 | `schema_exceeds_context` | error | `token_budget` | Schema prompt exceeds model context window |
 | `record_exceeds_context` | error | `token_budget` | Individual records exceed context window |
