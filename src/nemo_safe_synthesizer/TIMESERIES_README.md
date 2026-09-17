@@ -75,6 +75,10 @@ payload; `_time_idx` becomes the checked generation-time sequence column with
 interval one. Both control columns are removed from final output, and the
 original source-column order is restored.
 
+The resolved control-column names, record cap, and source schema are persisted
+as internal `FlexibleTimeseriesMetadata` with the trained model. They are not
+user-configurable time-series parameters.
+
 ### Generation Parameters
 
 Additional generation parameters in `src/nemo_safe_synthesizer/config/generate.py`:
