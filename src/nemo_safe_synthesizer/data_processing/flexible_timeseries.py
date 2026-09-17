@@ -65,7 +65,21 @@ def _prepare_flexible_timeseries_data(
     metadata: FlexibleTimeseriesMetadata,
     source_timestamp_format: str,
 ) -> tuple[pd.DataFrame, str]:
-    """Transform raw source data into the internal flexible time-series representation."""
+    """Transform source data into the internal flexible representation.
+
+    Rows are stably ordered within each group before the sequence index and
+    final-row marker are added. The resolved configuration is updated to use
+    the generated index as its generation-time timestamp.
+
+    Args:
+        data: Source time-series data.
+        config: Parameters to update with the resolved internal columns.
+        metadata: Resolved control-column names and sequence-length cap.
+        source_timestamp_format: Format used to normalize timestamp ordering.
+
+    Returns:
+        The transformed data and effective group-column name.
+    """
     ts_config = config.time_series
 
     group_column = config.data.group_training_examples_by

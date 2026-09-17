@@ -55,6 +55,8 @@ def process_timeseries_data(
     sequence. Fixed-shape groups retain deterministic time-range processing.
     Groups with different lengths, ranges, or intervals are automatically
     transformed to use a generated sequence index and final-row marker.
+    The passed configuration is updated with the selected representation and
+    resolved timestamp metadata.
 
     Args:
         training_df: The training DataFrame.

@@ -503,7 +503,21 @@ def _inspect_time_series_data(
     *,
     tolerate_interval_mismatch: bool = False,
 ) -> _TimeSeriesInspection:
-    """Normalize source timestamps and collect the statistics used by validation and routing."""
+    """Normalize time-series source data for routing and validation.
+
+    The inspection operates on copies, resolves pseudo-group and generated
+    timestamp columns when needed, sorts records, and collects per-group
+    timestamp statistics.
+
+    Args:
+        data: Source time-series data.
+        config: Parameters defining grouping and timestamp behavior.
+        tolerate_interval_mismatch: Whether inconsistent intervals should be
+            represented as missing group intervals instead of raising.
+
+    Returns:
+        Normalized data and the group statistics used by later decisions.
+    """
     working_df, group_by_col = _resolve_group_column(data, config)
     ts_config = config.time_series
     timestamp_col = ts_config.timestamp_column
@@ -640,7 +654,19 @@ def _resolve_timeseries_routing(
     data: pd.DataFrame,
     config: SafeSynthesizerParameters,
 ) -> _TimeSeriesRoutingDecision | None:
-    """Apply automatic routing to a time-series config and return the decision."""
+    """Resolve the time-series representation and update its internal metadata.
+
+    The timestamp format is persisted when it was inferred. Flexible metadata
+    is attached to ``config.time_series`` only when deterministic shape
+    constraints are not satisfied.
+
+    Args:
+        data: Source data to inspect.
+        config: Parameters updated with the routing result.
+
+    Returns:
+        The routing decision, or ``None`` when time-series mode is disabled.
+    """
     if not config.time_series.is_timeseries:
         return None
     if data.columns.has_duplicates:

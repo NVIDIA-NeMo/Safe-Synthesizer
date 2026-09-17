@@ -359,9 +359,9 @@ for the full field list.
 | Field | Default | Description | Guidance |
 |-------|---------|-------------|----------|
 | `time_series.is_timeseries` | `false` | Enable time series mode | Enable for datasets with sequential time-ordered records |
-| `time_series.timestamp_column` | `null` | Timestamp column name | Required unless `timestamp_interval_seconds` is provided |
-| `time_series.timestamp_interval_seconds` | `null` | Positive whole-number interval in seconds between timestamps | Required when no timestamp column is provided; otherwise optional and inferred when possible |
-| `time_series.timestamp_format` | `null` | strftime format or `"elapsed_seconds"` | Leave `null` to infer it from the timestamp data |
+| `time_series.timestamp_column` | `null` | Timestamp field | Required unless an interval is provided |
+| `time_series.timestamp_interval_seconds` | `null` | Interval in seconds | Required without a timestamp field |
+| `time_series.timestamp_format` | `null` | strftime or `"elapsed_seconds"` | Leave `null` to infer |
 | `time_series.start_timestamp` | `null` | Override start timestamp for all groups (inferred from data if `null`) | Leave `null` to infer from data |
 | `time_series.stop_timestamp` | `null` | Override stop timestamp for all groups (inferred from data if `null`) | Leave `null` to infer from data |
 
@@ -372,7 +372,7 @@ does not hold, preprocessing adds internal sequence-index and final-row marker
 columns so each group can terminate independently. These internal columns are
 removed from final output. Null, unparseable, or otherwise invalid timestamps
 remain configuration or data errors and do not trigger flexible routing.
-Flexible-routing control columns and termination bounds are derived internal
+Flexible-routing control columns and termination bounds are derived as internal
 metadata, not user configuration fields.
 
 See [`TimeSeriesParameters`][nemo_safe_synthesizer.config.time_series.TimeSeriesParameters]
