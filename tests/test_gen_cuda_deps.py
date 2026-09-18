@@ -134,6 +134,9 @@ gpu-old = [
 
 [tool.uv]
 required-version = ">=0.9.30, <0.10.0"
+override-dependencies = [
+  "unrelated-package==2",
+]
 conflicts = [
   [
     { extra = "cpu" },
@@ -395,19 +398,20 @@ def test_build_cuda_installer_fragment_renders_runtime_index_arrays(
     pytestconfig: pytest.Config, generator: ModuleType, tmp_path: Path
 ) -> None:
     config = generator.load_cuda_deps_config(pytestconfig.rootpath / "cuda_deps.toml")
+    dependency_overrides = generator.load_pyproject_dependency_overrides(pytestconfig.rootpath / "pyproject.toml")
 
-    generated = generator.build_cuda_installer_fragment(config)
+    generated = generator.build_cuda_installer_fragment(config, dependency_overrides)
 
     fragment_path = tmp_path / "indexes.sh"
     fragment_path.write_text(generated.text, encoding="utf-8")
     assert _shell_arrays(
         fragment_path,
-        "CUDA_PACKAGE_OVERRIDES",
+        "PACKAGE_OVERRIDES",
         "CUDA_INDEXES_CPU",
         "CUDA_INDEXES_CU129",
         "CUDA_INDEXES_CU130",
     ) == {
-        "CUDA_PACKAGE_OVERRIDES": ("flashinfer-python==0.6.16.post4; sys_platform == 'linux'",),
+        "PACKAGE_OVERRIDES": ("flashinfer-python==0.6.16.post4; sys_platform == 'linux'",),
         "CUDA_INDEXES_CPU": (
             "https://flashinfer.ai/whl/",
             "https://download.pytorch.org/whl/cpu",
@@ -428,12 +432,47 @@ def test_build_cuda_installer_fragment_renders_runtime_index_arrays(
     }
 
 
+def test_project_dependency_overrides_generate_installer_metadata(generator: ModuleType, tmp_path: Path) -> None:
+    config = generator.CudaDepsConfig.model_validate(_cuda_deps_dict())
+    overrides = [
+        "demo-package==2.0; sys_platform == 'linux'",
+        "unrelated-package>=3",
+    ]
+    fragment_path = tmp_path / "installer.sh"
+    fragment_path.write_text(
+        generator.build_cuda_installer_fragment(config, overrides).text,
+        encoding="utf-8",
+    )
+
+    assert _shell_arrays(fragment_path, "PACKAGE_OVERRIDES") == {"PACKAGE_OVERRIDES": tuple(overrides)}
+
+
+def test_load_project_dependency_overrides_reads_project_wide_uv_policy(generator: ModuleType, tmp_path: Path) -> None:
+    pyproject_path = tmp_path / "pyproject.toml"
+    pyproject_path.write_text(
+        """
+[tool.uv]
+override-dependencies = [
+  "cuda-package==1",
+  "unrelated-package==2",
+]
+""",
+        encoding="utf-8",
+    )
+
+    assert generator.load_pyproject_dependency_overrides(pyproject_path) == [
+        "cuda-package==1",
+        "unrelated-package==2",
+    ]
+
+
 def test_apply_cuda_fragment_to_installer_replaces_generated_block(
     pytestconfig: pytest.Config, generator: ModuleType
 ) -> None:
     config = generator.load_cuda_deps_config(pytestconfig.rootpath / "cuda_deps.toml")
+    dependency_overrides = generator.load_pyproject_dependency_overrides(pytestconfig.rootpath / "pyproject.toml")
     vllm_url = next(index.url for index in config.indexes if index.name.startswith("vllm-"))
-    generated = generator.build_cuda_installer_fragment(config)
+    generated = generator.build_cuda_installer_fragment(config, dependency_overrides)
     current = (pytestconfig.rootpath / "install_nss.sh").read_text(encoding="utf-8")
     stale = current.replace(vllm_url, f"{vllm_url}-stale")
 
@@ -553,7 +592,10 @@ def test_generation_check_preserves_each_two_output_drift_combination(
     installer_path.write_text(
         generator.apply_cuda_fragment_to_installer(
             (pytestconfig.rootpath / "install_nss.sh").read_text(encoding="utf-8"),
-            generator.build_cuda_installer_fragment(config),
+            generator.build_cuda_installer_fragment(
+                config,
+                generator.load_pyproject_dependency_overrides(pyproject_path),
+            ),
         ),
         encoding="utf-8",
     )
@@ -596,7 +638,10 @@ def test_generation_noop_does_not_write_current_installer(
     installer_path.write_text(
         generator.apply_cuda_fragment_to_installer(
             (pytestconfig.rootpath / "install_nss.sh").read_text(encoding="utf-8"),
-            generator.build_cuda_installer_fragment(config),
+            generator.build_cuda_installer_fragment(
+                config,
+                generator.load_pyproject_dependency_overrides(pyproject_path),
+            ),
         ),
         encoding="utf-8",
     )
@@ -660,6 +705,7 @@ def test_click_cli_updates_pyproject_and_checks_drift(
     parsed = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
     assert parsed["project"]["optional-dependencies"]["cu132"] == EXPECTED_CU132_DEPS
     assert parsed["tool"]["uv"]["sources"]["torch"] == EXPECTED_CU132_TORCH_SOURCES
+    assert "unrelated-package==2" in installer_path.read_text(encoding="utf-8")
 
     current_result = CliRunner().invoke(generator._cli, [*cli_paths, "--check"])
 
