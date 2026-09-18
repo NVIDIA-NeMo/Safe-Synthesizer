@@ -5,11 +5,15 @@
 # The engine extra remains independent because it is installable without Torch.
 base_runtime_deps = []
 
+installer_overrides = [
+    "flashinfer-python==0.6.16.post4; sys_platform == 'linux'",
+]
+
 torch_runtime_deps = [
     "accelerate>=1.1.0",
     "bitsandbytes>=0.46.1",
-    "flashinfer-python==0.6.16.post3; sys_platform == 'linux'",
-    "flashinfer-cubin==0.6.16.post3; sys_platform == 'linux'",
+    "flashinfer-python==0.6.16.post4; sys_platform == 'linux'",
+    "flashinfer-cubin==0.6.16.post4; sys_platform == 'linux'",
     "gliner",
     "kernels>=0.12.1,<0.15",
     "opacus",
@@ -21,7 +25,7 @@ torch_runtime_deps = [
 ]
 
 cuda_runtime_deps = [
-    { name = "flashinfer-jit-cache", version = "0.6.16.post3", local = "{torch_local_version}", sys_platform = "linux", source_kind = "flashinfer" },
+    { name = "flashinfer-jit-cache", version = "0.6.16.post4", local = "{torch_local_version}", sys_platform = "linux", source_kind = "flashinfer" },
     { name = "nvidia-cublas{nvidia_package_suffix}", sys_platform = "linux" },
     "nvidia-ml-py; sys_platform == 'linux'",
     "torch-c-dlpack-ext",

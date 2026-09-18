@@ -400,7 +400,14 @@ def test_build_cuda_installer_fragment_renders_runtime_index_arrays(
 
     fragment_path = tmp_path / "indexes.sh"
     fragment_path.write_text(generated.text, encoding="utf-8")
-    assert _shell_arrays(fragment_path, "CUDA_INDEXES_CPU", "CUDA_INDEXES_CU129", "CUDA_INDEXES_CU130") == {
+    assert _shell_arrays(
+        fragment_path,
+        "CUDA_PACKAGE_OVERRIDES",
+        "CUDA_INDEXES_CPU",
+        "CUDA_INDEXES_CU129",
+        "CUDA_INDEXES_CU130",
+    ) == {
+        "CUDA_PACKAGE_OVERRIDES": ("flashinfer-python==0.6.16.post4; sys_platform == 'linux'",),
         "CUDA_INDEXES_CPU": (
             "https://flashinfer.ai/whl/",
             "https://download.pytorch.org/whl/cpu",

@@ -78,6 +78,7 @@ constraints = [
     { name = "tornado", specifier = ">=6.5.8" },
     { name = "urllib3", specifier = ">=2.7.0" },
 ]
+overrides = [{ name = "flashinfer-python", marker = "sys_platform == 'linux'", specifier = "==0.6.16.post4" }]
 
 [[package]]
 name = "accelerate"
@@ -1745,15 +1746,15 @@ wheels = [
 
 [[package]]
 name = "flashinfer-cubin"
-version = "0.6.16.post3"
+version = "0.6.16.post4"
 source = { registry = "https://flashinfer.ai/whl/" }
 wheels = [
-    { url = "https://github.com/flashinfer-ai/flashinfer/releases/download/v0.6.16.post3/flashinfer_cubin-0.6.16.post3-py3-none-any.whl", hash = "sha256:c79fba990aee2a7c7ef64208bb65900e45fe23c3a223f3dfc21eef225f43cba2" },
+    { url = "https://github.com/flashinfer-ai/flashinfer/releases/download/v0.6.16.post4/flashinfer_cubin-0.6.16.post4-py3-none-any.whl", hash = "sha256:a506cfb82328eae387b767e938e2130e349ead296b8dabba04c2ccaa12823308" },
 ]
 
 [[package]]
 name = "flashinfer-jit-cache"
-version = "0.6.16.post3+cu129"
+version = "0.6.16.post4+cu129"
 source = { registry = "https://flashinfer.ai/whl/cu129" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and sys_platform == 'linux'",
@@ -1766,13 +1767,13 @@ resolution-markers = [
     "python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
 ]
 wheels = [
-    { url = "https://github.com/flashinfer-ai/flashinfer/releases/download/v0.6.16.post3/flashinfer_jit_cache-0.6.16.post3+cu129-cp39-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:2e7d27d6c82e5d6200c704799d83704185ad228d576c5aee06b6d528d09616c1" },
-    { url = "https://github.com/flashinfer-ai/flashinfer/releases/download/v0.6.16.post3/flashinfer_jit_cache-0.6.16.post3+cu129-cp39-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:bfccb6a2a1db86763bded97f4f898e329ae5767d556a1f51b131a2fa3174a48e" },
+    { url = "https://github.com/flashinfer-ai/flashinfer/releases/download/v0.6.16.post4/flashinfer_jit_cache-0.6.16.post4+cu129-cp39-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:6b043861a150a0e8b68fb71e047553cbeddb9a3a3de9d2f092cc5def470584bf" },
+    { url = "https://github.com/flashinfer-ai/flashinfer/releases/download/v0.6.16.post4/flashinfer_jit_cache-0.6.16.post4+cu129-cp39-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:ac54b044e4a67d16f3e72879c24555dda44f1f3bd248a50f05670011be18c732" },
 ]
 
 [[package]]
 name = "flashinfer-jit-cache"
-version = "0.6.16.post3+cu130"
+version = "0.6.16.post4+cu130"
 source = { registry = "https://flashinfer.ai/whl/cu130" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and sys_platform == 'linux'",
@@ -1785,13 +1786,13 @@ resolution-markers = [
     "python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
 ]
 wheels = [
-    { url = "https://github.com/flashinfer-ai/flashinfer/releases/download/v0.6.16.post3/flashinfer_jit_cache-0.6.16.post3+cu130-cp39-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:9bd5529b1b2c774206bde78a65d84aff29583a51ce2804226cb45d6261af43ad" },
-    { url = "https://github.com/flashinfer-ai/flashinfer/releases/download/v0.6.16.post3/flashinfer_jit_cache-0.6.16.post3+cu130-cp39-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:abcca93faa2fbbc9a98394ccc44ab657627b91e49da2624efd26a6ff669264ab" },
+    { url = "https://github.com/flashinfer-ai/flashinfer/releases/download/v0.6.16.post4/flashinfer_jit_cache-0.6.16.post4+cu130-cp39-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:0ba2bcdff39a3b5719633908ec54ab1d46050370e6b3aab9e0f44fc860e8a4dd" },
+    { url = "https://github.com/flashinfer-ai/flashinfer/releases/download/v0.6.16.post4/flashinfer_jit_cache-0.6.16.post4+cu130-cp39-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:327bda2a14a5dbca08b48cdb6d5a95862a3b903c9a3f2b2b80e79a157181161b" },
 ]
 
 [[package]]
 name = "flashinfer-python"
-version = "0.6.16.post3"
+version = "0.6.16.post4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "apache-tvm-ffi", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
@@ -1814,9 +1815,9 @@ dependencies = [
     { name = "torch", version = "2.13.0+cu130", source = { registry = "https://download.pytorch.org/whl/cu130" }, marker = "(platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129') or (platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu130') or (platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cu130') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cu130') or (platform_machine == 'aarch64' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129') or (platform_machine == 'aarch64' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu130') or (platform_machine == 'x86_64' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129') or (platform_machine == 'x86_64' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu130') or (sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129') or (sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu130') or (sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130')" },
     { name = "tqdm", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c2/46/17045cb47b7b93fcb4e5303e398e6b129b86239930ac0875942a83d8b962/flashinfer_python-0.6.16.post3.tar.gz", hash = "sha256:9b146cfcc1454c80f3f99444db48013b3eadaeb32f2a399bd76c9471ecb72f04", size = 11076656, upload-time = "2026-08-08T01:14:16.408Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/77/d5/e8ad5a1ce4c34372ebca517a6f2daf456816c49a895029df83bafca405f8/flashinfer_python-0.6.16.post4.tar.gz", hash = "sha256:7df6fdbebfb4090fb940e8c78065dc08566a8adbb4634a0374fa30b1a7a35b86", size = 11082780, upload-time = "2026-08-10T22:37:36.479Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/9d/dc/5367cb601fc9190cc75b4c141f5f7e9a224d1c26a1e983151823e02a25b3/flashinfer_python-0.6.16.post3-py3-none-any.whl", hash = "sha256:caf686b9b079abe1c9d65ab505698bd325e8072de40afd822f2c74f2ac3bc601", size = 15836034, upload-time = "2026-08-08T01:14:13.709Z" },
+    { url = "https://files.pythonhosted.org/packages/09/0b/2772ddc1b391efc20d2aa9f4aa4f914398f16c44888328c04117f47e2119/flashinfer_python-0.6.16.post4-py3-none-any.whl", hash = "sha256:31c2d94a36bb7309ff584ddd3a164bb5470f6a5c2b738a2879f686df2c05adb8", size = 15836134, upload-time = "2026-08-10T22:37:34.22Z" },
 ]
 
 [[package]]
@@ -3778,7 +3779,7 @@ cu129 = [
     { name = "accelerate", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "bitsandbytes", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "flashinfer-cubin", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
-    { name = "flashinfer-jit-cache", version = "0.6.16.post3+cu129", source = { registry = "https://flashinfer.ai/whl/cu129" }, marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "flashinfer-jit-cache", version = "0.6.16.post4+cu129", source = { registry = "https://flashinfer.ai/whl/cu129" }, marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "flashinfer-python", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "gliner", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "kernels", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
@@ -3803,7 +3804,7 @@ cu130 = [
     { name = "accelerate", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "bitsandbytes", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "flashinfer-cubin", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
-    { name = "flashinfer-jit-cache", version = "0.6.16.post3+cu130", source = { registry = "https://flashinfer.ai/whl/cu130" }, marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "flashinfer-jit-cache", version = "0.6.16.post4+cu130", source = { registry = "https://flashinfer.ai/whl/cu130" }, marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "flashinfer-python", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "gliner", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "kernels", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
@@ -3911,14 +3912,14 @@ requires-dist = [
     { name = "dython", marker = "extra == 'engine'", specifier = ">=0.7.12" },
     { name = "faker", specifier = ">=20.0" },
     { name = "faker", marker = "extra == 'engine'" },
-    { name = "flashinfer-cubin", marker = "sys_platform == 'linux' and extra == 'cpu'", specifier = "==0.6.16.post3", index = "https://flashinfer.ai/whl/", conflict = { package = "nemo-safe-synthesizer", extra = "cpu" } },
-    { name = "flashinfer-cubin", marker = "sys_platform == 'linux' and extra == 'cu129'", specifier = "==0.6.16.post3", index = "https://flashinfer.ai/whl/", conflict = { package = "nemo-safe-synthesizer", extra = "cu129" } },
-    { name = "flashinfer-cubin", marker = "sys_platform == 'linux' and extra == 'cu130'", specifier = "==0.6.16.post3", index = "https://flashinfer.ai/whl/", conflict = { package = "nemo-safe-synthesizer", extra = "cu130" } },
-    { name = "flashinfer-jit-cache", marker = "sys_platform == 'linux' and extra == 'cu129'", specifier = "==0.6.16.post3+cu129", index = "https://flashinfer.ai/whl/cu129", conflict = { package = "nemo-safe-synthesizer", extra = "cu129" } },
-    { name = "flashinfer-jit-cache", marker = "sys_platform == 'linux' and extra == 'cu130'", specifier = "==0.6.16.post3+cu130", index = "https://flashinfer.ai/whl/cu130", conflict = { package = "nemo-safe-synthesizer", extra = "cu130" } },
-    { name = "flashinfer-python", marker = "sys_platform == 'linux' and extra == 'cpu'", specifier = "==0.6.16.post3" },
-    { name = "flashinfer-python", marker = "sys_platform == 'linux' and extra == 'cu129'", specifier = "==0.6.16.post3" },
-    { name = "flashinfer-python", marker = "sys_platform == 'linux' and extra == 'cu130'", specifier = "==0.6.16.post3" },
+    { name = "flashinfer-cubin", marker = "sys_platform == 'linux' and extra == 'cpu'", specifier = "==0.6.16.post4", index = "https://flashinfer.ai/whl/", conflict = { package = "nemo-safe-synthesizer", extra = "cpu" } },
+    { name = "flashinfer-cubin", marker = "sys_platform == 'linux' and extra == 'cu129'", specifier = "==0.6.16.post4", index = "https://flashinfer.ai/whl/", conflict = { package = "nemo-safe-synthesizer", extra = "cu129" } },
+    { name = "flashinfer-cubin", marker = "sys_platform == 'linux' and extra == 'cu130'", specifier = "==0.6.16.post4", index = "https://flashinfer.ai/whl/", conflict = { package = "nemo-safe-synthesizer", extra = "cu130" } },
+    { name = "flashinfer-jit-cache", marker = "sys_platform == 'linux' and extra == 'cu129'", specifier = "==0.6.16.post4+cu129", index = "https://flashinfer.ai/whl/cu129", conflict = { package = "nemo-safe-synthesizer", extra = "cu129" } },
+    { name = "flashinfer-jit-cache", marker = "sys_platform == 'linux' and extra == 'cu130'", specifier = "==0.6.16.post4+cu130", index = "https://flashinfer.ai/whl/cu130", conflict = { package = "nemo-safe-synthesizer", extra = "cu130" } },
+    { name = "flashinfer-python", marker = "sys_platform == 'linux' and extra == 'cpu'", specifier = "==0.6.16.post4" },
+    { name = "flashinfer-python", marker = "sys_platform == 'linux' and extra == 'cu129'", specifier = "==0.6.16.post4" },
+    { name = "flashinfer-python", marker = "sys_platform == 'linux' and extra == 'cu130'", specifier = "==0.6.16.post4" },
     { name = "flashtext", marker = "extra == 'engine'" },
     { name = "gliner", marker = "extra == 'cpu'" },
     { name = "gliner", marker = "extra == 'cu129'" },

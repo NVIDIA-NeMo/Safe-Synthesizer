@@ -331,6 +331,10 @@ class CudaDepsConfig(StrictModel):
     base_runtime_deps: list[DependencyEntry] = Field(
         description="Pipeline/runtime dependencies shared by all runtime extras without implying Torch wheels.",
     )
+    installer_overrides: list[str] = Field(
+        default_factory=list,
+        description="Dependency overrides passed to uv by the standalone installer.",
+    )
     torch_runtime_deps: list[DependencyEntry] = Field(
         description="Torch-adjacent runtime dependencies shared by CPU and CUDA extras."
     )
@@ -646,6 +650,9 @@ def build_cuda_installer_fragment(config: CudaDepsConfig) -> CudaInstallerFragme
             )
         ),
     ]
+    lines.append("readonly -a CUDA_PACKAGE_OVERRIDES=(")
+    lines.extend(f"    {shlex.quote(override)}" for override in config.installer_overrides)
+    lines.append(")")
     for extra, urls in _installer_index_urls(config).items():
         variable = f"CUDA_INDEXES_{extra.upper()}"
         if len(urls) == 1:

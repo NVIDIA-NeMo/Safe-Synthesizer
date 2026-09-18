@@ -18,6 +18,7 @@ set -euo pipefail
 count=0; [[ -f "${FAKE_UV_CALLS:?}" ]] && count="$(<"$FAKE_UV_CALLS")"
 count=$((count + 1)); printf '%s' "$count" > "$FAKE_UV_CALLS"
 printf '%s\0' "$@" >> "${FAKE_UV_LOG:?}"; printf '\0' >> "$FAKE_UV_LOG"
+for arg in "$@"; do [[ "$arg" == "--overrides" ]] && cat > "${FAKE_UV_STDIN:?}"; done
 if [[ "${1:-}" == "venv" ]]; then mkdir -p "${!#}/bin"; printf '#!/usr/bin/env bash\n' > "${!#}/bin/python"; chmod +x "${!#}/bin/python"; fi
 [[ "${FAKE_UV_FAIL_CALL:-0}" != "$count" ]]
 EOF
@@ -29,7 +30,7 @@ exit "${FAKE_SMI_STATUS:-0}"
 EOF
 chmod +x "${fake_bin}/uv" "${fake_bin}/nvidia-smi"
 
-new_log() { FAKE_UV_LOG="${test_dir}/uv-$1.nul"; FAKE_UV_CALLS="${test_dir}/uv-$1.calls"; FAKE_SMI_LOG="${test_dir}/smi-$1.log"; export FAKE_UV_LOG FAKE_UV_CALLS FAKE_SMI_LOG; }
+new_log() { FAKE_UV_LOG="${test_dir}/uv-$1.nul"; FAKE_UV_CALLS="${test_dir}/uv-$1.calls"; FAKE_UV_STDIN="${test_dir}/uv-$1.stdin"; FAKE_SMI_LOG="${test_dir}/smi-$1.log"; export FAKE_UV_LOG FAKE_UV_CALLS FAKE_UV_STDIN FAKE_SMI_LOG; }
 uv_call_count() { local count=0; [[ -f "$FAKE_UV_CALLS" ]] && count="$(<"$FAKE_UV_CALLS")"; printf '%s' "$count"; }
 assert_eq() { [[ "$1" == "$2" ]] || { echo "expected '$2', got '$1'" >&2; exit 1; }; }
 assert_file_absent() { [[ ! -e "$1" ]] || { echo "unexpected file: $1" >&2; exit 1; }; }
@@ -75,8 +76,9 @@ venv="${test_dir}/venv with spaces"; mkdir -p "$venv/bin"; printf '#!/usr/bin/en
 PATH="${fake_bin}:$PATH" CUDA=cpu UV_PROJECT_ENVIRONMENT="$venv" PACKAGE_NAME=test-package CONSTRAINTS_URL=/constraints.txt "$INSTALLER" >/dev/null
 assert_eq "$(uv_call_count)" 1
 declare -a argv; read_call argv
-expected=(pip install 'test-package[engine,cpu]' -c /constraints.txt --python "$venv/bin/python" --index https://flashinfer.ai/whl/ --index https://download.pytorch.org/whl/cpu --index-strategy unsafe-best-match)
+expected=(pip install 'test-package[engine,cpu]' -c /constraints.txt --overrides - --python "$venv/bin/python" --index https://flashinfer.ai/whl/ --index https://download.pytorch.org/whl/cpu --index-strategy unsafe-best-match)
 assert_eq "$(printf '%s\n' "${argv[@]}")" "$(printf '%s\n' "${expected[@]}")"
+assert_eq "$(<"$FAKE_UV_STDIN")" "flashinfer-python==0.6.16.post4; sys_platform == 'linux'"
 
 # A release installer applies its pinned package version and constraints artifact
 # as actual uv argv, rather than merely rendering those values into its source.
@@ -89,7 +91,7 @@ PATH="${fake_bin}:$PATH" CUDA=cpu UV_PROJECT_ENVIRONMENT="$release_venv" PACKAGE
 assert_eq "$(uv_call_count)" 1
 read_call argv
 release_constraints="https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/v1.2.3/constraints.txt"
-release_expected=(pip install 'test-package[engine,cpu]==1.2.3' -c "$release_constraints" --python "$release_venv/bin/python" --index https://flashinfer.ai/whl/ --index https://download.pytorch.org/whl/cpu --index-strategy unsafe-best-match)
+release_expected=(pip install 'test-package[engine,cpu]==1.2.3' -c "$release_constraints" --overrides - --python "$release_venv/bin/python" --index https://flashinfer.ai/whl/ --index https://download.pytorch.org/whl/cpu --index-strategy unsafe-best-match)
 assert_eq "$(printf '%s\n' "${argv[@]}")" "$(printf '%s\n' "${release_expected[@]}")"
 
 # Docker consumes this narrow internal policy boundary; it has no effects.
