@@ -34,6 +34,8 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 COPY dist/*.whl /tmp/dist/
 
+# A fresh installer run already resolves the complete environment. Do not run
+# `uv pip check` afterward: it does not account for intentional dependency overrides.
 RUN --mount=type=cache,target=/root/.cache/uv \
     wheel_count="$(find /tmp/dist -maxdepth 1 -type f -name '*.whl' | wc -l)" && \
     test "${wheel_count}" -eq 1 && \
@@ -43,34 +45,21 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         UV_PROJECT_ENVIRONMENT=/opt/wheel-cpu \
         PACKAGE_WHEEL="${wheel}" \
         ./install_nss.sh && \
-    uv --no-config pip check --python /opt/wheel-cpu/bin/python && \
     /opt/wheel-cpu/bin/python -c \
         "from importlib.metadata import version; from nemo_safe_synthesizer.package_info import __version__; assert __version__ == version('nemo-safe-synthesizer')" && \
     /opt/wheel-cpu/bin/safe-synthesizer --help >/dev/null && \
-    CUDA=129 NSS_INSTALLER_RESOLVE_INDEXES=1 ./install_nss.sh > /tmp/cu129-indexes && \
-    uv --no-config venv --clear --python /usr/local/bin/python /opt/wheel-cu129 && \
-    mapfile -t cu129_indexes < /tmp/cu129-indexes && \
-    cu129_args=() && for index in "${cu129_indexes[@]}"; do cu129_args+=(--index "${index}"); done && \
-    uv --no-config pip install \
-        --python /opt/wheel-cu129/bin/python \
-        --no-sources \
-        --dry-run \
-        --default-index https://pypi.org/simple \
-        "${cu129_args[@]}" \
-        --index-strategy unsafe-best-match \
-        "nemo-safe-synthesizer[cu129,engine] @ file://${wheel}" && \
-    CUDA=130 NSS_INSTALLER_RESOLVE_INDEXES=1 ./install_nss.sh > /tmp/cu130-indexes && \
-    uv --no-config venv --clear --python /usr/local/bin/python /opt/wheel-cu130 && \
-    mapfile -t cu130_indexes < /tmp/cu130-indexes && \
-    cu130_args=() && for index in "${cu130_indexes[@]}"; do cu130_args+=(--index "${index}"); done && \
-    uv --no-config pip install \
-        --python /opt/wheel-cu130/bin/python \
-        --no-sources \
-        --dry-run \
-        --default-index https://pypi.org/simple \
-        "${cu130_args[@]}" \
-        --index-strategy unsafe-best-match \
-        "nemo-safe-synthesizer[cu130,engine] @ file://${wheel}" && \
+    CUDA=129 \
+        NSS_INSTALLER_ISOLATED=1 \
+        NSS_INSTALLER_RESOLVE_ONLY=1 \
+        UV_PROJECT_ENVIRONMENT=/opt/wheel-cu129 \
+        PACKAGE_WHEEL="${wheel}" \
+        ./install_nss.sh && \
+    CUDA=130 \
+        NSS_INSTALLER_ISOLATED=1 \
+        NSS_INSTALLER_RESOLVE_ONLY=1 \
+        UV_PROJECT_ENVIRONMENT=/opt/wheel-cu130 \
+        PACKAGE_WHEEL="${wheel}" \
+        ./install_nss.sh && \
     rm -rf /opt/wheel-cpu /opt/wheel-cu129 /opt/wheel-cu130
 
 FROM setup AS install-deps

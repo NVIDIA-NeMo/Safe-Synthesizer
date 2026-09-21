@@ -11,6 +11,7 @@ readonly RELEASE_VERSION=""
 readonly CUDA="${CUDA:-129}"
 readonly DRY_RUN="${DRY_RUN:-0}"
 readonly NSS_INSTALLER_RESOLVE_INDEXES="${NSS_INSTALLER_RESOLVE_INDEXES:-0}"
+readonly NSS_INSTALLER_RESOLVE_ONLY="${NSS_INSTALLER_RESOLVE_ONLY:-0}"
 readonly NSS_INSTALLER_ISOLATED="${NSS_INSTALLER_ISOLATED:-0}"
 readonly CONSTRAINTS_URL="${CONSTRAINTS_URL:-https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/main/constraints.txt}"
 readonly PYPI_INDEX_URL="https://pypi.org/simple"
@@ -53,6 +54,8 @@ Environment:
   CUDA=129|130|cpu|help   Runtime extra to install. Default: 129.
   CONSTRAINTS_URL=<url>   Override the installer-compatible constraints URL.
   DRY_RUN=1               Print the uv command without running it.
+  NSS_INSTALLER_RESOLVE_ONLY=1
+                          Resolve dependencies without installing them.
   NSS_INSTALLER_ISOLATED=1
                           Disable discovery of persistent uv configuration and
                           tool.uv.sources, and use PyPI as the default index.
@@ -179,6 +182,9 @@ build_install_command() {
     done
     if (( ${#INDEXES[@]} )); then
         INSTALL_CMD+=(--index-strategy unsafe-best-match)
+    fi
+    if [[ "$NSS_INSTALLER_RESOLVE_ONLY" == "1" ]]; then
+        INSTALL_CMD+=(--dry-run)
     fi
 }
 
