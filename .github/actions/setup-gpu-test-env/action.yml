@@ -56,6 +56,8 @@ runs:
       env:
         CUDA: ${{ inputs.cuda-extra }}
         NSS_INSTALLER_ISOLATED: "1"
+        # Install test dependencies from the package's pyproject.toml, but use the wheel to install the package.
+        PRIVATE_DEP_GROUPS: "test"
       run: |
         set -euo pipefail
         shopt -s nullglob
@@ -72,17 +74,6 @@ runs:
           "${GITHUB_WORKSPACE}/install_nss.sh"
         python_bin="${UV_PROJECT_ENVIRONMENT}/bin/python"
 
-        uv --no-config pip install \
-          --python "${python_bin}" \
-          "pytest>=9.0.3" \
-          "pytest-asyncio>=0.24.0" \
-          "pytest-cov>=6.0.0" \
-          "pytest-env>=1.1.0" \
-          "pytest-subtests>=0.13.1" \
-          "pytest-timeout>=2.3.1" \
-          "pytest-xdist>=3.5.0"
-
-        uv --no-config pip check --python "${python_bin}"
         "${python_bin}" -c \
           "from importlib.metadata import version; from nemo_safe_synthesizer.package_info import __version__; assert __version__ == version('nemo-safe-synthesizer')"
         "${python_bin}" - <<'PY'

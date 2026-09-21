@@ -35,12 +35,35 @@ uv_call_count() { local count=0; [[ -f "$FAKE_UV_CALLS" ]] && count="$(<"$FAKE_U
 assert_eq() { [[ "$1" == "$2" ]] || { echo "expected '$2', got '$1'" >&2; exit 1; }; }
 assert_file_absent() { [[ ! -e "$1" ]] || { echo "unexpected file: $1" >&2; exit 1; }; }
 read_call() { local -n target="$1"; target=(); [[ -f "$FAKE_UV_LOG" ]] && mapfile -d '' -t target < "$FAKE_UV_LOG"; }
+make_installer_fixture() {
+    local output="$1"
+    local source="$2"
+    local override="${3:-}"
+    awk -v override="$override" '
+        /readonly -a PACKAGE_OVERRIDES=\(/ {
+            print
+            if (override != "") printf "    \047%s\047\n", override
+            in_overrides=1
+            next
+        }
+        in_overrides && /^\)/ { print; in_overrides=0; next }
+        !in_overrides { print }
+    ' "$source" > "$output"
+    chmod +x "$output"
+}
+
+readonly OVERRIDE_REQUIREMENT="test-override==1.2.3"
+with_overrides_installer="${test_dir}/install_nss-with-overrides.sh"
+without_overrides_installer="${test_dir}/install_nss-without-overrides.sh"
+make_installer_fixture "$with_overrides_installer" "$INSTALLER" "$OVERRIDE_REQUIREMENT"
+make_installer_fixture "$without_overrides_installer" "$INSTALLER"
 
 # Dry-run is rendering-only: no driver probe and no uv invocation.
 new_log dry
-output="$(PATH="${fake_bin}:$PATH" DRY_RUN=1 CUDA=130 UV_PROJECT_ENVIRONMENT="${test_dir}/dry env" "$INSTALLER")"
+output="$(PATH="${fake_bin}:$PATH" DRY_RUN=1 CUDA=130 UV_PROJECT_ENVIRONMENT="${test_dir}/dry env" "$with_overrides_installer")"
 assert_file_absent "$FAKE_SMI_LOG"; assert_file_absent "$FAKE_UV_LOG"
 [[ "$output" == *"Installing with:"* && "$output" == *"--index https://pypi.nvidia.com"* ]]
+[[ "$output" == *" echo "*" | uv pip install "*" --overrides - "* ]]
 
 # CUDA 13 driver boundaries: reject below minimum before uv; warnings leave install available.
 for case in equal above; do
@@ -73,20 +96,38 @@ assert_eq "$(uv_call_count)" 2
 # Venv reuse has one argv-safe pip call; the path with spaces stays one argument.
 new_log reuse
 venv="${test_dir}/venv with spaces"; mkdir -p "$venv/bin"; printf '#!/usr/bin/env bash\n' > "$venv/bin/python"; chmod +x "$venv/bin/python"
-PATH="${fake_bin}:$PATH" CUDA=cpu UV_PROJECT_ENVIRONMENT="$venv" PACKAGE_NAME=test-package CONSTRAINTS_URL=/constraints.txt "$INSTALLER" >/dev/null
+PATH="${fake_bin}:$PATH" CUDA=cpu UV_PROJECT_ENVIRONMENT="$venv" PACKAGE_NAME=test-package CONSTRAINTS_URL=/constraints.txt "$with_overrides_installer" >/dev/null
 assert_eq "$(uv_call_count)" 1
 declare -a argv; read_call argv
-expected=(pip install 'test-package[engine,cpu]' -c /constraints.txt --overrides - --python "$venv/bin/python" --index https://flashinfer.ai/whl/ --index https://download.pytorch.org/whl/cpu --index-strategy unsafe-best-match)
+expected=(pip install 'test-package[engine,cpu]' -c /constraints.txt --python "$venv/bin/python" --overrides - --index https://flashinfer.ai/whl/ --index https://download.pytorch.org/whl/cpu --index-strategy unsafe-best-match)
 assert_eq "$(printf '%s\n' "${argv[@]}")" "$(printf '%s\n' "${expected[@]}")"
-assert_eq "$(<"$FAKE_UV_STDIN")" "flashinfer-python==0.6.16.post4; sys_platform == 'linux'"
+assert_eq "$(<"$FAKE_UV_STDIN")" "$OVERRIDE_REQUIREMENT"
+
+# An installer without package overrides uses neither stdin nor --overrides.
+new_log empty-overrides
+output="$(PATH="${fake_bin}:$PATH" CUDA=cpu UV_PROJECT_ENVIRONMENT="$venv" PACKAGE_NAME=test-package CONSTRAINTS_URL=/constraints.txt "$without_overrides_installer")"
+assert_eq "$(uv_call_count)" 1
+read_call argv
+empty_expected=(pip install 'test-package[engine,cpu]' -c /constraints.txt --python "$venv/bin/python" --index https://flashinfer.ai/whl/ --index https://download.pytorch.org/whl/cpu --index-strategy unsafe-best-match)
+assert_eq "$(printf '%s\n' "${argv[@]}")" "$(printf '%s\n' "${empty_expected[@]}")"
+assert_file_absent "$FAKE_UV_STDIN"
+[[ "$output" != *" echo "* && "$output" != *" | "* && "$output" != *"--overrides"* ]]
+
+# Private dependency groups participate in the same resolution as the package.
+new_log dependency-groups
+PATH="${fake_bin}:$PATH" CUDA=cpu PRIVATE_DEP_GROUPS="test docs" UV_PROJECT_ENVIRONMENT="$venv" PACKAGE_NAME=test-package CONSTRAINTS_URL=/constraints.txt "$with_overrides_installer" >/dev/null
+assert_eq "$(uv_call_count)" 1
+read_call argv
+groups_expected=(pip install 'test-package[engine,cpu]' -c /constraints.txt --python "$venv/bin/python" --overrides - --group test --group docs --index https://flashinfer.ai/whl/ --index https://download.pytorch.org/whl/cpu --index-strategy unsafe-best-match)
+assert_eq "$(printf '%s\n' "${argv[@]}")" "$(printf '%s\n' "${groups_expected[@]}")"
 
 # Resolve-only executes uv's resolver with the full installer policy but does not install.
 new_log resolve-only
 resolve_venv="${test_dir}/resolve only"; mkdir -p "$resolve_venv/bin"; printf '#!/usr/bin/env bash\n' > "$resolve_venv/bin/python"; chmod +x "$resolve_venv/bin/python"
-PATH="${fake_bin}:$PATH" CUDA=cpu NSS_INSTALLER_RESOLVE_ONLY=1 UV_PROJECT_ENVIRONMENT="$resolve_venv" PACKAGE_NAME=test-package CONSTRAINTS_URL=/constraints.txt "$INSTALLER" >/dev/null
+PATH="${fake_bin}:$PATH" CUDA=cpu NSS_INSTALLER_RESOLVE_ONLY=1 UV_PROJECT_ENVIRONMENT="$resolve_venv" PACKAGE_NAME=test-package CONSTRAINTS_URL=/constraints.txt "$with_overrides_installer" >/dev/null
 assert_eq "$(uv_call_count)" 1
 read_call argv
-resolve_expected=(pip install 'test-package[engine,cpu]' -c /constraints.txt --python "$resolve_venv/bin/python" --index https://flashinfer.ai/whl/ --index https://download.pytorch.org/whl/cpu --index-strategy unsafe-best-match --dry-run)
+resolve_expected=(pip install 'test-package[engine,cpu]' -c /constraints.txt --python "$resolve_venv/bin/python" --overrides - --index https://flashinfer.ai/whl/ --index https://download.pytorch.org/whl/cpu --index-strategy unsafe-best-match --dry-run)
 assert_eq "$(printf '%s\n' "${argv[@]}")" "$(printf '%s\n' "${resolve_expected[@]}")"
 
 # A release installer applies its pinned package version and constraints artifact
@@ -96,11 +137,13 @@ release_dir="${test_dir}/release"
 bash "${REPO_ROOT}/tools/build_release_installer.sh" 1.2.3 "$release_dir"
 release_venv="${test_dir}/release venv"; mkdir -p "$release_venv/bin"
 printf '#!/usr/bin/env bash\n' > "$release_venv/bin/python"; chmod +x "$release_venv/bin/python"
-PATH="${fake_bin}:$PATH" CUDA=cpu UV_PROJECT_ENVIRONMENT="$release_venv" PACKAGE_NAME=test-package "$release_dir/install_nss.sh" >/dev/null
+release_installer="${test_dir}/install_nss-release-with-overrides.sh"
+make_installer_fixture "$release_installer" "$release_dir/install_nss.sh" "$OVERRIDE_REQUIREMENT"
+PATH="${fake_bin}:$PATH" CUDA=cpu UV_PROJECT_ENVIRONMENT="$release_venv" PACKAGE_NAME=test-package "$release_installer" >/dev/null
 assert_eq "$(uv_call_count)" 1
 read_call argv
 release_constraints="https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/v1.2.3/constraints.txt"
-release_expected=(pip install 'test-package[engine,cpu]==1.2.3' -c "$release_constraints" --overrides - --python "$release_venv/bin/python" --index https://flashinfer.ai/whl/ --index https://download.pytorch.org/whl/cpu --index-strategy unsafe-best-match)
+release_expected=(pip install 'test-package[engine,cpu]==1.2.3' -c "$release_constraints" --python "$release_venv/bin/python" --overrides - --index https://flashinfer.ai/whl/ --index https://download.pytorch.org/whl/cpu --index-strategy unsafe-best-match)
 assert_eq "$(printf '%s\n' "${argv[@]}")" "$(printf '%s\n' "${release_expected[@]}")"
 
 # Docker consumes this narrow internal policy boundary; it has no effects.

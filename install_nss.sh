@@ -15,6 +15,12 @@ readonly NSS_INSTALLER_RESOLVE_ONLY="${NSS_INSTALLER_RESOLVE_ONLY:-0}"
 readonly NSS_INSTALLER_ISOLATED="${NSS_INSTALLER_ISOLATED:-0}"
 readonly CONSTRAINTS_URL="${CONSTRAINTS_URL:-https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/main/constraints.txt}"
 readonly PYPI_INDEX_URL="https://pypi.org/simple"
+# The PRIVATE_ prefix indicates an env var that users should not set and may
+# not work correctly in all environments.
+# dep groups are used in github CI to install additional dependencies from the
+# repo's pyproject.toml.
+readonly PRIVATE_DEP_GROUPS="${PRIVATE_DEP_GROUPS:-}"
+
 readonly NVIDIA_DRIVER_MIN_CUDA_13="580.65.06"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
@@ -171,15 +177,23 @@ build_venv_command() {
 
 build_install_command() {
     local extra="$1"
+    local group
     local index
+    local -a dependency_groups=()
 
     runtime_indexes "$extra"
     INSTALL_CMD=(
         "${UV_CMD[@]}" pip install "$(package_spec "$extra")"
         -c "$CONSTRAINTS_URL"
-        --overrides -
         --python "$VENV_PATH/bin/python"
     )
+    if (( ${#PACKAGE_OVERRIDES[@]} )); then
+        INSTALL_CMD+=(--overrides -)
+    fi
+    read -r -a dependency_groups <<< "$PRIVATE_DEP_GROUPS"
+    for group in "${dependency_groups[@]}"; do
+        INSTALL_CMD+=(--group "$group")
+    done
     if [[ "$NSS_INSTALLER_ISOLATED" == "1" ]]; then
         # Ignore uv-specific source mappings so this path exercises publishable dependency metadata.
         # https://docs.astral.sh/uv/reference/cli/#uv-pip-install
@@ -197,6 +211,8 @@ build_install_command() {
 }
 
 run_install() {
+    local overrides_input=""
+
     if (( ${#VENV_CMD[@]} )); then
         printf 'Preparing environment with:'
         printf ' %q' "${VENV_CMD[@]}"
@@ -205,10 +221,20 @@ run_install() {
     fi
 
     printf 'Installing with:'
+    if (( ${#PACKAGE_OVERRIDES[@]} )); then
+        overrides_input="$(IFS=$'\n'; printf '%s' "${PACKAGE_OVERRIDES[*]}")"
+        printf ' echo %q |' "$overrides_input"
+    fi
     printf ' %q' "${INSTALL_CMD[@]}"
     printf '\n'
 
-    [[ "$DRY_RUN" == "1" ]] || printf '%s\n' "${PACKAGE_OVERRIDES[@]}" | "${INSTALL_CMD[@]}"
+    if [[ "$DRY_RUN" != "1" ]]; then
+        if (( ${#PACKAGE_OVERRIDES[@]} )); then
+            echo "$overrides_input" | "${INSTALL_CMD[@]}"
+        else
+            "${INSTALL_CMD[@]}"
+        fi
+    fi
 }
 
 main() {
