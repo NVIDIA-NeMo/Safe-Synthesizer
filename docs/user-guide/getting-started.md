@@ -12,6 +12,14 @@ does at each stage.
 
 ## Installation
 
+!!! tip "Skip installation entirely"
+    [![Launch on Brev](https://brev-assets.s3.us-west-1.amazonaws.com/nv-lb-dark.svg#only-light)](https://brev.nvidia.com/launchable/deploy/now?launchableID=env-3HBtA2NKQaBukL2TyDphWUcvQ17)
+    [![Launch on Brev](https://brev-assets.s3.us-west-1.amazonaws.com/nv-lb-light.svg#only-dark)](https://brev.nvidia.com/launchable/deploy/now?launchableID=env-3HBtA2NKQaBukL2TyDphWUcvQ17)
+
+    Deploys a GPU instance with everything below already done, plus the tutorial
+    notebooks. Useful for evaluating Safe Synthesizer without a local NVIDIA GPU. The
+    instance bills continuously and cannot be paused -- delete it when you are finished.
+
 ### Prerequisites
 
 - Python 3.11–3.14 (dev tooling pins 3.13 via `.python-version` in the repo root)
@@ -27,15 +35,7 @@ does at each stage.
 
 ### Install the Package
 
-!!! tip "Skip installation entirely"
-    [![Launch on Brev](https://brev-assets.s3.us-west-1.amazonaws.com/nv-lb-dark.svg#only-light)](https://brev.nvidia.com/launchable/deploy/now?launchableID=env-3HBtA2NKQaBukL2TyDphWUcvQ17)
-    [![Launch on Brev](https://brev-assets.s3.us-west-1.amazonaws.com/nv-lb-light.svg#only-dark)](https://brev.nvidia.com/launchable/deploy/now?launchableID=env-3HBtA2NKQaBukL2TyDphWUcvQ17)
-
-    Deploys a GPU instance with everything below already done, plus the tutorial
-    notebooks. Useful for evaluating Safe Synthesizer without a local NVIDIA GPU. The
-    instance bills continuously and cannot be paused -- delete it when you are finished.
-
-For most installations, download the installer from the latest stable GitHub
+Download the installer from the latest stable GitHub
 release. Each released script pins the package version, constraints, and
 package indexes that were tested together.
 
@@ -43,136 +43,70 @@ package indexes that were tested together.
 curl -fsSLO https://github.com/NVIDIA-NeMo/Safe-Synthesizer/releases/latest/download/install_nss.sh
 chmod +x install_nss.sh
 
-./install_nss.sh             # CUDA 12.9 (default)
-CUDA=130 ./install_nss.sh    # CUDA 13.0
-CUDA=cpu ./install_nss.sh    # CPU-only development and validation
+UV_PROJECT_ENVIRONMENT=.venv ./install_nss.sh  # CUDA 12.9 (default)
+source .venv/bin/activate
 ```
-
-Use `DRY_RUN=1` to inspect the installation command without running it. CUDA
-13.0 requires an NVIDIA driver version 580.65.06 or newer. Use the manual
-commands below when you need to customize the package source or installation
-command.
-
-The CUDA and CPU extras depend on packages (PyTorch, FlashInfer) hosted on
-indexes outside PyPI. You must pass the extra index URLs shown below.
 
 !!! note
     This project will download and install additional third-party open source
     software projects. Review the license terms of these open source projects
     before use.
 
-=== "CUDA 12.9 (Linux with NVIDIA GPU)"
+The installer uses CUDA 12.9 by default. To choose another runtime, set
+`CUDA`:
 
-    === "pip"
+```bash
+CUDA=130 ./install_nss.sh    # CUDA 13.0
+CUDA=cpu ./install_nss.sh    # CPU-only development and validation
+```
 
-        ```bash
-        pip install "nemo-safe-synthesizer[cu129,engine]" \
-          --extra-index-url https://download.pytorch.org/whl/cu129 \
-          --extra-index-url https://flashinfer.ai/whl/cu129 \
-          --extra-index-url https://flashinfer.ai/whl/ \
-          --extra-index-url https://wheels.vllm.ai/0.27.0/cu129
-        ```
+CUDA 13.0 requires an NVIDIA driver version 580.65.06 or newer.
 
-    === "uv"
+!!! warning "CPU installation is for development use only"
+    The CPU install does not support training or generation. Use it to
+    validate configuration, explore the CLI, or import config classes in
+    code. An A100 or larger GPU is required to run the full pipeline.
 
-        ```bash
-        uv pip install "nemo-safe-synthesizer[cu129,engine]" \
-          --index https://flashinfer.ai/whl/cu129 \
-          --index https://flashinfer.ai/whl/ \
-          --index https://download.pytorch.org/whl/cu129 \
-          --index https://wheels.vllm.ai/0.27.0/cu129 \
-          --index-strategy unsafe-best-match
-        ```
+To customize the package source or installation command, use `DRY_RUN=1` with the desired
+`CUDA` setting. The installer prints the complete `uv pip` command without
+running it. Copy that command, edit it, and run it manually. For example,
 
-        !!! info "Why `--index-strategy unsafe-best-match`"
-            FlashInfer publishes wheels to flashinfer.ai, but `flashinfer-python`
-            also appears on the PyTorch index at older versions. uv's default
-            `first-match` strategy stops at the first index that contains a
-            package name, so it picks up the wrong version from the PyTorch
-            index and fails to resolve. `--index-strategy unsafe-best-match`
-            tells uv to consider all indexes and pick the best matching version.
+```bash title="Preview the installation command"
+DRY_RUN=1 CUDA=130 ./install_nss.sh
+```
 
-=== "CPU (macOS / Linux without GPU)"
+### Docker (Linux with NVIDIA GPU)
 
-    On **macOS**, PyTorch ships standard wheels on PyPI, so no extra indexes are needed.
+```bash
+docker run --rm --gpus all --shm-size=1g \
+  --user "$(id -u):$(id -g)" \
+  -v /path/to/input:/workspace/input:ro \
+  -v /path/to/config:/workspace/config:ro \
+  -v /path/to/artifacts:/workspace/artifacts \
+  -v /path/to/hf-cache:/workspace/.hf_cache \
+  ghcr.io/nvidia-nemo/safe-synthesizer:latest-cu129 \
+  run --config /workspace/config/config.yaml \
+  --data-source /workspace/input/input.csv \
+  --artifact-path /workspace/artifacts
+```
 
-    On **Linux**, the CPU-only PyTorch wheels (`+cpu` local version) are hosted
-    on a separate PyTorch index.
+The public image contains the runtime, not input data or configuration.
+`latest-cu129` is suitable for evaluation; select an approved versioned
+`cu129` tag or digest for reproducible workloads. No local Python install
+or source build is needed. See [Docker](docker.md) for tag selection,
+directory preparation, secrets, mounts, and offline usage.
 
-    === "pip (macOS)"
+### Bare Package for Config Definitions
 
-        ```bash
-        pip install "nemo-safe-synthesizer[cpu,engine]"
-        ```
+The bare package has no PyTorch or FlashInfer dependencies. To install it,
+generate a command with `DRY_RUN=1`, then remove the runtime extras and their
+package indexes before running the edited command.
 
-    === "pip (Linux)"
-
-        ```bash
-        pip install "nemo-safe-synthesizer[cpu,engine]" \
-          --extra-index-url https://download.pytorch.org/whl/cpu
-        ```
-
-    === "uv (macOS)"
-
-        ```bash
-        uv pip install "nemo-safe-synthesizer[cpu,engine]"
-        ```
-
-    === "uv (Linux)"
-
-        ```bash
-        uv pip install "nemo-safe-synthesizer[cpu,engine]" \
-          --index https://download.pytorch.org/whl/cpu \
-          --index-strategy unsafe-best-match
-        ```
-
-    !!! warning "Development use only"
-        The CPU install does not support training or generation. Use it to
-        validate configuration, explore the CLI, or import config classes in
-        code. An A100 or larger GPU is required to run the full pipeline.
-
-=== "Docker (Linux with NVIDIA GPU)"
-
-    ```bash
-    docker run --rm --gpus all --shm-size=1g \
-      --user "$(id -u):$(id -g)" \
-      -v /path/to/input:/workspace/input:ro \
-      -v /path/to/config:/workspace/config:ro \
-      -v /path/to/artifacts:/workspace/artifacts \
-      -v /path/to/hf-cache:/workspace/.hf_cache \
-      ghcr.io/nvidia-nemo/safe-synthesizer:latest-cu129 \
-      run --config /workspace/config/config.yaml \
-      --data-source /workspace/input/input.csv \
-      --artifact-path /workspace/artifacts
-    ```
-
-    The public image contains the runtime, not input data or configuration.
-    `latest-cu129` is suitable for evaluation; select an approved versioned
-    `cu129` tag or digest for reproducible workloads. No local Python install
-    or source build is needed. See [Docker](docker.md) for tag selection,
-    directory preparation, secrets, mounts, and offline usage.
-
-=== "Bare package for config definitions"
-
-    The bare package has no PyTorch or FlashInfer dependencies.
-
-    === "pip"
-
-        ```bash
-        pip install "nemo-safe-synthesizer"
-        ```
-
-    === "uv"
-
-        ```bash
-        uv pip install "nemo-safe-synthesizer"
-        ```
-
-    !!! note "Limited use"
-        The bare package includes only the Pydantic configuration models -- no
-        training, generation, or CLI engine. Use it in the NeMo Safe Synthesizer
-        Service or any Python project that needs to construct or validate
-        [`SafeSynthesizerParameters`][nemo_safe_synthesizer.config.parameters.SafeSynthesizerParameters] without pulling in the full ML stack.
+!!! note "Limited use"
+    The bare package includes only the Pydantic configuration models -- no
+    training, generation, or CLI engine. Use it in the NeMo Safe Synthesizer
+    Service or any Python project that needs to construct or validate
+    [`SafeSynthesizerParameters`][nemo_safe_synthesizer.config.parameters.SafeSynthesizerParameters] without pulling in the full ML stack.
 
 ### Verify
 

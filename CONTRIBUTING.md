@@ -769,29 +769,24 @@ Never move a published tag. If code changes, create and validate the next
   workflows succeeded for that tag.
 - Confirm the candidate exists on Test PyPI, production PyPI, and GitHub
   Releases, then pull its immutable GHCR SHA tag with the intended visibility.
-- Install the production-PyPI wheel outside the repository with uv project
-  configuration disabled. Check the dependency set, import, and CLI.
+- Install the production-PyPI wheel outside the repository with the candidate
+  release installer and uv project configuration disabled. Check the dependency
+  set, import, and CLI.
 
-Use the same auxiliary indexes documented in the installation guide for the
-clean CUDA install. Set `NSS_VERSION` to the candidate version:
+Download the installer attached to the candidate release and use it for the
+clean CUDA install:
 
 ```bash
 SMOKE_DIR=/tmp/nss-release-smoke
 SMOKE_VENV="${SMOKE_DIR}/.venv"
-NSS_VERSION="${RC_TAG#v}"
 mkdir -p "${SMOKE_DIR}"
 cd "${SMOKE_DIR}"
+gh release download "${RC_TAG}" --repo NVIDIA-NeMo/Safe-Synthesizer \
+  --pattern install_nss.sh --clobber
+chmod +x install_nss.sh
 uv --no-config venv --clear --python 3.13 "${SMOKE_VENV}"
-uv --no-config pip install \
-  --python "${SMOKE_VENV}/bin/python" \
-  --default-index https://pypi.org/simple \
-  --index https://flashinfer.ai/whl/cu129 \
-  --index https://flashinfer.ai/whl/ \
-  --index https://download.pytorch.org/whl/cu129 \
-  --index https://wheels.vllm.ai/0.27.0/cu129 \
-  --index-strategy unsafe-best-match \
-  "nemo-safe-synthesizer[cu129,engine]==${NSS_VERSION}"
-uv --no-config pip check --python "${SMOKE_VENV}/bin/python"
+UV_PROJECT_ENVIRONMENT="${SMOKE_VENV}" NSS_INSTALLER_ISOLATED=1 \
+  CUDA=129 ./install_nss.sh
 "${SMOKE_VENV}/bin/python" -c 'import nemo_safe_synthesizer'
 "${SMOKE_VENV}/bin/safe-synthesizer" --help
 ```
