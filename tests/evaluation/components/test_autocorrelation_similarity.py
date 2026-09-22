@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from nemo_safe_synthesizer.config.data import DataParameters
 from nemo_safe_synthesizer.config.evaluate import (
     AutocorrelationSimilarityParameters,
     EvaluationParameters,
@@ -20,11 +21,19 @@ from nemo_safe_synthesizer.evaluation.data_model.evaluation_datasets import Eval
 from nemo_safe_synthesizer.training.timeseries_preprocessing import process_timeseries_data
 
 
-def _config(metric: AutocorrelationSimilarityParameters | None = None) -> SafeSynthesizerParameters:
+def _config(
+    metric: AutocorrelationSimilarityParameters | None = None,
+    *,
+    group_column: str | None = None,
+) -> SafeSynthesizerParameters:
     return SafeSynthesizerParameters(
+        data=DataParameters(group_training_examples_by=group_column),
         time_series=TimeSeriesParameters(is_timeseries=True, timestamp_column="time"),
         evaluation=EvaluationParameters(
-            time_series=TimeSeriesEvaluationParameters(autocorrelation=metric or AutocorrelationSimilarityParameters())
+            time_series=TimeSeriesEvaluationParameters(
+                enabled=True,
+                autocorrelation=metric or AutocorrelationSimilarityParameters(),
+            )
         ),
     )
 
@@ -46,25 +55,25 @@ def test_autocorrelation_similarity_formula_matches_mean_absolute_acf_difference
     synthetic_df = pd.DataFrame({"time": range(8), "value": [0, 1, 0, -1, 0, 1, 0, -1]})
     component = AutocorrelationSimilarity.from_evaluation_datasets(_datasets(training_df, synthetic_df), _config())
 
-    atomic = component.details["atomics"][0]
-    expected = np.mean(np.abs(np.array(atomic["training_acf"]) - np.array(atomic["synthetic_acf"]))) / 2.0
-    assert atomic["error"] == pytest.approx(expected, abs=1e-6)
+    profile = component.details["profiles"][0]
+    expected = np.mean(np.abs(np.array(profile["training_acf"]) - np.array(profile["synthetic_acf"]))) / 2.0
+    assert profile["error"] == pytest.approx(expected, abs=1e-6)
     assert component.score.score == pytest.approx(10 * (1 - expected), abs=0.1)
 
 
-def test_autocorrelation_similarity_identical_grouped_series_are_scored_atomically():
+def test_autocorrelation_similarity_identical_grouped_series_are_scored_per_profile():
     training_df = pd.DataFrame(_grouped_rows([("B", 100), ("A", 0)])).sample(frac=1.0, random_state=7)
-    config = _config(AutocorrelationSimilarityParameters(group_column="group"))
+    config = _config(group_column="group")
     component = AutocorrelationSimilarity.from_evaluation_datasets(_datasets(training_df, training_df.copy()), config)
 
     assert component.score.score == 10
     assert component.details["counts"]["groups"] == 2
-    assert component.details["counts"]["atomic_scores"] == 2
+    assert component.details["counts"]["evaluated_profiles"] == 2
     assert [row["group"] for row in component.details["per_group"]] == ["A", "B"]
 
 
 def test_autocorrelation_similarity_treats_inherited_pseudo_group_as_global_sequence():
-    training_df = pd.DataFrame({"value": [0.0, 1.0, 2.0, 3.0, 2.0, 1.0]})
+    training_df = pd.DataFrame({"value": [3.0, 0.0, 4.0, 1.0, 5.0, 2.0]})
     config = SafeSynthesizerParameters.from_params(
         is_timeseries=True,
         timestamp_interval_seconds=1,
@@ -82,7 +91,7 @@ def test_autocorrelation_similarity_treats_inherited_pseudo_group_as_global_sequ
     assert component.details["evaluation_mode"] == "global"
     assert component.details["group_column"] is None
     assert component.details["timestamp_column"] == "elapsed_seconds"
-    assert component.details["atomics"][0]["training_acf"] == component.details["atomics"][0]["synthetic_acf"]
+    assert component.details["profiles"][0]["training_acf"] == component.details["profiles"][0]["synthetic_acf"]
 
 
 def test_autocorrelation_similarity_excludes_inherited_pseudo_group_from_value_columns():
@@ -104,7 +113,7 @@ def test_autocorrelation_similarity_excludes_inherited_pseudo_group_from_value_c
 
 def test_autocorrelation_similarity_reports_missing_explicit_group_column():
     frame = pd.DataFrame({"time": range(6), "value": [0.0, 1.0, 2.0, 3.0, 2.0, 1.0]})
-    config = _config(AutocorrelationSimilarityParameters(group_column="missing_group"))
+    config = _config(group_column="missing_group")
 
     component = AutocorrelationSimilarity.from_evaluation_datasets(_datasets(frame, frame.copy()), config)
 
@@ -119,7 +128,7 @@ def test_autocorrelation_similarity_short_and_constant_series_are_unavailable_in
     )
 
     assert component.score.score is None
-    assert component.details["skipped"][0]["reason"] == "training series is constant or near-constant"
+    assert "training sequence is constant" in component.details["skipped"][0]["reason"].lower()
 
 
 def test_autocorrelation_similarity_handles_aligned_non_finite_gaps():
@@ -132,9 +141,9 @@ def test_autocorrelation_similarity_handles_aligned_non_finite_gaps():
     )
 
     assert component.score.score == 10
-    atomic = component.details["atomics"][0]
-    assert np.isfinite(atomic["training_acf"]).all()
-    assert np.isfinite(atomic["synthetic_acf"]).all()
+    profile = component.details["profiles"][0]
+    assert np.isfinite(profile["training_acf"]).all()
+    assert np.isfinite(profile["synthetic_acf"]).all()
 
 
 def test_autocorrelation_similarity_preserves_non_finite_positions():
@@ -147,22 +156,62 @@ def test_autocorrelation_similarity_preserves_non_finite_positions():
     )
 
     assert component.score.score is not None and component.score.score < 10
-    atomic = component.details["atomics"][0]
-    assert atomic["training_acf"] != atomic["synthetic_acf"]
+    profile = component.details["profiles"][0]
+    assert profile["training_acf"] != profile["synthetic_acf"]
+
+
+def test_autocorrelation_similarity_profile_uses_pairwise_pearson_and_reports_support():
+    values = np.array([1.0, np.nan, 4.0, 2.0, 8.0, 3.0])
+
+    profile, support = AutocorrelationSimilarity._acf_profile(values, max_lag=2)
+
+    lag_one_mask = np.isfinite(values[:-1]) & np.isfinite(values[1:])
+    lag_one_expected = np.corrcoef(values[:-1][lag_one_mask], values[1:][lag_one_mask])[0, 1]
+    assert profile[0] == pytest.approx(lag_one_expected, abs=1e-15)
+    assert profile[0] != round(float(profile[0]), 6)
+    assert support.tolist() == [3, 3]
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        [1e-13, 2e-13, 4e-13, 3e-13, 6e-13, 5e-13],
+        [1e12, 1e12 + 1, 1e12 + 4, 1e12 + 2, 1e12 + 7, 1e12 + 3],
+    ],
+)
+def test_autocorrelation_similarity_constant_detection_is_scale_aware(values):
+    frame = pd.DataFrame({"time": range(len(values)), "value": values})
+
+    component = AutocorrelationSimilarity.from_evaluation_datasets(_datasets(frame, frame.copy()), _config())
+
+    assert component.score.score == 10
+
+
+def test_autocorrelation_similarity_rejects_invalid_explicit_value_columns():
+    training_df = pd.DataFrame({"time": range(6), "value": range(6), "label": list("abcdef")})
+    synthetic_df = pd.DataFrame({"time": range(6), "value": range(6), "label": list("abcdef")})
+    config = _config(AutocorrelationSimilarityParameters(value_columns=["missing", "label"]))
+
+    component = AutocorrelationSimilarity.from_evaluation_datasets(_datasets(training_df, synthetic_df), config)
+
+    assert component.score.score is None
+    assert component.score.notes is not None
+    assert "'missing' is missing from training and synthetic data" in component.score.notes
+    assert "'label' is not numeric in training data" in component.score.notes
 
 
 def test_autocorrelation_similarity_scores_synthetic_constant_collapse_as_failure():
     training_df = pd.DataFrame(_grouped_rows([("A", 0), ("B", 100)]))
     synthetic_df = training_df.copy()
     synthetic_df.loc[synthetic_df["group"] == "B", "value"] = 100
-    config = _config(AutocorrelationSimilarityParameters(group_column="group"))
+    config = _config(group_column="group")
 
     component = AutocorrelationSimilarity.from_evaluation_datasets(_datasets(training_df, synthetic_df), config)
 
     assert component.score.score == 5
-    collapsed = next(item for item in component.details["atomics"] if item["group"] == "B")
+    collapsed = next(item for item in component.details["profiles"] if item["group"] == "B")
     assert collapsed["similarity"] == 0
-    assert collapsed["reason"] == "synthetic series is constant or near-constant"
+    assert "synthetic sequence is constant" in collapsed["reason"].lower()
     assert component.details["counts"]["skipped"] == 0
 
 
@@ -175,31 +224,16 @@ def test_autocorrelation_similarity_revalidates_usable_length_with_non_finite_va
     )
 
     assert component.score.score is None
-    assert component.details["skipped"][0]["reason"] == "fewer than 4 points"
+    assert "at least 4 finite observations" in component.details["skipped"][0]["reason"]
 
 
-def test_autocorrelation_similarity_explicit_false_disables_auto_enabled_metric():
-    frame = pd.DataFrame({"time": range(5), "value": range(5)})
-    config = _config(AutocorrelationSimilarityParameters(enabled=False))
+def test_autocorrelation_similarity_without_config_runs_with_component_defaults():
+    frame = pd.DataFrame({"value": [0.0, 1.0, 3.0, 2.0, 4.0, 1.0]})
 
-    component = AutocorrelationSimilarity.from_evaluation_datasets(_datasets(frame, frame.copy()), config)
+    component = AutocorrelationSimilarity.from_evaluation_datasets(_datasets(frame, frame.copy()))
 
-    assert component.score.score is None
-    assert component.score.notes is not None
-    assert "disabled" in component.score.notes
-
-    forced_config = SafeSynthesizerParameters(
-        evaluation=EvaluationParameters(
-            time_series=TimeSeriesEvaluationParameters(
-                autocorrelation=AutocorrelationSimilarityParameters(
-                    enabled=True,
-                    value_columns=["value"],
-                )
-            )
-        )
-    )
-    forced = AutocorrelationSimilarity.from_evaluation_datasets(_datasets(frame, frame.copy()), forced_config)
-    assert forced.score.score == 10
+    assert component.score.score == 10
+    assert component.details["evaluation_mode"] == "global"
 
 
 def test_autocorrelation_similarity_isolates_unexpected_metric_failures(monkeypatch):
@@ -229,7 +263,7 @@ def test_autocorrelation_similarity_preserves_bare_timestamp_column_override():
     assert config.time_series.timestamp_column == "event_time"
 
 
-def test_autocorrelation_similarity_group_cap_uses_deterministic_hash_selection():
+def test_autocorrelation_similarity_group_cap_uses_seeded_selection():
     rows = []
     group_labels = ["A", "B", "C", "D", "E", "F"]
     for group_index, group in enumerate(group_labels):
@@ -244,7 +278,8 @@ def test_autocorrelation_similarity_group_cap_uses_deterministic_hash_selection(
         )
     frame = pd.DataFrame(rows)
     config = _config(
-        AutocorrelationSimilarityParameters(group_column="group", value_columns=["y"], max_groups=2, max_lag=2)
+        AutocorrelationSimilarityParameters(value_columns=["y"], max_groups=2, max_lag=2),
+        group_column="group",
     )
 
     first = AutocorrelationSimilarity.from_evaluation_datasets(_datasets(frame, frame.copy()), config)
@@ -258,8 +293,8 @@ def test_autocorrelation_similarity_group_cap_uses_deterministic_hash_selection(
     assert first.details["group_selection"] == {
         "shared_groups": 6,
         "evaluated_groups": 2,
-        "omitted_groups": 4,
-        "policy": "deterministic_hash",
+        "omitted_shared_groups": 4,
+        "policy": "seeded_random_sample",
     }
     assert first.score.notes is not None
     assert "Evaluated 2 of 6 shared groups" in first.score.notes

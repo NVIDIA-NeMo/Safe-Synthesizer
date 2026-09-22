@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+from pandas.api.types import is_numeric_dtype
 from typing_extensions import override
 
 from ...data_processing.timeseries_validation import (
@@ -30,6 +31,7 @@ __all__ = [
     "OrderbyColumnCheck",
     "PseudoColumnCheck",
     "TimeSeriesDataShapeCheck",
+    "TimeSeriesValueColumnCheck",
     "TimestampColumnCheck",
 ]
 
@@ -173,6 +175,37 @@ class TimestampColumnCheck(DataFrameCheck):
             expect=DataError,
             code="timestamp_nulls",
         )
+
+
+class TimeSeriesValueColumnCheck(DataFrameCheck):
+    """Validate explicitly configured time-series evaluation value columns."""
+
+    name = "timeseries.evaluation_columns"
+    label = "Time-series evaluation columns"
+
+    @override
+    def enabled(self, ctx: PreflightContext) -> bool:
+        if not super().enabled(ctx):
+            return False
+        return ctx.config.evaluation.time_series.enabled
+
+    @override
+    def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
+        columns = ctx.config.evaluation.time_series.autocorrelation.value_columns
+        if columns is None:
+            return
+        for column in columns:
+            if column not in ctx.data:
+                collector.error(
+                    "evaluation_column_not_found",
+                    f"Autocorrelation value column {column!r} is missing from the training data.",
+                )
+                continue
+            if not is_numeric_dtype(ctx.data[column]):
+                collector.error(
+                    "evaluation_column_not_numeric",
+                    f"Autocorrelation value column {column!r} must contain numeric training data.",
+                )
 
 
 class TimeSeriesDataShapeCheck(DataFrameCheck):

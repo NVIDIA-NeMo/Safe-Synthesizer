@@ -10,6 +10,7 @@ import pytest
 
 from nemo_safe_synthesizer.errors import DataError, ParameterError
 from nemo_safe_synthesizer.evaluation.components.autocorrelation_similarity_figures import (
+    generate_autocorrelation_profile_figure,
     generate_autocorrelation_similarity_figure,
 )
 
@@ -39,6 +40,18 @@ def test_autocorrelation_similarity_figure_preserves_non_finite_positions():
     assert np.isfinite(figure.data[0].y).all()
     assert np.isfinite(figure.data[1].y).all()
     assert list(figure.data[0].y) != list(figure.data[1].y)
+
+
+def test_autocorrelation_profile_figure_uses_precomputed_values():
+    figure = generate_autocorrelation_profile_figure(
+        [1, 2],
+        [0.75, 0.25],
+        [0.5, None],
+    )
+
+    assert list(figure.data[0].x) == [1, 2]
+    assert list(figure.data[0].y) == [0.75, 0.25]
+    assert list(figure.data[1].y) == [0.5, None]
 
 
 @pytest.mark.parametrize(

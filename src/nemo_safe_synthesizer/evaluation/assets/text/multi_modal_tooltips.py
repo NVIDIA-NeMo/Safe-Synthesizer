@@ -55,6 +55,10 @@ tooltips = {
         while penalizing memorization. A higher score is better. The text semantic similarity is based on cosine similarities of sentence embeddings,
         and is higher with higher similarity between the synthetic and test data, penalized for memorization by the similarity between the synthetic and training data being too high.
     """,
+    "autocorrelation_similarity_info": """
+        Autocorrelation Similarity compares how strongly each numeric value channel relates to its own prior values in training and synthetic sequences.
+        A higher score means the lag profiles are more alike for the configured columns, groups, and lag horizon. The report shows the lowest-scoring profiles first.
+    """,
     "differential_privacy_info": """
     Differential Privacy (DP) is generally regarded as the highest level of privacy, providing mathematical guarantees around the protection of individual training
     records based on the values of the epsilon and delta parameters. Lower epsilon indicates higher levels of privacy. Note that while applying DP increases privacy,

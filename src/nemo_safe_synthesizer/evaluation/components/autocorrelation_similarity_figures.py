@@ -9,16 +9,20 @@ validation as the metric-facing diagnostic path while leaving caller-owned
 Series objects unchanged.
 
 Functions:
+    generate_autocorrelation_profile_figure: Plot already-computed profiles.
     generate_autocorrelation_similarity_figure: Build a training-versus-
         synthetic autocorrelation profile figure.
 """
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
+from ...config.evaluate import DEFAULT_AUTOCORRELATION_MAX_LAG, DEFAULT_AUTOCORRELATION_MIN_POINTS
 from ...errors import DataError, ParameterError
 from .autocorrelation_similarity import AutocorrelationSimilarity
 
@@ -30,7 +34,7 @@ def generate_autocorrelation_similarity_figure(
     training: pd.Series,
     synthetic: pd.Series,
     *,
-    max_lag: int = 20,
+    max_lag: int = DEFAULT_AUTOCORRELATION_MAX_LAG,
 ) -> go.Figure:
     """Build a figure comparing training and synthetic lag profiles.
 
@@ -57,12 +61,14 @@ def generate_autocorrelation_similarity_figure(
 
     training_values = AutocorrelationSimilarity._prepare_values(training)
     synthetic_values = AutocorrelationSimilarity._prepare_values(synthetic)
-    training_count = int(np.count_nonzero(np.isfinite(training_values)))
-    synthetic_count = int(np.count_nonzero(np.isfinite(synthetic_values)))
+    training_count = int(np.sum(np.isfinite(training_values)))
+    synthetic_count = int(np.sum(np.isfinite(synthetic_values)))
     n = min(training_count, synthetic_count)
-    if n < 4:
-        raise DataError("At least 4 finite points are required in each series.")
-    if np.nanstd(training_values) <= 1e-12 or np.nanstd(synthetic_values) <= 1e-12:
+    if n < DEFAULT_AUTOCORRELATION_MIN_POINTS:
+        raise DataError(f"At least {DEFAULT_AUTOCORRELATION_MIN_POINTS} finite points are required in each series.")
+    if AutocorrelationSimilarity._is_effectively_constant(
+        training_values
+    ) or AutocorrelationSimilarity._is_effectively_constant(synthetic_values):
         raise DataError("Autocorrelation is unavailable for constant or near-constant series.")
 
     # Cap the lag so every plotted correlation retains at least half of the
@@ -71,10 +77,34 @@ def generate_autocorrelation_similarity_figure(
     if effective_max_lag < 1:
         raise DataError("The series are too short to compute a stable lag profile.")
     lags = np.arange(1, effective_max_lag + 1)
-    training_acf = AutocorrelationSimilarity._acf_vector(training_values, effective_max_lag)
-    synthetic_acf = AutocorrelationSimilarity._acf_vector(synthetic_values, effective_max_lag)
+    training_acf, _ = AutocorrelationSimilarity._acf_profile(training_values, effective_max_lag)
+    synthetic_acf, _ = AutocorrelationSimilarity._acf_profile(synthetic_values, effective_max_lag)
     if not np.any(np.isfinite(training_acf) & np.isfinite(synthetic_acf)):
         raise DataError("The series have no lags with sufficient pair support.")
+
+    return generate_autocorrelation_profile_figure(lags, training_acf, synthetic_acf)
+
+
+def generate_autocorrelation_profile_figure(
+    lags: Sequence[int] | np.ndarray,
+    training_acf: Sequence[float | None] | np.ndarray,
+    synthetic_acf: Sequence[float | None] | np.ndarray,
+) -> go.Figure:
+    """Build a figure from profiles already computed by the metric.
+
+    Args:
+        lags: Positive lag values shared by both profiles.
+        training_acf: Training autocorrelation values.
+        synthetic_acf: Synthetic autocorrelation values.
+
+    Returns:
+        A Plotly figure containing the supplied profiles.
+
+    Raises:
+        DataError: If the lag and profile lengths differ or are empty.
+    """
+    if len(lags) == 0 or len(lags) != len(training_acf) or len(lags) != len(synthetic_acf):
+        raise DataError("Autocorrelation profile lags and values must have the same nonzero length.")
 
     figure = go.Figure()
     figure.add_trace(

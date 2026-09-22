@@ -16,8 +16,9 @@ Classes:
 
 from __future__ import annotations
 
-import hashlib
+import random
 from collections import defaultdict
+from functools import cached_property
 from typing import Any
 
 import numpy as np
@@ -37,6 +38,8 @@ from .component import Component
 logger = get_logger(__name__)
 
 _MIN_VALID_PAIRS = 3
+_GROUP_SELECTION_SEED = 2112
+_CONSTANT_TOLERANCE_FACTOR = 32.0
 
 
 class AutocorrelationSimilarity(Component):
@@ -50,7 +53,7 @@ class AutocorrelationSimilarity(Component):
 
     Attributes:
         name: Display name used in serialized evaluation results.
-        details: Atomic profiles, skipped comparisons, and grouped summaries.
+        details: Per-group/column profiles, skipped comparisons, and summaries.
     """
 
     name: str = Field(
@@ -59,8 +62,15 @@ class AutocorrelationSimilarity(Component):
     )
     details: dict[str, Any] = Field(
         default_factory=dict,
-        description="Atomic autocorrelation profiles, skipped comparisons, and summary statistics.",
+        description="Per-group/column autocorrelation profiles, skipped comparisons, and summaries.",
     )
+
+    @cached_property
+    def jinja_context(self) -> dict[str, Any]:
+        """Return score and diagnostic details for report rendering."""
+        context = super().jinja_context
+        context["details"] = self.details
+        return context
 
     @staticmethod
     def from_evaluation_datasets(
@@ -69,10 +79,10 @@ class AutocorrelationSimilarity(Component):
     ) -> AutocorrelationSimilarity:
         """Evaluate autocorrelation fidelity for paired time-series datasets.
 
-        Explicit metric configuration takes precedence over automatic
-        time-series enablement. Evaluation failures are isolated to this
-        component and returned in ``score.notes`` instead of aborting the full
-        evaluation pipeline.
+        Report orchestration controls whether the optional metric runs.
+        Calling this component directly always computes it with the supplied
+        configuration or isolated defaults. Evaluation failures are returned
+        in ``score.notes`` instead of aborting the full evaluation pipeline.
 
         Args:
             evaluation_datasets: Training and synthetic datasets to compare.
@@ -82,9 +92,6 @@ class AutocorrelationSimilarity(Component):
             A component containing the score, diagnostic details, and notes.
         """
         cfg = AutocorrelationSimilarity._resolve_config(config)
-        if not AutocorrelationSimilarity._is_enabled(cfg, config):
-            return AutocorrelationSimilarity(score=EvaluationScore(notes="Autocorrelation Similarity is disabled."))
-
         # Optional metrics must fail independently so one diagnostic cannot
         # prevent the rest of the evaluation report from being produced.
         try:
@@ -101,22 +108,12 @@ class AutocorrelationSimilarity(Component):
         return config.evaluation.time_series.autocorrelation
 
     @staticmethod
-    def _is_enabled(
-        cfg: AutocorrelationSimilarityParameters,
-        config: SafeSynthesizerParameters | None,
-    ) -> bool:
-        """Resolve an explicit enable flag before automatic time-series enablement."""
-        if cfg.enabled is not None:
-            return cfg.enabled
-        return bool(config and config.time_series.is_timeseries)
-
-    @staticmethod
     def _evaluate(
         datasets: EvaluationDatasets,
         cfg: AutocorrelationSimilarityParameters,
         config: SafeSynthesizerParameters | None,
     ) -> AutocorrelationSimilarity:
-        """Compute atomic profiles and aggregate them into a component result.
+        """Compute per-group/column profiles and aggregate the component score.
 
         Args:
             datasets: Training and synthetic datasets to compare.
@@ -128,9 +125,8 @@ class AutocorrelationSimilarity(Component):
             notes when no usable comparison remains.
         """
         timestamp_column = config.time_series.timestamp_column if config is not None else None
-        inherited_group_column = config.data.group_training_examples_by if config is not None else None
-        group_column = cfg.group_column or inherited_group_column
-        if cfg.group_column is None and inherited_group_column == PSEUDO_GROUP_COLUMN:
+        group_column = config.data.group_training_examples_by if config is not None else None
+        if group_column == PSEUDO_GROUP_COLUMN:
             # Training injects this reserved column to reuse grouped sequence
             # infrastructure, but evaluation receives frames with it removed.
             group_column = None
@@ -141,7 +137,11 @@ class AutocorrelationSimilarity(Component):
                 score=EvaluationScore(notes=f"Configured group column {group_column!r} is missing from a dataset.")
             )
 
-        columns = AutocorrelationSimilarity._numeric_columns(datasets, cfg, timestamp_column, group_column)
+        columns, column_error = AutocorrelationSimilarity._numeric_columns(
+            datasets, cfg, timestamp_column, group_column
+        )
+        if column_error is not None:
+            return AutocorrelationSimilarity(score=EvaluationScore(notes=column_error))
         if not columns:
             return AutocorrelationSimilarity(score=EvaluationScore(notes="No shared numeric value columns."))
 
@@ -157,11 +157,11 @@ class AutocorrelationSimilarity(Component):
         group_selection = {
             "shared_groups": shared_group_count,
             "evaluated_groups": len(groups),
-            "omitted_groups": omitted_groups,
-            "policy": "deterministic_hash" if omitted_groups else "all_shared_groups",
+            "omitted_shared_groups": omitted_groups,
+            "policy": "seeded_random_sample" if omitted_groups else "all_shared_groups",
         }
 
-        atomics: list[dict[str, Any]] = []
+        profiles: list[dict[str, Any]] = []
         skipped: list[dict[str, Any]] = []
         for group_value in groups:
             training_group = AutocorrelationSimilarity._group_frame(
@@ -171,12 +171,12 @@ class AutocorrelationSimilarity(Component):
                 datasets.synthetic, group_column, group_value, timestamp_column
             )
             for column in columns:
-                result, reason = AutocorrelationSimilarity._atomic_score(
+                result, reason = AutocorrelationSimilarity._profile_score(
                     training_group[column], synthetic_group[column], cfg
                 )
                 group_label = None if group_column is None else str(group_value)
-                AutocorrelationSimilarity._record_atomic_result(
-                    atomics,
+                AutocorrelationSimilarity._record_profile_result(
+                    profiles,
                     skipped,
                     group_label,
                     column,
@@ -184,19 +184,21 @@ class AutocorrelationSimilarity(Component):
                     reason,
                 )
 
-        if not atomics:
-            notes = "No usable group/column autocorrelation profiles."
+        if not profiles:
+            unavailable_note = "No usable group/column autocorrelation profiles."
             if omitted_groups:
-                notes += f" Evaluated {len(groups)} of {shared_group_count} shared groups using deterministic hash selection."
+                unavailable_note += (
+                    f" Evaluated {len(groups)} of {shared_group_count} shared groups using a reproducible sample."
+                )
             return AutocorrelationSimilarity(
-                score=EvaluationScore(notes=notes),
+                score=EvaluationScore(notes=unavailable_note),
                 details={
                     "counts": {
                         "groups": len(groups),
                         "shared_groups": shared_group_count,
-                        "omitted_groups": omitted_groups,
+                        "omitted_shared_groups": omitted_groups,
                         "columns": len(columns),
-                        "atomic_scores": 0,
+                        "evaluated_profiles": 0,
                         "skipped": len(skipped),
                     },
                     "group_selection": group_selection,
@@ -206,15 +208,13 @@ class AutocorrelationSimilarity(Component):
                 },
             )
 
-        similarity = float(np.mean([item["similarity"] for item in atomics]))
+        similarity = float(np.mean([item["similarity"] for item in profiles]))
         score = EvaluationScore.finalize_grade(raw_score=similarity, score=10.0 * similarity)
         notes: list[str] = []
         if skipped:
             notes.append(f"Skipped {len(skipped)} unusable group/column comparisons.")
         if omitted_groups:
-            notes.append(
-                f"Evaluated {len(groups)} of {shared_group_count} shared groups using deterministic hash selection."
-            )
+            notes.append(f"Evaluated {len(groups)} of {shared_group_count} shared groups using a reproducible sample.")
         if notes:
             score.notes = " ".join(notes)
 
@@ -227,15 +227,15 @@ class AutocorrelationSimilarity(Component):
             "counts": {
                 "groups": len(groups),
                 "shared_groups": shared_group_count,
-                "omitted_groups": omitted_groups,
+                "omitted_shared_groups": omitted_groups,
                 "columns": len(columns),
-                "atomic_scores": len(atomics),
+                "evaluated_profiles": len(profiles),
                 "skipped": len(skipped),
             },
             "group_selection": group_selection,
-            "per_group": AutocorrelationSimilarity._summaries(atomics, "group"),
-            "per_column": AutocorrelationSimilarity._summaries(atomics, "column"),
-            "atomics": atomics,
+            "per_group": AutocorrelationSimilarity._summaries(profiles, "group"),
+            "per_column": AutocorrelationSimilarity._summaries(profiles, "column"),
+            "profiles": profiles,
             "skipped": skipped,
             "groups_only_in_training": missing_training,
             "groups_only_in_synthetic": missing_synthetic,
@@ -243,19 +243,19 @@ class AutocorrelationSimilarity(Component):
         return AutocorrelationSimilarity(score=score, details=details)
 
     @staticmethod
-    def _record_atomic_result(
-        atomics: list[dict[str, Any]],
+    def _record_profile_result(
+        profiles: list[dict[str, Any]],
         skipped: list[dict[str, Any]],
         group_label: str | None,
         column: str,
         result: dict[str, Any] | None,
         reason: str | None,
     ) -> None:
-        """Record one successful or skipped group-and-column comparison."""
+        """Record one successful or skipped group-and-column profile."""
         if result is None:
             skipped.append({"group": group_label, "column": column, "reason": reason})
             return
-        atomics.append({"group": group_label, "column": column, **result})
+        profiles.append({"group": group_label, "column": column, **result})
 
     @staticmethod
     def _numeric_columns(
@@ -263,7 +263,7 @@ class AutocorrelationSimilarity(Component):
         cfg: AutocorrelationSimilarityParameters,
         timestamp_column: str | None,
         group_column: str | None,
-    ) -> list[str]:
+    ) -> tuple[list[str], str | None]:
         """Select shared numeric value columns eligible for evaluation.
 
         Explicit ``value_columns`` retain their configured order. Automatic
@@ -277,21 +277,50 @@ class AutocorrelationSimilarity(Component):
             group_column: Column used only to separate sequences.
 
         Returns:
-            Shared numeric value column names to evaluate.
+            Shared numeric value column names and an optional validation error.
         """
         if cfg.value_columns is not None:
-            return [
-                column
-                for column in cfg.value_columns
-                if column in datasets.training
-                and column in datasets.synthetic
-                and pd.api.types.is_numeric_dtype(datasets.training[column])
-                and pd.api.types.is_numeric_dtype(datasets.synthetic[column])
-                and column not in {timestamp_column, group_column, PSEUDO_GROUP_COLUMN}
-            ]
+            invalid_columns = AutocorrelationSimilarity._invalid_value_columns(
+                datasets,
+                cfg.value_columns,
+                timestamp_column,
+                group_column,
+            )
+            if invalid_columns:
+                return [], "Invalid autocorrelation value columns: " + "; ".join(invalid_columns)
+            return list(dict.fromkeys(cfg.value_columns)), None
         numeric = set(datasets.get_columns_of_type({FieldType.NUMERIC}, based_on="both"))
-        numeric.difference_update(filter(None, [timestamp_column, group_column, PSEUDO_GROUP_COLUMN]))
-        return sorted(numeric)
+        numeric.difference_update([timestamp_column, group_column, PSEUDO_GROUP_COLUMN])
+        return sorted(numeric), None
+
+    @staticmethod
+    def _invalid_value_columns(
+        datasets: EvaluationDatasets,
+        columns: list[str],
+        timestamp_column: str | None,
+        group_column: str | None,
+    ) -> list[str]:
+        """Return actionable validation failures for explicit value columns."""
+        invalid: list[str] = []
+        reserved = {timestamp_column, group_column, PSEUDO_GROUP_COLUMN}
+        for column in columns:
+            if column in reserved:
+                invalid.append(f"{column!r} is used for timestamp or sequence grouping")
+                continue
+            missing_from = [
+                name
+                for name, frame in (("training", datasets.training), ("synthetic", datasets.synthetic))
+                if column not in frame
+            ]
+            if missing_from:
+                invalid.append(f"{column!r} is missing from {' and '.join(missing_from)} data")
+                continue
+            if not pd.api.types.is_numeric_dtype(datasets.training[column]):
+                invalid.append(f"{column!r} is not numeric in training data")
+                continue
+            if not pd.api.types.is_numeric_dtype(datasets.synthetic[column]):
+                invalid.append(f"{column!r} is not numeric in synthetic data")
+        return invalid
 
     @staticmethod
     def _shared_groups(
@@ -323,17 +352,20 @@ class AutocorrelationSimilarity(Component):
         training_groups = set(training[group_column].dropna().unique())
         synthetic_groups = set(synthetic[group_column].dropna().unique())
         shared_groups = training_groups & synthetic_groups
-        shared = sorted(shared_groups, key=AutocorrelationSimilarity._group_selection_key)[:max_groups]
+        ordered_shared = sorted(shared_groups, key=AutocorrelationSimilarity._group_sort_key)
+        shared = ordered_shared
+        if len(ordered_shared) > max_groups:
+            shared = random.Random(_GROUP_SELECTION_SEED).sample(ordered_shared, k=max_groups)
+            shared.sort(key=AutocorrelationSimilarity._group_sort_key)
         only_training = [str(value) for value in sorted(training_groups - synthetic_groups, key=str)]
         only_synthetic = [str(value) for value in sorted(synthetic_groups - training_groups, key=str)]
         return shared, only_training, only_synthetic, len(shared_groups)
 
     @staticmethod
-    def _group_selection_key(value: Any) -> tuple[str, str]:
-        """Return a stable pseudo-random ordering key for a group value."""
+    def _group_sort_key(value: Any) -> tuple[str, str]:
+        """Return a stable ordering key for heterogeneous group values."""
         type_name = f"{type(value).__module__}.{type(value).__qualname__}"
-        payload = f"{type_name}:{value!r}".encode()
-        return hashlib.sha256(payload).hexdigest(), str(value)
+        return type_name, str(value)
 
     @staticmethod
     def _group_frame(
@@ -362,17 +394,17 @@ class AutocorrelationSimilarity(Component):
         return frame
 
     @staticmethod
-    def _atomic_score(
+    def _profile_score(
         training: pd.Series,
         synthetic: pd.Series,
         cfg: AutocorrelationSimilarityParameters,
     ) -> tuple[dict[str, Any] | None, str | None]:
         """Compare one training and synthetic autocorrelation profile.
 
-        The usable length is the shorter finite sequence. Lags are capped at
-        half that length so each correlation retains substantial overlap. The
-        mean profile difference is divided by two because autocorrelation lies
-        in ``[-1, 1]`` and the largest possible lag-level difference is two.
+        For each lag, Pearson correlation is computed over positions whose two
+        endpoints are finite. Lags are capped at half the shorter finite
+        sequence. The mean profile difference is divided by two because
+        correlation lies in ``[-1, 1]``.
 
         Args:
             training: Ordered training values for one group and column.
@@ -380,53 +412,59 @@ class AutocorrelationSimilarity(Component):
             cfg: Parameters controlling minimum length and maximum lag.
 
         Returns:
-            Atomic score details and ``None`` on success, or ``None`` and a
-            human-readable skip reason when the profile is unusable.
+            Profile score details and ``None`` on success, or ``None`` and a
+            human-readable skip reason when the comparison is unusable.
         """
         training_values = AutocorrelationSimilarity._prepare_values(training)
         synthetic_values = AutocorrelationSimilarity._prepare_values(synthetic)
-        training_count = int(np.count_nonzero(np.isfinite(training_values)))
-        synthetic_count = int(np.count_nonzero(np.isfinite(synthetic_values)))
+        training_count = int(np.sum(np.isfinite(training_values)))
+        synthetic_count = int(np.sum(np.isfinite(synthetic_values)))
         n = min(training_count, synthetic_count)
         if n < cfg.min_points:
-            return None, f"fewer than {cfg.min_points} points"
-        if np.nanstd(training_values) <= 1e-12:
-            return None, "training series is constant or near-constant"
+            return None, f"Each sequence needs at least {cfg.min_points} finite observations."
+        if AutocorrelationSimilarity._is_effectively_constant(training_values):
+            return None, "The training sequence is constant or indistinguishable from constant at its numeric scale."
 
-        # Retaining at least half of the shorter sequence at every lag avoids
-        # presenting correlations based on only a small tail of observations.
+        # The lag cap bounds work and avoids profiles dominated by the short
+        # tail of either sequence. Per-lag support is validated independently.
         effective_max_lag = min(cfg.max_lag, (n - 1) // 2)
         if effective_max_lag < 1:
-            return None, "no stable lags"
-        training_acf = AutocorrelationSimilarity._acf_vector(training_values, effective_max_lag)
+            return None, "The sequences are too short to evaluate a positive lag."
+        training_acf, training_support = AutocorrelationSimilarity._acf_profile(training_values, effective_max_lag)
         if not np.any(np.isfinite(training_acf)):
-            return None, "no training lags with sufficient pair support"
-        if np.nanstd(synthetic_values) <= 1e-12:
+            return None, f"No training lags have at least {_MIN_VALID_PAIRS} usable endpoint pairs."
+
+        lags = list(range(1, effective_max_lag + 1))
+        synthetic_acf, synthetic_support = AutocorrelationSimilarity._acf_profile(synthetic_values, effective_max_lag)
+        if AutocorrelationSimilarity._is_effectively_constant(synthetic_values):
             return {
+                "lags": lags,
                 "effective_max_lag": effective_max_lag,
                 "evaluated_lags": 0,
                 "error": 1.0,
                 "similarity": 0.0,
-                "reason": "synthetic series is constant or near-constant",
+                "reason": "The synthetic sequence is constant or indistinguishable from constant at its numeric scale.",
                 "training_acf": AutocorrelationSimilarity._profile_details(training_acf),
                 "synthetic_acf": [None] * effective_max_lag,
+                "training_pair_support": training_support.tolist(),
+                "synthetic_pair_support": synthetic_support.tolist(),
             }, None
 
-        synthetic_acf = AutocorrelationSimilarity._acf_vector(synthetic_values, effective_max_lag)
         shared_valid_lags = np.isfinite(training_acf) & np.isfinite(synthetic_acf)
         if not np.any(shared_valid_lags):
-            return None, "no lags with sufficient pair support"
-        # ACF values are bounded by -1 and 1. Dividing their absolute
-        # difference by two maps the theoretical maximum error to one.
+            return None, f"No lags have at least {_MIN_VALID_PAIRS} usable endpoint pairs in both sequences."
         error = float(np.mean(np.abs(training_acf[shared_valid_lags] - synthetic_acf[shared_valid_lags])) / 2.0)
         error = float(np.clip(error, 0.0, 1.0))
         return {
+            "lags": lags,
             "effective_max_lag": effective_max_lag,
-            "evaluated_lags": int(np.count_nonzero(shared_valid_lags)),
-            "error": round(error, 6),
-            "similarity": round(1.0 - error, 6),
+            "evaluated_lags": int(np.sum(shared_valid_lags)),
+            "error": error,
+            "similarity": 1.0 - error,
             "training_acf": AutocorrelationSimilarity._profile_details(training_acf),
             "synthetic_acf": AutocorrelationSimilarity._profile_details(synthetic_acf),
+            "training_pair_support": training_support.tolist(),
+            "synthetic_pair_support": synthetic_support.tolist(),
         }, None
 
     @staticmethod
@@ -437,17 +475,32 @@ class AutocorrelationSimilarity(Component):
 
     @staticmethod
     def _profile_details(values: NDArray[np.float64]) -> list[float | None]:
-        """Convert an ACF vector into JSON-safe rounded details."""
-        return [round(float(value), 6) if np.isfinite(value) else None for value in values]
+        """Convert an ACF vector into JSON-safe full-precision details."""
+        return [float(value) if np.isfinite(value) else None for value in values]
 
     @staticmethod
-    def _acf_vector(values: NDArray[np.float64], max_lag: int) -> NDArray[np.float64]:
-        """Compute a gap-aware, consistently normalized autocorrelation vector.
+    def _is_effectively_constant(values: NDArray[np.float64]) -> bool:
+        """Return whether finite variation is negligible relative to value scale."""
+        finite_values = values[np.isfinite(values)]
+        if finite_values.size == 0:
+            return True
+        scale = float(np.max(np.abs(finite_values)))
+        if scale == 0.0:
+            return True
+        normalized_std = float(np.std(finite_values / scale))
+        tolerance = _CONSTANT_TOLERANCE_FACTOR * np.finfo(float).eps
+        return bool(normalized_std <= tolerance)
 
-        The estimator preserves missing positions and uses only finite endpoint
-        pairs at each lag. It centers all finite observations once and retains
-        ``n * population_variance`` as the common denominator so complete input
-        series keep the original estimator semantics.
+    @staticmethod
+    def _acf_profile(
+        values: NDArray[np.float64],
+        max_lag: int,
+    ) -> tuple[NDArray[np.float64], NDArray[np.int64]]:
+        """Compute missing-aware per-lag Pearson correlations and support.
+
+        Missing positions are preserved. At each lag, only pairs with two
+        finite endpoints contribute, and each endpoint vector is centered and
+        scaled independently as required by Pearson correlation.
 
         Args:
             values: Nonconstant values in temporal order, with gaps represented
@@ -455,37 +508,42 @@ class AutocorrelationSimilarity(Component):
             max_lag: Largest positive lag to include.
 
         Returns:
-            Autocorrelation values for lags 1 through ``max_lag``.
+            Correlations and valid endpoint-pair counts for each positive lag.
         """
         finite = np.isfinite(values)
-        finite_count = int(np.count_nonzero(finite))
-        centered = np.full_like(values, np.nan)
-        centered[finite] = values[finite] - np.mean(values[finite])
-        variance = float(np.var(centered[finite]))
         acf = np.full(max_lag, np.nan)
+        support = np.zeros(max_lag, dtype=np.int64)
         for lag in range(1, max_lag + 1):
             valid_pairs = finite[:-lag] & finite[lag:]
-            if np.count_nonzero(valid_pairs) < _MIN_VALID_PAIRS:
+            pair_count = int(np.sum(valid_pairs))
+            support[lag - 1] = pair_count
+            if pair_count < _MIN_VALID_PAIRS:
                 continue
-            numerator = np.dot(centered[:-lag][valid_pairs], centered[lag:][valid_pairs])
-            acf[lag - 1] = numerator / (finite_count * variance)
-        return acf
+            earlier = values[:-lag][valid_pairs]
+            later = values[lag:][valid_pairs]
+            if AutocorrelationSimilarity._is_effectively_constant(earlier):
+                continue
+            if AutocorrelationSimilarity._is_effectively_constant(later):
+                continue
+            correlation = float(np.corrcoef(earlier, later)[0, 1])
+            acf[lag - 1] = np.clip(correlation, -1.0, 1.0)
+        return acf, support
 
     @staticmethod
-    def _summaries(atomics: list[dict[str, Any]], key: str) -> list[dict[str, Any]]:
-        """Average atomic similarities by a diagnostic key.
+    def _summaries(profiles: list[dict[str, Any]], key: str) -> list[dict[str, Any]]:
+        """Average profile similarities by a diagnostic key.
 
         Args:
-            atomics: Successful group-and-column comparison details.
+            profiles: Successful group-and-column comparison details.
             key: Detail key to group by, such as ``group`` or ``column``.
 
         Returns:
             Deterministically ordered summaries with similarity and count.
         """
         scores: defaultdict[Any, list[float]] = defaultdict(list)
-        for item in atomics:
+        for item in profiles:
             scores[item[key]].append(item["similarity"])
         return [
-            {key: value, "similarity": round(float(np.mean(values)), 6), "count": len(values)}
+            {key: value, "similarity": float(np.mean(values)), "count": len(values)}
             for value, values in sorted(scores.items(), key=lambda item: str(item[0]))
         ]
