@@ -985,6 +985,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#docker-linux-with-nvidia-gpu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Docker (Linux with NVIDIA GPU)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bare-package-for-config-definitions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bare Package for Config Definitions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#verify" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -9428,6 +9450,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#docker-linux-with-nvidia-gpu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Docker (Linux with NVIDIA GPU)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bare-package-for-config-definitions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bare Package for Config Definitions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#verify" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -9637,6 +9681,14 @@ covers installation, a quick-start example, and a walkthrough of what the pipeli
 does at each stage.</p>
 <hr />
 <h2 id="installation">Installation<a class="headerlink" href="#installation" title="Permanent link">&para;</a></h2>
+<div class="admonition tip">
+<p class="admonition-title">Skip installation entirely</p>
+<p><a href="https://brev.nvidia.com/launchable/deploy/now?launchableID=env-3HBtA2NKQaBukL2TyDphWUcvQ17"><img alt="Launch on Brev" src="https://brev-assets.s3.us-west-1.amazonaws.com/nv-lb-dark.svg#only-light" /></a>
+<a href="https://brev.nvidia.com/launchable/deploy/now?launchableID=env-3HBtA2NKQaBukL2TyDphWUcvQ17"><img alt="Launch on Brev" src="https://brev-assets.s3.us-west-1.amazonaws.com/nv-lb-light.svg#only-dark" /></a></p>
+<p>Deploys a GPU instance with everything below already done, plus the tutorial
+notebooks. Useful for evaluating Safe Synthesizer without a local NVIDIA GPU. The
+instance bills continuously and cannot be paused -- delete it when you are finished.</p>
+</div>
 <h3 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h3>
 <ul>
 <li>Python 3.11–3.14 (dev tooling pins 3.13 via <code>.python-version</code> in the repo root)</li>
@@ -9652,136 +9704,59 @@ is for development and configuration validation only -- it cannot train models o
 generate synthetic data.</p>
 </div>
 <h3 id="install-the-package">Install the Package<a class="headerlink" href="#install-the-package" title="Permanent link">&para;</a></h3>
-<div class="admonition tip">
-<p class="admonition-title">Skip installation entirely</p>
-<p><a href="https://brev.nvidia.com/launchable/deploy/now?launchableID=env-3HBtA2NKQaBukL2TyDphWUcvQ17"><img alt="Launch on Brev" src="https://brev-assets.s3.us-west-1.amazonaws.com/nv-lb-dark.svg#only-light" /></a>
-<a href="https://brev.nvidia.com/launchable/deploy/now?launchableID=env-3HBtA2NKQaBukL2TyDphWUcvQ17"><img alt="Launch on Brev" src="https://brev-assets.s3.us-west-1.amazonaws.com/nv-lb-light.svg#only-dark" /></a></p>
-<p>Deploys a GPU instance with everything below already done, plus the tutorial
-notebooks. Useful for evaluating Safe Synthesizer without a local NVIDIA GPU. The
-instance bills continuously and cannot be paused -- delete it when you are finished.</p>
-</div>
-<p>For most installations, download the installer from the latest stable GitHub
+<p>Download the installer from the latest stable GitHub
 release. Each released script pins the package version, constraints, and
 package indexes that were tested together.</p>
 <div class="language-bash highlight"><span class="filename">Install Safe Synthesizer</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>curl<span class="w"> </span>-fsSLO<span class="w"> </span>https://github.com/NVIDIA-NeMo/Safe-Synthesizer/releases/latest/download/install_nss.sh
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>chmod<span class="w"> </span>+x<span class="w"> </span>install_nss.sh
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="hll">./install_nss.sh<span class="w">             </span><span class="c1"># CUDA 12.9 (default)</span>
-</span></span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="nv">CUDA</span><span class="o">=</span><span class="m">130</span><span class="w"> </span>./install_nss.sh<span class="w">    </span><span class="c1"># CUDA 13.0</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="nv">CUDA</span><span class="o">=</span>cpu<span class="w"> </span>./install_nss.sh<span class="w">    </span><span class="c1"># CPU-only development and validation</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="hll"><span class="nv">UV_PROJECT_ENVIRONMENT</span><span class="o">=</span>.venv<span class="w"> </span>./install_nss.sh<span class="w">  </span><span class="c1"># CUDA 12.9 (default)</span>
+</span></span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="nb">source</span><span class="w"> </span>.venv/bin/activate
 </span></code></pre></div>
-<p>Use <code>DRY_RUN=1</code> to inspect the installation command without running it. CUDA
-13.0 requires an NVIDIA driver version 580.65.06 or newer. Use the manual
-commands below when you need to customize the package source or installation
-command.</p>
-<p>The CUDA and CPU extras depend on packages (PyTorch, FlashInfer) hosted on
-indexes outside PyPI. You must pass the extra index URLs shown below.</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>This project will download and install additional third-party open source
 software projects. Review the license terms of these open source projects
 before use.</p>
 </div>
-<div class="tabbed-set tabbed-alternate" data-tabs="1:4"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><input id="__tabbed_1_4" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">CUDA 12.9 (Linux with NVIDIA GPU)</label><label for="__tabbed_1_2">CPU (macOS / Linux without GPU)</label><label for="__tabbed_1_3">Docker (Linux with NVIDIA GPU)</label><label for="__tabbed_1_4">Bare package for config definitions</label></div>
-<div class="tabbed-content">
-<div class="tabbed-block">
-<div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">pip</label><label for="__tabbed_2_2">uv</label></div>
-<div class="tabbed-content">
-<div class="tabbed-block">
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;nemo-safe-synthesizer[cu129,engine]&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>--extra-index-url<span class="w"> </span>https://download.pytorch.org/whl/cu129<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span>--extra-index-url<span class="w"> </span>https://flashinfer.ai/whl/cu129<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span>--extra-index-url<span class="w"> </span>https://flashinfer.ai/whl/<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span>--extra-index-url<span class="w"> </span>https://wheels.vllm.ai/0.27.0/cu129
+<p>The installer uses CUDA 12.9 by default. To choose another runtime, set
+<code>CUDA</code>:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nv">CUDA</span><span class="o">=</span><span class="m">130</span><span class="w"> </span>./install_nss.sh<span class="w">    </span><span class="c1"># CUDA 13.0</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nv">CUDA</span><span class="o">=</span>cpu<span class="w"> </span>./install_nss.sh<span class="w">    </span><span class="c1"># CPU-only development and validation</span>
 </span></code></pre></div>
-</div>
-<div class="tabbed-block">
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>uv<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;nemo-safe-synthesizer[cu129,engine]&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span>--index<span class="w"> </span>https://flashinfer.ai/whl/cu129<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span>--index<span class="w"> </span>https://flashinfer.ai/whl/<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span>--index<span class="w"> </span>https://download.pytorch.org/whl/cu129<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span>--index<span class="w"> </span>https://wheels.vllm.ai/0.27.0/cu129<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">  </span>--index-strategy<span class="w"> </span>unsafe-best-match
-</span></code></pre></div>
-<div class="admonition info">
-<p class="admonition-title">Why <code>--index-strategy unsafe-best-match</code></p>
-<p>FlashInfer publishes wheels to flashinfer.ai, but <code>flashinfer-python</code>
-also appears on the PyTorch index at older versions. uv's default
-<code>first-match</code> strategy stops at the first index that contains a
-package name, so it picks up the wrong version from the PyTorch
-index and fails to resolve. <code>--index-strategy unsafe-best-match</code>
-tells uv to consider all indexes and pick the best matching version.</p>
-</div>
-</div>
-</div>
-</div>
-</div>
-<div class="tabbed-block">
-<p>On <strong>macOS</strong>, PyTorch ships standard wheels on PyPI, so no extra indexes are needed.</p>
-<p>On <strong>Linux</strong>, the CPU-only PyTorch wheels (<code>+cpu</code> local version) are hosted
-on a separate PyTorch index.</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="3:4"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><input id="__tabbed_3_3" name="__tabbed_3" type="radio" /><input id="__tabbed_3_4" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1">pip (macOS)</label><label for="__tabbed_3_2">pip (Linux)</label><label for="__tabbed_3_3">uv (macOS)</label><label for="__tabbed_3_4">uv (Linux)</label></div>
-<div class="tabbed-content">
-<div class="tabbed-block">
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;nemo-safe-synthesizer[cpu,engine]&quot;</span>
-</span></code></pre></div>
-</div>
-<div class="tabbed-block">
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;nemo-safe-synthesizer[cpu,engine]&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>--extra-index-url<span class="w"> </span>https://download.pytorch.org/whl/cpu
-</span></code></pre></div>
-</div>
-<div class="tabbed-block">
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>uv<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;nemo-safe-synthesizer[cpu,engine]&quot;</span>
-</span></code></pre></div>
-</div>
-<div class="tabbed-block">
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>uv<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;nemo-safe-synthesizer[cpu,engine]&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span>--index<span class="w"> </span>https://download.pytorch.org/whl/cpu<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span>--index-strategy<span class="w"> </span>unsafe-best-match
-</span></code></pre></div>
-</div>
-</div>
-</div>
+<p>CUDA 13.0 requires an NVIDIA driver version 580.65.06 or newer.</p>
 <div class="admonition warning">
-<p class="admonition-title">Development use only</p>
+<p class="admonition-title">CPU installation is for development use only</p>
 <p>The CPU install does not support training or generation. Use it to
 validate configuration, explore the CLI, or import config classes in
 code. An A100 or larger GPU is required to run the full pipeline.</p>
 </div>
-</div>
-<div class="tabbed-block">
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>--gpus<span class="w"> </span>all<span class="w"> </span>--shm-size<span class="o">=</span>1g<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span>--user<span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>id<span class="w"> </span>-u<span class="k">)</span><span class="s2">:</span><span class="k">$(</span>id<span class="w"> </span>-g<span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span>-v<span class="w"> </span>/path/to/input:/workspace/input:ro<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">  </span>-v<span class="w"> </span>/path/to/config:/workspace/config:ro<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">  </span>-v<span class="w"> </span>/path/to/artifacts:/workspace/artifacts<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">  </span>-v<span class="w"> </span>/path/to/hf-cache:/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">  </span>ghcr.io/nvidia-nemo/safe-synthesizer:latest-cu129<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">  </span>run<span class="w"> </span>--config<span class="w"> </span>/workspace/config/config.yaml<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">  </span>--data-source<span class="w"> </span>/workspace/input/input.csv<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">  </span>--artifact-path<span class="w"> </span>/workspace/artifacts
+<p>To customize the package source or installation command, use <code>DRY_RUN=1</code> with the desired
+<code>CUDA</code> setting. The installer prints the complete <code>uv pip</code> command without
+running it. Copy that command, edit it, and run it manually. For example,</p>
+<div class="language-bash highlight"><span class="filename">Preview the installation command</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nv">DRY_RUN</span><span class="o">=</span><span class="m">1</span><span class="w"> </span><span class="nv">CUDA</span><span class="o">=</span><span class="m">130</span><span class="w"> </span>./install_nss.sh
+</span></code></pre></div>
+<h3 id="docker-linux-with-nvidia-gpu">Docker (Linux with NVIDIA GPU)<a class="headerlink" href="#docker-linux-with-nvidia-gpu" title="Permanent link">&para;</a></h3>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>--gpus<span class="w"> </span>all<span class="w"> </span>--shm-size<span class="o">=</span>1g<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span>--user<span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>id<span class="w"> </span>-u<span class="k">)</span><span class="s2">:</span><span class="k">$(</span>id<span class="w"> </span>-g<span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>-v<span class="w"> </span>/path/to/input:/workspace/input:ro<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span>-v<span class="w"> </span>/path/to/config:/workspace/config:ro<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">  </span>-v<span class="w"> </span>/path/to/artifacts:/workspace/artifacts<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">  </span>-v<span class="w"> </span>/path/to/hf-cache:/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">  </span>ghcr.io/nvidia-nemo/safe-synthesizer:latest-cu129<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">  </span>run<span class="w"> </span>--config<span class="w"> </span>/workspace/config/config.yaml<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">  </span>--data-source<span class="w"> </span>/workspace/input/input.csv<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">  </span>--artifact-path<span class="w"> </span>/workspace/artifacts
 </span></code></pre></div>
 <p>The public image contains the runtime, not input data or configuration.
 <code>latest-cu129</code> is suitable for evaluation; select an approved versioned
 <code>cu129</code> tag or digest for reproducible workloads. No local Python install
 or source build is needed. See <a href="../docker/">Docker</a> for tag selection,
 directory preparation, secrets, mounts, and offline usage.</p>
-</div>
-<div class="tabbed-block">
-<p>The bare package has no PyTorch or FlashInfer dependencies.</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="4:2"><input checked="checked" id="__tabbed_4_1" name="__tabbed_4" type="radio" /><input id="__tabbed_4_2" name="__tabbed_4" type="radio" /><div class="tabbed-labels"><label for="__tabbed_4_1">pip</label><label for="__tabbed_4_2">uv</label></div>
-<div class="tabbed-content">
-<div class="tabbed-block">
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;nemo-safe-synthesizer&quot;</span>
-</span></code></pre></div>
-</div>
-<div class="tabbed-block">
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>uv<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;nemo-safe-synthesizer&quot;</span>
-</span></code></pre></div>
-</div>
-</div>
-</div>
+<h3 id="bare-package-for-config-definitions">Bare Package for Config Definitions<a class="headerlink" href="#bare-package-for-config-definitions" title="Permanent link">&para;</a></h3>
+<p>The bare package has no PyTorch or FlashInfer dependencies. To install it,
+generate a command with <code>DRY_RUN=1</code>, then remove the runtime extras and their
+package indexes before running the edited command.</p>
 <div class="admonition note">
 <p class="admonition-title">Limited use</p>
 <p>The bare package includes only the Pydantic configuration models -- no
@@ -9794,30 +9769,27 @@ Service or any Python project that needs to construct or validate
       pydantic-model
   " href="../../reference/nemo_safe_synthesizer/config/parameters/#nemo_safe_synthesizer.config.parameters.SafeSynthesizerParameters"><code>SafeSynthesizerParameters</code></a> without pulling in the full ML stack.</p>
 </div>
-</div>
-</div>
-</div>
 <h3 id="verify">Verify<a class="headerlink" href="#verify" title="Permanent link">&para;</a></h3>
 <p>After installing, activate your Python virtual environment and confirm the CLI is available:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>safe-synthesizer<span class="w"> </span>--version
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>safe-synthesizer<span class="w"> </span>--help
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>safe-synthesizer<span class="w"> </span>--version
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>safe-synthesizer<span class="w"> </span>--help
 </span></code></pre></div>
 <p>Expected output:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>Usage: safe-synthesizer [OPTIONS] COMMAND [ARGS]...
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>  NeMo Safe Synthesizer command-line interface. This application is used to
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>  run the Safe Synthesizer pipeline. It can be used to train a model, generate
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>  synthetic data, and evaluate the synthetic data. It can also be used to
-</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>  modify a config file.
-</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>
-</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>Options:
-</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>  --version  Show the version and exit.
-</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a>  --help  Show this message and exit.
-</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a>
-</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a>Commands:
-</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a>  artifacts  Artifacts management commands.
-</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a>  config     Manage Safe Synthesizer configurations.
-</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a>  run        Run the Safe Synthesizer end-to-end pipeline.
+<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>Usage: safe-synthesizer [OPTIONS] COMMAND [ARGS]...
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>  NeMo Safe Synthesizer command-line interface. This application is used to
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>  run the Safe Synthesizer pipeline. It can be used to train a model, generate
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>  synthetic data, and evaluate the synthetic data. It can also be used to
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>  modify a config file.
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>Options:
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>  --version  Show the version and exit.
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>  --help  Show this message and exit.
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>Commands:
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a>  artifacts  Artifacts management commands.
+</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>  config     Manage Safe Synthesizer configurations.
+</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a>  run        Run the Safe Synthesizer end-to-end pipeline.
 </span></code></pre></div>
 <h3 id="optional-agent-skill">Optional Agent Skill<a class="headerlink" href="#optional-agent-skill" title="Permanent link">&para;</a></h3>
 <p>This repository includes an Agent Skill at <code>skills/safe-synthesizer/</code>. The
@@ -9836,10 +9808,10 @@ user-level skill directory, see <code>skills/safe-synthesizer/README.md</code>.<
 <hr />
 <h2 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
 <p>Create a synthetic version of an input dataset in one step by running:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--data-source<span class="w"> </span>data.csv
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--data-source<span class="w"> </span>data.csv
 </span></code></pre></div>
 <p>You can use <a href="https://huggingface.co/datasets/clinc/clinc_oos">Clinc OOS</a> as an example dataset: export the split you want (for example the training split) to a CSV file, then point <code>--data-source</code> at that file:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--data-source<span class="w"> </span>clinc_oos.csv
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--data-source<span class="w"> </span>clinc_oos.csv
 </span></code></pre></div>
 <p>Replace <code>data.csv</code> (or <code>clinc_oos.csv</code>) with your actual input file. Any <code>.csv</code>, <code>.json</code>, <code>.jsonl</code>,
 <code>.parquet</code>, or <code>.txt</code> file works -- see <a href="../running/#data-input">Running Safe Synthesizer -- Data Input</a> for all supported formats.</p>

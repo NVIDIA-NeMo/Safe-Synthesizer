@@ -9456,11 +9456,11 @@
 <p>Each score maps to concrete remediation guidance in the documentation. The <a href="../../product-overview/pipeline/">Product Overview</a> covers the full pipeline in more detail, and <a href="../../product-overview/evaluation/">Evaluation</a> explains the metrics.</p>
 <h2 id="getting-started">Getting Started<a class="headerlink" href="#getting-started" title="Permanent link">&para;</a></h2>
 <p><a href="../../user-guide/getting-started/#installation">Install</a> the package on a Linux machine with an NVIDIA GPU:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;nemo-safe-synthesizer[cu129,engine]&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span>--extra-index-url<span class="w"> </span>https://download.pytorch.org/whl/cu129<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span>--extra-index-url<span class="w"> </span>https://flashinfer.ai/whl/cu129<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span>--extra-index-url<span class="w"> </span>https://flashinfer.ai/whl/<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span>--extra-index-url<span class="w"> </span>https://wheels.vllm.ai/0.27.0/cu129
+<div class="language-bash highlight"><span class="filename">Install Safe Synthesizer</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>curl<span class="w"> </span>-fsSLO<span class="w"> </span>https://github.com/NVIDIA-NeMo/Safe-Synthesizer/releases/latest/download/install_nss.sh
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>chmod<span class="w"> </span>+x<span class="w"> </span>install_nss.sh
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="hll"><span class="nv">UV_PROJECT_ENVIRONMENT</span><span class="o">=</span>.venv<span class="w"> </span>./install_nss.sh
+</span></span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="nb">source</span><span class="w"> </span>.venv/bin/activate
 </span></code></pre></div>
 <p>The quickest way to run your first pipeline is the CLI:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--data-source<span class="w"> </span>data.csv

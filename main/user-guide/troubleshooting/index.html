@@ -10476,8 +10476,8 @@ fast tokenizer (most popular models do; check
 <code>AutoTokenizer.from_pretrained(model).is_fast</code>).</p>
 <h3 id="unsupported-python-versions">Unsupported Python Versions<a class="headerlink" href="#unsupported-python-versions" title="Permanent link">&para;</a></h3>
 <p>Safe Synthesizer supports Python 3.11, 3.12, 3.13, and 3.14. Python 3.15+ is
-not supported. Attempting to install on an unsupported interpreter fails during
-<code>pip install</code> or <code>uv pip install</code>.</p>
+not supported. Attempting to install on an unsupported interpreter fails when
+the installer's generated <code>uv pip</code> command runs.</p>
 <p>To fix, create a virtual environment with a supported interpreter:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>uv<span class="w"> </span>venv<span class="w"> </span>--python<span class="w"> </span><span class="m">3</span>.13
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nb">source</span><span class="w"> </span>.venv/bin/activate
