@@ -19,13 +19,13 @@ Read detailed usage below, or jump to the documentation with [Getting Started](h
 ### Prerequisites
 
 - Python 3.11–3.14 (`.python-version` pins 3.13 for local/dev bootstrap; any 3.11, 3.12, 3.13, or 3.14 interpreter works)
-- [uv](https://docs.astral.sh/uv/) (recommended) or pip -- Python package manager
+- [uv](https://docs.astral.sh/uv/) -- Python package manager
 - NVIDIA GPU (A100 or larger) for training and generation
 - Linux only -- macOS, Windows, and Apple Silicon are not supported for training or generation. A CPU-only install is available for development and configuration validation.
 
 ### Installation
 
-For most installations, download the installer from the latest stable GitHub
+Download the installer from the latest stable GitHub
 release. The released script pins NeMo Safe Synthesizer, its constraints, and
 the package indexes that support that version.
 
@@ -33,37 +33,32 @@ the package indexes that support that version.
 curl -fsSLO https://github.com/NVIDIA-NeMo/Safe-Synthesizer/releases/latest/download/install_nss.sh
 chmod +x install_nss.sh
 
-# CUDA 12.9 is the default.
 ./install_nss.sh
-CUDA=130 ./install_nss.sh
-CUDA=cpu ./install_nss.sh
-```
-
-The installer requires [uv](https://docs.astral.sh/uv/). Use `DRY_RUN=1` to
-inspect its command without installing. Use the manual commands below when you
-need to customize the package source or installation command.
-
-```bash
-# With uv (recommended):
-uv pip install "nemo-safe-synthesizer[cu129,engine]" \
-  --index https://flashinfer.ai/whl/cu129 \
-  --index https://flashinfer.ai/whl/ \
-  --index https://download.pytorch.org/whl/cu129 \
-  --index https://wheels.vllm.ai/0.27.0/cu129 \
-  --index-strategy unsafe-best-match
-
-# With pip:
-pip install "nemo-safe-synthesizer[cu129,engine]" \
-  --extra-index-url https://download.pytorch.org/whl/cu129 \
-  --extra-index-url https://flashinfer.ai/whl/cu129 \
-  --extra-index-url https://flashinfer.ai/whl/ \
-  --extra-index-url https://wheels.vllm.ai/0.27.0/cu129
+source .venv/bin/activate
 ```
 
 > [!NOTE]
 > This project will download and install additional third-party open source
 > software projects. Review the license terms of these open source projects
 > before use.
+
+The installer uses CUDA 12.9 by default. To choose another runtime, set
+`CUDA`:
+
+```bash
+CUDA=130 ./install_nss.sh    # CUDA 13.0
+CUDA=cpu ./install_nss.sh    # CPU-only development and validation
+```
+
+CUDA 13.0 requires an NVIDIA driver version 580.65.06 or newer.
+
+To customize the package source or installation command, use `DRY_RUN=1` with the desired
+`CUDA` setting. The installer prints the complete `uv pip` command without
+running it. Copy that command, edit it, and run it manually. For example,
+
+```bash
+DRY_RUN=1 CUDA=130 ./install_nss.sh
+```
 
 Or install from source:
 

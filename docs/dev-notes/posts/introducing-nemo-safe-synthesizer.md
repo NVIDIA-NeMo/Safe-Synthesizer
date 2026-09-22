@@ -84,11 +84,11 @@ Each score maps to concrete remediation guidance in the documentation. The [Prod
 [Install](../../user-guide/getting-started.md#installation) the package on a Linux machine with an NVIDIA GPU:
 
 ```bash
-pip install "nemo-safe-synthesizer[cu129,engine]" \
-  --extra-index-url https://download.pytorch.org/whl/cu129 \
-  --extra-index-url https://flashinfer.ai/whl/cu129 \
-  --extra-index-url https://flashinfer.ai/whl/ \
-  --extra-index-url https://wheels.vllm.ai/0.27.0/cu129
+curl -fsSLO https://github.com/NVIDIA-NeMo/Safe-Synthesizer/releases/latest/download/install_nss.sh
+chmod +x install_nss.sh
+
+./install_nss.sh
+source .venv/bin/activate
 ```
 
 The quickest way to run your first pipeline is the CLI:
