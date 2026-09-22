@@ -83,7 +83,7 @@ Each score maps to concrete remediation guidance in the documentation. The [Prod
 
 [Install](../../user-guide/getting-started.md#installation) the package on a Linux machine with an NVIDIA GPU:
 
-```bash
+```bash title="Install Safe Synthesizer" hl_lines="4"
 curl -fsSLO https://github.com/NVIDIA-NeMo/Safe-Synthesizer/releases/latest/download/install_nss.sh
 chmod +x install_nss.sh
 

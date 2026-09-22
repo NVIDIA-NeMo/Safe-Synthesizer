@@ -220,12 +220,16 @@ run_install() {
         [[ "$DRY_RUN" == "1" ]] || "${VENV_CMD[@]}"
     fi
 
-    printf 'Installing with:'
+    if [[ "$DRY_RUN" != "1" ]]; then
+        printf 'Installing with:\n'
+    fi
     if (( ${#PACKAGE_OVERRIDES[@]} )); then
         overrides_input="$(IFS=$'\n'; printf '%s' "${PACKAGE_OVERRIDES[*]}")"
-        printf ' echo %q |' "$overrides_input"
+        printf 'echo %q | ' "$overrides_input"
     fi
-    printf ' %q' "${INSTALL_CMD[@]}"
+    # Print the first argument separately so later arguments have separators without a leading space.
+    printf '%q' "${INSTALL_CMD[0]}"
+    printf ' %q' "${INSTALL_CMD[@]:1}"
     printf '\n'
 
     if [[ "$DRY_RUN" != "1" ]]; then

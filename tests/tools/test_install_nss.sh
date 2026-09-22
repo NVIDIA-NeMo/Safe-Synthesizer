@@ -62,8 +62,8 @@ make_installer_fixture "$without_overrides_installer" "$INSTALLER"
 new_log dry
 output="$(PATH="${fake_bin}:$PATH" DRY_RUN=1 CUDA=130 UV_PROJECT_ENVIRONMENT="${test_dir}/dry env" "$with_overrides_installer")"
 assert_file_absent "$FAKE_SMI_LOG"; assert_file_absent "$FAKE_UV_LOG"
-[[ "$output" == *"Installing with:"* && "$output" == *"--index https://pypi.nvidia.com"* ]]
-[[ "$output" == *" echo "*" | uv pip install "*" --overrides - "* ]]
+[[ "$output" != *"Installing with:"* && "$output" == *"--index https://pypi.nvidia.com"* ]]
+[[ "$output" == *$'\n'"echo test-override==1.2.3 | uv pip install "*" --overrides - "* ]]
 
 # CUDA 13 driver boundaries: reject below minimum before uv; warnings leave install available.
 for case in equal above; do

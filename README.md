@@ -33,7 +33,7 @@ the package indexes that support that version.
 curl -fsSLO https://github.com/NVIDIA-NeMo/Safe-Synthesizer/releases/latest/download/install_nss.sh
 chmod +x install_nss.sh
 
-./install_nss.sh
+UV_PROJECT_ENVIRONMENT=.venv ./install_nss.sh
 source .venv/bin/activate
 ```
 

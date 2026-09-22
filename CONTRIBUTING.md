@@ -781,7 +781,8 @@ SMOKE_DIR=/tmp/nss-release-smoke
 SMOKE_VENV="${SMOKE_DIR}/.venv"
 mkdir -p "${SMOKE_DIR}"
 cd "${SMOKE_DIR}"
-gh release download "${RC_TAG}" --pattern install_nss.sh --clobber
+gh release download "${RC_TAG}" --repo NVIDIA-NeMo/Safe-Synthesizer \
+  --pattern install_nss.sh --clobber
 chmod +x install_nss.sh
 uv --no-config venv --clear --python 3.13 "${SMOKE_VENV}"
 UV_PROJECT_ENVIRONMENT="${SMOKE_VENV}" NSS_INSTALLER_ISOLATED=1 \

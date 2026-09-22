@@ -12,6 +12,14 @@ does at each stage.
 
 ## Installation
 
+!!! tip "Skip installation entirely"
+    [![Launch on Brev](https://brev-assets.s3.us-west-1.amazonaws.com/nv-lb-dark.svg#only-light)](https://brev.nvidia.com/launchable/deploy/now?launchableID=env-3HBtA2NKQaBukL2TyDphWUcvQ17)
+    [![Launch on Brev](https://brev-assets.s3.us-west-1.amazonaws.com/nv-lb-light.svg#only-dark)](https://brev.nvidia.com/launchable/deploy/now?launchableID=env-3HBtA2NKQaBukL2TyDphWUcvQ17)
+
+    Deploys a GPU instance with everything below already done, plus the tutorial
+    notebooks. Useful for evaluating Safe Synthesizer without a local NVIDIA GPU. The
+    instance bills continuously and cannot be paused -- delete it when you are finished.
+
 ### Prerequisites
 
 - Python 3.11–3.14 (dev tooling pins 3.13 via `.python-version` in the repo root)
@@ -27,14 +35,6 @@ does at each stage.
 
 ### Install the Package
 
-!!! tip "Skip installation entirely"
-    [![Launch on Brev](https://brev-assets.s3.us-west-1.amazonaws.com/nv-lb-dark.svg#only-light)](https://brev.nvidia.com/launchable/deploy/now?launchableID=env-3HBtA2NKQaBukL2TyDphWUcvQ17)
-    [![Launch on Brev](https://brev-assets.s3.us-west-1.amazonaws.com/nv-lb-light.svg#only-dark)](https://brev.nvidia.com/launchable/deploy/now?launchableID=env-3HBtA2NKQaBukL2TyDphWUcvQ17)
-
-    Deploys a GPU instance with everything below already done, plus the tutorial
-    notebooks. Useful for evaluating Safe Synthesizer without a local NVIDIA GPU. The
-    instance bills continuously and cannot be paused -- delete it when you are finished.
-
 Download the installer from the latest stable GitHub
 release. Each released script pins the package version, constraints, and
 package indexes that were tested together.
@@ -43,7 +43,7 @@ package indexes that were tested together.
 curl -fsSLO https://github.com/NVIDIA-NeMo/Safe-Synthesizer/releases/latest/download/install_nss.sh
 chmod +x install_nss.sh
 
-./install_nss.sh             # CUDA 12.9 (default)
+UV_PROJECT_ENVIRONMENT=.venv ./install_nss.sh  # CUDA 12.9 (default)
 source .venv/bin/activate
 ```
 
@@ -71,7 +71,7 @@ To customize the package source or installation command, use `DRY_RUN=1` with th
 `CUDA` setting. The installer prints the complete `uv pip` command without
 running it. Copy that command, edit it, and run it manually. For example,
 
-```bash
+```bash title="Preview the installation command"
 DRY_RUN=1 CUDA=130 ./install_nss.sh
 ```
 
