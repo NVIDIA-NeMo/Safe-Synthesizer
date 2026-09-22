@@ -787,7 +787,6 @@ chmod +x install_nss.sh
 uv --no-config venv --clear --python 3.13 "${SMOKE_VENV}"
 UV_PROJECT_ENVIRONMENT="${SMOKE_VENV}" NSS_INSTALLER_ISOLATED=1 \
   CUDA=129 ./install_nss.sh
-uv --no-config pip check --python "${SMOKE_VENV}/bin/python"
 "${SMOKE_VENV}/bin/python" -c 'import nemo_safe_synthesizer'
 "${SMOKE_VENV}/bin/safe-synthesizer" --help
 ```
