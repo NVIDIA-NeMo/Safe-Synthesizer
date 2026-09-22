@@ -111,8 +111,8 @@ fast tokenizer (most popular models do; check
 ### Unsupported Python Versions
 
 Safe Synthesizer supports Python 3.11, 3.12, 3.13, and 3.14. Python 3.15+ is
-not supported. Attempting to install on an unsupported interpreter fails during
-`pip install` or `uv pip install`.
+not supported. Attempting to install on an unsupported interpreter fails when
+the installer's generated `uv pip` command runs.
 
 To fix, create a virtual environment with a supported interpreter:
 

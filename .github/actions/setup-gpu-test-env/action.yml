@@ -54,7 +54,10 @@ runs:
     - name: Install wheel with unpinned GPU dependencies
       shell: bash
       env:
-        CUDA_EXTRA: ${{ inputs.cuda-extra }}
+        CUDA: ${{ inputs.cuda-extra }}
+        NSS_INSTALLER_ISOLATED: "1"
+        # Install test dependencies from the package's pyproject.toml, but use the wheel to install the package.
+        PRIVATE_DEP_GROUPS: "test"
       run: |
         set -euo pipefail
         shopt -s nullglob
@@ -65,73 +68,12 @@ runs:
         fi
 
         wheel="${wheels[0]}"
-        venv_path="${UV_PROJECT_ENVIRONMENT:-${GITHUB_WORKSPACE}/.venv}"
-        uv --no-config venv --clear --python "${PYTHON_VERSION}" "${venv_path}"
-        python_bin="${venv_path}/bin/python"
+        export UV_PROJECT_ENVIRONMENT="${UV_PROJECT_ENVIRONMENT:-${GITHUB_WORKSPACE}/.venv}"
+        uv --no-config venv --clear --python "${PYTHON_VERSION}" "${UV_PROJECT_ENVIRONMENT}"
+        PACKAGE_WHEEL="${wheel}" \
+          "${GITHUB_WORKSPACE}/install_nss.sh"
+        python_bin="${UV_PROJECT_ENVIRONMENT}/bin/python"
 
-        index_args=()
-        index_count=0
-        while IFS= read -r url; do
-          [[ -n "${url}" ]] || continue
-          index_args+=(--index "${url}")
-          index_count=$((index_count + 1))
-          echo "CUDA index: ${url}"
-        done < <("${python_bin}" - "${GITHUB_WORKSPACE}/pyproject.toml" "${CUDA_EXTRA}" <<'PY'
-        import sys
-        import tomllib
-
-        with open(sys.argv[1], "rb") as handle:
-            uv_config = tomllib.load(handle)["tool"]["uv"]
-
-        indexes = uv_config["index"]
-        cuda_extra = sys.argv[2]
-
-        # Some indexes are reached only through [tool.uv.sources] and carry no
-        # CUDA variant in their name or URL (flashinfer-cubin serves a single
-        # https://flashinfer.ai/whl/ for every extra). We pass --no-sources
-        # below, so collect those by their declared extra or they are dropped.
-        source_indexes = {
-            entry["index"]
-            for value in uv_config.get("sources", {}).values()
-            for entry in (value if isinstance(value, list) else [value])
-            if isinstance(entry, dict)
-            and entry.get("extra") == cuda_extra
-            and "index" in entry
-        }
-
-        print(
-            "\n".join(
-                index["url"]
-                for index in indexes
-                if index["name"].endswith(f"-{cuda_extra}")
-                or f"/{cuda_extra}" in index["url"]
-                or index["name"] in source_indexes
-            )
-        )
-        PY
-        )
-
-        if (( index_count < 3 )); then
-          echo "Error: expected 3+ ${CUDA_EXTRA} indexes in pyproject.toml, found ${index_count}" >&2
-          exit 1
-        fi
-
-        uv --no-config pip install \
-          --python "${python_bin}" \
-          --no-sources \
-          --default-index https://pypi.org/simple \
-          "${index_args[@]}" \
-          --index-strategy unsafe-best-match \
-          "nemo-safe-synthesizer[${CUDA_EXTRA},engine] @ file://${wheel}" \
-          "pytest>=9.0.3" \
-          "pytest-asyncio>=0.24.0" \
-          "pytest-cov>=6.0.0" \
-          "pytest-env>=1.1.0" \
-          "pytest-subtests>=0.13.1" \
-          "pytest-timeout>=2.3.1" \
-          "pytest-xdist>=3.5.0"
-
-        uv --no-config pip check --python "${python_bin}"
         "${python_bin}" -c \
           "from importlib.metadata import version; from nemo_safe_synthesizer.package_info import __version__; assert __version__ == version('nemo-safe-synthesizer')"
         "${python_bin}" - <<'PY'
@@ -147,5 +89,5 @@ runs:
         print("device count:", torch.cuda.device_count())
         PY
 
-        echo "UV_PROJECT_ENVIRONMENT=${venv_path}" >> "${GITHUB_ENV}"
+        echo "UV_PROJECT_ENVIRONMENT=${UV_PROJECT_ENVIRONMENT}" >> "${GITHUB_ENV}"
         echo "UV_NO_SYNC=1" >> "${GITHUB_ENV}"

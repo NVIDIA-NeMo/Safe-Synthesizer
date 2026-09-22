@@ -117,8 +117,8 @@ engine = [
 cpu = [
     "accelerate>=1.1.0",
     "bitsandbytes>=0.46.1",
-    "flashinfer-python==0.6.16.post3; sys_platform == 'linux'",
-    "flashinfer-cubin==0.6.16.post3; sys_platform == 'linux'",
+    "flashinfer-python==0.6.16.post4; sys_platform == 'linux'",
+    "flashinfer-cubin==0.6.16.post4; sys_platform == 'linux'",
     "gliner",
     "kernels>=0.12.1,<0.15",
     "opacus",
@@ -141,8 +141,8 @@ cpu = [
 cu129 = [
     "accelerate>=1.1.0",
     "bitsandbytes>=0.46.1",
-    "flashinfer-python==0.6.16.post3; sys_platform == 'linux'",
-    "flashinfer-cubin==0.6.16.post3; sys_platform == 'linux'",
+    "flashinfer-python==0.6.16.post4; sys_platform == 'linux'",
+    "flashinfer-cubin==0.6.16.post4; sys_platform == 'linux'",
     "gliner",
     "kernels>=0.12.1,<0.15",
     "opacus",
@@ -151,7 +151,7 @@ cu129 = [
     "openai>=2.25.0",
     "trl>=0.23.0",
     "xgrammar>=0.2.0; sys_platform == 'linux'",
-    "flashinfer-jit-cache==0.6.16.post3+cu129; sys_platform == 'linux'",
+    "flashinfer-jit-cache==0.6.16.post4+cu129; sys_platform == 'linux'",
     "nvidia-cublas-cu12; sys_platform == 'linux'",
     "nvidia-ml-py; sys_platform == 'linux'",
     "torch-c-dlpack-ext",
@@ -166,8 +166,8 @@ cu129 = [
 cu130 = [
     "accelerate>=1.1.0",
     "bitsandbytes>=0.46.1",
-    "flashinfer-python==0.6.16.post3; sys_platform == 'linux'",
-    "flashinfer-cubin==0.6.16.post3; sys_platform == 'linux'",
+    "flashinfer-python==0.6.16.post4; sys_platform == 'linux'",
+    "flashinfer-cubin==0.6.16.post4; sys_platform == 'linux'",
     "gliner",
     "kernels>=0.12.1,<0.15",
     "opacus",
@@ -176,7 +176,7 @@ cu130 = [
     "openai>=2.25.0",
     "trl>=0.23.0",
     "xgrammar>=0.2.0; sys_platform == 'linux'",
-    "flashinfer-jit-cache==0.6.16.post3+cu130; sys_platform == 'linux'",
+    "flashinfer-jit-cache==0.6.16.post4+cu130; sys_platform == 'linux'",
     "nvidia-cublas; sys_platform == 'linux'",
     "nvidia-ml-py; sys_platform == 'linux'",
     "torch-c-dlpack-ext",
@@ -250,6 +250,12 @@ constraint-dependencies = [
     "starlette>=1.3.1",
     "tornado>=6.5.8",
     "urllib3>=2.7.0",
+]
+
+# vLLM 0.27.0 pins post3, which fails at import time on Python 3.10 and 3.11.
+# post4 is the upstream compatibility-only hotfix for those interpreters.
+override-dependencies = [
+    "flashinfer-python==0.6.16.post4; sys_platform == 'linux'",
 ]
 
 # >>> BEGIN GENERATED CUDA UV SOURCES AND INDEXES - DO NOT EDIT <<<
