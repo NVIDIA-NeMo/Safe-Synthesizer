@@ -34,7 +34,7 @@
 {% for row in ctx.autocorrelation_similarity.figures %}
 <figure>
     <h3 class="chart-subheading">{{ row.title }}</h3>
-    {{ row.html }}
+    {{ row.html | safe }}
 </figure>
 {% endfor %}
 {% endif %}

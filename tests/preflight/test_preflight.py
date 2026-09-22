@@ -813,19 +813,36 @@ class TestTimestampColumnCheck:
 @pytest.mark.unit
 class TestTimeSeriesValueColumnCheck:
     @staticmethod
-    def _make_config(value_columns: list[str]) -> SafeSynthesizerParameters:
+    def _make_config(
+        value_columns: list[str],
+        *,
+        evaluation_enabled: bool = True,
+        timestamp_column: str | None = None,
+        group_column: str | None = None,
+    ) -> SafeSynthesizerParameters:
         return SafeSynthesizerParameters(
-            time_series=TimeSeriesParameters(is_timeseries=True, timestamp_interval_seconds=60),
+            data=DataParameters(group_training_examples_by=group_column),
+            time_series=TimeSeriesParameters(
+                is_timeseries=True,
+                timestamp_column=timestamp_column,
+                timestamp_interval_seconds=60,
+            ),
             evaluation=EvaluationParameters(
+                enabled=evaluation_enabled,
                 time_series=TimeSeriesEvaluationParameters(
                     enabled=True,
                     autocorrelation=AutocorrelationSimilarityParameters(value_columns=value_columns),
-                )
+                ),
             ),
         )
 
     def test_disabled_when_time_series_evaluation_is_disabled(self, default_config):
         assert TimeSeriesValueColumnCheck().enabled(make_ctx(config=default_config)) is False
+
+    def test_disabled_when_global_evaluation_is_disabled(self):
+        config = self._make_config(["value"], evaluation_enabled=False)
+
+        assert TimeSeriesValueColumnCheck().enabled(make_ctx(config=config)) is False
 
     def test_missing_explicit_column_reports_error(self):
         config = self._make_config(["missing"])
@@ -844,6 +861,29 @@ class TestTimeSeriesValueColumnCheck:
         )
 
         assert any(issue.code == "evaluation_column_not_numeric" for issue in issues)
+
+    @pytest.mark.parametrize(
+        ("column", "timestamp_column", "group_column"),
+        [
+            ("time", "time", None),
+            ("group", None, "group"),
+        ],
+    )
+    def test_reserved_explicit_column_reports_error(
+        self,
+        column: str,
+        timestamp_column: str | None,
+        group_column: str | None,
+    ):
+        config = self._make_config(
+            [column],
+            timestamp_column=timestamp_column,
+            group_column=group_column,
+        )
+
+        issues = TimeSeriesValueColumnCheck().run(make_ctx(config=config, data=pd.DataFrame({column: [1, 2, 3]})))
+
+        assert any(issue.code == "evaluation_column_reserved" for issue in issues)
 
 
 @pytest.mark.unit

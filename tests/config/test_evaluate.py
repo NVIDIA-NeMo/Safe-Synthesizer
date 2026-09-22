@@ -32,3 +32,15 @@ def test_time_series_evaluation_accepts_time_series_mode() -> None:
     )
 
     assert config.evaluation.time_series.enabled is True
+
+
+def test_global_evaluation_disable_overrides_invalid_time_series_gate_combination() -> None:
+    config = SafeSynthesizerParameters(
+        evaluation=EvaluationParameters(
+            enabled=False,
+            time_series=TimeSeriesEvaluationParameters(enabled=True),
+        )
+    )
+
+    assert config.evaluation.enabled is False
+    assert config.evaluation.time_series.enabled is True

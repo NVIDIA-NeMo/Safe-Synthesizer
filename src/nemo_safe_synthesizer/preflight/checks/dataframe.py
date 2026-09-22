@@ -187,14 +187,24 @@ class TimeSeriesValueColumnCheck(DataFrameCheck):
     def enabled(self, ctx: PreflightContext) -> bool:
         if not super().enabled(ctx):
             return False
-        return ctx.config.evaluation.time_series.enabled
+        return ctx.config.evaluation.enabled and ctx.config.evaluation.time_series.enabled
 
     @override
     def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
         columns = ctx.config.evaluation.time_series.autocorrelation.value_columns
         if columns is None:
             return
+        reserved_columns = {
+            ctx.config.time_series.timestamp_column,
+            ctx.config.data.group_training_examples_by,
+        }
         for column in columns:
+            if column in reserved_columns:
+                collector.error(
+                    "evaluation_column_reserved",
+                    f"Autocorrelation value column {column!r} is reserved for timestamp ordering or sequence grouping.",
+                )
+                continue
             if column not in ctx.data:
                 collector.error(
                     "evaluation_column_not_found",
