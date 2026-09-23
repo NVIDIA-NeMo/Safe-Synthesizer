@@ -19,13 +19,12 @@ from __future__ import annotations
 import random
 from collections import defaultdict
 from functools import cached_property
-from typing import NotRequired
+from typing import Any
 
 import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
 from pydantic import Field
-from typing_extensions import TypedDict
 
 from ...artifacts.analyzers.field_features import FieldType
 from ...config.evaluate import AutocorrelationSimilarityParameters
@@ -33,79 +32,14 @@ from ...config.parameters import SafeSynthesizerParameters
 from ...defaults import PSEUDO_GROUP_COLUMN
 from ...evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from ...evaluation.data_model.evaluation_score import EvaluationScore
+from ...observability import get_logger
 from .component import Component
+
+logger = get_logger(__name__)
 
 _MIN_VALID_PAIRS = 3
 _GROUP_SELECTION_SEED = 2112
 _CONSTANT_TOLERANCE_FACTOR = 32.0
-
-
-class _ProfileMetrics(TypedDict):
-    """Calculated values shared by stored autocorrelation profiles."""
-
-    lags: list[int]
-    effective_max_lag: int
-    evaluated_lags: int
-    error: float
-    similarity: float
-    training_acf: list[float | None]
-    synthetic_acf: list[float | None]
-    training_pair_support: list[int]
-    synthetic_pair_support: list[int]
-    reason: NotRequired[str]
-
-
-class AutocorrelationProfile(_ProfileMetrics):
-    """Stored profile for one group and numeric value column."""
-
-    group: str | None
-    column: str
-
-
-class SkippedAutocorrelationProfile(TypedDict):
-    """Explanation for one unavailable group and column profile."""
-
-    group: str | None
-    column: str
-    reason: str
-
-
-class AutocorrelationCounts(TypedDict):
-    """Counts describing autocorrelation evaluation coverage."""
-
-    groups: int
-    shared_groups: int
-    omitted_shared_groups: int
-    columns: int
-    evaluated_profiles: int
-    skipped: int
-
-
-class AutocorrelationGroupSelection(TypedDict):
-    """Diagnostic description of bounded group selection."""
-
-    shared_groups: int
-    evaluated_groups: int
-    omitted_shared_groups: int
-    policy: str
-
-
-class AutocorrelationDetails(TypedDict, total=False):
-    """Typed diagnostic payload exposed to report rendering."""
-
-    evaluation_mode: str
-    timestamp_column: str | None
-    group_column: str | None
-    max_lag: int
-    min_points: int
-    counts: AutocorrelationCounts
-    group_selection: AutocorrelationGroupSelection
-    per_group: list[dict[str, object]]
-    per_column: list[dict[str, object]]
-    profiles: list[AutocorrelationProfile]
-    skipped: list[SkippedAutocorrelationProfile]
-    groups_only_in_training: list[str]
-    groups_only_in_synthetic: list[str]
 
 
 class AutocorrelationSimilarity(Component):
@@ -126,13 +60,13 @@ class AutocorrelationSimilarity(Component):
         default="Autocorrelation Similarity",
         description="Display name used in serialized evaluation results.",
     )
-    details: AutocorrelationDetails = Field(
+    details: dict[str, Any] = Field(
         default_factory=dict,
         description="Per-group/column autocorrelation profiles, skipped comparisons, and summaries.",
     )
 
     @cached_property
-    def jinja_context(self) -> dict[str, object]:
+    def jinja_context(self) -> dict[str, Any]:
         """Return score and diagnostic details for report rendering."""
         context = super().jinja_context
         context["details"] = self.details
@@ -147,9 +81,8 @@ class AutocorrelationSimilarity(Component):
 
         Report orchestration controls whether the optional metric runs.
         Calling this component directly always computes it with the supplied
-        configuration or isolated defaults. Expected data limitations are
-        represented as unavailable scores; unexpected internal errors
-        propagate to expose implementation defects.
+        configuration or isolated defaults. Evaluation failures are returned
+        in ``score.notes`` instead of aborting the full evaluation pipeline.
 
         Args:
             evaluation_datasets: Training and synthetic datasets to compare.
@@ -159,7 +92,13 @@ class AutocorrelationSimilarity(Component):
             A component containing the score, diagnostic details, and notes.
         """
         cfg = AutocorrelationSimilarity._resolve_config(config)
-        return AutocorrelationSimilarity._evaluate(evaluation_datasets, cfg, config)
+        # Optional metrics must fail independently so one diagnostic cannot
+        # prevent the rest of the evaluation report from being produced.
+        try:
+            return AutocorrelationSimilarity._evaluate(evaluation_datasets, cfg, config)
+        except Exception as exc:
+            logger.exception("Failed to compute Autocorrelation Similarity.")
+            return AutocorrelationSimilarity(score=EvaluationScore(notes=str(exc)))
 
     @staticmethod
     def _resolve_config(config: SafeSynthesizerParameters | None) -> AutocorrelationSimilarityParameters:
@@ -215,15 +154,15 @@ class AutocorrelationSimilarity(Component):
         if not groups:
             return AutocorrelationSimilarity(score=EvaluationScore(notes="No shared groups to evaluate."))
         omitted_groups = shared_group_count - len(groups)
-        group_selection: AutocorrelationGroupSelection = {
+        group_selection = {
             "shared_groups": shared_group_count,
             "evaluated_groups": len(groups),
             "omitted_shared_groups": omitted_groups,
             "policy": "seeded_random_sample" if omitted_groups else "all_shared_groups",
         }
 
-        profiles: list[AutocorrelationProfile] = []
-        skipped: list[SkippedAutocorrelationProfile] = []
+        profiles: list[dict[str, Any]] = []
+        skipped: list[dict[str, Any]] = []
         for group_value in groups:
             training_group = AutocorrelationSimilarity._group_frame(
                 datasets.training, group_column, group_value, timestamp_column
@@ -251,23 +190,22 @@ class AutocorrelationSimilarity(Component):
                 unavailable_note += (
                     f" Evaluated {len(groups)} of {shared_group_count} shared groups using a reproducible sample."
                 )
-            unavailable_details: AutocorrelationDetails = {
-                "counts": {
-                    "groups": len(groups),
-                    "shared_groups": shared_group_count,
-                    "omitted_shared_groups": omitted_groups,
-                    "columns": len(columns),
-                    "evaluated_profiles": 0,
-                    "skipped": len(skipped),
-                },
-                "group_selection": group_selection,
-                "skipped": skipped,
-                "groups_only_in_training": missing_training,
-                "groups_only_in_synthetic": missing_synthetic,
-            }
             return AutocorrelationSimilarity(
                 score=EvaluationScore(notes=unavailable_note),
-                details=unavailable_details,
+                details={
+                    "counts": {
+                        "groups": len(groups),
+                        "shared_groups": shared_group_count,
+                        "omitted_shared_groups": omitted_groups,
+                        "columns": len(columns),
+                        "evaluated_profiles": 0,
+                        "skipped": len(skipped),
+                    },
+                    "group_selection": group_selection,
+                    "skipped": skipped,
+                    "groups_only_in_training": missing_training,
+                    "groups_only_in_synthetic": missing_synthetic,
+                },
             )
 
         similarity = float(np.mean([item["similarity"] for item in profiles]))
@@ -280,7 +218,7 @@ class AutocorrelationSimilarity(Component):
         if notes:
             score.notes = " ".join(notes)
 
-        details: AutocorrelationDetails = {
+        details = {
             "evaluation_mode": "per_group" if group_column else "global",
             "timestamp_column": timestamp_column,
             "group_column": group_column,
@@ -306,39 +244,18 @@ class AutocorrelationSimilarity(Component):
 
     @staticmethod
     def _record_profile_result(
-        profiles: list[AutocorrelationProfile],
-        skipped: list[SkippedAutocorrelationProfile],
+        profiles: list[dict[str, Any]],
+        skipped: list[dict[str, Any]],
         group_label: str | None,
         column: str,
-        result: _ProfileMetrics | None,
+        result: dict[str, Any] | None,
         reason: str | None,
     ) -> None:
         """Record one successful or skipped group-and-column profile."""
         if result is None:
-            skipped.append(
-                {
-                    "group": group_label,
-                    "column": column,
-                    "reason": reason or "The autocorrelation profile is unavailable.",
-                }
-            )
+            skipped.append({"group": group_label, "column": column, "reason": reason})
             return
-        profile: AutocorrelationProfile = {
-            "group": group_label,
-            "column": column,
-            "lags": result["lags"],
-            "effective_max_lag": result["effective_max_lag"],
-            "evaluated_lags": result["evaluated_lags"],
-            "error": result["error"],
-            "similarity": result["similarity"],
-            "training_acf": result["training_acf"],
-            "synthetic_acf": result["synthetic_acf"],
-            "training_pair_support": result["training_pair_support"],
-            "synthetic_pair_support": result["synthetic_pair_support"],
-        }
-        if "reason" in result:
-            profile["reason"] = result["reason"]
-        profiles.append(profile)
+        profiles.append({"group": group_label, "column": column, **result})
 
     @staticmethod
     def _numeric_columns(
@@ -411,7 +328,7 @@ class AutocorrelationSimilarity(Component):
         synthetic: pd.DataFrame,
         group_column: str | None,
         max_groups: int,
-    ) -> tuple[list[object], list[str], list[str], int]:
+    ) -> tuple[list[Any], list[str], list[str], int]:
         """Find a deterministic, bounded set of groups shared by both datasets.
 
         A ``None`` sentinel represents one global sequence when grouping is not
@@ -445,7 +362,7 @@ class AutocorrelationSimilarity(Component):
         return shared, only_training, only_synthetic, len(shared_groups)
 
     @staticmethod
-    def _group_sort_key(value: object) -> tuple[str, str]:
+    def _group_sort_key(value: Any) -> tuple[str, str]:
         """Return a stable ordering key for heterogeneous group values."""
         type_name = f"{type(value).__module__}.{type(value).__qualname__}"
         return type_name, str(value)
@@ -454,16 +371,13 @@ class AutocorrelationSimilarity(Component):
     def _group_frame(
         df: pd.DataFrame,
         group_column: str | None,
-        group_value: object,
+        group_value: Any,
         timestamp_column: str | None,
     ) -> pd.DataFrame:
         """Return one sequence in deterministic timestamp order.
 
         ``mergesort`` preserves input order for equal timestamps, which makes
         repeated runs stable without inventing a secondary ordering key.
-        Interval-only training data has no generated timestamp column, so its
-        source row order remains the canonical sequence order. Synthetic data
-        contains the generated timestamp and is sorted by it.
 
         Args:
             df: Dataset containing one or more sequences.
@@ -484,7 +398,7 @@ class AutocorrelationSimilarity(Component):
         training: pd.Series,
         synthetic: pd.Series,
         cfg: AutocorrelationSimilarityParameters,
-    ) -> tuple[_ProfileMetrics | None, str | None]:
+    ) -> tuple[dict[str, Any] | None, str | None]:
         """Compare one training and synthetic autocorrelation profile.
 
         For each lag, Pearson correlation is computed over positions whose two
@@ -616,10 +530,7 @@ class AutocorrelationSimilarity(Component):
         return acf, support
 
     @staticmethod
-    def _summaries(
-        profiles: list[AutocorrelationProfile],
-        key: str,
-    ) -> list[dict[str, object]]:
+    def _summaries(profiles: list[dict[str, Any]], key: str) -> list[dict[str, Any]]:
         """Average profile similarities by a diagnostic key.
 
         Args:
@@ -629,10 +540,9 @@ class AutocorrelationSimilarity(Component):
         Returns:
             Deterministically ordered summaries with similarity and count.
         """
-        scores: defaultdict[object, list[float]] = defaultdict(list)
+        scores: defaultdict[Any, list[float]] = defaultdict(list)
         for item in profiles:
-            summary_key: object = item["group"] if key == "group" else item["column"]
-            scores[summary_key].append(item["similarity"])
+            scores[item[key]].append(item["similarity"])
         return [
             {key: value, "similarity": float(np.mean(values)), "count": len(values)}
             for value, values in sorted(scores.items(), key=lambda item: str(item[0]))

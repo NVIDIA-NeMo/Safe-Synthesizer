@@ -17,10 +17,7 @@ from ....config.evaluate import (
 from ....config.parameters import SafeSynthesizerParameters
 from ....evaluation.assets.text.multi_modal_tooltips import tooltips
 from ....evaluation.components.attribute_inference_protection import AttributeInferenceProtection
-from ....evaluation.components.autocorrelation_similarity import (
-    AutocorrelationProfile,
-    AutocorrelationSimilarity,
-)
+from ....evaluation.components.autocorrelation_similarity import AutocorrelationSimilarity
 from ....evaluation.components.autocorrelation_similarity_figures import generate_autocorrelation_profile_figure
 from ....evaluation.components.column_distribution import (
     ColumnDistribution,
@@ -152,7 +149,7 @@ class MultimodalReport(EvaluationReport):
         return default
 
     @staticmethod
-    def _autocorrelation_figure_title(item: AutocorrelationProfile) -> str:
+    def _autocorrelation_figure_title(item: dict[str, Any]) -> str:
         """Return a user-facing label for one autocorrelation profile."""
         group = item["group"]
         if group is None:

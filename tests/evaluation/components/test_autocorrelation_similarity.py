@@ -142,8 +142,8 @@ def test_autocorrelation_similarity_handles_aligned_non_finite_gaps():
 
     assert component.score.score == 10
     profile = component.details["profiles"][0]
-    assert np.isfinite(np.asarray(profile["training_acf"], dtype=float)).all()
-    assert np.isfinite(np.asarray(profile["synthetic_acf"], dtype=float)).all()
+    assert np.isfinite(profile["training_acf"]).all()
+    assert np.isfinite(profile["synthetic_acf"]).all()
 
 
 def test_autocorrelation_similarity_preserves_non_finite_positions():
@@ -236,7 +236,7 @@ def test_autocorrelation_similarity_without_config_runs_with_component_defaults(
     assert component.details["evaluation_mode"] == "global"
 
 
-def test_autocorrelation_similarity_propagates_unexpected_metric_failures(monkeypatch):
+def test_autocorrelation_similarity_isolates_unexpected_metric_failures(monkeypatch):
     frame = pd.DataFrame({"time": range(5), "value": range(5)})
     datasets = _datasets(frame, frame.copy())
 
@@ -246,9 +246,10 @@ def test_autocorrelation_similarity_propagates_unexpected_metric_failures(monkey
     monkeypatch.setattr(pd.DataFrame, "sort_values", fail_sort)
 
     config = _config(AutocorrelationSimilarityParameters(value_columns=["value"]))
+    component = AutocorrelationSimilarity.from_evaluation_datasets(datasets, config)
 
-    with pytest.raises(RuntimeError, match="unexpected metric failure"):
-        AutocorrelationSimilarity.from_evaluation_datasets(datasets, config)
+    assert component.score.score is None
+    assert component.score.notes == "unexpected metric failure"
 
 
 def test_autocorrelation_similarity_preserves_bare_timestamp_column_override():

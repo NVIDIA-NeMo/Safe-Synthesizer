@@ -10,10 +10,7 @@ import pytest
 from nemo_safe_synthesizer.config.evaluate import EvaluationParameters, TimeSeriesEvaluationParameters
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
-from nemo_safe_synthesizer.evaluation.components.autocorrelation_similarity import (
-    AutocorrelationProfile,
-    AutocorrelationSimilarity,
-)
+from nemo_safe_synthesizer.evaluation.components.autocorrelation_similarity import AutocorrelationSimilarity
 from nemo_safe_synthesizer.evaluation.components.text_semantic_similarity import TextSemanticSimilarity
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import EvaluationScore, Grade
@@ -199,19 +196,14 @@ def test_enabled_unavailable_time_series_metric_renders_actionable_reason() -> N
 
 def test_time_series_report_limits_charts_to_lowest_scoring_profiles() -> None:
     report = _minimal_multimodal_report()
-    profiles: list[AutocorrelationProfile] = [
+    profiles = [
         {
             "group": str(index),
             "column": "value",
             "lags": [1],
-            "effective_max_lag": 1,
-            "evaluated_lags": 1,
-            "error": 0.0,
             "training_acf": [0.5],
             "synthetic_acf": [0.5],
             "similarity": index / 13,
-            "training_pair_support": [10],
-            "synthetic_pair_support": [10],
         }
         for index in range(13)
     ]
