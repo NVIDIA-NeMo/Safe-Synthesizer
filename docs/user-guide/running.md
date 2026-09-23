@@ -1100,10 +1100,15 @@ to sort within groups.
     data:
       group_training_examples_by: "sensor_id"
       order_training_examples_by: "timestamp"
+    evaluation:
+      time_series:
+        enabled: true
     ```
 
 See [Configuration Reference -- Time Series](configuration.md#time-series) for the full parameter table.
 See [Troubleshooting -- Time Series](troubleshooting.md#time-series) for common issues.
+When `evaluation.time_series.enabled` is true, the HTML report includes
+[Autocorrelation Similarity](time-series-metrics/autocorrelation-similarity.md).
 
 !!! note "How time-series examples are assembled"
     Each training example contains records from a single group in

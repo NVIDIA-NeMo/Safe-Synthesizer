@@ -26,6 +26,7 @@ def test_evaluation_report_uses_versioned_plotly_cdn() -> None:
 
 def test_evaluation_report_themes_charts_in_report_assets() -> None:
     template = _get_template("jinja/reports/multi_modal_report.j2")
+    autocorrelation_similarity = _get_template("jinja/components/autocorrelation_similarity.j2")
     dataset_statistics = _get_template("jinja/components/dataset_statistics.j2")
     gauge = _get_template("jinja/components/score_gauge.j2")
     metric_card = _get_template("jinja/components/metric_card.j2")
@@ -36,6 +37,7 @@ def test_evaluation_report_themes_charts_in_report_assets() -> None:
     javascript = _get_template("js/multi_modal_toggle.js")
 
     assert template is not None
+    assert autocorrelation_similarity is not None
     assert dataset_statistics is not None
     assert gauge is not None
     assert metric_card is not None
@@ -45,6 +47,9 @@ def test_evaluation_report_themes_charts_in_report_assets() -> None:
     assert text_structure_similarity is not None
     assert javascript is not None
     assert "score_ring(ctx.synthetic_quality_score.score)" in template
+    assert 'data-report-view="time-series"' in template
+    assert "ctx.autocorrelation_similarity.figures" in autocorrelation_similarity
+    assert "{{ row.html | safe }}" in autocorrelation_similarity
     assert "score-ring-canvas" in gauge
     assert "brand-assets.cne.ngc.nvidia.com/assets/fonts/nvidia-sans" in stylesheet
     assert "data-metric-toggle" in metric_card

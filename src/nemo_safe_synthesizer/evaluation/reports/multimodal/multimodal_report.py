@@ -17,6 +17,8 @@ from ....config.evaluate import (
 from ....config.parameters import SafeSynthesizerParameters
 from ....evaluation.assets.text.multi_modal_tooltips import tooltips
 from ....evaluation.components.attribute_inference_protection import AttributeInferenceProtection
+from ....evaluation.components.autocorrelation_similarity import AutocorrelationSimilarity
+from ....evaluation.components.autocorrelation_similarity_figures import generate_autocorrelation_profile_figure
 from ....evaluation.components.column_distribution import (
     ColumnDistribution,
     ColumnDistributionPlotRow,
@@ -49,6 +51,8 @@ from ....observability import get_logger
 from ....pii_replacer.transform_result import ColumnStatistics
 
 logger = get_logger(__name__)
+
+_MAX_AUTOCORRELATION_REPORT_PROFILES = 12
 
 
 class MultimodalReport(EvaluationReport):
@@ -106,6 +110,32 @@ class MultimodalReport(EvaluationReport):
                     self.evaluation_datasets
                 )
 
+            ctx["with_time_series"] = "autocorrelation_similarity" in ctx
+            if ctx["with_time_series"]:
+                autocorrelation = ctx["autocorrelation_similarity"]
+                profiles = autocorrelation["details"].get("profiles", [])
+                selected = sorted(
+                    profiles,
+                    key=lambda item: (
+                        item["similarity"],
+                        str(item["group"]),
+                        item["column"],
+                    ),
+                )[:_MAX_AUTOCORRELATION_REPORT_PROFILES]
+                autocorrelation["figures"] = [
+                    {
+                        "title": MultimodalReport._autocorrelation_figure_title(item),
+                        "html": generate_autocorrelation_profile_figure(
+                            item["lags"],
+                            item["training_acf"],
+                            item["synthetic_acf"],
+                        ).to_html(full_html=False, include_plotlyjs=False),
+                    }
+                    for item in selected
+                ]
+                autocorrelation["displayed_profile_count"] = len(selected)
+                autocorrelation["evaluated_profile_count"] = len(profiles)
+
             return ctx
         except Exception:
             logger.exception("Failed to get jinja context")
@@ -117,6 +147,14 @@ class MultimodalReport(EvaluationReport):
         if config and config.get(param):
             return config.get(param)
         return default
+
+    @staticmethod
+    def _autocorrelation_figure_title(item: dict[str, Any]) -> str:
+        """Return a user-facing label for one autocorrelation profile."""
+        group = item["group"]
+        if group is None:
+            return str(item["column"])
+        return f"{item['column']} -- group {group}"
 
     @staticmethod
     def from_dataframes(
@@ -221,6 +259,16 @@ class MultimodalReport(EvaluationReport):
             text_structure_similarity,
             sqs_score,
         ]
+
+        if config is not None and config.evaluation.enabled and config.evaluation.time_series.enabled:
+            time_series_datasets = EvaluationDatasets.from_dataframes(
+                training=training,
+                synthetic=synthetic,
+                test=test,
+                column_statistics=column_statistics,
+                enable_sampling=False,
+            )
+            components.append(AutocorrelationSimilarity.from_evaluation_datasets(time_series_datasets, config))
 
         report = MultimodalReport(config=config, evaluation_datasets=evaluation_datasets, components=components)
         report.evaluation_datasets = evaluation_datasets

@@ -16,6 +16,11 @@ from rich.console import Console
 from transformers import PretrainedConfig, PreTrainedTokenizerBase
 
 from nemo_safe_synthesizer.config.data import DataParameters
+from nemo_safe_synthesizer.config.evaluate import (
+    AutocorrelationSimilarityParameters,
+    EvaluationParameters,
+    TimeSeriesEvaluationParameters,
+)
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
 from nemo_safe_synthesizer.config.training import TrainingHyperparams
@@ -41,6 +46,7 @@ from nemo_safe_synthesizer.preflight import (
     PseudoColumnCheck,
     SmallDatasetCheck,
     TimeSeriesDataShapeCheck,
+    TimeSeriesValueColumnCheck,
     TimestampColumnCheck,
     TokenBudgetCheck,
     VRAMHeadroomCheck,
@@ -802,6 +808,52 @@ class TestTimestampColumnCheck:
         )
         issues = TimestampColumnCheck().run(make_ctx(config=config, data=df))
         assert any(i.code == "timestamp_not_found" and i.severity == "error" for i in issues)
+
+
+@pytest.mark.unit
+class TestTimeSeriesValueColumnCheck:
+    @staticmethod
+    def _make_config(
+        value_columns: list[str],
+        *,
+        evaluation_enabled: bool = True,
+    ) -> SafeSynthesizerParameters:
+        return SafeSynthesizerParameters(
+            time_series=TimeSeriesParameters(is_timeseries=True, timestamp_interval_seconds=60),
+            evaluation=EvaluationParameters(
+                enabled=evaluation_enabled,
+                time_series=TimeSeriesEvaluationParameters(
+                    enabled=True,
+                    autocorrelation=AutocorrelationSimilarityParameters(value_columns=value_columns),
+                ),
+            ),
+        )
+
+    def test_disabled_when_time_series_evaluation_is_disabled(self, default_config):
+        assert TimeSeriesValueColumnCheck().enabled(make_ctx(config=default_config)) is False
+
+    def test_disabled_when_global_evaluation_is_disabled(self):
+        config = self._make_config(["value"], evaluation_enabled=False)
+
+        assert TimeSeriesValueColumnCheck().enabled(make_ctx(config=config)) is False
+
+    def test_missing_explicit_column_reports_error(self):
+        config = self._make_config(["missing"])
+
+        issues = TimeSeriesValueColumnCheck().run(
+            make_ctx(config=config, data=pd.DataFrame({"value": [1.0, 2.0, 3.0]}))
+        )
+
+        assert any(issue.code == "evaluation_column_not_found" for issue in issues)
+
+    def test_nonnumeric_explicit_column_reports_error(self):
+        config = self._make_config(["label"])
+
+        issues = TimeSeriesValueColumnCheck().run(
+            make_ctx(config=config, data=pd.DataFrame({"label": ["a", "b", "c"]}))
+        )
+
+        assert any(issue.code == "evaluation_column_not_numeric" for issue in issues)
 
 
 @pytest.mark.unit

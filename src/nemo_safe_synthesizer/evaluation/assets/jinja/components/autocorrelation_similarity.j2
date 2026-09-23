@@ -1,0 +1,40 @@
+{% if ctx.autocorrelation_similarity.score.notes %}
+<p class="chart-subheading">{{ ctx.autocorrelation_similarity.score.notes }}</p>
+{% endif %}
+{% if ctx.autocorrelation_similarity.details.skipped %}
+<h3 class="chart-subheading">Skipped comparisons</h3>
+<ul>
+{% for item in ctx.autocorrelation_similarity.details.skipped[:12] %}
+    <li>
+        {{ item.column }}{% if item.group is not none %}, group {{ item.group }}{% endif %}: {{ item.reason }}
+    </li>
+{% endfor %}
+</ul>
+{% endif %}
+{% if ctx.autocorrelation_similarity.details.groups_only_in_training %}
+<p class="chart-subheading">
+    Groups found only in training data: {{ ctx.autocorrelation_similarity.details.groups_only_in_training | length }}.
+</p>
+{% endif %}
+{% if ctx.autocorrelation_similarity.details.groups_only_in_synthetic %}
+<p class="chart-subheading">
+    Groups found only in synthetic data: {{ ctx.autocorrelation_similarity.details.groups_only_in_synthetic | length }}.
+</p>
+{% endif %}
+{% if ctx.autocorrelation_similarity.evaluated_profile_count %}
+<p class="chart-subheading">
+    Showing {{ ctx.autocorrelation_similarity.displayed_profile_count }} of
+    {{ ctx.autocorrelation_similarity.evaluated_profile_count }} evaluated profiles,
+    ordered from lowest similarity.
+</p>
+<div class="chart-legend" aria-label="Chart legend">
+    <span><i class="legend-training"></i>Training Data</span>
+    <span><i class="legend-synthetic"></i>Synthetic Data</span>
+</div>
+{% for row in ctx.autocorrelation_similarity.figures %}
+<figure>
+    <h3 class="chart-subheading">{{ row.title }}</h3>
+    {{ row.html | safe }}
+</figure>
+{% endfor %}
+{% endif %}

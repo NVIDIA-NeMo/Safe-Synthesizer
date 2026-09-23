@@ -3,14 +3,18 @@
 
 import json
 
+import numpy as np
 import pandas as pd
 import pytest
 
-from nemo_safe_synthesizer.config.evaluate import EvaluationParameters
+from nemo_safe_synthesizer.config.evaluate import EvaluationParameters, TimeSeriesEvaluationParameters
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
+from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
+from nemo_safe_synthesizer.evaluation.components.autocorrelation_similarity import AutocorrelationSimilarity
 from nemo_safe_synthesizer.evaluation.components.text_semantic_similarity import TextSemanticSimilarity
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import EvaluationScore, Grade
+from nemo_safe_synthesizer.evaluation.render import render_report
 from nemo_safe_synthesizer.evaluation.reports.multimodal import multimodal_report as multimodal_report_module
 from nemo_safe_synthesizer.evaluation.reports.multimodal.multimodal_report import MultimodalReport
 
@@ -36,6 +40,24 @@ def _minimal_multimodal_report() -> MultimodalReport:
     synthetic_df = pd.DataFrame({"x": [1, 2], "y": [3, 4]})
     datasets = EvaluationDatasets(training=training_df, synthetic=synthetic_df)
     return MultimodalReport(evaluation_datasets=datasets, components=[])
+
+
+def _time_series_config(
+    *,
+    report_rows: int = 5000,
+    evaluation_enabled: bool = True,
+) -> SafeSynthesizerParameters:
+    return SafeSynthesizerParameters(
+        time_series=TimeSeriesParameters(is_timeseries=True, timestamp_column="time"),
+        evaluation=EvaluationParameters(
+            enabled=evaluation_enabled,
+            mia_enabled=False,
+            aia_enabled=False,
+            pii_replay_enabled=False,
+            sqs_report_rows=report_rows,
+            time_series=TimeSeriesEvaluationParameters(enabled=True),
+        ),
+    )
 
 
 def test_jinja_context_job_id_none_when_nemo_job_id_unset(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -113,3 +135,88 @@ def test_multimodal_report(
     report_json = json.loads(report.get_json())
     assert report_json["Text Semantic Similarity"] == report_dict["Text Semantic Similarity"]
     assert report_json["Synthetic Quality Score"] == report_dict["Synthetic Quality Score"]
+
+
+def test_time_series_metric_is_absent_when_feature_gate_is_disabled() -> None:
+    frame = pd.DataFrame({"value": [0.0, 1.0, 3.0, 2.0, 4.0, 1.0]})
+
+    report = MultimodalReport.from_dataframes(frame, frame.copy(), config=SafeSynthesizerParameters())
+
+    assert not any(isinstance(component, AutocorrelationSimilarity) for component in report.components)
+    assert report.jinja_context["with_time_series"] is False
+
+
+def test_global_evaluation_gate_overrides_time_series_evaluation_gate() -> None:
+    frame = pd.DataFrame({"time": range(6), "value": [0.0, 1.0, 3.0, 2.0, 4.0, 1.0]})
+
+    report = MultimodalReport.from_dataframes(
+        frame,
+        frame.copy(),
+        config=_time_series_config(evaluation_enabled=False),
+    )
+
+    assert not any(isinstance(component, AutocorrelationSimilarity) for component in report.components)
+
+
+def test_time_series_metric_uses_unsampled_ordered_data_and_renders_profiles() -> None:
+    row_count = 5001
+    time = np.arange(row_count)
+    training = pd.DataFrame({"time": time, "value": np.sin(time / 11)})
+    synthetic = training.sample(frac=1.0, random_state=17).reset_index(drop=True)
+
+    report = MultimodalReport.from_dataframes(
+        training,
+        synthetic,
+        config=_time_series_config(report_rows=100),
+    )
+
+    component = next(item for item in report.components if isinstance(item, AutocorrelationSimilarity))
+    assert component.score.score == 10
+    assert report.evaluation_datasets.training_rows == 100
+    assert report.jinja_context["autocorrelation_similarity"]["evaluated_profile_count"] == 1
+    output = render_report(report)
+    assert output is not None
+    assert "Time-Series Evaluation" in output
+    assert "Training ACF" in output
+    assert "Synthetic ACF" in output
+
+
+def test_enabled_unavailable_time_series_metric_renders_actionable_reason() -> None:
+    frame = pd.DataFrame({"time": range(6), "value": [1.0] * 6})
+
+    report = MultimodalReport.from_dataframes(frame, frame.copy(), config=_time_series_config())
+
+    component = next(item for item in report.components if isinstance(item, AutocorrelationSimilarity))
+    assert component.score.score is None
+    assert component.score.notes == "No usable group/column autocorrelation profiles."
+    output = render_report(report)
+    assert output is not None
+    assert "No usable group/column autocorrelation profiles." in output
+
+
+def test_time_series_report_limits_charts_to_lowest_scoring_profiles() -> None:
+    report = _minimal_multimodal_report()
+    profiles = [
+        {
+            "group": str(index),
+            "column": "value",
+            "lags": [1],
+            "training_acf": [0.5],
+            "synthetic_acf": [0.5],
+            "similarity": index / 13,
+        }
+        for index in range(13)
+    ]
+    report.components = [
+        AutocorrelationSimilarity(
+            score=EvaluationScore.finalize_grade(raw_score=0.5, score=5.0),
+            details={"profiles": profiles},
+        )
+    ]
+
+    context = report.jinja_context["autocorrelation_similarity"]
+
+    assert context["evaluated_profile_count"] == 13
+    assert context["displayed_profile_count"] == 12
+    assert len(context["figures"]) == 12
+    assert all("group 12" not in figure["title"] for figure in context["figures"])
