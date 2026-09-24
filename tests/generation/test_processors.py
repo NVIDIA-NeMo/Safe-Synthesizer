@@ -14,7 +14,6 @@ from transformers import AutoTokenizer, PreTrainedTokenizer
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.generate import ValidationParameters
 from nemo_safe_synthesizer.data_processing.assembler import TrainingExampleAssembler
-from nemo_safe_synthesizer.data_processing.dataset import make_json_schema
 from nemo_safe_synthesizer.generation.processors import (
     GroupedDataProcessor,
     TabularDataProcessor,
@@ -23,6 +22,8 @@ from nemo_safe_synthesizer.generation.processors import (
 )
 from nemo_safe_synthesizer.observability import get_logger
 from nemo_safe_synthesizer.training.backend import ModelMetadata
+
+from ..schema_utils import json_schema_with_nested_columns
 
 logger = get_logger(__name__)
 
@@ -435,7 +436,7 @@ def _check_assembler_to_processor(
         df: The dataframe to use for the test.
         tokenizer: The tokenizer to use for the test.
     """
-    schema = make_json_schema(df)
+    schema = json_schema_with_nested_columns(df)
 
     hf_dataset = Dataset.from_pandas(df)
 

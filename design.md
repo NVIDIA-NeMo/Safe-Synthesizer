@@ -445,7 +445,7 @@ safe-synthesizer-artifacts/
         │       ├── adapter_config.json
         │       ├── adapter_model.safetensors
         │       ├── metadata_v2.json
-        │       └── dataset_schema.json
+        │       └── dataset_profile.json
         ├── generate/
         │   ├── logs.jsonl                      # generate-only workflow
         │   ├── info.json                       # generate-only workflow
