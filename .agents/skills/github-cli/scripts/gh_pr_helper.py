@@ -31,6 +31,7 @@ from github import Auth, Github
 from github.Issue import Issue
 from github.PullRequest import PullRequest
 from github.Repository import Repository
+from github.Requester import Requester
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 app = typer.Typer(
@@ -102,6 +103,9 @@ class ReplyOutput(BaseModel):
     """Single JSON output for reply command after posting a reply."""
 
     comment_id: int
+    reply_id: int
+    pr_number: int
+    html_url: str
     body: str
     success: bool = True
 
@@ -294,6 +298,34 @@ def _submit_approved_review(
     )
 
 
+def _post_review_comment_reply(
+    requester: Requester,
+    repo_url: str,
+    comment_id: int,
+    body: str,
+) -> ReplyOutput:
+    """Reply to an inline review comment, resolving its PR from the original comment."""
+    _, comment = requester.requestJsonAndCheck("GET", f"{repo_url}/pulls/comments/{comment_id}")
+    pr_url = comment.get("pull_request_url")
+    if not pr_url:
+        msg = f"Could not determine PR for comment {comment_id}."
+        raise ValueError(msg)
+    pr_number = int(pr_url.rstrip("/").rsplit("/", 1)[-1])
+
+    _, reply_data = requester.requestJsonAndCheck(
+        "POST",
+        f"{repo_url}/pulls/{pr_number}/comments/{comment_id}/replies",
+        input={"body": body},
+    )
+    return ReplyOutput(
+        comment_id=comment_id,
+        reply_id=reply_data["id"],
+        pr_number=pr_number,
+        html_url=reply_data["html_url"],
+        body=reply_data.get("body", body),
+    )
+
+
 @app.command()
 def comments(
     pr_number: str | None = typer.Argument(None, help="PR number (default: from current branch)"),
@@ -419,39 +451,18 @@ def reply(
     if not rep:
         typer.echo("Could not determine repo. Pass --repo OWNER/REPO.", err=True)
         raise typer.Exit(1)
-    repo_obj = gh.get_repo(rep)
-    # Reply endpoint uses comment_id only; we need a PR to get the pull object.
-    # PyGithub: create_review_comment_reply is on PullRequest and needs comment_id (int) and body.
-    # We have comment_id but not pr number. GitHub API: POST /repos/owner/repo/pulls/comments/comment_id/replies
-    # So we don't need PR number. PyGithub's PullRequest.create_review_comment_reply(comment_id, body) - let me check
-    # if we can get there without a PR. We need a PullRequest instance. So we need to find the PR that contains
-    # this comment, or use the low-level API. Actually the REST endpoint is under pulls/comments/ID/replies - so
-    # we don't need pull number. In PyGithub we might need to use the repository's _requester. I'll fetch the
-    # comment first to get its pull request URL, or use requester.
-    comment = repo_obj.get_pull_comment(int(comment_id))
-    # PullRequestComment has create_reply? Let me check - the web said create_review_comment_reply is on PullRequest.
-    # So we need pr number. We can get it from the comment: comment has pull_request_review_id or we can get
-    # comment.raw_data and see if there's a pull_request url. Actually in GitHub API, the comment object has
-    # "pull_request_url" which gives us the PR. So: get comment, parse pull_request_url to get pull number, then
-    # pr.create_review_comment_reply(comment_id, body).
-    pr_url = comment.raw_data.get("pull_request_url") or comment.raw_data.get("_links", {}).get("pull_request", {}).get(
-        "href"
-    )
-    if not pr_url:
-        # Fallback: comment might have pull_request in raw_data
-        pr_url = (
-            comment.raw_data.get("pull_request", {}).get("url")
-            if isinstance(comment.raw_data.get("pull_request"), dict)
-            else None
-        )
-    if not pr_url:
-        typer.echo("Could not determine PR from comment.", err=True)
-        raise typer.Exit(1)
-    pr_number = int(pr_url.rstrip("/").split("/")[-1])
-    pr = repo_obj.get_pull(pr_number)
-    pr.create_review_comment_reply(int(comment_id), reply_text)
+    try:
+        resolved_comment_id = int(comment_id)
+    except ValueError as exc:
+        typer.echo(f"Invalid comment ID: {comment_id}", err=True)
+        raise typer.Exit(1) from exc
 
-    result = ReplyOutput(comment_id=int(comment_id), body=reply_text)
+    repo_obj = gh.get_repo(rep)
+    try:
+        result = _post_review_comment_reply(repo_obj.requester, repo_obj.url, resolved_comment_id, reply_text)
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from exc
     print(result.model_dump_json(indent=2))  # noqa: T201
 
 

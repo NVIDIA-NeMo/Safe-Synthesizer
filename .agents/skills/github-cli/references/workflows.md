@@ -293,7 +293,7 @@ gh api repos/NVIDIA-NeMo/Safe-Synthesizer/issues/<number>/comments
 ```bash
 gh issue comment <number> --body "Your reply here."   # top-level only
 # Inline thread (comment-id from pulls/<number>/comments id field):
-gh api repos/NVIDIA-NeMo/Safe-Synthesizer/pulls/comments/<comment-id>/replies -f body="Fixed in <commit-sha>"
+gh api repos/NVIDIA-NeMo/Safe-Synthesizer/pulls/<number>/comments/<comment-id>/replies -f body="Fixed in <commit-sha>"
 ```
 
 ### Address Comments in Code
