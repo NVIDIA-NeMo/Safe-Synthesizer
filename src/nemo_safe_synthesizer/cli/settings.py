@@ -184,9 +184,9 @@ class CLISettings(BaseSettings):
     inference_api_key: str | None = Field(
         default=None,
         validation_alias=AliasChoices("inference_api_key", "NSS_INFERENCE_KEY"),
-        description="Runtime API key for the PII inference endpoint",
+        description="API key for the PII inference endpoint",
     )
-    """Runtime-only PII inference API key (env: ``NSS_INFERENCE_KEY``)."""
+    """PII inference API key (env: ``NSS_INFERENCE_KEY``)."""
 
     inference_model_id: str | None = Field(
         default=None,
