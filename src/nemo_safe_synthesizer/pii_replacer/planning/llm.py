@@ -288,6 +288,7 @@ def _dependency_candidate_payload(
 
 
 def _dependency_selection_messages(
+    plan: PiiReplacementPlan,
     candidates: Sequence[DependencyCandidate],
     baseline: PiiReplacementPlan,
     classifications: Sequence[ColumnClassification],
@@ -328,7 +329,8 @@ def _dependency_selection_messages(
         for classification in classifications
         if classification.entity_type is not None
     }
-    patterns = {classification.column_name: classification.pattern for classification in classifications}
+    # Targets are replacement columns, so read their repaired patterns from the plan.
+    patterns = {spec.column_name: spec.pattern for spec in plan.columns_to_replace}
     candidate_payloads = [
         _dependency_candidate_payload(
             index,
@@ -486,6 +488,8 @@ class LLMPlanEnhancer(PlanEnhancer):
             expected_columns=expected_columns,
             protected_columns=discovery_input.protected_columns,
         )
+        # Repair first so dependency selection sees each target's final pattern.
+        plan = self._repair_invalid_patterns(discovery_input, plan)
         candidates = derive_dependency_candidates(
             classifications,
             expected_columns=expected_columns,
@@ -493,7 +497,7 @@ class LLMPlanEnhancer(PlanEnhancer):
         )
         if candidates:
             plan = self._select_dependencies(plan, candidates, baseline, classifications)
-        return self._repair_invalid_patterns(discovery_input, plan)
+        return plan
 
     def _classify_columns(
         self,
@@ -551,7 +555,7 @@ class LLMPlanEnhancer(PlanEnhancer):
         candidates_by_id = {_dependency_candidate_id(index): candidate for index, candidate in enumerate(candidates)}
         return self._request_structured(
             purpose="PII dependency selection",
-            messages=_dependency_selection_messages(candidates, baseline, classifications),
+            messages=_dependency_selection_messages(plan, candidates, baseline, classifications),
             response_model=_DependencySelectionResponse,
             parse=lambda response: _apply_dependency_selection(
                 plan, candidates_by_id, classifications, response.selected_dependency_ids
