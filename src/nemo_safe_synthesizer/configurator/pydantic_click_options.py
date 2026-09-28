@@ -31,7 +31,7 @@ from typing_extensions import TypeIs
 from ..config.types import AUTO_STR
 from .parameter_paths import insert_parameter_value, split_parameter_path
 
-__all__ = ["pydantic_options", "parse_overrides", "AutoParamType"]
+__all__ = ["pydantic_options", "parse_overrides", "AutoParamType", "CommaOrJsonListParamType"]
 
 _NEGATION_PREFIX = "no_"
 """Prefix marking a generated disable flag for a nullable sub-config field."""
@@ -180,6 +180,56 @@ class AutoParamType(click.ParamType):
         return self.base_type.convert(value, param, ctx)
 
 
+
+class CommaOrJsonListParamType(click.ParamType):
+    """Accept a list via comma-separated values or a JSON array string.
+
+    Used for ``list[str]`` Pydantic fields so CLI flags like
+    ``--preflight__disabled_checks timeseries.shape`` (or ``a,b`` /
+    ``["a","b"]``) validate as lists instead of raw strings.
+    """
+
+    name = "list"
+
+    def convert(
+        self,
+        value: Any,
+        param: click.Parameter | None,
+        ctx: click.Context | None,
+    ) -> list[str]:
+        if isinstance(value, list):
+            return [str(item) for item in value]
+        if value is None:
+            return []
+        text = str(value).strip()
+        if not text:
+            return []
+        if text.startswith("["):
+            import json
+
+            try:
+                parsed = json.loads(text)
+            except json.JSONDecodeError as error:
+                self.fail(f"invalid JSON list: {text!r} ({error})", param, ctx)
+            if not isinstance(parsed, list):
+                self.fail(f"expected a JSON array, got {type(parsed).__name__}", param, ctx)
+            return [str(item) for item in parsed]
+        return [part.strip() for part in text.split(",") if part.strip()]
+
+
+def _is_str_list(annotation: Any) -> bool:
+    """True for ``list[str]`` / ``List[str]`` (optionally optional)."""
+    t = annotation
+    if get_origin(t) is Annotated:
+        t = get_args(t)[0]
+    if get_origin(t) in (Union, types.UnionType):
+        args = [a for a in get_args(t) if a is not type(None)]
+        if len(args) != 1:
+            return False
+        t = args[0]
+    return get_origin(t) is list and get_args(t) == (str,)
+
+
 def _has_string_literal(args: set) -> bool:
     """Check if any member is a ``Literal`` containing a string value."""
     return any(get_origin(a) is Literal and any(isinstance(v, str) for v in get_args(a)) for a in args)
@@ -218,14 +268,17 @@ def _click_type(annotation: Any) -> click.ParamType:
     """Map a Pydantic field annotation to a Click type.
 
     Unwraps ``Annotated[T, ...]`` and ``T | None`` unions, then returns the
-    widest Click type that covers any member of the union. ``Auto*Param``
-    fields (``Literal["auto"] | <numeric|bool>``) get an ``AutoParamType``
+    widest Click type that covers any member of the union. ``list[str]``
+    fields use ``CommaOrJsonListParamType``. ``Auto*Param`` fields
+    (``Literal["auto"] | <numeric|bool>``) get an ``AutoParamType``
     wrapping the numeric/bool base so Click can validate non-sentinel values
     while still accepting the ``"auto"`` sentinel. Other string-valued
     ``Literal`` members fall through to ``click.STRING`` so Click won't
     reject the sentinel before Pydantic validates it. Falls back to
     ``click.STRING`` for unrecognized types.
     """
+    if _is_str_list(annotation):
+        return CommaOrJsonListParamType()
     t = annotation
     if get_origin(t) is Annotated:
         t = get_args(t)[0]

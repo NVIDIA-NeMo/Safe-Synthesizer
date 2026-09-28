@@ -14,6 +14,7 @@ from pydantic.fields import FieldInfo
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 from nemo_safe_synthesizer.configurator.pydantic_click_options import (
     AutoParamType,
+    CommaOrJsonListParamType,
     FlagParam,
     LeafParam,
     _click_type,
@@ -536,3 +537,15 @@ def test_structured_generation_legacy_options_end_to_end_via_click_runner(
     result = CliRunner().invoke(cmd, [option, value])
     assert result.exit_code == 0, result.output
     assert captured["generation"][legacy_key] == expected
+
+
+def test_click_type_list_str_uses_list_param():
+    assert isinstance(_click_type(list[str]), CommaOrJsonListParamType)
+
+
+def test_comma_or_json_list_param_parses_forms():
+    param = CommaOrJsonListParamType()
+    assert param.convert("timeseries.shape", None, None) == ["timeseries.shape"]
+    assert param.convert("a,b", None, None) == ["a", "b"]
+    assert param.convert('["timeseries.shape"]', None, None) == ["timeseries.shape"]
+    assert param.convert(["already"], None, None) == ["already"]
