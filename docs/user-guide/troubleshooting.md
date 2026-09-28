@@ -510,7 +510,7 @@ check of its own.
 | `no_gpu` | error | `gpu.cuda` | No CUDA GPU detected (required for training or generation) |
 | `low_vram` | warning | `gpu.vram` | Free GPU VRAM may be insufficient |
 | `vram_exceeds_capacity` | error | `gpu.vram` | Estimated training VRAM is far above available GPU memory |
-| `inference_key_missing` | error | `env.inference` | `replace_pii.llm` resolves to the default hosted NVIDIA endpoint but no runtime API key is set |
+| `inference_key_missing` | error | `env.inference` | `replace_pii.llm` resolves to the default hosted NVIDIA endpoint but no API key is set |
 | `inference_endpoint_invalid` | error | `env.inference` | The configured PII inference endpoint is not an absolute HTTP(S) URL, embeds credentials, or uses plain HTTP for a non-loopback host |
 | `hf_token_missing` | warning | `env.hf_model_availability` | Neither `HF_TOKEN` nor `HUGGING_FACE_HUB_TOKEN` set, and model loading may need online Hugging Face access |
 | `hf_model_not_cached` | warning/error | `env.hf_model_availability` | Hugging Face model is not present in the local cache; severity is error when HF offline mode is enabled |

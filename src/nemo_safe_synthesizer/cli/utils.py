@@ -316,7 +316,7 @@ def _apply_inference_cli_overrides(
 
     Environment-loaded model values are intentionally excluded here because
     persisted model configuration takes precedence. The endpoint and API key
-    remain runtime-only and are propagated through ``NSS_INFERENCE_*``.
+    are never persisted in configuration and are propagated through ``NSS_INFERENCE_*``.
     """
     replace_pii = config.replace_pii
     model_id = settings.inference_model_id
