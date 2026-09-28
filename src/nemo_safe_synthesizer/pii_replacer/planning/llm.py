@@ -128,8 +128,6 @@ def _entity_catalog() -> list[dict[str, object]]:
     return [
         {
             "entity_type": entity.entity_type.value,
-            "action": entity.action.name.lower(),
-            "can_condition": entity.can_condition,
             "pattern_syntax": entity.pattern_syntax.name.lower() if entity.pattern_syntax is not None else None,
         }
         for entity in ENTITIES
@@ -212,21 +210,34 @@ def _classification_messages(
     baseline: PiiReplacementPlan,
 ) -> list[dict[str, str]]:
     system = (
-        "Classify every submitted dataframe column by its semantic entity type and, when useful, propose an "
-        "optional whole-column replacement pattern. Return exactly one classification for every submitted column, "
-        "in the same order. entity_type must be one of the values in entity_catalog, or null when no catalog entity "
-        "accurately describes the column. Classify semantic meaning only. Do not decide whether a column should be "
-        "replaced, used as a conditioner, or ignored; NSS derives those roles deterministically. pattern must be null "
-        "when entity_type is null, the selected entity has no pattern_syntax, or the column is listed in "
-        "discovery_context.protected_columns. Protected columns must still receive a semantic classification, but NSS "
-        "will not replace them. The grouping column is not automatically protected and must still be classified. "
-        "Otherwise, "
-        "emit a pattern only when the observed values have a consistent format worth preserving; do not emit a "
-        "redundant pattern that adds no useful formatting information beyond the entity type. A non-null pattern must "
-        "follow exactly the grammar named by the entity's pattern_syntax and describe the complete cell value. "
-        "Patterns are not regular expressions. heuristic_classifications is a sparse projection containing only "
-        "columns that the heuristic baseline selected for replacement; treat it as fallible prior evidence, not an "
-        "ignore decision for absent columns. Do not omit, duplicate, or invent columns."
+        "You are helping NVIDIA NeMo Safe Synthesizer (NSS) de-identify a table before it is used to train a "
+        "synthetic-data model. NSS replaces sensitive values with realistic fake values of the same kind. Your job is "
+        "only to say what kind of data each column holds, and optionally describe its format so the fake values look "
+        "like the real ones. NSS decides on its own which columns to replace.\n"
+        "\n"
+        "Input\n"
+        "- column_profiles: one entry per column, with its name, dtype, counts, and a few sample values.\n"
+        "- entity_catalog: the entity types you may choose from, each with the pattern grammar it supports.\n"
+        "- discovery_context.protected_columns: columns NSS will never replace.\n"
+        "- discovery_context.group_column: the column that groups rows (for example, one patient's events). It is "
+        "not protected unless it is also listed in protected_columns.\n"
+        "- heuristic_classifications: guesses from a rule-based detector, only for columns it flagged. They can be "
+        "wrong, and a column missing from this list may still hold sensitive data.\n"
+        "- pattern_grammars: the pattern languages you may use.\n"
+        "\n"
+        "For each column\n"
+        "1. Set entity_type to the catalog entry that matches what the values mean, or null if none fits. Classify "
+        "every column, including protected columns and the group column.\n"
+        "2. Set pattern to null unless all of these are true:\n"
+        "   - entity_type is not null and that entity has a pattern_syntax;\n"
+        "   - the column is not in protected_columns;\n"
+        "   - the sample values share a consistent format that the entity type alone does not capture.\n"
+        "3. A pattern must use exactly the grammar named by the entity's pattern_syntax and describe the whole cell "
+        "value. Patterns are not regular expressions. Name placeholders such as {first} or {last} do not require "
+        "name columns in the table; NSS fills them with a generated name when no related column exists.\n"
+        "\n"
+        "Output\n"
+        "Return one classification per submitted column, in the same order. Do not skip, repeat, or add columns."
     )
     user = _compact_json(
         {
@@ -247,17 +258,29 @@ def _dependency_candidate_id(index: int) -> str:
     return f"dependency_{index}"
 
 
+def _pattern_syntax_name(entity_type: EntityType, pattern: str | None) -> str | None:
+    pattern_syntax = ENTITY_BY_TYPE[entity_type].pattern_syntax
+    if pattern is None or pattern_syntax is None:
+        return None
+    return pattern_syntax.name.lower()
+
+
 def _dependency_candidate_payload(
     index: int,
     candidate: DependencyCandidate,
     *,
     entity_types: Mapping[str, EntityType],
+    patterns: Mapping[str, str | None],
     selected_by_heuristic: bool,
-) -> dict[str, str | bool]:
+) -> dict[str, str | bool | None]:
+    target_entity_type = entity_types[candidate.target_column]
+    target_pattern = patterns.get(candidate.target_column)
     return {
         "id": _dependency_candidate_id(index),
         "target_column": candidate.target_column,
-        "target_entity_type": entity_types[candidate.target_column].value,
+        "target_entity_type": target_entity_type.value,
+        "target_pattern": target_pattern,
+        "target_pattern_syntax": _pattern_syntax_name(target_entity_type, target_pattern),
         "source_column": candidate.source_column,
         "source_entity_type": entity_types[candidate.source_column].value,
         "selected_by_heuristic": selected_by_heuristic,
@@ -270,16 +293,34 @@ def _dependency_selection_messages(
     classifications: Sequence[ColumnClassification],
 ) -> list[dict[str, str]]:
     system = (
-        "Select the contextually useful replacement dependencies from the submitted candidates. A selected dependency "
-        "means that the target column's replacement should be conditioned on the source column. Every submitted "
-        "candidate is permitted by the entity catalog, but permission alone does not make a dependency useful. Select "
-        "a candidate only when the source column provides meaningful semantic context for generating the target "
-        "column. selected_by_heuristic indicates that the heuristic baseline chose the same target/source edge; treat "
-        "it as fallible prior evidence, not a requirement. Return only IDs from dependency_candidates. Do not invent "
-        "IDs, replacement columns, entity types, patterns, or dependency relationships. Apply "
-        "exclusive_dependency_groups independently to every target column: within each outer family, the selected "
-        "source_entity_types for one target may intersect at most one inner group. Multiple source entity types from "
-        "the same inner group are allowed. Do not select redundant dependencies."
+        "You are helping NVIDIA NeMo Safe Synthesizer (NSS) de-identify a table before it is used to train a "
+        "synthetic-data model. NSS replaces sensitive values with realistic fake values. A dependency tells NSS to "
+        "generate a target column's fake value using a source column in the same row as context, so related fake "
+        "values stay consistent. For example, a fake email can be built from the fake first and last name in the "
+        "same row.\n"
+        "\n"
+        "Input\n"
+        "- dependency_candidates: possible dependencies, each with an id, a target column, a source column, and "
+        "their entity types. Every candidate is allowed, but that does not make it useful. selected_by_heuristic is "
+        "true when a rule-based detector chose the same dependency; it can be wrong, so treat it as a hint, not a "
+        "requirement. target_pattern is the format proposed for the target's fake values, or null, and "
+        "target_pattern_syntax names its grammar in pattern_grammars. When the pattern uses a name part such as "
+        "{first} or {last}, a source column holding that name part lets the fake value match the fake name in the "
+        "same row.\n"
+        "- exclusive_dependency_groups: families of source entity types that must not be mixed (see rule 2).\n"
+        "\n"
+        "Rules\n"
+        "1. Select a candidate only when the source column gives meaningful context for generating the target "
+        "column. Skip candidates that add nothing beyond the other sources selected for the same target.\n"
+        "2. Check exclusivity separately for each target column. Each outer list in exclusive_dependency_groups is a "
+        "family of inner groups. Within a family, the source entity types selected for one target may come from at "
+        "most one inner group; several types from the same inner group are fine. For example, with the family "
+        "[[first_name, last_name, middle_name], [full_name]], a target may depend on first_name and last_name, or on "
+        "full_name, but not on both first_name and full_name.\n"
+        "\n"
+        "Output\n"
+        "Return only ids from dependency_candidates. Do not invent ids, columns, entity types, patterns, or "
+        "dependencies."
     )
     heuristic_edges = _heuristic_dependency_edges(baseline)
     entity_types = {
@@ -287,18 +328,26 @@ def _dependency_selection_messages(
         for classification in classifications
         if classification.entity_type is not None
     }
+    patterns = {classification.column_name: classification.pattern for classification in classifications}
+    candidate_payloads = [
+        _dependency_candidate_payload(
+            index,
+            candidate,
+            entity_types=entity_types,
+            patterns=patterns,
+            selected_by_heuristic=(candidate.target_column, candidate.source_column) in heuristic_edges,
+        )
+        for index, candidate in enumerate(candidates)
+    ]
+    # Only document the grammars that the candidates' target patterns actually use.
+    used_syntaxes = {payload["target_pattern_syntax"] for payload in candidate_payloads}
     user = _compact_json(
         {
-            "dependency_candidates": [
-                _dependency_candidate_payload(
-                    index,
-                    candidate,
-                    entity_types=entity_types,
-                    selected_by_heuristic=(candidate.target_column, candidate.source_column) in heuristic_edges,
-                )
-                for index, candidate in enumerate(candidates)
-            ],
+            "dependency_candidates": candidate_payloads,
             "exclusive_dependency_groups": _exclusive_dependency_groups_payload(),
+            "pattern_grammars": {
+                name: grammar for name, grammar in pattern_grammar_catalog().items() if name in used_syntaxes
+            },
         }
     )
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
