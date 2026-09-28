@@ -198,7 +198,7 @@ class CommaOrJsonListParamType(click.ParamType):
         ctx: click.Context | None,
     ) -> list[str]:
         if isinstance(value, list):
-            return [str(item) for item in value]
+            return self._require_str_items(value, param, ctx)
         if value is None:
             return []
         text = str(value).strip()
@@ -213,8 +213,27 @@ class CommaOrJsonListParamType(click.ParamType):
                 self.fail(f"invalid JSON list: {text!r} ({error})", param, ctx)
             if not isinstance(parsed, list):
                 self.fail(f"expected a JSON array, got {type(parsed).__name__}", param, ctx)
-            return [str(item) for item in parsed]
+            return self._require_str_items(parsed, param, ctx)
         return [part.strip() for part in text.split(",") if part.strip()]
+
+    def _require_str_items(
+        self,
+        items: list[Any],
+        param: click.Parameter | None,
+        ctx: click.Context | None,
+    ) -> list[str]:
+        # Leave non-strings alone for Pydantic to reject — do not str()-coerce
+        # null/number elements into "None"/"123".
+        out: list[str] = []
+        for item in items:
+            if not isinstance(item, str):
+                self.fail(
+                    f"list elements must be strings, got {type(item).__name__}: {item!r}",
+                    param,
+                    ctx,
+                )
+            out.append(item)
+        return out
 
 
 def _is_str_list(annotation: Any) -> bool:

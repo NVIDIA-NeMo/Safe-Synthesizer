@@ -543,9 +543,45 @@ def test_click_type_list_str_uses_list_param():
     assert isinstance(_click_type(list[str]), CommaOrJsonListParamType)
 
 
-def test_comma_or_json_list_param_parses_forms():
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("timeseries.shape", ["timeseries.shape"]),
+        ("a,b", ["a", "b"]),
+        ('["timeseries.shape"]', ["timeseries.shape"]),
+        (["already"], ["already"]),
+    ],
+)
+def test_comma_or_json_list_param_parses_forms(raw, expected):
     param = CommaOrJsonListParamType()
-    assert param.convert("timeseries.shape", None, None) == ["timeseries.shape"]
-    assert param.convert("a,b", None, None) == ["a", "b"]
-    assert param.convert('["timeseries.shape"]', None, None) == ["timeseries.shape"]
-    assert param.convert(["already"], None, None) == ["already"]
+    assert param.convert(raw, None, None) == expected
+
+
+@pytest.mark.parametrize("raw", ['[null]', '[123]', [None], [1]])
+def test_comma_or_json_list_param_rejects_non_strings(raw):
+    param = CommaOrJsonListParamType()
+    with pytest.raises(click.BadParameter):
+        param.convert(raw, None, None)
+
+
+def test_list_str_option_end_to_end_via_click_runner():
+    """CLI path: Click option → parse_overrides for a list[str] field."""
+    from pydantic import BaseModel, Field
+
+    class Prefs(BaseModel):
+        disabled_checks: list[str] = Field(default_factory=list)
+
+    captured: dict = {}
+
+    @pydantic_options(Prefs, field_separator="__")
+    @click.command()
+    def cmd(**kwargs):
+        captured.update(parse_overrides(kwargs))
+
+    result = CliRunner().invoke(cmd, ["--disabled_checks", "timeseries.shape,other"])
+    assert result.exit_code == 0, result.output
+    assert captured["disabled_checks"] == ["timeseries.shape", "other"]
+
+    result = CliRunner().invoke(cmd, ["--disabled_checks", '["a","b"]'])
+    assert result.exit_code == 0, result.output
+    assert captured["disabled_checks"] == ["a", "b"]
