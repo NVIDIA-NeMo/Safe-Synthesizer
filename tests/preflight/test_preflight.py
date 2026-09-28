@@ -393,37 +393,31 @@ class TestInferenceModelCheck:
             issues = InferenceModelCheck().run(make_ctx(config=default_config))
         assert issues == []
 
-    def test_hosted_llm_requires_runtime_key(self, default_config):
-        default_config.replace_pii.llm = LLMConfig()
-
-        with patch.dict("os.environ", {}, clear=True):
-            issues = InferenceModelCheck().run(make_ctx(config=default_config))
-
-        assert any(issue.code == "inference_key_missing" and issue.severity == "error" for issue in issues)
-
-    def test_local_llm_endpoint_can_be_keyless(self, default_config):
+    @pytest.mark.parametrize(
+        ("environ", "expected_codes"),
+        [
+            pytest.param({}, ["inference_key_missing"], id="hosted-without-key"),
+            pytest.param({"NSS_INFERENCE_ENDPOINT": "http://localhost:8000/v1"}, [], id="keyless-local"),
+            pytest.param(
+                {"NSS_INFERENCE_ENDPOINT": "not-a-url", "NSS_INFERENCE_KEY": "key"},
+                ["inference_endpoint_invalid"],
+                id="malformed-endpoint",
+            ),
+            pytest.param(
+                {"NSS_INFERENCE_ENDPOINT": "http://inference.example.com/v1"},
+                ["inference_endpoint_invalid"],
+                id="remote-plaintext-http",
+            ),
+        ],
+    )
+    def test_enabled_llm_validates_inference_environment(self, default_config, environ, expected_codes):
         default_config.replace_pii.llm = LLMConfig(model_id="local-model")
 
-        with patch.dict(
-            "os.environ",
-            {"NSS_INFERENCE_ENDPOINT": "http://localhost:8000/v1"},
-            clear=True,
-        ):
+        with patch.dict("os.environ", environ, clear=True):
             issues = InferenceModelCheck().run(make_ctx(config=default_config))
 
-        assert issues == []
-
-    def test_invalid_llm_endpoint_is_an_error(self, default_config):
-        default_config.replace_pii.llm = LLMConfig(model_id="model")
-
-        with patch.dict(
-            "os.environ",
-            {"NSS_INFERENCE_ENDPOINT": "not-a-url", "NSS_INFERENCE_KEY": "key"},
-            clear=True,
-        ):
-            issues = InferenceModelCheck().run(make_ctx(config=default_config))
-
-        assert any(issue.code == "inference_endpoint_invalid" and issue.severity == "error" for issue in issues)
+        assert [issue.code for issue in issues] == expected_codes
+        assert all(issue.severity == "error" for issue in issues)
 
 
 @pytest.mark.unit

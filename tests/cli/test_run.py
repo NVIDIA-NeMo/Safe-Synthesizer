@@ -765,12 +765,21 @@ class TestRunReplacePii:
         assert plan.columns_to_replace[0].column_name == "col1"
         assert plan.columns_to_replace[0].entity_type is EntityType.UNIQUE_IDENTIFIER
 
+    @pytest.mark.parametrize(
+        ("extra_args", "expected_model"),
+        [
+            pytest.param([], "test-model", id="yaml-model-precedes-env"),
+            pytest.param(["--inference-model-id", "cli-model"], "cli-model", id="cli-model-precedes-yaml"),
+        ],
+    )
     def test_plan_only_auto_discovery_uses_runtime_inference_settings(
         self,
         cli_runner: CliRunner,
         dummy_csv: Path,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
+        extra_args: list[str],
+        expected_model: str,
     ) -> None:
         config_path = tmp_path / "config.yaml"
         config_path.write_text("replace_pii:\n  replacement_plan: auto_discovery\n  llm:\n    model_id: test-model\n")
@@ -808,13 +817,14 @@ class TestRunReplacePii:
                 str(dummy_csv),
                 "--run-path",
                 str(run_path),
+                *extra_args,
             ],
             catch_exceptions=False,
         )
 
         assert result.exit_code == 0
         assert len(request_payloads) == 1
-        assert request_payloads[0]["model"] == "env-model"
+        assert request_payloads[0]["model"] == expected_model
         messages = cast(list[dict[str, str]], request_payloads[0]["messages"])
         assert '"non_null_count":2' in messages[1]["content"]
         assert (run_path / "pii_replacement_plan.yaml").exists()

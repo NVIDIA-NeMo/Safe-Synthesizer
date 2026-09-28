@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import Mapping, Sequence
 from threading import Lock
 
@@ -31,6 +32,8 @@ from nemo_safe_synthesizer.pii_replacer.planning import (
 from nemo_safe_synthesizer.pii_replacer.planning.llm import (
     MAX_CLASSIFICATION_PROFILE_BYTES,
     MAX_CLASSIFICATION_PROFILES,
+    RETRY_BASE_DELAY_SECONDS,
+    RETRY_MAX_DELAY_SECONDS,
     _json_bytes,
     _profile_batches,
 )
@@ -96,13 +99,15 @@ def _enhancer(
     responses: Sequence[str | Exception],
     *,
     max_workers: int = 8,
+    sleeps: list[float] | None = None,
 ) -> tuple[LLMPlanEnhancer, ScriptedTransport]:
     transport = ScriptedTransport(responses)
+    recorded_sleeps = sleeps if sleeps is not None else []
     enhancer = LLMPlanEnhancer(
         _local_config(max_workers=max_workers),
-        endpoint_url="http://localhost:8000/v1",
         transport=transport,
-        environ={},
+        environ={"NSS_INFERENCE_ENDPOINT": "http://localhost:8000/v1"},
+        sleep=recorded_sleeps.append,
     )
     return enhancer, transport
 
@@ -383,7 +388,9 @@ class TestLLMPlanEnhancer:
 
         assert plan.columns_to_replace == []
         assert len(transport.calls) == 2
-        assert "previous structured response was invalid" in transport.calls[1][0][-1]["content"]
+        feedback = transport.calls[1][0][-1]["content"]
+        assert "previous structured response was invalid" in feedback
+        assert "missing: 'email'" in feedback
 
     def test_duplicate_classification_retries(self) -> None:
         dataframe = pd.DataFrame({"name": ["Ada"], "email": ["ada@example.com"]})
@@ -406,16 +413,21 @@ class TestLLMPlanEnhancer:
 
         assert plan.columns_to_replace == []
         assert len(transport.calls) == 2
+        feedback = transport.calls[1][0][-1]["content"]
+        assert "missing: 'email'" in feedback
+        assert "duplicated: 'name'" in feedback
 
     @pytest.mark.parametrize(
-        "invalid_selection",
+        ("invalid_selection", "expected_feedback"),
         [
-            _dependency_selection("invented"),
-            _dependency_selection("dependency_0", "dependency_0"),
+            (_dependency_selection("invented"), "unknown IDs: 'invented'"),
+            (_dependency_selection("dependency_0", "dependency_0"), "must not contain duplicates: 'dependency_0'"),
         ],
         ids=["unknown-id", "duplicate-id"],
     )
-    def test_invalid_dependency_selection_is_repaired_on_retry(self, invalid_selection: str) -> None:
+    def test_invalid_dependency_selection_is_repaired_on_retry(
+        self, invalid_selection: str, expected_feedback: str
+    ) -> None:
         dataframe = pd.DataFrame({"first_name": ["Ada"], "sex": ["F"]})
         enhancer, transport = _enhancer(
             [
@@ -434,7 +446,9 @@ class TestLLMPlanEnhancer:
 
         assert plan.columns_to_replace[0].depends_on == []
         assert len(transport.calls) == 3
-        assert "previous structured response was invalid" in transport.calls[2][0][-1]["content"]
+        feedback = transport.calls[2][0][-1]["content"]
+        assert "previous structured response was invalid" in feedback
+        assert expected_feedback in feedback
 
     def test_dependency_selection_response_is_strict(self) -> None:
         dataframe = pd.DataFrame({"first_name": ["Ada"], "sex": ["F"]})
@@ -486,6 +500,9 @@ class TestLLMPlanEnhancer:
 
         assert all(not spec.depends_on for spec in plan.columns_to_replace)
         assert len(transport.calls) == 3
+        feedback = transport.calls[2][0][-1]["content"]
+        assert "selected dependencies do not form a valid replacement plan: " in feedback
+        assert "column 'first_name': depends_on mixes mutually exclusive conditioner groups" in feedback
 
     def test_pattern_for_unsupported_entity_type_is_retried(self) -> None:
         dataframe = pd.DataFrame({"address": ["123 Main St"]})
@@ -580,6 +597,92 @@ class TestLLMPlanEnhancer:
 
         assert [spec.column_name for spec in plan.columns_to_replace] == ["email"]
         assert len(transport.calls) == 2
+
+    def test_transient_failures_back_off_exponentially_with_jitter(self) -> None:
+        dataframe = pd.DataFrame({"email": ["ada@example.com"]})
+        sleeps: list[float] = []
+        enhancer, transport = _enhancer(
+            [
+                TransientInferenceError("temporary"),
+                TransientInferenceError("temporary"),
+                _classifications({"email": "email"}),
+            ],
+            sleeps=sleeps,
+        )
+
+        resolve_plan(dataframe, ReplacePiiConfig(llm=_local_config()), DataParameters(), enhancer=enhancer)
+
+        assert len(transport.calls) == 3
+        assert len(sleeps) == 2
+        assert RETRY_BASE_DELAY_SECONDS / 2 <= sleeps[0] <= RETRY_BASE_DELAY_SECONDS
+        assert RETRY_BASE_DELAY_SECONDS <= sleeps[1] <= 2 * RETRY_BASE_DELAY_SECONDS
+
+    @pytest.mark.parametrize(
+        ("retry_after", "expected_sleep"),
+        [(7.0, 7.0), (10 * RETRY_MAX_DELAY_SECONDS, RETRY_MAX_DELAY_SECONDS)],
+    )
+    def test_transient_failure_honors_capped_retry_after(self, retry_after: float, expected_sleep: float) -> None:
+        dataframe = pd.DataFrame({"email": ["ada@example.com"]})
+        sleeps: list[float] = []
+        enhancer, _ = _enhancer(
+            [
+                TransientInferenceError("rate limited", retry_after=retry_after),
+                _classifications({"email": "email"}),
+            ],
+            sleeps=sleeps,
+        )
+
+        resolve_plan(dataframe, ReplacePiiConfig(llm=_local_config()), DataParameters(), enhancer=enhancer)
+
+        assert sleeps == [expected_sleep]
+
+    def test_exhausted_transient_failures_fail_planning(self) -> None:
+        dataframe = pd.DataFrame({"email": ["ada@example.com"]})
+        sleeps: list[float] = []
+        enhancer, transport = _enhancer([TransientInferenceError("temporary")] * 3, sleeps=sleeps)
+
+        with pytest.raises(GenerationError, match="PII column classification failed after 3 attempts") as exc_info:
+            resolve_plan(dataframe, ReplacePiiConfig(llm=_local_config()), DataParameters(), enhancer=enhancer)
+
+        assert isinstance(exc_info.value.__cause__, TransientInferenceError)
+        assert len(transport.calls) == 3
+        assert len(sleeps) == 2
+
+    def test_exhausted_transient_failures_during_pattern_repair_fail_planning(self) -> None:
+        dataframe = pd.DataFrame({"phone": ["+1-415-555-0100", "+1-212-555-0199"]})
+        enhancer, transport = _enhancer(
+            [
+                _classifications({"phone": "phone_number"}, patterns={"phone": "literal"}),
+                *[TransientInferenceError("temporary")] * 3,
+            ]
+        )
+
+        with pytest.raises(GenerationError, match="PII pattern repair failed after 3 attempts"):
+            resolve_plan(dataframe, ReplacePiiConfig(llm=_local_config()), DataParameters(), enhancer=enhancer)
+
+        assert len(transport.calls) == 4
+
+    def test_logs_exclude_samples_prompts_and_responses(self, caplog: pytest.LogCaptureFixture) -> None:
+        caplog.set_level(logging.DEBUG)
+        dataframe = pd.DataFrame({"phone": ["+1-415-555-0100", "+1-212-555-0199"], "secret": ["raw-private-value"] * 2})
+        enhancer, transport = _enhancer(
+            [
+                '{"classifications": "raw-response-text"}',
+                _classifications({"phone": "phone_number", "secret": None}, patterns={"phone": "literal"}),
+                json.dumps({"pattern": "raw-repair-1"}),
+                json.dumps({"pattern": "raw-repair-2"}),
+                json.dumps({"pattern": "raw-repair-3"}),
+            ]
+        )
+
+        plan = resolve_plan(dataframe, ReplacePiiConfig(llm=_local_config()), DataParameters(), enhancer=enhancer)
+
+        assert plan.columns_to_replace[0].pattern is None
+        assert len(transport.calls) == 5
+        assert "Dropping an invalid LLM-proposed pattern" in caplog.text
+        logged = caplog.text + "".join(repr(vars(record)) for record in caplog.records)
+        for private_text in ("raw-private-value", "+1-415-555-0100", "raw-response-text", "raw-repair-", "Classify"):
+            assert private_text not in logged
 
     def test_authentication_failure_is_not_retried(self) -> None:
         dataframe = pd.DataFrame({"email": ["ada@example.com"]})
