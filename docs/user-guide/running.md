@@ -223,7 +223,7 @@ optional.
 | `--wandb-upload-evaluation-report` / `--no-wandb-upload-evaluation-report` | `NSS_WANDB_UPLOAD_EVALUATION_REPORT` | `true` | Control evaluation HTML and artifact publishing |
 | `--dataset-registry` | `NSS_DATASET_REGISTRY` | -- | Dataset registry YAML path/URL |
 | `--inference-endpoint-url` | `NSS_INFERENCE_ENDPOINT` | NVIDIA integrate URL | OpenAI-compatible endpoint for PII plan enhancement |
-| `--inference-api-key` | `NSS_INFERENCE_KEY` | -- | Runtime-only API key for the PII inference endpoint |
+| `--inference-api-key` | `NSS_INFERENCE_KEY` | -- | API key for the PII inference endpoint |
 | `--inference-model-id` | `NSS_INFERENCE_MODEL` | `nvidia/nemotron-3-ultra-550b-a55b` | Model ID sent to the PII inference endpoint |
 | `-v` / `-vv` | -- | -- | Verbose logging (`-v` debug, `-vv` debug + dependencies) |
 

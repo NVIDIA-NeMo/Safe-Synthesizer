@@ -187,7 +187,7 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
             type=str,
             required=False,
             default=None,
-            help="Runtime API key for the PII inference endpoint. Can also be set via NSS_INFERENCE_KEY env var.",
+            help="API key for the PII inference endpoint. Can also be set via NSS_INFERENCE_KEY env var.",
         )
     )
     options.append(
