@@ -6,10 +6,15 @@
 from __future__ import annotations
 
 import json
+import random
+import time
+from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from typing import TypeVar
 
+import pandas as pd
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from ...config.replace_pii import (
@@ -21,7 +26,7 @@ from ...config.replace_pii import (
     PiiColumnPlan,
     PiiReplacementPlan,
 )
-from ...errors import GenerationError, ParameterError
+from ...errors import GenerationError, InternalError, ParameterError
 from ...observability import get_logger
 from ..llm_client import (
     InvalidInferenceResponse,
@@ -39,7 +44,7 @@ from .plan_builder import (
     plan_from_classifications,
 )
 from .resolver import ColumnProfile, PlanDiscoveryInput, PlanEnhancer
-from .validation import _iter_pattern_issues
+from .validation import column_pattern_issue
 
 __all__ = [
     "LLMPlanEnhancer",
@@ -48,6 +53,8 @@ __all__ = [
 MAX_CLASSIFICATION_PROFILES = 32
 MAX_CLASSIFICATION_PROFILE_BYTES = 48 * 1024
 MAX_REQUEST_ATTEMPTS = 3
+RETRY_BASE_DELAY_SECONDS = 1.0
+RETRY_MAX_DELAY_SECONDS = 30.0
 
 logger = get_logger(__name__)
 
@@ -70,8 +77,12 @@ class _PatternRepairResponse(_StructuredResponse):
     pattern: str
 
 
+class _InvalidStructuredOutputError(GenerationError):
+    """Structured output stayed invalid after every allowed attempt."""
+
+
 ResponseT = TypeVar("ResponseT", bound=_StructuredResponse)
-ResponseValidator = Callable[[ResponseT], ResponseT]
+ResultT = TypeVar("ResultT")
 
 
 def _profile_payload(profile: ColumnProfile) -> dict[str, object]:
@@ -85,8 +96,12 @@ def _profile_payload(profile: ColumnProfile) -> dict[str, object]:
     }
 
 
+def _compact_json(value: object) -> str:
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+
+
 def _json_bytes(value: object) -> int:
-    return len(json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode())
+    return len(_compact_json(value).encode())
 
 
 def _profile_batches(profiles: Sequence[ColumnProfile]) -> list[list[dict[str, object]]]:
@@ -107,10 +122,6 @@ def _profile_batches(profiles: Sequence[ColumnProfile]) -> list[list[dict[str, o
     if current:
         batches.append(current)
     return batches
-
-
-def _compact_json(value: object) -> str:
-    return json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
 
 
 def _entity_catalog() -> list[dict[str, object]]:
@@ -157,6 +168,12 @@ def _exclusive_dependency_groups_payload() -> list[list[list[str]]]:
 
 
 def _validation_feedback(exc: Exception) -> str:
+    """Render a bounded, input-free description of why a response was rejected.
+
+    Pydantic errors are rendered without their inputs so model-authored text
+    and samples are not echoed back. The result is capped because it is
+    appended to the next attempt's prompt.
+    """
     if isinstance(exc, ValidationError):
         details = exc.errors(include_input=False, include_url=False)[:5]
         rendered = "; ".join(
@@ -165,6 +182,28 @@ def _validation_feedback(exc: Exception) -> str:
     else:
         rendered = str(exc)
     return rendered[:800]
+
+
+def _quoted(names: Sequence[str]) -> str:
+    return ", ".join(repr(name) for name in names)
+
+
+def _classification_coverage_issue(expected: Sequence[str], actual: Sequence[str]) -> str | None:
+    """Name the columns that make ``actual`` differ from exactly one entry per ``expected`` column."""
+    counts = Counter(actual)
+    expected_names = set(expected)
+    problems = [
+        f"{label}: {_quoted(names)}"
+        for label, names in (
+            ("missing", [name for name in expected if name not in counts]),
+            ("duplicated", sorted(name for name, count in counts.items() if count > 1)),
+            ("not submitted", sorted(set(counts) - expected_names)),
+        )
+        if names
+    ]
+    if not problems:
+        return None
+    return "classifications must contain every submitted column exactly once; " + "; ".join(problems)
 
 
 def _classification_messages(
@@ -265,13 +304,38 @@ def _dependency_selection_messages(
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
+def _apply_dependency_selection(
+    plan: PiiReplacementPlan,
+    candidates_by_id: Mapping[str, DependencyCandidate],
+    classifications: Sequence[ColumnClassification],
+    selected_ids: Sequence[str],
+) -> PiiReplacementPlan:
+    """Apply selected candidate IDs, raising ``ValueError`` with specific feedback when invalid."""
+    if duplicates := sorted(selected_id for selected_id, count in Counter(selected_ids).items() if count > 1):
+        raise ValueError("selected_dependency_ids must not contain duplicates: " + _quoted(duplicates))
+    if unknown := sorted(set(selected_ids) - set(candidates_by_id)):
+        raise ValueError("selected_dependency_ids contains unknown IDs: " + _quoted(unknown))
+
+    try:
+        return apply_dependencies(
+            plan,
+            [candidates_by_id[selected_id] for selected_id in selected_ids],
+            classifications=classifications,
+        )
+    except (ParameterError, ValidationError) as exc:
+        raise ValueError(
+            "selected dependencies do not form a valid replacement plan: " + _validation_feedback(exc)
+        ) from exc
+
+
 def _pattern_repair_messages(
     profile: ColumnProfile,
     spec: PiiColumnPlan,
     issue: str,
 ) -> list[dict[str, str]]:
     pattern_syntax = ENTITY_BY_TYPE[spec.entity_type].pattern_syntax
-    assert pattern_syntax is not None
+    if pattern_syntax is None:
+        raise InternalError(f"entity_type {spec.entity_type.value!r} has a pattern but no pattern syntax")
     system = (
         "Repair only the optional whole-column pattern. Return one non-empty pattern that follows the supplied pattern "
         "grammar exactly and describes the complete cell values represented by the samples. Patterns are not regular "
@@ -304,27 +368,61 @@ def _with_feedback(messages: Sequence[Mapping[str, str]], feedback: str | None) 
     return result
 
 
+def _retry_delay(attempt: int, exc: TransientInferenceError) -> float:
+    """Return the wait before retrying after transient failure ``attempt``.
+
+    A server-supplied ``Retry-After`` wins. Otherwise the delay doubles per
+    attempt with equal jitter, so concurrent batches that failed together do
+    not retry in lockstep. Both forms are capped.
+    """
+    if exc.retry_after is not None:
+        return min(exc.retry_after, RETRY_MAX_DELAY_SECONDS)
+    ceiling = min(RETRY_BASE_DELAY_SECONDS * 2 ** (attempt - 1), RETRY_MAX_DELAY_SECONDS)
+    return ceiling / 2 + random.uniform(0, ceiling / 2)
+
+
+def _raise_if_invalid_output_exhausted(purpose: str, attempt: int) -> None:
+    if attempt == MAX_REQUEST_ATTEMPTS:
+        # ``from None`` keeps model-authored output out of the exception chain.
+        raise _InvalidStructuredOutputError(
+            f"{purpose} returned invalid structured output after {MAX_REQUEST_ATTEMPTS} attempts"
+        ) from None
+
+
 class LLMPlanEnhancer(PlanEnhancer):
-    """Enhance a heuristic plan with classification and dependency-selection passes."""
+    """Enhance a heuristic plan with classification and dependency-selection passes.
+
+    Pass one classifies every column's entity type and optional pattern. NSS
+    then derives replacement membership and all permitted dependency
+    candidates deterministically, and pass two only selects useful candidate
+    IDs. Invalid optional patterns get focused repair requests.
+
+    Args:
+        config: Persisted LLM behavior; the endpoint, key, and model resolve
+            through ``resolve_inference_settings``.
+        transport: Structured-response transport; defaults to an
+            ``OpenAICompatibleTransport`` for the resolved settings.
+        environ: Environment mapping for settings resolution; defaults to ``os.environ``.
+        sleep: Function used to wait between transient retries.
+
+    Attributes:
+        settings: Resolved inference settings.
+
+    Raises:
+        ParameterError: If the inference settings are invalid.
+    """
 
     def __init__(
         self,
         config: LLMConfig,
         *,
-        endpoint_url: str | None = None,
-        model_id: str | None = None,
-        api_key: str | None = None,
         transport: LLMTransport | None = None,
         environ: Mapping[str, str] | None = None,
+        sleep: Callable[[float], None] = time.sleep,
     ) -> None:
-        self.settings = resolve_inference_settings(
-            config,
-            endpoint_url=endpoint_url,
-            model_id=model_id,
-            api_key=api_key,
-            environ=environ,
-        )
+        self.settings = resolve_inference_settings(config, environ=environ)
         self._transport = transport or OpenAICompatibleTransport(self.settings)
+        self._sleep = sleep
 
     def enhance(
         self,
@@ -356,35 +454,43 @@ class LLMPlanEnhancer(PlanEnhancer):
         batches = _profile_batches(discovery_input.column_profiles)
         if not batches:
             return []
-
-        def classify(batch: list[dict[str, object]]) -> list[ColumnClassification]:
-            expected = [str(profile["column_name"]) for profile in batch]
-            protected = discovery_input.protected_columns.intersection(expected)
-
-            def validate(response: _ClassificationResponse) -> _ClassificationResponse:
-                actual = [classification.column_name for classification in response.classifications]
-                if len(actual) != len(expected) or set(actual) != set(expected):
-                    raise ValueError("classifications must contain every submitted column exactly once")
-                by_name = {classification.column_name: classification for classification in response.classifications}
-                response.classifications = [by_name[name] for name in expected]
-                if any(item.pattern is not None and item.column_name in protected for item in response.classifications):
-                    raise ValueError("protected columns cannot include replacement patterns")
-                return response
-
-            response = self._request_structured(
-                purpose="PII column classification",
-                messages=_classification_messages(discovery_input, batch, baseline),
-                response_model=_ClassificationResponse,
-                validate=validate,
-            )
-            return response.classifications
-
+        classify = partial(self._classify_batch, discovery_input, baseline)
         if len(batches) == 1:
             return classify(batches[0])
-        worker_count = min(self.settings.max_workers, len(batches))
-        with ThreadPoolExecutor(max_workers=worker_count) as executor:
+        with ThreadPoolExecutor(max_workers=min(self.settings.max_workers, len(batches))) as executor:
             results = list(executor.map(classify, batches))
         return [classification for batch_result in results for classification in batch_result]
+
+    def _classify_batch(
+        self,
+        discovery_input: PlanDiscoveryInput,
+        baseline: PiiReplacementPlan,
+        batch: list[dict[str, object]],
+    ) -> list[ColumnClassification]:
+        expected = [str(profile["column_name"]) for profile in batch]
+        protected = discovery_input.protected_columns.intersection(expected)
+
+        def parse(response: _ClassificationResponse) -> list[ColumnClassification]:
+            actual = [classification.column_name for classification in response.classifications]
+            if issue := _classification_coverage_issue(expected, actual):
+                raise ValueError(issue)
+            if protected_with_pattern := sorted(
+                item.column_name
+                for item in response.classifications
+                if item.pattern is not None and item.column_name in protected
+            ):
+                raise ValueError(
+                    "protected columns cannot include replacement patterns: " + _quoted(protected_with_pattern)
+                )
+            by_name = {classification.column_name: classification for classification in response.classifications}
+            return [by_name[name] for name in expected]
+
+        return self._request_structured(
+            purpose="PII column classification",
+            messages=_classification_messages(discovery_input, batch, baseline),
+            response_model=_ClassificationResponse,
+            parse=parse,
+        )
 
     def _select_dependencies(
         self,
@@ -393,45 +499,15 @@ class LLMPlanEnhancer(PlanEnhancer):
         baseline: PiiReplacementPlan,
         classifications: Sequence[ColumnClassification],
     ) -> PiiReplacementPlan:
-        selected_plan: PiiReplacementPlan | None = None
-
-        def validate(response: _DependencySelectionResponse) -> _DependencySelectionResponse:
-            nonlocal selected_plan
-            selected_plan = self._apply_dependency_selection(plan, candidates, classifications, response)
-            return response
-
-        self._request_structured(
+        candidates_by_id = {_dependency_candidate_id(index): candidate for index, candidate in enumerate(candidates)}
+        return self._request_structured(
             purpose="PII dependency selection",
             messages=_dependency_selection_messages(candidates, baseline, classifications),
             response_model=_DependencySelectionResponse,
-            validate=validate,
+            parse=lambda response: _apply_dependency_selection(
+                plan, candidates_by_id, classifications, response.selected_dependency_ids
+            ),
         )
-        assert selected_plan is not None
-        return selected_plan
-
-    @staticmethod
-    def _apply_dependency_selection(
-        plan: PiiReplacementPlan,
-        candidates: Sequence[DependencyCandidate],
-        classifications: Sequence[ColumnClassification],
-        response: _DependencySelectionResponse,
-    ) -> PiiReplacementPlan:
-        selected_ids = response.selected_dependency_ids
-        if len(selected_ids) != len(set(selected_ids)):
-            raise ValueError("selected_dependency_ids must not contain duplicates")
-
-        by_id = {_dependency_candidate_id(index): candidate for index, candidate in enumerate(candidates)}
-        if unknown := sorted(set(selected_ids) - set(by_id)):
-            raise ValueError("selected_dependency_ids contains unknown IDs: " + ", ".join(unknown))
-
-        try:
-            return apply_dependencies(
-                plan,
-                [by_id[selected_id] for selected_id in selected_ids],
-                classifications=classifications,
-            )
-        except (ParameterError, ValidationError) as exc:
-            raise ValueError("selected dependencies do not form a valid replacement plan") from exc
 
     def _request_structured(
         self,
@@ -439,8 +515,30 @@ class LLMPlanEnhancer(PlanEnhancer):
         purpose: str,
         messages: Sequence[Mapping[str, str]],
         response_model: type[ResponseT],
-        validate: ResponseValidator[ResponseT] | None = None,
-    ) -> ResponseT:
+        parse: Callable[[ResponseT], ResultT],
+    ) -> ResultT:
+        """Request, validate, and parse one structured response with bounded retries.
+
+        Every request path shares this loop. Each attempt resends the original
+        messages plus, after an invalid response, feedback describing only the
+        latest rejection, so the prompt does not grow across attempts.
+
+        Args:
+            purpose: Human-readable request name used in error messages.
+            messages: Original chat messages for every attempt.
+            response_model: Strict response envelope to validate against.
+            parse: Converts a validated response into the result; raises
+                ``ValueError`` with specific feedback when the response is
+                semantically invalid.
+
+        Returns:
+            The value returned by ``parse``.
+
+        Raises:
+            ParameterError: Immediately, on permanent configuration or authentication failures.
+            GenerationError: When transient failures persist through every attempt.
+            _InvalidStructuredOutputError: When every attempt returns invalid output.
+        """
         feedback: str | None = None
         for attempt in range(1, MAX_REQUEST_ATTEMPTS + 1):
             try:
@@ -448,85 +546,70 @@ class LLMPlanEnhancer(PlanEnhancer):
                     messages=_with_feedback(messages, feedback),
                     response_model=response_model,
                 )
-                response = response_model.model_validate_json(raw)
-                return validate(response) if validate is not None else response
+                return parse(response_model.model_validate_json(raw))
             except ParameterError:
                 raise
             except TransientInferenceError as exc:
-                if attempt == MAX_REQUEST_ATTEMPTS:
-                    raise GenerationError(f"{purpose} failed after {MAX_REQUEST_ATTEMPTS} attempts") from exc
+                self._wait_before_transient_retry(purpose, attempt, exc)
                 feedback = None
             except (InvalidInferenceResponse, ValidationError, ValueError) as exc:
-                if attempt == MAX_REQUEST_ATTEMPTS:
-                    raise GenerationError(
-                        f"{purpose} returned invalid structured output after {MAX_REQUEST_ATTEMPTS} attempts"
-                    ) from None
+                _raise_if_invalid_output_exhausted(purpose, attempt)
                 feedback = _validation_feedback(exc)
-        raise AssertionError("unreachable")
+        raise InternalError(f"{purpose} retry loop ended without a result")
+
+    def _wait_before_transient_retry(self, purpose: str, attempt: int, exc: TransientInferenceError) -> None:
+        if attempt == MAX_REQUEST_ATTEMPTS:
+            raise GenerationError(f"{purpose} failed after {MAX_REQUEST_ATTEMPTS} attempts") from exc
+        self._sleep(_retry_delay(attempt, exc))
 
     def _repair_invalid_patterns(
         self,
         discovery_input: PlanDiscoveryInput,
         plan: PiiReplacementPlan,
     ) -> PiiReplacementPlan:
-        repaired = plan.model_copy(deep=True)
+        dataframe = discovery_input.dataframe
         profiles = {profile.column_name: profile for profile in discovery_input.column_profiles}
-        for spec in repaired.columns_to_replace:
-            issue = self._pattern_issue(discovery_input, repaired, spec.column_name)
+        repaired_specs: list[PiiColumnPlan] = []
+        for spec in plan.columns_to_replace:
+            issue = column_pattern_issue(dataframe, spec)
             if issue is None:
+                repaired_specs.append(spec)
                 continue
-            spec.pattern = self._repair_pattern(profiles[spec.column_name], spec, discovery_input, repaired, issue)
-        return repaired
-
-    @staticmethod
-    def _pattern_issue(
-        discovery_input: PlanDiscoveryInput,
-        plan: PiiReplacementPlan,
-        column_name: str,
-    ) -> str | None:
-        prefix = f"column {column_name!r}:"
-        return next(
-            (issue for issue in _iter_pattern_issues(discovery_input.dataframe, plan) if issue.startswith(prefix)),
-            None,
-        )
+            pattern = self._repair_pattern(dataframe, profiles[spec.column_name], spec, issue)
+            repaired_specs.append(spec.model_copy(update={"pattern": pattern}))
+        return plan.model_copy(update={"columns_to_replace": repaired_specs})
 
     def _repair_pattern(
         self,
+        dataframe: pd.DataFrame,
         profile: ColumnProfile,
         spec: PiiColumnPlan,
-        discovery_input: PlanDiscoveryInput,
-        plan: PiiReplacementPlan,
         issue: str,
     ) -> str | None:
-        messages = _pattern_repair_messages(profile, spec, issue)
-        feedback: str | None = issue
-        for attempt in range(1, MAX_REQUEST_ATTEMPTS + 1):
-            try:
-                raw = self._transport.complete(
-                    messages=_with_feedback(messages, feedback),
-                    response_model=_PatternRepairResponse,
-                )
-                response = _PatternRepairResponse.model_validate_json(raw)
-                candidate_plan = plan.model_copy(deep=True)
-                candidate = next(
-                    item for item in candidate_plan.columns_to_replace if item.column_name == spec.column_name
-                )
-                candidate.pattern = response.pattern
-                next_issue = self._pattern_issue(discovery_input, candidate_plan, spec.column_name)
-                if next_issue is None:
-                    return response.pattern
-                feedback = next_issue
-            except ParameterError:
-                raise
-            except TransientInferenceError as exc:
-                if attempt == MAX_REQUEST_ATTEMPTS:
-                    raise GenerationError(f"PII pattern repair failed after {MAX_REQUEST_ATTEMPTS} attempts") from exc
-                feedback = None
-            except (InvalidInferenceResponse, ValidationError, ValueError) as exc:
-                feedback = _validation_feedback(exc)
+        """Return a repaired pattern, or ``None`` after repair attempts are exhausted.
 
-        logger.user.warning(
-            "Dropping an invalid LLM-proposed pattern after repair attempts",
-            extra={"column": spec.column_name, "attempts": MAX_REQUEST_ATTEMPTS},
-        )
-        return None
+        Transient failures that persist still raise ``GenerationError``; only
+        invalid repair output drops the optional pattern.
+        """
+
+        def parse(response: _PatternRepairResponse) -> str:
+            if not response.pattern.strip():
+                raise ValueError("pattern must be non-empty")
+            candidate = spec.model_copy(update={"pattern": response.pattern})
+            if (next_issue := column_pattern_issue(dataframe, candidate)) is not None:
+                raise ValueError(next_issue)
+            return response.pattern
+
+        try:
+            return self._request_structured(
+                purpose="PII pattern repair",
+                messages=_pattern_repair_messages(profile, spec, issue),
+                response_model=_PatternRepairResponse,
+                parse=parse,
+            )
+        except _InvalidStructuredOutputError:
+            logger.user.warning(
+                "Dropping an invalid LLM-proposed pattern after repair attempts",
+                extra={"column": spec.column_name, "attempts": MAX_REQUEST_ATTEMPTS},
+            )
+            return None
