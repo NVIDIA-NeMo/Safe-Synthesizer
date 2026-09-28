@@ -170,12 +170,14 @@ for the full pre-cache checklist.
 Adding an `llm` mapping under `replace_pii` enables LLM-assisted plan
 enhancement. The inference endpoint and credential are runtime-only settings:
 
-```bash
+```bash title="PII inference environment" hl_lines="1 2"
 export NSS_INFERENCE_ENDPOINT=http://localhost:8000/v1
 export NSS_INFERENCE_MODEL=gpt-oss-120b
 ```
 
-Set `NSS_INFERENCE_KEY` when the endpoint requires authentication. The default
+The endpoint must use HTTPS unless it is a loopback address (`localhost`,
+`127.0.0.0/8`, or `::1`), because plan enhancement sends raw cell samples and
+the API key. Set `NSS_INFERENCE_KEY` when the endpoint requires authentication. The default
 hosted NVIDIA endpoint always requires it; local OpenAI-compatible endpoints
 may be keyless. The endpoint and key are intentionally rejected in YAML. The
 model ID may instead be persisted as `replace_pii.llm.model_id`.
@@ -183,8 +185,9 @@ model ID may instead be persisted as `replace_pii.llm.model_id`.
 The equivalent CLI options are `--inference-endpoint-url`,
 `--inference-model-id`, and `--inference-api-key`, which take precedence over
 environment or persisted model settings. For the model ID, the complete order
-is CLI option, environment variable, persisted `replace_pii.llm.model_id`, then
-the NSS default.
+is CLI option, persisted `replace_pii.llm.model_id`, environment variable, then
+the NSS default. As with `emit_telemetry`, an explicit YAML value wins over the
+environment variable, which only supplies the default.
 
 Plan enhancement sends bounded raw cell samples to the configured endpoint.
 Only enable it when that endpoint is approved to receive the input data.

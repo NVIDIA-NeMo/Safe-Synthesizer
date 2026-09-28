@@ -129,11 +129,15 @@ An empty mapping (`llm: {}`) enables the existing NSS inference defaults. Set
 the OpenAI-compatible endpoint at runtime through `NSS_INFERENCE_ENDPOINT` or
 the `--inference-endpoint-url` CLI option. For example, a local vLLM server may
 use `NSS_INFERENCE_ENDPOINT=http://localhost:8000/v1` with its served model ID.
+Plain HTTP is accepted only for loopback addresses (`localhost`, `127.0.0.0/8`,
+or `::1`); any other host must use HTTPS.
 
 The endpoint resolves from the explicit CLI runtime flag, then
 `NSS_INFERENCE_ENDPOINT`, then the NSS default; it is never persisted in NSS
 configuration. The model resolves from the explicit CLI runtime flag, then
-`NSS_INFERENCE_MODEL`, `replace_pii.llm.model_id`, and finally the NSS default.
+`replace_pii.llm.model_id`, `NSS_INFERENCE_MODEL`, and finally the NSS default.
+`NSS_INFERENCE_MODEL` supplies the model only when the configuration omits
+`model_id`; use `--inference-model-id` to override a persisted model for one run.
 The default hosted NVIDIA endpoint requires an API key. Keyless operation is
 supported for local OpenAI-compatible endpoints.
 
@@ -159,11 +163,16 @@ the assembled plan. Grouping columns remain eligible for replacement so
 identifiers such as patient IDs can be anonymized.
 
 Each request permits up to three attempts for transient transport failures or
-invalid structured responses. Authentication, authorization, and permanent
-configuration failures stop immediately. If structured output remains invalid,
+invalid structured responses. Transient failures wait before retrying: the
+server's `Retry-After` delay when supplied, otherwise an exponentially growing,
+jittered delay, capped at 30 seconds. Authentication, authorization, and
+permanent configuration failures stop immediately. If structured output remains invalid,
 planning fails instead of falling back to the heuristic baseline. Invalid
 optional patterns receive up to three focused repair attempts; NSS drops only
-the pattern and warns if repair is exhausted.
+the pattern and warns if every repair response is invalid. Transient failures
+that persist through all repair attempts still fail planning, as for any other
+request. Retry feedback names the specific columns, dependency IDs, or
+dependency conflicts that made the previous response invalid.
 
 !!! warning "Inference endpoints receive source data"
     Plan enhancement can send bounded raw cell samples from the full input
