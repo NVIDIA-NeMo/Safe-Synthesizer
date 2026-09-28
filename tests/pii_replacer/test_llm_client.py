@@ -161,6 +161,17 @@ class TestInferenceSettings:
 
 @pytest.mark.unit
 class TestOpenAICompatibleTransport:
+    def test_rejects_plaintext_remote_endpoint_from_direct_settings(self) -> None:
+        settings = InferenceSettings(
+            endpoint_url="http://inference.example.com/v1",
+            model_id="remote-model",
+            max_workers=1,
+            api_key="private-key",  # pragma: allowlist secret
+        )
+
+        with pytest.raises(ParameterError, match="must use HTTPS"):
+            OpenAICompatibleTransport(settings)
+
     def test_sends_chat_completions_with_strict_json_schema(self, monkeypatch: pytest.MonkeyPatch) -> None:
         captured = _capture_request(monkeypatch, _StructuredResponse)
 

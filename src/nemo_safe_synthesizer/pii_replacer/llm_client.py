@@ -230,9 +230,16 @@ class OpenAICompatibleTransport:
     Args:
         settings: Resolved endpoint, model, and credential.
         timeout: Per-request timeout in seconds.
+
+    Raises:
+        ParameterError: If the endpoint is malformed, embeds credentials, or
+            uses plaintext HTTP for a non-loopback host.
     """
 
     def __init__(self, settings: InferenceSettings, *, timeout: float = 60.0) -> None:
+        # Settings built directly, not through ``resolve_inference_settings``,
+        # must not send samples or the bearer key over an unsafe endpoint.
+        _validate_endpoint(settings.endpoint_url)
         self._settings = settings
         self._timeout = timeout
 

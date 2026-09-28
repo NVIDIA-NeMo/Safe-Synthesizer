@@ -759,6 +759,52 @@ class TestLLMPlanEnhancer:
         assert repair_payload["pattern_syntax"] == "character_mask"
         assert repair_payload["pattern_grammar"]["tokens"]["#"] == "digit 0-9"
 
+    @pytest.mark.parametrize(
+        ("repair_responses", "final_pattern", "final_syntax"),
+        [
+            pytest.param(["{first}@{domain}"], "{first}@{domain}", "name_parts", id="repaired"),
+            pytest.param(["no-at-sign-1", "no-at-sign-2", "no-at-sign-3"], None, None, id="dropped"),
+        ],
+    )
+    def test_dependency_selection_sees_repaired_target_pattern(
+        self,
+        repair_responses: list[str],
+        final_pattern: str | None,
+        final_syntax: str | None,
+    ) -> None:
+        dataframe = pd.DataFrame(
+            {
+                "first_name": ["Ada", "Grace"],
+                "email": ["ada@example.com", "grace@example.com"],
+            }
+        )
+        enhancer, transport = _enhancer(
+            [
+                _classifications(
+                    {"first_name": "first_name", "email": "email"},
+                    patterns={"email": "{first}.{last}@{domain}"},
+                ),
+                *[json.dumps({"pattern": pattern}) for pattern in repair_responses],
+                _dependency_selection("dependency_0"),
+            ]
+        )
+
+        plan = resolve_plan(
+            dataframe,
+            ReplacePiiConfig(llm=_local_config()),
+            DataParameters(),
+            enhancer=enhancer,
+        )
+
+        dependency_payload = json.loads(transport.calls[-1][0][1]["content"])
+        assert "selected_dependency_ids" in transport.calls[-1][1].model_json_schema()["properties"]
+        [candidate] = dependency_payload["dependency_candidates"]
+        assert candidate["target_pattern"] == final_pattern
+        assert candidate["target_pattern_syntax"] == final_syntax
+        email = next(spec for spec in plan.columns_to_replace if spec.column_name == "email")
+        assert email.pattern == final_pattern
+        assert [dependency.column_name for dependency in email.depends_on] == ["first_name"]
+
     def test_exhausted_invalid_pattern_repairs_drop_only_the_pattern(self) -> None:
         dataframe = pd.DataFrame({"phone": ["+1-415-555-0100", "+1-212-555-0199"]})
         enhancer, transport = _enhancer(
