@@ -166,6 +166,20 @@ def test_post_review_comment_reply_uses_the_comment_pr_and_returns_url() -> None
     assert output.html_url == "https://github.com/owner/repo/pull/715#discussion_r92"
 
 
+def test_post_review_comment_reply_to_a_reply_targets_the_thread_root() -> None:
+    repo_url = "https://api.github.com/repos/owner/repo"
+    requester = _FakeRequester({"id": 93, "in_reply_to_id": 91, "pull_request_url": f"{repo_url}/pulls/715"})
+
+    output = helper._post_review_comment_reply(requester, repo_url, 93, "Fixed in beefcafe")
+
+    assert requester.calls[-1] == (
+        "POST",
+        f"{repo_url}/pulls/715/comments/91/replies",
+        {"body": "Fixed in beefcafe"},
+    )
+    assert output.comment_id == 91
+
+
 def test_post_review_comment_reply_rejects_comment_without_pr() -> None:
     requester = _FakeRequester({"id": 91})
 

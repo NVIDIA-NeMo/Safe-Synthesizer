@@ -304,21 +304,25 @@ def _post_review_comment_reply(
     comment_id: int,
     body: str,
 ) -> ReplyOutput:
-    """Reply to an inline review comment, resolving its PR from the original comment."""
+    """Reply to an inline review comment, resolving its PR from the original comment.
+
+    GitHub rejects replies to replies, so a reply ID is redirected to its thread's top-level comment.
+    """
     _, comment = requester.requestJsonAndCheck("GET", f"{repo_url}/pulls/comments/{comment_id}")
     pr_url = comment.get("pull_request_url")
     if not pr_url:
         msg = f"Could not determine PR for comment {comment_id}."
         raise ValueError(msg)
     pr_number = int(pr_url.rstrip("/").rsplit("/", 1)[-1])
+    thread_comment_id = comment.get("in_reply_to_id") or comment_id
 
     _, reply_data = requester.requestJsonAndCheck(
         "POST",
-        f"{repo_url}/pulls/{pr_number}/comments/{comment_id}/replies",
+        f"{repo_url}/pulls/{pr_number}/comments/{thread_comment_id}/replies",
         input={"body": body},
     )
     return ReplyOutput(
-        comment_id=comment_id,
+        comment_id=thread_comment_id,
         reply_id=reply_data["id"],
         pr_number=pr_number,
         html_url=reply_data["html_url"],
