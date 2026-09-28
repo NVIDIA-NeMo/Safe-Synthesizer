@@ -15,7 +15,7 @@ from typing_extensions import override
 from ...errors import ParameterError
 from ...llm.utils import ModelRef
 from ...observability import get_logger
-from ...pii_replacer.llm_client import resolve_inference_settings
+from ...pii_replacer.llm_client import MissingInferenceKeyError, resolve_inference_settings
 from ...utils import hf_offline_enabled
 from ..base import ConfigCheck, IssueCollector, MetadataCheck
 from ..helpers import require_import
@@ -465,10 +465,10 @@ class InferenceModelCheck(ConfigCheck):
             return
         try:
             resolve_inference_settings(replace_pii.llm)
+        except MissingInferenceKeyError as exc:
+            collector.error("inference_key_missing", str(exc))
         except ParameterError as exc:
-            message = str(exc)
-            code = "inference_key_missing" if "NSS_INFERENCE_KEY" in message else "inference_endpoint_invalid"
-            collector.error(code, message)
+            collector.error("inference_endpoint_invalid", str(exc))
 
 
 def _has_hf_token() -> bool:

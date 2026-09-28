@@ -16,13 +16,14 @@ from ...config.replace_pii import (
     ENTITY_BY_TYPE,
     EntityType,
     PatternSyntax,
+    PiiColumnPlan,
     PiiReplacementPlan,
 )
 from ...config.time_series import TimeSeriesParameters
 from ...errors import InternalError, ParameterError
 from .patterns import CHARACTER_MASK_ESCAPABLE_CHARACTERS, CHARACTER_MASK_TOKENS, NAME_PART_PLACEHOLDERS
 
-__all__ = ["get_protected_columns", "validate_plan"]
+__all__ = ["column_pattern_issue", "get_protected_columns", "validate_plan"]
 
 MIN_PATTERN_COVERAGE = 0.85
 _NAME_PART_PATTERN = re.compile(r"\{([^{}]+)\}")
@@ -164,36 +165,56 @@ def _pattern_matcher(
     return None, None
 
 
+def column_pattern_issue(df: pd.DataFrame, spec: PiiColumnPlan) -> str | None:
+    """Return the dataframe-aware pattern issue for one replacement column.
+
+    A pattern must follow its entity's grammar and cover at least
+    ``MIN_PATTERN_COVERAGE`` of the column's non-null values. Columns without a
+    pattern, or absent from ``df``, have no pattern issue.
+
+    Args:
+        df: Dataframe whose column values the pattern must describe.
+        spec: Replacement column carrying the pattern to check.
+
+    Returns:
+        A description of the first problem found, or ``None`` when the pattern is valid.
+
+    Raises:
+        InternalError: If the entity's pattern syntax has no matcher.
+    """
+    pattern = spec.pattern
+    if pattern is None or spec.column_name not in df.columns:
+        return None
+
+    values = df[spec.column_name].dropna().astype(str).tolist()
+    pattern_syntax = ENTITY_BY_TYPE[spec.entity_type].pattern_syntax
+    if pattern_syntax is PatternSyntax.STRFTIME:
+        if error := _strftime_pattern_error(pattern):
+            return f"column {spec.column_name!r}: pattern {pattern!r} is not valid strftime ({error})"
+        matches = sum(_parses_datetime(value, pattern) for value in values)
+    else:
+        matcher, error = _pattern_matcher(spec.entity_type, pattern)
+        if error is not None:
+            return f"column {spec.column_name!r}: pattern {pattern!r} {error}"
+        if matcher is None:
+            raise InternalError(
+                f"Pattern syntax {pattern_syntax!r} for entity_type {spec.entity_type.value!r} has no matcher"
+            )
+        matches = sum(matcher.fullmatch(value) is not None for value in values)
+
+    if values and matches / len(values) < MIN_PATTERN_COVERAGE:
+        coverage = matches / len(values)
+        return (
+            f"column {spec.column_name!r}: pattern {pattern!r} covers {coverage:.1%} of non-null values; "
+            f"at least {MIN_PATTERN_COVERAGE:.0%} is required"
+        )
+    return None
+
+
 def _iter_pattern_issues(df: pd.DataFrame, plan: PiiReplacementPlan) -> Iterator[str]:
     for spec in plan.columns_to_replace:
-        pattern = spec.pattern
-        if pattern is None or spec.column_name not in df.columns:
-            continue
-
-        values = df[spec.column_name].dropna().astype(str).tolist()
-        pattern_syntax = ENTITY_BY_TYPE[spec.entity_type].pattern_syntax
-        if pattern_syntax is PatternSyntax.STRFTIME:
-            if error := _strftime_pattern_error(pattern):
-                yield f"column {spec.column_name!r}: pattern {pattern!r} is not valid strftime ({error})"
-                continue
-            matches = sum(_parses_datetime(value, pattern) for value in values)
-        else:
-            matcher, error = _pattern_matcher(spec.entity_type, pattern)
-            if error is not None:
-                yield f"column {spec.column_name!r}: pattern {pattern!r} {error}"
-                continue
-            if matcher is None:
-                raise InternalError(
-                    f"Pattern syntax {pattern_syntax!r} for entity_type {spec.entity_type.value!r} has no matcher"
-                )
-            matches = sum(matcher.fullmatch(value) is not None for value in values)
-
-        if values and matches / len(values) < MIN_PATTERN_COVERAGE:
-            coverage = matches / len(values)
-            yield (
-                f"column {spec.column_name!r}: pattern {pattern!r} covers {coverage:.1%} of non-null values; "
-                f"at least {MIN_PATTERN_COVERAGE:.0%} is required"
-            )
+        if (issue := column_pattern_issue(df, spec)) is not None:
+            yield issue
 
 
 def _parses_datetime(value: str, pattern: str) -> bool:
