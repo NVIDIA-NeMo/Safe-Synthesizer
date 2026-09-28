@@ -191,6 +191,8 @@ class TestLLMPlanEnhancer:
                     "source_entity_type": "organization",
                     "target_column": "email",
                     "target_entity_type": "email",
+                    "target_pattern": None,
+                    "target_pattern_syntax": None,
                     "selected_by_heuristic": False,
                 }
             ],
@@ -199,9 +201,10 @@ class TestLLMPlanEnhancer:
                 [["full_name"], ["ethnic_background", "gender"]],
                 [["zipcode"], ["city", "country", "state"]],
             ],
+            "pattern_grammars": {},
         }
         assert (
-            "selected source_entity_types for one target may intersect at most one inner group"
+            "the source entity types selected for one target may come from at most one inner group"
             in dependency_messages[0]["content"]
         )
         assert set(dependency_model.model_json_schema()["properties"]) == {"selected_dependency_ids"}
@@ -245,7 +248,7 @@ class TestLLMPlanEnhancer:
         dependency_messages, _ = transport.calls[1]
         dependency_payload = json.loads(dependency_messages[1]["content"])
         assert dependency_payload["dependency_candidates"][0]["selected_by_heuristic"] is True
-        assert "fallible prior evidence" in dependency_messages[0]["content"]
+        assert "treat it as a hint, not a requirement" in dependency_messages[0]["content"]
 
     def test_classification_prompt_includes_exact_supported_pattern_grammars(self) -> None:
         dataframe = pd.DataFrame(
@@ -264,11 +267,45 @@ class TestLLMPlanEnhancer:
         )
 
         messages, _ = transport.calls[0]
-        assert "Do not decide whether a column should be replaced" in messages[0]["content"]
+        assert "NSS decides on its own which columns to replace" in messages[0]["content"]
+        assert "do not require name columns in the table" in messages[0]["content"]
         payload = json.loads(messages[1]["content"])
         assert payload["pattern_grammars"]["character_mask"]["tokens"]["&"] == "digit or uppercase letter"
         assert payload["pattern_grammars"]["character_mask"]["tokens"]["%"] == "digit or lowercase letter"
         assert "In email patterns, # emits one digit." in payload["pattern_grammars"]["name_parts"]["rules"]
+        assert all(set(entity) == {"entity_type", "pattern_syntax"} for entity in payload["entity_catalog"])
+
+    def test_dependency_candidates_include_proposed_target_pattern(self) -> None:
+        dataframe = pd.DataFrame(
+            {
+                "first_name": ["Ada", "Grace"],
+                "email": ["ada@example.com", "grace@example.com"],
+            }
+        )
+        enhancer, transport = _enhancer(
+            [
+                _classifications(
+                    {"first_name": "first_name", "email": "email"},
+                    patterns={"email": "{first}@{domain}"},
+                ),
+                _dependency_selection(),
+            ]
+        )
+
+        resolve_plan(
+            dataframe,
+            ReplacePiiConfig(llm=_local_config()),
+            DataParameters(),
+            enhancer=enhancer,
+        )
+
+        dependency_payload = json.loads(transport.calls[1][0][1]["content"])
+        [candidate] = dependency_payload["dependency_candidates"]
+        assert (candidate["target_column"], candidate["source_column"]) == ("email", "first_name")
+        assert candidate["target_pattern"] == "{first}@{domain}"
+        assert candidate["target_pattern_syntax"] == "name_parts"
+        assert set(dependency_payload["pattern_grammars"]) == {"name_parts"}
+        assert "{first}" in dependency_payload["pattern_grammars"]["name_parts"]["placeholders"]
 
     def test_code_excludes_identify_only_and_ordering_but_not_group_classifications(self) -> None:
         dataframe = pd.DataFrame(
@@ -319,6 +356,8 @@ class TestLLMPlanEnhancer:
                 "source_entity_type": "gender",
                 "target_column": "first_name",
                 "target_entity_type": "first_name",
+                "target_pattern": None,
+                "target_pattern_syntax": None,
                 "selected_by_heuristic": False,
             }
         ]
