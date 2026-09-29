@@ -203,6 +203,18 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
     )
     options.append(
         click.option(
+            "--inference-local-profile",
+            type=str,
+            required=False,
+            default=None,
+            help="Bundled profile name (for example gpt-oss-120b) or YAML path for a local vLLM server "
+            "that NSS starts for LLM-assisted PII plan discovery and stops before planning returns. "
+            "NSS_INFERENCE_ENDPOINT, if set, must be a loopback http URL and selects the listening address. "
+            "Can also be set via NSS_INFERENCE_LOCAL_PROFILE env var.",
+        )
+    )
+    options.append(
+        click.option(
             "--enable-huggingface-remote/--disable-huggingface-remote",
             "huggingface_remote",
             required=False,

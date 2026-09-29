@@ -382,6 +382,8 @@ def _propagate_runtime_settings_to_env(settings: "CLISettings") -> None:
         os.environ["NSS_INFERENCE_KEY"] = settings.inference_api_key
     if settings.inference_model_id is not None:
         os.environ["NSS_INFERENCE_MODEL"] = settings.inference_model_id
+    if settings.inference_local_profile is not None:
+        os.environ["NSS_INFERENCE_LOCAL_PROFILE"] = settings.inference_local_profile
     if settings.huggingface_remote is not None:
         offline = "0" if settings.huggingface_remote else "1"
         os.environ["HF_HUB_OFFLINE"] = offline

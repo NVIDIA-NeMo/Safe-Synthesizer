@@ -224,6 +224,14 @@ class TestCLISettings:
         settings = CLISettings()
         assert settings.inference_endpoint_url == "https://custom.example/v1"
 
+    def test_inference_local_profile_from_env_and_cli(self, monkeypatch):
+        """NSS_INFERENCE_LOCAL_PROFILE loads, and --inference-local-profile overrides it."""
+        monkeypatch.setenv("NSS_INFERENCE_LOCAL_PROFILE", "gpt-oss-120b")
+        assert CLISettings().inference_local_profile == "gpt-oss-120b"
+
+        settings = CLISettings.from_cli_kwargs(inference_local_profile="/profiles/custom.yaml")
+        assert settings.inference_local_profile == "/profiles/custom.yaml"
+
     def test_explicit_cli_fields_exclude_environment_loaded_values(self, monkeypatch):
         monkeypatch.setenv("NSS_INFERENCE_ENDPOINT", "https://env.example/v1")
 

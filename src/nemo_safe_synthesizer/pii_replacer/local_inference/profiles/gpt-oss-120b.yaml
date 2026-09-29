@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# GPT-OSS-120B on one 80 GB GPU. The MXFP4 weights take about 65 GB.
+model_id: openai/gpt-oss-120b
+revision: b5c939de8f754692c1647ca79fbf85e8c1e70f8a
+gpu_memory_utilization: 0.95
+# One classification request carries up to 48 KiB of column samples,
+# roughly 12-16k tokens before instructions and reasoning.
+max_model_len: 32768
+# Matches the default replace_pii.llm.max_workers.
+max_num_seqs: 8
+extra_args:
+  # Let the model reason before its schema-constrained answer. Without a
+  # reasoning parser, vLLM constrains the first token and the model skips reasoning.
+  - --reasoning-parser=openai_gptoss
+# Allows for the first-run download of about 65 GB.
+startup_timeout_seconds: 1800
+shutdown_timeout_seconds: 60
