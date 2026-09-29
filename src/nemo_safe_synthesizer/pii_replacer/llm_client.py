@@ -17,7 +17,7 @@ import httpx
 from pydantic import BaseModel
 
 from ..config.replace_pii import LLMConfig
-from ..defaults import DEFAULT_NSS_INFERENCE_ENDPOINT, DEFAULT_NSS_INFERENCE_MODEL
+from ..defaults import HOSTED_NSS_INFERENCE_ENDPOINT
 from ..errors import GenerationError, ParameterError
 
 __all__ = [
@@ -25,6 +25,7 @@ __all__ = [
     "InvalidInferenceResponse",
     "LLMTransport",
     "MissingInferenceKeyError",
+    "MissingInferenceModelError",
     "OpenAICompatibleTransport",
     "TransientInferenceError",
     "resolve_inference_settings",
@@ -71,6 +72,10 @@ class InvalidInferenceResponse(GenerationError):
 
 class MissingInferenceKeyError(ParameterError):
     """The resolved endpoint requires an API key, but none was supplied."""
+
+
+class MissingInferenceModelError(ParameterError):
+    """An explicit endpoint is configured, but no model ID for it."""
 
 
 class LLMTransport(Protocol):
@@ -120,8 +125,8 @@ def _validate_endpoint(endpoint_url: str) -> None:
         )
 
 
-def _is_default_hosted_endpoint(endpoint_url: str) -> bool:
-    return endpoint_url.rstrip("/") == DEFAULT_NSS_INFERENCE_ENDPOINT.rstrip("/")
+def _is_hosted_endpoint(endpoint_url: str) -> bool:
+    return endpoint_url.rstrip("/") == HOSTED_NSS_INFERENCE_ENDPOINT.rstrip("/")
 
 
 def resolve_inference_settings(
@@ -129,20 +134,19 @@ def resolve_inference_settings(
     *,
     environ: Mapping[str, str] | None = None,
 ) -> InferenceSettings:
-    """Resolve inference settings from persisted configuration, environment, and defaults.
+    """Resolve inference settings from persisted configuration and environment.
 
-    The model resolves from ``config.model_id``, then ``NSS_INFERENCE_MODEL``,
-    then the NSS default. As with other overlapping YAML and environment
-    settings, an explicit YAML value wins and the environment only supplies its
-    default. The CLI applies an explicit ``--inference-model-id`` to
-    ``config.model_id`` before this runs.
+    There are no defaults: an endpoint and its model must both be set. The
+    model resolves from ``config.model_id``, then ``NSS_INFERENCE_MODEL``. As
+    with other overlapping YAML and environment settings, an explicit YAML
+    value wins and the environment only supplies its default. The CLI applies
+    an explicit ``--inference-model-id`` to ``config.model_id`` before this runs.
 
     The endpoint and API key are deliberately absent from persisted
     configuration. They come only from ``NSS_INFERENCE_ENDPOINT`` and
     ``NSS_INFERENCE_KEY``, which the CLI populates from its runtime options.
     Plan discovery calls this inside ``planning_inference_environment``, which
-    points these variables at the default local server when no endpoint is
-    set; a direct call without an endpoint falls back to the hosted endpoint.
+    points these variables at the managed local server when no endpoint is set.
 
     Args:
         config: Persisted LLM behavior from ``replace_pii.llm``.
@@ -152,22 +156,29 @@ def resolve_inference_settings(
         Settings with a validated endpoint and resolved model.
 
     Raises:
-        ParameterError: If the endpoint is not an absolute HTTP(S) URL, embeds
-            credentials, or uses plaintext HTTP for a non-loopback host.
+        ParameterError: If no endpoint is set, or the endpoint is not an
+            absolute HTTP(S) URL, embeds credentials, or uses plaintext HTTP
+            for a non-loopback host.
         MissingInferenceKeyError: If the hosted NVIDIA endpoint is selected
             without an API key.
+        MissingInferenceModelError: If the endpoint has no model ID.
     """
     runtime_env = os.environ if environ is None else environ
-    resolved_endpoint = _nonblank(runtime_env.get("NSS_INFERENCE_ENDPOINT")) or DEFAULT_NSS_INFERENCE_ENDPOINT
-    resolved_model = (
-        _nonblank(config.model_id) or _nonblank(runtime_env.get("NSS_INFERENCE_MODEL")) or DEFAULT_NSS_INFERENCE_MODEL
-    )
+    resolved_endpoint = _nonblank(runtime_env.get("NSS_INFERENCE_ENDPOINT"))
+    resolved_model = _nonblank(config.model_id) or _nonblank(runtime_env.get("NSS_INFERENCE_MODEL"))
     resolved_key = _nonblank(runtime_env.get("NSS_INFERENCE_KEY"))
 
+    if resolved_endpoint is None:
+        raise ParameterError("No PII inference endpoint is set; set NSS_INFERENCE_ENDPOINT or --inference-endpoint-url")
     _validate_endpoint(resolved_endpoint)
-    if _is_default_hosted_endpoint(resolved_endpoint) and resolved_key is None:
+    if _is_hosted_endpoint(resolved_endpoint) and resolved_key is None:
         raise MissingInferenceKeyError(
             "NSS_INFERENCE_KEY or --inference-api-key is required for the hosted NVIDIA inference endpoint"
+        )
+    if resolved_model is None:
+        raise MissingInferenceModelError(
+            "NSS_INFERENCE_ENDPOINT is set, so the model it serves must be set too: use "
+            "replace_pii.llm.model_id, --inference-model-id, or NSS_INFERENCE_MODEL"
         )
 
     return InferenceSettings(

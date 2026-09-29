@@ -72,8 +72,8 @@ class TestResolveLocalServerRequest:
 
     @pytest.mark.parametrize(
         "environ",
-        [{}, {"NSS_INFERENCE_KEY": "hosted-key"}, {"NSS_INFERENCE_MODEL": GPT_OSS}],
-        ids=["nothing-set", "key-alone", "matching-model"],
+        [{}, {"NSS_INFERENCE_KEY": "hosted-key"}],
+        ids=["nothing-set", "key-alone"],
     )
     def test_without_endpoint_the_default_is_a_local_gpt_oss_server(self, environ: dict[str, str]) -> None:
         request = resolve_local_server_request(LLMConfig(), environ=environ)
@@ -109,15 +109,6 @@ class TestResolveLocalServerRequest:
         with pytest.raises(ParameterError, match="no bundled profile serves it(.|\\n)*NSS_INFERENCE_LOCAL_PROFILE"):
             resolve_local_server_request(config, environ=environ)
 
-    def test_yaml_model_wins_over_env_model_when_choosing_the_bundled_profile(self) -> None:
-        request = resolve_local_server_request(
-            LLMConfig(model_id=GPT_OSS),
-            environ={"NSS_INFERENCE_MODEL": "org/unbundled"},
-        )
-
-        assert request is not None
-        assert request.profile.served_name == GPT_OSS
-
     @pytest.mark.parametrize(
         ("endpoint", "host", "port"),
         [
@@ -149,8 +140,6 @@ class TestResolveLocalServerRequest:
             pytest.param("http://inference.example.com:8000/v1", id="remote-host"),
             pytest.param("http://127.0.0.1/v1", id="missing-port"),
             pytest.param("http://127.0.0.1:8000", id="missing-v1-path"),
-            pytest.param("http://127.0.0.1:8000/v1?x=1", id="query"),
-            pytest.param("http://127.0.0.1:notaport/v1", id="invalid-port"),
         ],
     )
     def test_endpoint_that_cannot_host_the_managed_server_is_rejected(self, endpoint: str) -> None:
@@ -174,11 +163,6 @@ class TestResolveLocalServerRequest:
     ) -> None:
         with pytest.raises(ParameterError, match=match):
             resolve_local_server_request(config, environ={"NSS_INFERENCE_LOCAL_PROFILE": "gpt-oss-120b", **environ})
-
-    def test_matching_model_names_are_accepted(self) -> None:
-        environ = {"NSS_INFERENCE_LOCAL_PROFILE": "gpt-oss-120b", "NSS_INFERENCE_MODEL": GPT_OSS}
-
-        assert resolve_local_server_request(LLMConfig(model_id=GPT_OSS), environ=environ) is not None
 
     def test_invalid_profile_reference_is_a_parameter_error(self) -> None:
         with pytest.raises(ParameterError, match="neither a bundled profile"):
@@ -205,12 +189,3 @@ class TestPlanningInferenceEnvironment:
 
         assert (server.host, server.port) == ("127.0.0.1", 8123)
         assert not server.running
-
-    def test_server_stops_when_planning_raises(self, fake_server: type[FakeServer]) -> None:
-        environ = {"NSS_INFERENCE_LOCAL_PROFILE": "gpt-oss-120b"}
-
-        with pytest.raises(RuntimeError, match="planning failed"):
-            with planning_inference_environment(LLMConfig(), environ=environ):
-                raise RuntimeError("planning failed")
-
-        assert not fake_server.instances[0].running

@@ -75,10 +75,9 @@ DEFAULT_EXCLUDE_COLUMNS: tuple[str, ...] = (PSEUDO_GROUP_COLUMN,)
 # PII replacement v3 runs this model in a local vLLM server, from its bundled
 # profile, when no inference endpoint or model is configured.
 DEFAULT_NSS_INFERENCE_LOCAL_MODEL = "openai/gpt-oss-120b"
-# Hosted OpenAI-compatible inference service; used only when an endpoint is
-# selected explicitly, and its model is the default for explicit endpoints.
-DEFAULT_NSS_INFERENCE_ENDPOINT = "https://integrate.api.nvidia.com/v1"
-DEFAULT_NSS_INFERENCE_MODEL = "nvidia/nemotron-3-ultra-550b-a55b"
+# Hosted NVIDIA OpenAI-compatible inference service. Used only when selected
+# explicitly through NSS_INFERENCE_ENDPOINT, and it always requires an API key.
+HOSTED_NSS_INFERENCE_ENDPOINT = "https://integrate.api.nvidia.com/v1"
 PII_REPLACEMENT_PLAN_FILENAME = "pii_replacement_plan.yaml"
 
 # Managed parquet assets for the PII sampler (``datasets/{locale}.parquet``).

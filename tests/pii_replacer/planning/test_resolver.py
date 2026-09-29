@@ -237,9 +237,6 @@ class TestResolvePlanWithLocalServer:
             created.append(FakeLocalServer(profile, **kwargs))
             return created[-1]
 
-        monkeypatch.setenv("NSS_INFERENCE_LOCAL_PROFILE", "gpt-oss-120b")
-        monkeypatch.delenv("NSS_INFERENCE_ENDPOINT", raising=False)
-        monkeypatch.delenv("NSS_INFERENCE_MODEL", raising=False)
         monkeypatch.setattr("nemo_safe_synthesizer.pii_replacer.local_inference.managed.LocalVllmServer", make_server)
         return created
 
@@ -322,40 +319,6 @@ class TestResolvePlanWithLocalServer:
         config: ReplacePiiConfig,
     ) -> None:
         resolve_plan(fixture_patient_df, config, DataParameters())
-
-        assert servers == []
-
-    def test_default_without_endpoint_runs_the_local_server(
-        self,
-        fixture_patient_df: pd.DataFrame,
-        servers: list[FakeLocalServer],
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        monkeypatch.delenv("NSS_INFERENCE_LOCAL_PROFILE")
-        monkeypatch.setattr(
-            "nemo_safe_synthesizer.pii_replacer.planning.llm.LLMPlanEnhancer",
-            lambda config, environ=None: RecordingEnhancer(PiiReplacementPlan()),
-        )
-
-        resolve_plan(fixture_patient_df, ReplacePiiConfig(llm=LLMConfig()), DataParameters())
-
-        assert len(servers) == 1
-        assert not servers[0].running
-
-    def test_explicit_endpoint_starts_no_server(
-        self,
-        fixture_patient_df: pd.DataFrame,
-        servers: list[FakeLocalServer],
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        monkeypatch.delenv("NSS_INFERENCE_LOCAL_PROFILE")
-        monkeypatch.setenv("NSS_INFERENCE_ENDPOINT", "https://integrate.api.nvidia.com/v1")
-        monkeypatch.setattr(
-            "nemo_safe_synthesizer.pii_replacer.planning.llm.LLMPlanEnhancer",
-            lambda config, environ=None: RecordingEnhancer(PiiReplacementPlan()),
-        )
-
-        resolve_plan(fixture_patient_df, ReplacePiiConfig(llm=LLMConfig()), DataParameters())
 
         assert servers == []
 

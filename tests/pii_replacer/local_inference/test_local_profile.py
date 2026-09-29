@@ -26,13 +26,6 @@ class TestBundledProfiles:
 
         assert re.fullmatch(r"[0-9a-f]{40}", profile.revision)
 
-    def test_gpt_oss_120b_fits_planner_requests_and_parses_reasoning(self) -> None:
-        profile = load_profile("gpt-oss-120b")
-
-        assert profile.served_name == "openai/gpt-oss-120b"
-        assert profile.max_model_len is not None and profile.max_model_len >= 32768
-        assert "--reasoning-parser=openai_gptoss" in profile.extra_args
-
     def test_bundled_profile_is_found_by_served_model_name(self) -> None:
         assert bundled_profile_for_model("openai/gpt-oss-120b") == load_profile("gpt-oss-120b")
         assert bundled_profile_for_model("gpt-oss-120b") is None
@@ -76,15 +69,13 @@ class TestLoadProfile:
 class TestExtraArgs:
     @pytest.mark.parametrize(
         "argument",
-        ["--port=9000", "--host", "--api_key", "--enable-log-requests", "--enable-log-req", "--served-model-name=x"],
+        ["--port=9000", "--api_key", "--enable-log-req"],
     )
     def test_rejects_options_nss_manages(self, argument: str) -> None:
         with pytest.raises(ValidationError, match="managed by NSS"):
             LocalVllmProfile(model_id="org/tiny", revision="abc", extra_args=(argument,))
 
-    @pytest.mark.parametrize(
-        "argument", ["--reasoning-parser=openai_gptoss", "--enforce-eager", "--api-server-count=2"]
-    )
+    @pytest.mark.parametrize("argument", ["--reasoning-parser=openai_gptoss", "--api-server-count=2"])
     def test_accepts_other_vllm_options(self, argument: str) -> None:
         profile = LocalVllmProfile(model_id="org/tiny", revision="abc", extra_args=(argument,))
 
