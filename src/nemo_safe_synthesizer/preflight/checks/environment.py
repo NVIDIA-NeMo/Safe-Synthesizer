@@ -16,7 +16,6 @@ from ...errors import ParameterError
 from ...llm.utils import ModelRef
 from ...observability import get_logger
 from ...pii_replacer.llm_client import (
-    MissingInferenceKeyError,
     MissingInferenceModelError,
     resolve_inference_settings,
 )
@@ -488,8 +487,6 @@ class InferenceModelCheck(ConfigCheck):
             return
         try:
             resolve_inference_settings(replace_pii.llm)
-        except MissingInferenceKeyError as exc:
-            collector.error("inference_key_missing", str(exc))
         except MissingInferenceModelError as exc:
             collector.error("inference_model_missing", str(exc))
         except ParameterError as exc:

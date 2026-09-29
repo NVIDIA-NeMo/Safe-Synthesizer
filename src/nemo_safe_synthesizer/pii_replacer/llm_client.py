@@ -16,14 +16,12 @@ import httpx
 from pydantic import BaseModel
 
 from ..config.replace_pii import LLMConfig
-from ..defaults import HOSTED_NSS_INFERENCE_ENDPOINT
 from ..errors import GenerationError, ParameterError
 
 __all__ = [
     "InferenceSettings",
     "InvalidInferenceResponse",
     "LLMTransport",
-    "MissingInferenceKeyError",
     "MissingInferenceModelError",
     "OpenAICompatibleTransport",
     "TransientInferenceError",
@@ -67,10 +65,6 @@ class TransientInferenceError(GenerationError):
 
 class InvalidInferenceResponse(GenerationError):
     """Retryable malformed inference envelope without response content."""
-
-
-class MissingInferenceKeyError(ParameterError):
-    """The resolved endpoint requires an API key, but none was supplied."""
 
 
 class MissingInferenceModelError(ParameterError):
@@ -124,10 +118,6 @@ def _validate_endpoint(endpoint_url: str) -> None:
         )
 
 
-def _is_hosted_endpoint(endpoint_url: str) -> bool:
-    return endpoint_url.rstrip("/") == HOSTED_NSS_INFERENCE_ENDPOINT.rstrip("/")
-
-
 def resolve_inference_settings(
     config: LLMConfig,
     *,
@@ -158,8 +148,6 @@ def resolve_inference_settings(
         ParameterError: If no endpoint is set, or the endpoint is not an
             absolute HTTP(S) URL, embeds credentials, or uses plaintext HTTP
             for a non-loopback host.
-        MissingInferenceKeyError: If the hosted NVIDIA endpoint is selected
-            without an API key.
         MissingInferenceModelError: If the endpoint has no model ID.
     """
     runtime_env = os.environ if environ is None else environ
@@ -170,10 +158,6 @@ def resolve_inference_settings(
     if resolved_endpoint is None:
         raise ParameterError("No PII inference endpoint is set; set NSS_INFERENCE_ENDPOINT or --inference-endpoint-url")
     _validate_endpoint(resolved_endpoint)
-    if _is_hosted_endpoint(resolved_endpoint) and resolved_key is None:
-        raise MissingInferenceKeyError(
-            "NSS_INFERENCE_KEY or --inference-api-key is required for the hosted NVIDIA inference endpoint"
-        )
     if resolved_model is None:
         raise MissingInferenceModelError(
             "NSS_INFERENCE_ENDPOINT is set, so the model it serves must be set too: use "
@@ -303,7 +287,10 @@ class OpenAICompatibleTransport:
             raise TransientInferenceError("PII inference transport failed") from exc
 
         if response.status_code in {401, 403}:
-            raise ParameterError(f"PII inference authentication or authorization failed (HTTP {response.status_code})")
+            raise ParameterError(
+                f"PII inference authentication or authorization failed (HTTP {response.status_code}); "
+                "check NSS_INFERENCE_KEY or --inference-api-key"
+            )
         if response.status_code in _TRANSIENT_STATUS_CODES or response.status_code >= 500:
             raise TransientInferenceError(
                 f"PII inference service returned HTTP {response.status_code}",
