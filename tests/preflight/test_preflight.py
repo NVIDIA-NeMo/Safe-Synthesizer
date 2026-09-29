@@ -421,6 +421,38 @@ class TestInferenceModelCheck:
         assert [issue.code for issue in issues] == expected_codes
         assert all(issue.severity == "error" for issue in issues)
 
+    @pytest.mark.parametrize(
+        ("environ", "vllm_installed", "expected_codes"),
+        [
+            pytest.param({}, True, [], id="free-port"),
+            pytest.param({"NSS_INFERENCE_ENDPOINT": "http://127.0.0.1:8000/v1"}, True, [], id="loopback-address"),
+            pytest.param({}, False, ["inference_local_vllm_missing"], id="vllm-missing"),
+            pytest.param(
+                {"NSS_INFERENCE_ENDPOINT": "https://inference.example.com/v1"},
+                True,
+                ["inference_local_profile_invalid"],
+                id="remote-endpoint",
+            ),
+            pytest.param(
+                {"NSS_INFERENCE_LOCAL_PROFILE": "missing"}, True, ["inference_local_profile_invalid"], id="bad-profile"
+            ),
+        ],
+    )
+    def test_local_profile_replaces_endpoint_validation(self, default_config, environ, vllm_installed, expected_codes):
+        default_config.replace_pii.llm = LLMConfig()
+        environ = {"NSS_INFERENCE_LOCAL_PROFILE": "gpt-oss-120b", **environ}
+
+        with (
+            patch.dict("os.environ", environ, clear=True),
+            patch(
+                "nemo_safe_synthesizer.preflight.checks.environment.is_vllm_installed",
+                return_value=vllm_installed,
+            ),
+        ):
+            issues = InferenceModelCheck().run(make_ctx(config=default_config))
+
+        assert [issue.code for issue in issues] == expected_codes
+
 
 @pytest.mark.unit
 class TestHFModelAvailabilityCheck:
