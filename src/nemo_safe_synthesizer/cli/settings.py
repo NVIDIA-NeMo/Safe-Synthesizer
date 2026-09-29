@@ -203,7 +203,8 @@ class CLISettings(BaseSettings):
     """Managed local PII inference server profile (env: ``NSS_INFERENCE_LOCAL_PROFILE``).
 
     NSS starts the server only for LLM-assisted plan discovery and stops it
-    before planning returns.
+    before planning returns. When this and the endpoint are both unset, the
+    configured model ID selects a bundled profile.
     """
 
     huggingface_remote: bool | None = Field(

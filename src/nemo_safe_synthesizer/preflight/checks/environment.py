@@ -16,7 +16,7 @@ from ...errors import ParameterError
 from ...llm.utils import ModelRef
 from ...observability import get_logger
 from ...pii_replacer.llm_client import MissingInferenceKeyError, resolve_inference_settings
-from ...pii_replacer.local_inference import is_vllm_installed, resolve_local_server_request
+from ...pii_replacer.local_inference import local_runtime_problem, resolve_local_server_request
 from ...utils import hf_offline_enabled
 from ..base import ConfigCheck, IssueCollector, MetadataCheck
 from ..helpers import require_import
@@ -455,9 +455,9 @@ class VRAMHeadroomCheck(MetadataCheck):
 class InferenceModelCheck(ConfigCheck):
     """Validate configured PII plan-enhancement inference settings.
 
-    With ``NSS_INFERENCE_LOCAL_PROFILE``, validates the profile, managed
-    address, and model names, and that vLLM is installed, instead of the
-    remote endpoint and key.
+    When a managed local server applies (a local profile, or no endpoint at
+    all), validates the profile, managed address, model names, and that vLLM
+    and a CUDA GPU are available, instead of the remote endpoint and key.
     """
 
     name = "env.inference"
@@ -475,10 +475,11 @@ class InferenceModelCheck(ConfigCheck):
             collector.error("inference_local_profile_invalid", str(exc))
             return
         if local_server is not None:
-            if not is_vllm_installed():
+            if problem := local_runtime_problem():
                 collector.error(
-                    "inference_local_vllm_missing",
-                    "NSS_INFERENCE_LOCAL_PROFILE requires vLLM; install the engine extra.",
+                    "inference_local_runtime_unavailable",
+                    f"LLM-assisted PII planning runs a local vLLM server unless NSS_INFERENCE_ENDPOINT is set, "
+                    f"but {problem}.",
                 )
             return
         try:

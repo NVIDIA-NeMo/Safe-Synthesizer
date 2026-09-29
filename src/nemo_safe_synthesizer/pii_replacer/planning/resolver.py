@@ -153,9 +153,9 @@ def _enhance_with_default_llm(
 ) -> PiiReplacementPlan:
     """Run the default LLM enhancer inside its inference environment.
 
-    A server started for ``NSS_INFERENCE_LOCAL_PROFILE`` stops before this
-    returns, so validation, persistence, replacement, and training never run
-    while it holds the GPU.
+    A managed local server, the default without ``NSS_INFERENCE_ENDPOINT``,
+    stops before this returns, so validation, persistence, replacement, and
+    training never run while it holds the GPU.
     """
     from ..local_inference import planning_inference_environment
     from .llm import LLMPlanEnhancer
@@ -179,9 +179,9 @@ def resolve_plan(
     Inline plans and plan files are authoritative and bypass discovery.
     Auto-discovery always runs the heuristic adapter first, then runs an LLM
     enhancer only when ``config.llm`` is configured. When no ``enhancer`` is
-    supplied and ``NSS_INFERENCE_LOCAL_PROFILE`` is set, the default enhancer
-    runs against a managed local vLLM server that stops as soon as enhancement
-    ends. Dataframe-aware validation occurs once, after the final plan has
+    supplied, the default enhancer runs against a managed local vLLM server
+    unless ``NSS_INFERENCE_ENDPOINT`` selects another service; that server
+    stops as soon as enhancement ends. Dataframe-aware validation occurs once, after the final plan has
     been selected.
     """
     if not config.is_auto_discovery:

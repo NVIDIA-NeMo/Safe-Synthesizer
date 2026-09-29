@@ -11,6 +11,7 @@ from nemo_safe_synthesizer.config.replace_pii import LLMConfig
 from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.pii_replacer.local_inference import (
     LocalVllmProfile,
+    load_profile,
     planning_inference_environment,
     resolve_local_server_request,
 )
@@ -61,8 +62,61 @@ def fake_server(monkeypatch: pytest.MonkeyPatch) -> type[FakeServer]:
 
 @pytest.mark.unit
 class TestResolveLocalServerRequest:
-    def test_unset_profile_means_no_managed_server(self) -> None:
-        assert resolve_local_server_request(LLMConfig(), environ={"NSS_INFERENCE_ENDPOINT": "https://x/v1"}) is None
+    @pytest.mark.parametrize(
+        "endpoint",
+        ["https://integrate.api.nvidia.com/v1", "http://127.0.0.1:8000/v1"],
+        ids=["hosted", "own-local-server"],
+    )
+    def test_endpoint_without_profile_opts_out_of_the_managed_server(self, endpoint: str) -> None:
+        assert resolve_local_server_request(LLMConfig(), environ={"NSS_INFERENCE_ENDPOINT": endpoint}) is None
+
+    @pytest.mark.parametrize(
+        "environ",
+        [{}, {"NSS_INFERENCE_KEY": "hosted-key"}, {"NSS_INFERENCE_MODEL": GPT_OSS}],
+        ids=["nothing-set", "key-alone", "matching-model"],
+    )
+    def test_without_endpoint_the_default_is_a_local_gpt_oss_server(self, environ: dict[str, str]) -> None:
+        request = resolve_local_server_request(LLMConfig(), environ=environ)
+
+        assert request is not None
+        assert (request.host, request.port, request.profile.served_name) == ("127.0.0.1", None, GPT_OSS)
+
+    @pytest.mark.parametrize(
+        ("config", "environ"),
+        [
+            pytest.param(LLMConfig(model_id=GPT_OSS), {}, id="yaml-model"),
+            pytest.param(LLMConfig(), {"NSS_INFERENCE_MODEL": GPT_OSS}, id="env-model"),
+        ],
+    )
+    def test_model_id_selects_the_bundled_profile(self, config: LLMConfig, environ: dict[str, str]) -> None:
+        request = resolve_local_server_request(config, environ=environ)
+
+        assert request is not None
+        assert request.profile == load_profile("gpt-oss-120b")
+
+    @pytest.mark.parametrize(
+        ("config", "environ"),
+        [
+            pytest.param(LLMConfig(model_id="nvidia/nemotron-3-ultra-550b-a55b"), {}, id="yaml-model"),
+            pytest.param(LLMConfig(), {"NSS_INFERENCE_MODEL": "org/unbundled"}, id="env-model"),
+        ],
+    )
+    def test_model_without_bundled_profile_points_to_an_endpoint_or_profile(
+        self,
+        config: LLMConfig,
+        environ: dict[str, str],
+    ) -> None:
+        with pytest.raises(ParameterError, match="no bundled profile serves it(.|\\n)*NSS_INFERENCE_LOCAL_PROFILE"):
+            resolve_local_server_request(config, environ=environ)
+
+    def test_yaml_model_wins_over_env_model_when_choosing_the_bundled_profile(self) -> None:
+        request = resolve_local_server_request(
+            LLMConfig(model_id=GPT_OSS),
+            environ={"NSS_INFERENCE_MODEL": "org/unbundled"},
+        )
+
+        assert request is not None
+        assert request.profile.served_name == GPT_OSS
 
     @pytest.mark.parametrize(
         ("endpoint", "host", "port"),

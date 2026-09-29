@@ -21,6 +21,9 @@ from nemo_safe_synthesizer.errors import GenerationError, ParameterError
 from nemo_safe_synthesizer.pii_replacer.local_inference import LocalVllmProfile, LocalVllmServer, build_serve_command
 from nemo_safe_synthesizer.pii_replacer.local_inference import server as server_module
 
+# Captured at import, before the root conftest's autouse guard replaces it.
+REAL_LAUNCH = server_module._launch
+
 PROFILE = LocalVllmProfile(
     model_id="org/tiny",
     revision="abc123",
@@ -70,7 +73,7 @@ class FakeProcess:
 @dataclass
 class Harness:
     group: FakeProcessGroup
-    popen_calls: list[tuple[list[str], dict[str, object]]] = field(default_factory=list)
+    popen_calls: list[tuple[list[str], dict[str, str]]] = field(default_factory=list)
     models: list[Callable[[], httpx.Response]] = field(default_factory=list)
     probe_content: str = '{"ready": true}'
 
@@ -80,7 +83,7 @@ class Harness:
 
     @property
     def child_env(self) -> dict[str, str]:
-        return cast(dict[str, str], self.popen_calls[0][1]["env"])
+        return self.popen_calls[0][1]
 
 
 def _models_response(*names: str) -> Callable[[], httpx.Response]:
@@ -91,8 +94,8 @@ def _models_response(*names: str) -> Callable[[], httpx.Response]:
 def harness(monkeypatch: pytest.MonkeyPatch) -> Iterator[Harness]:
     state = Harness(group=FakeProcessGroup())
 
-    def popen(argv: list[str], **kwargs: object) -> FakeProcess:
-        state.popen_calls.append((argv, kwargs))
+    def launch(argv: list[str], environ: dict[str, str]) -> FakeProcess:
+        state.popen_calls.append((argv, environ))
         return FakeProcess(state.group, output="INFO starting\nINFO loading weights\n")
 
     def get(url: str, **kwargs: object) -> httpx.Response:
@@ -108,8 +111,8 @@ def harness(monkeypatch: pytest.MonkeyPatch) -> Iterator[Harness]:
         return httpx.Response(200, json={"choices": [{"message": {"content": state.probe_content}}]})
 
     state.models.append(_models_response("tiny"))
-    monkeypatch.setattr(server_module, "is_vllm_installed", lambda: True)
-    monkeypatch.setattr(server_module.subprocess, "Popen", popen)
+    monkeypatch.setattr(server_module, "local_runtime_problem", lambda: None)
+    monkeypatch.setattr(server_module, "_launch", launch)
     monkeypatch.setattr(server_module.os, "killpg", state.group.killpg)
     monkeypatch.setattr(server_module.time, "sleep", lambda seconds: None)
     monkeypatch.setattr(httpx, "get", get)
@@ -134,7 +137,6 @@ class TestLocalVllmServerLifecycle:
         assert "NSS_INFERENCE_KEY" not in harness.child_env
         assert "NSS_INFERENCE_ENDPOINT" not in harness.child_env
         assert harness.child_env["VLLM_API_KEY"] not in " ".join(harness.argv)
-        assert harness.popen_calls[0][1]["start_new_session"] is True
 
     def test_polls_until_the_model_is_listed(self, harness: Harness) -> None:
         def refused() -> httpx.Response:
@@ -224,10 +226,14 @@ class TestLocalVllmServerLifecycle:
 
         assert harness.group.signals == [signal.SIGTERM]
 
-    def test_missing_vllm_fails_before_launch(self, harness: Harness, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(server_module, "is_vllm_installed", lambda: False)
+    def test_unavailable_runtime_fails_before_launch_and_points_to_an_endpoint(
+        self,
+        harness: Harness,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(server_module, "local_runtime_problem", lambda: "no CUDA GPU is available")
 
-        with pytest.raises(ParameterError, match="requires vLLM"):
+        with pytest.raises(ParameterError, match="no CUDA GPU is available. Set NSS_INFERENCE_ENDPOINT"):
             LocalVllmServer(PROFILE).start()
 
         assert harness.popen_calls == []
@@ -250,6 +256,18 @@ class TestLocalVllmServerLifecycle:
 
         with LocalVllmServer(PROFILE, port=port) as server:
             assert server.endpoint_url == f"http://127.0.0.1:{port}/v1"
+
+
+@pytest.mark.unit
+def test_launch_starts_the_server_in_its_own_session(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[dict[str, object]] = []
+    monkeypatch.setattr(server_module.subprocess, "Popen", lambda argv, **kwargs: calls.append(kwargs))
+
+    REAL_LAUNCH(["vllm"], {"A": "1"})
+
+    assert calls[0]["start_new_session"] is True
+    assert calls[0]["env"] == {"A": "1"}
+    assert calls[0]["stderr"] is subprocess.STDOUT
 
 
 @pytest.mark.unit
