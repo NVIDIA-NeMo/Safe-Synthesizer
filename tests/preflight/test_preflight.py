@@ -398,7 +398,11 @@ class TestInferenceModelCheck:
     @pytest.mark.parametrize(
         ("environ", "expected_codes"),
         [
-            pytest.param({}, ["inference_key_missing"], id="hosted-without-key"),
+            pytest.param(
+                {"NSS_INFERENCE_ENDPOINT": "https://integrate.api.nvidia.com/v1"},
+                ["inference_key_missing"],
+                id="hosted-without-key",
+            ),
             pytest.param({"NSS_INFERENCE_ENDPOINT": "http://localhost:8000/v1"}, [], id="keyless-local"),
             pytest.param(
                 {"NSS_INFERENCE_ENDPOINT": "not-a-url", "NSS_INFERENCE_KEY": "key"},
@@ -412,7 +416,7 @@ class TestInferenceModelCheck:
             ),
         ],
     )
-    def test_enabled_llm_validates_inference_environment(self, default_config, environ, expected_codes):
+    def test_explicit_endpoint_validates_inference_environment(self, default_config, environ, expected_codes):
         default_config.replace_pii.llm = LLMConfig(model_id="local-model")
 
         with patch.dict("os.environ", environ, clear=True):
@@ -422,36 +426,52 @@ class TestInferenceModelCheck:
         assert all(issue.severity == "error" for issue in issues)
 
     @pytest.mark.parametrize(
-        ("environ", "vllm_installed", "expected_codes"),
+        ("environ", "runtime_problem", "expected_codes"),
         [
-            pytest.param({}, True, [], id="free-port"),
-            pytest.param({"NSS_INFERENCE_ENDPOINT": "http://127.0.0.1:8000/v1"}, True, [], id="loopback-address"),
-            pytest.param({}, False, ["inference_local_vllm_missing"], id="vllm-missing"),
+            pytest.param({}, None, [], id="default-local-server"),
+            pytest.param({}, "no CUDA GPU is available", ["inference_local_runtime_unavailable"], id="no-gpu"),
+            pytest.param({"NSS_INFERENCE_KEY": "key"}, None, [], id="key-alone-keeps-local-default"),
             pytest.param(
-                {"NSS_INFERENCE_ENDPOINT": "https://inference.example.com/v1"},
-                True,
-                ["inference_local_profile_invalid"],
-                id="remote-endpoint",
+                {"NSS_INFERENCE_LOCAL_PROFILE": "gpt-oss-120b", "NSS_INFERENCE_ENDPOINT": "http://127.0.0.1:8000/v1"},
+                None,
+                [],
+                id="profile-with-loopback-address",
             ),
             pytest.param(
-                {"NSS_INFERENCE_LOCAL_PROFILE": "missing"}, True, ["inference_local_profile_invalid"], id="bad-profile"
+                {"NSS_INFERENCE_LOCAL_PROFILE": "gpt-oss-120b", "NSS_INFERENCE_ENDPOINT": "https://x.example.com/v1"},
+                None,
+                ["inference_local_profile_invalid"],
+                id="profile-with-remote-endpoint",
+            ),
+            pytest.param(
+                {"NSS_INFERENCE_LOCAL_PROFILE": "missing"}, None, ["inference_local_profile_invalid"], id="bad-profile"
             ),
         ],
     )
-    def test_local_profile_replaces_endpoint_validation(self, default_config, environ, vllm_installed, expected_codes):
+    def test_managed_local_server_replaces_endpoint_validation(
+        self, default_config, environ, runtime_problem, expected_codes
+    ):
         default_config.replace_pii.llm = LLMConfig()
-        environ = {"NSS_INFERENCE_LOCAL_PROFILE": "gpt-oss-120b", **environ}
 
         with (
             patch.dict("os.environ", environ, clear=True),
             patch(
-                "nemo_safe_synthesizer.preflight.checks.environment.is_vllm_installed",
-                return_value=vllm_installed,
+                "nemo_safe_synthesizer.preflight.checks.environment.local_runtime_problem",
+                return_value=runtime_problem,
             ),
         ):
             issues = InferenceModelCheck().run(make_ctx(config=default_config))
 
         assert [issue.code for issue in issues] == expected_codes
+
+    def test_default_local_server_rejects_a_different_configured_model(self, default_config):
+        default_config.replace_pii.llm = LLMConfig(model_id="nvidia/nemotron-3-ultra-550b-a55b")
+
+        with patch.dict("os.environ", {}, clear=True):
+            issues = InferenceModelCheck().run(make_ctx(config=default_config))
+
+        assert [issue.code for issue in issues] == ["inference_local_profile_invalid"]
+        assert "Set NSS_INFERENCE_ENDPOINT" in issues[0].message
 
 
 @pytest.mark.unit

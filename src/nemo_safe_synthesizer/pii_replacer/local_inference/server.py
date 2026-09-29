@@ -32,6 +32,7 @@ __all__ = [
     "LocalVllmServer",
     "build_serve_command",
     "is_vllm_installed",
+    "local_runtime_problem",
 ]
 
 logger = get_logger(__name__)
@@ -67,6 +68,17 @@ class _ReadinessProbe(BaseModel):
 def is_vllm_installed() -> bool:
     """Return whether vLLM can be imported, without importing it."""
     return importlib.util.find_spec("vllm") is not None
+
+
+def local_runtime_problem() -> str | None:
+    """Return why this machine cannot run a managed vLLM server, or ``None`` if it can."""
+    if not is_vllm_installed():
+        return "vLLM is not installed (install the engine extra, for example `uv sync --extra cu129 --extra engine`)"
+    import torch
+
+    if not torch.cuda.is_available():
+        return "no CUDA GPU is available"
+    return None
 
 
 def build_serve_command(profile: LocalVllmProfile, *, host: str, port: int, parent_pid: int) -> list[str]:
@@ -113,6 +125,20 @@ def build_serve_command(profile: LocalVllmProfile, *, host: str, port: int, pare
         *options,
         *profile.extra_args,
     ]
+
+
+def _launch(command: list[str], environ: Mapping[str, str]) -> subprocess.Popen[str]:
+    """Start the server in its own session, merging stderr into a text stdout pipe."""
+    return subprocess.Popen(
+        command,
+        env=dict(environ),
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        errors="replace",
+        start_new_session=True,
+    )
 
 
 def _url_host(host: str) -> str:
@@ -170,7 +196,7 @@ class LocalVllmServer:
             ``os.environ``. ``NSS_INFERENCE_*`` values are not passed on.
 
     Raises:
-        ParameterError: On entry, if vLLM is not installed or the port is in use.
+        ParameterError: On entry, if vLLM or a CUDA GPU is unavailable, or the port is in use.
         GenerationError: On entry, if the server exits, times out, or fails
             its readiness checks.
     """
@@ -226,31 +252,23 @@ class LocalVllmServer:
         """Launch the server and block until it is ready.
 
         Raises:
-            ParameterError: If vLLM is not installed or the port is in use.
+            ParameterError: If vLLM or a CUDA GPU is unavailable, or the port is in use.
             GenerationError: If the server exits, times out, or fails readiness checks.
         """
         if self._process is not None or self._stopped:
             raise InternalError("A LocalVllmServer can only be started once")
-        if not is_vllm_installed():
+        if problem := local_runtime_problem():
             raise ParameterError(
-                "NSS_INFERENCE_LOCAL_PROFILE requires vLLM. Install the engine extra, for example "
-                "`uv sync --extra cu129 --extra engine`."
+                f"LLM-assisted PII planning runs a local vLLM server unless NSS_INFERENCE_ENDPOINT is set, "
+                f"but {problem}. Set NSS_INFERENCE_ENDPOINT, plus NSS_INFERENCE_KEY if it requires one, "
+                "to use a remote OpenAI-compatible service instead."
             )
         self._port = _available_port(self._host, self._requested_port)
         command = build_serve_command(self._profile, host=self._host, port=self._port, parent_pid=os.getpid())
         logger.user.info(f"Starting local vLLM server for {self._profile.served_name!r} at {self.endpoint_url}")
         started = time.monotonic()
         try:
-            self._process = subprocess.Popen(
-                command,
-                env=self._server_environ(),
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                errors="replace",
-                start_new_session=True,
-            )
+            self._process = _launch(command, self._server_environ())
             if self._process.stdout is not None:
                 self._output_thread = threading.Thread(
                     target=self._forward_output,

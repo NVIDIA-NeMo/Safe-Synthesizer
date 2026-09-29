@@ -12,9 +12,10 @@ from dataclasses import dataclass
 from urllib.parse import urlparse
 
 from ...config.replace_pii import LLMConfig
+from ...defaults import DEFAULT_NSS_INFERENCE_LOCAL_MODEL
 from ...errors import ParameterError
 from ..llm_client import _is_loopback_host, _nonblank
-from .profile import LocalVllmProfile, load_profile
+from .profile import LocalVllmProfile, bundled_profile_for_model, bundled_profile_names, load_profile
 from .server import DEFAULT_HOST, LocalVllmServer
 
 __all__ = [
@@ -25,7 +26,11 @@ __all__ = [
 ]
 
 LOCAL_PROFILE_ENV = "NSS_INFERENCE_LOCAL_PROFILE"
-"""Runtime setting naming a bundled profile or profile YAML path."""
+"""Runtime setting naming a custom profile YAML path (or a bundled profile name).
+
+When neither this nor ``NSS_INFERENCE_ENDPOINT`` is set, the configured model
+selects a bundled profile instead.
+"""
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,6 +86,22 @@ def _check_model_names(config: LLMConfig, environ: Mapping[str, str], profile: L
         )
 
 
+def _bundled_profile(config: LLMConfig, environ: Mapping[str, str]) -> LocalVllmProfile:
+    """Return the bundled profile for the configured model, or for the default local model."""
+    model_id = (
+        _nonblank(config.model_id) or _nonblank(environ.get("NSS_INFERENCE_MODEL")) or DEFAULT_NSS_INFERENCE_LOCAL_MODEL
+    )
+    profile = bundled_profile_for_model(model_id)
+    if profile is None:
+        served = ", ".join(sorted(load_profile(name).served_name for name in bundled_profile_names()))
+        raise ParameterError(
+            f"No inference endpoint is set, so NSS runs {model_id!r} in a local vLLM server, but no bundled "
+            f"profile serves it (bundled: {served}). Set NSS_INFERENCE_ENDPOINT to a service that serves the "
+            f"model, or set {LOCAL_PROFILE_ENV} to a profile YAML for it."
+        )
+    return profile
+
+
 def resolve_local_server_request(
     config: LLMConfig,
     *,
@@ -88,25 +109,36 @@ def resolve_local_server_request(
 ) -> LocalServerRequest | None:
     """Validate the managed-server settings without launching anything.
 
+    An explicit ``NSS_INFERENCE_LOCAL_PROFILE`` always selects a managed
+    server, and any configured model must match it. Without a profile, an
+    explicit ``NSS_INFERENCE_ENDPOINT`` selects that endpoint and no managed
+    server. With neither, the configured model (``replace_pii.llm.model_id``,
+    then ``NSS_INFERENCE_MODEL``, then ``DEFAULT_NSS_INFERENCE_LOCAL_MODEL``)
+    selects the bundled profile to run.
+
     Args:
         config: Persisted LLM behavior from ``replace_pii.llm``.
         environ: Environment mapping to read; defaults to ``os.environ``.
 
     Returns:
-        The launch request, or ``None`` when ``NSS_INFERENCE_LOCAL_PROFILE`` is unset.
+        The launch request, or ``None`` when an explicit endpoint replaces the managed server.
 
     Raises:
         ParameterError: If the profile is invalid, ``NSS_INFERENCE_ENDPOINT``
-            is not a usable loopback address, or a configured model name
-            differs from the profile's served name.
+            is not a usable loopback address, a configured model differs from
+            an explicit profile, or no bundled profile serves the model.
     """
     runtime_env = os.environ if environ is None else environ
     reference = _nonblank(runtime_env.get(LOCAL_PROFILE_ENV))
-    if reference is None:
+    endpoint = _nonblank(runtime_env.get("NSS_INFERENCE_ENDPOINT"))
+    if reference is not None:
+        profile = load_profile(reference)
+        _check_model_names(config, runtime_env, profile)
+    elif endpoint is not None:
         return None
-    profile = load_profile(reference)
-    host, port = _managed_address(_nonblank(runtime_env.get("NSS_INFERENCE_ENDPOINT")))
-    _check_model_names(config, runtime_env, profile)
+    else:
+        profile = _bundled_profile(config, runtime_env)
+    host, port = _managed_address(endpoint)
     return LocalServerRequest(profile=profile, host=host, port=port)
 
 
@@ -118,8 +150,9 @@ def planning_inference_environment(
 ) -> Iterator[Mapping[str, str] | None]:
     """Yield the inference environment for one LLM planning pass.
 
-    Without ``NSS_INFERENCE_LOCAL_PROFILE``, this yields ``environ`` unchanged.
-    With it, this starts a :class:`LocalVllmServer`, yields an environment
+    When an explicit ``NSS_INFERENCE_ENDPOINT`` replaces the managed server
+    (see :func:`resolve_local_server_request`), this yields ``environ``
+    unchanged. Otherwise it starts a :class:`LocalVllmServer`, yields an environment
     whose ``NSS_INFERENCE_*`` values point at that server, and stops the
     server when the block exits. The server therefore never outlives
     planning, and its GPU memory is free before replacement or training.

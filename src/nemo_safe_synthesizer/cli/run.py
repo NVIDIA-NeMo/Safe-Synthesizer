@@ -177,8 +177,8 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
             type=str,
             required=False,
             default=None,
-            help="OpenAI-compatible inference endpoint URL for PII replacement. "
-            "Can also be set via NSS_INFERENCE_ENDPOINT env var.",
+            help="OpenAI-compatible inference endpoint URL for PII replacement. When unset, NSS runs a local "
+            "vLLM server instead (see --inference-local-profile). Can also be set via NSS_INFERENCE_ENDPOINT env var.",
         )
     )
     options.append(
@@ -198,7 +198,8 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
             default=None,
             help="Model ID served by the PII inference endpoint. "
             "Can also be set via NSS_INFERENCE_MODEL env var. "
-            "[default: nvidia/nemotron-3-ultra-550b-a55b]",
+            "Without an endpoint, selects the bundled local vLLM profile to run. "
+            "[default: openai/gpt-oss-120b locally, or nvidia/nemotron-3-ultra-550b-a55b with an explicit endpoint]",
         )
     )
     options.append(
@@ -207,9 +208,10 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
             type=str,
             required=False,
             default=None,
-            help="Bundled profile name (for example gpt-oss-120b) or YAML path for a local vLLM server "
-            "that NSS starts for LLM-assisted PII plan discovery and stops before planning returns. "
-            "NSS_INFERENCE_ENDPOINT, if set, must be a loopback http URL and selects the listening address. "
+            help="Path to a custom profile YAML for the local vLLM server that NSS starts for LLM-assisted "
+            "PII plan discovery and stops before planning returns. Without it and without an endpoint, "
+            "--inference-model-id selects a bundled profile. With a profile, NSS_INFERENCE_ENDPOINT, if set, "
+            "must be a loopback http URL and selects the listening address. "
             "Can also be set via NSS_INFERENCE_LOCAL_PROFILE env var.",
         )
     )

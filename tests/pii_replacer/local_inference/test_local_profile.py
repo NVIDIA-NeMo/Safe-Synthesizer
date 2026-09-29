@@ -12,6 +12,7 @@ from pydantic import ValidationError
 from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.pii_replacer.local_inference import (
     LocalVllmProfile,
+    bundled_profile_for_model,
     bundled_profile_names,
     load_profile,
 )
@@ -31,6 +32,10 @@ class TestBundledProfiles:
         assert profile.served_name == "openai/gpt-oss-120b"
         assert profile.max_model_len is not None and profile.max_model_len >= 32768
         assert "--reasoning-parser=openai_gptoss" in profile.extra_args
+
+    def test_bundled_profile_is_found_by_served_model_name(self) -> None:
+        assert bundled_profile_for_model("openai/gpt-oss-120b") == load_profile("gpt-oss-120b")
+        assert bundled_profile_for_model("gpt-oss-120b") is None
 
 
 @pytest.mark.unit
@@ -54,7 +59,9 @@ class TestLoadProfile:
             pytest.param("- a\n- b\n", "must be a YAML mapping", id="not-a-mapping"),
             pytest.param("model_id: [unclosed\n", "Could not read", id="bad-yaml"),
             pytest.param("model_id: org/tiny\n", "revision", id="missing-revision"),
-            pytest.param("model_id: org/tiny\nrevision: abc\nport: 8000\n", "port", id="address-is-not-a-profile-field"),
+            pytest.param(
+                "model_id: org/tiny\nrevision: abc\nport: 8000\n", "port", id="address-is-not-a-profile-field"
+            ),
         ],
     )
     def test_invalid_profile_files_raise_parameter_error(self, tmp_path: Path, content: str, match: str) -> None:
@@ -75,7 +82,9 @@ class TestExtraArgs:
         with pytest.raises(ValidationError, match="managed by NSS"):
             LocalVllmProfile(model_id="org/tiny", revision="abc", extra_args=(argument,))
 
-    @pytest.mark.parametrize("argument", ["--reasoning-parser=openai_gptoss", "--enforce-eager", "--api-server-count=2"])
+    @pytest.mark.parametrize(
+        "argument", ["--reasoning-parser=openai_gptoss", "--enforce-eager", "--api-server-count=2"]
+    )
     def test_accepts_other_vllm_options(self, argument: str) -> None:
         profile = LocalVllmProfile(model_id="org/tiny", revision="abc", extra_args=(argument,))
 
