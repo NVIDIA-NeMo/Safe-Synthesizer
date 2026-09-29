@@ -15,7 +15,11 @@ from typing_extensions import override
 from ...errors import ParameterError
 from ...llm.utils import ModelRef
 from ...observability import get_logger
-from ...pii_replacer.llm_client import MissingInferenceKeyError, resolve_inference_settings
+from ...pii_replacer.llm_client import (
+    MissingInferenceKeyError,
+    MissingInferenceModelError,
+    resolve_inference_settings,
+)
 from ...pii_replacer.local_inference import local_runtime_problem, resolve_local_server_request
 from ...utils import hf_offline_enabled
 from ..base import ConfigCheck, IssueCollector, MetadataCheck
@@ -486,6 +490,8 @@ class InferenceModelCheck(ConfigCheck):
             resolve_inference_settings(replace_pii.llm)
         except MissingInferenceKeyError as exc:
             collector.error("inference_key_missing", str(exc))
+        except MissingInferenceModelError as exc:
+            collector.error("inference_model_missing", str(exc))
         except ParameterError as exc:
             collector.error("inference_endpoint_invalid", str(exc))
 

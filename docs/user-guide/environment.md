@@ -47,7 +47,7 @@ Grouped by the `Category` column -- `nss`-native settings first, then
 | `NSS_DATASET_REGISTRY` | nss | `--dataset-registry` | CLI | -- | Dataset registry YAML path or URL | [Running -- Dataset Registry](running.md#dataset-registry) |
 | `NSS_INFERENCE_ENDPOINT` | nss | `--inference-endpoint-url` | PII planning | -- (local vLLM server) | OpenAI-compatible PII inference endpoint; replaces the default local server | [PII appendix](#pii-replacement) |
 | `NSS_INFERENCE_KEY` | nss | `--inference-api-key` | PII planning | -- | Inference credential; required by the hosted NVIDIA endpoint | [PII appendix](#pii-replacement) |
-| `NSS_INFERENCE_MODEL` | nss | `--inference-model-id` | PII planning | `openai/gpt-oss-120b` locally; `nvidia/nemotron-3-ultra-550b-a55b` with an endpoint | Model ID for PII inference; without an endpoint, selects the bundled local profile | [PII appendix](#pii-replacement) |
+| `NSS_INFERENCE_MODEL` | nss | `--inference-model-id` | PII planning | `openai/gpt-oss-120b` locally; required with an endpoint | Model ID for PII inference; without an endpoint, selects the bundled local profile | [PII appendix](#pii-replacement) |
 | `NSS_INFERENCE_LOCAL_PROFILE` | nss | `--inference-local-profile` | PII planning | -- | Custom profile YAML for the local vLLM server NSS runs during plan discovery | [PII appendix](#pii-replacement) |
 | `NSS_WANDB_MODE` | nss | `--wandb-mode` | WandB | `disabled` | WandB run mode | Alias for `WANDB_MODE` |
 | `NSS_WANDB_PROJECT` | nss | `--wandb-project` | WandB | -- | WandB project name | Alias for `WANDB_PROJECT` |
@@ -174,8 +174,9 @@ on the GPU for the duration of plan discovery, so no endpoint or key is needed.
 To use another service, set its endpoint and credential through environment
 variables or CLI options, not YAML:
 
-```bash title="PII inference environment" hl_lines="1 2"
+```bash title="PII inference environment" hl_lines="1 2 3"
 export NSS_INFERENCE_ENDPOINT=https://integrate.api.nvidia.com/v1
+export NSS_INFERENCE_MODEL=nvidia/nemotron-3-ultra-550b-a55b
 export NSS_INFERENCE_KEY=<your key>
 ```
 
@@ -189,9 +190,10 @@ model ID may instead be persisted as `replace_pii.llm.model_id`.
 The equivalent CLI options are `--inference-endpoint-url`,
 `--inference-model-id`, and `--inference-api-key`, which take precedence over
 environment or persisted model settings. For the model ID, the complete order
-is CLI option, persisted `replace_pii.llm.model_id`, environment variable, then
-the NSS default. Without an endpoint, the model ID selects a bundled local
-profile, and a model without one is an error.
+is CLI option, persisted `replace_pii.llm.model_id`, then environment variable.
+With an explicit endpoint, the model ID is required. Without an endpoint, it
+selects a bundled local profile, defaults to `openai/gpt-oss-120b`, and a model
+without a bundled profile is an error.
 
 To run a model that has no bundled profile locally, set a custom serving profile:
 
