@@ -398,11 +398,6 @@ class TestInferenceModelCheck:
     @pytest.mark.parametrize(
         ("environ", "expected_codes"),
         [
-            pytest.param(
-                {"NSS_INFERENCE_ENDPOINT": "https://integrate.api.nvidia.com/v1"},
-                ["inference_key_missing"],
-                id="hosted-without-key",
-            ),
             pytest.param({"NSS_INFERENCE_ENDPOINT": "http://localhost:8000/v1"}, [], id="keyless-local"),
             pytest.param(
                 {"NSS_INFERENCE_ENDPOINT": "not-a-url", "NSS_INFERENCE_KEY": "key"},

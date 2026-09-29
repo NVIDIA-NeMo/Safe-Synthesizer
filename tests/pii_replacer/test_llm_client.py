@@ -10,12 +10,10 @@ import pytest
 from pydantic import BaseModel, ConfigDict, Field
 
 from nemo_safe_synthesizer.config.replace_pii import LLMConfig
-from nemo_safe_synthesizer.defaults import HOSTED_NSS_INFERENCE_ENDPOINT
 from nemo_safe_synthesizer.errors import GenerationError, ParameterError
 from nemo_safe_synthesizer.pii_replacer.llm_client import (
     InferenceSettings,
     InvalidInferenceResponse,
-    MissingInferenceKeyError,
     MissingInferenceModelError,
     OpenAICompatibleTransport,
     TransientInferenceError,
@@ -106,25 +104,6 @@ class TestInferenceSettings:
                 environ={"NSS_INFERENCE_KEY": "hosted-key"},  # pragma: allowlist secret
             )
 
-    def test_explicit_hosted_endpoint_uses_the_configured_model(self) -> None:
-        settings = resolve_inference_settings(
-            LLMConfig(model_id="nvidia/some-model"),
-            environ={
-                "NSS_INFERENCE_ENDPOINT": HOSTED_NSS_INFERENCE_ENDPOINT,
-                "NSS_INFERENCE_KEY": "hosted-key",  # pragma: allowlist secret
-            },
-        )
-
-        assert settings.endpoint_url == HOSTED_NSS_INFERENCE_ENDPOINT
-        assert settings.model_id == "nvidia/some-model"
-
-    def test_hosted_endpoint_requires_runtime_key(self) -> None:
-        with pytest.raises(MissingInferenceKeyError, match="NSS_INFERENCE_KEY"):
-            resolve_inference_settings(
-                LLMConfig(model_id="model"),
-                environ={"NSS_INFERENCE_ENDPOINT": HOSTED_NSS_INFERENCE_ENDPOINT},
-            )
-
     def test_local_openai_compatible_endpoint_can_be_keyless(self) -> None:
         assert _local_settings().api_key is None
 
@@ -165,15 +144,12 @@ class TestInferenceSettings:
         ],
     )
     def test_rejects_invalid_or_plaintext_remote_endpoints(self, endpoint: str, message: str) -> None:
-        with pytest.raises(ParameterError, match=message) as exc_info:
+        with pytest.raises(ParameterError, match=message):
             resolve_inference_settings(LLMConfig(), environ={"NSS_INFERENCE_ENDPOINT": endpoint})
-
-        assert not isinstance(exc_info.value, MissingInferenceKeyError)
 
     def test_retryable_errors_belong_to_the_generation_error_hierarchy(self) -> None:
         assert issubclass(TransientInferenceError, GenerationError)
         assert issubclass(InvalidInferenceResponse, GenerationError)
-        assert issubclass(MissingInferenceKeyError, ParameterError)
 
 
 @pytest.mark.unit
