@@ -136,11 +136,11 @@ yourself. Plain HTTP is accepted only for loopback addresses (`localhost`,
 
 The endpoint resolves from the explicit CLI runtime flag, then
 `NSS_INFERENCE_ENDPOINT`; it is never persisted in NSS configuration. With an
-explicit endpoint, the model resolves from the explicit CLI runtime flag, then
-`replace_pii.llm.model_id`, `NSS_INFERENCE_MODEL`, and finally
-`nvidia/nemotron-3-ultra-550b-a55b`. `NSS_INFERENCE_MODEL` supplies the model
-only when the configuration omits `model_id`; use `--inference-model-id` to
-override a persisted model for one run. The hosted NVIDIA endpoint requires an
+explicit endpoint, the model has no default and must be set; it resolves from
+the explicit CLI runtime flag, then `replace_pii.llm.model_id`, then
+`NSS_INFERENCE_MODEL`. `NSS_INFERENCE_MODEL` supplies the model only when the
+configuration omits `model_id`; use `--inference-model-id` to override a
+persisted model for one run. The hosted NVIDIA endpoint requires an
 API key. Keyless operation is supported for local OpenAI-compatible endpoints.
 
 Supply the inference API key at runtime through `NSS_INFERENCE_KEY` or the

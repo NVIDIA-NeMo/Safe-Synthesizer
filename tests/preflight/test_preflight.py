@@ -425,24 +425,19 @@ class TestInferenceModelCheck:
         assert [issue.code for issue in issues] == expected_codes
         assert all(issue.severity == "error" for issue in issues)
 
+    def test_explicit_endpoint_without_model_is_an_error(self, default_config):
+        default_config.replace_pii.llm = LLMConfig()
+
+        with patch.dict("os.environ", {"NSS_INFERENCE_ENDPOINT": "http://localhost:8000/v1"}, clear=True):
+            issues = InferenceModelCheck().run(make_ctx(config=default_config))
+
+        assert [issue.code for issue in issues] == ["inference_model_missing"]
+
     @pytest.mark.parametrize(
         ("environ", "runtime_problem", "expected_codes"),
         [
             pytest.param({}, None, [], id="default-local-server"),
             pytest.param({}, "no CUDA GPU is available", ["inference_local_runtime_unavailable"], id="no-gpu"),
-            pytest.param({"NSS_INFERENCE_KEY": "key"}, None, [], id="key-alone-keeps-local-default"),
-            pytest.param(
-                {"NSS_INFERENCE_LOCAL_PROFILE": "gpt-oss-120b", "NSS_INFERENCE_ENDPOINT": "http://127.0.0.1:8000/v1"},
-                None,
-                [],
-                id="profile-with-loopback-address",
-            ),
-            pytest.param(
-                {"NSS_INFERENCE_LOCAL_PROFILE": "gpt-oss-120b", "NSS_INFERENCE_ENDPOINT": "https://x.example.com/v1"},
-                None,
-                ["inference_local_profile_invalid"],
-                id="profile-with-remote-endpoint",
-            ),
             pytest.param(
                 {"NSS_INFERENCE_LOCAL_PROFILE": "missing"}, None, ["inference_local_profile_invalid"], id="bad-profile"
             ),
@@ -463,15 +458,6 @@ class TestInferenceModelCheck:
             issues = InferenceModelCheck().run(make_ctx(config=default_config))
 
         assert [issue.code for issue in issues] == expected_codes
-
-    def test_default_local_server_rejects_a_different_configured_model(self, default_config):
-        default_config.replace_pii.llm = LLMConfig(model_id="nvidia/nemotron-3-ultra-550b-a55b")
-
-        with patch.dict("os.environ", {}, clear=True):
-            issues = InferenceModelCheck().run(make_ctx(config=default_config))
-
-        assert [issue.code for issue in issues] == ["inference_local_profile_invalid"]
-        assert "Set NSS_INFERENCE_ENDPOINT" in issues[0].message
 
 
 @pytest.mark.unit

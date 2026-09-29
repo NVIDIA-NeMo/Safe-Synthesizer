@@ -10,12 +10,13 @@ import pytest
 from pydantic import BaseModel, ConfigDict, Field
 
 from nemo_safe_synthesizer.config.replace_pii import LLMConfig
-from nemo_safe_synthesizer.defaults import DEFAULT_NSS_INFERENCE_ENDPOINT, DEFAULT_NSS_INFERENCE_MODEL
+from nemo_safe_synthesizer.defaults import HOSTED_NSS_INFERENCE_ENDPOINT
 from nemo_safe_synthesizer.errors import GenerationError, ParameterError
 from nemo_safe_synthesizer.pii_replacer.llm_client import (
     InferenceSettings,
     InvalidInferenceResponse,
     MissingInferenceKeyError,
+    MissingInferenceModelError,
     OpenAICompatibleTransport,
     TransientInferenceError,
     resolve_inference_settings,
@@ -76,9 +77,7 @@ class TestInferenceSettings:
         ("config_model", "environ", "expected_model"),
         [
             pytest.param("config-model", {"NSS_INFERENCE_MODEL": "env-model"}, "config-model", id="yaml-before-env"),
-            pytest.param(None, {"NSS_INFERENCE_MODEL": "env-model"}, "env-model", id="env-before-default"),
-            pytest.param(None, {"NSS_INFERENCE_MODEL": "  "}, DEFAULT_NSS_INFERENCE_MODEL, id="blank-env-ignored"),
-            pytest.param(None, {}, DEFAULT_NSS_INFERENCE_MODEL, id="default"),
+            pytest.param(None, {"NSS_INFERENCE_MODEL": "env-model"}, "env-model", id="env-when-yaml-unset"),
         ],
     )
     def test_model_precedence(
@@ -95,18 +94,36 @@ class TestInferenceSettings:
         assert settings.endpoint_url == LOCAL_ENDPOINT
         assert settings.model_id == expected_model
 
-    def test_defaults_use_hosted_nvidia_service(self) -> None:
+    @pytest.mark.parametrize("model_env", [{}, {"NSS_INFERENCE_MODEL": "  "}], ids=["unset", "blank"])
+    def test_explicit_endpoint_has_no_default_model(self, model_env: dict[str, str]) -> None:
+        with pytest.raises(MissingInferenceModelError, match="model it serves must be set"):
+            resolve_inference_settings(LLMConfig(), environ={"NSS_INFERENCE_ENDPOINT": LOCAL_ENDPOINT, **model_env})
+
+    def test_missing_endpoint_has_no_hosted_fallback(self) -> None:
+        with pytest.raises(ParameterError, match="No PII inference endpoint is set"):
+            resolve_inference_settings(
+                LLMConfig(model_id="model"),
+                environ={"NSS_INFERENCE_KEY": "hosted-key"},  # pragma: allowlist secret
+            )
+
+    def test_explicit_hosted_endpoint_uses_the_configured_model(self) -> None:
         settings = resolve_inference_settings(
-            LLMConfig(),
-            environ={"NSS_INFERENCE_KEY": "hosted-key"},  # pragma: allowlist secret
+            LLMConfig(model_id="nvidia/some-model"),
+            environ={
+                "NSS_INFERENCE_ENDPOINT": HOSTED_NSS_INFERENCE_ENDPOINT,
+                "NSS_INFERENCE_KEY": "hosted-key",  # pragma: allowlist secret
+            },
         )
 
-        assert settings.endpoint_url == DEFAULT_NSS_INFERENCE_ENDPOINT
-        assert settings.model_id == DEFAULT_NSS_INFERENCE_MODEL
+        assert settings.endpoint_url == HOSTED_NSS_INFERENCE_ENDPOINT
+        assert settings.model_id == "nvidia/some-model"
 
-    def test_default_hosted_endpoint_requires_runtime_key(self) -> None:
+    def test_hosted_endpoint_requires_runtime_key(self) -> None:
         with pytest.raises(MissingInferenceKeyError, match="NSS_INFERENCE_KEY"):
-            resolve_inference_settings(LLMConfig(), environ={})
+            resolve_inference_settings(
+                LLMConfig(model_id="model"),
+                environ={"NSS_INFERENCE_ENDPOINT": HOSTED_NSS_INFERENCE_ENDPOINT},
+            )
 
     def test_local_openai_compatible_endpoint_can_be_keyless(self) -> None:
         assert _local_settings().api_key is None
@@ -128,7 +145,7 @@ class TestInferenceSettings:
         ],
     )
     def test_accepts_https_or_loopback_http(self, endpoint: str) -> None:
-        settings = resolve_inference_settings(LLMConfig(), environ={"NSS_INFERENCE_ENDPOINT": endpoint})
+        settings = resolve_inference_settings(LLMConfig(model_id="model"), environ={"NSS_INFERENCE_ENDPOINT": endpoint})
 
         assert settings.endpoint_url == endpoint
 

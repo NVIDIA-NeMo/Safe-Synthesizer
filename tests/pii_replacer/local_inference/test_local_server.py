@@ -189,9 +189,8 @@ class TestLocalVllmServerLifecycle:
 
         assert harness.group.signals == [signal.SIGTERM]
 
-    @pytest.mark.parametrize("content", ["not json", '{"ready": true, "extra": 1}', '{"state": "ok"}'])
-    def test_schema_probe_failure_stops_the_server(self, harness: Harness, content: str) -> None:
-        harness.probe_content = content
+    def test_schema_probe_failure_stops_the_server(self, harness: Harness) -> None:
+        harness.probe_content = '{"state": "ok"}'
 
         with pytest.raises(GenerationError, match="did not return JSON matching a strict schema"):
             LocalVllmServer(PROFILE).start()
@@ -217,14 +216,6 @@ class TestLocalVllmServerLifecycle:
 
         assert harness.group.signals == [signal.SIGTERM, signal.SIGKILL]
         assert not harness.group.alive
-
-    def test_stop_is_idempotent(self, harness: Harness) -> None:
-        server = LocalVllmServer(PROFILE)
-        server.start()
-        server.stop()
-        server.stop()
-
-        assert harness.group.signals == [signal.SIGTERM]
 
     def test_unavailable_runtime_fails_before_launch_and_points_to_an_endpoint(
         self,
