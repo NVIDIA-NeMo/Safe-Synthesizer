@@ -195,6 +195,17 @@ class CLISettings(BaseSettings):
     )
     """PII inference model ID (env: ``NSS_INFERENCE_MODEL``)."""
 
+    inference_local_profile: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("inference_local_profile", "NSS_INFERENCE_LOCAL_PROFILE"),
+        description="Bundled profile name or YAML path for a managed local vLLM PII inference server",
+    )
+    """Managed local PII inference server profile (env: ``NSS_INFERENCE_LOCAL_PROFILE``).
+
+    NSS starts the server only for LLM-assisted plan discovery and stops it
+    before planning returns.
+    """
+
     huggingface_remote: bool | None = Field(
         default=None,
         validation_alias=AliasChoices("huggingface_remote"),

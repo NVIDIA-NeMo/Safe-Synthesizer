@@ -1,0 +1,12 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Tiny instruct model for the managed local inference GPU smoke test.
+model_id: HuggingFaceTB/SmolLM2-135M-Instruct
+revision: 12fd25f77366fa6b3b4b768ec3050bf629380bac
+gpu_memory_utilization: 0.3
+max_model_len: 2048
+extra_args:
+  - --enforce-eager
+startup_timeout_seconds: 600
+shutdown_timeout_seconds: 30

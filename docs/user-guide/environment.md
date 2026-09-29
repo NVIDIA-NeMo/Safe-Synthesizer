@@ -48,6 +48,7 @@ Grouped by the `Category` column -- `nss`-native settings first, then
 | `NSS_INFERENCE_ENDPOINT` | nss | `--inference-endpoint-url` | PII planning | NVIDIA integrate URL | OpenAI-compatible PII inference endpoint | [PII appendix](#pii-replacement) |
 | `NSS_INFERENCE_KEY` | nss | `--inference-api-key` | PII planning | -- | Inference credential; required by the default hosted endpoint | [PII appendix](#pii-replacement) |
 | `NSS_INFERENCE_MODEL` | nss | `--inference-model-id` | PII planning | `nvidia/nemotron-3-ultra-550b-a55b` | Model ID served by the PII inference endpoint | [PII appendix](#pii-replacement) |
+| `NSS_INFERENCE_LOCAL_PROFILE` | nss | `--inference-local-profile` | PII planning | -- | Bundled profile name or YAML path for a local vLLM server NSS runs during plan discovery | [PII appendix](#pii-replacement) |
 | `NSS_WANDB_MODE` | nss | `--wandb-mode` | WandB | `disabled` | WandB run mode | Alias for `WANDB_MODE` |
 | `NSS_WANDB_PROJECT` | nss | `--wandb-project` | WandB | -- | WandB project name | Alias for `WANDB_PROJECT` |
 | `NSS_WANDB_UPLOAD_EVALUATION_REPORT` | nss | `--wandb-upload-evaluation-report` / `--no-wandb-upload-evaluation-report` | WandB | `true` | Upload final evaluation HTML and artifact | Set to `false` to skip HTML and artifact publishing; summary metrics and the scorecard remain enabled |
@@ -188,6 +189,17 @@ The equivalent CLI options are `--inference-endpoint-url`,
 environment or persisted model settings. For the model ID, the complete order
 is CLI option, persisted `replace_pii.llm.model_id`, environment variable, then
 the NSS default.
+
+To run plan discovery against a vLLM server that NSS starts and stops on the
+local GPU, set a serving profile instead of an endpoint:
+
+```bash title="Managed local PII inference"
+export NSS_INFERENCE_LOCAL_PROFILE=gpt-oss-120b
+```
+
+With a local profile, `NSS_INFERENCE_ENDPOINT` is optional and, when set, must
+be a loopback URL that selects the listening address. See
+[Local inference server](../product-overview/pii_replacement.md#local-inference-server).
 
 Plan enhancement sends bounded raw cell samples to the configured endpoint.
 Only enable it when that endpoint is approved to receive the input data.

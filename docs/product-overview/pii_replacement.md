@@ -145,6 +145,44 @@ Supply the inference API key at runtime through `NSS_INFERENCE_KEY` or the
 `--inference-api-key` CLI option. NSS does not store the key in configuration or
 plan artifacts.
 
+### Local inference server
+
+NSS can start a vLLM server on the local GPU for plan discovery instead of
+calling a remote endpoint. Select a serving profile through
+`NSS_INFERENCE_LOCAL_PROFILE` or the `--inference-local-profile` CLI option:
+
+```bash
+safe-synthesizer run replace-pii --plan-only \
+  --config config.yaml \
+  --data-source data.csv \
+  --inference-local-profile gpt-oss-120b
+```
+
+The bundled `gpt-oss-120b` profile pins `openai/gpt-oss-120b` to a fixed
+revision and needs one 80 GB GPU, such as an A100 or H100. The first run
+downloads about 65 GB of weights into the Hugging Face cache. A profile can
+also be a path to your own YAML file with the same fields: `model_id`,
+`revision`, and optionally `served_model_name`, `gpu_memory_utilization`,
+`max_model_len`, `max_num_seqs`, `tensor_parallel_size`, `extra_args`,
+`startup_timeout_seconds`, and `shutdown_timeout_seconds`.
+
+NSS starts the server only when LLM-assisted discovery runs, meaning an
+`auto_discovery` plan with `llm` configured, and stops it before planning
+returns, including when planning fails. Plan validation, replacement, and
+training therefore never run while the server holds the GPU. Each run loads
+the model again; to reuse one server across many runs, start `vllm serve`
+yourself and set `NSS_INFERENCE_ENDPOINT` and `NSS_INFERENCE_MODEL` without a
+local profile.
+
+The server listens on a free loopback port, or on the address in
+`NSS_INFERENCE_ENDPOINT` when that is a loopback URL such as
+`http://127.0.0.1:8000/v1`. A non-loopback endpoint, or a port already in use,
+is an error. Each launch generates its own API key, so `NSS_INFERENCE_KEY` is
+ignored. If `replace_pii.llm.model_id` or `NSS_INFERENCE_MODEL` is set, it must
+match the profile's served model name, which defaults to its `model_id`.
+Server output goes to the NSS log at debug level, and vLLM request logging stays
+off because prompts contain raw cell samples.
+
 Automatic discovery uses two LLM passes. The first classifies every column's
 semantic entity type and may propose a replacement pattern, in bounded batches
 of at most 32 profiles and 48 KiB of profile evidence. Each profile contains
