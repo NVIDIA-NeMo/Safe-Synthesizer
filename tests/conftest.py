@@ -107,6 +107,24 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
 
 
 @pytest.fixture(autouse=True)
+def fixture_isolate_pii_inference(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep developer inference settings out of tests and block accidental vLLM launches.
+
+    Without an endpoint, LLM-assisted PII planning starts a local vLLM server.
+    Only ``requires_gpu`` tests may launch one; other tests fake the launch.
+    """
+    for name in ("NSS_INFERENCE_ENDPOINT", "NSS_INFERENCE_KEY", "NSS_INFERENCE_MODEL", "NSS_INFERENCE_LOCAL_PROFILE"):
+        monkeypatch.delenv(name, raising=False)
+    if request.node.get_closest_marker("requires_gpu") is not None:
+        return
+
+    def refuse_launch(*args: object, **kwargs: object) -> None:
+        raise AssertionError("Unit tests must not launch a real vLLM server; set NSS_INFERENCE_ENDPOINT or fake it")
+
+    monkeypatch.setattr("nemo_safe_synthesizer.pii_replacer.local_inference.server._launch", refuse_launch)
+
+
+@pytest.fixture(autouse=True)
 def fixture_isolate_deployment_type(monkeypatch: pytest.MonkeyPatch) -> None:
     """Tests opt into deployment type instead of inheriting process state."""
     monkeypatch.delenv("NEMO_DEPLOYMENT_TYPE", raising=False)

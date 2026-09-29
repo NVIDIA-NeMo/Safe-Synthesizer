@@ -140,6 +140,9 @@ def resolve_inference_settings(
     The endpoint and API key are deliberately absent from persisted
     configuration. They come only from ``NSS_INFERENCE_ENDPOINT`` and
     ``NSS_INFERENCE_KEY``, which the CLI populates from its runtime options.
+    Plan discovery calls this inside ``planning_inference_environment``, which
+    points these variables at the default local server when no endpoint is
+    set; a direct call without an endpoint falls back to the hosted endpoint.
 
     Args:
         config: Persisted LLM behavior from ``replace_pii.llm``.
@@ -151,7 +154,7 @@ def resolve_inference_settings(
     Raises:
         ParameterError: If the endpoint is not an absolute HTTP(S) URL, embeds
             credentials, or uses plaintext HTTP for a non-loopback host.
-        MissingInferenceKeyError: If the default hosted endpoint is selected
+        MissingInferenceKeyError: If the hosted NVIDIA endpoint is selected
             without an API key.
     """
     runtime_env = os.environ if environ is None else environ
@@ -164,7 +167,7 @@ def resolve_inference_settings(
     _validate_endpoint(resolved_endpoint)
     if _is_default_hosted_endpoint(resolved_endpoint) and resolved_key is None:
         raise MissingInferenceKeyError(
-            "NSS_INFERENCE_KEY or --inference-api-key is required for the default hosted NVIDIA inference endpoint"
+            "NSS_INFERENCE_KEY or --inference-api-key is required for the hosted NVIDIA inference endpoint"
         )
 
     return InferenceSettings(

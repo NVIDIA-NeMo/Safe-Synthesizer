@@ -15,6 +15,7 @@ from ...errors import ParameterError
 __all__ = [
     "RESERVED_VLLM_OPTIONS",
     "LocalVllmProfile",
+    "bundled_profile_for_model",
     "bundled_profile_names",
     "load_profile",
 ]
@@ -119,6 +120,15 @@ class LocalVllmProfile(BaseModel):
 def bundled_profile_names() -> tuple[str, ...]:
     """Return the names of profiles shipped with NSS."""
     return tuple(sorted(path.stem for path in _BUNDLED_PROFILE_DIR.glob(f"*{_PROFILE_SUFFIX}")))
+
+
+def bundled_profile_for_model(model_id: str) -> LocalVllmProfile | None:
+    """Return the bundled profile whose served model name is ``model_id``, if any."""
+    for name in bundled_profile_names():
+        profile = load_profile(name)
+        if profile.served_name == model_id:
+            return profile
+    return None
 
 
 def load_profile(reference: str | Path) -> LocalVllmProfile:
