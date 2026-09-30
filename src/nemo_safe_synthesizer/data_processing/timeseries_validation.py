@@ -14,9 +14,10 @@ from typing import Any
 import pandas as pd
 
 from ..config.parameters import SafeSynthesizerParameters
-from ..config.time_series import FlexibleTimeseriesMetadata, TimeSeriesParameters
+from ..config.time_series import TimeSeriesParameters
 from ..defaults import PSEUDO_GROUP_COLUMN
 from ..errors import DataError, ParameterError
+from ..llm.metadata import FlexibleTimeseriesMetadata
 from .actions.utils import guess_datetime_format
 from .flexible_timeseries import _resolve_flexible_timeseries_metadata
 from .timeseries_utils import _stable_sort_within_groups
@@ -607,11 +608,57 @@ def _validate_deterministic_inspection(
     )
 
 
+def _resolve_timestamp_order_columns(config: SafeSynthesizerParameters) -> None:
+    """Make the source timestamp and within-group order columns name the same column.
+
+    Contradicting values are rejected during configuration validation. When
+    only ``timestamp_column`` is set it also orders records. When only
+    ``order_training_examples_by`` is set together with
+    ``timestamp_interval_seconds``, that column is treated as the timestamp so
+    the asserted interval is checked against its values.
+
+    Args:
+        config: Parameters updated in place.
+    """
+    ts_config = config.time_series
+    if not ts_config.is_timeseries:
+        return
+    if ts_config.timestamp_column is None:
+        if config.data.order_training_examples_by is not None and ts_config.timestamp_interval_seconds is not None:
+            ts_config.timestamp_column = config.data.order_training_examples_by
+        return
+    if config.data.order_training_examples_by is None:
+        config.data.order_training_examples_by = ts_config.timestamp_column
+
+
+def _validate_asserted_interval(inspection: _TimeSeriesInspection, expected_interval_seconds: int) -> None:
+    """Raise when source timestamps do not follow a user-asserted interval.
+
+    Groups may still differ in length, start, or stop; only the spacing between
+    consecutive records within each group is checked.
+    """
+    for stats in inspection.group_stats:
+        if stats.record_count > 1 and stats.interval_seconds != expected_interval_seconds:
+            raise TimeSeriesDataValidationError(
+                TimeSeriesValidationReason.TIMESTAMP_INTERVAL_MISMATCH,
+                f"timestamp_interval_seconds={expected_interval_seconds} does not match the spacing of "
+                f"timestamp column '{inspection.timestamp_column}' in group '{stats.group_name}'. "
+                "Correct timestamp_interval_seconds, or remove it to allow irregular intervals.",
+            )
+
+
 def _inspect_timeseries_constraints(
     data: pd.DataFrame,
     config: SafeSynthesizerParameters,
 ) -> _TimeSeriesRoutingDecision:
-    """Inspect the four deterministic shape constraints without mutating inputs."""
+    """Inspect the four deterministic shape constraints without mutating inputs.
+
+    Raises:
+        TimeSeriesDataValidationError: If data is malformed or source
+            timestamps do not follow an asserted ``timestamp_interval_seconds``.
+        TimeSeriesParameterValidationError: If configured columns or formats
+            are incompatible with the data.
+    """
     if data.empty:
         raise TimeSeriesDataValidationError(
             TimeSeriesValidationReason.TIMESERIES_EMPTY,
@@ -619,13 +666,17 @@ def _inspect_timeseries_constraints(
         )
 
     config_copy = config.model_copy(deep=True)
-    config_copy.time_series._resolve_flexible_timeseries(None)
+    _resolve_timestamp_order_columns(config_copy)
     inspection = _inspect_time_series_data(
         data,
         config_copy,
         tolerate_interval_mismatch=True,
     )
     group_stats = inspection.group_stats
+    expected_interval = config_copy.time_series.timestamp_interval_seconds
+    if expected_interval is not None and config_copy.time_series.timestamp_column is not None:
+        _validate_asserted_interval(inspection, expected_interval)
+
     failed: list[str] = []
     if len({stats.record_count for stats in group_stats}) > 1:
         failed.append("equal group lengths")
@@ -634,7 +685,7 @@ def _inspect_timeseries_constraints(
     if len({stats.stop_timestamp for stats in group_stats}) > 1:
         failed.append("common stop timestamps")
     try:
-        _validate_interval_consistency(config_copy.time_series.timestamp_interval_seconds, group_stats)
+        _validate_interval_consistency(expected_interval, group_stats)
     except TimeSeriesDataValidationError as exc:
         if exc.reason is not TimeSeriesValidationReason.TIMESTAMP_INTERVAL_MISMATCH:
             raise
@@ -650,25 +701,8 @@ def _inspect_timeseries_constraints(
     )
 
 
-def _resolve_timeseries_routing(
-    data: pd.DataFrame,
-    config: SafeSynthesizerParameters,
-) -> _TimeSeriesRoutingDecision | None:
-    """Resolve the time-series representation and update its internal metadata.
-
-    The timestamp format is persisted when it was inferred. Flexible metadata
-    is attached to ``config.time_series`` only when deterministic shape
-    constraints are not satisfied.
-
-    Args:
-        data: Source data to inspect.
-        config: Parameters updated with the routing result.
-
-    Returns:
-        The routing decision, or ``None`` when time-series mode is disabled.
-    """
-    if not config.time_series.is_timeseries:
-        return None
+def _check_duplicate_columns(data: pd.DataFrame) -> None:
+    """Raise when the source data contains duplicate column names."""
     if data.columns.has_duplicates:
         duplicates = data.columns[data.columns.duplicated()].unique().tolist()
         raise TimeSeriesDataValidationError(
@@ -677,16 +711,64 @@ def _resolve_timeseries_routing(
             "Rename or remove duplicate columns before running the pipeline.",
         )
 
+
+def _validate_timeseries_source_data(data: pd.DataFrame, config: SafeSynthesizerParameters) -> None:
+    """Validate time-series source data without selecting a representation.
+
+    Reports malformed data and asserted-interval mismatches. Differences in
+    group length, start, stop, or unasserted interval are not errors; they
+    select flexible processing during training preprocessing.
+
+    Args:
+        data: Source data to validate.
+        config: Parameters defining grouping and timestamp behavior. Not mutated.
+
+    Raises:
+        TimeSeriesDataValidationError: If data is malformed or does not follow
+            an asserted ``timestamp_interval_seconds``.
+        TimeSeriesParameterValidationError: If configured columns or formats
+            are incompatible with the data.
+    """
+    if not config.time_series.is_timeseries:
+        return
+    _check_duplicate_columns(data)
+    _inspect_timeseries_constraints(data, config)
+
+
+def _resolve_timeseries_routing(
+    data: pd.DataFrame,
+    config: SafeSynthesizerParameters,
+) -> _TimeSeriesRoutingDecision | None:
+    """Select the deterministic or flexible time-series representation.
+
+    Resolves the effective timestamp and order columns and persists an inferred
+    timestamp format on ``config``. Flexible metadata is returned on the
+    decision only when deterministic shape constraints are not satisfied.
+
+    Args:
+        data: Source data to inspect.
+        config: Parameters updated with the resolved timestamp columns and format.
+
+    Returns:
+        The routing decision, or ``None`` when time-series mode is disabled.
+    """
+    if not config.time_series.is_timeseries:
+        return None
+    _check_duplicate_columns(data)
+
+    _resolve_timestamp_order_columns(config)
     ts_config = config.time_series
     decision = _inspect_timeseries_constraints(data, config)
     if ts_config.timestamp_format is None:
         ts_config.timestamp_format = decision.timestamp_format
     if decision.uses_flexible_timeseries:
-        metadata = _resolve_flexible_timeseries_metadata(data, config, decision.sequence_max_records)
-        ts_config._resolve_flexible_timeseries(metadata)
+        metadata = _resolve_flexible_timeseries_metadata(
+            data,
+            config,
+            decision.sequence_max_records,
+            decision.timestamp_format,
+        )
         decision = replace(decision, flexible_metadata=metadata)
-    else:
-        ts_config._resolve_flexible_timeseries(None)
     return decision
 
 

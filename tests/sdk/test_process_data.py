@@ -162,7 +162,7 @@ def _wire_process_data_mocks(
 # ---------------------------------------------------------------------------
 
 
-def test_process_data_preflight_reroutes_using_authoritative_training_split(fixture_workdir):
+def test_process_data_preflight_does_not_route_or_mutate_timeseries_config(fixture_workdir):
     source = pd.DataFrame(
         {
             "group": ["A", "A", "A", "B", "B"],
@@ -185,11 +185,12 @@ def test_process_data_preflight_reroutes_using_authoritative_training_split(fixt
         rope_scaling_factor=1,
         replace_pii=None,
     )
+    config_before = config.model_dump()
     builder = SafeSynthesizer(config=config, workdir=fixture_workdir)
     builder._data_source = source
-    routing_decisions: list[tuple[bool, int | None]] = []
+    preflight_issue_codes: list[list[str]] = []
     registry = get_registry()
-    routing_registry = build_registry(
+    timeseries_registry = build_registry(
         tuple(
             registry[name]
             for name in (
@@ -208,15 +209,10 @@ def test_process_data_preflight_reroutes_using_authoritative_training_split(fixt
             current_config,
             _metadata,
             stages=frozenset({PreflightStage.DATAFRAME}),
-            registry=routing_registry,
+            registry=timeseries_registry,
         )
-        flexible_metadata = current_config.time_series._resolved_flexible_timeseries_metadata
-        routing_decisions.append(
-            (
-                current_config.time_series._uses_flexible_timeseries,
-                flexible_metadata.max_records if flexible_metadata is not None else None,
-            )
-        )
+        preflight_issue_codes.append([issue.code for issue in report.issues])
+        assert current_config.model_dump() == config_before
         return report
 
     with (
@@ -230,9 +226,7 @@ def test_process_data_preflight_reroutes_using_authoritative_training_split(fixt
         metadata_cls.from_config.return_value = MagicMock()
         builder.process_data()
 
-    assert routing_decisions == [(True, 3), (False, None)]
-    assert builder._nss_config is not None
-    assert builder._nss_config.time_series._uses_flexible_timeseries is False
+    assert preflight_issue_codes == [[], []]
 
 
 class TestProcessDataPiiSeparation:

@@ -11,6 +11,7 @@ from nemo_safe_synthesizer.data_processing.actions.data_actions import (
     ActionExecutor,
     CategoricalCol,
     DateConstraint,
+    DropDuplicates,
     data_actions_fn,
 )
 from nemo_safe_synthesizer.data_processing.record_utils import normalize_record_keys
@@ -414,3 +415,31 @@ class TestGenerateJobResultsFromBatches:
         assert results.tokens_per_second is None
         assert results.valid_tokens_per_second is None
         assert results.tokenization_overhead_sec is None
+
+
+def _single_record_batch(processor) -> tuple[Batch, ParsedRecord]:
+    record = ParsedRecord(text="row", parsed={"group_id": "A", "value": 2})
+    batch = Batch(processor)
+    batch._responses = [ParsedResponse(records=[record], prompt_number=0)]
+    return batch, record
+
+
+# Purpose: Rows rejected by a backend after data actions must not enter the data-action history.
+# Data: One row accepted by drop_duplicates, then invalidated by the backend; an identical retry follows.
+# Asserts: The retry is accepted when history is committed after backend checks, and rejected otherwise.
+@pytest.mark.parametrize(("defer_commit", "retry_valid"), [(True, True), (False, False)])
+def test_data_action_history_excludes_rows_rejected_after_postprocessing(
+    fixture_mock_processor, defer_commit, retry_valid
+):
+    generation = GenerationBatches(data_actions_fn=data_actions_fn(ActionExecutor(actions=[DropDuplicates()])))
+    first_batch, first_record = _single_record_batch(fixture_mock_processor)
+
+    generation.postprocess_batch(first_batch, commit_history=not defer_commit)
+    assert first_record.is_valid
+    first_record.invalidate(("Generated sequence index does not match", "TimeSeries"))
+    generation.commit_history(first_batch)
+
+    retry_batch, retry_record = _single_record_batch(fixture_mock_processor)
+    generation.postprocess_batch(retry_batch)
+
+    assert retry_record.is_valid is retry_valid

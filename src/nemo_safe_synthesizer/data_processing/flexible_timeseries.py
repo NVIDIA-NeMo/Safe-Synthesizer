@@ -8,8 +8,8 @@ from __future__ import annotations
 import pandas as pd
 
 from ..config.parameters import SafeSynthesizerParameters
-from ..config.time_series import FlexibleTimeseriesMetadata
 from ..defaults import PSEUDO_GROUP_COLUMN
+from ..llm.metadata import FlexibleTimeseriesMetadata
 from .timeseries_utils import _stable_sort_within_groups, _unused_column_name
 from .validation import (
     check_column_has_no_nulls,
@@ -24,8 +24,19 @@ def _resolve_flexible_timeseries_metadata(
     data: pd.DataFrame,
     config: SafeSynthesizerParameters,
     max_records: int,
+    source_timestamp_format: str,
 ) -> FlexibleTimeseriesMetadata:
-    """Resolve internal control columns and source schema for flexible routing."""
+    """Resolve internal control columns, source schema, and timestamp checks for flexible routing.
+
+    Args:
+        data: Source time-series data.
+        config: Parameters with the effective source timestamp column already resolved.
+        max_records: Largest source-group length.
+        source_timestamp_format: Validated or inferred format of the source timestamp column.
+
+    Returns:
+        Metadata persisted with the model and used by generation.
+    """
     columns = list(data.columns)
     if config.data.group_training_examples_by is None:
         check_no_pseudo_column_collision(data)
@@ -36,27 +47,31 @@ def _resolve_flexible_timeseries_metadata(
         FlexibleTimeseriesMetadata.DEFAULT_MARKER_COLUMN,
         [*columns, index_column],
     )
+    source_timestamp_column = config.time_series.timestamp_column
+    has_source_timestamp = source_timestamp_column is not None
     return FlexibleTimeseriesMetadata(
         index_column=index_column,
         marker_column=marker_column,
         max_records=max_records,
         source_columns=tuple(data.columns),
+        source_timestamp_column=source_timestamp_column,
+        source_timestamp_format=source_timestamp_format if has_source_timestamp else None,
+        source_interval_seconds=config.time_series.timestamp_interval_seconds if has_source_timestamp else None,
     )
 
 
 def _source_order_column(data: pd.DataFrame, config: SafeSynthesizerParameters) -> str | None:
     """Resolve the source column used for deterministic within-group ordering."""
-    order_column = config.data.order_training_examples_by
-    if order_column is not None:
-        check_column_present(data, order_column, role="Order by")
-        check_column_has_no_nulls(data, order_column, role="Order by")
-        return order_column
-
     timestamp_column = config.time_series.timestamp_column
     if timestamp_column is not None:
         check_timestamp_column(data, timestamp_column)
         return timestamp_column
-    return None
+
+    order_column = config.data.order_training_examples_by
+    if order_column is not None:
+        check_column_present(data, order_column, role="Order by")
+        check_column_has_no_nulls(data, order_column, role="Order by")
+    return order_column
 
 
 def _prepare_flexible_timeseries_data(

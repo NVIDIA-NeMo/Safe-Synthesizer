@@ -14,6 +14,7 @@ from nemo_safe_synthesizer.data_processing.timeseries_validation import (
     TimeSeriesValidationReason,
     _inspect_timeseries_constraints,
     _resolve_timeseries_routing,
+    _validate_timeseries_source_data,
     validate_start_stop_consistency,
     validate_timeseries_data,
 )
@@ -46,15 +47,14 @@ def test_routing_keeps_deterministic_pipeline_when_all_constraints_match():
     assert decision is not None
     assert decision.uses_flexible_timeseries is False
     assert decision.failed_constraints == ()
-    assert config.time_series._uses_flexible_timeseries is False
-    assert config.time_series._resolved_flexible_timeseries_metadata is None
+    assert decision.flexible_metadata is None
 
 
-def test_routing_does_not_promote_order_column_to_missing_timestamp():
+def test_routing_treats_order_column_with_interval_as_timestamp():
     data = pd.DataFrame(
         {
             "group": ["A", "A", "B", "B"],
-            "event": ["second", "first", "second", "first"],
+            "event": [60, 0, 60, 0],
             "value": [2, 1, 4, 3],
         }
     )
@@ -70,7 +70,7 @@ def test_routing_does_not_promote_order_column_to_missing_timestamp():
 
     assert decision is not None
     assert decision.uses_flexible_timeseries is False
-    assert config.time_series.timestamp_column is None
+    assert config.time_series.timestamp_column == "event"
 
 
 def test_routing_uses_flexible_timeseries_and_reports_all_shape_mismatches():
@@ -94,13 +94,15 @@ def test_routing_uses_flexible_timeseries_and_reports_all_shape_mismatches():
         "consistent timestamp intervals",
     )
     assert decision.sequence_max_records == 3
-    assert config.time_series._uses_flexible_timeseries is True
-    metadata = config.time_series._resolved_flexible_timeseries_metadata
+    metadata = decision.flexible_metadata
     assert metadata is not None
     assert metadata.max_records == 3
+    assert metadata.source_timestamp_column == "ts"
+    assert metadata.source_timestamp_format == "elapsed_seconds"
+    assert metadata.source_interval_seconds is None
 
 
-def test_routing_detects_interval_only_mismatch_without_mutating_inspection():
+def test_routing_detects_interval_only_mismatch_without_mutating_config():
     data = pd.DataFrame(
         {
             "group": ["A", "A", "A", "B", "B", "B"],
@@ -109,11 +111,81 @@ def test_routing_detects_interval_only_mismatch_without_mutating_inspection():
         }
     )
     config = _routing_config()
+    before = config.model_dump()
 
     decision = _inspect_timeseries_constraints(data, config)
 
     assert decision.failed_constraints == ("consistent timestamp intervals",)
-    assert config.time_series._uses_flexible_timeseries is False
+    assert config.model_dump() == before
+
+
+def test_routing_rejects_asserted_interval_mismatch():
+    data = pd.DataFrame(
+        {
+            "group": ["A", "A", "A", "B", "B", "B"],
+            "ts": [0, 60, 120, 0, 60, 120],
+            "value": [1, 2, 3, 4, 5, 6],
+        }
+    )
+    config = _routing_config()
+    config.time_series.timestamp_interval_seconds = 30
+
+    with pytest.raises(TimeSeriesDataValidationError) as exc_info:
+        _resolve_timeseries_routing(data, config)
+
+    assert exc_info.value.reason is TimeSeriesValidationReason.TIMESTAMP_INTERVAL_MISMATCH
+    assert "remove it to allow irregular intervals" in str(exc_info.value)
+
+
+def test_routing_with_asserted_interval_still_routes_differing_lengths_to_flexible():
+    data = pd.DataFrame(
+        {
+            "group": ["A", "A", "A", "B", "B"],
+            "ts": [0, 60, 120, 60, 120],
+            "value": [1, 2, 3, 4, 5],
+        }
+    )
+    config = _routing_config()
+    config.time_series.timestamp_interval_seconds = 60
+
+    decision = _resolve_timeseries_routing(data, config)
+
+    assert decision is not None
+    assert decision.failed_constraints == ("equal group lengths", "common start timestamps")
+    assert decision.flexible_metadata is not None
+    assert decision.flexible_metadata.source_interval_seconds == 60
+
+
+def test_validate_source_data_reports_asserted_interval_without_routing():
+    data = pd.DataFrame(
+        {
+            "group": ["A", "A", "B"],
+            "ts": [0, 90, 0],
+            "value": [1, 2, 3],
+        }
+    )
+    config = _routing_config()
+    config.time_series.timestamp_interval_seconds = 60
+    before = config.model_dump()
+
+    with pytest.raises(TimeSeriesDataValidationError) as exc_info:
+        _validate_timeseries_source_data(data, config)
+
+    assert exc_info.value.reason is TimeSeriesValidationReason.TIMESTAMP_INTERVAL_MISMATCH
+    assert config.model_dump() == before
+
+
+def test_validate_source_data_accepts_differently_shaped_groups():
+    data = pd.DataFrame(
+        {
+            "group": ["A", "A", "A", "B"],
+            "ts": [0, 60, 150, 30],
+            "value": [1, 2, 3, 4],
+        }
+    )
+    config = _routing_config()
+
+    _validate_timeseries_source_data(data, config)
 
 
 def test_routing_does_not_fallback_for_null_timestamps():
@@ -130,7 +202,6 @@ def test_routing_does_not_fallback_for_null_timestamps():
         _resolve_timeseries_routing(data, config)
 
     assert exc_info.value.reason is TimeSeriesValidationReason.TIMESTAMP_NULLS
-    assert config.time_series._uses_flexible_timeseries is False
 
 
 def test_flexible_metadata_reports_duplicate_source_columns_as_data_error():

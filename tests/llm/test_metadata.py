@@ -22,7 +22,6 @@ from pydantic import ValidationError
 from transformers import PretrainedConfig, PreTrainedTokenizerBase, Qwen2Config
 
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
-from nemo_safe_synthesizer.config.time_series import FlexibleTimeseriesMetadata
 from nemo_safe_synthesizer.defaults import (
     DEFAULT_INSTRUCTION,
     MAX_ROPE_SCALING_FACTOR,
@@ -33,6 +32,7 @@ from nemo_safe_synthesizer.llm.metadata import (
     DEFAULT_MAX_SEQ_LENGTH,
     GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER,
     GLOBAL_MAX_SEQ_LENGTH,
+    FlexibleTimeseriesMetadata,
     Llama32,
     LLMPromptConfig,
     Mistral,
@@ -667,6 +667,31 @@ class TestModelMetadata:
                 },
                 id="invalid-field-type",
             ),
+            pytest.param(
+                {
+                    "max_records": 2,
+                    "source_columns": ["group", "value"],
+                    "source_timestamp_column": "timestamp",
+                    "source_timestamp_format": "elapsed_seconds",
+                },
+                id="timestamp-not-a-source-column",
+            ),
+            pytest.param(
+                {
+                    "max_records": 2,
+                    "source_columns": ["group", "timestamp", "value"],
+                    "source_timestamp_column": "timestamp",
+                },
+                id="timestamp-without-format",
+            ),
+            pytest.param(
+                {
+                    "max_records": 2,
+                    "source_columns": ["group", "timestamp", "value"],
+                    "source_interval_seconds": 60,
+                },
+                id="interval-without-timestamp",
+            ),
         ],
     )
     @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
@@ -804,6 +829,9 @@ class TestGenerationMaxTokensFor:
             marker_column="_is_last_row_1",
             max_records=4,
             source_columns=("value", "group_id", "timestamp"),
+            source_timestamp_column="timestamp",
+            source_timestamp_format="%Y-%m-%d %H:%M:%S",
+            source_interval_seconds=60,
         )
         sample_model_metadata.save_metadata()
 

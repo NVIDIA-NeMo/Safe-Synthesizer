@@ -31,7 +31,7 @@ configuration, and NER parallelism, see [Environment Variables](environment.md).
 | Low SQS scores | Underfit or too few records | [Review distributions](evaluating-data.md#low-sqs-scores) |
 | PII uses default entities | Classifier failed | [Set entities explicitly](evaluating-data.md#pii-uses-unexpected-entity-types) |
 | "timestamp_column has missing values" | Dirty time series data | Clean NaN/nulls from timestamp column |
-| `flexible_timeseries_routing` warning | Groups have different shapes | [Details](#flexible-routing-warning) |
+| `timestamp_interval_mismatch` error | Timestamps do not follow `timestamp_interval_seconds` | [Details](#interval-mismatch) |
 | Pre-flight validation fails | Dataset or config issue | [Pre-flight validation codes](#pre-flight-validation-codes) |
 
 ---
@@ -529,7 +529,7 @@ check of its own.
 | `timestamp_parse_failed` | error | `timeseries.shape` | One or more timestamp values could not be parsed with the inferred or configured timestamp format |
 | `timestamp_elapsed_non_numeric` | error | `timeseries.shape` | `timestamp_format='elapsed_seconds'` was configured for a non-numeric timestamp column |
 | `timestamp_elapsed_invalid` | error | `timeseries.shape` | `timestamp_format='elapsed_seconds'` was configured for boolean or infinite timestamp values |
-| `flexible_timeseries_routing` | warning | `timeseries.shape` | Group shapes require flexible processing |
+| `timestamp_interval_mismatch` | error | `timeseries.shape` | Spacing between consecutive timestamps in a group does not match `timestamp_interval_seconds` |
 | `timeseries_empty` | error | `timeseries.shape` | Time-series data contains no records to validate |
 | `tokenizer_unavailable` | warning | `token_budget` | Model tokenizer could not be loaded; token checks skipped |
 | `schema_exceeds_context` | error | `token_budget` | Schema prompt exceeds model context window |
@@ -641,27 +641,33 @@ Missing timestamp values:
     df = df.sort_values(by=["group_column", "timestamp"])
     ```
 
-#### Flexible-routing warning
+#### Interval mismatch
 
-If groups differ in length, start timestamp, stop timestamp, or interval,
-pre-flight reports `flexible_timeseries_routing` and automatically uses
-flexible processing. Flexible processing generates the source timestamp as
-payload while validating an internal zero-based sequence index. The warning
-lists the shape constraints that triggered routing and the maximum source
-group length used as a safety cap.
+`timestamp_interval_seconds` is an assertion about your data. If the spacing
+between consecutive timestamps in any group differs from it, pre-flight and
+training fail with `timestamp_interval_mismatch`. Correct the value, or remove
+it so irregular intervals are allowed. Groups may still differ in length,
+start, or stop when the interval is set.
 
 Invalid timestamp data:
 
 : Null, non-finite, unparseable, or format-incompatible timestamps remain
-  errors. Flexible routing handles valid but differently shaped sequences; it
-  does not repair malformed timestamps.
+  errors. Differently shaped groups are handled automatically; malformed
+  timestamps are not repaired.
+
+Conflicting timestamp and order columns:
+
+: In time-series mode, `time_series.timestamp_column` and
+  `data.order_training_examples_by` must name the same column. Set only one of
+  them; the other is filled in automatically.
 
 Groups skipped during generation:
 
 : If a group consistently produces invalid records (exceeding
   `generation.patience` consecutive batches above
-  `generation.invalid_fraction_threshold`), that group is skipped entirely.
-  Check your training data quality for those groups.
+  `generation.invalid_fraction_threshold`), that group is skipped and its rows
+  are discarded. The generation status is then `incomplete`. Check your
+  training data quality for those groups.
 
 Out-of-order records:
 
@@ -670,10 +676,15 @@ Out-of-order records:
 
 #### Groups with different starts or lengths
 
-Groups do not need to share a start timestamp, stop timestamp, or record
-count. Differences in any of these properties select flexible time-series
-processing automatically. Each group learns termination through an internal
-final-row marker and is bounded by the maximum source-group length.
+Groups do not need to share a start timestamp, stop timestamp, record count,
+or interval. When any of these differ, training preprocessing automatically
+selects flexible time-series processing and logs the constraints that
+differed. The source timestamp is generated as a synthesized column while
+generation validates an internal zero-based sequence index. Generated
+timestamps must not decrease within a group and must follow
+`timestamp_interval_seconds` when it is set. Each group stops at a learned
+final-row marker, and the maximum source-group length is a hard limit for
+synthetic groups.
 
 ---
 

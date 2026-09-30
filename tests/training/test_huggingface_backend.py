@@ -788,7 +788,31 @@ def test_process_timeseries_copies_flexible_metadata_to_model_metadata(backend):
     assert metadata is not None
     assert metadata.max_records == 2
     assert metadata.source_columns == ("group", "timestamp", "value")
+    assert metadata.source_timestamp_column == "timestamp"
+    assert backend.model_metadata.timeseries_source_columns is None
     assert list(result.columns) == ["group", "_time_idx", "timestamp", "value", "_is_last_row"]
+
+
+def test_process_timeseries_clears_flexible_metadata_for_deterministic_data(backend):
+    data = pd.DataFrame(
+        {
+            "group": ["A", "A", "B", "B"],
+            "timestamp": [0, 1, 0, 1],
+            "value": [1, 2, 3, 4],
+        }
+    )
+    backend.params = SafeSynthesizerParameters.from_params(
+        is_timeseries=True,
+        timestamp_column="timestamp",
+        timestamp_format="elapsed_seconds",
+        group_training_examples_by="group",
+        rope_scaling_factor=1,
+    )
+
+    backend._process_timeseries(data)
+
+    assert backend.model_metadata.flexible_timeseries_metadata is None
+    assert backend.model_metadata.timeseries_source_columns == ["group", "timestamp", "value"]
 
 
 class TestPreprocessLogitsForMetrics:
