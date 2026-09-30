@@ -228,12 +228,18 @@ class LocalVllmServer:
         return f"http://{_url_host(self._host)}:{self._port}/v1"
 
     def inference_environ(self) -> dict[str, str]:
-        """Return the base environment with ``NSS_INFERENCE_*`` pointing at this server."""
+        """Return the base environment with ``NSS_INFERENCE_*`` pointing at this server.
+
+        An ``NSS_INFERENCE_TIMEOUT`` already in the base environment wins over
+        the profile's request timeout.
+        """
         return {
             **self._base_environ,
             "NSS_INFERENCE_ENDPOINT": self.endpoint_url,
             "NSS_INFERENCE_KEY": self._api_key,
             "NSS_INFERENCE_MODEL": self._profile.served_name,
+            "NSS_INFERENCE_TIMEOUT": self._base_environ.get("NSS_INFERENCE_TIMEOUT")
+            or f"{self._profile.request_timeout_seconds:g}",
         }
 
     def __enter__(self) -> Self:

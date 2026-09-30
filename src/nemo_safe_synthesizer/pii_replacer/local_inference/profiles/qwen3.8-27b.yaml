@@ -1,0 +1,24 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Qwen3.8-27B (dense) in BF16 on one 80 GB GPU. The weights take about 56 GB.
+model_id: Qwen/Qwen3.8-27B
+revision: 1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0
+gpu_memory_utilization: 0.92
+# One classification request carries up to 48 KiB of column samples,
+# roughly 12-16k tokens before instructions and reasoning.
+max_model_len: 32768
+# Matches the default replace_pii.llm.max_workers.
+max_num_seqs: 8
+extra_args:
+  # Planning sends text only, so skip the vision encoder.
+  - --language-model-only
+  # Think before the schema-constrained answer.
+  - --reasoning-parser=qwen3
+  - '--default-chat-template-kwargs={"enable_thinking": true}'
+# Thinking on a dense model takes about 3 minutes per request on an A100 for
+# a small table; full 32-column batches take longer.
+request_timeout_seconds: 900
+# Allows for the first-run download of about 56 GB.
+startup_timeout_seconds: 1800
+shutdown_timeout_seconds: 60

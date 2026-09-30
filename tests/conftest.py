@@ -113,7 +113,13 @@ def fixture_isolate_pii_inference(request: pytest.FixtureRequest, monkeypatch: p
     Without an endpoint, LLM-assisted PII planning starts a local vLLM server.
     Only ``requires_gpu`` tests may launch one; other tests fake the launch.
     """
-    for name in ("NSS_INFERENCE_ENDPOINT", "NSS_INFERENCE_KEY", "NSS_INFERENCE_MODEL", "NSS_INFERENCE_LOCAL_PROFILE"):
+    for name in (
+        "NSS_INFERENCE_ENDPOINT",
+        "NSS_INFERENCE_KEY",
+        "NSS_INFERENCE_MODEL",
+        "NSS_INFERENCE_LOCAL_PROFILE",
+        "NSS_INFERENCE_TIMEOUT",
+    ):
         monkeypatch.delenv(name, raising=False)
     if request.node.get_closest_marker("requires_gpu") is not None:
         return

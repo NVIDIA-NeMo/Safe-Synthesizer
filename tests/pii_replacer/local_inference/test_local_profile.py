@@ -26,6 +26,11 @@ class TestBundledProfiles:
 
         assert re.fullmatch(r"[0-9a-f]{40}", profile.revision)
 
+    def test_bundled_profiles_serve_distinct_models(self) -> None:
+        served = [load_profile(name).served_name for name in bundled_profile_names()]
+
+        assert len(served) == len(set(served))
+
     def test_bundled_profile_is_found_by_served_model_name(self) -> None:
         assert bundled_profile_for_model("openai/gpt-oss-120b") == load_profile("gpt-oss-120b")
         assert bundled_profile_for_model("gpt-oss-120b") is None
