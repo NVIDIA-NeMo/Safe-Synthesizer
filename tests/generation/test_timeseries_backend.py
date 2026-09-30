@@ -1049,6 +1049,7 @@ class TestFlexibleTimeseries:
             progress_snapshots=[],
         )
 
+        backend._finalize_flexible_timeseries_artifacts()
         state = backend._sequence_group_states["group_A"]
         expected_prompt_tokens = len(backend._build_prompt_token_ids(state.prompt_state.prefix))
         raw_entries = [
@@ -1332,30 +1333,7 @@ class TestFlexibleTimeseries:
 
         assert not backend._internal_output_path.exists()
 
-    def test_fresh_attempt_removes_stale_internal_artifact(
-        self, timeseries_base_params, timeseries_model_metadata, mock_workdir, tmp_path
-    ):
-        _enable_flexible_timeseries(timeseries_base_params, timeseries_model_metadata)
-        backend = create_timeseries_backend(
-            timeseries_base_params,
-            timeseries_model_metadata,
-            mock_workdir,
-            self._schema(),
-        )
-        backend._raw_generations_path = tmp_path / "raw.jsonl"
-        backend._flexible_metrics_path = tmp_path / "metrics.json"
-        backend._internal_output_path = tmp_path / "internal.csv"
-        backend._raw_generations_path.write_text("stale", encoding="utf-8")
-        backend._flexible_metrics_path.write_text('{"status":"failed"}', encoding="utf-8")
-        backend._internal_output_path.write_text("stale", encoding="utf-8")
-
-        backend._prepare_flexible_timeseries_artifacts()
-
-        assert not backend._raw_generations_path.exists()
-        assert not backend._flexible_metrics_path.exists()
-        assert not backend._internal_output_path.exists()
-
-    def test_regeneration_overwrites_completed_run_artifacts(
+    def test_starting_a_run_keeps_previous_artifacts_and_resets_stale_log(
         self, timeseries_base_params, timeseries_model_metadata, mock_workdir, tmp_path
     ):
         _enable_flexible_timeseries(timeseries_base_params, timeseries_model_metadata)
@@ -1371,12 +1349,64 @@ class TestFlexibleTimeseries:
         backend._raw_generations_path.write_text("previous", encoding="utf-8")
         backend._flexible_metrics_path.write_text('{"status":"complete"}', encoding="utf-8")
         backend._internal_output_path.write_text("previous", encoding="utf-8")
+        backend._raw_generations_tmp_path.write_text("stale partial log", encoding="utf-8")
 
         backend._prepare_flexible_timeseries_artifacts()
 
-        assert not backend._raw_generations_path.exists()
-        assert not backend._flexible_metrics_path.exists()
-        assert not backend._internal_output_path.exists()
+        assert backend._raw_generations_path.read_text(encoding="utf-8") == "previous"
+        assert backend._flexible_metrics_path.read_text(encoding="utf-8") == '{"status":"complete"}'
+        assert backend._internal_output_path.read_text(encoding="utf-8") == "previous"
+        assert backend._raw_generations_tmp_path.read_text(encoding="utf-8") == ""
+
+    def test_regeneration_in_same_workdir_overwrites_previous_run(
+        self,
+        timeseries_base_params,
+        timeseries_model_metadata,
+        mock_workdir,
+        fixture_tokenizer,
+        tmp_path,
+    ):
+        _enable_flexible_timeseries(timeseries_base_params, timeseries_model_metadata)
+        timeseries_model_metadata.timeseries_group_values = ["group_A"]
+        backend = create_timeseries_backend(
+            timeseries_base_params,
+            timeseries_model_metadata,
+            mock_workdir,
+            self._schema(),
+        )
+        backend._raw_generations_path = tmp_path / "raw.jsonl"
+        backend._flexible_metrics_path = tmp_path / "metrics.json"
+        backend._internal_output_path = tmp_path / "internal.csv"
+        backend.llm = MagicMock()
+        backend.llm.get_tokenizer.return_value = fixture_tokenizer
+
+        def run_generation(value: int) -> None:
+            backend.llm.generate.return_value = [
+                SimpleNamespace(
+                    outputs=[
+                        SimpleNamespace(
+                            finish_reason="stop",
+                            text=f'value":{value},"_is_last_row":true}}\n',
+                            token_ids=[1, 2, 3],
+                        )
+                    ]
+                )
+            ]
+            results = backend.generate()
+            assert results.status == GenerationStatus.COMPLETE
+            assert results.df.to_dict("records") == [{"value": value, "group_id": "group_A"}]
+
+        run_generation(1)
+        run_generation(2)
+
+        raw_entries = [
+            json.loads(line) for line in backend._raw_generations_path.read_text(encoding="utf-8").splitlines()
+        ]
+        assert len(raw_entries) == 1
+        assert raw_entries[0]["completion"].startswith('value":2,')
+        assert pd.read_csv(backend._internal_output_path)["value"].tolist() == [2]
+        assert json.loads(backend._flexible_metrics_path.read_text(encoding="utf-8"))["status"] == "complete"
+        assert not backend._raw_generations_tmp_path.exists()
 
     @staticmethod
     def _timestamped_schema() -> dict:
@@ -1586,6 +1616,7 @@ class TestFlexibleTimeseries:
             finish_reason="stop",
         )
         backend._write_flexible_timeseries_metrics()
+        backend._finalize_flexible_timeseries_artifacts()
 
         raw = backend._raw_generations_path.read_text(encoding="utf-8")
         metrics = pd.read_json(backend._flexible_metrics_path, typ="series")
