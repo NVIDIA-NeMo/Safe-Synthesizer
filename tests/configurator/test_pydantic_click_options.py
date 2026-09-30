@@ -744,4 +744,5 @@ def test_cli_explicit_empty_structured_list_reaches_model_validation():
     assert result.exit_code == 0, result.output
     assert "replace_pii" not in captured or "steps" not in captured.get("replace_pii", {})
     params = SafeSynthesizerParameters.model_validate(captured)
+    assert params.replace_pii is not None
     assert len(params.replace_pii.steps) >= 1
