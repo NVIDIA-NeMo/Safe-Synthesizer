@@ -803,14 +803,27 @@ class TimeseriesBackend(VllmBackend):
                 continue
             expected_index += 1
 
+    @property
+    def _raw_generations_tmp_path(self) -> Path:
+        """In-progress raw completion log, moved to ``_raw_generations_path`` when generation finishes."""
+        return self._raw_generations_path.with_name(f"{self._raw_generations_path.name}.tmp")
+
     def _prepare_flexible_timeseries_artifacts(self) -> None:
-        """Remove flexible time-series artifacts from a previous run in the same workdir."""
+        """Start an empty in-progress raw completion log.
+
+        Like other generation outputs, artifacts from a previous run in the same
+        workdir are left in place until this run finishes and overwrites them.
+        """
         if not self._flexible_timeseries:
             return
-        self._raw_generations_path.parent.mkdir(parents=True, exist_ok=True)
-        self._raw_generations_path.unlink(missing_ok=True)
-        self._flexible_metrics_path.unlink(missing_ok=True)
-        self._internal_output_path.unlink(missing_ok=True)
+        self._raw_generations_tmp_path.parent.mkdir(parents=True, exist_ok=True)
+        self._raw_generations_tmp_path.write_text("", encoding="utf-8")
+
+    def _finalize_flexible_timeseries_artifacts(self) -> None:
+        """Replace the previous run's raw completion log with this run's log."""
+        if not self._flexible_timeseries or not self._raw_generations_tmp_path.exists():
+            return
+        self._raw_generations_tmp_path.replace(self._raw_generations_path)
 
     def _write_raw_completion(
         self,
@@ -834,7 +847,7 @@ class TimeseriesBackend(VllmBackend):
             "total_tokens": prompt_tokens + completion_tokens,
             "finish_reason": finish_reason,
         }
-        with self._raw_generations_path.open("a", encoding="utf-8") as raw_file:
+        with self._raw_generations_tmp_path.open("a", encoding="utf-8") as raw_file:
             raw_file.write(json.dumps(payload, ensure_ascii=False))
             raw_file.write("\n")
 
@@ -1516,5 +1529,6 @@ class TimeseriesBackend(VllmBackend):
         # Sort by group and timestamp for consistent output (also removes pseudo-group column)
         self.gen_results.df = self._sort_dataframe(internal_df)
         self._write_flexible_timeseries_metrics()
+        self._finalize_flexible_timeseries_artifacts()
 
         return self.gen_results

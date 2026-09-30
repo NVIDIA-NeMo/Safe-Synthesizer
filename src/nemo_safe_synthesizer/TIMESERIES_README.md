@@ -385,9 +385,10 @@ Global Stopping:
   generation.
 - The final status is `complete` only when every group completes; if any group
   fails, the status is `incomplete`. `num_records` does not affect it.
-- Generating again into the same workdir overwrites earlier output, including
-  the flexible artifacts `raw_generations.jsonl`,
-  `flexible_timeseries_metrics.json`, and `synthetic_data_internal.csv`.
+- Generating again into the same workdir overwrites earlier output when the
+  new run finishes, as for other generation modes. This includes the flexible
+  artifacts `raw_generations.jsonl`, `flexible_timeseries_metrics.json`, and
+  `synthetic_data_internal.csv`; a run that fails partway leaves them intact.
 
 ### Progress Checkpoints
 
