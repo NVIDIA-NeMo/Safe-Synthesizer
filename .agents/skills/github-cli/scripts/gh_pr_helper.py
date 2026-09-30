@@ -322,7 +322,7 @@ def _post_review_comment_reply(
         input={"body": body},
     )
     return ReplyOutput(
-        comment_id=thread_comment_id,
+        comment_id=comment_id,
         reply_id=reply_data["id"],
         pr_number=pr_number,
         html_url=reply_data["html_url"],

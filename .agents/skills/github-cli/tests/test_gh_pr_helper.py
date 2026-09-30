@@ -177,7 +177,7 @@ def test_post_review_comment_reply_to_a_reply_targets_the_thread_root() -> None:
         f"{repo_url}/pulls/715/comments/91/replies",
         {"body": "Fixed in beefcafe"},
     )
-    assert output.comment_id == 91
+    assert output.comment_id == 93
 
 
 def test_post_review_comment_reply_rejects_comment_without_pr() -> None:
