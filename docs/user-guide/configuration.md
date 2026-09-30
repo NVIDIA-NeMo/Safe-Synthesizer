@@ -342,7 +342,7 @@ for the full field list. For DP error diagnostics, see
 | `data.max_holdout` | `2000` | Upper cap on holdout size | Leave at default for most datasets |
 | `data.random_state` | `null` | Random seed -- auto-generated if `null`; set an explicit integer for reproducible splits | Set to a fixed integer for reproducibility |
 | `data.group_training_examples_by` | `null` | Column to group records by | Use for multi-row entities (e.g. patient ID, session ID) |
-| `data.order_training_examples_by` | `null` | Column to order within groups (requires `data.group_training_examples_by`) | Use with a timestamp column for time series data |
+| `data.order_training_examples_by` | `null` | Column to order within groups (requires `data.group_training_examples_by`) | In time-series mode, leave unset or set it to `time_series.timestamp_column` |
 | `data.max_sequences_per_example` | `"auto"` | Max sequences per example (`1` for DP, `null` for time series, `10` otherwise). `null` lets each example fill the context window. DP and time-series mode cannot be enabled together. | Leave at `"auto"` |
 
 See [`DataParameters`][nemo_safe_synthesizer.config.data.DataParameters]
@@ -360,20 +360,22 @@ for the full field list.
 |-------|---------|-------------|----------|
 | `time_series.is_timeseries` | `false` | Enable time series mode | Enable for datasets with sequential time-ordered records |
 | `time_series.timestamp_column` | `null` | Timestamp field | Required unless an interval is provided |
-| `time_series.timestamp_interval_seconds` | `null` | Interval in seconds | Required without a timestamp field |
+| `time_series.timestamp_interval_seconds` | `null` | Interval in seconds; must match the data when set | Required without a timestamp field; leave unset for irregular intervals |
 | `time_series.timestamp_format` | `null` | strftime or `"elapsed_seconds"` | Leave `null` to infer |
 | `time_series.start_timestamp` | `null` | Override start timestamp for all groups (inferred from data if `null`) | Leave `null` to infer from data |
 | `time_series.stop_timestamp` | `null` | Override stop timestamp for all groups (inferred from data if `null`) | Leave `null` to infer from data |
 
-Safe Synthesizer chooses the generation representation automatically. Groups
-with equal lengths, common start and stop timestamps, and consistent intervals
-use deterministic time-range generation. If any of those shape constraints
-does not hold, preprocessing adds internal sequence-index and final-row marker
-columns so each group can terminate independently. These internal columns are
-removed from final output. Null, unparseable, or otherwise invalid timestamps
-remain configuration or data errors and do not trigger flexible routing.
-Flexible-routing control columns and termination bounds are derived as internal
-metadata, not user configuration fields.
+Groups do not need equal lengths, common start and stop timestamps, or a
+consistent interval; Safe Synthesizer adapts to differently shaped groups
+automatically. Null, unparseable, or otherwise invalid timestamps remain data
+errors.
+
+In time-series mode, `time_series.timestamp_column` and
+`data.order_training_examples_by` must name the same column. Set only one; the
+other is filled in automatically. `time_series.timestamp_interval_seconds` is
+an assertion: if the spacing of your timestamps does not match it, the run
+fails with `timestamp_interval_mismatch`. Leave it unset to allow irregular
+intervals.
 
 See [`TimeSeriesParameters`][nemo_safe_synthesizer.config.time_series.TimeSeriesParameters]
 for the full schema. For detailed descriptions and constraints, see the

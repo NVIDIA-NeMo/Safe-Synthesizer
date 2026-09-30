@@ -29,6 +29,9 @@ def _stable_sort_within_groups(
     working = data.copy()
     temporary_columns: list[str] = []
 
+    # pandas ignores ``kind`` when sorting by multiple columns and does not
+    # document that multi-column sorts are stable. The positional tie-breaker
+    # guarantees rows with equal group and order values keep source row order.
     source_position_column = _unused_column_name("__nss_source_position", list(working.columns))
     working[source_position_column] = range(len(working))
     temporary_columns.append(source_position_column)

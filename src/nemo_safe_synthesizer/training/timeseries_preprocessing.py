@@ -13,6 +13,7 @@ from ..data_processing.timeseries_validation import (
     _resolve_timeseries_routing,
     _validate_deterministic_inspection,
 )
+from ..llm.metadata import FlexibleTimeseriesMetadata
 from ..observability import get_logger
 
 logger = get_logger(__name__)
@@ -46,33 +47,36 @@ def _reorder_timeseries_columns(
 def process_timeseries_data(
     training_df: pd.DataFrame,
     config: SafeSynthesizerParameters,
-) -> tuple[pd.DataFrame, SafeSynthesizerParameters]:
+) -> tuple[pd.DataFrame, SafeSynthesizerParameters, FlexibleTimeseriesMetadata | None]:
     """Resolve and prepare deterministic or flexible time-series training data.
 
     Normalizes grouped and ungrouped time series into the same training path.
     When no group column is configured, a reserved pseudo-group column
     (``PSEUDO_GROUP_COLUMN``) is added so the whole dataset is treated as one
     sequence. Fixed-shape groups retain deterministic time-range processing.
-    Groups with different lengths, ranges, or intervals are automatically
-    transformed to use a generated sequence index and final-row marker.
-    The passed configuration is updated with the selected representation and
-    resolved timestamp metadata.
+    Groups with different lengths, ranges, or unasserted intervals are
+    automatically transformed to use a generated sequence index and final-row
+    marker. The passed configuration is updated with the selected
+    representation and resolved timestamp metadata.
 
     Args:
         training_df: The training DataFrame.
         config: Configuration containing time-series and data settings.
 
     Returns:
-        Processed training data and the resolved configuration.
+        Processed training data, the resolved configuration, and the flexible
+        metadata to persist with the model, or ``None`` for deterministic or
+        non-time-series data.
 
     Raises:
         ParameterError: If a configured timestamp or ordering column is missing,
             or if the timestamp format is incompatible with the source data.
-        DataError: If required source values are null or timestamps cannot be parsed.
+        DataError: If required source values are null, timestamps cannot be
+            parsed, or timestamps do not follow an asserted interval.
     """
     routing = _resolve_timeseries_routing(training_df, config)
     if routing is None:
-        return training_df, config
+        return training_df, config, None
 
     ts_config = config.time_series
     if routing.flexible_metadata is not None:
@@ -84,13 +88,16 @@ def process_timeseries_data(
             routing.timestamp_format,
         )
         logger.info(
-            "Prepared automatically routed flexible time-series data.",
+            "Time-series groups differ in shape; using flexible time-series processing.",
             extra={
                 "group_column": group_column,
+                "failed_constraints": list(routing.failed_constraints),
                 "sequence_max_records": metadata.max_records,
             },
         )
-        return training_df, config
+        return training_df, config, metadata
+
+    logger.info("Time-series groups share one shape; using deterministic time-range processing.")
 
     original_group_column = config.data.group_training_examples_by
     original_timestamp_column = ts_config.timestamp_column
@@ -135,4 +142,4 @@ def process_timeseries_data(
         validation.group_by_column,
         validation.timestamp_column,
     )
-    return training_df, config
+    return training_df, config, None

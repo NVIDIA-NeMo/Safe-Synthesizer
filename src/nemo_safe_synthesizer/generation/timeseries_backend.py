@@ -20,7 +20,6 @@ from vllm.sampling_params import SamplingParams
 
 from .. import utils
 from ..config import SafeSynthesizerParameters
-from ..config.time_series import FlexibleTimeseriesMetadata
 from ..data_processing.record_utils import ParsedRecord, _parse_timestamp_to_seconds
 from ..defaults import FIXED_RUNTIME_GENERATE_ARGS, LOG_DASHES, PSEUDO_GROUP_COLUMN
 from ..errors import GenerationError
@@ -32,7 +31,7 @@ from ..generation.timeseries_prompting import (
     build_training_compatible_prompt_token_ids,
 )
 from ..generation.vllm_backend import VllmBackend
-from ..llm.metadata import ModelMetadata, TimeSeriesGroupValue
+from ..llm.metadata import FlexibleTimeseriesMetadata, ModelMetadata, TimeSeriesGroupValue
 from ..observability import get_logger
 
 logger = get_logger(__name__)
@@ -162,6 +161,15 @@ class GroupState:
     last_timestamp_seconds: int | None = None
     """Timestamp (in seconds) of the most recently generated record, used for chronological validation."""
 
+    last_source_timestamp_seconds: int | None = None
+    """Flexible mode: source timestamp (in seconds) of the most recently accepted record."""
+
+    retained_source_seconds: list[int | None] = field(default_factory=list, repr=False)
+    """Flexible mode: source timestamps of the current batch's retained rows, in order, pending acceptance."""
+
+    batches: list[Batch] = field(default_factory=list, repr=False)
+    """Batches whose accepted rows belong to this group; invalidated if the group fails."""
+
     low_valid_fraction_count: int = 0
     """Consecutive batches with high invalid fraction.  Triggers group failure after ``patience`` is exceeded."""
 
@@ -270,19 +278,17 @@ class TimeseriesBackend(VllmBackend):
             - Failure (low valid fraction or no progress): A group fails after
               ``config.generation.patience`` consecutive batches where either the
               invalid record fraction remains above the configured threshold or
-              no accepted timestamp advances. Failed groups are not retried;
-              records accepted in earlier batches remain in the partial output.
+              no accepted timestamp advances. Failed groups are not retried, and
+              rows they accepted in earlier batches are discarded from the output.
 
         Global Stopping:
             - Natural completion: Generation ends when both the pending groups
               queue and active groups list are empty (all groups processed).
-            - No records: If `GenerationBatches` detects too many consecutive
-              batches with no valid records globally, it signals `STOP_NO_RECORDS`.
-            - Target reached: If the target number of records is reached,
-              `GenerationBatches` signals `STOP_METRIC_REACHED`.
+            - Per-group retry state is authoritative; batch-level stop signals
+              from `GenerationBatches` are cleared while groups remain active.
 
-        When global stopping occurs before all groups complete, `all_groups_succeeded`
-        returns False, and the final generation status reflects partial completion.
+        The final status is ``COMPLETE`` only when every group completed and
+        ``INCOMPLETE`` when any group failed. ``num_records`` does not affect it.
 
     Attributes:
         _samples_per_prompt (int): Number of completion samples per prompt.
@@ -625,9 +631,11 @@ class TimeseriesBackend(VllmBackend):
         """Retain the structurally valid prefix of a flexible sequence.
 
         Records must match the active group and advance the generated sequence
-        index contiguously. This method invalidates records after the first
-        structural failure or stopping row. The stopping candidate remains
-        tentative until data actions have accepted it.
+        index contiguously. When the source data has a timestamp column, its
+        generated values must be non-decreasing and follow any asserted
+        interval. This method invalidates records after the first structural
+        failure or stopping row. The stopping candidate remains tentative until
+        data actions have accepted it.
 
         Args:
             state: Active generation state for the group.
@@ -641,9 +649,11 @@ class TimeseriesBackend(VllmBackend):
             return records, None
 
         retained: list[ParsedRecord] = []
+        retained_source_seconds: list[int | None] = []
         accepted_row_stop: tuple[str, ParsedRecord] | None = None
         prefix_ended = False
         expected_index = 0 if state.last_timestamp_seconds is None else state.last_timestamp_seconds + 1
+        previous_source_seconds = state.last_source_timestamp_seconds
         trimmed_error = ("Generated row appears after the sequence end marker", "TimeSeries")
         group_error = ("Generated record group does not match the active time-series group", "TimeSeries")
         index_error = ("Generated sequence index is not a valid integer", "TimeSeries")
@@ -673,9 +683,17 @@ class TimeseriesBackend(VllmBackend):
                 )
                 prefix_ended = True
                 continue
+            source_seconds, source_error = self._check_source_timestamp(parsed, previous_source_seconds)
+            if source_error is not None:
+                record.invalidate(source_error)
+                prefix_ended = True
+                continue
 
             retained.append(record)
+            retained_source_seconds.append(source_seconds)
             expected_index += 1
+            if source_seconds is not None:
+                previous_source_seconds = source_seconds
             if parsed.get(self._sequence_marker_column) is True:
                 accepted_row_stop = ("terminal", record)
                 prefix_ended = True
@@ -683,7 +701,42 @@ class TimeseriesBackend(VllmBackend):
                 accepted_row_stop = ("cap", record)
                 prefix_ended = True
 
+        state.retained_source_seconds = retained_source_seconds
         return retained, accepted_row_stop
+
+    def _check_source_timestamp(
+        self,
+        parsed: dict,
+        previous_seconds: int | None,
+    ) -> tuple[int | None, tuple[str, str] | None]:
+        """Parse a generated source timestamp and check it against the previous accepted row.
+
+        Args:
+            parsed: Parsed generated record in the training representation.
+            previous_seconds: Source timestamp of the previous accepted row in the group.
+
+        Returns:
+            The parsed timestamp in seconds, or ``None`` when the source data has
+            no timestamp column, and an invalidation error when a check fails.
+        """
+        metadata = self._flexible_metadata
+        if metadata is None or metadata.source_timestamp_column is None or metadata.source_timestamp_format is None:
+            return None, None
+        try:
+            seconds = _parse_timestamp_to_seconds(
+                parsed.get(metadata.source_timestamp_column),
+                metadata.source_timestamp_format,
+            )
+        except (ValueError, TypeError, OverflowError):
+            return None, ("Generated source timestamp does not match the source timestamp format", "TimeSeries")
+        if previous_seconds is None:
+            return seconds, None
+        if seconds < previous_seconds:
+            return None, ("Generated source timestamp decreases within the group", "TimeSeries")
+        interval = metadata.source_interval_seconds
+        if interval is not None and seconds - previous_seconds != interval:
+            return None, ("Generated source timestamp does not follow timestamp_interval_seconds", "TimeSeries")
+        return seconds, None
 
     def _resolve_postprocessed_termination(
         self,
@@ -751,20 +804,10 @@ class TimeseriesBackend(VllmBackend):
             expected_index += 1
 
     def _prepare_flexible_timeseries_artifacts(self) -> None:
-        """Reset stale partial artifacts while protecting completed flexible time-series runs."""
+        """Remove flexible time-series artifacts from a previous run in the same workdir."""
         if not self._flexible_timeseries:
             return
         self._raw_generations_path.parent.mkdir(parents=True, exist_ok=True)
-        if self._flexible_metrics_path.exists():
-            try:
-                existing = utils.load_json(self._flexible_metrics_path)
-            except (OSError, ValueError, TypeError):
-                existing = {}
-            if existing.get("status") == "completed":
-                raise GenerationError(
-                    f"A completed time-series generation run already exists at {self._flexible_metrics_path}. "
-                    "Use a new workdir or remove that run before generating again."
-                )
         self._raw_generations_path.unlink(missing_ok=True)
         self._flexible_metrics_path.unlink(missing_ok=True)
         self._internal_output_path.unlink(missing_ok=True)
@@ -795,6 +838,33 @@ class TimeseriesBackend(VllmBackend):
             raw_file.write(json.dumps(payload, ensure_ascii=False))
             raw_file.write("\n")
 
+    def _resolve_timeseries_status(self) -> GenerationStatus:
+        """Return ``COMPLETE`` only when every group finished; ``num_records`` does not apply."""
+        states = self._sequence_group_states.values()
+        if states and all(state.completed and not state.failed for state in states):
+            return GenerationStatus.COMPLETE
+        return GenerationStatus.INCOMPLETE
+
+    def _discard_failed_group_records(self) -> None:
+        """Invalidate accepted rows of failed groups so they are excluded from output."""
+        error = ("Time-series group failed before completing", "TimeSeries")
+        failed_states = [state for state in self._sequence_group_states.values() if state.failed]
+        if failed_states:
+            logger.warning(
+                "Discarding rows from failed time-series groups; generation is incomplete.",
+                extra={
+                    "failed_groups": len(failed_states),
+                    "total_groups": len(self._sequence_group_states),
+                    "failed_group_ordinals": [state.group_ordinal for state in failed_states],
+                },
+            )
+        for state in failed_states:
+            for batch in state.batches:
+                for response in batch._responses:
+                    for record in response.records:
+                        if record.is_valid:
+                            record.invalidate(error)
+
     def _write_flexible_timeseries_metrics(self) -> None:
         """Write auditable per-group and aggregate flexible time-series metrics."""
         metadata = self._flexible_metadata
@@ -805,7 +875,7 @@ class TimeseriesBackend(VllmBackend):
                 "group": state.group_id,
                 "group_ordinal": state.group_ordinal,
                 "reason": state.termination_reason or "failure",
-                "rows": state.total_valid_records,
+                "rows": 0 if state.failed else state.total_valid_records,
                 "prompts": state.total_prompts,
                 "prompt_tokens": state.total_prompt_tokens,
                 "completion_tokens": state.total_completion_tokens,
@@ -817,7 +887,7 @@ class TimeseriesBackend(VllmBackend):
             reason: sum(group["reason"] == reason for group in groups) for reason in ("terminal", "cap", "failure")
         }
         metrics = {
-            "status": "completed",
+            "status": self._resolve_timeseries_status().value,
             "flexible_timeseries": True,
             "sequence_max_records": metadata.max_records,
             "groups": groups,
@@ -845,8 +915,17 @@ class TimeseriesBackend(VllmBackend):
             group_state: The group state to update.
             records: The new valid records (``parsed`` is set on each).
         """
+        retained_source_seconds = group_state.retained_source_seconds
+        group_state.retained_source_seconds = []
         if not records:
             return
+
+        # Accepted records are a prefix of the rows retained by
+        # ``_trim_flexible_timeseries_records``, so their source timestamps align.
+        if retained_source_seconds and len(records) <= len(retained_source_seconds):
+            source_seconds = retained_source_seconds[len(records) - 1]
+            if source_seconds is not None:
+                group_state.last_source_timestamp_seconds = source_seconds
 
         group_state.prompt_state.add_history(records, max_records=self._history_window_size)
 
@@ -1239,9 +1318,10 @@ class TimeseriesBackend(VllmBackend):
                     self._check_chronological_for_group(batch, state)
                 retained_records = self._retain_single_valid_response(batch)
                 retained_records, accepted_row_stop = self._trim_flexible_timeseries_records(state, retained_records)
-                batches.postprocess_batch(batch)
+                batches.postprocess_batch(batch, commit_history=False)
                 self._validate_postprocessed_group_identity(state, retained_records)
                 self._validate_postprocessed_sequence_indices(state, retained_records)
+                batches.commit_history(batch)
                 termination_reason = self._resolve_postprocessed_termination(accepted_row_stop)
                 accepted_records = [
                     record for record in retained_records if record.is_valid and record.parsed is not None
@@ -1261,6 +1341,7 @@ class TimeseriesBackend(VllmBackend):
                         invalid_fraction_threshold,
                         termination_reason=termination_reason,
                     )
+                state.batches.append(batch)
                 batches.add_batch(batch, apply_data_actions=False)
                 # Time-series retries are tracked per group. Since completion is
                 # determined from post-processed records, a batch-level zero-record
@@ -1364,8 +1445,11 @@ class TimeseriesBackend(VllmBackend):
 
         Note:
             ``config.generation.num_records`` is used for progress tracking but
-            does not limit time-series output. Groups are the same as those seen
-            during training in ``model_metadata.timeseries_group_values``.
+            does not limit time-series output or decide completion. The status is
+            ``COMPLETE`` only when every group finishes; otherwise it is
+            ``INCOMPLETE`` and rows from failed groups are discarded. Groups are
+            the same as those seen during training in
+            ``model_metadata.timeseries_group_values``.
 
         Args:
             data_actions_fn: Optional function that takes a DataFrame and returns a modified DataFrame.
@@ -1408,15 +1492,14 @@ class TimeseriesBackend(VllmBackend):
             f"Generating for {num_groups} groups using parallel generation "
             f"(total expected records: {total_expected_records})",
         )
-        all_groups_completed = self._generate_parallel_groups(
+        self._generate_parallel_groups(
             batches=batches,
             sampling_params=sampling_params,
             progress_snapshots=progress_snapshots,
         )
 
-        if all_groups_completed and batches.status == GenerationStatus.IN_PROGRESS:
-            batches.status = GenerationStatus.COMPLETE
-
+        self._discard_failed_group_records()
+        batches.status = self._resolve_timeseries_status()
         batches.job_complete()
         batches.log_status()
 

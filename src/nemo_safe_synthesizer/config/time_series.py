@@ -4,9 +4,9 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated, ClassVar, Self
+from typing import Annotated, Self
 
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from ..configurator.parameters import (
     Parameters,
@@ -17,26 +17,6 @@ __all__ = [
 ]
 
 
-class FlexibleTimeseriesMetadata(BaseModel):
-    """Internal values resolved when flexible time-series routing is selected."""
-
-    model_config = ConfigDict(frozen=True)
-
-    DEFAULT_INDEX_COLUMN: ClassVar[str] = "_time_idx"
-    DEFAULT_MARKER_COLUMN: ClassVar[str] = "_is_last_row"
-
-    index_column: str = Field(
-        default=DEFAULT_INDEX_COLUMN,
-        description="Generated zero-based sequence index column.",
-    )
-    marker_column: str = Field(
-        default=DEFAULT_MARKER_COLUMN,
-        description="Generated boolean column marking each sequence's final row.",
-    )
-    max_records: int = Field(description="Largest source-group length used as the generation safety cap.")
-    source_columns: tuple[str, ...] = Field(description="Original source columns in output order.")
-
-
 class TimeSeriesParameters(Parameters):
     """Configuration for time-series mode in the Safe Synthesizer pipeline.
 
@@ -44,8 +24,6 @@ class TimeSeriesParameters(Parameters):
     timestamp column selection, interval inference, and format validation.
     The time-series pipeline is currently experimental.
     """
-
-    _flexible_timeseries_metadata: FlexibleTimeseriesMetadata | None = PrivateAttr(default=None)
 
     is_timeseries: Annotated[
         bool,
@@ -117,20 +95,6 @@ class TimeSeriesParameters(Parameters):
             description="Stop timestamp. If not provided, the last timestamp in the timestamp column will be used.",
         ),
     ] = None
-
-    @property
-    def _uses_flexible_timeseries(self) -> bool:
-        """Whether automatic routing selected flexible time-series processing."""
-        return self._flexible_timeseries_metadata is not None
-
-    @property
-    def _resolved_flexible_timeseries_metadata(self) -> FlexibleTimeseriesMetadata | None:
-        """The internal metadata for the resolved flexible representation."""
-        return self._flexible_timeseries_metadata
-
-    def _resolve_flexible_timeseries(self, metadata: FlexibleTimeseriesMetadata | None) -> None:
-        """Record or clear the internal automatic-routing result."""
-        self._flexible_timeseries_metadata = metadata
 
     @model_validator(mode="after")
     def check_timestamp_column_or_interval_when_timeseries(self) -> Self:

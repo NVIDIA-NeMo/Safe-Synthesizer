@@ -22,7 +22,6 @@ from transformers import AutoConfig, PretrainedConfig, PreTrainedTokenizerBase
 
 from ..cli.artifact_structure import Workdir
 from ..config.parameters import SafeSynthesizerParameters
-from ..config.time_series import FlexibleTimeseriesMetadata
 from ..defaults import (
     DEFAULT_INSTRUCTION,
     MAX_ROPE_SCALING_FACTOR,
@@ -47,6 +46,38 @@ TimeSeriesGroupValue: TypeAlias = str | int | float | bool
 """JSON-compatible, non-null value identifying a time-series group."""
 
 
+class FlexibleTimeseriesMetadata(BaseModel):
+    """Internal values resolved when flexible time-series routing is selected."""
+
+    model_config = ConfigDict(frozen=True)
+
+    DEFAULT_INDEX_COLUMN: ClassVar[str] = "_time_idx"
+    DEFAULT_MARKER_COLUMN: ClassVar[str] = "_is_last_row"
+
+    index_column: str = Field(
+        default=DEFAULT_INDEX_COLUMN,
+        description="Generated zero-based sequence index column.",
+    )
+    marker_column: str = Field(
+        default=DEFAULT_MARKER_COLUMN,
+        description="Generated boolean column marking each sequence's final row.",
+    )
+    max_records: int = Field(description="Largest source-group length; generated groups never exceed it.")
+    source_columns: tuple[str, ...] = Field(description="Original source columns in output order.")
+    source_timestamp_column: str | None = Field(
+        default=None,
+        description="Source timestamp column whose generated values must be non-decreasing within a group.",
+    )
+    source_timestamp_format: str | None = Field(
+        default=None,
+        description="strftime format or ``elapsed_seconds`` used to parse ``source_timestamp_column``.",
+    )
+    source_interval_seconds: int | None = Field(
+        default=None,
+        description="User-asserted spacing between consecutive source timestamps.",
+    )
+
+
 def _flexible_timeseries_metadata_issue(metadata: FlexibleTimeseriesMetadata) -> str | None:
     """Return an internal artifact invariant violation, if any."""
     if not metadata.index_column or not metadata.marker_column:
@@ -61,6 +92,16 @@ def _flexible_timeseries_metadata_issue(metadata: FlexibleTimeseriesMetadata) ->
         return "source column list contains duplicates"
     if metadata.index_column in metadata.source_columns or metadata.marker_column in metadata.source_columns:
         return "control columns overlap source columns"
+    if metadata.source_timestamp_column is None:
+        if metadata.source_timestamp_format is not None or metadata.source_interval_seconds is not None:
+            return "source timestamp settings require a source timestamp column"
+        return None
+    if metadata.source_timestamp_column not in metadata.source_columns:
+        return "source timestamp column is not a source column"
+    if not metadata.source_timestamp_format:
+        return "source timestamp column requires a timestamp format"
+    if metadata.source_interval_seconds is not None and metadata.source_interval_seconds < 1:
+        return "source interval must be positive"
     return None
 
 

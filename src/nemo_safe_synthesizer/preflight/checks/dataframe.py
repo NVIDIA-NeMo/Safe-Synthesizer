@@ -11,7 +11,7 @@ from ...data_processing.timeseries_validation import (
     TimeSeriesDataValidationError,
     TimeSeriesParameterValidationError,
     TimeSeriesValidationReason,
-    _resolve_timeseries_routing,
+    _validate_timeseries_source_data,
 )
 from ...data_processing.validation import (
     check_column_has_no_nulls,
@@ -212,7 +212,12 @@ class TimestampColumnCheck(DataFrameCheck):
 
 
 class TimeSeriesDataShapeCheck(DataFrameCheck):
-    """Validate time-series timestamp format and per-group shape invariants."""
+    """Validate time-series timestamp data and any asserted ``timestamp_interval_seconds``.
+
+    Differences in group length, start, stop, or unasserted interval are not
+    reported here; training preprocessing uses them to select flexible
+    processing.
+    """
 
     name = "timeseries.shape"
     label = "Time-series data shape"
@@ -228,6 +233,7 @@ class TimeSeriesDataShapeCheck(DataFrameCheck):
         TimeSeriesValidationReason.TIMESTAMP_PARSE_FAILED: "timestamp_parse_failed",
         TimeSeriesValidationReason.TIMESTAMP_ELAPSED_NON_NUMERIC: "timestamp_elapsed_non_numeric",
         TimeSeriesValidationReason.TIMESTAMP_ELAPSED_INVALID: "timestamp_elapsed_invalid",
+        TimeSeriesValidationReason.TIMESTAMP_INTERVAL_MISMATCH: "timestamp_interval_mismatch",
         TimeSeriesValidationReason.TIMESERIES_EMPTY: "timeseries_empty",
         TimeSeriesValidationReason.TIMESERIES_NO_VALUE_COLUMNS: "timeseries_no_value_columns",
         TimeSeriesValidationReason.TIMESERIES_IDENTITY_COLUMNS_SAME: "timeseries_identity_columns_same",
@@ -252,17 +258,6 @@ class TimeSeriesDataShapeCheck(DataFrameCheck):
     @override
     def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
         try:
-            decision = _resolve_timeseries_routing(ctx.data, ctx.config)
-            if decision is None:
-                return
-            metadata = decision.flexible_metadata
-            if metadata is not None:
-                constraints = ", ".join(decision.failed_constraints)
-                collector.warning(
-                    "flexible_timeseries_routing",
-                    "Time-series source groups do not satisfy the deterministic pipeline constraints "
-                    f"({constraints}); automatically using flexible time-series processing with a "
-                    f"{decision.sequence_max_records}-record safety cap.",
-                )
+            _validate_timeseries_source_data(ctx.data, ctx.config)
         except (TimeSeriesDataValidationError, TimeSeriesParameterValidationError) as exc:
             collector.error(self.issue_codes[exc.reason], str(exc))

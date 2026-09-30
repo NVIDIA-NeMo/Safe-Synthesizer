@@ -53,6 +53,11 @@ class DataParameters(Parameters):
             depends_on="group_training_examples_by",
             depends_on_func=lambda v: v is not None,
             value_func=lambda v: v is not None,
+            message=(
+                "order_training_examples_by requires group_training_examples_by. "
+                "For a single time series, set time_series.timestamp_column instead; "
+                "records are grouped automatically."
+            ),
         ),
         Field(
             description=(

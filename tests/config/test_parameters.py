@@ -14,7 +14,6 @@ from nemo_safe_synthesizer.config.generate import GenerateParameters, Structured
 from nemo_safe_synthesizer.config.job import SafeSynthesizerJobConfig
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig, StepDefinition
-from nemo_safe_synthesizer.config.time_series import FlexibleTimeseriesMetadata
 from nemo_safe_synthesizer.config.training import QuantizationScheme, TrainingHyperparams
 from nemo_safe_synthesizer.configurator.parameter_paths import (
     AmbiguousParameterName,
@@ -44,20 +43,55 @@ def test_flexible_timeseries_state_is_not_a_public_parameter(name, value):
         SafeSynthesizerParameters.from_params(**{name: value})
 
 
-def test_resolved_flexible_timeseries_metadata_is_not_serialized_as_user_config():
+def test_timeseries_config_has_no_flexible_metadata_fields():
     config = SafeSynthesizerParameters.from_params(
         is_timeseries=True,
         timestamp_column="timestamp",
     )
-    config.time_series._resolve_flexible_timeseries(
-        FlexibleTimeseriesMetadata(max_records=2, source_columns=("group", "timestamp", "value"))
-    )
 
     dumped = config.time_series.model_dump()
 
-    assert config.time_series._uses_flexible_timeseries is True
     assert "flexible_timeseries_metadata" not in dumped
     assert not any(name.startswith("sequence_") for name in dumped)
+
+
+def test_timeseries_rejects_contradicting_timestamp_and_order_columns():
+    with pytest.raises(ValidationError, match="must name the same column"):
+        SafeSynthesizerParameters.from_params(
+            is_timeseries=True,
+            timestamp_column="timestamp",
+            group_training_examples_by="group",
+            order_training_examples_by="event",
+        )
+
+
+def test_timeseries_accepts_matching_timestamp_and_order_columns():
+    config = SafeSynthesizerParameters.from_params(
+        is_timeseries=True,
+        timestamp_column="timestamp",
+        group_training_examples_by="group",
+        order_training_examples_by="timestamp",
+    )
+
+    assert config.data.order_training_examples_by == config.time_series.timestamp_column
+
+
+def test_non_timeseries_order_column_is_not_compared_to_timestamp():
+    config = SafeSynthesizerParameters.from_params(
+        group_training_examples_by="group",
+        order_training_examples_by="event",
+    )
+
+    assert config.data.order_training_examples_by == "event"
+
+
+def test_order_column_without_group_suggests_timestamp_column():
+    with pytest.raises(ValidationError, match="For a single time series, set time_series.timestamp_column"):
+        SafeSynthesizerParameters.from_params(
+            is_timeseries=True,
+            timestamp_column="timestamp",
+            order_training_examples_by="timestamp",
+        )
 
 
 def test_safe_synthesizer_parameters(monkeypatch):

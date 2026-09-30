@@ -18,7 +18,7 @@ from transformers import PretrainedConfig, PreTrainedTokenizerBase
 from nemo_safe_synthesizer.config.data import DataParameters
 from nemo_safe_synthesizer.config.evaluate import EvaluationParameters
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
-from nemo_safe_synthesizer.config.time_series import FlexibleTimeseriesMetadata, TimeSeriesParameters
+from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
 from nemo_safe_synthesizer.config.training import TrainingHyperparams
 from nemo_safe_synthesizer.defaults import DEFAULT_MAX_SEQ_LENGTH, PSEUDO_GROUP_COLUMN
 from nemo_safe_synthesizer.llm.metadata import ModelMetadata
@@ -935,7 +935,7 @@ class TestTimeSeriesDataShapeCheck:
         )
         assert not any(issue.code == "preflight.check_crash" for issue in report.issues)
 
-    def test_automatic_flexible_routing_reports_warning_instead_of_shape_error(self):
+    def test_differently_shaped_groups_report_no_issues_or_config_changes(self):
         df = pd.DataFrame(
             {
                 "grp": ["A", "A", "A", "B", "B"],
@@ -950,24 +950,35 @@ class TestTimeSeriesDataShapeCheck:
             }
         )
         config = self._make_config(timestamp_format="%Y-%m-%d")
+        before = config.model_dump()
 
         issues = TimeSeriesDataShapeCheck().run(make_ctx(config=config, data=df))
 
-        assert config.time_series._uses_flexible_timeseries is True
-        warning = next(issue for issue in issues if issue.code == "flexible_timeseries_routing")
-        assert warning.severity == "warning"
-        assert "equal group lengths" in warning.message
-        assert "common start timestamps" in warning.message
-        assert "common stop timestamps" in warning.message
-        assert "consistent timestamp intervals" in warning.message
-        assert "3-record safety cap" in warning.message
-        assert not any(issue.severity == "error" for issue in issues)
+        assert issues == []
+        assert config.model_dump() == before
+
+    def test_asserted_interval_mismatch_reports_error(self):
+        df = pd.DataFrame({"grp": ["A", "A", "A", "B"], "ts": [0, 60, 90, 0], "value": [1, 2, 3, 4]})
+        config = self._make_config(timestamp_format="elapsed_seconds", timestamp_interval_seconds=60)
+
+        issues = TimeSeriesDataShapeCheck().run(make_ctx(config=config, data=df))
+
+        error = next(issue for issue in issues if issue.code == "timestamp_interval_mismatch")
+        assert error.severity == "error"
+        assert "remove it to allow irregular intervals" in error.message
+
+    def test_asserted_interval_matching_differently_shaped_groups_passes(self):
+        df = pd.DataFrame({"grp": ["A", "A", "A", "B"], "ts": [0, 60, 120, 60], "value": [1, 2, 3, 4]})
+        config = self._make_config(timestamp_format="elapsed_seconds", timestamp_interval_seconds=60)
+
+        issues = TimeSeriesDataShapeCheck().run(make_ctx(config=config, data=df))
+
+        assert issues == []
 
     def test_source_order_nulls_report_domain_error(self):
         df = pd.DataFrame(
             {
                 "grp": ["A", "A", "B"],
-                "ts": [0, 1, 0],
                 "source_order": [0, None, 0],
                 "value": [1, 2, 3],
             }
@@ -979,14 +990,12 @@ class TestTimeSeriesDataShapeCheck:
             ),
             time_series=TimeSeriesParameters(
                 is_timeseries=True,
-                timestamp_column="ts",
-                timestamp_format="elapsed_seconds",
+                timestamp_interval_seconds=1,
             ),
         )
 
         report = run_preflight(df, config, MagicMock(spec=ModelMetadata), stages=frozenset({PreflightStage.DATAFRAME}))
 
-        assert config.time_series._uses_flexible_timeseries is False
         assert any(
             issue.check == "columns.orderby" and issue.code == "column_nulls" and issue.severity == "error"
             for issue in report.issues
