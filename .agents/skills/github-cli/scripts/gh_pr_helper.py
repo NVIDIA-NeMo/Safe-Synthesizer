@@ -12,7 +12,7 @@
 # requires-python = ">=3.11"
 # dependencies = [
 #     "typer>=0.12",
-#     "PyGithub>=2.4",
+#     "PyGithub>=2.5",
 #     "pydantic>=2.0",
 # ]
 # ///
