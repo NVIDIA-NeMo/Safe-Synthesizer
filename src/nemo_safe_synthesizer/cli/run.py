@@ -204,6 +204,17 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
     )
     options.append(
         click.option(
+            "--inference-timeout-seconds",
+            type=float,
+            required=False,
+            default=None,
+            help="Per-request timeout in seconds for PII inference, including model reasoning. "
+            "Overrides the local profile's timeout. Can also be set via NSS_INFERENCE_TIMEOUT env var. "
+            "[default: the local profile's timeout, or 60]",
+        )
+    )
+    options.append(
+        click.option(
             "--inference-local-profile",
             type=str,
             required=False,

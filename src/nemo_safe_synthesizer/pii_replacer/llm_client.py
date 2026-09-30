@@ -17,6 +17,7 @@ import httpx
 from pydantic import BaseModel
 
 from ..config.replace_pii import LLMConfig
+from ..defaults import DEFAULT_NSS_INFERENCE_TIMEOUT_SECONDS
 from ..errors import GenerationError, ParameterError
 
 __all__ = [
@@ -27,6 +28,7 @@ __all__ = [
     "OpenAICompatibleTransport",
     "TransientInferenceError",
     "resolve_inference_settings",
+    "resolve_inference_timeout",
 ]
 
 _CHAT_COMPLETIONS_PATH = "/chat/completions"
@@ -45,6 +47,9 @@ class InferenceSettings:
 
     max_workers: int
     """Maximum concurrent requests."""
+
+    timeout_seconds: float = DEFAULT_NSS_INFERENCE_TIMEOUT_SECONDS
+    """Per-request timeout; reasoning models on local GPUs can need several minutes."""
 
     api_key: str | None = field(default=None, repr=False)
     """Bearer credential, or ``None`` for keyless local endpoints; excluded from ``repr``."""
@@ -119,6 +124,25 @@ def _validate_endpoint(endpoint_url: str) -> None:
         )
 
 
+def resolve_inference_timeout(environ: Mapping[str, str] | None = None) -> float:
+    """Return the per-request timeout from ``NSS_INFERENCE_TIMEOUT``, or the default.
+
+    Raises:
+        ParameterError: If the value is not a positive number of seconds.
+    """
+    runtime_env = os.environ if environ is None else environ
+    raw = _nonblank(runtime_env.get("NSS_INFERENCE_TIMEOUT"))
+    if raw is None:
+        return DEFAULT_NSS_INFERENCE_TIMEOUT_SECONDS
+    try:
+        timeout = float(raw)
+    except ValueError:
+        timeout = 0.0
+    if not timeout > 0 or timeout == float("inf"):
+        raise ParameterError(f"NSS_INFERENCE_TIMEOUT must be a positive number of seconds, got {raw!r}")
+    return timeout
+
+
 def resolve_inference_settings(
     config: LLMConfig,
     *,
@@ -135,6 +159,7 @@ def resolve_inference_settings(
     The endpoint and API key are deliberately absent from persisted
     configuration. They come only from ``NSS_INFERENCE_ENDPOINT`` and
     ``NSS_INFERENCE_KEY``, which the CLI populates from its runtime options.
+    The per-request timeout comes from ``NSS_INFERENCE_TIMEOUT``.
     Plan discovery calls this inside ``planning_inference_environment``, which
     points these variables at the managed local server when no endpoint is set.
 
@@ -150,6 +175,8 @@ def resolve_inference_settings(
             absolute HTTP(S) URL, embeds credentials, or uses plaintext HTTP
             for a non-loopback host.
         MissingInferenceModelError: If the endpoint has no model ID.
+
+    See :func:`resolve_inference_timeout` for timeout validation errors.
     """
     runtime_env = os.environ if environ is None else environ
     resolved_endpoint = _nonblank(runtime_env.get("NSS_INFERENCE_ENDPOINT"))
@@ -170,6 +197,7 @@ def resolve_inference_settings(
         model_id=resolved_model,
         api_key=resolved_key,
         max_workers=config.max_workers,
+        timeout_seconds=resolve_inference_timeout(runtime_env),
     )
 
 
@@ -227,19 +255,19 @@ class OpenAICompatibleTransport:
 
     Args:
         settings: Resolved endpoint, model, and credential.
-        timeout: Per-request timeout in seconds.
+        timeout: Per-request timeout in seconds; defaults to ``settings.timeout_seconds``.
 
     Raises:
         ParameterError: If the endpoint is malformed, embeds credentials, or
             uses plaintext HTTP for a non-loopback host.
     """
 
-    def __init__(self, settings: InferenceSettings, *, timeout: float = 60.0) -> None:
+    def __init__(self, settings: InferenceSettings, *, timeout: float | None = None) -> None:
         # Settings built directly, not through ``resolve_inference_settings``,
         # must not send samples or the bearer key over an unsafe endpoint.
         _validate_endpoint(settings.endpoint_url)
         self._settings = settings
-        self._timeout = timeout
+        self._timeout = settings.timeout_seconds if timeout is None else timeout
 
     def complete(
         self,

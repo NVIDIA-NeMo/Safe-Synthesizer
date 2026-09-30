@@ -72,6 +72,9 @@ NUM_EVAL_BATCHES_GROUPED = 1
 PSEUDO_GROUP_COLUMN = "__nss_sequence_id"
 DEFAULT_EXCLUDE_COLUMNS: tuple[str, ...] = (PSEUDO_GROUP_COLUMN,)
 
+# Per-request PII inference timeout unless NSS_INFERENCE_TIMEOUT or a local
+# serving profile sets one.
+DEFAULT_NSS_INFERENCE_TIMEOUT_SECONDS = 60.0
 # PII replacement v3 runs this model in a local vLLM server, from its bundled
 # profile, when no inference endpoint or model is configured.
 DEFAULT_NSS_INFERENCE_LOCAL_MODEL = "openai/gpt-oss-120b"

@@ -424,14 +424,19 @@ class TestPropagateRuntimeSettingsToEnv:
         assert os.environ["NSS_INFERENCE_ENDPOINT"] == "https://cli.example/v1"
         assert os.environ["NSS_INFERENCE_KEY"] == "token-propagated-cli"
 
-    def test_propagates_local_inference_profile(self, monkeypatch):
-        """The local profile propagates to NSS_INFERENCE_LOCAL_PROFILE."""
+    def test_propagates_local_inference_profile_and_timeout(self, monkeypatch):
+        """The local profile and timeout propagate to their NSS_INFERENCE_* variables."""
         monkeypatch.delenv("NSS_INFERENCE_LOCAL_PROFILE", raising=False)
+        monkeypatch.delenv("NSS_INFERENCE_TIMEOUT", raising=False)
 
-        settings = CLISettings.from_cli_kwargs(inference_local_profile="gpt-oss-120b")
+        settings = CLISettings.from_cli_kwargs(
+            inference_local_profile="/profiles/custom.yaml",
+            inference_timeout_seconds=900,
+        )
         _propagate_runtime_settings_to_env(settings)
 
-        assert os.environ["NSS_INFERENCE_LOCAL_PROFILE"] == "gpt-oss-120b"
+        assert os.environ["NSS_INFERENCE_LOCAL_PROFILE"] == "/profiles/custom.yaml"
+        assert os.environ["NSS_INFERENCE_TIMEOUT"] == "900"
 
     def test_propagates_remaining_runtime_settings(self, monkeypatch):
         """Model ID and offline mode propagate to their runtime env vars."""

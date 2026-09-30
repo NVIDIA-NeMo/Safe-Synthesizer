@@ -104,6 +104,24 @@ class TestInferenceSettings:
                 environ={"NSS_INFERENCE_KEY": "hosted-key"},  # pragma: allowlist secret
             )
 
+    @pytest.mark.parametrize(("raw", "expected"), [(None, 60.0), ("900", 900.0), (" 12.5 ", 12.5)])
+    def test_timeout_comes_from_environment(self, raw: str | None, expected: float) -> None:
+        environ = {"NSS_INFERENCE_ENDPOINT": LOCAL_ENDPOINT}
+        if raw is not None:
+            environ["NSS_INFERENCE_TIMEOUT"] = raw
+
+        settings = resolve_inference_settings(LLMConfig(model_id="model"), environ=environ)
+
+        assert settings.timeout_seconds == expected
+
+    @pytest.mark.parametrize("raw", ["0", "-5", "soon", "inf", "nan"])
+    def test_invalid_timeout_is_rejected(self, raw: str) -> None:
+        with pytest.raises(ParameterError, match="NSS_INFERENCE_TIMEOUT must be a positive number"):
+            resolve_inference_settings(
+                LLMConfig(model_id="model"),
+                environ={"NSS_INFERENCE_ENDPOINT": LOCAL_ENDPOINT, "NSS_INFERENCE_TIMEOUT": raw},
+            )
+
     def test_local_openai_compatible_endpoint_can_be_keyless(self) -> None:
         assert _local_settings().api_key is None
 
@@ -154,6 +172,23 @@ class TestInferenceSettings:
 
 @pytest.mark.unit
 class TestOpenAICompatibleTransport:
+    def test_requests_use_the_resolved_timeout(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        timeouts: list[object] = []
+
+        def post(url: str, **kwargs: object) -> httpx.Response:
+            timeouts.append(kwargs["timeout"])
+            return httpx.Response(200, json={"choices": [{"message": {"content": "{}"}}]})
+
+        monkeypatch.setattr(httpx, "post", post)
+        settings = resolve_inference_settings(
+            LLMConfig(model_id="model"),
+            environ={"NSS_INFERENCE_ENDPOINT": LOCAL_ENDPOINT, "NSS_INFERENCE_TIMEOUT": "900"},
+        )
+
+        OpenAICompatibleTransport(settings).complete(messages=[], response_model=_StructuredResponse)
+
+        assert timeouts == [900.0]
+
     def test_rejects_plaintext_remote_endpoint_from_direct_settings(self) -> None:
         settings = InferenceSettings(
             endpoint_url="http://inference.example.com/v1",
