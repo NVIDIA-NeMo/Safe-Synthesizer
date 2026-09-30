@@ -1,0 +1,25 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Nemotron 3.5 Lightning 30B-A3B (hybrid Mamba MoE) in BF16 on one 80 GB GPU.
+# The weights take about 66 GB; Mamba layers keep the per-request cache small.
+model_id: nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16
+revision: a9904d24bcc1d289a1950fa9d2b978c47cf903b9
+gpu_memory_utilization: 0.95
+# One classification request carries up to 48 KiB of column samples,
+# roughly 12-16k tokens before instructions and reasoning.
+max_model_len: 32768
+# Matches the default replace_pii.llm.max_workers.
+max_num_seqs: 8
+extra_args:
+  # Mamba state setting recommended by the model card. Its stochastic-rounding
+  # option is left out because A100 GPUs lack the required instruction.
+  - --mamba-ssm-cache-dtype=float16
+  # Think before the schema-constrained answer.
+  - --reasoning-parser=nemotron_v3
+  - '--default-chat-template-kwargs={"enable_thinking": true}'
+# Column classification takes about 1 minute on an A100 for a small table.
+request_timeout_seconds: 300
+# Allows for the first-run download of about 66 GB.
+startup_timeout_seconds: 1800
+shutdown_timeout_seconds: 60

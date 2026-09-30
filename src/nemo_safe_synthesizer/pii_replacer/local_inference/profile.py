@@ -92,6 +92,12 @@ class LocalVllmProfile(BaseModel):
         description="Additional `vllm serve` options. Options NSS manages, such as --host, --port, "
         "--api-key, and --enable-log-requests, are rejected.",
     )
+    request_timeout_seconds: float = Field(
+        default=60,
+        gt=0,
+        description="Per-request timeout for planning calls to this model, including reasoning. "
+        "NSS_INFERENCE_TIMEOUT overrides it.",
+    )
     startup_timeout_seconds: float = Field(
         default=600,
         gt=0,

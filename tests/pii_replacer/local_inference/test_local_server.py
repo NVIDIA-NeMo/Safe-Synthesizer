@@ -133,10 +133,27 @@ class TestLocalVllmServerLifecycle:
         assert environ["NSS_INFERENCE_ENDPOINT"] == server.endpoint_url
         assert environ["NSS_INFERENCE_MODEL"] == "tiny"
         assert environ["NSS_INFERENCE_KEY"] == harness.child_env["VLLM_API_KEY"]
+        assert environ["NSS_INFERENCE_TIMEOUT"] == "60"
         assert environ["PATH"] == "/bin"
         assert "NSS_INFERENCE_KEY" not in harness.child_env
         assert "NSS_INFERENCE_ENDPOINT" not in harness.child_env
         assert harness.child_env["VLLM_API_KEY"] not in " ".join(harness.argv)
+
+    @pytest.mark.parametrize(
+        ("environ", "expected"),
+        [({}, "900"), ({"NSS_INFERENCE_TIMEOUT": "30"}, "30")],
+        ids=["profile-timeout", "explicit-timeout-wins"],
+    )
+    def test_planner_timeout_comes_from_profile_unless_set_explicitly(
+        self,
+        harness: Harness,
+        environ: dict[str, str],
+        expected: str,
+    ) -> None:
+        profile = PROFILE.model_copy(update={"request_timeout_seconds": 900})
+
+        with LocalVllmServer(profile, environ=environ) as server:
+            assert server.inference_environ()["NSS_INFERENCE_TIMEOUT"] == expected
 
     def test_polls_until_the_model_is_listed(self, harness: Harness) -> None:
         def refused() -> httpx.Response:

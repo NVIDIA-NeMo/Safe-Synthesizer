@@ -163,16 +163,29 @@ safe-synthesizer run replace-pii --plan-only \
 If vLLM or a CUDA GPU is unavailable, planning fails with an error rather than
 sending data to a remote service; set `NSS_INFERENCE_ENDPOINT` to choose one.
 
-The bundled `openai/gpt-oss-120b` profile pins the model to a fixed revision
-and needs one 80 GB GPU, such as an A100 or H100. The first run downloads about
-65 GB of weights into the Hugging Face cache. A model ID without a bundled
-profile is an error. To run another model locally, point
+Bundled profiles pin each model to a fixed revision, turn on reasoning before
+the schema-constrained answer, and fit one 80 GB GPU, such as an A100 or H100:
+
+| Model ID | Weights | Request timeout | Notes |
+|----------|---------|-----------------|-------|
+| `openai/gpt-oss-120b` (default) | about 65 GB | 120 s | Mixture of experts |
+| `Qwen/Qwen3.8-27B` | about 56 GB | 900 s | Dense; about 3 minutes per request on an A100 |
+| `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16` | about 66 GB | 300 s | Hybrid Mamba mixture of experts; about 1 minute per request on an A100 |
+
+Reasoning makes requests slow, so each profile sets its own request timeout.
+Set `NSS_INFERENCE_TIMEOUT` or `--inference-timeout-seconds` to override it, for
+example for much larger tables. The same setting applies to explicit endpoints,
+where it defaults to 60 seconds.
+
+The first run downloads the weights into the Hugging Face cache. A model ID
+without a bundled profile is an error. To run another model locally, point
 `NSS_INFERENCE_LOCAL_PROFILE` or the `--inference-local-profile` CLI option at
 your own profile YAML; any configured model ID must then match its served
 model name. A profile YAML has these fields: `model_id`,
 `revision`, and optionally `served_model_name`, `gpu_memory_utilization`,
 `max_model_len`, `max_num_seqs`, `tensor_parallel_size`, `extra_args`,
-`startup_timeout_seconds`, and `shutdown_timeout_seconds`.
+`request_timeout_seconds`, `startup_timeout_seconds`, and
+`shutdown_timeout_seconds`.
 
 NSS starts the server only when LLM-assisted discovery runs, meaning an
 `auto_discovery` plan with `llm` configured, and stops it before planning
