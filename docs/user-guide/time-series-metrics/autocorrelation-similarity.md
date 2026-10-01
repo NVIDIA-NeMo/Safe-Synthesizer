@@ -126,28 +126,6 @@ autocorrelation, so only Pair scores shows it. In the example, the `pressure`
 point at 0 is sensor 7, and the note above the charts reports it. The
 Typical autocorrelation median for `pressure` uses the remaining seven sensors.
 
-## Diagnosing and improving a low score
-
-Start with the Pair scores chart to check whether the low score is widespread or concentrated in particular columns or groups. Then compare the Typical autocorrelation and Difference by lag charts:
-
-- If synthetic autocorrelation decays more quickly than training
-  autocorrelation, verify `time_series.timestamp_column`,
-  `time_series.timestamp_interval_seconds`, and
-  `data.group_training_examples_by`. If ordering is correct, modestly lower
-  `generation.temperature` and rerun the evaluation.
-- If synthetic autocorrelation remains higher than training autocorrelation for
-  the same lags, confirm that the training data contains the expected
-  short-term variation. For overly smooth or repetitive output, modestly
-  increase `generation.temperature` or set `generation.repetition_penalty`
-  slightly above 1, changing one parameter at a time.
-- If peaks or sign changes occur at different lags than in training, verify
-  `time_series.timestamp_interval_seconds` and confirm that the training data
-  contains multiple examples of the expected cycle. Increase `max_lag` only
-  when the behavior that matters lies beyond the current evaluation horizon.
-- If only some groups score poorly, use the per-group details to identify them
-  and improve their training coverage. If groups require materially different
-  modeling behavior, split them into separate datasets and synthesis runs.
-
 ## Limitations
 
 Autocorrelation summarizes average linear dependence within one value channel.
