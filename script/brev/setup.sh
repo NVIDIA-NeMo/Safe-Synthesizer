@@ -18,6 +18,7 @@ readonly UV_VERSION="0.9.30"
 readonly PYTHON_VERSION="3.13"
 # No .git suffix: this is only used to build archive URLs, not to clone.
 readonly REPO_URL="https://github.com/NVIDIA-NeMo/Safe-Synthesizer"
+readonly INSTALLER_URL="${REPO_URL}/releases/latest/download/install_nss.sh"
 
 : "${HOME:?HOME is not set}"
 
@@ -32,7 +33,7 @@ readonly USER_KERNEL_DIR="${HOME}/.local/share/jupyter/kernels/python3"
 readonly ENV_FILE="${HOME}/.nss-env.sh"
 readonly LOG_FILE="${HOME}/.nss-setup.log"
 
-readonly CUDA_EXTRA="cu129"
+readonly CUDA_EXTRA="129"
 
 mkdir -p "${BIN_DIR}"
 exec > >(tee -a "${LOG_FILE}") 2>&1
@@ -121,6 +122,7 @@ fi
 export UV_HTTP_TIMEOUT=300
 
 # Venv kept separate from Jupyter's, so a failed install cannot break it.
+# Created here so the installer reuses it on our pinned Python.
 
 if [[ ! -x "${VENV_DIR}/bin/python" ]]; then
   log "creating venv at ${VENV_DIR} (python ${PYTHON_VERSION})"
@@ -132,66 +134,13 @@ fi
 if "${VENV_DIR}/bin/safe-synthesizer" --version >/dev/null 2>&1; then
   log "safe-synthesizer already installed; skipping package install"
 else
-  NSS_VERSION="$(curl -fsSL https://pypi.org/pypi/nemo-safe-synthesizer/json \
-    | "${VENV_DIR}/bin/python" -c 'import json, sys; print(json.load(sys.stdin)["info"]["version"])')"
-
-  # Indexes come from the installed release's pyproject. Match CUDA names and
-  # URLs plus source-mapped indexes whose names are variant-neutral.
-  pyproject="$(mktemp)"
-  curl -fsSL "${REPO_URL}/raw/v${NSS_VERSION}/pyproject.toml" -o "${pyproject}"
-  index_args=()
-  index_count=0
-  while IFS= read -r url; do
-    [[ -n "${url}" ]] || continue
-    index_args+=(--index "${url}")
-    index_count=$((index_count + 1))
-    log "index: ${url}"
-  done < <(env CUDA_EXTRA="${CUDA_EXTRA}" "${VENV_DIR}/bin/python" - "${pyproject}" <<'PY'
-import os
-import sys
-import tomllib
-
-with open(sys.argv[1], "rb") as handle:
-    uv_config = tomllib.load(handle)["tool"]["uv"]
-
-indexes = uv_config["index"]
-cuda_extra = os.environ["CUDA_EXTRA"]
-
-# Some indexes carry no CUDA variant in their name or URL. Source config is
-# not wheel metadata, so collect indexes mapped to packages for this extra.
-source_indexes = {
-    entry["index"]
-    for value in uv_config.get("sources", {}).values()
-    for entry in (value if isinstance(value, list) else [value])
-    if isinstance(entry, dict)
-    and entry.get("extra") == cuda_extra
-    and "index" in entry
-}
-
-print(
-    "\n".join(
-        index["url"]
-        for index in indexes
-        if index["name"].endswith(f"-{cuda_extra}")
-        or f"/{cuda_extra}" in index["url"]
-        or index["name"] in source_indexes
-    )
-)
-PY
-  )
-  rm -f "${pyproject}"
-
-  # The parse cannot fail the script from a process substitution; count validates.
-  if [[ "${index_count}" -lt 3 ]]; then
-    log "ERROR: expected 3+ ${CUDA_EXTRA} indexes in v${NSS_VERSION}, got ${index_count}"
-    exit 1
-  fi
-
-  log "installing nemo-safe-synthesizer ${NSS_VERSION} -- this takes several minutes"
-  VIRTUAL_ENV="${VENV_DIR}" uv pip install \
-    "nemo-safe-synthesizer[${CUDA_EXTRA},engine]==${NSS_VERSION}" \
-    "${index_args[@]}" \
-    --index-strategy unsafe-best-match
+  # The release installer pins the version, CUDA indexes, constraints, and
+  # overrides together, so this script carries none of that policy.
+  installer="$(mktemp)"
+  curl -fsSL "${INSTALLER_URL}" -o "${installer}"
+  log "installing nemo-safe-synthesizer -- this takes several minutes"
+  env CUDA="${CUDA_EXTRA}" UV_PROJECT_ENVIRONMENT="${VENV_DIR}" bash "${installer}"
+  rm -f "${installer}"
 fi
 
 # Checked separately, or a rerun skips it and the kernel cannot start.
@@ -205,9 +154,8 @@ fi
 if [[ -f "${TUTORIALS_DIR}/.fetched" ]]; then
   log "tutorials already present"
 else
-  # Set above if this run installed; read off the package if the install ran previously.
-  NSS_VERSION="${NSS_VERSION:-$("${VENV_DIR}/bin/python" -c \
-    'from importlib.metadata import version; print(version("nemo-safe-synthesizer"))')}"
+  NSS_VERSION="$("${VENV_DIR}/bin/python" -c \
+    'from importlib.metadata import version; print(version("nemo-safe-synthesizer"))')"
   log "fetching tutorials for version ${NSS_VERSION}"
 
   # Staged under $HOME: same-filesystem rename, and never half-visible.
