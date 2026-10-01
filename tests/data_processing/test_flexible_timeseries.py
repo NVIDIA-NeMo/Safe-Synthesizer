@@ -7,8 +7,8 @@ import pandas as pd
 import pytest
 
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
-from nemo_safe_synthesizer.training.timeseries_preprocessing import process_timeseries_data
 from nemo_safe_synthesizer.data_processing.flexible_timeseries import finalize_flexible_timeseries_controls
+from nemo_safe_synthesizer.training.timeseries_preprocessing import process_timeseries_data
 
 
 def _flexible_training_data():
