@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import pytest
 from jinja2 import Environment, FunctionLoader, select_autoescape
 
 from nemo_safe_synthesizer.evaluation.render import _get_template
@@ -189,13 +190,24 @@ def test_autocorrelation_omits_column_select_and_note_for_single_column() -> Non
     assert "constant synthetic values" not in rendered
 
 
-def test_autocorrelation_notes_constant_synthetic_pairs_missing_from_profile_charts() -> None:
+@pytest.mark.parametrize(
+    ("constant_count", "expected"),
+    [
+        (1, "1 pair has constant synthetic values."),
+        (3, "3 pairs have constant synthetic values."),
+    ],
+)
+def test_autocorrelation_notes_constant_synthetic_pairs_missing_from_profile_charts(
+    constant_count: int, expected: str
+) -> None:
     rendered = _render_template(
         "jinja/components/autocorrelation_similarity.j2",
-        ctx=_autocorrelation_context(column_count=2, pair_score_column_count=2, constant_synthetic_profile_count=3),
+        ctx=_autocorrelation_context(
+            column_count=2, pair_score_column_count=2, constant_synthetic_profile_count=constant_count
+        ),
     )
 
-    assert "3 pairs have constant synthetic values." in rendered
+    assert expected in rendered
 
 
 def test_score_guidance_renders_recommendations_for_the_current_grade() -> None:

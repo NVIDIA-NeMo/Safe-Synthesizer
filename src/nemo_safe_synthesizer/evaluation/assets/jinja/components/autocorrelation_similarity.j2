@@ -32,8 +32,14 @@
 </p>
 {% if ctx.autocorrelation_similarity.constant_synthetic_profile_count %}
 <p class="chart-subheading">
-    {{ ctx.autocorrelation_similarity.constant_synthetic_profile_count }} pairs have constant synthetic values.
-    They score 0 in Pair scores but have no synthetic autocorrelation, so the other two charts leave them out.
+    {% set constant_count = ctx.autocorrelation_similarity.constant_synthetic_profile_count %}
+    {% if constant_count == 1 %}
+    1 pair has constant synthetic values. It scores 0 in Pair scores but has no synthetic autocorrelation,
+    so the other two charts leave it out.
+    {% else %}
+    {{ constant_count }} pairs have constant synthetic values. They score 0 in Pair scores but have no synthetic
+    autocorrelation, so the other two charts leave them out.
+    {% endif %}
 </p>
 {% endif %}
 <div class="chart-legend" aria-label="Chart legend">
