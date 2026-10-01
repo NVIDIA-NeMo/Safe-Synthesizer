@@ -31,6 +31,7 @@ readonly BIN_DIR="${HOME}/.local/bin"
 readonly VENV_DIR="${HOME}/.nss-venv"
 readonly USER_KERNEL_DIR="${HOME}/.local/share/jupyter/kernels/python3"
 readonly ENV_FILE="${HOME}/.nss-env.sh"
+readonly OVERRIDES_FILE="${HOME}/.nss-overrides.txt"
 readonly LOG_FILE="${HOME}/.nss-setup.log"
 
 readonly CUDA_EXTRA="129"
@@ -140,6 +141,13 @@ else
   curl -fsSL "${INSTALLER_URL}" -o "${installer}"
   log "installing nemo-safe-synthesizer -- this takes several minutes"
   env CUDA="${CUDA_EXTRA}" UV_PROJECT_ENVIRONMENT="${VENV_DIR}" bash "${installer}"
+  # Later `uv pip install`s (the notebooks' setup cells) need the installer's
+  # overrides too, or uv re-resolves without them and downgrades the stack.
+  bash -s "${installer}" >"${OVERRIDES_FILE}" <<'SH'
+source <(sed '/^main "\$@"$/d' "$1")
+declare -p PACKAGE_OVERRIDES >/dev/null
+printf '%s\n' "${PACKAGE_OVERRIDES[@]}"
+SH
   rm -f "${installer}"
 fi
 
@@ -203,6 +211,7 @@ log "writing ${ENV_FILE}"
   echo "export PATH=\"${VENV_DIR}/bin:${BIN_DIR}:\${PATH}\""
   # Pin VIRTUAL_ENV or uv walks up and finds Brev's own ~/.venv instead.
   echo "export VIRTUAL_ENV=\"${VENV_DIR}\""
+  echo "export UV_OVERRIDE=\"${OVERRIDES_FILE}\""
   if [[ -n "${NSS_INFERENCE_KEY:-}" ]]; then
     printf 'export NSS_INFERENCE_KEY=%q\n' "${NSS_INFERENCE_KEY}"
   fi
@@ -223,7 +232,7 @@ fi
 log "building kernelspec"
 KERNEL_JSON="$(mktemp)"
 # `env`, because bash rejects prefix assignments to readonly variables.
-env VENV_DIR="${VENV_DIR}" BIN_DIR="${BIN_DIR}" \
+env VENV_DIR="${VENV_DIR}" BIN_DIR="${BIN_DIR}" OVERRIDES_FILE="${OVERRIDES_FILE}" \
   "${VENV_DIR}/bin/python" - "${KERNEL_JSON}" <<'PY'
 import json
 import os
@@ -235,6 +244,7 @@ env = {
     # Keeps `!uv pip install ...` in a notebook from resolving to the Brev
     # image's own ~/.venv, which uv would otherwise discover by walking up.
     "VIRTUAL_ENV": venv,
+    "UV_OVERRIDE": os.environ["OVERRIDES_FILE"],
 }
 # Secrets live in the kernelspec because the Jupyter server is not launched
 # from a login shell. The VM is single-tenant and the file is mode 0600.

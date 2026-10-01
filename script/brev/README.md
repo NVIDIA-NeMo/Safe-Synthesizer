@@ -72,7 +72,8 @@ $HOME/
 
   .nss-venv/                    cu129 venv, registered as the default kernel
   .cache/huggingface/           model cache (Hugging Face's default location)
-  .nss-env.sh                   PATH and VIRTUAL_ENV, sourced from .bashrc
+  .nss-env.sh                   PATH, VIRTUAL_ENV, UV_OVERRIDE, sourced from .bashrc
+  .nss-overrides.txt            the installer's dependency overrides, for later uv installs
   .nss-setup.log                full provisioning log
 ```
 
@@ -92,6 +93,12 @@ hard way on a real instance.
   together, so this script carries none of that policy and cannot drift from what other
   users get. The script creates the venv first so the installer reuses it on the pinned
   Python version instead of whatever interpreter uv finds.
+- The installer's dependency overrides outlive the install. Each tutorial's setup cell
+  runs its own `uv pip install nemo-safe-synthesizer[...]`. Without the overrides, uv
+  sees the installed `flashinfer-python` as conflicting with vLLM's pin, re-resolves,
+  and downgrades the whole stack to an older release. The script saves the installer's
+  override list to `~/.nss-overrides.txt` and sets `UV_OVERRIDE` in the kernelspec and
+  `.nss-env.sh`, so those cells find everything installed and change nothing.
 - uv is installed from a checksum-verified tarball, not `curl | sh`. The
   `astral.sh/install.sh` path logs `no checksums to verify`, so nothing validated what
   it downloaded. The script fetches the pinned release tarball, compares it against the
