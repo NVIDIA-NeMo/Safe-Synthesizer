@@ -119,6 +119,7 @@ def fixture_isolate_pii_inference(request: pytest.FixtureRequest, monkeypatch: p
         "NSS_INFERENCE_MODEL",
         "NSS_INFERENCE_LOCAL_PROFILE",
         "NSS_INFERENCE_TIMEOUT",
+        "NSS_INFERENCE_REQUEST_OPTIONS",
     ):
         monkeypatch.delenv(name, raising=False)
     if request.node.get_closest_marker("requires_gpu") is not None:

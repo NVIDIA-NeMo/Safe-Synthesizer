@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import ipaddress
+import json
 import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -28,9 +29,15 @@ __all__ = [
     "TransientInferenceError",
     "resolve_inference_settings",
     "resolve_inference_timeout",
+    "resolve_request_options",
+    "RESERVED_REQUEST_FIELDS",
 ]
 
 _CHAT_COMPLETIONS_PATH = "/chat/completions"
+_DEFAULT_REQUEST_OPTIONS: dict[str, object] = {"temperature": 0}
+
+RESERVED_REQUEST_FIELDS = frozenset({"messages", "model", "response_format", "stream"})
+"""Chat-completions fields NSS sets itself and request options must not override."""
 _TRANSIENT_STATUS_CODES = frozenset({408, 409, 425, 429})
 
 
@@ -49,6 +56,9 @@ class InferenceSettings:
 
     timeout_seconds: float = DEFAULT_NSS_INFERENCE_TIMEOUT_SECONDS
     """Per-request timeout; reasoning models on local GPUs can need several minutes."""
+
+    request_options: Mapping[str, object] = field(default_factory=lambda: dict(_DEFAULT_REQUEST_OPTIONS))
+    """Extra chat-completions fields, such as sampling settings, sent with every request."""
 
     api_key: str | None = field(default=None, repr=False)
     """Bearer credential, or ``None`` for keyless local endpoints; excluded from ``repr``."""
@@ -142,6 +152,33 @@ def resolve_inference_timeout(environ: Mapping[str, str] | None = None) -> float
     return timeout
 
 
+def resolve_request_options(environ: Mapping[str, str] | None = None) -> dict[str, object]:
+    """Return the chat-completions fields sent with every request.
+
+    ``NSS_INFERENCE_REQUEST_OPTIONS`` holds a JSON object, such as
+    ``{"temperature": 1.0, "thinking_token_budget": 1000}``, that replaces the
+    default ``{"temperature": 0}``. Omitting ``temperature`` there leaves it to
+    the server's default.
+
+    Raises:
+        ParameterError: If the value is not a JSON object or sets a field in
+            ``RESERVED_REQUEST_FIELDS``.
+    """
+    runtime_env = os.environ if environ is None else environ
+    raw = _nonblank(runtime_env.get("NSS_INFERENCE_REQUEST_OPTIONS"))
+    if raw is None:
+        return dict(_DEFAULT_REQUEST_OPTIONS)
+    try:
+        options = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ParameterError("NSS_INFERENCE_REQUEST_OPTIONS must be a JSON object") from exc
+    if not isinstance(options, dict):
+        raise ParameterError("NSS_INFERENCE_REQUEST_OPTIONS must be a JSON object")
+    if reserved := sorted(RESERVED_REQUEST_FIELDS.intersection(options)):
+        raise ParameterError(f"NSS_INFERENCE_REQUEST_OPTIONS must not set fields NSS manages: {', '.join(reserved)}")
+    return cast(dict[str, object], options)
+
+
 def resolve_inference_settings(
     config: LLMConfig,
     *,
@@ -158,7 +195,8 @@ def resolve_inference_settings(
     The endpoint and API key are deliberately absent from persisted
     configuration. They come only from ``NSS_INFERENCE_ENDPOINT`` and
     ``NSS_INFERENCE_KEY``, which the CLI populates from its runtime options.
-    The per-request timeout comes from ``NSS_INFERENCE_TIMEOUT``.
+    The per-request timeout comes from ``NSS_INFERENCE_TIMEOUT`` and extra
+    request fields from ``NSS_INFERENCE_REQUEST_OPTIONS``.
     Plan discovery calls this inside ``planning_inference_environment``, which
     points these variables at the managed local server when no endpoint is set.
 
@@ -175,7 +213,8 @@ def resolve_inference_settings(
             for a non-loopback host.
         MissingInferenceModelError: If the endpoint has no model ID.
 
-    See :func:`resolve_inference_timeout` for timeout validation errors.
+    See :func:`resolve_inference_timeout` and :func:`resolve_request_options`
+    for their validation errors.
     """
     runtime_env = os.environ if environ is None else environ
     resolved_endpoint = _nonblank(runtime_env.get("NSS_INFERENCE_ENDPOINT"))
@@ -197,6 +236,7 @@ def resolve_inference_settings(
         api_key=resolved_key,
         max_workers=config.max_workers,
         timeout_seconds=resolve_inference_timeout(runtime_env),
+        request_options=resolve_request_options(runtime_env),
     )
 
 
@@ -302,7 +342,7 @@ class OpenAICompatibleTransport:
                     "schema": _strict_json_schema(response_model),
                 },
             },
-            "temperature": 0,
+            **self._settings.request_options,
         }
         try:
             response = httpx.post(

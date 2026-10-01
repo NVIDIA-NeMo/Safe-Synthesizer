@@ -369,6 +369,7 @@ class TestPathOptions:
         assert "--inference-model-id" in result.output
         assert "--inference-local-profile" in result.output
         assert "--inference-timeout-seconds" in result.output
+        assert "--inference-request-options" in result.output
         assert "--disable-huggingface-remote" in result.output
         assert "NSS_INFERENCE_ENDPOINT" in result.output
         assert "NSS_INFERENCE_KEY" in result.output

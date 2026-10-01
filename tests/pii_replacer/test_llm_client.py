@@ -172,6 +172,57 @@ class TestInferenceSettings:
 
 @pytest.mark.unit
 class TestOpenAICompatibleTransport:
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            (None, {"temperature": 0}),
+            (
+                '{"temperature": 1.0, "top_k": 20, "thinking_token_budget": 1000}',
+                {"temperature": 1.0, "top_k": 20, "thinking_token_budget": 1000},
+            ),
+            ("{}", {}),
+        ],
+        ids=["default-greedy", "options-replace-default", "server-defaults"],
+    )
+    def test_request_options_are_sent_with_every_request(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        raw: str | None,
+        expected: dict[str, object],
+    ) -> None:
+        payloads: list[dict[str, object]] = []
+
+        def post(url: str, **kwargs: object) -> httpx.Response:
+            payloads.append(cast(dict[str, object], kwargs["json"]))
+            return httpx.Response(200, json={"choices": [{"message": {"content": "{}"}}]})
+
+        monkeypatch.setattr(httpx, "post", post)
+        environ = {"NSS_INFERENCE_ENDPOINT": LOCAL_ENDPOINT}
+        if raw is not None:
+            environ["NSS_INFERENCE_REQUEST_OPTIONS"] = raw
+        settings = resolve_inference_settings(LLMConfig(model_id="model"), environ=environ)
+
+        OpenAICompatibleTransport(settings).complete(messages=[], response_model=_StructuredResponse)
+
+        sent = {key: value for key, value in payloads[0].items() if key not in {"model", "messages", "response_format"}}
+        assert sent == expected
+
+    @pytest.mark.parametrize(
+        ("raw", "match"),
+        [
+            ("not json", "must be a JSON object"),
+            ("[1, 2]", "must be a JSON object"),
+            ('{"model": "other", "temperature": 1}', "must not set fields NSS manages: model"),
+        ],
+        ids=["invalid-json", "not-an-object", "reserved-field"],
+    )
+    def test_invalid_request_options_are_rejected(self, raw: str, match: str) -> None:
+        with pytest.raises(ParameterError, match=match):
+            resolve_inference_settings(
+                LLMConfig(model_id="model"),
+                environ={"NSS_INFERENCE_ENDPOINT": LOCAL_ENDPOINT, "NSS_INFERENCE_REQUEST_OPTIONS": raw},
+            )
+
     def test_requests_use_the_resolved_timeout(self, monkeypatch: pytest.MonkeyPatch) -> None:
         timeouts: list[object] = []
 
