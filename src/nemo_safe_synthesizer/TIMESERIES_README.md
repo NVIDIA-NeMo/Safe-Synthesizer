@@ -88,9 +88,13 @@ flexible processing. If any of these four shape constraints does not hold, prepr
 zero-based `_time_idx` within each group and an `_is_last_row` marker to the
 final source row. A configured source timestamp remains a synthesized column;
 `_time_idx` becomes the checked generation-time sequence column with interval
-one. Generated source timestamps must not decrease within a group and must
-follow `timestamp_interval_seconds` when it is set. Both control columns are
-removed from final output, and the original source-column order is restored.
+one. If training-time preprocessing actions remove rows, the index, marker, and
+record cap are recomputed afterward. During generation, source timestamps are
+checked after data actions restore the source representation: they must not
+decrease within a group and must follow `timestamp_interval_seconds` when it is
+set. Both control columns are removed from final output; the original
+source-column order is restored, followed by any columns added by
+preprocessing.
 
 The resolved control-column names, record cap, source schema, and source
 timestamp column, format, and asserted interval are persisted as internal
@@ -174,13 +178,13 @@ Time series preprocessing occurs during training data preparation in `src/nemo_s
 ```text
 HuggingFaceBackend._process_timeseries()
     └── process_timeseries_data(df, config)
-            ├── _resolve_timeseries_routing()       # Resolve timestamp/order columns, validate, inspect shape
-            ├── flexible: _prepare_flexible_timeseries_data()
+            ├── resolve_timeseries_routing()       # Resolve timestamp/order columns, validate, inspect shape
+            ├── flexible: prepare_flexible_timeseries_data()
             │       └── add the generated index and marker columns
             ├── deterministic: reuse routing inspection
             │       ├── generated elapsed-seconds timestamp normalization
             │       ├── timestamp format/parse validation
-            │       └── _validate_deterministic_inspection()
+            │       └── validate_deterministic_inspection()
             ├── order group and timestamp columns first
             └── Return (processed_df, updated_config, flexible_metadata | None)
 ```

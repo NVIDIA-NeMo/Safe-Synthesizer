@@ -8,10 +8,10 @@ from __future__ import annotations
 import pandas as pd
 
 from ..config import SafeSynthesizerParameters
-from ..data_processing.flexible_timeseries import _prepare_flexible_timeseries_data
+from ..data_processing.flexible_timeseries import prepare_flexible_timeseries_data
 from ..data_processing.timeseries_validation import (
-    _resolve_timeseries_routing,
-    _validate_deterministic_inspection,
+    resolve_timeseries_routing,
+    validate_deterministic_inspection,
 )
 from ..llm.metadata import FlexibleTimeseriesMetadata
 from ..observability import get_logger
@@ -74,14 +74,14 @@ def process_timeseries_data(
         DataError: If required source values are null, timestamps cannot be
             parsed, or timestamps do not follow an asserted interval.
     """
-    routing = _resolve_timeseries_routing(training_df, config)
+    routing = resolve_timeseries_routing(training_df, config)
     if routing is None:
         return training_df, config, None
 
     ts_config = config.time_series
     if routing.flexible_metadata is not None:
         metadata = routing.flexible_metadata
-        training_df, group_column = _prepare_flexible_timeseries_data(
+        training_df, group_column = prepare_flexible_timeseries_data(
             training_df,
             config,
             metadata,
@@ -101,7 +101,7 @@ def process_timeseries_data(
 
     original_group_column = config.data.group_training_examples_by
     original_timestamp_column = ts_config.timestamp_column
-    validation = _validate_deterministic_inspection(
+    validation = validate_deterministic_inspection(
         routing.inspection,
         ts_config.timestamp_interval_seconds,
     )

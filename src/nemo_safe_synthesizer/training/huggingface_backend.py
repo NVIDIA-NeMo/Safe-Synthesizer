@@ -42,6 +42,7 @@ from ..cli.artifact_structure import BoundDir
 from ..config.autoconfig import AutoConfigResolver
 from ..data_processing.assembler import TrainingExampleAssembler
 from ..data_processing.dataset import make_json_schema
+from ..data_processing.flexible_timeseries import finalize_flexible_timeseries_controls
 from ..defaults import (
     DEFAULT_VALID_RECORD_EVAL_BATCH_SIZE,
     EVAL_STEPS,
@@ -664,6 +665,15 @@ class HuggingFaceBackend(TrainingBackend):
         self.model_metadata.timeseries_source_columns = source_columns if flexible_metadata is None else None
         return df
 
+    def _finalize_flexible_timeseries(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Recompute flexible control columns after preprocessing may have removed rows."""
+        metadata = self.model_metadata.flexible_timeseries_metadata
+        if metadata is None:
+            return df
+        df, metadata = finalize_flexible_timeseries_controls(df, self.params, metadata)
+        self.model_metadata.flexible_timeseries_metadata = metadata
+        return df
+
     def _create_example_assembler(self, hf_dataset: Dataset) -> TrainingExampleAssembler:
         """Create the example assembler for training.
 
@@ -730,6 +740,7 @@ class HuggingFaceBackend(TrainingBackend):
         training_df = self._process_timeseries(training_df)
 
         training_df = self._apply_preprocessing(training_df)
+        training_df = self._finalize_flexible_timeseries(training_df)
         test_df = None
 
         hf_dataset = Dataset.from_pandas(training_df, preserve_index=False)

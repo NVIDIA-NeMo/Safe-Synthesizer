@@ -793,6 +793,32 @@ def test_process_timeseries_copies_flexible_metadata_to_model_metadata(backend):
     assert list(result.columns) == ["group", "_time_idx", "timestamp", "value", "_is_last_row"]
 
 
+def test_finalize_flexible_timeseries_recomputes_controls_after_preprocessing(backend):
+    data = pd.DataFrame(
+        {
+            "group": ["A", "A", "A", "B"],
+            "timestamp": [0, 1, 2, 0],
+            "value": [1, 2, 3, 4],
+        }
+    )
+    backend.params = SafeSynthesizerParameters.from_params(
+        is_timeseries=True,
+        timestamp_column="timestamp",
+        timestamp_format="elapsed_seconds",
+        group_training_examples_by="group",
+        rope_scaling_factor=1,
+    )
+    processed = backend._process_timeseries(data)
+    preprocessed = processed[processed["value"] != 3]
+
+    result = backend._finalize_flexible_timeseries(preprocessed)
+
+    metadata = backend.model_metadata.flexible_timeseries_metadata
+    assert metadata is not None
+    assert metadata.max_records == 2
+    assert result[result["group"] == "A"]["_is_last_row"].tolist() == [False, True]
+
+
 def test_process_timeseries_clears_flexible_metadata_for_deterministic_data(backend):
     data = pd.DataFrame(
         {

@@ -1,14 +1,16 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Shared internal helpers for deterministic time-series row ordering."""
+"""Shared helpers for deterministic time-series row ordering."""
 
 from __future__ import annotations
 
 import pandas as pd
 
+__all__ = ["stable_sort_within_groups", "unused_column_name"]
 
-def _unused_column_name(preferred: str, columns: list[str]) -> str:
+
+def unused_column_name(preferred: str, columns: list[str]) -> str:
     """Return the preferred column name or a deterministic suffixed variant."""
     if preferred not in columns:
         return preferred
@@ -18,7 +20,7 @@ def _unused_column_name(preferred: str, columns: list[str]) -> str:
     return f"{preferred}_{suffix}"
 
 
-def _stable_sort_within_groups(
+def stable_sort_within_groups(
     data: pd.DataFrame,
     group_column: str,
     order_column: str | None,
@@ -32,13 +34,13 @@ def _stable_sort_within_groups(
     # pandas ignores ``kind`` when sorting by multiple columns and does not
     # document that multi-column sorts are stable. The positional tie-breaker
     # guarantees rows with equal group and order values keep source row order.
-    source_position_column = _unused_column_name("__nss_source_position", list(working.columns))
+    source_position_column = unused_column_name("__nss_source_position", list(working.columns))
     working[source_position_column] = range(len(working))
     temporary_columns.append(source_position_column)
 
     sort_order_column = order_column
     if normalized_order is not None:
-        sort_order_column = _unused_column_name("__nss_source_order", list(working.columns))
+        sort_order_column = unused_column_name("__nss_source_order", list(working.columns))
         working[sort_order_column] = normalized_order
         temporary_columns.append(sort_order_column)
 

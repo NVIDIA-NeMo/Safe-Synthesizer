@@ -5,11 +5,13 @@
 
 from __future__ import annotations
 
+import calendar
 import json
 import math
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum, auto
 from pathlib import Path
 from typing import Self
@@ -163,9 +165,6 @@ class GroupState:
 
     last_source_timestamp_seconds: int | None = None
     """Flexible mode: source timestamp (in seconds) of the most recently accepted record."""
-
-    retained_source_seconds: list[int | None] = field(default_factory=list, repr=False)
-    """Flexible mode: source timestamps of the current batch's retained rows, in order, pending acceptance."""
 
     batches: list[Batch] = field(default_factory=list, repr=False)
     """Batches whose accepted rows belong to this group; invalidated if the group fails."""
@@ -631,11 +630,10 @@ class TimeseriesBackend(VllmBackend):
         """Retain the structurally valid prefix of a flexible sequence.
 
         Records must match the active group and advance the generated sequence
-        index contiguously. When the source data has a timestamp column, its
-        generated values must be non-decreasing and follow any asserted
-        interval. This method invalidates records after the first structural
-        failure or stopping row. The stopping candidate remains tentative until
-        data actions have accepted it.
+        index contiguously. This method invalidates records after the first
+        structural failure or stopping row. The stopping candidate remains
+        tentative until data actions have accepted it. Source timestamps are
+        checked after data actions in ``_validate_postprocessed_sequence_indices``.
 
         Args:
             state: Active generation state for the group.
@@ -649,11 +647,9 @@ class TimeseriesBackend(VllmBackend):
             return records, None
 
         retained: list[ParsedRecord] = []
-        retained_source_seconds: list[int | None] = []
         accepted_row_stop: tuple[str, ParsedRecord] | None = None
         prefix_ended = False
         expected_index = 0 if state.last_timestamp_seconds is None else state.last_timestamp_seconds + 1
-        previous_source_seconds = state.last_source_timestamp_seconds
         trimmed_error = ("Generated row appears after the sequence end marker", "TimeSeries")
         group_error = ("Generated record group does not match the active time-series group", "TimeSeries")
         index_error = ("Generated sequence index is not a valid integer", "TimeSeries")
@@ -665,7 +661,7 @@ class TimeseriesBackend(VllmBackend):
             parsed = record.parsed
             if parsed is None:
                 continue
-            if parsed.get(self._group_column) != state.group_id:
+            if not self._matches_group(parsed, state):
                 record.invalidate(group_error)
                 prefix_ended = True
                 continue
@@ -683,17 +679,9 @@ class TimeseriesBackend(VllmBackend):
                 )
                 prefix_ended = True
                 continue
-            source_seconds, source_error = self._check_source_timestamp(parsed, previous_source_seconds)
-            if source_error is not None:
-                record.invalidate(source_error)
-                prefix_ended = True
-                continue
 
             retained.append(record)
-            retained_source_seconds.append(source_seconds)
             expected_index += 1
-            if source_seconds is not None:
-                previous_source_seconds = source_seconds
             if parsed.get(self._sequence_marker_column) is True:
                 accepted_row_stop = ("terminal", record)
                 prefix_ended = True
@@ -701,18 +689,47 @@ class TimeseriesBackend(VllmBackend):
                 accepted_row_stop = ("cap", record)
                 prefix_ended = True
 
-        state.retained_source_seconds = retained_source_seconds
         return retained, accepted_row_stop
+
+    def _matches_group(self, parsed: dict, state: GroupState) -> bool:
+        """Whether a record belongs to the active group.
+
+        The pseudo-group of an ungrouped dataset is never part of the schema or
+        generated records, so every record of the single stream belongs to it.
+        """
+        if self._group_column == PSEUDO_GROUP_COLUMN:
+            return True
+        return parsed.get(self._group_column) == state.group_id
+
+    def _source_timestamp_seconds(self, parsed: dict) -> int | None:
+        """Parse the source timestamp of a post-processed record, or ``None`` when absent or unparseable.
+
+        Post-processing restores the source representation, so values follow
+        ``source_timestamp_format``; data actions may also return datetime objects.
+        """
+        metadata = self._flexible_metadata
+        if metadata is None or metadata.source_timestamp_column is None or metadata.source_timestamp_format is None:
+            return None
+        value = parsed.get(metadata.source_timestamp_column)
+        if isinstance(value, datetime):
+            timestamp = pd.Timestamp(value)
+            if timestamp.tzinfo is not None:
+                return int(timestamp.timestamp())
+            return calendar.timegm(timestamp.timetuple())
+        try:
+            return _parse_timestamp_to_seconds(value, metadata.source_timestamp_format)
+        except (ValueError, TypeError, OverflowError):
+            return None
 
     def _check_source_timestamp(
         self,
         parsed: dict,
         previous_seconds: int | None,
     ) -> tuple[int | None, tuple[str, str] | None]:
-        """Parse a generated source timestamp and check it against the previous accepted row.
+        """Parse a post-processed source timestamp and check it against the previous accepted row.
 
         Args:
-            parsed: Parsed generated record in the training representation.
+            parsed: Post-processed record in the source representation.
             previous_seconds: Source timestamp of the previous accepted row in the group.
 
         Returns:
@@ -720,14 +737,10 @@ class TimeseriesBackend(VllmBackend):
             no timestamp column, and an invalidation error when a check fails.
         """
         metadata = self._flexible_metadata
-        if metadata is None or metadata.source_timestamp_column is None or metadata.source_timestamp_format is None:
+        if metadata is None or metadata.source_timestamp_column is None:
             return None, None
-        try:
-            seconds = _parse_timestamp_to_seconds(
-                parsed.get(metadata.source_timestamp_column),
-                metadata.source_timestamp_format,
-            )
-        except (ValueError, TypeError, OverflowError):
+        seconds = self._source_timestamp_seconds(parsed)
+        if seconds is None:
             return None, ("Generated source timestamp does not match the source timestamp format", "TimeSeries")
         if previous_seconds is None:
             return seconds, None
@@ -768,11 +781,7 @@ class TimeseriesBackend(VllmBackend):
         """Invalidate accepted rows whose postprocessed group no longer matches the active stream."""
         error = ("Postprocessed record group does not match the active time-series group", "TimeSeries")
         for record in records:
-            if (
-                record.is_valid
-                and record.parsed is not None
-                and record.parsed.get(self._group_column) != state.group_id
-            ):
+            if record.is_valid and record.parsed is not None and not self._matches_group(record.parsed, state):
                 record.invalidate(error)
 
     def _validate_postprocessed_sequence_indices(
@@ -780,10 +789,17 @@ class TimeseriesBackend(VllmBackend):
         state: GroupState,
         records: list[ParsedRecord],
     ) -> None:
-        """Retain only the contiguous postprocessed sequence prefix."""
+        """Retain only the contiguous, chronological post-processed sequence prefix.
+
+        Each accepted row must advance the sequence index by one. When the source
+        data has a timestamp column, its post-processed value must also be
+        non-decreasing and follow any asserted interval. Checks run after data
+        actions so they apply to the values that are actually returned.
+        """
         if self._flexible_metadata is None:
             return
         expected_index = 0 if state.last_timestamp_seconds is None else state.last_timestamp_seconds + 1
+        previous_source_seconds = state.last_source_timestamp_seconds
         prefix_ended = False
         for record in records:
             if prefix_ended or not record.is_valid or record.parsed is None:
@@ -801,7 +817,14 @@ class TimeseriesBackend(VllmBackend):
                 )
                 prefix_ended = True
                 continue
+            source_seconds, source_error = self._check_source_timestamp(record.parsed, previous_source_seconds)
+            if source_error is not None:
+                record.invalidate(source_error)
+                prefix_ended = True
+                continue
             expected_index += 1
+            if source_seconds is not None:
+                previous_source_seconds = source_seconds
 
     @property
     def _raw_generations_tmp_path(self) -> Path:
@@ -871,12 +894,16 @@ class TimeseriesBackend(VllmBackend):
                     "failed_group_ordinals": [state.group_ordinal for state in failed_states],
                 },
             )
-        for state in failed_states:
-            for batch in state.batches:
-                for response in batch._responses:
-                    for record in response.records:
-                        if record.is_valid:
-                            record.invalidate(error)
+        records = (
+            record
+            for state in failed_states
+            for batch in state.batches
+            for response in batch._responses
+            for record in response.records
+        )
+        for record in records:
+            if record.is_valid:
+                record.invalidate(error)
 
     def _write_flexible_timeseries_metrics(self) -> None:
         """Write auditable per-group and aggregate flexible time-series metrics."""
@@ -928,22 +955,16 @@ class TimeseriesBackend(VllmBackend):
             group_state: The group state to update.
             records: The new valid records (``parsed`` is set on each).
         """
-        retained_source_seconds = group_state.retained_source_seconds
-        group_state.retained_source_seconds = []
         if not records:
             return
-
-        # Accepted records are a prefix of the rows retained by
-        # ``_trim_flexible_timeseries_records``, so their source timestamps align.
-        if retained_source_seconds and len(records) <= len(retained_source_seconds):
-            source_seconds = retained_source_seconds[len(records) - 1]
-            if source_seconds is not None:
-                group_state.last_source_timestamp_seconds = source_seconds
 
         group_state.prompt_state.add_history(records, max_records=self._history_window_size)
 
         # Update last timestamp
         last_parsed = records[-1].parsed or {}
+        source_seconds = self._source_timestamp_seconds(last_parsed)
+        if source_seconds is not None:
+            group_state.last_source_timestamp_seconds = source_seconds
         timestamp_value = last_parsed.get(self._time_column) if self._time_column is not None else None
         timestamp_seconds = self._parse_timestamp_seconds(timestamp_value)
         if timestamp_seconds is not None:
@@ -999,8 +1020,6 @@ class TimeseriesBackend(VllmBackend):
         )
         if source_columns:
             restored_columns = [column for column in source_columns if column in df.columns]
-            if self._flexible_timeseries:
-                return df.loc[:, restored_columns]
             extra_columns = [column for column in df.columns if column not in restored_columns]
             df = df.loc[:, [*restored_columns, *extra_columns]]
 

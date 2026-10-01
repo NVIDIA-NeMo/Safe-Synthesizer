@@ -86,7 +86,7 @@ def test_non_timeseries_order_column_is_not_compared_to_timestamp():
 
 
 def test_order_column_without_group_suggests_timestamp_column():
-    with pytest.raises(ValidationError, match="For a single time series, set time_series.timestamp_column"):
+    with pytest.raises(ValidationError, match="In time-series mode .* set time_series.timestamp_column"):
         SafeSynthesizerParameters.from_params(
             is_timeseries=True,
             timestamp_column="timestamp",

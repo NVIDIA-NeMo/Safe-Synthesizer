@@ -1323,6 +1323,30 @@ class TestFlexibleTimeseries:
         assert list(result.columns) == ["value", "group_id"]
         assert result.to_dict("records") == [{"value": 3, "group_id": "group_A"}]
 
+    def test_output_keeps_preprocessing_added_columns(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        _enable_flexible_timeseries(timeseries_base_params, timeseries_model_metadata)
+        backend = create_timeseries_backend(
+            timeseries_base_params,
+            timeseries_model_metadata,
+            mock_workdir,
+            self._schema(),
+        )
+        internal = pd.DataFrame(
+            {
+                "group_id": ["group_A"],
+                "_time_idx": [0],
+                "value": [3],
+                "_is_last_row": [True],
+                "row_uid": ["uid-1"],
+            }
+        )
+
+        result = backend._sort_dataframe(internal)
+
+        assert list(result.columns) == ["value", "group_id", "row_uid"]
+
     def test_standard_pipeline_does_not_write_internal_output(
         self, timeseries_base_params, timeseries_model_metadata, mock_workdir, tmp_path
     ):
@@ -1429,90 +1453,131 @@ class TestFlexibleTimeseries:
             for index, ts in enumerate(timestamps)
         ]
 
-    def test_decreasing_source_timestamp_ends_valid_prefix(
+    def _timestamped_backend(self, params, metadata, workdir, **source_options):
+        _enable_flexible_timeseries(params, metadata, max_records=10, source_timestamp_column="ts", **source_options)
+        return create_timeseries_backend(params, metadata, workdir, self._timestamped_schema())
+
+    def test_decreasing_source_timestamp_ends_postprocessed_prefix(
         self, timeseries_base_params, timeseries_model_metadata, mock_workdir
     ):
-        _enable_flexible_timeseries(
-            timeseries_base_params, timeseries_model_metadata, max_records=10, source_timestamp_column="ts"
-        )
-        backend = create_timeseries_backend(
-            timeseries_base_params, timeseries_model_metadata, mock_workdir, self._timestamped_schema()
-        )
+        backend = self._timestamped_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
         state = backend._init_group_state("group_A")
         records = self._timestamped_records([10, 10, 5, 20])
 
-        retained, accepted_row_stop = backend._trim_flexible_timeseries_records(state, records)
+        backend._validate_postprocessed_sequence_indices(state, records)
 
-        assert [record.parsed["_time_idx"] for record in retained] == [0, 1]
-        assert accepted_row_stop is None
+        assert [record.is_valid for record in records] == [True, True, False, False]
         assert records[2].error == ("Generated source timestamp decreases within the group", "TimeSeries")
-        assert records[3].is_valid is False
 
-    def test_asserted_interval_mismatch_ends_valid_prefix(
+    def test_asserted_interval_mismatch_ends_postprocessed_prefix(
         self, timeseries_base_params, timeseries_model_metadata, mock_workdir
     ):
-        _enable_flexible_timeseries(
-            timeseries_base_params,
-            timeseries_model_metadata,
-            max_records=10,
-            source_timestamp_column="ts",
-            source_interval_seconds=60,
-        )
-        backend = create_timeseries_backend(
-            timeseries_base_params, timeseries_model_metadata, mock_workdir, self._timestamped_schema()
+        backend = self._timestamped_backend(
+            timeseries_base_params, timeseries_model_metadata, mock_workdir, source_interval_seconds=60
         )
         state = backend._init_group_state("group_A")
         records = self._timestamped_records([0, 60, 90])
 
-        retained, _ = backend._trim_flexible_timeseries_records(state, records)
+        backend._validate_postprocessed_sequence_indices(state, records)
 
-        assert [record.parsed["ts"] for record in retained] == [0, 60]
+        assert [record.is_valid for record in records] == [True, True, False]
         assert records[2].error == (
             "Generated source timestamp does not follow timestamp_interval_seconds",
             "TimeSeries",
         )
 
-    def test_unparseable_source_timestamp_ends_valid_prefix(
+    def test_unparseable_source_timestamp_ends_postprocessed_prefix(
         self, timeseries_base_params, timeseries_model_metadata, mock_workdir
     ):
-        _enable_flexible_timeseries(
-            timeseries_base_params, timeseries_model_metadata, max_records=10, source_timestamp_column="ts"
-        )
-        backend = create_timeseries_backend(
-            timeseries_base_params, timeseries_model_metadata, mock_workdir, self._timestamped_schema()
-        )
+        backend = self._timestamped_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
         state = backend._init_group_state("group_A")
         records = self._timestamped_records([0, 60])
         assert records[1].parsed is not None
         records[1].parsed["ts"] = "not-a-time"
 
-        retained, _ = backend._trim_flexible_timeseries_records(state, records)
+        backend._validate_postprocessed_sequence_indices(state, records)
 
-        assert len(retained) == 1
-        assert records[1].is_valid is False
+        assert [record.is_valid for record in records] == [True, False]
 
-    def test_source_timestamp_cursor_advances_only_for_accepted_rows(
+    def test_pre_postprocessing_trim_does_not_check_source_timestamps(
         self, timeseries_base_params, timeseries_model_metadata, mock_workdir
     ):
-        _enable_flexible_timeseries(
-            timeseries_base_params, timeseries_model_metadata, max_records=10, source_timestamp_column="ts"
+        """Timestamps are checked after data actions restore the source representation."""
+        backend = self._timestamped_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
+        state = backend._init_group_state("group_A")
+        records = self._timestamped_records([60, 0])
+
+        retained, _ = backend._trim_flexible_timeseries_records(state, records)
+
+        assert len(retained) == 2
+
+    def test_postprocessed_datetime_values_are_checked(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        _enable_flexible_timeseries(timeseries_base_params, timeseries_model_metadata, max_records=10)
+        timeseries_model_metadata.flexible_timeseries_metadata = FlexibleTimeseriesMetadata(
+            max_records=10,
+            source_columns=("value", "group_id", "ts"),
+            source_timestamp_column="ts",
+            source_timestamp_format="%Y-%m-%d",
         )
         backend = create_timeseries_backend(
             timeseries_base_params, timeseries_model_metadata, mock_workdir, self._timestamped_schema()
         )
         state = backend._init_group_state("group_A")
-        records = self._timestamped_records([0, 30, 90])
+        records = self._timestamped_records([0, 0])
+        assert records[0].parsed is not None and records[1].parsed is not None
+        records[0].parsed["ts"] = pd.Timestamp("2024-01-02")
+        records[1].parsed["ts"] = "2024-01-01"
 
-        retained, _ = backend._trim_flexible_timeseries_records(state, records)
-        backend._update_group_state(state, retained[:2])
+        backend._validate_postprocessed_sequence_indices(state, records)
+
+        assert [record.is_valid for record in records] == [True, False]
+
+    def test_source_timestamp_cursor_advances_from_accepted_rows(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        backend = self._timestamped_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
+        state = backend._init_group_state("group_A")
+        records = self._timestamped_records([0, 30])
+
+        backend._validate_postprocessed_sequence_indices(state, records)
+        backend._update_group_state(state, records)
 
         assert state.last_source_timestamp_seconds == 30
-        assert state.retained_source_seconds == []
-        follow_up = self._timestamped_records([0, 30, 20])[2:]
+        follow_up = self._timestamped_records([0, 0, 20])[2:]
         assert follow_up[0].parsed is not None
-        follow_up[0].parsed["_time_idx"] = 2
-        retained_follow_up, _ = backend._trim_flexible_timeseries_records(state, follow_up)
-        assert retained_follow_up == []
+        state.last_timestamp_seconds = 1
+        backend._validate_postprocessed_sequence_indices(state, follow_up)
+        assert follow_up[0].is_valid is False
+
+    @pytest.mark.parametrize("flexible", [True, False], ids=["flexible", "deterministic"])
+    def test_ungrouped_records_without_pseudo_group_match_the_stream(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir, flexible
+    ):
+        timeseries_base_params.data.group_training_examples_by = PSEUDO_GROUP_COLUMN
+        timeseries_model_metadata.timeseries_group_values = [0]
+        if flexible:
+            _enable_flexible_timeseries(timeseries_base_params, timeseries_model_metadata)
+            properties = {
+                "_time_idx": {"type": "integer"},
+                "value": {"type": "integer"},
+                "_is_last_row": {"type": "boolean"},
+            }
+        else:
+            properties = {"timestamp": {"type": "string"}, "value": {"type": "integer"}}
+        schema = {"type": "object", "properties": properties, "required": list(properties)}
+        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir, schema)
+        state = backend._init_group_state(0)
+        parsed = {"_time_idx": 0, "value": 1, "_is_last_row": True} if flexible else {"value": 1}
+        record = ParsedRecord(text="row", parsed=parsed)
+
+        if flexible:
+            retained, _ = backend._trim_flexible_timeseries_records(state, [record])
+            assert retained == [record]
+        backend._validate_postprocessed_group_identity(state, [record])
+
+        assert record.is_valid
 
     def test_status_is_incomplete_and_failed_group_rows_are_discarded(
         self, timeseries_base_params, timeseries_model_metadata, mock_workdir, tmp_path

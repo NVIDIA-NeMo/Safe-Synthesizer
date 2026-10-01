@@ -262,7 +262,7 @@ class GenerationBatches:
                 filtered in place.
             commit_history: Whether accepted rows join the history that
                 later batches are validated against. When ``False``, call
-                :meth:`commit_history` after any further backend checks.
+                ``commit_history`` after any further backend checks.
         """
         if self.data_actions_fn is None:
             return
@@ -324,7 +324,7 @@ class GenerationBatches:
             commit_history: Whether accepted rows immediately join the history
                 used by history-dependent validation actions. Backends that
                 can still reject rows pass ``False`` and call
-                :meth:`commit_history` after their own checks.
+                ``commit_history`` after their own checks.
         """
         self._apply_data_actions_fn(batch, commit_history=commit_history)
 
@@ -336,7 +336,7 @@ class GenerationBatches:
         example, duplicate removal) to reject later retries.
 
         Args:
-            batch: A batch previously passed to :meth:`postprocess_batch`
+            batch: A batch previously passed to ``postprocess_batch``
                 with ``commit_history=False``.
         """
         pending = self._pending_history.pop(id(batch), None)
