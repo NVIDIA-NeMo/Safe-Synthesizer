@@ -894,6 +894,12 @@ h3 {
     background: var(--synthetic);
 }
 
+.autocorrelation-charts {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+}
+
 .distribution-charts {
     --distribution-chart-height: 120px;
 
@@ -1239,6 +1245,10 @@ tbody tr:hover td {
 
     .distribution-charts {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .autocorrelation-charts {
+        grid-template-columns: 1fr;
     }
 }
 

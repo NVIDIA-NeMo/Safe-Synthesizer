@@ -176,9 +176,9 @@ def test_time_series_metric_uses_unsampled_ordered_data_and_renders_profiles() -
     assert report.jinja_context["autocorrelation_similarity"]["evaluated_profile_count"] == 1
     output = render_report(report)
     assert output is not None
-    assert "Time-Series Evaluation" in output
-    assert "Training ACF" in output
-    assert "Synthetic ACF" in output
+    assert "Time-Series Metrics" in output
+    assert "Training median ACF" in output
+    assert "Synthetic median ACF" in output
 
 
 def test_enabled_unavailable_time_series_metric_renders_actionable_reason() -> None:
@@ -194,18 +194,19 @@ def test_enabled_unavailable_time_series_metric_renders_actionable_reason() -> N
     assert "No usable group/column autocorrelation profiles." in output
 
 
-def test_time_series_report_limits_charts_to_lowest_scoring_profiles() -> None:
+def test_time_series_report_summarizes_all_profiles_in_one_chart_row() -> None:
     report = _minimal_multimodal_report()
     profiles = [
         {
             "group": str(index),
-            "column": "value",
-            "lags": [1],
-            "training_acf": [0.5],
-            "synthetic_acf": [0.5],
+            "column": column,
+            "lags": [1, 2],
+            "training_acf": [0.5, 0.2],
+            "synthetic_acf": [0.4, None],
             "similarity": index / 13,
         }
         for index in range(13)
+        for column in ("value", "other")
     ]
     report.components = [
         AutocorrelationSimilarity(
@@ -216,7 +217,11 @@ def test_time_series_report_limits_charts_to_lowest_scoring_profiles() -> None:
 
     context = report.jinja_context["autocorrelation_similarity"]
 
-    assert context["evaluated_profile_count"] == 13
-    assert context["displayed_profile_count"] == 12
-    assert len(context["figures"]) == 12
-    assert all("group 12" not in figure["title"] for figure in context["figures"])
+    assert context["evaluated_profile_count"] == 26
+    assert context["evaluated_group_count"] == 13
+    assert context["evaluated_column_count"] == 2
+    assert [figure["title"] for figure in context["figures"]] == [
+        "Typical autocorrelation",
+        "Difference by lag",
+        "Pair scores",
+    ]

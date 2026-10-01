@@ -47,7 +47,8 @@ variation.
 ## Configuration
 
 Time-series evaluation is off by default. Enable it explicitly to compute the
-metric and add the time-series section to the HTML evaluation report.
+metric and add a Time-Series Metrics panel to the Synthetic Quality section of
+the HTML evaluation report.
 
 ```yaml
 time_series:
@@ -74,9 +75,24 @@ total, evaluated, and omitted shared-group counts. Changing `value_columns`,
 `max_lag`, or the grouping configuration changes what the aggregate score
 measures.
 
+## Reading the report charts
+
+The metric card shows three charts built from every evaluated group and column pair:
+
+- **Typical autocorrelation** plots the median training and synthetic
+  autocorrelation at each lag, with shaded bands covering the middle 50% of
+  groups. Use the dropdown to switch value columns. The chart opens on the
+  column with the lowest mean pair score.
+- **Difference by lag** plots the mean absolute difference between paired
+  training and synthetic profiles at each lag. It shows whether short-range
+  dependence, long-range persistence, or a specific cycle is lost.
+- **Pair scores** plots every group and column pair score on the 0–10 scale,
+  with the overall score marked. Hover over a point to see its group. It shows
+  whether a low score is widespread or driven by a few groups.
+
 ## Diagnosing and improving a low score
 
-Start by checking whether the low score is widespread or concentrated in particular columns or groups. Then compare the sequence and autocorrelation plots:
+Start with the Pair scores chart to check whether the low score is widespread or concentrated in particular columns or groups. Then compare the Typical autocorrelation and Difference by lag charts:
 
 - If synthetic autocorrelation decays more quickly than training
   autocorrelation, verify `time_series.timestamp_column`,

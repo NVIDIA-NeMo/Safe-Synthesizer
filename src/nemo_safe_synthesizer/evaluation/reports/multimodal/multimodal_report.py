@@ -18,7 +18,11 @@ from ....config.parameters import SafeSynthesizerParameters
 from ....evaluation.assets.text.multi_modal_tooltips import tooltips
 from ....evaluation.components.attribute_inference_protection import AttributeInferenceProtection
 from ....evaluation.components.autocorrelation_similarity import AutocorrelationSimilarity
-from ....evaluation.components.autocorrelation_similarity_figures import generate_autocorrelation_profile_figure
+from ....evaluation.components.autocorrelation_similarity_figures import (
+    generate_autocorrelation_lag_error_figure,
+    generate_autocorrelation_pair_score_figure,
+    generate_autocorrelation_summary_figure,
+)
 from ....evaluation.components.column_distribution import (
     ColumnDistribution,
     ColumnDistributionPlotRow,
@@ -51,8 +55,6 @@ from ....observability import get_logger
 from ....pii_replacer.transform_result import ColumnStatistics
 
 logger = get_logger(__name__)
-
-_MAX_AUTOCORRELATION_REPORT_PROFILES = 12
 
 
 class MultimodalReport(EvaluationReport):
@@ -114,27 +116,23 @@ class MultimodalReport(EvaluationReport):
             if ctx["with_time_series"]:
                 autocorrelation = ctx["autocorrelation_similarity"]
                 profiles = autocorrelation["details"].get("profiles", [])
-                selected = sorted(
-                    profiles,
-                    key=lambda item: (
-                        item["similarity"],
-                        str(item["group"]),
-                        item["column"],
-                    ),
-                )[:_MAX_AUTOCORRELATION_REPORT_PROFILES]
-                autocorrelation["figures"] = [
-                    {
-                        "title": MultimodalReport._autocorrelation_figure_title(item),
-                        "html": generate_autocorrelation_profile_figure(
-                            item["lags"],
-                            item["training_acf"],
-                            item["synthetic_acf"],
-                        ).to_html(full_html=False, include_plotlyjs=False),
-                    }
-                    for item in selected
-                ]
-                autocorrelation["displayed_profile_count"] = len(selected)
+                autocorrelation["figures"] = []
+                if profiles:
+                    figures = [
+                        ("Typical autocorrelation", generate_autocorrelation_summary_figure(profiles)),
+                        ("Difference by lag", generate_autocorrelation_lag_error_figure(profiles)),
+                        (
+                            "Pair scores",
+                            generate_autocorrelation_pair_score_figure(profiles, autocorrelation["score"]["score"]),
+                        ),
+                    ]
+                    autocorrelation["figures"] = [
+                        {"title": title, "html": figure.to_html(full_html=False, include_plotlyjs=False)}
+                        for title, figure in figures
+                    ]
                 autocorrelation["evaluated_profile_count"] = len(profiles)
+                autocorrelation["evaluated_group_count"] = len({str(item["group"]) for item in profiles})
+                autocorrelation["evaluated_column_count"] = len({item["column"] for item in profiles})
 
             return ctx
         except Exception:
@@ -147,14 +145,6 @@ class MultimodalReport(EvaluationReport):
         if config and config.get(param):
             return config.get(param)
         return default
-
-    @staticmethod
-    def _autocorrelation_figure_title(item: dict[str, Any]) -> str:
-        """Return a user-facing label for one autocorrelation profile."""
-        group = item["group"]
-        if group is None:
-            return str(item["column"])
-        return f"{item['column']} -- group {group}"
 
     @staticmethod
     def from_dataframes(

@@ -10,9 +10,91 @@ import pytest
 
 from nemo_safe_synthesizer.errors import DataError, ParameterError
 from nemo_safe_synthesizer.evaluation.components.autocorrelation_similarity_figures import (
+    generate_autocorrelation_lag_error_figure,
+    generate_autocorrelation_pair_score_figure,
     generate_autocorrelation_profile_figure,
     generate_autocorrelation_similarity_figure,
+    generate_autocorrelation_summary_figure,
 )
+
+
+def _profile(group, column, training_acf, synthetic_acf, similarity):
+    return {
+        "group": group,
+        "column": column,
+        "lags": list(range(1, len(training_acf) + 1)),
+        "training_acf": training_acf,
+        "synthetic_acf": synthetic_acf,
+        "similarity": similarity,
+    }
+
+
+_SUMMARY_PROFILES = [
+    _profile("a", "good", [0.9, 0.8, 0.7], [0.9, 0.8, 0.7], 1.0),
+    _profile("b", "good", [0.7, 0.6], [0.7, 0.6], 1.0),
+    _profile("a", "bad", [0.9, 0.8, 0.7], [0.1, 0.0, None], 0.6),
+    _profile("b", "bad", [0.5, 0.4, 0.3], [0.3, 0.2, 0.1], 0.9),
+]
+
+
+def test_summary_figure_starts_with_lowest_scoring_column_and_switches_columns():
+    figure = generate_autocorrelation_summary_figure(_SUMMARY_PROFILES)
+
+    assert len(figure.data) == 8
+    assert [trace.visible for trace in figure.data] == [True] * 4 + [False] * 4
+    medians = [trace for trace in figure.data if trace.name == "Training median ACF"]
+    assert list(medians[0].x) == [1, 2, 3]
+    assert list(medians[0].y) == pytest.approx([0.7, 0.6, 0.5])
+    synthetic_median = next(trace for trace in figure.data if trace.name == "Synthetic median ACF")
+    assert list(synthetic_median.y) == pytest.approx([0.2, 0.1, 0.1])
+    buttons = figure.layout.updatemenus[0].buttons
+    assert [button.label for button in buttons] == ["bad", "good"]
+    assert buttons[1].args[0]["visible"] == [False] * 4 + [True] * 4
+
+
+def test_summary_figure_omits_dropdown_for_single_column():
+    figure = generate_autocorrelation_summary_figure(_SUMMARY_PROFILES[:2])
+
+    assert len(figure.data) == 4
+    assert not figure.layout.updatemenus
+
+
+def test_lag_error_figure_averages_only_paired_finite_lags():
+    figure = generate_autocorrelation_lag_error_figure(_SUMMARY_PROFILES)
+
+    bar = figure.data[0]
+    assert list(bar.x) == [1, 2, 3]
+    assert list(bar.y) == pytest.approx([(0 + 0 + 0.8 + 0.2) / 4, (0 + 0 + 0.8 + 0.2) / 4, (0 + 0.2) / 2])
+    assert list(bar.customdata) == [4, 4, 2]
+
+
+def test_pair_score_figure_plots_every_pair_on_report_scale():
+    figure = generate_autocorrelation_pair_score_figure(_SUMMARY_PROFILES, overall_score=8.8)
+
+    assert [trace.name for trace in figure.data] == ["bad", "good"]
+    assert list(figure.data[0].x) == pytest.approx([6.0, 9.0])
+    assert list(figure.data[0].customdata) == ["a", "b"]
+    assert figure.layout.shapes[0].x0 == 8.8
+
+
+def test_pair_score_figure_labels_ungrouped_profiles():
+    figure = generate_autocorrelation_pair_score_figure([_profile(None, "value", [0.5], [0.5], 1.0)], None)
+
+    assert list(figure.data[0].customdata) == ["all rows"]
+    assert not figure.layout.shapes
+
+
+@pytest.mark.parametrize(
+    "builder",
+    [
+        generate_autocorrelation_summary_figure,
+        generate_autocorrelation_lag_error_figure,
+        lambda profiles: generate_autocorrelation_pair_score_figure(profiles, None),
+    ],
+)
+def test_summary_figures_require_profiles(builder):
+    with pytest.raises(DataError, match="At least one autocorrelation profile"):
+        builder([])
 
 
 def test_autocorrelation_similarity_figure_uses_requested_lags_without_mutating_inputs():

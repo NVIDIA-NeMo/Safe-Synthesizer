@@ -30,11 +30,6 @@
                 <span class="nav-icon">{{ icon("quality") }}</span>Synthetic Quality
             </a>
             {% endif %}
-            {% if ctx.with_time_series %}
-            <a href="#time-series" data-report-nav="time-series">
-                <span class="nav-icon">{{ icon("chart") }}</span>Time-Series Evaluation
-            </a>
-            {% endif %}
             {% if (ctx.with_data_privacy) or (ctx.pii_replay and ctx.pii_replay.pii_replay_data) %}
             <a href="#data-privacy" data-report-nav="data-privacy">
                 <span class="nav-icon">{{ icon("lock") }}</span>Data Privacy
@@ -153,20 +148,12 @@
                     {% endcall %}
                 </div>
             </section>
-        </section>
-        {% endif %}
 
-        {% if ctx.with_time_series %}
-        <section class="report-view" id="time-series" data-report-view="time-series">
-            <h1>Time-Series Evaluation</h1>
-            <p class="view-intro">
-                Time-series metrics compare temporal behavior in synthetic and training sequences.
-                Interpret each metric according to the temporal behavior required by your downstream use case.
-            </p>
+            {% if ctx.with_time_series %}
             <section class="metric-panel">
                 <header class="metric-panel-heading">
                     <span class="panel-icon">{{ icon("chart") }}</span>
-                    <div><h2>Temporal Fidelity Metrics</h2>
+                    <div><h2>Time-Series Metrics</h2>
                     <p>Measures preservation of relationships between observations across time.</p></div>
                 </header>
                 <div class="metric-list">
@@ -179,6 +166,7 @@
                     {% endcall %}
                 </div>
             </section>
+            {% endif %}
         </section>
         {% endif %}
 

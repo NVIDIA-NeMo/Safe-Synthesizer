@@ -47,9 +47,13 @@ def test_evaluation_report_themes_charts_in_report_assets() -> None:
     assert text_structure_similarity is not None
     assert javascript is not None
     assert "score_ring(ctx.synthetic_quality_score.score)" in template
-    assert 'data-report-view="time-series"' in template
+    assert 'data-report-view="time-series"' not in template
+    assert template.index("Text Metrics") < template.index("Time-Series Metrics")
+    assert template.index("Time-Series Metrics") < template.index('id="data-privacy"')
     assert "ctx.autocorrelation_similarity.figures" in autocorrelation_similarity
     assert "{{ row.html | safe }}" in autocorrelation_similarity
+    assert 'class="autocorrelation-charts"' in autocorrelation_similarity
+    assert ".autocorrelation-charts" in stylesheet
     assert "score-ring-canvas" in gauge
     assert "brand-assets.cne.ngc.nvidia.com/assets/fonts/nvidia-sans" in stylesheet
     assert "data-metric-toggle" in metric_card

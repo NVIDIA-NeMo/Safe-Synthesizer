@@ -21,20 +21,22 @@
     Groups found only in synthetic data: {{ ctx.autocorrelation_similarity.details.groups_only_in_synthetic | length }}.
 </p>
 {% endif %}
-{% if ctx.autocorrelation_similarity.evaluated_profile_count %}
+{% if ctx.autocorrelation_similarity.figures %}
 <p class="chart-subheading">
-    Showing {{ ctx.autocorrelation_similarity.displayed_profile_count }} of
-    {{ ctx.autocorrelation_similarity.evaluated_profile_count }} evaluated profiles,
-    ordered from lowest similarity.
+    Summarizing {{ ctx.autocorrelation_similarity.evaluated_profile_count }} group and column pairs across
+    {{ ctx.autocorrelation_similarity.evaluated_group_count }} groups and
+    {{ ctx.autocorrelation_similarity.evaluated_column_count }} value columns.
 </p>
 <div class="chart-legend" aria-label="Chart legend">
     <span><i class="legend-training"></i>Training Data</span>
     <span><i class="legend-synthetic"></i>Synthetic Data</span>
 </div>
+<div class="autocorrelation-charts">
 {% for row in ctx.autocorrelation_similarity.figures %}
 <figure>
     <h3 class="chart-subheading">{{ row.title }}</h3>
     {{ row.html | safe }}
 </figure>
 {% endfor %}
+</div>
 {% endif %}

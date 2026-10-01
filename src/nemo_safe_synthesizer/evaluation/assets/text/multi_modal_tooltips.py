@@ -57,7 +57,7 @@ tooltips = {
     """,
     "autocorrelation_similarity_info": """
         Autocorrelation Similarity compares how strongly each numeric value channel relates to its own prior values in training and synthetic sequences.
-        A higher score means the lag profiles are more alike for the configured columns, groups, and lag horizon. The report shows the lowest-scoring profiles first.
+        A higher score means the lag profiles are more alike for the configured columns, groups, and lag horizon. The report summarizes typical profiles, differences by lag, and every pair score.
     """,
     "differential_privacy_info": """
     Differential Privacy (DP) is generally regarded as the highest level of privacy, providing mathematical guarantees around the protection of individual training
