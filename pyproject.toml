@@ -247,6 +247,11 @@ constraint-dependencies = [
     "starlette>=1.3.1",
     "tornado>=6.5.8",
     "urllib3>=2.7.0",
+    # torchcodec's PyPI wheels need CUDA 13 (libnvrtc.so.13) and cannot load under
+    # cu129. 0.15 reports that as RuntimeError, which vLLM 0.27 treats as
+    # torchcodec being unavailable; 0.16+ raise OSError, which vLLM does not
+    # catch, so every vLLM server fails to start. Main locks 0.15.0.
+    "torchcodec<0.16",
 ]
 
 # vLLM 0.27.0 pins post3, which fails at import time on Python 3.10 and 3.11.
