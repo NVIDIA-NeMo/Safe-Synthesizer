@@ -19,8 +19,8 @@ from ..defaults import PSEUDO_GROUP_COLUMN
 from ..errors import DataError, ParameterError
 from ..llm.metadata import FlexibleTimeseriesMetadata
 from .actions.utils import guess_datetime_format
-from .flexible_timeseries import _resolve_flexible_timeseries_metadata
-from .timeseries_utils import _stable_sort_within_groups
+from .flexible_timeseries import resolve_flexible_timeseries_metadata
+from .timeseries_utils import stable_sort_within_groups
 from .validation import (
     check_column_has_no_nulls,
     check_column_present,
@@ -32,12 +32,17 @@ from .validation import (
 __all__ = [
     "TimeSeriesDataValidationError",
     "TimeSeriesGroupTimestampStats",
+    "TimeSeriesInspection",
     "TimeSeriesParameterValidationError",
+    "TimeSeriesRoutingDecision",
     "TimeSeriesValidationReason",
     "TimeSeriesValidationResult",
     "resolve_elapsed_time_column_name",
+    "resolve_timeseries_routing",
+    "validate_deterministic_inspection",
     "validate_start_stop_consistency",
     "validate_timeseries_data",
+    "validate_timeseries_source_data",
 ]
 
 
@@ -138,7 +143,7 @@ class TimeSeriesValidationResult:
 
 
 @dataclass(frozen=True)
-class _TimeSeriesInspection:
+class TimeSeriesInspection:
     """Normalized source data and statistics shared by routing and validation."""
 
     data: pd.DataFrame
@@ -161,7 +166,7 @@ class _TimeSeriesInspection:
 
 
 @dataclass(frozen=True)
-class _TimeSeriesRoutingDecision:
+class TimeSeriesRoutingDecision:
     """Automatic selection between deterministic and flexible time-series processing."""
 
     uses_flexible_timeseries: bool
@@ -176,7 +181,7 @@ class _TimeSeriesRoutingDecision:
     timestamp_format: str
     """Validated or inferred format used to order source timestamps."""
 
-    inspection: _TimeSeriesInspection
+    inspection: TimeSeriesInspection
     """Normalized source inspection reused by deterministic preprocessing."""
 
     flexible_metadata: FlexibleTimeseriesMetadata | None = None
@@ -247,7 +252,7 @@ def _add_elapsed_time_column(
         except DataError as exc:
             raise TimeSeriesDataValidationError(TimeSeriesValidationReason.COLUMN_NULLS, str(exc)) from exc
         if order_by_col != group_by_col:
-            data = _stable_sort_within_groups(data, group_by_col, order_by_col)
+            data = stable_sort_within_groups(data, group_by_col, order_by_col)
 
     timestamp_col = resolve_elapsed_time_column_name(data.columns)
 
@@ -416,6 +421,33 @@ def _collect_group_timestamp_stats(
     return tuple(stats_list)
 
 
+def _collect_tolerant_group_timestamp_stats(
+    group_df: pd.DataFrame,
+    group_name: Any,
+    timestamp_col: str,
+    group_by_col: str,
+    is_elapsed_time: bool,
+) -> TimeSeriesGroupTimestampStats:
+    """Collect one group's statistics, recording an unsupported interval as ``None`` instead of raising.
+
+    Collecting per group keeps the valid intervals of other groups, so a later
+    interval check reports the group that actually has unsupported spacing.
+    """
+    try:
+        (stats,) = _collect_group_timestamp_stats(group_df, timestamp_col, group_by_col, is_elapsed_time)
+    except TimeSeriesDataValidationError as exc:
+        if exc.reason is not TimeSeriesValidationReason.TIMESTAMP_INTERVAL_MISMATCH:
+            raise
+        return TimeSeriesGroupTimestampStats(
+            group_name=group_name,
+            start_timestamp=group_df[timestamp_col].iloc[0],
+            stop_timestamp=group_df[timestamp_col].iloc[-1],
+            interval_seconds=None,
+            record_count=len(group_df),
+        )
+    return stats
+
+
 def _coerce_whole_second_interval(value: Any, *, group_name: Any) -> int:
     """Convert an interval to integer seconds or raise for unsupported precision."""
     interval = float(value)
@@ -503,7 +535,7 @@ def _inspect_time_series_data(
     config: SafeSynthesizerParameters,
     *,
     tolerate_interval_mismatch: bool = False,
-) -> _TimeSeriesInspection:
+) -> TimeSeriesInspection:
     """Normalize time-series source data for routing and validation.
 
     The inspection operates on copies, resolves pseudo-group and generated
@@ -560,24 +592,13 @@ def _inspect_time_series_data(
 
     working_df = _sort_by_group_and_timestamp(working_df, group_by_col, timestamp_col)
     if tolerate_interval_mismatch:
-        try:
-            group_stats = _collect_group_timestamp_stats(working_df, timestamp_col, group_by_col, is_elapsed_time)
-        except TimeSeriesDataValidationError as exc:
-            if exc.reason is not TimeSeriesValidationReason.TIMESTAMP_INTERVAL_MISMATCH:
-                raise
-            group_stats = tuple(
-                TimeSeriesGroupTimestampStats(
-                    group_name=group_name,
-                    start_timestamp=group[timestamp_col].iloc[0],
-                    stop_timestamp=group[timestamp_col].iloc[-1],
-                    interval_seconds=None,
-                    record_count=len(group),
-                )
-                for group_name, group in working_df.groupby(group_by_col, sort=False)
-            )
+        group_stats = tuple(
+            _collect_tolerant_group_timestamp_stats(group, group_name, timestamp_col, group_by_col, is_elapsed_time)
+            for group_name, group in working_df.groupby(group_by_col, sort=False)
+        )
     else:
         group_stats = _collect_group_timestamp_stats(working_df, timestamp_col, group_by_col, is_elapsed_time)
-    return _TimeSeriesInspection(
+    return TimeSeriesInspection(
         data=working_df,
         group_column=group_by_col,
         timestamp_column=timestamp_col,
@@ -587,8 +608,8 @@ def _inspect_time_series_data(
     )
 
 
-def _validate_deterministic_inspection(
-    inspection: _TimeSeriesInspection,
+def validate_deterministic_inspection(
+    inspection: TimeSeriesInspection,
     expected_interval_seconds: int | None,
 ) -> TimeSeriesValidationResult:
     """Validate deterministic shape constraints and return the resolved data."""
@@ -631,7 +652,7 @@ def _resolve_timestamp_order_columns(config: SafeSynthesizerParameters) -> None:
         config.data.order_training_examples_by = ts_config.timestamp_column
 
 
-def _validate_asserted_interval(inspection: _TimeSeriesInspection, expected_interval_seconds: int) -> None:
+def _validate_asserted_interval(inspection: TimeSeriesInspection, expected_interval_seconds: int) -> None:
     """Raise when source timestamps do not follow a user-asserted interval.
 
     Groups may still differ in length, start, or stop; only the spacing between
@@ -650,7 +671,7 @@ def _validate_asserted_interval(inspection: _TimeSeriesInspection, expected_inte
 def _inspect_timeseries_constraints(
     data: pd.DataFrame,
     config: SafeSynthesizerParameters,
-) -> _TimeSeriesRoutingDecision:
+) -> TimeSeriesRoutingDecision:
     """Inspect the four deterministic shape constraints without mutating inputs.
 
     Raises:
@@ -692,7 +713,7 @@ def _inspect_timeseries_constraints(
         failed.append("consistent timestamp intervals")
 
     maximum = max(stats.record_count for stats in group_stats)
-    return _TimeSeriesRoutingDecision(
+    return TimeSeriesRoutingDecision(
         uses_flexible_timeseries=bool(failed),
         failed_constraints=tuple(failed),
         sequence_max_records=maximum,
@@ -712,7 +733,7 @@ def _check_duplicate_columns(data: pd.DataFrame) -> None:
         )
 
 
-def _validate_timeseries_source_data(data: pd.DataFrame, config: SafeSynthesizerParameters) -> None:
+def validate_timeseries_source_data(data: pd.DataFrame, config: SafeSynthesizerParameters) -> None:
     """Validate time-series source data without selecting a representation.
 
     Reports malformed data and asserted-interval mismatches. Differences in
@@ -735,10 +756,10 @@ def _validate_timeseries_source_data(data: pd.DataFrame, config: SafeSynthesizer
     _inspect_timeseries_constraints(data, config)
 
 
-def _resolve_timeseries_routing(
+def resolve_timeseries_routing(
     data: pd.DataFrame,
     config: SafeSynthesizerParameters,
-) -> _TimeSeriesRoutingDecision | None:
+) -> TimeSeriesRoutingDecision | None:
     """Select the deterministic or flexible time-series representation.
 
     Resolves the effective timestamp and order columns and persists an inferred
@@ -762,7 +783,7 @@ def _resolve_timeseries_routing(
     if ts_config.timestamp_format is None:
         ts_config.timestamp_format = decision.timestamp_format
     if decision.uses_flexible_timeseries:
-        metadata = _resolve_flexible_timeseries_metadata(
+        metadata = resolve_flexible_timeseries_metadata(
             data,
             config,
             decision.sequence_max_records,
@@ -800,7 +821,7 @@ def validate_timeseries_data(data: pd.DataFrame, config: SafeSynthesizerParamete
         )
 
     inspection = _inspect_time_series_data(data, config)
-    return _validate_deterministic_inspection(
+    return validate_deterministic_inspection(
         inspection,
         config.time_series.timestamp_interval_seconds,
     )

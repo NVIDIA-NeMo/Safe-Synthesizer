@@ -11,7 +11,7 @@ from ...data_processing.timeseries_validation import (
     TimeSeriesDataValidationError,
     TimeSeriesParameterValidationError,
     TimeSeriesValidationReason,
-    _validate_timeseries_source_data,
+    validate_timeseries_source_data,
 )
 from ...data_processing.validation import (
     check_column_has_no_nulls,
@@ -225,6 +225,6 @@ class TimeSeriesDataShapeCheck(DataFrameCheck):
     @override
     def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
         try:
-            _validate_timeseries_source_data(ctx.data, ctx.config)
+            validate_timeseries_source_data(ctx.data, ctx.config)
         except (TimeSeriesDataValidationError, TimeSeriesParameterValidationError) as exc:
             collector.error(self.issue_codes[exc.reason], str(exc))

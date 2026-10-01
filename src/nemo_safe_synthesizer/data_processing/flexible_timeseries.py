@@ -10,7 +10,7 @@ import pandas as pd
 from ..config.parameters import SafeSynthesizerParameters
 from ..defaults import PSEUDO_GROUP_COLUMN
 from ..llm.metadata import FlexibleTimeseriesMetadata
-from .timeseries_utils import _stable_sort_within_groups, _unused_column_name
+from .timeseries_utils import stable_sort_within_groups, unused_column_name
 from .validation import (
     check_column_has_no_nulls,
     check_column_present,
@@ -19,8 +19,14 @@ from .validation import (
     check_timestamp_column,
 )
 
+__all__ = [
+    "finalize_flexible_timeseries_controls",
+    "prepare_flexible_timeseries_data",
+    "resolve_flexible_timeseries_metadata",
+]
 
-def _resolve_flexible_timeseries_metadata(
+
+def resolve_flexible_timeseries_metadata(
     data: pd.DataFrame,
     config: SafeSynthesizerParameters,
     max_records: int,
@@ -42,8 +48,8 @@ def _resolve_flexible_timeseries_metadata(
         check_no_pseudo_column_collision(data)
         columns.append(PSEUDO_GROUP_COLUMN)
 
-    index_column = _unused_column_name(FlexibleTimeseriesMetadata.DEFAULT_INDEX_COLUMN, columns)
-    marker_column = _unused_column_name(
+    index_column = unused_column_name(FlexibleTimeseriesMetadata.DEFAULT_INDEX_COLUMN, columns)
+    marker_column = unused_column_name(
         FlexibleTimeseriesMetadata.DEFAULT_MARKER_COLUMN,
         [*columns, index_column],
     )
@@ -74,7 +80,7 @@ def _source_order_column(data: pd.DataFrame, config: SafeSynthesizerParameters) 
     return order_column
 
 
-def _prepare_flexible_timeseries_data(
+def prepare_flexible_timeseries_data(
     data: pd.DataFrame,
     config: SafeSynthesizerParameters,
     metadata: FlexibleTimeseriesMetadata,
@@ -117,17 +123,14 @@ def _prepare_flexible_timeseries_data(
             working[order_column],
             format=source_timestamp_format,
         )
-    working = _stable_sort_within_groups(
+    working = stable_sort_within_groups(
         working,
         group_column,
         order_column,
         normalized_order=normalized_order,
     )
 
-    working[metadata.index_column] = working.groupby(group_column, sort=False).cumcount()
-    working[metadata.marker_column] = False
-    final_indices = working.groupby(group_column, sort=False).tail(1).index
-    working.loc[final_indices, metadata.marker_column] = True
+    _assign_sequence_controls(working, group_column, metadata)
 
     payload_columns = [column for column in metadata.source_columns if column != group_column]
     ordered_columns = [group_column, metadata.index_column, *payload_columns, metadata.marker_column]
@@ -141,3 +144,41 @@ def _prepare_flexible_timeseries_data(
     config.data.group_training_examples_by = group_column
     config.data.order_training_examples_by = metadata.index_column
     return working, group_column
+
+
+def _assign_sequence_controls(data: pd.DataFrame, group_column: str, metadata: FlexibleTimeseriesMetadata) -> None:
+    """Number rows within each group in their current order and mark each group's final row, in place."""
+    data[metadata.index_column] = data.groupby(group_column, sort=False).cumcount()
+    data[metadata.marker_column] = False
+    final_indices = data.groupby(group_column, sort=False).tail(1).index
+    data.loc[final_indices, metadata.marker_column] = True
+
+
+def finalize_flexible_timeseries_controls(
+    data: pd.DataFrame,
+    config: SafeSynthesizerParameters,
+    metadata: FlexibleTimeseriesMetadata,
+) -> tuple[pd.DataFrame, FlexibleTimeseriesMetadata]:
+    """Recompute flexible control columns after training-time preprocessing.
+
+    Preprocessing actions can drop rows after the sequence index and final-row
+    marker were assigned, which would leave index gaps or groups without a
+    final-row marker. Indices and markers are reassigned in the current row
+    order, and the record cap is updated to the longest remaining group.
+
+    Args:
+        data: Preprocessed training data in the flexible representation.
+        config: Resolved parameters; the generation stop timestamp is updated.
+        metadata: Flexible metadata resolved before preprocessing.
+
+    Returns:
+        The data with consistent control columns and the updated metadata.
+    """
+    group_column = config.data.group_training_examples_by
+    if data.empty or group_column is None:
+        return data, metadata
+    working = data.reset_index(drop=True)
+    _assign_sequence_controls(working, group_column, metadata)
+    max_records = int(working.groupby(group_column, sort=False).size().max())
+    config.time_series.stop_timestamp = max_records - 1
+    return working, metadata.model_copy(update={"max_records": max_records})
