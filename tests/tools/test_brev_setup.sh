@@ -3,8 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Checks that script/brev/setup.sh still works with what a release ships:
-# install_nss.sh and the docs/tutorials layout. Changes to setup.sh itself are
-# verified by deploying on Brev; these two can break it without touching it.
+# install_nss.sh and the docs/tutorials folder it extracts. Changes to setup.sh
+# itself are verified by deploying on Brev; these two can break it without
+# touching it.
 #
 # The Brev Launchable downloads the latest *released* install_nss.sh and runs
 # it. This test builds that release asset from this checkout, so a PR that
@@ -30,22 +31,16 @@ export REAL_PYTHON
 fail() { echo "FAIL: $*" >&2; exit 1; }
 assert_contains() { [[ "$1" == *"$2"* ]] || fail "expected '$2' in: $1"; }
 
-# setup.sh extracts docs/tutorials from the release source archive into
-# ~/tutorials, and welcome.md sends customers to notebooks there. Moving or
-# renaming them breaks the Launchable at the next release.
-welcome_paths="$(grep -o 'tutorials/[A-Za-z0-9._-]*' "${REPO_ROOT}/script/brev/welcome.md" | sort -u)"
-[[ -n "$welcome_paths" ]] || fail "welcome.md names no tutorials"
-for path in $welcome_paths; do
-    [[ -f "${REPO_ROOT}/docs/${path}" ]] || fail "welcome.md points to ${path}, but docs/${path} does not exist"
-done
-
 # The installer exactly as the release workflow publishes it.
 bash "${REPO_ROOT}/tools/build_release_installer.sh" "$VERSION" "${test_dir}/release" >/dev/null
 export FAKE_INSTALLER="${test_dir}/release/install_nss.sh"
 
-# setup.sh fetches tutorials after installing; give it a minimal source archive.
-mkdir -p "${test_dir}/archive/Safe-Synthesizer-${VERSION}/docs/tutorials"
-printf '{}\n' > "${test_dir}/archive/Safe-Synthesizer-${VERSION}/docs/tutorials/safe-synthesizer-101.ipynb"
+# A source archive shaped like GitHub's, holding this checkout's real
+# docs/tutorials, so setup.sh's extraction runs against the actual layout.
+[[ -d "${REPO_ROOT}/docs/tutorials" ]] ||
+    fail "docs/tutorials is missing; setup.sh extracts the tutorials from that path"
+mkdir -p "${test_dir}/archive/Safe-Synthesizer-${VERSION}/docs"
+cp -R "${REPO_ROOT}/docs/tutorials" "${test_dir}/archive/Safe-Synthesizer-${VERSION}/docs/"
 tar -czf "${test_dir}/source.tar.gz" -C "${test_dir}/archive" "Safe-Synthesizer-${VERSION}"
 export FAKE_TARBALL="${test_dir}/source.tar.gz"
 
@@ -141,6 +136,9 @@ assert_contains "$uv_calls" "--python ${venv}/bin/python"
 assert_contains "$uv_calls" "--index https://download.pytorch.org/whl/cu129"
 assert_contains "$uv_calls" "-c https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/v${VERSION}/constraints.txt"
 assert_contains "$uv_calls" "--overrides -"
+
+# The tutorials were extracted from the release archive into ~/tutorials.
+compgen -G "${home}/tutorials/*.ipynb" >/dev/null || fail "no notebooks extracted into ~/tutorials"
 
 # The rest of setup.sh found the install where it expects it and finished.
 assert_contains "$output" "setup complete"
