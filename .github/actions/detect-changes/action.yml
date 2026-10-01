@@ -97,6 +97,7 @@ runs:
             - 'tests/tools/test_install_nss.sh'
             - 'script/brev/**'
             - 'tests/tools/test_brev_setup.sh'
+            - 'docs/tutorials/**'
             - 'tools/build_release_installer.sh'
             - 'tools/gen_cuda_deps.py'
             - 'tools/release_version.py'

@@ -2,7 +2,9 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
-# Checks that script/brev/setup.sh still works with install_nss.sh.
+# Checks that script/brev/setup.sh still works with what a release ships:
+# install_nss.sh and the docs/tutorials layout. Changes to setup.sh itself are
+# verified by deploying on Brev; these two can break it without touching it.
 #
 # The Brev Launchable downloads the latest *released* install_nss.sh and runs
 # it. This test builds that release asset from this checkout, so a PR that
@@ -27,6 +29,15 @@ export REAL_PYTHON
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
 assert_contains() { [[ "$1" == *"$2"* ]] || fail "expected '$2' in: $1"; }
+
+# setup.sh extracts docs/tutorials from the release source archive into
+# ~/tutorials, and welcome.md sends customers to notebooks there. Moving or
+# renaming them breaks the Launchable at the next release.
+welcome_paths="$(grep -o 'tutorials/[A-Za-z0-9._-]*' "${REPO_ROOT}/script/brev/welcome.md" | sort -u)"
+[[ -n "$welcome_paths" ]] || fail "welcome.md names no tutorials"
+for path in $welcome_paths; do
+    [[ -f "${REPO_ROOT}/docs/${path}" ]] || fail "welcome.md points to ${path}, but docs/${path} does not exist"
+done
 
 # The installer exactly as the release workflow publishes it.
 bash "${REPO_ROOT}/tools/build_release_installer.sh" "$VERSION" "${test_dir}/release" >/dev/null
