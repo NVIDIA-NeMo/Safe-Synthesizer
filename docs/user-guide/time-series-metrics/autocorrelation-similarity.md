@@ -12,10 +12,21 @@ synthetic sequences whose temporal order has been disrupted.
 
 A higher score means the training and synthetic autocorrelation profiles are more alike.
 
+![Three training and synthetic series with their autocorrelation profiles. A close match scores 9.9, shuffled synthetic values score 7.5, and a synthetic cycle half as long as the training cycle scores 6.2.](assets/autocorrelation-examples.svg)
+
+Each column above compares one training series with one synthetic series. The
+top row shows the values, and the bottom row shows their autocorrelation at
+each lag. The shaded gap between the two profiles is what lowers the score.
+
 - A score near 10 can occur when synthetic and training profiles overlap across the evaluated lags.
 - A middle score can occur when the general profile shape is preserved but a
   cycle has shifted or persistence decays at a different rate.
-- A score near 0 can occur when synthetic values are constant or the lag relationships oppose the training profile.
+- A lower score can occur when the synthetic data loses temporal order or its
+  lag relationships oppose the training profile. Because autocorrelation
+  rarely stays near 1 or -1 across every lag, synthetic series that vary
+  seldom score below about 5, even when their lag structure is unrelated or
+  opposite to the training data.
+- A group and column pair scores 0 when its synthetic values are constant.
 
 These examples are not calibrated quality bands. Compare scores only when the
 selected columns, groups, and `max_lag` are the same. Whether a difference
