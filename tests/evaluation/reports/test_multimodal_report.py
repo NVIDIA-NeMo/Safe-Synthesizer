@@ -202,7 +202,8 @@ def test_time_series_report_summarizes_all_profiles_in_one_chart_row() -> None:
             "column": column,
             "lags": [1, 2],
             "training_acf": [0.5, 0.2],
-            "synthetic_acf": [0.4, None],
+            "synthetic_acf": [None, None] if index == 0 else [0.4, None],
+            "evaluated_lags": 0 if index == 0 else 1,
             "similarity": index / 13,
         }
         for index in range(13)
@@ -220,6 +221,7 @@ def test_time_series_report_summarizes_all_profiles_in_one_chart_row() -> None:
     assert context["evaluated_profile_count"] == 26
     assert context["evaluated_group_count"] == 13
     assert context["evaluated_column_count"] == 2
+    assert context["constant_synthetic_profile_count"] == 2
     assert [figure["title"] for figure in context["figures"]] == [
         "Typical autocorrelation",
         "Difference by lag",

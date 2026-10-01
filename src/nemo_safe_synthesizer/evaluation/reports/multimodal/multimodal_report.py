@@ -147,6 +147,9 @@ class MultimodalReport(EvaluationReport):
                 autocorrelation["evaluated_profile_count"] = len(profiles)
                 autocorrelation["evaluated_group_count"] = len({str(item["group"]) for item in profiles})
                 autocorrelation["evaluated_column_count"] = len({item["column"] for item in profiles})
+                autocorrelation["constant_synthetic_profile_count"] = sum(
+                    1 for item in profiles if item["evaluated_lags"] == 0
+                )
 
             return ctx
         except Exception:
