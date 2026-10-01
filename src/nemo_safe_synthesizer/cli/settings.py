@@ -206,6 +206,16 @@ class CLISettings(BaseSettings):
     Overrides a local profile's request timeout; defaults to 60 seconds otherwise.
     """
 
+    inference_request_options: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("inference_request_options", "NSS_INFERENCE_REQUEST_OPTIONS"),
+        description="JSON object of chat-completions fields sent with every PII inference request",
+    )
+    """Extra PII inference request fields as JSON (env: ``NSS_INFERENCE_REQUEST_OPTIONS``).
+
+    Overrides a local profile's request options; replaces the default ``{"temperature": 0}``.
+    """
+
     inference_local_profile: str | None = Field(
         default=None,
         validation_alias=AliasChoices("inference_local_profile", "NSS_INFERENCE_LOCAL_PROFILE"),

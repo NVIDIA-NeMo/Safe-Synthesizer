@@ -8,9 +8,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError, field_validator
 
 from ...errors import ParameterError
+from ..llm_client import RESERVED_REQUEST_FIELDS
 
 __all__ = [
     "RESERVED_VLLM_OPTIONS",
@@ -92,6 +93,17 @@ class LocalVllmProfile(BaseModel):
         description="Additional `vllm serve` options. Options NSS manages, such as --host, --port, "
         "--api-key, and --enable-log-requests, are rejected.",
     )
+    request_options: dict[str, JsonValue] = Field(
+        default_factory=dict,
+        description="Chat-completions fields sent with every planning request, such as temperature, top_p, "
+        "top_k, and thinking_token_budget. When set, they replace NSS's default temperature of 0. "
+        "NSS_INFERENCE_REQUEST_OPTIONS overrides them.",
+    )
+    environment: dict[str, str] = Field(
+        default_factory=dict,
+        description="Extra environment variables for the vLLM server process, such as "
+        "VLLM_USE_V2_MODEL_RUNNER=0, which thinking_token_budget needs in vLLM 0.27.",
+    )
     request_timeout_seconds: float = Field(
         default=60,
         gt=0,
@@ -113,6 +125,21 @@ class LocalVllmProfile(BaseModel):
     def served_name(self) -> str:
         """Model name clients must send; ``served_model_name`` or ``model_id``."""
         return self.served_model_name or self.model_id
+
+    @field_validator("request_options")
+    @classmethod
+    def _reject_reserved_request_fields(cls, value: dict[str, JsonValue]) -> dict[str, JsonValue]:
+        if reserved := sorted(RESERVED_REQUEST_FIELDS.intersection(value)):
+            raise ValueError(f"request_options must not set fields NSS manages: {', '.join(reserved)}")
+        return value
+
+    @field_validator("environment")
+    @classmethod
+    def _reject_managed_environment(cls, value: dict[str, str]) -> dict[str, str]:
+        managed = sorted(key for key in value if key == "VLLM_API_KEY" or key.startswith("NSS_INFERENCE_"))
+        if managed:
+            raise ValueError(f"environment must not set variables NSS manages: {', '.join(managed)}")
+        return value
 
     @field_validator("extra_args")
     @classmethod
