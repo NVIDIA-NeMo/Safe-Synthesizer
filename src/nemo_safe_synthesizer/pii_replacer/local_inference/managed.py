@@ -14,7 +14,7 @@ from urllib.parse import urlparse
 from ...config.replace_pii import LLMConfig
 from ...defaults import DEFAULT_NSS_INFERENCE_LOCAL_MODEL
 from ...errors import ParameterError
-from ..llm_client import _is_loopback_host, _nonblank, resolve_inference_timeout
+from ..llm_client import _is_loopback_host, _nonblank, resolve_inference_timeout, resolve_request_options
 from .profile import LocalVllmProfile, bundled_profile_for_model, bundled_profile_names, load_profile
 from .server import DEFAULT_HOST, LocalVllmServer
 
@@ -125,14 +125,15 @@ def resolve_local_server_request(
 
     Raises:
         ParameterError: If the profile is invalid, ``NSS_INFERENCE_ENDPOINT``
-            is not a usable loopback address, ``NSS_INFERENCE_TIMEOUT`` is
-            invalid, a configured model differs from an explicit profile, or no
+            is not a usable loopback address, ``NSS_INFERENCE_TIMEOUT`` or
+            ``NSS_INFERENCE_REQUEST_OPTIONS`` is invalid, a configured model differs from an explicit profile, or no
             bundled profile serves the model.
     """
     runtime_env = os.environ if environ is None else environ
     reference = _nonblank(runtime_env.get(LOCAL_PROFILE_ENV))
     endpoint = _nonblank(runtime_env.get("NSS_INFERENCE_ENDPOINT"))
     resolve_inference_timeout(runtime_env)
+    resolve_request_options(runtime_env)
     if reference is not None:
         profile = load_profile(reference)
         _check_model_names(config, runtime_env, profile)

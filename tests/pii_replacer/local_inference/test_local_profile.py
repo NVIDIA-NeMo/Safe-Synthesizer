@@ -71,6 +71,18 @@ class TestLoadProfile:
 
 
 @pytest.mark.unit
+class TestRequestOptionsAndEnvironment:
+    def test_request_options_must_not_override_nss_fields(self) -> None:
+        with pytest.raises(ValidationError, match="must not set fields NSS manages: response_format"):
+            LocalVllmProfile(model_id="org/tiny", revision="abc", request_options={"response_format": {}})
+
+    @pytest.mark.parametrize("name", ["VLLM_API_KEY", "NSS_INFERENCE_KEY"])
+    def test_environment_must_not_set_managed_variables(self, name: str) -> None:
+        with pytest.raises(ValidationError, match="must not set variables NSS manages"):
+            LocalVllmProfile(model_id="org/tiny", revision="abc", environment={name: "x"})
+
+
+@pytest.mark.unit
 class TestExtraArgs:
     @pytest.mark.parametrize(
         "argument",

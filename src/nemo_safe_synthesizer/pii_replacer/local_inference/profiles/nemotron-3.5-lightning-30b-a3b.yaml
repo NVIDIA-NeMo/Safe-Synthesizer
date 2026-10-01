@@ -18,6 +18,15 @@ extra_args:
   # Think before the schema-constrained answer.
   - --reasoning-parser=nemotron_v3
   - '--default-chat-template-kwargs={"enable_thinking": true}'
+# Model-card sampling. Uncapped, the model thinks about 18,000 tokens per
+# request; the budget keeps planning to about 1.5 minutes per table.
+request_options:
+  temperature: 1.0
+  top_p: 0.95
+  thinking_token_budget: 2000
+environment:
+  # vLLM 0.27's V2 model runner ignores thinking_token_budget.
+  VLLM_USE_V2_MODEL_RUNNER: "0"
 # Column classification takes about 1 minute on an A100 for a small table.
 request_timeout_seconds: 300
 # Allows for the first-run download of about 66 GB.

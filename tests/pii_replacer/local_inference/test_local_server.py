@@ -76,6 +76,7 @@ class Harness:
     popen_calls: list[tuple[list[str], dict[str, str]]] = field(default_factory=list)
     models: list[Callable[[], httpx.Response]] = field(default_factory=list)
     probe_content: str = '{"ready": true}'
+    probe_payloads: list[dict[str, object]] = field(default_factory=list)
 
     @property
     def argv(self) -> list[str]:
@@ -108,6 +109,7 @@ def harness(monkeypatch: pytest.MonkeyPatch) -> Iterator[Harness]:
     def post(url: str, **kwargs: object) -> httpx.Response:
         payload = cast(dict[str, object], kwargs["json"])
         assert payload["model"] == "tiny"
+        state.probe_payloads.append(payload)
         return httpx.Response(200, json={"choices": [{"message": {"content": state.probe_content}}]})
 
     state.models.append(_models_response("tiny"))
@@ -154,6 +156,34 @@ class TestLocalVllmServerLifecycle:
 
         with LocalVllmServer(profile, environ=environ) as server:
             assert server.inference_environ()["NSS_INFERENCE_TIMEOUT"] == expected
+
+    @pytest.mark.parametrize(
+        ("environ", "expected_options"),
+        [
+            ({}, {"temperature": 1.0, "thinking_token_budget": 500}),
+            ({"NSS_INFERENCE_REQUEST_OPTIONS": '{"temperature": 0.2}'}, {"temperature": 0.2}),
+        ],
+        ids=["profile-options", "explicit-options-win"],
+    )
+    def test_request_options_reach_the_planner_and_the_probe(
+        self,
+        harness: Harness,
+        environ: dict[str, str],
+        expected_options: dict[str, object],
+    ) -> None:
+        profile = PROFILE.model_copy(
+            update={
+                "request_options": {"temperature": 1.0, "thinking_token_budget": 500},
+                "environment": {"VLLM_USE_V2_MODEL_RUNNER": "0"},
+            }
+        )
+
+        with LocalVllmServer(profile, environ=environ) as server:
+            planner_options = json.loads(server.inference_environ()["NSS_INFERENCE_REQUEST_OPTIONS"])
+
+        assert planner_options == expected_options
+        assert {key: harness.probe_payloads[0][key] for key in expected_options} == expected_options
+        assert harness.child_env["VLLM_USE_V2_MODEL_RUNNER"] == "0"
 
     def test_polls_until_the_model_is_listed(self, harness: Harness) -> None:
         def refused() -> httpx.Response:

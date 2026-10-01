@@ -13,12 +13,23 @@ max_num_seqs: 8
 extra_args:
   # Planning sends text only, so skip the vision encoder.
   - --language-model-only
-  # Think before the schema-constrained answer.
+  # Think before the schema-constrained answer. The template's default effort,
+  # xhigh, thinks about 8,000 tokens per request (several minutes on an A100);
+  # low averages about 1,750.
   - --reasoning-parser=qwen3
-  - '--default-chat-template-kwargs={"enable_thinking": true}'
-# Thinking on a dense model takes about 3 minutes per request on an A100 for
-# a small table; full 32-column batches take longer.
-request_timeout_seconds: 900
+  - '--default-chat-template-kwargs={"enable_thinking": true, "reasoning_effort": "low"}'
+# Model-card sampling for thinking mode; the card warns against temperature 0.
+# The thinking budget caps rare long reasoning before the JSON answer.
+request_options:
+  temperature: 1.0
+  top_p: 0.95
+  top_k: 20
+  thinking_token_budget: 1000
+environment:
+  # vLLM 0.27's V2 model runner ignores thinking_token_budget.
+  VLLM_USE_V2_MODEL_RUNNER: "0"
+# A capped low-effort request takes under a minute on an A100.
+request_timeout_seconds: 300
 # Allows for the first-run download of about 56 GB.
 startup_timeout_seconds: 1800
 shutdown_timeout_seconds: 60

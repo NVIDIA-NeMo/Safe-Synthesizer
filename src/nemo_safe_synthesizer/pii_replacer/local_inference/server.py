@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import secrets
 import signal
@@ -24,7 +25,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 from ...errors import GenerationError, InternalError, ParameterError
 from ...observability import get_logger, heartbeat
-from ..llm_client import InferenceSettings, OpenAICompatibleTransport
+from ..llm_client import InferenceSettings, OpenAICompatibleTransport, resolve_request_options
 from .profile import LocalVllmProfile
 
 __all__ = [
@@ -230,10 +231,10 @@ class LocalVllmServer:
     def inference_environ(self) -> dict[str, str]:
         """Return the base environment with ``NSS_INFERENCE_*`` pointing at this server.
 
-        An ``NSS_INFERENCE_TIMEOUT`` already in the base environment wins over
-        the profile's request timeout.
+        ``NSS_INFERENCE_TIMEOUT`` or ``NSS_INFERENCE_REQUEST_OPTIONS`` already
+        in the base environment wins over the profile's value.
         """
-        return {
+        environ = {
             **self._base_environ,
             "NSS_INFERENCE_ENDPOINT": self.endpoint_url,
             "NSS_INFERENCE_KEY": self._api_key,
@@ -241,6 +242,9 @@ class LocalVllmServer:
             "NSS_INFERENCE_TIMEOUT": self._base_environ.get("NSS_INFERENCE_TIMEOUT")
             or f"{self._profile.request_timeout_seconds:g}",
         }
+        if "NSS_INFERENCE_REQUEST_OPTIONS" not in self._base_environ and self._profile.request_options:
+            environ["NSS_INFERENCE_REQUEST_OPTIONS"] = json.dumps(self._profile.request_options)
+        return environ
 
     def __enter__(self) -> Self:
         self.start()
@@ -318,6 +322,7 @@ class LocalVllmServer:
 
     def _server_environ(self) -> dict[str, str]:
         environ = {key: value for key, value in self._base_environ.items() if not key.startswith("NSS_INFERENCE_")}
+        environ.update(self._profile.environment)
         environ["VLLM_API_KEY"] = self._api_key
         return environ
 
@@ -389,6 +394,8 @@ class LocalVllmServer:
             model_id=self._profile.served_name,
             max_workers=1,
             api_key=self._api_key,
+            # Probe with the planner's sampling and thinking settings.
+            request_options=resolve_request_options(self.inference_environ()),
         )
         transport = OpenAICompatibleTransport(settings, timeout=_PROBE_TIMEOUT_SECONDS)
         try:

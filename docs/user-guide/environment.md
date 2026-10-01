@@ -49,6 +49,7 @@ Grouped by the `Category` column -- `nss`-native settings first, then
 | `NSS_INFERENCE_KEY` | nss | `--inference-api-key` | PII planning | -- | Inference credential; required by the hosted NVIDIA endpoint | [PII appendix](#pii-replacement) |
 | `NSS_INFERENCE_MODEL` | nss | `--inference-model-id` | PII planning | `openai/gpt-oss-120b` locally; required with an endpoint | Model ID for PII inference; without an endpoint, selects the bundled local profile | [PII appendix](#pii-replacement) |
 | `NSS_INFERENCE_TIMEOUT` | nss | `--inference-timeout-seconds` | PII planning | local profile's timeout, else `60` | Per-request inference timeout in seconds, including model reasoning | [PII appendix](#pii-replacement) |
+| `NSS_INFERENCE_REQUEST_OPTIONS` | nss | `--inference-request-options` | PII planning | local profile's options, else `{"temperature": 0}` | JSON object of extra chat-completions fields sent with every request | [PII appendix](#pii-replacement) |
 | `NSS_INFERENCE_LOCAL_PROFILE` | nss | `--inference-local-profile` | PII planning | -- | Custom profile YAML for the local vLLM server NSS runs during plan discovery | [PII appendix](#pii-replacement) |
 | `NSS_WANDB_MODE` | nss | `--wandb-mode` | WandB | `disabled` | WandB run mode | Alias for `WANDB_MODE` |
 | `NSS_WANDB_PROJECT` | nss | `--wandb-project` | WandB | -- | WandB project name | Alias for `WANDB_PROJECT` |
