@@ -34,6 +34,8 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 COPY dist/*.whl /tmp/dist/
 
+# vLLM leaves torchcodec unpinned and PyPI ships CUDA 13 wheels, so each extra
+# must resolve the PyTorch-index build tagged for it or vLLM fails to import.
 RUN --mount=type=cache,target=/root/.cache/uv \
     wheel_count="$(find /tmp/dist -maxdepth 1 -type f -name '*.whl' | wc -l)" && \
     test "${wheel_count}" -eq 1 && \
@@ -46,19 +48,23 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     /opt/wheel-cpu/bin/python -c \
         "from importlib.metadata import version; from nemo_safe_synthesizer.package_info import __version__; assert __version__ == version('nemo-safe-synthesizer')" && \
     /opt/wheel-cpu/bin/safe-synthesizer --help >/dev/null && \
+    /opt/wheel-cpu/bin/python -c \
+        "from importlib.metadata import version; v = version('torchcodec'); assert v.endswith('+cpu'), v" && \
     CUDA=129 \
         NSS_INSTALLER_ISOLATED=1 \
         NSS_INSTALLER_RESOLVE_ONLY=1 \
         UV_PROJECT_ENVIRONMENT=/opt/wheel-cu129 \
         PACKAGE_WHEEL="${wheel}" \
-        ./install_nss.sh && \
+        ./install_nss.sh 2>&1 | tee /tmp/resolve-cu129.log && \
+    grep -Eq '^ \+ torchcodec==[^ ]+\+cu129$' /tmp/resolve-cu129.log && \
     CUDA=130 \
         NSS_INSTALLER_ISOLATED=1 \
         NSS_INSTALLER_RESOLVE_ONLY=1 \
         UV_PROJECT_ENVIRONMENT=/opt/wheel-cu130 \
         PACKAGE_WHEEL="${wheel}" \
-        ./install_nss.sh && \
-    rm -rf /opt/wheel-cpu /opt/wheel-cu129 /opt/wheel-cu130
+        ./install_nss.sh 2>&1 | tee /tmp/resolve-cu130.log && \
+    grep -Eq '^ \+ torchcodec==[^ ]+\+cu130$' /tmp/resolve-cu130.log && \
+    rm -rf /opt/wheel-cpu /opt/wheel-cu129 /opt/wheel-cu130 /tmp/resolve-cu129.log /tmp/resolve-cu130.log
 
 FROM setup AS install-deps
 # Install Python dependencies (cached until pyproject.toml, uv.lock, or src/ or tests/ change)
