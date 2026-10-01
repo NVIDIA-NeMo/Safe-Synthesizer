@@ -15,6 +15,8 @@ from nemo_safe_synthesizer.evaluation.components.autocorrelation_similarity_figu
     generate_autocorrelation_profile_figure,
     generate_autocorrelation_similarity_figure,
     generate_autocorrelation_summary_figure,
+    order_autocorrelation_columns,
+    shorten_column_label,
 )
 
 
@@ -37,9 +39,10 @@ _SUMMARY_PROFILES = [
 ]
 
 
-def test_summary_figure_starts_with_lowest_scoring_column_and_switches_columns():
+def test_summary_figure_groups_traces_by_column_with_lowest_scoring_column_visible():
     figure = generate_autocorrelation_summary_figure(_SUMMARY_PROFILES)
 
+    assert order_autocorrelation_columns(_SUMMARY_PROFILES) == ["bad", "good"]
     assert len(figure.data) == 8
     assert [trace.visible for trace in figure.data] == [True] * 4 + [False] * 4
     medians = [trace for trace in figure.data if trace.name == "Training median ACF"]
@@ -47,15 +50,6 @@ def test_summary_figure_starts_with_lowest_scoring_column_and_switches_columns()
     assert list(medians[0].y) == pytest.approx([0.7, 0.6, 0.5])
     synthetic_median = next(trace for trace in figure.data if trace.name == "Synthetic median ACF")
     assert list(synthetic_median.y) == pytest.approx([0.2, 0.1, 0.1])
-    buttons = figure.layout.updatemenus[0].buttons
-    assert [button.label for button in buttons] == ["bad", "good"]
-    assert buttons[1].args[0]["visible"] == [False] * 4 + [True] * 4
-
-
-def test_summary_figure_omits_dropdown_for_single_column():
-    figure = generate_autocorrelation_summary_figure(_SUMMARY_PROFILES[:2])
-
-    assert len(figure.data) == 4
     assert not figure.layout.updatemenus
 
 
@@ -75,6 +69,32 @@ def test_pair_score_figure_plots_every_pair_on_report_scale():
     assert list(figure.data[0].x) == pytest.approx([6.0, 9.0])
     assert list(figure.data[0].customdata) == ["a", "b"]
     assert figure.layout.shapes[0].x0 == 8.8
+
+
+def test_pair_score_figure_limits_columns_and_shortens_labels_without_merging_rows():
+    profiles = [_profile("a", f"channel_{index:02d}_descriptive_name", [0.5], [0.5], index / 10) for index in range(10)]
+
+    figure = generate_autocorrelation_pair_score_figure(profiles, None, max_columns=3)
+
+    assert [trace.name for trace in figure.data] == [
+        "channel_00_descriptive_name",
+        "channel_01_descriptive_name",
+        "channel_02_descriptive_name",
+    ]
+    assert list(figure.layout.yaxis.tickvals) == list(reversed([trace.name for trace in figure.data]))
+    assert list(figure.layout.yaxis.ticktext) == ["cha...ame"] * 3
+
+
+@pytest.mark.parametrize(
+    ("name", "label"),
+    [
+        ("pressure", "pressure"),
+        ("exactly_10", "exactly_10"),
+        ("temperature", "tem...ure"),
+    ],
+)
+def test_shorten_column_label(name, label):
+    assert shorten_column_label(name) == label
 
 
 def test_pair_score_figure_labels_ungrouped_profiles():

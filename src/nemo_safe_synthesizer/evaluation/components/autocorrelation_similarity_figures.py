@@ -16,8 +16,10 @@ Functions:
         interquartile bands across groups, one column at a time.
     generate_autocorrelation_lag_error_figure: Plot the mean paired profile
         difference at each lag.
-    generate_autocorrelation_pair_score_figure: Plot every group and column
-        pair score against the overall score.
+    generate_autocorrelation_pair_score_figure: Plot group and column pair
+        scores for the lowest-scoring columns against the overall score.
+    order_autocorrelation_columns: Order value columns by mean pair score.
+    shorten_column_label: Shorten long column names for axis labels.
 """
 
 from __future__ import annotations
@@ -40,6 +42,11 @@ _TRAINING_BAND_COLOR = "rgba(59, 130, 246, 0.2)"
 _SYNTHETIC_BAND_COLOR = "rgba(245, 158, 11, 0.2)"
 _SUMMARY_COLOR = "#76B900"
 _SUMMARY_FIGURE_HEIGHT = 300
+_LABEL_MAX_LENGTH = 10
+_LABEL_EDGE_LENGTH = 3
+
+AUTOCORRELATION_SUMMARY_TRACES_PER_COLUMN = 4
+AUTOCORRELATION_PAIR_SCORE_MAX_COLUMNS = 8
 
 
 def generate_autocorrelation_similarity_figure(
@@ -154,8 +161,9 @@ def generate_autocorrelation_summary_figure(profiles: Sequence[Mapping[str, Any]
     """Plot typical training and synthetic profiles across groups.
 
     Each value column gets a median profile and an interquartile band for both
-    datasets. A dropdown switches between columns, starting with the column
-    whose mean pair similarity is lowest.
+    datasets. Columns contribute ``AUTOCORRELATION_SUMMARY_TRACES_PER_COLUMN``
+    consecutive traces in ``order_autocorrelation_columns`` order, and only the
+    first column is visible so the report can switch columns by trace index.
 
     Args:
         profiles: Stored profiles from ``AutocorrelationSimilarity.details``.
@@ -166,9 +174,8 @@ def generate_autocorrelation_summary_figure(profiles: Sequence[Mapping[str, Any]
     Raises:
         DataError: If no profiles are supplied.
     """
-    columns = _columns_by_similarity(profiles)
+    columns = order_autocorrelation_columns(profiles)
     figure = go.Figure()
-    traces_per_column = 4
     for column_index, column in enumerate(columns):
         column_profiles = [item for item in profiles if item["column"] == column]
         visible = column_index == 0
@@ -201,29 +208,6 @@ def generate_autocorrelation_summary_figure(profiles: Sequence[Mapping[str, Any]
                     visible=visible,
                 )
             )
-    if len(columns) > 1:
-        buttons = []
-        for column_index, column in enumerate(columns):
-            visibility = [False] * (len(columns) * traces_per_column)
-            start = column_index * traces_per_column
-            visibility[start : start + traces_per_column] = [True] * traces_per_column
-            buttons.append({"label": str(column), "method": "update", "args": [{"visible": visibility}]})
-        figure.update_layout(
-            updatemenus=[
-                {
-                    "buttons": buttons,
-                    "direction": "down",
-                    "x": 1.0,
-                    "xanchor": "right",
-                    "y": 1.18,
-                    "yanchor": "top",
-                    "bgcolor": "#292929",
-                    "bordercolor": "#666666",
-                    "font": {"color": "rgba(255,255,255,0.85)"},
-                    "showactive": True,
-                }
-            ]
-        )
     figure.update_layout(
         template="plotly_white",
         height=_SUMMARY_FIGURE_HEIGHT,
@@ -287,20 +271,27 @@ def generate_autocorrelation_lag_error_figure(profiles: Sequence[Mapping[str, An
 def generate_autocorrelation_pair_score_figure(
     profiles: Sequence[Mapping[str, Any]],
     overall_score: float | None,
+    *,
+    max_columns: int = AUTOCORRELATION_PAIR_SCORE_MAX_COLUMNS,
 ) -> go.Figure:
-    """Plot every group and column pair score on the report's 0-10 scale.
+    """Plot group and column pair scores on the report's 0-10 scale.
+
+    Only the ``max_columns`` lowest-scoring columns are plotted so each row
+    stays readable. Rows are keyed by full column name, and long names are
+    shortened only in the axis labels so shortened names cannot merge rows.
 
     Args:
         profiles: Stored profiles from ``AutocorrelationSimilarity.details``.
         overall_score: Aggregate metric score drawn as a reference line.
+        max_columns: Largest number of value columns to plot.
 
     Returns:
-        A Plotly strip figure with one row per value column.
+        A Plotly strip figure with one row per plotted value column.
 
     Raises:
         DataError: If no profiles are supplied.
     """
-    columns = _columns_by_similarity(profiles)
+    columns = order_autocorrelation_columns(profiles)[:max_columns]
     figure = go.Figure()
     for column in columns:
         column_profiles = [item for item in profiles if item["column"] == column]
@@ -319,7 +310,7 @@ def generate_autocorrelation_pair_score_figure(
                 marker={"color": _SUMMARY_COLOR, "size": 6, "opacity": 0.75},
                 name=str(column),
                 hoveron="points",
-                hovertemplate="group %{customdata}<br>score %{x:.1f}<extra></extra>",
+                hovertemplate="%{y}<br>group %{customdata}<br>score %{x:.1f}<extra></extra>",
             )
         )
     if overall_score is not None:
@@ -334,15 +325,46 @@ def generate_autocorrelation_pair_score_figure(
         height=_SUMMARY_FIGURE_HEIGHT,
         showlegend=False,
         xaxis_title="Pair score",
-        margin={"l": 90, "r": 16, "t": 40, "b": 48},
+        margin={"l": 80, "r": 16, "t": 40, "b": 48},
     )
     figure.update_xaxes(range=[-0.25, 10.25])
-    figure.update_yaxes(categoryorder="array", categoryarray=list(reversed(columns)))
+    rows = [str(column) for column in reversed(columns)]
+    figure.update_yaxes(
+        categoryorder="array",
+        categoryarray=rows,
+        tickmode="array",
+        tickvals=rows,
+        ticktext=[shorten_column_label(row) for row in rows],
+    )
     return figure
 
 
-def _columns_by_similarity(profiles: Sequence[Mapping[str, Any]]) -> list[str]:
-    """Return value columns ordered from lowest to highest mean pair similarity."""
+def shorten_column_label(name: str) -> str:
+    """Shorten a column name longer than 10 characters to its first and last 3.
+
+    Args:
+        name: Full column name.
+
+    Returns:
+        The name unchanged, or its first and last three characters joined by an ellipsis.
+    """
+    if len(name) <= _LABEL_MAX_LENGTH:
+        return name
+    return f"{name[:_LABEL_EDGE_LENGTH]}...{name[-_LABEL_EDGE_LENGTH:]}"
+
+
+def order_autocorrelation_columns(profiles: Sequence[Mapping[str, Any]]) -> list[str]:
+    """Return value columns ordered from lowest to highest mean pair similarity.
+
+    Args:
+        profiles: Stored profiles from ``AutocorrelationSimilarity.details``.
+
+    Returns:
+        Column names, lowest mean pair similarity first, with names breaking ties.
+
+    Raises:
+        DataError: If no profiles are supplied.
+    """
     if not profiles:
         raise DataError("At least one autocorrelation profile is required.")
     scores: dict[str, list[float]] = {}

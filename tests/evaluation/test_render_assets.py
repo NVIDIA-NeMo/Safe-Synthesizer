@@ -54,6 +54,11 @@ def test_evaluation_report_themes_charts_in_report_assets() -> None:
     assert "{{ row.html | safe }}" in autocorrelation_similarity
     assert 'class="autocorrelation-charts"' in autocorrelation_similarity
     assert ".autocorrelation-charts" in stylesheet
+    assert "data-autocorrelation-column-select" in autocorrelation_similarity
+    assert ".autocorrelation-column-select" in stylesheet
+    assert autocorrelation_similarity.count('class="autocorrelation-chart-heading"') == 1
+    assert ".autocorrelation-chart-heading" in stylesheet
+    assert "selectAutocorrelationColumn" in javascript
     assert "score-ring-canvas" in gauge
     assert "brand-assets.cne.ngc.nvidia.com/assets/fonts/nvidia-sans" in stylesheet
     assert "data-metric-toggle" in metric_card
@@ -135,6 +140,49 @@ def test_training_columns_render_distribution_links_grades_and_entity_counts() -
     assert '<span class="score-label">Very Good</span>' in rendered
     assert "<th>Entities (Count)</th>" in rendered
     assert "PERSON (12)" in rendered
+
+
+def _autocorrelation_context(column_count: int, pair_score_column_count: int) -> dict[str, object]:
+    columns = [f"column_{index}" for index in range(column_count)]
+    return {
+        "autocorrelation_similarity": {
+            "score": {"notes": None},
+            "details": {},
+            "evaluated_profile_count": column_count,
+            "evaluated_group_count": 1,
+            "evaluated_column_count": column_count,
+            "pair_score_column_count": pair_score_column_count,
+            "summary_columns": columns,
+            "summary_traces_per_column": 4,
+            "figures": [
+                {"title": "Typical autocorrelation", "html": "<div>summary</div>", "column_select": True},
+                {"title": "Pair scores", "html": "<div>pairs</div>", "column_select": False},
+            ],
+        }
+    }
+
+
+def test_autocorrelation_renders_column_select_and_pair_score_limit_note() -> None:
+    rendered = _render_template(
+        "jinja/components/autocorrelation_similarity.j2",
+        ctx=_autocorrelation_context(column_count=10, pair_score_column_count=8),
+    )
+
+    assert rendered.count("data-autocorrelation-column-select") == 1
+    assert 'data-traces-per-column="4"' in rendered
+    assert '<option value="9">column_9</option>' in rendered
+    assert "Pair scores shows the 8 lowest-scoring columns." in rendered
+    assert "<div>summary</div>" in rendered
+
+
+def test_autocorrelation_omits_column_select_and_note_for_single_column() -> None:
+    rendered = _render_template(
+        "jinja/components/autocorrelation_similarity.j2",
+        ctx=_autocorrelation_context(column_count=1, pair_score_column_count=1),
+    )
+
+    assert "data-autocorrelation-column-select" not in rendered
+    assert "lowest-scoring columns" not in rendered
 
 
 def test_score_guidance_renders_recommendations_for_the_current_grade() -> None:

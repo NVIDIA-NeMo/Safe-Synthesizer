@@ -81,14 +81,16 @@ The metric card shows three charts built from every evaluated group and column p
 
 - **Typical autocorrelation** plots the median training and synthetic
   autocorrelation at each lag, with shaded bands covering the middle 50% of
-  groups. Use the dropdown to switch value columns. The chart opens on the
-  column with the lowest mean pair score.
+  groups. Use the column selector to switch value columns. The chart opens on
+  the column with the lowest mean pair score.
 - **Difference by lag** plots the mean absolute difference between paired
   training and synthetic profiles at each lag. It shows whether short-range
   dependence, long-range persistence, or a specific cycle is lost.
 - **Pair scores** plots every group and column pair score on the 0–10 scale,
-  with the overall score marked. Hover over a point to see its group. It shows
-  whether a low score is widespread or driven by a few groups.
+  with the overall score marked. It shows whether a low score is widespread or
+  driven by a few groups. The chart plots the 8 lowest-scoring columns.
+  Column names longer than 10 characters are shortened to their first and last
+  three characters. Hover over a point to see its full column name and group.
 
 ## Diagnosing and improving a low score
 

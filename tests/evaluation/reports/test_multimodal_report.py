@@ -225,3 +225,7 @@ def test_time_series_report_summarizes_all_profiles_in_one_chart_row() -> None:
         "Difference by lag",
         "Pair scores",
     ]
+    assert [figure["column_select"] for figure in context["figures"]] == [True, False, False]
+    assert context["summary_columns"] == ["other", "value"]
+    assert context["summary_traces_per_column"] == 4
+    assert context["pair_score_column_count"] == 2

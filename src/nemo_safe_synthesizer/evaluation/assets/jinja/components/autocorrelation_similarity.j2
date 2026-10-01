@@ -26,6 +26,9 @@
     Summarizing {{ ctx.autocorrelation_similarity.evaluated_profile_count }} group and column pairs across
     {{ ctx.autocorrelation_similarity.evaluated_group_count }} groups and
     {{ ctx.autocorrelation_similarity.evaluated_column_count }} value columns.
+    {% if ctx.autocorrelation_similarity.evaluated_column_count > ctx.autocorrelation_similarity.pair_score_column_count %}
+    Pair scores shows the {{ ctx.autocorrelation_similarity.pair_score_column_count }} lowest-scoring columns.
+    {% endif %}
 </p>
 <div class="chart-legend" aria-label="Chart legend">
     <span><i class="legend-training"></i>Training Data</span>
@@ -34,7 +37,18 @@
 <div class="autocorrelation-charts">
 {% for row in ctx.autocorrelation_similarity.figures %}
 <figure>
-    <h3 class="chart-subheading">{{ row.title }}</h3>
+    <div class="autocorrelation-chart-heading">
+        <h3 class="chart-subheading">{{ row.title }}</h3>
+        {% if row.column_select and ctx.autocorrelation_similarity.summary_columns | length > 1 %}
+        <select class="autocorrelation-column-select" data-autocorrelation-column-select
+                data-traces-per-column="{{ ctx.autocorrelation_similarity.summary_traces_per_column }}"
+                aria-label="Value column">
+            {% for column in ctx.autocorrelation_similarity.summary_columns %}
+            <option value="{{ loop.index0 }}">{{ column }}</option>
+            {% endfor %}
+        </select>
+        {% endif %}
+    </div>
     {{ row.html | safe }}
 </figure>
 {% endfor %}
