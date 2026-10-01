@@ -88,24 +88,43 @@ measures.
 
 ## Reading the report charts
 
-The metric card shows three charts built from every evaluated group and column pair:
+The metric card shows three charts built from every evaluated group and column pair.
+
+![The Autocorrelation Similarity card in the HTML evaluation report, showing a score of 8.4 with the Typical autocorrelation, Difference by lag, and Pair scores charts.](assets/autocorrelation-report.png)
+
+The example above comes from a dataset of eight sensors, grouped by sensor ID,
+with three value columns: `temperature`, `pressure`, and `humidity`. The
+synthetic data reproduces sensors 0 to 2 well, loses persistence in
+`temperature` and `pressure` for sensors 3 to 7, and generates a constant
+`pressure` series for sensor 7. `humidity` is preserved for every sensor.
 
 - Typical autocorrelation: plots the median training and synthetic
   autocorrelation at each lag, with shaded bands covering the middle 50% of
-  groups. Use the column selector to switch value columns. The chart opens on
-  the column with the lowest mean pair score.
+  groups. The chart opens on the column with the lowest mean pair score, here
+  `pressure`. Training autocorrelation decays slowly from about 0.9, while the
+  synthetic median drops below 0.2 by lag 5, so most synthetic sensors lost
+  the persistence of the training data. Use the column selector to switch
+  value columns.
 - Difference by lag: plots the mean absolute difference between paired
-  training and synthetic profiles at each lag. It shows whether short-range
-  dependence, long-range persistence, or a specific cycle is lost.
+  training and synthetic profiles at each lag, across all value columns. Here
+  the difference grows from about 0.18 at lag 1 to about 0.3 at lag 15 and
+  beyond, so the loss is largest for long-range persistence. A peak at one lag
+  instead points to a missing or shifted cycle.
 - Pair scores: plots every group and column pair score on the 0–10 scale,
-  with the overall score marked. It shows whether a low score is widespread or
-  driven by a few groups. The chart plots the 8 lowest-scoring columns.
-  Column names longer than 10 characters are shortened to their first and last
-  three characters. Hover over a point to see its full column name and group.
+  with the overall score marked by the dashed line. Each point is one sensor.
+  `humidity` scores near 10 for all sensors, while `pressure` and
+  `temperature` split into a cluster between about 9 and 10 for the
+  well-reproduced sensors and a cluster between about 6.5 and 8 for the
+  others. The gap between the overall score and 10 is therefore driven by
+  specific sensors rather than the whole dataset. The
+  chart plots the 8 lowest-scoring columns. Column names longer than 10
+  characters are shortened to their first and last three characters, as with
+  `tem...ure`. Hover over a point to see its full column name and group.
 
 A pair whose synthetic values are constant scores 0 but has no synthetic
-autocorrelation, so only Pair scores shows it. The report states how many
-pairs this applies to.
+autocorrelation, so only Pair scores shows it. In the example, the `pressure`
+point at 0 is sensor 7, and the note above the charts reports it. The
+Typical autocorrelation median for `pressure` uses the remaining seven sensors.
 
 ## Diagnosing and improving a low score
 
