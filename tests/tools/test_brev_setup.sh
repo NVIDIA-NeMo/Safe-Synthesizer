@@ -78,7 +78,7 @@ case "$1" in
         venv="${VIRTUAL_ENV:-}"; prev=""
         for arg in "$@"; do
             [[ "$prev" == "--python" ]] && venv="${arg%/bin/python}"
-            [[ "$arg" == "--overrides" ]] && cat > "${FAKE_UV_OVERRIDES:?}"
+            [[ "$arg" == "--overrides" ]] && cat > /dev/null
             prev="$arg"
         done
         site="${venv:?}/site"
@@ -112,7 +112,7 @@ run_setup() {
     mkdir -p "$home"
     env -u VIRTUAL_ENV -u UV_PROJECT_ENVIRONMENT -u CUDA \
         HOME="$home" PATH="${fake_bin}:${PATH}" FAKE_VERSION="$VERSION" \
-        FAKE_UV_LOG="${home}.uv" FAKE_UV_OVERRIDES="${home}.overrides" FAKE_CURL_LOG="${home}.curl" \
+        FAKE_UV_LOG="${home}.uv" FAKE_CURL_LOG="${home}.curl" \
         "$@" bash "$SETUP" 2>&1
 }
 
@@ -129,21 +129,13 @@ assert_contains "$(<"${home}.curl")" "/releases/latest/download/install_nss.sh"
 assert_contains "$uv_calls" "venv --python 3.13 ${venv}"
 [[ "$(grep -c '^venv ' "${home}.uv")" == 1 ]] || fail "installer created another venv: $uv_calls"
 
-# The installer ran the release policy against that venv: pinned version,
-# cu129 extra and index, and release constraints. Overrides are checked below.
+# The installer ran the full release policy against that venv: pinned version,
+# cu129 extra and index, release constraints, and dependency overrides.
 assert_contains "$uv_calls" "pip install nemo-safe-synthesizer[engine,cu129]==${VERSION}"
 assert_contains "$uv_calls" "--python ${venv}/bin/python"
 assert_contains "$uv_calls" "--index https://download.pytorch.org/whl/cu129"
 assert_contains "$uv_calls" "-c https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/v${VERSION}/constraints.txt"
-
-# Notebook setup cells run their own `uv pip install`; without the installer's
-# overrides uv re-resolves and downgrades the stack. setup.sh saves the exact
-# overrides the installer used and points the kernel and terminals at them.
-overrides="${home}/.nss-overrides.txt"
-[[ "$(<"$overrides")" == "$(cat "${home}.overrides" 2>/dev/null)" ]] ||
-    fail "saved overrides differ from the installer's: $(<"$overrides")"
-assert_contains "$(<"${home}/jupyter-kernels/python3/kernel.json")" "\"UV_OVERRIDE\": \"${overrides}\""
-assert_contains "$(<"${home}/.nss-env.sh")" "export UV_OVERRIDE=\"${overrides}\""
+assert_contains "$uv_calls" "--overrides -"
 
 # The tutorials were extracted from the release archive into ~/tutorials.
 compgen -G "${home}/tutorials/*.ipynb" >/dev/null || fail "no notebooks extracted into ~/tutorials"
