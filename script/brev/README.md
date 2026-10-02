@@ -16,9 +16,9 @@ update it in the console for the change to take effect.
 ### Files
 
 - `setup.sh`: Pasted into the Launchable's Setup Script field. Installs the CUDA
-  build of Safe Synthesizer into a dedicated venv, provisions Triton's runtime compiler,
-  registers the venv as the default Jupyter kernel, and drops the tutorial notebooks in
-  `$HOME`.
+  build of Safe Synthesizer into a dedicated venv through the release installer,
+  provisions Triton's runtime compiler, registers the venv as the default Jupyter
+  kernel, and drops the tutorial notebooks in `$HOME`.
 - `welcome.md`: Added to the Launchable's Source files so it renders on the Launchable
   webpage and appears as the customer's `$HOME/welcome.md`.
 
@@ -86,17 +86,12 @@ options, in rough order of convenience: drag and drop into the JupyterLab file b
 These are the non-obvious constraints the script works around. They were each found the
 hard way on a real instance.
 
-- Package indexes are derived at runtime, not hardcoded. Index URLs are
-  install-time configuration rather than wheel metadata, so the installer must supply
-  them -- and they have to match the release being installed, not this repo's `main`.
-  The script resolves the latest version from the PyPI JSON API, fetches that tag's
-  `pyproject.toml`, and reads the CUDA index URLs out of it, then pins the install to
-  that exact version so the two cannot drift. Selection uses the CUDA extra in each
-  index's name or URL and includes indexes referenced by `[tool.uv.sources]` for that
-  extra. The source lookup matters for variant-neutral indexes such as
-  `https://flashinfer.ai/whl/`, while the URL lookup handles names that changed between
-  releases. The parse runs inside a process substitution and therefore cannot fail the
-  script, so the count of discovered indexes is what validates it.
+- Packages are installed by the latest release's `install_nss.sh`, the canonical
+  installation path, downloaded from the GitHub release assets. That release copy pins
+  the package version, CUDA indexes, security constraints, and dependency overrides
+  together, so this script carries none of that policy and cannot drift from what other
+  users get. The script creates the venv first so the installer reuses it on the pinned
+  Python version instead of whatever interpreter uv finds.
 - uv is installed from a checksum-verified tarball, not `curl | sh`. The
   `astral.sh/install.sh` path logs `no checksums to verify`, so nothing validated what
   it downloaded. The script fetches the pinned release tarball, compares it against the
@@ -163,6 +158,13 @@ hard way on a real instance.
   script reads the listing into a variable and takes the prefix with `${listing%%/*}`.
 
 ### Verification
+
+`mise run test:installer` runs `setup.sh` against the release build of this checkout's
+`install_nss.sh`, with network, uv, and Jupyter stubbed (`tests/tools/test_brev_setup.sh`).
+It catches installer changes, and changes to `docs/tutorials` that break extraction,
+before they are released.
+It installs nothing and does not cover changes on Brev's side, so it does not replace a
+real deploy.
 
 After deploying, check `$HOME/.nss-setup.log` for the `setup complete` banner, then in a
 notebook confirm the environment resolved correctly:
