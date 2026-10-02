@@ -3,173 +3,139 @@
 
 # PII Replacement
 
-PII (Personally Identifiable Information) replacement is a critical privacy protection step that detects and replaces sensitive information in your datasets before synthesis. This ensures that the model never has the opportunity to learn the most sensitive information (e.g. names, addresses, identifiers) from the training data.
+PII replacement v3 uses a dataset-specific replacement plan. The plan names
+the columns NSS should replace, the entity type in each column, optional format
+patterns, and dependencies between related columns.
 
-## How It Works
+Set `replace_pii: null`, pass `--no-replace-pii`, or call
+`.with_replace_pii(enable=False)` to run the synthesis pipeline without
+replacement.
 
-The PII replacement pipeline operates in multiple stages:
+## Replacement plan sources
 
-1. Detection: Classifies PII entities within free text and entire columns.
-2. Replacement: Substitutes PII using configurable rules.
+The `replace_pii` configuration has an integer `schema_version`. This release
+accepts version `3`; an omitted version is interpreted as version `3`. NSS
+includes the version whenever it serializes the configuration.
 
-## Detection Methods
+`replace_pii.replacement_plan` accepts three forms.
 
-NeMo Safe Synthesizer supports multiple PII detection approaches described in the table below:
+### Automatic discovery
 
-| Method | Scope | Description | Key Features |
-|--------|--------|--------------|---------------|
-| LLM Classification | Entire columns | Leverages language models for column classification when the entire column is a single entity | - Contextual understanding of entities<br>- Handles complex PII patterns<br>- Flexible entity definitions<br>- Configurable prompts and models |
-| [GLiNER PII](https://huggingface.co/nvidia/gliner-PII#evaluation-datasets) | Free text | Uses the GLiNER PII model for entity recognition within free text columns | - Zero-shot entity detection<br>- Supports custom entity types<br>- High accuracy for standard PII categories<br>- Configurable confidence thresholds |
+Use `auto_discovery` to run the heuristic plan discoverer. When `llm` is
+configured, NSS passes the heuristic result to the LLM plan enhancer before
+validating the final plan.
 
-
-## Replacement Methods
-
-After detection, PII can be handled in multiple ways:
-
-| Strategy   | Description                                  | Example                     |
-|------------|----------------------------------------------|-----------------------------|
-| Annotate   | Add identified entity to original PII        | Alice → &lt;entity type="first_name" value="Alice"&gt; |
-| Redact     | Replace PII with a generic tag               | Alice → &lt;first_name&gt;     |
-| Hash       | Replace PII with a hashed value               | Alice → 3bf676c57     |
-| Substitute | Replace PII with a context-relevant alternative | Alice → Erica            |
-
-## Supported Entity Types
-GLiNER PII will attempt to identify any custom entity type you provide. However, it has specifically been fine-tuned to detect the following entities, organized by category:
-
-!!! note "Default entity set"
-    The default configuration detects and replaces a focused subset of these entities: `first_name`,
-    `last_name`, `name`, `street_address`, `city`, `state`, `postcode`, `address`, `phone_number`,
-    `fax_number`, `email`, `ssn`, `national_id`, `tax_id`, and `credit_debit_card`. To detect additional
-    entity types, add them to `replace_pii.globals.classify.entities` and
-    `replace_pii.globals.ner.ner_entities` in your configuration. Also add replacement steps to `replace_pii.steps`.
-
-### Personal Information
-- `first_name` - Given names
-- `last_name` - Surnames and family names
-- `name` - Full names
-- `age` - Ages
-- `email` - Email addresses
-- `phone_number` - Phone numbers in various formats
-- `fax_number` - Fax numbers in various formats
-
-
-
-### Addresses
-
-- `address` - Complete physical addresses (for example, 123 Main Street, Anytown, CA 90210)
-- `street_address` - Street addresses (for example, 123 Main Street)
-- `city` - City names
-- `county` - County names
-- `state` - State/province names
-- `postcode` - Postal/ZIP codes
-- `country` - Country names
-
-### Personal Identifiers
-- `ssn` - Social Security Numbers
-- `national_id` - National ID numbers
-- `tax_id` - Tax ID numbers
-- `certificate_license_number` - Driver’s license numbers
-- `unique_identifier` - Generic unique IDs
-- `customer_id` - Customer identifiers
-- `employee_id` - Employee identifiers
-
-### Financial Information
-
-- `credit_debit_card` - Credit and debit card numbers
-- `cvv` - Credit card verification code
-- `pin` - Personal identification numbers
-- `account_number` - Bank account numbers
-- `bank_routing_number` - Bank routing numbers
-- `swift_bic` - Swift/BIC codes
-- `iban` - International bank account numbers
-
-### Medical Information
-
-- `medical_record_number` - Medical record numbers
-- `health_plan_beneficiary_number` - Insurance IDs
-- `biometric_identifier` - Biometric data references
-
-### Technical Identifiers
-
-- `url` - Web URLs
-- `ipv4` - IPv4 addresses
-- `ipv6` - IPv6 addresses
-- `mac_address` - Hardware MAC addresses
-- `api_key` - API keys and tokens
-- `user_name` - Usernames
-- `password` - Passwords
-- `http_cookie` - HTTP Cookies
-- `device_identifier` - Device IDs
-
-### Vehicle Identifiers
-
-- `vehicle_identifier` - Vehicle identification numbers (VINs)
-- `license_plate` - License plates
-
-### Geographic Information
-
-- `latitude` - Latitude coordinates
-- `longitude` - Longitude coordinates
-- `coordinate` - Coordinate pairs
-
-### Quasi Identifiers
-
-- `date` - Date values
-- `date_time` - Date and time values
-- `blood_type` - Blood type information
-- `gender` - Gender information
-- `sexuality` - Sexual orientation
-- `political_view` - Political affiliations
-- `race` - Race
-- `ethnicity` - Ethnicity information
-- `religious_belief` - Religious affiliations
-- `language` - Language preferences
-- `education` - Education level
-- `job_title` - Professional titles
-- `employment_status` - Employment information
-- `company_name` - Organization names
-
-### Custom Entity Types
-
-Beyond these built-in types, you can define custom entities using:
-
-```yaml title="Custom entity configuration"
-globals:
-  classify:
-    enable_classify: true
-    entities:
-      - first_name
-      - last_name
-      - email
-      - employee_id
-      - project_code
-```
-
-## Configuration
-
-PII replacement is configured through the `replace_pii` section. For the full schema, refer to [Configuration Reference -- Replacing PII](../user-guide/configuration.md#replacing-pii).
-
-```yaml title="replace_pii section"
+```yaml
 replace_pii:
-  globals:
-    locales:
-      - en_US
-  steps:
-    - rows:
-        update:
-          - entity:
-              - email
-              - phone_number
-            value: "column.entity | fake"
+  schema_version: 3
+  replacement_plan: auto_discovery
 ```
 
-## When to Use PII Replacement
+### Inline plan
 
-Consider using PII replacement when:
+An inline plan is written directly under `replacement_plan` in the main NSS
+configuration:
 
-- Your data contains names, addresses, or other direct identifiers
-- Compliance requires PII removal before processing
-- You want to ensure the model cannot memorize sensitive values
-- You need to share synthetic data with external parties
+```yaml
+replace_pii:
+  schema_version: 3
+  replacement_plan:
+    columns_to_replace:
+      - column_name: full_name
+        entity_type: full_name
+        pattern: "{First} {Last}"
+      - column_name: email
+        entity_type: email
+        pattern: "{f}.{last}@{domain}"
+        depends_on:
+          - column_name: full_name
+```
 
-PII replacement is on by default as a pre-processing step before synthesis.
+### Plan file
+
+A plan file is a separately versioned YAML document containing
+`schema_version` followed by the same fields as an inline plan:
+
+```yaml
+schema_version: 3
+columns_to_replace:
+  - column_name: email
+    entity_type: email
+```
+
+Set `replacement_plan` to its path:
+
+```yaml
+replace_pii:
+  schema_version: 3
+  replacement_plan: ./pii_replacement_plan.yaml
+```
+
+Inline plans and plan files are authoritative: NSS validates them against the
+input dataframe but does not run heuristic or LLM discovery for the plan. This
+bypass applies only to plan discovery. If `llm` is configured, the replacement
+executor can still use it to replace PII found inside free-text columns named by
+the plan.
+
+## Plan-only workflow
+
+Resolve and save a plan from the full input dataframe without running holdout,
+model metadata, replacement, training, generation, or evaluation:
+
+```bash
+safe-synthesizer run replace-pii --plan-only \
+  --config config.yaml \
+  --data-source data.csv
+```
+
+The command writes `pii_replacement_plan.yaml` in the standard timestamped NSS
+run directory under `--artifact-path`.
+
+The matching SDK interface returns the resolved plan and writes YAML only when
+an output path is supplied:
+
+```python
+from nemo_safe_synthesizer.config import SafeSynthesizerParameters
+from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+
+config = SafeSynthesizerParameters.from_yaml("config.yaml")
+plan = (
+    SafeSynthesizer(config)
+    .with_data_source("data.csv")
+    .plan_pii_replacement("pii_replacement_plan.yaml")
+)
+```
+
+The generated standalone plan can be reviewed, edited, and reused as
+`replace_pii.replacement_plan` in a later run.
+
+## LLM-assisted planning and free-text replacement
+
+The `llm` mapping configures the OpenAI-compatible inference service shared by
+plan enhancement and free-text replacement. During automatic discovery, the LLM
+enhances the heuristic plan. During execution, the same service processes
+free-text columns in the resolved plan.
+
+```yaml
+replace_pii:
+  schema_version: 3
+  replacement_plan: auto_discovery
+  llm:
+    model_id: nvidia/nemotron-3-ultra-550b-a55b
+    max_workers: 8
+```
+
+An empty mapping (`llm: {}`) enables the existing NSS inference defaults. Set
+the OpenAI-compatible endpoint at runtime through `NSS_INFERENCE_ENDPOINT` or
+the `--inference-endpoint-url` CLI option. For example, a local vLLM server may
+use `NSS_INFERENCE_ENDPOINT=http://localhost:8000/v1` with its served model ID.
+
+Supply the inference API key at runtime through `NSS_INFERENCE_KEY` or the
+`--inference-api-key` CLI option. NSS does not store the key in configuration or
+plan artifacts.
+
+!!! warning "Inference endpoints receive source data"
+    Plan enhancement can send bounded raw cell samples from the full input
+    dataframe, including rows that may later be assigned to a holdout set.
+    Free-text replacement can send raw cell values. Enable these operations
+    only when the endpoint is approved to receive the input data.
