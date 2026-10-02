@@ -47,7 +47,7 @@ Grouped by the `Category` column -- `nss`-native settings first, then
 | `NSS_DATASET_REGISTRY` | nss | `--dataset-registry` | CLI | -- | Dataset registry YAML path or URL | [Running -- Dataset Registry](running.md#dataset-registry) |
 | `NSS_INFERENCE_ENDPOINT` | nss | `--inference-endpoint-url` | PII planning | -- (local vLLM server) | OpenAI-compatible PII inference endpoint; replaces the default local server | [PII appendix](#pii-replacement) |
 | `NSS_INFERENCE_KEY` | nss | `--inference-api-key` | PII planning | -- | Inference credential; required by the hosted NVIDIA endpoint | [PII appendix](#pii-replacement) |
-| `NSS_INFERENCE_MODEL` | nss | `--inference-model-id` | PII planning | `openai/gpt-oss-120b` locally; required with an endpoint | Model ID for PII inference; without an endpoint, selects the bundled local profile | [PII appendix](#pii-replacement) |
+| `NSS_INFERENCE_MODEL` | nss | `--inference-model-id` | PII planning | `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16` locally; required with an endpoint | Model ID for PII inference; without an endpoint, selects the bundled local profile | [PII appendix](#pii-replacement) |
 | `NSS_INFERENCE_TIMEOUT` | nss | `--inference-timeout-seconds` | PII planning | local profile's timeout, else `60` | Per-request inference timeout in seconds, including model reasoning | [PII appendix](#pii-replacement) |
 | `NSS_INFERENCE_REQUEST_OPTIONS` | nss | `--inference-request-options` | PII planning | local profile's options, else `{"temperature": 0}` | JSON object of extra chat-completions fields sent with every request | [PII appendix](#pii-replacement) |
 | `NSS_INFERENCE_LOCAL_PROFILE` | nss | `--inference-local-profile` | PII planning | -- | Custom profile YAML for the local vLLM server NSS runs during plan discovery | [PII appendix](#pii-replacement) |
@@ -171,7 +171,7 @@ for the full pre-cache checklist.
 ## PII Replacement
 
 Adding an `llm` mapping under `replace_pii` enables LLM-assisted plan
-enhancement. By default, NSS runs `openai/gpt-oss-120b` in a local vLLM server
+enhancement. By default, NSS runs `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16` in a local vLLM server
 on the GPU for the duration of plan discovery, so no endpoint or key is needed.
 To use another service, set its endpoint and credential through environment
 variables or CLI options, not YAML:
@@ -194,7 +194,7 @@ The equivalent CLI options are `--inference-endpoint-url`,
 environment or persisted model settings. For the model ID, the complete order
 is CLI option, persisted `replace_pii.llm.model_id`, then environment variable.
 With an explicit endpoint, the model ID is required. Without an endpoint, it
-selects a bundled local profile, defaults to `openai/gpt-oss-120b`, and a model
+selects a bundled local profile, defaults to `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16`, and a model
 without a bundled profile is an error.
 
 To run a model that has no bundled profile locally, set a custom serving profile:

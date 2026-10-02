@@ -18,6 +18,7 @@ from nemo_safe_synthesizer.pii_replacer.local_inference import (
 from nemo_safe_synthesizer.pii_replacer.local_inference import managed as managed_module
 
 GPT_OSS = "openai/gpt-oss-120b"
+NEMOTRON = "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16"
 
 
 class FakeServer:
@@ -75,11 +76,11 @@ class TestResolveLocalServerRequest:
         [{}, {"NSS_INFERENCE_KEY": "hosted-key"}],
         ids=["nothing-set", "key-alone"],
     )
-    def test_without_endpoint_the_default_is_a_local_gpt_oss_server(self, environ: dict[str, str]) -> None:
+    def test_without_endpoint_the_default_is_a_local_nemotron_server(self, environ: dict[str, str]) -> None:
         request = resolve_local_server_request(LLMConfig(), environ=environ)
 
         assert request is not None
-        assert (request.host, request.port, request.profile.served_name) == ("127.0.0.1", None, GPT_OSS)
+        assert (request.host, request.port, request.profile.served_name) == ("127.0.0.1", None, NEMOTRON)
 
     @pytest.mark.parametrize(
         ("config", "environ"),
