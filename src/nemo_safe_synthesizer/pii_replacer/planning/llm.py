@@ -12,10 +12,10 @@ from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
-from typing import TypeVar
+from typing import Any, Literal, TypeVar
 
 import pandas as pd
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, create_model
 
 from ...config.replace_pii import (
     ENTITIES,
@@ -67,10 +67,6 @@ class _StructuredResponse(BaseModel):
 
 class _ClassificationResponse(_StructuredResponse):
     classifications: list[ColumnClassification]
-
-
-class _DependencySelectionResponse(_StructuredResponse):
-    selected_dependency_ids: list[str]
 
 
 class _PatternRepairResponse(_StructuredResponse):
@@ -254,10 +250,6 @@ def _classification_messages(
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
-def _dependency_candidate_id(index: int) -> str:
-    return f"dependency_{index}"
-
-
 def _pattern_syntax_name(entity_type: EntityType, pattern: str | None) -> str | None:
     pattern_syntax = ENTITY_BY_TYPE[entity_type].pattern_syntax
     if pattern is None or pattern_syntax is None:
@@ -265,88 +257,142 @@ def _pattern_syntax_name(entity_type: EntityType, pattern: str | None) -> str | 
     return pattern_syntax.name.lower()
 
 
-def _dependency_candidate_payload(
-    index: int,
-    candidate: DependencyCandidate,
-    *,
+DependencyOptions = dict[str, dict[EntityType, list[str]]]
+"""Target column -> source entity type -> permitted source columns, in candidate order."""
+
+
+def _dependency_options(
+    candidates: Sequence[DependencyCandidate],
     entity_types: Mapping[str, EntityType],
-    patterns: Mapping[str, str | None],
-    selected_by_heuristic: bool,
-) -> dict[str, str | bool | None]:
-    target_entity_type = entity_types[candidate.target_column]
-    target_pattern = patterns.get(candidate.target_column)
-    return {
-        "id": _dependency_candidate_id(index),
-        "target_column": candidate.target_column,
-        "target_entity_type": target_entity_type.value,
-        "target_pattern": target_pattern,
-        "target_pattern_syntax": _pattern_syntax_name(target_entity_type, target_pattern),
-        "source_column": candidate.source_column,
-        "source_entity_type": entity_types[candidate.source_column].value,
-        "selected_by_heuristic": selected_by_heuristic,
-    }
+) -> DependencyOptions:
+    options: DependencyOptions = {}
+    for candidate in candidates:
+        source_entity_type = entity_types[candidate.source_column]
+        options.setdefault(candidate.target_column, {}).setdefault(source_entity_type, []).append(
+            candidate.source_column
+        )
+    return options
+
+
+def _dependency_response_model(options: DependencyOptions) -> type[_StructuredResponse]:
+    """Build the response schema for one dependency-selection request.
+
+    The response has one object per target column and, inside it, one field per
+    permitted source entity type whose value is one permitted source column or
+    null. A target therefore cannot select two sources of the same entity type,
+    and cannot name a column that is not a candidate; with schema-constrained
+    decoding the model cannot even produce such output. Field names are
+    positional because column names need not be Python identifiers; aliases
+    carry the real names into the schema and the parsed JSON.
+    """
+    target_fields: dict[str, Any] = {}
+    for target_index, (target_column, sources_by_type) in enumerate(options.items()):
+        source_fields: dict[str, Any] = {
+            f"source_{type_index}": (
+                # The permitted columns are only known at runtime, so the Literal is built from them.
+                Literal[tuple(source_columns)] | None,  # ty: ignore[invalid-type-form]
+                Field(default=None, alias=entity_type.value),
+            )
+            for type_index, (entity_type, source_columns) in enumerate(sources_by_type.items())
+        }
+        target_model = create_model(
+            f"_DependencyTarget{target_index}",
+            __base__=_StructuredResponse,
+            **source_fields,
+        )
+        target_fields[f"target_{target_index}"] = (
+            target_model,
+            Field(default_factory=target_model, alias=target_column),
+        )
+    return create_model(
+        "_DependencySelectionResponse",
+        __base__=_StructuredResponse,
+        **target_fields,
+    )
+
+
+def _selected_dependencies(response: _StructuredResponse, options: DependencyOptions) -> list[DependencyCandidate]:
+    selected: list[DependencyCandidate] = []
+    for target_index, (target_column, sources_by_type) in enumerate(options.items()):
+        choices = getattr(response, f"target_{target_index}")
+        for type_index in range(len(sources_by_type)):
+            source_column = getattr(choices, f"source_{type_index}")
+            if source_column is not None:
+                selected.append(DependencyCandidate(target_column=target_column, source_column=source_column))
+    return selected
 
 
 def _dependency_selection_messages(
     plan: PiiReplacementPlan,
-    candidates: Sequence[DependencyCandidate],
+    options: DependencyOptions,
     baseline: PiiReplacementPlan,
-    classifications: Sequence[ColumnClassification],
 ) -> list[dict[str, str]]:
     system = (
         "You are helping NVIDIA NeMo Safe Synthesizer (NSS) de-identify a table before it is used to train a "
         "synthetic-data model. NSS replaces sensitive values with realistic fake values. A dependency tells NSS to "
         "generate a target column's fake value using a source column in the same row as context, so related fake "
-        "values stay consistent. For example, a fake email can be built from the fake first and last name in the "
-        "same row.\n"
+        "values stay consistent. For example, a fake first name can match the gender in the same row, and a fake "
+        "email can be built from the fake first and last name in the same row.\n"
         "\n"
         "Input\n"
-        "- dependency_candidates: possible dependencies, each with an id, a target column, a source column, and "
-        "their entity types. Every candidate is allowed, but that does not make it useful. selected_by_heuristic is "
-        "true when a rule-based detector chose the same dependency; it can be wrong, so treat it as a hint, not a "
-        "requirement. target_pattern is the format proposed for the target's fake values, or null, and "
-        "target_pattern_syntax names its grammar in pattern_grammars. When the pattern uses a name part such as "
-        "{first} or {last}, a source column holding that name part lets the fake value match the fake name in the "
-        "same row.\n"
-        "- exclusive_dependency_groups: families of source entity types that must not be mixed (see rule 2).\n"
+        "- dependency_targets: one entry per target column, with its entity type and target_pattern, the format "
+        "proposed for its fake values (or null; target_pattern_syntax names its grammar in pattern_grammars). "
+        "source_options lists, for each source entity type the target may depend on, the columns of that type. "
+        "heuristic_choice is the column a rule-based detector chose for that type, or null; it can be wrong, so "
+        "treat it as a hint, not a requirement. When the pattern uses a name part such as {first} or {last}, a "
+        "source column holding that name part lets the fake value match the fake name in the same row.\n"
+        "- exclusive_dependency_groups: families of source entity types that must not be mixed (see rule 3).\n"
         "\n"
         "Rules\n"
-        "1. Select a candidate only when the source column gives meaningful context for generating the target "
-        "column. Skip candidates that add nothing beyond the other sources selected for the same target.\n"
-        "2. Check exclusivity separately for each target column. Each outer list in exclusive_dependency_groups is a "
-        "family of inner groups. Within a family, the source entity types selected for one target may come from at "
+        "1. For each target and each source entity type, choose at most one column: the one that describes the "
+        "same person or record as the target. Tables can describe several people per row, such as a customer and "
+        "a spouse or several children; match each target to its own "
+        "person by column name, for example a spouse's first name to the spouse's gender, never to another person's.\n"
+        "2. Choose null when no column of that type describes the same person or record, or when the source adds "
+        "nothing beyond the other sources chosen for the same target.\n"
+        "3. Check exclusivity separately for each target column. Each outer list in exclusive_dependency_groups is a "
+        "family of inner groups. Within a family, the source entity types chosen for one target may come from at "
         "most one inner group; several types from the same inner group are fine. For example, with the family "
         "[[first_name, last_name, middle_name], [full_name]], a target may depend on first_name and last_name, or on "
         "full_name, but not on both first_name and full_name.\n"
         "\n"
         "Output\n"
-        "Return only ids from dependency_candidates. Do not invent ids, columns, entity types, patterns, or "
-        "dependencies."
+        "Return one object per target column, keyed by the target column name. Inside it, give one key per source "
+        "entity type listed in that target's source_options, set to one of the listed columns or null."
     )
     heuristic_edges = _heuristic_dependency_edges(baseline)
-    entity_types = {
-        classification.column_name: classification.entity_type
-        for classification in classifications
-        if classification.entity_type is not None
-    }
-    # Targets are replacement columns, so read their repaired patterns from the plan.
-    patterns = {spec.column_name: spec.pattern for spec in plan.columns_to_replace}
-    candidate_payloads = [
-        _dependency_candidate_payload(
-            index,
-            candidate,
-            entity_types=entity_types,
-            patterns=patterns,
-            selected_by_heuristic=(candidate.target_column, candidate.source_column) in heuristic_edges,
+    specs = {spec.column_name: spec for spec in plan.columns_to_replace}
+    targets: list[dict[str, object]] = []
+    used_syntaxes: set[str] = set()
+    for target_column, sources_by_type in options.items():
+        # Targets are replacement columns, so read their repaired patterns from the plan.
+        spec = specs[target_column]
+        pattern_syntax = _pattern_syntax_name(spec.entity_type, spec.pattern)
+        if pattern_syntax is not None:
+            used_syntaxes.add(pattern_syntax)
+        targets.append(
+            {
+                "target_column": target_column,
+                "target_entity_type": spec.entity_type.value,
+                "target_pattern": spec.pattern,
+                "target_pattern_syntax": pattern_syntax,
+                "source_options": {
+                    entity_type.value: {
+                        "columns": source_columns,
+                        "heuristic_choice": next(
+                            (source for source in source_columns if (target_column, source) in heuristic_edges),
+                            None,
+                        ),
+                    }
+                    for entity_type, source_columns in sources_by_type.items()
+                },
+            }
         )
-        for index, candidate in enumerate(candidates)
-    ]
-    # Only document the grammars that the candidates' target patterns actually use.
-    used_syntaxes = {payload["target_pattern_syntax"] for payload in candidate_payloads}
     user = _compact_json(
         {
-            "dependency_candidates": candidate_payloads,
+            "dependency_targets": targets,
             "exclusive_dependency_groups": _exclusive_dependency_groups_payload(),
+            # Only document the grammars that the targets' patterns actually use.
             "pattern_grammars": {
                 name: grammar for name, grammar in pattern_grammar_catalog().items() if name in used_syntaxes
             },
@@ -357,22 +403,12 @@ def _dependency_selection_messages(
 
 def _apply_dependency_selection(
     plan: PiiReplacementPlan,
-    candidates_by_id: Mapping[str, DependencyCandidate],
+    selected: Sequence[DependencyCandidate],
     classifications: Sequence[ColumnClassification],
-    selected_ids: Sequence[str],
 ) -> PiiReplacementPlan:
-    """Apply selected candidate IDs, raising ``ValueError`` with specific feedback when invalid."""
-    if duplicates := sorted(selected_id for selected_id, count in Counter(selected_ids).items() if count > 1):
-        raise ValueError("selected_dependency_ids must not contain duplicates: " + _quoted(duplicates))
-    if unknown := sorted(set(selected_ids) - set(candidates_by_id)):
-        raise ValueError("selected_dependency_ids contains unknown IDs: " + _quoted(unknown))
-
+    """Apply selected dependencies, raising ``ValueError`` with specific feedback when invalid."""
     try:
-        return apply_dependencies(
-            plan,
-            [candidates_by_id[selected_id] for selected_id in selected_ids],
-            classifications=classifications,
-        )
+        return apply_dependencies(plan, selected, classifications=classifications)
     except (ParameterError, ValidationError) as exc:
         raise ValueError(
             "selected dependencies do not form a valid replacement plan: " + _validation_feedback(exc)
@@ -552,13 +588,18 @@ class LLMPlanEnhancer(PlanEnhancer):
         baseline: PiiReplacementPlan,
         classifications: Sequence[ColumnClassification],
     ) -> PiiReplacementPlan:
-        candidates_by_id = {_dependency_candidate_id(index): candidate for index, candidate in enumerate(candidates)}
+        entity_types = {
+            classification.column_name: classification.entity_type
+            for classification in classifications
+            if classification.entity_type is not None
+        }
+        options = _dependency_options(candidates, entity_types)
         return self._request_structured(
             purpose="PII dependency selection",
-            messages=_dependency_selection_messages(plan, candidates, baseline, classifications),
-            response_model=_DependencySelectionResponse,
+            messages=_dependency_selection_messages(plan, options, baseline),
+            response_model=_dependency_response_model(options),
             parse=lambda response: _apply_dependency_selection(
-                plan, candidates_by_id, classifications, response.selected_dependency_ids
+                plan, _selected_dependencies(response, options), classifications
             ),
         )
 
