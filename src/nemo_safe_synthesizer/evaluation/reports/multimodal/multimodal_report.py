@@ -17,6 +17,15 @@ from ....config.evaluate import (
 from ....config.parameters import SafeSynthesizerParameters
 from ....evaluation.assets.text.multi_modal_tooltips import tooltips
 from ....evaluation.components.attribute_inference_protection import AttributeInferenceProtection
+from ....evaluation.components.autocorrelation_similarity import AutocorrelationSimilarity
+from ....evaluation.components.autocorrelation_similarity_figures import (
+    AUTOCORRELATION_PAIR_SCORE_MAX_COLUMNS,
+    AUTOCORRELATION_SUMMARY_TRACES_PER_COLUMN,
+    generate_autocorrelation_lag_error_figure,
+    generate_autocorrelation_pair_score_figure,
+    generate_autocorrelation_summary_figure,
+    order_autocorrelation_columns,
+)
 from ....evaluation.components.column_distribution import (
     ColumnDistribution,
     ColumnDistributionPlotRow,
@@ -104,6 +113,42 @@ class MultimodalReport(EvaluationReport):
             if "column_distribution_stability" in ctx:
                 ctx["column_distribution_stability"]["figures"] = ColumnDistributionPlotRow.from_evaluation_datasets(
                     self.evaluation_datasets
+                )
+
+            ctx["with_time_series"] = "autocorrelation_similarity" in ctx
+            if ctx["with_time_series"]:
+                autocorrelation = ctx["autocorrelation_similarity"]
+                profiles = autocorrelation["details"].get("profiles", [])
+                autocorrelation["figures"] = []
+                autocorrelation["summary_columns"] = []
+                if profiles:
+                    figures = [
+                        ("Typical autocorrelation", generate_autocorrelation_summary_figure(profiles), True),
+                        ("Difference by lag", generate_autocorrelation_lag_error_figure(profiles), False),
+                        (
+                            "Pair scores",
+                            generate_autocorrelation_pair_score_figure(profiles, autocorrelation["score"]["score"]),
+                            False,
+                        ),
+                    ]
+                    autocorrelation["figures"] = [
+                        {
+                            "title": title,
+                            "html": figure.to_html(full_html=False, include_plotlyjs=False),
+                            "column_select": column_select,
+                        }
+                        for title, figure, column_select in figures
+                    ]
+                    autocorrelation["summary_columns"] = order_autocorrelation_columns(profiles)
+                autocorrelation["summary_traces_per_column"] = AUTOCORRELATION_SUMMARY_TRACES_PER_COLUMN
+                autocorrelation["pair_score_column_count"] = min(
+                    len(autocorrelation["summary_columns"]), AUTOCORRELATION_PAIR_SCORE_MAX_COLUMNS
+                )
+                autocorrelation["evaluated_profile_count"] = len(profiles)
+                autocorrelation["evaluated_group_count"] = len({str(item["group"]) for item in profiles})
+                autocorrelation["evaluated_column_count"] = len({item["column"] for item in profiles})
+                autocorrelation["constant_synthetic_profile_count"] = sum(
+                    1 for item in profiles if item["evaluated_lags"] == 0
                 )
 
             return ctx
@@ -221,6 +266,16 @@ class MultimodalReport(EvaluationReport):
             text_structure_similarity,
             sqs_score,
         ]
+
+        if config is not None and config.evaluation.enabled and config.evaluation.time_series.enabled:
+            time_series_datasets = EvaluationDatasets.from_dataframes(
+                training=training,
+                synthetic=synthetic,
+                test=test,
+                column_statistics=column_statistics,
+                enable_sampling=False,
+            )
+            components.append(AutocorrelationSimilarity.from_evaluation_datasets(time_series_datasets, config))
 
         report = MultimodalReport(config=config, evaluation_datasets=evaluation_datasets, components=components)
         report.evaluation_datasets = evaluation_datasets

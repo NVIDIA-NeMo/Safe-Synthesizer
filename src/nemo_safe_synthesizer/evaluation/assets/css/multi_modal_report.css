@@ -894,6 +894,39 @@ h3 {
     background: var(--synthetic);
 }
 
+.autocorrelation-charts {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.autocorrelation-chart-heading {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    justify-content: space-between;
+    height: 32px;
+    margin-bottom: 8px;
+}
+
+.autocorrelation-chart-heading .chart-subheading {
+    flex: none;
+    margin: 0;
+}
+
+.autocorrelation-column-select {
+    min-width: 0;
+    max-width: 60%;
+    padding: 6px 8px;
+    border: 1px solid #666666;
+    border-radius: 4px;
+    background: #292929;
+    color: var(--text);
+    font: inherit;
+    font-size: 12px;
+    text-overflow: ellipsis;
+}
+
 .distribution-charts {
     --distribution-chart-height: 120px;
 
@@ -1239,6 +1272,10 @@ tbody tr:hover td {
 
     .distribution-charts {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .autocorrelation-charts {
+        grid-template-columns: 1fr;
     }
 }
 

@@ -152,6 +152,12 @@ class SafeSynthesizerParameters(Parameters):
         dp_enabled = self.privacy is not None and self.privacy.dp_enabled
         is_timeseries = self.time_series.is_timeseries
 
+        if self.evaluation.enabled and self.evaluation.time_series.enabled and not is_timeseries:
+            raise ParameterError(
+                "Time-series evaluation requires time_series.is_timeseries=True. "
+                "Set evaluation.time_series.enabled=False or enable time-series mode."
+            )
+
         if dp_enabled and is_timeseries:
             raise ParameterError(
                 "Differential privacy is not supported in time-series mode. "

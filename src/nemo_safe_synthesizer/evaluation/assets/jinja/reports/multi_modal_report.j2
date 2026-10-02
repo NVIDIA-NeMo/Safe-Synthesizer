@@ -148,6 +148,25 @@
                     {% endcall %}
                 </div>
             </section>
+
+            {% if ctx.with_time_series %}
+            <section class="metric-panel">
+                <header class="metric-panel-heading">
+                    <span class="panel-icon">{{ icon("chart") }}</span>
+                    <div><h2>Time-Series Metrics</h2>
+                    <p>Measures preservation of relationships between observations across time.</p></div>
+                </header>
+                <div class="metric-list">
+                    {% call metric_card("autocorrelation-similarity", ctx.autocorrelation_similarity.name,
+                            ctx.autocorrelation_similarity.score,
+                            "Measures preservation of lagged dependence within numeric value columns",
+                            ctx.tooltips.autocorrelation_similarity_info,
+                            expandable=true) %}
+                        {% include "jinja/components/autocorrelation_similarity.j2" %}
+                    {% endcall %}
+                </div>
+            </section>
+            {% endif %}
         </section>
         {% endif %}
 

@@ -15,11 +15,69 @@ from ..configurator.parameters import (
     Parameters,
 )
 
-__all__ = ["EvaluationParameters"]
+__all__ = [
+    "AutocorrelationSimilarityParameters",
+    "DEFAULT_AUTOCORRELATION_MAX_LAG",
+    "DEFAULT_AUTOCORRELATION_MIN_POINTS",
+    "EvaluationParameters",
+    "TimeSeriesEvaluationParameters",
+]
 
+DEFAULT_AUTOCORRELATION_MAX_LAG = 20
+DEFAULT_AUTOCORRELATION_MIN_POINTS = 4
 DEFAULT_SQS_REPORT_COLUMNS: int = 250
 DEFAULT_RECORD_COUNT = 5000
 QUASI_IDENTIFIER_COUNT = 3
+
+
+class AutocorrelationSimilarityParameters(Parameters):
+    """Control autocorrelation similarity evaluation.
+
+    Timestamp ordering and sequence grouping use the top-level time-series and
+    data settings. The requested lag is capped automatically for short
+    sequences, and undersized or constant training profiles are skipped. A
+    constant synthetic profile paired with varying training data receives zero
+    similarity.
+    """
+
+    value_columns: list[str] | None = Field(
+        default=None,
+        description=(
+            "Numeric value columns to evaluate. Defaults to all shared columns inferred as numeric. "
+            "Changing this selection changes the meaning of the aggregate score."
+        ),
+    )
+    max_lag: int = Field(
+        default=DEFAULT_AUTOCORRELATION_MAX_LAG,
+        ge=1,
+        description=(
+            "Maximum requested lag; short sequences use a smaller stable lag cap. "
+            "Scores computed with different lag horizons are not directly comparable."
+        ),
+    )
+    min_points: int = Field(
+        default=DEFAULT_AUTOCORRELATION_MIN_POINTS,
+        ge=4,
+        description="Minimum finite observations required in each sequence.",
+    )
+    max_groups: int = Field(
+        default=128,
+        ge=1,
+        description="Maximum shared groups to evaluate using a reproducible sample to bound runtime.",
+    )
+
+
+class TimeSeriesEvaluationParameters(Parameters):
+    """Metric-specific time-series evaluation configuration."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable time-series evaluation metrics. Requires top-level time-series mode.",
+    )
+    autocorrelation: AutocorrelationSimilarityParameters = Field(
+        default_factory=AutocorrelationSimilarityParameters,
+        description="Autocorrelation similarity metric parameters.",
+    )
 
 
 class EvaluationParameters(Parameters):
@@ -97,3 +155,8 @@ class EvaluationParameters(Parameters):
             description="List of columns for PII Replay. If not provided, only entities will be used.",
         ),
     ] = None
+
+    time_series: TimeSeriesEvaluationParameters = Field(
+        default_factory=TimeSeriesEvaluationParameters,
+        description="Time-series-specific evaluation settings.",
+    )
