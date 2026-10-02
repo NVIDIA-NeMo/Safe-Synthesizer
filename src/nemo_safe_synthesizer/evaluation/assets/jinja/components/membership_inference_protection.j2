@@ -1,2 +1,9 @@
 <p class="chart-subheading">Breakdown of protection levels across simulated attacks.</p>
+{% set excluded_columns = ctx.membership_inference_protection.excluded_columns %}
+{% if excluded_columns %}
+<details class="excluded-columns">
+    <summary>{{ excluded_columns | length }} {{ "column" if excluded_columns | length == 1 else "columns" }} excluded from this metric</summary>
+    <p>{{ excluded_columns | join(", ") | e }}</p>
+</details>
+{% endif %}
 <figure class="figure">{{ ctx.membership_inference_protection.figure }}</figure>

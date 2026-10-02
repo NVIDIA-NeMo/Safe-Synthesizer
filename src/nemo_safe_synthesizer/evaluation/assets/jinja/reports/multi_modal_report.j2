@@ -203,13 +203,9 @@
                     <p>Measures resistance to inference attacks on the synthetic data.</p></div>
                 </header>
                 <div class="metric-list">
-                    {% set mia_description = "Protection against attacks that determine whether a record was in training data" %}
-                    {% if ctx.membership_inference_protection.excluded_columns %}
-                    {% set mia_description = mia_description ~ ". Excluded columns: " ~ (ctx.membership_inference_protection.excluded_columns | join(", ") | e) %}
-                    {% endif %}
                     {% call metric_card("mia", ctx.membership_inference_protection.name,
                             ctx.membership_inference_protection.score,
-                            mia_description,
+                            "Protection against attacks that determine whether a record was in training data",
                             ctx.tooltips.membership_inference_info,
                             expandable=ctx.membership_inference_protection.figure) %}
                         {% include "jinja/components/membership_inference_protection.j2" %}
