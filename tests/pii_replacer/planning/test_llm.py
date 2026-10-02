@@ -91,8 +91,9 @@ def _classifications(
     )
 
 
-def _dependency_selection(*candidate_ids: str) -> str:
-    return json.dumps({"selected_dependency_ids": list(candidate_ids)})
+def _dependency_selection(choices: Mapping[str, Mapping[str, str | None]] | None = None) -> str:
+    """Return a dependency answer: target column -> source entity type -> source column or null."""
+    return json.dumps(dict(choices or {}))
 
 
 def _enhancer(
@@ -184,16 +185,13 @@ class TestLLMPlanEnhancer:
         dependency_messages, dependency_model = transport.calls[1]
         dependency_payload = json.loads(dependency_messages[1]["content"])
         assert dependency_payload == {
-            "dependency_candidates": [
+            "dependency_targets": [
                 {
-                    "id": "dependency_0",
-                    "source_column": "company",
-                    "source_entity_type": "organization",
                     "target_column": "email",
                     "target_entity_type": "email",
                     "target_pattern": None,
                     "target_pattern_syntax": None,
-                    "selected_by_heuristic": False,
+                    "source_options": {"organization": {"columns": ["company"], "heuristic_choice": None}},
                 }
             ],
             "exclusive_dependency_groups": [
@@ -204,10 +202,15 @@ class TestLLMPlanEnhancer:
             "pattern_grammars": {},
         }
         assert (
-            "the source entity types selected for one target may come from at most one inner group"
+            "the source entity types chosen for one target may come from at most one inner group"
             in dependency_messages[0]["content"]
         )
-        assert set(dependency_model.model_json_schema()["properties"]) == {"selected_dependency_ids"}
+        assert "describes the same person or record as the target" in dependency_messages[0]["content"]
+        dependency_schema = dependency_model.model_json_schema()
+        assert set(dependency_schema["properties"]) == {"email"}
+        [email_choices] = dependency_schema["$defs"].values()
+        allowed = email_choices["properties"]["organization"]["anyOf"][0]
+        assert allowed.get("enum", [allowed.get("const")]) == ["company"]
 
     def test_dependency_candidates_preserve_heuristic_selections_as_prior_evidence(self) -> None:
         dataframe = pd.DataFrame(
@@ -247,7 +250,8 @@ class TestLLMPlanEnhancer:
 
         dependency_messages, _ = transport.calls[1]
         dependency_payload = json.loads(dependency_messages[1]["content"])
-        assert dependency_payload["dependency_candidates"][0]["selected_by_heuristic"] is True
+        [target] = dependency_payload["dependency_targets"]
+        assert target["source_options"]["organization"]["heuristic_choice"] == "company"
         assert "treat it as a hint, not a requirement" in dependency_messages[0]["content"]
 
     def test_classification_prompt_includes_exact_supported_pattern_grammars(self) -> None:
@@ -300,10 +304,11 @@ class TestLLMPlanEnhancer:
         )
 
         dependency_payload = json.loads(transport.calls[1][0][1]["content"])
-        [candidate] = dependency_payload["dependency_candidates"]
-        assert (candidate["target_column"], candidate["source_column"]) == ("email", "first_name")
-        assert candidate["target_pattern"] == "{first}@{domain}"
-        assert candidate["target_pattern_syntax"] == "name_parts"
+        [target] = dependency_payload["dependency_targets"]
+        assert target["target_column"] == "email"
+        assert target["source_options"] == {"first_name": {"columns": ["first_name"], "heuristic_choice": None}}
+        assert target["target_pattern"] == "{first}@{domain}"
+        assert target["target_pattern_syntax"] == "name_parts"
         assert set(dependency_payload["pattern_grammars"]) == {"name_parts"}
         assert "{first}" in dependency_payload["pattern_grammars"]["name_parts"]["placeholders"]
 
@@ -349,16 +354,13 @@ class TestLLMPlanEnhancer:
             "protected_columns": ["event_index"],
         }
         dependency_payload = json.loads(transport.calls[1][0][1]["content"])
-        assert dependency_payload["dependency_candidates"] == [
+        assert dependency_payload["dependency_targets"] == [
             {
-                "id": "dependency_0",
-                "source_column": "sex",
-                "source_entity_type": "gender",
                 "target_column": "first_name",
                 "target_entity_type": "first_name",
                 "target_pattern": None,
                 "target_pattern_syntax": None,
-                "selected_by_heuristic": False,
+                "source_options": {"gender": {"columns": ["sex"], "heuristic_choice": None}},
             }
         ]
 
@@ -379,7 +381,7 @@ class TestLLMPlanEnhancer:
                         "race": "ethnic_background",
                     }
                 ),
-                _dependency_selection("dependency_0", "dependency_1"),
+                _dependency_selection({"first_name": {"gender": "sex", "ethnic_background": "race"}}),
             ]
         )
 
@@ -394,6 +396,76 @@ class TestLLMPlanEnhancer:
             ("sex", EntityType.GENDER),
             ("race", EntityType.ETHNIC_BACKGROUND),
         ]
+
+    def test_each_target_chooses_one_source_per_entity_type(self) -> None:
+        dataframe = pd.DataFrame(
+            {
+                "first_name": ["Ada"],
+                "gender": ["F"],
+                "spouse_first_name": ["William"],
+                "spouse_gender": ["M"],
+            }
+        )
+        enhancer, transport = _enhancer(
+            [
+                _classifications(
+                    {
+                        "first_name": "first_name",
+                        "gender": "gender",
+                        "spouse_first_name": "first_name",
+                        "spouse_gender": "gender",
+                    }
+                ),
+                _dependency_selection(
+                    {
+                        "first_name": {"gender": "gender"},
+                        "spouse_first_name": {"gender": "spouse_gender"},
+                    }
+                ),
+            ]
+        )
+
+        plan = resolve_plan(
+            dataframe,
+            ReplacePiiConfig(llm=_local_config()),
+            DataParameters(),
+            enhancer=enhancer,
+        )
+
+        depends_on = {
+            spec.column_name: [item.column_name for item in spec.depends_on] for spec in plan.columns_to_replace
+        }
+        assert depends_on == {"first_name": ["gender"], "spouse_first_name": ["spouse_gender"]}
+        dependency_payload = json.loads(transport.calls[1][0][1]["content"])
+        assert [
+            target["source_options"]["gender"]["columns"] for target in dependency_payload["dependency_targets"]
+        ] == [
+            ["gender", "spouse_gender"],
+            ["gender", "spouse_gender"],
+        ]
+
+    def test_dependency_answer_cannot_choose_two_sources_of_one_entity_type(self) -> None:
+        dataframe = pd.DataFrame({"first_name": ["Ada"], "gender": ["F"], "spouse_gender": ["M"]})
+        enhancer, transport = _enhancer(
+            [
+                _classifications({"first_name": "first_name", "gender": "gender", "spouse_gender": "gender"}),
+                json.dumps({"first_name": {"gender": ["gender", "spouse_gender"]}}),
+                _dependency_selection({"first_name": {"gender": "gender"}}),
+            ]
+        )
+
+        plan = resolve_plan(
+            dataframe,
+            ReplacePiiConfig(llm=_local_config()),
+            DataParameters(),
+            enhancer=enhancer,
+        )
+
+        assert [item.column_name for item in plan.columns_to_replace[0].depends_on] == ["gender"]
+        assert len(transport.calls) == 3
+        _, dependency_model = transport.calls[1]
+        [choices] = dependency_model.model_json_schema()["$defs"].values()
+        assert choices["properties"]["gender"]["anyOf"][0]["enum"] == ["gender", "spouse_gender"]
 
     def test_dependency_pass_is_skipped_when_code_derives_no_candidates(self) -> None:
         dataframe = pd.DataFrame({"email": ["ada@example.com"]})
@@ -459,10 +531,10 @@ class TestLLMPlanEnhancer:
     @pytest.mark.parametrize(
         ("invalid_selection", "expected_feedback"),
         [
-            (_dependency_selection("invented"), "unknown IDs: 'invented'"),
-            (_dependency_selection("dependency_0", "dependency_0"), "must not contain duplicates: 'dependency_0'"),
+            (_dependency_selection({"first_name": {"gender": "invented"}}), "first_name.gender"),
+            (_dependency_selection({"first_name": {"full_name": "sex"}}), "first_name.full_name"),
         ],
-        ids=["unknown-id", "duplicate-id"],
+        ids=["unknown-source-column", "entity-type-not-offered"],
     )
     def test_invalid_dependency_selection_is_repaired_on_retry(
         self, invalid_selection: str, expected_feedback: str
@@ -494,7 +566,7 @@ class TestLLMPlanEnhancer:
         enhancer, transport = _enhancer(
             [
                 _classifications({"first_name": "first_name", "sex": "gender"}),
-                json.dumps({"selected_dependency_ids": [], "unexpected": "field"}),
+                json.dumps({"first_name": {"gender": None}, "unexpected": {}}),
                 _dependency_selection(),
             ]
         )
@@ -525,7 +597,7 @@ class TestLLMPlanEnhancer:
                         "sex": "gender",
                     }
                 ),
-                _dependency_selection("dependency_0", "dependency_1"),
+                _dependency_selection({"first_name": {"gender": "sex", "full_name": "full_name"}}),
                 _dependency_selection(),
             ]
         )
@@ -785,7 +857,7 @@ class TestLLMPlanEnhancer:
                     patterns={"email": "{first}.{last}@{domain}"},
                 ),
                 *[json.dumps({"pattern": pattern}) for pattern in repair_responses],
-                _dependency_selection("dependency_0"),
+                _dependency_selection({"email": {"first_name": "first_name"}}),
             ]
         )
 
@@ -797,10 +869,10 @@ class TestLLMPlanEnhancer:
         )
 
         dependency_payload = json.loads(transport.calls[-1][0][1]["content"])
-        assert "selected_dependency_ids" in transport.calls[-1][1].model_json_schema()["properties"]
-        [candidate] = dependency_payload["dependency_candidates"]
-        assert candidate["target_pattern"] == final_pattern
-        assert candidate["target_pattern_syntax"] == final_syntax
+        assert set(transport.calls[-1][1].model_json_schema()["properties"]) == {"email"}
+        [target] = dependency_payload["dependency_targets"]
+        assert target["target_pattern"] == final_pattern
+        assert target["target_pattern_syntax"] == final_syntax
         email = next(spec for spec in plan.columns_to_replace if spec.column_name == "email")
         assert email.pattern == final_pattern
         assert [dependency.column_name for dependency in email.depends_on] == ["first_name"]
