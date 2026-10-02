@@ -28,11 +28,14 @@ import plotly.graph_objects as go
 
 from ...errors import DataError
 
-_TRAINING_COLOR = "#3C2ED1"
-_SYNTHETIC_COLOR = "#1AA2E6"
+_TRAINING_COLOR = "#3b82f6"
+_SYNTHETIC_COLOR = "#f59e0b"
 _TRAINING_BAND_COLOR = "rgba(59, 130, 246, 0.2)"
 _SYNTHETIC_BAND_COLOR = "rgba(245, 158, 11, 0.2)"
-_SUMMARY_COLOR = "#76B900"
+# Matches the Correlation Stability difference heatmap in multi_modal_toggle.js.
+_DIFFERENCE_COLORSCALE = [[0, "#ffffff"], [0.25, "#fee2e2"], [0.5, "#fca5a5"], [0.75, "#f87171"], [1, "#dc2626"]]
+_LAG_DIFFERENCE_COLOR_MAX = 0.5
+_PAIR_SCORE_JITTER = 0.25
 _SUMMARY_FIGURE_HEIGHT = 300
 _LABEL_MAX_LENGTH = 10
 _LABEL_EDGE_LENGTH = 3
@@ -108,7 +111,9 @@ def generate_autocorrelation_lag_error_figure(profiles: Sequence[Mapping[str, An
     """Plot the mean absolute paired profile difference at each lag.
 
     Only lags where both profiles of a pair are finite contribute, matching
-    the lags used by the pair score.
+    the lags used by the pair score. Bars shade from white to red as the
+    difference grows, and the y-axis spans at least 0 to 1 so bar heights are
+    comparable across reports.
 
     Args:
         profiles: Stored profiles from ``AutocorrelationSimilarity.details``.
@@ -135,7 +140,12 @@ def generate_autocorrelation_lag_error_figure(profiles: Sequence[Mapping[str, An
             x=lags[valid],
             y=mean_difference[valid],
             customdata=support[valid],
-            marker={"color": _SUMMARY_COLOR},
+            marker={
+                "color": mean_difference[valid],
+                "colorscale": _DIFFERENCE_COLORSCALE,
+                "cmin": 0.0,
+                "cmax": _LAG_DIFFERENCE_COLOR_MAX,
+            },
             name="Mean absolute difference",
             hovertemplate="lag %{x}: %{y:.3f}<br>%{customdata} pairs<extra></extra>",
         )
@@ -148,7 +158,8 @@ def generate_autocorrelation_lag_error_figure(profiles: Sequence[Mapping[str, An
         yaxis_title="Mean |ACF difference|",
         margin={"l": 54, "r": 16, "t": 40, "b": 48},
     )
-    figure.update_yaxes(rangemode="tozero")
+    top = max(1.0, float(np.max(mean_difference[valid], initial=0.0)) * 1.05)
+    figure.update_yaxes(range=[0.0, top])
     return figure
 
 
@@ -161,8 +172,10 @@ def generate_autocorrelation_pair_score_figure(
     """Plot group and column pair scores on the report's 0-10 scale.
 
     Only the ``max_columns`` lowest-scoring columns are plotted so each row
-    stays readable. Rows are keyed by full column name, and long names are
-    shortened only in the axis labels so shortened names cannot merge rows.
+    stays readable. Each row sits at an integer y position with seeded
+    vertical jitter, so long names are shortened only in the axis labels and
+    shortened names cannot merge rows. Dots shade from white at a score of 10
+    to red at 0.
 
     Args:
         profiles: Stored profiles from ``AutocorrelationSimilarity.details``.
@@ -170,31 +183,36 @@ def generate_autocorrelation_pair_score_figure(
         max_columns: Largest number of value columns to plot.
 
     Returns:
-        A Plotly strip figure with one row per plotted value column.
+        A Plotly strip figure with one marker trace per plotted value column.
 
     Raises:
         DataError: If no profiles are supplied.
     """
     columns = order_autocorrelation_columns(profiles)[:max_columns]
+    rows = [str(column) for column in reversed(columns)]
+    rng = np.random.default_rng(0)
     figure = go.Figure()
     for column in columns:
         column_profiles = [item for item in profiles if item["column"] == column]
         groups = ["all rows" if item["group"] is None else str(item["group"]) for item in column_profiles]
+        similarity = np.array([float(item["similarity"]) for item in column_profiles])
+        jitter = rng.uniform(-_PAIR_SCORE_JITTER, _PAIR_SCORE_JITTER, size=len(column_profiles))
         figure.add_trace(
-            go.Box(
-                x=[10 * float(item["similarity"]) for item in column_profiles],
-                y=[str(column)] * len(column_profiles),
+            go.Scatter(
+                x=10 * similarity,
+                y=rows.index(str(column)) + jitter,
                 customdata=groups,
-                orientation="h",
-                boxpoints="all",
-                jitter=0.5,
-                pointpos=0,
-                fillcolor="rgba(0,0,0,0)",
-                line={"color": "rgba(0,0,0,0)"},
-                marker={"color": _SUMMARY_COLOR, "size": 6, "opacity": 0.75},
+                mode="markers",
+                marker={
+                    "color": 1 - similarity,
+                    "colorscale": _DIFFERENCE_COLORSCALE,
+                    "cmin": 0.0,
+                    "cmax": 1.0,
+                    "size": 7,
+                    "opacity": 0.9,
+                },
                 name=str(column),
-                hoveron="points",
-                hovertemplate="%{y}<br>group %{customdata}<br>score %{x:.1f}<extra></extra>",
+                hovertemplate="%{fullData.name}<br>group %{customdata}<br>score %{x:.1f}<extra></extra>",
             )
         )
     if overall_score is not None:
@@ -212,13 +230,12 @@ def generate_autocorrelation_pair_score_figure(
         margin={"l": 80, "r": 16, "t": 40, "b": 48},
     )
     figure.update_xaxes(range=[-0.25, 10.25])
-    rows = [str(column) for column in reversed(columns)]
     figure.update_yaxes(
-        categoryorder="array",
-        categoryarray=rows,
+        range=[-0.6, len(rows) - 0.4],
         tickmode="array",
-        tickvals=rows,
+        tickvals=list(range(len(rows))),
         ticktext=[shorten_column_label(row) for row in rows],
+        zeroline=False,
     )
     return figure
 

@@ -109,9 +109,12 @@ synthetic data reproduces sensors 0 to 2 well, loses persistence in
   training and synthetic profiles at each lag, across all value columns. Here
   the difference grows from about 0.18 at lag 1 to about 0.3 at lag 15 and
   beyond, so the loss is largest for long-range persistence. A peak at one lag
-  instead points to a missing or shifted cycle.
+  instead points to a missing or shifted cycle. The y-axis always spans at
+  least 0 to 1, so short, pale bars mean small differences, and bars turn
+  red as the difference approaches 0.5.
 - Pair scores: plots every group and column pair score on the 0–10 scale,
-  with the overall score marked by the dashed line. Each point is one sensor.
+  with the overall score marked by the dashed line. Each point is one sensor,
+  shaded from white at 10 to red at 0.
   `humidity` scores near 10 for all sensors, while `pressure` and
   `temperature` split into a cluster between about 9 and 10 for the
   well-reproduced sensors and a cluster between about 6.5 and 8 for the

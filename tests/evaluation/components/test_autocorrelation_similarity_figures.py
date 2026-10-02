@@ -55,6 +55,18 @@ def test_lag_error_figure_averages_only_paired_finite_lags():
     assert list(bar.x) == [1, 2, 3]
     assert list(bar.y) == pytest.approx([(0 + 0 + 0.8 + 0.2) / 4, (0 + 0 + 0.8 + 0.2) / 4, (0 + 0.2) / 2])
     assert list(bar.customdata) == [4, 4, 2]
+    assert list(bar.marker.color) == pytest.approx(list(bar.y))
+    assert bar.marker.colorscale[0][1] == "#ffffff"
+    assert bar.marker.colorscale[-1][1] == "#dc2626"
+    assert figure.layout.yaxis.range == (0.0, 1.0)
+
+
+def test_lag_error_figure_axis_grows_past_one():
+    profiles = [_profile("a", "flipped", [0.9, -0.9], [-0.9, 0.9], 0.0)]
+
+    figure = generate_autocorrelation_lag_error_figure(profiles)
+
+    assert figure.layout.yaxis.range[1] == pytest.approx(1.8 * 1.05)
 
 
 def test_pair_score_figure_plots_every_pair_on_report_scale():
@@ -63,7 +75,19 @@ def test_pair_score_figure_plots_every_pair_on_report_scale():
     assert [trace.name for trace in figure.data] == ["bad", "good"]
     assert list(figure.data[0].x) == pytest.approx([6.0, 9.0])
     assert list(figure.data[0].customdata) == ["a", "b"]
+    assert "group %{customdata}" in figure.data[0].hovertemplate
+    assert list(figure.data[0].marker.color) == pytest.approx([0.4, 0.1])
+    assert list(figure.data[1].marker.color) == pytest.approx([0.0, 0.0])
     assert figure.layout.shapes[0].x0 == 8.8
+
+
+def test_pair_score_figure_jitters_points_within_their_row():
+    figure = generate_autocorrelation_pair_score_figure(_SUMMARY_PROFILES, None)
+
+    bad, good = figure.data
+    assert all(abs(y - 1) <= 0.25 for y in bad.y)
+    assert all(abs(y) <= 0.25 for y in good.y)
+    assert list(generate_autocorrelation_pair_score_figure(_SUMMARY_PROFILES, None).data[0].y) == list(bad.y)
 
 
 def test_pair_score_figure_limits_columns_and_shortens_labels_without_merging_rows():
@@ -76,8 +100,9 @@ def test_pair_score_figure_limits_columns_and_shortens_labels_without_merging_ro
         "channel_01_descriptive_name",
         "channel_02_descriptive_name",
     ]
-    assert list(figure.layout.yaxis.tickvals) == list(reversed([trace.name for trace in figure.data]))
+    assert list(figure.layout.yaxis.tickvals) == [0, 1, 2]
     assert list(figure.layout.yaxis.ticktext) == ["cha...ame"] * 3
+    assert [round(sum(trace.y) / len(trace.y)) for trace in figure.data] == [2, 1, 0]
 
 
 @pytest.mark.parametrize(
