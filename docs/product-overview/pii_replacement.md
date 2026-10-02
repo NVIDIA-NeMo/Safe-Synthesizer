@@ -168,7 +168,7 @@ the schema-constrained answer, and fit one 80 GB GPU, such as an A100 or H100:
 
 | Model ID | Weights | Request timeout | Notes |
 |----------|---------|-----------------|-------|
-| `openai/gpt-oss-120b` (default) | about 65 GB | 120 s | Mixture of experts |
+| `openai/gpt-oss-120b` (default) | about 65 GB | 120 s | Mixture of experts; default medium reasoning effort |
 | `Qwen/Qwen3.8-27B` | about 56 GB | 300 s | Dense; low reasoning effort, 1,000-token thinking budget |
 | `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16` | about 66 GB | 300 s | Hybrid Mamba mixture of experts; 2,000-token thinking budget |
 
@@ -177,10 +177,10 @@ Set `NSS_INFERENCE_TIMEOUT` or `--inference-timeout-seconds` to override it, for
 example for much larger tables. The same setting applies to explicit endpoints,
 where it defaults to 60 seconds.
 
-The Qwen and Nemotron profiles also send each model card's recommended
-sampling settings and a `thinking_token_budget`, which caps reasoning before
-the JSON answer. Their model cards warn against temperature 0 in thinking mode,
-which NSS otherwise sends. Set `NSS_INFERENCE_REQUEST_OPTIONS` or
+Each profile also sends its model card's recommended sampling settings
+instead of the temperature 0 that NSS otherwise sends, since the cards warn
+against greedy decoding with reasoning. The Qwen and Nemotron profiles add a
+`thinking_token_budget`, which caps reasoning before the JSON answer. Set `NSS_INFERENCE_REQUEST_OPTIONS` or
 `--inference-request-options` to a JSON object, such as
 `{"temperature": 1.0, "thinking_token_budget": 1000}`, to replace a profile's
 request options or the default `{"temperature": 0}` for an explicit endpoint.
