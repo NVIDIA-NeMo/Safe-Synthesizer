@@ -43,7 +43,7 @@ class EvaluationParameters(Parameters):
         Field(
             title="mia_excluded_columns",
             description=(
-                "Columns to leave out of the membership inference attack. Other metrics still use them. "
+                "Columns to leave out of the membership inference attack. "
                 "Useful when identifiers were already replaced outside Safe Synthesizer, or are expected "
                 "to repeat verbatim in the synthetic data."
             ),
