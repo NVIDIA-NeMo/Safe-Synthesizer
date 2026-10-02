@@ -148,7 +148,9 @@ def _strftime_pattern_error(pattern: str) -> str | None:
         # render values that can be parsed back with the same format.
         rendered = datetime(2001, 2, 3, 4, 5, 6, tzinfo=timezone.utc).strftime(pattern)
         datetime.strptime(rendered, pattern)
-    except ValueError as exc:
+    # strptime compiles the format to a regex; a repeated directive such as
+    # "%d %d" fails that compile with re.error rather than ValueError.
+    except (ValueError, re.error) as exc:
         return str(exc)
     return None
 
@@ -220,7 +222,7 @@ def _iter_pattern_issues(df: pd.DataFrame, plan: PiiReplacementPlan) -> Iterator
 def _parses_datetime(value: str, pattern: str) -> bool:
     try:
         datetime.strptime(value, pattern)
-    except ValueError:
+    except (ValueError, re.error):
         return False
     return True
 
