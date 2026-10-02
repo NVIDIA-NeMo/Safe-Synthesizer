@@ -159,6 +159,9 @@ jobs:
       }}
     timeout-minutes: 210
     runs-on: linux-amd64-gpu-a100-latest-1
+    # Job-level (not step-level) so a failed non-required leg still reports
+    # conclusion "failure" in the jobs API, which notify-slack reads.
+    continue-on-error: ${{ !matrix.required }}
     strategy:
       fail-fast: false
       matrix:
@@ -186,7 +189,6 @@ jobs:
 
       - name: Run GPU E2E tests
         id: e2e_tests
-        continue-on-error: ${{ !matrix.required }}
         run: mise run test:e2e:prepared
         timeout-minutes: 190
 
@@ -194,7 +196,10 @@ jobs:
         id: record_result
         if: always()
         env:
-          E2E_RESULT: ${{ steps.e2e_tests.outcome }}
+          # job.status, not steps.e2e_tests.outcome, so checkout or setup
+          # failures also count; job-level continue-on-error only applies
+          # after the job finishes.
+          E2E_RESULT: ${{ job.status }}
         run: echo "${{ matrix.cuda-extra }}_result=${E2E_RESULT}" >> "$GITHUB_OUTPUT"
 
   # ---------------------------------------------------------------------------
@@ -232,3 +237,46 @@ jobs:
           fi
 
           echo "All required GPU jobs passed (or were skipped)."
+
+  # ---------------------------------------------------------------------------
+  # Post to Slack when any job in a nightly run fails, times out, or is
+  # cancelled. Job names come from the GitHub API, so new matrix entries (e.g.
+  # another CUDA version) are picked up without changes here. Non-required
+  # legs must use job-level continue-on-error: a step-level one makes the API
+  # report the job as successful. Manual dispatches are skipped because whoever
+  # triggered them is watching.
+  #
+  # Requires the SLACK_GPU_TESTS_WEBHOOK_URL secret: the trigger URL of a Slack
+  # Workflow Builder workflow ("From a webhook") that posts to
+  # #swdl-nemollm-safe-synthesizer. It must declare Text variables named
+  # branch, run_url, and failed_jobs; the message text lives in Slack.
+  # ---------------------------------------------------------------------------
+  notify-slack:
+    name: Notify Slack on failure
+    if: always() && !cancelled() && github.event_name == 'schedule'
+    needs: [changes, gpu-smoke-test, gpu-e2e-test, gpu-ci-status]
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    steps:
+      - name: Post failed jobs to Slack
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_GPU_TESTS_WEBHOOK_URL }}
+          BRANCH: ${{ github.ref_name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          failed_jobs=$(gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}/jobs" \
+            --jq '.jobs[]
+              | select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out")
+              | "• " + .name')
+
+          if [[ -z "${failed_jobs}" ]]; then
+            echo "No failed jobs; skipping Slack notification."
+            exit 0
+          fi
+
+          jq -n --arg branch "${BRANCH}" --arg run_url "${RUN_URL}" --arg failed_jobs "${failed_jobs}" \
+            '{branch: $branch, run_url: $run_url, failed_jobs: $failed_jobs}' \
+            | curl -fsS --retry 3 -H 'Content-Type: application/json' --data @- "${SLACK_WEBHOOK_URL}"
