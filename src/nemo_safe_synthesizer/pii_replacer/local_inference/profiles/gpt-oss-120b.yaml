@@ -14,6 +14,11 @@ extra_args:
   # Let the model reason before its schema-constrained answer. Without a
   # reasoning parser, vLLM constrains the first token and the model skips reasoning.
   - --reasoning-parser=openai_gptoss
+# Model-card sampling. In a plan-discovery eval, temperature 0 returned an empty
+# plan for one dataset in every run; reasoning stays at the default medium effort.
+request_options:
+  temperature: 1.0
+  top_p: 1.0
 # Planning requests finish in seconds on an A100; allow headroom.
 request_timeout_seconds: 120
 # Allows for the first-run download of about 65 GB.
