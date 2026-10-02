@@ -150,11 +150,12 @@ semantic entity type and may propose a replacement pattern, in bounded batches
 of at most 32 profiles and 48 KiB of profile evidence. Each profile contains
 deterministic statistics and up to eight distinct cell samples truncated to 128
 characters. The prompt includes the entity catalog and the exact supported
-pattern grammars. Grouping-column and protected-column metadata is sent as
-discovery context. NSS then derives replacement columns and all permitted
+pattern grammars. The grouping column is sent as discovery context; protected
+columns are not mentioned, because NSS excludes them itself. NSS then derives replacement columns and all permitted
 dependency candidates deterministically from those classifications. The second
 pass sees only column names, entity types, and proposed patterns, not cell
-values. For each replacement column and each permitted source entity type, it
+values, and is split into batches under the same 32-entry and 48 KiB limits. For
+each replacement column and each permitted source entity type, it
 chooses at most one candidate column, the one describing the same person or
 record, or none. The response schema lists only the candidate columns, so the
 model cannot name another column or choose two sources of one type, such as
@@ -165,8 +166,9 @@ grouping column, excludes protected ordering and timestamp columns, and validate
 the assembled plan. Grouping columns remain eligible for replacement so
 identifiers such as patient IDs can be anonymized.
 
-Each request permits up to three attempts for transient transport failures or
-invalid structured responses. Transient failures wait before retrying: the
+Each prompt describes the expected JSON response, and the request also
+constrains decoding to that response's strict schema. Each request permits up to
+three attempts for transient transport failures or invalid structured responses. Transient failures wait before retrying: the
 server's `Retry-After` delay when supplied, otherwise an exponentially growing,
 jittered delay, capped at 30 seconds. Authentication, authorization, and
 permanent configuration failures stop immediately. If structured output remains invalid,

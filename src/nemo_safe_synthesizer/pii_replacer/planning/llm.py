@@ -50,8 +50,10 @@ __all__ = [
     "LLMPlanEnhancer",
 ]
 
-MAX_CLASSIFICATION_PROFILES = 32
-MAX_CLASSIFICATION_PROFILE_BYTES = 48 * 1024
+# Every request is split into batches of at most this many entries (column
+# profiles or dependency targets) and this many bytes of compact JSON evidence.
+MAX_BATCH_ENTRIES = 32
+MAX_BATCH_BYTES = 48 * 1024
 MAX_REQUEST_ATTEMPTS = 3
 RETRY_BASE_DELAY_SECONDS = 1.0
 RETRY_MAX_DELAY_SECONDS = 30.0
@@ -92,6 +94,7 @@ class _InvalidStructuredOutputError(GenerationError):
 
 ResponseT = TypeVar("ResponseT", bound=_StructuredResponse)
 ResultT = TypeVar("ResultT")
+BatchT = TypeVar("BatchT")
 
 
 def _profile_payload(profile: ColumnProfile) -> dict[str, object]:
@@ -113,17 +116,32 @@ def _json_bytes(value: object) -> int:
     return len(_compact_json(value).encode())
 
 
-def _profile_batches(profiles: Sequence[ColumnProfile]) -> list[list[dict[str, object]]]:
+def _bounded_batches(
+    payloads: Sequence[dict[str, object]],
+    *,
+    kind: str,
+    name_key: str,
+) -> list[list[dict[str, object]]]:
+    """Split request entries into batches within ``MAX_BATCH_ENTRIES`` and ``MAX_BATCH_BYTES``.
+
+    Args:
+        payloads: JSON-ready entries, kept in order.
+        kind: Entry description used in the oversize error, such as ``"Column profile"``.
+        name_key: Payload key naming the entry in the oversize error.
+
+    Returns:
+        Consecutive, non-empty batches covering every entry.
+
+    Raises:
+        ParameterError: If a single entry exceeds ``MAX_BATCH_BYTES`` on its own.
+    """
     batches: list[list[dict[str, object]]] = []
     current: list[dict[str, object]] = []
-    for profile in profiles:
-        payload = _profile_payload(profile)
-        if _json_bytes([payload]) > MAX_CLASSIFICATION_PROFILE_BYTES:
-            raise ParameterError(f"Column profile for {profile.column_name!r} exceeds the 48 KiB LLM evidence limit")
+    for payload in payloads:
+        if _json_bytes([payload]) > MAX_BATCH_BYTES:
+            raise ParameterError(f"{kind} for {payload[name_key]!r} exceeds the 48 KiB LLM evidence limit")
         candidate = [*current, payload]
-        if current and (
-            len(candidate) > MAX_CLASSIFICATION_PROFILES or _json_bytes(candidate) > MAX_CLASSIFICATION_PROFILE_BYTES
-        ):
+        if current and (len(candidate) > MAX_BATCH_ENTRIES or _json_bytes(candidate) > MAX_BATCH_BYTES):
             batches.append(current)
             current = [payload]
         else:
@@ -131,6 +149,14 @@ def _profile_batches(profiles: Sequence[ColumnProfile]) -> list[list[dict[str, o
     if current:
         batches.append(current)
     return batches
+
+
+def _profile_batches(profiles: Sequence[ColumnProfile]) -> list[list[dict[str, object]]]:
+    return _bounded_batches(
+        [_profile_payload(profile) for profile in profiles],
+        kind="Column profile",
+        name_key="column_name",
+    )
 
 
 def _entity_catalog() -> list[dict[str, object]]:
@@ -251,20 +277,17 @@ def _classification_messages(
         "Input\n"
         "- column_profiles: one entry per column, with its name, dtype, counts, and a few sample values.\n"
         "- entity_catalog: the entity types you may choose from, each with the pattern grammar it supports.\n"
-        "- discovery_context.protected_columns: columns NSS will never replace.\n"
-        "- discovery_context.group_column: the column that groups rows (for example, one patient's events). It is "
-        "not protected unless it is also listed in protected_columns.\n"
+        "- discovery_context.group_column: the column that groups rows (for example, one patient's events).\n"
         "- heuristic_classifications: guesses from a rule-based detector, only for columns it flagged. They can be "
         "wrong, and a column missing from this list may still hold sensitive data.\n"
         "- pattern_grammars: the pattern languages you may use.\n"
         "\n"
         "For each column\n"
         "1. Set entity_type to the catalog entry that matches what the values mean, or null if none fits. Classify "
-        "every column, including protected columns and the group column.\n"
+        "every column, including the group column.\n"
         "2. Set pattern to null unless all of these are true:\n"
         "   - entity_type is not null and that entity has a pattern_syntax. These entity types never take a "
         f"pattern: {_entity_types_without_pattern()};\n"
-        "   - the column is not in protected_columns;\n"
         "   - every sample value shares one format that the entity type alone does not capture. If the values mix "
         "formats, set pattern to null.\n"
         "3. A pattern must use exactly the grammar named by the entity's pattern_syntax and describe the whole cell "
@@ -272,14 +295,15 @@ def _classification_messages(
         "name columns in the table; NSS fills them with a generated name when no related column exists.\n"
         "\n"
         "Output\n"
-        "Return one classification per submitted column, in the same order. Do not skip, repeat, or add columns."
+        "Return a JSON object with one key, classifications: a list with one object per submitted column, in the "
+        "same order. Do not skip, repeat, or add columns. Each object has exactly the keys column_name, entity_type "
+        "(a catalog value or null), and pattern (a string or null). Example:\n"
+        '{"classifications":[{"column_name":"phone","entity_type":"phone_number","pattern":"###-###-####"},'
+        '{"column_name":"visit_count","entity_type":null,"pattern":null}]}'
     )
     user = _compact_json(
         {
-            "discovery_context": {
-                "group_column": discovery_input.group_column,
-                "protected_columns": sorted(discovery_input.protected_columns),
-            },
+            "discovery_context": {"group_column": discovery_input.group_column},
             "entity_catalog": _entity_catalog(),
             "pattern_grammars": pattern_grammar_catalog(),
             "heuristic_classifications": _heuristic_classifications_payload(baseline, batch),
@@ -361,11 +385,40 @@ def _selected_dependencies(response: _StructuredResponse, options: DependencyOpt
     return selected
 
 
-def _dependency_selection_messages(
+def _dependency_target_payloads(
     plan: PiiReplacementPlan,
     options: DependencyOptions,
     baseline: PiiReplacementPlan,
-) -> list[dict[str, str]]:
+) -> list[dict[str, object]]:
+    """Describe each dependency target and its permitted sources, in ``options`` order."""
+    heuristic_edges = _heuristic_dependency_edges(baseline)
+    specs = {spec.column_name: spec for spec in plan.columns_to_replace}
+    targets: list[dict[str, object]] = []
+    for target_column, sources_by_type in options.items():
+        # Targets are replacement columns, so read their repaired patterns from the plan.
+        spec = specs[target_column]
+        targets.append(
+            {
+                "target_column": target_column,
+                "target_entity_type": spec.entity_type.value,
+                "target_pattern": spec.pattern,
+                "target_pattern_syntax": _pattern_syntax_name(spec.entity_type, spec.pattern),
+                "source_options": {
+                    entity_type.value: {
+                        "columns": source_columns,
+                        "heuristic_choice": next(
+                            (source for source in source_columns if (target_column, source) in heuristic_edges),
+                            None,
+                        ),
+                    }
+                    for entity_type, source_columns in sources_by_type.items()
+                },
+            }
+        )
+    return targets
+
+
+def _dependency_selection_messages(targets: Sequence[Mapping[str, object]]) -> list[dict[str, str]]:
     system = (
         "You are helping NVIDIA NeMo Safe Synthesizer (NSS) de-identify a table before it is used to train a "
         "synthetic-data model. NSS replaces sensitive values with realistic fake values. A dependency tells NSS to "
@@ -396,40 +449,15 @@ def _dependency_selection_messages(
         "full_name, but not on both first_name and full_name.\n"
         "\n"
         "Output\n"
-        "Return one object per target column, keyed by the target column name. Inside it, give one key per source "
-        "entity type listed in that target's source_options, set to one of the listed columns or null."
+        "Return a JSON object with one key per target column in dependency_targets. Each value is an object with one "
+        "key per source entity type listed in that target's source_options, set to one of the listed columns or null. "
+        "For example, for a target column email whose source_options are first_name and last_name:\n"
+        '{"email":{"first_name":"given_name","last_name":null}}'
     )
-    heuristic_edges = _heuristic_dependency_edges(baseline)
-    specs = {spec.column_name: spec for spec in plan.columns_to_replace}
-    targets: list[dict[str, object]] = []
-    used_syntaxes: set[str] = set()
-    for target_column, sources_by_type in options.items():
-        # Targets are replacement columns, so read their repaired patterns from the plan.
-        spec = specs[target_column]
-        pattern_syntax = _pattern_syntax_name(spec.entity_type, spec.pattern)
-        if pattern_syntax is not None:
-            used_syntaxes.add(pattern_syntax)
-        targets.append(
-            {
-                "target_column": target_column,
-                "target_entity_type": spec.entity_type.value,
-                "target_pattern": spec.pattern,
-                "target_pattern_syntax": pattern_syntax,
-                "source_options": {
-                    entity_type.value: {
-                        "columns": source_columns,
-                        "heuristic_choice": next(
-                            (source for source in source_columns if (target_column, source) in heuristic_edges),
-                            None,
-                        ),
-                    }
-                    for entity_type, source_columns in sources_by_type.items()
-                },
-            }
-        )
+    used_syntaxes = {str(target["target_pattern_syntax"]) for target in targets if target["target_pattern_syntax"]}
     user = _compact_json(
         {
-            "dependency_targets": targets,
+            "dependency_targets": list(targets),
             "exclusive_dependency_groups": _exclusive_dependency_groups_payload(),
             # Only document the grammars that the targets' patterns actually use.
             "pattern_grammars": {
@@ -465,7 +493,8 @@ def _pattern_repair_messages(
     system = (
         "Repair only the optional whole-column pattern. Return one non-empty pattern that follows the supplied pattern "
         "grammar exactly and describes the complete cell values represented by the samples. Patterns are not regular "
-        "expressions. Do not change the column or entity type."
+        "expressions. Do not change the column or entity type. Return a JSON object with one key, pattern, for "
+        'example {"pattern":"###-###-####"}.'
     )
     syntax_name = pattern_syntax.name.lower()
     user = _compact_json(
@@ -583,11 +612,14 @@ class LLMPlanEnhancer(PlanEnhancer):
         if not batches:
             return []
         classify = partial(self._classify_batch, discovery_input, baseline)
+        return [classification for batch in self._map_batches(classify, batches) for classification in batch]
+
+    def _map_batches(self, request: Callable[[BatchT], ResultT], batches: Sequence[BatchT]) -> list[ResultT]:
+        """Run one request per batch, concurrently up to ``max_workers``, preserving batch order."""
         if len(batches) == 1:
-            return classify(batches[0])
+            return [request(batches[0])]
         with ThreadPoolExecutor(max_workers=min(self.settings.max_workers, len(batches))) as executor:
-            results = list(executor.map(classify, batches))
-        return [classification for batch_result in results for classification in batch_result]
+            return list(executor.map(request, batches))
 
     def _classify_batch(
         self,
@@ -632,13 +664,40 @@ class LLMPlanEnhancer(PlanEnhancer):
             if classification.entity_type is not None
         }
         options = _dependency_options(candidates, entity_types)
+        batches = _bounded_batches(
+            _dependency_target_payloads(plan, options, baseline),
+            kind="Dependency options",
+            name_key="target_column",
+        )
+        select = partial(self._select_batch_dependencies, plan, options, classifications)
+        selected = [dependency for batch in self._map_batches(select, batches) for dependency in batch]
+        try:
+            return apply_dependencies(plan, selected, classifications=classifications)
+        except (ParameterError, ValidationError) as exc:
+            # Every selection rule applies to one target, and the entity catalog's
+            # dependency graph is acyclic, so batches valid on their own stay valid together.
+            raise InternalError("Dependency batches that were valid individually failed together") from exc
+
+    def _select_batch_dependencies(
+        self,
+        plan: PiiReplacementPlan,
+        options: DependencyOptions,
+        classifications: Sequence[ColumnClassification],
+        targets: Sequence[Mapping[str, object]],
+    ) -> list[DependencyCandidate]:
+        batch_options = {str(target["target_column"]): options[str(target["target_column"])] for target in targets}
+
+        def parse(response: _StructuredResponse) -> list[DependencyCandidate]:
+            selected = _selected_dependencies(response, batch_options)
+            # Validate this batch on its own so retry feedback names its specific conflicts.
+            _apply_dependency_selection(plan, selected, classifications)
+            return selected
+
         return self._request_structured(
             purpose="PII dependency selection",
-            messages=_dependency_selection_messages(plan, options, baseline),
-            response_model=_dependency_response_model(options),
-            parse=lambda response: _apply_dependency_selection(
-                plan, _selected_dependencies(response, options), classifications
-            ),
+            messages=_dependency_selection_messages(targets),
+            response_model=_dependency_response_model(batch_options),
+            parse=parse,
         )
 
     def _request_structured(
@@ -652,8 +711,9 @@ class LLMPlanEnhancer(PlanEnhancer):
         """Request, validate, and parse one structured response with bounded retries.
 
         Every request path shares this loop. Each attempt resends the original
-        messages plus, after an invalid response, feedback describing only the
-        latest rejection, so the prompt does not grow across attempts.
+        messages plus feedback describing only the latest invalid response, so
+        the prompt does not grow across attempts. A transient failure keeps that
+        feedback for the next attempt.
 
         Args:
             purpose: Human-readable request name used in error messages.
@@ -682,8 +742,8 @@ class LLMPlanEnhancer(PlanEnhancer):
             except ParameterError:
                 raise
             except TransientInferenceError as exc:
+                # Keep the latest validation feedback: the failed request never reached the model.
                 self._wait_before_transient_retry(purpose, attempt, exc)
-                feedback = None
             except (InvalidInferenceResponse, ValidationError, ValueError) as exc:
                 _raise_if_invalid_output_exhausted(purpose, attempt)
                 feedback = _validation_feedback(exc)

@@ -228,7 +228,11 @@ def column_pattern_issue(df: pd.DataFrame, spec: PiiColumnPlan) -> str | None:
         matches = sum(_parses_datetime(value, pattern) for value in values)
     else:
         matcher, _ = _pattern_matcher(spec.entity_type, pattern)
-        assert matcher is not None  # column_pattern_syntax_issue rejects patterns without a matcher
+        if matcher is None:
+            # column_pattern_syntax_issue already rejected patterns without a matcher.
+            raise InternalError(
+                f"pattern {pattern!r} for column {spec.column_name!r} passed syntax checks without a matcher"
+            )
         matches = sum(matcher.fullmatch(value) is not None for value in values)
 
     if values and matches / len(values) < MIN_PATTERN_COVERAGE:
