@@ -27,6 +27,7 @@ __all__ = [
     "ConstantColumnCheck",
     "DatasetSizeCheck",
     "GroupbyColumnCheck",
+    "MiaExcludedColumnsCheck",
     "OrderbyColumnCheck",
     "PseudoColumnCheck",
     "TimeSeriesDataShapeCheck",
@@ -82,6 +83,31 @@ class GroupbyColumnCheck(DataFrameCheck):
             expect=DataError,
             code="column_nulls",
         )
+
+
+class MiaExcludedColumnsCheck(DataFrameCheck):
+    """Validate that every column in ``evaluation.mia_excluded_columns`` exists."""
+
+    name = "columns.mia_excluded"
+    label = "MIA excluded columns"
+
+    @override
+    def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
+        columns = ctx.config.evaluation.mia_excluded_columns
+        if not columns:
+            return
+        for column in columns:
+            emit_on_raise(
+                collector,
+                lambda column=column: check_column_present(
+                    ctx.data,
+                    column,
+                    role="MIA excluded",
+                    hint="Remove it from evaluation.mia_excluded_columns or fix the column name.",
+                ),
+                expect=ParameterError,
+                code="column_not_found",
+            )
 
 
 class OrderbyColumnCheck(DataFrameCheck):
