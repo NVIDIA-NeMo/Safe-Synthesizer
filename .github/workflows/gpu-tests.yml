@@ -159,6 +159,9 @@ jobs:
       }}
     timeout-minutes: 210
     runs-on: linux-amd64-gpu-a100-latest-1
+    # Job-level (not step-level) so a failed non-required leg still reports
+    # conclusion "failure" in the jobs API, which notify-slack reads.
+    continue-on-error: ${{ !matrix.required }}
     strategy:
       fail-fast: false
       matrix:
@@ -186,7 +189,6 @@ jobs:
 
       - name: Run GPU E2E tests
         id: e2e_tests
-        continue-on-error: ${{ !matrix.required }}
         run: mise run test:e2e:prepared
         timeout-minutes: 190
 
@@ -236,9 +238,10 @@ jobs:
   # ---------------------------------------------------------------------------
   # Post to Slack when any job in a nightly run fails, times out, or is
   # cancelled. Job names come from the GitHub API, so new matrix entries (e.g.
-  # another CUDA version) are picked up without changes here. Steps that fail
-  # under continue-on-error are included too. Manual dispatches are skipped
-  # because whoever triggered them is watching.
+  # another CUDA version) are picked up without changes here. Non-required
+  # legs must use job-level continue-on-error: a step-level one makes the API
+  # report the job as successful. Manual dispatches are skipped because whoever
+  # triggered them is watching.
   #
   # Requires the SLACK_GPU_TESTS_WEBHOOK_URL secret: the trigger URL of a Slack
   # Workflow Builder workflow ("From a webhook") that posts to
@@ -263,10 +266,7 @@ jobs:
           failed_jobs=$(gh api --paginate \
             "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}/jobs" \
             --jq '.jobs[]
-              | select(
-                  .conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out"
-                  or any(.steps[]?; .conclusion == "failure")
-                )
+              | select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out")
               | "• " + .name')
 
           if [[ -z "${failed_jobs}" ]]; then
