@@ -29,11 +29,13 @@ from nemo_safe_synthesizer.pii_replacer.planning import (
     PlanDiscoveryInput,
     resolve_plan,
 )
+from nemo_safe_synthesizer.pii_replacer.planning import llm as llm_module
 from nemo_safe_synthesizer.pii_replacer.planning.llm import (
-    MAX_CLASSIFICATION_PROFILE_BYTES,
-    MAX_CLASSIFICATION_PROFILES,
+    MAX_BATCH_BYTES,
+    MAX_BATCH_ENTRIES,
     RETRY_BASE_DELAY_SECONDS,
     RETRY_MAX_DELAY_SECONDS,
+    _bounded_batches,
     _json_bytes,
     _profile_batches,
 )
@@ -128,8 +130,57 @@ class TestClassificationBatching:
         batches = _profile_batches(captured[0].column_profiles)
 
         assert len(batches) > 1
-        assert all(len(batch) <= MAX_CLASSIFICATION_PROFILES for batch in batches)
-        assert all(_json_bytes(batch) <= MAX_CLASSIFICATION_PROFILE_BYTES for batch in batches)
+        assert all(len(batch) <= MAX_BATCH_ENTRIES for batch in batches)
+        assert all(_json_bytes(batch) <= MAX_BATCH_BYTES for batch in batches)
+
+
+@pytest.mark.unit
+class TestDependencyBatching:
+    def test_dependency_targets_are_batched_and_merged(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(llm_module, "MAX_BATCH_ENTRIES", 1)
+        dataframe = pd.DataFrame(
+            {
+                "first_name": ["Ada"],
+                "gender": ["F"],
+                "spouse_first_name": ["William"],
+                "spouse_gender": ["M"],
+            }
+        )
+        classifications = {
+            "first_name": "first_name",
+            "gender": "gender",
+            "spouse_first_name": "first_name",
+            "spouse_gender": "gender",
+        }
+        # One worker keeps batch order deterministic for the scripted responses.
+        enhancer, transport = _enhancer(
+            [
+                *[_classifications({column: entity}) for column, entity in classifications.items()],
+                _dependency_selection({"first_name": {"gender": "gender"}}),
+                _dependency_selection({"spouse_first_name": {"gender": "spouse_gender"}}),
+            ],
+            max_workers=1,
+        )
+
+        plan = resolve_plan(dataframe, ReplacePiiConfig(llm=_local_config()), DataParameters(), enhancer=enhancer)
+
+        depends_on = {
+            spec.column_name: [item.column_name for item in spec.depends_on] for spec in plan.columns_to_replace
+        }
+        assert depends_on == {"first_name": ["gender"], "spouse_first_name": ["spouse_gender"]}
+        dependency_targets = [
+            [target["target_column"] for target in json.loads(messages[1]["content"])["dependency_targets"]]
+            for messages, _ in transport.calls[len(classifications) :]
+        ]
+        assert dependency_targets == [["first_name"], ["spouse_first_name"]]
+
+    def test_oversized_dependency_target_is_rejected(self) -> None:
+        with pytest.raises(ParameterError, match="Dependency options for 'email' exceeds the 48 KiB"):
+            _bounded_batches(
+                [{"target_column": "email", "source_options": "x" * MAX_BATCH_BYTES}],
+                kind="Dependency options",
+                name_key="target_column",
+            )
 
 
 @pytest.mark.unit
@@ -164,10 +215,8 @@ class TestLLMPlanEnhancer:
 
         classification_messages, classification_model = transport.calls[0]
         classification_payload = json.loads(classification_messages[1]["content"])
-        assert classification_payload["discovery_context"] == {
-            "group_column": None,
-            "protected_columns": [],
-        }
+        assert classification_payload["discovery_context"] == {"group_column": None}
+        assert '"classifications":[{"column_name":' in classification_messages[0]["content"]
         assert set(classification_payload["column_profiles"][0]) == {
             "column_name",
             "dtype",
@@ -206,6 +255,7 @@ class TestLLMPlanEnhancer:
             in dependency_messages[0]["content"]
         )
         assert "describes the same person or record as the target" in dependency_messages[0]["content"]
+        assert "Return a JSON object with one key per target column" in dependency_messages[0]["content"]
         dependency_schema = dependency_model.model_json_schema()
         assert set(dependency_schema["properties"]) == {"email"}
         [email_choices] = dependency_schema["$defs"].values()
@@ -349,10 +399,9 @@ class TestLLMPlanEnhancer:
 
         assert [spec.column_name for spec in plan.columns_to_replace] == ["patient_id", "first_name"]
         classification_payload = json.loads(transport.calls[0][0][1]["content"])
-        assert classification_payload["discovery_context"] == {
-            "group_column": "patient_id",
-            "protected_columns": ["event_index"],
-        }
+        # Protected columns are excluded in code, so the prompt never mentions them.
+        assert classification_payload["discovery_context"] == {"group_column": "patient_id"}
+        assert "protected" not in transport.calls[0][0][0]["content"]
         dependency_payload = json.loads(transport.calls[1][0][1]["content"])
         assert dependency_payload["dependency_targets"] == [
             {
@@ -753,6 +802,22 @@ class TestLLMPlanEnhancer:
 
         assert sleeps == [expected_sleep]
 
+    def test_transient_failure_keeps_previous_validation_feedback(self) -> None:
+        dataframe = pd.DataFrame({"name": ["Ada"], "email": ["ada@example.com"]})
+        enhancer, transport = _enhancer(
+            [
+                _classifications({"name": None}),
+                TransientInferenceError("temporary"),
+                _classifications({"name": None, "email": None}),
+            ]
+        )
+
+        resolve_plan(dataframe, ReplacePiiConfig(llm=_local_config()), DataParameters(), enhancer=enhancer)
+
+        assert len(transport.calls) == 3
+        for messages, _ in transport.calls[1:]:
+            assert "missing: 'email'" in messages[-1]["content"]
+
     def test_exhausted_transient_failures_fail_planning(self) -> None:
         dataframe = pd.DataFrame({"email": ["ada@example.com"]})
         sleeps: list[float] = []
@@ -836,6 +901,7 @@ class TestLLMPlanEnhancer:
         repair_payload = json.loads(transport.calls[1][0][1]["content"])
         assert repair_payload["pattern_syntax"] == "character_mask"
         assert repair_payload["pattern_grammar"]["tokens"]["#"] == "digit 0-9"
+        assert '{"pattern":' in transport.calls[1][0][0]["content"]
 
     def test_pattern_covering_too_few_values_is_dropped_without_repair(self, caplog: pytest.LogCaptureFixture) -> None:
         dataframe = pd.DataFrame({"phone": ["+1-415-555-0100", "(212) 555-0199"]})
