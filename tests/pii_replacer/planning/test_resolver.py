@@ -98,9 +98,10 @@ class TestResolvePlan:
             columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
         )
         enhancer = RecordingEnhancer(expected)
+        monkeypatch.setenv("NSS_INFERENCE_ENDPOINT", "https://inference.example.com/v1")
         monkeypatch.setattr(
             "nemo_safe_synthesizer.pii_replacer.planning.llm.LLMPlanEnhancer",
-            lambda config: enhancer,
+            lambda config, environ=None: enhancer,
         )
 
         result = resolve_plan(
@@ -207,3 +208,130 @@ class TestResolvePlan:
 
         assert path.exists()
         assert load_plan(path) == plan
+
+
+class FakeLocalServer:
+    """Managed-server stand-in that records whether it is running."""
+
+    def __init__(self, profile: object, **kwargs: object) -> None:
+        self.running = False
+
+    def __enter__(self) -> "FakeLocalServer":
+        self.running = True
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        self.running = False
+
+    def inference_environ(self) -> dict[str, str]:
+        return {"NSS_INFERENCE_ENDPOINT": "http://127.0.0.1:8123/v1", "NSS_INFERENCE_MODEL": "openai/gpt-oss-120b"}
+
+
+@pytest.mark.unit
+class TestResolvePlanWithLocalServer:
+    @pytest.fixture
+    def servers(self, monkeypatch: pytest.MonkeyPatch) -> list[FakeLocalServer]:
+        created: list[FakeLocalServer] = []
+
+        def make_server(profile: object, **kwargs: object) -> FakeLocalServer:
+            created.append(FakeLocalServer(profile, **kwargs))
+            return created[-1]
+
+        monkeypatch.setattr("nemo_safe_synthesizer.pii_replacer.local_inference.managed.LocalVllmServer", make_server)
+        return created
+
+    def test_server_runs_for_enhancement_and_stops_before_validation(
+        self,
+        fixture_patient_df: pd.DataFrame,
+        servers: list[FakeLocalServer],
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        expected = PiiReplacementPlan(
+            columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
+        )
+        seen: dict[str, object] = {}
+
+        def make_enhancer(config: LLMConfig, environ: dict[str, str] | None = None) -> PlanEnhancer:
+            seen["environ"] = environ
+            seen["running_during_enhance"] = servers[0].running
+            return RecordingEnhancer(expected)
+
+        def record_validation(*args: object, **kwargs: object) -> None:
+            seen["running_during_validation"] = servers[0].running
+
+        monkeypatch.setattr("nemo_safe_synthesizer.pii_replacer.planning.llm.LLMPlanEnhancer", make_enhancer)
+        monkeypatch.setattr("nemo_safe_synthesizer.pii_replacer.planning.resolver.validate_plan", record_validation)
+
+        result = resolve_plan(
+            fixture_patient_df,
+            ReplacePiiConfig(llm=LLMConfig()),
+            DataParameters(),
+            output_path=tmp_path / "plan.yaml",
+        )
+
+        assert result is expected
+        assert seen["environ"] == servers[0].inference_environ()
+        assert seen["running_during_enhance"] is True
+        assert seen["running_during_validation"] is False
+        assert not servers[0].running
+
+    def test_server_stops_when_enhancement_fails(
+        self,
+        fixture_patient_df: pd.DataFrame,
+        servers: list[FakeLocalServer],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        class FailingEnhancer(PlanEnhancer):
+            def enhance(self, discovery_input: PlanDiscoveryInput, baseline: PiiReplacementPlan) -> PiiReplacementPlan:
+                raise RuntimeError("inference failed")
+
+        monkeypatch.setattr(
+            "nemo_safe_synthesizer.pii_replacer.planning.llm.LLMPlanEnhancer",
+            lambda config, environ=None: FailingEnhancer(),
+        )
+
+        with pytest.raises(RuntimeError, match="inference failed"):
+            resolve_plan(fixture_patient_df, ReplacePiiConfig(llm=LLMConfig()), DataParameters())
+
+        assert len(servers) == 1
+        assert not servers[0].running
+
+    @pytest.mark.parametrize(
+        "config",
+        [
+            pytest.param(ReplacePiiConfig(), id="llm-disabled"),
+            pytest.param(
+                ReplacePiiConfig(
+                    replacement_plan=PiiReplacementPlan(
+                        columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
+                    ),
+                    llm=LLMConfig(),
+                ),
+                id="explicit-plan",
+            ),
+        ],
+    )
+    def test_no_server_starts_without_llm_discovery(
+        self,
+        fixture_patient_df: pd.DataFrame,
+        servers: list[FakeLocalServer],
+        config: ReplacePiiConfig,
+    ) -> None:
+        resolve_plan(fixture_patient_df, config, DataParameters())
+
+        assert servers == []
+
+    def test_caller_supplied_enhancer_starts_no_server(
+        self,
+        fixture_patient_df: pd.DataFrame,
+        servers: list[FakeLocalServer],
+    ) -> None:
+        resolve_plan(
+            fixture_patient_df,
+            ReplacePiiConfig(llm=LLMConfig()),
+            DataParameters(),
+            enhancer=RecordingEnhancer(PiiReplacementPlan()),
+        )
+
+        assert servers == []

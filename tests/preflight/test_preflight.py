@@ -396,7 +396,6 @@ class TestInferenceModelCheck:
     @pytest.mark.parametrize(
         ("environ", "expected_codes"),
         [
-            pytest.param({}, ["inference_key_missing"], id="hosted-without-key"),
             pytest.param({"NSS_INFERENCE_ENDPOINT": "http://localhost:8000/v1"}, [], id="keyless-local"),
             pytest.param(
                 {"NSS_INFERENCE_ENDPOINT": "not-a-url", "NSS_INFERENCE_KEY": "key"},
@@ -410,7 +409,7 @@ class TestInferenceModelCheck:
             ),
         ],
     )
-    def test_enabled_llm_validates_inference_environment(self, default_config, environ, expected_codes):
+    def test_explicit_endpoint_validates_inference_environment(self, default_config, environ, expected_codes):
         default_config.replace_pii.llm = LLMConfig(model_id="local-model")
 
         with patch.dict("os.environ", environ, clear=True):
@@ -418,6 +417,40 @@ class TestInferenceModelCheck:
 
         assert [issue.code for issue in issues] == expected_codes
         assert all(issue.severity == "error" for issue in issues)
+
+    def test_explicit_endpoint_without_model_is_an_error(self, default_config):
+        default_config.replace_pii.llm = LLMConfig()
+
+        with patch.dict("os.environ", {"NSS_INFERENCE_ENDPOINT": "http://localhost:8000/v1"}, clear=True):
+            issues = InferenceModelCheck().run(make_ctx(config=default_config))
+
+        assert [issue.code for issue in issues] == ["inference_model_missing"]
+
+    @pytest.mark.parametrize(
+        ("environ", "runtime_problem", "expected_codes"),
+        [
+            pytest.param({}, None, [], id="default-local-server"),
+            pytest.param({}, "no CUDA GPU is available", ["inference_local_runtime_unavailable"], id="no-gpu"),
+            pytest.param(
+                {"NSS_INFERENCE_LOCAL_PROFILE": "missing"}, None, ["inference_local_profile_invalid"], id="bad-profile"
+            ),
+        ],
+    )
+    def test_managed_local_server_replaces_endpoint_validation(
+        self, default_config, environ, runtime_problem, expected_codes
+    ):
+        default_config.replace_pii.llm = LLMConfig()
+
+        with (
+            patch.dict("os.environ", environ, clear=True),
+            patch(
+                "nemo_safe_synthesizer.preflight.checks.environment.local_runtime_problem",
+                return_value=runtime_problem,
+            ),
+        ):
+            issues = InferenceModelCheck().run(make_ctx(config=default_config))
+
+        assert [issue.code for issue in issues] == expected_codes
 
 
 @pytest.mark.unit

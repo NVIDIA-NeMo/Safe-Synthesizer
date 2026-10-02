@@ -45,9 +45,12 @@ Grouped by the `Category` column -- `nss`-native settings first, then
 | `NSS_LOG_COLOR` | nss | `--log-color` / `--no-log-color` | CLI / observability | auto (TTY) | Colorize console output | [Running -- Log Format](running.md#log-format) |
 | `NSS_LOG_LEVEL` | nss | `--verbose` (0–2) | observability | `INFO` | Log level (`DEBUG`, `DEBUG_DEPENDENCIES`, etc.) | Set via verbosity, not a direct CLI flag |
 | `NSS_DATASET_REGISTRY` | nss | `--dataset-registry` | CLI | -- | Dataset registry YAML path or URL | [Running -- Dataset Registry](running.md#dataset-registry) |
-| `NSS_INFERENCE_ENDPOINT` | nss | `--inference-endpoint-url` | PII planning | NVIDIA integrate URL | OpenAI-compatible PII inference endpoint | [PII appendix](#pii-replacement) |
-| `NSS_INFERENCE_KEY` | nss | `--inference-api-key` | PII planning | -- | Inference credential; required by the default hosted endpoint | [PII appendix](#pii-replacement) |
-| `NSS_INFERENCE_MODEL` | nss | `--inference-model-id` | PII planning | `nvidia/nemotron-3-ultra-550b-a55b` | Model ID served by the PII inference endpoint | [PII appendix](#pii-replacement) |
+| `NSS_INFERENCE_ENDPOINT` | nss | `--inference-endpoint-url` | PII planning | -- (local vLLM server) | OpenAI-compatible PII inference endpoint; replaces the default local server | [PII appendix](#pii-replacement) |
+| `NSS_INFERENCE_KEY` | nss | `--inference-api-key` | PII planning | -- | Inference credential; required by the hosted NVIDIA endpoint | [PII appendix](#pii-replacement) |
+| `NSS_INFERENCE_MODEL` | nss | `--inference-model-id` | PII planning | `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16` locally; required with an endpoint | Model ID for PII inference; without an endpoint, selects the bundled local profile | [PII appendix](#pii-replacement) |
+| `NSS_INFERENCE_TIMEOUT` | nss | `--inference-timeout-seconds` | PII planning | local profile's timeout, else `60` | Per-request inference timeout in seconds, including model reasoning | [PII appendix](#pii-replacement) |
+| `NSS_INFERENCE_REQUEST_OPTIONS` | nss | `--inference-request-options` | PII planning | local profile's options, else `{"temperature": 0}` | JSON object of extra chat-completions fields sent with every request | [PII appendix](#pii-replacement) |
+| `NSS_INFERENCE_LOCAL_PROFILE` | nss | `--inference-local-profile` | PII planning | -- | Custom profile YAML for the local vLLM server NSS runs during plan discovery | [PII appendix](#pii-replacement) |
 | `NSS_WANDB_MODE` | nss | `--wandb-mode` | WandB | `disabled` | WandB run mode | Alias for `WANDB_MODE` |
 | `NSS_WANDB_PROJECT` | nss | `--wandb-project` | WandB | -- | WandB project name | Alias for `WANDB_PROJECT` |
 | `NSS_WANDB_UPLOAD_EVALUATION_REPORT` | nss | `--wandb-upload-evaluation-report` / `--no-wandb-upload-evaluation-report` | WandB | `true` | Upload final evaluation HTML and artifact | Set to `false` to skip HTML and artifact publishing; summary metrics and the scorecard remain enabled |
@@ -168,17 +171,20 @@ for the full pre-cache checklist.
 ## PII Replacement
 
 Adding an `llm` mapping under `replace_pii` enables LLM-assisted plan
-enhancement. Set the inference endpoint and credential through environment
+enhancement. By default, NSS runs `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16` in a local vLLM server
+on the GPU for the duration of plan discovery, so no endpoint or key is needed.
+To use another service, set its endpoint and credential through environment
 variables or CLI options, not YAML:
 
-```bash title="PII inference environment" hl_lines="1 2"
-export NSS_INFERENCE_ENDPOINT=http://localhost:8000/v1
-export NSS_INFERENCE_MODEL=gpt-oss-120b
+```bash title="PII inference environment" hl_lines="1 2 3"
+export NSS_INFERENCE_ENDPOINT=https://integrate.api.nvidia.com/v1
+export NSS_INFERENCE_MODEL=nvidia/nemotron-3-ultra-550b-a55b
+export NSS_INFERENCE_KEY=<your key>
 ```
 
 The endpoint must use HTTPS unless it is a loopback address (`localhost`,
 `127.0.0.0/8`, or `::1`), because plan enhancement sends raw cell samples and
-the API key. Set `NSS_INFERENCE_KEY` when the endpoint requires authentication. The default
+the API key. Set `NSS_INFERENCE_KEY` when the endpoint requires authentication. The
 hosted NVIDIA endpoint always requires it; local OpenAI-compatible endpoints
 may be keyless. The endpoint and key are intentionally rejected in YAML. The
 model ID may instead be persisted as `replace_pii.llm.model_id`.
@@ -186,8 +192,21 @@ model ID may instead be persisted as `replace_pii.llm.model_id`.
 The equivalent CLI options are `--inference-endpoint-url`,
 `--inference-model-id`, and `--inference-api-key`, which take precedence over
 environment or persisted model settings. For the model ID, the complete order
-is CLI option, persisted `replace_pii.llm.model_id`, environment variable, then
-the NSS default.
+is CLI option, persisted `replace_pii.llm.model_id`, then environment variable.
+With an explicit endpoint, the model ID is required. Without an endpoint, it
+selects a bundled local profile, defaults to `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16`, and a model
+without a bundled profile is an error.
+
+To run a model that has no bundled profile locally, set a custom serving profile:
+
+```bash title="Managed local PII inference"
+export NSS_INFERENCE_LOCAL_PROFILE=/path/to/profile.yaml
+```
+
+With a local profile, `NSS_INFERENCE_ENDPOINT` is optional and, when set, must
+be a loopback URL that selects the listening address. If vLLM or a CUDA GPU is
+unavailable, planning fails instead of falling back to a remote service. See
+[Local inference server](../product-overview/pii_replacement.md#local-inference-server).
 
 Plan enhancement sends bounded raw cell samples to the configured endpoint.
 Only enable it when that endpoint is approved to receive the input data.

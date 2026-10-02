@@ -72,9 +72,12 @@ NUM_EVAL_BATCHES_GROUPED = 1
 PSEUDO_GROUP_COLUMN = "__nss_sequence_id"
 DEFAULT_EXCLUDE_COLUMNS: tuple[str, ...] = (PSEUDO_GROUP_COLUMN,)
 
-# Default OpenAI-compatible inference service used by PII replacement v3.
-DEFAULT_NSS_INFERENCE_ENDPOINT = "https://integrate.api.nvidia.com/v1"
-DEFAULT_NSS_INFERENCE_MODEL = "nvidia/nemotron-3-ultra-550b-a55b"
+# Per-request PII inference timeout unless NSS_INFERENCE_TIMEOUT or a local
+# serving profile sets one.
+DEFAULT_NSS_INFERENCE_TIMEOUT_SECONDS = 60.0
+# PII replacement v3 runs this model in a local vLLM server, from its bundled
+# profile, when no inference endpoint or model is configured.
+DEFAULT_NSS_INFERENCE_LOCAL_MODEL = "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16"
 PII_REPLACEMENT_PLAN_FILENAME = "pii_replacement_plan.yaml"
 
 # Managed parquet assets for the PII sampler (``datasets/{locale}.parquet``).

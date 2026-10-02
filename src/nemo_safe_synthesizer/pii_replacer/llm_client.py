@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import copy
 import ipaddress
+import json
 import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -17,20 +18,27 @@ import httpx
 from pydantic import BaseModel
 
 from ..config.replace_pii import LLMConfig
-from ..defaults import DEFAULT_NSS_INFERENCE_ENDPOINT, DEFAULT_NSS_INFERENCE_MODEL
+from ..defaults import DEFAULT_NSS_INFERENCE_TIMEOUT_SECONDS
 from ..errors import GenerationError, ParameterError
 
 __all__ = [
     "InferenceSettings",
     "InvalidInferenceResponse",
     "LLMTransport",
-    "MissingInferenceKeyError",
+    "MissingInferenceModelError",
     "OpenAICompatibleTransport",
     "TransientInferenceError",
     "resolve_inference_settings",
+    "resolve_inference_timeout",
+    "resolve_request_options",
+    "RESERVED_REQUEST_FIELDS",
 ]
 
 _CHAT_COMPLETIONS_PATH = "/chat/completions"
+_DEFAULT_REQUEST_OPTIONS: dict[str, object] = {"temperature": 0}
+
+RESERVED_REQUEST_FIELDS = frozenset({"messages", "model", "response_format", "stream"})
+"""Chat-completions fields NSS sets itself and request options must not override."""
 _TRANSIENT_STATUS_CODES = frozenset({408, 409, 425, 429})
 
 
@@ -46,6 +54,12 @@ class InferenceSettings:
 
     max_workers: int
     """Maximum concurrent requests."""
+
+    timeout_seconds: float = DEFAULT_NSS_INFERENCE_TIMEOUT_SECONDS
+    """Per-request timeout; reasoning models on local GPUs can need several minutes."""
+
+    request_options: Mapping[str, object] = field(default_factory=lambda: dict(_DEFAULT_REQUEST_OPTIONS))
+    """Extra chat-completions fields, such as sampling settings, sent with every request."""
 
     api_key: str | None = field(default=None, repr=False)
     """Bearer credential, or ``None`` for keyless local endpoints; excluded from ``repr``."""
@@ -69,8 +83,8 @@ class InvalidInferenceResponse(GenerationError):
     """Retryable malformed inference envelope without response content."""
 
 
-class MissingInferenceKeyError(ParameterError):
-    """The resolved endpoint requires an API key, but none was supplied."""
+class MissingInferenceModelError(ParameterError):
+    """An explicit endpoint is configured, but no model ID for it."""
 
 
 class LLMTransport(Protocol):
@@ -120,8 +134,50 @@ def _validate_endpoint(endpoint_url: str) -> None:
         )
 
 
-def _is_default_hosted_endpoint(endpoint_url: str) -> bool:
-    return endpoint_url.rstrip("/") == DEFAULT_NSS_INFERENCE_ENDPOINT.rstrip("/")
+def resolve_inference_timeout(environ: Mapping[str, str] | None = None) -> float:
+    """Return the per-request timeout from ``NSS_INFERENCE_TIMEOUT``, or the default.
+
+    Raises:
+        ParameterError: If the value is not a positive number of seconds.
+    """
+    runtime_env = os.environ if environ is None else environ
+    raw = _nonblank(runtime_env.get("NSS_INFERENCE_TIMEOUT"))
+    if raw is None:
+        return DEFAULT_NSS_INFERENCE_TIMEOUT_SECONDS
+    try:
+        timeout = float(raw)
+    except ValueError:
+        timeout = 0.0
+    if not timeout > 0 or timeout == float("inf"):
+        raise ParameterError(f"NSS_INFERENCE_TIMEOUT must be a positive number of seconds, got {raw!r}")
+    return timeout
+
+
+def resolve_request_options(environ: Mapping[str, str] | None = None) -> dict[str, object]:
+    """Return the chat-completions fields sent with every request.
+
+    ``NSS_INFERENCE_REQUEST_OPTIONS`` holds a JSON object, such as
+    ``{"temperature": 1.0, "thinking_token_budget": 1000}``, that replaces the
+    default ``{"temperature": 0}``. Omitting ``temperature`` there leaves it to
+    the server's default.
+
+    Raises:
+        ParameterError: If the value is not a JSON object or sets a field in
+            ``RESERVED_REQUEST_FIELDS``.
+    """
+    runtime_env = os.environ if environ is None else environ
+    raw = _nonblank(runtime_env.get("NSS_INFERENCE_REQUEST_OPTIONS"))
+    if raw is None:
+        return dict(_DEFAULT_REQUEST_OPTIONS)
+    try:
+        options = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ParameterError("NSS_INFERENCE_REQUEST_OPTIONS must be a JSON object") from exc
+    if not isinstance(options, dict):
+        raise ParameterError("NSS_INFERENCE_REQUEST_OPTIONS must be a JSON object")
+    if reserved := sorted(RESERVED_REQUEST_FIELDS.intersection(options)):
+        raise ParameterError(f"NSS_INFERENCE_REQUEST_OPTIONS must not set fields NSS manages: {', '.join(reserved)}")
+    return cast(dict[str, object], options)
 
 
 def resolve_inference_settings(
@@ -129,17 +185,21 @@ def resolve_inference_settings(
     *,
     environ: Mapping[str, str] | None = None,
 ) -> InferenceSettings:
-    """Resolve inference settings from persisted configuration, environment, and defaults.
+    """Resolve inference settings from persisted configuration and environment.
 
-    The model resolves from ``config.model_id``, then ``NSS_INFERENCE_MODEL``,
-    then the NSS default. As with other overlapping YAML and environment
-    settings, an explicit YAML value wins and the environment only supplies its
-    default. The CLI applies an explicit ``--inference-model-id`` to
-    ``config.model_id`` before this runs.
+    There are no defaults: an endpoint and its model must both be set. The
+    model resolves from ``config.model_id``, then ``NSS_INFERENCE_MODEL``. As
+    with other overlapping YAML and environment settings, an explicit YAML
+    value wins and the environment only supplies its default. The CLI applies
+    an explicit ``--inference-model-id`` to ``config.model_id`` before this runs.
 
     The endpoint and API key are deliberately absent from persisted
     configuration. They come only from ``NSS_INFERENCE_ENDPOINT`` and
     ``NSS_INFERENCE_KEY``, which the CLI populates from its runtime options.
+    The per-request timeout comes from ``NSS_INFERENCE_TIMEOUT`` and extra
+    request fields from ``NSS_INFERENCE_REQUEST_OPTIONS``.
+    Plan discovery calls this inside ``planning_inference_environment``, which
+    points these variables at the managed local server when no endpoint is set.
 
     Args:
         config: Persisted LLM behavior from ``replace_pii.llm``.
@@ -149,22 +209,26 @@ def resolve_inference_settings(
         Settings with a validated endpoint and resolved model.
 
     Raises:
-        ParameterError: If the endpoint is not an absolute HTTP(S) URL, embeds
-            credentials, or uses plaintext HTTP for a non-loopback host.
-        MissingInferenceKeyError: If the default hosted endpoint is selected
-            without an API key.
+        ParameterError: If no endpoint is set, or the endpoint is not an
+            absolute HTTP(S) URL, embeds credentials, or uses plaintext HTTP
+            for a non-loopback host.
+        MissingInferenceModelError: If the endpoint has no model ID.
+
+    See :func:`resolve_inference_timeout` and :func:`resolve_request_options`
+    for their validation errors.
     """
     runtime_env = os.environ if environ is None else environ
-    resolved_endpoint = _nonblank(runtime_env.get("NSS_INFERENCE_ENDPOINT")) or DEFAULT_NSS_INFERENCE_ENDPOINT
-    resolved_model = (
-        _nonblank(config.model_id) or _nonblank(runtime_env.get("NSS_INFERENCE_MODEL")) or DEFAULT_NSS_INFERENCE_MODEL
-    )
+    resolved_endpoint = _nonblank(runtime_env.get("NSS_INFERENCE_ENDPOINT"))
+    resolved_model = _nonblank(config.model_id) or _nonblank(runtime_env.get("NSS_INFERENCE_MODEL"))
     resolved_key = _nonblank(runtime_env.get("NSS_INFERENCE_KEY"))
 
+    if resolved_endpoint is None:
+        raise ParameterError("No PII inference endpoint is set; set NSS_INFERENCE_ENDPOINT or --inference-endpoint-url")
     _validate_endpoint(resolved_endpoint)
-    if _is_default_hosted_endpoint(resolved_endpoint) and resolved_key is None:
-        raise MissingInferenceKeyError(
-            "NSS_INFERENCE_KEY or --inference-api-key is required for the default hosted NVIDIA inference endpoint"
+    if resolved_model is None:
+        raise MissingInferenceModelError(
+            "NSS_INFERENCE_ENDPOINT is set, so the model it serves must be set too: use "
+            "replace_pii.llm.model_id, --inference-model-id, or NSS_INFERENCE_MODEL"
         )
 
     return InferenceSettings(
@@ -172,6 +236,8 @@ def resolve_inference_settings(
         model_id=resolved_model,
         api_key=resolved_key,
         max_workers=config.max_workers,
+        timeout_seconds=resolve_inference_timeout(runtime_env),
+        request_options=resolve_request_options(runtime_env),
     )
 
 
@@ -229,19 +295,19 @@ class OpenAICompatibleTransport:
 
     Args:
         settings: Resolved endpoint, model, and credential.
-        timeout: Per-request timeout in seconds.
+        timeout: Per-request timeout in seconds; defaults to ``settings.timeout_seconds``.
 
     Raises:
         ParameterError: If the endpoint is malformed, embeds credentials, or
             uses plaintext HTTP for a non-loopback host.
     """
 
-    def __init__(self, settings: InferenceSettings, *, timeout: float = 60.0) -> None:
+    def __init__(self, settings: InferenceSettings, *, timeout: float | None = None) -> None:
         # Settings built directly, not through ``resolve_inference_settings``,
         # must not send samples or the bearer key over an unsafe endpoint.
         _validate_endpoint(settings.endpoint_url)
         self._settings = settings
-        self._timeout = timeout
+        self._timeout = settings.timeout_seconds if timeout is None else timeout
 
     def complete(
         self,
@@ -280,7 +346,7 @@ class OpenAICompatibleTransport:
                     "schema": _strict_json_schema(response_model),
                 },
             },
-            "temperature": 0,
+            **self._settings.request_options,
         }
         try:
             response = httpx.post(
@@ -293,7 +359,10 @@ class OpenAICompatibleTransport:
             raise TransientInferenceError("PII inference transport failed") from exc
 
         if response.status_code in {401, 403}:
-            raise ParameterError(f"PII inference authentication or authorization failed (HTTP {response.status_code})")
+            raise ParameterError(
+                f"PII inference authentication or authorization failed (HTTP {response.status_code}); "
+                "check NSS_INFERENCE_KEY or --inference-api-key"
+            )
         if response.status_code in _TRANSIENT_STATUS_CODES or response.status_code >= 500:
             raise TransientInferenceError(
                 f"PII inference service returned HTTP {response.status_code}",

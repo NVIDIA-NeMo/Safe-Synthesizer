@@ -15,7 +15,11 @@ from typing_extensions import override
 from ...errors import ParameterError
 from ...llm.utils import ModelRef
 from ...observability import get_logger
-from ...pii_replacer.llm_client import MissingInferenceKeyError, resolve_inference_settings
+from ...pii_replacer.llm_client import (
+    MissingInferenceModelError,
+    resolve_inference_settings,
+)
+from ...pii_replacer.local_inference import local_runtime_problem, resolve_local_server_request
 from ...utils import hf_offline_enabled
 from ..base import ConfigCheck, IssueCollector, MetadataCheck
 from ..helpers import require_import
@@ -452,7 +456,12 @@ class VRAMHeadroomCheck(MetadataCheck):
 
 
 class InferenceModelCheck(ConfigCheck):
-    """Validate configured PII plan-enhancement inference settings."""
+    """Validate configured PII plan-enhancement inference settings.
+
+    When a managed local server applies (a local profile, or no endpoint at
+    all), validates the profile, managed address, model names, and that vLLM
+    and a CUDA GPU are available, instead of the remote endpoint and key.
+    """
 
     name = "env.inference"
     label = "Inference configuration"
@@ -464,9 +473,22 @@ class InferenceModelCheck(ConfigCheck):
         if replace_pii is None or replace_pii.llm is None:
             return
         try:
+            local_server = resolve_local_server_request(replace_pii.llm)
+        except ParameterError as exc:
+            collector.error("inference_local_profile_invalid", str(exc))
+            return
+        if local_server is not None:
+            if problem := local_runtime_problem():
+                collector.error(
+                    "inference_local_runtime_unavailable",
+                    f"LLM-assisted PII planning runs a local vLLM server unless NSS_INFERENCE_ENDPOINT is set, "
+                    f"but {problem}.",
+                )
+            return
+        try:
             resolve_inference_settings(replace_pii.llm)
-        except MissingInferenceKeyError as exc:
-            collector.error("inference_key_missing", str(exc))
+        except MissingInferenceModelError as exc:
+            collector.error("inference_model_missing", str(exc))
         except ParameterError as exc:
             collector.error("inference_endpoint_invalid", str(exc))
 

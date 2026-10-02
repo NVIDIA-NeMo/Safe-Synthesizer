@@ -590,7 +590,8 @@ class PiiReplacementPlan(Parameters):
 class LLMConfig(NSSBaseModel):
     """Inference behavior shared by PII planning and replacement.
 
-    LLM behavior is disabled when ``ReplacePiiConfig.llm`` is ``None``. The
+    LLM behavior is disabled when ``ReplacePiiConfig.llm`` is ``None``. Without
+    an endpoint, NSS runs the model in a managed local vLLM server. An
     OpenAI-compatible endpoint is supplied at runtime through
     ``NSS_INFERENCE_ENDPOINT`` or ``--inference-endpoint-url`` rather than persisted
     in NSS configuration.
@@ -599,8 +600,9 @@ class LLMConfig(NSSBaseModel):
     model_id: str | None = Field(
         default=None,
         description=(
-            "Model identifier served by the inference endpoint. When unset, uses "
-            "NSS_INFERENCE_MODEL or the NSS default model."
+            "Model identifier for PII inference. When unset, uses NSS_INFERENCE_MODEL. Without an inference "
+            "endpoint, selects the bundled local vLLM profile and defaults to nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16; with an "
+            "endpoint, a model ID is required."
         ),
     )
     max_workers: int = Field(
