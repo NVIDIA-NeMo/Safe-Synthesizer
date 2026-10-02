@@ -827,3 +827,25 @@ class TestLLMPlanEnhancer:
         assert plan.columns_to_replace[0].entity_type is EntityType.PHONE_NUMBER
         assert plan.columns_to_replace[0].pattern is None
         assert len(transport.calls) == 4
+
+    def test_strftime_pattern_with_repeated_directive_is_repaired_instead_of_crashing(self) -> None:
+        dataframe = pd.DataFrame({"dob": ["12/10/1815", "09/12/1906"]})
+        repeated = "%m/%d/%Y|%d/%m/%Y"
+        enhancer, transport = _enhancer(
+            [
+                _classifications({"dob": "date_of_birth"}, patterns={"dob": repeated}),
+                *[json.dumps({"pattern": repeated})] * 3,
+            ]
+        )
+
+        plan = resolve_plan(
+            dataframe,
+            ReplacePiiConfig(llm=_local_config()),
+            DataParameters(),
+            enhancer=enhancer,
+        )
+
+        assert plan.columns_to_replace[0].column_name == "dob"
+        assert plan.columns_to_replace[0].pattern is None
+        assert len(transport.calls) == 4
+        assert "is not valid strftime" in transport.calls[1][0][1]["content"]
