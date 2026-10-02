@@ -17,6 +17,7 @@ from transformers import PretrainedConfig, PreTrainedTokenizerBase
 
 from nemo_safe_synthesizer.config.data import DataParameters
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
+from nemo_safe_synthesizer.config.replace_pii import LLMConfig
 from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
 from nemo_safe_synthesizer.config.training import TrainingHyperparams
 from nemo_safe_synthesizer.defaults import DEFAULT_MAX_SEQ_LENGTH, PSEUDO_GROUP_COLUMN
@@ -383,7 +384,7 @@ class TestVRAMHeadroomCheck:
 
 @pytest.mark.unit
 class TestInferenceModelCheck:
-    def test_legacy_pii_inference_check_is_inactive(self, default_config):
+    def test_disabled_llm_skips_inference_environment(self, default_config):
         with patch.dict(
             "os.environ",
             {"NSS_INFERENCE_MODEL": "", "NSS_INFERENCE_ENDPOINT": "not-a-url"},
@@ -391,6 +392,32 @@ class TestInferenceModelCheck:
         ):
             issues = InferenceModelCheck().run(make_ctx(config=default_config))
         assert issues == []
+
+    @pytest.mark.parametrize(
+        ("environ", "expected_codes"),
+        [
+            pytest.param({}, ["inference_key_missing"], id="hosted-without-key"),
+            pytest.param({"NSS_INFERENCE_ENDPOINT": "http://localhost:8000/v1"}, [], id="keyless-local"),
+            pytest.param(
+                {"NSS_INFERENCE_ENDPOINT": "not-a-url", "NSS_INFERENCE_KEY": "key"},
+                ["inference_endpoint_invalid"],
+                id="malformed-endpoint",
+            ),
+            pytest.param(
+                {"NSS_INFERENCE_ENDPOINT": "http://inference.example.com/v1"},
+                ["inference_endpoint_invalid"],
+                id="remote-plaintext-http",
+            ),
+        ],
+    )
+    def test_enabled_llm_validates_inference_environment(self, default_config, environ, expected_codes):
+        default_config.replace_pii.llm = LLMConfig(model_id="local-model")
+
+        with patch.dict("os.environ", environ, clear=True):
+            issues = InferenceModelCheck().run(make_ctx(config=default_config))
+
+        assert [issue.code for issue in issues] == expected_codes
+        assert all(issue.severity == "error" for issue in issues)
 
 
 @pytest.mark.unit
