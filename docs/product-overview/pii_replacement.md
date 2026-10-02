@@ -153,10 +153,13 @@ characters. The prompt includes the entity catalog and the exact supported
 pattern grammars. Grouping-column and protected-column metadata is sent as
 discovery context. NSS then derives replacement columns and all permitted
 dependency candidates deterministically from those classifications. The second
-pass can only select
-contextually useful dependency candidate IDs. Candidates identify edges
-selected by the heuristic baseline so that choice remains
-available as fallible prior evidence. NSS, rather than the model, derives
+pass sees only column names, entity types, and proposed patterns, not cell
+values. For each replacement column and each permitted source entity type, it
+chooses at most one candidate column, the one describing the same person or
+record, or none. The response schema lists only the candidate columns, so the
+model cannot name another column or choose two sources of one type, such as
+both a person's and a spouse's gender. Each option carries the heuristic
+baseline's choice as fallible prior evidence. NSS, rather than the model, derives
 group-consistent or record-consistent replacement behavior from the configured
 grouping column, excludes protected ordering and timestamp columns, and validates
 the assembled plan. Grouping columns remain eligible for replacement so
@@ -171,8 +174,8 @@ planning fails instead of falling back to the heuristic baseline. Invalid
 optional patterns receive up to three focused repair attempts; NSS drops only
 the pattern and warns if every repair response is invalid. Transient failures
 that persist through all repair attempts still fail planning, as for any other
-request. Retry feedback names the specific columns, dependency IDs, or
-dependency conflicts that made the previous response invalid.
+request. Retry feedback names the specific columns or dependency conflicts that
+made the previous response invalid.
 
 !!! warning "Inference endpoints receive source data"
     Plan enhancement can send bounded raw cell samples from the full input
