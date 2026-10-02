@@ -198,7 +198,7 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
             default=None,
             help="Model ID served by the PII inference endpoint. "
             "Can also be set via NSS_INFERENCE_MODEL env var. "
-            "Without an endpoint, selects the bundled local vLLM profile to run (default: openai/gpt-oss-120b); "
+            "Without an endpoint, selects the bundled local vLLM profile to run (default: nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16); "
             "required with an explicit endpoint.",
         )
     )

@@ -125,7 +125,7 @@ replace_pii:
 ```
 
 An empty mapping (`llm: {}`) enables the NSS inference defaults. By default,
-NSS runs `openai/gpt-oss-120b` in a local vLLM server for the duration of plan
+NSS runs `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16` in a local vLLM server for the duration of plan
 discovery; see [Local inference server](#local-inference-server). To use
 another OpenAI-compatible service instead, set its endpoint at runtime through
 `NSS_INFERENCE_ENDPOINT` or the `--inference-endpoint-url` CLI option. For
@@ -152,7 +152,7 @@ plan artifacts.
 When no inference endpoint is set, NSS starts a vLLM server on the local GPU for
 plan discovery. The model ID (`replace_pii.llm.model_id`,
 `--inference-model-id`, or `NSS_INFERENCE_MODEL`) selects the bundled profile
-to run, and defaults to `openai/gpt-oss-120b`:
+to run, and defaults to `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16`:
 
 ```bash
 safe-synthesizer run replace-pii --plan-only \
@@ -168,9 +168,9 @@ the schema-constrained answer, and fit one 80 GB GPU, such as an A100 or H100:
 
 | Model ID | Weights | Request timeout | Notes |
 |----------|---------|-----------------|-------|
-| `openai/gpt-oss-120b` (default) | about 65 GB | 120 s | Mixture of experts; default medium reasoning effort |
+| `openai/gpt-oss-120b` | about 65 GB | 120 s | Mixture of experts; default medium reasoning effort |
 | `Qwen/Qwen3.8-27B` | about 56 GB | 300 s | Dense; low reasoning effort, 1,000-token thinking budget |
-| `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16` | about 66 GB | 300 s | Hybrid Mamba mixture of experts; 2,000-token thinking budget |
+| `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16` (default) | about 66 GB | 300 s | Hybrid Mamba mixture of experts; 2,000-token thinking budget |
 
 Reasoning makes requests slow, so each profile sets its own request timeout.
 Set `NSS_INFERENCE_TIMEOUT` or `--inference-timeout-seconds` to override it, for
