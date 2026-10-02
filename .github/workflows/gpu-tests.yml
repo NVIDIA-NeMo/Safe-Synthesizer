@@ -196,7 +196,10 @@ jobs:
         id: record_result
         if: always()
         env:
-          E2E_RESULT: ${{ steps.e2e_tests.outcome }}
+          # job.status, not steps.e2e_tests.outcome, so checkout or setup
+          # failures also count; job-level continue-on-error only applies
+          # after the job finishes.
+          E2E_RESULT: ${{ job.status }}
         run: echo "${{ matrix.cuda-extra }}_result=${E2E_RESULT}" >> "$GITHUB_OUTPUT"
 
   # ---------------------------------------------------------------------------
