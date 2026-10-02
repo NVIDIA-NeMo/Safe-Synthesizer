@@ -148,6 +148,7 @@ The `gpu-tests.yml` workflow runs nightly at 02:00 UTC, and can also be triggere
 - GPU Smoke Tests: runs GPU-marked unit tests, followed by staged train-only, generation, resume, structured generation, timeseries, and SmolLM2 smoke tests. Required for merge when the workflow is part of branch protection.
 - GPU E2E Tests: End-to-end tests on a gpu runner with a 210-minute job timeout and 190-minute step timeout. Informational -- failures produce a warning but don't block merge.
 - GPU CI Status: Aggregation job for the GPU workflow. It is not currently a live branch-protection requirement while PR GPU runs are disabled; when re-enabled, it is intended to be the required GPU check. It fails if smoke tests fail and warns if E2E tests fail.
+- Notify Slack on failure: On scheduled (nightly) runs only, posts to `#swdl-nemollm-safe-synthesizer` listing every job that failed, timed out, or was cancelled (including steps that failed under `continue-on-error`). Job names come from the GitHub API, so new matrix entries need no changes. Uses the `SLACK_GPU_TESTS_WEBHOOK_URL` repository secret, the trigger URL of a Slack Workflow Builder workflow that starts "From a webhook" and declares Text variables `branch`, `run_url`, and `failed_jobs`; the message wording is edited in Slack, not in the workflow file.
 
 The `changes` (Detect Changes) job is skipped on `workflow_dispatch`. GPU jobs use `always()` in their job conditions so manual runs can bypass the skipped dependency and run the selected suite. On scheduled runs, `changes` gates GPU jobs with the `src_test_deps` output, which is true for source, test, `pytest.ini`, dependency, or CI workflow/action changes.
 
@@ -173,6 +174,7 @@ Internal runners and projects are defined in an internal repo, `nv-gha-runners/e
 | GPU Tests | GPU Smoke Tests | `linux-amd64-gpu-a100-latest-1` | NVIDIA self-hosted GPU |
 | GPU Tests | GPU E2E Tests | `linux-amd64-gpu-a100-latest-1` | NVIDIA self-hosted GPU |
 | GPU Tests | Detect Changes, GPU CI Status | `linux-amd64-cpu4` | NVIDIA self-hosted CPU (4-core) |
+| GPU Tests | Notify Slack | `ubuntu-latest` | GitHub-hosted |
 | Dev Wheel | All jobs | `linux-amd64-cpu4` | NVIDIA self-hosted CPU (4-core) |
 | Internal Release | All jobs | `linux-amd64-cpu4` | NVIDIA self-hosted CPU (4-core) |
 
