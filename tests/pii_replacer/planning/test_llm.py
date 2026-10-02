@@ -615,14 +615,17 @@ class TestLLMPlanEnhancer:
         assert "selected dependencies do not form a valid replacement plan: " in feedback
         assert "column 'first_name': depends_on mixes mutually exclusive conditioner groups" in feedback
 
-    def test_pattern_for_unsupported_entity_type_is_retried(self) -> None:
+    @pytest.mark.parametrize(
+        ("entity_type", "pattern"),
+        [
+            pytest.param("street_address", "### Main St", id="entity-without-pattern-syntax"),
+            pytest.param(None, "### Main St", id="unclassified-column"),
+            pytest.param("street_address", "  ", id="blank-pattern"),
+        ],
+    )
+    def test_pattern_the_column_cannot_use_is_ignored(self, entity_type: str | None, pattern: str) -> None:
         dataframe = pd.DataFrame({"address": ["123 Main St"]})
-        enhancer, transport = _enhancer(
-            [
-                _classifications({"address": "street_address"}, patterns={"address": "### Main St"}),
-                _classifications({"address": "street_address"}),
-            ]
-        )
+        enhancer, transport = _enhancer([_classifications({"address": entity_type}, patterns={"address": pattern})])
 
         plan = resolve_plan(
             dataframe,
@@ -631,10 +634,20 @@ class TestLLMPlanEnhancer:
             enhancer=enhancer,
         )
 
-        assert plan.columns_to_replace[0].pattern is None
-        assert len(transport.calls) == 2
+        assert all(spec.pattern is None for spec in plan.columns_to_replace)
+        assert len(transport.calls) == 1
 
-    def test_pattern_for_protected_ordering_column_is_retried(self) -> None:
+    def test_classification_prompt_names_entity_types_without_patterns(self) -> None:
+        dataframe = pd.DataFrame({"email": ["ada@example.com"]})
+        enhancer, transport = _enhancer([_classifications({"email": "email"})])
+
+        resolve_plan(dataframe, ReplacePiiConfig(llm=_local_config()), DataParameters(), enhancer=enhancer)
+
+        system_prompt = transport.calls[0][0][0]["content"]
+        assert "These entity types never take a pattern: street_address, ssn, national_id" in system_prompt
+        assert "If the values mix formats, set pattern to null." in system_prompt
+
+    def test_pattern_for_protected_ordering_column_is_ignored(self) -> None:
         dataframe = pd.DataFrame(
             {
                 "patient_id": [1, 2],
@@ -652,13 +665,6 @@ class TestLLMPlanEnhancer:
                     },
                     patterns={"event_index": "#"},
                 ),
-                _classifications(
-                    {
-                        "patient_id": "unique_identifier",
-                        "event_index": "unique_identifier",
-                        "email": "email",
-                    }
-                ),
             ]
         )
 
@@ -673,7 +679,7 @@ class TestLLMPlanEnhancer:
         )
 
         assert [spec.column_name for spec in plan.columns_to_replace] == ["patient_id", "email"]
-        assert len(transport.calls) == 2
+        assert len(transport.calls) == 1
 
     def test_malformed_responses_fail_without_exposing_samples(self) -> None:
         dataframe = pd.DataFrame({"secret": ["raw-private-value"]})
@@ -831,6 +837,23 @@ class TestLLMPlanEnhancer:
         assert repair_payload["pattern_syntax"] == "character_mask"
         assert repair_payload["pattern_grammar"]["tokens"]["#"] == "digit 0-9"
 
+    def test_pattern_covering_too_few_values_is_dropped_without_repair(self, caplog: pytest.LogCaptureFixture) -> None:
+        dataframe = pd.DataFrame({"phone": ["+1-415-555-0100", "(212) 555-0199"]})
+        enhancer, transport = _enhancer(
+            [_classifications({"phone": "phone_number"}, patterns={"phone": "+1-###-###-####"})]
+        )
+
+        plan = resolve_plan(
+            dataframe,
+            ReplacePiiConfig(llm=_local_config()),
+            DataParameters(),
+            enhancer=enhancer,
+        )
+
+        assert plan.columns_to_replace[0].pattern is None
+        assert len(transport.calls) == 1
+        assert "Dropping an LLM-proposed pattern that does not cover the column's values" in caplog.text
+
     @pytest.mark.parametrize(
         ("repair_responses", "final_pattern", "final_syntax"),
         [
@@ -854,7 +877,8 @@ class TestLLMPlanEnhancer:
             [
                 _classifications(
                     {"first_name": "first_name", "email": "email"},
-                    patterns={"email": "{first}.{last}@{domain}"},
+                    # Missing "@" is a grammar error, which still gets a repair request.
+                    patterns={"email": "{first}.{last}"},
                 ),
                 *[json.dumps({"pattern": pattern}) for pattern in repair_responses],
                 _dependency_selection({"email": {"first_name": "first_name"}}),
