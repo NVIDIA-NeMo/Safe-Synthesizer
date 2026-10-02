@@ -601,7 +601,7 @@ class LLMConfig(NSSBaseModel):
         default=None,
         description=(
             "Model identifier for PII inference. When unset, uses NSS_INFERENCE_MODEL. Without an inference "
-            "endpoint, selects the bundled local vLLM profile and defaults to openai/gpt-oss-120b; with an "
+            "endpoint, selects the bundled local vLLM profile and defaults to nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16; with an "
             "endpoint, a model ID is required."
         ),
     )

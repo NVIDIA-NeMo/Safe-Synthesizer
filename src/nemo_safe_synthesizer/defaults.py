@@ -77,7 +77,7 @@ DEFAULT_EXCLUDE_COLUMNS: tuple[str, ...] = (PSEUDO_GROUP_COLUMN,)
 DEFAULT_NSS_INFERENCE_TIMEOUT_SECONDS = 60.0
 # PII replacement v3 runs this model in a local vLLM server, from its bundled
 # profile, when no inference endpoint or model is configured.
-DEFAULT_NSS_INFERENCE_LOCAL_MODEL = "openai/gpt-oss-120b"
+DEFAULT_NSS_INFERENCE_LOCAL_MODEL = "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16"
 PII_REPLACEMENT_PLAN_FILENAME = "pii_replacement_plan.yaml"
 
 # Managed parquet assets for the PII sampler (``datasets/{locale}.parquet``).

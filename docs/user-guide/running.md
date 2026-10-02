@@ -226,7 +226,7 @@ optional.
 | `--inference-api-key` | `NSS_INFERENCE_KEY` | -- | API key for the PII inference endpoint |
 | `--inference-timeout-seconds` | `NSS_INFERENCE_TIMEOUT` | local profile's timeout, else `60` | Per-request PII inference timeout, including model reasoning |
 | `--inference-request-options` | `NSS_INFERENCE_REQUEST_OPTIONS` | local profile's options, else `{"temperature": 0}` | JSON object of extra fields for each PII inference request |
-| `--inference-model-id` | `NSS_INFERENCE_MODEL` | `openai/gpt-oss-120b` locally; required with an endpoint | Model ID for PII inference; without an endpoint, selects the bundled local profile |
+| `--inference-model-id` | `NSS_INFERENCE_MODEL` | `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16` locally; required with an endpoint | Model ID for PII inference; without an endpoint, selects the bundled local profile |
 | `-v` / `-vv` | -- | -- | Verbose logging (`-v` debug, `-vv` debug + dependencies) |
 
 #### Synthesis Parameter Overrides
