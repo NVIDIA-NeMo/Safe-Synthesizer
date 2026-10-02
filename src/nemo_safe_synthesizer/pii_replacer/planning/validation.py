@@ -23,9 +23,11 @@ from ...config.time_series import TimeSeriesParameters
 from ...errors import InternalError, ParameterError
 from .patterns import CHARACTER_MASK_ESCAPABLE_CHARACTERS, CHARACTER_MASK_TOKENS, NAME_PART_PLACEHOLDERS
 
-__all__ = ["column_pattern_issue", "get_protected_columns", "validate_plan"]
+__all__ = ["column_pattern_issue", "column_pattern_syntax_issue", "get_protected_columns", "validate_plan"]
 
-MIN_PATTERN_COVERAGE = 0.85
+# A column has one pattern, so it must describe nearly every value; the small
+# tolerance only absorbs stray malformed cells.
+MIN_PATTERN_COVERAGE = 0.99
 _NAME_PART_PATTERN = re.compile(r"\{([^{}]+)\}")
 
 
@@ -167,6 +169,37 @@ def _pattern_matcher(
     return None, None
 
 
+def column_pattern_syntax_issue(spec: PiiColumnPlan) -> str | None:
+    """Return the grammar issue with a replacement column's pattern, independent of any data.
+
+    Args:
+        spec: Replacement column carrying the pattern to check.
+
+    Returns:
+        A description of the grammar problem, or ``None`` when the column has no
+        pattern or the pattern follows its entity's grammar.
+
+    Raises:
+        InternalError: If the entity's pattern syntax has no matcher.
+    """
+    pattern = spec.pattern
+    if pattern is None:
+        return None
+    pattern_syntax = ENTITY_BY_TYPE[spec.entity_type].pattern_syntax
+    if pattern_syntax is PatternSyntax.STRFTIME:
+        if error := _strftime_pattern_error(pattern):
+            return f"column {spec.column_name!r}: pattern {pattern!r} is not valid strftime ({error})"
+        return None
+    matcher, error = _pattern_matcher(spec.entity_type, pattern)
+    if error is not None:
+        return f"column {spec.column_name!r}: pattern {pattern!r} {error}"
+    if matcher is None:
+        raise InternalError(
+            f"Pattern syntax {pattern_syntax!r} for entity_type {spec.entity_type.value!r} has no matcher"
+        )
+    return None
+
+
 def column_pattern_issue(df: pd.DataFrame, spec: PiiColumnPlan) -> str | None:
     """Return the dataframe-aware pattern issue for one replacement column.
 
@@ -187,21 +220,15 @@ def column_pattern_issue(df: pd.DataFrame, spec: PiiColumnPlan) -> str | None:
     pattern = spec.pattern
     if pattern is None or spec.column_name not in df.columns:
         return None
+    if (issue := column_pattern_syntax_issue(spec)) is not None:
+        return issue
 
     values = df[spec.column_name].dropna().astype(str).tolist()
-    pattern_syntax = ENTITY_BY_TYPE[spec.entity_type].pattern_syntax
-    if pattern_syntax is PatternSyntax.STRFTIME:
-        if error := _strftime_pattern_error(pattern):
-            return f"column {spec.column_name!r}: pattern {pattern!r} is not valid strftime ({error})"
+    if ENTITY_BY_TYPE[spec.entity_type].pattern_syntax is PatternSyntax.STRFTIME:
         matches = sum(_parses_datetime(value, pattern) for value in values)
     else:
-        matcher, error = _pattern_matcher(spec.entity_type, pattern)
-        if error is not None:
-            return f"column {spec.column_name!r}: pattern {pattern!r} {error}"
-        if matcher is None:
-            raise InternalError(
-                f"Pattern syntax {pattern_syntax!r} for entity_type {spec.entity_type.value!r} has no matcher"
-            )
+        matcher, _ = _pattern_matcher(spec.entity_type, pattern)
+        assert matcher is not None  # column_pattern_syntax_issue rejects patterns without a matcher
         matches = sum(matcher.fullmatch(value) is not None for value in values)
 
     if values and matches / len(values) < MIN_PATTERN_COVERAGE:

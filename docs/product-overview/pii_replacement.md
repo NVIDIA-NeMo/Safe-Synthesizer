@@ -170,12 +170,17 @@ invalid structured responses. Transient failures wait before retrying: the
 server's `Retry-After` delay when supplied, otherwise an exponentially growing,
 jittered delay, capped at 30 seconds. Authentication, authorization, and
 permanent configuration failures stop immediately. If structured output remains invalid,
-planning fails instead of falling back to the heuristic baseline. Invalid
-optional patterns receive up to three focused repair attempts; NSS drops only
-the pattern and warns if every repair response is invalid. Transient failures
-that persist through all repair attempts still fail planning, as for any other
-request. Retry feedback names the specific columns or dependency conflicts that
-made the previous response invalid.
+planning fails instead of falling back to the heuristic baseline. A proposed
+pattern that a column cannot use (on an unclassified or protected column, on an
+entity type without a pattern syntax, or blank) is ignored rather than rejected.
+A pattern must cover at least 99% of a column's non-null values; one that follows
+its grammar but covers fewer is dropped with a warning and no repair request,
+since a column with mixed formats has no single pattern. Patterns that break their
+grammar receive up to three focused repair attempts; NSS drops only the pattern
+and warns if every repair response is invalid. Transient failures that persist
+through all repair attempts still fail planning, as for any other request. Retry
+feedback names the specific columns or dependency conflicts that made the
+previous response invalid.
 
 !!! warning "Inference endpoints receive source data"
     Plan enhancement can send bounded raw cell samples from the full input

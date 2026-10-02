@@ -382,7 +382,7 @@ class PiiColumnPlan(NSSBaseModel):
             "Optional whole-value format using the grammar associated with this entity type. "
             "Only entity types that define a pattern syntax may set this. "
             "When provided, the whole column is replaced with the pattern if it "
-            "covers at least 85% of non-null values (checked against the dataframe, "
+            "covers at least 99% of non-null values (checked against the dataframe, "
             "not here)."
         ),
     )
