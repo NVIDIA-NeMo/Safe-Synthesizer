@@ -267,7 +267,7 @@ class TestValidatePlan:
             ]
         )
 
-        with pytest.raises(ParameterError, match="covers 0.0%.*at least 85%"):
+        with pytest.raises(ParameterError, match="covers 0.0%.*at least 99%"):
             validate_plan(fixture_pii_df, plan, data_config=DataParameters())
 
     def test_missing_matcher_is_an_internal_error(self, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -9,7 +9,7 @@ import json
 import random
 import time
 from collections import Counter
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence, Set
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from typing import Any, Literal, TypeVar
@@ -44,7 +44,7 @@ from .plan_builder import (
     plan_from_classifications,
 )
 from .resolver import ColumnProfile, PlanDiscoveryInput, PlanEnhancer
-from .validation import column_pattern_issue
+from .validation import column_pattern_issue, column_pattern_syntax_issue
 
 __all__ = [
     "LLMPlanEnhancer",
@@ -65,8 +65,21 @@ class _StructuredResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class _ProposedClassification(_StructuredResponse):
+    """One LLM classification before NSS drops a pattern it cannot use.
+
+    ``ColumnClassification`` rejects ineligible patterns, which is right for
+    heuristic and user-authored input. An LLM pattern that cannot apply is
+    harmless and unambiguous to drop, so it must not fail the whole batch.
+    """
+
+    column_name: str
+    entity_type: EntityType | None
+    pattern: str | None
+
+
 class _ClassificationResponse(_StructuredResponse):
-    classifications: list[ColumnClassification]
+    classifications: list[_ProposedClassification]
 
 
 class _PatternRepairResponse(_StructuredResponse):
@@ -130,6 +143,10 @@ def _entity_catalog() -> list[dict[str, object]]:
     ]
 
 
+def _entity_types_without_pattern() -> str:
+    return ", ".join(entity.entity_type.value for entity in ENTITIES if entity.pattern_syntax is None)
+
+
 def _heuristic_classifications_payload(
     baseline: PiiReplacementPlan,
     batch: Sequence[Mapping[str, object]],
@@ -182,6 +199,26 @@ def _quoted(names: Sequence[str]) -> str:
     return ", ".join(repr(name) for name in names)
 
 
+def _usable_pattern(item: _ProposedClassification, protected_columns: Set[str]) -> str | None:
+    """Return the proposed pattern, or ``None`` when NSS could not use it for this column.
+
+    Unclassified columns, protected columns, and entity types without a pattern
+    syntax never take a pattern, so dropping one loses nothing.
+    """
+    pattern = item.pattern
+    if (
+        pattern is None
+        or not pattern.strip()
+        or item.entity_type is None
+        or item.column_name in protected_columns
+        or ENTITY_BY_TYPE[item.entity_type].pattern_syntax is None
+    ):
+        if pattern is not None:
+            logger.debug("Ignoring an LLM-proposed pattern the column cannot use", extra={"column": item.column_name})
+        return None
+    return pattern
+
+
 def _classification_coverage_issue(expected: Sequence[str], actual: Sequence[str]) -> str | None:
     """Name the columns that make ``actual`` differ from exactly one entry per ``expected`` column."""
     counts = Counter(actual)
@@ -225,9 +262,11 @@ def _classification_messages(
         "1. Set entity_type to the catalog entry that matches what the values mean, or null if none fits. Classify "
         "every column, including protected columns and the group column.\n"
         "2. Set pattern to null unless all of these are true:\n"
-        "   - entity_type is not null and that entity has a pattern_syntax;\n"
+        "   - entity_type is not null and that entity has a pattern_syntax. These entity types never take a "
+        f"pattern: {_entity_types_without_pattern()};\n"
         "   - the column is not in protected_columns;\n"
-        "   - the sample values share a consistent format that the entity type alone does not capture.\n"
+        "   - every sample value shares one format that the entity type alone does not capture. If the values mix "
+        "formats, set pattern to null.\n"
         "3. A pattern must use exactly the grammar named by the entity's pattern_syntax and describe the whole cell "
         "value. Patterns are not regular expressions. Name placeholders such as {first} or {last} do not require "
         "name columns in the table; NSS fills them with a generated name when no related column exists.\n"
@@ -563,15 +602,14 @@ class LLMPlanEnhancer(PlanEnhancer):
             actual = [classification.column_name for classification in response.classifications]
             if issue := _classification_coverage_issue(expected, actual):
                 raise ValueError(issue)
-            if protected_with_pattern := sorted(
-                item.column_name
-                for item in response.classifications
-                if item.pattern is not None and item.column_name in protected
-            ):
-                raise ValueError(
-                    "protected columns cannot include replacement patterns: " + _quoted(protected_with_pattern)
+            by_name = {
+                item.column_name: ColumnClassification(
+                    column_name=item.column_name,
+                    entity_type=item.entity_type,
+                    pattern=_usable_pattern(item, protected),
                 )
-            by_name = {classification.column_name: classification for classification in response.classifications}
+                for item in response.classifications
+            }
             return [by_name[name] for name in expected]
 
         return self._request_structured(
@@ -668,6 +706,15 @@ class LLMPlanEnhancer(PlanEnhancer):
             issue = column_pattern_issue(dataframe, spec)
             if issue is None:
                 repaired_specs.append(spec)
+                continue
+            if column_pattern_syntax_issue(spec) is None:
+                # The grammar is fine but too few values match, so the column mixes
+                # formats. One pattern cannot describe it, and asking again would not help.
+                logger.user.warning(
+                    "Dropping an LLM-proposed pattern that does not cover the column's values",
+                    extra={"column": spec.column_name},
+                )
+                repaired_specs.append(spec.model_copy(update={"pattern": None}))
                 continue
             pattern = self._repair_pattern(dataframe, profiles[spec.column_name], spec, issue)
             repaired_specs.append(spec.model_copy(update={"pattern": pattern}))
