@@ -13,10 +13,41 @@ pytest.importorskip(
 
 import logging
 
+from nemo_safe_synthesizer.config.evaluate import EvaluationParameters
+from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.evaluation.components.membership_inference_protection import MembershipInferenceProtection
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_datasets import EvaluationDatasets
+from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import EvaluationScore, PrivacyGrade
 
 logger = logging.getLogger(__name__)
+
+
+def _grouped_datasets() -> EvaluationDatasets:
+    training_df = pd.DataFrame({"group_id": np.repeat(np.arange(6), 4), "x": np.arange(24, dtype=float)})
+    synthetic_df = training_df.sample(frac=1, random_state=0).reset_index(drop=True)
+    # "site" exists only in test, as when column subsampling drops it from training and synthetic.
+    test_df = pd.DataFrame(
+        {"group_id": np.repeat(np.arange(100, 103), 4), "x": np.arange(12, dtype=float), "site": ["a"] * 12}
+    )
+    return EvaluationDatasets(training=training_df, synthetic=synthetic_df, test=test_df)
+
+
+def test_mia_excluded_columns_are_dropped_before_attack(monkeypatch: pytest.MonkeyPatch):
+    captured: dict[str, pd.DataFrame] = {}
+
+    def fake_mia(training_df, synthetic_df, test_df, column_name=None):
+        captured.update(training=training_df, synthetic=synthetic_df, test=test_df)
+        return EvaluationScore(score=10.0, grade=PrivacyGrade.EXCELLENT), None, {}, {}
+
+    monkeypatch.setattr(MembershipInferenceProtection, "mia", staticmethod(fake_mia))
+    config = SafeSynthesizerParameters(evaluation=EvaluationParameters(mia_excluded_columns=["group_id", "site"]))
+
+    component = MembershipInferenceProtection.from_evaluation_datasets(_grouped_datasets(), config)
+
+    assert component.excluded_columns == ["group_id", "site"]
+    for name in ("training", "synthetic", "test"):
+        assert list(captured[name].columns) == ["x"]
+    assert component.jinja_context["excluded_columns"] == ["group_id", "site"]
 
 
 def test_mia_tabular_unit_returns_threshold_counts():

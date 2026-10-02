@@ -167,7 +167,7 @@ class MultimodalReport(EvaluationReport):
         )
         if config and config.get("mia_enabled"):
             membership_inference_protection = MembershipInferenceProtection.from_evaluation_datasets(
-                evaluation_datasets
+                evaluation_datasets, config
             )
         components.append(membership_inference_protection)
 

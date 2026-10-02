@@ -16,6 +16,7 @@ from rich.console import Console
 from transformers import PretrainedConfig, PreTrainedTokenizerBase
 
 from nemo_safe_synthesizer.config.data import DataParameters
+from nemo_safe_synthesizer.config.evaluate import EvaluationParameters
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
 from nemo_safe_synthesizer.config.training import TrainingHyperparams
@@ -31,6 +32,7 @@ from nemo_safe_synthesizer.preflight import (
     GroupbyColumnCheck,
     HFModelAvailabilityCheck,
     InferenceModelCheck,
+    MiaExcludedColumnsCheck,
     OrderbyColumnCheck,
     OversamplingCheck,
     PreflightContext,
@@ -750,6 +752,34 @@ class TestGroupbyColumnCheck:
         config = SafeSynthesizerParameters(data=DataParameters(group_training_examples_by="grp"))
         issues = GroupbyColumnCheck().run(make_ctx(config=config, data=df))
         assert any(i.code == "column_nulls" for i in issues)
+
+
+@pytest.mark.unit
+class TestMiaExcludedColumnsCheck:
+    def test_unset_is_silent(self, sample_df, default_config):
+        issues = MiaExcludedColumnsCheck().run(make_ctx(config=default_config, data=sample_df))
+        assert not any(i.code == "column_not_found" for i in issues)
+
+    def test_present_columns_pass(self, sample_df):
+        config = SafeSynthesizerParameters(evaluation=EvaluationParameters(mia_excluded_columns=["id", "category"]))
+        issues = MiaExcludedColumnsCheck().run(make_ctx(config=config, data=sample_df))
+        assert not any(i.severity == "error" for i in issues)
+
+    def test_missing_column_is_error(self, sample_df):
+        config = SafeSynthesizerParameters(
+            evaluation=EvaluationParameters(mia_excluded_columns=["id", "nonexistent_col"])
+        )
+        issues = MiaExcludedColumnsCheck().run(make_ctx(config=config, data=sample_df))
+        errors = [i for i in issues if i.code == "column_not_found" and i.severity == "error"]
+        assert len(errors) == 1
+        assert "nonexistent_col" in errors[0].message
+
+    @pytest.mark.parametrize("disabled", [{"mia_enabled": False}, {"enabled": False}])
+    def test_disabled_when_mia_not_run(self, disabled):
+        config = SafeSynthesizerParameters(
+            evaluation=EvaluationParameters(mia_excluded_columns=["nonexistent_col"], **disabled)
+        )
+        assert MiaExcludedColumnsCheck().enabled(make_ctx(config=config)) is False
 
 
 @pytest.mark.unit

@@ -51,6 +51,9 @@ class MembershipInferenceProtection(Component):
     fps_values: dict[float, int] | None = Field(
         default=None, description="False positive counts per similarity threshold."
     )
+    excluded_columns: list[str] = Field(
+        default_factory=list, description="Columns left out of the attack via ``evaluation.mia_excluded_columns``."
+    )
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -59,6 +62,7 @@ class MembershipInferenceProtection(Component):
         """Template context with the membership-inference pie chart figure."""
         d = super().jinja_context
         d["anchor_link"] = "#mia"
+        d["excluded_columns"] = list(self.excluded_columns)
         if self.attack_sum_df is not None and not self.attack_sum_df.empty:
             d["figure"] = figures.generate_mia_figure(df=self.attack_sum_df).to_html(
                 full_html=False, include_plotlyjs=False
@@ -71,16 +75,39 @@ class MembershipInferenceProtection(Component):
     def from_evaluation_datasets(
         evaluation_datasets: EvaluationDatasets, config: SafeSynthesizerParameters | None = None
     ) -> MembershipInferenceProtection:
-        """Run the membership inference attack and return the protection score."""
+        """Run the membership inference attack and return the protection score.
+
+        Columns listed in ``evaluation.mia_excluded_columns`` are dropped from the
+        training, synthetic, and test data before the attack. Names that are not
+        present (for example, removed by column subsampling) are ignored.
+        """
+        requested = (config.get("mia_excluded_columns") if config else None) or []
+        training_df = evaluation_datasets.training
+        synthetic_df = evaluation_datasets.synthetic
+        test_df = evaluation_datasets.test
+
+        # Column subsampling can leave test with columns that training and synthetic no longer have,
+        # so check and drop against each dataframe independently.
+        frames = [df for df in (training_df, synthetic_df, test_df) if df is not None]
+        excluded_columns = [col for col in requested if any(col in df.columns for df in frames)]
+        if excluded_columns:
+            logger.info(f"Excluding columns from Membership Inference Attack: {excluded_columns}")
+            training_df = training_df.drop(columns=excluded_columns, errors="ignore")
+            synthetic_df = synthetic_df.drop(columns=excluded_columns, errors="ignore")
+            if test_df is not None:
+                test_df = test_df.drop(columns=excluded_columns, errors="ignore")
+
         score, attack_sum_df, tps_values, fps_values = MembershipInferenceProtection.mia(
-            training_df=evaluation_datasets.training,
-            synthetic_df=evaluation_datasets.synthetic,
-            test_df=evaluation_datasets.test,
-            # FIXME config setting?
-            # column_name: str | None = None,
+            training_df=training_df,
+            synthetic_df=synthetic_df,
+            test_df=test_df,
         )
         return MembershipInferenceProtection(
-            score=score, attack_sum_df=attack_sum_df, tps_values=tps_values, fps_values=fps_values
+            score=score,
+            attack_sum_df=attack_sum_df,
+            tps_values=tps_values,
+            fps_values=fps_values,
+            excluded_columns=excluded_columns,
         )
 
     @staticmethod
