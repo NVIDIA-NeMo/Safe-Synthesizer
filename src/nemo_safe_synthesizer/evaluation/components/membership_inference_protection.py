@@ -86,10 +86,13 @@ class MembershipInferenceProtection(Component):
         synthetic_df = evaluation_datasets.synthetic
         test_df = evaluation_datasets.test
 
-        excluded_columns = [col for col in requested if col in training_df.columns]
+        # Column subsampling can leave test with columns that training and synthetic no longer have,
+        # so check and drop against each dataframe independently.
+        frames = [df for df in (training_df, synthetic_df, test_df) if df is not None]
+        excluded_columns = [col for col in requested if any(col in df.columns for df in frames)]
         if excluded_columns:
             logger.info(f"Excluding columns from Membership Inference Attack: {excluded_columns}")
-            training_df = training_df.drop(columns=excluded_columns)
+            training_df = training_df.drop(columns=excluded_columns, errors="ignore")
             synthetic_df = synthetic_df.drop(columns=excluded_columns, errors="ignore")
             if test_df is not None:
                 test_df = test_df.drop(columns=excluded_columns, errors="ignore")

@@ -92,6 +92,13 @@ class MiaExcludedColumnsCheck(DataFrameCheck):
     label = "MIA excluded columns"
 
     @override
+    def enabled(self, ctx: PreflightContext) -> bool:
+        if not super().enabled(ctx):
+            return False
+        evaluation = ctx.config.evaluation
+        return evaluation.enabled and evaluation.mia_enabled
+
+    @override
     def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
         columns = ctx.config.evaluation.mia_excluded_columns
         if not columns:

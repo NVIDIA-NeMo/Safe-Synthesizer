@@ -205,7 +205,7 @@
                 <div class="metric-list">
                     {% set mia_description = "Protection against attacks that determine whether a record was in training data" %}
                     {% if ctx.membership_inference_protection.excluded_columns %}
-                    {% set mia_description = mia_description ~ ". Excluded columns: " ~ (ctx.membership_inference_protection.excluded_columns | join(", ")) %}
+                    {% set mia_description = mia_description ~ ". Excluded columns: " ~ (ctx.membership_inference_protection.excluded_columns | join(", ") | e) %}
                     {% endif %}
                     {% call metric_card("mia", ctx.membership_inference_protection.name,
                             ctx.membership_inference_protection.score,

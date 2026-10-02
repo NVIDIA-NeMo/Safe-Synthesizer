@@ -774,6 +774,13 @@ class TestMiaExcludedColumnsCheck:
         assert len(errors) == 1
         assert "nonexistent_col" in errors[0].message
 
+    @pytest.mark.parametrize("disabled", [{"mia_enabled": False}, {"enabled": False}])
+    def test_disabled_when_mia_not_run(self, disabled):
+        config = SafeSynthesizerParameters(
+            evaluation=EvaluationParameters(mia_excluded_columns=["nonexistent_col"], **disabled)
+        )
+        assert MiaExcludedColumnsCheck().enabled(make_ctx(config=config)) is False
+
 
 @pytest.mark.unit
 class TestOrderbyColumnCheck:

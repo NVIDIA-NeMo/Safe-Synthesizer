@@ -38,17 +38,15 @@ class EvaluationParameters(Parameters):
         ),
     ] = True
 
-    mia_excluded_columns: Annotated[
-        list[str] | None,
-        Field(
-            title="mia_excluded_columns",
-            description=(
-                "Columns to leave out of the membership inference attack. "
-                "Useful when identifiers were already replaced outside Safe Synthesizer, or are expected "
-                "to repeat verbatim in the synthetic data."
-            ),
+    mia_excluded_columns: list[str] | None = Field(
+        default=None,
+        title="mia_excluded_columns",
+        description=(
+            "Columns to leave out of the membership inference attack. "
+            "Useful when identifiers were already replaced outside Safe Synthesizer, or are expected "
+            "to repeat verbatim in the synthetic data."
         ),
-    ] = None
+    )
 
     aia_enabled: Annotated[
         bool,
