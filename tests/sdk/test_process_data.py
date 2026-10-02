@@ -25,7 +25,15 @@ from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.generation.results import GenerateJobResults
 from nemo_safe_synthesizer.generation.utils import GenerationStatus
-from nemo_safe_synthesizer.preflight import PreflightReport, PreflightStage
+from nemo_safe_synthesizer.preflight import (
+    PreflightReport,
+    PreflightStage,
+    build_registry,
+    get_registry,
+)
+from nemo_safe_synthesizer.preflight import (
+    run_preflight as run_actual_preflight,
+)
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
 
 _EMPTY_PREFLIGHT = PreflightReport(checks=[])
@@ -152,6 +160,73 @@ def _wire_process_data_mocks(
 # ---------------------------------------------------------------------------
 # Tests: process_data
 # ---------------------------------------------------------------------------
+
+
+def test_process_data_preflight_does_not_route_or_mutate_timeseries_config(fixture_workdir):
+    source = pd.DataFrame(
+        {
+            "group": ["A", "A", "A", "B", "B"],
+            "timestamp": [0, 60, 120, 0, 60],
+            "value": [1, 2, 3, 4, 5],
+        }
+    )
+    training = pd.DataFrame(
+        {
+            "group": ["A", "A", "B", "B"],
+            "timestamp": [0, 60, 0, 60],
+            "value": [1, 2, 4, 5],
+        }
+    )
+    config = SafeSynthesizerParameters.from_params(
+        is_timeseries=True,
+        timestamp_column="timestamp",
+        timestamp_format="elapsed_seconds",
+        group_training_examples_by="group",
+        rope_scaling_factor=1,
+        replace_pii=None,
+    )
+    config_before = config.model_dump()
+    builder = SafeSynthesizer(config=config, workdir=fixture_workdir)
+    builder._data_source = source
+    preflight_issue_codes: list[list[str]] = []
+    registry = get_registry()
+    timeseries_registry = build_registry(
+        tuple(
+            registry[name]
+            for name in (
+                "columns.groupby",
+                "columns.orderby",
+                "columns.pseudo",
+                "timeseries.timestamp",
+                "timeseries.shape",
+            )
+        )
+    )
+
+    def capture_preflight(data, current_config, _metadata, **_kwargs):
+        report = run_actual_preflight(
+            data,
+            current_config,
+            _metadata,
+            stages=frozenset({PreflightStage.DATAFRAME}),
+            registry=timeseries_registry,
+        )
+        preflight_issue_codes.append([issue.code for issue in report.issues])
+        assert current_config.model_dump() == config_before
+        return report
+
+    with (
+        patch("nemo_safe_synthesizer.sdk.library_builder.run_preflight", side_effect=capture_preflight),
+        patch("nemo_safe_synthesizer.sdk.library_builder.Holdout") as holdout_cls,
+        patch("nemo_safe_synthesizer.sdk.library_builder.AutoConfigResolver") as resolver_cls,
+        patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata") as metadata_cls,
+    ):
+        holdout_cls.return_value.train_test_split.return_value = (training, source.iloc[0:0].copy())
+        resolver_cls.return_value.return_value = config
+        metadata_cls.from_config.return_value = MagicMock()
+        builder.process_data()
+
+    assert preflight_issue_codes == [[], []]
 
 
 class TestProcessDataPiiSeparation:

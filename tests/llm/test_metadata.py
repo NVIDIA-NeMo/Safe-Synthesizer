@@ -27,11 +27,12 @@ from nemo_safe_synthesizer.defaults import (
     MAX_ROPE_SCALING_FACTOR,
     PROMPT_TEMPLATE,
 )
-from nemo_safe_synthesizer.errors import ParameterError
+from nemo_safe_synthesizer.errors import GenerationError, ParameterError
 from nemo_safe_synthesizer.llm.metadata import (
     DEFAULT_MAX_SEQ_LENGTH,
     GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER,
     GLOBAL_MAX_SEQ_LENGTH,
+    FlexibleTimeseriesMetadata,
     Llama32,
     LLMPromptConfig,
     Mistral,
@@ -627,6 +628,95 @@ class TestModelMetadata:
         assert metadata.max_seq_length == 4096
         assert metadata.workdir == sample_workdir
 
+    @pytest.mark.parametrize(
+        "flexible_metadata",
+        [
+            pytest.param(
+                {
+                    "index_column": "_control",
+                    "marker_column": "_control",
+                    "max_records": 2,
+                    "source_columns": ["group", "value"],
+                },
+                id="overlapping-controls",
+            ),
+            pytest.param(
+                {
+                    "index_column": "_time_idx",
+                    "marker_column": "_is_last_row",
+                    "max_records": 0,
+                    "source_columns": ["group", "value"],
+                },
+                id="invalid-cap",
+            ),
+            pytest.param(
+                {
+                    "index_column": "_time_idx",
+                    "marker_column": "_is_last_row",
+                    "max_records": 2,
+                    "source_columns": ["group", "value", "value"],
+                },
+                id="duplicate-source-columns",
+            ),
+            pytest.param(
+                {
+                    "index_column": "_time_idx",
+                    "marker_column": "_is_last_row",
+                    "max_records": "invalid",
+                    "source_columns": ["group", "value"],
+                },
+                id="invalid-field-type",
+            ),
+            pytest.param(
+                {
+                    "max_records": 2,
+                    "source_columns": ["group", "value"],
+                    "source_timestamp_column": "timestamp",
+                    "source_timestamp_format": "elapsed_seconds",
+                },
+                id="timestamp-not-a-source-column",
+            ),
+            pytest.param(
+                {
+                    "max_records": 2,
+                    "source_columns": ["group", "timestamp", "value"],
+                    "source_timestamp_column": "timestamp",
+                },
+                id="timestamp-without-format",
+            ),
+            pytest.param(
+                {
+                    "max_records": 2,
+                    "source_columns": ["group", "timestamp", "value"],
+                    "source_interval_seconds": 60,
+                },
+                id="interval-without-timestamp",
+            ),
+        ],
+    )
+    @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
+    @patch("nemo_safe_synthesizer.llm.metadata.load_json")
+    def test_invalid_flexible_metadata_reports_actionable_artifact_error(
+        self,
+        mock_load_json,
+        mock_auto_config,
+        flexible_metadata,
+        sample_prompt_config,
+        mock_autoconfig_obj,
+        tmp_path,
+        sample_workdir,
+    ):
+        mock_auto_config.from_pretrained.return_value = mock_autoconfig_obj
+        mock_load_json.return_value = {
+            "model_name_or_path": "loaded-model",
+            "prompt_config": sample_prompt_config.model_dump(),
+            "base_max_seq_length": 2048,
+            "flexible_timeseries_metadata": flexible_metadata,
+        }
+
+        with pytest.raises(GenerationError, match="Retrain the model or restore a complete artifact"):
+            ModelMetadata.from_metadata_json(tmp_path / "metadata.json", workdir=sample_workdir)
+
     def test_from_str_or_path_raises_for_unknown_model(self):
         """Test from_str_or_path raises ValueError for unknown model names."""
         with pytest.raises(ValueError, match="Unknown model name or path"):
@@ -731,10 +821,18 @@ class TestGenerationMaxTokensFor:
         # prompt_len=0 reproduces the old prompt-agnostic budget for round-trip parity.
         assert reloaded.generation_max_tokens_for(0) == int(1500 * GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER)
 
-    def test_timeseries_group_values_preserve_types_through_metadata_json(self, sample_model_metadata):
-        """Time-series group values must not become strings through dictionary keys."""
+    def test_timeseries_metadata_round_trips_through_json(self, sample_model_metadata):
+        """Typed group values and flexible metadata survive artifact persistence."""
         sample_model_metadata.timeseries_group_values = [7, "group-A", 2.5]
-        sample_model_metadata.timeseries_source_columns = ["value", "group_id", "timestamp"]
+        sample_model_metadata.flexible_timeseries_metadata = FlexibleTimeseriesMetadata(
+            index_column="_time_idx_1",
+            marker_column="_is_last_row_1",
+            max_records=4,
+            source_columns=("value", "group_id", "timestamp"),
+            source_timestamp_column="timestamp",
+            source_timestamp_format="%Y-%m-%d %H:%M:%S",
+            source_interval_seconds=60,
+        )
         sample_model_metadata.save_metadata()
 
         with patch("nemo_safe_synthesizer.llm.metadata.AutoConfig") as mock_ac:
@@ -745,7 +843,7 @@ class TestGenerationMaxTokensFor:
             )
 
         assert reloaded.timeseries_group_values == [7, "group-A", 2.5]
-        assert reloaded.timeseries_source_columns == ["value", "group_id", "timestamp"]
+        assert reloaded.flexible_timeseries_metadata == sample_model_metadata.flexible_timeseries_metadata
 
     def test_metadata_max_records_per_group_accepts_none_or_positive(
         self, sample_prompt_config, mock_autoconfig_obj, sample_workdir

@@ -293,11 +293,11 @@ execute in order (`config` → `dataframe` → `metadata` → `advisory`).
 | `env.hf_model_availability` | config | The pretrained model reference is usable locally or can be fetched from Hugging Face; warns about a missing HF token only when online HF access may be needed |
 | `dataset.size` | dataframe | Training split meets the hard minimum row count |
 | `columns.groupby` | dataframe | `group_training_examples_by` column is present and has no nulls |
-| `columns.orderby` | dataframe | `order_training_examples_by` column is present |
+| `columns.orderby` | dataframe | `order_training_examples_by` column is present and has no nulls |
 | `columns.pseudo` | dataframe | Input does not use the reserved `__nss_sequence_id` column name |
 | `columns.constant` | dataframe | No column is constant (warning only) |
 | `timeseries.timestamp` | dataframe | Timestamp column is present and has no nulls (time-series mode) |
-| `timeseries.shape` | dataframe | Timestamp formats parse cleanly and groups have matching lengths, intervals, starts, and stops (time-series mode) |
+| `timeseries.shape` | dataframe | Timestamps are valid and follow `timestamp_interval_seconds` when it is set (time-series mode) |
 | `gpu.vram` | metadata | Free VRAM headroom for the chosen model, quantization load mode, and per-device batch size; emits `low_vram` as a warning and `vram_exceeds_capacity` as an error when the estimate is far above capacity |
 | `token_budget` | metadata | Schema prompt, sampled records, and top groups each fit in the model's context window |
 | `dataset.row_count` | advisory | Training split is above a comfort threshold (warning only) |
@@ -317,6 +317,12 @@ token-budget messages all report on the training partition the model
 will actually see. The runtime-info block at the top of the report shows
 both the input dataset size and the training-split size so the scope of
 each check is unambiguous.
+
+For time-series data, unequal group lengths, different start or stop
+timestamps, and irregular intervals are not pre-flight errors; training
+selects flexible processing for them. Malformed or null timestamp values, and
+timestamps that do not follow an explicit `timestamp_interval_seconds`, remain
+errors.
 
 Token budget checks use the same budget computation as the training
 assembler, so the numbers pre-flight reports match what assembly will

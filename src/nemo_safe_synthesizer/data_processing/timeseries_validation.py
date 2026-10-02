@@ -6,10 +6,10 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from enum import Enum, auto
-from typing import Any, cast
+from typing import Any
 
 import pandas as pd
 
@@ -17,18 +17,32 @@ from ..config.parameters import SafeSynthesizerParameters
 from ..config.time_series import TimeSeriesParameters
 from ..defaults import PSEUDO_GROUP_COLUMN
 from ..errors import DataError, ParameterError
+from ..llm.metadata import FlexibleTimeseriesMetadata
 from .actions.utils import guess_datetime_format
-from .validation import check_groupby_column, check_no_pseudo_column_collision, check_timestamp_column
+from .flexible_timeseries import resolve_flexible_timeseries_metadata
+from .timeseries_utils import stable_sort_within_groups
+from .validation import (
+    check_column_has_no_nulls,
+    check_column_present,
+    check_groupby_column,
+    check_no_pseudo_column_collision,
+    check_timestamp_column,
+)
 
 __all__ = [
     "TimeSeriesDataValidationError",
     "TimeSeriesGroupTimestampStats",
+    "TimeSeriesInspection",
     "TimeSeriesParameterValidationError",
+    "TimeSeriesRoutingDecision",
     "TimeSeriesValidationReason",
     "TimeSeriesValidationResult",
     "resolve_elapsed_time_column_name",
+    "resolve_timeseries_routing",
+    "validate_deterministic_inspection",
     "validate_start_stop_consistency",
     "validate_timeseries_data",
+    "validate_timeseries_source_data",
 ]
 
 
@@ -37,6 +51,7 @@ class TimeSeriesValidationReason(Enum):
 
     COLUMN_NOT_FOUND = auto()
     COLUMN_NULLS = auto()
+    DUPLICATE_COLUMNS = auto()
     PSEUDO_COLUMN_COLLISION = auto()
     TIMESTAMP_NOT_FOUND = auto()
     TIMESTAMP_NULLS = auto()
@@ -127,6 +142,52 @@ class TimeSeriesValidationResult:
     """Per-group timestamp statistics used to derive the result."""
 
 
+@dataclass(frozen=True)
+class TimeSeriesInspection:
+    """Normalized source data and statistics shared by routing and validation."""
+
+    data: pd.DataFrame
+    """Timestamp-sorted source data."""
+
+    group_column: str
+    """Effective source group column."""
+
+    timestamp_column: str
+    """Effective source timestamp column."""
+
+    timestamp_format: str
+    """Validated or inferred source timestamp format."""
+
+    is_elapsed_time: bool
+    """Whether timestamps are numeric elapsed seconds."""
+
+    group_stats: tuple[TimeSeriesGroupTimestampStats, ...]
+    """Per-group timestamp statistics."""
+
+
+@dataclass(frozen=True)
+class TimeSeriesRoutingDecision:
+    """Automatic selection between deterministic and flexible time-series processing."""
+
+    uses_flexible_timeseries: bool
+    """Whether source shape requires marker-based flexible processing."""
+
+    failed_constraints: tuple[str, ...]
+    """Deterministic shape constraints not satisfied by the source data."""
+
+    sequence_max_records: int
+    """Largest source-group length used as the flexible generation cap."""
+
+    timestamp_format: str
+    """Validated or inferred format used to order source timestamps."""
+
+    inspection: TimeSeriesInspection
+    """Normalized source inspection reused by deterministic preprocessing."""
+
+    flexible_metadata: FlexibleTimeseriesMetadata | None = None
+    """Internal control-column metadata when flexible routing was applied."""
+
+
 def _resolve_group_column(data: pd.DataFrame, config: SafeSynthesizerParameters) -> tuple[pd.DataFrame, str]:
     """Return a grouped DataFrame copy and the effective group column."""
     group_by_col = config.data.group_training_examples_by
@@ -173,6 +234,7 @@ def _add_elapsed_time_column(
     data: pd.DataFrame,
     ts_config: TimeSeriesParameters,
     group_by_col: str,
+    order_by_col: str | None = None,
 ) -> tuple[pd.DataFrame, str]:
     """Return a copy with a generated elapsed-seconds timestamp column."""
     if ts_config.timestamp_interval_seconds is None:
@@ -180,6 +242,17 @@ def _add_elapsed_time_column(
             TimeSeriesValidationReason.TIMESTAMP_NOT_FOUND,
             "Time-series mode requires either timestamp_column or timestamp_interval_seconds.",
         )
+
+    if order_by_col is not None:
+        try:
+            check_column_present(data, order_by_col, role="Order by")
+            check_column_has_no_nulls(data, order_by_col, role="Order by")
+        except ParameterError as exc:
+            raise TimeSeriesParameterValidationError(TimeSeriesValidationReason.COLUMN_NOT_FOUND, str(exc)) from exc
+        except DataError as exc:
+            raise TimeSeriesDataValidationError(TimeSeriesValidationReason.COLUMN_NULLS, str(exc)) from exc
+        if order_by_col != group_by_col:
+            data = stable_sort_within_groups(data, group_by_col, order_by_col)
 
     timestamp_col = resolve_elapsed_time_column_name(data.columns)
 
@@ -230,7 +303,10 @@ def _validate_elapsed_seconds_column(column: pd.Series, timestamp_col: str) -> N
         )
 
 
-def _infer_and_convert_timestamp_format(df: pd.DataFrame, ts_config: TimeSeriesParameters) -> pd.DataFrame:
+def _infer_and_convert_timestamp_format(
+    df: pd.DataFrame,
+    ts_config: TimeSeriesParameters,
+) -> tuple[pd.DataFrame, str]:
     """Infer or validate timestamp format and return a converted copy."""
     if len(df) == 0:
         raise TimeSeriesDataValidationError(
@@ -282,7 +358,7 @@ def _infer_and_convert_timestamp_format(df: pd.DataFrame, ts_config: TimeSeriesP
             f"'{timestamp_format}'. Please check your data or provide a valid timestamp_format.",
         )
 
-    return df
+    return df, timestamp_format
 
 
 def _sort_by_group_and_timestamp(df: pd.DataFrame, group_by_col: str, timestamp_col: str) -> pd.DataFrame:
@@ -343,6 +419,33 @@ def _collect_group_timestamp_stats(
         )
 
     return tuple(stats_list)
+
+
+def _collect_tolerant_group_timestamp_stats(
+    group_df: pd.DataFrame,
+    group_name: Any,
+    timestamp_col: str,
+    group_by_col: str,
+    is_elapsed_time: bool,
+) -> TimeSeriesGroupTimestampStats:
+    """Collect one group's statistics, recording an unsupported interval as ``None`` instead of raising.
+
+    Collecting per group keeps the valid intervals of other groups, so a later
+    interval check reports the group that actually has unsupported spacing.
+    """
+    try:
+        (stats,) = _collect_group_timestamp_stats(group_df, timestamp_col, group_by_col, is_elapsed_time)
+    except TimeSeriesDataValidationError as exc:
+        if exc.reason is not TimeSeriesValidationReason.TIMESTAMP_INTERVAL_MISMATCH:
+            raise
+        return TimeSeriesGroupTimestampStats(
+            group_name=group_name,
+            start_timestamp=group_df[timestamp_col].iloc[0],
+            stop_timestamp=group_df[timestamp_col].iloc[-1],
+            interval_seconds=None,
+            record_count=len(group_df),
+        )
+    return stats
 
 
 def _coerce_whole_second_interval(value: Any, *, group_name: Any) -> int:
@@ -427,8 +530,271 @@ def validate_start_stop_consistency(
     return str(group_stats[0].start_timestamp), str(group_stats[0].stop_timestamp)
 
 
+def _inspect_time_series_data(
+    data: pd.DataFrame,
+    config: SafeSynthesizerParameters,
+    *,
+    tolerate_interval_mismatch: bool = False,
+) -> TimeSeriesInspection:
+    """Normalize time-series source data for routing and validation.
+
+    The inspection operates on copies, resolves pseudo-group and generated
+    timestamp columns when needed, sorts records, and collects per-group
+    timestamp statistics.
+
+    Args:
+        data: Source time-series data.
+        config: Parameters defining grouping and timestamp behavior.
+        tolerate_interval_mismatch: Whether inconsistent intervals should be
+            represented as missing group intervals instead of raising.
+
+    Returns:
+        Normalized data and the group statistics used by later decisions.
+    """
+    working_df, group_by_col = _resolve_group_column(data, config)
+    ts_config = config.time_series
+    timestamp_col = ts_config.timestamp_column
+    if timestamp_col is None:
+        working_df, timestamp_col = _add_elapsed_time_column(
+            working_df,
+            ts_config,
+            group_by_col,
+            config.data.order_training_examples_by,
+        )
+        timestamp_format = "elapsed_seconds"
+        is_elapsed_time = True
+    else:
+        try:
+            check_timestamp_column(working_df, timestamp_col)
+        except ParameterError as exc:
+            raise TimeSeriesParameterValidationError(TimeSeriesValidationReason.TIMESTAMP_NOT_FOUND, str(exc)) from exc
+        except DataError as exc:
+            raise TimeSeriesDataValidationError(TimeSeriesValidationReason.TIMESTAMP_NULLS, str(exc)) from exc
+        is_elapsed_time = _detect_elapsed_seconds_format(working_df, ts_config, timestamp_col)
+        timestamp_format = "elapsed_seconds" if is_elapsed_time else ""
+
+    if group_by_col == timestamp_col:
+        raise TimeSeriesParameterValidationError(
+            TimeSeriesValidationReason.TIMESERIES_IDENTITY_COLUMNS_SAME,
+            "The time-series group and timestamp columns must be different columns.",
+        )
+
+    identity_columns = {group_by_col, timestamp_col}
+    if not any(column not in identity_columns for column in working_df.columns):
+        raise TimeSeriesDataValidationError(
+            TimeSeriesValidationReason.TIMESERIES_NO_VALUE_COLUMNS,
+            "Time-series data must contain at least one value column besides the group and timestamp columns.",
+        )
+
+    if not is_elapsed_time:
+        ts_config_copy = ts_config.model_copy(update={"timestamp_column": timestamp_col})
+        working_df, timestamp_format = _infer_and_convert_timestamp_format(working_df, ts_config_copy)
+
+    working_df = _sort_by_group_and_timestamp(working_df, group_by_col, timestamp_col)
+    if tolerate_interval_mismatch:
+        group_stats = tuple(
+            _collect_tolerant_group_timestamp_stats(group, group_name, timestamp_col, group_by_col, is_elapsed_time)
+            for group_name, group in working_df.groupby(group_by_col, sort=False)
+        )
+    else:
+        group_stats = _collect_group_timestamp_stats(working_df, timestamp_col, group_by_col, is_elapsed_time)
+    return TimeSeriesInspection(
+        data=working_df,
+        group_column=group_by_col,
+        timestamp_column=timestamp_col,
+        timestamp_format=timestamp_format,
+        is_elapsed_time=is_elapsed_time,
+        group_stats=group_stats,
+    )
+
+
+def validate_deterministic_inspection(
+    inspection: TimeSeriesInspection,
+    expected_interval_seconds: int | None,
+) -> TimeSeriesValidationResult:
+    """Validate deterministic shape constraints and return the resolved data."""
+    _validate_equal_group_lengths(inspection.group_stats)
+    start_timestamp, stop_timestamp = validate_start_stop_consistency(inspection.group_stats)
+    interval_seconds = _validate_interval_consistency(expected_interval_seconds, inspection.group_stats)
+    return TimeSeriesValidationResult(
+        data=inspection.data,
+        group_by_column=inspection.group_column,
+        timestamp_column=inspection.timestamp_column,
+        timestamp_format=inspection.timestamp_format,
+        is_elapsed_time=inspection.is_elapsed_time,
+        timestamp_interval_seconds=interval_seconds,
+        start_timestamp=start_timestamp,
+        stop_timestamp=stop_timestamp,
+        group_stats=inspection.group_stats,
+    )
+
+
+def _resolve_timestamp_order_columns(config: SafeSynthesizerParameters) -> None:
+    """Make the source timestamp and within-group order columns name the same column.
+
+    Contradicting values are rejected during configuration validation. When
+    only ``timestamp_column`` is set it also orders records. When only
+    ``order_training_examples_by`` is set together with
+    ``timestamp_interval_seconds``, that column is treated as the timestamp so
+    the asserted interval is checked against its values.
+
+    Args:
+        config: Parameters updated in place.
+    """
+    ts_config = config.time_series
+    if not ts_config.is_timeseries:
+        return
+    if ts_config.timestamp_column is None:
+        if config.data.order_training_examples_by is not None and ts_config.timestamp_interval_seconds is not None:
+            ts_config.timestamp_column = config.data.order_training_examples_by
+        return
+    if config.data.order_training_examples_by is None:
+        config.data.order_training_examples_by = ts_config.timestamp_column
+
+
+def _validate_asserted_interval(inspection: TimeSeriesInspection, expected_interval_seconds: int) -> None:
+    """Raise when source timestamps do not follow a user-asserted interval.
+
+    Groups may still differ in length, start, or stop; only the spacing between
+    consecutive records within each group is checked.
+    """
+    for stats in inspection.group_stats:
+        if stats.record_count > 1 and stats.interval_seconds != expected_interval_seconds:
+            raise TimeSeriesDataValidationError(
+                TimeSeriesValidationReason.TIMESTAMP_INTERVAL_MISMATCH,
+                f"timestamp_interval_seconds={expected_interval_seconds} does not match the spacing of "
+                f"timestamp column '{inspection.timestamp_column}' in group '{stats.group_name}'. "
+                "Correct timestamp_interval_seconds, or remove it to allow irregular intervals.",
+            )
+
+
+def _inspect_timeseries_constraints(
+    data: pd.DataFrame,
+    config: SafeSynthesizerParameters,
+) -> TimeSeriesRoutingDecision:
+    """Inspect the four deterministic shape constraints without mutating inputs.
+
+    Raises:
+        TimeSeriesDataValidationError: If data is malformed or source
+            timestamps do not follow an asserted ``timestamp_interval_seconds``.
+        TimeSeriesParameterValidationError: If configured columns or formats
+            are incompatible with the data.
+    """
+    if data.empty:
+        raise TimeSeriesDataValidationError(
+            TimeSeriesValidationReason.TIMESERIES_EMPTY,
+            "Time-series data must contain at least one record.",
+        )
+
+    config_copy = config.model_copy(deep=True)
+    _resolve_timestamp_order_columns(config_copy)
+    inspection = _inspect_time_series_data(
+        data,
+        config_copy,
+        tolerate_interval_mismatch=True,
+    )
+    group_stats = inspection.group_stats
+    expected_interval = config_copy.time_series.timestamp_interval_seconds
+    if expected_interval is not None and config_copy.time_series.timestamp_column is not None:
+        _validate_asserted_interval(inspection, expected_interval)
+
+    failed: list[str] = []
+    if len({stats.record_count for stats in group_stats}) > 1:
+        failed.append("equal group lengths")
+    if len({stats.start_timestamp for stats in group_stats}) > 1:
+        failed.append("common start timestamps")
+    if len({stats.stop_timestamp for stats in group_stats}) > 1:
+        failed.append("common stop timestamps")
+    try:
+        _validate_interval_consistency(expected_interval, group_stats)
+    except TimeSeriesDataValidationError as exc:
+        if exc.reason is not TimeSeriesValidationReason.TIMESTAMP_INTERVAL_MISMATCH:
+            raise
+        failed.append("consistent timestamp intervals")
+
+    maximum = max(stats.record_count for stats in group_stats)
+    return TimeSeriesRoutingDecision(
+        uses_flexible_timeseries=bool(failed),
+        failed_constraints=tuple(failed),
+        sequence_max_records=maximum,
+        timestamp_format=inspection.timestamp_format,
+        inspection=inspection,
+    )
+
+
+def _check_duplicate_columns(data: pd.DataFrame) -> None:
+    """Raise when the source data contains duplicate column names."""
+    if data.columns.has_duplicates:
+        duplicates = data.columns[data.columns.duplicated()].unique().tolist()
+        raise TimeSeriesDataValidationError(
+            TimeSeriesValidationReason.DUPLICATE_COLUMNS,
+            f"Input dataset contains duplicate column names {duplicates!r}. "
+            "Rename or remove duplicate columns before running the pipeline.",
+        )
+
+
+def validate_timeseries_source_data(data: pd.DataFrame, config: SafeSynthesizerParameters) -> None:
+    """Validate time-series source data without selecting a representation.
+
+    Reports malformed data and asserted-interval mismatches. Differences in
+    group length, start, stop, or unasserted interval are not errors; they
+    select flexible processing during training preprocessing.
+
+    Args:
+        data: Source data to validate.
+        config: Parameters defining grouping and timestamp behavior. Not mutated.
+
+    Raises:
+        TimeSeriesDataValidationError: If data is malformed or does not follow
+            an asserted ``timestamp_interval_seconds``.
+        TimeSeriesParameterValidationError: If configured columns or formats
+            are incompatible with the data.
+    """
+    if not config.time_series.is_timeseries:
+        return
+    _check_duplicate_columns(data)
+    _inspect_timeseries_constraints(data, config)
+
+
+def resolve_timeseries_routing(
+    data: pd.DataFrame,
+    config: SafeSynthesizerParameters,
+) -> TimeSeriesRoutingDecision | None:
+    """Select the deterministic or flexible time-series representation.
+
+    Resolves the effective timestamp and order columns and persists an inferred
+    timestamp format on ``config``. Flexible metadata is returned on the
+    decision only when deterministic shape constraints are not satisfied.
+
+    Args:
+        data: Source data to inspect.
+        config: Parameters updated with the resolved timestamp columns and format.
+
+    Returns:
+        The routing decision, or ``None`` when time-series mode is disabled.
+    """
+    if not config.time_series.is_timeseries:
+        return None
+    _check_duplicate_columns(data)
+
+    _resolve_timestamp_order_columns(config)
+    ts_config = config.time_series
+    decision = _inspect_timeseries_constraints(data, config)
+    if ts_config.timestamp_format is None:
+        ts_config.timestamp_format = decision.timestamp_format
+    if decision.uses_flexible_timeseries:
+        metadata = resolve_flexible_timeseries_metadata(
+            data,
+            config,
+            decision.sequence_max_records,
+            decision.timestamp_format,
+        )
+        decision = replace(decision, flexible_metadata=metadata)
+    return decision
+
+
 def validate_timeseries_data(data: pd.DataFrame, config: SafeSynthesizerParameters) -> TimeSeriesValidationResult:
-    """Validate time-series data shape and infer timestamp metadata.
+    """Validate deterministic time-series data shape and infer timestamp metadata.
 
     The validator performs the same timestamp normalization checks needed by
     training preprocessing, but operates on copies so preflight can run it
@@ -454,61 +820,8 @@ def validate_timeseries_data(data: pd.DataFrame, config: SafeSynthesizerParamete
             "Time-series data must contain at least one record.",
         )
 
-    ts_config = config.time_series
-    working_df, group_by_col = _resolve_group_column(data, config)
-
-    timestamp_col = ts_config.timestamp_column
-    if timestamp_col is None:
-        working_df, timestamp_col = _add_elapsed_time_column(working_df, ts_config, group_by_col)
-        timestamp_format = "elapsed_seconds"
-        is_elapsed_time = True
-    else:
-        try:
-            check_timestamp_column(working_df, timestamp_col)
-        except ParameterError as exc:
-            raise TimeSeriesParameterValidationError(TimeSeriesValidationReason.TIMESTAMP_NOT_FOUND, str(exc)) from exc
-        except DataError as exc:
-            raise TimeSeriesDataValidationError(TimeSeriesValidationReason.TIMESTAMP_NULLS, str(exc)) from exc
-
-        is_elapsed_time = _detect_elapsed_seconds_format(working_df, ts_config, timestamp_col)
-
-    if group_by_col == timestamp_col:
-        raise TimeSeriesParameterValidationError(
-            TimeSeriesValidationReason.TIMESERIES_IDENTITY_COLUMNS_SAME,
-            "The time-series group and timestamp columns must be different columns.",
-        )
-
-    identity_columns = {group_by_col, timestamp_col}
-    if not any(column not in identity_columns for column in working_df.columns):
-        raise TimeSeriesDataValidationError(
-            TimeSeriesValidationReason.TIMESERIES_NO_VALUE_COLUMNS,
-            "Time-series data must contain at least one value column besides the group and timestamp columns.",
-        )
-
-    if not is_elapsed_time:
-        ts_config_copy = ts_config.model_copy(update={"timestamp_column": timestamp_col})
-        working_df = _infer_and_convert_timestamp_format(working_df, ts_config_copy)
-        timestamp_format = cast(str, ts_config_copy.timestamp_format)
-    else:
-        timestamp_format = "elapsed_seconds"
-
-    working_df = _sort_by_group_and_timestamp(working_df, group_by_col, timestamp_col)
-    group_stats = _collect_group_timestamp_stats(working_df, timestamp_col, group_by_col, is_elapsed_time)
-    _validate_equal_group_lengths(group_stats)
-    start_ts, stop_ts = validate_start_stop_consistency(group_stats)
-    interval_seconds = _validate_interval_consistency(
-        ts_config.timestamp_interval_seconds,
-        group_stats,
-    )
-
-    return TimeSeriesValidationResult(
-        data=working_df,
-        group_by_column=group_by_col,
-        timestamp_column=timestamp_col,
-        timestamp_format=timestamp_format,
-        is_elapsed_time=is_elapsed_time,
-        timestamp_interval_seconds=interval_seconds,
-        start_timestamp=start_ts,
-        stop_timestamp=stop_ts,
-        group_stats=group_stats,
+    inspection = _inspect_time_series_data(data, config)
+    return validate_deterministic_inspection(
+        inspection,
+        config.time_series.timestamp_interval_seconds,
     )

@@ -52,6 +52,8 @@ class DependsOnValidator:
         value_func: Optional predicate on the current field's own value.
             When ``None`` (or when it returns falsy), the dependency check
             is skipped and the value passes through unchanged.
+        message: Optional error message used when the dependency condition
+            fails. Defaults to a message derived from ``depends_on_func``.
 
     Example::
 
@@ -69,6 +71,7 @@ class DependsOnValidator:
     depends_on: str
     depends_on_func: Callable[[Any], bool]
     value_func: Callable[[Any], bool] | None
+    message: str | None = None
 
     def validate(self, value, info: ValidationInfo):
         """Run the dependency check during Pydantic validation.
@@ -92,6 +95,8 @@ class DependsOnValidator:
         if vf(value):
             if self.depends_on_func(info.data.get(self.depends_on)):
                 return value
+            if self.message is not None:
+                raise ValueError(self.message)
             try:
                 src = inspect.getsource(self.depends_on_func)
                 msg = f"{info.field_name} is only allowed when {self.depends_on} passes condition `{src}`"

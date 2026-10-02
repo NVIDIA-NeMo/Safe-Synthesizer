@@ -13,6 +13,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    ValidationError,
     field_serializer,
     field_validator,
     model_validator,
@@ -26,7 +27,7 @@ from ..defaults import (
     MAX_ROPE_SCALING_FACTOR,
     PROMPT_TEMPLATE,
 )
-from ..errors import ParameterError
+from ..errors import GenerationError, ParameterError
 from ..observability import get_logger
 from ..utils import load_json, write_json
 from .utils import ModelRef, load_fast_tokenizer
@@ -43,6 +44,65 @@ observed during training, so a small jitter margin is sufficient."""
 
 TimeSeriesGroupValue: TypeAlias = str | int | float | bool
 """JSON-compatible, non-null value identifying a time-series group."""
+
+
+class FlexibleTimeseriesMetadata(BaseModel):
+    """Internal values resolved when flexible time-series routing is selected."""
+
+    model_config = ConfigDict(frozen=True)
+
+    DEFAULT_INDEX_COLUMN: ClassVar[str] = "_time_idx"
+    DEFAULT_MARKER_COLUMN: ClassVar[str] = "_is_last_row"
+
+    index_column: str = Field(
+        default=DEFAULT_INDEX_COLUMN,
+        description="Generated zero-based sequence index column.",
+    )
+    marker_column: str = Field(
+        default=DEFAULT_MARKER_COLUMN,
+        description="Generated boolean column marking each sequence's final row.",
+    )
+    max_records: int = Field(description="Largest source-group length; generated groups never exceed it.")
+    source_columns: tuple[str, ...] = Field(description="Original source columns in output order.")
+    source_timestamp_column: str | None = Field(
+        default=None,
+        description="Source timestamp column whose generated values must be non-decreasing within a group.",
+    )
+    source_timestamp_format: str | None = Field(
+        default=None,
+        description="strftime format or ``elapsed_seconds`` used to parse ``source_timestamp_column``.",
+    )
+    source_interval_seconds: int | None = Field(
+        default=None,
+        description="User-asserted spacing between consecutive source timestamps.",
+    )
+
+
+def _flexible_timeseries_metadata_issue(metadata: FlexibleTimeseriesMetadata) -> str | None:
+    """Return an internal artifact invariant violation, if any."""
+    if not metadata.index_column or not metadata.marker_column:
+        return "control column names must not be empty"
+    if metadata.index_column == metadata.marker_column:
+        return "control column names must be different"
+    if metadata.max_records < 1:
+        return "maximum record count must be positive"
+    if not metadata.source_columns:
+        return "source column list must not be empty"
+    if len(set(metadata.source_columns)) != len(metadata.source_columns):
+        return "source column list contains duplicates"
+    if metadata.index_column in metadata.source_columns or metadata.marker_column in metadata.source_columns:
+        return "control columns overlap source columns"
+    if metadata.source_timestamp_column is None:
+        if metadata.source_timestamp_format is not None or metadata.source_interval_seconds is not None:
+            return "source timestamp settings require a source timestamp column"
+        return None
+    if metadata.source_timestamp_column not in metadata.source_columns:
+        return "source timestamp column is not a source column"
+    if not metadata.source_timestamp_format:
+        return "source timestamp column requires a timestamp format"
+    if metadata.source_interval_seconds is not None and metadata.source_interval_seconds < 1:
+        return "source interval must be positive"
+    return None
 
 
 class LLMPromptConfig(BaseModel):
@@ -354,7 +414,12 @@ class ModelMetadata(BaseModel):
 
     timeseries_source_columns: list[str] | None = Field(
         default=None,
-        description="Original time-series input column order restored on generated output.",
+        description="Original deterministic time-series input column order restored on generated output.",
+    )
+
+    flexible_timeseries_metadata: FlexibleTimeseriesMetadata | None = Field(
+        default=None,
+        description="Resolved internal metadata when flexible time-series processing was selected during training.",
     )
 
     max_tokens_per_example: int | None = Field(
@@ -679,6 +744,23 @@ class ModelMetadata(BaseModel):
         """
         path = Path(path).resolve()
         kwargs = load_json(path)
+        raw_flexible_metadata = kwargs.get("flexible_timeseries_metadata")
+        if raw_flexible_metadata is not None:
+            try:
+                flexible_metadata = FlexibleTimeseriesMetadata.model_validate(raw_flexible_metadata)
+            except ValidationError as exc:
+                logger.debug(f"Invalid flexible time-series metadata in artifact {path}: {exc}")
+                raise GenerationError(
+                    "The model artifact contains invalid flexible time-series metadata. "
+                    "Retrain the model or restore a complete artifact."
+                ) from exc
+            if issue := _flexible_timeseries_metadata_issue(flexible_metadata):
+                logger.debug(f"Invalid flexible time-series metadata in artifact {path}: {issue}")
+                raise GenerationError(
+                    "The model artifact contains invalid flexible time-series metadata. "
+                    "Retrain the model or restore a complete artifact."
+                )
+            kwargs["flexible_timeseries_metadata"] = flexible_metadata
         if workdir is not None:
             kwargs["workdir"] = workdir
         return cls(**kwargs)

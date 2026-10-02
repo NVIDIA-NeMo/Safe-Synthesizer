@@ -42,6 +42,7 @@ from ..cli.artifact_structure import BoundDir
 from ..config.autoconfig import AutoConfigResolver
 from ..data_processing.assembler import TrainingExampleAssembler
 from ..data_processing.dataset import make_json_schema
+from ..data_processing.flexible_timeseries import finalize_flexible_timeseries_controls
 from ..defaults import (
     DEFAULT_VALID_RECORD_EVAL_BATCH_SIZE,
     EVAL_STEPS,
@@ -413,7 +414,7 @@ class HuggingFaceBackend(TrainingBackend):
         evaluation_strategy = (
             IntervalStrategy.STEPS if self.params.training.validation_ratio > 0 else IntervalStrategy.NO
         )
-        return dict(
+        training_args = dict(
             output_dir=Path(self.workdir.train.cache),
             per_device_train_batch_size=self.params.training.batch_size,
             gradient_accumulation_steps=self.params.training.gradient_accumulation_steps,
@@ -427,6 +428,7 @@ class HuggingFaceBackend(TrainingBackend):
             disable_tqdm=True,  # The 🤗 progress bar doesn't play nice with our logging.
             **FIXED_RUNTIME_TRAINING_ARGS,
         )
+        return training_args
 
     def _apply_eval_dataset_overrides(self, training_args: dict) -> None:
         """Apply eval dataset-specific overrides to training args.
@@ -657,8 +659,19 @@ class HuggingFaceBackend(TrainingBackend):
             return df
 
         logger.info("Processing time series data")
-        self.model_metadata.timeseries_source_columns = list(df.columns)
-        df, self.params = process_timeseries_data(df, self.params)
+        source_columns = list(df.columns)
+        df, self.params, flexible_metadata = process_timeseries_data(df, self.params)
+        self.model_metadata.flexible_timeseries_metadata = flexible_metadata
+        self.model_metadata.timeseries_source_columns = source_columns if flexible_metadata is None else None
+        return df
+
+    def _finalize_flexible_timeseries(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Recompute flexible control columns after preprocessing may have removed rows."""
+        metadata = self.model_metadata.flexible_timeseries_metadata
+        if metadata is None:
+            return df
+        df, metadata = finalize_flexible_timeseries_controls(df, self.params, metadata)
+        self.model_metadata.flexible_timeseries_metadata = metadata
         return df
 
     def _create_example_assembler(self, hf_dataset: Dataset) -> TrainingExampleAssembler:
@@ -727,6 +740,7 @@ class HuggingFaceBackend(TrainingBackend):
         training_df = self._process_timeseries(training_df)
 
         training_df = self._apply_preprocessing(training_df)
+        training_df = self._finalize_flexible_timeseries(training_df)
         test_df = None
 
         hf_dataset = Dataset.from_pandas(training_df, preserve_index=False)

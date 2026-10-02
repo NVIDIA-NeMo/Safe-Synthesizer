@@ -8,7 +8,7 @@ import pytest
 
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 from nemo_safe_synthesizer.defaults import PSEUDO_GROUP_COLUMN
-from nemo_safe_synthesizer.errors import ParameterError
+from nemo_safe_synthesizer.errors import DataError, ParameterError
 from nemo_safe_synthesizer.training.timeseries_preprocessing import process_timeseries_data
 
 
@@ -22,7 +22,7 @@ def test_process_timeseries_data_adds_pseudo_group_and_elapsed_timestamp():
         rope_scaling_factor=1,
     )
 
-    df_result, result_config = process_timeseries_data(df.copy(), config)
+    df_result, result_config, _ = process_timeseries_data(df.copy(), config)
 
     assert PSEUDO_GROUP_COLUMN in df_result.columns
     assert result_config.data.group_training_examples_by == PSEUDO_GROUP_COLUMN
@@ -47,7 +47,7 @@ def test_process_timeseries_data_preserves_existing_group_column():
         rope_scaling_factor=1,
     )
 
-    df_result, result_config = process_timeseries_data(df.copy(), config)
+    df_result, result_config, _ = process_timeseries_data(df.copy(), config)
 
     assert PSEUDO_GROUP_COLUMN not in df_result.columns
     assert result_config.data.group_training_examples_by == "group_id"
@@ -72,7 +72,7 @@ def test_process_timeseries_data_sorts_by_group_and_timestamp():
         rope_scaling_factor=1,
     )
 
-    df_result, _ = process_timeseries_data(df.copy(), config)
+    df_result, _, _ = process_timeseries_data(df.copy(), config)
 
     # Should be sorted: A-1, A-2, B-1, B-2
     assert list(df_result.columns) == ["group_id", "timestamp", "value"]
@@ -96,7 +96,7 @@ def test_process_timeseries_data_sorts_ungrouped_timestamp_data():
         rope_scaling_factor=1,
     )
 
-    df_result, _ = process_timeseries_data(df.copy(), config)
+    df_result, _, _ = process_timeseries_data(df.copy(), config)
 
     assert list(df_result["timestamp"]) == [1, 2, 3]
     assert list(df_result["value"]) == ["a", "b", "c"]
@@ -134,7 +134,7 @@ class TestProcessTimeseriesElapsedSecondsDetection:
             group_training_examples_by="group",
         )
 
-        result_df, result_config = process_timeseries_data(df.copy(), config)
+        result_df, result_config, _ = process_timeseries_data(df.copy(), config)
 
         assert result_config.time_series.timestamp_format == "elapsed_seconds"
         assert list(result_df["ts"]) == expected_values
@@ -190,7 +190,7 @@ class TestProcessTimeseriesElapsedSecondsDetection:
         config = self._make_config(timestamp_column="ts", group_training_examples_by="group")
         assert config.time_series.timestamp_format is None
 
-        _, result_config = process_timeseries_data(df.copy(), config)
+        _, result_config, _ = process_timeseries_data(df.copy(), config)
 
         is_elapsed = result_config.time_series.timestamp_format == "elapsed_seconds"
         assert is_elapsed is expected_format_is_elapsed
@@ -201,7 +201,7 @@ class TestProcessTimeseriesElapsedSecondsDetection:
         config = self._make_config(timestamp_column="ts")
         assert config.time_series.timestamp_format is None
 
-        _, result_config = process_timeseries_data(df.copy(), config)
+        _, result_config, _ = process_timeseries_data(df.copy(), config)
 
         assert result_config.time_series.timestamp_format == "elapsed_seconds"
 
@@ -240,6 +240,248 @@ class TestProcessTimeseriesElapsedSecondsDetection:
             group_training_examples_by="group",
         )
 
-        _, result_config = process_timeseries_data(df.copy(), config)
+        _, result_config, _ = process_timeseries_data(df.copy(), config)
 
         assert result_config.time_series.timestamp_interval_seconds == 60
+
+
+@pytest.fixture
+def fixture_variable_length_sequences():
+    """Provide unsorted source groups with lengths one, two, and four."""
+    return pd.DataFrame(
+        {
+            "group": ["C", "B", "C", "A", "C", "B", "C"],
+            "timestamp": [4, 2, 1, 1, 3, 1, 2],
+            "value": [40, 20, 10, 1, 30, 10, 20],
+        }
+    )
+
+
+def _sequence_config() -> SafeSynthesizerParameters:
+    return SafeSynthesizerParameters.from_params(
+        is_timeseries=True,
+        timestamp_column="timestamp",
+        group_training_examples_by="group",
+        order_training_examples_by="timestamp",
+        rope_scaling_factor=1,
+    )
+
+
+def test_process_flexible_timeseries_marks_only_final_real_row(fixture_variable_length_sequences):
+    config = _sequence_config()
+
+    result, _, metadata = process_timeseries_data(fixture_variable_length_sequences, config)
+
+    assert metadata is not None
+    assert metadata.max_records == 4
+    assert metadata.source_timestamp_column == "timestamp"
+    assert metadata.source_timestamp_format == "elapsed_seconds"
+    assert metadata.source_interval_seconds is None
+    assert list(result.columns) == ["group", "_time_idx", "timestamp", "value", "_is_last_row"]
+    assert result.groupby("group", sort=False).size().to_dict() == {"A": 1, "B": 2, "C": 4}
+    for _, group in result.groupby("group", sort=False):
+        assert group["_is_last_row"].tolist() == [False] * (len(group) - 1) + [True]
+
+
+def test_process_flexible_timeseries_normalizes_timestamp_sort_key():
+    data = pd.DataFrame(
+        {
+            "value": ["only", "new", "old"],
+            "group": ["B", "A", "A"],
+            "timestamp": ["06/30/2024", "01/01/2024", "12/31/2023"],
+        }
+    )
+    config = SafeSynthesizerParameters.from_params(
+        is_timeseries=True,
+        timestamp_column="timestamp",
+        group_training_examples_by="group",
+        order_training_examples_by="timestamp",
+        rope_scaling_factor=1,
+    )
+
+    result, _, metadata = process_timeseries_data(data, config)
+
+    assert metadata is not None
+    assert metadata.source_columns == ("value", "group", "timestamp")
+    assert metadata.source_timestamp_format == "%m/%d/%Y"
+    assert list(result.columns) == ["group", "_time_idx", "value", "timestamp", "_is_last_row"]
+    group_a = result[result["group"] == "A"]
+    assert group_a["_time_idx"].tolist() == [0, 1]
+    assert group_a["timestamp"].tolist() == ["12/31/2023", "01/01/2024"]
+    assert group_a["value"].tolist() == ["old", "new"]
+
+
+def test_process_fills_order_column_from_timestamp_column():
+    data = pd.DataFrame(
+        {
+            "group": ["A", "A", "B", "B"],
+            "timestamp": [2, 1, 1, 2],
+            "value": [2, 1, 3, 4],
+        }
+    )
+    config = SafeSynthesizerParameters.from_params(
+        is_timeseries=True,
+        timestamp_column="timestamp",
+        group_training_examples_by="group",
+        rope_scaling_factor=1,
+    )
+
+    result, resolved, metadata = process_timeseries_data(data, config)
+
+    assert metadata is None
+    assert resolved.data.order_training_examples_by == resolved.time_series.timestamp_column == "timestamp"
+    assert result["value"].tolist() == [1, 2, 3, 4]
+
+
+def test_process_order_column_with_interval_is_treated_as_timestamp():
+    data = pd.DataFrame(
+        {
+            "group": ["B", "A", "B", "A"],
+            "event": [60, 60, 0, 0],
+            "value": [4, 2, 3, 1],
+        }
+    )
+    config = SafeSynthesizerParameters.from_params(
+        is_timeseries=True,
+        timestamp_interval_seconds=60,
+        group_training_examples_by="group",
+        order_training_examples_by="event",
+        rope_scaling_factor=1,
+    )
+
+    result, resolved, metadata = process_timeseries_data(data, config)
+
+    assert metadata is None
+    assert resolved.time_series.timestamp_column == "event"
+    assert resolved.data.order_training_examples_by == "event"
+    assert "elapsed_seconds" not in result.columns
+    assert result["group"].tolist() == ["A", "A", "B", "B"]
+    assert result["value"].tolist() == [1, 2, 3, 4]
+
+
+def test_process_order_column_with_mismatched_interval_raises():
+    data = pd.DataFrame(
+        {
+            "group": ["A", "A", "A"],
+            "event": [1, 2, 3],
+            "value": [1, 2, 3],
+        }
+    )
+    config = SafeSynthesizerParameters.from_params(
+        is_timeseries=True,
+        timestamp_interval_seconds=60,
+        group_training_examples_by="group",
+        order_training_examples_by="event",
+        rope_scaling_factor=1,
+    )
+
+    with pytest.raises(DataError, match="does not match the spacing of timestamp column 'event'"):
+        process_timeseries_data(data, config)
+
+
+def test_process_explicit_interval_mismatch_raises_instead_of_flexible_routing():
+    data = pd.DataFrame(
+        {
+            "group": ["A", "A", "A", "B", "B"],
+            "timestamp": [0, 60, 120, 0, 60],
+            "value": [1, 2, 3, 4, 5],
+        }
+    )
+    config = SafeSynthesizerParameters.from_params(
+        is_timeseries=True,
+        timestamp_column="timestamp",
+        timestamp_interval_seconds=30,
+        group_training_examples_by="group",
+        rope_scaling_factor=1,
+    )
+
+    with pytest.raises(DataError, match="remove it to allow irregular intervals"):
+        process_timeseries_data(data, config)
+
+
+def test_process_matching_interval_with_different_lengths_routes_flexible():
+    data = pd.DataFrame(
+        {
+            "group": ["A", "A", "A", "B", "B"],
+            "timestamp": [0, 60, 120, 60, 120],
+            "value": [1, 2, 3, 4, 5],
+        }
+    )
+    config = SafeSynthesizerParameters.from_params(
+        is_timeseries=True,
+        timestamp_column="timestamp",
+        timestamp_interval_seconds=60,
+        group_training_examples_by="group",
+        rope_scaling_factor=1,
+    )
+
+    result, resolved, metadata = process_timeseries_data(data, config)
+
+    assert metadata is not None
+    assert metadata.source_timestamp_column == "timestamp"
+    assert metadata.source_interval_seconds == 60
+    assert resolved.time_series.timestamp_column == metadata.index_column
+    assert "_is_last_row" in result.columns
+
+
+def test_process_timestamp_less_timeseries_rejects_missing_order_column():
+    data = pd.DataFrame(
+        {
+            "group": ["A", "A"],
+            "value": [1, 2],
+        }
+    )
+    config = SafeSynthesizerParameters.from_params(
+        is_timeseries=True,
+        timestamp_interval_seconds=60,
+        group_training_examples_by="group",
+        order_training_examples_by="missing",
+        rope_scaling_factor=1,
+    )
+
+    with pytest.raises(ParameterError, match="Timestamp column 'missing' not found"):
+        process_timeseries_data(data, config)
+
+
+def test_process_fixed_shape_uses_standard_pipeline():
+    data = pd.DataFrame(
+        {
+            "group": ["A", "A", "B", "B"],
+            "timestamp": [1, 2, 1, 2],
+            "value": [1, 2, 3, 4],
+        }
+    )
+    config = _sequence_config()
+
+    result, _, metadata = process_timeseries_data(data, config)
+
+    assert metadata is None
+    assert "_time_idx" not in result.columns
+    assert "_is_last_row" not in result.columns
+    assert list(result.columns) == ["group", "timestamp", "value"]
+
+
+def test_process_sequence_resolves_control_column_collisions():
+    data = pd.DataFrame(
+        {
+            "group": ["A", "B", "B"],
+            "timestamp": [1, 1, 2],
+            "_time_idx": [99, 99, 100],
+            "value": [1, 2, 3],
+        }
+    )
+    config = _sequence_config()
+
+    result, _, metadata = process_timeseries_data(data, config)
+
+    assert metadata is not None
+    assert metadata.index_column == "_time_idx_1"
+    assert metadata.source_columns == ("group", "timestamp", "_time_idx", "value")
+    assert list(result.columns) == [
+        "group",
+        "_time_idx_1",
+        "timestamp",
+        "_time_idx",
+        "value",
+        "_is_last_row",
+    ]

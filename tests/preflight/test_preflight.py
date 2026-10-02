@@ -761,7 +761,7 @@ class TestOrderbyColumnCheck:
         issues = OrderbyColumnCheck().run(make_ctx(config=config, data=sample_df))
         assert any(i.code == "column_not_found" for i in issues)
 
-    def test_timeseries_with_generated_timestamp_bypasses_missing_order_by(self, sample_df):
+    def test_timeseries_with_generated_timestamp_rejects_missing_order_by(self, sample_df):
         config = SafeSynthesizerParameters(
             data=DataParameters(
                 group_training_examples_by="category",
@@ -770,7 +770,7 @@ class TestOrderbyColumnCheck:
             time_series=TimeSeriesParameters(is_timeseries=True, timestamp_interval_seconds=60),
         )
         issues = OrderbyColumnCheck().run(make_ctx(config=config, data=sample_df))
-        assert not any(i.code == "column_not_found" and "generated_ts" in i.message for i in issues)
+        assert any(i.code == "column_not_found" and "generated_ts" in i.message for i in issues)
 
 
 @pytest.mark.unit
@@ -819,15 +819,6 @@ class TestTimeSeriesDataShapeCheck:
 
     def test_disabled_when_not_timeseries(self, default_config):
         assert TimeSeriesDataShapeCheck().enabled(make_ctx(config=default_config)) is False
-
-    def test_missing_timestamp_prerequisite_is_not_duplicated(self):
-        df = pd.DataFrame({"grp": ["A", "A"], "value": [1, 2]})
-        config = self._make_config()
-
-        assert TimeSeriesDataShapeCheck().enabled(make_ctx(config=config, data=df)) is False
-        issues = TimeSeriesDataShapeCheck().run(make_ctx(config=config, data=df))
-
-        assert issues == []
 
     def test_missing_timestamp_prerequisite_omits_shape_from_full_preflight(self):
         df = pd.DataFrame({"grp": ["A", "A"], "value": [1, 2]})
@@ -914,68 +905,89 @@ class TestTimeSeriesDataShapeCheck:
         )
         assert not any(issue.code == "preflight.check_crash" for issue in report.issues)
 
-    def test_interval_mismatch_reports_error(self):
-        df = pd.DataFrame(
-            {
-                "grp": ["A", "A", "A", "B", "B", "B"],
-                "ts": [
-                    "2024-01-01 00:00:00",
-                    "2024-01-01 01:00:00",
-                    "2024-01-01 02:00:00",
-                    "2024-01-01 00:00:00",
-                    "2024-01-01 00:30:00",
-                    "2024-01-01 02:00:00",
-                ],
-                "value": [1, 2, 3, 4, 5, 6],
-            }
-        )
-        config = self._make_config(timestamp_format="%Y-%m-%d %H:%M:%S")
-
-        issues = TimeSeriesDataShapeCheck().run(make_ctx(config=config, data=df))
-
-        assert any(i.code == "timestamp_interval_mismatch" and i.severity == "error" for i in issues)
-
-    def test_group_length_mismatch_reports_error(self):
+    def test_differently_shaped_groups_report_no_issues_or_config_changes(self):
         df = pd.DataFrame(
             {
                 "grp": ["A", "A", "A", "B", "B"],
-                "ts": ["2024-01-01", "2024-01-02", "2024-01-03", "2024-01-01", "2024-01-02"],
+                "ts": [
+                    "2024-01-01",
+                    "2024-01-02",
+                    "2024-01-03",
+                    "2024-01-02",
+                    "2024-01-04",
+                ],
                 "value": [1, 2, 3, 4, 5],
             }
         )
         config = self._make_config(timestamp_format="%Y-%m-%d")
+        before = config.model_dump()
 
         issues = TimeSeriesDataShapeCheck().run(make_ctx(config=config, data=df))
 
-        assert any(i.code == "timeseries_group_length_mismatch" and i.severity == "error" for i in issues)
+        assert issues == []
+        assert config.model_dump() == before
 
-    def test_start_mismatch_reports_error(self):
+    def test_asserted_interval_mismatch_reports_error(self):
+        df = pd.DataFrame({"grp": ["A", "A", "A", "B"], "ts": [0, 60, 90, 0], "value": [1, 2, 3, 4]})
+        config = self._make_config(timestamp_format="elapsed_seconds", timestamp_interval_seconds=60)
+
+        issues = TimeSeriesDataShapeCheck().run(make_ctx(config=config, data=df))
+
+        error = next(issue for issue in issues if issue.code == "timestamp_interval_mismatch")
+        assert error.severity == "error"
+        assert "remove it to allow irregular intervals" in error.message
+
+    def test_asserted_interval_matching_differently_shaped_groups_passes(self):
+        df = pd.DataFrame({"grp": ["A", "A", "A", "B"], "ts": [0, 60, 120, 60], "value": [1, 2, 3, 4]})
+        config = self._make_config(timestamp_format="elapsed_seconds", timestamp_interval_seconds=60)
+
+        issues = TimeSeriesDataShapeCheck().run(make_ctx(config=config, data=df))
+
+        assert issues == []
+
+    def test_source_order_nulls_report_domain_error(self):
         df = pd.DataFrame(
             {
-                "grp": ["A", "A", "B", "B"],
-                "ts": ["2024-01-01", "2024-01-02", "2024-01-02", "2024-01-03"],
-                "value": [1, 2, 3, 4],
+                "grp": ["A", "A", "B"],
+                "source_order": [0, None, 0],
+                "value": [1, 2, 3],
             }
         )
-        config = self._make_config(timestamp_format="%Y-%m-%d")
+        config = SafeSynthesizerParameters(
+            data=DataParameters(
+                group_training_examples_by="grp",
+                order_training_examples_by="source_order",
+            ),
+            time_series=TimeSeriesParameters(
+                is_timeseries=True,
+                timestamp_interval_seconds=1,
+            ),
+        )
 
-        issues = TimeSeriesDataShapeCheck().run(make_ctx(config=config, data=df))
+        report = run_preflight(df, config, MagicMock(spec=ModelMetadata), stages=frozenset({PreflightStage.DATAFRAME}))
 
-        assert any(i.code == "timeseries_start_mismatch" and i.severity == "error" for i in issues)
+        assert any(
+            issue.check == "columns.orderby" and issue.code == "column_nulls" and issue.severity == "error"
+            for issue in report.issues
+        )
+        assert not any(issue.code == "preflight.check_crash" for issue in report.issues)
 
-    def test_stop_mismatch_reports_error(self):
+    def test_flexible_duplicate_columns_report_actionable_data_error(self):
         df = pd.DataFrame(
-            {
-                "grp": ["A", "A", "B", "B"],
-                "ts": ["2024-01-01", "2024-01-02", "2024-01-01", "2024-01-03"],
-                "value": [1, 2, 3, 4],
-            }
+            [
+                ["A", 0, 1, 2],
+                ["A", 1, 3, 4],
+                ["B", 0, 5, 6],
+            ],
+            columns=["grp", "ts", "value", "value"],
         )
-        config = self._make_config(timestamp_format="%Y-%m-%d")
+        config = self._make_config(timestamp_format="elapsed_seconds")
 
         issues = TimeSeriesDataShapeCheck().run(make_ctx(config=config, data=df))
 
-        assert any(i.code == "timeseries_stop_mismatch" and i.severity == "error" for i in issues)
+        error = next(issue for issue in issues if issue.code == "duplicate_columns")
+        assert error.severity == "error"
+        assert "Rename or remove duplicate columns" in error.message
 
 
 @pytest.mark.unit

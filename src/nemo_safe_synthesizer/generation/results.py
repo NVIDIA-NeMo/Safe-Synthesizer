@@ -14,7 +14,7 @@ import pandas as pd
 from ..data_processing.actions.utils import (
     MetadataColumns,
 )
-from ..data_processing.record_utils import normalize_record_keys
+from ..data_processing.record_utils import ParsedRecord, normalize_record_keys
 from ..data_processing.stats import RunningStatistics
 from ..defaults import (
     EPS,
@@ -223,6 +223,7 @@ class GenerationBatches:
 
         self.data_actions_fn = data_actions_fn
         self._batches_df: pd.DataFrame | None = None
+        self._pending_history: dict[int, tuple[pd.DataFrame, dict[object, ParsedRecord]]] = {}
 
     @staticmethod
     def _resolve_max_num_prompts_per_batch(
@@ -243,7 +244,7 @@ class GenerationBatches:
             return MAX_NUM_PROMPTS_PER_BATCH
         return min(ADAPTIVE_MAX_PROMPTS_CEILING, max(MAX_NUM_PROMPTS_PER_BATCH, target_num_records // 20))
 
-    def _apply_data_actions_fn(self, batch: Batch) -> None:
+    def _apply_data_actions_fn(self, batch: Batch, *, commit_history: bool = True) -> None:
         """Post-process and validate a batch via ``data_actions_fn``.
 
         Converts the batch's valid records into a DataFrame, runs the
@@ -259,6 +260,9 @@ class GenerationBatches:
         Args:
             batch: The batch whose records will be post-processed and
                 filtered in place.
+            commit_history: Whether accepted rows join the history that
+                later batches are validated against. When ``False``, call
+                ``commit_history`` after any further backend checks.
         """
         if self.data_actions_fn is None:
             return
@@ -283,11 +287,9 @@ class GenerationBatches:
 
         valid_df, rejected_df = self.data_actions_fn(batch_df, self._batches_df)
 
-        # Incrementally add onto the `_batches_df` with each batch of valid records.
-        self._batches_df = pd.concat([self._batches_df, valid_df])
-
         id_to_valid_records = dict(zip(valid_df[record_id_key], valid_df.to_dict("records")))
         id_to_rejected_records = dict(zip(rejected_df[record_id_key], rejected_df.to_dict("records")))
+        accepted_records: dict[object, ParsedRecord] = {}
         for response in batch._responses:
             for record in response.records:
                 if not record.is_valid or record.parsed is None:
@@ -296,13 +298,20 @@ class GenerationBatches:
                 if new_record := id_to_valid_records.get(rid):
                     del new_record[record_id_key]
                     record.parsed = normalize_record_keys(new_record)
+                    accepted_records[rid] = record
                 elif new_record := id_to_rejected_records.get(rid):
                     del new_record[record_id_key]
                     record.invalidate(rejected_record_to_error(new_record))
                 else:
                     raise AssertionError("Every record in response should map to either a valid or rejected row.")
 
-    def postprocess_batch(self, batch: Batch) -> None:
+        if commit_history:
+            # Incrementally add onto the `_batches_df` with each batch of valid records.
+            self._batches_df = pd.concat([self._batches_df, valid_df])
+        else:
+            self._pending_history[id(batch)] = (valid_df, accepted_records)
+
+    def postprocess_batch(self, batch: Batch, *, commit_history: bool = True) -> None:
         """Apply configured data actions before generation-specific state updates.
 
         Most generation paths use :meth:`add_batch`, which applies data actions
@@ -312,8 +321,31 @@ class GenerationBatches:
 
         Args:
             batch: The completed batch to post-process in place.
+            commit_history: Whether accepted rows immediately join the history
+                used by history-dependent validation actions. Backends that
+                can still reject rows pass ``False`` and call
+                ``commit_history`` after their own checks.
         """
-        self._apply_data_actions_fn(batch)
+        self._apply_data_actions_fn(batch, commit_history=commit_history)
+
+    def commit_history(self, batch: Batch) -> None:
+        """Add a post-processed batch's still-valid rows to the data-action history.
+
+        Rows that data actions accepted but a backend later invalidated are
+        excluded, so they cannot cause history-dependent validation (for
+        example, duplicate removal) to reject later retries.
+
+        Args:
+            batch: A batch previously passed to ``postprocess_batch``
+                with ``commit_history=False``.
+        """
+        pending = self._pending_history.pop(id(batch), None)
+        if pending is None:
+            return
+        valid_df, accepted_records = pending
+        surviving_ids = [rid for rid, record in accepted_records.items() if record.is_valid]
+        record_id_key = MetadataColumns.INDEX.value
+        self._batches_df = pd.concat([self._batches_df, valid_df[valid_df[record_id_key].isin(surviving_ids)]])
 
     @property
     def num_batches(self) -> int:

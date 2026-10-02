@@ -8,7 +8,12 @@ from __future__ import annotations
 import pandas as pd
 
 from ..config import SafeSynthesizerParameters
-from ..data_processing.timeseries_validation import validate_timeseries_data
+from ..data_processing.flexible_timeseries import prepare_flexible_timeseries_data
+from ..data_processing.timeseries_validation import (
+    resolve_timeseries_routing,
+    validate_deterministic_inspection,
+)
+from ..llm.metadata import FlexibleTimeseriesMetadata
 from ..observability import get_logger
 
 logger = get_logger(__name__)
@@ -42,40 +47,64 @@ def _reorder_timeseries_columns(
 def process_timeseries_data(
     training_df: pd.DataFrame,
     config: SafeSynthesizerParameters,
-) -> tuple[pd.DataFrame, SafeSynthesizerParameters]:
-    """Process time series data and validate/infer timestamp parameters.
+) -> tuple[pd.DataFrame, SafeSynthesizerParameters, FlexibleTimeseriesMetadata | None]:
+    """Resolve and prepare deterministic or flexible time-series training data.
 
     Normalizes grouped and ungrouped time series into the same training path.
     When no group column is configured, a reserved pseudo-group column
     (``PSEUDO_GROUP_COLUMN``) is added so the whole dataset is treated as one
-    sequence. Timestamp format and interval metadata inferred here are saved
-    back into the resolved config for generation.
-
-    This function:
-    1. Creates a timestamp column if one doesn't exist
-    2. Validates the timestamp column exists and has no missing values
-    3. Sorts the data by timestamp
-    4. Infers timestamp_format from the data
-    5. Validates or infers timestamp_interval_seconds
-    6. Sets start_timestamp and stop_timestamp
-    7. Orders group and timestamp columns first for partial-prefix generation
+    sequence. Fixed-shape groups retain deterministic time-range processing.
+    Groups with different lengths, ranges, or unasserted intervals are
+    automatically transformed to use a generated sequence index and final-row
+    marker. The passed configuration is updated with the selected
+    representation and resolved timestamp metadata.
 
     Args:
         training_df: The training DataFrame.
-        config: The configuration object with time_series settings
+        config: Configuration containing time-series and data settings.
 
     Returns:
-        Tuple of (processed DataFrame, updated config)
+        Processed training data, the resolved configuration, and the flexible
+        metadata to persist with the model, or ``None`` for deterministic or
+        non-time-series data.
 
     Raises:
-        ParameterError: If the timestamp column is missing, if ``timestamp_format="elapsed_seconds"``
-            is set on a non-numeric column, or if an explicit format fails to parse the data.
-        DataError: If the timestamp column has missing values or intervals are inconsistent.
+        ParameterError: If a configured timestamp or ordering column is missing,
+            or if the timestamp format is incompatible with the source data.
+        DataError: If required source values are null, timestamps cannot be
+            parsed, or timestamps do not follow an asserted interval.
     """
+    routing = resolve_timeseries_routing(training_df, config)
+    if routing is None:
+        return training_df, config, None
+
     ts_config = config.time_series
+    if routing.flexible_metadata is not None:
+        metadata = routing.flexible_metadata
+        training_df, group_column = prepare_flexible_timeseries_data(
+            training_df,
+            config,
+            metadata,
+            routing.timestamp_format,
+        )
+        logger.info(
+            "Time-series groups differ in shape; using flexible time-series processing.",
+            extra={
+                "group_column": group_column,
+                "failed_constraints": list(routing.failed_constraints),
+                "sequence_max_records": metadata.max_records,
+            },
+        )
+        return training_df, config, metadata
+
+    logger.info("Time-series groups share one shape; using deterministic time-range processing.")
+
     original_group_column = config.data.group_training_examples_by
     original_timestamp_column = ts_config.timestamp_column
-    validation = validate_timeseries_data(training_df, config)
+    validation = validate_deterministic_inspection(
+        routing.inspection,
+        ts_config.timestamp_interval_seconds,
+    )
     training_df = validation.data
     if original_group_column is None:
         logger.info("No group column specified, treating entire dataset as a single sequence")
@@ -113,4 +142,4 @@ def process_timeseries_data(
         validation.group_by_column,
         validation.timestamp_column,
     )
-    return training_df, config
+    return training_df, config, None
