@@ -23,7 +23,6 @@ from tenacity import (
     wait_exponential,
 )
 
-from ...artifacts.analyzers.field_features import FieldType
 from ...config.evaluate import DEFAULT_RECORD_COUNT
 from ...config.parameters import SafeSynthesizerParameters
 from ...evaluation.components.component import Component
@@ -136,9 +135,7 @@ class TextSemanticSimilarity(Component):
         )  # MIN_RECORDS_FOR_TEXT_AND_PRIVACY_METRICS ?
 
         text_semantic_similarity_dict = dict()
-        text_fields = [
-            f.name for f in evaluation_datasets.evaluation_fields if f.training_field_features.type == FieldType.TEXT
-        ]
+        text_fields = evaluation_datasets.get_text_columns()
 
         for field in text_fields:
             training = evaluation_datasets.training[field]

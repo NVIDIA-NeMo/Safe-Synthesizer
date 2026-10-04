@@ -341,7 +341,7 @@ class _AdapterDir(BoundDir):
     if TYPE_CHECKING:
         adapter_config: Path
         metadata: Path
-        schema: Path
+        dataset_profile: Path
 
 
 class _TrainDir(BoundDir):
@@ -391,7 +391,7 @@ class Workdir:
             - adapter_config.json
             - adapter_model.safetensors
             - metadata_v2.json
-            - dataset_schema.json
+            - dataset_profile.json
         - generate/
           - logs.jsonl                   (generate-only workflow)
           - info.json                    (generate-only workflow)
@@ -455,7 +455,7 @@ class Workdir:
             "adapter",
             adapter_config=FileNode("adapter_config.json"),
             metadata=FileNode("metadata_v2.json"),
-            schema=FileNode("dataset_schema.json"),
+            dataset_profile=FileNode("dataset_profile.json"),
         ),
     )
     """Location and contents of train directory structure."""
@@ -562,19 +562,14 @@ class Workdir:
         return self.train.adapter.metadata
 
     @property
-    def schema_file(self) -> Path:
-        """Shortcut to train.adapter.schema.
+    def dataset_profile_file(self) -> Path:
+        """Shortcut to ``train.adapter.dataset_profile``.
 
         Uses parent workdir's path when available.
         """
         if self._parent_workdir is not None:
-            return self._parent_workdir.train.adapter.schema
-        return self.train.adapter.schema
-
-    @property
-    def dataset_schema_file(self) -> Path:
-        """Alias for schema_file (backwards compatibility)."""
-        return self.schema_file
+            return self._parent_workdir.train.adapter.dataset_profile
+        return self.train.adapter.dataset_profile
 
     @property
     def output_file(self) -> Path:
@@ -640,11 +635,11 @@ class Workdir:
         return self.dataset
 
     @property
-    def source_schema_file(self) -> Path:
-        """Source schema file path (from parent workdir if available)."""
+    def source_dataset_profile_file(self) -> Path:
+        """Source dataset profile file path (from parent workdir if available)."""
         if self._parent_workdir is not None:
-            return self._parent_workdir.schema_file
-        return self.schema_file
+            return self._parent_workdir.dataset_profile_file
+        return self.dataset_profile_file
 
     # =========================================================================
     # Methods
@@ -691,7 +686,7 @@ class Workdir:
                 "Config": str(self.source_config),
                 "Original training data": str(self.source_dataset.training),
                 "Test data": str(self.source_dataset.test),
-                "Schema": str(self.schema_file),
+                "Dataset profile": str(self.dataset_profile_file),
             },
         }
 

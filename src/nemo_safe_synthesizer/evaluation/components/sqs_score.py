@@ -5,9 +5,6 @@ from __future__ import annotations
 
 from pydantic import Field
 
-from ...artifacts.analyzers.field_features import (
-    FieldType,
-)
 from ...evaluation.components.column_distribution import ColumnDistribution
 from ...evaluation.components.component import Component
 from ...evaluation.components.composite_score import CompositeScore
@@ -45,8 +42,12 @@ class SQSScore(CompositeScore):
             # If it is absent, something is really wrong -- we get that field info before even trying to make any components.
             # So if we don't have this, it's not worth trying to get consolation field counts from other components.
             if isinstance(c, ColumnDistribution):
-                text_cols = len([f for f in c.evaluation_fields if f.training_field_features.type == FieldType.TEXT])
-                tabular_cols = len(c.evaluation_fields) - text_cols
+                if c.dataset_profile is not None:
+                    text_cols = len(c.dataset_profile.text_columns())
+                    tabular_cols = len(c.dataset_profile.tabular_columns())
+                else:
+                    text_cols = len([f for f in c.evaluation_fields if f.training_field_features.type.value == "text"])
+                    tabular_cols = len(c.evaluation_fields) - text_cols
 
         if tabular_cols + text_cols == 0:
             logger.warning("Failed to detect text/tabular columns for SQS.")

@@ -325,7 +325,7 @@ class TestWorkdir:
         adapter = workdir.train.adapter
         assert adapter.adapter_config == adapter.path / "adapter_config.json"
         assert adapter.metadata == adapter.path / "metadata_v2.json"
-        assert adapter.schema == adapter.path / "dataset_schema.json"
+        assert adapter.dataset_profile == adapter.path / "dataset_profile.json"
 
     # =========================================================================
     # Generate directory structure
@@ -370,9 +370,9 @@ class TestWorkdir:
         """metadata_file shortcut matches full path."""
         assert workdir.metadata_file == workdir.train.adapter.metadata
 
-    def test_schema_file_alias(self, workdir: Workdir):
-        """schema_file shortcut matches full path."""
-        assert workdir.schema_file == workdir.train.adapter.schema
+    def test_dataset_profile_file_alias(self, workdir: Workdir):
+        """dataset_profile_file shortcut matches full path."""
+        assert workdir.dataset_profile_file == workdir.train.adapter.dataset_profile
 
     def test_output_file_alias(self, workdir: Workdir):
         """output_file shortcut matches full path."""

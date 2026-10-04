@@ -7,6 +7,13 @@ Classes:
 
     FieldType: Enum of column types recognized by the field analyzer.
     FieldFeatures: Statistical profile of a single DataFrame column.
+
+Standard ``FieldType`` groupings:
+
+    NUMERIC_FIELD_TYPES: Integer and floating-point columns.
+    NOMINAL_FIELD_TYPES: Binary and categorical columns.
+    TABULAR_FIELD_TYPES: Numeric and nominal columns used by tabular metrics.
+    HIGHLY_UNIQUE_FIELD_TYPES: Types skipped by distribution metrics.
 """
 
 from __future__ import annotations
@@ -25,11 +32,18 @@ class FieldType(StrEnum):
     """
 
     EMPTY = "empty"
-    NUMERIC = "numeric"
+    INTEGER = "integer"
+    FLOAT = "float"
     CATEGORICAL = "categorical"
     TEXT = "text"
     OTHER = "other"
     BINARY = "binary"
+
+
+NUMERIC_FIELD_TYPES: frozenset[FieldType] = frozenset({FieldType.INTEGER, FieldType.FLOAT})
+NOMINAL_FIELD_TYPES: frozenset[FieldType] = frozenset({FieldType.BINARY, FieldType.CATEGORICAL})
+TABULAR_FIELD_TYPES: frozenset[FieldType] = NUMERIC_FIELD_TYPES | NOMINAL_FIELD_TYPES
+HIGHLY_UNIQUE_FIELD_TYPES: frozenset[FieldType] = frozenset({FieldType.OTHER, FieldType.TEXT, FieldType.EMPTY})
 
 
 class FieldFeatures(BaseModel):
