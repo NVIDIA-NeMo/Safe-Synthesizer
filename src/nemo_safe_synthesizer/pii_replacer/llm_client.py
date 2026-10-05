@@ -176,7 +176,8 @@ def resolve_request_options(environ: Mapping[str, str] | None = None) -> dict[st
         raise ParameterError("NSS_INFERENCE_REQUEST_OPTIONS must be a JSON object")
     if reserved := sorted(RESERVED_REQUEST_FIELDS.intersection(options)):
         raise ParameterError(f"NSS_INFERENCE_REQUEST_OPTIONS must not set fields NSS manages: {', '.join(reserved)}")
-    return cast(dict[str, object], options)
+    # JSON object keys are always strings.
+    return {str(key): value for key, value in options.items()}
 
 
 def resolve_inference_settings(
