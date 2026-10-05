@@ -69,7 +69,10 @@ class TestResolveLocalServerRequest:
         ids=["hosted", "own-local-server"],
     )
     def test_endpoint_without_profile_opts_out_of_the_managed_server(self, endpoint: str) -> None:
-        assert resolve_local_server_request(LLMConfig(), environ={"NSS_INFERENCE_ENDPOINT": endpoint}) is None
+        # Explicit-endpoint settings are validated with that endpoint, not as a local profile.
+        environ = {"NSS_INFERENCE_ENDPOINT": endpoint, "NSS_INFERENCE_TIMEOUT": "not-a-number"}
+
+        assert resolve_local_server_request(LLMConfig(), environ=environ) is None
 
     @pytest.mark.parametrize(
         "environ",
@@ -141,6 +144,7 @@ class TestResolveLocalServerRequest:
             pytest.param("http://inference.example.com:8000/v1", id="remote-host"),
             pytest.param("http://127.0.0.1/v1", id="missing-port"),
             pytest.param("http://127.0.0.1:8000", id="missing-v1-path"),
+            pytest.param("http://[::1/v1", id="malformed-ipv6"),
         ],
     )
     def test_endpoint_that_cannot_host_the_managed_server_is_rejected(self, endpoint: str) -> None:

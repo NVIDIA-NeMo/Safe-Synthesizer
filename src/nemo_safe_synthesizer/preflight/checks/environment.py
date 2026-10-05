@@ -18,6 +18,8 @@ from ...observability import get_logger
 from ...pii_replacer.llm_client import (
     MissingInferenceModelError,
     resolve_inference_settings,
+    resolve_inference_timeout,
+    resolve_request_options,
 )
 from ...pii_replacer.local_inference import local_runtime_problem, resolve_local_server_request
 from ...utils import hf_offline_enabled
@@ -471,6 +473,13 @@ class InferenceModelCheck(ConfigCheck):
     def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
         replace_pii = ctx.config.replace_pii
         if replace_pii is None or replace_pii.llm is None:
+            return
+        # Timeout and request options apply to local and explicit endpoints alike.
+        try:
+            resolve_inference_timeout()
+            resolve_request_options()
+        except ParameterError as exc:
+            collector.error("inference_request_settings_invalid", str(exc))
             return
         try:
             local_server = resolve_local_server_request(replace_pii.llm)

@@ -223,6 +223,33 @@ class TestOpenAICompatibleTransport:
                 environ={"NSS_INFERENCE_ENDPOINT": LOCAL_ENDPOINT, "NSS_INFERENCE_REQUEST_OPTIONS": raw},
             )
 
+    @pytest.mark.parametrize(
+        ("endpoint", "trust_env"),
+        [(LOCAL_ENDPOINT, False), ("http://127.0.0.1:8000/v1", False), ("https://inference.example.com/v1", True)],
+        ids=["localhost", "ipv4-loopback", "remote"],
+    )
+    def test_environment_proxies_apply_only_to_remote_endpoints(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        endpoint: str,
+        trust_env: bool,
+    ) -> None:
+        seen: list[object] = []
+
+        def post(url: str, **kwargs: object) -> httpx.Response:
+            seen.append(kwargs["trust_env"])
+            return httpx.Response(200, json={"choices": [{"message": {"content": "{}"}}]})
+
+        monkeypatch.setattr(httpx, "post", post)
+        settings = resolve_inference_settings(
+            LLMConfig(model_id="model"),
+            environ={"NSS_INFERENCE_ENDPOINT": endpoint},
+        )
+
+        OpenAICompatibleTransport(settings).complete(messages=[], response_model=_StructuredResponse)
+
+        assert seen == [trust_env]
+
     def test_requests_use_the_resolved_timeout(self, monkeypatch: pytest.MonkeyPatch) -> None:
         timeouts: list[object] = []
 

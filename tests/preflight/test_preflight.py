@@ -420,6 +420,24 @@ class TestInferenceModelCheck:
         assert [issue.code for issue in issues] == expected_codes
         assert all(issue.severity == "error" for issue in issues)
 
+    @pytest.mark.parametrize(
+        "environ",
+        [
+            pytest.param(
+                {"NSS_INFERENCE_ENDPOINT": "https://inference.example.com/v1", "NSS_INFERENCE_TIMEOUT": "soon"},
+                id="explicit-endpoint-timeout",
+            ),
+            pytest.param({"NSS_INFERENCE_REQUEST_OPTIONS": "[1]"}, id="local-server-options"),
+        ],
+    )
+    def test_invalid_request_settings_have_their_own_code(self, default_config, environ):
+        default_config.replace_pii.llm = LLMConfig(model_id="model")
+
+        with patch.dict("os.environ", environ, clear=True):
+            issues = InferenceModelCheck().run(make_ctx(config=default_config))
+
+        assert [issue.code for issue in issues] == ["inference_request_settings_invalid"]
+
     def test_explicit_endpoint_without_model_is_an_error(self, default_config):
         default_config.replace_pii.llm = LLMConfig()
 

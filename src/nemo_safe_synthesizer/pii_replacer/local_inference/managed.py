@@ -53,21 +53,22 @@ def _managed_address(endpoint: str | None) -> tuple[str, int | None]:
     if endpoint is None:
         return DEFAULT_HOST, None
     expected_form = "an http:// loopback URL with a port and /v1 path, such as http://127.0.0.1:8000/v1"
-    parsed = urlparse(endpoint)
-    if parsed.scheme != "http" or not _is_loopback_host(parsed.hostname):
+    try:
+        parsed = urlparse(endpoint)
+        host = parsed.hostname
+        port = parsed.port
+    except ValueError as exc:
+        # Raised for malformed bracketed IPv6 hosts and non-numeric ports.
+        raise ParameterError(f"With {LOCAL_PROFILE_ENV}, NSS_INFERENCE_ENDPOINT must be {expected_form}") from exc
+    if parsed.scheme != "http" or host is None or not _is_loopback_host(host):
         raise ParameterError(
             f"{LOCAL_PROFILE_ENV} starts the PII inference server on this machine, so "
             f"NSS_INFERENCE_ENDPOINT must be unset or {expected_form}"
         )
-    try:
-        port = parsed.port
-    except ValueError:
-        port = None
     has_extras = parsed.username or parsed.password or parsed.params or parsed.query or parsed.fragment
     if port is None or parsed.path.rstrip("/") != "/v1" or has_extras:
         raise ParameterError(f"With {LOCAL_PROFILE_ENV}, NSS_INFERENCE_ENDPOINT must be {expected_form}")
-    assert parsed.hostname is not None
-    return parsed.hostname, port
+    return host, port
 
 
 def _check_model_names(config: LLMConfig, environ: Mapping[str, str], profile: LocalVllmProfile) -> None:
@@ -132,13 +133,14 @@ def resolve_local_server_request(
     runtime_env = os.environ if environ is None else environ
     reference = _nonblank(runtime_env.get(LOCAL_PROFILE_ENV))
     endpoint = _nonblank(runtime_env.get("NSS_INFERENCE_ENDPOINT"))
+    if reference is None and endpoint is not None:
+        return None
+    # Catch invalid runtime settings before an expensive server launch.
     resolve_inference_timeout(runtime_env)
     resolve_request_options(runtime_env)
     if reference is not None:
         profile = load_profile(reference)
         _check_model_names(config, runtime_env, profile)
-    elif endpoint is not None:
-        return None
     else:
         profile = _bundled_profile(config, runtime_env)
     host, port = _managed_address(endpoint)
