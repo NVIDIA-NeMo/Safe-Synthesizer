@@ -294,6 +294,7 @@ execute in order (`config` → `dataframe` → `metadata` → `advisory`).
 | `dataset.size` | dataframe | Training split meets the hard minimum row count |
 | `columns.groupby` | dataframe | `group_training_examples_by` column is present and has no nulls |
 | `columns.orderby` | dataframe | `order_training_examples_by` column is present |
+| `columns.mia_excluded` | dataframe | Every column in `evaluation.mia_excluded_columns` is present |
 | `columns.pseudo` | dataframe | Input does not use the reserved `__nss_sequence_id` column name |
 | `columns.constant` | dataframe | No column is constant (warning only) |
 | `timeseries.timestamp` | dataframe | Timestamp column is present and has no nulls (time-series mode) |

@@ -518,7 +518,7 @@ check of its own.
 | `hf_model_cache_incomplete` | warning/error | `env.hf_model_availability` | Cached Hugging Face model snapshot is missing required config, tokenizer, weights, or shards; severity is error when HF offline mode is enabled |
 | `hf_remote_code_not_cached` | warning/error | `env.hf_model_availability` | Trusted model references remote code that is not cached locally; severity is error when HF offline mode is enabled |
 | `preflight.check_crash` | error | (crashing check) | A check raised an unexpected exception; the issue's `check` field names the crashing check and other checks continued running |
-| `column_not_found` | error | `columns.groupby` / `columns.orderby` | Required column missing from dataset, or input DataFrame uses unsupported MultiIndex columns |
+| `column_not_found` | error | `columns.groupby` / `columns.orderby` / `columns.mia_excluded` | Required column missing from dataset, or input DataFrame uses unsupported MultiIndex columns |
 | `column_nulls` | error | `columns.groupby` | Required column contains null values |
 | `pseudo_column_collision` | error | `columns.pseudo` | Dataset contains reserved internal column name, or input DataFrame uses unsupported MultiIndex columns |
 | `constant_column` | warning | `columns.constant` | Column has only one unique value |
