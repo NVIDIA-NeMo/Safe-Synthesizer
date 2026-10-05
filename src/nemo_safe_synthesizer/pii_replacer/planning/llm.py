@@ -337,6 +337,18 @@ def _dependency_options(
     return options
 
 
+def _create_response_model(name: str, fields: Mapping[str, tuple[object, object]]) -> type[_StructuredResponse]:
+    """Create a strict response model from ``(type, Field(...))`` field definitions.
+
+    ``create_model`` accepts fields only as ``**field_definitions`` typed ``Any``.
+    Typed values would also be checked against its own keyword parameters, such
+    as ``__doc__`` and ``__module__``, so the definitions cross that boundary as
+    ``Any`` here and nowhere else.
+    """
+    field_definitions: dict[str, Any] = dict(fields)
+    return create_model(name, __base__=_StructuredResponse, **field_definitions)
+
+
 def _dependency_response_model(options: DependencyOptions) -> type[_StructuredResponse]:
     """Build the response schema for one dependency-selection request.
 
@@ -348,9 +360,9 @@ def _dependency_response_model(options: DependencyOptions) -> type[_StructuredRe
     positional because column names need not be Python identifiers; aliases
     carry the real names into the schema and the parsed JSON.
     """
-    target_fields: dict[str, Any] = {}
+    target_fields: dict[str, tuple[object, object]] = {}
     for target_index, (target_column, sources_by_type) in enumerate(options.items()):
-        source_fields: dict[str, Any] = {
+        source_fields: dict[str, tuple[object, object]] = {
             f"source_{type_index}": (
                 # The permitted columns are only known at runtime, so the Literal is built from them.
                 Literal[tuple(source_columns)] | None,  # ty: ignore[invalid-type-form]
@@ -358,20 +370,12 @@ def _dependency_response_model(options: DependencyOptions) -> type[_StructuredRe
             )
             for type_index, (entity_type, source_columns) in enumerate(sources_by_type.items())
         }
-        target_model = create_model(
-            f"_DependencyTarget{target_index}",
-            __base__=_StructuredResponse,
-            **source_fields,
-        )
+        target_model = _create_response_model(f"_DependencyTarget{target_index}", source_fields)
         target_fields[f"target_{target_index}"] = (
             target_model,
             Field(default_factory=target_model, alias=target_column),
         )
-    return create_model(
-        "_DependencySelectionResponse",
-        __base__=_StructuredResponse,
-        **target_fields,
-    )
+    return _create_response_model("_DependencySelectionResponse", target_fields)
 
 
 def _selected_dependencies(response: _StructuredResponse, options: DependencyOptions) -> list[DependencyCandidate]:

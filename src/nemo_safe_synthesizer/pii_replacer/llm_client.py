@@ -5,12 +5,11 @@
 
 from __future__ import annotations
 
-import copy
 import ipaddress
 import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Protocol, cast
+from typing import Protocol
 from urllib.parse import urlparse
 
 import httpx
@@ -184,30 +183,29 @@ def _retry_after_seconds(response: httpx.Response) -> float | None:
     return seconds if seconds >= 0 else None
 
 
-def _require_all_properties(node: dict[str, object]) -> None:
-    properties = node.get("properties")
-    if node.get("type") != "object" or not isinstance(properties, dict):
-        return
-    property_schemas = cast(dict[str, object], properties)
-    node["required"] = list(property_schemas)
-    for property_schema in property_schemas.values():
-        if isinstance(property_schema, dict):
-            cast(dict[str, object], property_schema).pop("default", None)
+def _without_default(property_schema: object) -> object:
+    if isinstance(property_schema, Mapping):
+        return {key: value for key, value in property_schema.items() if key != "default"}
+    return property_schema
 
 
-def _schema_objects(node: object) -> list[dict[str, object]]:
-    """Return every mapping nested anywhere in a JSON schema, including ``node``."""
-    found: list[dict[str, object]] = []
-    pending = [node]
-    while pending:
-        current = pending.pop()
-        if isinstance(current, dict):
-            mapping = cast(dict[str, object], current)
-            found.append(mapping)
-            pending.extend(mapping.values())
-        elif isinstance(current, list):
-            pending.extend(current)
-    return found
+def _strict_schema_value(value: object) -> object:
+    if isinstance(value, Mapping):
+        # JSON schema keys are always strings.
+        return _strict_schema_object({str(key): item for key, item in value.items()})
+    if isinstance(value, list):
+        return [_strict_schema_value(item) for item in value]
+    return value
+
+
+def _strict_schema_object(node: Mapping[str, object]) -> dict[str, object]:
+    """Return a copy of one schema mapping, recursively made strict-mode compatible."""
+    strict = {key: _strict_schema_value(value) for key, value in node.items()}
+    properties = strict.get("properties")
+    if strict.get("type") == "object" and isinstance(properties, Mapping):
+        strict["required"] = [str(name) for name in properties]
+        strict["properties"] = {str(name): _without_default(schema) for name, schema in properties.items()}
+    return strict
 
 
 def _strict_json_schema(response_model: type[BaseModel]) -> dict[str, object]:
@@ -216,12 +214,10 @@ def _strict_json_schema(response_model: type[BaseModel]) -> dict[str, object]:
     Strict mode requires every object property to be listed in ``required``.
     Pydantic omits fields that have defaults, so this marks every property
     required and drops property defaults. Nullable fields keep their ``null``
-    branch, so the model can still express an absent value explicitly.
+    branch, so the model can still express an absent value explicitly. The
+    model's own schema is left unchanged.
     """
-    schema = cast(dict[str, object], copy.deepcopy(response_model.model_json_schema()))
-    for node in _schema_objects(schema):
-        _require_all_properties(node)
-    return schema
+    return _strict_schema_object(response_model.model_json_schema())
 
 
 class OpenAICompatibleTransport:
