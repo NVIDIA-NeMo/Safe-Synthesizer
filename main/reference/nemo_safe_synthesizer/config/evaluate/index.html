@@ -2568,6 +2568,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.config.evaluate.EvaluationParameters.mia_excluded_columns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;mia_excluded_columns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#nemo_safe_synthesizer.config.evaluate.EvaluationParameters.aia_enabled" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -9398,6 +9409,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.config.evaluate.EvaluationParameters.mia_excluded_columns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;mia_excluded_columns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#nemo_safe_synthesizer.config.evaluate.EvaluationParameters.aia_enabled" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -9774,6 +9796,14 @@ machine learning performance assessments.</p>
                 (<code><span title="bool">bool</span></code>)
             </li>
             <li>
+              <code><a class="autorefs autorefs-internal" title="            mia_excluded_columns = None
+
+  
+      pydantic-field
+   (nemo_safe_synthesizer.config.evaluate.EvaluationParameters.mia_excluded_columns)" href="#nemo_safe_synthesizer.config.evaluate.EvaluationParameters.mia_excluded_columns">mia_excluded_columns</a></code>
+                (<code><span title="list">list</span>[<span title="str">str</span>] | None</code>)
+            </li>
+            <li>
               <code><a class="autorefs autorefs-internal" title="            aia_enabled
 
   
@@ -9875,6 +9905,28 @@ machine learning performance assessments.</p>
     <div class="doc doc-contents ">
 
         <p>Enable membership inference attack evaluation for privacy assessment.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="nemo_safe_synthesizer.config.evaluate.EvaluationParameters.mia_excluded_columns" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">mia_excluded_columns</span> <span class="o">=</span> <span class="kc">None</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
+  </span>
+
+<a href="#nemo_safe_synthesizer.config.evaluate.EvaluationParameters.mia_excluded_columns" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Columns to leave out of the membership inference attack. Useful when identifiers were already replaced outside Safe Synthesizer, or are expected to repeat verbatim in the synthetic data.</p>
 
     </div>
 

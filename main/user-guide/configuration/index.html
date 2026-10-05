@@ -10527,6 +10527,12 @@ change between releases.</p>
 <td>Disable to speed up evaluation if privacy assessment is not needed</td>
 </tr>
 <tr>
+<td><code>evaluation.mia_excluded_columns</code></td>
+<td><code>null</code></td>
+<td>Columns to leave out of the MIA</td>
+<td>Useful when identifiers were already replaced outside Safe Synthesizer, or are expected to repeat verbatim in the synthetic data</td>
+</tr>
+<tr>
 <td><code>evaluation.aia_enabled</code></td>
 <td><code>true</code></td>
 <td>Attribute Inference Attack (AIA) -- measures whether an attacker can infer a sensitive attribute from quasi-identifiers in the synthetic data</td>
