@@ -76,10 +76,21 @@ class TestRequestOptionsAndEnvironment:
         with pytest.raises(ValidationError, match="must not set fields NSS manages: response_format"):
             LocalVllmProfile(model_id="org/tiny", revision="abc", request_options={"response_format": {}})
 
-    @pytest.mark.parametrize("name", ["VLLM_API_KEY", "NSS_INFERENCE_KEY"])
+    @pytest.mark.parametrize(
+        "name",
+        ["VLLM_API_KEY", "NSS_INFERENCE_KEY", "HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE", "VLLM_V1_USE_OUTLINES_CACHE"],
+    )
     def test_environment_must_not_set_managed_variables(self, name: str) -> None:
         with pytest.raises(ValidationError, match="must not set variables NSS manages"):
             LocalVllmProfile(model_id="org/tiny", revision="abc", environment={name: "x"})
+
+    @pytest.mark.parametrize(
+        "field", ["request_timeout_seconds", "startup_timeout_seconds", "shutdown_timeout_seconds"]
+    )
+    @pytest.mark.parametrize("value", [float("inf"), float("nan")], ids=["inf", "nan"])
+    def test_timeouts_must_be_finite(self, field: str, value: float) -> None:
+        with pytest.raises(ValidationError, match=field):
+            LocalVllmProfile.model_validate({"model_id": "org/tiny", "revision": "abc", field: value})
 
 
 @pytest.mark.unit

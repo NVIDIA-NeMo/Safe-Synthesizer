@@ -8,10 +8,12 @@ import json
 import os
 import signal
 import socket
+import stat
 import subprocess
 import sys
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import cast
 
 import httpx
@@ -77,6 +79,7 @@ class Harness:
     models: list[Callable[[], httpx.Response]] = field(default_factory=list)
     probe_content: str = '{"ready": true}'
     probe_payloads: list[dict[str, object]] = field(default_factory=list)
+    probe_timeouts: list[float] = field(default_factory=list)
 
     @property
     def argv(self) -> list[str]:
@@ -103,12 +106,15 @@ def harness(monkeypatch: pytest.MonkeyPatch) -> Iterator[Harness]:
         assert url.endswith("/v1/models")
         headers = cast(dict[str, str], kwargs["headers"])
         assert headers["Authorization"] == f"Bearer {state.child_env['VLLM_API_KEY']}"
+        assert kwargs["trust_env"] is False
         response = state.models.pop(0) if len(state.models) > 1 else state.models[0]
         return response()
 
     def post(url: str, **kwargs: object) -> httpx.Response:
         payload = cast(dict[str, object], kwargs["json"])
         assert payload["model"] == "tiny"
+        assert kwargs["trust_env"] is False
+        state.probe_timeouts.append(cast(float, kwargs["timeout"]))
         state.probe_payloads.append(payload)
         return httpx.Response(200, json={"choices": [{"message": {"content": state.probe_content}}]})
 
@@ -124,8 +130,15 @@ def harness(monkeypatch: pytest.MonkeyPatch) -> Iterator[Harness]:
 
 @pytest.mark.unit
 class TestLocalVllmServerLifecycle:
-    def test_ready_server_points_planner_at_itself_and_stops_on_exit(self, harness: Harness) -> None:
-        base = {"PATH": "/bin", "NSS_INFERENCE_KEY": "hosted-secret", "NSS_INFERENCE_ENDPOINT": "http://x"}
+    def test_ready_server_points_planner_at_itself_and_stops_on_exit(self, harness: Harness, tmp_path: Path) -> None:
+        cache_dir = tmp_path / "outlines"
+        base = {
+            "PATH": "/bin",
+            "NSS_INFERENCE_KEY": "hosted-secret",
+            "NSS_INFERENCE_ENDPOINT": "http://x",
+            "OUTLINES_CACHE_DIR": str(cache_dir),
+            "VLLM_V1_USE_OUTLINES_CACHE": "1",
+        }
 
         with LocalVllmServer(PROFILE, port=None, environ=base) as server:
             environ = server.inference_environ()
@@ -140,6 +153,11 @@ class TestLocalVllmServerLifecycle:
         assert "NSS_INFERENCE_KEY" not in harness.child_env
         assert "NSS_INFERENCE_ENDPOINT" not in harness.child_env
         assert harness.child_env["VLLM_API_KEY"] not in " ".join(harness.argv)
+        # The server gets the same diskcache protections as in-process generation.
+        assert harness.child_env["VLLM_V1_USE_OUTLINES_CACHE"] == "0"
+        assert stat.S_IMODE(cache_dir.stat().st_mode) == 0o700
+        # The schema probe stays within the profile's startup deadline.
+        assert 0 < harness.probe_timeouts[0] <= PROFILE.startup_timeout_seconds
 
     @pytest.mark.parametrize(
         ("environ", "expected"),
@@ -162,8 +180,9 @@ class TestLocalVllmServerLifecycle:
         [
             ({}, {"temperature": 1.0, "thinking_token_budget": 500}),
             ({"NSS_INFERENCE_REQUEST_OPTIONS": '{"temperature": 0.2}'}, {"temperature": 0.2}),
+            ({"NSS_INFERENCE_REQUEST_OPTIONS": "  "}, {"temperature": 1.0, "thinking_token_budget": 500}),
         ],
-        ids=["profile-options", "explicit-options-win"],
+        ids=["profile-options", "explicit-options-win", "blank-options-keep-profile"],
     )
     def test_request_options_reach_the_planner_and_the_probe(
         self,

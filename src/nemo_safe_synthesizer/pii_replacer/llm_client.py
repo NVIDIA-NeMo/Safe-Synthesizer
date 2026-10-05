@@ -305,6 +305,10 @@ class OpenAICompatibleTransport:
         _validate_endpoint(settings.endpoint_url)
         self._settings = settings
         self._timeout = settings.timeout_seconds if timeout is None else timeout
+        # Loopback servers never need a proxy, and an environment proxy would
+        # receive the bearer key and raw cell samples. Remote endpoints keep
+        # the environment's proxy settings.
+        self._trust_env = not _is_loopback_host(urlparse(settings.endpoint_url).hostname)
 
     def complete(
         self,
@@ -351,6 +355,7 @@ class OpenAICompatibleTransport:
                 headers=headers,
                 json=payload,
                 timeout=self._timeout,
+                trust_env=self._trust_env,
             )
         except httpx.HTTPError as exc:
             raise TransientInferenceError("PII inference transport failed") from exc

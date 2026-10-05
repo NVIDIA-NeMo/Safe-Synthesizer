@@ -46,6 +46,19 @@ cell samples.
 """
 
 
+_MANAGED_SERVER_VARIABLES = frozenset(
+    {
+        # Each launch generates its own key.
+        "VLLM_API_KEY",
+        # --disable-huggingface-remote controls offline mode for the whole run.
+        "HF_HUB_OFFLINE",
+        "TRANSFORMERS_OFFLINE",
+        # Kept off to avoid diskcache poisoning (CVE-2025-69872).
+        "VLLM_V1_USE_OUTLINES_CACHE",
+    }
+)
+
+
 def _is_reserved_option(argument: str) -> bool:
     """Return whether ``argument`` names a reserved option, including argparse abbreviations."""
     name = argument.split("=", 1)[0].replace("_", "-")
@@ -107,17 +120,20 @@ class LocalVllmProfile(BaseModel):
     request_timeout_seconds: float = Field(
         default=60,
         gt=0,
+        allow_inf_nan=False,
         description="Per-request timeout for planning calls to this model, including reasoning. "
         "NSS_INFERENCE_TIMEOUT overrides it.",
     )
     startup_timeout_seconds: float = Field(
         default=600,
         gt=0,
+        allow_inf_nan=False,
         description="Maximum seconds to wait for the server to become ready, including any model download.",
     )
     shutdown_timeout_seconds: float = Field(
         default=30,
         gt=0,
+        allow_inf_nan=False,
         description="Seconds to wait after SIGTERM before force-killing the server.",
     )
 
@@ -136,7 +152,7 @@ class LocalVllmProfile(BaseModel):
     @field_validator("environment")
     @classmethod
     def _reject_managed_environment(cls, value: dict[str, str]) -> dict[str, str]:
-        managed = sorted(key for key in value if key == "VLLM_API_KEY" or key.startswith("NSS_INFERENCE_"))
+        managed = sorted(key for key in value if key in _MANAGED_SERVER_VARIABLES or key.startswith("NSS_INFERENCE_"))
         if managed:
             raise ValueError(f"environment must not set variables NSS manages: {', '.join(managed)}")
         return value

@@ -25,7 +25,8 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 from ...errors import GenerationError, InternalError, ParameterError
 from ...observability import get_logger, heartbeat
-from ..llm_client import InferenceSettings, OpenAICompatibleTransport, resolve_request_options
+from ...outlines_cache import harden_outlines_cache
+from ..llm_client import InferenceSettings, OpenAICompatibleTransport, _nonblank, resolve_request_options
 from .profile import LocalVllmProfile
 
 __all__ = [
@@ -231,19 +232,24 @@ class LocalVllmServer:
     def inference_environ(self) -> dict[str, str]:
         """Return the base environment with ``NSS_INFERENCE_*`` pointing at this server.
 
-        ``NSS_INFERENCE_TIMEOUT`` or ``NSS_INFERENCE_REQUEST_OPTIONS`` already
-        in the base environment wins over the profile's value.
+        A non-blank ``NSS_INFERENCE_TIMEOUT`` or ``NSS_INFERENCE_REQUEST_OPTIONS``
+        already in the base environment wins over the profile's value.
         """
         environ = {
             **self._base_environ,
             "NSS_INFERENCE_ENDPOINT": self.endpoint_url,
             "NSS_INFERENCE_KEY": self._api_key,
             "NSS_INFERENCE_MODEL": self._profile.served_name,
-            "NSS_INFERENCE_TIMEOUT": self._base_environ.get("NSS_INFERENCE_TIMEOUT")
+            "NSS_INFERENCE_TIMEOUT": _nonblank(self._base_environ.get("NSS_INFERENCE_TIMEOUT"))
             or f"{self._profile.request_timeout_seconds:g}",
         }
-        if "NSS_INFERENCE_REQUEST_OPTIONS" not in self._base_environ and self._profile.request_options:
+        explicit_options = _nonblank(self._base_environ.get("NSS_INFERENCE_REQUEST_OPTIONS"))
+        if explicit_options is not None:
+            environ["NSS_INFERENCE_REQUEST_OPTIONS"] = explicit_options
+        elif self._profile.request_options:
             environ["NSS_INFERENCE_REQUEST_OPTIONS"] = json.dumps(self._profile.request_options)
+        else:
+            environ.pop("NSS_INFERENCE_REQUEST_OPTIONS", None)
         return environ
 
     def __enter__(self) -> Self:
@@ -323,6 +329,8 @@ class LocalVllmServer:
     def _server_environ(self) -> dict[str, str]:
         environ = {key: value for key, value in self._base_environ.items() if not key.startswith("NSS_INFERENCE_")}
         environ.update(self._profile.environment)
+        # Apply the same Outlines diskcache protections as in-process generation.
+        harden_outlines_cache(environ)
         environ["VLLM_API_KEY"] = self._api_key
         return environ
 
@@ -340,7 +348,8 @@ class LocalVllmServer:
         return "\nLast server output:\n" + "\n".join(self._output_tail)
 
     def _raise_if_exited(self) -> None:
-        assert self._process is not None
+        if self._process is None:
+            raise InternalError("The local vLLM server process has not been started")
         returncode = self._process.poll()
         if returncode is not None:
             raise GenerationError(
@@ -359,7 +368,14 @@ class LocalVllmServer:
                     f"{self._profile.startup_timeout_seconds:g}s.{self._output_summary()}"
                 )
             time.sleep(_POLL_INTERVAL_SECONDS)
-        self._probe_structured_output()
+        # The schema probe shares the startup deadline.
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise GenerationError(
+                f"The local vLLM server did not become ready within "
+                f"{self._profile.startup_timeout_seconds:g}s.{self._output_summary()}"
+            )
+        self._probe_structured_output(timeout=min(_PROBE_TIMEOUT_SECONDS, remaining))
 
     def _model_listed(self) -> bool:
         """Return whether ``/models`` lists the served model; ``False`` while the server is starting."""
@@ -368,6 +384,8 @@ class LocalVllmServer:
                 f"{self.endpoint_url}/models",
                 headers={"Authorization": f"Bearer {self._api_key}"},
                 timeout=_MODELS_REQUEST_TIMEOUT_SECONDS,
+                # Never route the loopback server or its key through an environment proxy.
+                trust_env=False,
             )
         except httpx.HTTPError:
             return False
@@ -388,7 +406,7 @@ class LocalVllmServer:
             )
         return True
 
-    def _probe_structured_output(self) -> None:
+    def _probe_structured_output(self, *, timeout: float) -> None:
         settings = InferenceSettings(
             endpoint_url=self.endpoint_url,
             model_id=self._profile.served_name,
@@ -397,7 +415,7 @@ class LocalVllmServer:
             # Probe with the planner's sampling and thinking settings.
             request_options=resolve_request_options(self.inference_environ()),
         )
-        transport = OpenAICompatibleTransport(settings, timeout=_PROBE_TIMEOUT_SECONDS)
+        transport = OpenAICompatibleTransport(settings, timeout=timeout)
         try:
             content = transport.complete(
                 messages=[{"role": "user", "content": 'Reply with a JSON object whose "ready" field is true.'}],
