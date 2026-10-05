@@ -80,9 +80,12 @@ def test_vram_helpers_return_fraction_and_hf_memory_map() -> None:
         patch("torch.cuda.device_count", return_value=1),
         patch("torch.cuda.mem_get_info", return_value=(10 * gib, 16 * gib)),
         patch("torch.cuda.get_device_properties", return_value=discrete_gpu),
+        patch("nemo_safe_synthesizer.llm.utils._reclaimable_available_bytes") as mock_reclaimable,
     ):
         assert get_max_vram(max_vram_fraction=0.8) == {0: 0.5}
         assert get_max_memory_map(max_vram_fraction=0.8) == {0: 8 * gib}
+        # Discrete-only hosts should never touch /proc/meminfo.
+        mock_reclaimable.assert_not_called()
 
 
 def test_vram_helpers_use_reclaimable_memory_on_integrated_gpus() -> None:
