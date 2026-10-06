@@ -14,6 +14,8 @@ from nemo_safe_synthesizer.config.replace_pii import (
     DEFAULT_GLINER2_MODEL_ID,
     ENTITIES,
     ENTITY_BY_TYPE,
+    FREE_TEXT_DETECTION_ENTITY_TYPES,
+    GLINER_DETECTION_ENTITY_TYPES,
     ConditioningColumn,
     EntityAction,
     EntityType,
@@ -22,6 +24,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiColumnPlan,
     PiiReplacementPlan,
     PiiSamplerBackend,
+    PiiSamplerConfig,
     ReplacePiiConfig,
     can_condition,
     is_columns_to_replace_type,
@@ -410,7 +413,7 @@ class TestReplacePiiConfig:
 
         assert config.model_dump(exclude_unset=True)["replace_pii"]["schema_version"] == 3
 
-    def test_config_serialization_omits_explicitly_empty_dependencies(self) -> None:
+    def test_config_serialization_omits_empty_and_null_plan_fields(self) -> None:
         plan = PiiReplacementPlan(
             columns_to_replace=[
                 PiiColumnPlan(
@@ -424,7 +427,34 @@ class TestReplacePiiConfig:
         replacement_plan = serialized["replacement_plan"]
 
         assert isinstance(replacement_plan, dict)
-        assert "depends_on" not in replacement_plan["columns_to_replace"][0]
+        serialized_column = replacement_plan["columns_to_replace"][0]
+        assert "depends_on" not in serialized_column
+        assert "pattern" not in serialized_column
+        assert replacement_plan["dependency_value_mappings"] == {}
+
+    def test_config_serialization_omits_runtime_inferred_dependency_type(self) -> None:
+        plan = PiiReplacementPlan(
+            columns_to_replace=[
+                PiiColumnPlan(column_name="first", entity_type=EntityType.FIRST_NAME),
+                PiiColumnPlan(
+                    column_name="email",
+                    entity_type=EntityType.EMAIL,
+                    depends_on=[
+                        ConditioningColumn(column_name="first"),
+                        ConditioningColumn(column_name="company", entity_type=EntityType.ORGANIZATION),
+                    ],
+                ),
+            ]
+        )
+
+        serialized = ReplacePiiConfig(replacement_plan=plan).model_dump(exclude_unset=False)
+        replacement_plan = serialized["replacement_plan"]
+
+        assert isinstance(replacement_plan, dict)
+        assert replacement_plan["columns_to_replace"][1]["depends_on"] == [
+            {"column_name": "first"},
+            {"column_name": "company", "entity_type": EntityType.ORGANIZATION},
+        ]
 
     @pytest.mark.parametrize("schema_version", [1, 2, 0, -1])
     def test_unsupported_schema_version_is_rejected(self, schema_version: int) -> None:
@@ -520,26 +550,69 @@ class TestReplacePiiConfig:
 
     def test_free_text_detection_defaults_and_serialization(self) -> None:
         config = ReplacePiiConfig()
+        expected_thresholds = {
+            EntityType.FULL_NAME: 0.95,
+            EntityType.FIRST_NAME: 0.9,
+            EntityType.MIDDLE_NAME: 0.9,
+            EntityType.LAST_NAME: 0.9,
+            EntityType.PHONE_NUMBER: 0.5,
+            EntityType.DATE_OF_BIRTH: 0.5,
+            EntityType.STREET_ADDRESS: 0.5,
+            EntityType.SSN: 0.5,
+            EntityType.NATIONAL_ID: 0.5,
+            EntityType.API_KEY: 0.5,
+        }
 
         assert config.free_text_detection == FreeTextDetectionConfig(
             model_id=DEFAULT_GLINER2_MODEL_ID,
-            threshold=0.3,
+            entity_thresholds=expected_thresholds,
             batch_size=8,
             chunk_length=384,
             chunk_overlap=128,
         )
         assert config.model_dump(mode="json")["free_text_detection"] == {
             "model_id": DEFAULT_GLINER2_MODEL_ID,
-            "threshold": 0.3,
+            "entity_thresholds": {
+                entity_type.value: threshold for entity_type, threshold in expected_thresholds.items()
+            },
             "batch_size": 8,
             "chunk_length": 384,
             "chunk_overlap": 128,
         }
+        assert tuple(config.free_text_detection.entity_thresholds) == GLINER_DETECTION_ENTITY_TYPES
+        assert set(FREE_TEXT_DETECTION_ENTITY_TYPES) - set(GLINER_DETECTION_ENTITY_TYPES) == {
+            EntityType.EMAIL,
+            EntityType.CREDIT_DEBIT_CARD,
+            EntityType.IPV4,
+            EntityType.IPV6,
+        }
 
     @pytest.mark.parametrize("threshold", [-0.01, 1.01])
-    def test_free_text_detection_threshold_must_be_in_closed_unit_interval(self, threshold: float) -> None:
+    def test_free_text_detection_thresholds_must_be_in_closed_unit_interval(self, threshold: float) -> None:
+        entity_thresholds = FreeTextDetectionConfig().entity_thresholds | {EntityType.PHONE_NUMBER: threshold}
+
         with pytest.raises(ValidationError, match="less than or equal|greater than or equal"):
-            FreeTextDetectionConfig(threshold=threshold)
+            FreeTextDetectionConfig.model_validate({"entity_thresholds": entity_thresholds})
+
+    def test_free_text_detection_requires_a_threshold_for_every_supported_entity(self) -> None:
+        entity_thresholds = FreeTextDetectionConfig().entity_thresholds.copy()
+        del entity_thresholds[EntityType.API_KEY]
+
+        with pytest.raises(ValidationError, match=r"missing: \['api_key'\]"):
+            FreeTextDetectionConfig(entity_thresholds=entity_thresholds)
+
+    @pytest.mark.parametrize(
+        "entity_type",
+        [EntityType.EMAIL, EntityType.CREDIT_DEBIT_CARD, EntityType.IPV4, EntityType.IPV6],
+    )
+    def test_free_text_detection_rejects_thresholds_for_non_gliner_entities(
+        self,
+        entity_type: EntityType,
+    ) -> None:
+        entity_thresholds = FreeTextDetectionConfig().entity_thresholds | {entity_type: 0.5}
+
+        with pytest.raises(ValidationError, match=rf"unsupported: \['{entity_type.value}'\]"):
+            FreeTextDetectionConfig(entity_thresholds=entity_thresholds)
 
     @pytest.mark.parametrize("field", ["batch_size", "chunk_length"])
     def test_free_text_detection_batch_and_chunk_values_must_be_positive(self, field: str) -> None:
@@ -563,6 +636,60 @@ class TestReplacePiiConfig:
             {"sampler": {"backend": "faker", "managed_assets_path": str(tmp_path)}}
         )
         assert config.sampler.resolved_managed_assets_path() == tmp_path
+
+    def test_sampler_documentation_identifies_nemotron_personas_asset_layout(self) -> None:
+        backend_description = PiiSamplerConfig.model_fields["backend"].description
+        path_description = PiiSamplerConfig.model_fields["managed_assets_path"].description
+
+        assert backend_description is not None
+        assert "Nemotron Personas" in backend_description
+        assert path_description is not None
+        assert "Nemotron Personas" in path_description
+        assert "datasets/{locale}.parquet" in path_description
+
+    def test_plan_accepts_manual_dependency_value_mappings(self) -> None:
+        plan = PiiReplacementPlan.model_validate(
+            {
+                "dependency_value_mappings": {
+                    "sex": {"Woman": ["female"], "Non-binary": None},
+                    "race": {"Asian": ["east asian", "south asian"]},
+                },
+            }
+        )
+
+        assert plan.dependency_value_mappings == {
+            "sex": {"Woman": ["female"], "Non-binary": None},
+            "race": {"Asian": ["east asian", "south asian"]},
+        }
+        assert plan.model_dump()["dependency_value_mappings"]["sex"]["Non-binary"] is None
+
+    def test_plan_dependency_value_mappings_default_to_empty(self) -> None:
+        assert PiiReplacementPlan().dependency_value_mappings == {}
+
+    @pytest.mark.parametrize(
+        ("mappings", "error"),
+        [
+            ({"": {"work": ["personal"]}}, "column names must be non-empty"),
+            ({"sex": {"": ["female"]}}, "source labels must be non-empty"),
+            ({"sex": {"Woman": []}}, "target lists must be non-empty"),
+            ({"sex": {"Woman": [" "]}}, "target labels must be non-empty"),
+            (
+                {"sex": {"Woman": ["female"], "woman": ["female"]}},
+                "duplicate source labels after case-folding",
+            ),
+            (
+                {"sex": {"Woman": ["female", "FEMALE"]}},
+                "duplicate target labels after case-folding",
+            ),
+        ],
+    )
+    def test_plan_rejects_invalid_dependency_value_mappings(
+        self,
+        mappings: object,
+        error: str,
+    ) -> None:
+        with pytest.raises(ValidationError, match=error):
+            PiiReplacementPlan.model_validate({"dependency_value_mappings": mappings})
 
     def test_default_managed_assets_path_uses_env_then_home(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

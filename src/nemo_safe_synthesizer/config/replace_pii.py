@@ -18,7 +18,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum, StrEnum, auto
 from pathlib import Path
-from typing import ClassVar, Literal, Self, cast
+from typing import Annotated, ClassVar, Literal, Self, cast
 
 from pydantic import (
     Field,
@@ -42,9 +42,13 @@ __all__ = [
     "AUTO_DISCOVERY",
     "ConditioningColumn",
     "DEFAULT_GLINER2_MODEL_ID",
+    "DependencyValueMappings",
     "ENTITIES",
     "ENTITY_BY_TYPE",
     "EXCLUSIVE_DEPENDS_ON_GROUPS",
+    "FREE_TEXT_DETECTION_ENTITY_TYPES",
+    "GLINER_DETECTION_ENTITY_TYPES",
+    "REGEX_DETECTION_ENTITY_TYPES",
     "Entity",
     "EntityAction",
     "EntityType",
@@ -111,6 +115,10 @@ class EntityType(StrEnum):
     ZIPCODE = "zipcode"
     COUNTRY = "country"
     ORGANIZATION = "organization"
+
+
+DependencyValueMappings = dict[str, dict[str, list[str] | None]]
+"""Dependency-column values mapped to labels understood by one sampler."""
 
 
 class EntityAction(Enum):
@@ -254,6 +262,47 @@ ENTITIES: tuple[Entity, ...] = (
 
 ENTITY_BY_TYPE: dict[EntityType, Entity] = {entity.entity_type: entity for entity in ENTITIES}
 
+FREE_TEXT_DETECTION_ENTITY_TYPES: tuple[EntityType, ...] = tuple(
+    entity.entity_type
+    for entity in ENTITIES
+    if entity.action is EntityAction.REPLACE and entity.entity_type is not EntityType.UNIQUE_IDENTIFIER
+)
+"""Entity types eligible for fresh detection and replacement inside free text."""
+
+REGEX_DETECTION_ENTITY_TYPES: tuple[EntityType, ...] = (
+    EntityType.EMAIL,
+    EntityType.CREDIT_DEBIT_CARD,
+    EntityType.IPV4,
+    EntityType.IPV6,
+)
+"""Entity types detected exclusively by structurally validated built-in regex rules."""
+
+GLINER_DETECTION_ENTITY_TYPES: tuple[EntityType, ...] = tuple(
+    entity_type for entity_type in FREE_TEXT_DETECTION_ENTITY_TYPES if entity_type not in REGEX_DETECTION_ENTITY_TYPES
+)
+"""Entity types requested from GLiNER2 rather than the built-in regex detector.
+
+The checkpoint's specific ``full_name`` label is used for complete names; its
+broader ``person`` label is intentionally not requested.
+"""
+
+_DEFAULT_NAME_ENTITY_THRESHOLDS = {
+    EntityType.FIRST_NAME: 0.9,
+    EntityType.MIDDLE_NAME: 0.9,
+    EntityType.LAST_NAME: 0.9,
+    EntityType.FULL_NAME: 0.95,
+}
+_ConfidenceThreshold = Annotated[float, Field(ge=0, le=1)]
+
+
+def _default_gliner_entity_thresholds() -> dict[EntityType, float]:
+    """Return a fresh, complete set of precision-first GLiNER2 thresholds."""
+    return {
+        entity_type: _DEFAULT_NAME_ENTITY_THRESHOLDS.get(entity_type, 0.5)
+        for entity_type in GLINER_DETECTION_ENTITY_TYPES
+    }
+
+
 # entity_type → allowed depends_on entity types (optional edges may be omitted).
 ALLOWED_DEPENDS_ON: dict[EntityType, frozenset[EntityType]] = {
     EntityType.FIRST_NAME: frozenset({EntityType.GENDER, EntityType.ETHNIC_BACKGROUND, EntityType.FULL_NAME}),
@@ -370,6 +419,14 @@ class ConditioningColumn(NSSBaseModel):
             )
         return self
 
+    @model_serializer(mode="wrap")
+    def _omit_inferred_entity_type(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        """Keep runtime-inferred entity types out of reusable plans."""
+        serialized = cast(dict[str, object], handler(self))
+        if "entity_type" not in self.model_fields_set or self.entity_type is None:
+            serialized.pop("entity_type", None)
+        return serialized
+
 
 class PiiColumnPlan(NSSBaseModel):
     """Replacement spec for one named column.
@@ -386,6 +443,7 @@ class PiiColumnPlan(NSSBaseModel):
     )
     pattern: str | None = Field(
         default=None,
+        exclude_if=lambda value: value is None,
         description=(
             "Optional whole-value format using the grammar associated with this entity type. "
             "Only entity types that define a pattern syntax may set this. "
@@ -429,9 +487,9 @@ class PiiColumnPlan(NSSBaseModel):
 class PiiReplacementPlan(Parameters):
     """Dataset-specific detection/replacement plan (column-oriented).
 
-    Flat ``columns_to_replace`` list; cross-column relationships are expressed
-    via ``depends_on`` edges (a DAG). Context-free dependency and graph checks
-    are enforced here; plan-vs-dataframe checks live in
+    Flat ``columns_to_replace`` list with adjacent dataset-value mappings;
+    cross-column relationships are expressed via ``depends_on`` edges (a DAG).
+    Context-free dependency and graph checks are enforced here; plan-vs-dataframe checks live in
     ``pii_replacer.planning.validation``.
     """
 
@@ -439,6 +497,50 @@ class PiiReplacementPlan(Parameters):
         default_factory=list,
         description="Columns to replace or (for free_text) scan for PII spans to rewrite.",
     )
+    dependency_value_mappings: DependencyValueMappings = Field(
+        default_factory=dict,
+        description=(
+            "Authoritative dataset-column mappings to labels understood by the sampler. "
+            "A list maps one input label to acceptable sampler labels; null disables that dependency condition. "
+            "Unmapped labels use case-insensitive identity matching. This mapping is discovered together with "
+            "columns_to_replace when replace_pii.replacement_plan is 'auto_discovery'."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _validate_dependency_value_mappings(self) -> Self:
+        for column_name, mappings in self.dependency_value_mappings.items():
+            if not column_name.strip():
+                raise ParameterError("dependency_value_mappings column names must be non-empty")
+            seen_sources: set[str] = set()
+            for source, targets in mappings.items():
+                source_key = source.casefold()
+                if not source.strip():
+                    raise ParameterError("dependency_value_mappings source labels must be non-empty")
+                if source_key in seen_sources:
+                    raise ParameterError(
+                        f"dependency_value_mappings for column {column_name!r} contains duplicate "
+                        "source labels after case-folding"
+                    )
+                seen_sources.add(source_key)
+
+                if targets is None:
+                    continue
+                if not targets:
+                    raise ParameterError("dependency_value_mappings target lists must be non-empty")
+
+                seen_targets: set[str] = set()
+                for target in targets:
+                    target_key = target.casefold()
+                    if not target.strip():
+                        raise ParameterError("dependency_value_mappings target labels must be non-empty")
+                    if target_key in seen_targets:
+                        raise ParameterError(
+                            f"dependency_value_mappings for column {column_name!r} contains duplicate "
+                            "target labels after case-folding"
+                        )
+                    seen_targets.add(target_key)
+        return self
 
     @model_validator(mode="after")
     def _reject_duplicate_replace_columns(self) -> Self:
@@ -626,11 +728,12 @@ class FreeTextDetectionConfig(NSSBaseModel):
         min_length=1,
         description="GLiNER2 model identifier used to detect PII spans in free-text columns. Must be nonempty.",
     )
-    threshold: float = Field(
-        default=0.3,
-        ge=0,
-        le=1,
-        description="Minimum GLiNER2 confidence score to accept. Must be between 0 and 1, inclusive.",
+    entity_thresholds: dict[EntityType, _ConfidenceThreshold] = Field(
+        default_factory=_default_gliner_entity_thresholds,
+        description=(
+            "Minimum GLiNER2 confidence score for every GLiNER-detected entity type. "
+            "The mapping must contain each GLiNER entity exactly once; regex-owned entity types have no threshold."
+        ),
     )
     batch_size: int = Field(
         default=8,
@@ -647,6 +750,28 @@ class FreeTextDetectionConfig(NSSBaseModel):
         ge=0,
         description="Overlap between adjacent GLiNER2 text chunks. Must be nonnegative and smaller than chunk_length.",
     )
+
+    @field_validator("entity_thresholds")
+    @classmethod
+    def _validate_complete_entity_thresholds(
+        cls,
+        value: dict[EntityType, float],
+    ) -> dict[EntityType, float]:
+        expected = set(GLINER_DETECTION_ENTITY_TYPES)
+        actual = set(value)
+        missing = sorted(entity_type.value for entity_type in expected - actual)
+        unsupported = sorted(entity_type.value for entity_type in actual - expected)
+        if missing or unsupported:
+            details = []
+            if missing:
+                details.append(f"missing: {missing}")
+            if unsupported:
+                details.append(f"unsupported: {unsupported}")
+            raise ParameterError(
+                "free_text_detection.entity_thresholds must contain every GLiNER-detected "
+                f"entity exactly once ({'; '.join(details)})"
+            )
+        return value
 
     @model_validator(mode="after")
     def _validate_chunk_overlap(self) -> Self:
@@ -675,23 +800,23 @@ class PiiSamplerBackend(StrEnum):
     """Source of synthetic values for names and related person-like fields."""
 
     MANAGED = "managed"
-    """Draw from managed locale assets (see ``PiiSamplerConfig.managed_assets_path``)."""
+    """Draw from downloaded Nemotron Personas locale assets."""
 
     FAKER = "faker"
     """Draw from the Faker library; ignores ``ethnic_background`` conditioners."""
 
 
 class PiiSamplerConfig(NSSBaseModel):
-    """Settings for the synthetic value sampler (names and related person-like fields)."""
+    """Settings for Nemotron Personas or Faker-backed person sampling."""
 
     backend: PiiSamplerBackend = Field(
         default=PiiSamplerBackend.MANAGED,
-        description="Synthetic value sampler backend: managed assets or Faker.",
+        description="Person sampler backend: downloaded Nemotron Personas assets or Faker.",
     )
     managed_assets_path: str | None = Field(
         default=None,
         description=(
-            "Root directory containing a datasets/ folder of locale parquet files. "
+            "Root directory containing downloaded Nemotron Personas files as datasets/{locale}.parquet. "
             f"Defaults to {NSS_MANAGED_ASSETS_PATH_ENV} or ~/.data-designer/managed-assets."
         ),
     )

@@ -131,3 +131,14 @@ class TestReplacementGenerator:
                 pattern=None,
                 seed=42,
             )
+
+    def test_request_requires_resolved_dependency_labels_to_be_a_tuple(self) -> None:
+        with pytest.raises(InternalError, match="resolved_dependency_labels must be a tuple"):
+            ReplacementGenerationRequest(
+                entity_type=EntityType.FIRST_NAME,
+                original_value="Ada",
+                effective_dependency_tuple=(),
+                pattern=None,
+                seed=42,
+                resolved_dependency_labels=[],  # ty: ignore[invalid-argument-type] -- deliberate invalid input
+            )

@@ -147,7 +147,17 @@ rules:
 replace_pii:
   free_text_detection:
     model_id: fastino/gliner2-privacy-filter-PII-multi
-    threshold: 0.3
+    entity_thresholds:
+      full_name: 0.95
+      first_name: 0.9
+      middle_name: 0.9
+      last_name: 0.9
+      phone_number: 0.5
+      date_of_birth: 0.5
+      street_address: 0.5
+      ssn: 0.5
+      national_id: 0.5
+      api_key: 0.5
     batch_size: 8
     chunk_length: 384
     chunk_overlap: 128

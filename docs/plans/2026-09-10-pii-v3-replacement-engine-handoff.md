@@ -236,7 +236,7 @@ Replace the old proposal's `llm`/`fast` method union with one initial GLiNER2-pl
 ```python
 class FreeTextDetectionConfig(NSSBaseModel):
     model_id: str = DEFAULT_GLINER2_MODEL_ID
-    threshold: float = 0.3
+    entity_thresholds: dict[EntityType, float]  # one entry per GLINER_DETECTION_ENTITY_TYPES member
     batch_size: int = 8
     chunk_length: int = 384
     chunk_overlap: int = 128
@@ -247,8 +247,10 @@ class ReplacePiiConfig(Parameters):
 ```
 
 PR 741 sets `DEFAULT_GLINER2_MODEL_ID` and the documented configuration example to
-`fastino/gliner2-privacy-filter-PII-multi`. Validate `threshold` within `[0, 1]`, positive batch/chunk values, and a
-nonnegative overlap smaller than the chunk length.
+`fastino/gliner2-privacy-filter-PII-multi`. Each `entity_thresholds` value is within `[0, 1]`, and the mapping
+covers every GLiNER-detected entity type exactly once (`full_name` defaults to 0.95, other name types to 0.9, and
+everything else to 0.5; regex-owned types have no threshold). Batch and chunk values are positive, and the overlap is
+nonnegative and smaller than the chunk length.
 
 Built-in regex runs as part of this detector pipeline. Do not expose an LLM method. Whether reviewers want an explicit
 regex disable switch is an open first-PR question; the minimal interface has no switch.

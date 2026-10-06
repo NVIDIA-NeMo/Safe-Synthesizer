@@ -21,17 +21,18 @@ __all__ = ["TabularPiiReplacer"]
 class TabularPiiReplacer:
     """Replace PII in a dataframe through one plan-driven interface.
 
-    The replacement module owns plan resolution and DAG execution, positional
-    row identity, scope keys, synthetic value generation, free-text detection,
-    overlap handling, and statistics. ``replace`` returns a new dataframe and
+    The replacement module owns plan resolution, DAG execution, free-text span
+    detection and rewriting, positional row identity, scope keys, synthetic
+    value generation, and statistics. ``replace`` returns a new dataframe and
     never mutates the caller's frame or writes artifacts. The pipeline remains
-    responsible for deciding whether and where to persist the resolved plan.
+    responsible for deciding whether and where to persist the resolved
+    configuration.
 
     Replacement execution is intentionally deferred from this interface-only
     implementation.
 
     Args:
-        config: PII replacement configuration, including the plan source.
+        config: PII replacement configuration, including the replacement plan.
         data_config: Input data configuration used to validate and execute the
             resolved plan.
         time_series: Optional time-series configuration used to protect ordering
@@ -49,8 +50,15 @@ class TabularPiiReplacer:
         self._data_config = data_config
         self._time_series = time_series
 
-    def replace(self, df: pd.DataFrame) -> TransformResult:
+    def replace(self, df: pd.DataFrame, *, capture_replacement_map: bool = False) -> TransformResult:
         """Return a replacement result for ``df`` without mutating ``df``.
+
+        Args:
+            df: Dataframe whose planned PII values should be replaced.
+            capture_replacement_map: Include sensitive per-occurrence replacement
+                provenance and accepted free-text span traces in the result. The
+                default leaves this data unavailable so ordinary calls do not
+                accidentally persist original PII.
 
         Raises:
             NotImplementedError: Always in the interface-definition PR because
