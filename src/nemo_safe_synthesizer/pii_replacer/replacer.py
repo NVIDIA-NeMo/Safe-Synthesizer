@@ -66,7 +66,11 @@ class TabularPiiReplacer:
         Raises:
             ParameterError: If the configured plan is invalid for ``df``.
             GenerationError: If a replacement cannot be generated.
+            NotImplementedError: If ``capture_replacement_map`` is requested;
+                capture is introduced with free-text replacement.
         """
+        if capture_replacement_map:
+            raise NotImplementedError("replacement map capture is not implemented")
         started = time.perf_counter()
         resolved_config = resolve_replacement_config(
             df,

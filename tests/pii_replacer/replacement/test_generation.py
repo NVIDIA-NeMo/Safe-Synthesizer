@@ -233,6 +233,17 @@ class TestReplacementGenerator:
                 seed=42,
             )
 
+    def test_request_requires_resolved_dependency_values_to_be_a_tuple(self) -> None:
+        with pytest.raises(InternalError, match="resolved_dependency_values must be a tuple"):
+            ReplacementGenerationRequest(
+                entity_type=EntityType.FIRST_NAME,
+                original_value="Ada",
+                effective_dependency_tuple=(),
+                pattern=None,
+                seed=42,
+                resolved_dependency_values=[],  # ty: ignore[invalid-argument-type] -- deliberate invalid input
+            )
+
     def test_faker_generation_is_deterministic_for_equal_requests(self) -> None:
         generator = _faker_generator()
         request = _request(
