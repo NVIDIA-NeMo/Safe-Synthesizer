@@ -18,7 +18,13 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiSamplerConfig,
     ReplacePiiConfig,
 )
-from nemo_safe_synthesizer.pii_replacer import ReplacementGenerationStatistics, TabularPiiReplacer
+from nemo_safe_synthesizer.pii_replacer import (
+    FreeTextReplacementRecord,
+    ReplacementGenerationStatistics,
+    ReplacementMap,
+    StructuredReplacementRecord,
+    TabularPiiReplacer,
+)
 from nemo_safe_synthesizer.pii_replacer.transform_result import TransformResult
 
 
@@ -46,12 +52,6 @@ class TestTabularPiiReplacerInterface:
 
         assert parameter.kind is inspect.Parameter.KEYWORD_ONLY
         assert parameter.default is False
-
-    def test_replacement_map_capture_is_explicitly_deferred(self) -> None:
-        replacer = TabularPiiReplacer(ReplacePiiConfig(), data_config=DataParameters())
-
-        with pytest.raises(NotImplementedError, match="replacement map capture is not implemented"):
-            replacer.replace(pd.DataFrame({"email": ["ada@example.com"]}), capture_replacement_map=True)
 
     def test_empty_plan_returns_a_copy_without_mutating_the_caller_dataframe(self) -> None:
         dataframe = pd.DataFrame({"email": ["ada@example.com"]}, index=[7])
