@@ -9,7 +9,8 @@ from dataclasses import dataclass, field
 from typing import ClassVar, Protocol
 
 from ...config.replace_pii import EntityType, PiiReplacementSettings, PiiSamplerBackend, PiiSamplerConfig
-from .types import EffectiveDependencyTuple
+from ...errors import InternalError
+from .types import EffectiveDependencyTuple, require_effective_dependency_tuple
 
 __all__ = [
     "FakerReplacementGenerator",
@@ -21,31 +22,34 @@ __all__ = [
 
 @dataclass(frozen=True, slots=True)
 class ReplacementGenerationRequest:
-    """Inputs required to deterministically generate one replacement value.
-
-    ``original_value`` is the exact accepted substring for free text and the
-    ``normalized_value`` payload of a ``CanonicalValue`` for structured data.
-    Sensitive inputs are excluded from ``repr`` so request diagnostics do not
-    disclose original or conditioning values.
-    """
+    """Inputs required to deterministically generate one replacement value."""
 
     entity_type: EntityType
+    """Normalized entity type of the value to generate."""
+
     original_value: str = field(repr=False)
+    """Exact accepted substring for free text, or the ``normalized_value`` of a
+    ``CanonicalValue`` for structured data. Excluded from ``repr`` because it is PII."""
+
     effective_dependency_tuple: EffectiveDependencyTuple = field(repr=False)
+    """Dependency values that condition generation. Excluded from ``repr`` because they may contain PII."""
+
     pattern: str | None
+    """Plan pattern the generated value must follow, or ``None`` for the entity default."""
+
     seed: int
+    """Seed that makes generation deterministic for equal requests."""
 
     def __post_init__(self) -> None:
         if not isinstance(self.entity_type, EntityType):
-            raise TypeError("replacement generation entity_type must be a normalized EntityType")
+            raise InternalError("replacement generation entity_type must be a normalized EntityType")
         if not isinstance(self.original_value, str):
-            raise TypeError("replacement generation original_value must be a string")
-        if not isinstance(self.effective_dependency_tuple, tuple):
-            raise TypeError("effective_dependency_tuple must be a tuple")
+            raise InternalError("replacement generation original_value must be a string")
+        require_effective_dependency_tuple(self.effective_dependency_tuple, "effective_dependency_tuple")
         if self.pattern is not None and not isinstance(self.pattern, str):
-            raise TypeError("replacement generation pattern must be a string or None")
+            raise InternalError("replacement generation pattern must be a string or None")
         if type(self.seed) is not int:
-            raise TypeError("replacement generation seed must be an integer")
+            raise InternalError("replacement generation seed must be an integer")
 
 
 class ReplacementGenerator(Protocol):
@@ -62,7 +66,19 @@ class ReplacementGenerator(Protocol):
         """Return one synthetic value satisfying ``request``."""
 
 
-class ManagedReplacementGenerator(ReplacementGenerator):
+class _SamplerReplacementGenerator(ReplacementGenerator):
+    """Shared construction for generators bound to one sampler backend."""
+
+    def __init__(self, *, settings: PiiReplacementSettings, sampler: PiiSamplerConfig) -> None:
+        if sampler.backend is not self.backend:
+            raise InternalError(
+                f"{type(self).__name__} requires the {self.backend.value} sampler backend, got {sampler.backend.value}"
+            )
+        self._settings = settings
+        self._sampler = sampler
+
+
+class ManagedReplacementGenerator(_SamplerReplacementGenerator):
     """Generate replacements using managed person-sampling assets.
 
     Args:
@@ -75,18 +91,12 @@ class ManagedReplacementGenerator(ReplacementGenerator):
 
     backend: ClassVar[PiiSamplerBackend] = PiiSamplerBackend.MANAGED
 
-    def __init__(self, *, settings: PiiReplacementSettings, sampler: PiiSamplerConfig) -> None:
-        if sampler.backend is not self.backend:
-            raise ValueError("ManagedReplacementGenerator requires the managed sampler backend")
-        self._settings = settings
-        self._sampler = sampler
-
     def generate(self, request: ReplacementGenerationRequest) -> str:
         """Generate a managed-asset replacement for ``request``."""
         raise NotImplementedError("managed replacement generation is not implemented")
 
 
-class FakerReplacementGenerator(ReplacementGenerator):
+class FakerReplacementGenerator(_SamplerReplacementGenerator):
     """Generate replacements using Faker for person-like values.
 
     Args:
@@ -98,12 +108,6 @@ class FakerReplacementGenerator(ReplacementGenerator):
     """
 
     backend: ClassVar[PiiSamplerBackend] = PiiSamplerBackend.FAKER
-
-    def __init__(self, *, settings: PiiReplacementSettings, sampler: PiiSamplerConfig) -> None:
-        if sampler.backend is not self.backend:
-            raise ValueError("FakerReplacementGenerator requires the faker sampler backend")
-        self._settings = settings
-        self._sampler = sampler
 
     def generate(self, request: ReplacementGenerationRequest) -> str:
         """Generate a Faker-backed replacement for ``request``."""

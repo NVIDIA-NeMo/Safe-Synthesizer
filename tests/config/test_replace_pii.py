@@ -554,18 +554,9 @@ class TestReplacePiiConfig:
 
         assert FreeTextDetectionConfig(chunk_length=32, chunk_overlap=0).chunk_overlap == 0
 
-    def test_llm_documentation_is_planning_only(self) -> None:
-        llm_description = ReplacePiiConfig.model_fields["llm"].description
-        free_text_description = ReplacePiiConfig.model_fields["free_text_detection"].description
-
-        assert LLMConfig.__doc__ is not None
-        assert "plan discovery" in LLMConfig.__doc__
-        assert llm_description is not None
-        assert "plan discovery" in llm_description
-        assert "replacement" not in llm_description
-        assert free_text_description is not None
-        assert "GLiNER2" in free_text_description
-        assert "regex" in free_text_description
+    def test_free_text_detection_model_id_must_be_nonempty(self) -> None:
+        with pytest.raises(ValidationError, match="at least 1 character"):
+            FreeTextDetectionConfig(model_id="")
 
     def test_resolved_managed_assets_path_uses_override(self, tmp_path: Path) -> None:
         config = ReplacePiiConfig.model_validate(

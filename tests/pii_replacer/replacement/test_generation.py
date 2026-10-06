@@ -11,6 +11,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiSamplerBackend,
     PiiSamplerConfig,
 )
+from nemo_safe_synthesizer.errors import InternalError
 from nemo_safe_synthesizer.pii_replacer.replacement.generation import (
     FakerReplacementGenerator,
     ManagedReplacementGenerator,
@@ -74,7 +75,7 @@ class TestReplacementGenerator:
         generator_class: type[ReplacementGenerator],
         backend: PiiSamplerBackend,
     ) -> None:
-        with pytest.raises(ValueError, match="requires the .* sampler backend"):
+        with pytest.raises(InternalError, match="requires the .* sampler backend"):
             generator_class(
                 settings=PiiReplacementSettings(),
                 sampler=PiiSamplerConfig(backend=backend),
@@ -111,3 +112,22 @@ class TestReplacementGenerator:
             setattr(request, "seed", 7)
         assert "Ada Lovelace" not in repr(request)
         assert "Analytical Engines" not in repr(request)
+
+    @pytest.mark.parametrize(
+        "dependency_tuple",
+        [
+            [(EntityType.ORGANIZATION, None)],
+            (("organization", None),),
+            ((EntityType.ORGANIZATION, "example"),),
+            ((EntityType.ORGANIZATION,),),
+        ],
+    )
+    def test_request_rejects_malformed_dependency_tuples(self, dependency_tuple: object) -> None:
+        with pytest.raises(InternalError, match="effective_dependency_tuple must"):
+            ReplacementGenerationRequest(
+                entity_type=EntityType.EMAIL,
+                original_value="ada@example.com",
+                effective_dependency_tuple=dependency_tuple,  # ty: ignore[invalid-argument-type] -- deliberate invalid input
+                pattern=None,
+                seed=42,
+            )

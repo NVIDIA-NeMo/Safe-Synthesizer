@@ -66,7 +66,7 @@ __all__ = [
 # Sentinel value for ``ReplacePiiConfig.replacement_plan`` requesting automatic
 # entity discovery instead of an explicit plan.
 AUTO_DISCOVERY = "auto_discovery"
-DEFAULT_GLINER2_MODEL_ID = "fastino/gliner2.5-base-v1"
+DEFAULT_GLINER2_MODEL_ID = "fastino/gliner2-privacy-filter-PII-multi"
 # Unversioned configurations are permanently interpreted as v3. Adding a new
 # schema may expand the supported set, but must not advance this implicit value.
 _IMPLICIT_REPLACE_PII_SCHEMA_VERSION = 3
@@ -614,7 +614,7 @@ class LLMConfig(NSSBaseModel):
     max_workers: int = Field(
         default=8,
         ge=1,
-        description=("Maximum concurrent requests for LLM-assisted plan discovery. Must be at least 1."),
+        description="Maximum concurrent requests for LLM-assisted plan discovery. Must be at least 1.",
     )
 
 
@@ -623,7 +623,8 @@ class FreeTextDetectionConfig(NSSBaseModel):
 
     model_id: str = Field(
         default=DEFAULT_GLINER2_MODEL_ID,
-        description="GLiNER2 model identifier used to detect PII spans in free-text columns.",
+        min_length=1,
+        description="GLiNER2 model identifier used to detect PII spans in free-text columns. Must be nonempty.",
     )
     threshold: float = Field(
         default=0.3,
@@ -650,7 +651,10 @@ class FreeTextDetectionConfig(NSSBaseModel):
     @model_validator(mode="after")
     def _validate_chunk_overlap(self) -> Self:
         if self.chunk_overlap >= self.chunk_length:
-            raise ParameterError("free_text_detection.chunk_overlap must be smaller than chunk_length")
+            raise ParameterError(
+                "free_text_detection.chunk_overlap must be smaller than chunk_length, "
+                f"got chunk_overlap={self.chunk_overlap}, chunk_length={self.chunk_length}"
+            )
         return self
 
 
@@ -751,7 +755,7 @@ class ReplacePiiConfig(Parameters):
     )
     free_text_detection: FreeTextDetectionConfig = Field(
         default_factory=FreeTextDetectionConfig,
-        description=("GLiNER2 and deterministic built-in regex settings for detecting PII spans in free-text columns."),
+        description="GLiNER2 and deterministic built-in regex settings for detecting PII spans in free-text columns.",
     )
     replacement: PiiReplacementSettings = Field(
         default_factory=PiiReplacementSettings,

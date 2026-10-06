@@ -246,8 +246,7 @@ class ReplacePiiConfig(Parameters):
     free_text_detection: FreeTextDetectionConfig = Field(default_factory=FreeTextDetectionConfig)
 ```
 
-PR 741 provisionally uses the base checkpoint. Before implementing model loading, the follow-up must change
-`DEFAULT_GLINER2_MODEL_ID` and the documented configuration example to
+PR 741 sets `DEFAULT_GLINER2_MODEL_ID` and the documented configuration example to
 `fastino/gliner2-privacy-filter-PII-multi`. Validate `threshold` within `[0, 1]`, positive batch/chunk values, and a
 nonnegative overlap smaller than the chunk length.
 
@@ -535,8 +534,7 @@ make it explicit opt-in, label the artifact as sensitive, and define access cont
 
 ## Implementation sequence after the interface PR
 
-1. Change `DEFAULT_GLINER2_MODEL_ID`, its tests, and the documented example to
-   `fastino/gliner2-privacy-filter-PII-multi`; add its model adapter; and adapt the deterministic regex layer from
+1. Add the model adapter for `fastino/gliner2-privacy-filter-PII-multi` (already the configured default) and adapt the deterministic regex layer from
    Anonymizer PR 265.
 2. Implement the deep `TabularPiiReplacer` module, DAG compiler, scopes, deterministic mapping keys, group conflict
    handling, and programmatic entity generators.

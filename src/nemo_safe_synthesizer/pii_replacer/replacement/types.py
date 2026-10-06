@@ -5,17 +5,74 @@
 
 The execution engine composes these types to keep positional identity separate
 from sensitive values and to keep sensitive mapping inputs out of diagnostics.
+The replacement executor is the only producer of these values, so contract
+violations raise ``InternalError``.
 """
 
 from __future__ import annotations
 
+import math
 from collections.abc import Hashable
 from dataclasses import dataclass, field
-from typing import Literal, TypeAlias
+from typing import Literal, TypeAlias, get_args
 
 from ...config.replace_pii import EntityType
+from ...errors import InternalError
+
+__all__ = [
+    "CanonicalValue",
+    "DetectedSpan",
+    "DetectionCell",
+    "DetectionCellId",
+    "DetectionSource",
+    "EffectiveDependencyTuple",
+    "FreeTextMappingKey",
+    "GroupDependencyDrift",
+    "GroupMappingKey",
+    "GroupMappingProvenance",
+    "RecordMappingKey",
+    "detected_text",
+    "free_text_mapping_key",
+    "require_effective_dependency_tuple",
+]
 
 DetectionSource: TypeAlias = Literal["gliner", "regex"]
+_DETECTION_SOURCES: frozenset[str] = frozenset(get_args(DetectionSource))
+
+
+def _require_row_position(row_position: object, owner: str) -> None:
+    if type(row_position) is not int:
+        raise InternalError(f"{owner} row_position must be an integer")
+    if row_position < 0:
+        raise InternalError(f"{owner} row_position must be nonnegative")
+
+
+def _require_str(value: object, description: str) -> None:
+    if not isinstance(value, str):
+        raise InternalError(f"{description} must be a string")
+
+
+def _require_entity_type(value: object, description: str) -> None:
+    if not isinstance(value, EntityType):
+        raise InternalError(f"{description} must be a normalized EntityType")
+
+
+def _require_entity_types(values: object, description: str) -> None:
+    if not isinstance(values, frozenset):
+        raise InternalError(f"{description} must be a frozenset")
+    if not all(isinstance(value, EntityType) for value in values):
+        raise InternalError(f"{description} must contain normalized EntityType values")
+
+
+def _require_canonical_value(value: object, description: str) -> None:
+    if not isinstance(value, CanonicalValue):
+        raise InternalError(f"{description} must be a CanonicalValue")
+
+
+def _require_scope_identity(value: object, description: str) -> None:
+    # NaN is hashable but never equal to itself, so it would silently defeat mapping reuse.
+    if not isinstance(value, Hashable) or (isinstance(value, float) and math.isnan(value)):
+        raise InternalError(f"{description} must be hashable and not NaN")
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,51 +80,56 @@ class CanonicalValue:
     """Type-tagged, normalized identity for an original structured scalar.
 
     The replacement executor creates this value only after excluding missing
-    values. ``type_tag`` identifies the scalar's semantic type, while
-    ``normalized_value`` is its deterministic, locale-independent string
-    representation. The tag prevents unlike values such as integer ``1`` and
-    string ``"1"`` from sharing a mapping. Canonicalization means stable typed
+    values. The tag prevents unlike values such as integer ``1`` and string
+    ``"1"`` from sharing a mapping. Canonicalization means stable typed
     serialization, not text cleanup: it must not trim, case-fold, or otherwise
     alter string content. Equivalent Python, NumPy, or pandas scalars must
     produce the same pair; different semantic scalar types must not.
-
-    The normalized value is excluded from ``repr`` because it may contain PII.
     """
 
     type_tag: str
+    """Nonempty identifier of the scalar's semantic type."""
+
     normalized_value: str = field(repr=False)
+    """Deterministic, locale-independent string form of the scalar. Excluded from ``repr`` because it may contain PII."""
 
     def __post_init__(self) -> None:
-        if not isinstance(self.type_tag, str):
-            raise TypeError("canonical value type_tag must be a string")
+        _require_str(self.type_tag, "canonical value type_tag")
         if not self.type_tag:
-            raise ValueError("canonical value type_tag must be a nonempty string")
-        if not isinstance(self.normalized_value, str):
-            raise TypeError("canonical normalized_value must be a string")
+            raise InternalError("canonical value type_tag must be a nonempty string")
+        _require_str(self.normalized_value, "canonical normalized_value")
 
 
 EffectiveDependencyTuple: TypeAlias = tuple[tuple[EntityType, CanonicalValue | None], ...]
 
 
+def require_effective_dependency_tuple(value: object, description: str) -> None:
+    """Raise ``InternalError`` unless ``value`` is a well-formed ``EffectiveDependencyTuple``."""
+    if not isinstance(value, tuple):
+        raise InternalError(f"{description} must be a tuple")
+    for item in value:
+        if (
+            not isinstance(item, tuple)
+            or len(item) != 2
+            or not isinstance(item[0], EntityType)
+            or not (item[1] is None or isinstance(item[1], CanonicalValue))
+        ):
+            raise InternalError(f"{description} must contain (EntityType, CanonicalValue | None) pairs")
+
+
 @dataclass(frozen=True, slots=True)
 class DetectionCellId:
-    """PII-free positional identity for one dataframe cell.
-
-    ``row_position`` refers to stable input row order rather than the dataframe
-    index, which may contain duplicates. ``column_name`` identifies the target
-    column without carrying the raw cell value.
-    """
+    """PII-free positional identity for one dataframe cell."""
 
     row_position: int
+    """Stable input row order rather than the dataframe index, which may contain duplicates."""
+
     column_name: str
+    """Target column, identified without carrying the raw cell value."""
 
     def __post_init__(self) -> None:
-        if type(self.row_position) is not int:
-            raise TypeError("detection cell row_position must be an integer")
-        if self.row_position < 0:
-            raise ValueError("detection cell row_position must be nonnegative")
-        if not isinstance(self.column_name, str):
-            raise TypeError("detection cell column_name must be a string")
+        _require_row_position(self.row_position, "detection cell")
+        _require_str(self.column_name, "detection cell column_name")
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,18 +137,19 @@ class DetectionCell:
     """Original cell text and the entity types its plan permits detecting."""
 
     cell_id: DetectionCellId
+    """Positional identity of the cell."""
+
     text: str = field(repr=False)
+    """Complete original cell text. Excluded from ``repr`` because it may contain PII."""
+
     allowed_entity_types: frozenset[EntityType]
+    """Entity types the plan permits detecting in this cell."""
 
     def __post_init__(self) -> None:
         if not isinstance(self.cell_id, DetectionCellId):
-            raise TypeError("cell_id must be a DetectionCellId")
-        if not isinstance(self.text, str):
-            raise TypeError("detection cell text must be a string")
-        if not isinstance(self.allowed_entity_types, frozenset):
-            raise TypeError("allowed_entity_types must be a frozenset")
-        if not all(isinstance(entity_type, EntityType) for entity_type in self.allowed_entity_types):
-            raise TypeError("allowed_entity_types must contain normalized EntityType values")
+            raise InternalError("cell_id must be a DetectionCellId")
+        _require_str(self.text, "detection cell text")
+        _require_entity_types(self.allowed_entity_types, "allowed_entity_types")
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,23 +162,42 @@ class DetectedSpan:
     """
 
     cell_id: DetectionCellId
+    """Positional identity of the cell containing the span."""
+
     start: int
+    """Inclusive start offset into the complete original cell text."""
+
     end: int
+    """Exclusive end offset into the complete original cell text."""
+
     entity_type: EntityType
+    """Normalized entity type assigned by the detector."""
+
     source: DetectionSource
+    """Detector that produced the span."""
+
     score: float | None = None
+    """Detector confidence in ``[0, 1]``, or ``None`` for detectors without scores."""
 
     def __post_init__(self) -> None:
         if not isinstance(self.cell_id, DetectionCellId):
-            raise TypeError("cell_id must be a DetectionCellId")
+            raise InternalError("cell_id must be a DetectionCellId")
         if type(self.start) is not int or type(self.end) is not int:
-            raise TypeError("detected span offsets must be integers")
+            raise InternalError("detected span offsets must be integers")
         if self.start < 0 or self.end <= self.start:
-            raise ValueError("detected span offsets must satisfy 0 <= start < end")
-        if not isinstance(self.entity_type, EntityType):
-            raise TypeError("detected span entity_type must be a normalized EntityType")
-        if self.source not in {"gliner", "regex"}:
-            raise ValueError("detected span source must be 'gliner' or 'regex'")
+            raise InternalError(
+                f"detected span offsets must satisfy 0 <= start < end, got start={self.start}, end={self.end}"
+            )
+        _require_entity_type(self.entity_type, "detected span entity_type")
+        if self.source not in _DETECTION_SOURCES:
+            raise InternalError(
+                f"detected span source must be one of {sorted(_DETECTION_SOURCES)}, got {self.source!r}"
+            )
+        if self.score is not None:
+            if isinstance(self.score, bool) or not isinstance(self.score, int | float):
+                raise InternalError("detected span score must be a number or None")
+            if not 0 <= self.score <= 1:
+                raise InternalError(f"detected span score must be between 0 and 1, got {self.score}")
 
 
 def detected_text(cell: DetectionCell, span: DetectedSpan) -> str:
@@ -125,11 +207,11 @@ def detected_text(cell: DetectionCell, span: DetectedSpan) -> str:
     half-open. Error messages deliberately omit the cell text.
     """
     if span.cell_id != cell.cell_id:
-        raise ValueError("detected span cell_id does not match its detection cell")
+        raise InternalError("detected span cell_id does not match its detection cell")
     if span.end > len(cell.text):
-        raise ValueError("detected span end exceeds the original cell length")
+        raise InternalError("detected span end exceeds the original cell length")
     if span.entity_type not in cell.allowed_entity_types:
-        raise ValueError("detected span entity_type is not allowed for its detection cell")
+        raise InternalError("detected span entity_type is not allowed for its detection cell")
     return cell.text[span.start : span.end]
 
 
@@ -139,19 +221,22 @@ class RecordMappingKey:
 
     Stable positional row identity keeps duplicate dataframe indexes safe.
     Dependencies affect generation but not mapping identity because every row
-    has one effective dependency tuple for a given target. Sensitive values are
-    excluded from ``repr`` so accidental diagnostics do not disclose them.
+    has one effective dependency tuple for a given target.
     """
 
     target_column: str
+    """Column whose value is replaced."""
+
     row_position: int
+    """Stable input row position that scopes the mapping."""
+
     canonical_original_value: CanonicalValue = field(repr=False)
+    """Canonical original value. Excluded from ``repr`` because it may contain PII."""
 
     def __post_init__(self) -> None:
-        if type(self.row_position) is not int:
-            raise TypeError("record mapping row_position must be an integer")
-        if self.row_position < 0:
-            raise ValueError("record mapping row_position must be nonnegative")
+        _require_str(self.target_column, "record mapping target_column")
+        _require_row_position(self.row_position, "record mapping")
+        _require_canonical_value(self.canonical_original_value, "record mapping canonical_original_value")
 
 
 @dataclass(frozen=True, slots=True)
@@ -161,14 +246,22 @@ class FreeTextMappingKey:
     The replacement executor looks up every accepted span by this key before
     calling the replacement generator. Repeated occurrences of the same entity
     and exact original value in any planned free-text column therefore reuse one
-    replacement within the scope, independently of propagation mappings. In
-    record scope, ``scope_identity`` is the stable row position; a group
-    identity widens reuse across rows.
+    replacement within the scope, independently of propagation mappings.
     """
 
     scope_identity: Hashable = field(repr=False)
+    """Stable row position in record scope, or the group identity to widen reuse across rows. Excluded from ``repr``."""
+
     entity_type: EntityType
+    """Normalized entity type of the detected value."""
+
     original_value: str = field(repr=False)
+    """Exact detected substring. Excluded from ``repr`` because it is PII."""
+
+    def __post_init__(self) -> None:
+        _require_scope_identity(self.scope_identity, "free-text mapping scope_identity")
+        _require_entity_type(self.entity_type, "free-text mapping entity_type")
+        _require_str(self.original_value, "free-text mapping original_value")
 
 
 def free_text_mapping_key(
@@ -195,8 +288,18 @@ class GroupMappingKey:
     """
 
     target_column: str
+    """Column whose value is replaced."""
+
     original_group_identity: Hashable = field(repr=False)
+    """Original grouping-column value. Excluded from ``repr`` because it may contain PII."""
+
     canonical_original_value: CanonicalValue = field(repr=False)
+    """Canonical original value. Excluded from ``repr`` because it may contain PII."""
+
+    def __post_init__(self) -> None:
+        _require_str(self.target_column, "group mapping target_column")
+        _require_scope_identity(self.original_group_identity, "group mapping original_group_identity")
+        _require_canonical_value(self.canonical_original_value, "group mapping canonical_original_value")
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,6 +307,10 @@ class GroupMappingProvenance:
     """Effective dependencies used by the first occurrence of a group mapping."""
 
     effective_dependency_tuple: EffectiveDependencyTuple = field(repr=False)
+    """Dependency values that conditioned the first replacement. Excluded from ``repr`` because they may contain PII."""
+
+    def __post_init__(self) -> None:
+        require_effective_dependency_tuple(self.effective_dependency_tuple, "group mapping effective_dependency_tuple")
 
 
 @dataclass(frozen=True, slots=True)
@@ -211,12 +318,21 @@ class GroupDependencyDrift:
     """PII-free aggregate warning for dependency drift within a group mapping."""
 
     target_column: str
+    """Column whose group mapping saw drifting dependencies."""
+
     conditioner_entity_types: frozenset[EntityType]
+    """Entity types of the dependencies that drifted."""
+
     conflict_count: int
+    """Number of later occurrences whose dependencies differed from the first occurrence."""
 
     def __post_init__(self) -> None:
+        _require_str(self.target_column, "group dependency drift target_column")
+        _require_entity_types(self.conditioner_entity_types, "group dependency drift conditioner_entity_types")
+        if type(self.conflict_count) is not int:
+            raise InternalError("group dependency drift conflict_count must be an integer")
         if self.conflict_count <= 0:
-            raise ValueError("group dependency drift conflict_count must be positive")
+            raise InternalError(f"group dependency drift conflict_count must be positive, got {self.conflict_count}")
 
     def as_log_extra(self) -> dict[str, object]:
         """Return the complete safe structured warning payload."""

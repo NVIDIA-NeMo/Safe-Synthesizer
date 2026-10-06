@@ -2,11 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from dataclasses import FrozenInstanceError, fields
-from typing import cast
 
 import pytest
 
 from nemo_safe_synthesizer.config.replace_pii import EntityType
+from nemo_safe_synthesizer.errors import InternalError
 from nemo_safe_synthesizer.pii_replacer.replacement.types import (
     CanonicalValue,
     DetectedSpan,
@@ -75,18 +75,18 @@ class TestDetectionContracts:
         [(-1, 2), (0, 0), (2, 1)],
     )
     def test_span_requires_nonempty_half_open_offsets(self, start: int, end: int) -> None:
-        with pytest.raises(ValueError, match="0 <= start < end"):
+        with pytest.raises(InternalError, match="0 <= start < end"):
             _span(start=start, end=end)
 
     def test_span_is_validated_against_the_complete_original_cell(self) -> None:
         cell = _cell()
 
         assert detected_text(cell, _span()) == "ada@example.com"
-        with pytest.raises(ValueError, match="exceeds the original cell length"):
+        with pytest.raises(InternalError, match="exceeds the original cell length"):
             detected_text(cell, _span(end=len(cell.text) + 1))
-        with pytest.raises(ValueError, match="cell_id does not match"):
+        with pytest.raises(InternalError, match="cell_id does not match"):
             detected_text(cell, _span(cell_id=DetectionCellId(0, "notes")))
-        with pytest.raises(ValueError, match="entity_type is not allowed"):
+        with pytest.raises(InternalError, match="entity_type is not allowed"):
             detected_text(cell, _span(entity_type=EntityType.FULL_NAME))
 
     def test_detector_result_has_normalized_type_and_provenance_but_no_replacement(self) -> None:
@@ -98,16 +98,21 @@ class TestDetectionContracts:
         assert "replacement" not in {field.name for field in fields(DetectedSpan)}
 
     def test_detector_result_requires_a_normalized_entity_type(self) -> None:
-        with pytest.raises(TypeError, match="normalized EntityType"):
-            _span(entity_type=cast(EntityType, "email"))
+        with pytest.raises(InternalError, match="normalized EntityType"):
+            _span(entity_type="email")  # ty: ignore[invalid-argument-type] -- deliberate invalid input
 
     def test_cell_requires_an_immutable_allowed_entity_collection(self) -> None:
-        with pytest.raises(TypeError, match="must be a frozenset"):
+        with pytest.raises(InternalError, match="must be a frozenset"):
             DetectionCell(
                 DetectionCellId(0, "notes"),
                 "text",
-                cast(frozenset[EntityType], {EntityType.EMAIL}),
+                {EntityType.EMAIL},  # ty: ignore[invalid-argument-type] -- deliberate invalid input
             )
+
+    @pytest.mark.parametrize("score", [-0.1, 1.1, True])
+    def test_span_score_must_be_a_unit_interval_number(self, score: float) -> None:
+        with pytest.raises(InternalError, match="score must be"):
+            _span(score=score)
 
 
 @pytest.mark.unit
@@ -204,5 +209,38 @@ class TestMappingContracts:
         }
 
     def test_group_dependency_drift_requires_a_conflict(self) -> None:
-        with pytest.raises(ValueError, match="conflict_count must be positive"):
+        with pytest.raises(InternalError, match="conflict_count must be positive"):
             GroupDependencyDrift("email", frozenset({EntityType.ORGANIZATION}), 0)
+        with pytest.raises(InternalError, match="conflict_count must be an integer"):
+            GroupDependencyDrift("email", frozenset({EntityType.ORGANIZATION}), True)
+
+    def test_group_dependency_drift_requires_normalized_entity_types(self) -> None:
+        with pytest.raises(InternalError, match="normalized EntityType"):
+            GroupDependencyDrift(
+                "email",
+                frozenset({"organization"}),  # ty: ignore[invalid-argument-type] -- deliberate invalid input
+                1,
+            )
+
+    def test_mapping_keys_require_canonical_original_values(self) -> None:
+        with pytest.raises(InternalError, match="must be a CanonicalValue"):
+            RecordMappingKey("email", 0, "ada@example.com")  # ty: ignore[invalid-argument-type] -- deliberate invalid input
+        with pytest.raises(InternalError, match="must be a CanonicalValue"):
+            GroupMappingKey("email", "patient-1", "ada@example.com")  # ty: ignore[invalid-argument-type] -- deliberate invalid input
+
+    @pytest.mark.parametrize("scope_identity", [float("nan"), ["unhashable"]])
+    def test_scope_identities_must_be_hashable_and_not_nan(self, scope_identity: object) -> None:
+        original_value = CanonicalValue(type_tag="string", normalized_value="ada@example.com")
+
+        with pytest.raises(InternalError, match="hashable and not NaN"):
+            FreeTextMappingKey(scope_identity, EntityType.EMAIL, "ada@example.com")
+        with pytest.raises(InternalError, match="hashable and not NaN"):
+            GroupMappingKey("email", scope_identity, original_value)
+
+    def test_free_text_mapping_key_requires_a_normalized_entity_type(self) -> None:
+        with pytest.raises(InternalError, match="normalized EntityType"):
+            FreeTextMappingKey(0, "email", "ada@example.com")  # ty: ignore[invalid-argument-type] -- deliberate invalid input
+
+    def test_group_provenance_requires_well_formed_dependencies(self) -> None:
+        with pytest.raises(InternalError, match="must contain"):
+            GroupMappingProvenance((("organization", None),))  # ty: ignore[invalid-argument-type] -- deliberate invalid input

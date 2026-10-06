@@ -177,7 +177,7 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
             type=str,
             required=False,
             default=None,
-            help="OpenAI-compatible inference endpoint URL for PII replacement. "
+            help="OpenAI-compatible inference endpoint URL for LLM-assisted PII plan discovery. "
             "Can also be set via NSS_INFERENCE_ENDPOINT env var.",
         )
     )

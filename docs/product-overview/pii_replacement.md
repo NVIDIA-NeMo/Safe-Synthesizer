@@ -146,7 +146,7 @@ rules:
 ```yaml
 replace_pii:
   free_text_detection:
-    model_id: fastino/gliner2.5-base-v1
+    model_id: fastino/gliner2-privacy-filter-PII-multi
     threshold: 0.3
     batch_size: 8
     chunk_length: 384

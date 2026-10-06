@@ -87,5 +87,7 @@ class TestTransformResult:
         }
         values.update(field_overrides)
 
-        with pytest.raises(ValidationError, match="greater than or equal to 0"):
+        with pytest.raises(ValidationError) as exc_info:
             TransformResult.model_validate(values)
+
+        assert exc_info.value.errors()[0]["type"] == "greater_than_equal"
