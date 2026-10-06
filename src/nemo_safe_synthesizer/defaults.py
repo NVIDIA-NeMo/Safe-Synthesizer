@@ -72,8 +72,9 @@ NUM_EVAL_BATCHES_GROUPED = 1
 PSEUDO_GROUP_COLUMN = "__nss_sequence_id"
 DEFAULT_EXCLUDE_COLUMNS: tuple[str, ...] = (PSEUDO_GROUP_COLUMN,)
 
-# Unused default LLM inference endpoint (reserved for PII replacement v3).
+# Default OpenAI-compatible inference service used by PII replacement v3.
 DEFAULT_NSS_INFERENCE_ENDPOINT = "https://integrate.api.nvidia.com/v1"
+DEFAULT_NSS_INFERENCE_MODEL = "nvidia/nemotron-3-ultra-550b-a55b"
 PII_REPLACEMENT_PLAN_FILENAME = "pii_replacement_plan.yaml"
 
 # Managed parquet assets for the PII sampler (``datasets/{locale}.parquet``).

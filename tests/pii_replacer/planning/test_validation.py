@@ -78,6 +78,21 @@ class TestValidatePlan:
 
         validate_plan(dataframe, plan, data_config=DataParameters())
 
+    @pytest.mark.parametrize("pattern", ["%m/%d/%Y|%d/%m/%Y", "%d %d"])
+    def test_rejects_strftime_pattern_with_repeated_directive(self, fixture_pii_df: pd.DataFrame, pattern: str) -> None:
+        plan = PiiReplacementPlan(
+            columns_to_replace=[
+                PiiColumnPlan(
+                    column_name="dob",
+                    entity_type=EntityType.DATE_OF_BIRTH,
+                    pattern=pattern,
+                )
+            ]
+        )
+
+        with pytest.raises(ParameterError, match="is not valid strftime"):
+            validate_plan(fixture_pii_df, plan, data_config=DataParameters())
+
     @pytest.mark.parametrize(
         ("pattern", "value"),
         [
@@ -252,7 +267,7 @@ class TestValidatePlan:
             ]
         )
 
-        with pytest.raises(ParameterError, match="covers 0.0%.*at least 85%"):
+        with pytest.raises(ParameterError, match="covers 0.0%.*at least 99%"):
             validate_plan(fixture_pii_df, plan, data_config=DataParameters())
 
     def test_missing_matcher_is_an_internal_error(self, monkeypatch: pytest.MonkeyPatch) -> None:

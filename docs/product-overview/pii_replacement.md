@@ -129,10 +129,60 @@ An empty mapping (`llm: {}`) enables the existing NSS inference defaults. Set
 the OpenAI-compatible endpoint at runtime through `NSS_INFERENCE_ENDPOINT` or
 the `--inference-endpoint-url` CLI option. For example, a local vLLM server may
 use `NSS_INFERENCE_ENDPOINT=http://localhost:8000/v1` with its served model ID.
+Plain HTTP is accepted only for loopback addresses (`localhost`, `127.0.0.0/8`,
+or `::1`); any other host must use HTTPS.
+
+The endpoint resolves from the explicit CLI runtime flag, then
+`NSS_INFERENCE_ENDPOINT`, then the NSS default; it is never persisted in NSS
+configuration. The model resolves from the explicit CLI runtime flag, then
+`replace_pii.llm.model_id`, `NSS_INFERENCE_MODEL`, and finally the NSS default.
+`NSS_INFERENCE_MODEL` supplies the model only when the configuration omits
+`model_id`; use `--inference-model-id` to override a persisted model for one run.
+The default hosted NVIDIA endpoint requires an API key. Keyless operation is
+supported for local OpenAI-compatible endpoints.
 
 Supply the inference API key at runtime through `NSS_INFERENCE_KEY` or the
 `--inference-api-key` CLI option. NSS does not store the key in configuration or
 plan artifacts.
+
+Automatic discovery uses two LLM passes. The first classifies every column's
+semantic entity type and may propose a replacement pattern, in bounded batches
+of at most 32 profiles and 48 KiB of profile evidence. Each profile contains
+deterministic statistics and up to eight distinct cell samples truncated to 128
+characters. The prompt includes the entity catalog and the exact supported
+pattern grammars. The grouping column is sent as discovery context; protected
+columns are not mentioned, because NSS excludes them itself. NSS then derives replacement columns and all permitted
+dependency candidates deterministically from those classifications. The second
+pass sees only column names, entity types, and proposed patterns, not cell
+values, and is split into batches under the same 32-entry and 48 KiB limits. For
+each replacement column and each permitted source entity type, it
+chooses at most one candidate column, the one describing the same person or
+record, or none. The response schema lists only the candidate columns, so the
+model cannot name another column or choose two sources of one type, such as
+both a person's and a spouse's gender. Each option carries the heuristic
+baseline's choice as fallible prior evidence. NSS, rather than the model, derives
+group-consistent or record-consistent replacement behavior from the configured
+grouping column, excludes protected ordering and timestamp columns, and validates
+the assembled plan. Grouping columns remain eligible for replacement so
+identifiers such as patient IDs can be anonymized.
+
+Each prompt describes the expected JSON response, and the request also
+constrains decoding to that response's strict schema. Each request permits up to
+three attempts for transient transport failures or invalid structured responses. Transient failures wait before retrying: the
+server's `Retry-After` delay when supplied, otherwise an exponentially growing,
+jittered delay, capped at 30 seconds. Authentication, authorization, and
+permanent configuration failures stop immediately. If structured output remains invalid,
+planning fails instead of falling back to the heuristic baseline. A proposed
+pattern that a column cannot use (on an unclassified or protected column, on an
+entity type without a pattern syntax, or blank) is ignored rather than rejected.
+A pattern must cover at least 99% of a column's non-null values; one that follows
+its grammar but covers fewer is dropped with a warning and no repair request,
+since a column with mixed formats has no single pattern. Patterns that break their
+grammar receive up to three focused repair attempts; NSS drops only the pattern
+and warns if every repair response is invalid. Transient failures that persist
+through all repair attempts still fail planning, as for any other request. Retry
+feedback names the specific columns or dependency conflicts that made the
+previous response invalid.
 
 !!! warning "Inference endpoints receive source data"
     Plan enhancement can send bounded raw cell samples from the full input
