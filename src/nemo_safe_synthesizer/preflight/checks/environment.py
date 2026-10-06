@@ -12,8 +12,10 @@ from typing import TYPE_CHECKING, Literal
 
 from typing_extensions import override
 
+from ...errors import ParameterError
 from ...llm.utils import ModelRef
 from ...observability import get_logger
+from ...pii_replacer.llm_client import MissingInferenceKeyError, resolve_inference_settings
 from ...utils import hf_offline_enabled
 from ..base import ConfigCheck, IssueCollector, MetadataCheck
 from ..helpers import require_import
@@ -450,7 +452,7 @@ class VRAMHeadroomCheck(MetadataCheck):
 
 
 class InferenceModelCheck(ConfigCheck):
-    """Placeholder for inference checks used by a future PII implementation."""
+    """Validate configured PII plan-enhancement inference settings."""
 
     name = "env.inference"
     label = "Inference configuration"
@@ -458,9 +460,15 @@ class InferenceModelCheck(ConfigCheck):
 
     @override
     def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
-        # Legacy PII inference checks were removed with the replacement engine.
-        # A later implementation will restore this check.
-        return
+        replace_pii = ctx.config.replace_pii
+        if replace_pii is None or replace_pii.llm is None:
+            return
+        try:
+            resolve_inference_settings(replace_pii.llm)
+        except MissingInferenceKeyError as exc:
+            collector.error("inference_key_missing", str(exc))
+        except ParameterError as exc:
+            collector.error("inference_endpoint_invalid", str(exc))
 
 
 def _has_hf_token() -> bool:
