@@ -159,13 +159,6 @@ hard way on a real instance.
 
 ### Verification
 
-`mise run test:installer` runs `setup.sh` against the release build of this checkout's
-`install_nss.sh`, with network, uv, and Jupyter stubbed (`tests/tools/test_brev_setup.sh`).
-It catches installer changes, and changes to `docs/tutorials` that break extraction,
-before they are released.
-It installs nothing and does not cover changes on Brev's side, so it does not replace a
-real deploy.
-
 After deploying, check `$HOME/.nss-setup.log` for the `setup complete` banner, then in a
 notebook confirm the environment resolved correctly:
 
