@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 from .io import load_plan, save_plan
+from .llm import LLMPlanEnhancer
 from .patterns import pattern_grammar_catalog
 from .plan_builder import (
     ColumnClassification,
@@ -29,6 +30,7 @@ __all__ = [
     "ColumnProfile",
     "DependencyCandidate",
     "HeuristicPlanDiscoverer",
+    "LLMPlanEnhancer",
     "PlanDiscoverer",
     "PlanDiscoveryInput",
     "PlanEnhancer",
