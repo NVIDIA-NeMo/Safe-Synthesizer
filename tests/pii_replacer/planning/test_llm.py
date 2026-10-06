@@ -218,7 +218,7 @@ class TestLLMPlanEnhancer:
                         "race": "ethnic_background",
                     }
                 ),
-                _dependency_selection("dependency_0", "dependency_1"),
+                _dependency_selection({"first_name": {"gender": "sex", "ethnic_background": "race"}}),
                 _dependency_mappings(
                     ("sex", "Non-binary", None),
                     ("race", "Asian", ["east asian", "south asian"]),

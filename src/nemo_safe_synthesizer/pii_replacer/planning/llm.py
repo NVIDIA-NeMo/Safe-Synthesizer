@@ -683,7 +683,7 @@ class LLMPlanEnhancer(PlanEnhancer):
 
     def discover_data_to_sampler_value_mapping(
         self,
-        dataframe: pd.DataFrame,
+        dataframe: object,
         plan: PiiReplacementPlan,
         catalog: SamplerValueCatalog,
     ) -> DataToSamplerValueMapping:
@@ -699,8 +699,11 @@ class LLMPlanEnhancer(PlanEnhancer):
             ``None`` when no supplied value fits.
 
         Raises:
+            TypeError: If ``dataframe`` is not a pandas DataFrame.
             ParameterError: If the mapping request exceeds its size bounds.
         """
+        if not isinstance(dataframe, pd.DataFrame):
+            raise TypeError("dependency mapping discovery requires a pandas DataFrame")
         inputs = mapping_inputs(dataframe, plan, catalog)
         if not inputs:
             return {}
