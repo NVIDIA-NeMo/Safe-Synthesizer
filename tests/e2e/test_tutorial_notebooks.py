@@ -26,6 +26,8 @@ def test_safe_synthesizer_101_notebook_runs(tmp_path: Path, monkeypatch: pytest.
     # An empty value skips the notebook's getpass prompt, which cannot be answered here.
     monkeypatch.setenv("NSS_INFERENCE_KEY", os.environ.get("NSS_INFERENCE_KEY", ""))
     notebook = nbformat.read(TUTORIALS / "safe-synthesizer-101.ipynb", as_version=4)
+    # The install cell pins the latest release, which would replace the checkout under test.
+    notebook.cells = [cell for cell in notebook.cells if "uv pip install" not in cell.source]
     # Without kernel dirs, jupyter_client falls back to ipykernel's built-in python3 spec, which
     # runs sys.executable. A user-level python3 kernelspec could point at another environment.
     kernel_manager = KernelManager(kernel_name="python3", kernel_spec_manager=KernelSpecManager(kernel_dirs=[]))
