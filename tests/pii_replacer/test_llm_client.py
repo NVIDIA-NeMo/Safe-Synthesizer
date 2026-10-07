@@ -180,9 +180,10 @@ class TestOpenAICompatibleTransport:
                 '{"temperature": 1.0, "top_k": 20, "thinking_token_budget": 1000}',
                 {"temperature": 1.0, "top_k": 20, "thinking_token_budget": 1000},
             ),
-            ("{}", {}),
+            ('{"top_p": 0.9}', {"temperature": 0, "top_p": 0.9}),
+            ('{"temperature": null}', {}),
         ],
-        ids=["default-greedy", "options-replace-default", "server-defaults"],
+        ids=["default-greedy", "options-override-default", "options-merge-with-default", "null-drops-field"],
     )
     def test_request_options_are_sent_with_every_request(
         self,

@@ -14,7 +14,15 @@ from urllib.parse import urlparse
 from ...config.replace_pii import LLMConfig
 from ...defaults import DEFAULT_NSS_INFERENCE_LOCAL_MODEL
 from ...errors import ParameterError
-from ..llm_client import _is_loopback_host, _nonblank, resolve_inference_timeout, resolve_request_options
+from ..llm_client import (
+    ENDPOINT_ENV,
+    MODEL_ENV,
+    configured_model_id,
+    is_loopback_host,
+    nonblank,
+    resolve_inference_timeout,
+    resolve_request_options,
+)
 from .profile import LocalVllmProfile, bundled_profile_for_model, bundled_profile_names, load_profile
 from .server import DEFAULT_HOST, LocalVllmServer
 
@@ -38,7 +46,11 @@ class LocalServerRequest:
     """Validated settings for one managed local server launch."""
 
     profile: LocalVllmProfile
+    """Model and engine settings to serve."""
+
     host: str
+    """Loopback host the server binds."""
+
     port: int | None
     """Port from ``NSS_INFERENCE_ENDPOINT``, or ``None`` to choose a free port."""
 
@@ -60,7 +72,7 @@ def _managed_address(endpoint: str | None) -> tuple[str, int | None]:
     except ValueError as exc:
         # Raised for malformed bracketed IPv6 hosts and non-numeric ports.
         raise ParameterError(f"With {LOCAL_PROFILE_ENV}, NSS_INFERENCE_ENDPOINT must be {expected_form}") from exc
-    if parsed.scheme != "http" or host is None or not _is_loopback_host(host):
+    if parsed.scheme != "http" or host is None or not is_loopback_host(host):
         raise ParameterError(
             f"{LOCAL_PROFILE_ENV} starts the PII inference server on this machine, so "
             f"NSS_INFERENCE_ENDPOINT must be unset or {expected_form}"
@@ -74,10 +86,10 @@ def _managed_address(endpoint: str | None) -> tuple[str, int | None]:
 def _check_model_names(config: LLMConfig, environ: Mapping[str, str], profile: LocalVllmProfile) -> None:
     served = profile.served_name
     conflicts: list[str] = []
-    configured = _nonblank(config.model_id)
+    configured = nonblank(config.model_id)
     if configured is not None and configured != served:
         conflicts.append(f"replace_pii.llm.model_id is {configured!r}")
-    env_model = _nonblank(environ.get("NSS_INFERENCE_MODEL"))
+    env_model = nonblank(environ.get(MODEL_ENV))
     if env_model is not None and env_model != served:
         conflicts.append(f"NSS_INFERENCE_MODEL is {env_model!r}")
     if conflicts:
@@ -89,9 +101,7 @@ def _check_model_names(config: LLMConfig, environ: Mapping[str, str], profile: L
 
 def _bundled_profile(config: LLMConfig, environ: Mapping[str, str]) -> LocalVllmProfile:
     """Return the bundled profile for the configured model, or for the default local model."""
-    model_id = (
-        _nonblank(config.model_id) or _nonblank(environ.get("NSS_INFERENCE_MODEL")) or DEFAULT_NSS_INFERENCE_LOCAL_MODEL
-    )
+    model_id = configured_model_id(config, environ) or DEFAULT_NSS_INFERENCE_LOCAL_MODEL
     profile = bundled_profile_for_model(model_id)
     if profile is None:
         served = ", ".join(sorted(load_profile(name).served_name for name in bundled_profile_names()))
@@ -131,8 +141,8 @@ def resolve_local_server_request(
             bundled profile serves the model.
     """
     runtime_env = os.environ if environ is None else environ
-    reference = _nonblank(runtime_env.get(LOCAL_PROFILE_ENV))
-    endpoint = _nonblank(runtime_env.get("NSS_INFERENCE_ENDPOINT"))
+    reference = nonblank(runtime_env.get(LOCAL_PROFILE_ENV))
+    endpoint = nonblank(runtime_env.get(ENDPOINT_ENV))
     if reference is None and endpoint is not None:
         return None
     # Catch invalid runtime settings before an expensive server launch.
@@ -156,8 +166,8 @@ def planning_inference_environment(
     """Yield the inference environment for one LLM planning pass.
 
     When an explicit ``NSS_INFERENCE_ENDPOINT`` replaces the managed server
-    (see :func:`resolve_local_server_request`), this yields ``environ``
-    unchanged. Otherwise it starts a :class:`LocalVllmServer`, yields an environment
+    (see ``resolve_local_server_request``), this yields ``environ``
+    unchanged. Otherwise it starts a ``LocalVllmServer``, yields an environment
     whose ``NSS_INFERENCE_*`` values point at that server, and stops the
     server when the block exits. The server therefore never outlives
     planning, and its GPU memory is free before replacement or training.

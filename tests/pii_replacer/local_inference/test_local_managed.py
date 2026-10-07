@@ -3,62 +3,20 @@
 
 from __future__ import annotations
 
-from types import TracebackType
-
 import pytest
 
 from nemo_safe_synthesizer.config.replace_pii import LLMConfig
 from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.pii_replacer.local_inference import (
-    LocalVllmProfile,
     load_profile,
     planning_inference_environment,
     resolve_local_server_request,
 )
-from nemo_safe_synthesizer.pii_replacer.local_inference import managed as managed_module
+
+from ..conftest import FakeLocalServer
 
 GPT_OSS = "openai/gpt-oss-120b"
 NEMOTRON = "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16"
-
-
-class FakeServer:
-    instances: list[FakeServer] = []
-
-    def __init__(
-        self,
-        profile: LocalVllmProfile,
-        *,
-        host: str,
-        port: int | None,
-        environ: dict[str, str] | None,
-    ) -> None:
-        self.profile = profile
-        self.host = host
-        self.port = port
-        self.running = False
-        FakeServer.instances.append(self)
-
-    def __enter__(self) -> FakeServer:
-        self.running = True
-        return self
-
-    def __exit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc: BaseException | None,
-        traceback: TracebackType | None,
-    ) -> None:
-        self.running = False
-
-    def inference_environ(self) -> dict[str, str]:
-        return {"NSS_INFERENCE_ENDPOINT": "http://127.0.0.1:1/v1", "NSS_INFERENCE_MODEL": self.profile.served_name}
-
-
-@pytest.fixture
-def fake_server(monkeypatch: pytest.MonkeyPatch) -> type[FakeServer]:
-    FakeServer.instances = []
-    monkeypatch.setattr(managed_module, "LocalVllmServer", FakeServer)
-    return FakeServer
 
 
 @pytest.mark.unit
@@ -176,19 +134,23 @@ class TestResolveLocalServerRequest:
 
 @pytest.mark.unit
 class TestPlanningInferenceEnvironment:
-    def test_without_profile_yields_the_given_environment(self, fake_server: type[FakeServer]) -> None:
+    def test_without_profile_yields_the_given_environment(
+        self, fixture_fake_local_servers: list[FakeLocalServer]
+    ) -> None:
         environ = {"NSS_INFERENCE_ENDPOINT": "https://hosted.example/v1"}
 
         with planning_inference_environment(LLMConfig(), environ=environ) as yielded:
             assert yielded is environ
 
-        assert fake_server.instances == []
+        assert fixture_fake_local_servers == []
 
-    def test_with_profile_runs_the_server_only_inside_the_block(self, fake_server: type[FakeServer]) -> None:
+    def test_with_profile_runs_the_server_only_inside_the_block(
+        self, fixture_fake_local_servers: list[FakeLocalServer]
+    ) -> None:
         environ = {"NSS_INFERENCE_LOCAL_PROFILE": "gpt-oss-120b", "NSS_INFERENCE_ENDPOINT": "http://127.0.0.1:8123/v1"}
 
         with planning_inference_environment(LLMConfig(), environ=environ) as yielded:
-            (server,) = fake_server.instances
+            (server,) = fixture_fake_local_servers
             assert server.running
             assert yielded == server.inference_environ()
 

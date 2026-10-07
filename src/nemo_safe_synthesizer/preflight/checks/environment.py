@@ -21,7 +21,11 @@ from ...pii_replacer.llm_client import (
     resolve_inference_timeout,
     resolve_request_options,
 )
-from ...pii_replacer.local_inference import local_runtime_problem, resolve_local_server_request
+from ...pii_replacer.local_inference import (
+    local_runtime_problem,
+    local_runtime_problem_message,
+    resolve_local_server_request,
+)
 from ...utils import hf_offline_enabled
 from ..base import ConfigCheck, IssueCollector, MetadataCheck
 from ..helpers import require_import
@@ -488,11 +492,7 @@ class InferenceModelCheck(ConfigCheck):
             return
         if local_server is not None:
             if problem := local_runtime_problem():
-                collector.error(
-                    "inference_local_runtime_unavailable",
-                    f"LLM-assisted PII planning runs a local vLLM server unless NSS_INFERENCE_ENDPOINT is set, "
-                    f"but {problem}.",
-                )
+                collector.error("inference_local_runtime_unavailable", local_runtime_problem_message(problem))
             return
         try:
             resolve_inference_settings(replace_pii.llm)

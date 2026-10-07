@@ -20,6 +20,7 @@ import httpx
 import pytest
 
 from nemo_safe_synthesizer.errors import GenerationError, ParameterError
+from nemo_safe_synthesizer.pii_replacer.llm_client import resolve_request_options
 from nemo_safe_synthesizer.pii_replacer.local_inference import LocalVllmProfile, LocalVllmServer, build_serve_command
 from nemo_safe_synthesizer.pii_replacer.local_inference import server as server_module
 
@@ -95,7 +96,8 @@ def _models_response(*names: str) -> Callable[[], httpx.Response]:
 
 
 @pytest.fixture
-def harness(monkeypatch: pytest.MonkeyPatch) -> Iterator[Harness]:
+def fixture_server_harness(monkeypatch: pytest.MonkeyPatch) -> Iterator[Harness]:
+    """Fake the vLLM launch, process group, and HTTP endpoints, and record what the server does."""
     state = Harness(group=FakeProcessGroup())
 
     def launch(argv: list[str], environ: dict[str, str]) -> FakeProcess:
@@ -130,7 +132,9 @@ def harness(monkeypatch: pytest.MonkeyPatch) -> Iterator[Harness]:
 
 @pytest.mark.unit
 class TestLocalVllmServerLifecycle:
-    def test_ready_server_points_planner_at_itself_and_stops_on_exit(self, harness: Harness, tmp_path: Path) -> None:
+    def test_ready_server_points_planner_at_itself_and_stops_on_exit(
+        self, fixture_server_harness: Harness, tmp_path: Path
+    ) -> None:
         cache_dir = tmp_path / "outlines"
         base = {
             "PATH": "/bin",
@@ -142,22 +146,22 @@ class TestLocalVllmServerLifecycle:
 
         with LocalVllmServer(PROFILE, port=None, environ=base) as server:
             environ = server.inference_environ()
-            assert harness.group.signals == []
+            assert fixture_server_harness.group.signals == []
 
-        assert harness.group.signals == [signal.SIGTERM]
+        assert fixture_server_harness.group.signals == [signal.SIGTERM]
         assert environ["NSS_INFERENCE_ENDPOINT"] == server.endpoint_url
         assert environ["NSS_INFERENCE_MODEL"] == "tiny"
-        assert environ["NSS_INFERENCE_KEY"] == harness.child_env["VLLM_API_KEY"]
+        assert environ["NSS_INFERENCE_KEY"] == fixture_server_harness.child_env["VLLM_API_KEY"]
         assert environ["NSS_INFERENCE_TIMEOUT"] == "60"
         assert environ["PATH"] == "/bin"
-        assert "NSS_INFERENCE_KEY" not in harness.child_env
-        assert "NSS_INFERENCE_ENDPOINT" not in harness.child_env
-        assert harness.child_env["VLLM_API_KEY"] not in " ".join(harness.argv)
+        assert "NSS_INFERENCE_KEY" not in fixture_server_harness.child_env
+        assert "NSS_INFERENCE_ENDPOINT" not in fixture_server_harness.child_env
+        assert fixture_server_harness.child_env["VLLM_API_KEY"] not in " ".join(fixture_server_harness.argv)
         # The server gets the same diskcache protections as in-process generation.
-        assert harness.child_env["VLLM_V1_USE_OUTLINES_CACHE"] == "0"
+        assert fixture_server_harness.child_env["VLLM_V1_USE_OUTLINES_CACHE"] == "0"
         assert stat.S_IMODE(cache_dir.stat().st_mode) == 0o700
         # The schema probe stays within the profile's startup deadline.
-        assert 0 < harness.probe_timeouts[0] <= PROFILE.startup_timeout_seconds
+        assert 0 < fixture_server_harness.probe_timeouts[0] <= PROFILE.startup_timeout_seconds
 
     @pytest.mark.parametrize(
         ("environ", "expected"),
@@ -166,7 +170,7 @@ class TestLocalVllmServerLifecycle:
     )
     def test_planner_timeout_comes_from_profile_unless_set_explicitly(
         self,
-        harness: Harness,
+        fixture_server_harness: Harness,
         environ: dict[str, str],
         expected: str,
     ) -> None:
@@ -179,14 +183,18 @@ class TestLocalVllmServerLifecycle:
         ("environ", "expected_options"),
         [
             ({}, {"temperature": 1.0, "thinking_token_budget": 500}),
-            ({"NSS_INFERENCE_REQUEST_OPTIONS": '{"temperature": 0.2}'}, {"temperature": 0.2}),
+            (
+                {"NSS_INFERENCE_REQUEST_OPTIONS": '{"temperature": 0.2}'},
+                {"temperature": 0.2, "thinking_token_budget": 500},
+            ),
+            ({"NSS_INFERENCE_REQUEST_OPTIONS": '{"thinking_token_budget": null}'}, {"temperature": 1.0}),
             ({"NSS_INFERENCE_REQUEST_OPTIONS": "  "}, {"temperature": 1.0, "thinking_token_budget": 500}),
         ],
-        ids=["profile-options", "explicit-options-win", "blank-options-keep-profile"],
+        ids=["profile-options", "explicit-field-overrides", "null-drops-profile-field", "blank-options-keep-profile"],
     )
     def test_request_options_reach_the_planner_and_the_probe(
         self,
-        harness: Harness,
+        fixture_server_harness: Harness,
         environ: dict[str, str],
         expected_options: dict[str, object],
     ) -> None:
@@ -198,41 +206,46 @@ class TestLocalVllmServerLifecycle:
         )
 
         with LocalVllmServer(profile, environ=environ) as server:
-            planner_options = json.loads(server.inference_environ()["NSS_INFERENCE_REQUEST_OPTIONS"])
+            planner_options = resolve_request_options(server.inference_environ())
 
+        probe_options = {
+            key: value
+            for key, value in fixture_server_harness.probe_payloads[0].items()
+            if key not in {"model", "messages", "response_format"}
+        }
         assert planner_options == expected_options
-        assert {key: harness.probe_payloads[0][key] for key in expected_options} == expected_options
-        assert harness.child_env["VLLM_USE_V2_MODEL_RUNNER"] == "0"
+        assert probe_options == expected_options
+        assert fixture_server_harness.child_env["VLLM_USE_V2_MODEL_RUNNER"] == "0"
 
-    def test_polls_until_the_model_is_listed(self, harness: Harness) -> None:
+    def test_polls_until_the_model_is_listed(self, fixture_server_harness: Harness) -> None:
         def refused() -> httpx.Response:
             raise httpx.ConnectError("refused")
 
-        harness.models[:] = [refused, lambda: httpx.Response(503), _models_response("tiny")]
+        fixture_server_harness.models[:] = [refused, lambda: httpx.Response(503), _models_response("tiny")]
 
         with LocalVllmServer(PROFILE):
             pass
 
-        assert harness.group.signals == [signal.SIGTERM]
+        assert fixture_server_harness.group.signals == [signal.SIGTERM]
 
-    def test_early_exit_reports_server_output(self, harness: Harness) -> None:
+    def test_early_exit_reports_server_output(self, fixture_server_harness: Harness) -> None:
         def crashed() -> httpx.Response:
-            harness.group.exit(1)
+            fixture_server_harness.group.exit(1)
             raise httpx.ConnectError("refused")
 
-        harness.models[:] = [crashed]
+        fixture_server_harness.models[:] = [crashed]
 
         with pytest.raises(GenerationError, match=r"exited with code 1(.|\n)*INFO loading weights"):
             LocalVllmServer(PROFILE).start()
 
-    def test_startup_timeout_stops_the_server(self, harness: Harness) -> None:
-        harness.models[:] = [lambda: httpx.Response(503)]
+    def test_startup_timeout_stops_the_server(self, fixture_server_harness: Harness) -> None:
+        fixture_server_harness.models[:] = [lambda: httpx.Response(503)]
         profile = PROFILE.model_copy(update={"startup_timeout_seconds": 0.01})
 
         with pytest.raises(GenerationError, match="did not become ready within"):
             LocalVllmServer(profile).start()
 
-        assert harness.group.signals == [signal.SIGTERM]
+        assert fixture_server_harness.group.signals == [signal.SIGTERM]
 
     @pytest.mark.parametrize(
         ("response", "match"),
@@ -244,48 +257,48 @@ class TestLocalVllmServerLifecycle:
     )
     def test_foreign_or_invalid_servers_fail_fast(
         self,
-        harness: Harness,
+        fixture_server_harness: Harness,
         response: Callable[[], httpx.Response],
         match: str,
     ) -> None:
-        harness.models[:] = [response]
+        fixture_server_harness.models[:] = [response]
 
         with pytest.raises(GenerationError, match=match):
             LocalVllmServer(PROFILE).start()
 
-        assert harness.group.signals == [signal.SIGTERM]
+        assert fixture_server_harness.group.signals == [signal.SIGTERM]
 
-    def test_schema_probe_failure_stops_the_server(self, harness: Harness) -> None:
-        harness.probe_content = '{"state": "ok"}'
+    def test_schema_probe_failure_stops_the_server(self, fixture_server_harness: Harness) -> None:
+        fixture_server_harness.probe_content = '{"state": "ok"}'
 
         with pytest.raises(GenerationError, match="did not return JSON matching a strict schema"):
             LocalVllmServer(PROFILE).start()
 
-        assert harness.group.signals == [signal.SIGTERM]
+        assert fixture_server_harness.group.signals == [signal.SIGTERM]
 
-    def test_interrupt_during_startup_stops_the_server(self, harness: Harness) -> None:
+    def test_interrupt_during_startup_stops_the_server(self, fixture_server_harness: Harness) -> None:
         def interrupted() -> httpx.Response:
             raise KeyboardInterrupt
 
-        harness.models[:] = [interrupted]
+        fixture_server_harness.models[:] = [interrupted]
 
         with pytest.raises(KeyboardInterrupt):
             LocalVllmServer(PROFILE).start()
 
-        assert harness.group.signals == [signal.SIGTERM]
+        assert fixture_server_harness.group.signals == [signal.SIGTERM]
 
-    def test_server_ignoring_sigterm_is_killed(self, harness: Harness) -> None:
-        harness.group.ignore_sigterm = True
+    def test_server_ignoring_sigterm_is_killed(self, fixture_server_harness: Harness) -> None:
+        fixture_server_harness.group.ignore_sigterm = True
 
         with LocalVllmServer(PROFILE):
             pass
 
-        assert harness.group.signals == [signal.SIGTERM, signal.SIGKILL]
-        assert not harness.group.alive
+        assert fixture_server_harness.group.signals == [signal.SIGTERM, signal.SIGKILL]
+        assert not fixture_server_harness.group.alive
 
     def test_unavailable_runtime_fails_before_launch_and_points_to_an_endpoint(
         self,
-        harness: Harness,
+        fixture_server_harness: Harness,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setattr(server_module, "local_runtime_problem", lambda: "no CUDA GPU is available")
@@ -293,9 +306,9 @@ class TestLocalVllmServerLifecycle:
         with pytest.raises(ParameterError, match="no CUDA GPU is available. Set NSS_INFERENCE_ENDPOINT"):
             LocalVllmServer(PROFILE).start()
 
-        assert harness.popen_calls == []
+        assert fixture_server_harness.popen_calls == []
 
-    def test_busy_port_fails_before_launch(self, harness: Harness) -> None:
+    def test_busy_port_fails_before_launch(self, fixture_server_harness: Harness) -> None:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
             listener.bind(("127.0.0.1", 0))
             listener.listen()
@@ -304,9 +317,9 @@ class TestLocalVllmServerLifecycle:
             with pytest.raises(ParameterError, match="address is in use"):
                 LocalVllmServer(PROFILE, port=port).start()
 
-        assert harness.popen_calls == []
+        assert fixture_server_harness.popen_calls == []
 
-    def test_requested_free_port_is_used(self, harness: Harness) -> None:
+    def test_requested_free_port_is_used(self, fixture_server_harness: Harness) -> None:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as reserved:
             reserved.bind(("127.0.0.1", 0))
             port = reserved.getsockname()[1]

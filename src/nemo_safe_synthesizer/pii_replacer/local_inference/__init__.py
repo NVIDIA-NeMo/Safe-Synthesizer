@@ -12,7 +12,13 @@ from .managed import (
     resolve_local_server_request,
 )
 from .profile import LocalVllmProfile, bundled_profile_for_model, bundled_profile_names, load_profile
-from .server import LocalVllmServer, build_serve_command, is_vllm_installed, local_runtime_problem
+from .server import (
+    LocalVllmServer,
+    build_serve_command,
+    is_vllm_installed,
+    local_runtime_problem,
+    local_runtime_problem_message,
+)
 
 __all__ = [
     "LOCAL_PROFILE_ENV",
@@ -25,6 +31,7 @@ __all__ = [
     "is_vllm_installed",
     "load_profile",
     "local_runtime_problem",
+    "local_runtime_problem_message",
     "planning_inference_environment",
     "resolve_local_server_request",
 ]

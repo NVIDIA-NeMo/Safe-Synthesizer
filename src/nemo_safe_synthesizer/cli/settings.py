@@ -213,7 +213,8 @@ class CLISettings(BaseSettings):
     )
     """Extra PII inference request fields as JSON (env: ``NSS_INFERENCE_REQUEST_OPTIONS``).
 
-    Overrides a local profile's request options; replaces the default ``{"temperature": 0}``.
+    Overrides a local profile's request options and the default ``{"temperature": 0}`` field
+    by field; a ``null`` value drops a field.
     """
 
     inference_local_profile: str | None = Field(

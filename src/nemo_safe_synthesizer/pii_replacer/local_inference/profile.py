@@ -10,8 +10,9 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError, field_validator
 
+from ...defaults import DEFAULT_NSS_INFERENCE_TIMEOUT_SECONDS
 from ...errors import ParameterError
-from ..llm_client import RESERVED_REQUEST_FIELDS
+from ..llm_client import reserved_request_fields
 
 __all__ = [
     "RESERVED_VLLM_OPTIONS",
@@ -109,8 +110,8 @@ class LocalVllmProfile(BaseModel):
     request_options: dict[str, JsonValue] = Field(
         default_factory=dict,
         description="Chat-completions fields sent with every planning request, such as temperature, top_p, "
-        "top_k, and thinking_token_budget. When set, they replace NSS's default temperature of 0. "
-        "NSS_INFERENCE_REQUEST_OPTIONS overrides them.",
+        "top_k, and thinking_token_budget, merged field by field over NSS's default temperature of 0. "
+        "NSS_INFERENCE_REQUEST_OPTIONS overrides individual fields; a null value drops a field.",
     )
     environment: dict[str, str] = Field(
         default_factory=dict,
@@ -118,7 +119,7 @@ class LocalVllmProfile(BaseModel):
         "VLLM_USE_V2_MODEL_RUNNER=0, which thinking_token_budget needs in vLLM 0.27.",
     )
     request_timeout_seconds: float = Field(
-        default=60,
+        default=DEFAULT_NSS_INFERENCE_TIMEOUT_SECONDS,
         gt=0,
         allow_inf_nan=False,
         description="Per-request timeout for planning calls to this model, including reasoning. "
@@ -145,7 +146,7 @@ class LocalVllmProfile(BaseModel):
     @field_validator("request_options")
     @classmethod
     def _reject_reserved_request_fields(cls, value: dict[str, JsonValue]) -> dict[str, JsonValue]:
-        if reserved := sorted(RESERVED_REQUEST_FIELDS.intersection(value)):
+        if reserved := reserved_request_fields(value):
             raise ValueError(f"request_options must not set fields NSS manages: {', '.join(reserved)}")
         return value
 
