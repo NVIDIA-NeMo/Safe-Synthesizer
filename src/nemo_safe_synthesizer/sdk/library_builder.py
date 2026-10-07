@@ -82,7 +82,9 @@ def _warn_for_saved_default_drift(saved_config: SafeSynthesizerParameters) -> No
         )
 
 
-def _build_telemetry_event(ss: SafeSynthesizer, status: TaskStatusEnum) -> NSSTrainingAndGenerationEvent:
+def _build_telemetry_event(
+    ss: SafeSynthesizer, status: TaskStatusEnum, task: str = "run"
+) -> NSSTrainingAndGenerationEvent:
     """Build a telemetry event from the current pipeline state."""
     cfg = ss._nss_config
 
@@ -100,7 +102,9 @@ def _build_telemetry_event(ss: SafeSynthesizer, status: TaskStatusEnum) -> NSSTr
         if summary.data_privacy_score is not None:
             dps = summary.data_privacy_score
 
-    replace_pii = cfg is not None and cfg.replace_pii is not None
+    replace_pii_config = cfg.replace_pii if cfg is not None else None
+    replace_pii = replace_pii_config is not None
+    pii_sampler_backend = replace_pii_config.sampler.backend.value if replace_pii_config is not None else "undefined"
     dp_enabled = cfg is not None and cfg.privacy is not None and cfg.privacy.dp_enabled
     ts_enabled = cfg is not None and cfg.time_series.is_timeseries
     group_by = cfg is not None and cfg.data.group_training_examples_by is not None
@@ -115,12 +119,13 @@ def _build_telemetry_event(ss: SafeSynthesizer, status: TaskStatusEnum) -> NSSTr
     gpu = get_device_name()
 
     return NSSTrainingAndGenerationEvent(
-        task="run",
+        task=task,
         task_status=status,
         deployment_type=ss._deployment_type,
         job_duration_sec=duration,
         num_records_generated=num_records,
         replace_pii_enabled=replace_pii,
+        pii_sampler_backend=pii_sampler_backend,
         differential_privacy_enabled=dp_enabled,
         time_series_enabled=ts_enabled,
         group_by_enabled=group_by,
@@ -133,12 +138,12 @@ def _build_telemetry_event(ss: SafeSynthesizer, status: TaskStatusEnum) -> NSSTr
     )
 
 
-def _emit_nss_telemetry(ss: SafeSynthesizer, status: TaskStatusEnum) -> None:
+def _emit_nss_telemetry(ss: SafeSynthesizer, status: TaskStatusEnum, task: str = "run") -> None:
     """Enqueue and immediately flush a single telemetry event. Never raises."""
     try:
         if not ss._emit_telemetry:
             return
-        event = _build_telemetry_event(ss, status)
+        event = _build_telemetry_event(ss, status, task)
         handler = TelemetryHandler(source_client_version=__version__)
         handler.enqueue(event)
         handler.stop()  # Flushes the queue and sends
@@ -422,6 +427,9 @@ class SafeSynthesizer(ConfigBuilder):
         pipeline instead resolves against the full input and replaces only its
         training split after holdout creation.
 
+        When telemetry is enabled, emits one anonymous event with task
+        ``replace_pii`` and the final status, including on failure.
+
         Args:
             output_path: Optional destination for the replaced CSV.
             config_output_path: Optional destination for the complete reusable
@@ -436,6 +444,23 @@ class SafeSynthesizer(ConfigBuilder):
             ValueError: If no valid data source is configured.
         """
         self._ensure_observability()
+        self._total_start = time.monotonic()
+        try:
+            result = self._replace_full_input_pii(output_path, config_output_path)
+            _emit_nss_telemetry(self, TaskStatusEnum.COMPLETED, task="replace_pii")
+        except KeyboardInterrupt:
+            _emit_nss_telemetry(self, TaskStatusEnum.CANCELED, task="replace_pii")
+            raise
+        except Exception:
+            _emit_nss_telemetry(self, TaskStatusEnum.ERROR, task="replace_pii")
+            raise
+        return result
+
+    def _replace_full_input_pii(
+        self,
+        output_path: Path | str | None,
+        config_output_path: Path | str | None,
+    ) -> TransformResult:
         resolved = self.plan_pii_replacement(output_path=config_output_path)
 
         config = self._nss_config

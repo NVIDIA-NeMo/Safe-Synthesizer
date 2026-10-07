@@ -8,8 +8,9 @@ import pandas as pd
 import pytest
 
 from nemo_safe_synthesizer.config import GenerateParameters, SafeSynthesizerParameters
+from nemo_safe_synthesizer.config.replace_pii import PiiSamplerBackend, PiiSamplerConfig, ReplacePiiConfig
 from nemo_safe_synthesizer.errors import ParameterError
-from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer, _emit_nss_telemetry
+from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer, _build_telemetry_event, _emit_nss_telemetry
 from nemo_safe_synthesizer.telemetry import DeploymentTypeEnum, TaskStatusEnum
 
 _SMALL_DF = pd.DataFrame({"a": [1, 2, 3]})
@@ -322,6 +323,42 @@ class TestTelemetryEmission:
         assert [event.task for event in events] == ["run", "run"]
         assert [event.task_status for event in events] == [TaskStatusEnum.COMPLETED, TaskStatusEnum.ERROR]
         assert [event.deployment_type for event in events] == [DeploymentTypeEnum.SDK, DeploymentTypeEnum.SDK]
+
+    @pytest.mark.parametrize(
+        ("replace_pii", "expected_enabled", "expected_backend"),
+        [
+            (ReplacePiiConfig(), True, "nemotron-personas"),
+            (
+                ReplacePiiConfig(sampler=PiiSamplerConfig(backend=PiiSamplerBackend.NEMOTRON_PERSONAS)),
+                True,
+                "nemotron-personas",
+            ),
+            (ReplacePiiConfig(sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER)), True, "faker"),
+            (None, False, "undefined"),
+        ],
+        ids=["default", "nemotron-personas", "faker", "disabled"],
+    )
+    def test_build_telemetry_event_reports_configured_pii_sampler_backend(
+        self, replace_pii: ReplacePiiConfig | None, expected_enabled: bool, expected_backend: str
+    ):
+        builder = _builder_for_telemetry()
+        builder._nss_config = SafeSynthesizerParameters(emit_telemetry=True, replace_pii=replace_pii)
+
+        event = _build_telemetry_event(builder, TaskStatusEnum.COMPLETED)
+
+        assert event.replace_pii_enabled is expected_enabled
+        assert event.pii_sampler_backend == expected_backend
+        assert event.model_dump(by_alias=True, mode="json")["piiSamplerBackend"] == expected_backend
+
+    def test_build_telemetry_event_reports_undefined_backend_without_config(self):
+        builder = _builder_for_telemetry()
+        builder._nss_config = None
+
+        event = _build_telemetry_event(builder, TaskStatusEnum.ERROR, task="replace_pii")
+
+        assert event.task == "replace_pii"
+        assert event.replace_pii_enabled is False
+        assert event.pii_sampler_backend == "undefined"
 
     def test_emit_nss_telemetry_swallows_handler_errors(self, monkeypatch):
         class FailingTelemetryHandler:

@@ -166,7 +166,7 @@ def bucket_columns(n: int) -> str:
 
 class NSSTrainingAndGenerationEvent(BaseModel):
     _event_name: ClassVar[str] = "train_and_generation_event"
-    _schema_version: ClassVar[str] = "1.9"
+    _schema_version: ClassVar[str] = "1.10"
 
     nemo_source: NemoSourceEnum = Field(
         default=NemoSourceEnum.SAFE_SYNTHESIZER,
@@ -175,7 +175,7 @@ class NSSTrainingAndGenerationEvent(BaseModel):
     )
     task: str = Field(
         ...,
-        description="The type of task that was performed (e.g. train, generate, evaluate, run).",
+        description="The type of task that was performed (e.g. train, generate, evaluate, run, replace_pii).",
     )
     task_status: TaskStatusEnum = Field(
         ...,
@@ -212,6 +212,15 @@ class NSSTrainingAndGenerationEvent(BaseModel):
         default=False,
         serialization_alias="replacePiiEnabled",
         description="Whether PII replacement was enabled for this run.",
+    )
+    pii_sampler_backend: str = Field(
+        default="undefined",
+        serialization_alias="piiSamplerBackend",
+        description=(
+            "Configured PII replacement sampler backend ('nemotron-personas' or 'faker'). "
+            "'undefined' when PII replacement is disabled. Reports the configured backend, not per-entity "
+            "Faker fallbacks when Nemotron Personas locale assets are missing."
+        ),
     )
     differential_privacy_enabled: bool = Field(
         default=False,
