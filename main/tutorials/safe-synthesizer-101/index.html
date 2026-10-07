@@ -10206,7 +10206,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h3 id="install-safe-synthesizer">⚡ Install Safe Synthesizer<a class="anchor-link" href="#install-safe-synthesizer">¶</a></h3><p>Run the cell below to install NeMo Safe Synthesizer (engine and CUDA 12.9) and the <code>datasets</code> library for the sample dataset.</p>
+<h3 id="install-safe-synthesizer">⚡ Install Safe Synthesizer<a class="anchor-link" href="#install-safe-synthesizer">¶</a></h3><p>Run the cell below to install NeMo Safe Synthesizer (engine and CUDA 12.9) and the <code>datasets</code> library for the sample dataset. The cell requires <a href="https://docs.astral.sh/uv/">uv</a>.</p>
 </div>
 </div>
 </div>
@@ -10229,48 +10229,37 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="o">%%</span><span class="n">bash</span>
-<span class="c1"># SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION &amp; AFFILIATES. All rights reserved.</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION &amp; AFFILIATES. All rights reserved.</span>
 <span class="c1"># SPDX-License-Identifier: Apache-2.0</span>
 
-<span class="k">if</span> <span class="n">command</span> <span class="o">-</span><span class="n">v</span> <span class="n">uv</span> <span class="o">&gt;</span> <span class="o">/</span><span class="n">dev</span><span class="o">/</span><span class="n">null</span> <span class="mi">2</span><span class="o">&gt;&amp;</span><span class="mi">1</span><span class="p">;</span> <span class="n">then</span>
-    <span class="n">uv</span> <span class="n">pip</span> <span class="n">install</span> <span class="s2">"nemo-safe-synthesizer[engine,cu129]"</span> \
-        <span class="o">--</span><span class="n">index</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">flashinfer</span><span class="o">.</span><span class="n">ai</span><span class="o">/</span><span class="n">whl</span><span class="o">/</span><span class="n">cu129</span> \
-        <span class="o">--</span><span class="n">index</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">flashinfer</span><span class="o">.</span><span class="n">ai</span><span class="o">/</span><span class="n">whl</span><span class="o">/</span> \
-        <span class="o">--</span><span class="n">index</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">download</span><span class="o">.</span><span class="n">pytorch</span><span class="o">.</span><span class="n">org</span><span class="o">/</span><span class="n">whl</span><span class="o">/</span><span class="n">cu129</span> \
-        <span class="o">--</span><span class="n">index</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">wheels</span><span class="o">.</span><span class="n">vllm</span><span class="o">.</span><span class="n">ai</span><span class="o">/</span><span class="mf">0.26.0</span><span class="o">/</span><span class="n">cu129</span> \
-        <span class="o">--</span><span class="n">index</span><span class="o">-</span><span class="n">strategy</span> <span class="n">unsafe</span><span class="o">-</span><span class="n">best</span><span class="o">-</span><span class="n">match</span> <span class="o">--</span><span class="n">quiet</span>
-    <span class="n">uv</span> <span class="n">pip</span> <span class="n">install</span> <span class="n">datasets</span> <span class="o">--</span><span class="n">quiet</span>
-<span class="k">else</span>
-    <span class="n">pip</span> <span class="n">install</span> <span class="s2">"nemo-safe-synthesizer[engine,cu129]"</span> \
-        <span class="o">--</span><span class="n">extra</span><span class="o">-</span><span class="n">index</span><span class="o">-</span><span class="n">url</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">flashinfer</span><span class="o">.</span><span class="n">ai</span><span class="o">/</span><span class="n">whl</span><span class="o">/</span><span class="n">cu129</span> \
-        <span class="o">--</span><span class="n">extra</span><span class="o">-</span><span class="n">index</span><span class="o">-</span><span class="n">url</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">flashinfer</span><span class="o">.</span><span class="n">ai</span><span class="o">/</span><span class="n">whl</span><span class="o">/</span> \
-        <span class="o">--</span><span class="n">extra</span><span class="o">-</span><span class="n">index</span><span class="o">-</span><span class="n">url</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">download</span><span class="o">.</span><span class="n">pytorch</span><span class="o">.</span><span class="n">org</span><span class="o">/</span><span class="n">whl</span><span class="o">/</span><span class="n">cu129</span> \
-        <span class="o">--</span><span class="n">extra</span><span class="o">-</span><span class="n">index</span><span class="o">-</span><span class="n">url</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">wheels</span><span class="o">.</span><span class="n">vllm</span><span class="o">.</span><span class="n">ai</span><span class="o">/</span><span class="mf">0.26.0</span><span class="o">/</span><span class="n">cu129</span> <span class="o">--</span><span class="n">quiet</span>
-    <span class="n">pip</span> <span class="n">install</span> <span class="n">datasets</span> <span class="o">--</span><span class="n">quiet</span>
-<span class="n">fi</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
+
+<span class="c1"># The override resolves a flashinfer-python pin conflict between vLLM and NeMo Safe Synthesizer.</span>
+<span class="err">!</span><span class="n">echo</span> <span class="s2">"flashinfer-python==0.6.16.post4"</span> <span class="o">|</span> <span class="n">uv</span> <span class="n">pip</span> <span class="n">install</span> <span class="o">--</span><span class="n">python</span> <span class="s2">"</span><span class="si">{sys.executable}</span><span class="s2">"</span> \
+    <span class="s2">"nemo-safe-synthesizer[engine,cu129]==0.1.14"</span> <span class="n">datasets</span> \
+    <span class="o">-</span><span class="n">c</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">raw</span><span class="o">.</span><span class="n">githubusercontent</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">NVIDIA</span><span class="o">-</span><span class="n">NeMo</span><span class="o">/</span><span class="n">Safe</span><span class="o">-</span><span class="n">Synthesizer</span><span class="o">/</span><span class="n">v0</span><span class="mf">.1.14</span><span class="o">/</span><span class="n">constraints</span><span class="o">.</span><span class="n">txt</span> \
+    <span class="o">--</span><span class="n">overrides</span> <span class="o">-</span> \
+    <span class="o">--</span><span class="n">index</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">flashinfer</span><span class="o">.</span><span class="n">ai</span><span class="o">/</span><span class="n">whl</span><span class="o">/</span><span class="n">cu129</span> \
+    <span class="o">--</span><span class="n">index</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">download</span><span class="o">.</span><span class="n">pytorch</span><span class="o">.</span><span class="n">org</span><span class="o">/</span><span class="n">whl</span><span class="o">/</span><span class="n">cu129</span> \
+    <span class="o">--</span><span class="n">index</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">flashinfer</span><span class="o">.</span><span class="n">ai</span><span class="o">/</span><span class="n">whl</span><span class="o">/</span> \
+    <span class="o">--</span><span class="n">index</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">wheels</span><span class="o">.</span><span class="n">vllm</span><span class="o">.</span><span class="n">ai</span><span class="o">/</span><span class="mf">0.27.0</span><span class="o">/</span><span class="n">cu129</span> \
+    <span class="o">--</span><span class="n">index</span><span class="o">-</span><span class="n">strategy</span> <span class="n">unsafe</span><span class="o">-</span><span class="n">best</span><span class="o">-</span><span class="n">match</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-1">%%bash
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION &amp; AFFILIATES. All rights reserved.
+<div class="clipboard-copy-txt" id="cell-1"># SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION &amp; AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-if command -v uv &gt; /dev/null 2&gt;&amp;1; then
-    uv pip install "nemo-safe-synthesizer[engine,cu129]" \
-        --index https://flashinfer.ai/whl/cu129 \
-        --index https://flashinfer.ai/whl/ \
-        --index https://download.pytorch.org/whl/cu129 \
-        --index https://wheels.vllm.ai/0.26.0/cu129 \
-        --index-strategy unsafe-best-match --quiet
-    uv pip install datasets --quiet
-else
-    pip install "nemo-safe-synthesizer[engine,cu129]" \
-        --extra-index-url https://flashinfer.ai/whl/cu129 \
-        --extra-index-url https://flashinfer.ai/whl/ \
-        --extra-index-url https://download.pytorch.org/whl/cu129 \
-        --extra-index-url https://wheels.vllm.ai/0.26.0/cu129 --quiet
-    pip install datasets --quiet
-fi
-</div>
+import sys
+
+# The override resolves a flashinfer-python pin conflict between vLLM and NeMo Safe Synthesizer.
+!echo "flashinfer-python==0.6.16.post4" | uv pip install --python "{sys.executable}" \
+    "nemo-safe-synthesizer[engine,cu129]==0.1.14" datasets \
+    -c https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/v0.1.14/constraints.txt \
+    --overrides - \
+    --index https://flashinfer.ai/whl/cu129 \
+    --index https://download.pytorch.org/whl/cu129 \
+    --index https://flashinfer.ai/whl/ \
+    --index https://wheels.vllm.ai/0.27.0/cu129 \
+    --index-strategy unsafe-best-match</div>
 </div>
 </div>
 </div>
