@@ -280,7 +280,7 @@ class MultimodalReport(EvaluationReport):
             sqs_score,
         ]
 
-        if config is not None and config.evaluation.enabled and config.evaluation.time_series.enabled:
+        if config is not None and config.time_series_evaluation_enabled:
             time_series_datasets = EvaluationDatasets.from_dataframes(
                 training=training,
                 synthetic=synthetic,

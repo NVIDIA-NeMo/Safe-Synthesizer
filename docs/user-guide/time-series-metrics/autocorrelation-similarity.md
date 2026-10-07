@@ -94,9 +94,11 @@ variation.
 
 ## Configuration
 
-Time-series evaluation is off by default. Enable it explicitly to compute the
-metric and add a Time-Series Metrics panel to the Synthetic Quality section of
-the HTML evaluation report.
+Time-series evaluation runs by default whenever `time_series.is_timeseries` is
+true. It computes the metric and adds a Time-Series Metrics panel to the
+Synthetic Quality section of the HTML evaluation report. Set
+`evaluation.time_series.enabled: false` to skip it. Setting it to `true`
+without time-series mode is a configuration error.
 
 ```yaml
 time_series:
@@ -104,7 +106,7 @@ time_series:
   timestamp_column: time
 evaluation:
   time_series:
-    enabled: true
+    enabled: null  # null follows time_series.is_timeseries
     autocorrelation:
       value_columns: null
       max_lag: 20

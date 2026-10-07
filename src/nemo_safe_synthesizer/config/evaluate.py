@@ -70,9 +70,12 @@ class AutocorrelationSimilarityParameters(Parameters):
 class TimeSeriesEvaluationParameters(Parameters):
     """Metric-specific time-series evaluation configuration."""
 
-    enabled: bool = Field(
-        default=False,
-        description="Enable time-series evaluation metrics. Requires top-level time-series mode.",
+    enabled: bool | None = Field(
+        default=None,
+        description=(
+            "Enable time-series evaluation metrics. Defaults to None, which follows "
+            "time_series.is_timeseries. True requires top-level time-series mode."
+        ),
     )
     autocorrelation: AutocorrelationSimilarityParameters = Field(
         default_factory=AutocorrelationSimilarityParameters,

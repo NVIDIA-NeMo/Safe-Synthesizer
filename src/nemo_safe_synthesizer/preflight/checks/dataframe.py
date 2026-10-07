@@ -187,7 +187,7 @@ class TimeSeriesValueColumnCheck(DataFrameCheck):
     def enabled(self, ctx: PreflightContext) -> bool:
         if not super().enabled(ctx):
             return False
-        return ctx.config.evaluation.enabled and ctx.config.evaluation.time_series.enabled
+        return ctx.config.time_series_evaluation_enabled
 
     @override
     def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:

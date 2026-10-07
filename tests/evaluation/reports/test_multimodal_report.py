@@ -46,6 +46,7 @@ def _time_series_config(
     *,
     report_rows: int = 5000,
     evaluation_enabled: bool = True,
+    time_series_enabled: bool | None = None,
 ) -> SafeSynthesizerParameters:
     return SafeSynthesizerParameters(
         time_series=TimeSeriesParameters(is_timeseries=True, timestamp_column="time"),
@@ -55,7 +56,7 @@ def _time_series_config(
             aia_enabled=False,
             pii_replay_enabled=False,
             sqs_report_rows=report_rows,
-            time_series=TimeSeriesEvaluationParameters(enabled=True),
+            time_series=TimeSeriesEvaluationParameters(enabled=time_series_enabled),
         ),
     )
 
@@ -141,6 +142,19 @@ def test_time_series_metric_is_absent_when_feature_gate_is_disabled() -> None:
     frame = pd.DataFrame({"value": [0.0, 1.0, 3.0, 2.0, 4.0, 1.0]})
 
     report = MultimodalReport.from_dataframes(frame, frame.copy(), config=SafeSynthesizerParameters())
+
+    assert not any(isinstance(component, AutocorrelationSimilarity) for component in report.components)
+    assert report.jinja_context["with_time_series"] is False
+
+
+def test_time_series_metric_can_be_disabled_in_time_series_mode() -> None:
+    frame = pd.DataFrame({"time": range(6), "value": [0.0, 1.0, 3.0, 2.0, 4.0, 1.0]})
+
+    report = MultimodalReport.from_dataframes(
+        frame,
+        frame.copy(),
+        config=_time_series_config(time_series_enabled=False),
+    )
 
     assert not any(isinstance(component, AutocorrelationSimilarity) for component in report.components)
     assert report.jinja_context["with_time_series"] is False

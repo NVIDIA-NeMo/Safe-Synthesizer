@@ -832,6 +832,13 @@ class TestTimeSeriesValueColumnCheck:
     def test_disabled_when_time_series_evaluation_is_disabled(self, default_config):
         assert TimeSeriesValueColumnCheck().enabled(make_ctx(config=default_config)) is False
 
+    def test_enabled_by_default_in_time_series_mode(self):
+        config = SafeSynthesizerParameters(
+            time_series=TimeSeriesParameters(is_timeseries=True, timestamp_interval_seconds=60),
+        )
+
+        assert TimeSeriesValueColumnCheck().enabled(make_ctx(config=config)) is True
+
     def test_disabled_when_global_evaluation_is_disabled(self):
         config = self._make_config(["value"], evaluation_enabled=False)
 
