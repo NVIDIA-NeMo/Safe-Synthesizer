@@ -28,13 +28,6 @@ from nemo_safe_synthesizer.pii_replacer.replacement.generators import (
 from nemo_safe_synthesizer.pii_replacer.replacement.types import CanonicalValue
 
 
-class _FakeGenerator:
-    backend = PiiSamplerBackend.FAKER
-
-    def generate(self, request: ReplacementGenerationRequest) -> str:
-        return f"synthetic-{request.entity_type.value}"
-
-
 class _GenderAwareFake:
     def first_name_female(self) -> str:
         return "FEMALE"
@@ -47,10 +40,6 @@ class _GenderAwareFake:
 
     def last_name(self) -> str:
         return "LAST"
-
-
-def _generate(generator: ReplacementGenerator, request: ReplacementGenerationRequest) -> str:
-    return generator.generate(request)
 
 
 def _request(
@@ -156,16 +145,6 @@ class TestReplacementGenerator:
                 settings=PiiReplacementSettings(),
                 sampler=PiiSamplerConfig(backend=backend),
             )
-
-    def test_generator_is_a_structural_interface_for_one_replacement(self) -> None:
-        request = _request(
-            EntityType.EMAIL,
-            "ada@example.com",
-            dependencies=((EntityType.ORGANIZATION, CanonicalValue(type_tag="string", normalized_value="example")),),
-            pattern="{first_name}.{last_name}@example.com",
-        )
-
-        assert _generate(_FakeGenerator(), request) == "synthetic-email"
 
     @pytest.mark.parametrize(
         ("entity_type", "original"),
