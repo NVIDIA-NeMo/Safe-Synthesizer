@@ -172,6 +172,9 @@ the schema-constrained answer, and fit one 80 GB GPU, such as an A100 or H100:
 | `Qwen/Qwen3.8-27B` | about 56 GB | 300 s | Dense; low reasoning effort, 1,000-token thinking budget |
 | `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16` (default) | about 66 GB | 300 s | Hybrid Mamba mixture of experts; 2,000-token thinking budget |
 
+Nemotron 3.5 Lightning and GPT-OSS-120B both performed well in our PII planning
+evaluation.
+
 Reasoning makes requests slow, so each profile sets its own request timeout.
 Set `NSS_INFERENCE_TIMEOUT` or `--inference-timeout-seconds` to override it, for
 example for much larger tables. The same setting applies to explicit endpoints,
