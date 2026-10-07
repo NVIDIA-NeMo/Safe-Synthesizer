@@ -163,6 +163,7 @@ class TestNSSTrainingAndGenerationEvent:
         assert event.num_records_generated == -1
         assert event.num_tokens_generated == -1
         assert event.replace_pii_enabled is False
+        assert event.pii_sampler_backend == "undefined"
         assert event.differential_privacy_enabled is False
         assert event.time_series_enabled is False
         assert event.group_by_enabled is False
@@ -189,7 +190,7 @@ class TestNSSTrainingAndGenerationEvent:
         assert NSSTrainingAndGenerationEvent._event_name == "train_and_generation_event"
 
     def test_schema_version(self):
-        assert NSSTrainingAndGenerationEvent._schema_version == "1.9"
+        assert NSSTrainingAndGenerationEvent._schema_version == "1.10"
 
     def test_feature_flags(self):
         event = NSSTrainingAndGenerationEvent(
@@ -234,6 +235,7 @@ class TestNSSTrainingAndGenerationEvent:
             task="generate",
             task_status=TaskStatusEnum.COMPLETED,
             replace_pii_enabled=True,
+            pii_sampler_backend="faker",
         )
         dumped = event.model_dump(by_alias=True)
         assert "nemoSource" in dumped
@@ -249,6 +251,7 @@ class TestNSSTrainingAndGenerationEvent:
         assert "syntheticQualityScore" in dumped
         assert "dataPrivacyScore" in dumped
         assert dumped["replacePiiEnabled"] is True
+        assert dumped["piiSamplerBackend"] == "faker"
 
 
 # =============================================================================
