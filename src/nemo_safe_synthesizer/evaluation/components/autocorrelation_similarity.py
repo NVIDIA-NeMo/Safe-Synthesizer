@@ -40,6 +40,8 @@ logger = get_logger(__name__)
 _MIN_VALID_PAIRS = 3
 _GROUP_SELECTION_SEED = 2112
 _CONSTANT_TOLERANCE_FACTOR = 32.0
+# Standard errors of a lag difference treated as sampling noise.
+_NOISE_ALLOWANCE = 1.0
 
 
 class AutocorrelationSimilarity(Component):
@@ -403,8 +405,9 @@ class AutocorrelationSimilarity(Component):
 
         For each lag, Pearson correlation is computed over positions whose two
         endpoints are finite. Lags are capped at half the shorter finite
-        sequence. The mean profile difference is divided by two because
-        correlation lies in ``[-1, 1]``.
+        sequence. The error is scored by ``_noise_aware_error``, so differences
+        explained by sampling noise do not lower the score and losing all lag
+        structure scores near zero.
 
         Args:
             training: Ordered training values for one group and column.
@@ -453,8 +456,15 @@ class AutocorrelationSimilarity(Component):
         shared_valid_lags = np.isfinite(training_acf) & np.isfinite(synthetic_acf)
         if not np.any(shared_valid_lags):
             return None, f"No lags have at least {_MIN_VALID_PAIRS} usable endpoint pairs in both sequences."
-        error = float(np.mean(np.abs(training_acf[shared_valid_lags] - synthetic_acf[shared_valid_lags])) / 2.0)
-        error = float(np.clip(error, 0.0, 1.0))
+        noise = np.hypot(
+            AutocorrelationSimilarity._acf_standard_error(training_acf, training_count),
+            AutocorrelationSimilarity._acf_standard_error(synthetic_acf, synthetic_count),
+        )
+        error = AutocorrelationSimilarity._noise_aware_error(
+            training_acf[shared_valid_lags],
+            synthetic_acf[shared_valid_lags],
+            noise[shared_valid_lags],
+        )
         return {
             "lags": lags,
             "effective_max_lag": effective_max_lag,
@@ -466,6 +476,44 @@ class AutocorrelationSimilarity(Component):
             "training_pair_support": training_support.tolist(),
             "synthetic_pair_support": synthetic_support.tolist(),
         }, None
+
+    @staticmethod
+    def _acf_standard_error(acf: NDArray[np.float64], count: int) -> NDArray[np.float64]:
+        """Return Bartlett's large-sample standard error for each lag of an ACF.
+
+        The variance at lag ``k`` is ``(1 + 2 * sum(r_j ** 2 for j < k)) / n``.
+        Undefined lags contribute nothing to later lags.
+        """
+        squared = np.nan_to_num(acf) ** 2
+        earlier = np.concatenate([[0.0], np.cumsum(squared[:-1])])
+        return np.sqrt((1.0 + 2.0 * earlier) / count)
+
+    @staticmethod
+    def _noise_aware_error(
+        training_acf: NDArray[np.float64],
+        synthetic_acf: NDArray[np.float64],
+        noise: NDArray[np.float64],
+    ) -> float:
+        """Return the share of lag structure that differs beyond sampling noise.
+
+        At each lag, only the part of the absolute difference that exceeds the
+        expected noise counts. The excess is divided by the larger of the two
+        profile magnitudes, floored at the noise, so losing all structure and
+        inventing structure are penalized alike. Lags are weighted by inverse
+        noise variance so precisely estimated lags count more.
+
+        Args:
+            training_acf: Training correlations at lags valid in both profiles.
+            synthetic_acf: Synthetic correlations at the same lags.
+            noise: Expected sampling noise of the difference at each lag.
+
+        Returns:
+            Error in ``[0, 1]``.
+        """
+        weight = 1.0 / noise**2
+        excess = np.maximum(np.abs(training_acf - synthetic_acf) - _NOISE_ALLOWANCE * noise, 0.0)
+        magnitude = np.maximum(np.maximum(np.abs(training_acf), np.abs(synthetic_acf)), _NOISE_ALLOWANCE * noise)
+        return float(np.clip(np.sum(weight * excess) / np.sum(weight * magnitude), 0.0, 1.0))
 
     @staticmethod
     def _prepare_values(values: pd.Series) -> NDArray[np.float64]:

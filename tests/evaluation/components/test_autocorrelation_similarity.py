@@ -50,15 +50,68 @@ def _grouped_rows(groups: list[tuple[str, int]], points: int = 12) -> list[dict[
     return rows
 
 
-def test_autocorrelation_similarity_formula_matches_mean_absolute_acf_difference_divided_by_two():
-    training_df = pd.DataFrame({"time": range(8), "value": [0, 1, 2, 3, 2, 1, 0, -1]})
-    synthetic_df = pd.DataFrame({"time": range(8), "value": [0, 1, 0, -1, 0, 1, 0, -1]})
+def _bartlett(acf: np.ndarray, count: int) -> np.ndarray:
+    earlier = np.concatenate([[0.0], np.cumsum(acf[:-1] ** 2)])
+    return np.sqrt((1 + 2 * earlier) / count)
+
+
+def _ar_series(rng: np.random.Generator, phi: float, points: int) -> np.ndarray:
+    values = np.zeros(points)
+    for index in range(1, points):
+        values[index] = phi * values[index - 1] + rng.normal()
+    return values
+
+
+def _single_series_score(training: np.ndarray, synthetic: np.ndarray) -> float | None:
+    time = np.arange(len(training))
+    datasets = _datasets(
+        pd.DataFrame({"time": time, "value": training}),
+        pd.DataFrame({"time": time, "value": synthetic}),
+    )
+    return AutocorrelationSimilarity.from_evaluation_datasets(datasets, _config()).score.score
+
+
+def test_autocorrelation_similarity_formula_is_noise_aware_weighted_and_symmetric():
+    time = np.arange(60)
+    training_df = pd.DataFrame({"time": time, "value": np.sin(2 * np.pi * time / 12)})
+    synthetic_df = pd.DataFrame({"time": time, "value": np.sin(2 * np.pi * time / 9)})
     component = AutocorrelationSimilarity.from_evaluation_datasets(_datasets(training_df, synthetic_df), _config())
 
     profile = component.details["profiles"][0]
-    expected = np.mean(np.abs(np.array(profile["training_acf"]) - np.array(profile["synthetic_acf"]))) / 2.0
-    assert profile["error"] == pytest.approx(expected, abs=1e-6)
+    training_acf = np.array(profile["training_acf"])
+    synthetic_acf = np.array(profile["synthetic_acf"])
+    noise = np.hypot(_bartlett(training_acf, 60), _bartlett(synthetic_acf, 60))
+    weight = 1 / noise**2
+    excess = np.maximum(np.abs(training_acf - synthetic_acf) - noise, 0)
+    magnitude = np.maximum.reduce([np.abs(training_acf), np.abs(synthetic_acf), noise])
+    expected = np.sum(weight * excess) / np.sum(weight * magnitude)
+    assert 0 < expected < 1
+    assert profile["error"] == pytest.approx(expected, abs=1e-12)
     assert component.score.score == pytest.approx(10 * (1 - expected), abs=0.1)
+
+
+def test_autocorrelation_similarity_scores_lost_structure_low_and_matching_structure_high():
+    rng = np.random.default_rng(3)
+    training = _ar_series(rng, 0.9, 1000)
+
+    same_process = _single_series_score(training, _ar_series(rng, 0.9, 1000))
+    shuffled = _single_series_score(training, rng.permutation(training))
+
+    assert same_process is not None and same_process >= 8.5
+    assert shuffled is not None and shuffled <= 3.0
+
+
+def test_autocorrelation_similarity_penalizes_invented_structure_like_lost_structure():
+    rng = np.random.default_rng(5)
+    weak = _ar_series(rng, 0.5, 1000)
+    strong = _ar_series(rng, 0.95, 1000)
+
+    too_smooth = _single_series_score(weak, strong)
+    too_choppy = _single_series_score(strong, weak)
+
+    assert too_smooth is not None and too_choppy is not None
+    assert 1.0 < too_smooth < 7.0
+    assert too_smooth == pytest.approx(too_choppy, abs=1.5)
 
 
 def test_autocorrelation_similarity_identical_grouped_series_are_scored_per_profile():
@@ -155,7 +208,7 @@ def test_autocorrelation_similarity_preserves_non_finite_positions():
         _config(),
     )
 
-    assert component.score.score is not None and component.score.score < 10
+    assert component.score.score is not None
     profile = component.details["profiles"][0]
     assert profile["training_acf"] != profile["synthetic_acf"]
 
