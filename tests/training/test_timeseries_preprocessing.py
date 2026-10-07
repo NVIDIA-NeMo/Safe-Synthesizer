@@ -273,10 +273,12 @@ def test_process_flexible_timeseries_marks_only_final_real_row(fixture_variable_
     result, _, metadata = process_timeseries_data(fixture_variable_length_sequences, config)
 
     assert metadata is not None
-    assert metadata.max_records == 4
-    assert metadata.source_timestamp_column == "timestamp"
-    assert metadata.source_timestamp_format == "elapsed_seconds"
-    assert metadata.source_interval_seconds is None
+    flexible = metadata.flexible
+    assert flexible is not None
+    assert flexible.max_records == 4
+    assert flexible.source_timestamp_column == "timestamp"
+    assert flexible.source_timestamp_format == "elapsed_seconds"
+    assert flexible.source_interval_seconds is None
     assert list(result.columns) == ["group", "_time_idx", "timestamp", "value", "_is_last_row"]
     assert result.groupby("group", sort=False).size().to_dict() == {"A": 1, "B": 2, "C": 4}
     for _, group in result.groupby("group", sort=False):
@@ -302,8 +304,9 @@ def test_process_flexible_timeseries_normalizes_timestamp_sort_key():
     result, _, metadata = process_timeseries_data(data, config)
 
     assert metadata is not None
+    assert metadata.flexible is not None
     assert metadata.source_columns == ("value", "group", "timestamp")
-    assert metadata.source_timestamp_format == "%m/%d/%Y"
+    assert metadata.flexible.source_timestamp_format == "%m/%d/%Y"
     assert list(result.columns) == ["group", "_time_idx", "value", "timestamp", "_is_last_row"]
     group_a = result[result["group"] == "A"]
     assert group_a["_time_idx"].tolist() == [0, 1]
@@ -328,7 +331,8 @@ def test_process_fills_order_column_from_timestamp_column():
 
     result, resolved, metadata = process_timeseries_data(data, config)
 
-    assert metadata is None
+    assert metadata is not None
+    assert metadata.use_flexible_timeseries is False
     assert resolved.data.order_training_examples_by == resolved.time_series.timestamp_column == "timestamp"
     assert result["value"].tolist() == [1, 2, 3, 4]
 
@@ -351,7 +355,8 @@ def test_process_order_column_with_interval_is_treated_as_timestamp():
 
     result, resolved, metadata = process_timeseries_data(data, config)
 
-    assert metadata is None
+    assert metadata is not None
+    assert metadata.use_flexible_timeseries is False
     assert resolved.time_series.timestamp_column == "event"
     assert resolved.data.order_training_examples_by == "event"
     assert "elapsed_seconds" not in result.columns
@@ -395,7 +400,7 @@ def test_process_explicit_interval_mismatch_raises_instead_of_flexible_routing()
         rope_scaling_factor=1,
     )
 
-    with pytest.raises(DataError, match="remove it to allow irregular intervals"):
+    with pytest.raises(DataError, match="Unset timestamp_interval_seconds in the config to remove the check"):
         process_timeseries_data(data, config)
 
 
@@ -418,9 +423,11 @@ def test_process_matching_interval_with_different_lengths_routes_flexible():
     result, resolved, metadata = process_timeseries_data(data, config)
 
     assert metadata is not None
-    assert metadata.source_timestamp_column == "timestamp"
-    assert metadata.source_interval_seconds == 60
-    assert resolved.time_series.timestamp_column == metadata.index_column
+    flexible = metadata.flexible
+    assert flexible is not None
+    assert flexible.source_timestamp_column == "timestamp"
+    assert flexible.source_interval_seconds == 60
+    assert resolved.time_series.timestamp_column == flexible.index_column
     assert "_is_last_row" in result.columns
 
 
@@ -455,7 +462,9 @@ def test_process_fixed_shape_uses_standard_pipeline():
 
     result, _, metadata = process_timeseries_data(data, config)
 
-    assert metadata is None
+    assert metadata is not None
+    assert metadata.use_flexible_timeseries is False
+    assert metadata.source_columns == ("group", "timestamp", "value")
     assert "_time_idx" not in result.columns
     assert "_is_last_row" not in result.columns
     assert list(result.columns) == ["group", "timestamp", "value"]
@@ -475,7 +484,8 @@ def test_process_sequence_resolves_control_column_collisions():
     result, _, metadata = process_timeseries_data(data, config)
 
     assert metadata is not None
-    assert metadata.index_column == "_time_idx_1"
+    assert metadata.flexible is not None
+    assert metadata.flexible.index_column == "_time_idx_1"
     assert metadata.source_columns == ("group", "timestamp", "_time_idx", "value")
     assert list(result.columns) == [
         "group",

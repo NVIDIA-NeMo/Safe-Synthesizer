@@ -965,7 +965,7 @@ class TestTimeSeriesDataShapeCheck:
 
         error = next(issue for issue in issues if issue.code == "timestamp_interval_mismatch")
         assert error.severity == "error"
-        assert "remove it to allow irregular intervals" in error.message
+        assert "Unset timestamp_interval_seconds in the config to remove the check" in error.message
 
     def test_asserted_interval_matching_differently_shaped_groups_passes(self):
         df = pd.DataFrame({"grp": ["A", "A", "A", "B"], "ts": [0, 60, 120, 60], "value": [1, 2, 3, 4]})

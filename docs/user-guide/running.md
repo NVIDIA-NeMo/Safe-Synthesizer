@@ -294,6 +294,7 @@ execute in order (`config` → `dataframe` → `metadata` → `advisory`).
 | `dataset.size` | dataframe | Training split meets the hard minimum row count |
 | `columns.groupby` | dataframe | `group_training_examples_by` column is present and has no nulls |
 | `columns.orderby` | dataframe | `order_training_examples_by` column is present and has no nulls |
+| `columns.mia_excluded` | dataframe | Every column in `evaluation.mia_excluded_columns` is present |
 | `columns.pseudo` | dataframe | Input does not use the reserved `__nss_sequence_id` column name |
 | `columns.constant` | dataframe | No column is constant (warning only) |
 | `timeseries.timestamp` | dataframe | Timestamp column is present and has no nulls (time-series mode) |
@@ -317,12 +318,6 @@ token-budget messages all report on the training partition the model
 will actually see. The runtime-info block at the top of the report shows
 both the input dataset size and the training-split size so the scope of
 each check is unambiguous.
-
-For time-series data, unequal group lengths, different start or stop
-timestamps, and irregular intervals are not pre-flight errors; training
-selects flexible processing for them. Malformed or null timestamp values, and
-timestamps that do not follow an explicit `timestamp_interval_seconds`, remain
-errors.
 
 Token budget checks use the same budget computation as the training
 assembler, so the numbers pre-flight reports match what assembly will

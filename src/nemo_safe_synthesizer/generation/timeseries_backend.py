@@ -33,7 +33,7 @@ from ..generation.timeseries_prompting import (
     build_training_compatible_prompt_token_ids,
 )
 from ..generation.vllm_backend import VllmBackend
-from ..llm.metadata import FlexibleTimeseriesMetadata, ModelMetadata, TimeSeriesGroupValue
+from ..llm.metadata import ModelMetadata, TimeSeriesGroupValue, TimeseriesMetadata
 from ..observability import get_logger
 
 logger = get_logger(__name__)
@@ -49,7 +49,7 @@ class _ResolvedTimeseriesSettings:
     stop_timestamp: str | int | None
     timestamp_interval_seconds: int | None
     timestamp_format: str
-    flexible_metadata: FlexibleTimeseriesMetadata | None
+    timeseries_metadata: TimeseriesMetadata | None
 
     @classmethod
     def from_config(cls, config: SafeSynthesizerParameters, metadata: ModelMetadata) -> Self:
@@ -78,7 +78,7 @@ class _ResolvedTimeseriesSettings:
             stop_timestamp=config.time_series.stop_timestamp,
             timestamp_interval_seconds=config.time_series.timestamp_interval_seconds,
             timestamp_format=config.time_series.timestamp_format or "",
-            flexible_metadata=metadata.flexible_timeseries_metadata,
+            timeseries_metadata=metadata.timeseries_metadata,
         )
 
 
@@ -290,8 +290,8 @@ class TimeseriesBackend(VllmBackend):
         ``INCOMPLETE`` when any group failed. ``num_records`` does not affect it.
 
     Attributes:
-        _samples_per_prompt (int): Number of completion samples per prompt.
-            Flexible generation uses one; deterministic generation uses five.
+        _samples_per_prompt (int): Minimum number of completion samples per
+            prompt. One sample per group is kept per batch.
         _max_prompts_per_batch (int): Maximum number of prompts to include in a
             single LLM generation call. Controls parallelism. Default: 100.
         _history_window_size (int): Number of recent records to include in the
@@ -311,20 +311,23 @@ class TimeseriesBackend(VllmBackend):
         _group_prefixes (dict[TimeSeriesGroupValue, str]): Mapping of group IDs to
             incomplete first records used to start generation.
         _groups (list[TimeSeriesGroupValue]): Typed group IDs to generate.
+        _timeseries_metadata (TimeseriesMetadata | None): Resolved
+            representation and source schema from training.
         _flexible_metadata (FlexibleTimeseriesMetadata | None): Resolved
-            marker-based generation settings.
+            marker-based generation settings; ``None`` for deterministic routing.
     """
 
     def __init__(self, config: SafeSynthesizerParameters, model_metadata: ModelMetadata, **kwargs):
         settings = _ResolvedTimeseriesSettings.from_config(config, model_metadata)
         super().__init__(config, model_metadata, **kwargs)
 
-        flexible_metadata = settings.flexible_metadata
+        self._timeseries_metadata = settings.timeseries_metadata
+        flexible_metadata = self._timeseries_metadata.flexible if self._timeseries_metadata is not None else None
         self._flexible_metadata = flexible_metadata
         self._flexible_timeseries = flexible_metadata is not None
         self._sequence_index_column = flexible_metadata.index_column if flexible_metadata is not None else ""
         self._sequence_marker_column = flexible_metadata.marker_column if flexible_metadata is not None else ""
-        self._samples_per_prompt = 1 if self._flexible_timeseries else 5
+        self._samples_per_prompt = 5
         self._max_prompts_per_batch = 100  # max prompts per batch for parallel group generation
         self._history_window_size = 3
         self._time_column = settings.timestamp_column
@@ -642,10 +645,31 @@ class TimeseriesBackend(VllmBackend):
         Returns:
             The retained prefix and its tentative marker- or cap-based stop.
         """
+        invalidations, retained, accepted_row_stop = self._scan_flexible_prefix(state, records)
+        for record, error in invalidations:
+            record.invalidate(error)
+        return retained, accepted_row_stop
+
+    def _scan_flexible_prefix(
+        self,
+        state: GroupState,
+        records: list[ParsedRecord],
+    ) -> tuple[list[tuple[ParsedRecord, tuple[str, str]]], list[ParsedRecord], tuple[str, ParsedRecord] | None]:
+        """Evaluate a flexible sequence prefix without modifying the records.
+
+        Args:
+            state: Active generation state for the group.
+            records: Parsed records in generation order.
+
+        Returns:
+            The records to invalidate with their errors, the retained prefix,
+            and its tentative marker- or cap-based stop.
+        """
         metadata = self._flexible_metadata
         if metadata is None:
-            return records, None
+            return [], records, None
 
+        invalidations: list[tuple[ParsedRecord, tuple[str, str]]] = []
         retained: list[ParsedRecord] = []
         accepted_row_stop: tuple[str, ParsedRecord] | None = None
         prefix_ended = False
@@ -656,25 +680,28 @@ class TimeseriesBackend(VllmBackend):
 
         for record in records:
             if prefix_ended:
-                record.invalidate(trimmed_error)
+                invalidations.append((record, trimmed_error))
                 continue
             parsed = record.parsed
             if parsed is None:
                 continue
             if not self._matches_group(parsed, state):
-                record.invalidate(group_error)
+                invalidations.append((record, group_error))
                 prefix_ended = True
                 continue
             index_value = parsed.get(self._sequence_index_column)
             if not isinstance(index_value, int) or isinstance(index_value, bool):
-                record.invalidate(index_error)
+                invalidations.append((record, index_error))
                 prefix_ended = True
                 continue
             if index_value != expected_index:
-                record.invalidate(
+                invalidations.append(
                     (
-                        f"Generated sequence index {index_value!r} does not match expected index {expected_index}",
-                        "TimeSeries",
+                        record,
+                        (
+                            f"Generated sequence index {index_value!r} does not match expected index {expected_index}",
+                            "TimeSeries",
+                        ),
                     )
                 )
                 prefix_ended = True
@@ -689,7 +716,35 @@ class TimeseriesBackend(VllmBackend):
                 accepted_row_stop = ("cap", record)
                 prefix_ended = True
 
-        return retained, accepted_row_stop
+        return invalidations, retained, accepted_row_stop
+
+    def _select_flexible_response(self, state: GroupState, batch: Batch) -> int | None:
+        """Choose which sampled response continues a flexible sequence.
+
+        Prefers the first response whose valid prefix ends with an accepted
+        final-row marker, then the first response with any valid prefix.
+        Selecting by sample order rather than by the number of valid rows avoids
+        favoring responses that continue past the point where the group should end.
+
+        Args:
+            state: Active generation state for the group.
+            batch: The group's batch of sampled responses.
+
+        Returns:
+            The index of the selected response, or ``None`` when no response has
+            a valid prefix.
+        """
+        first_valid_index: int | None = None
+        for index, response in enumerate(batch._responses):
+            valid_records = [record for record in response.records if record.is_valid and record.parsed is not None]
+            _, retained, stop = self._scan_flexible_prefix(state, valid_records)
+            if not retained:
+                continue
+            if stop is not None and stop[0] == "terminal":
+                return index
+            if first_valid_index is None:
+                first_valid_index = index
+        return first_valid_index
 
     def _matches_group(self, parsed: dict, state: GroupState) -> bool:
         """Whether a record belongs to the active group.
@@ -826,27 +881,46 @@ class TimeseriesBackend(VllmBackend):
             if source_seconds is not None:
                 previous_source_seconds = source_seconds
 
+    @staticmethod
+    def _in_progress_path(path: Path) -> Path:
+        """Return the sibling path an artifact is written to until generation finishes."""
+        return path.with_name(f"{path.name}.tmp")
+
     @property
     def _raw_generations_tmp_path(self) -> Path:
         """In-progress raw completion log, moved to ``_raw_generations_path`` when generation finishes."""
-        return self._raw_generations_path.with_name(f"{self._raw_generations_path.name}.tmp")
+        return self._in_progress_path(self._raw_generations_path)
+
+    @property
+    def _flexible_artifact_paths(self) -> tuple[Path, Path, Path]:
+        """Final paths of the flexible artifacts that are replaced together."""
+        return self._raw_generations_path, self._flexible_metrics_path, self._internal_output_path
 
     def _prepare_flexible_timeseries_artifacts(self) -> None:
-        """Start an empty in-progress raw completion log.
+        """Start an empty in-progress raw completion log and clear stale in-progress artifacts.
 
         Like other generation outputs, artifacts from a previous run in the same
         workdir are left in place until this run finishes and overwrites them.
         """
         if not self._flexible_timeseries:
             return
+        for path in self._flexible_artifact_paths:
+            self._in_progress_path(path).unlink(missing_ok=True)
         self._raw_generations_tmp_path.parent.mkdir(parents=True, exist_ok=True)
         self._raw_generations_tmp_path.write_text("", encoding="utf-8")
 
     def _finalize_flexible_timeseries_artifacts(self) -> None:
-        """Replace the previous run's raw completion log with this run's log."""
-        if not self._flexible_timeseries or not self._raw_generations_tmp_path.exists():
+        """Replace the previous run's flexible artifacts with this run's artifacts.
+
+        All three artifacts are written to in-progress paths first, so a run
+        that fails before this point never leaves files from two runs side by side.
+        """
+        if not self._flexible_timeseries:
             return
-        self._raw_generations_tmp_path.replace(self._raw_generations_path)
+        for path in self._flexible_artifact_paths:
+            in_progress = self._in_progress_path(path)
+            if in_progress.exists():
+                in_progress.replace(path)
 
     def _write_raw_completion(
         self,
@@ -941,7 +1015,7 @@ class TimeseriesBackend(VllmBackend):
                 "reason_counts": reason_counts,
             },
         }
-        utils.write_json(metrics, self._flexible_metrics_path, indent=2)
+        utils.write_json(metrics, self._in_progress_path(self._flexible_metrics_path), indent=2)
 
     def _update_group_state(self, group_state: GroupState, records: list[ParsedRecord]) -> None:
         """Update a group's state with new valid records.
@@ -983,8 +1057,9 @@ class TimeseriesBackend(VllmBackend):
         """Persist accepted flexible time-series rows before internal-column cleanup."""
         internal_df = self._sort_internal_dataframe(df)
         if self._flexible_timeseries:
-            self._internal_output_path.parent.mkdir(parents=True, exist_ok=True)
-            internal_df.to_csv(self._internal_output_path, index=False)
+            internal_path = self._in_progress_path(self._internal_output_path)
+            internal_path.parent.mkdir(parents=True, exist_ok=True)
+            internal_df.to_csv(internal_path, index=False)
         return internal_df
 
     def _sort_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -1012,12 +1087,7 @@ class TimeseriesBackend(VllmBackend):
         if PSEUDO_GROUP_COLUMN in df.columns:
             df = df.drop(columns=[PSEUDO_GROUP_COLUMN])
 
-        flexible_metadata = self.model_metadata.flexible_timeseries_metadata
-        source_columns = (
-            list(flexible_metadata.source_columns)
-            if flexible_metadata is not None
-            else self.model_metadata.timeseries_source_columns
-        )
+        source_columns = self._timeseries_metadata.source_columns if self._timeseries_metadata is not None else ()
         if source_columns:
             restored_columns = [column for column in source_columns if column in df.columns]
             extra_columns = [column for column in df.columns if column not in restored_columns]
@@ -1046,13 +1116,10 @@ class TimeseriesBackend(VllmBackend):
             GenerationError: If the rolling prompt leaves no context for
                 generation.
         """
-        if self._flexible_timeseries:
-            effective_samples_per_prompt = 1
-        else:
-            effective_samples_per_prompt = min(
-                10,
-                max(self._samples_per_prompt, self._max_prompts_per_batch // num_active),
-            )
+        effective_samples_per_prompt = min(
+            10,
+            max(self._samples_per_prompt, self._max_prompts_per_batch // num_active),
+        )
         max_tokens = sampling_params.max_tokens
         if max_prompt_tokens is not None:
             remaining_context = self.model_metadata.max_seq_length - max_prompt_tokens
@@ -1348,7 +1415,8 @@ class TimeseriesBackend(VllmBackend):
                 batch = group_batches[state.group_id]
                 if self.config.time_series.timestamp_interval_seconds is not None:
                     self._check_chronological_for_group(batch, state)
-                retained_records = self._retain_single_valid_response(batch)
+                preferred_index = self._select_flexible_response(state, batch) if self._flexible_timeseries else None
+                retained_records = self._retain_single_valid_response(batch, preferred_index=preferred_index)
                 retained_records, accepted_row_stop = self._trim_flexible_timeseries_records(state, retained_records)
                 batches.postprocess_batch(batch, commit_history=False)
                 self._validate_postprocessed_group_identity(state, retained_records)
@@ -1424,17 +1492,23 @@ class TimeseriesBackend(VllmBackend):
 
         return all_groups_succeeded
 
-    def _retain_single_valid_response(self, batch: Batch) -> list[ParsedRecord]:
-        """Retain the response with the most valid records, discarding all others.
+    def _retain_single_valid_response(
+        self,
+        batch: Batch,
+        preferred_index: int | None = None,
+    ) -> list[ParsedRecord]:
+        """Retain one response, discarding all others.
 
         For time-series sliding window generation, only one response can be used
-        per batch to maintain chronological continuity. This method selects the
-        response with the most valid records and discards all other responses
-        (both their valid and invalid records are cleared, and an error note is
-        added to track that they were trimmed).
+        per batch to maintain chronological continuity. This method keeps
+        ``preferred_index`` when given, otherwise the response with the most
+        valid records, and discards all other responses (both their valid and
+        invalid records are cleared, and an error note is added to track that
+        they were trimmed).
 
         Args:
             batch: The batch to retain the response from.
+            preferred_index: Index of the response to keep, if already selected.
 
         Returns:
             The retained response's valid ``ParsedRecord`` objects, keeping
@@ -1443,14 +1517,15 @@ class TimeseriesBackend(VllmBackend):
         """
         final_records: list[ParsedRecord] = []
 
-        # Find the index of the response with the most valid records.
-        max_valid_idx = None
-        max_valid_count = -1
-        for idx, response in enumerate(batch._responses):
-            count = len(response.valid_records)
-            if count > max_valid_count:
-                max_valid_count = count
-                max_valid_idx = idx
+        max_valid_idx = preferred_index
+        if max_valid_idx is None:
+            # Find the index of the response with the most valid records.
+            max_valid_count = -1
+            for idx, response in enumerate(batch._responses):
+                count = len(response.valid_records)
+                if count > max_valid_count:
+                    max_valid_count = count
+                    max_valid_idx = idx
 
         trim_error = ("Extra response trimmed for sliding window", "TimeSeries")
         for idx, response in enumerate(batch._responses):

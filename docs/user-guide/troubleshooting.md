@@ -518,7 +518,7 @@ check of its own.
 | `hf_model_cache_incomplete` | warning/error | `env.hf_model_availability` | Cached Hugging Face model snapshot is missing required config, tokenizer, weights, or shards; severity is error when HF offline mode is enabled |
 | `hf_remote_code_not_cached` | warning/error | `env.hf_model_availability` | Trusted model references remote code that is not cached locally; severity is error when HF offline mode is enabled |
 | `preflight.check_crash` | error | (crashing check) | A check raised an unexpected exception; the issue's `check` field names the crashing check and other checks continued running |
-| `column_not_found` | error | `columns.groupby` / `columns.orderby` | Required column missing from dataset, or input DataFrame uses unsupported MultiIndex columns |
+| `column_not_found` | error | `columns.groupby` / `columns.orderby` / `columns.mia_excluded` | Required column missing from dataset, or input DataFrame uses unsupported MultiIndex columns |
 | `column_nulls` | error | `columns.groupby` / `columns.orderby` | Required column contains null values |
 | `duplicate_columns` | error | `timeseries.shape` | Duplicate column names; rename or remove them |
 | `pseudo_column_collision` | error | `columns.pseudo` | Dataset contains reserved internal column name, or input DataFrame uses unsupported MultiIndex columns |
@@ -645,9 +645,11 @@ Missing timestamp values:
 
 `timestamp_interval_seconds` is an assertion about your data. If the spacing
 between consecutive timestamps in any group differs from it, pre-flight and
-training fail with `timestamp_interval_mismatch`. Correct the value, or remove
-it so irregular intervals are allowed. Groups may still differ in length,
-start, or stop when the interval is set.
+training fail with `timestamp_interval_mismatch`. Unset
+`timestamp_interval_seconds` in the config to remove the check, or correct the
+input data to have regular intervals by fixing inconsistent timestamp values
+or removing the offending groups. Groups may still differ in length, start, or
+stop when the interval is set.
 
 Invalid timestamp data:
 
@@ -658,8 +660,10 @@ Invalid timestamp data:
 Conflicting timestamp and order columns:
 
 : In time-series mode, `time_series.timestamp_column` and
-  `data.order_training_examples_by` must name the same column. Set only one of
-  them; the other is filled in automatically.
+  `data.order_training_examples_by` play the same role. Set either one, or
+  both with the same value; differing values are a configuration error.
+  `order_training_examples_by` also requires `data.group_training_examples_by`,
+  so use `timestamp_column` for a single ungrouped series.
 
 Groups skipped during generation:
 

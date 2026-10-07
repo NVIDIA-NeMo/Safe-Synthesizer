@@ -45,9 +45,10 @@ def test_routing_keeps_deterministic_pipeline_when_all_constraints_match():
     decision = resolve_timeseries_routing(data, config)
 
     assert decision is not None
-    assert decision.uses_flexible_timeseries is False
+    assert decision.use_flexible_timeseries is False
     assert decision.failed_constraints == ()
-    assert decision.flexible_metadata is None
+    assert decision.timeseries_metadata is not None
+    assert decision.timeseries_metadata.use_flexible_timeseries is False
 
 
 def test_routing_treats_order_column_with_interval_as_timestamp():
@@ -69,7 +70,7 @@ def test_routing_treats_order_column_with_interval_as_timestamp():
     decision = resolve_timeseries_routing(data, config)
 
     assert decision is not None
-    assert decision.uses_flexible_timeseries is False
+    assert decision.use_flexible_timeseries is False
     assert config.time_series.timestamp_column == "event"
 
 
@@ -86,7 +87,7 @@ def test_routing_uses_flexible_timeseries_and_reports_all_shape_mismatches():
     decision = resolve_timeseries_routing(data, config)
 
     assert decision is not None
-    assert decision.uses_flexible_timeseries is True
+    assert decision.use_flexible_timeseries is True
     assert decision.failed_constraints == (
         "equal group lengths",
         "common start timestamps",
@@ -94,7 +95,8 @@ def test_routing_uses_flexible_timeseries_and_reports_all_shape_mismatches():
         "consistent timestamp intervals",
     )
     assert decision.sequence_max_records == 3
-    metadata = decision.flexible_metadata
+    assert decision.timeseries_metadata is not None
+    metadata = decision.timeseries_metadata.flexible
     assert metadata is not None
     assert metadata.max_records == 3
     assert metadata.source_timestamp_column == "ts"
@@ -134,7 +136,7 @@ def test_routing_rejects_asserted_interval_mismatch():
         resolve_timeseries_routing(data, config)
 
     assert exc_info.value.reason is TimeSeriesValidationReason.TIMESTAMP_INTERVAL_MISMATCH
-    assert "remove it to allow irregular intervals" in str(exc_info.value)
+    assert "Unset timestamp_interval_seconds in the config to remove the check" in str(exc_info.value)
 
 
 def test_routing_with_asserted_interval_still_routes_differing_lengths_to_flexible():
@@ -152,8 +154,9 @@ def test_routing_with_asserted_interval_still_routes_differing_lengths_to_flexib
 
     assert decision is not None
     assert decision.failed_constraints == ("equal group lengths", "common start timestamps")
-    assert decision.flexible_metadata is not None
-    assert decision.flexible_metadata.source_interval_seconds == 60
+    assert decision.timeseries_metadata is not None
+    assert decision.timeseries_metadata.flexible is not None
+    assert decision.timeseries_metadata.flexible.source_interval_seconds == 60
 
 
 def test_validate_source_data_names_the_group_with_unsupported_spacing():

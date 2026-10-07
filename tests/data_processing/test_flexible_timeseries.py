@@ -28,7 +28,8 @@ def _flexible_training_data():
     )
     prepared, resolved, metadata = process_timeseries_data(data, config)
     assert metadata is not None
-    return prepared, resolved, metadata
+    assert metadata.flexible is not None
+    return prepared, resolved, metadata.flexible
 
 
 @pytest.mark.parametrize(

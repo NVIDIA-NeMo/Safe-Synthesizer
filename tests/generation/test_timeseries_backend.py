@@ -40,6 +40,7 @@ from nemo_safe_synthesizer.llm.metadata import (
     FlexibleTimeseriesMetadata,
     LLMPromptConfig,
     ModelMetadata,
+    TimeseriesMetadata,
 )
 
 PROMPT_TEMPLATE = "[INST] {instruction} {schema} [/INST]{prefill}"
@@ -357,7 +358,9 @@ class TestSortDataframe:
 
     def test_restores_source_column_order(self, timeseries_base_params, timeseries_model_metadata, mock_workdir):
         """Generated output should match the user's input column order."""
-        timeseries_model_metadata.timeseries_source_columns = ["value", "group_id", "timestamp"]
+        timeseries_model_metadata.timeseries_metadata = TimeseriesMetadata(
+            source_columns=("value", "group_id", "timestamp")
+        )
         backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
         df = pd.DataFrame(
             {
@@ -977,12 +980,14 @@ def _enable_flexible_timeseries(
     source_columns = ("value", "group_id")
     if source_timestamp_column is not None:
         source_columns = (*source_columns, source_timestamp_column)
-    metadata.flexible_timeseries_metadata = FlexibleTimeseriesMetadata(
-        max_records=max_records,
+    metadata.timeseries_metadata = TimeseriesMetadata(
         source_columns=source_columns,
-        source_timestamp_column=source_timestamp_column,
-        source_timestamp_format="elapsed_seconds" if source_timestamp_column is not None else None,
-        source_interval_seconds=source_interval_seconds,
+        flexible=FlexibleTimeseriesMetadata(
+            max_records=max_records,
+            source_timestamp_column=source_timestamp_column,
+            source_timestamp_format="elapsed_seconds" if source_timestamp_column is not None else None,
+            source_interval_seconds=source_interval_seconds,
+        ),
     )
     params.time_series.timestamp_column = "_time_idx"
     params.time_series.timestamp_format = "elapsed_seconds"
@@ -990,7 +995,6 @@ def _enable_flexible_timeseries(
     params.time_series.start_timestamp = 0
     params.time_series.stop_timestamp = max_records - 1
     params.data.order_training_examples_by = "_time_idx"
-    metadata.timeseries_source_columns = ["value", "group_id"]
 
 
 class TestFlexibleTimeseries:
@@ -1311,6 +1315,7 @@ class TestFlexibleTimeseries:
 
         backend._internal_output_path = tmp_path / "synthetic_data_internal.csv"
         persisted = backend._write_internal_output(internal)
+        backend._finalize_flexible_timeseries_artifacts()
         result = backend._sort_dataframe(persisted)
 
         assert backend._internal_output_path.exists()
@@ -1432,6 +1437,124 @@ class TestFlexibleTimeseries:
         assert json.loads(backend._flexible_metrics_path.read_text(encoding="utf-8"))["status"] == "complete"
         assert not backend._raw_generations_tmp_path.exists()
 
+    def test_failed_run_leaves_previous_artifacts_intact(
+        self,
+        timeseries_base_params,
+        timeseries_model_metadata,
+        mock_workdir,
+        fixture_tokenizer,
+        tmp_path,
+    ):
+        _enable_flexible_timeseries(timeseries_base_params, timeseries_model_metadata)
+        timeseries_model_metadata.timeseries_group_values = ["group_A"]
+        backend = create_timeseries_backend(
+            timeseries_base_params,
+            timeseries_model_metadata,
+            mock_workdir,
+            self._schema(),
+        )
+        backend._raw_generations_path = tmp_path / "raw.jsonl"
+        backend._flexible_metrics_path = tmp_path / "metrics.json"
+        backend._internal_output_path = tmp_path / "internal.csv"
+        for path in backend._flexible_artifact_paths:
+            path.write_text("previous", encoding="utf-8")
+        backend.llm = MagicMock()
+        backend.llm.get_tokenizer.return_value = fixture_tokenizer
+        backend.llm.generate.return_value = [
+            SimpleNamespace(
+                outputs=[SimpleNamespace(finish_reason="stop", text='value":1,"_is_last_row":true}\n', token_ids=[1])]
+            )
+        ]
+
+        with patch.object(backend, "_write_flexible_timeseries_metrics", side_effect=RuntimeError("boom")):
+            with pytest.raises(RuntimeError, match="boom"):
+                backend.generate()
+
+        for path in backend._flexible_artifact_paths:
+            assert path.read_text(encoding="utf-8") == "previous"
+
+    @staticmethod
+    def _sample_batch(*samples: list[tuple[int, bool]] | None) -> Batch:
+        """Build a batch with one response per sample of ``(_time_idx, _is_last_row)`` rows; ``None`` is invalid."""
+        batch = Batch(processor=MagicMock())
+        for sample in samples:
+            if sample is None:
+                records = [ParsedRecord(text="bad", error=("invalid", "test"))]
+            else:
+                records = [
+                    ParsedRecord(
+                        text=f"row{index}",
+                        parsed={"group_id": "group_A", "_time_idx": index, "value": index, "_is_last_row": is_last},
+                    )
+                    for index, is_last in sample
+                ]
+            batch._responses.append(ParsedResponse(records=records))
+        return batch
+
+    @pytest.mark.parametrize(
+        ("samples", "expected_index"),
+        [
+            pytest.param(
+                ([(0, False), (1, False), (2, False)], [(0, True)]),
+                1,
+                id="marker-over-longer",
+            ),
+            pytest.param((None, [(0, False), (1, True)], [(0, True)]), 1, id="first-marker"),
+            pytest.param(([(0, False)], [(0, False), (1, False), (2, False)]), 0, id="first-valid-not-longest"),
+            pytest.param(([(1, True)], [(0, False)]), 1, id="marker-after-index-gap-ignored"),
+            pytest.param((None, None), None, id="no-valid-response"),
+        ],
+    )
+    def test_flexible_response_selection_prefers_marker_then_first_valid(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir, samples, expected_index
+    ):
+        _enable_flexible_timeseries(timeseries_base_params, timeseries_model_metadata, max_records=10)
+        backend = create_timeseries_backend(
+            timeseries_base_params, timeseries_model_metadata, mock_workdir, self._schema()
+        )
+        state = backend._init_group_state("group_A")
+
+        assert backend._select_flexible_response(state, self._sample_batch(*samples)) == expected_index
+
+    def test_selected_flexible_response_is_retained(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        _enable_flexible_timeseries(timeseries_base_params, timeseries_model_metadata, max_records=10)
+        backend = create_timeseries_backend(
+            timeseries_base_params, timeseries_model_metadata, mock_workdir, self._schema()
+        )
+        state = backend._init_group_state("group_A")
+        batch = self._sample_batch([(0, False), (1, False), (2, False)], [(0, True)])
+
+        preferred_index = backend._select_flexible_response(state, batch)
+        retained = backend._retain_single_valid_response(batch, preferred_index=preferred_index)
+
+        assert [record.parsed["_is_last_row"] for record in retained if record.parsed is not None] == [True]
+        assert batch._responses[0].valid_records == []
+
+    def test_deterministic_retention_keeps_response_with_most_valid_records(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
+        batch = self._sample_batch([(0, False)], [(0, False), (1, False)])
+
+        retained = backend._retain_single_valid_response(batch)
+
+        assert len(retained) == 2
+
+    def test_flexible_generation_requests_multiple_samples(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        _enable_flexible_timeseries(timeseries_base_params, timeseries_model_metadata)
+        backend = create_timeseries_backend(
+            timeseries_base_params, timeseries_model_metadata, mock_workdir, self._schema()
+        )
+
+        params, samples_per_prompt = backend._build_modified_sampling_params(SamplingParams(max_tokens=10), 100)
+
+        assert samples_per_prompt == 5
+        assert params.n == 5
+
     @staticmethod
     def _timestamped_schema() -> dict:
         properties = {
@@ -1515,11 +1638,13 @@ class TestFlexibleTimeseries:
         self, timeseries_base_params, timeseries_model_metadata, mock_workdir
     ):
         _enable_flexible_timeseries(timeseries_base_params, timeseries_model_metadata, max_records=10)
-        timeseries_model_metadata.flexible_timeseries_metadata = FlexibleTimeseriesMetadata(
-            max_records=10,
+        timeseries_model_metadata.timeseries_metadata = TimeseriesMetadata(
             source_columns=("value", "group_id", "ts"),
-            source_timestamp_column="ts",
-            source_timestamp_format="%Y-%m-%d",
+            flexible=FlexibleTimeseriesMetadata(
+                max_records=10,
+                source_timestamp_column="ts",
+                source_timestamp_format="%Y-%m-%d",
+            ),
         )
         backend = create_timeseries_backend(
             timeseries_base_params, timeseries_model_metadata, mock_workdir, self._timestamped_schema()
@@ -1611,6 +1736,7 @@ class TestFlexibleTimeseries:
         assert backend._resolve_timeseries_status() == GenerationStatus.INCOMPLETE
         backend._discard_failed_group_records()
         backend._write_flexible_timeseries_metrics()
+        backend._finalize_flexible_timeseries_artifacts()
 
         assert kept.is_valid is True
         assert dropped.is_valid is False

@@ -32,7 +32,7 @@ def resolve_flexible_timeseries_metadata(
     max_records: int,
     source_timestamp_format: str,
 ) -> FlexibleTimeseriesMetadata:
-    """Resolve internal control columns, source schema, and timestamp checks for flexible routing.
+    """Resolve internal control columns and timestamp checks for flexible routing.
 
     Args:
         data: Source time-series data.
@@ -41,7 +41,7 @@ def resolve_flexible_timeseries_metadata(
         source_timestamp_format: Validated or inferred format of the source timestamp column.
 
     Returns:
-        Metadata persisted with the model and used by generation.
+        Flexible controls persisted with the model and used by generation.
     """
     columns = list(data.columns)
     if config.data.group_training_examples_by is None:
@@ -59,7 +59,6 @@ def resolve_flexible_timeseries_metadata(
         index_column=index_column,
         marker_column=marker_column,
         max_records=max_records,
-        source_columns=tuple(data.columns),
         source_timestamp_column=source_timestamp_column,
         source_timestamp_format=source_timestamp_format if has_source_timestamp else None,
         source_interval_seconds=config.time_series.timestamp_interval_seconds if has_source_timestamp else None,
@@ -132,7 +131,7 @@ def prepare_flexible_timeseries_data(
 
     _assign_sequence_controls(working, group_column, metadata)
 
-    payload_columns = [column for column in metadata.source_columns if column != group_column]
+    payload_columns = [column for column in data.columns if column != group_column]
     ordered_columns = [group_column, metadata.index_column, *payload_columns, metadata.marker_column]
     working = working.loc[:, ordered_columns]
 

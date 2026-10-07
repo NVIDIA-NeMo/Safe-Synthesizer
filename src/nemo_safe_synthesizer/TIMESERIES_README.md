@@ -96,10 +96,13 @@ set. Both control columns are removed from final output; the original
 source-column order is restored, followed by any columns added by
 preprocessing.
 
-The resolved control-column names, record cap, source schema, and source
-timestamp column, format, and asserted interval are persisted as internal
-`FlexibleTimeseriesMetadata` (defined in `llm/metadata.py`) on the trained
-model's `ModelMetadata`. They are not user-configurable time-series parameters.
+The resolved representation is persisted as internal `TimeseriesMetadata`
+(defined in `llm/metadata.py`) on the trained model's
+`ModelMetadata.timeseries_metadata`. It always records the original source
+column order. For flexible routing, its nested `FlexibleTimeseriesMetadata`
+holds the control-column names, record cap, and source timestamp column,
+format, and asserted interval; `use_flexible_timeseries` reports which route
+was selected. None of these are user-configurable time-series parameters.
 
 ### Generation Parameters
 
@@ -186,11 +189,11 @@ HuggingFaceBackend._process_timeseries()
             │       ├── timestamp format/parse validation
             │       └── validate_deterministic_inspection()
             ├── order group and timestamp columns first
-            └── Return (processed_df, updated_config, flexible_metadata | None)
+            └── Return (processed_df, updated_config, timeseries_metadata)
 ```
 
-The backend stores the returned flexible metadata on
-`ModelMetadata.flexible_timeseries_metadata`.
+The backend stores the returned metadata on
+`ModelMetadata.timeseries_metadata`.
 
 ---
 
@@ -316,7 +319,7 @@ TimeseriesBackend(VllmBackend)
 2. Token-Prompt Assembly: Reproduce the training prompt and sequence special-token boundary, then append the prefix or history bytes.
 3. Batch Generation: Clamp completion length to the remaining context and generate multiple candidate suffixes (default 5) per prompt for each active group.
 4. Record Reconstruction: During the first iteration, prepend the JSON-only prefix before parsing each candidate.
-5. Response Selection: Keep the response with the most valid records per group.
+5. Response Selection: Keep one response per group. Deterministic groups keep the response with the most valid records; flexible groups keep the first response whose valid prefix ends with an accepted final-row marker, otherwise the first response with a valid prefix.
 6. History Update: Switch from the prefix to a sliding history containing exact accepted record text.
 7. Repeat: Continue until each group completes. Deterministic groups complete at the stop timestamp; flexible groups complete at an accepted final-row marker or the maximum source-group length.
 
@@ -324,7 +327,7 @@ TimeseriesBackend(VllmBackend)
 
 | Parameter | Value | Description |
 |-----------|-------|-------------|
-| `_samples_per_prompt` | 5 | Number of samples generated per prompt |
+| `_samples_per_prompt` | 5 | Minimum number of samples generated per prompt, for both deterministic and flexible groups |
 | `_max_prompts_per_batch` | 100 | Max prompts per batch in parallel generation |
 | `_history_window_size` | 3 | Internal number of recent records in the history window |
 
@@ -343,7 +346,7 @@ All time series use parallel group generation (single-sequence is just 1 group):
    d. Process LLM outputs into per-group Batch objects
    e. For each group:
       - Validate chronological order against group's last timestamp
-      - Retain response with most valid records (discard others)
+      - Retain one response (deterministic: most valid records; flexible: first with an end marker, else first valid) and discard others
       - Update group state (history, last_timestamp)
       - Deterministic: check if stop timestamp reached (marks group complete)
       - Flexible: check for an accepted final-row marker or the length limit
@@ -565,12 +568,17 @@ Rationale:
 
 ### 2. Multiple Samples per Prompt
 
-Decision: Generate 5 samples per prompt, keep the best one.
+Decision: Generate 5 samples per prompt and keep one per group.
 
 Rationale:
 - Time series generation is more constrained than tabular.
 - Multiple samples increase the chance of getting a valid continuation.
-- Best sample = most valid records (longer valid sequence is better).
+- Deterministic groups keep the sample with the most valid records; a longer
+  valid sequence moves toward the fixed stop timestamp.
+- Flexible groups keep the first sample that ends with an accepted final-row
+  marker, otherwise the first valid sample. Choosing the sample with the most
+  valid records would favor samples that continue past the point where the
+  group should end, so sample order is used instead of length.
 
 ### 3. Parallel Group Generation
 

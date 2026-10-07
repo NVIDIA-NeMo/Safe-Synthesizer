@@ -42,6 +42,7 @@ from nemo_safe_synthesizer.llm.metadata import (
     RopeScaling,
     SmolLM2,
     SmolLM3,
+    TimeseriesMetadata,
     TinyLlama,
     resolve_rope_scaling_factor,
 )
@@ -707,15 +708,42 @@ class TestModelMetadata:
         sample_workdir,
     ):
         mock_auto_config.from_pretrained.return_value = mock_autoconfig_obj
+        flexible = dict(flexible_metadata)
+        source_columns = flexible.pop("source_columns")
         mock_load_json.return_value = {
             "model_name_or_path": "loaded-model",
             "prompt_config": sample_prompt_config.model_dump(),
             "base_max_seq_length": 2048,
-            "flexible_timeseries_metadata": flexible_metadata,
+            "timeseries_metadata": {"source_columns": source_columns, "flexible": flexible},
         }
 
         with pytest.raises(GenerationError, match="Retrain the model or restore a complete artifact"):
             ModelMetadata.from_metadata_json(tmp_path / "metadata.json", workdir=sample_workdir)
+
+    @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
+    @patch("nemo_safe_synthesizer.llm.metadata.load_json")
+    def test_legacy_timeseries_source_columns_load_as_deterministic_metadata(
+        self,
+        mock_load_json,
+        mock_auto_config,
+        sample_prompt_config,
+        mock_autoconfig_obj,
+        tmp_path,
+        sample_workdir,
+    ):
+        mock_auto_config.from_pretrained.return_value = mock_autoconfig_obj
+        mock_load_json.return_value = {
+            "model_name_or_path": "loaded-model",
+            "prompt_config": sample_prompt_config.model_dump(),
+            "base_max_seq_length": 2048,
+            "timeseries_source_columns": ["group", "timestamp", "value"],
+        }
+
+        metadata = ModelMetadata.from_metadata_json(tmp_path / "metadata.json", workdir=sample_workdir)
+
+        assert metadata.timeseries_metadata == TimeseriesMetadata(source_columns=("group", "timestamp", "value"))
+        assert metadata.timeseries_metadata is not None
+        assert metadata.timeseries_metadata.use_flexible_timeseries is False
 
     def test_from_str_or_path_raises_for_unknown_model(self):
         """Test from_str_or_path raises ValueError for unknown model names."""
@@ -824,14 +852,16 @@ class TestGenerationMaxTokensFor:
     def test_timeseries_metadata_round_trips_through_json(self, sample_model_metadata):
         """Typed group values and flexible metadata survive artifact persistence."""
         sample_model_metadata.timeseries_group_values = [7, "group-A", 2.5]
-        sample_model_metadata.flexible_timeseries_metadata = FlexibleTimeseriesMetadata(
-            index_column="_time_idx_1",
-            marker_column="_is_last_row_1",
-            max_records=4,
+        sample_model_metadata.timeseries_metadata = TimeseriesMetadata(
             source_columns=("value", "group_id", "timestamp"),
-            source_timestamp_column="timestamp",
-            source_timestamp_format="%Y-%m-%d %H:%M:%S",
-            source_interval_seconds=60,
+            flexible=FlexibleTimeseriesMetadata(
+                index_column="_time_idx_1",
+                marker_column="_is_last_row_1",
+                max_records=4,
+                source_timestamp_column="timestamp",
+                source_timestamp_format="%Y-%m-%d %H:%M:%S",
+                source_interval_seconds=60,
+            ),
         )
         sample_model_metadata.save_metadata()
 
@@ -843,7 +873,24 @@ class TestGenerationMaxTokensFor:
             )
 
         assert reloaded.timeseries_group_values == [7, "group-A", 2.5]
-        assert reloaded.flexible_timeseries_metadata == sample_model_metadata.flexible_timeseries_metadata
+        assert reloaded.timeseries_metadata == sample_model_metadata.timeseries_metadata
+        assert reloaded.timeseries_metadata is not None
+        assert reloaded.timeseries_metadata.use_flexible_timeseries is True
+
+    def test_deterministic_timeseries_metadata_round_trips_through_json(self, sample_model_metadata):
+        sample_model_metadata.timeseries_metadata = TimeseriesMetadata(source_columns=("value", "group_id"))
+        sample_model_metadata.save_metadata()
+
+        with patch("nemo_safe_synthesizer.llm.metadata.AutoConfig") as mock_ac:
+            mock_ac.from_pretrained.return_value = sample_model_metadata.autoconfig
+            reloaded = ModelMetadata.from_metadata_json(
+                sample_model_metadata.workdir.train.adapter.metadata,  # ty: ignore[unresolved-attribute]
+                workdir=sample_model_metadata.workdir,
+            )
+
+        assert reloaded.timeseries_metadata == TimeseriesMetadata(source_columns=("value", "group_id"))
+        assert reloaded.timeseries_metadata is not None
+        assert reloaded.timeseries_metadata.use_flexible_timeseries is False
 
     def test_metadata_max_records_per_group_accepts_none_or_positive(
         self, sample_prompt_config, mock_autoconfig_obj, sample_workdir

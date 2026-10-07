@@ -766,7 +766,7 @@ class TestApplyPreprocessing:
         assert "new_col" in result.columns
 
 
-def test_process_timeseries_copies_flexible_metadata_to_model_metadata(backend):
+def test_process_timeseries_stores_flexible_metadata(backend):
     data = pd.DataFrame(
         {
             "group": ["A", "A", "B"],
@@ -784,12 +784,13 @@ def test_process_timeseries_copies_flexible_metadata_to_model_metadata(backend):
 
     result = backend._process_timeseries(data)
 
-    metadata = backend.model_metadata.flexible_timeseries_metadata
+    metadata = backend.model_metadata.timeseries_metadata
     assert metadata is not None
-    assert metadata.max_records == 2
+    assert metadata.use_flexible_timeseries is True
+    assert metadata.flexible is not None
+    assert metadata.flexible.max_records == 2
     assert metadata.source_columns == ("group", "timestamp", "value")
-    assert metadata.source_timestamp_column == "timestamp"
-    assert backend.model_metadata.timeseries_source_columns is None
+    assert metadata.flexible.source_timestamp_column == "timestamp"
     assert list(result.columns) == ["group", "_time_idx", "timestamp", "value", "_is_last_row"]
 
 
@@ -813,13 +814,14 @@ def test_finalize_flexible_timeseries_recomputes_controls_after_preprocessing(ba
 
     result = backend._finalize_flexible_timeseries(preprocessed)
 
-    metadata = backend.model_metadata.flexible_timeseries_metadata
+    metadata = backend.model_metadata.timeseries_metadata
     assert metadata is not None
-    assert metadata.max_records == 2
+    assert metadata.flexible is not None
+    assert metadata.flexible.max_records == 2
     assert result[result["group"] == "A"]["_is_last_row"].tolist() == [False, True]
 
 
-def test_process_timeseries_clears_flexible_metadata_for_deterministic_data(backend):
+def test_process_timeseries_stores_deterministic_metadata(backend):
     data = pd.DataFrame(
         {
             "group": ["A", "A", "B", "B"],
@@ -837,8 +839,10 @@ def test_process_timeseries_clears_flexible_metadata_for_deterministic_data(back
 
     backend._process_timeseries(data)
 
-    assert backend.model_metadata.flexible_timeseries_metadata is None
-    assert backend.model_metadata.timeseries_source_columns == ["group", "timestamp", "value"]
+    metadata = backend.model_metadata.timeseries_metadata
+    assert metadata is not None
+    assert metadata.use_flexible_timeseries is False
+    assert metadata.source_columns == ("group", "timestamp", "value")
 
 
 class TestPreprocessLogitsForMetrics:

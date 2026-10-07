@@ -17,7 +17,7 @@ from ..config.parameters import SafeSynthesizerParameters
 from ..config.time_series import TimeSeriesParameters
 from ..defaults import PSEUDO_GROUP_COLUMN
 from ..errors import DataError, ParameterError
-from ..llm.metadata import FlexibleTimeseriesMetadata
+from ..llm.metadata import TimeseriesMetadata
 from .actions.utils import guess_datetime_format
 from .flexible_timeseries import resolve_flexible_timeseries_metadata
 from .timeseries_utils import stable_sort_within_groups
@@ -150,10 +150,19 @@ class TimeSeriesInspection:
     """Timestamp-sorted source data."""
 
     group_column: str
-    """Effective source group column."""
+    """Resolved group column in ``data``.
+
+    The configured ``group_training_examples_by``, or the internal pseudo-group
+    column ``PSEUDO_GROUP_COLUMN`` added for an ungrouped series.
+    """
 
     timestamp_column: str
-    """Effective source timestamp column."""
+    """Resolved timestamp column in ``data``.
+
+    The configured ``timestamp_column``; the order column when it is used as the
+    timestamp together with ``timestamp_interval_seconds``; or a generated
+    elapsed-seconds column when only ``timestamp_interval_seconds`` is set.
+    """
 
     timestamp_format: str
     """Validated or inferred source timestamp format."""
@@ -169,7 +178,7 @@ class TimeSeriesInspection:
 class TimeSeriesRoutingDecision:
     """Automatic selection between deterministic and flexible time-series processing."""
 
-    uses_flexible_timeseries: bool
+    use_flexible_timeseries: bool
     """Whether source shape requires marker-based flexible processing."""
 
     failed_constraints: tuple[str, ...]
@@ -184,8 +193,8 @@ class TimeSeriesRoutingDecision:
     inspection: TimeSeriesInspection
     """Normalized source inspection reused by deterministic preprocessing."""
 
-    flexible_metadata: FlexibleTimeseriesMetadata | None = None
-    """Internal control-column metadata when flexible routing was applied."""
+    timeseries_metadata: TimeseriesMetadata | None = None
+    """Resolved representation and source schema; flexible controls are set only for flexible routing."""
 
 
 def _resolve_group_column(data: pd.DataFrame, config: SafeSynthesizerParameters) -> tuple[pd.DataFrame, str]:
@@ -664,7 +673,9 @@ def _validate_asserted_interval(inspection: TimeSeriesInspection, expected_inter
                 TimeSeriesValidationReason.TIMESTAMP_INTERVAL_MISMATCH,
                 f"timestamp_interval_seconds={expected_interval_seconds} does not match the spacing of "
                 f"timestamp column '{inspection.timestamp_column}' in group '{stats.group_name}'. "
-                "Correct timestamp_interval_seconds, or remove it to allow irregular intervals.",
+                "Unset timestamp_interval_seconds in the config to remove the check, or correct the input "
+                "data to have regular intervals by fixing inconsistent timestamp values or removing the "
+                "offending groups.",
             )
 
 
@@ -714,7 +725,7 @@ def _inspect_timeseries_constraints(
 
     maximum = max(stats.record_count for stats in group_stats)
     return TimeSeriesRoutingDecision(
-        uses_flexible_timeseries=bool(failed),
+        use_flexible_timeseries=bool(failed),
         failed_constraints=tuple(failed),
         sequence_max_records=maximum,
         timestamp_format=inspection.timestamp_format,
@@ -763,8 +774,9 @@ def resolve_timeseries_routing(
     """Select the deterministic or flexible time-series representation.
 
     Resolves the effective timestamp and order columns and persists an inferred
-    timestamp format on ``config``. Flexible metadata is returned on the
-    decision only when deterministic shape constraints are not satisfied.
+    timestamp format on ``config``. The decision carries the time-series
+    metadata for either route; its flexible controls are set only when
+    deterministic shape constraints are not satisfied.
 
     Args:
         data: Source data to inspect.
@@ -782,15 +794,16 @@ def resolve_timeseries_routing(
     decision = _inspect_timeseries_constraints(data, config)
     if ts_config.timestamp_format is None:
         ts_config.timestamp_format = decision.timestamp_format
-    if decision.uses_flexible_timeseries:
-        metadata = resolve_flexible_timeseries_metadata(
+    flexible = None
+    if decision.use_flexible_timeseries:
+        flexible = resolve_flexible_timeseries_metadata(
             data,
             config,
             decision.sequence_max_records,
             decision.timestamp_format,
         )
-        decision = replace(decision, flexible_metadata=metadata)
-    return decision
+    metadata = TimeseriesMetadata(source_columns=tuple(data.columns), flexible=flexible)
+    return replace(decision, timeseries_metadata=metadata)
 
 
 def validate_timeseries_data(data: pd.DataFrame, config: SafeSynthesizerParameters) -> TimeSeriesValidationResult:

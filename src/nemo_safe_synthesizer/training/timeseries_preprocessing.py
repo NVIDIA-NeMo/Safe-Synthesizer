@@ -13,7 +13,7 @@ from ..data_processing.timeseries_validation import (
     resolve_timeseries_routing,
     validate_deterministic_inspection,
 )
-from ..llm.metadata import FlexibleTimeseriesMetadata
+from ..llm.metadata import TimeseriesMetadata
 from ..observability import get_logger
 
 logger = get_logger(__name__)
@@ -47,7 +47,7 @@ def _reorder_timeseries_columns(
 def process_timeseries_data(
     training_df: pd.DataFrame,
     config: SafeSynthesizerParameters,
-) -> tuple[pd.DataFrame, SafeSynthesizerParameters, FlexibleTimeseriesMetadata | None]:
+) -> tuple[pd.DataFrame, SafeSynthesizerParameters, TimeseriesMetadata | None]:
     """Resolve and prepare deterministic or flexible time-series training data.
 
     Normalizes grouped and ungrouped time series into the same training path.
@@ -64,8 +64,8 @@ def process_timeseries_data(
         config: Configuration containing time-series and data settings.
 
     Returns:
-        Processed training data, the resolved configuration, and the flexible
-        metadata to persist with the model, or ``None`` for deterministic or
+        Processed training data, the resolved configuration, and the
+        time-series metadata to persist with the model, or ``None`` for
         non-time-series data.
 
     Raises:
@@ -79,12 +79,12 @@ def process_timeseries_data(
         return training_df, config, None
 
     ts_config = config.time_series
-    if routing.flexible_metadata is not None:
-        metadata = routing.flexible_metadata
+    metadata = routing.timeseries_metadata
+    if metadata is not None and metadata.flexible is not None:
         training_df, group_column = prepare_flexible_timeseries_data(
             training_df,
             config,
-            metadata,
+            metadata.flexible,
             routing.timestamp_format,
         )
         logger.info(
@@ -92,7 +92,7 @@ def process_timeseries_data(
             extra={
                 "group_column": group_column,
                 "failed_constraints": list(routing.failed_constraints),
-                "sequence_max_records": metadata.max_records,
+                "sequence_max_records": metadata.flexible.max_records,
             },
         )
         return training_df, config, metadata
@@ -142,4 +142,4 @@ def process_timeseries_data(
         validation.group_by_column,
         validation.timestamp_column,
     )
-    return training_df, config, None
+    return training_df, config, metadata

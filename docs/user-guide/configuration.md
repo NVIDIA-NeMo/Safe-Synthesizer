@@ -342,7 +342,7 @@ for the full field list. For DP error diagnostics, see
 | `data.max_holdout` | `2000` | Upper cap on holdout size | Leave at default for most datasets |
 | `data.random_state` | `null` | Random seed -- auto-generated if `null`; set an explicit integer for reproducible splits | Set to a fixed integer for reproducibility |
 | `data.group_training_examples_by` | `null` | Column to group records by | Use for multi-row entities (e.g. patient ID, session ID) |
-| `data.order_training_examples_by` | `null` | Column to order within groups (requires `data.group_training_examples_by`) | In time-series mode, leave unset or set it to `time_series.timestamp_column` |
+| `data.order_training_examples_by` | `null` | Column to order within groups (requires `data.group_training_examples_by`) | In time-series mode, prefer `time_series.timestamp_column`; if both are set they must match |
 | `data.max_sequences_per_example` | `"auto"` | Max sequences per example (`1` for DP, `null` for time series, `10` otherwise). `null` lets each example fill the context window. DP and time-series mode cannot be enabled together. | Leave at `"auto"` |
 
 See [`DataParameters`][nemo_safe_synthesizer.config.data.DataParameters]
@@ -371,11 +371,17 @@ automatically. Null, unparseable, or otherwise invalid timestamps remain data
 errors.
 
 In time-series mode, `time_series.timestamp_column` and
-`data.order_training_examples_by` must name the same column. Set only one; the
-other is filled in automatically. `time_series.timestamp_interval_seconds` is
-an assertion: if the spacing of your timestamps does not match it, the run
-fails with `timestamp_interval_mismatch`. Leave it unset to allow irregular
-intervals.
+`data.order_training_examples_by` play the same role: both name the column
+that orders records within a group. You can set either one, or both if they
+are identical; differing values are a configuration error. Prefer
+`timestamp_column`, which also works for a single ungrouped series;
+`order_training_examples_by` requires `data.group_training_examples_by`. When
+only `order_training_examples_by` is set together with
+`timestamp_interval_seconds`, that column is treated as the timestamp.
+
+`time_series.timestamp_interval_seconds` is an assertion: if the spacing of
+your timestamps does not match it, the run fails with
+`timestamp_interval_mismatch`. Leave it unset to allow irregular intervals.
 
 See [`TimeSeriesParameters`][nemo_safe_synthesizer.config.time_series.TimeSeriesParameters]
 for the full schema. For detailed descriptions and constraints, see the
