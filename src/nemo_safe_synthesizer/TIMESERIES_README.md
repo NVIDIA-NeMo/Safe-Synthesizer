@@ -319,7 +319,7 @@ TimeseriesBackend(VllmBackend)
 2. Token-Prompt Assembly: Reproduce the training prompt and sequence special-token boundary, then append the prefix or history bytes.
 3. Batch Generation: Clamp completion length to the remaining context and generate multiple candidate suffixes (default 5) per prompt for each active group.
 4. Record Reconstruction: During the first iteration, prepend the JSON-only prefix before parsing each candidate.
-5. Response Selection: Keep one response per group. Deterministic groups keep the response with the most valid records; flexible groups keep the first response whose valid prefix ends with an accepted final-row marker, otherwise the first response with a valid prefix.
+5. Response Selection: Apply data actions and post-processing checks to every response, then keep one per group. Deterministic groups keep the response with the most accepted rows; flexible groups keep the first response whose accepted rows end with the final-row marker, otherwise the first response with an accepted row. A response rejected by data actions therefore never displaces another valid response.
 6. History Update: Switch from the prefix to a sliding history containing exact accepted record text.
 7. Repeat: Continue until each group completes. Deterministic groups complete at the stop timestamp; flexible groups complete at an accepted final-row marker or the maximum source-group length.
 
@@ -346,7 +346,8 @@ All time series use parallel group generation (single-sequence is just 1 group):
    d. Process LLM outputs into per-group Batch objects
    e. For each group:
       - Validate chronological order against group's last timestamp
-      - Retain one response (deterministic: most valid records; flexible: first with an end marker, else first valid) and discard others
+      - Apply data actions and post-processing checks to every response
+      - Retain one validated response (deterministic: most accepted rows; flexible: first with an end marker, else first valid) and discard others
       - Update group state (history, last_timestamp)
       - Deterministic: check if stop timestamp reached (marks group complete)
       - Flexible: check for an accepted final-row marker or the length limit

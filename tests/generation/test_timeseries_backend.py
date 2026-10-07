@@ -1491,6 +1491,22 @@ class TestFlexibleTimeseries:
             batch._responses.append(ParsedResponse(records=records))
         return batch
 
+    @staticmethod
+    def _select(backend, state, batch, batches=None) -> int | None:
+        outcomes = backend._evaluate_responses(state, batch, batches or GenerationBatches())
+        return backend._select_response(outcomes)
+
+    @staticmethod
+    def _reject_value(rejected_value: int):
+        """Data action that rejects rows whose ``value`` equals ``rejected_value``."""
+
+        def data_actions(batch: pd.DataFrame, df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+            rejected = batch[batch["value"] == rejected_value].copy()
+            rejected[MetadataColumns.REJECT_REASON.value] = "test rejection"
+            return batch[batch["value"] != rejected_value].copy(), rejected
+
+        return data_actions
+
     @pytest.mark.parametrize(
         ("samples", "expected_index"),
         [
@@ -1514,9 +1530,29 @@ class TestFlexibleTimeseries:
         )
         state = backend._init_group_state("group_A")
 
-        assert backend._select_flexible_response(state, self._sample_batch(*samples)) == expected_index
+        assert self._select(backend, state, self._sample_batch(*samples)) == expected_index
 
-    def test_selected_flexible_response_is_retained(
+    def test_flexible_selection_falls_back_when_data_actions_reject_marker_sample(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        _enable_flexible_timeseries(timeseries_base_params, timeseries_model_metadata, max_records=10)
+        backend = create_timeseries_backend(
+            timeseries_base_params, timeseries_model_metadata, mock_workdir, self._schema()
+        )
+        state = backend._init_group_state("group_A")
+        batch = self._sample_batch([(0, True)], [(0, False), (1, True)])
+        marker_row = batch._responses[0].records[0].parsed
+        assert marker_row is not None
+        marker_row["value"] = 99
+        batches = GenerationBatches(data_actions_fn=self._reject_value(99))
+
+        outcomes = backend._evaluate_responses(state, batch, batches)
+
+        assert outcomes[0].accepted == []
+        assert backend._select_response(outcomes) == 1
+        assert outcomes[1].termination_reason == "terminal"
+
+    def test_selected_flexible_response_is_retained_and_others_invalidated(
         self, timeseries_base_params, timeseries_model_metadata, mock_workdir
     ):
         _enable_flexible_timeseries(timeseries_base_params, timeseries_model_metadata, max_records=10)
@@ -1525,22 +1561,27 @@ class TestFlexibleTimeseries:
         )
         state = backend._init_group_state("group_A")
         batch = self._sample_batch([(0, False), (1, False), (2, False)], [(0, True)])
+        discarded = list(batch._responses[0].records)
 
-        preferred_index = backend._select_flexible_response(state, batch)
-        retained = backend._retain_single_valid_response(batch, preferred_index=preferred_index)
+        selected_index = self._select(backend, state, batch)
+        retained = backend._retain_single_valid_response(batch, preferred_index=selected_index)
 
         assert [record.parsed["_is_last_row"] for record in retained if record.parsed is not None] == [True]
         assert batch._responses[0].valid_records == []
+        assert all(not record.is_valid for record in discarded)
 
-    def test_deterministic_retention_keeps_response_with_most_valid_records(
+    def test_deterministic_selection_keeps_response_with_most_accepted_rows(
         self, timeseries_base_params, timeseries_model_metadata, mock_workdir
     ):
         backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
-        batch = self._sample_batch([(0, False)], [(0, False), (1, False)])
+        state = backend._init_group_state("group_A")
+        batch = self._sample_batch([(0, False), (1, False), (2, False)], [(0, False), (1, False)])
+        for record in batch._responses[0].records[1:]:
+            assert record.parsed is not None
+            record.parsed["value"] = 99
+        batches = GenerationBatches(data_actions_fn=self._reject_value(99))
 
-        retained = backend._retain_single_valid_response(batch)
-
-        assert len(retained) == 2
+        assert self._select(backend, state, batch, batches) == 1
 
     def test_flexible_generation_requests_multiple_samples(
         self, timeseries_base_params, timeseries_model_metadata, mock_workdir

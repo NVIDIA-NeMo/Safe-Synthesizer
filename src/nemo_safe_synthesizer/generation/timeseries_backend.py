@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, auto
 from pathlib import Path
-from typing import Self
+from typing import NamedTuple, Self
 
 import pandas as pd
 from vllm.inputs.llm import TokensPrompt
@@ -200,6 +200,16 @@ class GroupState:
     """Completion tokens attempted for this group, including discarded rows."""
 
 
+class _ResponseOutcome(NamedTuple):
+    """Validated result of one sampled response for a time-series group."""
+
+    accepted: list[ParsedRecord]
+    """Rows that passed every check, in generation order."""
+
+    termination_reason: str | None
+    """Flexible ``terminal`` or ``cap`` stop accepted in this response, if any."""
+
+
 class GroupProcessingResult(Enum):
     """Result of processing a generation batch for a single group.
 
@@ -257,8 +267,9 @@ class TimeseriesBackend(VllmBackend):
            d. Process LLM outputs into per-group Batch objects
            e. For each group:
               - Validate chronological order against group's last timestamp
-              - Retain the response with the most valid records (discard others)
-              - Apply data actions and discard records rejected by post-processing
+              - Apply data actions and post-processing checks to every sampled response
+              - Retain one validated response (deterministic: most accepted rows;
+                flexible: first ending with the final-row marker, else first valid)
               - Update group state from accepted records (history, last_timestamp)
               - Check if an accepted record reached the stop timestamp
               - Track invalid output and timestamp progress; fail after consecutive retries
@@ -645,31 +656,10 @@ class TimeseriesBackend(VllmBackend):
         Returns:
             The retained prefix and its tentative marker- or cap-based stop.
         """
-        invalidations, retained, accepted_row_stop = self._scan_flexible_prefix(state, records)
-        for record, error in invalidations:
-            record.invalidate(error)
-        return retained, accepted_row_stop
-
-    def _scan_flexible_prefix(
-        self,
-        state: GroupState,
-        records: list[ParsedRecord],
-    ) -> tuple[list[tuple[ParsedRecord, tuple[str, str]]], list[ParsedRecord], tuple[str, ParsedRecord] | None]:
-        """Evaluate a flexible sequence prefix without modifying the records.
-
-        Args:
-            state: Active generation state for the group.
-            records: Parsed records in generation order.
-
-        Returns:
-            The records to invalidate with their errors, the retained prefix,
-            and its tentative marker- or cap-based stop.
-        """
         metadata = self._flexible_metadata
         if metadata is None:
-            return [], records, None
+            return records, None
 
-        invalidations: list[tuple[ParsedRecord, tuple[str, str]]] = []
         retained: list[ParsedRecord] = []
         accepted_row_stop: tuple[str, ParsedRecord] | None = None
         prefix_ended = False
@@ -680,28 +670,25 @@ class TimeseriesBackend(VllmBackend):
 
         for record in records:
             if prefix_ended:
-                invalidations.append((record, trimmed_error))
+                record.invalidate(trimmed_error)
                 continue
             parsed = record.parsed
             if parsed is None:
                 continue
             if not self._matches_group(parsed, state):
-                invalidations.append((record, group_error))
+                record.invalidate(group_error)
                 prefix_ended = True
                 continue
             index_value = parsed.get(self._sequence_index_column)
             if not isinstance(index_value, int) or isinstance(index_value, bool):
-                invalidations.append((record, index_error))
+                record.invalidate(index_error)
                 prefix_ended = True
                 continue
             if index_value != expected_index:
-                invalidations.append(
+                record.invalidate(
                     (
-                        record,
-                        (
-                            f"Generated sequence index {index_value!r} does not match expected index {expected_index}",
-                            "TimeSeries",
-                        ),
+                        f"Generated sequence index {index_value!r} does not match expected index {expected_index}",
+                        "TimeSeries",
                     )
                 )
                 prefix_ended = True
@@ -716,31 +703,75 @@ class TimeseriesBackend(VllmBackend):
                 accepted_row_stop = ("cap", record)
                 prefix_ended = True
 
-        return invalidations, retained, accepted_row_stop
+        return retained, accepted_row_stop
 
-    def _select_flexible_response(self, state: GroupState, batch: Batch) -> int | None:
-        """Choose which sampled response continues a flexible sequence.
+    def _evaluate_responses(
+        self,
+        state: GroupState,
+        batch: Batch,
+        batches: GenerationBatches,
+    ) -> list[_ResponseOutcome]:
+        """Validate every sampled response before one is selected.
 
-        Prefers the first response whose valid prefix ends with an accepted
-        final-row marker, then the first response with any valid prefix.
-        Selecting by sample order rather than by the number of valid rows avoids
-        favoring responses that continue past the point where the group should end.
+        Each response is trimmed to its structurally valid prefix, data actions
+        run on all responses, and post-processed rows are checked again. Selection
+        therefore only considers rows that would actually be accepted, so a
+        response rejected by data actions or post-processed checks cannot displace
+        another valid response. Data-action history is not updated here.
 
         Args:
             state: Active generation state for the group.
             batch: The group's batch of sampled responses.
+            batches: Accumulator that applies data actions.
+
+        Returns:
+            The accepted rows and termination reason of each response, in order.
+        """
+        trimmed = [
+            self._trim_flexible_timeseries_records(
+                state,
+                [record for record in response.records if record.is_valid and record.parsed is not None],
+            )
+            for response in batch._responses
+        ]
+        batches.postprocess_batch(batch, commit_history=False)
+        outcomes: list[_ResponseOutcome] = []
+        for retained, accepted_row_stop in trimmed:
+            self._validate_postprocessed_group_identity(state, retained)
+            self._validate_postprocessed_sequence_indices(state, retained)
+            accepted = [record for record in retained if record.is_valid and record.parsed is not None]
+            outcomes.append(_ResponseOutcome(accepted, self._resolve_postprocessed_termination(accepted_row_stop)))
+        return outcomes
+
+    def _select_response(self, outcomes: list[_ResponseOutcome]) -> int | None:
+        """Choose which validated response continues the group.
+
+        Deterministic groups keep the response with the most accepted rows.
+        Flexible groups keep the first response whose accepted rows end with the
+        final-row marker, otherwise the first response with any accepted row.
+        Choosing the most rows in flexible mode would favor responses that
+        continue past the point where the group should end.
+
+        Args:
+            outcomes: Validated outcomes from ``_evaluate_responses``.
 
         Returns:
             The index of the selected response, or ``None`` when no response has
-            a valid prefix.
+            an accepted row.
         """
+        if not self._flexible_timeseries:
+            best_index: int | None = None
+            best_count = 0
+            for index, outcome in enumerate(outcomes):
+                if len(outcome.accepted) > best_count:
+                    best_index, best_count = index, len(outcome.accepted)
+            return best_index
+
         first_valid_index: int | None = None
-        for index, response in enumerate(batch._responses):
-            valid_records = [record for record in response.records if record.is_valid and record.parsed is not None]
-            _, retained, stop = self._scan_flexible_prefix(state, valid_records)
-            if not retained:
+        for index, outcome in enumerate(outcomes):
+            if not outcome.accepted:
                 continue
-            if stop is not None and stop[0] == "terminal":
+            if outcome.termination_reason == "terminal":
                 return index
             if first_valid_index is None:
                 first_valid_index = index
@@ -1415,17 +1446,15 @@ class TimeseriesBackend(VllmBackend):
                 batch = group_batches[state.group_id]
                 if self.config.time_series.timestamp_interval_seconds is not None:
                     self._check_chronological_for_group(batch, state)
-                preferred_index = self._select_flexible_response(state, batch) if self._flexible_timeseries else None
-                retained_records = self._retain_single_valid_response(batch, preferred_index=preferred_index)
-                retained_records, accepted_row_stop = self._trim_flexible_timeseries_records(state, retained_records)
-                batches.postprocess_batch(batch, commit_history=False)
-                self._validate_postprocessed_group_identity(state, retained_records)
-                self._validate_postprocessed_sequence_indices(state, retained_records)
+                outcomes = self._evaluate_responses(state, batch, batches)
+                selected_index = self._select_response(outcomes)
+                self._retain_single_valid_response(batch, preferred_index=selected_index)
                 batches.commit_history(batch)
-                termination_reason = self._resolve_postprocessed_termination(accepted_row_stop)
-                accepted_records = [
-                    record for record in retained_records if record.is_valid and record.parsed is not None
-                ]
+                if selected_index is None:
+                    accepted_records: list[ParsedRecord] = []
+                    termination_reason: str | None = None
+                else:
+                    accepted_records, termination_reason = outcomes[selected_index]
                 if termination_reason is None:
                     result = self._process_group_result(
                         state,
@@ -1530,6 +1559,11 @@ class TimeseriesBackend(VllmBackend):
         trim_error = ("Extra response trimmed for sliding window", "TimeSeries")
         for idx, response in enumerate(batch._responses):
             if idx != max_valid_idx:
+                # Invalidate the discarded rows themselves so post-processing
+                # bookkeeping that still references them treats them as rejected.
+                for record in response.records:
+                    if record.is_valid:
+                        record.invalidate(trim_error)
                 # Drop all records from the trimmed response; replace with a
                 # single synthetic marker record so the trim is visible in
                 # error statistics without carrying stale text/token counts.
