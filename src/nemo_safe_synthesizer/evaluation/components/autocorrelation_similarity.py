@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Autocorrelation-based fidelity evaluation for numeric time-series channels.
+"""Autocorrelation-based fidelity evaluation for numeric time-series columns.
 
 The metric compares lagged self-correlation in training and synthetic
 sequences. It evaluates each shared group and numeric value column separately,

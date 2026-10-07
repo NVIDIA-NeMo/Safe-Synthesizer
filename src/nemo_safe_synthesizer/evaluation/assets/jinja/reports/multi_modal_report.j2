@@ -159,7 +159,7 @@
                 <div class="metric-list">
                     {% call metric_card("autocorrelation-similarity", ctx.autocorrelation_similarity.name,
                             ctx.autocorrelation_similarity.score,
-                            "Measures preservation of lagged dependence within numeric value columns",
+                            "Measures whether numeric columns change over time like the training data",
                             ctx.tooltips.autocorrelation_similarity_info,
                             expandable=true) %}
                         {% include "jinja/components/autocorrelation_similarity.j2" %}

@@ -383,7 +383,7 @@ for the full schema. For detailed descriptions and constraints, see the
 | `evaluation.quasi_identifier_count` | `3` | Number of quasi-identifiers sampled for AIA (auto-reduced for small datasets) | Leave at default |
 | `evaluation.mandatory_columns` | `null` | Number of mandatory columns that must be used in evaluation | Leave at default |
 | `evaluation.time_series.enabled` | `false` | Add time-series metrics to evaluation and the HTML report | Enable only with `time_series.is_timeseries: true` |
-| `evaluation.time_series.autocorrelation.value_columns` | `null` | Numeric channels included in Autocorrelation Similarity | Leave `null` for inferred numeric columns or provide an explicit list |
+| `evaluation.time_series.autocorrelation.value_columns` | `null` | Numeric columns included in Autocorrelation Similarity | Leave `null` for inferred numeric columns or provide an explicit list |
 | `evaluation.time_series.autocorrelation.max_lag` | `20` | Largest positive lag requested | Select a horizon relevant to the downstream use case |
 | `evaluation.time_series.autocorrelation.min_points` | `4` | Minimum finite observations required per sequence | Leave at default unless short sequences must be excluded |
 | `evaluation.time_series.autocorrelation.max_groups` | `128` | Maximum shared groups evaluated in a reproducible sample | Lower to reduce evaluation time for highly grouped data |

@@ -159,8 +159,20 @@ def _autocorrelation_context(
             "summary_columns": columns,
             "summary_traces_per_column": 4,
             "figures": [
-                {"title": "Typical autocorrelation", "html": "<div>summary</div>", "column_select": True},
-                {"title": "Pair scores", "html": "<div>pairs</div>", "column_select": False},
+                {
+                    "title": "Typical autocorrelation",
+                    "html": "<div>summary</div>",
+                    "column_select": True,
+                    "tooltip_id": "autocorrelation-typical-info",
+                    "tooltip": "Lines should overlap.",
+                },
+                {
+                    "title": "Pair scores",
+                    "html": "<div>pairs</div>",
+                    "column_select": False,
+                    "tooltip_id": "autocorrelation-pair-scores-info",
+                    "tooltip": "Dots should be near 10.",
+                },
             ],
         }
     }
@@ -177,6 +189,19 @@ def test_autocorrelation_renders_column_select_and_pair_score_limit_note() -> No
     assert '<option value="9">column_9</option>' in rendered
     assert "Pair scores shows the 8 lowest-scoring columns." in rendered
     assert "<div>summary</div>" in rendered
+    assert " ".join(rendered.split()).count("Summarizing 10 group-column pairs (1 group, 10 numeric columns).") == 1
+
+
+def test_autocorrelation_renders_info_tooltip_for_each_chart() -> None:
+    rendered = _render_template(
+        "jinja/components/autocorrelation_similarity.j2",
+        ctx=_autocorrelation_context(column_count=2, pair_score_column_count=2),
+    )
+
+    assert rendered.count("data-tooltip-toggle") == 2
+    assert 'aria-controls="autocorrelation-typical-info"' in rendered
+    assert 'id="autocorrelation-pair-scores-info" role="tooltip" hidden' in rendered
+    assert "Dots should be near 10." in rendered
 
 
 def test_autocorrelation_omits_column_select_and_note_for_single_column() -> None:

@@ -123,12 +123,23 @@ class MultimodalReport(EvaluationReport):
                 autocorrelation["summary_columns"] = []
                 if profiles:
                     figures = [
-                        ("Typical autocorrelation", generate_autocorrelation_summary_figure(profiles), True),
-                        ("Difference by lag", generate_autocorrelation_lag_error_figure(profiles), False),
+                        (
+                            "Typical autocorrelation",
+                            generate_autocorrelation_summary_figure(profiles),
+                            True,
+                            "autocorrelation_typical_info",
+                        ),
+                        (
+                            "Difference by lag",
+                            generate_autocorrelation_lag_error_figure(profiles),
+                            False,
+                            "autocorrelation_difference_info",
+                        ),
                         (
                             "Pair scores",
                             generate_autocorrelation_pair_score_figure(profiles, autocorrelation["score"]["score"]),
                             False,
+                            "autocorrelation_pair_scores_info",
                         ),
                     ]
                     autocorrelation["figures"] = [
@@ -136,8 +147,10 @@ class MultimodalReport(EvaluationReport):
                             "title": title,
                             "html": figure.to_html(full_html=False, include_plotlyjs=False),
                             "column_select": column_select,
+                            "tooltip_id": tooltip_key.replace("_", "-"),
+                            "tooltip": tooltips[tooltip_key],
                         }
-                        for title, figure, column_select in figures
+                        for title, figure, column_select, tooltip_key in figures
                     ]
                     autocorrelation["summary_columns"] = order_autocorrelation_columns(profiles)
                 autocorrelation["summary_traces_per_column"] = AUTOCORRELATION_SUMMARY_TRACES_PER_COLUMN

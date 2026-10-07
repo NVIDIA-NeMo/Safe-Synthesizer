@@ -228,6 +228,12 @@ def test_time_series_report_summarizes_all_profiles_in_one_chart_row() -> None:
         "Pair scores",
     ]
     assert [figure["column_select"] for figure in context["figures"]] == [True, False, False]
+    assert [figure["tooltip_id"] for figure in context["figures"]] == [
+        "autocorrelation-typical-info",
+        "autocorrelation-difference-info",
+        "autocorrelation-pair-scores-info",
+    ]
+    assert all(figure["tooltip"].strip() for figure in context["figures"])
     assert context["summary_columns"] == ["other", "value"]
     assert context["summary_traces_per_column"] == 4
     assert context["pair_score_column_count"] == 2
