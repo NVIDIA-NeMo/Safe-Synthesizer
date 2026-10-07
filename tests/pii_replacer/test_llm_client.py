@@ -10,12 +10,11 @@ import pytest
 from pydantic import BaseModel, ConfigDict, Field
 
 from nemo_safe_synthesizer.config.replace_pii import LLMConfig
-from nemo_safe_synthesizer.defaults import DEFAULT_NSS_INFERENCE_ENDPOINT, DEFAULT_NSS_INFERENCE_MODEL
 from nemo_safe_synthesizer.errors import GenerationError, ParameterError
 from nemo_safe_synthesizer.pii_replacer.llm_client import (
     InferenceSettings,
     InvalidInferenceResponse,
-    MissingInferenceKeyError,
+    MissingInferenceModelError,
     OpenAICompatibleTransport,
     TransientInferenceError,
     resolve_inference_settings,
@@ -76,9 +75,7 @@ class TestInferenceSettings:
         ("config_model", "environ", "expected_model"),
         [
             pytest.param("config-model", {"NSS_INFERENCE_MODEL": "env-model"}, "config-model", id="yaml-before-env"),
-            pytest.param(None, {"NSS_INFERENCE_MODEL": "env-model"}, "env-model", id="env-before-default"),
-            pytest.param(None, {"NSS_INFERENCE_MODEL": "  "}, DEFAULT_NSS_INFERENCE_MODEL, id="blank-env-ignored"),
-            pytest.param(None, {}, DEFAULT_NSS_INFERENCE_MODEL, id="default"),
+            pytest.param(None, {"NSS_INFERENCE_MODEL": "env-model"}, "env-model", id="env-when-yaml-unset"),
         ],
     )
     def test_model_precedence(
@@ -95,18 +92,35 @@ class TestInferenceSettings:
         assert settings.endpoint_url == LOCAL_ENDPOINT
         assert settings.model_id == expected_model
 
-    def test_defaults_use_hosted_nvidia_service(self) -> None:
-        settings = resolve_inference_settings(
-            LLMConfig(),
-            environ={"NSS_INFERENCE_KEY": "hosted-key"},  # pragma: allowlist secret
-        )
+    @pytest.mark.parametrize("model_env", [{}, {"NSS_INFERENCE_MODEL": "  "}], ids=["unset", "blank"])
+    def test_explicit_endpoint_has_no_default_model(self, model_env: dict[str, str]) -> None:
+        with pytest.raises(MissingInferenceModelError, match="model it serves must be set"):
+            resolve_inference_settings(LLMConfig(), environ={"NSS_INFERENCE_ENDPOINT": LOCAL_ENDPOINT, **model_env})
 
-        assert settings.endpoint_url == DEFAULT_NSS_INFERENCE_ENDPOINT
-        assert settings.model_id == DEFAULT_NSS_INFERENCE_MODEL
+    def test_missing_endpoint_has_no_hosted_fallback(self) -> None:
+        with pytest.raises(ParameterError, match="No PII inference endpoint is set"):
+            resolve_inference_settings(
+                LLMConfig(model_id="model"),
+                environ={"NSS_INFERENCE_KEY": "hosted-key"},  # pragma: allowlist secret
+            )
 
-    def test_default_hosted_endpoint_requires_runtime_key(self) -> None:
-        with pytest.raises(MissingInferenceKeyError, match="NSS_INFERENCE_KEY"):
-            resolve_inference_settings(LLMConfig(), environ={})
+    @pytest.mark.parametrize(("raw", "expected"), [(None, 60.0), ("900", 900.0), (" 12.5 ", 12.5)])
+    def test_timeout_comes_from_environment(self, raw: str | None, expected: float) -> None:
+        environ = {"NSS_INFERENCE_ENDPOINT": LOCAL_ENDPOINT}
+        if raw is not None:
+            environ["NSS_INFERENCE_TIMEOUT"] = raw
+
+        settings = resolve_inference_settings(LLMConfig(model_id="model"), environ=environ)
+
+        assert settings.timeout_seconds == expected
+
+    @pytest.mark.parametrize("raw", ["0", "-5", "soon", "inf", "nan"])
+    def test_invalid_timeout_is_rejected(self, raw: str) -> None:
+        with pytest.raises(ParameterError, match="NSS_INFERENCE_TIMEOUT must be a positive number"):
+            resolve_inference_settings(
+                LLMConfig(model_id="model"),
+                environ={"NSS_INFERENCE_ENDPOINT": LOCAL_ENDPOINT, "NSS_INFERENCE_TIMEOUT": raw},
+            )
 
     def test_local_openai_compatible_endpoint_can_be_keyless(self) -> None:
         assert _local_settings().api_key is None
@@ -128,7 +142,7 @@ class TestInferenceSettings:
         ],
     )
     def test_accepts_https_or_loopback_http(self, endpoint: str) -> None:
-        settings = resolve_inference_settings(LLMConfig(), environ={"NSS_INFERENCE_ENDPOINT": endpoint})
+        settings = resolve_inference_settings(LLMConfig(model_id="model"), environ={"NSS_INFERENCE_ENDPOINT": endpoint})
 
         assert settings.endpoint_url == endpoint
 
@@ -148,19 +162,112 @@ class TestInferenceSettings:
         ],
     )
     def test_rejects_invalid_or_plaintext_remote_endpoints(self, endpoint: str, message: str) -> None:
-        with pytest.raises(ParameterError, match=message) as exc_info:
+        with pytest.raises(ParameterError, match=message):
             resolve_inference_settings(LLMConfig(), environ={"NSS_INFERENCE_ENDPOINT": endpoint})
-
-        assert not isinstance(exc_info.value, MissingInferenceKeyError)
 
     def test_retryable_errors_belong_to_the_generation_error_hierarchy(self) -> None:
         assert issubclass(TransientInferenceError, GenerationError)
         assert issubclass(InvalidInferenceResponse, GenerationError)
-        assert issubclass(MissingInferenceKeyError, ParameterError)
 
 
 @pytest.mark.unit
 class TestOpenAICompatibleTransport:
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            (None, {"temperature": 0}),
+            (
+                '{"temperature": 1.0, "top_k": 20, "thinking_token_budget": 1000}',
+                {"temperature": 1.0, "top_k": 20, "thinking_token_budget": 1000},
+            ),
+            ('{"top_p": 0.9}', {"temperature": 0, "top_p": 0.9}),
+            ('{"temperature": null}', {}),
+        ],
+        ids=["default-greedy", "options-override-default", "options-merge-with-default", "null-drops-field"],
+    )
+    def test_request_options_are_sent_with_every_request(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        raw: str | None,
+        expected: dict[str, object],
+    ) -> None:
+        payloads: list[dict[str, object]] = []
+
+        def post(url: str, **kwargs: object) -> httpx.Response:
+            payloads.append(cast(dict[str, object], kwargs["json"]))
+            return httpx.Response(200, json={"choices": [{"message": {"content": "{}"}}]})
+
+        monkeypatch.setattr(httpx, "post", post)
+        environ = {"NSS_INFERENCE_ENDPOINT": LOCAL_ENDPOINT}
+        if raw is not None:
+            environ["NSS_INFERENCE_REQUEST_OPTIONS"] = raw
+        settings = resolve_inference_settings(LLMConfig(model_id="model"), environ=environ)
+
+        OpenAICompatibleTransport(settings).complete(messages=[], response_model=_StructuredResponse)
+
+        sent = {key: value for key, value in payloads[0].items() if key not in {"model", "messages", "response_format"}}
+        assert sent == expected
+
+    @pytest.mark.parametrize(
+        ("raw", "match"),
+        [
+            ("not json", "must be a JSON object"),
+            ("[1, 2]", "must be a JSON object"),
+            ('{"model": "other", "temperature": 1}', "must not set fields NSS manages: model"),
+        ],
+        ids=["invalid-json", "not-an-object", "reserved-field"],
+    )
+    def test_invalid_request_options_are_rejected(self, raw: str, match: str) -> None:
+        with pytest.raises(ParameterError, match=match):
+            resolve_inference_settings(
+                LLMConfig(model_id="model"),
+                environ={"NSS_INFERENCE_ENDPOINT": LOCAL_ENDPOINT, "NSS_INFERENCE_REQUEST_OPTIONS": raw},
+            )
+
+    @pytest.mark.parametrize(
+        ("endpoint", "trust_env"),
+        [(LOCAL_ENDPOINT, False), ("http://127.0.0.1:8000/v1", False), ("https://inference.example.com/v1", True)],
+        ids=["localhost", "ipv4-loopback", "remote"],
+    )
+    def test_environment_proxies_apply_only_to_remote_endpoints(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        endpoint: str,
+        trust_env: bool,
+    ) -> None:
+        seen: list[object] = []
+
+        def post(url: str, **kwargs: object) -> httpx.Response:
+            seen.append(kwargs["trust_env"])
+            return httpx.Response(200, json={"choices": [{"message": {"content": "{}"}}]})
+
+        monkeypatch.setattr(httpx, "post", post)
+        settings = resolve_inference_settings(
+            LLMConfig(model_id="model"),
+            environ={"NSS_INFERENCE_ENDPOINT": endpoint},
+        )
+
+        OpenAICompatibleTransport(settings).complete(messages=[], response_model=_StructuredResponse)
+
+        assert seen == [trust_env]
+
+    def test_requests_use_the_resolved_timeout(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        timeouts: list[object] = []
+
+        def post(url: str, **kwargs: object) -> httpx.Response:
+            timeouts.append(kwargs["timeout"])
+            return httpx.Response(200, json={"choices": [{"message": {"content": "{}"}}]})
+
+        monkeypatch.setattr(httpx, "post", post)
+        settings = resolve_inference_settings(
+            LLMConfig(model_id="model"),
+            environ={"NSS_INFERENCE_ENDPOINT": LOCAL_ENDPOINT, "NSS_INFERENCE_TIMEOUT": "900"},
+        )
+
+        OpenAICompatibleTransport(settings).complete(messages=[], response_model=_StructuredResponse)
+
+        assert timeouts == [900.0]
+
     def test_rejects_plaintext_remote_endpoint_from_direct_settings(self) -> None:
         settings = InferenceSettings(
             endpoint_url="http://inference.example.com/v1",

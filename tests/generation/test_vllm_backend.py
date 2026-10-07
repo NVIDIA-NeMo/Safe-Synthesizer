@@ -896,7 +896,7 @@ class TestSecureOutlinesCacheDir:
     """Tests for the CVE-2025-69872 outlines diskcache hardening."""
 
     def test_chmods_existing_cache_dir_to_0700(self, tmp_path, monkeypatch):
-        """``_secure_outlines_cache_dir`` tightens permissions on a permissive dir.
+        """``secure_outlines_cache_dir`` tightens permissions on a permissive dir.
 
         Exercises the explicit-OUTLINES_CACHE_DIR branch: simulates a co-tenant-
         writable cache directory (mode 0777) and asserts the helper locks it down
@@ -904,7 +904,7 @@ class TestSecureOutlinesCacheDir:
         """
         import stat
 
-        from nemo_safe_synthesizer.generation.vllm_backend import _secure_outlines_cache_dir
+        from nemo_safe_synthesizer.outlines_cache import secure_outlines_cache_dir
 
         cache_dir = tmp_path / "outlines-cache"
         cache_dir.mkdir()
@@ -913,7 +913,7 @@ class TestSecureOutlinesCacheDir:
 
         monkeypatch.setenv("OUTLINES_CACHE_DIR", str(cache_dir))
 
-        _secure_outlines_cache_dir()
+        secure_outlines_cache_dir()
 
         assert stat.S_IMODE(cache_dir.stat().st_mode) == 0o700
         assert os.environ["OUTLINES_CACHE_DIR"] == str(cache_dir)

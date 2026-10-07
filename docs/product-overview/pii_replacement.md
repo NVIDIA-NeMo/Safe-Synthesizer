@@ -121,29 +121,102 @@ replace_pii:
   schema_version: 3
   replacement_plan: auto_discovery
   llm:
-    model_id: nvidia/nemotron-3-ultra-550b-a55b
     max_workers: 8
 ```
 
-An empty mapping (`llm: {}`) enables the existing NSS inference defaults. Set
-the OpenAI-compatible endpoint at runtime through `NSS_INFERENCE_ENDPOINT` or
-the `--inference-endpoint-url` CLI option. For example, a local vLLM server may
-use `NSS_INFERENCE_ENDPOINT=http://localhost:8000/v1` with its served model ID.
-Plain HTTP is accepted only for loopback addresses (`localhost`, `127.0.0.0/8`,
-or `::1`); any other host must use HTTPS.
+An empty mapping (`llm: {}`) enables the NSS inference defaults. By default,
+NSS runs `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16` in a local vLLM server for the duration of plan
+discovery; see [Local inference server](#local-inference-server). To use
+another OpenAI-compatible service instead, set its endpoint at runtime through
+`NSS_INFERENCE_ENDPOINT` or the `--inference-endpoint-url` CLI option. For
+example, use `https://integrate.api.nvidia.com/v1` with an API key for the
+hosted NVIDIA service, or `http://localhost:8000/v1` for a vLLM server you run
+yourself. Plain HTTP is accepted only for loopback addresses (`localhost`,
+`127.0.0.0/8`, or `::1`); any other host must use HTTPS.
 
 The endpoint resolves from the explicit CLI runtime flag, then
-`NSS_INFERENCE_ENDPOINT`, then the NSS default; it is never persisted in NSS
-configuration. The model resolves from the explicit CLI runtime flag, then
-`replace_pii.llm.model_id`, `NSS_INFERENCE_MODEL`, and finally the NSS default.
-`NSS_INFERENCE_MODEL` supplies the model only when the configuration omits
-`model_id`; use `--inference-model-id` to override a persisted model for one run.
-The default hosted NVIDIA endpoint requires an API key. Keyless operation is
-supported for local OpenAI-compatible endpoints.
+`NSS_INFERENCE_ENDPOINT`; it is never persisted in NSS configuration. With an
+explicit endpoint, the model has no default and must be set; it resolves from
+the explicit CLI runtime flag, then `replace_pii.llm.model_id`, then
+`NSS_INFERENCE_MODEL`. `NSS_INFERENCE_MODEL` supplies the model only when the
+configuration omits `model_id`; use `--inference-model-id` to override a
+persisted model for one run. The hosted NVIDIA endpoint requires an
+API key. Keyless operation is supported for local OpenAI-compatible endpoints.
 
 Supply the inference API key at runtime through `NSS_INFERENCE_KEY` or the
 `--inference-api-key` CLI option. NSS does not store the key in configuration or
 plan artifacts.
+
+### Local inference server
+
+When no inference endpoint is set, NSS starts a vLLM server on the local GPU for
+plan discovery. The model ID (`replace_pii.llm.model_id`,
+`--inference-model-id`, or `NSS_INFERENCE_MODEL`) selects the bundled profile
+to run, and defaults to `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16`:
+
+```bash
+safe-synthesizer run replace-pii --plan-only \
+  --config config.yaml \
+  --data-source data.csv
+```
+
+If vLLM or a CUDA GPU is unavailable, planning fails with an error rather than
+sending data to a remote service; set `NSS_INFERENCE_ENDPOINT` to choose one.
+
+Bundled profiles pin each model to a fixed revision, turn on reasoning before
+the schema-constrained answer, and fit one 80 GB GPU, such as an A100 or H100:
+
+| Model ID | Weights | Request timeout | Notes |
+|----------|---------|-----------------|-------|
+| `openai/gpt-oss-120b` | about 65 GB | 120 s | Mixture of experts; default medium reasoning effort |
+| `Qwen/Qwen3.8-27B` | about 56 GB | 300 s | Dense; low reasoning effort, 1,000-token thinking budget |
+| `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16` (default) | about 66 GB | 300 s | Hybrid Mamba mixture of experts; 2,000-token thinking budget |
+
+Nemotron 3.5 Lightning and GPT-OSS-120B both performed well in our PII planning
+evaluation.
+
+Reasoning makes requests slow, so each profile sets its own request timeout.
+Set `NSS_INFERENCE_TIMEOUT` or `--inference-timeout-seconds` to override it, for
+example for much larger tables. The same setting applies to explicit endpoints,
+where it defaults to 60 seconds.
+
+Each profile also sends its model card's recommended sampling settings
+instead of the temperature 0 that NSS otherwise sends, since the cards warn
+against greedy decoding with reasoning. The Qwen and Nemotron profiles add a
+`thinking_token_budget`, which caps reasoning before the JSON answer. Set
+`NSS_INFERENCE_REQUEST_OPTIONS` or `--inference-request-options` to a JSON
+object, such as `{"thinking_token_budget": 500}`, to override individual fields
+of a profile's request options, or of the default `{"temperature": 0}` for an
+explicit endpoint. Fields you don't set keep their values; set a field to
+`null` to drop it and use the server's default.
+
+The first run downloads the weights into the Hugging Face cache. A model ID
+without a bundled profile is an error. To run another model locally, point
+`NSS_INFERENCE_LOCAL_PROFILE` or the `--inference-local-profile` CLI option at
+your own profile YAML (a bundled profile name such as `gpt-oss-120b` also
+works); any configured model ID must then match its served
+model name. A profile YAML has these fields: `model_id`,
+`revision`, and optionally `served_model_name`, `gpu_memory_utilization`,
+`max_model_len`, `max_num_seqs`, `tensor_parallel_size`, `extra_args`,
+`request_options`, `environment` (server process variables), `request_timeout_seconds`,
+`startup_timeout_seconds`, and `shutdown_timeout_seconds`. In vLLM 0.27,
+`thinking_token_budget` needs `VLLM_USE_V2_MODEL_RUNNER: "0"` in `environment`.
+
+NSS starts the server only when LLM-assisted discovery runs, meaning an
+`auto_discovery` plan with `llm` configured, and stops it before planning
+returns, including when planning fails. Plan validation, replacement, and
+training therefore never run while the server holds the GPU. Each run loads
+the model again; to reuse one server across many runs, start `vllm serve`
+yourself and set `NSS_INFERENCE_ENDPOINT` and `NSS_INFERENCE_MODEL` without a
+local profile.
+
+The server listens on a free loopback port. With an explicit local profile, a
+loopback `NSS_INFERENCE_ENDPOINT` such as `http://127.0.0.1:8000/v1` selects the
+listening address instead; a non-loopback endpoint, or a port already in use,
+is an error. Each launch generates its own API key, so `NSS_INFERENCE_KEY` is
+ignored. A profile's served model name defaults to its `model_id`.
+Server output goes to the NSS log at debug level, and vLLM request logging stays
+off because prompts contain raw cell samples.
 
 Automatic discovery uses two LLM passes. The first classifies every column's
 semantic entity type and may propose a replacement pattern, in bounded batches

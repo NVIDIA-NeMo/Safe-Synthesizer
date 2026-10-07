@@ -1,0 +1,110 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+import pytest
+from pydantic import ValidationError
+
+from nemo_safe_synthesizer.errors import ParameterError
+from nemo_safe_synthesizer.pii_replacer.local_inference import (
+    LocalVllmProfile,
+    bundled_profile_for_model,
+    bundled_profile_names,
+    load_profile,
+)
+
+
+@pytest.mark.unit
+class TestBundledProfiles:
+    @pytest.mark.parametrize("name", bundled_profile_names())
+    def test_every_bundled_profile_loads_with_a_pinned_commit(self, name: str) -> None:
+        profile = load_profile(name)
+
+        assert re.fullmatch(r"[0-9a-f]{40}", profile.revision)
+
+    def test_bundled_profiles_serve_distinct_models(self) -> None:
+        served = [load_profile(name).served_name for name in bundled_profile_names()]
+
+        assert len(served) == len(set(served))
+
+    def test_bundled_profile_is_found_by_served_model_name(self) -> None:
+        assert bundled_profile_for_model("openai/gpt-oss-120b") == load_profile("gpt-oss-120b")
+        assert bundled_profile_for_model("gpt-oss-120b") is None
+
+
+@pytest.mark.unit
+class TestLoadProfile:
+    def test_loads_profile_file_by_path(self, tmp_path: Path) -> None:
+        path = tmp_path / "tiny.yaml"
+        path.write_text("model_id: org/tiny\nrevision: abc123\nserved_model_name: tiny\n")
+
+        profile = load_profile(str(path))
+
+        assert profile == LocalVllmProfile(model_id="org/tiny", revision="abc123", served_model_name="tiny")
+        assert profile.served_name == "tiny"
+
+    def test_unknown_reference_lists_bundled_profiles(self) -> None:
+        with pytest.raises(ParameterError, match="gpt-oss-120b"):
+            load_profile("no-such-profile")
+
+    @pytest.mark.parametrize(
+        ("content", "match"),
+        [
+            pytest.param("- a\n- b\n", "must be a YAML mapping", id="not-a-mapping"),
+            pytest.param("model_id: [unclosed\n", "Could not read", id="bad-yaml"),
+            pytest.param("model_id: org/tiny\n", "revision", id="missing-revision"),
+            pytest.param(
+                "model_id: org/tiny\nrevision: abc\nport: 8000\n", "port", id="address-is-not-a-profile-field"
+            ),
+        ],
+    )
+    def test_invalid_profile_files_raise_parameter_error(self, tmp_path: Path, content: str, match: str) -> None:
+        path = tmp_path / "profile.yaml"
+        path.write_text(content)
+
+        with pytest.raises(ParameterError, match=match):
+            load_profile(path)
+
+
+@pytest.mark.unit
+class TestRequestOptionsAndEnvironment:
+    def test_request_options_must_not_override_nss_fields(self) -> None:
+        with pytest.raises(ValidationError, match="must not set fields NSS manages: response_format"):
+            LocalVllmProfile(model_id="org/tiny", revision="abc", request_options={"response_format": {}})
+
+    @pytest.mark.parametrize(
+        "name",
+        ["VLLM_API_KEY", "NSS_INFERENCE_KEY", "HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE", "VLLM_V1_USE_OUTLINES_CACHE"],
+    )
+    def test_environment_must_not_set_managed_variables(self, name: str) -> None:
+        with pytest.raises(ValidationError, match="must not set variables NSS manages"):
+            LocalVllmProfile(model_id="org/tiny", revision="abc", environment={name: "x"})
+
+    @pytest.mark.parametrize(
+        "field", ["request_timeout_seconds", "startup_timeout_seconds", "shutdown_timeout_seconds"]
+    )
+    @pytest.mark.parametrize("value", [float("inf"), float("nan")], ids=["inf", "nan"])
+    def test_timeouts_must_be_finite(self, field: str, value: float) -> None:
+        with pytest.raises(ValidationError, match=field):
+            LocalVllmProfile.model_validate({"model_id": "org/tiny", "revision": "abc", field: value})
+
+
+@pytest.mark.unit
+class TestExtraArgs:
+    @pytest.mark.parametrize(
+        "argument",
+        ["--port=9000", "--api_key", "--enable-log-req"],
+    )
+    def test_rejects_options_nss_manages(self, argument: str) -> None:
+        with pytest.raises(ValidationError, match="managed by NSS"):
+            LocalVllmProfile(model_id="org/tiny", revision="abc", extra_args=(argument,))
+
+    @pytest.mark.parametrize("argument", ["--reasoning-parser=openai_gptoss", "--api-server-count=2"])
+    def test_accepts_other_vllm_options(self, argument: str) -> None:
+        profile = LocalVllmProfile(model_id="org/tiny", revision="abc", extra_args=(argument,))
+
+        assert profile.extra_args == (argument,)

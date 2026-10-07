@@ -13,7 +13,7 @@ from pathlib import Path
 import pandas as pd
 
 from ...config.data import DataParameters
-from ...config.replace_pii import PiiReplacementPlan, ReplacePiiConfig
+from ...config.replace_pii import LLMConfig, PiiReplacementPlan, ReplacePiiConfig
 from ...config.time_series import TimeSeriesParameters
 from ...errors import ParameterError
 from .io import load_plan, save_plan
@@ -146,6 +146,24 @@ def _configured_plan(config: ReplacePiiConfig) -> PiiReplacementPlan:
     raise ParameterError("replacement_plan must be auto_discovery, an inline plan, or a path to a plan file")
 
 
+def _enhance_with_default_llm(
+    llm_config: LLMConfig,
+    discovery_input: PlanDiscoveryInput,
+    baseline: PiiReplacementPlan,
+) -> PiiReplacementPlan:
+    """Run the default LLM enhancer inside its inference environment.
+
+    A managed local server, the default without ``NSS_INFERENCE_ENDPOINT``,
+    stops before this returns, so validation, persistence, replacement, and
+    training never run while it holds the GPU.
+    """
+    from ..local_inference import planning_inference_environment
+    from .llm import LLMPlanEnhancer
+
+    with planning_inference_environment(llm_config) as environ:
+        return LLMPlanEnhancer(llm_config, environ=environ).enhance(discovery_input, baseline)
+
+
 def resolve_plan(
     df: pd.DataFrame,
     config: ReplacePiiConfig,
@@ -160,8 +178,11 @@ def resolve_plan(
 
     Inline plans and plan files are authoritative and bypass discovery.
     Auto-discovery always runs the heuristic adapter first, then runs an LLM
-    enhancer only when ``config.llm`` is configured. Dataframe-aware validation
-    occurs once, after the final plan has been selected.
+    enhancer only when ``config.llm`` is configured. When no ``enhancer`` is
+    supplied, the default enhancer runs against a managed local vLLM server
+    unless ``NSS_INFERENCE_ENDPOINT`` selects another service; that server
+    stops as soon as enhancement ends. Dataframe-aware validation occurs once, after the final plan has
+    been selected.
     """
     if not config.is_auto_discovery:
         plan = _configured_plan(config)
@@ -170,12 +191,10 @@ def resolve_plan(
         baseline = (discoverer or HeuristicPlanDiscoverer()).discover(discovery_input)
         if config.llm is None:
             plan = baseline
-        else:
-            if enhancer is None:
-                from .llm import LLMPlanEnhancer
-
-                enhancer = LLMPlanEnhancer(config.llm)
+        elif enhancer is not None:
             plan = enhancer.enhance(discovery_input, baseline)
+        else:
+            plan = _enhance_with_default_llm(config.llm, discovery_input, baseline)
 
     validate_plan(
         df,
