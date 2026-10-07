@@ -28,7 +28,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     can_condition,
     is_columns_to_replace_type,
 )
-from nemo_safe_synthesizer.defaults import NSS_MANAGED_ASSETS_PATH_ENV, default_managed_assets_path
+from nemo_safe_synthesizer.defaults import NSS_NEMOTRON_PERSONAS_PATH_ENV, default_nemotron_personas_path
 
 
 @pytest.mark.unit
@@ -398,7 +398,7 @@ class TestReplacePiiConfig:
         assert config.plan_path is None
         assert config.inline_plan is None
         assert config.llm is None
-        assert config.sampler.backend is PiiSamplerBackend.MANAGED
+        assert config.sampler.backend is PiiSamplerBackend.NEMOTRON_PERSONAS
         assert ENTITY_BY_TYPE[EntityType.FREE_TEXT].action is EntityAction.REPLACE_IN_TEXT
 
     def test_missing_schema_version_is_v3_and_sparse_serialization_includes_it(self) -> None:
@@ -429,7 +429,7 @@ class TestReplacePiiConfig:
         serialized_column = replacement_plan["columns_to_replace"][0]
         assert "depends_on" not in serialized_column
         assert "pattern" not in serialized_column
-        assert replacement_plan["dependency_value_mappings"] == {}
+        assert replacement_plan["data_to_sampler_label_mapping"] == {}
 
     def test_config_serialization_omits_runtime_inferred_dependency_type(self) -> None:
         plan = PiiReplacementPlan(
@@ -630,27 +630,27 @@ class TestReplacePiiConfig:
         with pytest.raises(ValidationError, match="at least 1 character"):
             FreeTextDetectionConfig(model_id="")
 
-    def test_resolved_managed_assets_path_uses_override(self, tmp_path: Path) -> None:
+    def test_resolved_nemotron_personas_path_uses_override(self, tmp_path: Path) -> None:
         config = ReplacePiiConfig.model_validate(
-            {"sampler": {"backend": "faker", "managed_assets_path": str(tmp_path)}}
+            {"sampler": {"backend": "faker", "nemotron_personas_path": str(tmp_path)}}
         )
-        assert config.sampler.resolved_managed_assets_path() == tmp_path
+        assert config.sampler.resolved_nemotron_personas_path() == tmp_path
 
-    def test_plan_accepts_manual_dependency_value_mappings(self) -> None:
+    def test_plan_accepts_manual_data_to_sampler_label_mapping(self) -> None:
         plan = PiiReplacementPlan.model_validate(
             {
-                "dependency_value_mappings": {
+                "data_to_sampler_label_mapping": {
                     "sex": {"Woman": ["female"], "Non-binary": None},
                     "race": {"Asian": ["east asian", "south asian"]},
                 },
             }
         )
 
-        assert plan.dependency_value_mappings == {
+        assert plan.data_to_sampler_label_mapping == {
             "sex": {"Woman": ["female"], "Non-binary": None},
             "race": {"Asian": ["east asian", "south asian"]},
         }
-        assert plan.model_dump()["dependency_value_mappings"]["sex"]["Non-binary"] is None
+        assert plan.model_dump()["data_to_sampler_label_mapping"]["sex"]["Non-binary"] is None
 
     @pytest.mark.parametrize(
         ("mappings", "error"),
@@ -669,20 +669,20 @@ class TestReplacePiiConfig:
             ),
         ],
     )
-    def test_plan_rejects_invalid_dependency_value_mappings(
+    def test_plan_rejects_invalid_data_to_sampler_label_mapping(
         self,
         mappings: object,
         error: str,
     ) -> None:
         with pytest.raises(ValidationError, match=error):
-            PiiReplacementPlan.model_validate({"dependency_value_mappings": mappings})
+            PiiReplacementPlan.model_validate({"data_to_sampler_label_mapping": mappings})
 
-    def test_default_managed_assets_path_uses_env_then_home(
+    def test_default_nemotron_personas_path_uses_env_then_home(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.delenv(NSS_MANAGED_ASSETS_PATH_ENV, raising=False)
-        assert default_managed_assets_path() == Path.home() / ".data-designer" / "managed-assets"
-        monkeypatch.setenv(NSS_MANAGED_ASSETS_PATH_ENV, str(tmp_path))
-        assert default_managed_assets_path() == tmp_path
+        monkeypatch.delenv(NSS_NEMOTRON_PERSONAS_PATH_ENV, raising=False)
+        assert default_nemotron_personas_path() == Path.home() / ".data-designer" / "managed-assets"
+        monkeypatch.setenv(NSS_NEMOTRON_PERSONAS_PATH_ENV, str(tmp_path))
+        assert default_nemotron_personas_path() == tmp_path
         config = ReplacePiiConfig()
-        assert config.sampler.resolved_managed_assets_path() == tmp_path
+        assert config.sampler.resolved_nemotron_personas_path() == tmp_path

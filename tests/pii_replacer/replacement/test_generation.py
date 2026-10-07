@@ -14,7 +14,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
 from nemo_safe_synthesizer.errors import InternalError
 from nemo_safe_synthesizer.pii_replacer.replacement.generation import (
     FakerReplacementGenerator,
-    ManagedReplacementGenerator,
+    NemotronPersonasReplacementGenerator,
     ReplacementGenerationRequest,
     ReplacementGenerator,
 )
@@ -26,7 +26,7 @@ class TestReplacementGenerator:
     @pytest.mark.parametrize(
         ("generator_class", "backend"),
         [
-            (ManagedReplacementGenerator, PiiSamplerBackend.MANAGED),
+            (NemotronPersonasReplacementGenerator, PiiSamplerBackend.NEMOTRON_PERSONAS),
             (FakerReplacementGenerator, PiiSamplerBackend.FAKER),
         ],
     )
@@ -45,8 +45,8 @@ class TestReplacementGenerator:
     @pytest.mark.parametrize(
         ("generator_class", "backend"),
         [
-            (ManagedReplacementGenerator, PiiSamplerBackend.FAKER),
-            (FakerReplacementGenerator, PiiSamplerBackend.MANAGED),
+            (NemotronPersonasReplacementGenerator, PiiSamplerBackend.FAKER),
+            (FakerReplacementGenerator, PiiSamplerBackend.NEMOTRON_PERSONAS),
         ],
     )
     def test_named_generator_adapters_reject_the_wrong_backend(

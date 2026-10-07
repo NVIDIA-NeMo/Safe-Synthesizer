@@ -123,7 +123,7 @@ Reference: `nina-xu/pii-plan-preview` at `d4cd1b3d04cea64ede626d02c97692c82bfe71
 Useful reference areas:
 
 - `src/nemo_safe_synthesizer/pii_replacer/replacer.py`: orchestration and statistics assembly.
-- `src/nemo_safe_synthesizer/pii_replacer/replacement/`: structured replacement, scopes, managed/Faker behavior,
+- `src/nemo_safe_synthesizer/pii_replacer/replacement/`: structured replacement, scopes, Nemotron Personas/Faker behavior,
   component mappings, and free-text editing.
 - `tests/pii_replacer/replacement/`: behavior examples for scoping, free text, demographics, phone numbers, and
   consistency.
@@ -158,8 +158,8 @@ LLM span-detection experiment.
 - Component mappings may select the replacement for an independently detected span; they never create spans.
 - Follow Anonymizer's deterministic longer-span-first overlap policy.
 - Do not adopt Anonymizer's string-based occurrence expansion.
-- Managed sampling and Faker remain the replacement backends. LLM sampling is out of scope.
-- `ManagedReplacementGenerator` and `FakerReplacementGenerator` are the two adapters at the replacement-generator
+- Nemotron Personas sampling and Faker remain the replacement backends. LLM sampling is out of scope.
+- `NemotronPersonasReplacementGenerator` and `FakerReplacementGenerator` are the two adapters at the replacement-generator
   seam.
 - The flat `depends_on` DAG is the execution architecture.
 - Record mappings use stable positional row identity. Dependencies are generation inputs, not record mapping identity.
@@ -225,7 +225,7 @@ requests must produce equal results. The request carries entity type, generator-
 dependencies, optional pattern, and derived seed. Mapping scope, cache reuse, timing, and dataframe mutation remain in
 the replacement executor.
 
-`ManagedReplacementGenerator` and `FakerReplacementGenerator` are the two adapters. Each declares its
+`NemotronPersonasReplacementGenerator` and `FakerReplacementGenerator` are the two adapters. Each declares its
 `PiiSamplerBackend` and accepts `PiiReplacementSettings` plus `PiiSamplerConfig` at construction. Implement their
 generation behavior in the follow-up without widening the public `TabularPiiReplacer` constructor.
 
@@ -387,11 +387,11 @@ quality information, not invalid configuration.
 
 - Resolve the base seed from explicit replacement configuration, then `PERSON_RANDOM_SEED`, then `42`.
 - Derive a per-mapping RNG seed using SHA-256 over the base seed, complete mapping key, and operation-purpose tag.
-- Use randomness for managed/Faker choices, masks, birth-date shifts, retries, and collision avoidance.
+- Use randomness for Nemotron Personas/Faker choices, masks, birth-date shifts, retries, and collision avoidance.
 - Given the same plan, accepted detector spans, and seed, output must be deterministic.
-- Support managed and Faker person sampling, name patterns, character masks, plus-or-minus 365-day birth-date shifts,
+- Support Nemotron Personas and Faker person sampling, name patterns, character masks, plus-or-minus 365-day birth-date shifts,
   Luhn-valid cards, IP addresses, and collision-resistant identifiers.
-- If managed sampling fails, warn once per affected category and fall back deterministically to Faker.
+- If Nemotron Personas sampling fails, warn once per affected category and fall back deterministically to Faker.
 - Require generated values to differ from originals and satisfy entity-specific constraints.
 - Use one pattern parser for validation and rendering so their grammars cannot drift.
 
@@ -562,7 +562,7 @@ make it explicit opt-in, label the artifact as sensitive, and define access cont
   preservation, and protected columns.
 - Test that group-scoped dependency drift reuses the first replacement in positional row order and reports one
   aggregate warning/count without raw values.
-- Test deterministic seeds, managed fallback, supported generators, patterns, email-domain behavior, organization
+- Test deterministic seeds, Nemotron Personas fallback, supported generators, patterns, email-domain behavior, organization
   normalization, masks, birth dates, Luhn cards, original inequality, and collision retries.
 - Test component replacement reuse only for independently detected spans.
 - Test generation elapsed time and distinct-generation counts after cache reuse.

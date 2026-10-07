@@ -10,12 +10,12 @@ from typing import ClassVar, Protocol
 
 from ...config.replace_pii import EntityType, PiiSamplerBackend
 from ...errors import InternalError
-from .generators import FakerReplacementGenerator, ManagedReplacementGenerator
+from .generators import FakerReplacementGenerator, NemotronPersonasReplacementGenerator
 from .types import EffectiveDependencyTuple, require_effective_dependency_tuple
 
 __all__ = [
     "FakerReplacementGenerator",
-    "ManagedReplacementGenerator",
+    "NemotronPersonasReplacementGenerator",
     "ReplacementGenerationRequest",
     "ReplacementGenerator",
 ]

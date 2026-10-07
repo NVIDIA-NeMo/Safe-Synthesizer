@@ -4,6 +4,6 @@
 """Structured PII replacement generator implementations."""
 
 from .faker import FakerReplacementGenerator
-from .managed import ManagedReplacementGenerator
+from .nemotron_personas import NemotronPersonasReplacementGenerator
 
-__all__ = ["FakerReplacementGenerator", "ManagedReplacementGenerator"]
+__all__ = ["FakerReplacementGenerator", "NemotronPersonasReplacementGenerator"]
