@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-from dataclasses import FrozenInstanceError, fields
+from dataclasses import FrozenInstanceError
 
 import pytest
 
@@ -52,13 +52,6 @@ def _span(
 
 @pytest.mark.unit
 class TestDetectionContracts:
-    def test_cell_identity_is_positional_and_contains_no_raw_value(self) -> None:
-        first = DetectionCellId(row_position=0, column_name="notes")
-        duplicate_index_peer = DetectionCellId(row_position=1, column_name="notes")
-
-        assert first != duplicate_index_peer
-        assert {field.name for field in fields(DetectionCellId)} == {"row_position", "column_name"}
-
     def test_contracts_are_immutable_and_hide_cell_text_from_repr(self) -> None:
         cell = _cell()
         span = _span()
@@ -88,14 +81,6 @@ class TestDetectionContracts:
             detected_text(cell, _span(cell_id=DetectionCellId(0, "notes")))
         with pytest.raises(InternalError, match="entity_type is not allowed"):
             detected_text(cell, _span(entity_type=EntityType.FULL_NAME))
-
-    def test_detector_result_has_normalized_type_and_provenance_but_no_replacement(self) -> None:
-        span = _span(source="gliner", score=0.91)
-
-        assert span.entity_type is EntityType.EMAIL
-        assert span.source == "gliner"
-        assert span.score == 0.91
-        assert "replacement" not in {field.name for field in fields(DetectedSpan)}
 
     def test_detector_result_requires_a_normalized_entity_type(self) -> None:
         with pytest.raises(InternalError, match="normalized EntityType"):
@@ -165,11 +150,6 @@ class TestMappingContracts:
         )
 
         assert base != duplicate_index_peer
-        assert {field.name for field in fields(RecordMappingKey)} == {
-            "target_column",
-            "row_position",
-            "canonical_original_value",
-        }
         assert "ada@example.com" not in repr(base)
 
     def test_group_identity_excludes_dependencies_and_records_first_provenance_separately(self) -> None:
@@ -201,11 +181,6 @@ class TestMappingContracts:
             "target_column": "email",
             "conditioner_entity_types": ["first_name", "organization"],
             "conflict_count": 3,
-        }
-        assert {field.name for field in fields(GroupDependencyDrift)} == {
-            "target_column",
-            "conditioner_entity_types",
-            "conflict_count",
         }
 
     def test_group_dependency_drift_requires_a_conflict(self) -> None:

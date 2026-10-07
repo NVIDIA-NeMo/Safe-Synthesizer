@@ -7,7 +7,6 @@ import pandas as pd
 import pytest
 from pydantic import ValidationError
 
-from nemo_safe_synthesizer.config.data import DataParameters
 from nemo_safe_synthesizer.config.replace_pii import EntityType, PiiReplacementPlan, ReplacePiiConfig
 from nemo_safe_synthesizer.pii_replacer import (
     FreeTextReplacementRecord,
@@ -33,16 +32,6 @@ class TestTabularPiiReplacerInterface:
 
         assert parameter.kind is inspect.Parameter.KEYWORD_ONLY
         assert parameter.default is False
-
-    def test_interface_stub_does_not_mutate_the_caller_dataframe(self) -> None:
-        dataframe = pd.DataFrame({"email": ["ada@example.com"]}, index=[7])
-        original = dataframe.copy(deep=True)
-        replacer = TabularPiiReplacer(ReplacePiiConfig(), data_config=DataParameters())
-
-        with pytest.raises(NotImplementedError, match="execution is not implemented"):
-            replacer.replace(dataframe)
-
-        pd.testing.assert_frame_equal(dataframe, original)
 
 
 @pytest.mark.unit

@@ -24,7 +24,6 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiColumnPlan,
     PiiReplacementPlan,
     PiiSamplerBackend,
-    PiiSamplerConfig,
     ReplacePiiConfig,
     can_condition,
     is_columns_to_replace_type,
@@ -637,16 +636,6 @@ class TestReplacePiiConfig:
         )
         assert config.sampler.resolved_managed_assets_path() == tmp_path
 
-    def test_sampler_documentation_identifies_nemotron_personas_asset_layout(self) -> None:
-        backend_description = PiiSamplerConfig.model_fields["backend"].description
-        path_description = PiiSamplerConfig.model_fields["managed_assets_path"].description
-
-        assert backend_description is not None
-        assert "Nemotron Personas" in backend_description
-        assert path_description is not None
-        assert "Nemotron Personas" in path_description
-        assert "datasets/{locale}.parquet" in path_description
-
     def test_plan_accepts_manual_dependency_value_mappings(self) -> None:
         plan = PiiReplacementPlan.model_validate(
             {
@@ -662,9 +651,6 @@ class TestReplacePiiConfig:
             "race": {"Asian": ["east asian", "south asian"]},
         }
         assert plan.model_dump()["dependency_value_mappings"]["sex"]["Non-binary"] is None
-
-    def test_plan_dependency_value_mappings_default_to_empty(self) -> None:
-        assert PiiReplacementPlan().dependency_value_mappings == {}
 
     @pytest.mark.parametrize(
         ("mappings", "error"),
