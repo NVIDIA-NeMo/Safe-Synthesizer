@@ -220,8 +220,9 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
             required=False,
             default=None,
             help="JSON object of chat-completions fields sent with every PII inference request, such as "
-            '\'{"temperature": 1.0, "thinking_token_budget": 1000}\'. Replaces the local profile\'s options '
-            "and the default temperature of 0. Can also be set via NSS_INFERENCE_REQUEST_OPTIONS env var.",
+            '\'{"temperature": 1.0, "thinking_token_budget": 1000}\'. Overrides the local profile\'s options '
+            "and the default temperature of 0 field by field; a null value drops a field. "
+            "Can also be set via NSS_INFERENCE_REQUEST_OPTIONS env var.",
         )
     )
     options.append(
@@ -230,7 +231,8 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
             type=str,
             required=False,
             default=None,
-            help="Path to a custom profile YAML for the local vLLM server that NSS starts for LLM-assisted "
+            help="Path to a custom profile YAML, or a bundled profile name, for the local vLLM server that NSS "
+            "starts for LLM-assisted "
             "PII plan discovery and stops before planning returns. Without it and without an endpoint, "
             "--inference-model-id selects a bundled profile. With a profile, NSS_INFERENCE_ENDPOINT, if set, "
             "must be a loopback http URL and selects the listening address. "

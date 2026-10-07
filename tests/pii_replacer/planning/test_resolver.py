@@ -22,6 +22,8 @@ from nemo_safe_synthesizer.pii_replacer.planning import (
     resolve_plan,
 )
 
+from ..conftest import FakeLocalServer
+
 
 class RecordingDiscoverer(PlanDiscoverer):
     def __init__(self, plan: PiiReplacementPlan | None = None) -> None:
@@ -210,40 +212,12 @@ class TestResolvePlan:
         assert load_plan(path) == plan
 
 
-class FakeLocalServer:
-    """Managed-server stand-in that records whether it is running."""
-
-    def __init__(self, profile: object, **kwargs: object) -> None:
-        self.running = False
-
-    def __enter__(self) -> "FakeLocalServer":
-        self.running = True
-        return self
-
-    def __exit__(self, *exc_info: object) -> None:
-        self.running = False
-
-    def inference_environ(self) -> dict[str, str]:
-        return {"NSS_INFERENCE_ENDPOINT": "http://127.0.0.1:8123/v1", "NSS_INFERENCE_MODEL": "openai/gpt-oss-120b"}
-
-
 @pytest.mark.unit
 class TestResolvePlanWithLocalServer:
-    @pytest.fixture
-    def servers(self, monkeypatch: pytest.MonkeyPatch) -> list[FakeLocalServer]:
-        created: list[FakeLocalServer] = []
-
-        def make_server(profile: object, **kwargs: object) -> FakeLocalServer:
-            created.append(FakeLocalServer(profile, **kwargs))
-            return created[-1]
-
-        monkeypatch.setattr("nemo_safe_synthesizer.pii_replacer.local_inference.managed.LocalVllmServer", make_server)
-        return created
-
     def test_server_runs_for_enhancement_and_stops_before_validation(
         self,
         fixture_patient_df: pd.DataFrame,
-        servers: list[FakeLocalServer],
+        fixture_fake_local_servers: list[FakeLocalServer],
         monkeypatch: pytest.MonkeyPatch,
         tmp_path: Path,
     ) -> None:
@@ -254,11 +228,11 @@ class TestResolvePlanWithLocalServer:
 
         def make_enhancer(config: LLMConfig, environ: dict[str, str] | None = None) -> PlanEnhancer:
             seen["environ"] = environ
-            seen["running_during_enhance"] = servers[0].running
+            seen["running_during_enhance"] = fixture_fake_local_servers[0].running
             return RecordingEnhancer(expected)
 
         def record_validation(*args: object, **kwargs: object) -> None:
-            seen["running_during_validation"] = servers[0].running
+            seen["running_during_validation"] = fixture_fake_local_servers[0].running
 
         monkeypatch.setattr("nemo_safe_synthesizer.pii_replacer.planning.llm.LLMPlanEnhancer", make_enhancer)
         monkeypatch.setattr("nemo_safe_synthesizer.pii_replacer.planning.resolver.validate_plan", record_validation)
@@ -271,15 +245,15 @@ class TestResolvePlanWithLocalServer:
         )
 
         assert result is expected
-        assert seen["environ"] == servers[0].inference_environ()
+        assert seen["environ"] == fixture_fake_local_servers[0].inference_environ()
         assert seen["running_during_enhance"] is True
         assert seen["running_during_validation"] is False
-        assert not servers[0].running
+        assert not fixture_fake_local_servers[0].running
 
     def test_server_stops_when_enhancement_fails(
         self,
         fixture_patient_df: pd.DataFrame,
-        servers: list[FakeLocalServer],
+        fixture_fake_local_servers: list[FakeLocalServer],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         class FailingEnhancer(PlanEnhancer):
@@ -294,8 +268,8 @@ class TestResolvePlanWithLocalServer:
         with pytest.raises(RuntimeError, match="inference failed"):
             resolve_plan(fixture_patient_df, ReplacePiiConfig(llm=LLMConfig()), DataParameters())
 
-        assert len(servers) == 1
-        assert not servers[0].running
+        assert len(fixture_fake_local_servers) == 1
+        assert not fixture_fake_local_servers[0].running
 
     @pytest.mark.parametrize(
         "config",
@@ -315,17 +289,17 @@ class TestResolvePlanWithLocalServer:
     def test_no_server_starts_without_llm_discovery(
         self,
         fixture_patient_df: pd.DataFrame,
-        servers: list[FakeLocalServer],
+        fixture_fake_local_servers: list[FakeLocalServer],
         config: ReplacePiiConfig,
     ) -> None:
         resolve_plan(fixture_patient_df, config, DataParameters())
 
-        assert servers == []
+        assert fixture_fake_local_servers == []
 
     def test_caller_supplied_enhancer_starts_no_server(
         self,
         fixture_patient_df: pd.DataFrame,
-        servers: list[FakeLocalServer],
+        fixture_fake_local_servers: list[FakeLocalServer],
     ) -> None:
         resolve_plan(
             fixture_patient_df,
@@ -334,4 +308,4 @@ class TestResolvePlanWithLocalServer:
             enhancer=RecordingEnhancer(PiiReplacementPlan()),
         )
 
-        assert servers == []
+        assert fixture_fake_local_servers == []

@@ -26,7 +26,18 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 from ...errors import GenerationError, InternalError, ParameterError
 from ...observability import get_logger, heartbeat
 from ...outlines_cache import harden_outlines_cache
-from ..llm_client import InferenceSettings, OpenAICompatibleTransport, _nonblank, resolve_request_options
+from ..llm_client import (
+    ENDPOINT_ENV,
+    KEY_ENV,
+    MODEL_ENV,
+    REQUEST_OPTIONS_ENV,
+    TIMEOUT_ENV,
+    InferenceSettings,
+    OpenAICompatibleTransport,
+    nonblank,
+    parse_request_options,
+    resolve_request_options,
+)
 from .profile import LocalVllmProfile
 
 __all__ = [
@@ -35,6 +46,7 @@ __all__ = [
     "build_serve_command",
     "is_vllm_installed",
     "local_runtime_problem",
+    "local_runtime_problem_message",
 ]
 
 logger = get_logger(__name__)
@@ -81,6 +93,14 @@ def local_runtime_problem() -> str | None:
     if not torch.cuda.is_available():
         return "no CUDA GPU is available"
     return None
+
+
+def local_runtime_problem_message(problem: str) -> str:
+    """Explain a ``local_runtime_problem`` result and how to use a remote service instead."""
+    return (
+        f"LLM-assisted PII planning runs a local vLLM server unless {ENDPOINT_ENV} is set, but {problem}. "
+        f"Set {ENDPOINT_ENV}, plus {KEY_ENV} if it requires one, to use a remote OpenAI-compatible service instead."
+    )
 
 
 def build_serve_command(profile: LocalVllmProfile, *, host: str, port: int, parent_pid: int) -> list[str]:
@@ -232,24 +252,25 @@ class LocalVllmServer:
     def inference_environ(self) -> dict[str, str]:
         """Return the base environment with ``NSS_INFERENCE_*`` pointing at this server.
 
-        A non-blank ``NSS_INFERENCE_TIMEOUT`` or ``NSS_INFERENCE_REQUEST_OPTIONS``
-        already in the base environment wins over the profile's value.
+        A non-blank ``NSS_INFERENCE_TIMEOUT`` in the base environment wins over
+        the profile's timeout. A non-blank ``NSS_INFERENCE_REQUEST_OPTIONS``
+        overrides the profile's request options field by field.
         """
         environ = {
             **self._base_environ,
-            "NSS_INFERENCE_ENDPOINT": self.endpoint_url,
-            "NSS_INFERENCE_KEY": self._api_key,
-            "NSS_INFERENCE_MODEL": self._profile.served_name,
-            "NSS_INFERENCE_TIMEOUT": _nonblank(self._base_environ.get("NSS_INFERENCE_TIMEOUT"))
-            or f"{self._profile.request_timeout_seconds:g}",
+            ENDPOINT_ENV: self.endpoint_url,
+            KEY_ENV: self._api_key,
+            MODEL_ENV: self._profile.served_name,
+            TIMEOUT_ENV: nonblank(self._base_environ.get(TIMEOUT_ENV)) or f"{self._profile.request_timeout_seconds:g}",
         }
-        explicit_options = _nonblank(self._base_environ.get("NSS_INFERENCE_REQUEST_OPTIONS"))
-        if explicit_options is not None:
-            environ["NSS_INFERENCE_REQUEST_OPTIONS"] = explicit_options
-        elif self._profile.request_options:
-            environ["NSS_INFERENCE_REQUEST_OPTIONS"] = json.dumps(self._profile.request_options)
+        explicit = nonblank(self._base_environ.get(REQUEST_OPTIONS_ENV))
+        # Keep null overrides in the JSON: resolve_request_options drops those
+        # fields only after merging over NSS's defaults.
+        options = {**self._profile.request_options, **(parse_request_options(explicit) if explicit else {})}
+        if options:
+            environ[REQUEST_OPTIONS_ENV] = json.dumps(options)
         else:
-            environ.pop("NSS_INFERENCE_REQUEST_OPTIONS", None)
+            environ.pop(REQUEST_OPTIONS_ENV, None)
         return environ
 
     def __enter__(self) -> Self:
@@ -274,11 +295,7 @@ class LocalVllmServer:
         if self._process is not None or self._stopped:
             raise InternalError("A LocalVllmServer can only be started once")
         if problem := local_runtime_problem():
-            raise ParameterError(
-                f"LLM-assisted PII planning runs a local vLLM server unless NSS_INFERENCE_ENDPOINT is set, "
-                f"but {problem}. Set NSS_INFERENCE_ENDPOINT, plus NSS_INFERENCE_KEY if it requires one, "
-                "to use a remote OpenAI-compatible service instead."
-            )
+            raise ParameterError(local_runtime_problem_message(problem))
         self._port = _available_port(self._host, self._requested_port)
         command = build_serve_command(self._profile, host=self._host, port=self._port, parent_pid=os.getpid())
         logger.user.info(f"Starting local vLLM server for {self._profile.served_name!r} at {self.endpoint_url}")
@@ -327,6 +344,7 @@ class LocalVllmServer:
         logger.user.info("Local vLLM server stopped")
 
     def _server_environ(self) -> dict[str, str]:
+        # The server never needs NSS's client settings, including any API key.
         environ = {key: value for key, value in self._base_environ.items() if not key.startswith("NSS_INFERENCE_")}
         environ.update(self._profile.environment)
         # Apply the same Outlines diskcache protections as in-process generation.
@@ -363,19 +381,19 @@ class LocalVllmServer:
             if self._model_listed():
                 break
             if time.monotonic() >= deadline:
-                raise GenerationError(
-                    f"The local vLLM server did not become ready within "
-                    f"{self._profile.startup_timeout_seconds:g}s.{self._output_summary()}"
-                )
+                raise self._startup_timeout_error()
             time.sleep(_POLL_INTERVAL_SECONDS)
         # The schema probe shares the startup deadline.
         remaining = deadline - time.monotonic()
         if remaining <= 0:
-            raise GenerationError(
-                f"The local vLLM server did not become ready within "
-                f"{self._profile.startup_timeout_seconds:g}s.{self._output_summary()}"
-            )
+            raise self._startup_timeout_error()
         self._probe_structured_output(timeout=min(_PROBE_TIMEOUT_SECONDS, remaining))
+
+    def _startup_timeout_error(self) -> GenerationError:
+        return GenerationError(
+            f"The local vLLM server did not become ready within "
+            f"{self._profile.startup_timeout_seconds:g}s.{self._output_summary()}"
+        )
 
     def _model_listed(self) -> bool:
         """Return whether ``/models`` lists the served model; ``False`` while the server is starting."""

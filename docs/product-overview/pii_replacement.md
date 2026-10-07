@@ -183,15 +183,18 @@ where it defaults to 60 seconds.
 Each profile also sends its model card's recommended sampling settings
 instead of the temperature 0 that NSS otherwise sends, since the cards warn
 against greedy decoding with reasoning. The Qwen and Nemotron profiles add a
-`thinking_token_budget`, which caps reasoning before the JSON answer. Set `NSS_INFERENCE_REQUEST_OPTIONS` or
-`--inference-request-options` to a JSON object, such as
-`{"temperature": 1.0, "thinking_token_budget": 1000}`, to replace a profile's
-request options or the default `{"temperature": 0}` for an explicit endpoint.
+`thinking_token_budget`, which caps reasoning before the JSON answer. Set
+`NSS_INFERENCE_REQUEST_OPTIONS` or `--inference-request-options` to a JSON
+object, such as `{"thinking_token_budget": 500}`, to override individual fields
+of a profile's request options, or of the default `{"temperature": 0}` for an
+explicit endpoint. Fields you don't set keep their values; set a field to
+`null` to drop it and use the server's default.
 
 The first run downloads the weights into the Hugging Face cache. A model ID
 without a bundled profile is an error. To run another model locally, point
 `NSS_INFERENCE_LOCAL_PROFILE` or the `--inference-local-profile` CLI option at
-your own profile YAML; any configured model ID must then match its served
+your own profile YAML (a bundled profile name such as `gpt-oss-120b` also
+works); any configured model ID must then match its served
 model name. A profile YAML has these fields: `model_id`,
 `revision`, and optionally `served_model_name`, `gpu_memory_utilization`,
 `max_model_len`, `max_num_seqs`, `tensor_parallel_size`, `extra_args`,

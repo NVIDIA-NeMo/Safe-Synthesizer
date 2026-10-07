@@ -16,7 +16,6 @@ from pathlib import Path
 import httpx
 import pandas as pd
 import pytest
-import torch
 
 from nemo_safe_synthesizer.config.data import DataParameters
 from nemo_safe_synthesizer.config.replace_pii import LLMConfig, ReplacePiiConfig
@@ -27,14 +26,13 @@ from nemo_safe_synthesizer.pii_replacer.planning import resolve_plan
 pytestmark = [
     pytest.mark.requires_gpu,
     pytest.mark.vllm,
-    pytest.mark.smollm2,
-    pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available"),
     pytest.mark.skipif(sys.platform != "linux", reason="vLLM serving is Linux-only"),
 ]
 
 
 @pytest.fixture
 def fixture_tiny_profile_path(test_data_dir: Path) -> Path:
+    """Path to the SmolLM2-135M-Instruct local inference profile used by these tests."""
     return test_data_dir / "local_inference" / "smollm2-135m-instruct.yaml"
 
 

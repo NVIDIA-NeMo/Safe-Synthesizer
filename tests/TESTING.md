@@ -27,6 +27,7 @@ mise run test:smoke:gpu:generation
 mise run test:smoke:gpu:resume
 mise run test:smoke:gpu:structured-generation
 mise run test:smoke:gpu:timeseries
+mise run test:smoke:gpu:local-inference
 mise run test:smoke:gpu:smollm2
 mise run test:e2e                          # All e2e (requires CUDA) -- runs default + dp
 mise run test:e2e:prepared                 # All e2e without dependency bootstrap

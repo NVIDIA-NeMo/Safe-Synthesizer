@@ -57,11 +57,14 @@ def secure_outlines_cache_dir(environ: MutableMapping[str, str] | None = None) -
         cache_dir = Path(cache_dir_env)
     else:
         xdg_cache_home = env.get("XDG_CACHE_HOME")
-        home_dir = os.path.normpath(os.path.expanduser("~"))
+        try:
+            home_dir: Path | None = Path.home()
+        except RuntimeError:
+            home_dir = None
         if xdg_cache_home:
             cache_root = Path(xdg_cache_home)
-        elif home_dir != "/" and Path(home_dir).is_dir():
-            cache_root = Path(home_dir) / ".cache"
+        elif home_dir is not None and home_dir != Path("/") and home_dir.is_dir():
+            cache_root = home_dir / ".cache"
         else:
             uid = getattr(os, "getuid", lambda: "default")()
             cache_root = Path(tempfile.gettempdir()) / f".cache-{uid}"
