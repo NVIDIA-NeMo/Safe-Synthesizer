@@ -404,8 +404,11 @@ function themePlotlyCharts(container = document) {
     }
     container.querySelectorAll(".js-plotly-plot").forEach((plot) => {
         commonPlotUpdate(plot);
-        themeDatasetTraces(plot);
         const card = plot.closest("[data-metric-card]");
+        // Autocorrelation traces are named after value columns and colored by score.
+        if (card?.id !== "autocorrelation-similarity") {
+            themeDatasetTraces(plot);
+        }
         if (!card) {
             return;
         }

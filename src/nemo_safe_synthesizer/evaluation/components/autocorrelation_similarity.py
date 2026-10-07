@@ -128,7 +128,11 @@ class AutocorrelationSimilarity(Component):
         """
         timestamp_column = config.time_series.timestamp_column if config is not None else None
         group_column = config.data.group_training_examples_by if config is not None else None
-        if group_column == PSEUDO_GROUP_COLUMN:
+        if (
+            group_column == PSEUDO_GROUP_COLUMN
+            and group_column not in datasets.training
+            and group_column not in datasets.synthetic
+        ):
             # Training injects this reserved column to reuse grouped sequence
             # infrastructure, but evaluation receives frames with it removed.
             group_column = None
@@ -457,8 +461,8 @@ class AutocorrelationSimilarity(Component):
         if not np.any(shared_valid_lags):
             return None, f"No lags have at least {_MIN_VALID_PAIRS} usable endpoint pairs in both sequences."
         noise = np.hypot(
-            AutocorrelationSimilarity._acf_standard_error(training_acf, training_count),
-            AutocorrelationSimilarity._acf_standard_error(synthetic_acf, synthetic_count),
+            AutocorrelationSimilarity._acf_standard_error(training_acf, training_support),
+            AutocorrelationSimilarity._acf_standard_error(synthetic_acf, synthetic_support),
         )
         error = AutocorrelationSimilarity._noise_aware_error(
             training_acf[shared_valid_lags],
@@ -478,15 +482,17 @@ class AutocorrelationSimilarity(Component):
         }, None
 
     @staticmethod
-    def _acf_standard_error(acf: NDArray[np.float64], count: int) -> NDArray[np.float64]:
+    def _acf_standard_error(acf: NDArray[np.float64], support: NDArray[np.int64]) -> NDArray[np.float64]:
         """Return Bartlett's large-sample standard error for each lag of an ACF.
 
-        The variance at lag ``k`` is ``(1 + 2 * sum(r_j ** 2 for j < k)) / n``.
-        Undefined lags contribute nothing to later lags.
+        The variance at lag ``k`` is ``(1 + 2 * sum(r_j ** 2 for j < k)) / n_k``,
+        where ``n_k`` is the number of endpoint pairs behind that lag, so lags
+        thinned by gaps get a wider allowance. Undefined lags contribute
+        nothing to later lags.
         """
         squared = np.nan_to_num(acf) ** 2
         earlier = np.concatenate([[0.0], np.cumsum(squared[:-1])])
-        return np.sqrt((1.0 + 2.0 * earlier) / count)
+        return np.sqrt((1.0 + 2.0 * earlier) / np.maximum(support, 1))
 
     @staticmethod
     def _noise_aware_error(

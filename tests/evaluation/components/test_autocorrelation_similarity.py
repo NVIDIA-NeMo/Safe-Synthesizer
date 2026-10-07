@@ -50,9 +50,24 @@ def _grouped_rows(groups: list[tuple[str, int]], points: int = 12) -> list[dict[
     return rows
 
 
-def _bartlett(acf: np.ndarray, count: int) -> np.ndarray:
-    earlier = np.concatenate([[0.0], np.cumsum(acf[:-1] ** 2)])
-    return np.sqrt((1 + 2 * earlier) / count)
+def _bartlett(acf: np.ndarray, support: np.ndarray) -> np.ndarray:
+    earlier = np.concatenate([[0.0], np.cumsum(np.nan_to_num(acf[:-1]) ** 2)])
+    return np.sqrt((1 + 2 * earlier) / support)
+
+
+def _expected_error(profile: dict) -> float:
+    training_acf = np.array(profile["training_acf"], dtype=float)
+    synthetic_acf = np.array(profile["synthetic_acf"], dtype=float)
+    noise = np.hypot(
+        _bartlett(training_acf, np.array(profile["training_pair_support"])),
+        _bartlett(synthetic_acf, np.array(profile["synthetic_pair_support"])),
+    )
+    valid = np.isfinite(training_acf) & np.isfinite(synthetic_acf)
+    training_acf, synthetic_acf, noise = training_acf[valid], synthetic_acf[valid], noise[valid]
+    weight = 1 / noise**2
+    excess = np.maximum(np.abs(training_acf - synthetic_acf) - noise, 0)
+    magnitude = np.maximum.reduce([np.abs(training_acf), np.abs(synthetic_acf), noise])
+    return float(np.sum(weight * excess) / np.sum(weight * magnitude))
 
 
 def _ar_series(rng: np.random.Generator, phi: float, points: int) -> np.ndarray:
@@ -78,16 +93,29 @@ def test_autocorrelation_similarity_formula_is_noise_aware_weighted_and_symmetri
     component = AutocorrelationSimilarity.from_evaluation_datasets(_datasets(training_df, synthetic_df), _config())
 
     profile = component.details["profiles"][0]
-    training_acf = np.array(profile["training_acf"])
-    synthetic_acf = np.array(profile["synthetic_acf"])
-    noise = np.hypot(_bartlett(training_acf, 60), _bartlett(synthetic_acf, 60))
-    weight = 1 / noise**2
-    excess = np.maximum(np.abs(training_acf - synthetic_acf) - noise, 0)
-    magnitude = np.maximum.reduce([np.abs(training_acf), np.abs(synthetic_acf), noise])
-    expected = np.sum(weight * excess) / np.sum(weight * magnitude)
+    expected = _expected_error(profile)
+    assert profile["training_pair_support"][:3] == [59, 58, 57]
     assert 0 < expected < 1
     assert profile["error"] == pytest.approx(expected, abs=1e-12)
     assert component.score.score == pytest.approx(10 * (1 - expected), abs=0.1)
+
+
+def test_autocorrelation_similarity_noise_allowance_uses_per_lag_pair_support():
+    rng = np.random.default_rng(11)
+    time = np.arange(300)
+    training = _ar_series(rng, 0.9, 300)
+    synthetic = _ar_series(rng, 0.6, 300)
+    training[rng.random(300) < 0.4] = np.nan
+    datasets = _datasets(
+        pd.DataFrame({"time": time, "value": training}),
+        pd.DataFrame({"time": time, "value": synthetic}),
+    )
+
+    profile = AutocorrelationSimilarity.from_evaluation_datasets(datasets, _config()).details["profiles"][0]
+
+    finite_count = int(np.isfinite(training).sum())
+    assert max(profile["training_pair_support"]) < finite_count * 0.7
+    assert profile["error"] == pytest.approx(_expected_error(profile), abs=1e-12)
 
 
 def test_autocorrelation_similarity_scores_lost_structure_low_and_matching_structure_high():
@@ -123,6 +151,14 @@ def test_autocorrelation_similarity_identical_grouped_series_are_scored_per_prof
     assert component.details["counts"]["groups"] == 2
     assert component.details["counts"]["evaluated_profiles"] == 2
     assert [row["group"] for row in component.details["per_group"]] == ["A", "B"]
+
+
+def test_autocorrelation_similarity_keeps_real_column_named_like_pseudo_group():
+    training_df = pd.DataFrame(_grouped_rows([("B", 100), ("A", 0)])).rename(columns={"group": PSEUDO_GROUP_COLUMN})
+    config = _config(group_column=PSEUDO_GROUP_COLUMN)
+    component = AutocorrelationSimilarity.from_evaluation_datasets(_datasets(training_df, training_df.copy()), config)
+
+    assert component.details["counts"]["groups"] == 2
 
 
 def test_autocorrelation_similarity_treats_inherited_pseudo_group_as_global_sequence():
