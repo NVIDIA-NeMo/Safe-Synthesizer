@@ -11,6 +11,7 @@ import pandas as pd
 
 from ...config.replace_pii import DataToSamplerValueMapping, EntityType, PiiReplacementPlan
 from ...errors import ParameterError
+from ..replacement.canonicalization import canonicalize_scalar, readable_value
 from ..sampler_catalog import SamplerValueCatalog
 
 MAX_MAPPING_SOURCE_VALUE_LENGTH = 128
@@ -116,9 +117,10 @@ def unmatched_dependency_values(
 
 
 def _distinct_source_values(values: pd.Series) -> tuple[str, ...]:
+    """Return distinct non-missing values in the form replacement uses to look up mapping keys."""
     distinct: dict[str, str] = {}
     for raw in values.dropna().unique().tolist():
-        value = str(raw)
+        value = readable_value(canonicalize_scalar(raw))
         if len(value) > MAX_MAPPING_SOURCE_VALUE_LENGTH:
             raise ParameterError(
                 "automatic dependency mapping requires categorical values no longer than "
