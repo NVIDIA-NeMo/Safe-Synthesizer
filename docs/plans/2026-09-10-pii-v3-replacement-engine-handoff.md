@@ -318,7 +318,7 @@ Resolve each dependency value as follows:
 3. Match inline source-label keys case-insensitively. The inline mapping is authoritative and bypasses mapping discovery.
 4. A nonempty list selects the union of candidates carrying any listed sampler label. Preserve the asset's natural row
    frequency within that union; do not add per-label weights initially.
-5. `null` explicitly removes that condition for the matching source label.
+5. There is no `null` entry. To allow any candidate for a source label, list every sampler value.
 6. Without an explicit entry, compare the original dependency value directly to sampler values case-insensitively.
    Therefore values such as `Female`/`female` and `White`/`white` require no mapping.
 7. For Nemotron Personas sampling, fail when neither an explicit mapping nor the implicit identity value selects any asset
@@ -681,7 +681,7 @@ make it explicit opt-in, label the artifact as sensitive, and define access cont
 - Test deterministic seeds, Nemotron-Personas fallback, supported generators, patterns, email-domain behavior, organization
   normalization, masks, birth dates, Luhn cards, original inequality, and collision retries.
 - Test automatic and manual sparse dependency mappings, the shared plan-discovery switch, implicit case-insensitive
-  identity matching, one-to-many candidate unions, explicit `null`, missing Nemotron Personas candidates, mapping validation by
+  identity matching, one-to-many candidate unions, full-list entries, unmatched values without entries, missing Nemotron Personas candidates, mapping validation by
   source column, and acceptance by both Nemotron Personas and Faker configurations.
 - Test that Nemotron Personas assets load only required columns and build reusable candidate indexes rather than scanning the
   complete asset per generated value.

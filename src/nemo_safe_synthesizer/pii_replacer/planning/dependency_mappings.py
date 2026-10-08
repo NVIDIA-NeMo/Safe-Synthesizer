@@ -88,14 +88,31 @@ def validate_data_to_sampler_value_mapping(
             continue
         supported_keys = {sampler_value.casefold() for sampler_value in supported}
         for targets in value_mappings.values():
-            if targets is None:
-                continue
             unknown = sorted(target for target in targets if target.casefold() not in supported_keys)
             if unknown:
                 raise ParameterError(
                     f"data_to_sampler_value_mapping for column {column_name!r} contains values not supported "
                     f"by the configured sampler: {unknown}"
                 )
+
+
+def unmatched_dependency_values(
+    dataframe: pd.DataFrame,
+    plan: PiiReplacementPlan,
+    mappings: DataToSamplerValueMapping,
+    catalog: SamplerValueCatalog,
+) -> dict[str, int]:
+    """Count dataset values per dependency column that have no mapping entry and no sampler match.
+
+    Values are compared ignoring case. Columns whose entity type has no sampler catalog are skipped.
+    """
+    unmatched: dict[str, int] = {}
+    for item in mapping_inputs(dataframe, plan, catalog):
+        mapped = {source.casefold() for source in mappings.get(item.column_name, {})}
+        missing = sum(1 for value in item.source_values if value.casefold() not in mapped)
+        if missing:
+            unmatched[item.column_name] = missing
+    return unmatched
 
 
 def _distinct_source_values(values: pd.Series) -> tuple[str, ...]:

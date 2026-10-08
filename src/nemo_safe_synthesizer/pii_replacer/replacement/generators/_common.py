@@ -32,8 +32,8 @@ def _resolve_dependency_values(
     request: ReplacementGenerationRequest,
     entity_type: EntityType,
     value: str,
-) -> tuple[str, ...] | None:
-    """Return sampler values for one dependency, or ``None`` when disabled."""
+) -> tuple[str, ...]:
+    """Return the sampler values one dependency value may match."""
     resolved = dict(request.resolved_dependency_values)
     return resolved.get(entity_type, (value.casefold(),))
 
