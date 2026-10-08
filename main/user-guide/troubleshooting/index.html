@@ -1595,10 +1595,21 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#groups-must-have-same-start" class="md-nav__link">
+  <a href="#interval-mismatch" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Groups must have same start
+        Interval mismatch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#groups-with-different-starts-or-lengths" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Groups with different starts or lengths
       
     </span>
   </a>
@@ -3660,6 +3671,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -3982,6 +3997,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../reference/nemo_safe_synthesizer/data_processing/flexible_timeseries/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    flexible_timeseries
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../reference/nemo_safe_synthesizer/data_processing/prompt_tokens/" class="md-nav__link">
         
   
@@ -4065,10 +4108,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_1_5_7" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_1_5_8" >
         
           
-          <label class="md-nav__link" for="__nav_5_7_1_5_7" id="__nav_5_7_1_5_7_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_5_7_1_5_8" id="__nav_5_7_1_5_8_label" tabindex="0">
             
   
   
@@ -4086,8 +4129,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_5_7_1_5_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_7_1_5_7">
+        <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_5_7_1_5_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_7_1_5_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -4260,6 +4303,34 @@
     
   
     stats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/nemo_safe_synthesizer/data_processing/timeseries_utils/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    timeseries_utils
   
 
     
@@ -10136,10 +10207,21 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#groups-must-have-same-start" class="md-nav__link">
+  <a href="#interval-mismatch" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Groups must have same start
+        Interval mismatch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#groups-with-different-starts-or-lengths" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Groups with different starts or lengths
       
     </span>
   </a>
@@ -10408,9 +10490,9 @@ configuration, and NER parallelism, see <a href="../environment/">Environment Va
 <td>Clean NaN/nulls from timestamp column</td>
 </tr>
 <tr>
-<td>"groups must have same start"</td>
-<td>Inconsistent groups</td>
-<td><a href="#groups-must-have-same-start">Align group start timestamps</a></td>
+<td><code>timestamp_interval_mismatch</code> error</td>
+<td>Timestamps do not follow <code>timestamp_interval_seconds</code></td>
+<td><a href="#interval-mismatch">Details</a></td>
 </tr>
 <tr>
 <td>Pre-flight validation fails</td>
@@ -10941,8 +11023,14 @@ check of its own.</p>
 <tr>
 <td><code>column_nulls</code></td>
 <td>error</td>
-<td><code>columns.groupby</code></td>
+<td><code>columns.groupby</code> / <code>columns.orderby</code></td>
 <td>Required column contains null values</td>
+</tr>
+<tr>
+<td><code>duplicate_columns</code></td>
+<td>error</td>
+<td><code>timeseries.shape</code></td>
+<td>Duplicate column names; rename or remove them</td>
 </tr>
 <tr>
 <td><code>pseudo_column_collision</code></td>
@@ -10996,31 +11084,13 @@ check of its own.</p>
 <td><code>timestamp_interval_mismatch</code></td>
 <td>error</td>
 <td><code>timeseries.shape</code></td>
-<td>Timestamp intervals are inconsistent within or across groups, or do not match <code>timestamp_interval_seconds</code></td>
+<td>Spacing between consecutive timestamps in a group does not match <code>timestamp_interval_seconds</code></td>
 </tr>
 <tr>
 <td><code>timeseries_empty</code></td>
 <td>error</td>
 <td><code>timeseries.shape</code></td>
 <td>Time-series data contains no records to validate</td>
-</tr>
-<tr>
-<td><code>timeseries_group_length_mismatch</code></td>
-<td>error</td>
-<td><code>timeseries.shape</code></td>
-<td>Time-series groups do not contain the same number of records</td>
-</tr>
-<tr>
-<td><code>timeseries_start_mismatch</code></td>
-<td>error</td>
-<td><code>timeseries.shape</code></td>
-<td>Time-series groups do not share the same start timestamp</td>
-</tr>
-<tr>
-<td><code>timeseries_stop_mismatch</code></td>
-<td>error</td>
-<td><code>timeseries.shape</code></td>
-<td>Time-series groups do not share the same stop timestamp</td>
 </tr>
 <tr>
 <td><code>tokenizer_unavailable</code></td>
@@ -11137,22 +11207,37 @@ For configuration examples, see <a href="../configuration/#time-series">Configur
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">sort_values</span><span class="p">(</span><span class="n">by</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;group_column&quot;</span><span class="p">,</span> <span class="s2">&quot;timestamp&quot;</span><span class="p">])</span>
 </span></code></pre></div>
 </dd>
-<dt>Interval mismatch:</dt>
+</dl>
+<h4 id="interval-mismatch">Interval mismatch<a class="headerlink" href="#interval-mismatch" title="Permanent link">&para;</a></h4>
+<p><code>timestamp_interval_seconds</code> is an assertion about your data. If the spacing
+between consecutive timestamps in any group differs from it, pre-flight and
+training fail with <code>timestamp_interval_mismatch</code>. Unset
+<code>timestamp_interval_seconds</code> in the config to remove the check, or correct the
+input data to have regular intervals by fixing inconsistent timestamp values
+or removing the offending groups. Groups may still differ in length, start, or
+stop when the interval is set.</p>
+<dl>
+<dt>Invalid timestamp data:</dt>
 <dd>
-<p>If <code>timestamp_interval_seconds</code> does not match the actual intervals in your
-  data, pre-flight and training fail with <code>timestamp_interval_mismatch</code>.
-  Verify your interval setting matches the data and is a positive whole number
-  of seconds. Fractional/sub-second intervals are not supported; resample or
-  represent the data at whole-second resolution. Time-series synthesis is
-  experimental, and this validation is intentionally strict so mismatches are
-  caught before expensive pipeline stages.</p>
+<p>Null, non-finite, unparseable, or format-incompatible timestamps remain
+  errors. Differently shaped groups are handled automatically; malformed
+  timestamps are not repaired.</p>
+</dd>
+<dt>Conflicting timestamp and order columns:</dt>
+<dd>
+<p>In time-series mode, <code>time_series.timestamp_column</code> and
+  <code>data.order_training_examples_by</code> play the same role. Set either one, or
+  both with the same value; differing values are a configuration error.
+  <code>order_training_examples_by</code> also requires <code>data.group_training_examples_by</code>,
+  so use <code>timestamp_column</code> for a single ungrouped series.</p>
 </dd>
 <dt>Groups skipped during generation:</dt>
 <dd>
 <p>If a group consistently produces invalid records (exceeding
   <code>generation.patience</code> consecutive batches above
-  <code>generation.invalid_fraction_threshold</code>), that group is skipped entirely.
-  Check your training data quality for those groups.</p>
+  <code>generation.invalid_fraction_threshold</code>), that group is skipped and its rows
+  are discarded. The generation status is then <code>incomplete</code>. Check your
+  training data quality for those groups.</p>
 </dd>
 <dt>Out-of-order records:</dt>
 <dd>
@@ -11160,13 +11245,16 @@ For configuration examples, see <a href="../configuration/#time-series">Configur
   that arrive out of order are marked invalid.</p>
 </dd>
 </dl>
-<h4 id="groups-must-have-same-start">Groups must have same start<a class="headerlink" href="#groups-must-have-same-start" title="Permanent link">&para;</a></h4>
-<p>All groups in the dataset must begin at the same timestamp when
-<code>time_series.start_timestamp</code> is <code>null</code> (inferred from data). If group
-start timestamps differ, the pipeline raises a <code>DataError</code>. Either align
-all group start timestamps in your data, or set
-<code>time_series.start_timestamp</code> to an explicit value that applies to all
-groups.</p>
+<h4 id="groups-with-different-starts-or-lengths">Groups with different starts or lengths<a class="headerlink" href="#groups-with-different-starts-or-lengths" title="Permanent link">&para;</a></h4>
+<p>Groups do not need to share a start timestamp, stop timestamp, record count,
+or interval. When any of these differ, training preprocessing automatically
+selects flexible time-series processing and logs the constraints that
+differed. The source timestamp is generated as a synthesized column while
+generation validates an internal zero-based sequence index. Generated
+timestamps must not decrease within a group and must follow
+<code>timestamp_interval_seconds</code> when it is set. Each group stops at a learned
+final-row marker, and the maximum source-group length is a hard limit for
+synthetic groups.</p>
 <hr />
 <h2 id="error-classes">Error Classes<a class="headerlink" href="#error-classes" title="Permanent link">&para;</a></h2>
 <p>Safe Synthesizer uses a structured error hierarchy. Understanding which error

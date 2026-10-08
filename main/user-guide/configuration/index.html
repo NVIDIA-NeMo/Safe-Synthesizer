@@ -3403,6 +3403,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -3725,6 +3729,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../reference/nemo_safe_synthesizer/data_processing/flexible_timeseries/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    flexible_timeseries
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../reference/nemo_safe_synthesizer/data_processing/prompt_tokens/" class="md-nav__link">
         
   
@@ -3808,10 +3840,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_1_5_7" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_1_5_8" >
         
           
-          <label class="md-nav__link" for="__nav_5_7_1_5_7" id="__nav_5_7_1_5_7_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_5_7_1_5_8" id="__nav_5_7_1_5_8_label" tabindex="0">
             
   
   
@@ -3829,8 +3861,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_5_7_1_5_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_7_1_5_7">
+        <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_5_7_1_5_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_7_1_5_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -4003,6 +4035,34 @@
     
   
     stats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/nemo_safe_synthesizer/data_processing/timeseries_utils/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    timeseries_utils
   
 
     
@@ -10407,7 +10467,7 @@ for the full field list. For DP error diagnostics, see
 <td><code>data.order_training_examples_by</code></td>
 <td><code>null</code></td>
 <td>Column to order within groups (requires <code>data.group_training_examples_by</code>)</td>
-<td>Use with a timestamp column for time series data</td>
+<td>In time-series mode, prefer <code>time_series.timestamp_column</code>; if both are set they must match</td>
 </tr>
 <tr>
 <td><code>data.max_sequences_per_example</code></td>
@@ -10450,20 +10510,20 @@ change between releases.</p>
 <tr>
 <td><code>time_series.timestamp_column</code></td>
 <td><code>null</code></td>
-<td>Timestamp column name</td>
-<td>Required when <code>is_timeseries: true</code></td>
+<td>Timestamp field</td>
+<td>Required unless an interval is provided</td>
 </tr>
 <tr>
 <td><code>time_series.timestamp_interval_seconds</code></td>
 <td><code>null</code></td>
-<td>Positive whole-number interval in seconds between timestamps</td>
-<td>Set if your data has a regular whole-second sampling interval</td>
+<td>Interval in seconds; must match the data when set</td>
+<td>Required without a timestamp field; leave unset for irregular intervals</td>
 </tr>
 <tr>
 <td><code>time_series.timestamp_format</code></td>
 <td><code>null</code></td>
-<td>strftime format or <code>"elapsed_seconds"</code></td>
-<td>Required when <code>is_timeseries: true</code></td>
+<td>strftime or <code>"elapsed_seconds"</code></td>
+<td>Leave <code>null</code> to infer</td>
 </tr>
 <tr>
 <td><code>time_series.start_timestamp</code></td>
@@ -10477,31 +10537,31 @@ change between releases.</p>
 <td>Override stop timestamp for all groups (inferred from data if <code>null</code>)</td>
 <td>Leave <code>null</code> to infer from data</td>
 </tr>
-<tr>
-<td>See <a class="autorefs autorefs-internal" title="            TimeSeriesParameters
+</tbody>
+</table>
+<p>Groups do not need equal lengths, common start and stop timestamps, or a
+consistent interval; Safe Synthesizer adapts to differently shaped groups
+automatically. Null, unparseable, or otherwise invalid timestamps remain data
+errors.</p>
+<p>In time-series mode, <code>time_series.timestamp_column</code> and
+<code>data.order_training_examples_by</code> play the same role: both name the column
+that orders records within a group. You can set either one, or both if they
+are identical; differing values are a configuration error. Prefer
+<code>timestamp_column</code>, which also works for a single ungrouped series;
+<code>order_training_examples_by</code> requires <code>data.group_training_examples_by</code>. When
+only <code>order_training_examples_by</code> is set together with
+<code>timestamp_interval_seconds</code>, that column is treated as the timestamp.</p>
+<p><code>time_series.timestamp_interval_seconds</code> is an assertion: if the spacing of
+your timestamps does not match it, the run fails with
+<code>timestamp_interval_mismatch</code>. Leave it unset to allow irregular intervals.</p>
+<p>See <a class="autorefs autorefs-internal" title="            TimeSeriesParameters
 
 
   
       pydantic-model
-  " href="../../reference/nemo_safe_synthesizer/config/time_series/#nemo_safe_synthesizer.config.time_series.TimeSeriesParameters"><code>TimeSeriesParameters</code></a></td>
-<td></td>
-<td></td>
-<td></td>
-</tr>
-<tr>
-<td>for the full schema. For detailed descriptions and constraints, see the</td>
-<td></td>
-<td></td>
-<td></td>
-</tr>
-<tr>
-<td><a href="https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/src/nemo_safe_synthesizer/TIMESERIES_README.md">Time Series README</a>.</td>
-<td></td>
-<td></td>
-<td></td>
-</tr>
-</tbody>
-</table>
+  " href="../../reference/nemo_safe_synthesizer/config/time_series/#nemo_safe_synthesizer.config.time_series.TimeSeriesParameters"><code>TimeSeriesParameters</code></a>
+for the full schema. For detailed descriptions and constraints, see the
+<a href="https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/src/nemo_safe_synthesizer/TIMESERIES_README.md">Time Series README</a>.</p>
 <hr />
 <h2 id="evaluation">Evaluation<a class="headerlink" href="#evaluation" title="Permanent link">&para;</a></h2>
 <table>

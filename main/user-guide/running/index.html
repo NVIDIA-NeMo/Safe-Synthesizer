@@ -3727,6 +3727,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -4049,6 +4053,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../reference/nemo_safe_synthesizer/data_processing/flexible_timeseries/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    flexible_timeseries
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../reference/nemo_safe_synthesizer/data_processing/prompt_tokens/" class="md-nav__link">
         
   
@@ -4132,10 +4164,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_1_5_7" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_1_5_8" >
         
           
-          <label class="md-nav__link" for="__nav_5_7_1_5_7" id="__nav_5_7_1_5_7_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_5_7_1_5_8" id="__nav_5_7_1_5_8_label" tabindex="0">
             
   
   
@@ -4153,8 +4185,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_5_7_1_5_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_7_1_5_7">
+        <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_5_7_1_5_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_7_1_5_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -4327,6 +4359,34 @@
     
   
     stats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/nemo_safe_synthesizer/data_processing/timeseries_utils/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    timeseries_utils
   
 
     
@@ -10780,7 +10840,7 @@ execute in order (<code>config</code> → <code>dataframe</code> → <code>metad
 <tr>
 <td><code>columns.orderby</code></td>
 <td>dataframe</td>
-<td><code>order_training_examples_by</code> column is present</td>
+<td><code>order_training_examples_by</code> column is present and has no nulls</td>
 </tr>
 <tr>
 <td><code>columns.mia_excluded</code></td>
@@ -10805,7 +10865,7 @@ execute in order (<code>config</code> → <code>dataframe</code> → <code>metad
 <tr>
 <td><code>timeseries.shape</code></td>
 <td>dataframe</td>
-<td>Timestamp formats parse cleanly and groups have matching lengths, intervals, starts, and stops (time-series mode)</td>
+<td>Timestamps are valid and follow <code>timestamp_interval_seconds</code> when it is set (time-series mode)</td>
 </tr>
 <tr>
 <td><code>gpu.vram</code></td>
