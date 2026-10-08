@@ -49,7 +49,7 @@ def _request(
     dependencies: tuple[tuple[EntityType, CanonicalValue | None], ...] = (),
     pattern: str | None = None,
     seed: int = 42,
-    resolved_values: tuple[tuple[EntityType, tuple[str, ...] | None], ...] = (),
+    resolved_values: tuple[tuple[EntityType, tuple[str, ...]], ...] = (),
 ) -> ReplacementGenerationRequest:
     return ReplacementGenerationRequest(
         entity_type=entity_type,
@@ -473,7 +473,7 @@ class TestReplacementGenerator:
         assert generate("AAPI", 1) == "SouthWoman"
         assert intersection_count == 1
 
-    def test_nemotron_personas_generator_null_mapping_disables_the_dependency_condition(
+    def test_nemotron_personas_generator_listing_every_value_allows_any_candidate(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
@@ -488,7 +488,7 @@ class TestReplacementGenerator:
         request = _request(
             dependencies=((EntityType.GENDER, CanonicalValue("string", "Non-Binary")),),
             seed=1,
-            resolved_values=((EntityType.GENDER, None),),
+            resolved_values=((EntityType.GENDER, ("female", "male")),),
         )
 
         assert generator.generate(request) == "Second"

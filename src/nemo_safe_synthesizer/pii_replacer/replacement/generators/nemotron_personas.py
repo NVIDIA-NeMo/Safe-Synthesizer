@@ -109,8 +109,6 @@ class NemotronPersonasReplacementGenerator:
                 entity_type,
                 dependency_value,
             )
-            if sampler_values is None:
-                continue
             resolved.append((entity_type, sampler_values))
 
         if not resolved:
