@@ -295,7 +295,7 @@ PII replacement accepts automatic discovery, a plan written inline in the main N
 configuration, or a path to a separate plan YAML. Data-to-sampler value
 mappings default to automatic discovery or can be supplied inline. See
 [PII Replacement](../product-overview/pii_replacement.md) for the plan-source
-definitions, examples, Nemotron Personas download instructions, the LLM
+definitions, examples, Nemotron-Personas download instructions, the LLM
 configuration for plan enhancement and dependency mapping discovery, and the GLiNER2
 settings for free-text detection.
 

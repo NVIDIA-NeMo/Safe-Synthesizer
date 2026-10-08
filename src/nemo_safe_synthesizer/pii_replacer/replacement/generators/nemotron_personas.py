@@ -72,7 +72,7 @@ class NemotronPersonasReplacementGenerator:
         self._warned_fallbacks: set[EntityType] = set()
 
     def generate(self, request: ReplacementGenerationRequest) -> str:
-        """Generate a Nemotron Personas replacement for ``request``."""
+        """Generate a Nemotron-Personas replacement for ``request``."""
         if request.entity_type not in _PERSONA_ENTITY_TYPES:
             return self._fallback_generator.generate(request)
 
@@ -80,7 +80,7 @@ class NemotronPersonasReplacementGenerator:
         replacement = None if persona_values is None else _generate_persona_value(request, persona_values)
         if replacement is not None:
             # The executor rejects unchanged values and retries this generator
-            # with a new seed, producing another Nemotron Personas sample.
+            # with a new seed, producing another Nemotron-Personas sample.
             return replacement
         self._warn_fallback(request.entity_type)
         return self._fallback_generator.generate(request)
@@ -146,7 +146,7 @@ class NemotronPersonasReplacementGenerator:
             self._persona_value_columns = _persona_value_columns(self._personas)
         except Exception:
             logger.runtime.warning(
-                "Nemotron Personas replacement assets could not be read; affected entities will use Faker",
+                "Nemotron-Personas replacement assets could not be read; affected entities will use Faker",
                 extra={"locale": self._settings.locale},
             )
         return self._personas
@@ -156,7 +156,7 @@ class NemotronPersonasReplacementGenerator:
             return
         self._warned_fallbacks.add(entity_type)
         logger.user.warning(
-            "Nemotron Personas sampling is unavailable for an entity category; using Faker",
+            "Nemotron-Personas sampling is unavailable for an entity category; using Faker",
             extra={"entity_type": entity_type.value, "locale": self._settings.locale},
         )
 
@@ -248,7 +248,7 @@ def _build_arrow_value_index(values: pd.Series) -> dict[str, np.ndarray]:
         return {}
 
     # Sort integer dictionary codes once instead of materializing and grouping
-    # one Python string per Nemotron Personas row. Stable sorting keeps each value's row
+    # one Python string per Nemotron-Personas row. Stable sorting keeps each value's row
     # positions in their original order, preserving deterministic sampling.
     order = np.argsort(codes, kind="stable")
     sorted_codes = codes[order]
@@ -285,7 +285,7 @@ def _matching_positions(
 
 def _raise_no_persona_candidates(entity_type: EntityType) -> Never:
     raise GenerationError(
-        "Nemotron Personas sampling found no candidates after applying dependency "
+        "Nemotron-Personas sampling found no candidates after applying dependency "
         f"entity type {entity_type.value!r} (candidate_count=0)"
     )
 

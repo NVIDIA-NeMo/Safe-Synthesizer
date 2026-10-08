@@ -216,7 +216,7 @@ Extend `TransformResult` with:
 replacement_plan: PiiReplacementPlan
 resolved_config: ReplacePiiConfig
 generation_statistics: ReplacementGenerationStatistics
-total_time_seconds: float
+replacement_time_seconds: float
 ```
 
 `ReplacementGenerationStatistics` records `generator_time_seconds`, the time spent inside generator calls, and the
@@ -321,7 +321,7 @@ Resolve each dependency value as follows:
 5. There is no `null` entry. To allow any candidate for a source label, list every sampler value.
 6. Without an explicit entry, compare the original dependency value directly to sampler values case-insensitively.
    Therefore values such as `Female`/`female` and `White`/`white` require no mapping.
-7. For Nemotron Personas sampling, fail when neither an explicit mapping nor the implicit identity value selects any asset
+7. For Nemotron-Personas sampling, fail when neither an explicit mapping nor the implicit identity value selects any asset
    candidates. Do not silently discard the condition. Report only the conditioner entity type and aggregate count,
    never the raw dependency value.
 
@@ -335,7 +335,7 @@ gender, and continues to ignore unsupported attributes such as ethnic background
 warn merely because the active backend does not use one of its mapped entity types.
 
 Compile mappings once in the executor by dependency source column, then carry resolved sampler values on each
-generation request. Build candidate indexes once when a Nemotron Personas locale asset is loaded. Read only columns needed for
+generation request. Build candidate indexes once when a Nemotron-Personas locale asset is loaded. Read only columns needed for
 sampling, filtering, and rendering; do not load the large persona-description columns. A generation call must select
 from pre-indexed candidate rows rather than case-folding and scanning the complete asset for every replacement.
 
@@ -503,8 +503,8 @@ quality information, not invalid configuration.
   Luhn-valid cards, IP addresses, and collision-resistant identifiers.
 - Apply configured data-to-sampler value mappings and case-insensitive identity matching before sampler candidate
   selection.
-- If a Nemotron Personas asset or required generated field is unavailable, warn once per affected category and fall back
-  deterministically to Faker. A configured or implicit dependency label that selects no Nemotron Personas candidates is a
+- If a Nemotron-Personas asset or required generated field is unavailable, warn once per affected category and fall back
+  deterministically to Faker. A configured or implicit dependency label that selects no Nemotron-Personas candidates is a
   configuration error, not a fallback condition.
 - Require generated values to differ from originals and satisfy entity-specific constraints.
 - Use one pattern parser for validation and rendering so their grammars cannot drift.
@@ -654,7 +654,7 @@ make it explicit opt-in, label the artifact as sensitive, and define access cont
 1. Add the model adapter for `fastino/gliner2-privacy-filter-PII-multi` (already the configured default) and adapt the deterministic regex layer from
    Anonymizer PR 265.
 2. Implement the deep `TabularPiiReplacer` module, DAG compiler, scopes, deterministic mapping keys, group conflict
-   handling, sampler data-to-sampler value mappings, indexed Nemotron Personas loading, and programmatic entity generators.
+   handling, sampler data-to-sampler value mappings, indexed Nemotron-Personas loading, and programmatic entity generators.
 3. Implement span normalization, cross-source overlap resolution, component-map reuse, and one-pass text construction.
 4. Integrate the replacer after holdout, return the expanded result, persist the resolved configuration, and populate
    statistics.
@@ -681,9 +681,9 @@ make it explicit opt-in, label the artifact as sensitive, and define access cont
 - Test deterministic seeds, Nemotron-Personas fallback, supported generators, patterns, email-domain behavior, organization
   normalization, masks, birth dates, Luhn cards, original inequality, and collision retries.
 - Test automatic and manual sparse dependency mappings, the shared plan-discovery switch, implicit case-insensitive
-  identity matching, one-to-many candidate unions, full-list entries, unmatched values without entries, missing Nemotron Personas candidates, mapping validation by
-  source column, and acceptance by both Nemotron Personas and Faker configurations.
-- Test that Nemotron Personas assets load only required columns and build reusable candidate indexes rather than scanning the
+  identity matching, one-to-many candidate unions, full-list entries, unmatched values without entries, missing Nemotron-Personas candidates, mapping validation by
+  source column, and acceptance by both Nemotron-Personas and Faker configurations.
+- Test that Nemotron-Personas assets load only required columns and build reusable candidate indexes rather than scanning the
   complete asset per generated value.
 - Test component replacement reuse only for independently detected spans.
 - Test generation elapsed time and distinct-generation counts after cache reuse.

@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import re
+from collections.abc import Callable
 from dataclasses import FrozenInstanceError
 from datetime import datetime
 from pathlib import Path
@@ -26,6 +27,11 @@ from nemo_safe_synthesizer.pii_replacer.replacement.generators import (
     NemotronPersonasReplacementGenerator,
 )
 from nemo_safe_synthesizer.pii_replacer.replacement.types import CanonicalValue
+
+
+def _construct(factory: Callable[..., object], *args: object, **kwargs: object) -> object:
+    """Call ``factory`` with deliberately invalid arguments that its type hints would reject."""
+    return factory(*args, **kwargs)
 
 
 class _GenderAwareFake:
@@ -215,13 +221,14 @@ class TestReplacementGenerator:
 
     def test_request_requires_resolved_dependency_values_to_be_a_tuple(self) -> None:
         with pytest.raises(InternalError, match="resolved_dependency_values must be a tuple"):
-            ReplacementGenerationRequest(
+            _construct(
+                ReplacementGenerationRequest,
                 entity_type=EntityType.FIRST_NAME,
                 original_value="Ada",
                 effective_dependency_tuple=(),
                 pattern=None,
                 seed=42,
-                resolved_dependency_values=[],  # ty: ignore[invalid-argument-type] -- deliberate invalid input
+                resolved_dependency_values=[],
             )
 
     def test_faker_generation_is_deterministic_for_equal_requests(self) -> None:
@@ -577,7 +584,7 @@ class TestReplacementGenerator:
             _generator: FakerReplacementGenerator,
             _request: ReplacementGenerationRequest,
         ) -> str:
-            pytest.fail("an unchanged Nemotron Personas value should be resampled, not delegated to Faker")
+            pytest.fail("an unchanged Nemotron-Personas value should be resampled, not delegated to Faker")
 
         monkeypatch.setattr(FakerReplacementGenerator, "generate", fail_if_faker_is_used)
         generator = _nemotron_personas_generator(tmp_path, monkeypatch, pd.DataFrame({"first_name": ["Ada"]}))
