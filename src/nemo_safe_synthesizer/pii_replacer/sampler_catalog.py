@@ -48,7 +48,7 @@ def load_sampler_value_catalog(
         dataframe = pd.read_parquet(path, columns=list(selected.values()), dtype_backend="pyarrow")
     except Exception:
         logger.runtime.warning(
-            "Nemotron Personas dependency values could not be read; automatic value mappings will be unavailable",
+            "Nemotron-Personas dependency values could not be read; automatic value mappings will be unavailable",
             extra={"locale": settings.locale},
         )
         return {}
