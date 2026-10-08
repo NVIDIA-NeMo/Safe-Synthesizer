@@ -40,8 +40,6 @@ logger = get_logger(__name__)
 _MIN_VALID_PAIRS = 3
 _GROUP_SELECTION_SEED = 2112
 _CONSTANT_TOLERANCE_FACTOR = 32.0
-# Standard errors of a lag difference treated as sampling noise.
-_NOISE_ALLOWANCE = 1.0
 
 
 class AutocorrelationSimilarity(Component):
@@ -410,8 +408,8 @@ class AutocorrelationSimilarity(Component):
         For each lag, Pearson correlation is computed over positions whose two
         endpoints are finite. Lags are capped at half the shorter finite
         sequence. The error is scored by ``_noise_aware_error``, so differences
-        explained by sampling noise do not lower the score and losing all lag
-        structure scores near zero.
+        explained by sampling noise do not lower the score on average and losing
+        all lag structure scores near zero.
 
         Args:
             training: Ordered training values for one group and column.
@@ -502,11 +500,16 @@ class AutocorrelationSimilarity(Component):
     ) -> float:
         """Return the share of lag structure that differs beyond sampling noise.
 
-        At each lag, only the part of the absolute difference that exceeds the
-        expected noise counts. The excess is divided by the larger of the two
-        profile magnitudes, floored at the noise, so losing all structure and
-        inventing structure are penalized alike. Lags are weighted by inverse
-        noise variance so precisely estimated lags count more.
+        Sampling noise adds its variance to every squared difference, so the
+        expected noise variance is subtracted from each squared difference and
+        the results are pooled across lags before taking the square root.
+        Pooling first lets noise cancel across lags instead of rounding every
+        small gap up to a penalty or down to zero, which keeps the expected score
+        from depending on sequence length. The remaining difference is divided
+        by the larger of the two profile magnitudes, floored at the noise, so
+        losing all structure and inventing structure are penalized alike. Lags
+        are weighted by inverse noise variance so precisely estimated lags count
+        more.
 
         Args:
             training_acf: Training correlations at lags valid in both profiles.
@@ -517,9 +520,9 @@ class AutocorrelationSimilarity(Component):
             Error in ``[0, 1]``.
         """
         weight = 1.0 / noise**2
-        excess = np.maximum(np.abs(training_acf - synthetic_acf) - _NOISE_ALLOWANCE * noise, 0.0)
-        magnitude = np.maximum(np.maximum(np.abs(training_acf), np.abs(synthetic_acf)), _NOISE_ALLOWANCE * noise)
-        return float(np.clip(np.sum(weight * excess) / np.sum(weight * magnitude), 0.0, 1.0))
+        excess = np.sum(weight * ((training_acf - synthetic_acf) ** 2 - noise**2))
+        magnitude = np.maximum(np.maximum(np.abs(training_acf), np.abs(synthetic_acf)), noise)
+        return float(np.clip(np.sqrt(max(excess, 0.0) / np.sum(weight * magnitude**2)), 0.0, 1.0))
 
     @staticmethod
     def _prepare_values(values: pd.Series) -> NDArray[np.float64]:

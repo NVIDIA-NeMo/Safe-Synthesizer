@@ -65,9 +65,9 @@ def _expected_error(profile: dict) -> float:
     valid = np.isfinite(training_acf) & np.isfinite(synthetic_acf)
     training_acf, synthetic_acf, noise = training_acf[valid], synthetic_acf[valid], noise[valid]
     weight = 1 / noise**2
-    excess = np.maximum(np.abs(training_acf - synthetic_acf) - noise, 0)
+    excess = max(np.sum(weight * ((training_acf - synthetic_acf) ** 2 - noise**2)), 0)
     magnitude = np.maximum.reduce([np.abs(training_acf), np.abs(synthetic_acf), noise])
-    return float(np.sum(weight * excess) / np.sum(weight * magnitude))
+    return float(np.sqrt(excess / np.sum(weight * magnitude**2)))
 
 
 def _ar_series(rng: np.random.Generator, phi: float, points: int) -> np.ndarray:
@@ -389,13 +389,22 @@ def test_autocorrelation_similarity_group_cap_uses_seeded_selection():
     assert "Evaluated 2 of 6 shared groups" in first.score.notes
 
 
-def test_autocorrelation_similarity_documentation_examples_cover_presentation_bands():
+@pytest.mark.parametrize("points", [50, 1000])
+def test_autocorrelation_similarity_scores_independent_noise_high_at_any_length(points: int):
+    rng = np.random.default_rng(5)
+    scores = [_single_series_score(rng.normal(size=points), rng.normal(size=points)) for _ in range(20)]
+
+    assert all(score is not None for score in scores)
+    assert np.mean(scores) >= 8.0
+
+
+def test_autocorrelation_similarity_scores_wrong_cycle_length_in_lost_tier():
     time = np.arange(240)
     training_df = pd.DataFrame({"time": time, "value": np.sin(2 * np.pi * time / 8)})
     examples = {
-        "high": np.sin(2 * np.pi * time / 8),
-        "medium": np.sin(2 * np.pi * time / 16),
-        "low": np.sin(2 * np.pi * time / 40),
+        "same": np.sin(2 * np.pi * time / 8),
+        "double": np.sin(2 * np.pi * time / 16),
+        "fivefold": np.sin(2 * np.pi * time / 40),
     }
     config = _config(AutocorrelationSimilarityParameters(max_lag=5))
 
@@ -406,6 +415,6 @@ def test_autocorrelation_similarity_documentation_examples_cover_presentation_ba
         for label, values in examples.items()
     }
 
-    assert scores["low"] is not None and scores["low"] < 5.0
-    assert scores["medium"] is not None and 5.0 <= scores["medium"] < 7.0
-    assert scores["high"] is not None and scores["high"] >= 7.0
+    assert scores["same"] is not None and scores["same"] >= 8.0
+    assert scores["double"] is not None and scores["double"] < 4.0
+    assert scores["fivefold"] is not None and scores["fivefold"] < 4.0
