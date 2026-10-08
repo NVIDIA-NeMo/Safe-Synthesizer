@@ -500,7 +500,7 @@ class PiiReplacementPlan(Parameters):
     data_to_sampler_value_mapping: DataToSamplerValueMapping = Field(
         default_factory=dict,
         description=(
-            "Maps dataset values in dependency columns to the values used by the person sampler "
+            "Maps dataset values in depends_on columns to the values used by the person sampler "
             "(replace_pii.sampler). For example, {sex: {Woman: [female], Non-binary: null}} makes rows where "
             "sex is Woman sample a female persona, and leaves Non-binary rows unfiltered by sex. "
             "A dataset value without an entry is looked up in the sampler as is, ignoring case, so Female "
