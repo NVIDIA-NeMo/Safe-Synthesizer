@@ -19,7 +19,7 @@ from ..transform_result import (
     ReplacementMap,
     StructuredReplacementRecord,
 )
-from .canonicalization import canonicalize_scalar, is_missing_scalar
+from .canonicalization import canonicalize_scalar, is_missing_scalar, readable_value
 from .compiler import compile_plan
 from .detection import FreeTextDetector
 from .free_text import FreeTextColumnStatistics, FreeTextReplacementExecutor
@@ -39,7 +39,7 @@ logger = get_logger(__name__)
 __all__ = ["ReplacementExecutionResult", "StructuredReplacementExecutor", "resolve_base_seed"]
 
 _MAX_GENERATION_ATTEMPTS = 10
-_CompiledDataToSamplerValueMapping = dict[str, dict[str, tuple[str, ...] | None]]
+_CompiledDataToSamplerValueMapping = dict[str, dict[str, tuple[str, ...]]]
 _COLLISION_SENSITIVE_ENTITY_TYPES = frozenset(
     {
         EntityType.EMAIL,
@@ -145,7 +145,7 @@ class StructuredReplacementExecutor:
             ),
             generation_statistics=ReplacementGenerationStatistics(
                 generated_replacement_count=(self._generated_count + free_text_result.generated_replacement_count),
-                elapsed_time_seconds=self._generation_elapsed + free_text_result.elapsed_time_seconds,
+                generator_time_seconds=self._generation_elapsed + free_text_result.generator_time_seconds,
             ),
             dependency_drifts=drifts,
             replacement_map=(

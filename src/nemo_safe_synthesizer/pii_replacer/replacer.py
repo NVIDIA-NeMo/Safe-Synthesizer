@@ -99,7 +99,7 @@ class TabularPiiReplacer:
             replacement_plan=plan,
             resolved_config=resolved_config,
             generation_statistics=execution.generation_statistics,
-            elapsed_time_seconds=time.perf_counter() - started,
+            replacement_time_seconds=time.perf_counter() - started,
             replacement_map=execution.replacement_map,
         )
 

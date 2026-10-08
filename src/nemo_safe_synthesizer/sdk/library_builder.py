@@ -454,7 +454,7 @@ class SafeSynthesizer(ConfigBuilder):
         self._nss_config = config.model_copy(update={"replace_pii": result.resolved_config})
         self._replace_pii_config = result.resolved_config
         self._column_statistics = result.column_statistics
-        self._pii_replacer_time = result.elapsed_time_seconds
+        self._pii_replacer_time = result.replacement_time_seconds
 
         if output_path is not None:
             replacement_output_path = Path(output_path)
@@ -559,7 +559,7 @@ class SafeSynthesizer(ConfigBuilder):
             ).replace(original_training_df)
             self._training_df = replacement_result.transformed_df
             self._column_statistics = replacement_result.column_statistics
-            self._pii_replacer_time = replacement_result.elapsed_time_seconds
+            self._pii_replacer_time = replacement_result.replacement_time_seconds
             self._nss_config = self._nss_config.model_copy(update={"replace_pii": replacement_result.resolved_config})
             self._replace_pii_config = replacement_result.resolved_config
             self._nss_config.to_yaml(
