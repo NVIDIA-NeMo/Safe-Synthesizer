@@ -216,11 +216,11 @@ Extend `TransformResult` with:
 replacement_plan: PiiReplacementPlan
 resolved_config: ReplacePiiConfig
 generation_statistics: ReplacementGenerationStatistics
-elapsed_time_seconds: float
+total_time_seconds: float
 ```
 
-`ReplacementGenerationStatistics` records elapsed generation time and the number of distinct replacements generated
-after cache reuse.
+`ReplacementGenerationStatistics` records `generator_time_seconds`, the time spent inside generator calls, and the
+number of distinct replacements generated after cache reuse.
 
 Do not add a persisted replacement-map path to this interface. If an in-memory mapping is needed, design it as an
 explicit sensitive result with a separate persistence decision.

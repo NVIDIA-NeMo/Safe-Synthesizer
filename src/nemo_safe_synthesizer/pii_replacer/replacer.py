@@ -95,7 +95,7 @@ class TabularPiiReplacer:
             replacement_plan=plan,
             resolved_config=resolved_config,
             generation_statistics=execution.generation_statistics,
-            elapsed_time_seconds=time.perf_counter() - started,
+            total_time_seconds=time.perf_counter() - started,
         )
 
     def _replacement_generator(self, config: ReplacePiiConfig) -> ReplacementGenerator:

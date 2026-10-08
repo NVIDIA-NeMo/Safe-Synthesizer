@@ -120,7 +120,7 @@ class StructuredReplacementExecutor:
             column_statistics=_column_statistics(dataframe, working, self._plan, self._generator.backend.value),
             generation_statistics=ReplacementGenerationStatistics(
                 generated_replacement_count=self._generated_count,
-                elapsed_time_seconds=self._generation_elapsed,
+                generator_time_seconds=self._generation_elapsed,
             ),
             dependency_drifts=drifts,
         )
