@@ -181,8 +181,6 @@ nav:
   - User Guide:
       - Getting Started: user-guide/getting-started.md
       - Running Safe Synthesizer: user-guide/running.md
-      - Time-Series Metrics:
-          - Autocorrelation Similarity: user-guide/time-series-metrics/autocorrelation-similarity.md
       - Docker: user-guide/docker.md
       - Kubernetes Job: user-guide/kubernetes.md
       - Private Workload Images: user-guide/private-workload-images.md
@@ -192,6 +190,8 @@ nav:
       - Reference:
           - Configuration: user-guide/configuration.md
           - Environment Variables: user-guide/environment.md
+      - Time-Series Metrics (beta):
+          - Autocorrelation Similarity: user-guide/time-series-metrics/autocorrelation-similarity.md
   - Developer Guide:
       - Architecture: developer-guide/architecture.md
       - Configuration Management: developer-guide/configuration_management.md
