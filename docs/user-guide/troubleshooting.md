@@ -31,7 +31,7 @@ configuration, and NER parallelism, see [Environment Variables](environment.md).
 | Low SQS scores | Underfit or too few records | [Review distributions](evaluating-data.md#low-sqs-scores) |
 | PII uses default entities | Classifier failed | [Set entities explicitly](evaluating-data.md#pii-uses-unexpected-entity-types) |
 | "timestamp_column has missing values" | Dirty time series data | Clean NaN/nulls from timestamp column |
-| "groups must have same start" | Inconsistent groups | [Align group start timestamps](#groups-must-have-same-start) |
+| `timestamp_interval_mismatch` error | Timestamps do not follow `timestamp_interval_seconds` | [Details](#interval-mismatch) |
 | Pre-flight validation fails | Dataset or config issue | [Pre-flight validation codes](#pre-flight-validation-codes) |
 
 ---
@@ -519,7 +519,8 @@ check of its own.
 | `hf_remote_code_not_cached` | warning/error | `env.hf_model_availability` | Trusted model references remote code that is not cached locally; severity is error when HF offline mode is enabled |
 | `preflight.check_crash` | error | (crashing check) | A check raised an unexpected exception; the issue's `check` field names the crashing check and other checks continued running |
 | `column_not_found` | error | `columns.groupby` / `columns.orderby` / `columns.mia_excluded` | Required column missing from dataset, or input DataFrame uses unsupported MultiIndex columns |
-| `column_nulls` | error | `columns.groupby` | Required column contains null values |
+| `column_nulls` | error | `columns.groupby` / `columns.orderby` | Required column contains null values |
+| `duplicate_columns` | error | `timeseries.shape` | Duplicate column names; rename or remove them |
 | `pseudo_column_collision` | error | `columns.pseudo` | Dataset contains reserved internal column name, or input DataFrame uses unsupported MultiIndex columns |
 | `constant_column` | warning | `columns.constant` | Column has only one unique value |
 | `timestamp_not_found` | error | `timeseries.timestamp` | Timestamp column missing, or input DataFrame uses unsupported MultiIndex columns |
@@ -528,11 +529,8 @@ check of its own.
 | `timestamp_parse_failed` | error | `timeseries.shape` | One or more timestamp values could not be parsed with the inferred or configured timestamp format |
 | `timestamp_elapsed_non_numeric` | error | `timeseries.shape` | `timestamp_format='elapsed_seconds'` was configured for a non-numeric timestamp column |
 | `timestamp_elapsed_invalid` | error | `timeseries.shape` | `timestamp_format='elapsed_seconds'` was configured for boolean or infinite timestamp values |
-| `timestamp_interval_mismatch` | error | `timeseries.shape` | Timestamp intervals are inconsistent within or across groups, or do not match `timestamp_interval_seconds` |
+| `timestamp_interval_mismatch` | error | `timeseries.shape` | Spacing between consecutive timestamps in a group does not match `timestamp_interval_seconds` |
 | `timeseries_empty` | error | `timeseries.shape` | Time-series data contains no records to validate |
-| `timeseries_group_length_mismatch` | error | `timeseries.shape` | Time-series groups do not contain the same number of records |
-| `timeseries_start_mismatch` | error | `timeseries.shape` | Time-series groups do not share the same start timestamp |
-| `timeseries_stop_mismatch` | error | `timeseries.shape` | Time-series groups do not share the same stop timestamp |
 | `tokenizer_unavailable` | warning | `token_budget` | Model tokenizer could not be loaded; token checks skipped |
 | `schema_exceeds_context` | error | `token_budget` | Schema prompt exceeds model context window |
 | `record_exceeds_context` | error | `token_budget` | Individual records exceed context window |
@@ -643,36 +641,54 @@ Missing timestamp values:
     df = df.sort_values(by=["group_column", "timestamp"])
     ```
 
-Interval mismatch:
+#### Interval mismatch
 
-: If `timestamp_interval_seconds` does not match the actual intervals in your
-  data, pre-flight and training fail with `timestamp_interval_mismatch`.
-  Verify your interval setting matches the data and is a positive whole number
-  of seconds. Fractional/sub-second intervals are not supported; resample or
-  represent the data at whole-second resolution. Time-series synthesis is
-  experimental, and this validation is intentionally strict so mismatches are
-  caught before expensive pipeline stages.
+`timestamp_interval_seconds` is an assertion about your data. If the spacing
+between consecutive timestamps in any group differs from it, pre-flight and
+training fail with `timestamp_interval_mismatch`. Unset
+`timestamp_interval_seconds` in the config to remove the check, or correct the
+input data to have regular intervals by fixing inconsistent timestamp values
+or removing the offending groups. Groups may still differ in length, start, or
+stop when the interval is set.
+
+Invalid timestamp data:
+
+: Null, non-finite, unparseable, or format-incompatible timestamps remain
+  errors. Differently shaped groups are handled automatically; malformed
+  timestamps are not repaired.
+
+Conflicting timestamp and order columns:
+
+: In time-series mode, `time_series.timestamp_column` and
+  `data.order_training_examples_by` play the same role. Set either one, or
+  both with the same value; differing values are a configuration error.
+  `order_training_examples_by` also requires `data.group_training_examples_by`,
+  so use `timestamp_column` for a single ungrouped series.
 
 Groups skipped during generation:
 
 : If a group consistently produces invalid records (exceeding
   `generation.patience` consecutive batches above
-  `generation.invalid_fraction_threshold`), that group is skipped entirely.
-  Check your training data quality for those groups.
+  `generation.invalid_fraction_threshold`), that group is skipped and its rows
+  are discarded. The generation status is then `incomplete`. Check your
+  training data quality for those groups.
 
 Out-of-order records:
 
 : During generation, records are validated for chronological order. Records
   that arrive out of order are marked invalid.
 
-#### Groups must have same start
+#### Groups with different starts or lengths
 
-All groups in the dataset must begin at the same timestamp when
-`time_series.start_timestamp` is `null` (inferred from data). If group
-start timestamps differ, the pipeline raises a `DataError`. Either align
-all group start timestamps in your data, or set
-`time_series.start_timestamp` to an explicit value that applies to all
-groups.
+Groups do not need to share a start timestamp, stop timestamp, record count,
+or interval. When any of these differ, training preprocessing automatically
+selects flexible time-series processing and logs the constraints that
+differed. The source timestamp is generated as a synthesized column while
+generation validates an internal zero-based sequence index. Generated
+timestamps must not decrease within a group and must follow
+`timestamp_interval_seconds` when it is set. Each group stops at a learned
+final-row marker, and the maximum source-group length is a hard limit for
+synthetic groups.
 
 ---
 

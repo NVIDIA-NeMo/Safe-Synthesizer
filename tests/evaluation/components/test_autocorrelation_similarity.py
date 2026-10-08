@@ -168,7 +168,7 @@ def test_autocorrelation_similarity_treats_inherited_pseudo_group_as_global_sequ
         timestamp_interval_seconds=1,
         rope_scaling_factor=1,
     )
-    processed_df, config = process_timeseries_data(training_df.copy(), config)
+    processed_df, config, _ = process_timeseries_data(training_df.copy(), config)
     synthetic_df = processed_df.drop(columns=PSEUDO_GROUP_COLUMN).sample(frac=1.0, random_state=7)
 
     component = AutocorrelationSimilarity.from_evaluation_datasets(

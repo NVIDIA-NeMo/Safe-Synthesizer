@@ -5,13 +5,16 @@
 
 from __future__ import annotations
 
+import calendar
+import json
 import math
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum, auto
 from pathlib import Path
-from typing import Self
+from typing import NamedTuple, Self
 
 import pandas as pd
 from vllm.inputs.llm import TokensPrompt
@@ -30,7 +33,7 @@ from ..generation.timeseries_prompting import (
     build_training_compatible_prompt_token_ids,
 )
 from ..generation.vllm_backend import VllmBackend
-from ..llm.metadata import ModelMetadata, TimeSeriesGroupValue
+from ..llm.metadata import ModelMetadata, TimeSeriesGroupValue, TimeseriesMetadata
 from ..observability import get_logger
 
 logger = get_logger(__name__)
@@ -46,9 +49,10 @@ class _ResolvedTimeseriesSettings:
     stop_timestamp: str | int | None
     timestamp_interval_seconds: int | None
     timestamp_format: str
+    timeseries_metadata: TimeseriesMetadata | None
 
     @classmethod
-    def from_config(cls, config: SafeSynthesizerParameters) -> Self:
+    def from_config(cls, config: SafeSynthesizerParameters, metadata: ModelMetadata) -> Self:
         """Validate and extract the time-series values required by generation."""
         timestamp_column = config.time_series.timestamp_column
         group_column = config.data.group_training_examples_by
@@ -74,6 +78,7 @@ class _ResolvedTimeseriesSettings:
             stop_timestamp=config.time_series.stop_timestamp,
             timestamp_interval_seconds=config.time_series.timestamp_interval_seconds,
             timestamp_format=config.time_series.timestamp_format or "",
+            timeseries_metadata=metadata.timeseries_metadata,
         )
 
 
@@ -158,6 +163,12 @@ class GroupState:
     last_timestamp_seconds: int | None = None
     """Timestamp (in seconds) of the most recently generated record, used for chronological validation."""
 
+    last_source_timestamp_seconds: int | None = None
+    """Flexible mode: source timestamp (in seconds) of the most recently accepted record."""
+
+    batches: list[Batch] = field(default_factory=list, repr=False)
+    """Batches whose accepted rows belong to this group; invalidated if the group fails."""
+
     low_valid_fraction_count: int = 0
     """Consecutive batches with high invalid fraction.  Triggers group failure after ``patience`` is exceeded."""
 
@@ -175,6 +186,28 @@ class GroupState:
 
     no_progress_count: int = 0
     """Consecutive batches that did not advance the accepted timestamp."""
+
+    termination_reason: str | None = None
+    """Final flexible time-series outcome: ``terminal``, ``cap``, or ``failure``."""
+
+    total_prompts: int = 0
+    """Number of generation prompts attempted for this group."""
+
+    total_prompt_tokens: int = 0
+    """Prompt tokens submitted once per generation request, including retries."""
+
+    total_completion_tokens: int = 0
+    """Completion tokens attempted for this group, including discarded rows."""
+
+
+class _ResponseOutcome(NamedTuple):
+    """Validated result of one sampled response for a time-series group."""
+
+    accepted: list[ParsedRecord]
+    """Rows that passed every check, in generation order."""
+
+    termination_reason: str | None
+    """Flexible ``terminal`` or ``cap`` stop accepted in this response, if any."""
 
 
 class GroupProcessingResult(Enum):
@@ -203,20 +236,24 @@ class TimeseriesBackend(VllmBackend):
     ensuring temporal continuity.
 
     Key Concepts:
-        - Time-Range Based Generation: The number of records generated is
+        - Deterministic Time-Range Generation: For fixed-shape training data, the number of records generated is
           determined by the configured time range and interval, not by a target
           count. Specifically: (stop_timestamp - start_timestamp) / interval_seconds.
-          The `config.generation.num_records` parameter is used only for progress
+          The ``config.generation.num_records`` parameter is used only for progress
           tracking, not to limit output.
+        - Flexible Marker Generation: For automatically routed training data,
+          generated rows must have contiguous sequence indices. A final-row marker
+          completes the group, while the largest source-group length provides a
+          safety cap. Internal control columns are removed from final output.
         - Sliding Window: The backend maintains a window of recent records
-          (controlled by `_history_window_size`) that are included in each prompt
+          (controlled by ``_history_window_size``) that are included in each prompt
           to provide context for the LLM, ensuring generated records follow the
           established patterns and timestamps.
         - Parallel Group Generation: Multiple time-series groups (e.g., different
           devices, customers) are processed in parallel batches for efficiency.
           Even single-sequence data uses this path (treated as 1 group via a
           pseudo-group column added during preprocessing). Groups are the same as
-          those seen during training (from `model_metadata.timeseries_group_values`).
+          those seen during training (from ``model_metadata.timeseries_group_values``).
         - Chronological Validation: Each generated record must continue from the
           previous timestamp at the expected interval. Out-of-order records are
           marked invalid.
@@ -230,8 +267,9 @@ class TimeseriesBackend(VllmBackend):
            d. Process LLM outputs into per-group Batch objects
            e. For each group:
               - Validate chronological order against group's last timestamp
-              - Retain the response with the most valid records (discard others)
-              - Apply data actions and discard records rejected by post-processing
+              - Apply data actions and post-processing checks to every sampled response
+              - Retain one validated response (deterministic: most accepted rows;
+                flexible: first ending with the final-row marker, else first valid)
               - Update group state from accepted records (history, last_timestamp)
               - Check if an accepted record reached the stop timestamp
               - Track invalid output and timestamp progress; fail after consecutive retries
@@ -244,30 +282,27 @@ class TimeseriesBackend(VllmBackend):
         groups and the overall generation can stop for different reasons:
 
         Per-Group Stopping:
-            - Completion (success): A group completes when any generated record
-              has a timestamp >= `_stop_timestamp_value`. The group is marked as
-              completed and removed from active processing.
+            - Completion (success): A deterministic group completes at
+              ``_stop_timestamp_value``. A flexible group completes at its
+              final-row marker or source-derived record cap.
             - Failure (low valid fraction or no progress): A group fails after
-              `config.generation.patience` consecutive batches where either the
+              ``config.generation.patience`` consecutive batches where either the
               invalid record fraction remains above the configured threshold or
-              no accepted timestamp advances. Failed groups are not retried;
-              records accepted in earlier batches remain in the partial output.
+              no accepted timestamp advances. Failed groups are not retried, and
+              rows they accepted in earlier batches are discarded from the output.
 
         Global Stopping:
             - Natural completion: Generation ends when both the pending groups
               queue and active groups list are empty (all groups processed).
-            - No records: If `GenerationBatches` detects too many consecutive
-              batches with no valid records globally, it signals `STOP_NO_RECORDS`.
-            - Target reached: If the target number of records is reached,
-              `GenerationBatches` signals `STOP_METRIC_REACHED`.
+            - Per-group retry state is authoritative; batch-level stop signals
+              from `GenerationBatches` are cleared while groups remain active.
 
-        When global stopping occurs before all groups complete, `all_groups_succeeded`
-        returns False, and the final generation status reflects partial completion.
+        The final status is ``COMPLETE`` only when every group completed and
+        ``INCOMPLETE`` when any group failed. ``num_records`` does not affect it.
 
     Attributes:
-        _samples_per_prompt (int): Number of completion samples to generate per
-            prompt. Multiple samples increase chances of getting valid records.
-            Default: 5.
+        _samples_per_prompt (int): Minimum number of completion samples per
+            prompt. One sample per group is kept per batch.
         _max_prompts_per_batch (int): Maximum number of prompts to include in a
             single LLM generation call. Controls parallelism. Default: 100.
         _history_window_size (int): Number of recent records to include in the
@@ -287,13 +322,23 @@ class TimeseriesBackend(VllmBackend):
         _group_prefixes (dict[TimeSeriesGroupValue, str]): Mapping of group IDs to
             incomplete first records used to start generation.
         _groups (list[TimeSeriesGroupValue]): Typed group IDs to generate.
+        _timeseries_metadata (TimeseriesMetadata | None): Resolved
+            representation and source schema from training.
+        _flexible_metadata (FlexibleTimeseriesMetadata | None): Resolved
+            marker-based generation settings; ``None`` for deterministic routing.
     """
 
     def __init__(self, config: SafeSynthesizerParameters, model_metadata: ModelMetadata, **kwargs):
-        settings = _ResolvedTimeseriesSettings.from_config(config)
+        settings = _ResolvedTimeseriesSettings.from_config(config, model_metadata)
         super().__init__(config, model_metadata, **kwargs)
 
-        self._samples_per_prompt = 5  # num of samples per prompt
+        self._timeseries_metadata = settings.timeseries_metadata
+        flexible_metadata = self._timeseries_metadata.flexible if self._timeseries_metadata is not None else None
+        self._flexible_metadata = flexible_metadata
+        self._flexible_timeseries = flexible_metadata is not None
+        self._sequence_index_column = flexible_metadata.index_column if flexible_metadata is not None else ""
+        self._sequence_marker_column = flexible_metadata.marker_column if flexible_metadata is not None else ""
+        self._samples_per_prompt = 5
         self._max_prompts_per_batch = 100  # max prompts per batch for parallel group generation
         self._history_window_size = 3
         self._time_column = settings.timestamp_column
@@ -303,6 +348,10 @@ class TimeseriesBackend(VllmBackend):
         self._stop_timestamp_value = settings.stop_timestamp
         self._timestamp_interval_seconds = settings.timestamp_interval_seconds
         self._group_column = settings.group_column
+        self._raw_generations_path = self.workdir.generate.path / "raw_generations.jsonl"
+        self._flexible_metrics_path = self.workdir.generate.path / "flexible_timeseries_metrics.json"
+        self._internal_output_path = self.workdir.generate.path / "synthetic_data_internal.csv"
+        self._sequence_group_states: dict[TimeSeriesGroupValue, GroupState] = {}
 
         group_values = self.model_metadata.timeseries_group_values
         if not group_values:
@@ -587,6 +636,418 @@ class TimeseriesBackend(VllmBackend):
                 if record.is_valid:
                     record.invalidate(error)
 
+    def _trim_flexible_timeseries_records(
+        self,
+        state: GroupState,
+        records: list[ParsedRecord],
+    ) -> tuple[list[ParsedRecord], tuple[str, ParsedRecord] | None]:
+        """Retain the structurally valid prefix of a flexible sequence.
+
+        Records must match the active group and advance the generated sequence
+        index contiguously. This method invalidates records after the first
+        structural failure or stopping row. The stopping candidate remains
+        tentative until data actions have accepted it. Source timestamps are
+        checked after data actions in ``_validate_postprocessed_sequence_indices``.
+
+        Args:
+            state: Active generation state for the group.
+            records: Parsed records to validate and trim in place.
+
+        Returns:
+            The retained prefix and its tentative marker- or cap-based stop.
+        """
+        metadata = self._flexible_metadata
+        if metadata is None:
+            return records, None
+
+        retained: list[ParsedRecord] = []
+        accepted_row_stop: tuple[str, ParsedRecord] | None = None
+        prefix_ended = False
+        expected_index = 0 if state.last_timestamp_seconds is None else state.last_timestamp_seconds + 1
+        trimmed_error = ("Generated row appears after the sequence end marker", "TimeSeries")
+        group_error = ("Generated record group does not match the active time-series group", "TimeSeries")
+        index_error = ("Generated sequence index is not a valid integer", "TimeSeries")
+
+        for record in records:
+            if prefix_ended:
+                record.invalidate(trimmed_error)
+                continue
+            parsed = record.parsed
+            if parsed is None:
+                continue
+            if not self._matches_group(parsed, state):
+                record.invalidate(group_error)
+                prefix_ended = True
+                continue
+            index_value = parsed.get(self._sequence_index_column)
+            if not isinstance(index_value, int) or isinstance(index_value, bool):
+                record.invalidate(index_error)
+                prefix_ended = True
+                continue
+            if index_value != expected_index:
+                record.invalidate(
+                    (
+                        f"Generated sequence index {index_value!r} does not match expected index {expected_index}",
+                        "TimeSeries",
+                    )
+                )
+                prefix_ended = True
+                continue
+
+            retained.append(record)
+            expected_index += 1
+            if parsed.get(self._sequence_marker_column) is True:
+                accepted_row_stop = ("terminal", record)
+                prefix_ended = True
+            elif index_value >= metadata.max_records - 1:
+                accepted_row_stop = ("cap", record)
+                prefix_ended = True
+
+        return retained, accepted_row_stop
+
+    def _evaluate_responses(
+        self,
+        state: GroupState,
+        batch: Batch,
+        batches: GenerationBatches,
+    ) -> list[_ResponseOutcome]:
+        """Validate every sampled response before one is selected.
+
+        Each response is trimmed to its structurally valid prefix, data actions
+        run on all responses, and post-processed rows are checked again. Selection
+        therefore only considers rows that would actually be accepted, so a
+        response rejected by data actions or post-processed checks cannot displace
+        another valid response. Data-action history is not updated here.
+
+        Args:
+            state: Active generation state for the group.
+            batch: The group's batch of sampled responses.
+            batches: Accumulator that applies data actions.
+
+        Returns:
+            The accepted rows and termination reason of each response, in order.
+        """
+        trimmed = [
+            self._trim_flexible_timeseries_records(
+                state,
+                [record for record in response.records if record.is_valid and record.parsed is not None],
+            )
+            for response in batch._responses
+        ]
+        batches.postprocess_batch(batch, commit_history=False)
+        outcomes: list[_ResponseOutcome] = []
+        for retained, accepted_row_stop in trimmed:
+            self._validate_postprocessed_group_identity(state, retained)
+            self._validate_postprocessed_sequence_indices(state, retained)
+            accepted = [record for record in retained if record.is_valid and record.parsed is not None]
+            outcomes.append(_ResponseOutcome(accepted, self._resolve_postprocessed_termination(accepted_row_stop)))
+        return outcomes
+
+    def _select_response(self, outcomes: list[_ResponseOutcome]) -> int | None:
+        """Choose which validated response continues the group.
+
+        Deterministic groups keep the response with the most accepted rows.
+        Flexible groups keep the first response whose accepted rows end with the
+        final-row marker, otherwise the first response with any accepted row.
+        Choosing the most rows in flexible mode would favor responses that
+        continue past the point where the group should end.
+
+        Args:
+            outcomes: Validated outcomes from ``_evaluate_responses``.
+
+        Returns:
+            The index of the selected response, or ``None`` when no response has
+            an accepted row.
+        """
+        if not self._flexible_timeseries:
+            best_index: int | None = None
+            best_count = 0
+            for index, outcome in enumerate(outcomes):
+                if len(outcome.accepted) > best_count:
+                    best_index, best_count = index, len(outcome.accepted)
+            return best_index
+
+        first_valid_index: int | None = None
+        for index, outcome in enumerate(outcomes):
+            if not outcome.accepted:
+                continue
+            if outcome.termination_reason == "terminal":
+                return index
+            if first_valid_index is None:
+                first_valid_index = index
+        return first_valid_index
+
+    def _matches_group(self, parsed: dict, state: GroupState) -> bool:
+        """Whether a record belongs to the active group.
+
+        The pseudo-group of an ungrouped dataset is never part of the schema or
+        generated records, so every record of the single stream belongs to it.
+        """
+        if self._group_column == PSEUDO_GROUP_COLUMN:
+            return True
+        return parsed.get(self._group_column) == state.group_id
+
+    def _source_timestamp_seconds(self, parsed: dict) -> int | None:
+        """Parse the source timestamp of a post-processed record, or ``None`` when absent or unparseable.
+
+        Post-processing restores the source representation, so values follow
+        ``source_timestamp_format``; data actions may also return datetime objects.
+        """
+        metadata = self._flexible_metadata
+        if metadata is None or metadata.source_timestamp_column is None or metadata.source_timestamp_format is None:
+            return None
+        value = parsed.get(metadata.source_timestamp_column)
+        if isinstance(value, datetime):
+            timestamp = pd.Timestamp(value)
+            if timestamp.tzinfo is not None:
+                return int(timestamp.timestamp())
+            return calendar.timegm(timestamp.timetuple())
+        try:
+            return _parse_timestamp_to_seconds(value, metadata.source_timestamp_format)
+        except (ValueError, TypeError, OverflowError):
+            return None
+
+    def _check_source_timestamp(
+        self,
+        parsed: dict,
+        previous_seconds: int | None,
+    ) -> tuple[int | None, tuple[str, str] | None]:
+        """Parse a post-processed source timestamp and check it against the previous accepted row.
+
+        Args:
+            parsed: Post-processed record in the source representation.
+            previous_seconds: Source timestamp of the previous accepted row in the group.
+
+        Returns:
+            The parsed timestamp in seconds, or ``None`` when the source data has
+            no timestamp column, and an invalidation error when a check fails.
+        """
+        metadata = self._flexible_metadata
+        if metadata is None or metadata.source_timestamp_column is None:
+            return None, None
+        seconds = self._source_timestamp_seconds(parsed)
+        if seconds is None:
+            return None, ("Generated source timestamp does not match the source timestamp format", "TimeSeries")
+        if previous_seconds is None:
+            return seconds, None
+        if seconds < previous_seconds:
+            return None, ("Generated source timestamp decreases within the group", "TimeSeries")
+        interval = metadata.source_interval_seconds
+        if interval is not None and seconds - previous_seconds != interval:
+            return None, ("Generated source timestamp does not follow timestamp_interval_seconds", "TimeSeries")
+        return seconds, None
+
+    def _resolve_postprocessed_termination(
+        self,
+        accepted_row_stop: tuple[str, ParsedRecord] | None,
+    ) -> str | None:
+        """Resolve termination after data actions have accepted or rejected marker/cap rows."""
+        if accepted_row_stop is None:
+            return None
+        reason, candidate = accepted_row_stop
+        if not candidate.is_valid or candidate.parsed is None:
+            return None
+        if reason == "terminal":
+            return reason if candidate.parsed.get(self._sequence_marker_column) is True else None
+        if reason == "cap":
+            metadata = self._flexible_metadata
+            if metadata is None:
+                return None
+            index_value = candidate.parsed.get(self._sequence_index_column)
+            if not isinstance(index_value, int) or isinstance(index_value, bool):
+                return None
+            return reason if index_value >= metadata.max_records - 1 else None
+        return None
+
+    def _validate_postprocessed_group_identity(
+        self,
+        state: GroupState,
+        records: list[ParsedRecord],
+    ) -> None:
+        """Invalidate accepted rows whose postprocessed group no longer matches the active stream."""
+        error = ("Postprocessed record group does not match the active time-series group", "TimeSeries")
+        for record in records:
+            if record.is_valid and record.parsed is not None and not self._matches_group(record.parsed, state):
+                record.invalidate(error)
+
+    def _validate_postprocessed_sequence_indices(
+        self,
+        state: GroupState,
+        records: list[ParsedRecord],
+    ) -> None:
+        """Retain only the contiguous, chronological post-processed sequence prefix.
+
+        Each accepted row must advance the sequence index by one. When the source
+        data has a timestamp column, its post-processed value must also be
+        non-decreasing and follow any asserted interval. Checks run after data
+        actions so they apply to the values that are actually returned.
+        """
+        if self._flexible_metadata is None:
+            return
+        expected_index = 0 if state.last_timestamp_seconds is None else state.last_timestamp_seconds + 1
+        previous_source_seconds = state.last_source_timestamp_seconds
+        prefix_ended = False
+        for record in records:
+            if prefix_ended or not record.is_valid or record.parsed is None:
+                prefix_ended = True
+                if record.is_valid:
+                    record.invalidate(("Generated row follows an invalid sequence row", "TimeSeries"))
+                continue
+            index_value = record.parsed.get(self._sequence_index_column)
+            if not isinstance(index_value, int) or isinstance(index_value, bool) or index_value != expected_index:
+                record.invalidate(
+                    (
+                        f"Postprocessed sequence index {index_value!r} does not match expected index {expected_index}",
+                        "TimeSeries",
+                    )
+                )
+                prefix_ended = True
+                continue
+            source_seconds, source_error = self._check_source_timestamp(record.parsed, previous_source_seconds)
+            if source_error is not None:
+                record.invalidate(source_error)
+                prefix_ended = True
+                continue
+            expected_index += 1
+            if source_seconds is not None:
+                previous_source_seconds = source_seconds
+
+    @staticmethod
+    def _in_progress_path(path: Path) -> Path:
+        """Return the sibling path an artifact is written to until generation finishes."""
+        return path.with_name(f"{path.name}.tmp")
+
+    @property
+    def _raw_generations_tmp_path(self) -> Path:
+        """In-progress raw completion log, moved to ``_raw_generations_path`` when generation finishes."""
+        return self._in_progress_path(self._raw_generations_path)
+
+    @property
+    def _flexible_artifact_paths(self) -> tuple[Path, Path, Path]:
+        """Final paths of the flexible artifacts that are replaced together."""
+        return self._raw_generations_path, self._flexible_metrics_path, self._internal_output_path
+
+    def _prepare_flexible_timeseries_artifacts(self) -> None:
+        """Start an empty in-progress raw completion log and clear stale in-progress artifacts.
+
+        Like other generation outputs, artifacts from a previous run in the same
+        workdir are left in place until this run finishes and overwrites them.
+        """
+        if not self._flexible_timeseries:
+            return
+        for path in self._flexible_artifact_paths:
+            self._in_progress_path(path).unlink(missing_ok=True)
+        self._raw_generations_tmp_path.parent.mkdir(parents=True, exist_ok=True)
+        self._raw_generations_tmp_path.write_text("", encoding="utf-8")
+
+    def _finalize_flexible_timeseries_artifacts(self) -> None:
+        """Replace the previous run's flexible artifacts with this run's artifacts.
+
+        All three artifacts are written to in-progress paths first, so a run
+        that fails before this point never leaves files from two runs side by side.
+        """
+        if not self._flexible_timeseries:
+            return
+        for path in self._flexible_artifact_paths:
+            in_progress = self._in_progress_path(path)
+            if in_progress.exists():
+                in_progress.replace(path)
+
+    def _write_raw_completion(
+        self,
+        state: GroupState,
+        *,
+        completion_text: str,
+        prompt_tokens: int,
+        completion_tokens: int,
+        finish_reason: str,
+    ) -> None:
+        """Append one unparsed model completion to the flexible time-series audit log."""
+        if not self._flexible_timeseries:
+            return
+        payload = {
+            "group": state.group_id,
+            "group_ordinal": state.group_ordinal,
+            "prompt": state.total_prompts,
+            "completion": completion_text,
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": prompt_tokens + completion_tokens,
+            "finish_reason": finish_reason,
+        }
+        with self._raw_generations_tmp_path.open("a", encoding="utf-8") as raw_file:
+            raw_file.write(json.dumps(payload, ensure_ascii=False))
+            raw_file.write("\n")
+
+    def _resolve_timeseries_status(self) -> GenerationStatus:
+        """Return ``COMPLETE`` only when every group finished; ``num_records`` does not apply."""
+        states = self._sequence_group_states.values()
+        if states and all(state.completed and not state.failed for state in states):
+            return GenerationStatus.COMPLETE
+        return GenerationStatus.INCOMPLETE
+
+    def _discard_failed_group_records(self) -> None:
+        """Invalidate accepted rows of failed groups so they are excluded from output."""
+        error = ("Time-series group failed before completing", "TimeSeries")
+        failed_states = [state for state in self._sequence_group_states.values() if state.failed]
+        if failed_states:
+            logger.warning(
+                "Discarding rows from failed time-series groups; generation is incomplete.",
+                extra={
+                    "failed_groups": len(failed_states),
+                    "total_groups": len(self._sequence_group_states),
+                    "failed_group_ordinals": [state.group_ordinal for state in failed_states],
+                },
+            )
+        records = (
+            record
+            for state in failed_states
+            for batch in state.batches
+            for response in batch._responses
+            for record in response.records
+        )
+        for record in records:
+            if record.is_valid:
+                record.invalidate(error)
+
+    def _write_flexible_timeseries_metrics(self) -> None:
+        """Write auditable per-group and aggregate flexible time-series metrics."""
+        metadata = self._flexible_metadata
+        if metadata is None:
+            return
+        groups = [
+            {
+                "group": state.group_id,
+                "group_ordinal": state.group_ordinal,
+                "reason": state.termination_reason or "failure",
+                "rows": 0 if state.failed else state.total_valid_records,
+                "prompts": state.total_prompts,
+                "prompt_tokens": state.total_prompt_tokens,
+                "completion_tokens": state.total_completion_tokens,
+                "total_tokens": state.total_prompt_tokens + state.total_completion_tokens,
+            }
+            for state in self._sequence_group_states.values()
+        ]
+        reason_counts = {
+            reason: sum(group["reason"] == reason for group in groups) for reason in ("terminal", "cap", "failure")
+        }
+        metrics = {
+            "status": self._resolve_timeseries_status().value,
+            "flexible_timeseries": True,
+            "sequence_max_records": metadata.max_records,
+            "groups": groups,
+            "aggregate": {
+                "groups": len(groups),
+                "rows": sum(int(group["rows"]) for group in groups),
+                "prompts": sum(int(group["prompts"]) for group in groups),
+                "prompt_tokens": sum(int(group["prompt_tokens"]) for group in groups),
+                "completion_tokens": sum(int(group["completion_tokens"]) for group in groups),
+                "total_tokens": sum(int(group["total_tokens"]) for group in groups),
+                "reason_counts": reason_counts,
+            },
+        }
+        utils.write_json(metrics, self._in_progress_path(self._flexible_metrics_path), indent=2)
+
     def _update_group_state(self, group_state: GroupState, records: list[ParsedRecord]) -> None:
         """Update a group's state with new valid records.
 
@@ -606,10 +1067,31 @@ class TimeseriesBackend(VllmBackend):
 
         # Update last timestamp
         last_parsed = records[-1].parsed or {}
+        source_seconds = self._source_timestamp_seconds(last_parsed)
+        if source_seconds is not None:
+            group_state.last_source_timestamp_seconds = source_seconds
         timestamp_value = last_parsed.get(self._time_column) if self._time_column is not None else None
         timestamp_seconds = self._parse_timestamp_seconds(timestamp_value)
         if timestamp_seconds is not None:
             group_state.last_timestamp_seconds = timestamp_seconds
+
+    def _sort_internal_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Sort accepted rows while preserving flexible time-series control columns."""
+        if df.empty:
+            return df
+        sort_columns = [
+            column for column in (self._group_column, self._time_column) if column is not None and column in df.columns
+        ]
+        return df.sort_values(by=sort_columns).reset_index(drop=True) if sort_columns else df
+
+    def _write_internal_output(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Persist accepted flexible time-series rows before internal-column cleanup."""
+        internal_df = self._sort_internal_dataframe(df)
+        if self._flexible_timeseries:
+            internal_path = self._in_progress_path(self._internal_output_path)
+            internal_path.parent.mkdir(parents=True, exist_ok=True)
+            internal_df.to_csv(internal_path, index=False)
+        return internal_df
 
     def _sort_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
         """Sort dataframe by group column then timestamp column.
@@ -626,20 +1108,17 @@ class TimeseriesBackend(VllmBackend):
         if df.empty:
             return df
 
-        sort_columns = []
-        if self._group_column is not None and self._group_column in df.columns:
-            sort_columns.append(self._group_column)
-        if self._time_column in df.columns:
-            sort_columns.append(self._time_column)
+        df = self._sort_internal_dataframe(df)
 
-        if sort_columns:
-            df = df.sort_values(by=sort_columns).reset_index(drop=True)
+        if self._flexible_timeseries:
+            internal_columns = [self._sequence_index_column, self._sequence_marker_column]
+            df = df.drop(columns=internal_columns, errors="ignore")
 
         # Remove pseudo-group column from output (it's only used internally)
         if PSEUDO_GROUP_COLUMN in df.columns:
             df = df.drop(columns=[PSEUDO_GROUP_COLUMN])
 
-        source_columns = self.model_metadata.timeseries_source_columns
+        source_columns = self._timeseries_metadata.source_columns if self._timeseries_metadata is not None else ()
         if source_columns:
             restored_columns = [column for column in source_columns if column in df.columns]
             extra_columns = [column for column in df.columns if column not in restored_columns]
@@ -695,6 +1174,7 @@ class TimeseriesBackend(VllmBackend):
             ignore_eos=sampling_params.ignore_eos,
             stop=sampling_params.stop,
             stop_token_ids=sampling_params.stop_token_ids,
+            seed=sampling_params.seed,
         )
 
         return modified_params, effective_samples_per_prompt
@@ -705,6 +1185,7 @@ class TimeseriesBackend(VllmBackend):
         batch: Batch,
         accepted_records: list[ParsedRecord],
         invalid_fraction_threshold: float,
+        termination_reason: str | None = None,
     ) -> GroupProcessingResult:
         """Update a group from records accepted after post-processing.
 
@@ -713,6 +1194,7 @@ class TimeseriesBackend(VllmBackend):
             batch: The batch containing results for this group.
             accepted_records: Retained records that passed data actions.
             invalid_fraction_threshold: Threshold for invalid fraction.
+            termination_reason: Explicit flexible time-series stop reason, when detected.
 
         Returns:
             GroupProcessingResult enum indicating the group's status.
@@ -733,6 +1215,11 @@ class TimeseriesBackend(VllmBackend):
             state.no_progress_count = 0
         else:
             state.no_progress_count += 1
+
+        if termination_reason is not None:
+            state.completed = True
+            state.termination_reason = termination_reason
+            return GroupProcessingResult.COMPLETED
 
         if reached_stop:
             state.completed = True
@@ -768,6 +1255,7 @@ class TimeseriesBackend(VllmBackend):
 
             if state.low_valid_fraction_count >= patience:
                 state.failed = True
+                state.termination_reason = "failure"
                 logger.warning(
                     "Time-series group skipped after consecutive batches with a high invalid fraction.",
                     extra={
@@ -783,6 +1271,7 @@ class TimeseriesBackend(VllmBackend):
 
         if state.no_progress_count >= patience:
             state.failed = True
+            state.termination_reason = "failure"
             logger.warning(
                 "Time-series group skipped after consecutive batches without timestamp progress.",
                 extra={
@@ -875,6 +1364,7 @@ class TimeseriesBackend(VllmBackend):
         all_group_states: dict[TimeSeriesGroupValue, GroupState] = {
             group_id: self._init_group_state(group_id) for group_id in self._groups
         }
+        self._sequence_group_states = all_group_states
 
         pending_groups = list(self._groups)
         active_states: list[GroupState] = []
@@ -916,6 +1406,9 @@ class TimeseriesBackend(VllmBackend):
                 len(active_states),
                 max_prompt_tokens=max(len(token_ids) for token_ids in prompt_token_ids),
             )
+            for state, token_ids in zip(active_states, prompt_token_ids, strict=True):
+                state.total_prompts += 1
+                state.total_prompt_tokens += len(token_ids)
 
             # Generate for all prompts at once
             if self.llm is None:
@@ -931,9 +1424,19 @@ class TimeseriesBackend(VllmBackend):
                 group_state = active_states[prompt_idx]
                 batch = group_batches[group_state.group_id]
                 for completion_idx, completion in enumerate(output.outputs):
-                    batch.finish_reasons[str(completion.finish_reason or "unknown")] += 1
+                    finish_reason = str(completion.finish_reason or "unknown")
+                    completion_tokens = len(completion.token_ids)
+                    batch.finish_reasons[finish_reason] += 1
+                    group_state.total_completion_tokens += completion_tokens
+                    self._write_raw_completion(
+                        group_state,
+                        completion_text=completion.text,
+                        prompt_tokens=len(prompt_token_ids[prompt_idx]) if completion_idx == 0 else 0,
+                        completion_tokens=completion_tokens,
+                        finish_reason=finish_reason,
+                    )
                     completion_text = f"{group_state.prompt_state.completion_prefix}{completion.text}"
-                    batch.process(completion_idx, completion_text, completion_tokens=len(completion.token_ids))
+                    batch.process(completion_idx, completion_text, completion_tokens=completion_tokens)
 
             duration = time.perf_counter() - start_time
 
@@ -943,17 +1446,31 @@ class TimeseriesBackend(VllmBackend):
                 batch = group_batches[state.group_id]
                 if self.config.time_series.timestamp_interval_seconds is not None:
                     self._check_chronological_for_group(batch, state)
-                retained_records = self._retain_single_valid_response(batch)
-                batches.postprocess_batch(batch)
-                accepted_records = [
-                    record for record in retained_records if record.is_valid and record.parsed is not None
-                ]
-                result = self._process_group_result(
-                    state,
-                    batch,
-                    accepted_records,
-                    invalid_fraction_threshold,
-                )
+                outcomes = self._evaluate_responses(state, batch, batches)
+                selected_index = self._select_response(outcomes)
+                self._retain_single_valid_response(batch, preferred_index=selected_index)
+                batches.commit_history(batch)
+                if selected_index is None:
+                    accepted_records: list[ParsedRecord] = []
+                    termination_reason: str | None = None
+                else:
+                    accepted_records, termination_reason = outcomes[selected_index]
+                if termination_reason is None:
+                    result = self._process_group_result(
+                        state,
+                        batch,
+                        accepted_records,
+                        invalid_fraction_threshold,
+                    )
+                else:
+                    result = self._process_group_result(
+                        state,
+                        batch,
+                        accepted_records,
+                        invalid_fraction_threshold,
+                        termination_reason=termination_reason,
+                    )
+                state.batches.append(batch)
                 batches.add_batch(batch, apply_data_actions=False)
                 # Time-series retries are tracked per group. Since completion is
                 # determined from post-processed records, a batch-level zero-record
@@ -966,8 +1483,13 @@ class TimeseriesBackend(VllmBackend):
                 elif result == GroupProcessingResult.COMPLETED:
                     states_to_remove.append(state)
                     groups_completed += 1
+                    completion_message = (
+                        "Time-series group completed."
+                        if self._flexible_timeseries
+                        else "Time-series group completed after reaching the stop timestamp."
+                    )
                     logger.info(
-                        "Time-series group completed after reaching the stop timestamp.",
+                        completion_message,
                         extra={
                             "group_ordinal": state.group_ordinal,
                             "groups_completed": groups_completed,
@@ -999,17 +1521,23 @@ class TimeseriesBackend(VllmBackend):
 
         return all_groups_succeeded
 
-    def _retain_single_valid_response(self, batch: Batch) -> list[ParsedRecord]:
-        """Retain the response with the most valid records, discarding all others.
+    def _retain_single_valid_response(
+        self,
+        batch: Batch,
+        preferred_index: int | None = None,
+    ) -> list[ParsedRecord]:
+        """Retain one response, discarding all others.
 
         For time-series sliding window generation, only one response can be used
-        per batch to maintain chronological continuity. This method selects the
-        response with the most valid records and discards all other responses
-        (both their valid and invalid records are cleared, and an error note is
-        added to track that they were trimmed).
+        per batch to maintain chronological continuity. This method keeps
+        ``preferred_index`` when given, otherwise the response with the most
+        valid records, and discards all other responses (both their valid and
+        invalid records are cleared, and an error note is added to track that
+        they were trimmed).
 
         Args:
             batch: The batch to retain the response from.
+            preferred_index: Index of the response to keep, if already selected.
 
         Returns:
             The retained response's valid ``ParsedRecord`` objects, keeping
@@ -1018,18 +1546,24 @@ class TimeseriesBackend(VllmBackend):
         """
         final_records: list[ParsedRecord] = []
 
-        # Find the index of the response with the most valid records.
-        max_valid_idx = None
-        max_valid_count = -1
-        for idx, response in enumerate(batch._responses):
-            count = len(response.valid_records)
-            if count > max_valid_count:
-                max_valid_count = count
-                max_valid_idx = idx
+        max_valid_idx = preferred_index
+        if max_valid_idx is None:
+            # Find the index of the response with the most valid records.
+            max_valid_count = -1
+            for idx, response in enumerate(batch._responses):
+                count = len(response.valid_records)
+                if count > max_valid_count:
+                    max_valid_count = count
+                    max_valid_idx = idx
 
         trim_error = ("Extra response trimmed for sliding window", "TimeSeries")
         for idx, response in enumerate(batch._responses):
             if idx != max_valid_idx:
+                # Invalidate the discarded rows themselves so post-processing
+                # bookkeeping that still references them treats them as rejected.
+                for record in response.records:
+                    if record.is_valid:
+                        record.invalidate(trim_error)
                 # Drop all records from the trimmed response; replace with a
                 # single synthetic marker record so the trim is visible in
                 # error statistics without carrying stale text/token counts.
@@ -1046,14 +1580,17 @@ class TimeseriesBackend(VllmBackend):
         """Generate time-series tabular data using Nemo Safe Synthesizer.
 
         All time series are processed as groups (single-sequence is treated as 1 group
-        via pseudo-group column added during preprocessing).
+        via a pseudo-group column added during preprocessing). Fixed-shape groups stop
+        at the configured time range. Automatically routed flexible groups stop at an
+        accepted final-row marker or the maximum source-group length.
 
         Note:
-            Generation is time-range based, not count-based. The number of records
-            generated is determined by (stop_timestamp - start_timestamp) / interval_seconds
-            for each group. The config.generation.num_records parameter is used for
-            progress tracking but does not limit output. Groups are the same as those
-            seen during training (from model_metadata.timeseries_group_values).
+            ``config.generation.num_records`` is used for progress tracking but
+            does not limit time-series output or decide completion. The status is
+            ``COMPLETE`` only when every group finishes; otherwise it is
+            ``INCOMPLETE`` and rows from failed groups are discarded. Groups are
+            the same as those seen during training in
+            ``model_metadata.timeseries_group_values``.
 
         Args:
             data_actions_fn: Optional function that takes a DataFrame and returns a modified DataFrame.
@@ -1061,6 +1598,7 @@ class TimeseriesBackend(VllmBackend):
         Returns:
             Generation results object, which includes a DataFrame of generated records.
         """
+        self._prepare_flexible_timeseries_artifacts()
         generation_start = time.monotonic()
         num_records = self.config.generation.num_records
 
@@ -1095,15 +1633,14 @@ class TimeseriesBackend(VllmBackend):
             f"Generating for {num_groups} groups using parallel generation "
             f"(total expected records: {total_expected_records})",
         )
-        all_groups_completed = self._generate_parallel_groups(
+        self._generate_parallel_groups(
             batches=batches,
             sampling_params=sampling_params,
             progress_snapshots=progress_snapshots,
         )
 
-        if all_groups_completed and batches.status == GenerationStatus.IN_PROGRESS:
-            batches.status = GenerationStatus.COMPLETE
-
+        self._discard_failed_group_records()
+        batches.status = self._resolve_timeseries_status()
         batches.job_complete()
         batches.log_status()
 
@@ -1116,7 +1653,10 @@ class TimeseriesBackend(VllmBackend):
             elapsed_time=self.elapsed_time,
         )
 
+        internal_df = self._write_internal_output(self.gen_results.df)
         # Sort by group and timestamp for consistent output (also removes pseudo-group column)
-        self.gen_results.df = self._sort_dataframe(self.gen_results.df)
+        self.gen_results.df = self._sort_dataframe(internal_df)
+        self._write_flexible_timeseries_metrics()
+        self._finalize_flexible_timeseries_artifacts()
 
         return self.gen_results

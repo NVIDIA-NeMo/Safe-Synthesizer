@@ -92,13 +92,13 @@ run = [
 ]
 
 ["test:e2e"]
-description = "Run all GPU e2e tests: default then DP. Requires CUDA; stages are sequential to control GPU load."
+description = "Run all GPU e2e tests: default, DP, then tutorial notebooks. Requires CUDA; stages are sequential to control GPU load."
 alias = "test-e2e"
-run = [{ task = "test:e2e:default" }, { task = "test:e2e:dp" }]
+run = [{ task = "test:e2e:default" }, { task = "test:e2e:dp" }, { task = "test:e2e:notebooks" }]
 
 ["test:e2e:prepared"]
 description = "Run all GPU e2e tests without bootstrapping dependencies. Requires a prepared CUDA environment."
-run = [{ task = "test:e2e:default:run" }, { task = "test:e2e:dp:run" }]
+run = [{ task = "test:e2e:default:run" }, { task = "test:e2e:dp:run" }, { task = "test:e2e:notebooks:run" }]
 
 ["test:e2e:default"]
 description = "Run default e2e tests (requires CUDA). Bootstraps $NSS_GPU_CUDA_EXTRA (default cu129)."
@@ -124,6 +124,18 @@ run = [
 hide = true
 run = "uv run --frozen --no-sync pytest --dist loadscope -vv -n 0 tests/e2e/test_safe_synthesizer.py -k dp"
 
+["test:e2e:notebooks"]
+description = "Execute the Safe Synthesizer 101 tutorial notebook top to bottom (requires CUDA). Bootstraps $NSS_GPU_CUDA_EXTRA (default cu129)."
+alias = "test-e2e-notebooks"
+run = [
+    'mise run bootstrap-nss "${NSS_GPU_CUDA_EXTRA:-cu129}"',
+    { task = "test:e2e:notebooks:run" },
+]
+
+["test:e2e:notebooks:run"]
+hide = true
+run = "uv run --frozen --no-sync pytest -vv -n 0 tests/e2e/test_tutorial_notebooks.py"
+
 ["test:e2e:collect"]
 description = "Dry-run e2e and GPU selectors with pytest collection only. Does not run tests; useful before changing task selectors."
 alias = "test-e2e-collect"
@@ -137,6 +149,8 @@ echo "--- test-e2e-default ---"
 uv run --frozen pytest --dist loadscope -vv -n 0 tests/e2e/test_safe_synthesizer.py -k default -o "addopts=" --collect-only -qq -p no:warnings 2>/dev/null || true
 echo "--- test-e2e-dp ---"
 uv run --frozen pytest --dist loadscope -vv -n 0 tests/e2e/test_safe_synthesizer.py -k dp -o "addopts=" --collect-only -qq -p no:warnings 2>/dev/null || true
+echo "--- test-e2e-notebooks ---"
+uv run --frozen pytest -vv -n 0 tests/e2e/test_tutorial_notebooks.py -o "addopts=" --collect-only -qq -p no:warnings 2>/dev/null || true
 echo "--- test-gpu-integration (default) ---"
 uv run --frozen pytest -n auto --dist loadscope -vv tests/e2e/test_safe_synthesizer.py -k default -o "addopts=" --collect-only -qq -p no:warnings 2>/dev/null || true
 echo "--- test-gpu-integration (dp) ---"

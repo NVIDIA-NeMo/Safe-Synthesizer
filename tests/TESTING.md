@@ -28,10 +28,11 @@ mise run test:smoke:gpu:resume
 mise run test:smoke:gpu:structured-generation
 mise run test:smoke:gpu:timeseries
 mise run test:smoke:gpu:smollm2
-mise run test:e2e                          # All e2e (requires CUDA) -- runs default + dp
+mise run test:e2e                          # All e2e (requires CUDA) -- runs default + dp + notebooks
 mise run test:e2e:prepared                 # All e2e without dependency bootstrap
 mise run test:e2e:default                  # e2e default (no-DP) tests only
 mise run test:e2e:dp                       # e2e DP tests only
+mise run test:e2e:notebooks                # Execute the Safe Synthesizer 101 tutorial notebook
 mise run test:ci                           # CI unit tests with coverage (excludes slow, e2e, gpu, smoke)
 mise run test:ci-slow                      # CI slow tests with coverage
 mise run test:ci-container                 # CI tests in a Linux container (Docker/Podman)
@@ -194,7 +195,7 @@ GPU smoke tests use staged mise tasks for process isolation and CI visibility:
 
 `mise run test:smoke:gpu` runs staged mise tasks in order. Train-only tests are auto-discovered with marker algebra (`requires_gpu and not vllm and not smollm2`), vLLM tests run through dedicated per-file stage tasks for process isolation, and SmolLM2 uses marker selection. The GPU workflow runs the same stages as separate GitHub Actions steps so failures show which lane broke. When adding a new vLLM test file, add `pytest.mark.vllm`, create a dedicated `test:smoke:gpu:*` task, and include it in `test:smoke:gpu`.
 
-`mise run test:e2e` splits into `test:e2e:default` + `test:e2e:dp`, each single-process over `tests/e2e/test_safe_synthesizer.py`.
+`mise run test:e2e` splits into `test:e2e:default` + `test:e2e:dp`, each single-process over `tests/e2e/test_safe_synthesizer.py`, then `test:e2e:notebooks`, which executes `docs/tutorials/safe-synthesizer-101.ipynb` top to bottom in a fresh kernel.
 
 See [tests/smoke/README.md](smoke/README.md) for additional smoke-specific gotchas.
 

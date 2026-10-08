@@ -194,6 +194,27 @@ class SafeSynthesizerParameters(Parameters):
         return self
 
     @model_validator(mode="after")
+    def check_timeseries_order_column(self) -> Self:
+        """Reject time-series configs whose timestamp and order columns contradict.
+
+        Raises:
+            ParameterError: If time-series mode sets both
+                ``time_series.timestamp_column`` and
+                ``data.order_training_examples_by`` to different columns.
+        """
+        if not self.time_series.is_timeseries:
+            return self
+        timestamp_column = self.time_series.timestamp_column
+        order_column = self.data.order_training_examples_by
+        if timestamp_column is not None and order_column is not None and timestamp_column != order_column:
+            raise ParameterError(
+                f"time_series.timestamp_column ({timestamp_column!r}) and data.order_training_examples_by "
+                f"({order_column!r}) must name the same column in time-series mode. Set only one of them, "
+                "or set both to the same column."
+            )
+        return self
+
+    @model_validator(mode="after")
     def check_timeseries_group_column(self) -> Self:
         if self.time_series is not None and self.time_series.is_timeseries:
             if self.data.group_training_examples_by is None:

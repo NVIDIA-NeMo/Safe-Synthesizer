@@ -13,6 +13,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    ValidationError,
     field_serializer,
     field_validator,
     model_validator,
@@ -26,7 +27,7 @@ from ..defaults import (
     MAX_ROPE_SCALING_FACTOR,
     PROMPT_TEMPLATE,
 )
-from ..errors import ParameterError
+from ..errors import GenerationError, ParameterError
 from ..observability import get_logger
 from ..utils import load_json, write_json
 from .utils import ModelRef, load_fast_tokenizer
@@ -43,6 +44,84 @@ observed during training, so a small jitter margin is sufficient."""
 
 TimeSeriesGroupValue: TypeAlias = str | int | float | bool
 """JSON-compatible, non-null value identifying a time-series group."""
+
+
+class FlexibleTimeseriesMetadata(BaseModel):
+    """Internal controls resolved when flexible time-series routing is selected."""
+
+    model_config = ConfigDict(frozen=True)
+
+    DEFAULT_INDEX_COLUMN: ClassVar[str] = "_time_idx"
+    DEFAULT_MARKER_COLUMN: ClassVar[str] = "_is_last_row"
+
+    index_column: str = Field(
+        default=DEFAULT_INDEX_COLUMN,
+        description="Generated zero-based sequence index column.",
+    )
+    marker_column: str = Field(
+        default=DEFAULT_MARKER_COLUMN,
+        description="Generated boolean column marking each sequence's final row.",
+    )
+    max_records: int = Field(description="Largest source-group length; generated groups never exceed it.")
+    source_timestamp_column: str | None = Field(
+        default=None,
+        description="Source timestamp column whose generated values must be non-decreasing within a group.",
+    )
+    source_timestamp_format: str | None = Field(
+        default=None,
+        description="strftime format or ``elapsed_seconds`` used to parse ``source_timestamp_column``.",
+    )
+    source_interval_seconds: int | None = Field(
+        default=None,
+        description="User-asserted spacing between consecutive source timestamps.",
+    )
+
+
+class TimeseriesMetadata(BaseModel):
+    """Internal time-series representation resolved during training and used by generation."""
+
+    model_config = ConfigDict(frozen=True)
+
+    source_columns: tuple[str, ...] = Field(description="Original source columns in output order.")
+    flexible: FlexibleTimeseriesMetadata | None = Field(
+        default=None,
+        description="Flexible-routing controls, or ``None`` for deterministic time-range processing.",
+    )
+
+    @property
+    def use_flexible_timeseries(self) -> bool:
+        """Whether generation uses flexible marker-based processing."""
+        return self.flexible is not None
+
+
+def _timeseries_metadata_issue(metadata: TimeseriesMetadata) -> str | None:
+    """Return an internal artifact invariant violation, if any."""
+    if not metadata.source_columns:
+        return "source column list must not be empty"
+    if len(set(metadata.source_columns)) != len(metadata.source_columns):
+        return "source column list contains duplicates"
+    flexible = metadata.flexible
+    if flexible is None:
+        return None
+    if not flexible.index_column or not flexible.marker_column:
+        return "control column names must not be empty"
+    if flexible.index_column == flexible.marker_column:
+        return "control column names must be different"
+    if flexible.max_records < 1:
+        return "maximum record count must be positive"
+    if flexible.index_column in metadata.source_columns or flexible.marker_column in metadata.source_columns:
+        return "control columns overlap source columns"
+    if flexible.source_timestamp_column is None:
+        if flexible.source_timestamp_format is not None or flexible.source_interval_seconds is not None:
+            return "source timestamp settings require a source timestamp column"
+        return None
+    if flexible.source_timestamp_column not in metadata.source_columns:
+        return "source timestamp column is not a source column"
+    if not flexible.source_timestamp_format:
+        return "source timestamp column requires a timestamp format"
+    if flexible.source_interval_seconds is not None and flexible.source_interval_seconds < 1:
+        return "source interval must be positive"
+    return None
 
 
 class LLMPromptConfig(BaseModel):
@@ -352,9 +431,9 @@ class ModelMetadata(BaseModel):
         description="Typed time-series group values used to initialize one generation stream per group.",
     )
 
-    timeseries_source_columns: list[str] | None = Field(
+    timeseries_metadata: TimeseriesMetadata | None = Field(
         default=None,
-        description="Original time-series input column order restored on generated output.",
+        description="Resolved time-series representation and source schema selected during training.",
     )
 
     max_tokens_per_example: int | None = Field(
@@ -679,6 +758,25 @@ class ModelMetadata(BaseModel):
         """
         path = Path(path).resolve()
         kwargs = load_json(path)
+        # Artifacts trained before ``timeseries_metadata`` stored only the source column order.
+        legacy_source_columns = kwargs.pop("timeseries_source_columns", None)
+        raw_timeseries_metadata = kwargs.get("timeseries_metadata")
+        if raw_timeseries_metadata is None and legacy_source_columns:
+            raw_timeseries_metadata = {"source_columns": legacy_source_columns}
+        if raw_timeseries_metadata is not None:
+            invalid_message = (
+                "The model artifact contains invalid time-series metadata. "
+                "Retrain the model or restore a complete artifact."
+            )
+            try:
+                timeseries_metadata = TimeseriesMetadata.model_validate(raw_timeseries_metadata)
+            except ValidationError as exc:
+                logger.debug(f"Invalid time-series metadata in artifact {path}: {exc}")
+                raise GenerationError(invalid_message) from exc
+            if issue := _timeseries_metadata_issue(timeseries_metadata):
+                logger.debug(f"Invalid time-series metadata in artifact {path}: {issue}")
+                raise GenerationError(invalid_message)
+            kwargs["timeseries_metadata"] = timeseries_metadata
         if workdir is not None:
             kwargs["workdir"] = workdir
         return cls(**kwargs)

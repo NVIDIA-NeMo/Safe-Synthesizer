@@ -342,7 +342,7 @@ for the full field list. For DP error diagnostics, see
 | `data.max_holdout` | `2000` | Upper cap on holdout size | Leave at default for most datasets |
 | `data.random_state` | `null` | Random seed -- auto-generated if `null`; set an explicit integer for reproducible splits | Set to a fixed integer for reproducibility |
 | `data.group_training_examples_by` | `null` | Column to group records by | Use for multi-row entities (e.g. patient ID, session ID) |
-| `data.order_training_examples_by` | `null` | Column to order within groups (requires `data.group_training_examples_by`) | Use with a timestamp column for time series data |
+| `data.order_training_examples_by` | `null` | Column to order within groups (requires `data.group_training_examples_by`) | In time-series mode, prefer `time_series.timestamp_column`; if both are set they must match |
 | `data.max_sequences_per_example` | `"auto"` | Max sequences per example (`1` for DP, `null` for time series, `10` otherwise). `null` lets each example fill the context window. DP and time-series mode cannot be enabled together. | Leave at `"auto"` |
 
 See [`DataParameters`][nemo_safe_synthesizer.config.data.DataParameters]
@@ -359,11 +359,30 @@ for the full field list.
 | Field | Default | Description | Guidance |
 |-------|---------|-------------|----------|
 | `time_series.is_timeseries` | `false` | Enable time series mode | Enable for datasets with sequential time-ordered records |
-| `time_series.timestamp_column` | `null` | Timestamp column name | Required when `is_timeseries: true` |
-| `time_series.timestamp_interval_seconds` | `null` | Positive whole-number interval in seconds between timestamps | Set if your data has a regular whole-second sampling interval |
-| `time_series.timestamp_format` | `null` | strftime format or `"elapsed_seconds"` | Required when `is_timeseries: true` |
+| `time_series.timestamp_column` | `null` | Timestamp field | Required unless an interval is provided |
+| `time_series.timestamp_interval_seconds` | `null` | Interval in seconds; must match the data when set | Required without a timestamp field; leave unset for irregular intervals |
+| `time_series.timestamp_format` | `null` | strftime or `"elapsed_seconds"` | Leave `null` to infer |
 | `time_series.start_timestamp` | `null` | Override start timestamp for all groups (inferred from data if `null`) | Leave `null` to infer from data |
 | `time_series.stop_timestamp` | `null` | Override stop timestamp for all groups (inferred from data if `null`) | Leave `null` to infer from data |
+
+Groups do not need equal lengths, common start and stop timestamps, or a
+consistent interval; Safe Synthesizer adapts to differently shaped groups
+automatically. Null, unparseable, or otherwise invalid timestamps remain data
+errors.
+
+In time-series mode, `time_series.timestamp_column` and
+`data.order_training_examples_by` play the same role: both name the column
+that orders records within a group. You can set either one, or both if they
+are identical; differing values are a configuration error. Prefer
+`timestamp_column`, which also works for a single ungrouped series;
+`order_training_examples_by` requires `data.group_training_examples_by`. When
+only `order_training_examples_by` is set together with
+`timestamp_interval_seconds`, that column is treated as the timestamp.
+
+`time_series.timestamp_interval_seconds` is an assertion: if the spacing of
+your timestamps does not match it, the run fails with
+`timestamp_interval_mismatch`. Leave it unset to allow irregular intervals.
+
 See [`TimeSeriesParameters`][nemo_safe_synthesizer.config.time_series.TimeSeriesParameters]
 for the full schema. For detailed descriptions and constraints, see the
 [Time Series README](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/src/nemo_safe_synthesizer/TIMESERIES_README.md).
