@@ -21,7 +21,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     ReplacePiiConfig,
 )
 from nemo_safe_synthesizer.errors import ParameterError
-from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer, _build_telemetry_event
 from nemo_safe_synthesizer.telemetry import NSSTrainingAndGenerationEvent, TaskStatusEnum
 
 
@@ -172,6 +172,9 @@ def test_replace_pii_emits_completed_telemetry_with_sampler_backend(
     assert event.task_status == TaskStatusEnum.COMPLETED
     assert event.replace_pii_enabled is True
     assert event.pii_sampler_backend == "faker"
+    assert event.pii_plan_source == "inline"
+    assert event.pii_replaced_columns_bucket == "1-5"
+    assert event.pii_locale == "en_US"
     assert event.job_duration_sec >= 0.0
 
 
@@ -202,3 +205,29 @@ def test_plan_pii_replacement_does_not_emit_telemetry(
     nss.plan_pii_replacement()
 
     assert fixture_no_telemetry_network == []
+
+
+def test_plan_pii_replacement_keeps_auto_discovery_plan_source_after_resolution(tmp_path: Path) -> None:
+    dataframe = pd.DataFrame({"email": ["ada@example.com", "grace@example.com"]})
+    discovered = ReplacePiiConfig(
+        replacement_plan=PiiReplacementPlan(
+            columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
+        ),
+    )
+    nss = SafeSynthesizer(
+        config=SafeSynthesizerParameters(replace_pii=ReplacePiiConfig(), emit_telemetry=True),
+        save_path=tmp_path,
+    ).with_data_source(dataframe)
+
+    with patch(
+        "nemo_safe_synthesizer.pii_replacer.planning.resolve_replacement_config",
+        return_value=discovered,
+    ):
+        nss.plan_pii_replacement()
+
+    assert nss._nss_config is not None
+    assert nss._nss_config.replace_pii is not None
+    assert not nss._nss_config.replace_pii.is_auto_discovery
+    event = _build_telemetry_event(nss, TaskStatusEnum.COMPLETED)
+    assert event.pii_plan_source == "auto_discovery"
+    assert event.pii_replaced_columns_bucket == "1-5"

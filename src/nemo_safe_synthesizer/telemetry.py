@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import os
 import platform
+import re
 import threading
 from collections.abc import Coroutine
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -39,6 +40,8 @@ DEFAULT_ENDPOINT = "https://events.telemetry.data.nvidia.com/v1.1/events/json"
 MAX_RETRIES = 3
 CPU_ARCHITECTURE = platform.uname().machine
 LOCAL_MODEL_LABEL = "local_path"
+OTHER_LOCALE_LABEL = "other"
+_LOCALE_PATTERN = re.compile(r"[a-z]{2,3}(_[A-Z]{2})?")
 logger = get_logger(__name__)
 
 
@@ -128,6 +131,21 @@ def sanitize_model_for_telemetry(model: str | None) -> str:
     return model
 
 
+def sanitize_locale_for_telemetry(locale: str | None) -> str:
+    """Return a telemetry-safe PII replacement locale label.
+
+    The configured locale is free-form text. Values shaped like Faker and
+    Nemotron Personas locale codes (``en_US``, ``fil_PH``, ``de``) are reported
+    as-is; anything else is reported as ``"other"`` so arbitrary user text is
+    never transmitted.
+    """
+    if locale is None:
+        return "undefined"
+    if _LOCALE_PATTERN.fullmatch(locale) is None:
+        return OTHER_LOCALE_LABEL
+    return locale
+
+
 def _session_prefix() -> str | None:
     return os.getenv("NEMO_SESSION_PREFIX")
 
@@ -153,6 +171,8 @@ def bucket_columns(n: int) -> str:
 
     Used to avoid transmitting exact column counts in telemetry.
     """
+    if n <= 0:
+        return "0"
     if n <= 5:
         return "1-5"
     if n <= 10:
@@ -220,6 +240,31 @@ class NSSTrainingAndGenerationEvent(BaseModel):
             "Configured PII replacement sampler backend ('nemotron-personas' or 'faker'). "
             "'undefined' when PII replacement is disabled. Reports the configured backend, not per-entity "
             "Faker fallbacks when Nemotron Personas locale assets are missing."
+        ),
+    )
+    pii_plan_source: str = Field(
+        default="undefined",
+        serialization_alias="piiPlanSource",
+        description=(
+            "How the PII replacement plan was supplied: 'auto_discovery', 'inline' (in the main config), "
+            "or 'file' (a separate plan YAML). 'undefined' when PII replacement is disabled."
+        ),
+    )
+    pii_replaced_columns_bucket: str = Field(
+        default="undefined",
+        serialization_alias="piiReplacedColumnsBucket",
+        description=(
+            "Bucketed count of columns in the PII replacement plan, including free-text columns scanned for "
+            "PII spans (e.g. '0', '1-5'). Use bucket_columns(). 'undefined' when PII replacement is disabled "
+            "or the plan was not resolved."
+        ),
+    )
+    pii_locale: str = Field(
+        default="undefined",
+        serialization_alias="piiLocale",
+        description=(
+            "PII replacement locale (e.g. 'en_US'). 'other' when the value is not a locale code; "
+            "'undefined' when PII replacement is disabled. Use sanitize_locale_for_telemetry()."
         ),
     )
     differential_privacy_enabled: bool = Field(

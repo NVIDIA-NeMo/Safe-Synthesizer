@@ -34,6 +34,7 @@ from ..telemetry import (
     _telemetry_enabled,
     bucket_columns,
     bucket_records,
+    sanitize_locale_for_telemetry,
     sanitize_model_for_telemetry,
 )
 from .config_builder import ConfigBuilder
@@ -82,6 +83,15 @@ def _warn_for_saved_default_drift(saved_config: SafeSynthesizerParameters) -> No
         )
 
 
+def _pii_plan_source(config: ReplacePiiConfig) -> str:
+    """Return how the user supplied the PII replacement plan, before resolution replaces it inline."""
+    if config.is_auto_discovery:
+        return "auto_discovery"
+    if config.plan_path is not None:
+        return "file"
+    return "inline"
+
+
 def _build_telemetry_event(
     ss: SafeSynthesizer, status: TaskStatusEnum, task: str = "run"
 ) -> NSSTrainingAndGenerationEvent:
@@ -104,7 +114,17 @@ def _build_telemetry_event(
 
     replace_pii_config = cfg.replace_pii if cfg is not None else None
     replace_pii = replace_pii_config is not None
-    pii_sampler_backend = replace_pii_config.sampler.backend.value if replace_pii_config is not None else "undefined"
+    pii_sampler_backend = "undefined"
+    pii_plan_source = "undefined"
+    pii_columns_bucket = "undefined"
+    pii_locale = "undefined"
+    if replace_pii_config is not None:
+        pii_sampler_backend = replace_pii_config.sampler.backend.value
+        # Planning rewrites replacement_plan to the resolved inline plan, so prefer the source recorded beforehand.
+        pii_plan_source = ss._pii_plan_source or _pii_plan_source(replace_pii_config)
+        if replace_pii_config.inline_plan is not None:
+            pii_columns_bucket = bucket_columns(len(replace_pii_config.inline_plan.columns_to_replace))
+        pii_locale = sanitize_locale_for_telemetry(replace_pii_config.replacement.locale)
     dp_enabled = cfg is not None and cfg.privacy is not None and cfg.privacy.dp_enabled
     ts_enabled = cfg is not None and cfg.time_series.is_timeseries
     group_by = cfg is not None and cfg.data.group_training_examples_by is not None
@@ -126,6 +146,9 @@ def _build_telemetry_event(
         num_records_generated=num_records,
         replace_pii_enabled=replace_pii,
         pii_sampler_backend=pii_sampler_backend,
+        pii_plan_source=pii_plan_source,
+        pii_replaced_columns_bucket=pii_columns_bucket,
+        pii_locale=pii_locale,
         differential_privacy_enabled=dp_enabled,
         time_series_enabled=ts_enabled,
         group_by_enabled=group_by,
@@ -237,6 +260,7 @@ class SafeSynthesizer(ConfigBuilder):
         self._test_df: pd.DataFrame | None = None
         self._column_statistics: dict | None = None
         self._pii_replacer_time: float | None = None
+        self._pii_plan_source: str | None = None
         self._llm_metadata: ModelMetadata | None = None
         self._total_start: float | None = None
         self._loaded_from_save_path: bool = False
@@ -396,6 +420,7 @@ class SafeSynthesizer(ConfigBuilder):
         replace_pii = config.replace_pii
         if replace_pii is None:
             raise ParameterError("PII replacement is disabled; configure replace_pii before planning")
+        self._pii_plan_source = _pii_plan_source(replace_pii)
 
         from ..pii_replacer.planning import resolve_replacement_config
 
@@ -445,6 +470,7 @@ class SafeSynthesizer(ConfigBuilder):
         """
         self._ensure_observability()
         self._total_start = time.monotonic()
+        self._pii_plan_source = None
         try:
             result = self._replace_full_input_pii(output_path, config_output_path)
             _emit_nss_telemetry(self, TaskStatusEnum.COMPLETED, task="replace_pii")
@@ -517,6 +543,7 @@ class SafeSynthesizer(ConfigBuilder):
         from ..preflight import PreflightStage, run_preflight
 
         self._total_start = time.monotonic()
+        self._pii_plan_source = None
         if not os.environ.get("NSS_PHASE"):
             os.environ["NSS_PHASE"] = "process_data"
 
