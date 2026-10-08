@@ -400,7 +400,9 @@ class SafeSynthesizer(ConfigBuilder):
         if output_path is not None:
             resolved_output_path = Path(output_path)
             resolved_output_path.parent.mkdir(parents=True, exist_ok=True)
-            self._nss_config.to_yaml(resolved_output_path, exclude_unset=False)
+            from ..pii_replacer.planning.io import save_config
+
+            save_config(self._nss_config, resolved_output_path)
         return resolved
 
     @traced("SafeSynthesizer.process_data", category=LogCategory.RUNTIME)
@@ -513,7 +515,9 @@ class SafeSynthesizer(ConfigBuilder):
             assert self._workdir is not None
             self._workdir.ensure_directories()
             config_path = self._workdir.run_dir / "safe-synthesizer-config.yaml"
-            self._nss_config.to_yaml(config_path, exclude_unset=False)
+            from ..pii_replacer.planning.io import save_config
+
+            save_config(self._nss_config, config_path)
             self._preflight_config_path = config_path
 
         preflight = run_preflight(self._training_df, self._nss_config, metadata_for_preflight)
