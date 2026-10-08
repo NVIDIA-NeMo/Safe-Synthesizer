@@ -485,12 +485,15 @@ class AutocorrelationSimilarity(Component):
 
         The variance at lag ``k`` is ``(1 + 2 * sum(r_j ** 2 for j < k)) / n_k``,
         where ``n_k`` is the number of endpoint pairs behind that lag, so lags
-        thinned by gaps get a wider allowance. Undefined lags contribute
+        thinned by gaps get a wider allowance. Each measured ``r_j ** 2`` carries
+        about ``1 / n_j`` of its own noise, which is removed before summing so
+        short series do not overstate their noise. Undefined lags contribute
         nothing to later lags.
         """
-        squared = np.nan_to_num(acf) ** 2
-        earlier = np.concatenate([[0.0], np.cumsum(squared[:-1])])
-        return np.sqrt((1.0 + 2.0 * earlier) / np.maximum(support, 1))
+        support = np.maximum(support, 1)
+        signal = np.maximum(np.nan_to_num(acf) ** 2 - 1.0 / support, 0.0)
+        earlier = np.concatenate([[0.0], np.cumsum(signal[:-1])])
+        return np.sqrt((1.0 + 2.0 * earlier) / support)
 
     @staticmethod
     def _noise_aware_error(

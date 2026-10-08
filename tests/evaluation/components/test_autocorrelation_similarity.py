@@ -51,7 +51,8 @@ def _grouped_rows(groups: list[tuple[str, int]], points: int = 12) -> list[dict[
 
 
 def _bartlett(acf: np.ndarray, support: np.ndarray) -> np.ndarray:
-    earlier = np.concatenate([[0.0], np.cumsum(np.nan_to_num(acf[:-1]) ** 2)])
+    signal = np.maximum(np.nan_to_num(acf) ** 2 - 1 / support, 0)
+    earlier = np.concatenate([[0.0], np.cumsum(signal[:-1])])
     return np.sqrt((1 + 2 * earlier) / support)
 
 

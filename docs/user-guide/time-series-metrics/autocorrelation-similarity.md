@@ -21,15 +21,15 @@ all contain exactly the same values, so their histograms are identical. Only
 the order differs. The right column shows each sequence's autocorrelation: the
 correlation between each value and the value 1, 2, and up to 20 steps later.
 
-![One slowly drifting training series and three synthetic series with identical histograms. A different series that drifts just as slowly scores 10.0. The same values shuffled score 1.7. The same values rearranged into a 25-step cycle score 4.9.](assets/autocorrelation-memory-and-rhythm.png)
+![One slowly drifting training series and three synthetic series with identical histograms. A different series that drifts just as slowly scores 10.0. The same values shuffled score 0.0. The same values rearranged into a 25-step cycle score 2.2.](assets/autocorrelation-memory-and-rhythm.png)
 
 - Synthetic A takes a different path but drifts just as slowly. Its
   autocorrelation follows the training curve, so it scores 10.0.
 - Synthetic B is the training values shuffled. Each value is unrelated to the
-  one before it, so its autocorrelation is flat at 0 and it scores 1.7.
+  one before it, so its autocorrelation is flat at 0 and it scores 0.0.
 - Synthetic C repeats every 25 steps. Its autocorrelation dips negative half a
   cycle later and rises again, which the training data never does. It scores
-  4.9, because the first few lags still match.
+  2.2, because only the first few lags match.
 
 ## Reading the score
 
@@ -44,7 +44,7 @@ does not mean the synthetic data is bad overall. It means the synthetic data
 does not reproduce the persistence or rhythm of the training data. The values
 themselves, their distributions, and the relationships between columns can
 still match well, as with the shuffled series in the figure above, which has
-exactly the training values and scores 1.7. Read this score alongside the
+exactly the training values and scores 0.0. Read this score alongside the
 Synthetic Quality Score, and weigh it by how much your use case depends on
 behavior over time.
 
@@ -58,7 +58,7 @@ synthetic series (orange):
 - The middle chart shows their autocorrelation at lags 1 to 20. A lag is the
   number of steps between the two values being compared. The shaded band is
   the sampling noise the score allows for.
-- The right column shows the average score across 30 random pairs from the
+- The right column shows the average score across 200 random pairs from the
   same scenario, at 50, 200, and 1,000 points per sequence. The plotted pair
   is one example at 200 points, and a single pair can land a point or more
   away from the average.
@@ -70,20 +70,23 @@ synthetic series (orange):
 With 200 or more points per sequence, scores fall into rough tiers:
 
 - About 8 to 10: the synthetic data keeps the training data's persistence and
-  cycles. Two pure-noise series typically score about 8.4, because some
-  chance differences always exceed the allowance.
-- About 4 to 7: the synthetic data keeps some structure but loses part of it,
+  cycles. Two pure-noise series average about 8.5, because a single pair's
+  chance differences sometimes exceed what sampling noise predicts.
+- About 2 to 7: the synthetic data keeps some structure but loses part of it,
   for example weaker persistence, a cycle buried in noise, a regime change, or
   too much smoothness. Occasional outlier spikes lower the score less, to
-  about 8.
-- About 0 to 4: the synthetic data has lost its structure over time, as when
+  about 7.
+- About 0 to 2: the synthetic data has lost its structure over time, as when
   values are shuffled, a trend is missing, or a cycle has the wrong length.
 - 0: the synthetic values are constant.
 
-Short sequences carry less evidence, so their scores bunch toward the middle.
-At 50 points per sequence, shuffled data still scores about 6. The metric also
-cannot see patterns longer than `max_lag` steps, and by design it ignores
-differences in level, scale, and phase, as the additional scenarios show.
+Longer sequences measure autocorrelation more precisely, so the same partial
+loss scores somewhat lower at 1,000 points than at 200. Short sequences carry
+less evidence, so their scores bunch toward the middle. At 50 points per
+sequence, a partial loss still scores about 7, and shuffled data scores about
+3. The metric also cannot see patterns longer than `max_lag` steps, and by
+design it ignores differences in level, scale, and phase, as the additional
+scenarios show.
 
 These tiers are a guide rather than pass or fail thresholds. Compare scores
 only when the selected columns, groups, and `max_lag` are the same. Whether a
@@ -97,7 +100,7 @@ The metric card shows three charts built from every evaluated group and column
 pair. Select the info icon next to a chart title for a short reminder of how
 to read it.
 
-![The Autocorrelation Similarity card in the HTML evaluation report, showing a score of 7.8 with the Typical autocorrelation, Difference by lag, and Pair scores charts.](assets/autocorrelation-report.png)
+![The Autocorrelation Similarity card in the HTML evaluation report, showing a score of 6.8 with the Typical autocorrelation, Difference by lag, and Pair scores charts.](assets/autocorrelation-report.png)
 
 The example above comes from a dataset of eight sensors, grouped by sensor ID,
 with three numeric columns: `temperature`, `pressure`, and `humidity`. The
@@ -128,9 +131,9 @@ values.
   out vertically so that equal scores stay visible. Hover over a point to see
   its full column name, group, and score. `humidity` scores 10 for all
   sensors. `pressure` and `temperature` score about 10 for the
-  well-reproduced sensors 0 to 2 and between about 4.5 and 8 for sensors 3 to
-  5. Sensors 6 and 7 have no synthetic structure over time and score about 3,
-  except for the constant sensor 7 `pressure` series. The gap between the
+  well-reproduced sensors 0 to 2 and between about 2.5 and 5 for sensors 3 to
+  5. Sensors 6 and 7 have no synthetic structure over time and score below 1,
+  and the constant sensor 7 `pressure` series scores 0. The gap between the
   overall score and 10 is therefore driven by specific sensors rather than
   the whole dataset. The chart shows the 8 lowest-scoring columns. Column
   names longer than 10 characters are shortened to their first and last three
@@ -198,23 +201,30 @@ training profile \(r^{\text{train}}_k\) and the synthetic profile
 \(r^{\text{synth}}_k\) lag by lag, in three steps:
 
 1. Estimate the sampling noise at each lag. Bartlett's formula gives the
-   standard error of an autocorrelation measured from \(n\) pairs,
-   \(\sqrt{(1 + 2 \sum_{j<k} r_j^2) / n}\). The noise allowance \(\sigma_k\)
-   combines the training and synthetic standard errors.
-2. Keep only the gap beyond that noise,
-   \(\max(0, |r^{\text{train}}_k - r^{\text{synth}}_k| - \sigma_k)\), and
-   compare it with the structure present at that lag,
-   \(\max(|r^{\text{train}}_k|, |r^{\text{synth}}_k|, \sigma_k)\). Using the
-   larger of the two profiles penalizes lost structure and invented structure
-   alike.
-3. Weight each lag by \(1 / \sigma_k^2\), so precisely measured lags count
-   more, and calculate:
+   standard error of an autocorrelation at lag \(k\) measured from \(n_k\)
+   pairs, \(\sqrt{(1 + 2 \sum_{j<k} r_j^2) / n_k}\). Each measured
+   \(r_j^2\) includes about \(1 / n_j\) of noise, so the metric uses
+   \(\max(0, r_j^2 - 1 / n_j)\) instead, which keeps short sequences from
+   overstating their noise. The noise allowance \(\sigma_k\) combines the
+   training and synthetic standard errors in quadrature.
+2. Weight each lag by \(w_k = 1 / \sigma_k^2\), so precisely measured lags
+   count more. Sum the squared gaps between the profiles across lags, and
+   subtract the squared gap that sampling noise alone would produce,
+   \(\sigma_k^2\). What remains is the excess difference, floored at 0.
+3. Compare the excess with the structure present at each lag,
+   \(m_k = \max(|r^{\text{train}}_k|, |r^{\text{synth}}_k|, \sigma_k)\). Using
+   the larger of the two profiles penalizes lost structure and invented
+   structure alike:
 
 \[
-\text{profile similarity} = 1 - \frac{\sum_k w_k \max(0, |r^{\text{train}}_k - r^{\text{synth}}_k| - \sigma_k)}{\sum_k w_k \max(|r^{\text{train}}_k|, |r^{\text{synth}}_k|, \sigma_k)}
+\text{profile similarity} = 1 - \sqrt{\frac{\max\left(0, \sum_k w_k \left[(r^{\text{train}}_k - r^{\text{synth}}_k)^2 - \sigma_k^2\right]\right)}{\sum_k w_k m_k^2}}
 \]
 
-The result is clipped to the range 0 to 1. The final 0–10 score is ten times
+Subtracting the expected noise before taking the square root means that two
+sequences from the same process do not lose points on average, at any length,
+and pooling the lags before the square root keeps several small chance gaps
+from adding up to a large penalty. The result is clipped to the range 0 to 1.
+The final 0–10 score is ten times
 the mean profile similarity across group and column pairs. Therefore, 10 means
 the profiles agree within sampling noise, and 0 means none of the training
 data's structure over time is reproduced.
