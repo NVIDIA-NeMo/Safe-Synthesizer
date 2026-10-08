@@ -395,8 +395,9 @@ def test_autocorrelation_similarity_scores_independent_noise_high_at_any_length(
     rng = np.random.default_rng(5)
     scores = [_single_series_score(rng.normal(size=points), rng.normal(size=points)) for _ in range(20)]
 
-    assert all(score is not None for score in scores)
-    assert np.mean(scores) >= 8.0
+    finite_scores = [score for score in scores if score is not None]
+    assert len(finite_scores) == len(scores)
+    assert np.mean(finite_scores) >= 8.0
 
 
 def test_autocorrelation_similarity_scores_wrong_cycle_length_in_lost_tier():
