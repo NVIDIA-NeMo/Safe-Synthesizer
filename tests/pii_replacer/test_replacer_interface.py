@@ -51,19 +51,19 @@ class TestTransformResult:
             replacement_plan=plan,
             resolved_config=ReplacePiiConfig(replacement_plan=plan),
             generation_statistics=generation_statistics,
-            total_time_seconds=0.25,
+            replacement_time_seconds=0.25,
         )
 
         assert result.transformed_df is dataframe
         assert result.replacement_plan is plan
         assert result.generation_statistics is generation_statistics
-        assert result.total_time_seconds == 0.25
+        assert result.replacement_time_seconds == 0.25
         assert result.replacement_map is None
 
     @pytest.mark.parametrize(
         "field_overrides",
         [
-            {"total_time_seconds": -0.1},
+            {"replacement_time_seconds": -0.1},
             {
                 "generation_statistics": {
                     "generated_replacement_count": 1,
@@ -88,7 +88,7 @@ class TestTransformResult:
                 "generated_replacement_count": 1,
                 "generator_time_seconds": 0.1,
             },
-            "total_time_seconds": 0.2,
+            "replacement_time_seconds": 0.2,
         }
         values.update(field_overrides)
 
@@ -112,7 +112,7 @@ class TestTransformResult:
                     generated_replacement_count=0,
                     generator_time_seconds=0.0,
                 ),
-                total_time_seconds=0.0,
+                replacement_time_seconds=0.0,
             )
 
 

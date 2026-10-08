@@ -77,12 +77,12 @@ DEFAULT_NSS_INFERENCE_ENDPOINT = "https://integrate.api.nvidia.com/v1"
 DEFAULT_NSS_INFERENCE_MODEL = "nvidia/nemotron-3-ultra-550b-a55b"
 PII_REPLACEMENT_PLAN_FILENAME = "pii_replacement_plan.yaml"
 
-# Nemotron Personas parquet assets for the PII sampler (``datasets/{locale}.parquet``).
+# Nemotron-Personas parquet assets for the PII sampler (``datasets/{locale}.parquet``).
 NSS_NEMOTRON_PERSONAS_PATH_ENV = "NSS_NEMOTRON_PERSONAS_PATH"
 
 
 def default_nemotron_personas_path() -> Path:
-    """Return the Nemotron Personas sampler assets root directory.
+    """Return the Nemotron-Personas sampler assets root directory.
 
     Resolution order: ``NSS_NEMOTRON_PERSONAS_PATH`` environment variable, then
     ``~/.data-designer/managed-assets``.

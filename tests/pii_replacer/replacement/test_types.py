@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Callable
 from dataclasses import FrozenInstanceError
 
 import pytest
@@ -21,6 +22,11 @@ from nemo_safe_synthesizer.pii_replacer.replacement.types import (
     detected_text,
     free_text_mapping_key,
 )
+
+
+def _construct(factory: Callable[..., object], *args: object, **kwargs: object) -> object:
+    """Call ``factory`` with deliberately invalid arguments that its type hints would reject."""
+    return factory(*args, **kwargs)
 
 
 def _cell() -> DetectionCell:
@@ -84,15 +90,11 @@ class TestDetectionContracts:
 
     def test_detector_result_requires_a_normalized_entity_type(self) -> None:
         with pytest.raises(InternalError, match="normalized EntityType"):
-            _span(entity_type="email")  # ty: ignore[invalid-argument-type] -- deliberate invalid input
+            _construct(_span, entity_type="email")
 
     def test_cell_requires_an_immutable_allowed_entity_collection(self) -> None:
         with pytest.raises(InternalError, match="must be a frozenset"):
-            DetectionCell(
-                DetectionCellId(0, "notes"),
-                "text",
-                {EntityType.EMAIL},  # ty: ignore[invalid-argument-type] -- deliberate invalid input
-            )
+            _construct(DetectionCell, DetectionCellId(0, "notes"), "text", {EntityType.EMAIL})
 
     @pytest.mark.parametrize("score", [-0.1, 1.1, True])
     def test_span_score_must_be_a_unit_interval_number(self, score: float) -> None:
@@ -202,25 +204,13 @@ class TestMappingContracts:
 
     def test_group_dependency_drift_requires_normalized_entity_types(self) -> None:
         with pytest.raises(InternalError, match="normalized EntityType"):
-            GroupDependencyDrift(
-                "email",
-                frozenset({"organization"}),  # ty: ignore[invalid-argument-type] -- deliberate invalid input
-                1,
-            )
+            _construct(GroupDependencyDrift, "email", frozenset({"organization"}), 1)
 
     def test_mapping_keys_require_canonical_original_values(self) -> None:
         with pytest.raises(InternalError, match="must be a CanonicalValue"):
-            RecordMappingKey(
-                "email",
-                0,
-                "ada@example.com",  # ty: ignore[invalid-argument-type] -- deliberate invalid input
-            )
+            _construct(RecordMappingKey, "email", 0, "ada@example.com")
         with pytest.raises(InternalError, match="must be a CanonicalValue"):
-            GroupMappingKey(
-                "email",
-                "patient-1",
-                "ada@example.com",  # ty: ignore[invalid-argument-type] -- deliberate invalid input
-            )
+            _construct(GroupMappingKey, "email", "patient-1", "ada@example.com")
 
     @pytest.mark.parametrize("scope_identity", [float("nan"), ["unhashable"]])
     def test_scope_identities_must_be_hashable_and_not_nan(self, scope_identity: object) -> None:
@@ -233,14 +223,8 @@ class TestMappingContracts:
 
     def test_free_text_mapping_key_requires_a_normalized_entity_type(self) -> None:
         with pytest.raises(InternalError, match="normalized EntityType"):
-            FreeTextMappingKey(
-                0,
-                "email",  # ty: ignore[invalid-argument-type] -- deliberate invalid input
-                "ada@example.com",
-            )
+            _construct(FreeTextMappingKey, 0, "email", "ada@example.com")
 
     def test_group_provenance_requires_well_formed_dependencies(self) -> None:
         with pytest.raises(InternalError, match="must contain"):
-            GroupMappingProvenance(
-                (("organization", None),),  # ty: ignore[invalid-argument-type] -- deliberate invalid input
-            )
+            _construct(GroupMappingProvenance, (("organization", None),))

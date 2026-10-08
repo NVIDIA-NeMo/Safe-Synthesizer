@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Nemotron Personas structured PII replacement generation."""
+"""Nemotron-Personas structured PII replacement generation."""
 
 from __future__ import annotations
 
@@ -17,12 +17,12 @@ __all__ = ["NemotronPersonasReplacementGenerator"]
 
 
 class NemotronPersonasReplacementGenerator:
-    """Generate structured replacements using Nemotron Personas assets.
+    """Generate structured replacements using Nemotron-Personas assets.
 
     Args:
         settings: Locale and seed configuration shared by replacement
             generators.
-        sampler: Nemotron Personas sampler configuration, including its asset path.
+        sampler: Nemotron-Personas sampler configuration, including its asset path.
 
     Replacement execution is introduced by a follow-up change.
     """
@@ -38,5 +38,5 @@ class NemotronPersonasReplacementGenerator:
         self._sampler = sampler
 
     def generate(self, request: ReplacementGenerationRequest) -> str:
-        """Generate a Nemotron Personas replacement for ``request``."""
-        raise NotImplementedError("Nemotron Personas replacement generation is not implemented")
+        """Generate a Nemotron-Personas replacement for ``request``."""
+        raise NotImplementedError("Nemotron-Personas replacement generation is not implemented")

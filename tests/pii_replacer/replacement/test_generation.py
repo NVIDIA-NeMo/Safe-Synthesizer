@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Callable
 from dataclasses import FrozenInstanceError
 
 import pytest
@@ -19,6 +20,11 @@ from nemo_safe_synthesizer.pii_replacer.replacement.generation import (
     ReplacementGenerator,
 )
 from nemo_safe_synthesizer.pii_replacer.replacement.types import CanonicalValue
+
+
+def _construct(factory: Callable[..., object], *args: object, **kwargs: object) -> object:
+    """Call ``factory`` with deliberately invalid arguments that its type hints would reject."""
+    return factory(*args, **kwargs)
 
 
 @pytest.mark.unit
@@ -90,22 +96,23 @@ class TestReplacementGenerator:
     )
     def test_request_rejects_malformed_dependency_tuples(self, dependency_tuple: object) -> None:
         with pytest.raises(InternalError, match="effective_dependency_tuple must"):
-            ReplacementGenerationRequest(
+            _construct(
+                ReplacementGenerationRequest,
                 entity_type=EntityType.EMAIL,
                 original_value="ada@example.com",
-                # Deliberately malformed input.
-                effective_dependency_tuple=dependency_tuple,  # ty: ignore[invalid-argument-type]
+                effective_dependency_tuple=dependency_tuple,
                 pattern=None,
                 seed=42,
             )
 
     def test_request_requires_resolved_dependency_values_to_be_a_tuple(self) -> None:
         with pytest.raises(InternalError, match="resolved_dependency_values must be a tuple"):
-            ReplacementGenerationRequest(
+            _construct(
+                ReplacementGenerationRequest,
                 entity_type=EntityType.FIRST_NAME,
                 original_value="Ada",
                 effective_dependency_tuple=(),
                 pattern=None,
                 seed=42,
-                resolved_dependency_values=[],  # ty: ignore[invalid-argument-type] -- deliberate invalid input
+                resolved_dependency_values=[],
             )

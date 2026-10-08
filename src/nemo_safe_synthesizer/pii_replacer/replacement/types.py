@@ -276,6 +276,8 @@ class FreeTextMappingKey:
     replacement within the scope, independently of propagation mappings.
     Matching ignores case, so ``Margaret`` and ``MARGARET`` share a key; the
     key keeps the exact text of the occurrence that created it for generation.
+    When the shared replacement is written into a later occurrence, it takes
+    that occurrence's letter case: all capitals, all lowercase, or title case.
 
     Example:
         # In row 3, "Ada" in one note and "ADA" in another get the same replacement.

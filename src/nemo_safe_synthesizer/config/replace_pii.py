@@ -801,23 +801,23 @@ class PiiSamplerBackend(StrEnum):
     """Source of synthetic values for names and related person-like fields."""
 
     NEMOTRON_PERSONAS = "nemotron-personas"
-    """Draw from downloaded Nemotron Personas locale assets."""
+    """Draw from downloaded Nemotron-Personas locale assets."""
 
     FAKER = "faker"
     """Draw from the Faker library; ignores ``ethnic_background`` conditioners."""
 
 
 class PiiSamplerConfig(NSSBaseModel):
-    """Settings for Nemotron Personas or Faker-backed person sampling."""
+    """Settings for Nemotron-Personas or Faker-backed person sampling."""
 
     backend: PiiSamplerBackend = Field(
         default=PiiSamplerBackend.NEMOTRON_PERSONAS,
-        description="Person sampler backend: downloaded Nemotron Personas assets or Faker.",
+        description="Person sampler backend: downloaded Nemotron-Personas assets or Faker.",
     )
     nemotron_personas_path: str | None = Field(
         default=None,
         description=(
-            "Root directory containing downloaded Nemotron Personas files as datasets/{locale}.parquet. "
+            "Root directory containing downloaded Nemotron-Personas files as datasets/{locale}.parquet. "
             f"Defaults to {NSS_NEMOTRON_PERSONAS_PATH_ENV} or ~/.data-designer/managed-assets."
         ),
     )

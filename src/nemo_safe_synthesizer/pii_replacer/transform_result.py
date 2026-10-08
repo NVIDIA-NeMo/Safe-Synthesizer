@@ -151,11 +151,11 @@ class TransformResult(BaseModel):
     generation_statistics: ReplacementGenerationStatistics = Field(
         description="Aggregate timing and count statistics for replacement generation.",
     )
-    total_time_seconds: float = Field(
+    replacement_time_seconds: float = Field(
         ge=0,
         description=(
-            "Wall-clock time for the whole replacement call, in seconds, including plan resolution, free-text "
-            "detection, generation, and statistics."
+            "Wall-clock time for this PII replacement call, in seconds, including plan resolution, free-text "
+            "detection, generation, and statistics. This is not the total NSS pipeline time."
         ),
     )
     replacement_map: ReplacementMap | None = Field(
