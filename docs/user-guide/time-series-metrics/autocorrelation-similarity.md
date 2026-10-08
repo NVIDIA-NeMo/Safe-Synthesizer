@@ -100,13 +100,13 @@ The metric card shows three charts built from every evaluated group and column
 pair. Select the info icon next to a chart title for a short reminder of how
 to read it.
 
-![The Autocorrelation Similarity card in the HTML evaluation report, showing a score of 6.8 with the Typical autocorrelation, Difference by lag, and Pair scores charts.](assets/autocorrelation-report.png)
+![The Autocorrelation Similarity card in the HTML evaluation report, showing a score of 7.0 with the Typical autocorrelation, Difference by lag, and Pair scores charts.](assets/autocorrelation-report.png)
 
 The example above comes from a dataset of eight sensors, grouped by sensor ID,
 with three numeric columns: `temperature`, `pressure`, and `humidity`. The
-synthetic data reproduces sensors 0 to 2 well, loses persistence in
-`temperature` and `pressure` for sensors 3 to 7, and generates a constant
-`pressure` series for sensor 7. `humidity` is preserved for every sensor. You
+synthetic data reproduces sensor 0 closely and drifts further from the
+training data with each sensor after it: weaker persistence, a stretched
+cycle, and more noise. Sensor 7 also has a constant `pressure` series. You
 can confirm each of these details in the report itself: use the column
 selector on the first chart, and hover over any bar or point to see its exact
 values.
@@ -116,26 +116,26 @@ values.
   the middle 50% of groups. The chart opens on the column with the lowest mean
   pair score, here `pressure`. Use the column selector next to the title to
   switch columns. For `pressure`, training autocorrelation decays slowly from
-  about 0.9, while the synthetic median drops below 0.2 by lag 5, so most
-  synthetic sensors lost the persistence of the training data.
+  about 0.9, while the synthetic median drops to about 0.25 by lag 4 and to 0
+  by lag 10, so most synthetic sensors lost part of the training data's
+  persistence.
 - Difference by lag: plots the mean absolute difference between the training
   and synthetic profiles of each pair at each lag, across all numeric columns.
   Hover over a bar to see its exact value. Here the difference grows from
-  about 0.18 at lag 1 to about 0.3 at lag 15 and beyond, so the loss is largest
-  for long-range persistence. A peak at one lag instead points to a missing or
+  about 0.2 at lag 1 to about 0.3 to 0.35 from lag 9 onward, so the loss is
+  largest for long-range persistence. A peak at one lag instead points to a missing or
   shifted cycle. The y-axis always spans at least 0 to 1, so short, pale bars
   mean small differences, and bars turn red as the difference approaches 0.5.
 - Pair scores: plots the score of every group and column pair on the 0–10
   scale, with the overall score marked by the dashed line. Each point is one
   sensor, shaded from white at 10 to red at 0. Points within a row are spread
   out vertically so that equal scores stay visible. Hover over a point to see
-  its full column name, group, and score. `humidity` scores 10 for all
-  sensors. `pressure` and `temperature` score about 10 for the
-  well-reproduced sensors 0 to 2 and between about 2.5 and 5 for sensors 3 to
-  5. Sensors 6 and 7 have no synthetic structure over time and score below 1,
-  and the constant sensor 7 `pressure` series scores 0. The gap between the
-  overall score and 10 is therefore driven by specific sensors rather than
-  the whole dataset. The chart shows the 8 lowest-scoring columns. Column
+  its full column name, group, and score. Each column's scores fall steadily
+  from 10 for the first sensors toward the last ones. `temperature` and
+  `humidity` stay above about 5.5, while `pressure` falls to between about 2.5
+  and 4.5 for sensors 3 to 6 and to 0 for the constant sensor 7 series. The
+  gap between the overall score and 10 therefore comes mostly from the later
+  sensors and from `pressure`, rather than from every pair equally. The chart shows the 8 lowest-scoring columns. Column
   names longer than 10 characters are shortened to their first and last three
   characters, as with `tem...ure`.
 
