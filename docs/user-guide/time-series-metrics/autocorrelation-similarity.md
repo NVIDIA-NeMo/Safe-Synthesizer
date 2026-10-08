@@ -59,15 +59,14 @@ synthetic series (orange):
   number of steps between the two values being compared. The shaded band is
   the sampling noise the score allows for.
 - The right column shows the average score across 200 random pairs from the
-  same scenario, at 50, 200, and 1,000 points per sequence. The plotted pair
-  is one example at 200 points, and a single pair can land a point or more
-  away from the average.
+  same scenario, with 200 points per sequence. The plotted pair is one of
+  them, and a single pair can land a point or more away from the average.
 
 ![Ten training and synthetic series pairs with their autocorrelation profiles and average scores: perfect copies, close matches, partial loss of persistence or cycle strength, overly smooth synthetic data, shuffled synthetic data, and a cycle half as long as in training.](assets/autocorrelation-scenarios-core.png)
 
 ![Eight more training and synthetic series pairs: matching and missing trends, a cycle longer than max_lag, a level, scale, and phase change, missing values, outlier spikes, a regime change, and a shorter synthetic sequence.](assets/autocorrelation-scenarios-additional.png)
 
-With 200 or more points per sequence, scores fall into rough tiers:
+With about 200 points per sequence, scores fall into rough tiers:
 
 - About 8 to 10: the synthetic data keeps the training data's persistence and
   cycles. Two pure-noise series average about 8.5, because a single pair's
@@ -80,13 +79,13 @@ With 200 or more points per sequence, scores fall into rough tiers:
   values are shuffled, a trend is missing, or a cycle has the wrong length.
 - 0: the synthetic values are constant.
 
-Longer sequences measure autocorrelation more precisely, so the same partial
-loss scores somewhat lower at 1,000 points than at 200. Short sequences carry
-less evidence, so their scores bunch toward the middle. At 50 points per
-sequence, a partial loss still scores about 7, and shuffled data scores about
-3. The metric also cannot see patterns longer than `max_lag` steps, and by
-design it ignores differences in level, scale, and phase, as the additional
-scenarios show.
+Sequence length affects how much the score can tell apart. Longer sequences
+measure autocorrelation more precisely, so a real difference stands out more
+clearly and scores lower. Shorter sequences carry less evidence, so the metric
+gives them more benefit of the doubt and their scores bunch toward the middle.
+Synthetic data from the same process scores high at any length. The metric
+also cannot see patterns longer than `max_lag` steps, and by design it ignores
+differences in level, scale, and phase, as the additional scenarios show.
 
 These tiers are a guide rather than pass or fail thresholds. Compare scores
 only when the selected columns, groups, and `max_lag` are the same. Whether a
