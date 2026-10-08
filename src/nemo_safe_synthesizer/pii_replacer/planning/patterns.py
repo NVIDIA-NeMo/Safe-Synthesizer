@@ -14,6 +14,7 @@ from types import MappingProxyType
 from typing import Literal
 
 from ...config.replace_pii import EntityType, PatternSyntax
+from ...errors import ParameterError
 
 __all__ = [
     "CHARACTER_MASK_ESCAPABLE_CHARACTERS",
@@ -193,7 +194,7 @@ def render_character_mask(pattern: str, rng: Random) -> str:
     """Render one deterministic value from a valid character mask."""
     parts, error = parse_character_mask(pattern)
     if error is not None or parts is None:
-        raise ValueError(error or "invalid character mask")
+        raise ParameterError(error or "invalid character mask")
     return "".join(part.literal if part.literal is not None else rng.choice(part.choices or "") for part in parts)
 
 
@@ -270,7 +271,7 @@ def render_name_pattern(
     """Render a valid name/email pattern from normalized component values."""
     parts, error = parse_name_pattern(entity_type, pattern)
     if error is not None or parts is None:
-        raise ValueError(error or "invalid name pattern")
+        raise ParameterError(error or "invalid name pattern")
     rendered: list[str] = []
     for part in parts:
         if part.literal is not None:
