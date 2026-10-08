@@ -48,6 +48,17 @@ class _StaticPlanDiscoverer(PlanDiscoverer):
 
 @pytest.mark.unit
 class TestDependencyMappings:
+    def test_mapping_inputs_report_non_string_values_in_their_mapping_key_form(self) -> None:
+        dataframe = pd.DataFrame({"first_name": ["Ada", "Grace"], "sex": [1.0, 2.0], "race": ["White"] * 2})
+
+        inputs = mapping_inputs(
+            dataframe,
+            _plan(),
+            {EntityType.GENDER: ("female", "male"), EntityType.ETHNIC_BACKGROUND: ("white",)},
+        )
+
+        assert [(item.column_name, item.source_values) for item in inputs] == [("sex", ("1.0", "2.0"))]
+
     def test_mapping_inputs_omit_case_insensitive_identity_values(self) -> None:
         dataframe = pd.DataFrame(
             {

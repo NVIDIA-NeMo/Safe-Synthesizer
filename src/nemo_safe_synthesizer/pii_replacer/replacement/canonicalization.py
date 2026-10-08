@@ -17,7 +17,7 @@ import pandas as pd
 from ...errors import ParameterError
 from .types import CanonicalValue
 
-__all__ = ["canonicalize_scalar", "is_missing_scalar"]
+__all__ = ["canonicalize_scalar", "is_missing_scalar", "readable_value"]
 
 
 def is_missing_scalar(value: object) -> bool:
@@ -31,6 +31,21 @@ def is_missing_scalar(value: object) -> bool:
     if isinstance(value, Real):
         return math.isnan(float(value))
     return False
+
+
+def readable_value(value: CanonicalValue) -> str:
+    """Return the human-readable form of ``value`` used as a data-to-sampler value mapping key.
+
+    Planning and replacement both derive mapping keys through this function, so a key written in a plan
+    matches at replacement time. It equals ``normalized_value`` except that floats use Python's shortest
+    round-trip form (``1.0``) instead of their exact hexadecimal identity, and timedeltas use pandas'
+    string form instead of nanoseconds.
+    """
+    if value.type_tag == "float":
+        return repr(float.fromhex(value.normalized_value))
+    if value.type_tag == "timedelta_nanoseconds":
+        return str(pd.Timedelta(int(value.normalized_value)))
+    return value.normalized_value
 
 
 def canonicalize_scalar(value: object) -> CanonicalValue:

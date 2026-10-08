@@ -15,10 +15,10 @@ Set `replace_pii: null`, pass `--no-replace-pii`, or call
 `.with_replace_pii(enable=False)` to run the synthesis pipeline without
 replacement.
 
-## Nemotron Personas sampling
+## Nemotron-Personas sampling
 
 The default `nemotron-personas` sampler draws names, email addresses, phone numbers, and
-street-address components from the extended Nemotron Personas locale datasets.
+street-address components from the extended Nemotron-Personas locale datasets.
 Choose the NGC resource matching `replace_pii.replacement.locale`. Locale
 resources are versioned independently, so use the version published for the
 selected language and country. For example, download version `0.0.2` of the
@@ -61,7 +61,7 @@ replace_pii:
 
 When an applicable locale asset or required field is unavailable, NSS warns and
 uses Faker for that value. Set `backend: faker` to use Faker directly without a
-Nemotron Personas dataset. See NVIDIA's
+Nemotron-Personas dataset. See NVIDIA's
 [person-sampling setup](https://docs.nvidia.com/nemo/datadesigner/concepts/person-sampling)
 to select a locale resource and the
 [`en_US` NGC resource](https://catalog.ngc.nvidia.com/orgs/nvidia/nemotron-personas/resources/nemotron-personas-dataset-en_us/-)
@@ -115,7 +115,9 @@ replace_pii:
 Each list selects the union of sampler rows with those values, so listing every
 sampler value allows any match. Values without an entry use case-insensitive
 identity matching. A value that has no entry and matches no sampler value stops
-plan resolution with an error naming its column. Manual mappings are
+plan resolution with an error naming its column. Non-string dataset values use
+their usual text form as keys, for example `1.0` or `2024-01-01T00:00:00`.
+Manual mappings are
 validated against the resolved dependency columns and the selected sampler's
 known values. Faker applies mappings for attributes it supports, such as
 gender; unsupported attributes are ignored.

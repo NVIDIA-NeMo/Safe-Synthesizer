@@ -16,7 +16,7 @@ from ...config.replace_pii import DataToSamplerValueMapping, EntityType, PiiColu
 from ...errors import GenerationError, InternalError, ParameterError
 from ...observability import get_logger
 from ..transform_result import ColumnStatistics, ReplacementGenerationStatistics
-from .canonicalization import canonicalize_scalar, is_missing_scalar
+from .canonicalization import canonicalize_scalar, is_missing_scalar, readable_value
 from .compiler import compile_plan
 from .generation import ReplacementGenerationRequest, ReplacementGenerator, generated_value_is_valid
 from .types import (
@@ -319,7 +319,7 @@ def _resolved_dependency_values(
         if value is None:
             continue
         source_mappings = mappings.get(dependency.column_name, {})
-        normalized = value.normalized_value.casefold()
+        normalized = readable_value(value).casefold()
         resolved.append((entity_type, source_mappings.get(normalized, (normalized,))))
     return tuple(resolved)
 
