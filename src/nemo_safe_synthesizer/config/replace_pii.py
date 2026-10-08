@@ -117,7 +117,7 @@ class EntityType(StrEnum):
     ORGANIZATION = "organization"
 
 
-DataToSamplerValueMapping = dict[str, dict[str, list[str] | None]]
+DataToSamplerValueMapping = dict[str, dict[str, list[str]]]
 """Dependency-column values mapped to values understood by one sampler."""
 
 
@@ -501,10 +501,11 @@ class PiiReplacementPlan(Parameters):
         default_factory=dict,
         description=(
             "Maps dataset values in depends_on columns to the values used by the person sampler "
-            "(replace_pii.sampler). For example, {sex: {Woman: [female], Non-binary: null}} makes rows where "
-            "sex is Woman sample a female persona, and leaves Non-binary rows unfiltered by sex. "
+            "(replace_pii.sampler). For example, {sex: {Woman: [female], Non-binary: [female, male]}} makes rows "
+            "where sex is Woman sample a female persona and rows where sex is Non-binary sample either. "
             "A dataset value without an entry is looked up in the sampler as is, ignoring case, so Female "
-            "matches female. When replace_pii.replacement_plan is 'auto_discovery', NSS generates this mapping for you."
+            "matches female; a value that has no entry and matches no sampler value is an error. "
+            "When replace_pii.replacement_plan is 'auto_discovery', NSS generates this mapping for you."
         ),
     )
 
@@ -525,8 +526,6 @@ class PiiReplacementPlan(Parameters):
                     )
                 seen_sources.add(source_key)
 
-                if targets is None:
-                    continue
                 if not targets:
                     raise ParameterError("data_to_sampler_value_mapping sampler value lists must be non-empty")
 

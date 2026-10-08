@@ -20,7 +20,7 @@ __all__ = [
     "ReplacementGenerator",
 ]
 
-ResolvedDependencyValues = tuple[tuple[EntityType, tuple[str, ...] | None], ...]
+ResolvedDependencyValues = tuple[tuple[EntityType, tuple[str, ...]], ...]
 
 
 @dataclass(frozen=True, slots=True)

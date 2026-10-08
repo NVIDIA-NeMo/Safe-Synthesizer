@@ -640,17 +640,21 @@ class TestReplacePiiConfig:
         plan = PiiReplacementPlan.model_validate(
             {
                 "data_to_sampler_value_mapping": {
-                    "sex": {"Woman": ["female"], "Non-binary": None},
+                    "sex": {"Woman": ["female"], "Non-binary": ["female", "male"]},
                     "race": {"Asian": ["east asian", "south asian"]},
                 },
             }
         )
 
         assert plan.data_to_sampler_value_mapping == {
-            "sex": {"Woman": ["female"], "Non-binary": None},
+            "sex": {"Woman": ["female"], "Non-binary": ["female", "male"]},
             "race": {"Asian": ["east asian", "south asian"]},
         }
-        assert plan.model_dump()["data_to_sampler_value_mapping"]["sex"]["Non-binary"] is None
+        assert plan.model_dump()["data_to_sampler_value_mapping"]["sex"]["Non-binary"] == ["female", "male"]
+
+    def test_plan_rejects_null_sampler_values(self) -> None:
+        with pytest.raises(ValidationError, match="list_type"):
+            PiiReplacementPlan.model_validate({"data_to_sampler_value_mapping": {"sex": {"Non-binary": None}}})
 
     @pytest.mark.parametrize(
         ("mappings", "error"),
