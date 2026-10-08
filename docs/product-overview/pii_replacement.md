@@ -98,7 +98,9 @@ replace_pii:
             entity_type: ethnic_background
     data_to_sampler_value_mapping:
       sex:
-        Non-binary: null
+        Non-binary:
+          - female
+          - male
       race:
         Asian:
           - east asian
@@ -110,9 +112,10 @@ replace_pii:
     backend: nemotron-personas
 ```
 
-Each nonempty list selects the union of sampler rows with those values. An
-explicit `null` disables that condition for the matching input value. Omitted
-values continue to use case-insensitive identity matching. Manual mappings are
+Each list selects the union of sampler rows with those values, so listing every
+sampler value allows any match. Values without an entry use case-insensitive
+identity matching. A value that has no entry and matches no sampler value stops
+plan resolution with an error naming its column. Manual mappings are
 validated against the resolved dependency columns and the selected sampler's
 known values. Faker applies mappings for attributes it supports, such as
 gender; unsupported attributes are ignored.

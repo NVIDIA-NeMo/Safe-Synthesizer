@@ -40,7 +40,7 @@ class TestPlanIo:
                     ],
                 ),
             ],
-            data_to_sampler_value_mapping={"company": {"Independent": None}},
+            data_to_sampler_value_mapping={"company": {"Independent": ["independent"]}},
         )
         path = save_plan(plan, tmp_path / "plan.yaml")
 
@@ -57,7 +57,7 @@ class TestPlanIo:
                     ],
                 },
             ],
-            "data_to_sampler_value_mapping": {"company": {"Independent": None}},
+            "data_to_sampler_value_mapping": {"company": {"Independent": ["independent"]}},
         }
 
         loaded = load_plan(path)

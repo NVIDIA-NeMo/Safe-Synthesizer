@@ -99,7 +99,7 @@ def _dependency_selection(choices: Mapping[str, Mapping[str, str | None]] | None
     return json.dumps(dict(choices or {}))
 
 
-def _dependency_mappings(*mappings: tuple[str, str, list[str] | None]) -> str:
+def _dependency_mappings(*mappings: tuple[str, str, list[str]]) -> str:
     return json.dumps(
         {
             "mappings": [
@@ -220,7 +220,7 @@ class TestLLMPlanEnhancer:
                 ),
                 _dependency_selection({"first_name": {"gender": "sex", "ethnic_background": "race"}}),
                 _dependency_mappings(
-                    ("sex", "Non-binary", None),
+                    ("sex", "Non-binary", ["female", "male"]),
                     ("race", "Asian", ["east asian", "south asian"]),
                 ),
             ]
@@ -240,7 +240,7 @@ class TestLLMPlanEnhancer:
 
         assert resolved.inline_plan is not None
         assert resolved.inline_plan.data_to_sampler_value_mapping == {
-            "sex": {"Non-binary": None},
+            "sex": {"Non-binary": ["female", "male"]},
             "race": {"Asian": ["east asian", "south asian"]},
         }
         assert len(transport.calls) == 3

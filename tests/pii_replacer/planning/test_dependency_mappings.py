@@ -117,8 +117,8 @@ class TestDependencyMappings:
         assert resolved.inline_plan is not None
         assert resolved.inline_plan.data_to_sampler_value_mapping == {}
 
-    def test_explicit_plan_does_not_separately_auto_discover_mappings(self) -> None:
-        dataframe = pd.DataFrame({"first_name": ["Ada"], "sex": ["Woman"], "race": ["White"]})
+    def test_explicit_plan_uses_case_insensitive_matches_without_discovery(self) -> None:
+        dataframe = pd.DataFrame({"first_name": ["Ada"], "sex": ["Female"], "race": ["White"]})
 
         resolved = resolve_replacement_config(
             dataframe,
@@ -132,6 +132,20 @@ class TestDependencyMappings:
 
         assert resolved.inline_plan is not None
         assert resolved.inline_plan.data_to_sampler_value_mapping == {}
+
+    def test_explicit_plan_rejects_unmatched_values_without_entries(self) -> None:
+        dataframe = pd.DataFrame({"first_name": ["Ada", "Grace"], "sex": ["Woman", "Female"], "race": ["White"] * 2})
+
+        with pytest.raises(ParameterError, match=r"'sex' \(1\)"):
+            resolve_replacement_config(
+                dataframe,
+                ReplacePiiConfig(replacement_plan=_plan()),
+                DataParameters(),
+                sampler_value_catalog={
+                    EntityType.GENDER: ("female", "male"),
+                    EntityType.ETHNIC_BACKGROUND: ("white",),
+                },
+            )
 
     def test_manual_mapping_is_authoritative_and_validated_by_dependency_column(self) -> None:
         dataframe = pd.DataFrame({"first_name": ["Ada"], "sex": ["Woman"], "race": ["White"]})

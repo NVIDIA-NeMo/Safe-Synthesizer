@@ -100,7 +100,7 @@ class _InvalidStructuredOutputError(GenerationError):
 class _DataToSamplerValueMapping(_StructuredResponse):
     column_name: str
     source_value: str
-    sampler_values: list[str] | None
+    sampler_values: list[str]
 
 
 class _DataToSamplerValueMappingResponse(_StructuredResponse):
@@ -531,12 +531,12 @@ def _pattern_repair_messages(
 
 def _dependency_mapping_messages(inputs: Sequence[DependencyMappingInput]) -> list[dict[str, str]]:
     system = (
-        "Map every submitted dataset value to one or more sampler values, or null, from the sampler value catalog for the same "
+        "Map every submitted dataset value to one or more sampler values from the sampler value catalog for the same "
         "dependency column. Return exactly one mapping for every submitted column_name/source_value pair. "
-        "sampler_values must contain only values supplied for that column. Select one or more sampler values that are "
-        "reasonable semantic subsets of the dataset value. Use null only when no supplied value is appropriate; null "
-        "means that NSS will not filter the sampler for that dataset value. Do not invent columns, source values, or "
-        "sampler values."
+        "sampler_values must be a non-empty list containing only values supplied for that column. Select the sampler "
+        "values that are reasonable semantic subsets of the dataset value. When no subset is more appropriate than the "
+        "others, list every supplied value so NSS does not narrow the sampler for that dataset value. Do not invent "
+        "columns, source values, or sampler values."
     )
     payload = [
         {
@@ -568,12 +568,10 @@ def _mapping_coverage_issue(expected: Sequence[tuple[str, str]], actual: Sequenc
     return "mappings must contain every submitted column_name/source_value pair exactly once; " + "; ".join(problems)
 
 
-def _resolved_sampler_values(sampler_values: Sequence[str] | None, supplied: Sequence[str]) -> list[str] | None:
+def _resolved_sampler_values(sampler_values: Sequence[str], supplied: Sequence[str]) -> list[str]:
     """Return ``sampler_values`` in their supplied spelling, or raise ``ValueError`` naming the invalid values."""
-    if sampler_values is None:
-        return None
     if not sampler_values:
-        raise ValueError("sampler_values must be non-empty or null")
+        raise ValueError("sampler_values must be non-empty")
     available = {sampler_value.casefold(): sampler_value for sampler_value in supplied}
     normalized = [sampler_value.casefold() for sampler_value in sampler_values]
     if duplicates := sorted({sampler_value for sampler_value in normalized if normalized.count(sampler_value) > 1}):

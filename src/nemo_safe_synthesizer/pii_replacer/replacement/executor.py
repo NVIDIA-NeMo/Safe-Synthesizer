@@ -34,7 +34,7 @@ __all__ = ["ReplacementExecutionResult", "StructuredReplacementExecutor", "resol
 
 _MAX_GENERATION_ATTEMPTS = 10
 _PERSON_RANDOM_SEED_ENV = "PERSON_RANDOM_SEED"
-_CompiledDataToSamplerValueMapping = dict[str, dict[str, tuple[str, ...] | None]]
+_CompiledDataToSamplerValueMapping = dict[str, dict[str, tuple[str, ...]]]
 _COLLISION_SENSITIVE_ENTITY_TYPES = frozenset(
     {
         EntityType.EMAIL,
@@ -302,7 +302,7 @@ def _compile_data_to_sampler_value_mapping(
 ) -> _CompiledDataToSamplerValueMapping:
     return {
         column_name: {
-            source.casefold(): None if targets is None else tuple(target.casefold() for target in targets)
+            source.casefold(): tuple(target.casefold() for target in targets)
             for source, targets in value_mappings.items()
         }
         for column_name, value_mappings in mappings.items()
@@ -313,8 +313,8 @@ def _resolved_dependency_values(
     spec: PiiColumnPlan,
     dependencies: EffectiveDependencyTuple,
     mappings: _CompiledDataToSamplerValueMapping,
-) -> tuple[tuple[EntityType, tuple[str, ...] | None], ...]:
-    resolved: list[tuple[EntityType, tuple[str, ...] | None]] = []
+) -> tuple[tuple[EntityType, tuple[str, ...]], ...]:
+    resolved: list[tuple[EntityType, tuple[str, ...]]] = []
     for dependency, (entity_type, value) in zip(spec.depends_on, dependencies, strict=True):
         if value is None:
             continue
