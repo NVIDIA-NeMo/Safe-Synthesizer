@@ -593,12 +593,11 @@ class TestReplacePiiConfig:
         with pytest.raises(ValidationError, match="less than or equal|greater than or equal"):
             FreeTextDetectionConfig.model_validate({"entity_thresholds": entity_thresholds})
 
-    def test_free_text_detection_requires_a_threshold_for_every_supported_entity(self) -> None:
-        entity_thresholds = FreeTextDetectionConfig().entity_thresholds.copy()
-        del entity_thresholds[EntityType.API_KEY]
+    def test_free_text_detection_merges_partial_thresholds_with_defaults(self) -> None:
+        config = ReplacePiiConfig.model_validate({"free_text_detection": {"entity_thresholds": {"first_name": 0.8}}})
 
-        with pytest.raises(ValidationError, match=r"missing: \['api_key'\]"):
-            FreeTextDetectionConfig(entity_thresholds=entity_thresholds)
+        expected = FreeTextDetectionConfig().entity_thresholds | {EntityType.FIRST_NAME: 0.8}
+        assert config.free_text_detection.entity_thresholds == expected
 
     @pytest.mark.parametrize(
         "entity_type",

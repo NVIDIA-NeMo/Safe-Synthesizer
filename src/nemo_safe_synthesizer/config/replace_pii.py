@@ -731,8 +731,9 @@ class FreeTextDetectionConfig(NSSBaseModel):
     entity_thresholds: dict[EntityType, _ConfidenceThreshold] = Field(
         default_factory=_default_gliner_entity_thresholds,
         description=(
-            "Minimum GLiNER2 confidence score for every GLiNER-detected entity type. "
-            "The mapping must contain each GLiNER entity exactly once; regex-owned entity types have no threshold."
+            "Minimum GLiNER2 confidence score per entity type. Entity types left out use the defaults: 0.95 for "
+            "full_name, 0.9 for first_name, middle_name, and last_name, and 0.5 for the rest. Email, "
+            "credit_debit_card, ipv4, and ipv6 are detected by regex and take no threshold."
         ),
     )
     batch_size: int = Field(
@@ -751,25 +752,25 @@ class FreeTextDetectionConfig(NSSBaseModel):
         description="Overlap between adjacent GLiNER2 text chunks. Must be nonnegative and smaller than chunk_length.",
     )
 
+    @field_validator("entity_thresholds", mode="before")
+    @classmethod
+    def _fill_default_entity_thresholds(cls, value: object) -> object:
+        """Let users override selected thresholds; unspecified entity types keep their defaults."""
+        if isinstance(value, Mapping):
+            return {**_default_gliner_entity_thresholds(), **value}
+        return value
+
     @field_validator("entity_thresholds")
     @classmethod
-    def _validate_complete_entity_thresholds(
+    def _reject_non_gliner_entity_thresholds(
         cls,
         value: dict[EntityType, float],
     ) -> dict[EntityType, float]:
-        expected = set(GLINER_DETECTION_ENTITY_TYPES)
-        actual = set(value)
-        missing = sorted(entity_type.value for entity_type in expected - actual)
-        unsupported = sorted(entity_type.value for entity_type in actual - expected)
-        if missing or unsupported:
-            details = []
-            if missing:
-                details.append(f"missing: {missing}")
-            if unsupported:
-                details.append(f"unsupported: {unsupported}")
+        unsupported = sorted(entity_type.value for entity_type in set(value) - set(GLINER_DETECTION_ENTITY_TYPES))
+        if unsupported:
             raise ParameterError(
-                "free_text_detection.entity_thresholds must contain every GLiNER-detected "
-                f"entity exactly once ({'; '.join(details)})"
+                "free_text_detection.entity_thresholds accepts only GLiNER-detected entity types; "
+                f"unsupported: {unsupported}"
             )
         return value
 
