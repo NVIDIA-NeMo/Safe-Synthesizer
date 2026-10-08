@@ -52,7 +52,7 @@ class FreeTextExecutionResult:
 
     column_statistics: dict[str, FreeTextColumnStatistics]
     generated_replacement_count: int
-    elapsed_time_seconds: float
+    generator_time_seconds: float
     replacement_records: tuple[FreeTextReplacementRecord, ...]
 
 
@@ -129,7 +129,7 @@ class FreeTextReplacementExecutor:
         return FreeTextExecutionResult(
             column_statistics=self._statistics,
             generated_replacement_count=self._generated_count,
-            elapsed_time_seconds=self._generation_elapsed,
+            generator_time_seconds=self._generation_elapsed,
             replacement_records=tuple(self._replacement_records),
         )
 
@@ -249,7 +249,10 @@ class FreeTextReplacementExecutor:
         cursor = 0
         for span in spans:
             value = detected_text(cell, span)
-            replacement = self._replacement_for(free_text_mapping_key(cell, span, scope_identity=scope_identity))
+            replacement = _match_letter_case(
+                value,
+                self._replacement_for(free_text_mapping_key(cell, span, scope_identity=scope_identity)),
+            )
             parts.extend((cell.text[cursor : span.start], replacement))
             cursor = span.end
             _record_detection(statistics, span, value)
@@ -305,6 +308,20 @@ class FreeTextReplacementExecutor:
             raise GenerationError("PII replacement generation failed for an accepted free-text span") from exc
         finally:
             self._generation_elapsed += time.perf_counter() - started
+
+
+def _match_letter_case(occurrence: str, replacement: str) -> str:
+    """Give a shared replacement the letter case of the occurrence it replaces.
+
+    Free-text reuse ignores case, so ``MARGARET`` and ``margaret`` share one generated replacement. An
+    all-capitals or all-lowercase occurrence gets the replacement in the same case; any other occurrence keeps
+    the replacement as generated.
+    """
+    if occurrence.isupper():
+        return replacement.upper()
+    if occurrence.islower():
+        return replacement.lower()
+    return replacement
 
 
 def _detection_cells(dataframe: pd.DataFrame, spec: PiiColumnPlan) -> tuple[DetectionCell, ...]:

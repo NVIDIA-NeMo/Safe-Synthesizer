@@ -387,6 +387,24 @@ class TestStructuredReplacementExecutor:
         assert len(generator.requests) == 1
         assert result.generation_statistics.generated_replacement_count == 1
 
+    def test_reused_free_text_replacement_takes_each_occurrence_letter_case(self) -> None:
+        dataframe = pd.DataFrame({"notes": ["Ada, ADA, ada"]})
+        plan = _plan(_target("notes", EntityType.FREE_TEXT))
+        detector = _StaticDetector(
+            [
+                DetectedSpan(DetectionCellId(0, "notes"), start, start + 3, EntityType.FIRST_NAME, "gliner", 0.9)
+                for start in (0, 5, 10)
+            ]
+        )
+        generator = _RecordingGenerator()
+
+        result = _execute(dataframe, plan, generator, free_text_detector=detector)
+
+        first, shouted, quiet = str(result.dataframe.at[0, "notes"]).split(", ")
+        assert shouted == first.upper()
+        assert quiet == first.lower()
+        assert len(generator.requests) == 1
+
     def test_independently_detected_span_reuses_an_exact_structured_mapping(self) -> None:
         dataframe = pd.DataFrame({"first_name": ["Ada"], "notes": ["Ada met Grace"]})
         plan = _plan(
