@@ -7,7 +7,8 @@ import pandas as pd
 import pytest
 from pydantic import ValidationError
 
-from nemo_safe_synthesizer.config.replace_pii import EntityType, PiiReplacementPlan, ReplacePiiConfig
+from nemo_safe_synthesizer.config.replace_pii import EntityType, PiiColumnPlan, PiiReplacementPlan, ReplacePiiConfig
+from nemo_safe_synthesizer.errors import InternalError
 from nemo_safe_synthesizer.pii_replacer import (
     FreeTextReplacementRecord,
     ReplacementGenerationStatistics,
@@ -41,7 +42,7 @@ class TestTransformResult:
         plan = PiiReplacementPlan()
         generation_statistics = ReplacementGenerationStatistics(
             generated_replacement_count=2,
-            elapsed_time_seconds=0.1,
+            generator_time_seconds=0.1,
         )
 
         result = TransformResult(
@@ -50,29 +51,29 @@ class TestTransformResult:
             replacement_plan=plan,
             resolved_config=ReplacePiiConfig(replacement_plan=plan),
             generation_statistics=generation_statistics,
-            elapsed_time_seconds=0.25,
+            total_time_seconds=0.25,
         )
 
         assert result.transformed_df is dataframe
         assert result.replacement_plan is plan
         assert result.generation_statistics is generation_statistics
-        assert result.elapsed_time_seconds == 0.25
+        assert result.total_time_seconds == 0.25
         assert result.replacement_map is None
 
     @pytest.mark.parametrize(
         "field_overrides",
         [
-            {"elapsed_time_seconds": -0.1},
+            {"total_time_seconds": -0.1},
             {
                 "generation_statistics": {
                     "generated_replacement_count": 1,
-                    "elapsed_time_seconds": -0.1,
+                    "generator_time_seconds": -0.1,
                 }
             },
             {
                 "generation_statistics": {
                     "generated_replacement_count": -1,
-                    "elapsed_time_seconds": 0.1,
+                    "generator_time_seconds": 0.1,
                 }
             },
         ],
@@ -85,9 +86,9 @@ class TestTransformResult:
             "resolved_config": ReplacePiiConfig(replacement_plan=PiiReplacementPlan()),
             "generation_statistics": {
                 "generated_replacement_count": 1,
-                "elapsed_time_seconds": 0.1,
+                "generator_time_seconds": 0.1,
             },
-            "elapsed_time_seconds": 0.2,
+            "total_time_seconds": 0.2,
         }
         values.update(field_overrides)
 
@@ -95,6 +96,24 @@ class TestTransformResult:
             TransformResult.model_validate(values)
 
         assert exc_info.value.errors()[0]["type"] == "greater_than_equal"
+
+    def test_resolved_config_must_contain_the_executed_plan(self) -> None:
+        executed = PiiReplacementPlan(
+            columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
+        )
+
+        with pytest.raises(InternalError, match="must contain the executed replacement_plan"):
+            TransformResult(
+                transformed_df=pd.DataFrame(),
+                column_statistics={},
+                replacement_plan=executed,
+                resolved_config=ReplacePiiConfig(),
+                generation_statistics=ReplacementGenerationStatistics(
+                    generated_replacement_count=0,
+                    generator_time_seconds=0.0,
+                ),
+                total_time_seconds=0.0,
+            )
 
 
 @pytest.mark.unit

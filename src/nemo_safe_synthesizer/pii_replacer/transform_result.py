@@ -3,12 +3,13 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, Self
 
 import pandas as pd
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ..config.replace_pii import EntityType, PiiReplacementPlan, ReplacePiiConfig
+from ..errors import InternalError
 
 __all__ = [
     "ColumnStatistics",
@@ -118,9 +119,12 @@ class ReplacementGenerationStatistics(BaseModel):
         ge=0,
         description="Number of distinct replacement values generated after cache reuse.",
     )
-    elapsed_time_seconds: float = Field(
+    generator_time_seconds: float = Field(
         ge=0,
-        description="Elapsed wall-clock time spent generating replacement values, in seconds.",
+        description=(
+            "Wall-clock time spent inside replacement generator calls, in seconds. Excludes plan resolution, "
+            "free-text detection, and writing replacements back."
+        ),
     )
 
 
@@ -147,12 +151,21 @@ class TransformResult(BaseModel):
     generation_statistics: ReplacementGenerationStatistics = Field(
         description="Aggregate timing and count statistics for replacement generation.",
     )
-    elapsed_time_seconds: float = Field(
+    total_time_seconds: float = Field(
         ge=0,
-        description="Elapsed wall-clock time spent replacing PII, in seconds.",
+        description=(
+            "Wall-clock time for the whole replacement call, in seconds, including plan resolution, free-text "
+            "detection, generation, and statistics."
+        ),
     )
     replacement_map: ReplacementMap | None = Field(
         default=None,
         repr=False,
         description="Sensitive replacement provenance, present only when explicitly requested.",
     )
+
+    @model_validator(mode="after")
+    def _require_resolved_config_to_contain_the_executed_plan(self) -> Self:
+        if self.resolved_config.inline_plan != self.replacement_plan:
+            raise InternalError("resolved_config must contain the executed replacement_plan")
+        return self
