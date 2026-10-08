@@ -42,7 +42,7 @@ __all__ = [
     "AUTO_DISCOVERY",
     "ConditioningColumn",
     "DEFAULT_GLINER2_MODEL_ID",
-    "DataToSamplerLabelMapping",
+    "DataToSamplerValueMapping",
     "ENTITIES",
     "ENTITY_BY_TYPE",
     "EXCLUSIVE_DEPENDS_ON_GROUPS",
@@ -117,8 +117,8 @@ class EntityType(StrEnum):
     ORGANIZATION = "organization"
 
 
-DataToSamplerLabelMapping = dict[str, dict[str, list[str] | None]]
-"""Dependency-column values mapped to labels understood by one sampler."""
+DataToSamplerValueMapping = dict[str, dict[str, list[str] | None]]
+"""Dependency-column values mapped to values understood by one sampler."""
 
 
 class EntityAction(Enum):
@@ -487,7 +487,7 @@ class PiiColumnPlan(NSSBaseModel):
 class PiiReplacementPlan(Parameters):
     """Dataset-specific detection/replacement plan (column-oriented).
 
-    Flat ``columns_to_replace`` list with adjacent data-to-sampler label mappings;
+    Flat ``columns_to_replace`` list with adjacent data-to-sampler value mappings;
     cross-column relationships are expressed via ``depends_on`` edges (a DAG).
     Context-free dependency and graph checks are enforced here; plan-vs-dataframe checks live in
     ``pii_replacer.planning.validation``.
@@ -497,47 +497,48 @@ class PiiReplacementPlan(Parameters):
         default_factory=list,
         description="Columns to replace or (for free_text) scan for PII spans to rewrite.",
     )
-    data_to_sampler_label_mapping: DataToSamplerLabelMapping = Field(
+    data_to_sampler_value_mapping: DataToSamplerValueMapping = Field(
         default_factory=dict,
         description=(
-            "Authoritative dataset-column mappings to labels understood by the sampler. "
-            "A list maps one input label to acceptable sampler labels; null disables that dependency condition. "
-            "Unmapped labels use case-insensitive identity matching. This mapping is discovered together with "
-            "columns_to_replace when replace_pii.replacement_plan is 'auto_discovery'."
+            "Maps dataset values in dependency columns to the values used by the person sampler "
+            "(replace_pii.sampler). For example, {sex: {Woman: [female], Non-binary: null}} makes rows where "
+            "sex is Woman sample a female persona, and leaves Non-binary rows unfiltered by sex. "
+            "A dataset value without an entry is looked up in the sampler as is, ignoring case, so Female "
+            "matches female. When replace_pii.replacement_plan is 'auto_discovery', NSS generates this mapping for you."
         ),
     )
 
     @model_validator(mode="after")
-    def _validate_data_to_sampler_label_mapping(self) -> Self:
-        for column_name, mappings in self.data_to_sampler_label_mapping.items():
+    def _validate_data_to_sampler_value_mapping(self) -> Self:
+        for column_name, mappings in self.data_to_sampler_value_mapping.items():
             if not column_name.strip():
-                raise ParameterError("data_to_sampler_label_mapping column names must be non-empty")
+                raise ParameterError("data_to_sampler_value_mapping column names must be non-empty")
             seen_sources: set[str] = set()
             for source, targets in mappings.items():
                 source_key = source.casefold()
                 if not source.strip():
-                    raise ParameterError("data_to_sampler_label_mapping source labels must be non-empty")
+                    raise ParameterError("data_to_sampler_value_mapping dataset values must be non-empty")
                 if source_key in seen_sources:
                     raise ParameterError(
-                        f"data_to_sampler_label_mapping for column {column_name!r} contains duplicate "
-                        "source labels after case-folding"
+                        f"data_to_sampler_value_mapping for column {column_name!r} contains duplicate "
+                        "dataset values after case-folding"
                     )
                 seen_sources.add(source_key)
 
                 if targets is None:
                     continue
                 if not targets:
-                    raise ParameterError("data_to_sampler_label_mapping target lists must be non-empty")
+                    raise ParameterError("data_to_sampler_value_mapping sampler value lists must be non-empty")
 
                 seen_targets: set[str] = set()
                 for target in targets:
                     target_key = target.casefold()
                     if not target.strip():
-                        raise ParameterError("data_to_sampler_label_mapping target labels must be non-empty")
+                        raise ParameterError("data_to_sampler_value_mapping sampler values must be non-empty")
                     if target_key in seen_targets:
                         raise ParameterError(
-                            f"data_to_sampler_label_mapping for column {column_name!r} contains duplicate "
-                            "target labels after case-folding"
+                            f"data_to_sampler_value_mapping for column {column_name!r} contains duplicate "
+                            "sampler values after case-folding"
                         )
                     seen_targets.add(target_key)
         return self

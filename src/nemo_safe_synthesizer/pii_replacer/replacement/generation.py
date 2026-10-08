@@ -20,7 +20,7 @@ __all__ = [
     "ReplacementGenerator",
 ]
 
-ResolvedDependencyLabels = tuple[tuple[EntityType, tuple[str, ...] | None], ...]
+ResolvedDependencyValues = tuple[tuple[EntityType, tuple[str, ...] | None], ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,8 +43,8 @@ class ReplacementGenerationRequest:
     seed: int
     """Seed that makes generation deterministic for equal requests."""
 
-    resolved_dependency_labels: ResolvedDependencyLabels = field(default=(), repr=False)
-    """Sampler labels resolved for each dependency value. Excluded from ``repr`` because they derive from PII."""
+    resolved_dependency_values: ResolvedDependencyValues = field(default=(), repr=False)
+    """Sampler values resolved for each dependency value. Excluded from ``repr`` because they derive from PII."""
 
     def __post_init__(self) -> None:
         if not isinstance(self.entity_type, EntityType):
@@ -56,8 +56,8 @@ class ReplacementGenerationRequest:
             raise InternalError("replacement generation pattern must be a string or None")
         if type(self.seed) is not int:
             raise InternalError("replacement generation seed must be an integer")
-        if not isinstance(self.resolved_dependency_labels, tuple):
-            raise InternalError("resolved_dependency_labels must be a tuple")
+        if not isinstance(self.resolved_dependency_values, tuple):
+            raise InternalError("resolved_dependency_values must be a tuple")
 
 
 class ReplacementGenerator(Protocol):

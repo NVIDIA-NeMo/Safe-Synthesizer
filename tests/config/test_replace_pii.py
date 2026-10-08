@@ -429,7 +429,7 @@ class TestReplacePiiConfig:
         serialized_column = replacement_plan["columns_to_replace"][0]
         assert "depends_on" not in serialized_column
         assert "pattern" not in serialized_column
-        assert replacement_plan["data_to_sampler_label_mapping"] == {}
+        assert replacement_plan["data_to_sampler_value_mapping"] == {}
 
     def test_config_serialization_omits_runtime_inferred_dependency_type(self) -> None:
         plan = PiiReplacementPlan(
@@ -636,46 +636,46 @@ class TestReplacePiiConfig:
         )
         assert config.sampler.resolved_nemotron_personas_path() == tmp_path
 
-    def test_plan_accepts_manual_data_to_sampler_label_mapping(self) -> None:
+    def test_plan_accepts_manual_data_to_sampler_value_mapping(self) -> None:
         plan = PiiReplacementPlan.model_validate(
             {
-                "data_to_sampler_label_mapping": {
+                "data_to_sampler_value_mapping": {
                     "sex": {"Woman": ["female"], "Non-binary": None},
                     "race": {"Asian": ["east asian", "south asian"]},
                 },
             }
         )
 
-        assert plan.data_to_sampler_label_mapping == {
+        assert plan.data_to_sampler_value_mapping == {
             "sex": {"Woman": ["female"], "Non-binary": None},
             "race": {"Asian": ["east asian", "south asian"]},
         }
-        assert plan.model_dump()["data_to_sampler_label_mapping"]["sex"]["Non-binary"] is None
+        assert plan.model_dump()["data_to_sampler_value_mapping"]["sex"]["Non-binary"] is None
 
     @pytest.mark.parametrize(
         ("mappings", "error"),
         [
             ({"": {"work": ["personal"]}}, "column names must be non-empty"),
-            ({"sex": {"": ["female"]}}, "source labels must be non-empty"),
-            ({"sex": {"Woman": []}}, "target lists must be non-empty"),
-            ({"sex": {"Woman": [" "]}}, "target labels must be non-empty"),
+            ({"sex": {"": ["female"]}}, "dataset values must be non-empty"),
+            ({"sex": {"Woman": []}}, "sampler value lists must be non-empty"),
+            ({"sex": {"Woman": [" "]}}, "sampler values must be non-empty"),
             (
                 {"sex": {"Woman": ["female"], "woman": ["female"]}},
-                "duplicate source labels after case-folding",
+                "duplicate dataset values after case-folding",
             ),
             (
                 {"sex": {"Woman": ["female", "FEMALE"]}},
-                "duplicate target labels after case-folding",
+                "duplicate sampler values after case-folding",
             ),
         ],
     )
-    def test_plan_rejects_invalid_data_to_sampler_label_mapping(
+    def test_plan_rejects_invalid_data_to_sampler_value_mapping(
         self,
         mappings: object,
         error: str,
     ) -> None:
         with pytest.raises(ValidationError, match=error):
-            PiiReplacementPlan.model_validate({"data_to_sampler_label_mapping": mappings})
+            PiiReplacementPlan.model_validate({"data_to_sampler_value_mapping": mappings})
 
     def test_default_nemotron_personas_path_uses_env_then_home(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
