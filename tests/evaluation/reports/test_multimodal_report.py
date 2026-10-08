@@ -10,10 +10,12 @@ import pytest
 from nemo_safe_synthesizer.config.evaluate import EvaluationParameters, TimeSeriesEvaluationParameters
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
+from nemo_safe_synthesizer.evaluation.components.attribute_inference_protection import AttributeInferenceProtection
 from nemo_safe_synthesizer.evaluation.components.autocorrelation_similarity import AutocorrelationSimilarity
+from nemo_safe_synthesizer.evaluation.components.membership_inference_protection import MembershipInferenceProtection
 from nemo_safe_synthesizer.evaluation.components.text_semantic_similarity import TextSemanticSimilarity
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_datasets import EvaluationDatasets
-from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import EvaluationScore, Grade
+from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import EvaluationScore, Grade, PrivacyGrade
 from nemo_safe_synthesizer.evaluation.render import render_report
 from nemo_safe_synthesizer.evaluation.reports.multimodal import multimodal_report as multimodal_report_module
 from nemo_safe_synthesizer.evaluation.reports.multimodal.multimodal_report import MultimodalReport
@@ -106,6 +108,39 @@ def test_from_dataframes_applies_sqs_report_config(fixture_training_df, fixture_
     assert report.evaluation_datasets.synthetic_rows == target_rows
     assert report.evaluation_datasets.training_cols == target_cols
     assert report.evaluation_datasets.synthetic_cols == target_cols
+
+
+def test_from_dataframes_applies_mia_excluded_columns_to_mia_only(
+    monkeypatch: pytest.MonkeyPatch, fixture_training_df, fixture_synthetic_df, fixture_test_df
+) -> None:
+    """``mia_excluded_columns`` reaches MIP and leaves AIA's columns untouched."""
+    seen: dict[str, list[str]] = {}
+
+    def fake_mia(training_df, synthetic_df, test_df, column_name=None):
+        seen["mia"] = list(training_df.columns)
+        return EvaluationScore(score=10.0, grade=PrivacyGrade.EXCELLENT), None, {}, {}
+
+    def fake_aia(training_df, synthetic_df, quasi_identifier_count):
+        seen["aia"] = list(training_df.columns)
+        return EvaluationScore(score=10.0, grade=PrivacyGrade.EXCELLENT), None
+
+    monkeypatch.setattr(MembershipInferenceProtection, "mia", staticmethod(fake_mia))
+    monkeypatch.setattr(AttributeInferenceProtection, "_aia", staticmethod(fake_aia))
+
+    config = SafeSynthesizerParameters(
+        evaluation=EvaluationParameters(pii_replay_enabled=False, mia_excluded_columns=["small_cat"]),
+    )
+    report = MultimodalReport.from_dataframes(
+        training=fixture_training_df,
+        synthetic=fixture_synthetic_df,
+        test=fixture_test_df,
+        config=config,
+    )
+
+    assert "small_cat" not in seen["mia"]
+    assert "small_cat" in seen["aia"]
+    mip = next(c for c in report.components if isinstance(c, MembershipInferenceProtection))
+    assert mip.excluded_columns == ["small_cat"]
 
 
 def test_multimodal_report(

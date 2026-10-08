@@ -33,6 +33,9 @@ torch_wheel_deps = [
     { name = "torch", version = "2.13.0", local = "{torch_local_version}", sys_platform = "linux", source_kind = "pytorch" },
     { name = "torchaudio", version = "2.11.0", local = "{torch_local_version}", sys_platform = "linux", source_kind = "pytorch" },
     { name = "torchvision", version = "0.28.0", local = "{torch_local_version}", sys_platform = "linux", source_kind = "pytorch" },
+    # vLLM pulls in torchcodec unpinned; PyPI's Linux wheels target only the
+    # newest CUDA and fail to load under other variants, so take the matching build.
+    { name = "torchcodec", version = "0.16.0", local = "{torch_local_version}", sys_platform = "linux", source_kind = "pytorch" },
     { name = "torchao", version = "0.17.0", local = "{torch_local_version}", sys_platform = "linux", arch = "x86_64", source_kind = "pytorch" },
 ]
 
@@ -62,6 +65,8 @@ dependencies = [
     { name = "torchaudio", version = "2.11.0", local = "cpu", sys_platform = "linux", index = "pytorch-cpu" },
     { name = "torchvision", version = "0.28.0", sys_platform = "darwin" },
     { name = "torchvision", version = "0.28.0", local = "cpu", sys_platform = "linux", index = "pytorch-cpu" },
+    { name = "torchcodec", version = "0.16.0", sys_platform = "darwin" },
+    { name = "torchcodec", version = "0.16.0", local = "cpu", sys_platform = "linux", index = "pytorch-cpu" },
     "torchao==0.17.0",
     "transformers==5.12.0",
     "triton>=2.0.0; sys_platform=='linux'",

@@ -376,6 +376,7 @@ for the full schema. For detailed descriptions and constraints, see the
 |-------|---------|-------------|----------|
 | `evaluation.enabled` | `true` | Master switch for evaluation | Leave enabled |
 | `evaluation.mia_enabled` | `true` | Membership Inference Attack (MIA) -- privacy risk assessment | Disable to speed up evaluation if privacy assessment is not needed |
+| `evaluation.mia_excluded_columns` | `null` | Columns to leave out of the MIA | Useful when identifiers were already replaced outside Safe Synthesizer, or are expected to repeat verbatim in the synthetic data |
 | `evaluation.aia_enabled` | `true` | Attribute Inference Attack (AIA) -- measures whether an attacker can infer a sensitive attribute from quasi-identifiers in the synthetic data | Disable to speed up evaluation if AIA is not needed |
 | `evaluation.pii_replay_enabled` | `true` | PII replay detection -- checks whether PII from training appears in synthetic data | Leave enabled if PII replacement is used |
 | `evaluation.sqs_report_columns` | `250` | Max columns in the Synthetic Quality Score (SQS) report | Increase if your dataset has more columns |

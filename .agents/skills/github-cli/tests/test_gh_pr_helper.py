@@ -132,6 +132,63 @@ def test_submit_approved_review_rejects_a_stale_head_before_posting() -> None:
         helper._submit_approved_review(repo, pr, "owner/repo", 715, submission)
 
 
+class _FakeRequester:
+    def __init__(self, comment: dict[str, Any]) -> None:
+        self.comment = comment
+        self.calls: list[tuple[str, str, dict[str, Any] | None]] = []
+
+    def requestJsonAndCheck(  # noqa: N802
+        self, verb: str, url: str, input: dict[str, Any] | None = None
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        self.calls.append((verb, url, input))
+        if verb == "GET":
+            return {}, self.comment
+        return {}, {
+            "id": 92,
+            "body": input["body"],
+            "html_url": "https://github.com/owner/repo/pull/715#discussion_r92",
+        }
+
+
+def test_post_review_comment_reply_uses_the_comment_pr_and_returns_url() -> None:
+    repo_url = "https://api.github.com/repos/owner/repo"
+    requester = _FakeRequester({"id": 91, "pull_request_url": f"{repo_url}/pulls/715"})
+
+    output = helper._post_review_comment_reply(requester, repo_url, 91, "Fixed in beefcafe")
+
+    assert requester.calls == [
+        ("GET", f"{repo_url}/pulls/comments/91", None),
+        ("POST", f"{repo_url}/pulls/715/comments/91/replies", {"body": "Fixed in beefcafe"}),
+    ]
+    assert output.comment_id == 91
+    assert output.reply_id == 92
+    assert output.pr_number == 715
+    assert output.html_url == "https://github.com/owner/repo/pull/715#discussion_r92"
+
+
+def test_post_review_comment_reply_to_a_reply_targets_the_thread_root() -> None:
+    repo_url = "https://api.github.com/repos/owner/repo"
+    requester = _FakeRequester({"id": 93, "in_reply_to_id": 91, "pull_request_url": f"{repo_url}/pulls/715"})
+
+    output = helper._post_review_comment_reply(requester, repo_url, 93, "Fixed in beefcafe")
+
+    assert requester.calls[-1] == (
+        "POST",
+        f"{repo_url}/pulls/715/comments/91/replies",
+        {"body": "Fixed in beefcafe"},
+    )
+    assert output.comment_id == 93
+
+
+def test_post_review_comment_reply_rejects_comment_without_pr() -> None:
+    requester = _FakeRequester({"id": 91})
+
+    with pytest.raises(ValueError, match="Could not determine PR"):
+        helper._post_review_comment_reply(requester, "https://api.github.com/repos/owner/repo", 91, "Reply")
+
+    assert [verb for verb, _, _ in requester.calls] == ["GET"]
+
+
 def test_review_comment_range_requires_both_start_fields() -> None:
     with pytest.raises(ValidationError, match="start_line and start_side must be set together"):
         helper.ReviewDraftComment(

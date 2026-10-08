@@ -866,6 +866,23 @@ h3 {
     color: var(--muted);
 }
 
+.excluded-columns {
+    margin-bottom: 12px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 18px;
+}
+
+.excluded-columns summary {
+    width: fit-content;
+    cursor: pointer;
+}
+
+.excluded-columns p {
+    margin: 6px 0 0;
+    overflow-wrap: anywhere;
+}
+
 .chart-legend {
     display: flex;
     justify-content: flex-end;
