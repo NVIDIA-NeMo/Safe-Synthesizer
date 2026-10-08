@@ -11,7 +11,7 @@ from ...data_processing.timeseries_validation import (
     TimeSeriesDataValidationError,
     TimeSeriesParameterValidationError,
     TimeSeriesValidationReason,
-    validate_timeseries_data,
+    validate_timeseries_source_data,
 )
 from ...data_processing.validation import (
     check_column_has_no_nulls,
@@ -118,7 +118,7 @@ class MiaExcludedColumnsCheck(DataFrameCheck):
 
 
 class OrderbyColumnCheck(DataFrameCheck):
-    """Validate order-by column existence."""
+    """Validate order-by column existence and integrity."""
 
     name = "columns.orderby"
     label = "Order-by column"
@@ -129,16 +129,19 @@ class OrderbyColumnCheck(DataFrameCheck):
         column = config.data.order_training_examples_by
         if column is None:
             return
-        # Time-series mode without an explicit timestamp column defers
-        # ordering until preprocessing synthesizes a timestamp, so there
-        # is nothing to validate here yet.
-        if config.time_series.is_timeseries and config.time_series.timestamp_column is None:
-            return
-        emit_on_raise(
+        present = emit_on_raise(
             collector,
             lambda: check_column_present(ctx.data, column, role="Order by"),
             expect=ParameterError,
             code="column_not_found",
+        )
+        if not present:
+            return
+        emit_on_raise(
+            collector,
+            lambda: check_column_has_no_nulls(ctx.data, column, role="Order by"),
+            expect=DataError,
+            code="column_nulls",
         )
 
 
@@ -209,14 +212,20 @@ class TimestampColumnCheck(DataFrameCheck):
 
 
 class TimeSeriesDataShapeCheck(DataFrameCheck):
-    """Validate time-series timestamp format and per-group shape invariants."""
+    """Validate time-series timestamp data and any asserted ``timestamp_interval_seconds``.
+
+    Differences in group length, start, stop, or unasserted interval are not
+    reported here; training preprocessing uses them to select flexible
+    processing.
+    """
 
     name = "timeseries.shape"
     label = "Time-series data shape"
-    requires = ("columns.groupby", "columns.pseudo")
+    requires = ("columns.groupby", "columns.orderby", "columns.pseudo")
     issue_codes = {
         TimeSeriesValidationReason.COLUMN_NOT_FOUND: "column_not_found",
         TimeSeriesValidationReason.COLUMN_NULLS: "column_nulls",
+        TimeSeriesValidationReason.DUPLICATE_COLUMNS: "duplicate_columns",
         TimeSeriesValidationReason.PSEUDO_COLUMN_COLLISION: "pseudo_column_collision",
         TimeSeriesValidationReason.TIMESTAMP_NOT_FOUND: "timestamp_not_found",
         TimeSeriesValidationReason.TIMESTAMP_NULLS: "timestamp_nulls",
@@ -228,9 +237,6 @@ class TimeSeriesDataShapeCheck(DataFrameCheck):
         TimeSeriesValidationReason.TIMESERIES_EMPTY: "timeseries_empty",
         TimeSeriesValidationReason.TIMESERIES_NO_VALUE_COLUMNS: "timeseries_no_value_columns",
         TimeSeriesValidationReason.TIMESERIES_IDENTITY_COLUMNS_SAME: "timeseries_identity_columns_same",
-        TimeSeriesValidationReason.TIMESERIES_GROUP_LENGTH_MISMATCH: "timeseries_group_length_mismatch",
-        TimeSeriesValidationReason.TIMESERIES_START_MISMATCH: "timeseries_start_mismatch",
-        TimeSeriesValidationReason.TIMESERIES_STOP_MISMATCH: "timeseries_stop_mismatch",
     }
 
     @override
@@ -240,25 +246,18 @@ class TimeSeriesDataShapeCheck(DataFrameCheck):
         if not ctx.config.time_series.is_timeseries:
             return False
         timestamp_column = ctx.config.time_series.timestamp_column
-        if timestamp_column is not None:
-            try:
-                check_column_present(ctx.data, timestamp_column, role="Timestamp")
-                check_column_has_no_nulls(ctx.data, timestamp_column, role="Timestamp")
-            except (DataError, ParameterError):
-                return False
+        if timestamp_column is None:
+            return True
+        try:
+            check_column_present(ctx.data, timestamp_column, role="Timestamp")
+            check_column_has_no_nulls(ctx.data, timestamp_column, role="Timestamp")
+        except (DataError, ParameterError):
+            return False
         return True
 
     @override
     def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
-        timestamp_column = ctx.config.time_series.timestamp_column
-        if timestamp_column is not None:
-            try:
-                check_column_present(ctx.data, timestamp_column, role="Timestamp")
-                check_column_has_no_nulls(ctx.data, timestamp_column, role="Timestamp")
-            except (DataError, ParameterError):
-                return
-
         try:
-            validate_timeseries_data(ctx.data, ctx.config)
+            validate_timeseries_source_data(ctx.data, ctx.config)
         except (TimeSeriesDataValidationError, TimeSeriesParameterValidationError) as exc:
             collector.error(self.issue_codes[exc.reason], str(exc))

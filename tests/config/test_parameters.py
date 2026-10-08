@@ -28,6 +28,72 @@ from nemo_safe_synthesizer.configurator.parameters import Parameters
 from nemo_safe_synthesizer.errors import ParameterError
 
 
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("flexible_timeseries", True),
+        ("sequence_index_column", "_index"),
+        ("sequence_marker_column", "_marker"),
+        ("sequence_max_records", 2),
+        ("sequence_source_columns", ["group", "value"]),
+    ],
+)
+def test_flexible_timeseries_state_is_not_a_public_parameter(name, value):
+    with pytest.raises(ParameterError, match="Unknown parameter"):
+        SafeSynthesizerParameters.from_params(**{name: value})
+
+
+def test_timeseries_config_has_no_flexible_metadata_fields():
+    config = SafeSynthesizerParameters.from_params(
+        is_timeseries=True,
+        timestamp_column="timestamp",
+    )
+
+    dumped = config.time_series.model_dump()
+
+    assert "flexible_timeseries_metadata" not in dumped
+    assert not any(name.startswith("sequence_") for name in dumped)
+
+
+def test_timeseries_rejects_contradicting_timestamp_and_order_columns():
+    with pytest.raises(ValidationError, match="must name the same column"):
+        SafeSynthesizerParameters.from_params(
+            is_timeseries=True,
+            timestamp_column="timestamp",
+            group_training_examples_by="group",
+            order_training_examples_by="event",
+        )
+
+
+def test_timeseries_accepts_matching_timestamp_and_order_columns():
+    config = SafeSynthesizerParameters.from_params(
+        is_timeseries=True,
+        timestamp_column="timestamp",
+        group_training_examples_by="group",
+        order_training_examples_by="timestamp",
+    )
+
+    assert config.data.order_training_examples_by == config.time_series.timestamp_column
+
+
+def test_non_timeseries_order_column_is_not_compared_to_timestamp():
+    config = SafeSynthesizerParameters.from_params(
+        group_training_examples_by="group",
+        order_training_examples_by="event",
+    )
+
+    assert config.data.order_training_examples_by == "event"
+
+
+def test_order_column_without_group_suggests_timestamp_column():
+    with pytest.raises(ValidationError, match="In time-series mode .* set time_series.timestamp_column"):
+        SafeSynthesizerParameters.from_params(
+            is_timeseries=True,
+            timestamp_column="timestamp",
+            order_training_examples_by="timestamp",
+        )
+
+
 def test_safe_synthesizer_parameters(monkeypatch):
     monkeypatch.delenv("NEMO_TELEMETRY_ENABLED", raising=False)
     config = SafeSynthesizerParameters(
