@@ -137,6 +137,23 @@ class TestStructuredReplacementExecutor:
 
         assert generator.requests[0].resolved_dependency_values == ((EntityType.GENDER, ("female",)),)
 
+    def test_matches_mapping_keys_for_non_string_dependency_values(self) -> None:
+        dataframe = pd.DataFrame({"first_name": ["Ada", "Grace"], "sex": [1.0, 2.0]})
+        plan = _plan(_target("first_name", EntityType.FIRST_NAME, ("sex", EntityType.GENDER)))
+        generator = _RecordingGenerator()
+
+        _execute(
+            dataframe,
+            plan,
+            generator,
+            data_to_sampler_value_mapping={"sex": {"1.0": ["female"], "2.0": ["male"]}},
+        )
+
+        assert [request.resolved_dependency_values for request in generator.requests] == [
+            ((EntityType.GENDER, ("female",)),),
+            ((EntityType.GENDER, ("male",)),),
+        ]
+
     def test_reads_upstream_replacements_and_preserves_duplicate_indexes(self) -> None:
         dataframe = pd.DataFrame(
             {"first": ["Ada", "Grace"], "email": ["ada@example.com", "grace@example.com"]},
