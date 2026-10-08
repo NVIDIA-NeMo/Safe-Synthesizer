@@ -16,7 +16,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiSamplerConfig,
     ReplacePiiConfig,
 )
-from nemo_safe_synthesizer.errors import GenerationError
+from nemo_safe_synthesizer.errors import GenerationError, InternalError
 from nemo_safe_synthesizer.pii_replacer import (
     FreeTextReplacementRecord,
     ReplacementGenerationStatistics,
