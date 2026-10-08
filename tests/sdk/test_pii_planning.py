@@ -124,4 +124,4 @@ def test_replace_pii_resolves_and_writes_the_complete_input(tmp_path: Path) -> N
     pd.testing.assert_frame_equal(pd.read_csv(data_output), result.transformed_df)
     assert SafeSynthesizerParameters.from_yaml(config_output).replace_pii == result.resolved_config
     assert nss._column_statistics == result.column_statistics
-    assert nss._pii_replacer_time == result.elapsed_time_seconds
+    assert nss._pii_replacer_time == result.replacement_time_seconds
