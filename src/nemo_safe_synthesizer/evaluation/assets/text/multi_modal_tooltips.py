@@ -58,7 +58,8 @@ tooltips = {
     "autocorrelation_similarity_info": """
         Autocorrelation Similarity checks whether synthetic sequences move over time like the training sequences: whether values carry over from one step to the next,
         and whether patterns repeat on the same schedule. Each group and numeric column is scored separately and the scores are averaged. Differences small enough
-        to be explained by chance do not lower the score, so 10 means the timing patterns match and scores near 0 mean the synthetic data has lost them.
+        to be explained by chance do not lower the score, so 10 means the timing patterns match and scores near 0 mean the synthetic data has lost them. A low score
+        does not mean the synthetic data is bad overall, only that it does not reproduce these timing patterns.
     """,
     "autocorrelation_typical_info": """
         How strongly each value relates to the values before it, at each lag (the number of steps apart). Lines show the median across groups and bands cover
