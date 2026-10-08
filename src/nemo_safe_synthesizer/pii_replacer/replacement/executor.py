@@ -183,7 +183,7 @@ class StructuredReplacementExecutor:
             ),
             generation_statistics=ReplacementGenerationStatistics(
                 generated_replacement_count=(self._generated_count + free_text_result.generated_replacement_count),
-                generator_time_seconds=self._generation_elapsed + free_text_result.elapsed_time_seconds,
+                generator_time_seconds=self._generation_elapsed + free_text_result.generator_time_seconds,
                 dependency_drift_count=sum(drift.conflict_count for drift in drifts),
             ),
             dependency_drifts=drifts,
