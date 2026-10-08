@@ -129,6 +129,17 @@ class TestMappingContracts:
         assert first_key == FreeTextMappingKey(3, EntityType.FIRST_NAME, "Ada")
         assert "Ada" not in repr(first_key)
 
+    def test_free_text_key_ignores_case_but_keeps_the_first_occurrence_text(self) -> None:
+        first = FreeTextMappingKey(3, EntityType.FIRST_NAME, "Margaret")
+        shouted = FreeTextMappingKey(3, EntityType.FIRST_NAME, "MARGARET")
+
+        assert first == shouted
+        assert hash(first) == hash(shouted)
+        assert {first: "replacement"}[shouted] == "replacement"
+        assert first.original_value == "Margaret"
+        assert "Margaret" not in repr(first)
+        assert "margaret" not in repr(first)
+
     def test_canonical_structured_value_is_type_tagged_and_hides_pii(self) -> None:
         integer = CanonicalValue(type_tag="integer", normalized_value="1")
         string = CanonicalValue(type_tag="string", normalized_value="1")
@@ -199,9 +210,17 @@ class TestMappingContracts:
 
     def test_mapping_keys_require_canonical_original_values(self) -> None:
         with pytest.raises(InternalError, match="must be a CanonicalValue"):
-            RecordMappingKey("email", 0, "ada@example.com")  # ty: ignore[invalid-argument-type] -- deliberate invalid input
+            RecordMappingKey(
+                "email",
+                0,
+                "ada@example.com",  # ty: ignore[invalid-argument-type] -- deliberate invalid input
+            )
         with pytest.raises(InternalError, match="must be a CanonicalValue"):
-            GroupMappingKey("email", "patient-1", "ada@example.com")  # ty: ignore[invalid-argument-type] -- deliberate invalid input
+            GroupMappingKey(
+                "email",
+                "patient-1",
+                "ada@example.com",  # ty: ignore[invalid-argument-type] -- deliberate invalid input
+            )
 
     @pytest.mark.parametrize("scope_identity", [float("nan"), ["unhashable"]])
     def test_scope_identities_must_be_hashable_and_not_nan(self, scope_identity: object) -> None:
@@ -214,8 +233,14 @@ class TestMappingContracts:
 
     def test_free_text_mapping_key_requires_a_normalized_entity_type(self) -> None:
         with pytest.raises(InternalError, match="normalized EntityType"):
-            FreeTextMappingKey(0, "email", "ada@example.com")  # ty: ignore[invalid-argument-type] -- deliberate invalid input
+            FreeTextMappingKey(
+                0,
+                "email",  # ty: ignore[invalid-argument-type] -- deliberate invalid input
+                "ada@example.com",
+            )
 
     def test_group_provenance_requires_well_formed_dependencies(self) -> None:
         with pytest.raises(InternalError, match="must contain"):
-            GroupMappingProvenance((("organization", None),))  # ty: ignore[invalid-argument-type] -- deliberate invalid input
+            GroupMappingProvenance(
+                (("organization", None),),  # ty: ignore[invalid-argument-type] -- deliberate invalid input
+            )

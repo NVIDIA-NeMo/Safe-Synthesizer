@@ -85,13 +85,20 @@ class CanonicalValue:
     serialization, not text cleanup: it must not trim, case-fold, or otherwise
     alter string content. Equivalent Python, NumPy, or pandas scalars must
     produce the same pair; different semantic scalar types must not.
+
+    Example:
+        CanonicalValue(type_tag="integer", normalized_value="1")  # from 1, np.int64(1), ...
+        CanonicalValue(type_tag="string", normalized_value="1")  # from "1"; a different identity
     """
 
     type_tag: str
     """Nonempty identifier of the scalar's semantic type."""
 
     normalized_value: str = field(repr=False)
-    """Deterministic, locale-independent string form of the scalar. Excluded from ``repr`` because it may contain PII."""
+    """Deterministic, locale-independent string form of the scalar.
+
+    Excluded from ``repr`` because it may contain PII.
+    """
 
     def __post_init__(self) -> None:
         _require_str(self.type_tag, "canonical value type_tag")
@@ -119,7 +126,11 @@ def require_effective_dependency_tuple(value: object, description: str) -> None:
 
 @dataclass(frozen=True, slots=True)
 class DetectionCellId:
-    """PII-free positional identity for one dataframe cell."""
+    """PII-free positional identity for one dataframe cell.
+
+    Example:
+        DetectionCellId(row_position=3, column_name="notes")  # fourth input row, even if its index label is 7
+    """
 
     row_position: int
     """Stable input row order rather than the dataframe index, which may contain duplicates."""
@@ -134,7 +145,15 @@ class DetectionCellId:
 
 @dataclass(frozen=True, slots=True)
 class DetectionCell:
-    """Original cell text and the entity types its plan permits detecting."""
+    """Original cell text and the entity types its plan permits detecting.
+
+    Example:
+        DetectionCell(
+            cell_id=DetectionCellId(3, "notes"),
+            text="Email ada@example.com today",
+            allowed_entity_types=frozenset({EntityType.EMAIL, EntityType.FIRST_NAME}),
+        )
+    """
 
     cell_id: DetectionCellId
     """Positional identity of the cell."""
@@ -159,6 +178,10 @@ class DetectedSpan:
     The type contains normalized entity type and detector provenance, but no
     original text or replacement value. Use ``detected_text`` to validate the
     span against its ``DetectionCell`` and extract the exact occurrence.
+
+    Example:
+        # "ada@example.com" in "Email ada@example.com today", found by the email regex
+        DetectedSpan(DetectionCellId(3, "notes"), start=6, end=21, entity_type=EntityType.EMAIL, source="regex")
     """
 
     cell_id: DetectionCellId
@@ -222,6 +245,10 @@ class RecordMappingKey:
     Stable positional row identity keeps duplicate dataframe indexes safe.
     Dependencies affect generation but not mapping identity because every row
     has one effective dependency tuple for a given target.
+
+    Example:
+        # Every occurrence of "ada@example.com" in row 0's email column reuses one replacement.
+        RecordMappingKey("email", 0, CanonicalValue("string", "ada@example.com"))
     """
 
     target_column: str
@@ -245,23 +272,36 @@ class FreeTextMappingKey:
 
     The replacement executor looks up every accepted span by this key before
     calling the replacement generator. Repeated occurrences of the same entity
-    and exact original value in any planned free-text column therefore reuse one
+    and original value in any planned free-text column therefore reuse one
     replacement within the scope, independently of propagation mappings.
+    Matching ignores case, so ``Margaret`` and ``MARGARET`` share a key; the
+    key keeps the exact text of the occurrence that created it for generation.
+
+    Example:
+        # In row 3, "Ada" in one note and "ADA" in another get the same replacement.
+        FreeTextMappingKey(scope_identity=3, entity_type=EntityType.FIRST_NAME, original_value="Ada")
     """
 
     scope_identity: Hashable = field(repr=False)
-    """Stable row position in record scope, or the group identity to widen reuse across rows. Excluded from ``repr``."""
+    """Stable row position in record scope, or the group identity to widen reuse across rows.
+
+    Excluded from ``repr`` because a group identity may contain PII.
+    """
 
     entity_type: EntityType
     """Normalized entity type of the detected value."""
 
-    original_value: str = field(repr=False)
-    """Exact detected substring. Excluded from ``repr`` because it is PII."""
+    original_value: str = field(repr=False, compare=False)
+    """Exact detected text passed to the generator. Not part of identity; excluded from ``repr`` because it is PII."""
+
+    folded_value: str = field(init=False, repr=False)
+    """Case-folded ``original_value`` that identifies the key. Excluded from ``repr`` because it is PII."""
 
     def __post_init__(self) -> None:
         _require_scope_identity(self.scope_identity, "free-text mapping scope_identity")
         _require_entity_type(self.entity_type, "free-text mapping entity_type")
         _require_str(self.original_value, "free-text mapping original_value")
+        object.__setattr__(self, "folded_value", self.original_value.casefold())
 
 
 def free_text_mapping_key(
@@ -285,6 +325,10 @@ class GroupMappingKey:
     Effective dependencies are intentionally absent from identity: the first
     occurrence in stable positional row order establishes the replacement for
     this target, original group, and canonical original value.
+
+    Example:
+        # Every row of patient-1 with "ada@example.com" in the email column reuses one replacement.
+        GroupMappingKey("email", "patient-1", CanonicalValue("string", "ada@example.com"))
     """
 
     target_column: str
@@ -304,10 +348,21 @@ class GroupMappingKey:
 
 @dataclass(frozen=True, slots=True)
 class GroupMappingProvenance:
-    """Effective dependencies used by the first occurrence of a group mapping."""
+    """Effective dependencies used by the first occurrence of a group mapping.
+
+    Later occurrences with different dependencies reuse the first replacement and
+    are counted as ``GroupDependencyDrift``.
+
+    Example:
+        # The group's email replacement was generated from the replaced company name "Example Corp".
+        GroupMappingProvenance(((EntityType.ORGANIZATION, CanonicalValue("string", "Example Corp")),))
+    """
 
     effective_dependency_tuple: EffectiveDependencyTuple = field(repr=False)
-    """Dependency values that conditioned the first replacement. Excluded from ``repr`` because they may contain PII."""
+    """Dependency values that conditioned the first replacement.
+
+    Excluded from ``repr`` because they may contain PII.
+    """
 
     def __post_init__(self) -> None:
         require_effective_dependency_tuple(self.effective_dependency_tuple, "group mapping effective_dependency_tuple")
@@ -315,7 +370,12 @@ class GroupMappingProvenance:
 
 @dataclass(frozen=True, slots=True)
 class GroupDependencyDrift:
-    """PII-free aggregate warning for dependency drift within a group mapping."""
+    """PII-free aggregate warning for dependency drift within a group mapping.
+
+    Example:
+        # Three later rows reused a group's email replacement although their company differed.
+        GroupDependencyDrift("email", frozenset({EntityType.ORGANIZATION}), conflict_count=3)
+    """
 
     target_column: str
     """Column whose group mapping saw drifting dependencies."""

@@ -93,7 +93,8 @@ class TestReplacementGenerator:
             ReplacementGenerationRequest(
                 entity_type=EntityType.EMAIL,
                 original_value="ada@example.com",
-                effective_dependency_tuple=dependency_tuple,  # ty: ignore[invalid-argument-type] -- deliberate invalid input
+                # Deliberately malformed input.
+                effective_dependency_tuple=dependency_tuple,  # ty: ignore[invalid-argument-type]
                 pattern=None,
                 seed=42,
             )

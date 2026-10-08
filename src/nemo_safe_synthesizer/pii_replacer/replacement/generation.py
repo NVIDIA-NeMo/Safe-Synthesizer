@@ -35,7 +35,12 @@ class ReplacementGenerationRequest:
     ``CanonicalValue`` for structured data. Excluded from ``repr`` because it is PII."""
 
     effective_dependency_tuple: EffectiveDependencyTuple = field(repr=False)
-    """Dependency values that condition generation. Excluded from ``repr`` because they may contain PII."""
+    """Current value of each ``depends_on`` column for this row, in plan order.
+
+    A dependency on another replaced column carries its already-replaced value, so an email can be built from the
+    synthetic first and last names. A read-only conditioner such as gender carries the dataset value. Excluded from
+    ``repr`` because the values may contain PII.
+    """
 
     pattern: str | None
     """Plan pattern the generated value must follow, or ``None`` for the entity default."""
@@ -44,7 +49,12 @@ class ReplacementGenerationRequest:
     """Seed that makes generation deterministic for equal requests."""
 
     resolved_dependency_values: ResolvedDependencyValues = field(default=(), repr=False)
-    """Sampler values resolved for each dependency value. Excluded from ``repr`` because they derive from PII."""
+    """Person-sampler values each conditioner may match, from ``data_to_sampler_value_mapping``.
+
+    Used only to filter the sampler, for example gender ``Woman`` resolved to ``("female",)``. Generators still read
+    ``effective_dependency_tuple`` for values they render, such as names in an email. Excluded from ``repr`` because
+    the values derive from PII.
+    """
 
     def __post_init__(self) -> None:
         if not isinstance(self.entity_type, EntityType):
