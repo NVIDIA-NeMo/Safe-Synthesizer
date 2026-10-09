@@ -31,7 +31,7 @@ def _shell_arrays(fragment_path: Path, *names: str) -> dict[str, tuple[str, ...]
         name = fields[index].decode()
         index += 1
         values: list[str] = []
-        while index < len(fields) and not fields[index].startswith(b"CUDA_INDEXES_"):
+        while index < len(fields) and not fields[index].startswith(b"CUDA_FIND_LINKS_"):
             values.append(fields[index].decode())
             index += 1
         arrays[name] = tuple(values)
@@ -394,7 +394,7 @@ def test_repository_cuda_variant_dependencies_and_sources(pytestconfig: pytest.C
     assert indexes["vllm-v0-27-0-cu130"] == "https://wheels.vllm.ai/0.27.0/cu130"
 
 
-def test_build_cuda_installer_fragment_renders_runtime_index_arrays(
+def test_build_cuda_installer_fragment_renders_runtime_find_links_arrays(
     pytestconfig: pytest.Config, generator: ModuleType, tmp_path: Path
 ) -> None:
     config = generator.load_cuda_deps_config(pytestconfig.rootpath / "cuda_deps.toml")
@@ -407,27 +407,59 @@ def test_build_cuda_installer_fragment_renders_runtime_index_arrays(
     assert _shell_arrays(
         fragment_path,
         "PACKAGE_OVERRIDES",
-        "CUDA_INDEXES_CPU",
-        "CUDA_INDEXES_CU129",
-        "CUDA_INDEXES_CU130",
+        "CUDA_FIND_LINKS_CPU",
+        "CUDA_FIND_LINKS_CU129",
+        "CUDA_FIND_LINKS_CU130",
     ) == {
         "PACKAGE_OVERRIDES": ("flashinfer-python==0.6.16.post4; sys_platform == 'linux'",),
-        "CUDA_INDEXES_CPU": (
-            "https://flashinfer.ai/whl/",
-            "https://download.pytorch.org/whl/cpu",
+        "CUDA_FIND_LINKS_CPU": (
+            "https://flashinfer.ai/whl/flashinfer-cubin/",
+            "https://download.pytorch.org/whl/cpu/torch/",
+            "https://download.pytorch.org/whl/cpu/torchaudio/",
+            "https://download.pytorch.org/whl/cpu/torchvision/",
+            "https://download.pytorch.org/whl/cpu/torchcodec/",
         ),
-        "CUDA_INDEXES_CU129": (
-            "https://flashinfer.ai/whl/cu129",
-            "https://download.pytorch.org/whl/cu129",
-            "https://flashinfer.ai/whl/",
-            "https://wheels.vllm.ai/0.27.0/cu129",
+        "CUDA_FIND_LINKS_CU129": (
+            "https://flashinfer.ai/whl/flashinfer-cubin/",
+            "https://wheels.vllm.ai/0.27.0/cu129/vllm/",
+            "https://download.pytorch.org/whl/cu129/torch/",
+            "https://download.pytorch.org/whl/cu129/torchaudio/",
+            "https://download.pytorch.org/whl/cu129/torchvision/",
+            "https://download.pytorch.org/whl/cu129/torchcodec/",
+            "https://flashinfer.ai/whl/cu129/flashinfer-jit-cache/",
+            "https://download.pytorch.org/whl/cu129/triton/",
+            "https://download.pytorch.org/whl/cu129/torchao/",
+            "https://download.pytorch.org/whl/cu129/nvidia-cublas-cu12/",
+            "https://download.pytorch.org/whl/cu129/nvidia-cuda-cupti-cu12/",
+            "https://download.pytorch.org/whl/cu129/nvidia-cuda-nvrtc-cu12/",
+            "https://download.pytorch.org/whl/cu129/nvidia-cuda-runtime-cu12/",
+            "https://download.pytorch.org/whl/cu129/nvidia-cudnn-cu12/",
+            "https://download.pytorch.org/whl/cu129/nvidia-cusparse-cu12/",
+            "https://download.pytorch.org/whl/cu129/nvidia-cusparselt-cu12/",
+            "https://download.pytorch.org/whl/cu129/nvidia-nccl-cu12/",
+            "https://download.pytorch.org/whl/cu129/nvidia-nvjitlink-cu12/",
+            "https://download.pytorch.org/whl/cu129/nvidia-nvshmem-cu12/",
+            "https://download.pytorch.org/whl/cu129/nvidia-nvtx-cu12/",
         ),
-        "CUDA_INDEXES_CU130": (
-            "https://flashinfer.ai/whl/cu130",
-            "https://download.pytorch.org/whl/cu130",
-            "https://flashinfer.ai/whl/",
-            "https://wheels.vllm.ai/0.27.0/cu130",
-            "https://pypi.nvidia.com",
+        "CUDA_FIND_LINKS_CU130": (
+            "https://flashinfer.ai/whl/flashinfer-cubin/",
+            "https://wheels.vllm.ai/0.27.0/cu130/vllm/",
+            "https://download.pytorch.org/whl/cu130/torch/",
+            "https://download.pytorch.org/whl/cu130/torchaudio/",
+            "https://download.pytorch.org/whl/cu130/torchvision/",
+            "https://download.pytorch.org/whl/cu130/torchcodec/",
+            "https://flashinfer.ai/whl/cu130/flashinfer-jit-cache/",
+            "https://download.pytorch.org/whl/cu130/triton/",
+            "https://download.pytorch.org/whl/cu130/torchao/",
+            "https://pypi.nvidia.com/nvidia-cublas/",
+            "https://pypi.nvidia.com/nvidia-cuda-cupti/",
+            "https://pypi.nvidia.com/nvidia-cuda-nvrtc/",
+            "https://pypi.nvidia.com/nvidia-cuda-runtime/",
+            "https://pypi.nvidia.com/nvidia-cudnn/",
+            "https://pypi.nvidia.com/nvidia-cusparse/",
+            "https://pypi.nvidia.com/nvidia-nccl/",
+            "https://pypi.nvidia.com/nvidia-nvjitlink/",
+            "https://pypi.nvidia.com/nvidia-nvtx/",
         ),
     }
 
@@ -509,7 +541,7 @@ def test_apply_cuda_fragment_to_installer_rejects_duplicate_markers(
 def test_apply_cuda_fragment_to_installer_rejects_malformed_marker_lifecycles(
     generator: ModuleType, marker_state: str
 ) -> None:
-    generated = generator.CudaInstallerFragment(text="readonly -a CUDA_INDEXES_CPU=()")
+    generated = generator.CudaInstallerFragment(text="readonly -a CUDA_FIND_LINKS_CPU=()")
     installer_text = "#!/usr/bin/env bash\n"
     if marker_state == "reversed":
         installer_text += f"{generator.INSTALLER_INDEXES_END}\n{generator.INSTALLER_INDEXES_BEGIN}\n"
@@ -528,11 +560,47 @@ def test_installer_fragment_preserves_shell_sensitive_urls_and_extra_isolation(
     fragment_path = tmp_path / "indexes.sh"
     fragment_path.write_text(generator.build_cuda_installer_fragment(config).text, encoding="utf-8")
 
-    arrays = _shell_arrays(fragment_path, "CUDA_INDEXES_CPU", "CUDA_INDEXES_CU129", "CUDA_INDEXES_CU132")
+    arrays = _shell_arrays(fragment_path, "CUDA_FIND_LINKS_CPU", "CUDA_FIND_LINKS_CU129", "CUDA_FIND_LINKS_CU132")
 
-    assert arrays["CUDA_INDEXES_CPU"] == ("https://example.invalid/cpu path?quote='x'",)
-    assert "https://example.invalid/cpu path?quote='x'" not in arrays["CUDA_INDEXES_CU129"]
-    assert arrays["CUDA_INDEXES_CU132"][-1] == "https://example.invalid/nvidia path?x=$value"
+    assert arrays["CUDA_FIND_LINKS_CPU"] == ("https://example.invalid/cpu path?quote='x'/torch/",)
+    assert "https://example.invalid/cpu path?quote='x'/torch/" not in arrays["CUDA_FIND_LINKS_CU129"]
+    assert arrays["CUDA_FIND_LINKS_CU132"][-1] == "https://example.invalid/nvidia path?x=$value/nvidia-nvtx/"
+
+
+def test_installer_find_links_are_package_pages_in_each_routed_index(generator: ModuleType) -> None:
+    config = generator.CudaDepsConfig.model_validate(_cuda_deps_dict())
+
+    find_links = generator._installer_find_links(config)
+
+    assert find_links["cpu"] == ("https://download.pytorch.org/whl/cpu/torch/",)
+    assert find_links["cu129"] == (
+        "https://download.pytorch.org/whl/cu129/torch/",
+        "https://flashinfer.ai/whl/cu129/flashinfer-python/",
+        "https://flashinfer.ai/whl/cu129/flashinfer-jit-cache/",
+        "https://download.pytorch.org/whl/cu129/variant-only/",
+        "https://pypi.nvidia.com/nvidia-cublas/",
+        "https://download.pytorch.org/whl/cu129/nvidia-nvtx-cu12/",
+    )
+
+
+def test_installer_find_links_skip_unpublished_routes(generator: ModuleType) -> None:
+    data = _cuda_deps_dict()
+    data["installer_unpublished"] = {"pytorch-cu129": ["nvidia-nvtx-cu12"]}
+    config = generator.CudaDepsConfig.model_validate(data)
+
+    find_links = generator._installer_find_links(config)
+
+    assert "https://download.pytorch.org/whl/cu129/nvidia-nvtx-cu12/" not in find_links["cu129"]
+    assert "https://pypi.nvidia.com/nvidia-nvtx/" in find_links["cu132"]
+
+
+def test_installer_find_links_reject_stale_unpublished_routes(generator: ModuleType) -> None:
+    data = _cuda_deps_dict()
+    data["installer_unpublished"] = {"pytorch-cu129": ["not-routed"]}
+    config = generator.CudaDepsConfig.model_validate(data)
+
+    with pytest.raises(ValueError, match="pytorch-cu129: not-routed"):
+        generator._installer_find_links(config)
 
 
 def test_run_generation_command_installer_check_reports_drift(
@@ -740,7 +808,7 @@ def test_click_cli_checks_installer_in_working_directory_by_default(
     )
 
     assert result.exit_code == 0
-    assert "Generated CUDA installer indexes in install_nss.sh are up to date" in result.output
+    assert "Generated CUDA installer find-links in install_nss.sh are up to date" in result.output
 
 
 def test_load_cuda_deps_config_rejects_missing_managed_extra(generator: ModuleType) -> None:

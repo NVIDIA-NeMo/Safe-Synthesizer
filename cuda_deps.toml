@@ -146,3 +146,10 @@ flashinfer_index = { name = "flashinfer-jit-cache-cu130", url = "https://flashin
 dependencies = [
     "vllm==0.27.0; sys_platform == 'linux'",
 ]
+
+# install_nss.sh reads each routed package from its own index page via
+# --find-links. uv sync ignores a route to a package the index does not
+# publish, but a missing page fails the installer, so list those routes here.
+[installer_unpublished]
+pytorch-cu129 = ["nvidia-cuda-nvml-cu12", "nvidia-cuda-nvprof-cu12"]
+nvidia-pypi-public = ["nvidia-cuda-nvml", "nvidia-cuda-nvprof", "nvidia-cusparselt", "nvidia-nvshmem"]
