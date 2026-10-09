@@ -5,11 +5,17 @@
 
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING
 
 from ..config.data import DataParameters
-from ..config.replace_pii import ReplacePiiConfig
+from ..config.replace_pii import PiiSamplerBackend, ReplacePiiConfig
 from ..config.time_series import TimeSeriesParameters
+from ..errors import InternalError
+from .planning import resolve_replacement_config
+from .replacement.executor import StructuredReplacementExecutor, resolve_base_seed
+from .replacement.generation import ReplacementGenerator
+from .replacement.generators import FakerReplacementGenerator, NemotronPersonasReplacementGenerator
 from .transform_result import TransformResult
 
 if TYPE_CHECKING:
@@ -21,15 +27,12 @@ __all__ = ["TabularPiiReplacer"]
 class TabularPiiReplacer:
     """Replace PII in a dataframe through one plan-driven interface.
 
-    The replacement module owns plan resolution, DAG execution, free-text span
-    detection and rewriting, positional row identity, scope keys, synthetic
-    value generation, and statistics. ``replace`` returns a new dataframe and
-    never mutates the caller's frame or writes artifacts. The pipeline remains
-    responsible for deciding whether and where to persist the resolved
-    configuration.
-
-    Replacement execution is intentionally deferred from this interface-only
-    implementation.
+    The replacement module owns plan resolution and structured DAG execution,
+    positional row identity, scope keys, synthetic value generation, and
+    statistics. Free-text detection and span replacement are deferred.
+    ``replace`` returns a new dataframe and never mutates the caller's frame or
+    writes artifacts. The pipeline remains responsible for deciding whether
+    and where to persist the resolved configuration.
 
     Args:
         config: PII replacement configuration, including the replacement plan.
@@ -61,7 +64,46 @@ class TabularPiiReplacer:
                 accidentally persist original PII.
 
         Raises:
-            NotImplementedError: Always in the interface-definition PR because
-                replacement execution is introduced by a follow-up change.
+            ParameterError: If the configured plan is invalid for ``df``.
+            GenerationError: If a replacement cannot be generated.
+            NotImplementedError: If ``capture_replacement_map`` is requested;
+                capture is introduced with free-text replacement.
         """
-        raise NotImplementedError("TabularPiiReplacer execution is not implemented")
+        if capture_replacement_map:
+            raise NotImplementedError("replacement map capture is not implemented")
+        started = time.perf_counter()
+        resolved_config = resolve_replacement_config(
+            df,
+            self._config,
+            self._data_config,
+            self._time_series,
+        )
+        plan = resolved_config.inline_plan
+        if plan is None:
+            raise InternalError("PII replacement configuration was not fully resolved")
+        executor = StructuredReplacementExecutor(
+            plan,
+            self._replacement_generator(resolved_config),
+            group_column=self._data_config.group_training_examples_by,
+            base_seed=resolve_base_seed(self._config.replacement.seed),
+            data_to_sampler_value_mapping=plan.data_to_sampler_value_mapping,
+        )
+        execution = executor.execute(df)
+        return TransformResult(
+            transformed_df=execution.dataframe,
+            column_statistics=execution.column_statistics,
+            replacement_plan=plan,
+            resolved_config=resolved_config,
+            generation_statistics=execution.generation_statistics,
+            replacement_time_seconds=time.perf_counter() - started,
+        )
+
+    def _replacement_generator(self, config: ReplacePiiConfig) -> ReplacementGenerator:
+        settings = config.replacement
+        sampler = config.sampler
+        match sampler.backend:
+            case PiiSamplerBackend.NEMOTRON_PERSONAS:
+                return NemotronPersonasReplacementGenerator(settings=settings, sampler=sampler)
+            case PiiSamplerBackend.FAKER:
+                return FakerReplacementGenerator(settings=settings, sampler=sampler)
+        raise InternalError(f"Unsupported PII sampler backend: {sampler.backend!r}")

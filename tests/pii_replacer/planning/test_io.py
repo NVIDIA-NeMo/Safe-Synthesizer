@@ -6,14 +6,17 @@ from pathlib import Path
 import pytest
 import yaml
 
+from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.replace_pii import (
     ConditioningColumn,
     EntityType,
     PiiColumnPlan,
     PiiReplacementPlan,
+    ReplacePiiConfig,
 )
 from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.pii_replacer.planning import load_plan, save_plan
+from nemo_safe_synthesizer.pii_replacer.planning.io import save_config
 
 
 @pytest.mark.unit
@@ -39,7 +42,8 @@ class TestPlanIo:
                         ConditioningColumn(column_name="company", entity_type=EntityType.ORGANIZATION),
                     ],
                 ),
-            ]
+            ],
+            data_to_sampler_value_mapping={"company": {"Independent": ["independent"]}},
         )
         path = save_plan(plan, tmp_path / "plan.yaml")
 
@@ -56,6 +60,7 @@ class TestPlanIo:
                     ],
                 },
             ],
+            "data_to_sampler_value_mapping": {"company": {"Independent": ["independent"]}},
         }
 
         loaded = load_plan(path)
@@ -73,6 +78,7 @@ class TestPlanIo:
         assert yaml.safe_load(path.read_text()) == {
             "schema_version": 3,
             "columns_to_replace": [],
+            "data_to_sampler_value_mapping": {},
         }
 
     def test_load_treats_missing_schema_version_as_v3(self, tmp_path: Path) -> None:
@@ -121,3 +127,60 @@ class TestPlanIo:
 
         with pytest.raises(ParameterError, match="Unknown configuration field 'scope'"):
             load_plan(path)
+
+
+def _commented_plan() -> PiiReplacementPlan:
+    return PiiReplacementPlan(
+        columns_to_replace=[
+            PiiColumnPlan(
+                column_name="first",
+                entity_type=EntityType.FIRST_NAME,
+                depends_on=[ConditioningColumn(column_name="sex", entity_type=EntityType.GENDER)],
+            )
+        ],
+        data_to_sampler_value_mapping={"sex": {"Woman": ["female"]}},
+    )
+
+
+def _comment_above(text: str, key_line: str) -> str:
+    lines = text.splitlines()
+    index = lines.index(key_line)
+    comment: list[str] = []
+    for line in reversed(lines[:index]):
+        if not line.lstrip().startswith("#"):
+            break
+        comment.insert(0, line.lstrip()[2:])
+    return " ".join(comment)
+
+
+@pytest.mark.unit
+class TestCommentedYaml:
+    def test_saved_plan_comments_each_section_with_its_description(self, tmp_path: Path) -> None:
+        plan = _commented_plan()
+
+        text = save_plan(plan, tmp_path / "plan.yaml").read_text()
+
+        assert text.startswith("# PII replacement plan for this dataset.")
+        assert _comment_above(text, "columns_to_replace:") == (
+            PiiReplacementPlan.model_fields["columns_to_replace"].description
+        )
+        mapping_comment = _comment_above(text, "data_to_sampler_value_mapping:")
+        assert mapping_comment.startswith("Maps dataset values in depends_on columns")
+        assert mapping_comment.endswith("You can usually leave this section as is.")
+        assert load_plan(tmp_path / "plan.yaml") == plan
+
+    def test_saved_config_comments_only_replacement_plan_sections(self, tmp_path: Path) -> None:
+        plan = _commented_plan()
+        config = SafeSynthesizerParameters(replace_pii=ReplacePiiConfig(replacement_plan=plan))
+
+        text = save_config(config, tmp_path / "config.yaml").read_text()
+
+        assert _comment_above(text, "    columns_to_replace:") == (
+            PiiReplacementPlan.model_fields["columns_to_replace"].description
+        )
+        assert _comment_above(text, "    data_to_sampler_value_mapping:").startswith("Maps dataset values")
+        uncommented = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+        assert uncommented + "\n" == yaml.safe_dump(yaml.safe_load(text))
+        reloaded = SafeSynthesizerParameters.model_validate(yaml.safe_load(text))
+        assert reloaded.replace_pii is not None
+        assert reloaded.replace_pii.inline_plan == plan

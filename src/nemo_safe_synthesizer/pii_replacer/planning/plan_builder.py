@@ -231,4 +231,5 @@ def apply_dependencies(
             )
             for spec in plan.columns_to_replace
         ],
+        data_to_sampler_value_mapping=plan.data_to_sampler_value_mapping,
     )
