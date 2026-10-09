@@ -155,7 +155,7 @@ class TransformResult(BaseModel):
         ge=0,
         description=(
             "Wall-clock time for this PII replacement call, in seconds, including plan resolution, free-text "
-            "detection, generation, and statistics. This is not the total NSS pipeline time."
+            "detection, generation, and statistics."
         ),
     )
     replacement_map: ReplacementMap | None = Field(
