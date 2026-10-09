@@ -5,8 +5,10 @@
 
 import os
 from pathlib import Path
+from typing import cast
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
 from click.testing import CliRunner
 
@@ -15,6 +17,8 @@ import nemo_safe_synthesizer.sdk.library_builder  # noqa: F401 - ensure submodul
 from nemo_safe_synthesizer.cli.run import run
 from nemo_safe_synthesizer.cli.settings import CLISettings
 from nemo_safe_synthesizer.cli.utils import merge_overrides
+from nemo_safe_synthesizer.config.replace_pii import EntityType
+from nemo_safe_synthesizer.pii_replacer.planning import load_plan
 from nemo_safe_synthesizer.telemetry import DeploymentTypeEnum, TaskStatusEnum
 from nemo_safe_synthesizer.tooling import PreflightRenderContext
 
@@ -54,6 +58,7 @@ def mock_safe_synthesizer() -> MagicMock:
     ss.generate.return_value = ss
     ss.evaluate.return_value = ss
     ss.load_from_save_path.return_value = ss
+    ss.plan_pii_replacement.return_value = MagicMock()
     ss.run.return_value = ss
     ss.save_results.return_value = ss  # Return self for method chaining
     ss.generator.teardown.return_value = None
@@ -355,7 +360,7 @@ class TestPathOptions:
         assert "Explicit path for this run" in result.output
 
     def test_run_help_shows_runtime_settings_options(self, cli_runner: CliRunner):
-        """Verify runtime PII/NER settings appear in run command help."""
+        """Verify inference and Hugging Face settings appear in run command help."""
         result = cli_runner.invoke(run, ["--help"])
 
         assert result.exit_code == 0
@@ -363,7 +368,6 @@ class TestPathOptions:
         assert "--inference-api-key" in result.output
         assert "--inference-model-id" in result.output
         assert "--disable-huggingface-remote" in result.output
-        assert "--cpu-count" in result.output
         assert "NSS_INFERENCE_ENDPOINT" in result.output
         assert "NSS_INFERENCE_KEY" in result.output
 
@@ -638,6 +642,192 @@ class TestValidateMode:
         assert render_context.config_path == mock_ss._preflight_config_path
         assert render_context.data_source == str(dummy_csv)
         assert render_context.artifact_dir == mock_workdir.run_dir
+
+
+class TestRunReplacePii:
+    """Tests for the plan-only PII replacement command."""
+
+    @pytest.fixture(autouse=True)
+    def _reset_observability(self, monkeypatch: pytest.MonkeyPatch):
+        """Keep real CLI invocations isolated from global logging state."""
+        obs._INITIALIZED_OBSERVABILITY = False
+        monkeypatch.delenv("NSS_PHASE", raising=False)
+        for name in ("NSS_LOG_LEVEL", "NSS_LOG_FORMAT", "NSS_LOG_FILE", "NSS_LOG_COLOR"):
+            monkeypatch.delenv(name, raising=False)
+
+        yield
+
+        obs._INITIALIZED_OBSERVABILITY = False
+
+    def test_help_exposes_plan_only_command(self, cli_runner: CliRunner) -> None:
+        result = cli_runner.invoke(run, ["replace-pii", "--help"])
+
+        assert result.exit_code == 0
+        assert "--plan-only" in result.output
+
+    def test_plan_only_uses_full_input_without_pipeline_stages(
+        self,
+        cli_runner: CliRunner,
+        dummy_csv: Path,
+        mock_dataframe: MagicMock,
+        mock_workdir: MagicMock,
+        patched_run_dependencies: dict,
+    ) -> None:
+        result = cli_runner.invoke(
+            run,
+            ["replace-pii", "--plan-only", "--data-source", str(dummy_csv)],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0
+        setup_kwargs = patched_run_dependencies["common_setup"].call_args.kwargs
+        assert setup_kwargs["phase"] == "replace_pii"
+        assert setup_kwargs["skip_wandb"] is True
+
+        nss = patched_run_dependencies["safe_synthesizer"]
+        nss.with_data_source.assert_called_once_with(mock_dataframe)
+        nss.plan_pii_replacement.assert_called_once_with(output_path=mock_workdir.run_dir / "pii_replacement_plan.yaml")
+        nss.process_data.assert_not_called()
+        nss.train.assert_not_called()
+        nss.generate.assert_not_called()
+        nss.evaluate.assert_not_called()
+        nss.run.assert_not_called()
+
+    def test_command_requires_plan_only_until_replacement_exists(
+        self,
+        cli_runner: CliRunner,
+        dummy_csv: Path,
+        patched_run_dependencies: dict,
+    ) -> None:
+        result = cli_runner.invoke(run, ["replace-pii", "--data-source", str(dummy_csv)])
+
+        assert result.exit_code != 0
+        assert "requires --plan-only" in result.output
+        patched_run_dependencies["common_setup"].assert_not_called()
+
+    def test_plan_only_reports_missing_input_dataframe(
+        self,
+        cli_runner: CliRunner,
+        dummy_csv: Path,
+        mock_logger: MagicMock,
+        mock_config: MagicMock,
+        mock_workdir: MagicMock,
+        patched_run_dependencies: dict,
+    ) -> None:
+        common_setup = patched_run_dependencies["common_setup"]
+        common_setup.side_effect = None
+        common_setup.return_value = (mock_logger, mock_config, None, mock_workdir)
+
+        result = cli_runner.invoke(
+            run,
+            ["replace-pii", "--plan-only", "--data-source", str(dummy_csv)],
+        )
+
+        assert result.exit_code == 1
+        assert "Input data is required to plan PII replacement." in result.output
+        patched_run_dependencies["safe_synthesizer_cls"].assert_not_called()
+
+    def test_plan_only_writes_reusable_yaml(
+        self,
+        cli_runner: CliRunner,
+        dummy_csv: Path,
+        tmp_path: Path,
+    ) -> None:
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text(
+            "replace_pii:\n"
+            "  replacement_plan:\n"
+            "    columns_to_replace:\n"
+            "      - column_name: col1\n"
+            "        entity_type: unique_identifier\n"
+        )
+        run_path = tmp_path / "plan-run"
+
+        result = cli_runner.invoke(
+            run,
+            [
+                "replace-pii",
+                "--plan-only",
+                "--config",
+                str(config_path),
+                "--data-source",
+                str(dummy_csv),
+                "--run-path",
+                str(run_path),
+            ],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0
+        plan_path = run_path / "pii_replacement_plan.yaml"
+        assert plan_path.exists()
+        plan = load_plan(plan_path)
+        assert plan.columns_to_replace[0].column_name == "col1"
+        assert plan.columns_to_replace[0].entity_type is EntityType.UNIQUE_IDENTIFIER
+
+    @pytest.mark.parametrize(
+        ("extra_args", "expected_model"),
+        [
+            pytest.param([], "test-model", id="yaml-model-precedes-env"),
+            pytest.param(["--inference-model-id", "cli-model"], "cli-model", id="cli-model-precedes-yaml"),
+        ],
+    )
+    def test_plan_only_auto_discovery_uses_runtime_inference_settings(
+        self,
+        cli_runner: CliRunner,
+        dummy_csv: Path,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        extra_args: list[str],
+        expected_model: str,
+    ) -> None:
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text("replace_pii:\n  replacement_plan: auto_discovery\n  llm:\n    model_id: test-model\n")
+        monkeypatch.setenv("NSS_INFERENCE_ENDPOINT", "http://localhost:8000/v1")
+        monkeypatch.setenv("NSS_INFERENCE_MODEL", "env-model")
+        responses = iter(
+            [
+                '{"classifications":['
+                '{"column_name":"col1","entity_type":null,"pattern":null},'
+                '{"column_name":"col2","entity_type":null,"pattern":null}'
+                "]}",
+            ]
+        )
+        request_payloads: list[dict[str, object]] = []
+
+        def post(url: str, **kwargs: object) -> httpx.Response:
+            assert url == "http://localhost:8000/v1/chat/completions"
+            request_payloads.append(cast(dict[str, object], kwargs["json"]))
+            return httpx.Response(
+                200,
+                json={"choices": [{"message": {"content": next(responses)}}]},
+            )
+
+        monkeypatch.setattr(httpx, "post", post)
+        run_path = tmp_path / "llm-plan-run"
+
+        result = cli_runner.invoke(
+            run,
+            [
+                "replace-pii",
+                "--plan-only",
+                "--config",
+                str(config_path),
+                "--data-source",
+                str(dummy_csv),
+                "--run-path",
+                str(run_path),
+                *extra_args,
+            ],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0
+        assert len(request_payloads) == 1
+        assert request_payloads[0]["model"] == expected_model
+        messages = cast(list[dict[str, str]], request_payloads[0]["messages"])
+        assert '"non_null_count":2' in messages[1]["content"]
+        assert (run_path / "pii_replacement_plan.yaml").exists()
 
 
 class TestRunGenerateOptions:

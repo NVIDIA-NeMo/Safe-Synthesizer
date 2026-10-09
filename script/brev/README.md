@@ -48,7 +48,7 @@ All optional. Per Brev's guidance, do not put credential values in parameter def
 
 | Name | Type | Purpose |
 | ---- | ---- | ------- |
-| `NSS_INFERENCE_KEY` | Text | NVIDIA NIM key for column classification. Without it, classification runs in degraded mode. |
+| `NSS_INFERENCE_KEY` | Text | Unused on this branch (reserved for PII replacement v3). |
 | `HF_TOKEN` | Text | Only needed for gated Hugging Face models. |
 
 Brev passes these to `setup.sh` as environment variables.

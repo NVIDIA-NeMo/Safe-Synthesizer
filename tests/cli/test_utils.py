@@ -13,7 +13,14 @@ import pandas as pd
 import pytest
 
 from nemo_safe_synthesizer.cli.settings import CLISettings
-from nemo_safe_synthesizer.cli.utils import _propagate_runtime_settings_to_env, common_setup, merge_overrides
+from nemo_safe_synthesizer.cli.utils import (
+    _apply_inference_cli_overrides,
+    _propagate_runtime_settings_to_env,
+    common_setup,
+    merge_overrides,
+)
+from nemo_safe_synthesizer.config import SafeSynthesizerParameters
+from nemo_safe_synthesizer.config.replace_pii import LLMConfig, ReplacePiiConfig
 
 
 @pytest.fixture
@@ -404,7 +411,7 @@ class TestPropagateRuntimeSettingsToEnv:
     """Tests for materializing CLISettings runtime fields back to os.environ."""
 
     def test_propagates_nss_inference_settings(self, monkeypatch):
-        """Endpoint and key propagate to NSS_INFERENCE_* env vars read by pii_replacer."""
+        """Endpoint and key propagate to NSS_INFERENCE_* env vars."""
         monkeypatch.delenv("NSS_INFERENCE_ENDPOINT", raising=False)
         monkeypatch.delenv("NSS_INFERENCE_KEY", raising=False)
 
@@ -418,23 +425,41 @@ class TestPropagateRuntimeSettingsToEnv:
         assert os.environ["NSS_INFERENCE_KEY"] == "token-propagated-cli"
 
     def test_propagates_remaining_runtime_settings(self, monkeypatch):
-        """Model ID, offline mode, and CPU count propagate to their runtime env vars."""
+        """Model ID and offline mode propagate to their runtime env vars."""
         monkeypatch.delenv("NSS_INFERENCE_MODEL", raising=False)
         monkeypatch.delenv("HF_HUB_OFFLINE", raising=False)
         monkeypatch.delenv("TRANSFORMERS_OFFLINE", raising=False)
-        monkeypatch.delenv("NSS_PII_REPLACER_CPU_COUNT", raising=False)
 
         settings = CLISettings.from_cli_kwargs(
             inference_model_id="custom/model",
             huggingface_remote=False,
-            cpu_count=3,
         )
         _propagate_runtime_settings_to_env(settings)
 
         assert os.environ["NSS_INFERENCE_MODEL"] == "custom/model"
         assert os.environ["HF_HUB_OFFLINE"] == "1"
         assert os.environ["TRANSFORMERS_OFFLINE"] == "1"
-        assert os.environ["NSS_PII_REPLACER_CPU_COUNT"] == "3"
+
+    def test_explicit_cli_model_overrides_persisted_llm_config(self):
+        config = SafeSynthesizerParameters(replace_pii=ReplacePiiConfig(llm=LLMConfig(model_id="config-model")))
+        settings = CLISettings.from_cli_kwargs(inference_model_id="cli-model")
+
+        result = _apply_inference_cli_overrides(config, settings)
+
+        assert result.replace_pii is not None
+        assert result.replace_pii.llm is not None
+        assert result.replace_pii.llm.model_id == "cli-model"
+
+    def test_environment_model_does_not_override_persisted_llm_config(self, monkeypatch):
+        monkeypatch.setenv("NSS_INFERENCE_MODEL", "env-model")
+        config = SafeSynthesizerParameters(replace_pii=ReplacePiiConfig(llm=LLMConfig(model_id="config-model")))
+        settings = CLISettings()
+
+        result = _apply_inference_cli_overrides(config, settings)
+
+        assert result.replace_pii is not None
+        assert result.replace_pii.llm is not None
+        assert result.replace_pii.llm.model_id == "config-model"
 
     def test_enabling_huggingface_remote_disables_offline_env(self, monkeypatch):
         """--enable-huggingface-remote sets the HF offline vars to 0, overriding inherited offline env."""

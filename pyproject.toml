@@ -123,7 +123,6 @@ cpu = [
     "bitsandbytes>=0.46.1",
     "flashinfer-python==0.6.16.post4; sys_platform == 'linux'",
     "flashinfer-cubin==0.6.16.post4; sys_platform == 'linux'",
-    "gliner",
     "kernels>=0.12.1,<0.15",
     "opacus",
     "peft>=0.18.0",
@@ -149,7 +148,6 @@ cu129 = [
     "bitsandbytes>=0.46.1",
     "flashinfer-python==0.6.16.post4; sys_platform == 'linux'",
     "flashinfer-cubin==0.6.16.post4; sys_platform == 'linux'",
-    "gliner",
     "kernels>=0.12.1,<0.15",
     "opacus",
     "peft>=0.18.0",
@@ -175,7 +173,6 @@ cu130 = [
     "bitsandbytes>=0.46.1",
     "flashinfer-python==0.6.16.post4; sys_platform == 'linux'",
     "flashinfer-cubin==0.6.16.post4; sys_platform == 'linux'",
-    "gliner",
     "kernels>=0.12.1,<0.15",
     "opacus",
     "peft>=0.18.0",
@@ -474,5 +471,4 @@ extra-paths = ["typings"]
 exclude = [
     ".uv_cache", # Cache Dir in CI
     "./docs/**/*.ipynb",
-    "./src/nemo_safe_synthesizer/pii_replacer/",
 ]

@@ -232,9 +232,8 @@ def common_setup(
         cached datasets, dataframe may be None (loaded from cached files by SafeSynthesizer).
     """
     # 0. Propagate CLI-resolved runtime settings back to os.environ. This must
-    # run before any deferred pii_replacer imports so that module-level reads
-    # of NSS_INFERENCE_*, HF_HUB_OFFLINE/TRANSFORMERS_OFFLINE, and
-    # NSS_PII_REPLACER_CPU_COUNT see the CLI-overridden values.
+    # run before downstream imports so NSS_INFERENCE_* and
+    # HF_HUB_OFFLINE/TRANSFORMERS_OFFLINE see the CLI-overridden values.
     _propagate_runtime_settings_to_env(settings)
 
     # 1. Create workdir FIRST - this establishes all artifact paths
@@ -300,12 +299,38 @@ def common_setup(
     # 5. Load config with overrides from settings
     synthesis_overrides = merge_dicts(synthesis_overrides, settings.synthesis_overrides)
     config = merge_overrides(settings.config_path, synthesis_overrides)
+    config = _apply_inference_cli_overrides(config, settings)
 
     # 6. Initialize wandb (uses workdir for run ID files)
     if not skip_wandb:
         initialize_wandb_run(workdir, resume_job_id=wandb_resume_job_id, cfg=config)
 
     return run_logger, config, df, workdir
+
+
+def _apply_inference_cli_overrides(
+    config: SafeSynthesizerParameters,
+    settings: "CLISettings",
+) -> SafeSynthesizerParameters:
+    """Apply the explicit model flag above persisted LLM configuration.
+
+    Environment-loaded model values are intentionally excluded here because
+    persisted model configuration takes precedence. The endpoint and API key
+    are never persisted in configuration and are propagated through ``NSS_INFERENCE_*``.
+    """
+    replace_pii = config.replace_pii
+    model_id = settings.inference_model_id
+    if (
+        replace_pii is None
+        or replace_pii.llm is None
+        or model_id is None
+        or "inference_model_id" not in settings.explicit_cli_fields
+    ):
+        return config
+
+    llm = replace_pii.llm.model_copy(update={"model_id": model_id})
+    updated_replace_pii = replace_pii.model_copy(update={"llm": llm})
+    return config.model_copy(update={"replace_pii": updated_replace_pii})
 
 
 def _set_wandb_env_vars(
@@ -325,13 +350,11 @@ def _set_wandb_env_vars(
 def _propagate_runtime_settings_to_env(settings: "CLISettings") -> None:
     """Materialize CLI-resolved runtime settings back to ``os.environ``.
 
-    The downstream readers for these settings live deep in ``pii_replacer``
-    (NER, GLiNER, column classification) and historically read directly from
-    the process environment. Rather than thread a ``CLISettings`` handle
-    through every callsite, we propagate the resolved values back to
-    ``os.environ`` here so that CLI flag precedence -- which ``CLISettings``
-    handles via ``from_cli_kwargs`` -- carries through to those readers
-    unchanged.
+    Downstream readers for inference and Hugging Face offline mode historically
+    read directly from the process environment. Rather than thread a
+    ``CLISettings`` handle through every callsite, we propagate the resolved
+    values back to ``os.environ`` here so that CLI flag precedence carries
+    through unchanged.
 
     ``CLISettings`` values are already env-aware (via ``AliasChoices``); when
     no CLI flag is provided, the field carries the env var's existing value
@@ -363,8 +386,6 @@ def _propagate_runtime_settings_to_env(settings: "CLISettings") -> None:
         offline = "0" if settings.huggingface_remote else "1"
         os.environ["HF_HUB_OFFLINE"] = offline
         os.environ["TRANSFORMERS_OFFLINE"] = offline
-    if settings.cpu_count is not None:
-        os.environ["NSS_PII_REPLACER_CPU_COUNT"] = str(settings.cpu_count)
 
 
 def _initialize_logging_for_cli_from_settings(
