@@ -76,3 +76,22 @@ div.output_subarea pre,
     --md-primary-fg-color--dark: #5a8f00;
     --md-accent-fg-color: #76b900;
 }
+
+/* Compact, centered tables on pages with `compact_tables: true` in front matter */
+.md-typeset .compact-tables .md-typeset__scrollwrap {
+    text-align: center;
+}
+
+.md-typeset .compact-tables table:not([class]) {
+    font-size: 0.62rem;
+    text-align: left;
+}
+
+.md-typeset .compact-tables table:not([class]) th,
+.md-typeset .compact-tables table:not([class]) td {
+    padding: 0.45em 0.85em;
+}
+
+.md-typeset .compact-tables table:not([class]) th {
+    min-width: 0;
+}
