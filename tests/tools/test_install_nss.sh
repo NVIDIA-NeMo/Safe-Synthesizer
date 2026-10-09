@@ -58,11 +58,21 @@ without_overrides_installer="${test_dir}/install_nss-without-overrides.sh"
 make_installer_fixture "$with_overrides_installer" "$INSTALLER" "$OVERRIDE_REQUIREMENT"
 make_installer_fixture "$without_overrides_installer" "$INSTALLER"
 
+# The cpu extra's per-package pages, in generated order.
+cpu_find_links=(
+    --find-links https://flashinfer.ai/whl/flashinfer-cubin/
+    --find-links https://download.pytorch.org/whl/cpu/torch/
+    --find-links https://download.pytorch.org/whl/cpu/torchaudio/
+    --find-links https://download.pytorch.org/whl/cpu/torchvision/
+    --find-links https://download.pytorch.org/whl/cpu/torchcodec/
+)
+
 # Dry-run is rendering-only: no driver probe and no uv invocation.
 new_log dry
 output="$(PATH="${fake_bin}:$PATH" DRY_RUN=1 CUDA=130 UV_PROJECT_ENVIRONMENT="${test_dir}/dry env" "$with_overrides_installer")"
 assert_file_absent "$FAKE_SMI_LOG"; assert_file_absent "$FAKE_UV_LOG"
-[[ "$output" != *"Installing with:"* && "$output" == *"--index https://pypi.nvidia.com"* ]]
+[[ "$output" != *"Installing with:"* && "$output" == *"--find-links https://pypi.nvidia.com/nvidia-cublas/"* ]]
+[[ "$output" != *"--index"* ]]
 [[ "$output" == *$'\n'"echo test-override==1.2.3 | uv pip install "*" --overrides - "* ]]
 
 # CUDA 13 driver boundaries: reject below minimum before uv; warnings leave install available.
@@ -99,7 +109,7 @@ venv="${test_dir}/venv with spaces"; mkdir -p "$venv/bin"; printf '#!/usr/bin/en
 PATH="${fake_bin}:$PATH" CUDA=cpu UV_PROJECT_ENVIRONMENT="$venv" PACKAGE_NAME=test-package CONSTRAINTS_URL=/constraints.txt "$with_overrides_installer" >/dev/null
 assert_eq "$(uv_call_count)" 1
 declare -a argv; read_call argv
-expected=(pip install 'test-package[engine,cpu]' -c /constraints.txt --python "$venv/bin/python" --overrides - --index https://flashinfer.ai/whl/ --index https://download.pytorch.org/whl/cpu --index-strategy unsafe-best-match)
+expected=(pip install 'test-package[engine,cpu]' -c /constraints.txt --python "$venv/bin/python" --overrides - "${cpu_find_links[@]}")
 assert_eq "$(printf '%s\n' "${argv[@]}")" "$(printf '%s\n' "${expected[@]}")"
 assert_eq "$(<"$FAKE_UV_STDIN")" "$OVERRIDE_REQUIREMENT"
 
@@ -108,7 +118,7 @@ new_log empty-overrides
 output="$(PATH="${fake_bin}:$PATH" CUDA=cpu UV_PROJECT_ENVIRONMENT="$venv" PACKAGE_NAME=test-package CONSTRAINTS_URL=/constraints.txt "$without_overrides_installer")"
 assert_eq "$(uv_call_count)" 1
 read_call argv
-empty_expected=(pip install 'test-package[engine,cpu]' -c /constraints.txt --python "$venv/bin/python" --index https://flashinfer.ai/whl/ --index https://download.pytorch.org/whl/cpu --index-strategy unsafe-best-match)
+empty_expected=(pip install 'test-package[engine,cpu]' -c /constraints.txt --python "$venv/bin/python" "${cpu_find_links[@]}")
 assert_eq "$(printf '%s\n' "${argv[@]}")" "$(printf '%s\n' "${empty_expected[@]}")"
 assert_file_absent "$FAKE_UV_STDIN"
 [[ "$output" != *" echo "* && "$output" != *" | "* && "$output" != *"--overrides"* ]]
@@ -118,7 +128,7 @@ new_log dependency-groups
 PATH="${fake_bin}:$PATH" CUDA=cpu PRIVATE_DEP_GROUPS="test docs" UV_PROJECT_ENVIRONMENT="$venv" PACKAGE_NAME=test-package CONSTRAINTS_URL=/constraints.txt "$with_overrides_installer" >/dev/null
 assert_eq "$(uv_call_count)" 1
 read_call argv
-groups_expected=(pip install 'test-package[engine,cpu]' -c /constraints.txt --python "$venv/bin/python" --overrides - --group test --group docs --index https://flashinfer.ai/whl/ --index https://download.pytorch.org/whl/cpu --index-strategy unsafe-best-match)
+groups_expected=(pip install 'test-package[engine,cpu]' -c /constraints.txt --python "$venv/bin/python" --overrides - --group test --group docs "${cpu_find_links[@]}")
 assert_eq "$(printf '%s\n' "${argv[@]}")" "$(printf '%s\n' "${groups_expected[@]}")"
 
 # Resolve-only executes uv's resolver with the full installer policy but does not install.
@@ -127,7 +137,7 @@ resolve_venv="${test_dir}/resolve only"; mkdir -p "$resolve_venv/bin"; printf '#
 PATH="${fake_bin}:$PATH" CUDA=cpu NSS_INSTALLER_RESOLVE_ONLY=1 UV_PROJECT_ENVIRONMENT="$resolve_venv" PACKAGE_NAME=test-package CONSTRAINTS_URL=/constraints.txt "$with_overrides_installer" >/dev/null
 assert_eq "$(uv_call_count)" 1
 read_call argv
-resolve_expected=(pip install 'test-package[engine,cpu]' -c /constraints.txt --python "$resolve_venv/bin/python" --overrides - --index https://flashinfer.ai/whl/ --index https://download.pytorch.org/whl/cpu --index-strategy unsafe-best-match --dry-run)
+resolve_expected=(pip install 'test-package[engine,cpu]' -c /constraints.txt --python "$resolve_venv/bin/python" --overrides - "${cpu_find_links[@]}" --dry-run)
 assert_eq "$(printf '%s\n' "${argv[@]}")" "$(printf '%s\n' "${resolve_expected[@]}")"
 
 # A release installer applies its pinned package version and constraints artifact
@@ -143,11 +153,11 @@ PATH="${fake_bin}:$PATH" CUDA=cpu UV_PROJECT_ENVIRONMENT="$release_venv" PACKAGE
 assert_eq "$(uv_call_count)" 1
 read_call argv
 release_constraints="https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/v1.2.3/constraints.txt"
-release_expected=(pip install 'test-package[engine,cpu]==1.2.3' -c "$release_constraints" --python "$release_venv/bin/python" --overrides - --index https://flashinfer.ai/whl/ --index https://download.pytorch.org/whl/cpu --index-strategy unsafe-best-match)
+release_expected=(pip install 'test-package[engine,cpu]==1.2.3' -c "$release_constraints" --python "$release_venv/bin/python" --overrides - "${cpu_find_links[@]}")
 assert_eq "$(printf '%s\n' "${argv[@]}")" "$(printf '%s\n' "${release_expected[@]}")"
 
-# Docker consumes this narrow internal policy boundary; it has no effects.
+# Printing the find-links pages is a narrow internal policy boundary; it has no effects.
 new_log resolver
-indexes="$(PATH="${fake_bin}:$PATH" NSS_INSTALLER_RESOLVE_INDEXES=1 CUDA=130 "$INSTALLER")"
+find_links="$(PATH="${fake_bin}:$PATH" NSS_INSTALLER_RESOLVE_FIND_LINKS=1 CUDA=130 "$INSTALLER")"
 assert_file_absent "$FAKE_UV_LOG"; assert_file_absent "$FAKE_SMI_LOG"
-[[ "$indexes" == *"https://pypi.nvidia.com"* ]]
+[[ "$find_links" == *"https://pypi.nvidia.com/nvidia-cublas/"* ]]

@@ -353,6 +353,13 @@ class CudaDepsConfig(StrictModel):
         description="Static source entries keyed by owning extra, then package name.",
     )
     variants: dict[str, CudaVariant] = Field(description="CUDA variants keyed by extra name.")
+    installer_unpublished: dict[str, list[str]] = Field(
+        default_factory=dict,
+        description=(
+            "Routed packages that an index does not publish, keyed by index name. uv sync ignores "
+            "such routes, but the installer's --find-links page for one would 404 and fail the install."
+        ),
+    )
 
     @model_validator(mode="after")
     def _validate_managed_extras(self) -> "CudaDepsConfig":
@@ -587,9 +594,9 @@ class CudaPyprojectFragment(BaseModel):
 
 
 class CudaInstallerFragment(BaseModel):
-    """Generated shell declarations for installer runtime indexes."""
+    """Generated shell declarations for installer runtime package pages."""
 
-    text: str = Field(description="Generated install_nss.sh index declarations.")
+    text: str = Field(description="Generated install_nss.sh find-links declarations.")
 
 
 @dataclass(frozen=True)
@@ -663,8 +670,8 @@ def build_cuda_installer_fragment(
     lines.append("readonly -a PACKAGE_OVERRIDES=(")
     lines.extend(f"    {shlex.quote(override)}" for override in dependency_overrides)
     lines.append(")")
-    for extra, urls in _installer_index_urls(config).items():
-        variable = f"CUDA_INDEXES_{extra.upper()}"
+    for extra, urls in _installer_find_links(config).items():
+        variable = f"CUDA_FIND_LINKS_{extra.upper()}"
         if len(urls) == 1:
             lines.append(f"readonly -a {variable}=({shlex.quote(urls[0])})")
             continue
@@ -893,22 +900,52 @@ def _collect_uv_indexes(config: CudaDepsConfig) -> list[IndexSpec]:
     return list(indexes.values())
 
 
-def _installer_index_urls(config: CudaDepsConfig) -> dict[str, tuple[str, ...]]:
+def _installer_find_links(config: CudaDepsConfig) -> dict[str, tuple[str, ...]]:
+    """Per-package index pages for each installer extra, in uv source order.
+
+    The installer passes these as --find-links instead of passing whole indexes as --index:
+    with several --index flags, uv asks every index about every package in the resolution,
+    which made each install send hundreds of requests to each extra index.
+    """
     indexes = _collect_uv_indexes(config)
     sources = _collect_uv_sources(config)
     _validate_source_indexes(sources, indexes)
     index_urls = {index.name: index.url for index in indexes}
-    cpu_index_names = [spec.index for specs in sources.values() for spec in specs if spec.extra == "cpu"]
-    result = {"cpu": tuple(index_urls[name] for name in dict.fromkeys(cpu_index_names))}
+    routes_by_extra = {
+        "cpu": [(package, spec.index) for package, specs in sources.items() for spec in specs if spec.extra == "cpu"]
+    }
     for context in _cuda_variant_contexts(config):
-        index_names = []
-        if context.flashinfer_index is not None:
-            index_names.append(context.flashinfer_index.name)
-        index_names.append(context.pytorch_index.name)
-        index_names.extend(spec.index for specs in sources.values() for spec in specs if spec.extra == context.extra)
-        index_names.extend(index for _, index in context.nvidia_sources())
-        result[context.extra] = tuple(index_urls[name] for name in dict.fromkeys(index_names))
-    return result
+        routes_by_extra[context.extra] = [
+            *(
+                (package, spec.index)
+                for package, specs in sources.items()
+                for spec in specs
+                if spec.extra == context.extra
+            ),
+            *context.nvidia_sources(),
+        ]
+    unpublished = _installer_unpublished_routes(config, routes_by_extra)
+    return {
+        extra: tuple(
+            dict.fromkeys(
+                f"{index_urls[index].rstrip('/')}/{canonicalize_name(package)}/"
+                for package, index in routes
+                if (package, index) not in unpublished
+            )
+        )
+        for extra, routes in routes_by_extra.items()
+    }
+
+
+def _installer_unpublished_routes(
+    config: CudaDepsConfig, routes_by_extra: dict[str, list[tuple[str, str]]]
+) -> set[tuple[str, str]]:
+    routes = {route for extra_routes in routes_by_extra.values() for route in extra_routes}
+    unpublished = {(package, index) for index, packages in config.installer_unpublished.items() for package in packages}
+    stale = sorted(f"{index}: {package}" for package, index in unpublished - routes)
+    if stale:
+        raise ValueError(f"installer_unpublished names packages the index is not routed for: {', '.join(stale)}")
+    return unpublished
 
 
 def _add_index(indexes: dict[str, IndexSpec], index: IndexSpec) -> None:
@@ -1065,14 +1102,14 @@ def _update_installer(
     updated = apply_cuda_fragment_to_installer(current, generated)
     status = GenStatus.ok if current == updated else GenStatus.changed
     if check or status is GenStatus.ok:
-        message = f"Generated CUDA installer indexes in {installer_path} are up to date"
+        message = f"Generated CUDA installer find-links in {installer_path} are up to date"
         if status is GenStatus.changed:
-            message = f"Generated CUDA installer indexes differ from {installer_path}"
+            message = f"Generated CUDA installer find-links differ from {installer_path}"
         return GenerationResult(status=status, message=message)
     installer_path.write_text(updated, encoding="utf-8")
     return GenerationResult(
         status=GenStatus.ok,
-        message=f"Updated generated CUDA installer indexes in {installer_path}",
+        message=f"Updated generated CUDA installer find-links in {installer_path}",
     )
 
 

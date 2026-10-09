@@ -10,7 +10,7 @@ readonly PACKAGE_WHEEL="${PACKAGE_WHEEL:-}"
 readonly RELEASE_VERSION=""
 readonly CUDA="${CUDA:-129}"
 readonly DRY_RUN="${DRY_RUN:-0}"
-readonly NSS_INSTALLER_RESOLVE_INDEXES="${NSS_INSTALLER_RESOLVE_INDEXES:-0}"
+readonly NSS_INSTALLER_RESOLVE_FIND_LINKS="${NSS_INSTALLER_RESOLVE_FIND_LINKS:-0}"
 readonly NSS_INSTALLER_RESOLVE_ONLY="${NSS_INSTALLER_RESOLVE_ONLY:-0}"
 readonly NSS_INSTALLER_ISOLATED="${NSS_INSTALLER_ISOLATED:-0}"
 readonly CONSTRAINTS_URL="${CONSTRAINTS_URL:-https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/main/constraints.txt}"
@@ -31,22 +31,54 @@ readonly SCRIPT_DIR
 readonly -a PACKAGE_OVERRIDES=(
     'flashinfer-python==0.6.16.post4; sys_platform == '"'"'linux'"'"''
 )
-readonly -a CUDA_INDEXES_CPU=(
-    https://flashinfer.ai/whl/
-    https://download.pytorch.org/whl/cpu
+readonly -a CUDA_FIND_LINKS_CPU=(
+    https://flashinfer.ai/whl/flashinfer-cubin/
+    https://download.pytorch.org/whl/cpu/torch/
+    https://download.pytorch.org/whl/cpu/torchaudio/
+    https://download.pytorch.org/whl/cpu/torchvision/
+    https://download.pytorch.org/whl/cpu/torchcodec/
 )
-readonly -a CUDA_INDEXES_CU129=(
-    https://flashinfer.ai/whl/cu129
-    https://download.pytorch.org/whl/cu129
-    https://flashinfer.ai/whl/
-    https://wheels.vllm.ai/0.27.0/cu129
+readonly -a CUDA_FIND_LINKS_CU129=(
+    https://flashinfer.ai/whl/flashinfer-cubin/
+    https://wheels.vllm.ai/0.27.0/cu129/vllm/
+    https://download.pytorch.org/whl/cu129/torch/
+    https://download.pytorch.org/whl/cu129/torchaudio/
+    https://download.pytorch.org/whl/cu129/torchvision/
+    https://download.pytorch.org/whl/cu129/torchcodec/
+    https://flashinfer.ai/whl/cu129/flashinfer-jit-cache/
+    https://download.pytorch.org/whl/cu129/triton/
+    https://download.pytorch.org/whl/cu129/torchao/
+    https://download.pytorch.org/whl/cu129/nvidia-cublas-cu12/
+    https://download.pytorch.org/whl/cu129/nvidia-cuda-cupti-cu12/
+    https://download.pytorch.org/whl/cu129/nvidia-cuda-nvrtc-cu12/
+    https://download.pytorch.org/whl/cu129/nvidia-cuda-runtime-cu12/
+    https://download.pytorch.org/whl/cu129/nvidia-cudnn-cu12/
+    https://download.pytorch.org/whl/cu129/nvidia-cusparse-cu12/
+    https://download.pytorch.org/whl/cu129/nvidia-cusparselt-cu12/
+    https://download.pytorch.org/whl/cu129/nvidia-nccl-cu12/
+    https://download.pytorch.org/whl/cu129/nvidia-nvjitlink-cu12/
+    https://download.pytorch.org/whl/cu129/nvidia-nvshmem-cu12/
+    https://download.pytorch.org/whl/cu129/nvidia-nvtx-cu12/
 )
-readonly -a CUDA_INDEXES_CU130=(
-    https://flashinfer.ai/whl/cu130
-    https://download.pytorch.org/whl/cu130
-    https://flashinfer.ai/whl/
-    https://wheels.vllm.ai/0.27.0/cu130
-    https://pypi.nvidia.com
+readonly -a CUDA_FIND_LINKS_CU130=(
+    https://flashinfer.ai/whl/flashinfer-cubin/
+    https://wheels.vllm.ai/0.27.0/cu130/vllm/
+    https://download.pytorch.org/whl/cu130/torch/
+    https://download.pytorch.org/whl/cu130/torchaudio/
+    https://download.pytorch.org/whl/cu130/torchvision/
+    https://download.pytorch.org/whl/cu130/torchcodec/
+    https://flashinfer.ai/whl/cu130/flashinfer-jit-cache/
+    https://download.pytorch.org/whl/cu130/triton/
+    https://download.pytorch.org/whl/cu130/torchao/
+    https://pypi.nvidia.com/nvidia-cublas/
+    https://pypi.nvidia.com/nvidia-cuda-cupti/
+    https://pypi.nvidia.com/nvidia-cuda-nvrtc/
+    https://pypi.nvidia.com/nvidia-cuda-runtime/
+    https://pypi.nvidia.com/nvidia-cudnn/
+    https://pypi.nvidia.com/nvidia-cusparse/
+    https://pypi.nvidia.com/nvidia-nccl/
+    https://pypi.nvidia.com/nvidia-nvjitlink/
+    https://pypi.nvidia.com/nvidia-nvtx/
 )
 # <<< END GENERATED CUDA INSTALLER INDEXES - DO NOT EDIT >>>
 
@@ -127,18 +159,18 @@ runtime_extra() {
     esac
 }
 
-runtime_indexes() {
+runtime_find_links() {
     case "$1" in
         cu129)
-            INDEXES=("${CUDA_INDEXES_CU129[@]}")
+            FIND_LINKS=("${CUDA_FIND_LINKS_CU129[@]}")
             ;;
         cu130)
-            INDEXES=("${CUDA_INDEXES_CU130[@]}")
+            FIND_LINKS=("${CUDA_FIND_LINKS_CU130[@]}")
             ;;
         cpu)
-            INDEXES=()
+            FIND_LINKS=()
             if [[ "$(uname -s)" == "Linux" ]]; then
-                INDEXES=("${CUDA_INDEXES_CPU[@]}")
+                FIND_LINKS=("${CUDA_FIND_LINKS_CPU[@]}")
             fi
             ;;
     esac
@@ -178,10 +210,10 @@ build_venv_command() {
 build_install_command() {
     local extra="$1"
     local group
-    local index
+    local page
     local -a dependency_groups=()
 
-    runtime_indexes "$extra"
+    runtime_find_links "$extra"
     INSTALL_CMD=(
         "${UV_CMD[@]}" pip install "$(package_spec "$extra")"
         -c "$CONSTRAINTS_URL"
@@ -199,12 +231,12 @@ build_install_command() {
         # https://docs.astral.sh/uv/reference/cli/#uv-pip-install
         INSTALL_CMD+=(--no-sources --default-index "$PYPI_INDEX_URL")
     fi
-    for index in "${INDEXES[@]}"; do
-        INSTALL_CMD+=(--index "$index")
+    # Each page lists one package's wheels, so uv fetches it once. Passing the
+    # whole indexes with --index would make uv ask each of them about every
+    # package in the resolution, enough requests to get rate limited.
+    for page in "${FIND_LINKS[@]}"; do
+        INSTALL_CMD+=(--find-links "$page")
     done
-    if (( ${#INDEXES[@]} )); then
-        INSTALL_CMD+=(--index-strategy unsafe-best-match)
-    fi
     if [[ "$NSS_INSTALLER_RESOLVE_ONLY" == "1" ]]; then
         INSTALL_CMD+=(--dry-run)
     fi
@@ -250,9 +282,9 @@ main() {
 
     local extra
     extra="$(runtime_extra)"
-    if [[ "$NSS_INSTALLER_RESOLVE_INDEXES" == "1" ]]; then
-        runtime_indexes "$extra"
-        printf '%s\n' "${INDEXES[@]}"
+    if [[ "$NSS_INSTALLER_RESOLVE_FIND_LINKS" == "1" ]]; then
+        runtime_find_links "$extra"
+        printf '%s\n' "${FIND_LINKS[@]}"
         return
     fi
     require_command uv
@@ -271,7 +303,7 @@ main() {
     run_install
 }
 
-INDEXES=()
+FIND_LINKS=()
 INSTALL_CMD=()
 VENV_CMD=()
 VENV_PATH=""
