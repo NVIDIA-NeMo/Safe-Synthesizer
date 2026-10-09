@@ -404,8 +404,11 @@ function themePlotlyCharts(container = document) {
     }
     container.querySelectorAll(".js-plotly-plot").forEach((plot) => {
         commonPlotUpdate(plot);
-        themeDatasetTraces(plot);
         const card = plot.closest("[data-metric-card]");
+        // Autocorrelation traces are named after value columns and colored by score.
+        if (card?.id !== "autocorrelation-similarity") {
+            themeDatasetTraces(plot);
+        }
         if (!card) {
             return;
         }
@@ -579,6 +582,18 @@ function activateReportView() {
     });
 }
 
+function selectAutocorrelationColumn(event) {
+    const select = event.currentTarget;
+    const plot = select.closest("figure")?.querySelector(".js-plotly-plot");
+    if (!window.Plotly || !plot) {
+        return;
+    }
+    const tracesPerColumn = Number(select.dataset.tracesPerColumn);
+    const selected = Number(select.value);
+    const visible = (plot.data || []).map((_, index) => Math.floor(index / tracesPerColumn) === selected);
+    window.Plotly.restyle(plot, {visible});
+}
+
 function toggleColumns(event) {
     const button = event.currentTarget;
     const expanded = button.getAttribute("aria-expanded") !== "true";
@@ -596,6 +611,9 @@ document.querySelectorAll("[data-dismiss]").forEach((button) => {
     button.addEventListener("click", () => button.closest("[data-dismissible]")?.remove());
 });
 document.querySelector("[data-columns-toggle]")?.addEventListener("click", toggleColumns);
+document.querySelectorAll("[data-autocorrelation-column-select]").forEach((select) => {
+    select.addEventListener("change", selectAutocorrelationColumn);
+});
 document.addEventListener("click", (event) => {
     if (!event.target.closest(".metric-tooltip, [data-tooltip-toggle]")) {
         closeTooltips();

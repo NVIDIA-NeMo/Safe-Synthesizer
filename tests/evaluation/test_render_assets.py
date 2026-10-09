@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import pytest
 from jinja2 import Environment, FunctionLoader, select_autoescape
 
 from nemo_safe_synthesizer.evaluation.render import _get_template
@@ -26,6 +27,7 @@ def test_evaluation_report_uses_versioned_plotly_cdn() -> None:
 
 def test_evaluation_report_themes_charts_in_report_assets() -> None:
     template = _get_template("jinja/reports/multi_modal_report.j2")
+    autocorrelation_similarity = _get_template("jinja/components/autocorrelation_similarity.j2")
     dataset_statistics = _get_template("jinja/components/dataset_statistics.j2")
     gauge = _get_template("jinja/components/score_gauge.j2")
     metric_card = _get_template("jinja/components/metric_card.j2")
@@ -36,6 +38,7 @@ def test_evaluation_report_themes_charts_in_report_assets() -> None:
     javascript = _get_template("js/multi_modal_toggle.js")
 
     assert template is not None
+    assert autocorrelation_similarity is not None
     assert dataset_statistics is not None
     assert gauge is not None
     assert metric_card is not None
@@ -45,6 +48,18 @@ def test_evaluation_report_themes_charts_in_report_assets() -> None:
     assert text_structure_similarity is not None
     assert javascript is not None
     assert "score_ring(ctx.synthetic_quality_score.score)" in template
+    assert 'data-report-view="time-series"' not in template
+    assert template.index("Text Metrics") < template.index("Time-Series Metrics")
+    assert template.index("Time-Series Metrics") < template.index('id="data-privacy"')
+    assert "ctx.autocorrelation_similarity.figures" in autocorrelation_similarity
+    assert "{{ row.html | safe }}" in autocorrelation_similarity
+    assert 'class="autocorrelation-charts"' in autocorrelation_similarity
+    assert ".autocorrelation-charts" in stylesheet
+    assert "data-autocorrelation-column-select" in autocorrelation_similarity
+    assert ".autocorrelation-column-select" in stylesheet
+    assert autocorrelation_similarity.count('class="autocorrelation-chart-heading"') == 1
+    assert ".autocorrelation-chart-heading" in stylesheet
+    assert "selectAutocorrelationColumn" in javascript
     assert "score-ring-canvas" in gauge
     assert "brand-assets.cne.ngc.nvidia.com/assets/fonts/nvidia-sans" in stylesheet
     assert "data-metric-toggle" in metric_card
@@ -126,6 +141,98 @@ def test_training_columns_render_distribution_links_grades_and_entity_counts() -
     assert '<span class="score-label">Very Good</span>' in rendered
     assert "<th>Entities (Count)</th>" in rendered
     assert "PERSON (12)" in rendered
+
+
+def _autocorrelation_context(
+    column_count: int, pair_score_column_count: int, constant_synthetic_profile_count: int = 0
+) -> dict[str, object]:
+    columns = [f"column_{index}" for index in range(column_count)]
+    return {
+        "autocorrelation_similarity": {
+            "score": {"notes": None},
+            "details": {},
+            "evaluated_profile_count": column_count,
+            "evaluated_group_count": 1,
+            "evaluated_column_count": column_count,
+            "constant_synthetic_profile_count": constant_synthetic_profile_count,
+            "pair_score_column_count": pair_score_column_count,
+            "summary_columns": columns,
+            "summary_traces_per_column": 4,
+            "figures": [
+                {
+                    "title": "Typical autocorrelation",
+                    "html": "<div>summary</div>",
+                    "column_select": True,
+                    "tooltip_id": "autocorrelation-typical-info",
+                    "tooltip": "Lines should overlap.",
+                },
+                {
+                    "title": "Pair scores",
+                    "html": "<div>pairs</div>",
+                    "column_select": False,
+                    "tooltip_id": "autocorrelation-pair-scores-info",
+                    "tooltip": "Dots should be near 10.",
+                },
+            ],
+        }
+    }
+
+
+def test_autocorrelation_renders_column_select_and_pair_score_limit_note() -> None:
+    rendered = _render_template(
+        "jinja/components/autocorrelation_similarity.j2",
+        ctx=_autocorrelation_context(column_count=10, pair_score_column_count=8),
+    )
+
+    assert rendered.count("data-autocorrelation-column-select") == 1
+    assert 'data-traces-per-column="4"' in rendered
+    assert '<option value="9">column_9</option>' in rendered
+    assert "Pair scores shows the 8 lowest-scoring columns." in rendered
+    assert "<div>summary</div>" in rendered
+    assert " ".join(rendered.split()).count("Summarizing 10 group-column pairs (1 group, 10 numeric columns).") == 1
+
+
+def test_autocorrelation_renders_info_tooltip_for_each_chart() -> None:
+    rendered = _render_template(
+        "jinja/components/autocorrelation_similarity.j2",
+        ctx=_autocorrelation_context(column_count=2, pair_score_column_count=2),
+    )
+
+    assert rendered.count("data-tooltip-toggle") == 2
+    assert 'aria-controls="autocorrelation-typical-info"' in rendered
+    assert 'id="autocorrelation-pair-scores-info" role="tooltip" hidden' in rendered
+    assert "Dots should be near 10." in rendered
+
+
+def test_autocorrelation_omits_column_select_and_note_for_single_column() -> None:
+    rendered = _render_template(
+        "jinja/components/autocorrelation_similarity.j2",
+        ctx=_autocorrelation_context(column_count=1, pair_score_column_count=1),
+    )
+
+    assert "data-autocorrelation-column-select" not in rendered
+    assert "lowest-scoring columns" not in rendered
+    assert "constant synthetic values" not in rendered
+
+
+@pytest.mark.parametrize(
+    ("constant_count", "expected"),
+    [
+        (1, "1 pair has constant synthetic values."),
+        (3, "3 pairs have constant synthetic values."),
+    ],
+)
+def test_autocorrelation_notes_constant_synthetic_pairs_missing_from_profile_charts(
+    constant_count: int, expected: str
+) -> None:
+    rendered = _render_template(
+        "jinja/components/autocorrelation_similarity.j2",
+        ctx=_autocorrelation_context(
+            column_count=2, pair_score_column_count=2, constant_synthetic_profile_count=constant_count
+        ),
+    )
+
+    assert expected in rendered
 
 
 def test_score_guidance_renders_recommendations_for_the_current_grade() -> None:

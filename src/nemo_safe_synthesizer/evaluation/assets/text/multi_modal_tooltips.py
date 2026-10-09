@@ -55,6 +55,24 @@ tooltips = {
         while penalizing memorization. A higher score is better. The text semantic similarity is based on cosine similarities of sentence embeddings,
         and is higher with higher similarity between the synthetic and test data, penalized for memorization by the similarity between the synthetic and training data being too high.
     """,
+    "autocorrelation_similarity_info": """
+        Autocorrelation Similarity checks whether synthetic sequences move over time like the training sequences: whether values carry over from one step to the next,
+        and whether patterns repeat on the same schedule. Each group and numeric column is scored separately and the scores are averaged. Differences small enough
+        to be explained by chance do not lower the score, so 10 means the timing patterns match and scores near 0 mean the synthetic data has lost them. A low score
+        does not mean the synthetic data is bad overall, only that it does not reproduce these timing patterns.
+    """,
+    "autocorrelation_typical_info": """
+        How strongly each value relates to the values before it, at each lag (the number of steps apart). Lines show the median across groups and bands cover
+        the middle half of groups. In good synthetic data the orange and blue lines overlap. Use the dropdown to switch columns.
+    """,
+    "autocorrelation_difference_info": """
+        The average gap between training and synthetic autocorrelation at each lag, across all group and column pairs. Short, pale bars are good.
+        Tall, red bars mark lags where the synthetic data's timing pattern differs from the training data.
+    """,
+    "autocorrelation_pair_scores_info": """
+        One dot per group and numeric column, scored from 0 to 10. White dots near 10 match the training data's timing pattern, and redder dots further left do not.
+        The dashed line is the overall score. Hover over a dot to see its column and group.
+    """,
     "differential_privacy_info": """
     Differential Privacy (DP) is generally regarded as the highest level of privacy, providing mathematical guarantees around the protection of individual training
     records based on the values of the epsilon and delta parameters. Lower epsilon indicates higher levels of privacy. Note that while applying DP increases privacy,

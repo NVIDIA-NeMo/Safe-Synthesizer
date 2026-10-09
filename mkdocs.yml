@@ -190,6 +190,8 @@ nav:
       - Reference:
           - Configuration: user-guide/configuration.md
           - Environment Variables: user-guide/environment.md
+      - Time-Series Metrics (beta):
+          - Autocorrelation Similarity: user-guide/time-series-metrics/autocorrelation-similarity.md
   - Developer Guide:
       - Architecture: developer-guide/architecture.md
       - Configuration Management: developer-guide/configuration_management.md

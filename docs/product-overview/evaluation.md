@@ -98,6 +98,14 @@ PII Replay counts the total and unique instances of personally identifiable info
 
 You should expect some PII replay, and it is often not a cause for concern. We typically see rarer entities (for example, full address, full name) replayed less frequently than common ones (for example, first name, U.S. state). To reduce replay, we recommend enabling [Replace PII](pii_replacement.md) before synthesis.
 
+## Time-Series Metrics (beta)
+
+Time-series metrics check whether synthetic sequences change over time the way the training sequences do. They run by default when `time_series.is_timeseries` is true and appear in a Time-Series Metrics panel in the Synthetic Quality section of the report. They are not yet part of SQS. Set `evaluation.time_series.enabled: false` to skip them.
+
+### Autocorrelation Similarity
+
+This score measures whether each synthetic numeric column keeps the memory and rhythm of its training counterpart: how long values stay close to their recent past, and whether they rise and fall in the same cycles. We compare the autocorrelation at lags 1 to 20 for every group and column pair, after discounting the differences that sampling noise alone would produce. Synthetic data from the same process scores near 10, and shuffled or constant data scores near 0. A low score does not mean the synthetic data is bad overall: its values and column relationships can still match well, and the score only shows that its behavior over time does not. See [Autocorrelation Similarity](../user-guide/time-series-metrics/autocorrelation-similarity.md) for example scenarios, a walkthrough of the report charts, and configuration.
+
 ## Evaluation Reports
 
 Every Safe Synthesizer job automatically generates an HTML evaluation report saved to `generate/evaluation_report.html` inside the run directory (by default `./safe-synthesizer-artifacts/<config>---<dataset>/<run_name>/`). A machine-readable companion file, `generate/evaluation_metrics.json`, contains the same scores and timing data as structured JSON. The report contains:
@@ -143,3 +151,4 @@ evaluation:
 ## Related Topics
 
 - [Synthetic Data Quality](../user-guide/evaluating-data.md): See recommendations for increasing quality and privacy scores
+- [Autocorrelation Similarity](../user-guide/time-series-metrics/autocorrelation-similarity.md): Read and configure the time-series metric
