@@ -72,10 +72,7 @@ replace_pii:
 ```
 
 Inline plans and plan files are authoritative: NSS validates them against the
-input dataframe but does not run heuristic or LLM discovery for the plan. This
-bypass applies only to plan discovery. If `llm` is configured, the replacement
-executor can still use it to replace PII found inside free-text columns named by
-the plan.
+input dataframe but does not run heuristic or LLM discovery.
 
 ## Plan-only workflow
 
@@ -109,12 +106,10 @@ plan = (
 The generated standalone plan can be reviewed, edited, and reused as
 `replace_pii.replacement_plan` in a later run.
 
-## LLM-assisted planning and free-text replacement
+## LLM-assisted planning
 
-The `llm` mapping configures the OpenAI-compatible inference service shared by
-plan enhancement and free-text replacement. During automatic discovery, the LLM
-enhances the heuristic plan. During execution, the same service processes
-free-text columns in the resolved plan.
+The `llm` mapping configures the OpenAI-compatible inference service used for
+automatic plan enhancement.
 
 ```yaml
 replace_pii:
@@ -144,6 +139,29 @@ supported for local OpenAI-compatible endpoints.
 Supply the inference API key at runtime through `NSS_INFERENCE_KEY` or the
 `--inference-api-key` CLI option. NSS does not store the key in configuration or
 plan artifacts.
+
+Free-text columns use GLiNER2 plus applicable deterministic built-in regex
+rules:
+
+```yaml
+replace_pii:
+  free_text_detection:
+    model_id: fastino/gliner2-privacy-filter-PII-multi
+    entity_thresholds:
+      full_name: 0.95
+      first_name: 0.9
+      middle_name: 0.9
+      last_name: 0.9
+      phone_number: 0.5
+      date_of_birth: 0.5
+      street_address: 0.5
+      ssn: 0.5
+      national_id: 0.5
+      api_key: 0.5
+    batch_size: 8
+    chunk_length: 384
+    chunk_overlap: 128
+```
 
 Automatic discovery uses two LLM passes. The first classifies every column's
 semantic entity type and may propose a replacement pattern, in bounded batches
@@ -186,6 +204,5 @@ previous response invalid.
 
 !!! warning "Inference endpoints receive source data"
     Plan enhancement can send bounded raw cell samples from the full input
-    dataframe, including rows that may later be assigned to a holdout set.
-    Free-text replacement can send raw cell values. Enable these operations
-    only when the endpoint is approved to receive the input data.
+    dataframe, including rows that may later be assigned to a holdout set. Enable
+    it only when the endpoint is approved to receive the input data.

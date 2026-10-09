@@ -18,7 +18,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum, StrEnum, auto
 from pathlib import Path
-from typing import ClassVar, Literal, Self, cast
+from typing import Annotated, ClassVar, Literal, Self, cast
 
 from pydantic import (
     Field,
@@ -31,7 +31,7 @@ from pydantic import (
 )
 
 from ..configurator.parameters import Parameters
-from ..defaults import NSS_MANAGED_ASSETS_PATH_ENV, default_managed_assets_path
+from ..defaults import NSS_NEMOTRON_PERSONAS_PATH_ENV, default_nemotron_personas_path
 from ..errors import ParameterError
 from .base import NSSBaseModel
 from .unknown_fields import raise_if_removed_legacy_fields
@@ -41,12 +41,18 @@ __all__ = [
     "ALLOWED_DEPENDS_ON",
     "AUTO_DISCOVERY",
     "ConditioningColumn",
+    "DEFAULT_GLINER2_MODEL_ID",
+    "DataToSamplerValueMapping",
     "ENTITIES",
     "ENTITY_BY_TYPE",
     "EXCLUSIVE_DEPENDS_ON_GROUPS",
+    "FREE_TEXT_DETECTION_ENTITY_TYPES",
+    "GLINER_DETECTION_ENTITY_TYPES",
+    "REGEX_DETECTION_ENTITY_TYPES",
     "Entity",
     "EntityAction",
     "EntityType",
+    "FreeTextDetectionConfig",
     "LLMConfig",
     "PatternSyntax",
     "PiiColumnPlan",
@@ -64,6 +70,7 @@ __all__ = [
 # Sentinel value for ``ReplacePiiConfig.replacement_plan`` requesting automatic
 # entity discovery instead of an explicit plan.
 AUTO_DISCOVERY = "auto_discovery"
+DEFAULT_GLINER2_MODEL_ID = "fastino/gliner2-privacy-filter-PII-multi"
 # Unversioned configurations are permanently interpreted as v3. Adding a new
 # schema may expand the supported set, but must not advance this implicit value.
 _IMPLICIT_REPLACE_PII_SCHEMA_VERSION = 3
@@ -71,7 +78,12 @@ _SUPPORTED_REPLACE_PII_SCHEMA_VERSIONS = frozenset({3})
 
 
 class EntityType(StrEnum):
-    """Closed vocabulary for discovery and plan ``entity_type`` fields."""
+    """Closed vocabulary for discovery and plan ``entity_type`` fields.
+
+    ``FREE_TEXT`` marks columns whose accepted PII spans are detected by
+    GLiNER2 and applicable deterministic regex rules, then replaced without
+    changing the surrounding text.
+    """
 
     FIRST_NAME = "first_name"
     MIDDLE_NAME = "middle_name"
@@ -89,8 +101,8 @@ class EntityType(StrEnum):
     IPV6 = "ipv6"
     UNIQUE_IDENTIFIER = "unique_identifier"
 
-    # Propagate already-replaced values into spans of cell text (username/url use this too).
-    # Plus fresh NER and replacements when an LLM is available.
+    # Detect and replace PII spans in free-form text with GLiNER2 plus the
+    # applicable deterministic built-in regex rules.
     FREE_TEXT = "free_text"
 
     # Identify-only (and often original-value conditioners): discovery may classify
@@ -105,6 +117,10 @@ class EntityType(StrEnum):
     ORGANIZATION = "organization"
 
 
+DataToSamplerValueMapping = dict[str, dict[str, list[str]]]
+"""Dependency-column values mapped to values understood by one sampler."""
+
+
 class EntityAction(Enum):
     """What the engine does to a column of this entity type."""
 
@@ -115,8 +131,8 @@ class EntityAction(Enum):
     """Rewrite PII spans inside free-form text, leaving the surrounding text intact.
 
     Unlike ``REPLACE``, the cell is not itself a single entity value: only the
-    spans within it are rewritten. Spans are sourced from values already
-    replaced in other columns or newly discovered by NER when an LLM is available.
+    spans accepted from GLiNER2 and applicable deterministic regex rules are
+    rewritten. Existing structured values and mappings do not create spans.
     """
 
     IDENTIFY_ONLY = auto()
@@ -246,6 +262,47 @@ ENTITIES: tuple[Entity, ...] = (
 
 ENTITY_BY_TYPE: dict[EntityType, Entity] = {entity.entity_type: entity for entity in ENTITIES}
 
+FREE_TEXT_DETECTION_ENTITY_TYPES: tuple[EntityType, ...] = tuple(
+    entity.entity_type
+    for entity in ENTITIES
+    if entity.action is EntityAction.REPLACE and entity.entity_type is not EntityType.UNIQUE_IDENTIFIER
+)
+"""Entity types eligible for fresh detection and replacement inside free text."""
+
+REGEX_DETECTION_ENTITY_TYPES: tuple[EntityType, ...] = (
+    EntityType.EMAIL,
+    EntityType.CREDIT_DEBIT_CARD,
+    EntityType.IPV4,
+    EntityType.IPV6,
+)
+"""Entity types detected exclusively by structurally validated built-in regex rules."""
+
+GLINER_DETECTION_ENTITY_TYPES: tuple[EntityType, ...] = tuple(
+    entity_type for entity_type in FREE_TEXT_DETECTION_ENTITY_TYPES if entity_type not in REGEX_DETECTION_ENTITY_TYPES
+)
+"""Entity types requested from GLiNER2 rather than the built-in regex detector.
+
+The checkpoint's specific ``full_name`` label is used for complete names; its
+broader ``person`` label is intentionally not requested.
+"""
+
+_DEFAULT_NAME_ENTITY_THRESHOLDS = {
+    EntityType.FIRST_NAME: 0.9,
+    EntityType.MIDDLE_NAME: 0.9,
+    EntityType.LAST_NAME: 0.9,
+    EntityType.FULL_NAME: 0.95,
+}
+_ConfidenceThreshold = Annotated[float, Field(ge=0, le=1)]
+
+
+def _default_gliner_entity_thresholds() -> dict[EntityType, float]:
+    """Return a fresh, complete set of precision-first GLiNER2 thresholds."""
+    return {
+        entity_type: _DEFAULT_NAME_ENTITY_THRESHOLDS.get(entity_type, 0.5)
+        for entity_type in GLINER_DETECTION_ENTITY_TYPES
+    }
+
+
 # entity_type → allowed depends_on entity types (optional edges may be omitted).
 ALLOWED_DEPENDS_ON: dict[EntityType, frozenset[EntityType]] = {
     EntityType.FIRST_NAME: frozenset({EntityType.GENDER, EntityType.ETHNIC_BACKGROUND, EntityType.FULL_NAME}),
@@ -362,6 +419,14 @@ class ConditioningColumn(NSSBaseModel):
             )
         return self
 
+    @model_serializer(mode="wrap")
+    def _omit_inferred_entity_type(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        """Keep runtime-inferred entity types out of reusable plans."""
+        serialized = cast(dict[str, object], handler(self))
+        if "entity_type" not in self.model_fields_set or self.entity_type is None:
+            serialized.pop("entity_type", None)
+        return serialized
+
 
 class PiiColumnPlan(NSSBaseModel):
     """Replacement spec for one named column.
@@ -378,6 +443,7 @@ class PiiColumnPlan(NSSBaseModel):
     )
     pattern: str | None = Field(
         default=None,
+        exclude_if=lambda value: value is None,
         description=(
             "Optional whole-value format using the grammar associated with this entity type. "
             "Only entity types that define a pattern syntax may set this. "
@@ -421,9 +487,9 @@ class PiiColumnPlan(NSSBaseModel):
 class PiiReplacementPlan(Parameters):
     """Dataset-specific detection/replacement plan (column-oriented).
 
-    Flat ``columns_to_replace`` list; cross-column relationships are expressed
-    via ``depends_on`` edges (a DAG). Context-free dependency and graph checks
-    are enforced here; plan-vs-dataframe checks live in
+    Flat ``columns_to_replace`` list with adjacent data-to-sampler value mappings;
+    cross-column relationships are expressed via ``depends_on`` edges (a DAG).
+    Context-free dependency and graph checks are enforced here; plan-vs-dataframe checks live in
     ``pii_replacer.planning.validation``.
     """
 
@@ -431,6 +497,50 @@ class PiiReplacementPlan(Parameters):
         default_factory=list,
         description="Columns to replace or (for free_text) scan for PII spans to rewrite.",
     )
+    data_to_sampler_value_mapping: DataToSamplerValueMapping = Field(
+        default_factory=dict,
+        description=(
+            "Maps dataset values in depends_on columns to the values used by the person sampler "
+            "(replace_pii.sampler). For example, {sex: {Woman: [female], Non-binary: [female, male]}} makes rows "
+            "where sex is Woman sample a female persona and rows where sex is Non-binary sample either. "
+            "A dataset value without an entry is looked up in the sampler as is, ignoring case, so Female "
+            "matches female; a value that has no entry and matches no sampler value is an error. "
+            "When replace_pii.replacement_plan is 'auto_discovery', NSS generates this mapping for you."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _validate_data_to_sampler_value_mapping(self) -> Self:
+        for column_name, mappings in self.data_to_sampler_value_mapping.items():
+            if not column_name.strip():
+                raise ParameterError("data_to_sampler_value_mapping column names must be non-empty")
+            seen_sources: set[str] = set()
+            for source, targets in mappings.items():
+                source_key = source.casefold()
+                if not source.strip():
+                    raise ParameterError("data_to_sampler_value_mapping dataset values must be non-empty")
+                if source_key in seen_sources:
+                    raise ParameterError(
+                        f"data_to_sampler_value_mapping for column {column_name!r} contains duplicate "
+                        "dataset values after case-folding"
+                    )
+                seen_sources.add(source_key)
+
+                if not targets:
+                    raise ParameterError("data_to_sampler_value_mapping sampler value lists must be non-empty")
+
+                seen_targets: set[str] = set()
+                for target in targets:
+                    target_key = target.casefold()
+                    if not target.strip():
+                        raise ParameterError("data_to_sampler_value_mapping sampler values must be non-empty")
+                    if target_key in seen_targets:
+                        raise ParameterError(
+                            f"data_to_sampler_value_mapping for column {column_name!r} contains duplicate "
+                            "sampler values after case-folding"
+                        )
+                    seen_targets.add(target_key)
+        return self
 
     @model_validator(mode="after")
     def _reject_duplicate_replace_columns(self) -> Self:
@@ -588,7 +698,7 @@ class PiiReplacementPlan(Parameters):
 
 
 class LLMConfig(NSSBaseModel):
-    """Inference behavior shared by PII planning and replacement.
+    """Inference behavior for LLM-assisted PII plan discovery.
 
     LLM behavior is disabled when ``ReplacePiiConfig.llm`` is ``None``. The
     OpenAI-compatible endpoint is supplied at runtime through
@@ -606,10 +716,72 @@ class LLMConfig(NSSBaseModel):
     max_workers: int = Field(
         default=8,
         ge=1,
+        description="Maximum concurrent requests for LLM-assisted plan discovery. Must be at least 1.",
+    )
+
+
+class FreeTextDetectionConfig(NSSBaseModel):
+    """GLiNER2 and deterministic regex settings for free-text PII detection."""
+
+    model_id: str = Field(
+        default=DEFAULT_GLINER2_MODEL_ID,
+        min_length=1,
+        description="GLiNER2 model identifier used to detect PII spans in free-text columns. Must be nonempty.",
+    )
+    entity_thresholds: dict[EntityType, _ConfidenceThreshold] = Field(
+        default_factory=_default_gliner_entity_thresholds,
         description=(
-            "Maximum concurrent requests for LLM-assisted plan discovery and free-text replacement. Must be at least 1."
+            "Minimum GLiNER2 confidence score per entity type. Entity types left out use the defaults: 0.95 for "
+            "full_name, 0.9 for first_name, middle_name, and last_name, and 0.5 for the rest. Email, "
+            "credit_debit_card, ipv4, and ipv6 are detected by regex and take no threshold."
         ),
     )
+    batch_size: int = Field(
+        default=8,
+        gt=0,
+        description="Number of text chunks processed in one GLiNER2 inference batch. Must be positive.",
+    )
+    chunk_length: int = Field(
+        default=384,
+        gt=0,
+        description="Maximum length of each GLiNER2 text chunk. Must be positive.",
+    )
+    chunk_overlap: int = Field(
+        default=128,
+        ge=0,
+        description="Overlap between adjacent GLiNER2 text chunks. Must be nonnegative and smaller than chunk_length.",
+    )
+
+    @field_validator("entity_thresholds", mode="before")
+    @classmethod
+    def _fill_default_entity_thresholds(cls, value: object) -> object:
+        """Let users override selected thresholds; unspecified entity types keep their defaults."""
+        if isinstance(value, Mapping):
+            return {**_default_gliner_entity_thresholds(), **value}
+        return value
+
+    @field_validator("entity_thresholds")
+    @classmethod
+    def _reject_non_gliner_entity_thresholds(
+        cls,
+        value: dict[EntityType, float],
+    ) -> dict[EntityType, float]:
+        unsupported = sorted(entity_type.value for entity_type in set(value) - set(GLINER_DETECTION_ENTITY_TYPES))
+        if unsupported:
+            raise ParameterError(
+                "free_text_detection.entity_thresholds accepts only GLiNER-detected entity types; "
+                f"unsupported: {unsupported}"
+            )
+        return value
+
+    @model_validator(mode="after")
+    def _validate_chunk_overlap(self) -> Self:
+        if self.chunk_overlap >= self.chunk_length:
+            raise ParameterError(
+                "free_text_detection.chunk_overlap must be smaller than chunk_length, "
+                f"got chunk_overlap={self.chunk_overlap}, chunk_length={self.chunk_length}"
+            )
+        return self
 
 
 class PiiReplacementSettings(NSSBaseModel):
@@ -628,33 +800,33 @@ class PiiReplacementSettings(NSSBaseModel):
 class PiiSamplerBackend(StrEnum):
     """Source of synthetic values for names and related person-like fields."""
 
-    MANAGED = "managed"
-    """Draw from managed locale assets (see ``PiiSamplerConfig.managed_assets_path``)."""
+    NEMOTRON_PERSONAS = "nemotron-personas"
+    """Draw from downloaded Nemotron-Personas locale assets."""
 
     FAKER = "faker"
     """Draw from the Faker library; ignores ``ethnic_background`` conditioners."""
 
 
 class PiiSamplerConfig(NSSBaseModel):
-    """Settings for the synthetic value sampler (names and related person-like fields)."""
+    """Settings for Nemotron-Personas or Faker-backed person sampling."""
 
     backend: PiiSamplerBackend = Field(
-        default=PiiSamplerBackend.MANAGED,
-        description="Synthetic value sampler backend: managed assets or Faker.",
+        default=PiiSamplerBackend.NEMOTRON_PERSONAS,
+        description="Person sampler backend: downloaded Nemotron-Personas assets or Faker.",
     )
-    managed_assets_path: str | None = Field(
+    nemotron_personas_path: str | None = Field(
         default=None,
         description=(
-            "Root directory containing a datasets/ folder of locale parquet files. "
-            f"Defaults to {NSS_MANAGED_ASSETS_PATH_ENV} or ~/.data-designer/managed-assets."
+            "Root directory containing downloaded Nemotron-Personas files as datasets/{locale}.parquet. "
+            f"Defaults to {NSS_NEMOTRON_PERSONAS_PATH_ENV} or ~/.data-designer/managed-assets."
         ),
     )
 
-    def resolved_managed_assets_path(self) -> Path:
-        """Return ``managed_assets_path`` if set, else the environment or built-in default."""
-        if self.managed_assets_path is not None:
-            return Path(self.managed_assets_path)
-        return default_managed_assets_path()
+    def resolved_nemotron_personas_path(self) -> Path:
+        """Return ``nemotron_personas_path`` if set, else the environment or built-in default."""
+        if self.nemotron_personas_path is not None:
+            return Path(self.nemotron_personas_path)
+        return default_nemotron_personas_path()
 
 
 class ReplacePiiConfig(Parameters):
@@ -666,11 +838,9 @@ class ReplacePiiConfig(Parameters):
     * an inline ``PiiReplacementPlan`` mapping in the main NSS config; or
     * a string path to a separate plan YAML containing that same mapping.
 
-    ``llm=None`` leaves auto-discovery at the heuristic baseline and disables
-    LLM-assisted free-text replacement. Supplying an ``llm`` mapping enables
-    LLM enhancement after heuristic discovery and provides the same inference
-    settings to replacement-time free-text processing. An inline plan or plan
-    file bypasses only discovery; it does not disable replacement-time LLM use.
+    ``llm=None`` leaves auto-discovery at the heuristic baseline. Supplying an
+    ``llm`` mapping enables LLM enhancement after heuristic discovery. An
+    inline plan or plan file bypasses discovery, so it does not require an LLM.
     The API key remains a runtime secret supplied through ``NSS_INFERENCE_KEY``
     or the corresponding CLI option; it is never stored in this model.
 
@@ -704,10 +874,14 @@ class ReplacePiiConfig(Parameters):
     llm: LLMConfig | None = Field(
         default=None,
         description=(
-            "Optional inference behavior shared by plan enhancement and free-text replacement. "
+            "Optional inference behavior for LLM-assisted plan discovery. "
             "The endpoint is configured at runtime through NSS_INFERENCE_ENDPOINT or --inference-endpoint-url. "
             "Use an empty mapping to enable NSS inference defaults."
         ),
+    )
+    free_text_detection: FreeTextDetectionConfig = Field(
+        default_factory=FreeTextDetectionConfig,
+        description="GLiNER2 and deterministic built-in regex settings for detecting PII spans in free-text columns.",
     )
     replacement: PiiReplacementSettings = Field(
         default_factory=PiiReplacementSettings,
