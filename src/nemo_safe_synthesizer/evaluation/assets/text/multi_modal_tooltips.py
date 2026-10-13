@@ -66,7 +66,7 @@ tooltips = {
         the middle half of groups. In good synthetic data the orange and blue lines overlap. Use the dropdown to switch columns.
     """,
     "autocorrelation_difference_info": """
-        The average gap between training and synthetic autocorrelation at each lag, across all group and column pairs. Short, pale bars are good.
+        The average gap between training and synthetic autocorrelation at each lag, across all group-column pairs. Short, pale bars are good.
         Tall, red bars mark lags where the synthetic data's timing pattern differs from the training data.
     """,
     "autocorrelation_pair_scores_info": """
