@@ -478,8 +478,6 @@ def _resolved_dependency_values(
     return tuple(resolved)
 
 
-
-
 def _column_statistics(
     original: pd.DataFrame,
     transformed: pd.DataFrame,
