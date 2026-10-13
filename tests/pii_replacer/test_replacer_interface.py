@@ -51,7 +51,8 @@ class TestTabularPiiReplacerInterface:
     def test_empty_plan_returns_a_copy_without_mutating_the_caller_dataframe(self) -> None:
         dataframe = pd.DataFrame({"email": ["ada@example.com"]}, index=[7])
         original = dataframe.copy(deep=True)
-        replacer = TabularPiiReplacer(ReplacePiiConfig(), data_config=DataParameters())
+        config = ReplacePiiConfig(sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER))
+        replacer = TabularPiiReplacer(config, data_config=DataParameters())
 
         result = replacer.replace(dataframe)
 

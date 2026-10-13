@@ -11,9 +11,7 @@ from pathlib import Path
 import pandas as pd
 
 from ..config.replace_pii import EntityType, PiiReplacementSettings, PiiSamplerBackend, PiiSamplerConfig
-from ..observability import get_logger
-
-logger = get_logger(__name__)
+from ..errors import ParameterError
 
 SamplerValueCatalog = Mapping[EntityType, tuple[str, ...]]
 
@@ -27,17 +25,39 @@ _FAKER_DEPENDENCY_VALUES: SamplerValueCatalog = {
 }
 
 
+def require_nemotron_personas_dataset(settings: PiiReplacementSettings, sampler: PiiSamplerConfig) -> Path:
+    """Return the Nemotron-Personas dataset for the configured locale, or raise when it is missing.
+
+    Selecting the Nemotron-Personas sampler requires its data; NSS does not
+    silently substitute Faker for a missing dataset.
+
+    Raises:
+        ParameterError: If the locale's dataset file does not exist.
+    """
+    path = sampler.resolved_nemotron_personas_path() / "datasets" / f"{settings.locale}.parquet"
+    if not path.is_file():
+        raise ParameterError(
+            f"replace_pii.sampler.backend is {PiiSamplerBackend.NEMOTRON_PERSONAS.value}, but no Nemotron-Personas "
+            f"data for locale {settings.locale!r} was found at {path}. Download the Nemotron-Personas dataset, point "
+            "replace_pii.sampler.nemotron_personas_path or NSS_NEMOTRON_PERSONAS_PATH at it, or set "
+            f"replace_pii.sampler.backend to {PiiSamplerBackend.FAKER.value}"
+        )
+    return path
+
+
 def load_sampler_value_catalog(
     settings: PiiReplacementSettings,
     sampler: PiiSamplerConfig,
 ) -> SamplerValueCatalog:
-    """Return the dependency values understood by the selected sampler."""
+    """Return the dependency values understood by the selected sampler.
+
+    Raises:
+        ParameterError: If the Nemotron-Personas dataset is missing or cannot be read.
+    """
     if sampler.backend is PiiSamplerBackend.FAKER:
         return dict(_FAKER_DEPENDENCY_VALUES)
 
-    path = sampler.resolved_nemotron_personas_path() / "datasets" / f"{settings.locale}.parquet"
-    if not path.is_file():
-        return {}
+    path = require_nemotron_personas_dataset(settings, sampler)
     try:
         available_columns = _available_parquet_columns(path)
         selected = {
@@ -46,12 +66,8 @@ def load_sampler_value_catalog(
             if (column := next((alias for alias in aliases if alias in available_columns), None)) is not None
         }
         dataframe = pd.read_parquet(path, columns=list(selected.values()), dtype_backend="pyarrow")
-    except Exception:
-        logger.runtime.warning(
-            "Nemotron-Personas dependency values could not be read; automatic value mappings will be unavailable",
-            extra={"locale": settings.locale},
-        )
-        return {}
+    except Exception as exc:
+        raise ParameterError(f"Nemotron-Personas data at {path} could not be read") from exc
 
     return {
         entity_type: tuple(sorted({str(value).casefold() for value in dataframe[column].dropna().unique().tolist()}))

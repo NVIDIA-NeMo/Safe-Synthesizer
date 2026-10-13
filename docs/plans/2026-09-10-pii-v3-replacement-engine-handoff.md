@@ -503,8 +503,9 @@ quality information, not invalid configuration.
   Luhn-valid cards, IP addresses, and collision-resistant identifiers.
 - Apply configured data-to-sampler value mappings and case-insensitive identity matching before sampler candidate
   selection.
-- If a Nemotron-Personas asset or required generated field is unavailable, warn once per affected category and fall back
-  deterministically to Faker. A configured or implicit dependency label that selects no Nemotron-Personas candidates is a
+- If the selected Nemotron-Personas dataset for the locale is missing or unreadable, fail with a configuration error;
+  do not substitute Faker. If a persona row lacks a required generated field, warn once per affected category and fall
+  back deterministically to Faker. A configured or implicit dependency label that selects no Nemotron-Personas candidates is a
   configuration error, not a fallback condition.
 - Require generated values to differ from originals and satisfy entity-specific constraints.
 - Use one pattern parser for validation and rendering so their grammars cannot drift.

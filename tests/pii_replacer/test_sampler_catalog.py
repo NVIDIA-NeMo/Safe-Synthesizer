@@ -12,6 +12,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiSamplerBackend,
     PiiSamplerConfig,
 )
+from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.pii_replacer import sampler_catalog
 
 
@@ -62,10 +63,9 @@ class TestSamplerValueCatalog:
             EntityType.ETHNIC_BACKGROUND: ("east asian", "white"),
         }
 
-    def test_missing_nemotron_personas_locale_has_no_catalog(self, tmp_path: Path) -> None:
-        catalog = sampler_catalog.load_sampler_value_catalog(
-            PiiReplacementSettings(locale="fr_FR"),
-            PiiSamplerConfig(backend=PiiSamplerBackend.NEMOTRON_PERSONAS, nemotron_personas_path=str(tmp_path)),
-        )
-
-        assert catalog == {}
+    def test_missing_nemotron_personas_locale_is_a_configuration_error(self, tmp_path: Path) -> None:
+        with pytest.raises(ParameterError, match="no Nemotron-Personas data for locale 'fr_FR' was found"):
+            sampler_catalog.load_sampler_value_catalog(
+                PiiReplacementSettings(locale="fr_FR"),
+                PiiSamplerConfig(backend=PiiSamplerBackend.NEMOTRON_PERSONAS, nemotron_personas_path=str(tmp_path)),
+            )
