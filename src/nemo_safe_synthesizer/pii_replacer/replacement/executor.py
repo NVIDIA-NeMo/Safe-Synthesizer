@@ -161,6 +161,9 @@ class StructuredReplacementExecutor:
         column_position = working.columns.get_loc(spec.column_name)
         if not isinstance(column_position, int):
             raise ParameterError(f"replacement column {spec.column_name!r} is duplicated in the dataframe")
+        # Generators receive the same text form that plan validation checked patterns against;
+        # the typed canonical identity is kept for cache keys and seeds.
+        original_texts = working.iloc[:, column_position].astype(str).tolist()
         if working.iloc[:, column_position].notna().any():
             working[spec.column_name] = working[spec.column_name].astype(object)
 
@@ -171,7 +174,7 @@ class StructuredReplacementExecutor:
             canonical_original = canonicalize_scalar(original)
             dependencies = _effective_dependencies(working, row_position, spec)
             key = self._mapping_key(spec.column_name, row_position, canonical_original, group_identities)
-            replacement = self._replacement_for(key, spec, canonical_original, dependencies)
+            replacement = self._replacement_for(key, spec, original_texts[row_position], dependencies)
             working.iat[row_position, column_position] = replacement
 
     def _mapping_key(
@@ -189,7 +192,7 @@ class StructuredReplacementExecutor:
         self,
         key: RecordMappingKey | GroupMappingKey,
         spec: PiiColumnPlan,
-        original: CanonicalValue,
+        original_text: str,
         dependencies: EffectiveDependencyTuple,
     ) -> str:
         cached = self._cache.get(key)
@@ -197,7 +200,7 @@ class StructuredReplacementExecutor:
             self._record_dependency_drift(key, cached, dependencies)
             return cached.value
 
-        replacement = self._generate_fresh(key, spec, original, dependencies)
+        replacement = self._generate_fresh(key, spec, original_text, dependencies)
         provenance = GroupMappingProvenance(dependencies) if isinstance(key, GroupMappingKey) else None
         self._cache[key] = _CachedReplacement(replacement, provenance)
         if (reserved_values := self._reserved_by_target.get(spec.column_name)) is not None:
@@ -209,13 +212,13 @@ class StructuredReplacementExecutor:
         self,
         key: RecordMappingKey | GroupMappingKey,
         spec: PiiColumnPlan,
-        original: CanonicalValue,
+        original_text: str,
         dependencies: EffectiveDependencyTuple,
     ) -> str:
         for attempt in range(_MAX_GENERATION_ATTEMPTS):
             request = ReplacementGenerationRequest(
                 entity_type=spec.entity_type,
-                original_value=original.normalized_value,
+                original_value=original_text,
                 effective_dependency_tuple=dependencies,
                 pattern=spec.pattern,
                 seed=_derive_seed(self._base_seed, key, purpose="replacement", attempt=attempt),

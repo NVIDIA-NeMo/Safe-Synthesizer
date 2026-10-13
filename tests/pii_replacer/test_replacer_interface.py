@@ -61,6 +61,24 @@ class TestTabularPiiReplacerInterface:
         assert result.transformed_df is not dataframe
         assert result.generation_statistics.generated_replacement_count == 0
 
+    def test_generators_receive_the_text_form_that_patterns_were_validated_against(self) -> None:
+        dataframe = pd.DataFrame({"dob": pd.to_datetime(["2000-01-01", "1990-05-17"]), "id": [1.5, 2.25]})
+        config = ReplacePiiConfig(
+            replacement_plan=PiiReplacementPlan(
+                columns_to_replace=[
+                    PiiColumnPlan(column_name="dob", entity_type=EntityType.DATE_OF_BIRTH, pattern="%Y-%m-%d"),
+                    PiiColumnPlan(column_name="id", entity_type=EntityType.UNIQUE_IDENTIFIER),
+                ]
+            ),
+            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+        )
+
+        result = TabularPiiReplacer(config, data_config=DataParameters()).replace(dataframe)
+
+        assert result.transformed_df["dob"].str.fullmatch(r"\d{4}-\d{2}-\d{2}").all()
+        assert result.transformed_df["id"].tolist()[0].count(".") == 1
+        assert result.transformed_df["id"].str.fullmatch(r"\d\.\d|\d\.\d{2}").all()
+
     def test_replace_executes_an_explicit_structured_plan(self) -> None:
         dataframe = pd.DataFrame({"identifier": ["USER-001", "USER-002"]}, index=[3, 3])
         config = ReplacePiiConfig(

@@ -87,7 +87,7 @@ class TestDependencyMappings:
     def test_auto_mapping_rejects_dependency_values_over_128_characters(self) -> None:
         dataframe = pd.DataFrame({"first_name": ["Ada"], "sex": ["x" * 129], "race": ["White"]})
 
-        with pytest.raises(ParameterError, match="no longer than 128 characters"):
+        with pytest.raises(ParameterError, match="values longer than 128 characters"):
             mapping_inputs(
                 dataframe,
                 _plan(),

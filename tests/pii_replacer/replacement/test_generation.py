@@ -310,6 +310,13 @@ class TestReplacementGenerator:
 
         assert re.fullmatch(r"[a-z]{2}-[A-Z]{3}\d{3}", generator.generate(request))
 
+    def test_unpatterned_identifier_replaces_non_ascii_letters_and_digits(self) -> None:
+        generator = _faker_generator()
+
+        replacement = generator.generate(_request(EntityType.UNIQUE_IDENTIFIER, "张伟-Zoë-٣4"))
+
+        assert re.fullmatch(r"[A-Z]{2}-[A-Z][a-z]{2}-[0-9]{2}", replacement), replacement
+
     def test_email_pattern_uses_dependencies_and_normalizes_organization(self) -> None:
         generator = _faker_generator()
         request = _request(
