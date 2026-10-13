@@ -23,6 +23,7 @@ from pydantic import ValidationError
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.replace_pii import (
+    ConditioningColumn,
     EntityType,
     PiiColumnPlan,
     PiiReplacementPlan,
@@ -256,6 +257,9 @@ class TestProcessDataPiiSeparation:
         fixture_workdir: Workdir,
     ) -> None:
         original_df = fixture_sample_patient_dataframe.copy()
+        # "F" appears only in the test split, so its built-in gender mapping
+        # reaches the plan only when planning reads the full input.
+        original_df["sex"] = ["female"] * (len(original_df) - 1) + ["F"]
         train_split = original_df.head(100).copy()
         test_split = original_df.tail(100).copy()
         resolved_pii = ReplacePiiConfig(
@@ -264,6 +268,7 @@ class TestProcessDataPiiSeparation:
                     PiiColumnPlan(
                         column_name="patient_name",
                         entity_type=EntityType.FULL_NAME,
+                        depends_on=[ConditioningColumn(column_name="sex", entity_type=EntityType.GENDER)],
                         pattern="{First} {Last}",
                     )
                 ]
@@ -275,9 +280,7 @@ class TestProcessDataPiiSeparation:
             workdir=fixture_workdir,
         ).with_data_source(original_df)
         mock_holdout_cls.return_value.train_test_split.return_value = (train_split, test_split)
-        configured = builder._nss_config
-        assert configured is not None
-        mock_resolver_cls.return_value.return_value = configured
+        mock_resolver_cls.side_effect = lambda _training_df, config: lambda: config
         mock_metadata_cls.from_config.return_value = MagicMock()
 
         builder.process_data()
@@ -299,7 +302,10 @@ class TestProcessDataPiiSeparation:
             fixture_workdir.run_dir / "pii_replacement_config.yaml"
         ).replace_pii
         assert persisted is not None
-        assert persisted.inline_plan == resolved_pii.inline_plan
+        assert persisted.inline_plan is not None
+        assert resolved_pii.inline_plan is not None
+        assert persisted.inline_plan.columns_to_replace == resolved_pii.inline_plan.columns_to_replace
+        assert persisted.inline_plan.data_to_sampler_value_mapping == {"sex": {"F": ["female"]}}
 
 
 # ---------------------------------------------------------------------------
