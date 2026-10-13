@@ -77,15 +77,12 @@ class StructuredReplacementExecutor:
         *,
         group_column: str | None,
         base_seed: int,
-        data_to_sampler_value_mapping: DataToSamplerValueMapping | None = None,
     ) -> None:
         self._plan = plan
         self._generator = generator
         self._group_column = group_column
         self._base_seed = base_seed
-        self._data_to_sampler_value_mapping = _compile_data_to_sampler_value_mapping(
-            data_to_sampler_value_mapping or {}
-        )
+        self._data_to_sampler_value_mapping = _compile_data_to_sampler_value_mapping(plan.data_to_sampler_value_mapping)
         self._cache: dict[RecordMappingKey | GroupMappingKey, _CachedReplacement] = {}
         self._reserved_by_target: dict[str, set[str]] = {}
         self._dependency_conflicts: dict[tuple[str, frozenset[EntityType]], int] = {}

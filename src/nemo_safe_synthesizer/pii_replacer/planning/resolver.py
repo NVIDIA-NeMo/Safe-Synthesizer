@@ -19,7 +19,7 @@ from ...config.replace_pii import DataToSamplerValueMapping, EntityType, LLMConf
 from ...config.time_series import TimeSeriesParameters
 from ...errors import ParameterError
 from .dependency_mappings import (
-    dependency_columns,
+    conditioner_columns,
     mapping_inputs,
     unmatched_dependency_values,
     validate_data_to_sampler_value_mapping,
@@ -259,7 +259,7 @@ def resolve_replacement_config(
         enhancer=enhancer or default_enhancer,
     )
 
-    if sampler_value_catalog is None and dependency_columns(plan):
+    if sampler_value_catalog is None and conditioner_columns(plan):
         from ..sampler_catalog import load_sampler_value_catalog
 
         sampler_value_catalog = load_sampler_value_catalog(config.replacement, config.sampler)
@@ -283,16 +283,16 @@ def resolve_replacement_config(
                 )
             mappings = active_discoverer.discover_data_to_sampler_value_mapping(df, plan, catalog)
 
-    validate_data_to_sampler_value_mapping(plan, mappings, catalog)
-    if unmatched := unmatched_dependency_values(df, plan, mappings, catalog):
+    resolved_plan = PiiReplacementPlan(
+        columns_to_replace=plan.columns_to_replace,
+        data_to_sampler_value_mapping=mappings,
+    )
+    validate_data_to_sampler_value_mapping(resolved_plan, catalog)
+    if unmatched := unmatched_dependency_values(df, resolved_plan, catalog):
         columns = ", ".join(f"{column!r} ({count})" for column, count in sorted(unmatched.items()))
         raise ParameterError(
             "data_to_sampler_value_mapping has no entry for dataset values that match no sampler value, "
             f"counted by depends_on column: {columns}. Add an entry listing the sampler values each one may "
             "match, or list every sampler value to allow any match"
         )
-    resolved_plan = PiiReplacementPlan(
-        columns_to_replace=plan.columns_to_replace,
-        data_to_sampler_value_mapping=mappings,
-    )
     return config.model_copy(update={"replacement_plan": resolved_plan})

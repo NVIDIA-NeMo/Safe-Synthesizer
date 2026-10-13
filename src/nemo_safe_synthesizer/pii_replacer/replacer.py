@@ -85,7 +85,6 @@ class TabularPiiReplacer:
             self._replacement_generator(resolved_config),
             group_column=self._data_config.group_training_examples_by,
             base_seed=resolve_base_seed(self._config.replacement.seed),
-            data_to_sampler_value_mapping=plan.data_to_sampler_value_mapping,
         )
         execution = executor.execute(df)
         return TransformResult(

@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import logging
+
 import pandas as pd
 import pytest
 
@@ -201,3 +203,24 @@ class TestDependencyMappings:
                 DataParameters(),
                 sampler_value_catalog={EntityType.GENDER: ("female", "male")},
             )
+
+    def test_mapping_for_a_column_the_sampler_cannot_condition_on_is_kept_with_a_warning(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        caplog.set_level(logging.WARNING)
+        dataframe = pd.DataFrame({"first_name": ["Ada"], "sex": ["Female"], "race": ["Asian"]})
+        mappings: DataToSamplerValueMapping = {"race": {"Asian": ["east asian"]}}
+
+        resolved = resolve_replacement_config(
+            dataframe,
+            ReplacePiiConfig(replacement_plan=_plan(mappings)),
+            DataParameters(),
+            sampler_value_catalog={EntityType.GENDER: ("female", "male")},
+        )
+
+        assert resolved.inline_plan is not None
+        assert resolved.inline_plan.data_to_sampler_value_mapping == mappings
+        assert "Ignoring data_to_sampler_value_mapping for a column the configured sampler cannot condition on" in (
+            caplog.text
+        )

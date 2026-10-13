@@ -72,8 +72,14 @@ def _target(
     )
 
 
-def _plan(*targets: PiiColumnPlan) -> PiiReplacementPlan:
-    return PiiReplacementPlan(columns_to_replace=list(targets))
+def _plan(
+    *targets: PiiColumnPlan,
+    data_to_sampler_value_mapping: DataToSamplerValueMapping | None = None,
+) -> PiiReplacementPlan:
+    return PiiReplacementPlan(
+        columns_to_replace=list(targets),
+        data_to_sampler_value_mapping=data_to_sampler_value_mapping or {},
+    )
 
 
 def _execute(
@@ -82,14 +88,12 @@ def _execute(
     generator: _RecordingGenerator,
     *,
     group_column: str | None = None,
-    data_to_sampler_value_mapping: DataToSamplerValueMapping | None = None,
 ) -> ReplacementExecutionResult:
     return StructuredReplacementExecutor(
         plan,
         generator,
         group_column=group_column,
         base_seed=42,
-        data_to_sampler_value_mapping=data_to_sampler_value_mapping,
     ).execute(dataframe)
 
 
@@ -126,29 +130,25 @@ class TestPlanCompiler:
 class TestStructuredReplacementExecutor:
     def test_resolves_sampler_values_from_the_dependency_source_column(self) -> None:
         dataframe = pd.DataFrame({"first_name": ["Ada"], "sex": ["Woman"]})
-        plan = _plan(_target("first_name", EntityType.FIRST_NAME, ("sex", EntityType.GENDER)))
-        generator = _RecordingGenerator()
-
-        _execute(
-            dataframe,
-            plan,
-            generator,
+        plan = _plan(
+            _target("first_name", EntityType.FIRST_NAME, ("sex", EntityType.GENDER)),
             data_to_sampler_value_mapping={"sex": {"Woman": ["female"]}},
         )
+        generator = _RecordingGenerator()
+
+        _execute(dataframe, plan, generator)
 
         assert generator.requests[0].resolved_dependency_values == ((EntityType.GENDER, ("female",)),)
 
     def test_matches_mapping_keys_for_non_string_dependency_values(self) -> None:
         dataframe = pd.DataFrame({"first_name": ["Ada", "Grace"], "sex": [1.0, 2.0]})
-        plan = _plan(_target("first_name", EntityType.FIRST_NAME, ("sex", EntityType.GENDER)))
-        generator = _RecordingGenerator()
-
-        _execute(
-            dataframe,
-            plan,
-            generator,
+        plan = _plan(
+            _target("first_name", EntityType.FIRST_NAME, ("sex", EntityType.GENDER)),
             data_to_sampler_value_mapping={"sex": {"1.0": ["female"], "2.0": ["male"]}},
         )
+        generator = _RecordingGenerator()
+
+        _execute(dataframe, plan, generator)
 
         assert [request.resolved_dependency_values for request in generator.requests] == [
             ((EntityType.GENDER, ("female",)),),
