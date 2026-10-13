@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 from nemo_safe_synthesizer.errors import ParameterError
-from nemo_safe_synthesizer.pii_replacer.replacement.canonicalization import canonicalize_scalar
+from nemo_safe_synthesizer.pii_replacer.replacement.canonicalization import canonicalize_scalar, is_missing_scalar
 
 
 @pytest.mark.unit
@@ -49,3 +49,9 @@ class TestCanonicalizeScalar:
     def test_missing_values_are_never_canonicalized(self, missing: object) -> None:
         with pytest.raises(ParameterError, match="missing values cannot be canonicalized"):
             canonicalize_scalar(missing)
+
+    def test_integers_too_large_for_float_are_not_missing(self) -> None:
+        huge = 10**400
+
+        assert not is_missing_scalar(huge)
+        assert canonicalize_scalar(huge).normalized_value == str(huge)

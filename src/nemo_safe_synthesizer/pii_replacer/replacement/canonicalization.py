@@ -28,6 +28,9 @@ def is_missing_scalar(value: object) -> bool:
         return bool(np.isnat(value))
     if isinstance(value, Decimal):
         return value.is_nan()
+    if isinstance(value, Integral):
+        # Integers are never NaN, and float() overflows for very large ones.
+        return False
     if isinstance(value, Real):
         return math.isnan(float(value))
     return False

@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 import pandas as pd
 
 from ...config.replace_pii import DataToSamplerValueMapping, EntityType, PiiColumnPlan, PiiReplacementPlan
-from ...errors import GenerationError, InternalError, ParameterError
+from ...errors import DataError, GenerationError, InternalError, ParameterError, SafeSynthesizerError
 from ...observability import get_logger
 from ..transform_result import ColumnStatistics, ReplacementGenerationStatistics
 from .canonicalization import canonicalize_scalar, is_missing_scalar, readable_value
@@ -119,6 +119,7 @@ class StructuredReplacementExecutor:
             generation_statistics=ReplacementGenerationStatistics(
                 generated_replacement_count=self._generated_count,
                 generator_time_seconds=self._generation_elapsed,
+                dependency_drift_count=sum(drift.conflict_count for drift in drifts),
             ),
             dependency_drifts=drifts,
         )
@@ -133,7 +134,13 @@ class StructuredReplacementExecutor:
     def _snapshot_group_identities(self, dataframe: pd.DataFrame) -> tuple[CanonicalValue, ...] | None:
         if self._group_column is None:
             return None
-        return tuple(_group_identity(value) for value in dataframe[self._group_column].tolist())
+        values = dataframe[self._group_column].tolist()
+        if missing := sum(1 for value in values if is_missing_scalar(value)):
+            raise DataError(
+                f"group column {self._group_column!r} has {missing} missing value(s); PII replacement needs a group "
+                "identifier on every row so unrelated rows do not share replacements"
+            )
+        return tuple(canonicalize_scalar(value) for value in values)
 
     def _seed_reserved_values(self, dataframe: pd.DataFrame) -> None:
         for spec in self._plan.columns_to_replace:
@@ -221,7 +228,7 @@ class StructuredReplacementExecutor:
             started = time.perf_counter()
             try:
                 candidate = self._generator.generate(request)
-            except GenerationError:
+            except SafeSynthesizerError:
                 raise
             except Exception as exc:
                 raise GenerationError(
@@ -320,12 +327,6 @@ def _resolved_dependency_values(
         normalized = readable_value(value).casefold()
         resolved.append((entity_type, source_mappings.get(normalized, (normalized,))))
     return tuple(resolved)
-
-
-def _group_identity(value: object) -> CanonicalValue:
-    if is_missing_scalar(value):
-        return CanonicalValue("missing_group", "")
-    return canonicalize_scalar(value)
 
 
 def _derive_seed(

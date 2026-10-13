@@ -138,6 +138,14 @@ class ReplacementGenerationStatistics(BaseModel):
             "free-text detection, and writing replacements back."
         ),
     )
+    dependency_drift_count: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "Number of later group occurrences that reused a replacement although their dependency values "
+            "differed from the group's first occurrence."
+        ),
+    )
 
 
 class TransformResult(BaseModel):

@@ -14,7 +14,7 @@ from types import MappingProxyType
 from typing import Literal
 
 from ...config.replace_pii import EntityType, PatternSyntax
-from ...errors import ParameterError
+from ...errors import InternalError, ParameterError
 
 __all__ = [
     "CHARACTER_MASK_ESCAPABLE_CHARACTERS",
@@ -244,7 +244,7 @@ def compile_name_pattern(
             continue
         placeholder = part.placeholder
         if placeholder is None:
-            raise RuntimeError("parsed name pattern part has no literal or placeholder")
+            raise InternalError("parsed name pattern part has no literal or placeholder")
         if placeholder.part in {"domain", "organization"}:
             expression.append(r"[^@\s]+")
         elif placeholder.initial:
@@ -282,7 +282,7 @@ def render_name_pattern(
             continue
         placeholder = part.placeholder
         if placeholder is None:
-            raise RuntimeError("parsed name pattern part has no literal or placeholder")
+            raise InternalError("parsed name pattern part has no literal or placeholder")
         component = values.get(placeholder.part, "")
         if placeholder.initial:
             component = component[:1]
