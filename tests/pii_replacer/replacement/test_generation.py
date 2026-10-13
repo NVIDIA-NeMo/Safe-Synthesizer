@@ -22,7 +22,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiSamplerBackend,
     PiiSamplerConfig,
 )
-from nemo_safe_synthesizer.errors import InternalError, ParameterError
+from nemo_safe_synthesizer.errors import GenerationError, InternalError, ParameterError
 from nemo_safe_synthesizer.pii_replacer.replacement.generation import (
     ReplacementGenerationRequest,
     ReplacementGenerator,
