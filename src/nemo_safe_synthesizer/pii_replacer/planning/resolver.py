@@ -10,14 +10,14 @@ from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 import pandas as pd
 
 from ...config.data import DataParameters
 from ...config.replace_pii import DataToSamplerValueMapping, EntityType, LLMConfig, PiiReplacementPlan, ReplacePiiConfig
 from ...config.time_series import TimeSeriesParameters
-from ...errors import ParameterError
+from ...errors import InternalError, ParameterError
 from .dependency_mappings import (
     built_in_value_mappings,
     conditioner_columns,
@@ -27,6 +27,9 @@ from .dependency_mappings import (
 )
 from .io import load_plan, save_plan
 from .validation import get_protected_columns, validate_plan
+
+if TYPE_CHECKING:
+    from .llm import LLMPlanEnhancer
 
 __all__ = [
     "ColumnProfile",
@@ -95,7 +98,7 @@ class DependencyMappingDiscoverer(Protocol):
 
     def discover_data_to_sampler_value_mapping(
         self,
-        dataframe: object,
+        dataframe: pd.DataFrame,
         plan: PiiReplacementPlan,
         catalog: Mapping[EntityType, tuple[str, ...]],
     ) -> DataToSamplerValueMapping:
@@ -240,14 +243,43 @@ def resolve_replacement_config(
     mapping_discoverer: DependencyMappingDiscoverer | None = None,
     sampler_value_catalog: Mapping[EntityType, tuple[str, ...]] | None = None,
 ) -> ReplacePiiConfig:
-    """Resolve one plan, discovering its columns and mappings together when requested."""
+    """Resolve the replacement plan and its data-to-sampler value mapping for ``df``.
+
+    The plan comes from ``config`` or, for ``auto_discovery``, from the
+    discoverer and, when ``config.llm`` is set, the LLM enhancer. The value
+    mapping then combines built-in entries for common gender spellings, the
+    plan's own entries, and, for ``auto_discovery``, discovered entries for any
+    remaining conditioner values without a sampler match.
+
+    Args:
+        df: Data the plan is validated against and whose conditioner values are mapped.
+        config: PII replacement configuration to resolve.
+        data_config: Data parameters, used for grouping and protected columns.
+        time_series: Time-series parameters, used for protected columns.
+        discoverer: Plan discoverer for ``auto_discovery``; defaults to the heuristic discoverer.
+        enhancer: Plan enhancer; defaults to the LLM enhancer when ``config.llm`` is set.
+        mapping_discoverer: Value-mapping discoverer; defaults to the LLM enhancer when ``config.llm`` is set.
+        sampler_value_catalog: Sampler values per entity type; loaded from the configured sampler when omitted.
+
+    Returns:
+        A copy of ``config`` whose ``replacement_plan`` is the resolved inline plan,
+        including its complete ``data_to_sampler_value_mapping``.
+
+    Raises:
+        ParameterError: If the plan or mapping is invalid, a conditioner value has
+            no sampler match or mapping entry and cannot be discovered, or the
+            selected Nemotron-Personas dataset is missing.
+
+    Example:
+        With a plan where ``first_name`` depends on ``sex``, values ``"F"`` and
+        ``"Woman"`` resolve to ``{"sex": {"F": ["female"], "Woman": ["female"]}}``
+        without an LLM, while a value such as ``"X"`` needs a mapping entry.
+    """
     discover_plan = config.is_auto_discovery
     default_enhancer: PlanEnhancer | None = None
     default_mapping_discoverer: DependencyMappingDiscoverer | None = None
     if config.llm is not None and discover_plan and enhancer is None:
-        from .llm import LLMPlanEnhancer
-
-        llm_adapter = LLMPlanEnhancer(config.llm)
+        llm_adapter = _llm_plan_enhancer(config)
         default_enhancer = llm_adapter
         default_mapping_discoverer = llm_adapter
 
@@ -278,9 +310,7 @@ def resolve_replacement_config(
     if discover_plan and mapping_inputs(df, plan, catalog):
         active_discoverer = mapping_discoverer or default_mapping_discoverer
         if active_discoverer is None and config.llm is not None:
-            from .llm import LLMPlanEnhancer
-
-            active_discoverer = LLMPlanEnhancer(config.llm)
+            active_discoverer = _llm_plan_enhancer(config)
         if active_discoverer is None:
             raise ParameterError(
                 "automatic data-to-sampler value mapping found dataset values without case-insensitive sampler "
@@ -311,3 +341,12 @@ def _merged_value_mappings(*mappings: DataToSamplerValueMapping) -> DataToSample
         for column_name, value_mappings in mapping.items():
             merged.setdefault(column_name, {}).update(value_mappings)
     return merged
+
+
+def _llm_plan_enhancer(config: ReplacePiiConfig) -> LLMPlanEnhancer:
+    """Build the LLM plan enhancer for ``config.llm``, importing the LLM client only when needed."""
+    if config.llm is None:
+        raise InternalError("the LLM plan enhancer requires replace_pii.llm")
+    from .llm import LLMPlanEnhancer
+
+    return LLMPlanEnhancer(config.llm)

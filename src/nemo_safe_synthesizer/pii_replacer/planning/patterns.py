@@ -36,20 +36,32 @@ __all__ = [
 
 @dataclass(frozen=True, slots=True)
 class CharacterMaskToken:
-    """Regex and user-facing description for one character-mask token."""
+    """Regex, generated characters, and user-facing description for one character-mask token."""
 
     regex: str
+    """Regex that validates one character produced by the token."""
+
+    choices: str
+    """Characters the token can generate."""
+
     description: str
+    """Short description shown in prompts and error messages."""
 
 
 CHARACTER_MASK_TOKENS: Mapping[str, CharacterMaskToken] = MappingProxyType(
     {
-        "#": CharacterMaskToken(regex=r"\d", description="digit 0-9"),
-        "^": CharacterMaskToken(regex="[A-Z]", description="uppercase letter A-Z"),
-        "@": CharacterMaskToken(regex="[a-z]", description="lowercase letter a-z"),
-        "&": CharacterMaskToken(regex="[A-Z0-9]", description="digit or uppercase letter"),
-        "%": CharacterMaskToken(regex="[a-z0-9]", description="digit or lowercase letter"),
-        "*": CharacterMaskToken(regex="[A-Za-z0-9]", description="digit or letter"),
+        "#": CharacterMaskToken(regex=r"\d", choices=string.digits, description="digit 0-9"),
+        "^": CharacterMaskToken(regex="[A-Z]", choices=string.ascii_uppercase, description="uppercase letter A-Z"),
+        "@": CharacterMaskToken(regex="[a-z]", choices=string.ascii_lowercase, description="lowercase letter a-z"),
+        "&": CharacterMaskToken(
+            regex="[A-Z0-9]", choices=string.digits + string.ascii_uppercase, description="digit or uppercase letter"
+        ),
+        "%": CharacterMaskToken(
+            regex="[a-z0-9]", choices=string.digits + string.ascii_lowercase, description="digit or lowercase letter"
+        ),
+        "*": CharacterMaskToken(
+            regex="[A-Za-z0-9]", choices=string.digits + string.ascii_letters, description="digit or letter"
+        ),
     }
 )
 _CHARACTER_MASK_ESCAPE_ORDER = (*CHARACTER_MASK_TOKENS, "[", "]", "\\")
@@ -61,9 +73,16 @@ class NamePartPlaceholder:
     """Meaning and presentation of one accepted name-part placeholder."""
 
     part: Literal["first", "middle", "last", "domain", "organization"]
+    """Name or email part the placeholder renders."""
+
     capitalization: Literal["lower", "title", "upper"] | None
+    """Case applied to the rendered part, or ``None`` to keep it as generated."""
+
     initial: bool
+    """Whether only the part's first character is rendered."""
+
     description: str
+    """Short description shown in prompts and error messages."""
 
 
 NAME_PART_PLACEHOLDERS: Mapping[str, NamePartPlaceholder] = MappingProxyType(
@@ -99,7 +118,10 @@ class CharacterMaskPart:
     """One parsed literal or generated character in a character mask."""
 
     literal: str | None = None
+    """Character copied unchanged, or ``None`` for a generated position."""
+
     choices: str | None = None
+    """Characters a generated position may produce, or ``None`` for a literal."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,19 +129,13 @@ class NamePatternPart:
     """One parsed literal or placeholder in a name/email pattern."""
 
     literal: str | None = None
+    """Text copied unchanged, or ``None`` for a placeholder."""
+
     placeholder: NamePartPlaceholder | None = None
+    """Placeholder rendered from generated name parts, or ``None`` for a literal."""
 
 
-_TOKEN_CHOICES: Mapping[str, str] = MappingProxyType(
-    {
-        "#": string.digits,
-        "^": string.ascii_uppercase,
-        "@": string.ascii_lowercase,
-        "&": string.digits + string.ascii_uppercase,
-        "%": string.digits + string.ascii_lowercase,
-        "*": string.digits + string.ascii_letters,
-    }
-)
+_EMAIL_ONLY_NAME_PARTS = frozenset({"domain", "organization"})
 _NAME_PART_PATTERN = re.compile(r"\{([^{}]+)\}")
 
 
@@ -139,8 +155,8 @@ def parse_character_mask(pattern: str) -> tuple[tuple[CharacterMaskPart, ...] | 
                 allowed = " ".join(sorted(CHARACTER_MASK_ESCAPABLE_CHARACTERS))
                 return None, f"escapes unsupported character {escaped!r}; only {allowed} may be escaped"
             parts.append(CharacterMaskPart(literal=escaped))
-        elif choices := _TOKEN_CHOICES.get(character):
-            parts.append(CharacterMaskPart(choices=choices))
+        elif token := CHARACTER_MASK_TOKENS.get(character):
+            parts.append(CharacterMaskPart(choices=token.choices))
             has_variable = True
         elif character == "[":
             choices, end, error = _parse_character_class(pattern, index)
@@ -218,7 +234,7 @@ def parse_name_pattern(
         placeholder = NAME_PART_PLACEHOLDERS.get(match.group(0))
         if placeholder is None:
             return None, f"uses unknown placeholder {match.group(0)!r}"
-        if placeholder.part in {"domain", "organization"} and entity_type is not EntityType.EMAIL:
+        if placeholder.part in _EMAIL_ONLY_NAME_PARTS and entity_type is not EntityType.EMAIL:
             return None, f"uses {match.group(0)} outside an email pattern"
         parts.append(NamePatternPart(placeholder=placeholder))
         cursor = match.end()
@@ -245,7 +261,7 @@ def compile_name_pattern(
         placeholder = part.placeholder
         if placeholder is None:
             raise InternalError("parsed name pattern part has no literal or placeholder")
-        if placeholder.part in {"domain", "organization"}:
+        if placeholder.part in _EMAIL_ONLY_NAME_PARTS:
             expression.append(r"[^@\s]+")
         elif placeholder.initial:
             expression.append(r"[^\W\d_]")

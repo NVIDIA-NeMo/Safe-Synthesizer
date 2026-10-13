@@ -242,7 +242,7 @@ Add dataset-specific label adaptation beside the replacement columns it
 describes:
 
 ```python
-DataToSamplerValueMapping = dict[str, dict[str, list[str] | None]]
+DataToSamplerValueMapping = dict[str, dict[str, list[str]]]
 
 
 class PiiReplacementPlan(Parameters):
@@ -274,7 +274,9 @@ replace_pii:
             entity_type: ethnic_background
     data_to_sampler_value_mapping:
       sex:
-        Non-binary: null
+        Non-binary:
+          - female
+          - male
       race:
         Asian:
           - east asian
@@ -298,7 +300,6 @@ replace_pii:
           - polynesian
           - melanesian
           - micronesian
-        Other: null
 ```
 
 This mapping adapts labels from the input dataset to labels understood by the selected sampler. It remains
@@ -312,7 +313,9 @@ configuration and run it again.
 
 Resolve each dependency value as follows:
 
-1. Compare input and sampler values case-insensitively. Identity matches need no persisted mapping.
+1. Compare input and sampler values case-insensitively. Identity matches need no persisted mapping. For every sampler,
+   resolution also writes built-in entries for common gender spellings (`F`, `Woman`, `Girl` to `female`; `M`, `Man`,
+   `Boy` to `male`) into the resolved mapping unless the plan already has an entry for that value.
 2. In automatic mode, send only unmatched distinct source values and the selected sampler's allowed values to the LLM.
    Each source value is capped at 128 characters. If unmatched values exist without an LLM, require a manual mapping.
 3. Match inline source-label keys case-insensitively. The inline mapping is authoritative and bypasses mapping discovery.
@@ -326,7 +329,9 @@ Resolve each dependency value as follows:
    never the raw dependency value.
 
 Reject empty target lists, empty labels, source or target labels duplicated after case-folding, columns not used as plan
-dependencies, and labels unsupported by a sampler that exposes a label catalog. Applying a mapping must not alter
+dependencies, and labels unsupported by a sampler that exposes a label catalog. A mapping for a column whose entity type
+the selected sampler cannot condition on, such as ethnic background with Faker, is kept with a warning so the plan still
+works if the sampler is switched back. Applying a mapping must not alter
 `CanonicalValue`, mapping identity, dependency-drift comparison, or persisted source data; case-folding exists only
 inside sampler candidate selection.
 

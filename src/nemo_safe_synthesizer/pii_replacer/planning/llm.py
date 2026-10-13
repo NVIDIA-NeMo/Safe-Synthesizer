@@ -683,7 +683,7 @@ class LLMPlanEnhancer(PlanEnhancer):
 
     def discover_data_to_sampler_value_mapping(
         self,
-        dataframe: object,
+        dataframe: pd.DataFrame,
         plan: PiiReplacementPlan,
         catalog: SamplerValueCatalog,
     ) -> DataToSamplerValueMapping:
@@ -708,11 +708,8 @@ class LLMPlanEnhancer(PlanEnhancer):
             is omitted because it already matches.
 
         Raises:
-            TypeError: If ``dataframe`` is not a pandas DataFrame.
             ParameterError: If the mapping request exceeds its size bounds.
         """
-        if not isinstance(dataframe, pd.DataFrame):
-            raise TypeError("dependency mapping discovery requires a pandas DataFrame")
         inputs = mapping_inputs(dataframe, plan, catalog)
         if not inputs:
             return {}
@@ -723,11 +720,10 @@ class LLMPlanEnhancer(PlanEnhancer):
                 "automatic dependency mapping exceeds its bounded request size; provide manual mappings instead"
             )
 
-        expected = {
-            (item.column_name, source_value.casefold()): (source_value, item)
-            for item in inputs
-            for source_value in item.source_values
-        }
+        expected: dict[tuple[str, str], tuple[str, DependencyMappingInput]] = {}
+        for item in inputs:
+            for source_value in item.source_values:
+                expected[(item.column_name, source_value.casefold())] = (source_value, item)
 
         def parse(response: _LLMValueMappingResponse) -> DataToSamplerValueMapping:
             actual = [(item.column_name, item.source_value.casefold()) for item in response.mappings]

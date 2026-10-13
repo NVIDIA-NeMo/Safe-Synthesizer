@@ -59,7 +59,7 @@ def load_sampler_value_catalog(
 
     path = require_nemotron_personas_dataset(settings, sampler)
     try:
-        available_columns = _available_parquet_columns(path)
+        available_columns = available_parquet_columns(path)
         selected = {
             entity_type: column
             for entity_type, aliases in PERSONA_DEPENDENCY_COLUMN_ALIASES.items()
@@ -75,7 +75,8 @@ def load_sampler_value_catalog(
     }
 
 
-def _available_parquet_columns(path: Path) -> frozenset[str]:
+def available_parquet_columns(path: Path) -> frozenset[str]:
+    """Return the column names in a parquet file's schema without reading its data."""
     from pyarrow.parquet import ParquetFile
 
     return frozenset(ParquetFile(path).schema_arrow.names)

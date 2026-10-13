@@ -398,11 +398,9 @@ class SafeSynthesizer(ConfigBuilder):
         )
         self._nss_config = self._nss_config.model_copy(update={"replace_pii": resolved})
         if output_path is not None:
-            resolved_output_path = Path(output_path)
-            resolved_output_path.parent.mkdir(parents=True, exist_ok=True)
             from ..pii_replacer.planning.io import save_config
 
-            save_config(self._nss_config, resolved_output_path)
+            save_config(self._nss_config, Path(output_path))
         return resolved
 
     @traced("SafeSynthesizer.process_data", category=LogCategory.RUNTIME)

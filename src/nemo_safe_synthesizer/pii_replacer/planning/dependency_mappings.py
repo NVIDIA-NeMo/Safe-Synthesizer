@@ -41,9 +41,16 @@ class DependencyMappingInput:
     """Unmatched values for one dependency column and sampler value catalog."""
 
     column_name: str
+    """Dependency column the values come from."""
+
     entity_type: EntityType
+    """Entity type the plan assigns to that column."""
+
     source_values: tuple[str, ...]
+    """Distinct dataset values with neither a case-insensitive sampler match nor a mapping entry."""
+
     sampler_values: tuple[str, ...]
+    """Values the sampler accepts for ``entity_type``."""
 
 
 def conditioner_columns(plan: PiiReplacementPlan) -> dict[str, EntityType]:

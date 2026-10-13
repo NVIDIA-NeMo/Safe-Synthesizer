@@ -15,18 +15,19 @@ from ....errors import GenerationError, InternalError
 from ....observability import get_logger
 from ...planning.patterns import render_character_mask, render_name_pattern
 from ._common import (
-    _dependency_values,
-    _email_domain,
-    _looks_like_uuid,
-    _name_values,
-    _render_address,
-    _render_luhn_pattern,
-    _render_name,
-    _required_pattern_values,
-    _resolve_dependency_values,
-    _shape_preserving_value,
-    _shift_birth_date,
+    NAME_ENTITY_TYPES,
+    dependency_values,
+    email_domain,
+    looks_like_uuid,
+    name_values,
     normalize_organization_domain,
+    render_address,
+    render_luhn_pattern,
+    render_name,
+    required_pattern_values,
+    resolve_dependency_values,
+    shape_preserving_value,
+    shift_birth_date,
 )
 
 if TYPE_CHECKING:
@@ -65,48 +66,40 @@ class FakerReplacementGenerator:
         if entity_type is EntityType.PHONE_NUMBER and request.pattern is not None:
             return render_character_mask(request.pattern, rng)
         if entity_type is EntityType.DATE_OF_BIRTH:
-            return _shift_birth_date(request.original_value, request.pattern, rng)
+            return shift_birth_date(request.original_value, request.pattern, rng)
         if entity_type is EntityType.CREDIT_DEBIT_CARD and request.pattern is not None:
-            return _render_luhn_pattern(request.pattern, rng)
-        if entity_type in {EntityType.API_KEY, EntityType.UNIQUE_IDENTIFIER}:
-            if request.pattern is not None:
-                return render_character_mask(request.pattern, rng)
-            if entity_type is not EntityType.UNIQUE_IDENTIFIER or not _looks_like_uuid(request.original_value):
-                shaped = _shape_preserving_value(request.original_value, rng)
-                if shaped != request.original_value:
-                    return shaped
+            return render_luhn_pattern(request.pattern, rng)
+        if entity_type in {EntityType.API_KEY, EntityType.UNIQUE_IDENTIFIER} and (
+            shaped := _shaped_identifier(request, rng)
+        ):
+            return shaped
 
         fake = self._faker(request.seed)
-        dependencies = _dependency_values(request.effective_dependency_tuple)
-        if entity_type in {
-            EntityType.FIRST_NAME,
-            EntityType.MIDDLE_NAME,
-            EntityType.LAST_NAME,
-            EntityType.FULL_NAME,
-        }:
+        dependencies = dependency_values(request.effective_dependency_tuple)
+        if entity_type in NAME_ENTITY_TYPES:
             gender_value = dependencies.get(EntityType.GENDER)
             gender_values = (
-                _resolve_dependency_values(request, EntityType.GENDER, gender_value)
+                resolve_dependency_values(request, EntityType.GENDER, gender_value)
                 if gender_value is not None
                 else None
             )
-            values = _name_values(
+            values = name_values(
                 dependencies,
                 _faker_name_values(fake, _select_dependency_value(gender_values, request.seed)),
             )
-            return _render_name(entity_type, request.pattern, rng, values)
+            return render_name(entity_type, request.pattern, rng, values)
         if entity_type is EntityType.EMAIL:
             return self._generate_email(request, fake, rng, dependencies)
         if entity_type is EntityType.PHONE_NUMBER:
             return fake.phone_number()
         if entity_type is EntityType.STREET_ADDRESS:
-            return _render_address(fake.street_address(), dependencies)
+            return render_address(fake.street_address(), dependencies)
         if entity_type in {EntityType.SSN, EntityType.NATIONAL_ID}:
             return fake.ssn()
         if entity_type is EntityType.CREDIT_DEBIT_CARD:
             return fake.credit_card_number()
         if entity_type in {EntityType.API_KEY, EntityType.UNIQUE_IDENTIFIER}:
-            if entity_type is EntityType.UNIQUE_IDENTIFIER and _looks_like_uuid(request.original_value):
+            if entity_type is EntityType.UNIQUE_IDENTIFIER and looks_like_uuid(request.original_value):
                 return str(fake.uuid4())
             fallback = str(fake.uuid4()).replace("-", "")
             return fallback if entity_type is EntityType.UNIQUE_IDENTIFIER else f"key-{fallback}"
@@ -134,9 +127,9 @@ class FakerReplacementGenerator:
         if request.pattern is None:
             return fake.email()
 
-        required = _required_pattern_values(EntityType.EMAIL, request.pattern)
-        values = _name_values(dependencies, _faker_name_values(fake, None))
-        original_domain = _email_domain(request.original_value)
+        required = required_pattern_values(EntityType.EMAIL, request.pattern)
+        values = name_values(dependencies, _faker_name_values(fake, None))
+        original_domain = email_domain(request.original_value)
         if original_domain is None and "domain" in required:
             self._warn_generation_fallback("unresolved_email_domain")
         values["domain"] = original_domain or fake.domain_name()
@@ -178,3 +171,13 @@ def _faker_first_name(fake: Faker, gender: str | None) -> str:
     if normalized == "male":
         return fake.first_name_male()
     return fake.first_name()
+
+
+def _shaped_identifier(request: ReplacementGenerationRequest, rng: Random) -> str | None:
+    """Return a masked or shape-preserving identifier, or ``None`` to generate one with Faker."""
+    if request.pattern is not None:
+        return render_character_mask(request.pattern, rng)
+    if request.entity_type is EntityType.UNIQUE_IDENTIFIER and looks_like_uuid(request.original_value):
+        return None
+    shaped = shape_preserving_value(request.original_value, rng)
+    return shaped if shaped != request.original_value else None
