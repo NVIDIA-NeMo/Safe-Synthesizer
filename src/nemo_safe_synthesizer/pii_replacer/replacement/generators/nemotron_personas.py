@@ -121,6 +121,8 @@ class NemotronPersonasReplacementGenerator:
         candidates: np.ndarray | None = None
         for entity_type, sampler_values in resolved:
             value_index = self._candidate_indexes.get(entity_type)
+            if value_index is None:
+                _raise_missing_persona_column(entity_type, self._settings.locale)
             matching = _matching_positions(value_index, sampler_values)
             if matching is None:
                 _raise_no_persona_candidates(entity_type)
@@ -281,6 +283,15 @@ def _matching_positions(
     if len(matches) == 1:
         return matches[0]
     return np.sort(np.concatenate(matches))
+
+
+def _raise_missing_persona_column(entity_type: EntityType, locale: str) -> Never:
+    columns = ", ".join(repr(column) for column in PERSONA_DEPENDENCY_COLUMN_ALIASES[entity_type])
+    raise GenerationError(
+        f"the replacement plan conditions on {entity_type.value!r}, but the Nemotron-Personas data for locale "
+        f"{locale!r} has no column for it (looked for {columns}); remove that dependency from the plan or use "
+        "a Nemotron-Personas dataset that includes it"
+    )
 
 
 def _raise_no_persona_candidates(entity_type: EntityType) -> Never:

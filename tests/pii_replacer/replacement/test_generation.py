@@ -528,6 +528,22 @@ class TestReplacementGenerator:
             generator.generate(request)
         assert "Secret Source Label" not in str(error.value)
 
+    def test_nemotron_personas_generator_names_a_missing_dependency_column(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        people = pd.DataFrame({"first_name": ["First"], "sex": ["female"]})
+        generator = _nemotron_personas_generator(tmp_path, monkeypatch, people)
+        request = _request(
+            dependencies=((EntityType.ETHNIC_BACKGROUND, CanonicalValue("string", "Asian")),),
+            resolved_values=((EntityType.ETHNIC_BACKGROUND, ("east asian",)),),
+        )
+
+        with pytest.raises(GenerationError, match=r"conditions on 'ethnic_background'.*'en_US' has no column") as error:
+            generator.generate(request)
+        assert "'ethnicity'" in str(error.value)
+
     def test_nemotron_personas_generator_reads_selected_columns_and_reuses_candidate_indexes(
         self,
         tmp_path: Path,
