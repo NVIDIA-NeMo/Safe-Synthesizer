@@ -80,19 +80,24 @@ class _GlinerModel(Protocol):
         texts: list[str],
         labels: dict[str, dict[str, float]],
         **kwargs: object,
-    ) -> list[object]: ...
+    ) -> list[object]:
+        """Return one raw entity result per input text."""
 
 
 class _RegexMatch(Protocol):
-    def group(self, group: int = 0) -> str: ...
+    def group(self, group: int = 0) -> str:
+        """Return the matched text."""
 
-    def start(self) -> int: ...
+    def start(self) -> int:
+        """Return the match start offset."""
 
-    def end(self) -> int: ...
+    def end(self) -> int:
+        """Return the match end offset."""
 
 
 class _CompiledRegex(Protocol):
-    def finditer(self, string: str, *, timeout: float) -> Iterable[_RegexMatch]: ...
+    def finditer(self, string: str, *, timeout: float) -> Iterable[_RegexMatch]:
+        """Yield matches in ``string``, raising ``TimeoutError`` after ``timeout`` seconds."""
 
 
 @dataclass(frozen=True, slots=True)
