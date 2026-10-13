@@ -98,14 +98,14 @@ class _InvalidStructuredOutputError(GenerationError):
     """Structured output stayed invalid after every allowed attempt."""
 
 
-class _DataToSamplerValueMapping(_StructuredResponse):
+class _LLMValueMappingEntry(_StructuredResponse):
     column_name: str
     source_value: str
     sampler_values: list[str]
 
 
-class _DataToSamplerValueMappingResponse(_StructuredResponse):
-    mappings: list[_DataToSamplerValueMapping]
+class _LLMValueMappingResponse(_StructuredResponse):
+    mappings: list[_LLMValueMappingEntry]
 
 
 ResponseT = TypeVar("ResponseT", bound=_StructuredResponse)
@@ -687,16 +687,25 @@ class LLMPlanEnhancer(PlanEnhancer):
         plan: PiiReplacementPlan,
         catalog: SamplerValueCatalog,
     ) -> DataToSamplerValueMapping:
-        """Map non-identity dependency values to values from one sampler catalog.
+        """Map conditioner-column values without a sampler match to values from one sampler catalog.
 
         Args:
-            dataframe: Data whose dependency-column values need sampler values.
-            plan: Replacement plan naming the dependency columns.
-            catalog: Sampler values available for each dependency entity type.
+            dataframe: Data whose conditioner-column values need sampler values.
+            plan: Replacement plan naming the conditioner columns.
+            catalog: Sampler values available for each conditioner entity type.
 
         Returns:
-            Per-column mappings from each dataset value to sampler values, or
-            ``None`` when no supplied value fits.
+            Per-column mappings from each dataset value that has no
+            case-insensitive sampler match to one or more sampler values. A
+            value that fits no narrower set maps to every supplied value, so
+            sampling is not narrowed. Returns an empty dict when every value
+            already matches.
+
+            For example, with the catalog
+            ``{ETHNIC_BACKGROUND: ("east asian", "south asian", "white")}`` and
+            a ``race`` column holding ``"Asian"`` and ``"White"``, the result is
+            ``{"race": {"Asian": ["east asian", "south asian"]}}``. ``"White"``
+            is omitted because it already matches.
 
         Raises:
             TypeError: If ``dataframe`` is not a pandas DataFrame.
@@ -720,7 +729,7 @@ class LLMPlanEnhancer(PlanEnhancer):
             for source_value in item.source_values
         }
 
-        def parse(response: _DataToSamplerValueMappingResponse) -> DataToSamplerValueMapping:
+        def parse(response: _LLMValueMappingResponse) -> DataToSamplerValueMapping:
             actual = [(item.column_name, item.source_value.casefold()) for item in response.mappings]
             if issue := _mapping_coverage_issue(list(expected), actual):
                 raise ValueError(issue)
@@ -735,7 +744,7 @@ class LLMPlanEnhancer(PlanEnhancer):
         return self._request_structured(
             purpose="PII data-to-sampler value mapping",
             messages=messages,
-            response_model=_DataToSamplerValueMappingResponse,
+            response_model=_LLMValueMappingResponse,
             parse=parse,
         )
 
