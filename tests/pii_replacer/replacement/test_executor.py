@@ -508,6 +508,15 @@ class TestStructuredReplacementExecutor:
         with pytest.raises(GenerationError, match="differs from the original"):
             _execute(dataframe, plan, _EchoGenerator())
 
+    def test_free_text_group_scope_rejects_rows_without_a_group_identifier(self) -> None:
+        dataframe = pd.DataFrame({"patient": ["A", None], "notes": ["Ada called", "Ada called"]})
+        plan = _plan(_target("notes", EntityType.FREE_TEXT))
+        detector = _StaticDetector([])
+
+        with pytest.raises(DataError, match="'patient' has 1 missing value"):
+            _execute(dataframe, plan, _RecordingGenerator(), group_column="patient", free_text_detector=detector)
+        assert detector.cells == []
+
     def test_project_errors_from_the_generator_are_not_rewrapped(self) -> None:
         dataframe = pd.DataFrame({"first_name": ["Ada"]})
         plan = _plan(_target("first_name", EntityType.FIRST_NAME))
