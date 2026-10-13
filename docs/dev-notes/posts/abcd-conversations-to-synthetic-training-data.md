@@ -9,7 +9,7 @@ compact_tables: true
 
 # Synthesizing Agent Conversations with NeMo Safe Synthesizer (Part 1)
 
-Every time a customer chats with a support agent, or a user asks an AI assistant to get something done, a detailed trace is left behind. It captures what the person wanted, how the agent replied, and which actions it took along the way. As agentic applications take off, these traces are quickly becoming some of the most valuable data a team can learn from. They are also some of the most sensitive, since a single conversation can mix personal details with the internal playbook a business runs on.
+Every time a customer chats with a support agent or a user asks an AI assistant to get something done, a detailed trace is left behind. It captures what the person wanted, how the agent replied, and which actions it took along the way. As agentic applications take off, these traces are quickly becoming some of the most valuable data a team can learn from. They are also some of the most sensitive, since a single conversation can mix personal details with a business's internal playbook.
 
 That combination makes conversation data a natural candidate for synthetic data, but it raises a practical question. NeMo Safe Synthesizer learns from tables, and a conversation is not a table. Fortunately, it does not need to start as one. With a little reshaping, chat transcripts, event logs, transaction histories, and many other ordered records fit the format NeMo Safe Synthesizer expects.
 
@@ -30,7 +30,7 @@ Part 1 covers the full journey:
 
 ## Step 1. Meet the Data
 
-The [Action-Based Conversations Dataset (ABCD)](https://github.com/asappresearch/abcd) contains 10,042 human-to-human customer-service conversations for a fictional online retailer, split into 8,034 training, 1,004 development, and 1,004 test conversations. In each conversation, one person plays a customer with a scripted scenario and another plays an agent who follows the company's written policies. The agent clicks workflow actions, such as pulling up an account or validating a purchase, and those actions are logged in order alongside the chat.
+The [Action-Based Conversations Dataset (ABCD)](https://github.com/asappresearch/abcd) contains 10,042 human-to-human customer-service conversations for a fictional online retailer, split into 8,034 training, 1,004 development, and 1,004 test conversations. In each conversation, one person plays a customer with a scripted scenario and another plays an agent who follows the company's written policies. The agent takes workflow actions in a support tool, such as pulling up an account or validating a purchase, and those actions are logged in order alongside the chat.
 
 Here is a real conversation from the training split. A customer wants to return jeans that are the wrong size.
 
@@ -68,10 +68,10 @@ Customer: that's it. take care.
 
 A few things to notice:
 
-- **Actions carry values.** `validate-purchase` records a username, email, and order ID. Those values must line up with what the customer said earlier.
-- **Order matters.** The agent cannot validate a purchase before pulling up the account, and the escalation only makes sense after the return is denied.
-- **Every conversation has one intent.** This one is `return_size`. ABCD has 55 intents and 30 action types.
-- **Text placeholders.** ABCD ships a version of each message in which `<email>` and `<phone>` stand in for the values the customer typed. The action values keep the scenario's values.
+- Actions carry values: `validate-purchase` records a username, email, and order ID. Those values must line up with what the customer said earlier.
+- Order matters: the agent cannot validate a purchase before pulling up the account, and the escalation only makes sense after the return is denied.
+- Every conversation has one intent: this one is `return_size`. ABCD has 55 intents and 30 action types.
+- Text placeholders: ABCD ships a version of each message in which `<email>` and `<phone>` stand in for the values the customer typed. The action values keep the scenario's values.
 
 All customer profiles in ABCD are fictional, so none of these values belong to a real person.
 
@@ -124,20 +124,20 @@ NeMo Safe Synthesizer needs a table instead, so we flattened every conversation 
 
 In plain terms, the transformation does four things:
 
-- **One row per turn.** Every message and every action becomes its own row.
-- **Actions sit in the same timeline as messages.** An action is a row whose speaker is `action`, so the table records exactly when the agent clicked each button.
-- **The `targets` list becomes named columns.** Intent, next-step type, action button, and action values each get a column that NeMo Safe Synthesizer can learn from directly.
-- **Two columns hold the structure together.** `group_id` says which conversation a row belongs to, and `t` says where it falls in that conversation. ABCD has no timestamps, so `t` is workflow order, not time.
+- One row per turn: every message and every action becomes its own row.
+- Actions sit in the same timeline as messages: an action is a row whose speaker is `action`, so the table records exactly when the agent took each action.
+- The `targets` list becomes named columns: intent, next-step type, action button, and action values each get a column that NeMo Safe Synthesizer can learn from directly.
+- Two columns hold the structure together: `group_id` says which conversation a row belongs to, and `t` says where it falls in that conversation. ABCD has no timestamps, so `t` is workflow order, not time.
 
 We also kept two small helper columns derived from the action values. The result is a single table of 176,434 rows covering 8,034 conversations, each between 6 and 75 events long.
 
 A few choices in this transformation are less obvious, so here is why we made them.
 
-- **Why repeat the intent on every row?** The intent belongs to the whole conversation, but NeMo Safe Synthesizer reads rows. Copying it onto every row lets the model learn that it stays fixed for the entire conversation.
-- **Why are some `next_step` cells empty?** The next-step type describes what the agent does next. ABCD labels it on agent and action turns only, so customer rows leave it blank.
-- **Why store action values as a JSON list in one column?** An action can record zero to three values. `validate-purchase` records three. Keeping them in a single column preserves one row per event.
-- **Why drop `candidates` and `scenario`?** The candidates are IDs into a bank of agent responses that are only used to score the response-prediction task, so we rebuild them at evaluation time instead of asking the model to generate them. The scenario is the script the customer followed, and the details that matter already appear in the conversation itself.
-- **Why use the placeholder text?** ABCD's downstream tasks are defined on the placeholder version of each message, so we kept that version as the `text` column.
+- Why repeat the intent on every row? The intent belongs to the whole conversation, but NeMo Safe Synthesizer reads rows. Copying it onto every row lets the model learn that it stays fixed for the entire conversation.
+- Why are some `next_step` cells empty? The next-step type describes what the agent does next. ABCD labels it on agent and action turns only, so customer rows leave it blank.
+- Why store action values as a JSON list in one column? An action can record zero to three values. `validate-purchase` records three. Keeping them in a single column preserves one row per event.
+- Why drop `candidates` and `scenario`? The candidates are IDs into a bank of agent responses that are only used to score the response-prediction task, so we rebuild them at evaluation time instead of asking the model to generate them. The scenario is the script the customer followed, and the details that matter already appear in the conversation itself.
+- Why use the placeholder text? ABCD's downstream tasks are defined on the placeholder version of each message, so we kept that version as the `text` column.
 
 ## Step 3. Train and Generate
 
@@ -205,7 +205,7 @@ Here is what each setting does.
 | `num_records` | 176,434 | Match the size of the training split |
 | `replace_pii` | off | Not needed for fictional profiles |
 
-ABCD already provides separate development and test splits, so no holdout is needed. PII replacement stays off for two reasons. ABCD's profiles are fictional, and the current PII replacement does not swap an entity for the same stand-in everywhere it appears. On this data, that would break the link between what a customer types and the values the agent's actions record.
+ABCD already provides separate development and test splits, so no holdout is needed. PII replacement stays off because ABCD's customer profiles are fictional. For conversations that contain real personal data, turn it on.
 
 Under the hood, NeMo Safe Synthesizer fine-tunes a LoRA adapter on SmolLM3-3B so that the model learns to write whole conversations in this table's schema, then samples new conversations from it.
 
@@ -319,8 +319,8 @@ The action mix tracks the real data closely as well. Each row below is one actio
 
 Next, we trained models on the synthetic conversations and tested them on real ones. ABCD defines two downstream tasks that mirror what an agent has to do.
 
-- **Action State Tracking (AST)** predicts the next action and its value, given the conversation so far. *Joint accuracy* counts a prediction as correct only when both the action and the value are right.
-- **Cascading Dialogue Success (CDS)** predicts the intent, next-step type, action, value, and the next agent response, ranked against 100 candidates. The *cascading score* rewards a model for getting consecutive future steps right, so it is the strictest measure.
+- Action State Tracking (AST) predicts the next action and its value, given the conversation so far. *Joint accuracy* counts a prediction as correct only when both the action and the value are right.
+- Cascading Dialogue Success (CDS) predicts the intent, next-step type, action, value, and the next agent response, ranked against 100 candidates. The *cascading score* rewards a model for getting consecutive future steps right, so it is the strictest measure.
 
 We trained T5-Small with the [Workflow Discovery](https://github.com/ServiceNow/workflow-discovery) recipe twice, once on the real training split and once on the synthetic corpus with no real training rows. Both models were evaluated on the same untouched real test split. Each result is the mean of three training runs with different seeds.
 
@@ -332,7 +332,7 @@ To summarize utility in one number, we divide each synthetic score by its real-d
 
 - AST joint accuracy is 76.46 / 80.13 = 95.4%.
 - CDS cascading score is 10.86 / 12.71 = 85.4%.
-- **Combined utility retention is 90.4%.**
+- Combined utility retention is 90.4%.
 
 ## Step 6. Check What They Reveal About the Training Data
 
@@ -357,21 +357,23 @@ How to read this:
 - The row-level attack is at chance. Its 95% confidence interval (0.495–0.507) includes 0.5.
 - The conversation-level attack shows a modest signal. Its interval (0.524–0.568) sits just above 0.5.
 
+If any replay is a concern for your use case, you can filter the output before using it. Dropping the 2.60% of synthetic conversations that the linked-dialogue check flags removes every replayed combination of rare entities, and you can go further and drop any conversation that contains a rare training entity. Filtering only removes the exact matches these checks detect, so it works best alongside the training and generation settings that reduce replay in the first place. Part 2 explores those settings and the balance they strike between utility and replay.
+
 We are currently working on cross-row PII replacement, which swaps each recurring entity for the same consistent stand-in everywhere it appears before training. That should eliminate the kind of entity replay measured here, while keeping the values inside each conversation consistent with one another.
 
-## What We Learned
+## Takeaways from This Example
 
-- **Conversations fit naturally into NeMo Safe Synthesizer.** One row per event, grouped by conversation and ordered by position, was all the structure it needed. The same reshaping idea applies to many other ordered data types.
-- **Synthetic-only training transferred to real data.** Models trained without any real training rows kept 90.4% of real-data utility and stayed within about 4 points on every metric.
-- **The output was new, not copied.** No complete conversation was reproduced, and the synthetic conversations recombined the policy into new customers, items, and outcomes.
+- Conversations can be reshaped to fit NeMo Safe Synthesizer: one row per event, grouped by conversation and ordered by position, was all the structure it needed here. The same reshaping idea applies to many other ordered data types.
+- Synthetic-only training transferred to real data: models trained without any real training rows kept 90.4% of real-data utility and stayed within about 4 points on every metric.
+- The output was new, not copied: no complete conversation was reproduced, and the synthetic conversations recombined the policy into new customers, items, and outcomes.
 
 ## Coming Up in Part 2
 
-Part 1 used the default settings. In [Part 2](tuning-synthetic-conversations-abcd.md), we push on that baseline with three experiments.
+Part 1 used the default settings. In Part 2, we push on that baseline with three experiments.
 
-- **Can prompting replace fine-tuning?** We skip training entirely and give the base model a few real conversations as examples. It does not work, and we look at why.
-- **Which settings move the balance between utility and replay?** We sweep temperature, learning rate, LoRA rank, weight decay, and the number of passes over the data, try a larger backbone model, and show how to pick a setting for a given replay budget.
-- **Can synthetic data fix rare actions?** Some actions appear only a few hundred times. We generate a larger pool from the same adapter, add targeted examples for those actions, and measure what changes downstream.
+- Can prompting replace fine-tuning? We skip training entirely and give the base model a few real conversations as examples. It does not work, and we look at why.
+- Which settings move the balance between utility and replay? We sweep temperature, learning rate, LoRA rank, weight decay, and the number of passes over the data, try a larger backbone model, and show how to pick a setting for a given replay budget.
+- Can synthetic data fix rare actions? Some actions appear only a few hundred times. We generate a larger pool from the same adapter, add targeted examples for those actions, and measure what changes downstream.
 
 Have questions or want to share what you are building? Open a [GitHub discussion](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/discussions) or file a [feature request](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/issues).
 
