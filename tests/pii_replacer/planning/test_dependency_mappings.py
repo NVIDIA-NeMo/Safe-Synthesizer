@@ -186,7 +186,7 @@ class TestDependencyMappings:
     )
     def test_manual_mapping_rejects_invalid_plan_or_sampler_bindings(
         self,
-        mappings: dict[str, dict[str, list[str] | None]],
+        mappings: DataToSamplerValueMapping,
         error: str,
     ) -> None:
         dataframe = pd.DataFrame({"first_name": ["Ada"], "sex": ["Woman"], "race": ["White"]})

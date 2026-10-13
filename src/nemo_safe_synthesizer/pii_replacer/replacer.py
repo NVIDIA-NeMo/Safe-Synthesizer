@@ -15,7 +15,6 @@ from ..errors import InternalError
 from .planning import resolve_replacement_config
 from .replacement.executor import StructuredReplacementExecutor, resolve_base_seed
 from .replacement.generation import ReplacementGenerator
-from .replacement.generators import FakerReplacementGenerator, NemotronPersonasReplacementGenerator
 from .transform_result import TransformResult
 
 if TYPE_CHECKING:
@@ -92,13 +91,15 @@ class TabularPiiReplacer:
         return TransformResult(
             transformed_df=execution.dataframe,
             column_statistics=execution.column_statistics,
-            replacement_plan=plan,
             resolved_config=resolved_config,
             generation_statistics=execution.generation_statistics,
             replacement_time_seconds=time.perf_counter() - started,
         )
 
     def _replacement_generator(self, config: ReplacePiiConfig) -> ReplacementGenerator:
+        # Imported here so loading the package does not load generator implementations.
+        from .replacement.generators import FakerReplacementGenerator, NemotronPersonasReplacementGenerator
+
         settings = config.replacement
         sampler = config.sampler
         match sampler.backend:

@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import re
+import subprocess
+import sys
 from collections.abc import Callable
 from dataclasses import FrozenInstanceError
 from datetime import datetime
@@ -231,6 +233,16 @@ class TestReplacementGenerator:
                 resolved_dependency_values=[],
             )
 
+    def test_importing_the_contract_does_not_load_generator_implementations(self) -> None:
+        code = (
+            "import sys\n"
+            "import nemo_safe_synthesizer.pii_replacer.replacement.generation\n"
+            "loaded = [m for m in sys.modules if m.startswith('nemo_safe_synthesizer.pii_replacer.replacement.generators')]\n"
+            "assert not loaded, loaded\n"
+        )
+
+        subprocess.run([sys.executable, "-c", code], check=True)
+
     def test_faker_generation_is_deterministic_for_equal_requests(self) -> None:
         generator = _faker_generator()
         request = _request(
@@ -248,13 +260,13 @@ class TestReplacementGenerator:
         [
             ("Female", (), "FEMALE"),
             ("Woman", ((EntityType.GENDER, ("female",)),), "FEMALE"),
-            ("Non-binary", ((EntityType.GENDER, None),), "GENERIC"),
+            ("Non-binary", (), "GENERIC"),
         ],
     )
     def test_faker_applies_gender_dependency_mappings(
         self,
         dependency_value: str,
-        resolved_values: tuple[tuple[EntityType, tuple[str, ...] | None], ...],
+        resolved_values: tuple[tuple[EntityType, tuple[str, ...]], ...],
         expected: str,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:

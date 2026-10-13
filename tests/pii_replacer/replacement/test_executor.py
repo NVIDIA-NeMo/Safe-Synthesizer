@@ -8,6 +8,7 @@ import pytest
 
 from nemo_safe_synthesizer.config.replace_pii import (
     ConditioningColumn,
+    DataToSamplerValueMapping,
     EntityType,
     PiiColumnPlan,
     PiiReplacementPlan,
@@ -81,7 +82,7 @@ def _execute(
     generator: _RecordingGenerator,
     *,
     group_column: str | None = None,
-    data_to_sampler_value_mapping: dict[str, dict[str, list[str] | None]] | None = None,
+    data_to_sampler_value_mapping: DataToSamplerValueMapping | None = None,
 ) -> ReplacementExecutionResult:
     return StructuredReplacementExecutor(
         plan,
