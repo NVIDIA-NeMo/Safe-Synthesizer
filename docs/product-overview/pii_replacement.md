@@ -213,6 +213,9 @@ YAML has these fields: `model_id`, `revision`, and optionally
 `environment` (server process variables), `request_timeout_seconds`,
 `startup_timeout_seconds`, and `shutdown_timeout_seconds`. In vLLM 0.27,
 `thinking_token_budget` needs `VLLM_USE_V2_MODEL_RUNNER: "0"` in `environment`.
+Avoid `extra_args` that make vLLM compile kernels at startup, such as
+`--mamba-backend=flashinfer`: compiling needs `ninja` and a CUDA compiler,
+which an NSS install doesn't include, and it lengthens every server launch.
 
 NSS starts the server only when LLM-assisted discovery runs, meaning an
 `auto_discovery` plan with `llm` configured, and stops it before planning

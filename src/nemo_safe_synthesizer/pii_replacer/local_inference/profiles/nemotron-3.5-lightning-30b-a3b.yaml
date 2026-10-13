@@ -12,8 +12,12 @@ max_model_len: 32768
 # Matches the default replace_pii.llm.max_workers.
 max_num_seqs: 8
 extra_args:
-  # Mamba state setting recommended by the model card. Its stochastic-rounding
-  # option is left out because A100 GPUs lack the required instruction.
+  # Mamba state setting recommended by the model card. The card's
+  # --enable-mamba-cache-stochastic-rounding and --mamba-backend=flashinfer are
+  # left out: with vLLM's default Mamba kernel, stochastic rounding needs a
+  # Blackwell GPU, and the FlashInfer kernel is compiled at server startup,
+  # which needs ninja and a CUDA compiler that NSS installs don't include and
+  # adds launch time that one-off planning runs won't recover.
   - --mamba-ssm-cache-dtype=float16
   # Think before the schema-constrained answer.
   - --reasoning-parser=nemotron_v3
