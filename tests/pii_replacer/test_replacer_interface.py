@@ -48,14 +48,13 @@ class TestTransformResult:
         result = TransformResult(
             transformed_df=dataframe,
             column_statistics={},
-            replacement_plan=plan,
             resolved_config=ReplacePiiConfig(replacement_plan=plan),
             generation_statistics=generation_statistics,
             replacement_time_seconds=0.25,
         )
 
         assert result.transformed_df is dataframe
-        assert result.replacement_plan is plan
+        assert result.replacement_plan == plan
         assert result.generation_statistics is generation_statistics
         assert result.replacement_time_seconds == 0.25
         assert result.replacement_map is None
@@ -82,7 +81,6 @@ class TestTransformResult:
         values: dict[str, object] = {
             "transformed_df": pd.DataFrame(),
             "column_statistics": {},
-            "replacement_plan": PiiReplacementPlan(),
             "resolved_config": ReplacePiiConfig(replacement_plan=PiiReplacementPlan()),
             "generation_statistics": {
                 "generated_replacement_count": 1,
@@ -97,23 +95,47 @@ class TestTransformResult:
 
         assert exc_info.value.errors()[0]["type"] == "greater_than_equal"
 
-    def test_resolved_config_must_contain_the_executed_plan(self) -> None:
-        executed = PiiReplacementPlan(
-            columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
-        )
+    def test_result_keeps_its_own_copy_of_the_executed_config(self) -> None:
+        email = PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)
+        config = ReplacePiiConfig(replacement_plan=PiiReplacementPlan(columns_to_replace=[email]))
 
-        with pytest.raises(InternalError, match="must contain the executed replacement_plan"):
-            TransformResult(
-                transformed_df=pd.DataFrame(),
-                column_statistics={},
-                replacement_plan=executed,
-                resolved_config=ReplacePiiConfig(),
-                generation_statistics=ReplacementGenerationStatistics(
-                    generated_replacement_count=0,
-                    generator_time_seconds=0.0,
-                ),
-                replacement_time_seconds=0.0,
+        result = _result(config)
+        assert config.inline_plan is not None
+        config.inline_plan.columns_to_replace.clear()
+
+        assert result.replacement_plan.columns_to_replace == [email]
+        assert result.resolved_config.inline_plan == result.replacement_plan
+
+    def test_result_requires_a_concrete_executed_plan(self) -> None:
+        with pytest.raises(InternalError, match="must contain the executed replacement plan"):
+            _result(ReplacePiiConfig())
+
+    def test_result_rejects_a_separate_replacement_plan(self) -> None:
+        config = ReplacePiiConfig(replacement_plan=PiiReplacementPlan())
+
+        with pytest.raises(ValidationError, match="replacement_plan"):
+            TransformResult.model_validate(
+                {
+                    "transformed_df": pd.DataFrame(),
+                    "column_statistics": {},
+                    "replacement_plan": PiiReplacementPlan(),
+                    "resolved_config": config,
+                    "generation_statistics": {"generated_replacement_count": 0, "generator_time_seconds": 0.0},
+                    "replacement_time_seconds": 0.0,
+                }
             )
+
+
+def _result(config: ReplacePiiConfig) -> TransformResult:
+    return TransformResult(
+        transformed_df=pd.DataFrame(),
+        column_statistics={},
+        resolved_config=config,
+        generation_statistics=ReplacementGenerationStatistics(
+            generated_replacement_count=0, generator_time_seconds=0.0
+        ),
+        replacement_time_seconds=0.0,
+    )
 
 
 @pytest.mark.unit
@@ -145,3 +167,32 @@ class TestReplacementMap:
         assert "grace@example.org" not in repr(replacement_map)
         assert "Ada" not in repr(replacement_map)
         assert replacement_map.free_text[0].original_value == "Ada"
+
+    @pytest.mark.parametrize(
+        ("overrides", "error"),
+        [
+            ({"start": 10, "end": 2}, InternalError),
+            ({"score": 5.0}, ValidationError),
+            ({"score": float("nan")}, ValidationError),
+        ],
+    )
+    def test_free_text_record_rejects_impossible_spans(
+        self,
+        overrides: dict[str, object],
+        error: type[Exception],
+    ) -> None:
+        values: dict[str, object] = {
+            "row_position": 0,
+            "column_name": "notes",
+            "start": 0,
+            "end": 3,
+            "entity_type": EntityType.FIRST_NAME,
+            "detection_source": "gliner",
+            "score": 0.9,
+            "scope": "record",
+            "original_value": "Ada",
+            "replacement_value": "Eve",
+        } | overrides
+
+        with pytest.raises(error):
+            FreeTextReplacementRecord.model_validate(values)

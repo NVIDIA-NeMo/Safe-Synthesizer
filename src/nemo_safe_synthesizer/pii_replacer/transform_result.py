@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import Literal, Self
 
 import pandas as pd
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from ..config.replace_pii import EntityType, PiiReplacementPlan, ReplacePiiConfig
 from ..errors import InternalError
@@ -51,13 +51,25 @@ class FreeTextReplacementRecord(BaseModel):
     row_position: int = Field(ge=0, description="Zero-based position of the replaced dataframe row.")
     column_name: str = Field(description="Name of the free-text column containing the accepted span.")
     start: int = Field(ge=0, description="Inclusive start offset in the original cell.")
-    end: int = Field(gt=0, description="Exclusive end offset in the original cell.")
+    end: int = Field(gt=0, description="Exclusive end offset in the original cell. Must be greater than start.")
     entity_type: EntityType = Field(description="Normalized entity type assigned to the accepted span.")
     detection_source: Literal["gliner", "regex"] = Field(description="Detector that produced the accepted span.")
-    score: float | None = Field(default=None, description="Detector confidence when the detector supplies one.")
+    score: float | None = Field(
+        default=None,
+        ge=0,
+        le=1,
+        allow_inf_nan=False,
+        description="Detector confidence in [0, 1] when the detector supplies one.",
+    )
     scope: Literal["record", "group"] = Field(description="Mapping scope used for replacement reuse.")
     original_value: str = Field(repr=False, description="Exact text covered by the span. May contain sensitive data.")
     replacement_value: str = Field(repr=False, description="Replacement inserted for the accepted span.")
+
+    @model_validator(mode="after")
+    def _require_nonempty_span(self) -> Self:
+        if self.end <= self.start:
+            raise InternalError(f"free-text replacement record must satisfy start < end, got {self.start}, {self.end}")
+        return self
 
 
 class ReplacementMap(BaseModel):
@@ -131,10 +143,13 @@ class ReplacementGenerationStatistics(BaseModel):
 class TransformResult(BaseModel):
     """Result of PII replacement: transformed data and per-column statistics.
 
-    Shared result shape consumed by evaluation after a replacement run.
+    Shared result shape consumed by evaluation after a replacement run. The
+    result keeps its own deep copy of ``resolved_config``, and
+    ``replacement_plan`` is read from that copy, so later changes to the
+    caller's configuration cannot make the result inconsistent.
     """
 
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    model_config = ConfigDict(arbitrary_types_allowed=True, extra="forbid")
 
     transformed_df: pd.DataFrame = Field(
         description="DataFrame with PII replaced according to config.",
@@ -142,11 +157,11 @@ class TransformResult(BaseModel):
     column_statistics: dict[str, ColumnStatistics] = Field(
         description="Column name to ``ColumnStatistics`` for that column.",
     )
-    replacement_plan: PiiReplacementPlan = Field(
-        description="Resolved replacement plan executed for this result.",
-    )
     resolved_config: ReplacePiiConfig = Field(
-        description="Resolved PII configuration containing the executed plan and its dependency mappings.",
+        description=(
+            "Resolved PII configuration containing the executed plan and its dependency mappings. "
+            "Stored as a deep copy of the value passed in."
+        ),
     )
     generation_statistics: ReplacementGenerationStatistics = Field(
         description="Aggregate timing and count statistics for replacement generation.",
@@ -164,8 +179,17 @@ class TransformResult(BaseModel):
         description="Sensitive replacement provenance, present only when explicitly requested.",
     )
 
-    @model_validator(mode="after")
-    def _require_resolved_config_to_contain_the_executed_plan(self) -> Self:
-        if self.resolved_config.inline_plan != self.replacement_plan:
-            raise InternalError("resolved_config must contain the executed replacement_plan")
-        return self
+    @field_validator("resolved_config")
+    @classmethod
+    def _own_a_resolved_config_snapshot(cls, value: ReplacePiiConfig) -> ReplacePiiConfig:
+        if value.inline_plan is None:
+            raise InternalError("resolved_config must contain the executed replacement plan")
+        return value.model_copy(deep=True)
+
+    @property
+    def replacement_plan(self) -> PiiReplacementPlan:
+        """Resolved replacement plan executed for this result, read from ``resolved_config``."""
+        plan = self.resolved_config.inline_plan
+        if plan is None:
+            raise InternalError("resolved_config must contain the executed replacement plan")
+        return plan
