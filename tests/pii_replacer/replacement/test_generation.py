@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import subprocess
+import sys
 from collections.abc import Callable
 from dataclasses import FrozenInstanceError
 
@@ -14,10 +16,12 @@ from nemo_safe_synthesizer.config.replace_pii import (
 )
 from nemo_safe_synthesizer.errors import InternalError
 from nemo_safe_synthesizer.pii_replacer.replacement.generation import (
-    FakerReplacementGenerator,
-    NemotronPersonasReplacementGenerator,
     ReplacementGenerationRequest,
     ReplacementGenerator,
+)
+from nemo_safe_synthesizer.pii_replacer.replacement.generators import (
+    FakerReplacementGenerator,
+    NemotronPersonasReplacementGenerator,
 )
 from nemo_safe_synthesizer.pii_replacer.replacement.types import CanonicalValue
 
@@ -116,3 +120,13 @@ class TestReplacementGenerator:
                 seed=42,
                 resolved_dependency_values=[],
             )
+
+    def test_importing_the_contract_does_not_load_generator_implementations(self) -> None:
+        code = (
+            "import sys\n"
+            "import nemo_safe_synthesizer.pii_replacer.replacement.generation\n"
+            "loaded = [m for m in sys.modules if m.startswith('nemo_safe_synthesizer.pii_replacer.replacement.generators')]\n"
+            "assert not loaded, loaded\n"
+        )
+
+        subprocess.run([sys.executable, "-c", code], check=True)

@@ -1,7 +1,10 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Contract and compatibility exports for replacement value generation."""
+"""Contract for replacement value generation.
+
+Concrete generators live in ``replacement.generators``; this module does not import them.
+"""
 
 from __future__ import annotations
 
@@ -10,15 +13,9 @@ from typing import ClassVar, Protocol
 
 from ...config.replace_pii import EntityType, PiiSamplerBackend
 from ...errors import InternalError
-from .generators import FakerReplacementGenerator, NemotronPersonasReplacementGenerator
 from .types import EffectiveDependencyTuple, require_effective_dependency_tuple
 
-__all__ = [
-    "FakerReplacementGenerator",
-    "NemotronPersonasReplacementGenerator",
-    "ReplacementGenerationRequest",
-    "ReplacementGenerator",
-]
+__all__ = ["ReplacementGenerationRequest", "ReplacementGenerator"]
 
 ResolvedDependencyValues = tuple[tuple[EntityType, tuple[str, ...]], ...]
 
