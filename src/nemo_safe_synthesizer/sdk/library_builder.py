@@ -378,8 +378,8 @@ class SafeSynthesizer(ConfigBuilder):
             The dataframe-aware resolved PII replacement configuration.
 
         Raises:
-            ParameterError: If PII replacement is disabled.
-            ValueError: If no valid data source is configured.
+            ParameterError: If PII replacement is disabled or no dataframe
+                data source is configured.
         """
         self._ensure_observability()
         self.resolve()
@@ -387,7 +387,7 @@ class SafeSynthesizer(ConfigBuilder):
         config = self._nss_config
         dataframe = self._data_source
         if config is None or not isinstance(dataframe, pd.DataFrame):
-            raise ValueError("PII replacement planning requires a configured dataframe data source")
+            raise ParameterError("PII replacement planning requires a configured dataframe data source")
         replace_pii = config.replace_pii
         if replace_pii is None:
             raise ParameterError("PII replacement is disabled; configure replace_pii before planning")
@@ -432,8 +432,8 @@ class SafeSynthesizer(ConfigBuilder):
             transformed dataframe.
 
         Raises:
-            ParameterError: If PII replacement is disabled or invalid.
-            ValueError: If no valid data source is configured.
+            ParameterError: If PII replacement is disabled or invalid, or no
+                dataframe data source is configured.
         """
         self._ensure_observability()
         resolved = self.plan_pii_replacement(output_path=config_output_path)
@@ -441,7 +441,7 @@ class SafeSynthesizer(ConfigBuilder):
         config = self._nss_config
         dataframe = self._data_source
         if config is None or not isinstance(dataframe, pd.DataFrame):
-            raise ValueError("PII replacement requires a configured dataframe data source")
+            raise InternalError("PII replacement planning finished without a dataframe data source")
         from ..pii_replacer import TabularPiiReplacer
 
         result = TabularPiiReplacer(
