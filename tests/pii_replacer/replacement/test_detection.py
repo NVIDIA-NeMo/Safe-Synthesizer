@@ -450,6 +450,23 @@ class TestRegexDetector:
 
         assert [(text[span.start : span.end], span.entity_type) for span in spans] == [("2001:db8::1", EntityType.IPV6)]
 
+    @pytest.mark.parametrize(
+        ("text", "address"),
+        [
+            ("ip:2001:db8::1", "2001:db8::1"),
+            ("::ffff:192.0.2.1", "::ffff:192.0.2.1"),
+            ("Mapped ::ffff:192.0.2.1 here", "::ffff:192.0.2.1"),
+        ],
+    )
+    def test_ipv6_after_a_label_colon_and_ipv4_mapped_ipv6_are_replaced_whole(self, text: str, address: str) -> None:
+        spans = resolve_overlapping_spans(RegexDetector().detect([_cell(text)]))
+
+        assert [(text[span.start : span.end], span.entity_type) for span in spans] == [(address, EntityType.IPV6)]
+
+    @pytest.mark.parametrize("text", ["Meet at 12:30:45 today", "a:::1", "1::2::3", "2001:db8::1:"])
+    def test_rejects_ipv6_shaped_non_addresses(self, text: str) -> None:
+        assert RegexDetector().detect([_cell(text)]) == ()
+
 
 @pytest.mark.unit
 class TestOverlapResolution:
