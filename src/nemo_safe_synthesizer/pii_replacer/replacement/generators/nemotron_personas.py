@@ -14,10 +14,10 @@ import numpy as np
 import pandas as pd
 
 from ....config.replace_pii import EntityType, PiiReplacementSettings, PiiSamplerBackend, PiiSamplerConfig
-from ....errors import GenerationError, InternalError
+from ....errors import GenerationError, InternalError, ParameterError
 from ....observability import get_logger
 from ...planning.patterns import render_name_pattern
-from ...sampler_catalog import PERSONA_DEPENDENCY_COLUMN_ALIASES
+from ...sampler_catalog import PERSONA_DEPENDENCY_COLUMN_ALIASES, require_nemotron_personas_dataset
 from ._common import (
     _dependency_values,
     _email_domain,
@@ -57,6 +57,7 @@ class NemotronPersonasReplacementGenerator:
             )
         self._settings = settings
         self._sampler = sampler
+        self._dataset_path = require_nemotron_personas_dataset(settings, sampler)
         self._fallback_generator = FakerReplacementGenerator(
             settings=settings,
             sampler=sampler.model_copy(update={"backend": PiiSamplerBackend.FAKER}),
@@ -68,7 +69,6 @@ class NemotronPersonasReplacementGenerator:
             tuple[tuple[EntityType, tuple[str, ...]], ...],
             np.ndarray,
         ] = {}
-        self._load_attempted = False
         self._warned_fallbacks: set[EntityType] = set()
 
     def generate(self, request: ReplacementGenerationRequest) -> str:
@@ -87,7 +87,7 @@ class NemotronPersonasReplacementGenerator:
 
     def _persona_values(self, request: ReplacementGenerationRequest) -> dict[str, str] | None:
         people = self._load_personas()
-        if people is None or people.empty:
+        if people.empty:
             return None
 
         candidate_positions = self._candidate_positions(request)
@@ -134,24 +134,18 @@ class NemotronPersonasReplacementGenerator:
         self._candidate_position_cache[cache_key] = candidates
         return candidates
 
-    def _load_personas(self) -> pd.DataFrame | None:
-        if self._load_attempted:
+    def _load_personas(self) -> pd.DataFrame:
+        if self._personas is not None:
             return self._personas
-        self._load_attempted = True
-        path = self._sampler.resolved_nemotron_personas_path() / "datasets" / f"{self._settings.locale}.parquet"
-        if not path.is_file():
-            return None
         try:
-            people = _read_personas(path)
-            self._candidate_indexes, dependency_columns = _build_candidate_indexes(people)
-            self._personas = people.drop(columns=dependency_columns)
-            self._persona_value_columns = _persona_value_columns(self._personas)
-        except Exception:
-            logger.runtime.warning(
-                "Nemotron-Personas replacement assets could not be read; affected entities will use Faker",
-                extra={"locale": self._settings.locale},
-            )
-        return self._personas
+            people = _read_personas(self._dataset_path)
+        except Exception as exc:
+            raise ParameterError(f"Nemotron-Personas data at {self._dataset_path} could not be read") from exc
+        self._candidate_indexes, dependency_columns = _build_candidate_indexes(people)
+        personas = people.drop(columns=dependency_columns)
+        self._persona_value_columns = _persona_value_columns(personas)
+        self._personas = personas
+        return personas
 
     def _warn_fallback(self, entity_type: EntityType) -> None:
         if entity_type in self._warned_fallbacks:

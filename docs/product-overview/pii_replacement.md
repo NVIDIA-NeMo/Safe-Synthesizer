@@ -59,9 +59,13 @@ replace_pii:
     nemotron_personas_path: /path/to/managed-assets
 ```
 
-When an applicable locale asset or required field is unavailable, NSS warns and
-uses Faker for that value. Set `backend: faker` to use Faker directly without a
-Nemotron-Personas dataset. See NVIDIA's
+When the Nemotron-Personas sampler is selected (the default), its dataset for
+the configured locale is required: if the file is missing or cannot be read,
+replacement fails instead of switching to Faker. If the plan conditions on a
+value the dataset has no column for, such as ethnic background, replacement
+also fails. When a persona row lacks one generated field, or the entity type is
+not a persona field, NSS uses Faker for that value. Set `backend: faker` to use
+Faker without a Nemotron-Personas dataset. See NVIDIA's
 [person-sampling setup](https://docs.nvidia.com/nemo/datadesigner/concepts/person-sampling)
 to select a locale resource and the
 [`en_US` NGC resource](https://catalog.ngc.nvidia.com/orgs/nvidia/nemotron-personas/resources/nemotron-personas-dataset-en_us/-)

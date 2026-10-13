@@ -19,7 +19,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiSamplerBackend,
     PiiSamplerConfig,
 )
-from nemo_safe_synthesizer.errors import GenerationError, InternalError
+from nemo_safe_synthesizer.errors import GenerationError, InternalError, ParameterError
 from nemo_safe_synthesizer.pii_replacer.replacement.generation import (
     ReplacementGenerationRequest,
     ReplacementGenerator,
@@ -125,10 +125,13 @@ class TestReplacementGenerator:
         self,
         generator_class: type[ReplacementGenerator],
         backend: PiiSamplerBackend,
+        tmp_path: Path,
     ) -> None:
+        (tmp_path / "datasets").mkdir()
+        pd.DataFrame({"first_name": ["Persona"]}).to_parquet(tmp_path / "datasets" / "en_US.parquet")
         generator = generator_class(
             settings=PiiReplacementSettings(),
-            sampler=PiiSamplerConfig(backend=backend),
+            sampler=PiiSamplerConfig(backend=backend, nemotron_personas_path=str(tmp_path)),
         )
 
         assert generator.backend is backend
@@ -528,6 +531,27 @@ class TestReplacementGenerator:
             generator.generate(request)
         assert "Secret Source Label" not in str(error.value)
 
+    def test_nemotron_personas_generator_requires_its_locale_dataset(self, tmp_path: Path) -> None:
+        with pytest.raises(ParameterError, match="no Nemotron-Personas data for locale 'en_US' was found"):
+            NemotronPersonasReplacementGenerator(
+                settings=PiiReplacementSettings(),
+                sampler=PiiSamplerConfig(
+                    backend=PiiSamplerBackend.NEMOTRON_PERSONAS,
+                    nemotron_personas_path=str(tmp_path),
+                ),
+            )
+
+    def test_nemotron_personas_generator_fails_when_its_dataset_cannot_be_read(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        generator = _nemotron_personas_generator(tmp_path, monkeypatch)
+
+        with pytest.raises(ParameterError, match="could not be read") as error:
+            generator.generate(_request())
+        assert error.value.__cause__ is not None
+
     def test_nemotron_personas_generator_names_a_missing_dependency_column(
         self,
         tmp_path: Path,
@@ -635,13 +659,11 @@ class TestReplacementGenerator:
 
     def test_nemotron_personas_generator_delegates_patterned_phone_generation_to_faker(
         self,
+        tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         delegated_requests = _record_faker_fallback(monkeypatch, "202-555-0101")
-        generator = NemotronPersonasReplacementGenerator(
-            settings=PiiReplacementSettings(),
-            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.NEMOTRON_PERSONAS),
-        )
+        generator = _nemotron_personas_generator(tmp_path, monkeypatch, pd.DataFrame({"first_name": ["Persona"]}))
         request = _request(
             EntityType.PHONE_NUMBER,
             "202-555-9999",
