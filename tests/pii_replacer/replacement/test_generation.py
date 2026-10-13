@@ -8,10 +8,12 @@ from collections.abc import Callable
 from dataclasses import FrozenInstanceError
 from datetime import datetime
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
 import pandas as pd
 import pytest
+from faker.providers.person.en_US import Provider as FakerPersonProvider
 
 from nemo_safe_synthesizer.config.replace_pii import (
     EntityType,
@@ -36,18 +38,8 @@ def _construct(factory: Callable[..., object], *args: object, **kwargs: object) 
     return factory(*args, **kwargs)
 
 
-class _GenderAwareFake:
-    def first_name_female(self) -> str:
-        return "FEMALE"
-
-    def first_name_male(self) -> str:
-        return "MALE"
-
-    def first_name(self) -> str:
-        return "GENERIC"
-
-    def last_name(self) -> str:
-        return "LAST"
+_FAKER_FEMALE_FIRST_NAMES = frozenset(FakerPersonProvider.first_names_female)
+_FAKER_MALE_FIRST_NAMES = frozenset(FakerPersonProvider.first_names_male)
 
 
 def _request(
@@ -78,14 +70,15 @@ def _faker_generator(*, locale: str = "en_US") -> FakerReplacementGenerator:
 
 def _nemotron_personas_generator(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
     people: pd.DataFrame | None = None,
 ) -> NemotronPersonasReplacementGenerator:
+    """Build a generator over ``people`` written as the locale dataset, or over an empty, unreadable file."""
     asset_path = tmp_path / "datasets" / "en_US.parquet"
     asset_path.parent.mkdir(exist_ok=True)
-    asset_path.touch()
-    if people is not None:
-        monkeypatch.setattr(pd, "read_parquet", lambda _path: people)
+    if people is None:
+        asset_path.touch()
+    else:
+        people.to_parquet(asset_path)
     return NemotronPersonasReplacementGenerator(
         settings=PiiReplacementSettings(),
         sampler=PiiSamplerConfig(
@@ -259,41 +252,58 @@ class TestReplacementGenerator:
         assert generator.generate(request).startswith("USR-")
 
     @pytest.mark.parametrize(
-        ("dependency_value", "resolved_values", "expected"),
+        ("dependency_value", "resolved_values", "allowed_names"),
         [
-            ("Female", (), "FEMALE"),
-            ("Woman", ((EntityType.GENDER, ("female",)),), "FEMALE"),
-            ("Non-binary", (), "GENERIC"),
+            ("Female", (), _FAKER_FEMALE_FIRST_NAMES),
+            ("Woman", ((EntityType.GENDER, ("female",)),), _FAKER_FEMALE_FIRST_NAMES),
+            ("M", ((EntityType.GENDER, ("male",)),), _FAKER_MALE_FIRST_NAMES),
         ],
     )
     def test_faker_applies_gender_dependency_mappings(
         self,
         dependency_value: str,
         resolved_values: tuple[tuple[EntityType, tuple[str, ...]], ...],
-        expected: str,
-        monkeypatch: pytest.MonkeyPatch,
+        allowed_names: frozenset[str],
     ) -> None:
         generator = _faker_generator()
-        monkeypatch.setattr(generator, "_faker", lambda _seed: _GenderAwareFake())
-        request = _request(
-            dependencies=((EntityType.GENDER, CanonicalValue("string", dependency_value)),),
-            resolved_values=resolved_values,
-        )
 
-        assert generator.generate(request) == expected
+        names = {
+            generator.generate(
+                _request(
+                    dependencies=((EntityType.GENDER, CanonicalValue("string", dependency_value)),),
+                    resolved_values=resolved_values,
+                    seed=seed,
+                )
+            )
+            for seed in range(20)
+        }
 
-    def test_faker_accepts_and_ignores_unsupported_dependency_mappings(
+        assert names <= allowed_names
+
+    @pytest.mark.parametrize(
+        ("dependency", "resolved_values"),
+        [
+            ((EntityType.GENDER, CanonicalValue("string", "Non-binary")), ()),
+            (
+                (EntityType.ETHNIC_BACKGROUND, CanonicalValue("string", "Asian")),
+                ((EntityType.ETHNIC_BACKGROUND, ("east asian",)),),
+            ),
+        ],
+    )
+    def test_faker_uses_ungendered_names_without_a_supported_gender(
         self,
-        monkeypatch: pytest.MonkeyPatch,
+        dependency: tuple[EntityType, CanonicalValue],
+        resolved_values: tuple[tuple[EntityType, tuple[str, ...]], ...],
     ) -> None:
         generator = _faker_generator()
-        monkeypatch.setattr(generator, "_faker", lambda _seed: _GenderAwareFake())
-        request = _request(
-            dependencies=((EntityType.ETHNIC_BACKGROUND, CanonicalValue("string", "Asian")),),
-            resolved_values=((EntityType.ETHNIC_BACKGROUND, ("east asian",)),),
-        )
 
-        assert generator.generate(request) == "GENERIC"
+        names = {
+            generator.generate(_request(dependencies=(dependency,), resolved_values=resolved_values, seed=seed))
+            for seed in range(40)
+        }
+
+        assert names - _FAKER_FEMALE_FIRST_NAMES
+        assert names - _FAKER_MALE_FIRST_NAMES
 
     def test_faker_preserves_uuid_shape(self) -> None:
         generator = _faker_generator()
@@ -401,7 +411,7 @@ class TestReplacementGenerator:
             }
         )
 
-        assert _nemotron_personas_generator(tmp_path, monkeypatch, people).generate(_request()) == "SyntheticAda"
+        assert _nemotron_personas_generator(tmp_path, people).generate(_request()) == "SyntheticAda"
 
     def test_nemotron_personas_generator_uses_address_components_from_the_selected_asset_row(
         self,
@@ -415,7 +425,7 @@ class TestReplacementGenerator:
             }
         )
 
-        generator = _nemotron_personas_generator(tmp_path, monkeypatch, people)
+        generator = _nemotron_personas_generator(tmp_path, people)
         assert generator.generate(_request(EntityType.STREET_ADDRESS, "1 Main Street")) == "42 Analytical Engine Way"
 
     def test_nemotron_personas_generator_samples_each_value_independently(
@@ -429,7 +439,7 @@ class TestReplacementGenerator:
                 "last_name": ["FirstLast", "SecondLast"],
             }
         )
-        generator = _nemotron_personas_generator(tmp_path, monkeypatch, people)
+        generator = _nemotron_personas_generator(tmp_path, people)
 
         assert generator.generate(_request(seed=0)) == "FirstRow"
         assert generator.generate(_request(EntityType.LAST_NAME, "Lovelace", seed=1)) == "SecondLast"
@@ -445,7 +455,7 @@ class TestReplacementGenerator:
                 "sex": ["female", "male"],
             }
         )
-        generator = _nemotron_personas_generator(tmp_path, monkeypatch, people)
+        generator = _nemotron_personas_generator(tmp_path, people)
         request = _request(
             dependencies=((EntityType.GENDER, CanonicalValue("string", "Female")),),
             seed=1,
@@ -464,7 +474,7 @@ class TestReplacementGenerator:
                 "ethnic_background": ["east asian", "Asian", "south asian"],
             }
         )
-        generator = _nemotron_personas_generator(tmp_path, monkeypatch, people)
+        generator = _nemotron_personas_generator(tmp_path, people)
         request = _request(
             dependencies=((EntityType.ETHNIC_BACKGROUND, CanonicalValue("string", "Asian")),),
             seed=1,
@@ -499,7 +509,7 @@ class TestReplacementGenerator:
             return original_intersect(first, second, assume_unique=assume_unique)
 
         monkeypatch.setattr(np, "intersect1d", count_intersection)
-        generator = _nemotron_personas_generator(tmp_path, monkeypatch, people)
+        generator = _nemotron_personas_generator(tmp_path, people)
 
         def generate(dataset_value: str, seed: int) -> str:
             return generator.generate(
@@ -528,7 +538,7 @@ class TestReplacementGenerator:
                 "sex": ["female", "male"],
             }
         )
-        generator = _nemotron_personas_generator(tmp_path, monkeypatch, people)
+        generator = _nemotron_personas_generator(tmp_path, people)
         request = _request(
             dependencies=((EntityType.GENDER, CanonicalValue("string", "Non-Binary")),),
             seed=1,
@@ -543,7 +553,7 @@ class TestReplacementGenerator:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         people = pd.DataFrame({"first_name": ["First"], "sex": ["female"]})
-        generator = _nemotron_personas_generator(tmp_path, monkeypatch, people)
+        generator = _nemotron_personas_generator(tmp_path, people)
         request = _request(
             dependencies=((EntityType.GENDER, CanonicalValue("string", "Secret Source Label")),),
             seed=1,
@@ -568,7 +578,7 @@ class TestReplacementGenerator:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        generator = _nemotron_personas_generator(tmp_path, monkeypatch)
+        generator = _nemotron_personas_generator(tmp_path)
 
         with pytest.raises(ParameterError, match="could not be read") as error:
             generator.generate(_request())
@@ -580,7 +590,7 @@ class TestReplacementGenerator:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         people = pd.DataFrame({"first_name": ["First"], "sex": ["female"]})
-        generator = _nemotron_personas_generator(tmp_path, monkeypatch, people)
+        generator = _nemotron_personas_generator(tmp_path, people)
         request = _request(
             dependencies=((EntityType.ETHNIC_BACKGROUND, CanonicalValue("string", "Asian")),),
             resolved_values=((EntityType.ETHNIC_BACKGROUND, ("east asian",)),),
@@ -595,26 +605,23 @@ class TestReplacementGenerator:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        read_columns: list[list[str]] = []
-        read_dtype_backends: list[str] = []
-
-        monkeypatch.setattr(
-            "nemo_safe_synthesizer.pii_replacer.replacement.generators.nemotron_personas._available_parquet_columns",
-            lambda _path: frozenset({"first_name", "sex", "persona", "detailed_persona"}),
+        people = pd.DataFrame(
+            {
+                "first_name": ["Selected", "NotSelected"],
+                "sex": ["female", "male"],
+                "persona": ["unused", "unused"],
+                "detailed_persona": ["unused", "unused"],
+            }
         )
+        generator = _nemotron_personas_generator(tmp_path, people)
+        reads: list[dict[str, object]] = []
+        real_read_parquet = pd.read_parquet
 
-        def read_parquet(_path: Path, *, columns: list[str], dtype_backend: str) -> pd.DataFrame:
-            read_columns.append(columns)
-            read_dtype_backends.append(dtype_backend)
-            return pd.DataFrame(
-                {
-                    "first_name": ["Selected", "NotSelected"],
-                    "sex": ["female", "male"],
-                }
-            )
+        def read_parquet(path: Path, *, columns: list[str], dtype_backend: Literal["pyarrow"]) -> pd.DataFrame:
+            reads.append({"columns": columns, "dtype_backend": dtype_backend})
+            return real_read_parquet(path, columns=columns, dtype_backend=dtype_backend)
 
         monkeypatch.setattr(pd, "read_parquet", read_parquet)
-        generator = _nemotron_personas_generator(tmp_path, monkeypatch)
         request = _request(
             dependencies=((EntityType.GENDER, CanonicalValue("string", "female")),),
             seed=0,
@@ -622,8 +629,7 @@ class TestReplacementGenerator:
 
         assert generator.generate(request) == "Selected"
         assert generator.generate(request) == "Selected"
-        assert read_columns == [["first_name", "sex"]]
-        assert read_dtype_backends == ["pyarrow"]
+        assert reads == [{"columns": ["first_name", "sex"], "dtype_backend": "pyarrow"}]
 
     def test_nemotron_personas_generator_combines_casefolded_arrow_dependency_values(
         self,
@@ -636,7 +642,7 @@ class TestReplacementGenerator:
                 "sex": ["Female", "FEMALE", None],
             }
         ).convert_dtypes(dtype_backend="pyarrow")
-        generator = _nemotron_personas_generator(tmp_path, monkeypatch, people)
+        generator = _nemotron_personas_generator(tmp_path, people)
 
         def generate(seed: int) -> str:
             return generator.generate(
@@ -661,7 +667,7 @@ class TestReplacementGenerator:
             pytest.fail("an unchanged Nemotron-Personas value should be resampled, not delegated to Faker")
 
         monkeypatch.setattr(FakerReplacementGenerator, "generate", fail_if_faker_is_used)
-        generator = _nemotron_personas_generator(tmp_path, monkeypatch, pd.DataFrame({"first_name": ["Ada"]}))
+        generator = _nemotron_personas_generator(tmp_path, pd.DataFrame({"first_name": ["Ada"]}))
         request = _request()
 
         assert generator.generate(request) == request.original_value
@@ -673,7 +679,7 @@ class TestReplacementGenerator:
     ) -> None:
         people = pd.DataFrame({"first_name": ["PersonaFirst"]})
         delegated_requests = _record_faker_fallback(monkeypatch, "Faker Full Name")
-        generator = _nemotron_personas_generator(tmp_path, monkeypatch, people)
+        generator = _nemotron_personas_generator(tmp_path, people)
         request = _request(EntityType.FULL_NAME, "Ada Lovelace")
 
         assert generator.generate(request) == "Faker Full Name"
@@ -685,7 +691,7 @@ class TestReplacementGenerator:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         delegated_requests = _record_faker_fallback(monkeypatch, "202-555-0101")
-        generator = _nemotron_personas_generator(tmp_path, monkeypatch, pd.DataFrame({"first_name": ["Persona"]}))
+        generator = _nemotron_personas_generator(tmp_path, pd.DataFrame({"first_name": ["Persona"]}))
         request = _request(
             EntityType.PHONE_NUMBER,
             "202-555-9999",

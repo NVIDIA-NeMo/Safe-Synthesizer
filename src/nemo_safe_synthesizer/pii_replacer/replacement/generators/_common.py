@@ -21,14 +21,33 @@ from ..value_checks import is_luhn_valid
 if TYPE_CHECKING:
     from ..generation import ReplacementGenerationRequest
 
-__all__ = ["normalize_organization_domain"]
+__all__ = [
+    "NAME_ENTITY_TYPES",
+    "dependency_values",
+    "email_domain",
+    "looks_like_uuid",
+    "name_values",
+    "normalize_organization_domain",
+    "render_address",
+    "render_luhn_pattern",
+    "render_name",
+    "required_pattern_values",
+    "resolve_dependency_values",
+    "shape_preserving_value",
+    "shift_birth_date",
+]
+
+NAME_ENTITY_TYPES = frozenset(
+    {EntityType.FIRST_NAME, EntityType.MIDDLE_NAME, EntityType.LAST_NAME, EntityType.FULL_NAME}
+)
+"""Entity types generated from person-name parts."""
 
 
-def _dependency_values(dependencies: EffectiveDependencyTuple) -> dict[EntityType, str]:
+def dependency_values(dependencies: EffectiveDependencyTuple) -> dict[EntityType, str]:
     return {entity_type: value.normalized_value for entity_type, value in dependencies if value is not None}
 
 
-def _resolve_dependency_values(
+def resolve_dependency_values(
     request: ReplacementGenerationRequest,
     entity_type: EntityType,
     value: str,
@@ -38,7 +57,7 @@ def _resolve_dependency_values(
     return resolved.get(entity_type, (value.casefold(),))
 
 
-def _name_values(
+def name_values(
     dependencies: Mapping[EntityType, str],
     sampled: Mapping[str, str],
 ) -> dict[str, str]:
@@ -57,7 +76,7 @@ def _name_values(
     }
 
 
-def _render_name(
+def render_name(
     entity_type: EntityType,
     pattern: str | None,
     rng: Random,
@@ -73,21 +92,21 @@ def _render_name(
     }[entity_type]
 
 
-def _required_pattern_values(entity_type: EntityType, pattern: str) -> frozenset[str]:
+def required_pattern_values(entity_type: EntityType, pattern: str) -> frozenset[str]:
     parts, error = parse_name_pattern(entity_type, pattern)
     if error is not None or parts is None:
         raise GenerationError(error or "invalid name pattern")
     return frozenset(part.placeholder.part for part in parts if part.placeholder is not None)
 
 
-def _email_domain(value: str) -> str | None:
+def email_domain(value: str) -> str | None:
     if "@" not in value:
         return None
     domain = value.rsplit("@", 1)[1]
     return domain if domain and not any(character.isspace() for character in domain) else None
 
 
-def _render_address(street: str, dependencies: Mapping[EntityType, str]) -> str:
+def render_address(street: str, dependencies: Mapping[EntityType, str]) -> str:
     locality = [
         dependencies.get(EntityType.CITY),
         dependencies.get(EntityType.STATE),
@@ -105,7 +124,7 @@ def normalize_organization_domain(value: str) -> str:
     return normalized[:63].rstrip("-")
 
 
-def _shift_birth_date(original: str, pattern: str | None, rng: Random) -> str:
+def shift_birth_date(original: str, pattern: str | None, rng: Random) -> str:
     parsed, output_pattern = _parse_birth_date(original, pattern)
     offset = rng.randint(-365, 365)
     if offset == 0:
@@ -134,7 +153,7 @@ def _parse_birth_date(original: str, pattern: str | None) -> tuple[datetime, str
 _MAX_LUHN_ATTEMPTS = 100
 
 
-def _render_luhn_pattern(pattern: str, rng: Random) -> str:
+def render_luhn_pattern(pattern: str, rng: Random) -> str:
     parts, error = parse_character_mask(pattern)
     if error is not None or parts is None:
         raise GenerationError(error or "invalid credit/debit-card pattern")
@@ -167,7 +186,7 @@ def _render_luhn_pattern(pattern: str, rng: Random) -> str:
     raise GenerationError("credit/debit-card pattern cannot produce a Luhn-valid value")
 
 
-def _shape_preserving_value(original: str, rng: Random) -> str:
+def shape_preserving_value(original: str, rng: Random) -> str:
     rendered: list[str] = []
     for character in original:
         # Every letter and digit is replaced, including non-ASCII ones, so no identifying text survives.
@@ -183,7 +202,7 @@ def _shape_preserving_value(original: str, rng: Random) -> str:
     return "".join(rendered)
 
 
-def _looks_like_uuid(value: str) -> bool:
+def looks_like_uuid(value: str) -> bool:
     return (
         re.fullmatch(
             r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",

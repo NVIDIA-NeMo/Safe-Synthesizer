@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 import pandas as pd
 
 from ...config.replace_pii import DataToSamplerValueMapping, EntityType, PiiColumnPlan, PiiReplacementPlan
+from ...defaults import DEFAULT_PII_REPLACEMENT_SEED
 from ...errors import DataError, GenerationError, InternalError, ParameterError, SafeSynthesizerError
 from ...observability import get_logger
 from ..transform_result import ColumnStatistics, ReplacementGenerationStatistics
@@ -56,15 +57,25 @@ class ReplacementExecutionResult:
     """Internal structured-execution result returned to the public facade."""
 
     dataframe: pd.DataFrame
+    """Copy of the input with every structured target replaced."""
+
     column_statistics: dict[str, ColumnStatistics]
+    """Per-column replacement metadata, keyed by column name."""
+
     generation_statistics: ReplacementGenerationStatistics
+    """Aggregate generation counts and timing."""
+
     dependency_drifts: tuple[GroupDependencyDrift, ...]
+    """Group mappings reused although their dependency values changed."""
 
 
 @dataclass(frozen=True, slots=True)
 class _CachedReplacement:
     value: str = field(repr=False)
+    """Replacement reused for every occurrence with the same mapping key."""
+
     provenance: GroupMappingProvenance | None = field(default=None, repr=False)
+    """Dependencies of the group occurrence that generated the value, or ``None`` in record scope."""
 
 
 class StructuredReplacementExecutor:
@@ -280,7 +291,7 @@ def resolve_base_seed(explicit_seed: int | None) -> int:
         return explicit_seed
     environment_seed = os.environ.get(_PERSON_RANDOM_SEED_ENV)
     if environment_seed is None:
-        return 42
+        return DEFAULT_PII_REPLACEMENT_SEED
     try:
         return int(environment_seed)
     except ValueError as exc:

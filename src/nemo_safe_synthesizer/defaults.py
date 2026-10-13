@@ -16,6 +16,8 @@ from pathlib import Path
 # default artifacts path
 DEFAULT_ARTIFACTS_PATH = Path("./safe-synthesizer-artifacts").resolve()
 DEFAULT_CONFIG_SAVE_NAME = "safe-synthesizer-config.json"
+DEFAULT_PII_REPLACEMENT_SEED = 42
+"""Base seed for PII replacement when neither the config nor the environment sets one."""
 
 # logging parameters
 LOG_DASHES = "-" * 100

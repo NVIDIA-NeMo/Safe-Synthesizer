@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from pathlib import Path
+from typing import Literal
 
 import pandas as pd
 import pytest
@@ -33,22 +34,19 @@ class TestSamplerValueCatalog:
     ) -> None:
         dataset_path = tmp_path / "datasets" / "en_US.parquet"
         dataset_path.parent.mkdir()
-        dataset_path.touch()
-        reads: list[tuple[Path, list[str], str]] = []
-        monkeypatch.setattr(
-            sampler_catalog,
-            "_available_parquet_columns",
-            lambda _path: frozenset({"first_name", "sex", "ethnic_background"}),
-        )
+        pd.DataFrame(
+            {
+                "first_name": ["Ada", "Alan", "Grace"],
+                "sex": ["Female", "Male", "Female"],
+                "ethnic_background": ["White", "East Asian", "White"],
+            }
+        ).to_parquet(dataset_path)
+        reads: list[tuple[Path, dict[str, object]]] = []
+        real_read_parquet = pd.read_parquet
 
-        def read_parquet(path: Path, *, columns: list[str], dtype_backend: str) -> pd.DataFrame:
-            reads.append((path, columns, dtype_backend))
-            return pd.DataFrame(
-                {
-                    "sex": ["Female", "Male", "Female"],
-                    "ethnic_background": ["White", "East Asian", "White"],
-                }
-            )
+        def read_parquet(path: Path, *, columns: list[str], dtype_backend: Literal["pyarrow"]) -> pd.DataFrame:
+            reads.append((path, {"columns": columns, "dtype_backend": dtype_backend}))
+            return real_read_parquet(path, columns=columns, dtype_backend=dtype_backend)
 
         monkeypatch.setattr(pd, "read_parquet", read_parquet)
 
@@ -57,7 +55,7 @@ class TestSamplerValueCatalog:
             PiiSamplerConfig(backend=PiiSamplerBackend.NEMOTRON_PERSONAS, nemotron_personas_path=str(tmp_path)),
         )
 
-        assert reads == [(dataset_path, ["sex", "ethnic_background"], "pyarrow")]
+        assert reads == [(dataset_path, {"columns": ["sex", "ethnic_background"], "dtype_backend": "pyarrow"})]
         assert catalog == {
             EntityType.GENDER: ("female", "male"),
             EntityType.ETHNIC_BACKGROUND: ("east asian", "white"),

@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from itertools import chain
 from pathlib import Path
 from random import Random
 from typing import TYPE_CHECKING, ClassVar, Never
@@ -17,16 +18,21 @@ from ....config.replace_pii import EntityType, PiiReplacementSettings, PiiSample
 from ....errors import InternalError, ParameterError
 from ....observability import get_logger
 from ...planning.patterns import render_name_pattern
-from ...sampler_catalog import PERSONA_DEPENDENCY_COLUMN_ALIASES, require_nemotron_personas_dataset
+from ...sampler_catalog import (
+    PERSONA_DEPENDENCY_COLUMN_ALIASES,
+    available_parquet_columns,
+    require_nemotron_personas_dataset,
+)
 from ._common import (
-    _dependency_values,
-    _email_domain,
-    _name_values,
-    _render_address,
-    _render_name,
-    _required_pattern_values,
-    _resolve_dependency_values,
+    NAME_ENTITY_TYPES,
+    dependency_values,
+    email_domain,
+    name_values,
     normalize_organization_domain,
+    render_address,
+    render_name,
+    required_pattern_values,
+    resolve_dependency_values,
 )
 from .faker import FakerReplacementGenerator
 
@@ -98,13 +104,13 @@ class NemotronPersonasReplacementGenerator:
         return _persona_row_values(people, row_position, self._persona_value_columns)
 
     def _candidate_positions(self, request: ReplacementGenerationRequest) -> np.ndarray | None:
-        dependencies = _dependency_values(request.effective_dependency_tuple)
+        dependencies = dependency_values(request.effective_dependency_tuple)
         resolved: list[tuple[EntityType, tuple[str, ...]]] = []
         for entity_type in PERSONA_DEPENDENCY_COLUMN_ALIASES:
             dependency_value = dependencies.get(entity_type)
             if dependency_value is None:
                 continue
-            sampler_values = _resolve_dependency_values(
+            sampler_values = resolve_dependency_values(
                 request,
                 entity_type,
                 dependency_value,
@@ -157,17 +163,7 @@ class NemotronPersonasReplacementGenerator:
         )
 
 
-_PERSONA_ENTITY_TYPES = frozenset(
-    {
-        EntityType.FIRST_NAME,
-        EntityType.MIDDLE_NAME,
-        EntityType.LAST_NAME,
-        EntityType.FULL_NAME,
-        EntityType.EMAIL,
-        EntityType.PHONE_NUMBER,
-        EntityType.STREET_ADDRESS,
-    }
-)
+_PERSONA_ENTITY_TYPES = NAME_ENTITY_TYPES | {EntityType.EMAIL, EntityType.PHONE_NUMBER, EntityType.STREET_ADDRESS}
 _PERSONA_COLUMN_ALIASES: Mapping[str, tuple[str, ...]] = {
     "first": ("first_name", "given_name", "firstname"),
     "middle": ("middle_name", "middlename"),
@@ -179,29 +175,14 @@ _PERSONA_COLUMN_ALIASES: Mapping[str, tuple[str, ...]] = {
     "street_name": ("street_name",),
 }
 _PERSONA_READ_COLUMNS = tuple(
-    dict.fromkeys(
-        column
-        for aliases in (*_PERSONA_COLUMN_ALIASES.values(), *PERSONA_DEPENDENCY_COLUMN_ALIASES.values())
-        for column in aliases
-    )
+    dict.fromkeys(chain.from_iterable((*_PERSONA_COLUMN_ALIASES.values(), *PERSONA_DEPENDENCY_COLUMN_ALIASES.values())))
 )
 
 
 def _read_personas(path: Path) -> pd.DataFrame:
-    try:
-        available_columns = _available_parquet_columns(path)
-    except Exception:
-        # Tests and non-pyarrow parquet engines may not expose lightweight
-        # schema inspection. The ordinary read still produces the same result.
-        return pd.read_parquet(path)
+    available_columns = available_parquet_columns(path)
     columns = [column for column in _PERSONA_READ_COLUMNS if column in available_columns]
     return pd.read_parquet(path, columns=columns, dtype_backend="pyarrow")
-
-
-def _available_parquet_columns(path: Path) -> frozenset[str]:
-    from pyarrow.parquet import ParquetFile
-
-    return frozenset(ParquetFile(path).schema_arrow.names)
 
 
 def _build_candidate_indexes(
@@ -325,33 +306,28 @@ def _generate_persona_value(
     request: ReplacementGenerationRequest,
     sampled: Mapping[str, str],
 ) -> str | None:
-    dependencies = _dependency_values(request.effective_dependency_tuple)
+    dependencies = dependency_values(request.effective_dependency_tuple)
     entity_type = request.entity_type
     rng = Random(request.seed)
 
-    if entity_type in {
-        EntityType.FIRST_NAME,
-        EntityType.MIDDLE_NAME,
-        EntityType.LAST_NAME,
-        EntityType.FULL_NAME,
-    }:
-        values = _name_values(dependencies, sampled)
+    if entity_type in NAME_ENTITY_TYPES:
+        values = name_values(dependencies, sampled)
         required = (
-            _required_pattern_values(entity_type, request.pattern)
+            required_pattern_values(entity_type, request.pattern)
             if request.pattern is not None
             else _required_name_values(entity_type)
         )
         if not _has_values(values, required):
             return None
-        return _render_name(entity_type, request.pattern, rng, values)
+        return render_name(entity_type, request.pattern, rng, values)
     if entity_type is EntityType.EMAIL:
         if request.pattern is None:
             return sampled.get("email") or None
-        values = _name_values(dependencies, sampled)
-        values["domain"] = _email_domain(request.original_value) or ""
+        values = name_values(dependencies, sampled)
+        values["domain"] = email_domain(request.original_value) or ""
         organization = dependencies.get(EntityType.ORGANIZATION)
         values["organization"] = normalize_organization_domain(organization or "")
-        required = _required_pattern_values(EntityType.EMAIL, request.pattern)
+        required = required_pattern_values(EntityType.EMAIL, request.pattern)
         if not _has_values(values, required):
             return None
         return render_name_pattern(EntityType.EMAIL, request.pattern, values, rng)
@@ -361,7 +337,7 @@ def _generate_persona_value(
         return sampled.get("phone") or None
     if entity_type is EntityType.STREET_ADDRESS:
         street = sampled.get("street") or _persona_street_components(sampled)
-        return _render_address(street, dependencies) if street else None
+        return render_address(street, dependencies) if street else None
     return None
 
 
