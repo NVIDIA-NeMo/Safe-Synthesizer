@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import math
+import re
 from collections.abc import Iterable
 from functools import cached_property
 
@@ -153,6 +154,9 @@ class PIIReplay(Component):
         )
 
 
+_WORD_CHARACTER = re.compile(r"\w")
+
+
 def _synthetic_replay_counts(
     synthetic: pd.Series,
     training_values: Iterable[object],
@@ -164,14 +168,23 @@ def _synthetic_replay_counts(
         matches = synthetic[synthetic.isin(training_values)]
         return len(matches), len(matches.unique())
 
-    candidates = tuple(value for value in training_values if isinstance(value, str) and value)
+    candidates = tuple(
+        (value, _embedded_value_pattern(value)) for value in training_values if isinstance(value, str) and value
+    )
     replayed_values: set[str] = set()
     matching_rows = 0
     for synthetic_value in synthetic:
         if not isinstance(synthetic_value, str):
             continue
-        row_matches = {candidate for candidate in candidates if candidate in synthetic_value}
+        row_matches = {value for value, pattern in candidates if pattern.search(synthetic_value)}
         if row_matches:
             matching_rows += 1
             replayed_values.update(row_matches)
     return matching_rows, len(replayed_values)
+
+
+def _embedded_value_pattern(value: str) -> re.Pattern[str]:
+    """Match ``value`` in text only where no word character extends it, so ``Ada`` does not match ``Canada``."""
+    start = r"(?<!\w)" if _WORD_CHARACTER.match(value[0]) else ""
+    end = r"(?!\w)" if _WORD_CHARACTER.match(value[-1]) else ""
+    return re.compile(f"{start}{re.escape(value)}{end}")
