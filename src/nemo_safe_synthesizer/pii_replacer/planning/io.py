@@ -96,7 +96,7 @@ def _plan_document(plan: PiiReplacementPlan) -> dict[str, object]:
             dependencies: list[dict[str, object]] = []
             for dependency in spec.depends_on:
                 serialized_dependency: dict[str, object] = {"column_name": dependency.column_name}
-                if "entity_type" in dependency.model_fields_set and dependency.entity_type is not None:
+                if dependency.entity_type is not None:
                     serialized_dependency["entity_type"] = dependency.entity_type.value
                 dependencies.append(serialized_dependency)
             serialized_spec["depends_on"] = dependencies
