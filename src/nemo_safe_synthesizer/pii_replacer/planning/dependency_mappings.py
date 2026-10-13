@@ -5,11 +5,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
+from types import MappingProxyType
 
 import pandas as pd
 
-from ...config.replace_pii import EntityType, PiiReplacementPlan
+from ...config.replace_pii import DataToSamplerValueMapping, EntityType, PiiReplacementPlan
 from ...errors import ParameterError
 from ...observability import get_logger
 from ..replacement.canonicalization import canonicalize_scalar, readable_value
@@ -18,6 +20,19 @@ from ..sampler_catalog import SamplerValueCatalog
 logger = get_logger(__name__)
 
 MAX_MAPPING_SOURCE_VALUE_LENGTH = 128
+
+BUILT_IN_VALUE_MAPPINGS: Mapping[EntityType, Mapping[str, str]] = MappingProxyType(
+    {
+        EntityType.GENDER: MappingProxyType(
+            {"f": "female", "woman": "female", "girl": "female", "m": "male", "man": "male", "boy": "male"}
+        ),
+    }
+)
+"""Common dataset spellings and the sampler value each maps to, matched ignoring case.
+
+Resolution writes matching entries into the plan's ``data_to_sampler_value_mapping``
+for every sampler, so they are visible and editable in the saved plan.
+"""
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,15 +68,17 @@ def mapping_inputs(
     plan: PiiReplacementPlan,
     catalog: SamplerValueCatalog,
 ) -> tuple[DependencyMappingInput, ...]:
-    """Return non-identity dependency values that require automatic mapping."""
+    """Return conditioner values with neither a case-insensitive sampler match nor a mapping entry."""
     inputs: list[DependencyMappingInput] = []
     for column_name, entity_type in conditioner_columns(plan).items():
         sampler_values = catalog.get(entity_type)
         if not sampler_values:
             continue
-        sampler_keys = {sampler_value.casefold() for sampler_value in sampler_values}
+        covered = {sampler_value.casefold() for sampler_value in sampler_values} | {
+            source.casefold() for source in plan.data_to_sampler_value_mapping.get(column_name, {})
+        }
         source_values = _distinct_source_values(dataframe[column_name])
-        unmatched = tuple(value for value in source_values if value.casefold() not in sampler_keys)
+        unmatched = tuple(value for value in source_values if value.casefold() not in covered)
         if unmatched:
             inputs.append(
                 DependencyMappingInput(
@@ -144,14 +161,39 @@ def unmatched_dependency_values(
         ``"Female"`` matches the catalog, ``"Woman"`` has an entry, and ``"X"``
         has neither.
     """
-    mappings = plan.data_to_sampler_value_mapping
-    unmatched: dict[str, int] = {}
-    for item in mapping_inputs(dataframe, plan, catalog):
-        mapped = {source.casefold() for source in mappings.get(item.column_name, {})}
-        missing = sum(1 for value in item.source_values if value.casefold() not in mapped)
-        if missing:
-            unmatched[item.column_name] = missing
-    return unmatched
+    return {item.column_name: len(item.source_values) for item in mapping_inputs(dataframe, plan, catalog)}
+
+
+def built_in_value_mappings(
+    dataframe: pd.DataFrame,
+    plan: PiiReplacementPlan,
+    catalog: SamplerValueCatalog,
+) -> DataToSamplerValueMapping:
+    """Return ``BUILT_IN_VALUE_MAPPINGS`` entries for dataset values the plan's mapping does not cover.
+
+    An entry is added only when the dataset value has no case-insensitive
+    sampler match, the plan's mapping has no entry for it, and its built-in
+    target is in the sampler catalog.
+
+    Example:
+        With the catalog ``{GENDER: ("female", "male")}`` and a ``sex`` column
+        holding ``"F"``, ``"Female"`` and ``"Man"``, the result is
+        ``{"sex": {"F": ["female"], "Man": ["male"]}}``.
+    """
+    entries: DataToSamplerValueMapping = {}
+    for column_name, entity_type in conditioner_columns(plan).items():
+        variants = BUILT_IN_VALUE_MAPPINGS.get(entity_type)
+        sampler_values = {sampler_value.casefold(): sampler_value for sampler_value in catalog.get(entity_type, ())}
+        if not variants or not sampler_values:
+            continue
+        covered = {source.casefold() for source in plan.data_to_sampler_value_mapping.get(column_name, {})}
+        for value in _distinct_source_values(dataframe[column_name]):
+            key = value.casefold()
+            target = variants.get(key)
+            if key in sampler_values or key in covered or target not in sampler_values:
+                continue
+            entries.setdefault(column_name, {})[value] = [sampler_values[target]]
+    return entries
 
 
 def _distinct_source_values(values: pd.Series) -> tuple[str, ...]:

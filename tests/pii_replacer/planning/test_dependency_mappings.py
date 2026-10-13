@@ -98,7 +98,7 @@ class TestDependencyMappings:
             )
 
     def test_auto_mapping_without_llm_fails_only_for_unmatched_values(self) -> None:
-        dataframe = pd.DataFrame({"first_name": ["Ada"], "sex": ["Woman"], "race": ["White"]})
+        dataframe = pd.DataFrame({"first_name": ["Ada"], "sex": ["Nonbinary"], "race": ["White"]})
         config = ReplacePiiConfig()
 
         with pytest.raises(ParameterError, match="configure replace_pii.llm, or generate and edit"):
@@ -147,7 +147,7 @@ class TestDependencyMappings:
         assert resolved.inline_plan.data_to_sampler_value_mapping == {}
 
     def test_explicit_plan_rejects_unmatched_values_without_entries(self) -> None:
-        dataframe = pd.DataFrame({"first_name": ["Ada", "Grace"], "sex": ["Woman", "Female"], "race": ["White"] * 2})
+        dataframe = pd.DataFrame({"first_name": ["Ada", "Grace"], "sex": ["X", "Female"], "race": ["White"] * 2})
 
         with pytest.raises(ParameterError, match=r"'sex' \(1\)"):
             resolve_replacement_config(
@@ -224,3 +224,40 @@ class TestDependencyMappings:
         assert "Ignoring data_to_sampler_value_mapping for a column the configured sampler cannot condition on" in (
             caplog.text
         )
+
+    def test_built_in_variants_resolve_without_an_llm_or_manual_entries(self) -> None:
+        dataframe = pd.DataFrame(
+            {"first_name": ["Ada", "Grace", "Alan", "Mae"], "sex": ["F", "Woman", "M", "female"], "race": ["White"] * 4}
+        )
+
+        resolved = resolve_replacement_config(
+            dataframe,
+            ReplacePiiConfig(),
+            DataParameters(),
+            discoverer=_StaticPlanDiscoverer(),
+            sampler_value_catalog={
+                EntityType.GENDER: ("female", "male"),
+                EntityType.ETHNIC_BACKGROUND: ("white",),
+            },
+        )
+
+        assert resolved.inline_plan is not None
+        assert resolved.inline_plan.data_to_sampler_value_mapping == {
+            "sex": {"F": ["female"], "Woman": ["female"], "M": ["male"]}
+        }
+
+    def test_plan_entries_take_precedence_over_built_in_variants(self) -> None:
+        dataframe = pd.DataFrame({"first_name": ["Ada", "Alan"], "sex": ["F", "M"], "race": ["White"] * 2})
+
+        resolved = resolve_replacement_config(
+            dataframe,
+            ReplacePiiConfig(replacement_plan=_plan({"sex": {"f": ["female", "male"]}})),
+            DataParameters(),
+            sampler_value_catalog={
+                EntityType.GENDER: ("female", "male"),
+                EntityType.ETHNIC_BACKGROUND: ("white",),
+            },
+        )
+
+        assert resolved.inline_plan is not None
+        assert resolved.inline_plan.data_to_sampler_value_mapping == {"sex": {"M": ["male"], "f": ["female", "male"]}}

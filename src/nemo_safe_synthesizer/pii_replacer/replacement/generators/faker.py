@@ -173,8 +173,8 @@ def _select_dependency_value(sampler_values: tuple[str, ...] | None, seed: int) 
 
 def _faker_first_name(fake: Faker, gender: str | None) -> str:
     normalized = gender.casefold() if gender else ""
-    if normalized in {"female", "f", "woman", "girl"}:
+    if normalized == "female":
         return fake.first_name_female()
-    if normalized in {"male", "m", "man", "boy"}:
+    if normalized == "male":
         return fake.first_name_male()
     return fake.first_name()

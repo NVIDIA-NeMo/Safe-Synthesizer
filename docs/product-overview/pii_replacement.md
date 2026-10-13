@@ -70,7 +70,11 @@ for the example above.
 ### Data-to-sampler value mappings
 
 Dependency values are matched to sampler values case-insensitively, so values
-such as `Female` and `female` need no mapping. When `replacement_plan` is
+such as `Female` and `female` need no mapping. NSS also maps a few common
+gender spellings for every sampler: `F`, `Woman`, and `Girl` to `female`, and
+`M`, `Man`, and `Boy` to `male`. These entries are written into the resolved
+plan's `data_to_sampler_value_mapping`, where you can edit them; an entry you
+write for the same value takes precedence. Any other value needs a mapping. When `replacement_plan` is
 `auto_discovery`, NSS discovers `columns_to_replace` and
 `data_to_sampler_value_mapping` together. It compares each dependency column's
 distinct values with the selected sampler's values. If unmatched values remain,

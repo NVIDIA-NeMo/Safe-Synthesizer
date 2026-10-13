@@ -19,6 +19,7 @@ from ...config.replace_pii import DataToSamplerValueMapping, EntityType, LLMConf
 from ...config.time_series import TimeSeriesParameters
 from ...errors import ParameterError
 from .dependency_mappings import (
+    built_in_value_mappings,
     conditioner_columns,
     mapping_inputs,
     unmatched_dependency_values,
@@ -265,23 +266,28 @@ def resolve_replacement_config(
         sampler_value_catalog = load_sampler_value_catalog(config.replacement, config.sampler)
     catalog = dict(sampler_value_catalog or {})
 
+    # Built-in entries for common spellings come first so neither the LLM nor the user has to map them;
+    # the plan's own entries are kept as written.
+    plan = PiiReplacementPlan(
+        columns_to_replace=plan.columns_to_replace,
+        data_to_sampler_value_mapping=_merged_value_mappings(
+            built_in_value_mappings(df, plan, catalog), plan.data_to_sampler_value_mapping
+        ),
+    )
     mappings = plan.data_to_sampler_value_mapping
-    if discover_plan:
-        unresolved = mapping_inputs(df, plan, catalog)
-        if not unresolved:
-            mappings = {}
-        else:
-            active_discoverer = mapping_discoverer or default_mapping_discoverer
-            if active_discoverer is None and config.llm is not None:
-                from .llm import LLMPlanEnhancer
+    if discover_plan and mapping_inputs(df, plan, catalog):
+        active_discoverer = mapping_discoverer or default_mapping_discoverer
+        if active_discoverer is None and config.llm is not None:
+            from .llm import LLMPlanEnhancer
 
-                active_discoverer = LLMPlanEnhancer(config.llm)
-            if active_discoverer is None:
-                raise ParameterError(
-                    "automatic data-to-sampler value mapping found dataset values without case-insensitive sampler "
-                    "matches; configure replace_pii.llm, or generate and edit an explicit replacement plan"
-                )
-            mappings = active_discoverer.discover_data_to_sampler_value_mapping(df, plan, catalog)
+            active_discoverer = LLMPlanEnhancer(config.llm)
+        if active_discoverer is None:
+            raise ParameterError(
+                "automatic data-to-sampler value mapping found dataset values without case-insensitive sampler "
+                "matches; configure replace_pii.llm, or generate and edit an explicit replacement plan"
+            )
+        discovered = active_discoverer.discover_data_to_sampler_value_mapping(df, plan, catalog)
+        mappings = _merged_value_mappings(mappings, discovered)
 
     resolved_plan = PiiReplacementPlan(
         columns_to_replace=plan.columns_to_replace,
@@ -296,3 +302,12 @@ def resolve_replacement_config(
             "match, or list every sampler value to allow any match"
         )
     return config.model_copy(update={"replacement_plan": resolved_plan})
+
+
+def _merged_value_mappings(*mappings: DataToSamplerValueMapping) -> DataToSamplerValueMapping:
+    """Combine value mappings column by column; a later mapping's entry replaces an earlier one for the same key."""
+    merged: DataToSamplerValueMapping = {}
+    for mapping in mappings:
+        for column_name, value_mappings in mapping.items():
+            merged.setdefault(column_name, {}).update(value_mappings)
+    return merged
