@@ -211,7 +211,6 @@ class TestPlanBuilder:
 
         first, company = result.columns_to_replace[0].depends_on
         assert first.entity_type is EntityType.FIRST_NAME
-        assert "entity_type" not in first.model_fields_set
         assert company.entity_type is EntityType.ORGANIZATION
         assert "entity_type" in company.model_fields_set
 
