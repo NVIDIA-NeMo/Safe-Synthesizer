@@ -45,11 +45,11 @@ Grouped by the `Category` column -- `nss`-native settings first, then
 | `NSS_LOG_COLOR` | nss | `--log-color` / `--no-log-color` | CLI / observability | auto (TTY) | Colorize console output | [Running -- Log Format](running.md#log-format) |
 | `NSS_LOG_LEVEL` | nss | `--verbose` (0–2) | observability | `INFO` | Log level (`DEBUG`, `DEBUG_DEPENDENCIES`, etc.) | Set via verbosity, not a direct CLI flag |
 | `NSS_DATASET_REGISTRY` | nss | `--dataset-registry` | CLI | -- | Dataset registry YAML path or URL | [Running -- Dataset Registry](running.md#dataset-registry) |
-| `NSS_INFERENCE_ENDPOINT` | nss | `--inference-endpoint-url` | PII planning | -- (local vLLM server) | OpenAI-compatible PII inference endpoint; replaces the default local server | [PII appendix](#pii-replacement) |
+| `NSS_INFERENCE_ENDPOINT` | nss | `--inference-endpoint-url` | PII planning | -- (local vLLM server) | OpenAI-compatible PII inference endpoint. A non-loopback URL sends planning data to that service; see [where planning requests go](../product-overview/pii_replacement.md#where-planning-requests-go) | [PII appendix](#pii-replacement) |
 | `NSS_INFERENCE_KEY` | nss | `--inference-api-key` | PII planning | -- | Inference credential; required by the hosted NVIDIA endpoint | [PII appendix](#pii-replacement) |
 | `NSS_INFERENCE_MODEL` | nss | `--inference-model-id` | PII planning | `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16` locally; required with an endpoint | Model ID for PII inference; without an endpoint, selects the bundled local profile | [PII appendix](#pii-replacement) |
 | `NSS_INFERENCE_TIMEOUT` | nss | `--inference-timeout-seconds` | PII planning | local profile's timeout, else `60` | Per-request inference timeout in seconds, including model reasoning | [PII appendix](#pii-replacement) |
-| `NSS_INFERENCE_REQUEST_OPTIONS` | nss | `--inference-request-options` | PII planning | local profile's options, else `{"temperature": 0}` | JSON object of chat-completions fields sent with every request; overrides the defaults field by field, and `null` drops a field | [PII appendix](#pii-replacement) |
+| `NSS_INFERENCE_REQUEST_OPTIONS` | nss | `--inference-request-options` | PII planning | local profile's options, else none (server defaults) | JSON object of chat-completions fields sent with every request; overrides a profile's options field by field, and `null` drops a field | [PII appendix](#pii-replacement) |
 | `NSS_INFERENCE_LOCAL_PROFILE` | nss | `--inference-local-profile` | PII planning | -- | Profile YAML path, or bundled profile name, for the local vLLM server NSS runs during plan discovery | [PII appendix](#pii-replacement) |
 | `NSS_WANDB_MODE` | nss | `--wandb-mode` | WandB | `disabled` | WandB run mode | Alias for `WANDB_MODE` |
 | `NSS_WANDB_PROJECT` | nss | `--wandb-project` | WandB | -- | WandB project name | Alias for `WANDB_PROJECT` |
@@ -172,7 +172,10 @@ for the full pre-cache checklist.
 
 Adding an `llm` mapping under `replace_pii` enables LLM-assisted plan
 enhancement. By default, NSS runs `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16` in a local vLLM server
-on the GPU for the duration of plan discovery, so no endpoint or key is needed.
+on the GPU for the duration of plan discovery, so no endpoint or key is needed
+and the data stays on this machine. Planning data leaves the machine only when
+`NSS_INFERENCE_ENDPOINT` points to a non-loopback host; see
+[Where planning requests go](../product-overview/pii_replacement.md#where-planning-requests-go).
 To use another service, set its endpoint and credential through environment
 variables or CLI options, not YAML:
 

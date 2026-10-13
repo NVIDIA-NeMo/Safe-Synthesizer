@@ -110,7 +110,7 @@ class LocalVllmProfile(BaseModel):
     request_options: dict[str, JsonValue] = Field(
         default_factory=dict,
         description="Chat-completions fields sent with every planning request, such as temperature, top_p, "
-        "top_k, and thinking_token_budget, merged field by field over NSS's default temperature of 0. "
+        "top_k, and thinking_token_budget. Fields left out use the server's defaults. "
         "NSS_INFERENCE_REQUEST_OPTIONS overrides individual fields; a null value drops a field.",
     )
     environment: dict[str, str] = Field(

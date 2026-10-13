@@ -14,6 +14,7 @@ from urllib.parse import urlparse
 from ...config.replace_pii import LLMConfig
 from ...defaults import DEFAULT_NSS_INFERENCE_LOCAL_MODEL
 from ...errors import ParameterError
+from ...observability import get_logger
 from ..llm_client import (
     ENDPOINT_ENV,
     MODEL_ENV,
@@ -25,6 +26,8 @@ from ..llm_client import (
 )
 from .profile import LocalVllmProfile, bundled_profile_for_model, bundled_profile_names, load_profile
 from .server import DEFAULT_HOST, LocalVllmServer
+
+logger = get_logger(__name__)
 
 __all__ = [
     "LOCAL_PROFILE_ENV",
@@ -157,6 +160,19 @@ def resolve_local_server_request(
     return LocalServerRequest(profile=profile, host=host, port=port)
 
 
+def _log_explicit_destination(environ: Mapping[str, str]) -> None:
+    """Tell the user where planning sends column samples when an endpoint is set."""
+    endpoint = nonblank(environ.get(ENDPOINT_ENV)) or ""
+    try:
+        is_local = is_loopback_host(urlparse(endpoint).hostname)
+    except ValueError:
+        is_local = False
+    if is_local:
+        logger.user.info(f"PII planning sends column samples to the local server at {endpoint}")
+    else:
+        logger.user.info(f"PII planning sends column samples to {endpoint}")
+
+
 @contextmanager
 def planning_inference_environment(
     config: LLMConfig,
@@ -185,7 +201,11 @@ def planning_inference_environment(
     """
     request = resolve_local_server_request(config, environ=environ)
     if request is None:
+        _log_explicit_destination(os.environ if environ is None else environ)
         yield environ
         return
+    logger.user.info(
+        f"PII planning runs {request.profile.served_name!r} in a local vLLM server; column samples stay on this machine"
+    )
     with LocalVllmServer(request.profile, host=request.host, port=request.port, environ=environ) as server:
         yield server.inference_environ()

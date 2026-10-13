@@ -56,7 +56,6 @@ REQUEST_OPTIONS_ENV = "NSS_INFERENCE_REQUEST_OPTIONS"
 """Runtime setting for extra chat-completions fields, as a JSON object."""
 
 _CHAT_COMPLETIONS_PATH = "/chat/completions"
-_DEFAULT_REQUEST_OPTIONS: dict[str, object] = {"temperature": 0}
 
 RESERVED_REQUEST_FIELDS = frozenset({"messages", "model", "response_format", "stream"})
 """Chat-completions fields NSS sets itself and request options must not override."""
@@ -79,8 +78,12 @@ class InferenceSettings:
     timeout_seconds: float = DEFAULT_NSS_INFERENCE_TIMEOUT_SECONDS
     """Per-request timeout; reasoning models on local GPUs can need several minutes."""
 
-    request_options: Mapping[str, object] = field(default_factory=lambda: dict(_DEFAULT_REQUEST_OPTIONS))
-    """Extra chat-completions fields, such as sampling settings, sent with every request."""
+    request_options: Mapping[str, object] = field(default_factory=dict)
+    """Extra chat-completions fields, such as sampling settings, sent with every request.
+
+    Fields left out, including ``temperature``, use the server's defaults; vLLM
+    takes them from the model's ``generation_config.json``.
+    """
 
     api_key: str | None = field(default=None, repr=False)
     """Bearer credential, or ``None`` for keyless local endpoints; excluded from ``repr``."""
@@ -216,9 +219,9 @@ def resolve_request_options(environ: Mapping[str, str] | None = None) -> dict[st
     """Return the chat-completions fields sent with every request.
 
     ``NSS_INFERENCE_REQUEST_OPTIONS`` holds a JSON object, such as
-    ``{"temperature": 1.0, "thinking_token_budget": 1000}``, merged field by
-    field over the default ``{"temperature": 0}``. Set a field to ``null`` to
-    leave it to the server's default.
+    ``{"temperature": 1.0, "thinking_token_budget": 1000}``. NSS sends no
+    sampling settings of its own, so fields left out use the server's defaults;
+    a ``null`` field is dropped.
 
     Raises:
         ParameterError: If the value is not a JSON object or sets a field in
@@ -226,8 +229,7 @@ def resolve_request_options(environ: Mapping[str, str] | None = None) -> dict[st
     """
     runtime_env = os.environ if environ is None else environ
     raw = nonblank(runtime_env.get(REQUEST_OPTIONS_ENV))
-    overrides = {} if raw is None else parse_request_options(raw)
-    return merge_request_options(_DEFAULT_REQUEST_OPTIONS, overrides)
+    return merge_request_options({} if raw is None else parse_request_options(raw))
 
 
 def configured_model_id(config: LLMConfig, environ: Mapping[str, str]) -> str | None:

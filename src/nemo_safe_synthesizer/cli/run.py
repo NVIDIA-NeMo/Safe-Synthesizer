@@ -222,7 +222,7 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
             default=None,
             help="JSON object of chat-completions fields sent with every PII inference request, such as "
             '\'{"temperature": 1.0, "thinking_token_budget": 1000}\'. Overrides the local profile\'s options '
-            "and the default temperature of 0 field by field; a null value drops a field. "
+            "field by field; a null value drops a field. Fields left out use the server's defaults. "
             "Can also be set via NSS_INFERENCE_REQUEST_OPTIONS env var.",
         )
     )

@@ -264,8 +264,7 @@ class LocalVllmServer:
             TIMEOUT_ENV: nonblank(self._base_environ.get(TIMEOUT_ENV)) or f"{self._profile.request_timeout_seconds:g}",
         }
         explicit = nonblank(self._base_environ.get(REQUEST_OPTIONS_ENV))
-        # Keep null overrides in the JSON: resolve_request_options drops those
-        # fields only after merging over NSS's defaults.
+        # Keep null overrides in the JSON; resolve_request_options drops them.
         options = {**self._profile.request_options, **(parse_request_options(explicit) if explicit else {})}
         if options:
             environ[REQUEST_OPTIONS_ENV] = json.dumps(options)
