@@ -8,9 +8,9 @@ from __future__ import annotations
 import ipaddress
 import math
 from collections import defaultdict
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Protocol, cast
+from typing import Protocol, TypeGuard
 from unicodedata import normalize
 
 import regex
@@ -424,27 +424,30 @@ def _chunks(text: str, config: FreeTextDetectionConfig) -> tuple[_Chunk, ...]:
 
 def _result_spans(result: object) -> Iterable[tuple[int, int, str, float]]:
     """Yield validated primitive span metadata from one GLiNER2 result object."""
-    if not isinstance(result, dict):
+    if not _is_string_keyed_mapping(result):
         raise GenerationError("GLiNER2 free-text PII inference returned an invalid result")
-    result_mapping = cast(dict[str, object], result)
-    entities = result_mapping.get("entities")
-    if not isinstance(entities, dict):
+    entities = result.get("entities")
+    if not _is_string_keyed_mapping(entities):
         raise GenerationError("GLiNER2 free-text PII inference returned an invalid result")
-    for label, values in cast(dict[object, object], entities).items():
-        if not isinstance(label, str) or not isinstance(values, list):
+    for label, values in entities.items():
+        if not isinstance(values, list):
             raise GenerationError("GLiNER2 free-text PII inference returned invalid entities")
         yield from _entity_result_spans(label, values)
+
+
+def _is_string_keyed_mapping(value: object) -> TypeGuard[Mapping[str, object]]:
+    """Return whether ``value`` is a mapping whose keys are all strings."""
+    return isinstance(value, Mapping) and all(isinstance(key, str) for key in value)
 
 
 def _entity_result_spans(label: str, values: Sequence[object]) -> Iterable[tuple[int, int, str, float]]:
     """Yield primitive span metadata for one GLiNER entity label."""
     for value in values:
-        if not isinstance(value, dict):
+        if not _is_string_keyed_mapping(value):
             raise GenerationError("GLiNER2 free-text PII inference omitted required span metadata")
-        span_mapping = cast(dict[str, object], value)
-        start = span_mapping.get("start")
-        end = span_mapping.get("end")
-        score = span_mapping.get("confidence", 1.0)
+        start = value.get("start")
+        end = value.get("end")
+        score = value.get("confidence", 1.0)
         if type(start) is not int or type(end) is not int or not isinstance(score, int | float):
             raise GenerationError("GLiNER2 free-text PII inference returned invalid span metadata")
         yield start, end, label, float(score)
@@ -472,7 +475,7 @@ def _load_gliner2_model(model_id: str) -> _GlinerModel:
         model_id=model_id,
         device=device,
     ):
-        return cast(_GlinerModel, GLiNER2.from_pretrained(model_id, map_location=device))
+        return GLiNER2.from_pretrained(model_id, map_location=device)
 
 
 def _valid_ipv4(value: str) -> bool:
