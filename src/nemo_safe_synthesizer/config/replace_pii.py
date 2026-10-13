@@ -118,7 +118,10 @@ class EntityType(StrEnum):
 
 
 DataToSamplerValueMapping = dict[str, dict[str, list[str]]]
-"""Dependency-column values mapped to values understood by one sampler."""
+"""Dependency-column values mapped to values understood by one sampler.
+
+Keyed by ``depends_on`` column name, then by dataset value. All keys and values are compared ignoring case.
+"""
 
 
 class EntityAction(Enum):
@@ -494,10 +497,11 @@ class PiiReplacementPlan(Parameters):
         default_factory=dict,
         description=(
             "Maps dataset values in depends_on columns to the values used by the person sampler "
-            "(replace_pii.sampler). For example, {sex: {Woman: [female], Non-binary: [female, male]}} makes rows "
-            "where sex is Woman sample a female persona and rows where sex is Non-binary sample either. "
-            "A dataset value without an entry is looked up in the sampler as is, ignoring case, so Female "
-            "matches female; a value that has no entry and matches no sampler value is an error. "
+            "(replace_pii.sampler). Unlike most NSS settings, all matching here ignores case: dataset values, "
+            "mapping keys, and sampler values, so Female, female, and FEMALE are the same value. For example, "
+            "{sex: {Woman: [female], Non-binary: [female, male]}} makes rows where sex is Woman sample a female "
+            "persona and rows where sex is Non-binary sample either. A dataset value without an entry is looked "
+            "up in the sampler as is; a value that has no entry and matches no sampler value is an error. "
             "When replace_pii.replacement_plan is 'auto_discovery', NSS generates this mapping for you."
         ),
     )
