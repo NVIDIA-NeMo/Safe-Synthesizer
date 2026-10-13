@@ -177,7 +177,7 @@ class CLISettings(BaseSettings):
     inference_endpoint_url: str | None = Field(
         default=None,
         validation_alias=AliasChoices("inference_endpoint_url", "NSS_INFERENCE_ENDPOINT"),
-        description="OpenAI-compatible inference endpoint URL for PII replacement",
+        description="OpenAI-compatible inference endpoint URL for LLM-assisted PII plan discovery",
     )
     """OpenAI-compatible PII inference endpoint (env: ``NSS_INFERENCE_ENDPOINT``)."""
 

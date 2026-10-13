@@ -212,13 +212,7 @@ def apply_dependencies(
             source.entity_type,
             target_column=target.column_name,
         )
-        # Replacement sources omit entity_type so PiiReplacementPlan infers it
-        # from the source node. Read-only sources retain their explicit type.
-        conditioner = (
-            ConditioningColumn(column_name=source.column_name)
-            if source.column_name in targets
-            else ConditioningColumn(column_name=source.column_name, entity_type=source.entity_type)
-        )
+        conditioner = ConditioningColumn(column_name=source.column_name, entity_type=source.entity_type)
         dependencies_by_target.setdefault(dependency.target_column, []).append(conditioner)
 
     return PiiReplacementPlan(
