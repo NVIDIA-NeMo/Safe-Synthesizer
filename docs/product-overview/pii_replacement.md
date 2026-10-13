@@ -152,29 +152,6 @@ Supply an API key at runtime through `NSS_INFERENCE_KEY` or the
 local OpenAI-compatible servers may be keyless. NSS does not store the key in
 configuration or plan artifacts.
 
-Free-text columns use GLiNER2 plus applicable deterministic built-in regex
-rules:
-
-```yaml
-replace_pii:
-  free_text_detection:
-    model_id: fastino/gliner2-privacy-filter-PII-multi
-    entity_thresholds:
-      full_name: 0.95
-      first_name: 0.9
-      middle_name: 0.9
-      last_name: 0.9
-      phone_number: 0.5
-      date_of_birth: 0.5
-      street_address: 0.5
-      ssn: 0.5
-      national_id: 0.5
-      api_key: 0.5
-    batch_size: 8
-    chunk_length: 384
-    chunk_overlap: 128
-```
-
 ### Local inference server
 
 When no inference endpoint is set, NSS starts a vLLM server on the local GPU for
@@ -262,6 +239,8 @@ local profile.
 - **Short-lived.** The server stops when planning ends, and receives SIGTERM if
   the NSS process dies without cleaning up.
 
+### How discovery uses the LLM
+
 Automatic discovery uses two LLM passes. The first classifies every column's
 semantic entity type and may propose a replacement pattern, in bounded batches
 of at most 32 profiles and 48 KiB of profile evidence. Each profile contains
@@ -305,3 +284,28 @@ previous response invalid.
     Plan enhancement can send bounded raw cell samples from the full input
     dataframe, including rows that may later be assigned to a holdout set. Enable
     it only when the endpoint is approved to receive the input data.
+
+### Free-text detection
+
+Free-text columns use GLiNER2 plus applicable deterministic built-in regex
+rules:
+
+```yaml
+replace_pii:
+  free_text_detection:
+    model_id: fastino/gliner2-privacy-filter-PII-multi
+    entity_thresholds:
+      full_name: 0.95
+      first_name: 0.9
+      middle_name: 0.9
+      last_name: 0.9
+      phone_number: 0.5
+      date_of_birth: 0.5
+      street_address: 0.5
+      ssn: 0.5
+      national_id: 0.5
+      api_key: 0.5
+    batch_size: 8
+    chunk_length: 384
+    chunk_overlap: 128
+```
