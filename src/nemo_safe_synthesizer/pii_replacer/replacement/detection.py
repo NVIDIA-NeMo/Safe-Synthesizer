@@ -475,16 +475,22 @@ def _load_gliner2_model(model_id: str) -> _GlinerModel:
         return cast(_GlinerModel, GLiNER2.from_pretrained(model_id, map_location=device))
 
 
-def _valid_ip(version: int) -> Callable[[str], bool]:
-    """Build an IP validator constrained to one address version."""
+def _valid_ipv4(value: str) -> bool:
+    """Return whether a candidate is a valid IPv4 address."""
+    try:
+        ipaddress.IPv4Address(value)
+    except ValueError:
+        return False
+    return True
 
-    def validate(value: str) -> bool:
-        try:
-            return ipaddress.ip_address(value).version == version
-        except ValueError:
-            return False
 
-    return validate
+def _valid_ipv6(value: str) -> bool:
+    """Return whether a candidate, with any enclosing URL brackets removed, is a valid IPv6 address."""
+    try:
+        ipaddress.IPv6Address(value.strip("[]"))
+    except ValueError:
+        return False
+    return True
 
 
 def _valid_email(value: str) -> bool:
@@ -547,12 +553,21 @@ _REGEX_RULES = (
         "builtin.ipv4",
         EntityType.IPV4,
         regex.compile(r"(?<![0-9.])(?:[0-9]{1,3}\.){3}[0-9]{1,3}(?![0-9]|\.[0-9])"),
-        _valid_ip(4),
+        _valid_ipv4,
     ),
+    # Ported from NeMo Anonymizer's nemo-anonymizer.ipv6.v1 rule. The start may follow a lone colon
+    # (``ip:2001:db8::1``) but not a hex digit or ``::``, and the alternation also matches IPv4-mapped
+    # addresses (``::ffff:192.0.2.1``) whole so the IPv4 rule cannot claim only their tail.
     _RegexRule(
         "builtin.ipv6",
         EntityType.IPV6,
-        regex.compile(r"(?<![0-9A-Fa-f:])(?:[0-9A-Fa-f]{0,4}:){2,7}[0-9A-Fa-f]{0,4}(?![0-9A-Fa-f:])"),
-        _valid_ip(6),
+        regex.compile(
+            r"(?:(?<![0-9A-Fa-f:])|(?<=^:)|(?<=[^0-9A-Fa-f:]:))"
+            r"(?!:(?!:))(?!:::)(?:"
+            r"(?:[0-9A-Fa-f]{0,4}:){2,6}(?:[0-9]{1,3}\.){3}[0-9]{1,3}"
+            r"|(?:[0-9A-Fa-f]{0,4}:){2,7}[0-9A-Fa-f]{0,4}"
+            r")(?![0-9A-Fa-f:]|\.[0-9])"
+        ),
+        _valid_ipv6,
     ),
 )
