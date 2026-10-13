@@ -18,7 +18,7 @@ from ...observability import get_logger
 from ..transform_result import ColumnStatistics, ReplacementGenerationStatistics
 from .canonicalization import canonicalize_scalar, is_missing_scalar, readable_value
 from .compiler import compile_plan
-from .generation import ReplacementGenerationRequest, ReplacementGenerator, generated_value_is_valid
+from .generation import ReplacementGenerationRequest, ReplacementGenerator
 from .types import (
     CanonicalValue,
     EffectiveDependencyTuple,
@@ -27,6 +27,7 @@ from .types import (
     GroupMappingProvenance,
     RecordMappingKey,
 )
+from .value_checks import generated_value_is_valid
 
 logger = get_logger(__name__)
 

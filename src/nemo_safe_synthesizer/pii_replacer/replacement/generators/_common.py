@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import ipaddress
 import re
 import unicodedata
 from collections.abc import Mapping
@@ -17,11 +16,12 @@ from ....config.replace_pii import EntityType
 from ....errors import GenerationError
 from ...planning.patterns import parse_character_mask, parse_name_pattern, render_name_pattern
 from ..types import EffectiveDependencyTuple
+from ..value_checks import is_luhn_valid
 
 if TYPE_CHECKING:
     from ..generation import ReplacementGenerationRequest
 
-__all__ = ["generated_value_is_valid", "normalize_organization_domain"]
+__all__ = ["normalize_organization_domain"]
 
 
 def _dependency_values(dependencies: EffectiveDependencyTuple) -> dict[EntityType, str]:
@@ -152,24 +152,9 @@ def _render_luhn_pattern(pattern: str, rng: Random) -> str:
     for digit in "0123456789":
         rendered[check_position] = digit
         candidate = "".join(rendered)
-        if _is_luhn_valid(candidate):
+        if is_luhn_valid(candidate):
             return candidate
     raise GenerationError("credit/debit-card pattern cannot produce a Luhn-valid value")
-
-
-def _is_luhn_valid(value: str) -> bool:
-    digits = [int(character) for character in value if character.isdigit()]
-    if len(digits) < 2:
-        return False
-    total = 0
-    parity = len(digits) % 2
-    for index, digit in enumerate(digits):
-        if index % 2 == parity:
-            digit *= 2
-            if digit > 9:
-                digit -= 9
-        total += digit
-    return total % 10 == 0
 
 
 def _shape_preserving_value(original: str, rng: Random) -> str:
@@ -194,22 +179,3 @@ def _looks_like_uuid(value: str) -> bool:
         )
         is not None
     )
-
-
-def generated_value_is_valid(request: ReplacementGenerationRequest, value: str) -> bool:
-    """Return whether a generated value meets the request's local constraints."""
-    if not value or value == request.original_value:
-        return False
-    if request.entity_type is EntityType.CREDIT_DEBIT_CARD:
-        return _is_luhn_valid(value)
-    if request.entity_type is EntityType.IPV4:
-        try:
-            return ipaddress.ip_address(value).version == 4
-        except ValueError:
-            return False
-    if request.entity_type is EntityType.IPV6:
-        try:
-            return ipaddress.ip_address(value).version == 6
-        except ValueError:
-            return False
-    return True
