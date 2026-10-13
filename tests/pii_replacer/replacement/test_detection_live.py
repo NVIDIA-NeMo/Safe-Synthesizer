@@ -16,13 +16,16 @@ from nemo_safe_synthesizer.pii_replacer.replacement.detection import (
 )
 from nemo_safe_synthesizer.pii_replacer.replacement.types import DetectionCell, DetectionCellId
 
-pytestmark = [pytest.mark.slow, pytest.mark.requires_gpu]
+pytestmark = [
+    pytest.mark.slow,
+    pytest.mark.requires_gpu,
+    pytest.mark.skipif(
+        os.environ.get("NSS_RUN_LIVE_GLINER2") != "1",
+        reason="set NSS_RUN_LIVE_GLINER2=1 to evaluate the pinned local checkpoint",
+    ),
+]
 
 
-@pytest.mark.skipif(
-    os.environ.get("NSS_RUN_LIVE_GLINER2") != "1",
-    reason="set NSS_RUN_LIVE_GLINER2=1 to evaluate the pinned local checkpoint",
-)
 def test_pinned_model_detects_representative_name_and_birth_date() -> None:
     text = "Ada Lovelace was born on 10 December 1815; contact ada@example.com."
     cell = DetectionCell(DetectionCellId(0, "notes"), text, fresh_detection_entity_types())
