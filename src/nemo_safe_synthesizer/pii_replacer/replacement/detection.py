@@ -22,7 +22,7 @@ from ...config.replace_pii import (
     EntityType,
     FreeTextDetectionConfig,
 )
-from ...errors import GenerationError
+from ...errors import GenerationError, InternalError, SafeSynthesizerError
 from ...observability import get_logger, heartbeat
 from .birth_dates import birth_date_is_supported
 from .types import DetectedSpan, DetectionCell, DetectionCellId
@@ -156,7 +156,7 @@ class Gliner2Detector:
                     include_spans=True,
                     batch_size=self._config.batch_size,
                 )
-        except GenerationError:
+        except SafeSynthesizerError:
             raise
         except Exception as exc:
             raise GenerationError("GLiNER2 free-text PII inference failed") from exc
@@ -192,9 +192,9 @@ class RegexDetector:
         max_matches_per_rule: int = _DEFAULT_MAX_MATCHES_PER_RULE,
     ) -> None:
         if timeout_seconds <= 0:
-            raise ValueError("regex detector timeout_seconds must be positive")
+            raise InternalError("regex detector timeout_seconds must be positive")
         if max_matches_per_rule <= 0:
-            raise ValueError("regex detector max_matches_per_rule must be positive")
+            raise InternalError("regex detector max_matches_per_rule must be positive")
         self._timeout_seconds = timeout_seconds
         self._max_matches_per_rule = max_matches_per_rule
 
