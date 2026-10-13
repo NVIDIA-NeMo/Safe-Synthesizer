@@ -8,6 +8,7 @@ from __future__ import annotations
 import time
 from collections.abc import Hashable
 from dataclasses import dataclass, field
+from itertools import chain
 from typing import Literal
 
 import pandas as pd
@@ -43,8 +44,13 @@ class FreeTextColumnStatistics:
     """Mutable aggregate statistics for one planned free-text column."""
 
     counts: dict[str, int] = field(default_factory=dict)
+    """Accepted span count per entity type."""
+
     values: dict[str, set[str]] = field(default_factory=dict)
+    """Distinct accepted span texts per entity type."""
+
     sources: set[str] = field(default_factory=set)
+    """Detector sources that produced accepted spans."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,9 +58,16 @@ class FreeTextExecutionResult:
     """Aggregate outputs owned by one free-text execution pass."""
 
     column_statistics: dict[str, FreeTextColumnStatistics]
+    """Detection statistics keyed by free-text column name."""
+
     generated_replacement_count: int
+    """Replacements generated fresh rather than reused from a mapping."""
+
     generator_time_seconds: float
+    """Time spent inside the generator for free-text spans."""
+
     replacement_records: tuple[FreeTextReplacementRecord, ...]
+    """Per-span records when capture was requested, otherwise empty."""
 
 
 class FreeTextReplacementExecutor:
@@ -106,7 +119,7 @@ class FreeTextReplacementExecutor:
                 "free-text replacement targets require the detector and span-resolution implementation"
             )
 
-        cells = [cell for spec in specs for cell in _detection_cells(dataframe, spec)]
+        cells = list(chain.from_iterable(_detection_cells(dataframe, spec) for spec in specs))
         requested = {cell.cell_id: cell for cell in cells}
         try:
             detected = self._detector.detect(cells)
