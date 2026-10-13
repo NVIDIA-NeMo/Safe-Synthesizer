@@ -170,12 +170,14 @@ def _render_luhn_pattern(pattern: str, rng: Random) -> str:
 def _shape_preserving_value(original: str, rng: Random) -> str:
     rendered: list[str] = []
     for character in original:
-        if character.isascii() and character.isdigit():
+        # Every letter and digit is replaced, including non-ASCII ones, so no identifying text survives.
+        # Letters without case, such as CJK characters, become uppercase ASCII letters.
+        if character.isdigit():
             rendered.append(str(rng.randrange(10)))
-        elif character.isascii() and character.isupper():
-            rendered.append(chr(ord("A") + rng.randrange(26)))
-        elif character.isascii() and character.islower():
+        elif character.islower():
             rendered.append(chr(ord("a") + rng.randrange(26)))
+        elif character.isalpha():
+            rendered.append(chr(ord("A") + rng.randrange(26)))
         else:
             rendered.append(character)
     return "".join(rendered)

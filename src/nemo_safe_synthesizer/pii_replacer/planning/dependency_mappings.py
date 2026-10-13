@@ -210,8 +210,8 @@ def _distinct_source_values(values: pd.Series) -> tuple[str, ...]:
         value = readable_value(canonicalize_scalar(raw))
         if len(value) > MAX_MAPPING_SOURCE_VALUE_LENGTH:
             raise ParameterError(
-                "automatic dependency mapping requires categorical values no longer than "
-                f"{MAX_MAPPING_SOURCE_VALUE_LENGTH} characters"
+                f"dependency column {values.name!r} has values longer than {MAX_MAPPING_SOURCE_VALUE_LENGTH} "
+                "characters; sampler-conditioned dependencies such as gender or ethnic background must be categorical"
             )
         distinct.setdefault(value.casefold(), value)
     return tuple(distinct.values())
