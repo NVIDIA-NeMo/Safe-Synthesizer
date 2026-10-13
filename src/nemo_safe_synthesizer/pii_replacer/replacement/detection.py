@@ -10,6 +10,7 @@ import math
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from itertools import chain
 from typing import Protocol, TypeGuard
 from unicodedata import normalize
 
@@ -102,9 +103,16 @@ class _CompiledRegex(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class _Chunk:
+    """One bounded window of a unique cell text sent to GLiNER2."""
+
     text: str
+    """Window text passed to the model."""
+
     original_text: str
+    """Complete cell text the window was cut from."""
+
     offset: int
+    """Start of the window within ``original_text``."""
 
 
 class Gliner2Detector:
@@ -126,7 +134,7 @@ class Gliner2Detector:
         if not cells_by_text:
             return ()
 
-        chunks = [chunk for text in cells_by_text for chunk in _chunks(text, self._config)]
+        chunks = list(chain.from_iterable(_chunks(text, self._config) for text in cells_by_text))
         results = self._infer(chunks, _requested_labels(cells, self._config))
         spans: list[DetectedSpan] = []
         rejected_birth_dates = 0
@@ -181,10 +189,19 @@ class Gliner2Detector:
 
 @dataclass(frozen=True, slots=True)
 class _RegexRule:
+    """One built-in regex detector rule."""
+
     rule_id: str
+    """Stable identifier used in error messages."""
+
     entity_type: EntityType
+    """Entity type assigned to accepted matches."""
+
     expression: _CompiledRegex
+    """Candidate pattern, run with a timeout."""
+
     validator: Callable[[str], bool]
+    """Structural check a candidate must pass to become a span."""
 
 
 class RegexDetector:
@@ -205,16 +222,12 @@ class RegexDetector:
 
     def detect(self, cells: Sequence[DetectionCell]) -> tuple[DetectedSpan, ...]:
         """Return exact spans from applicable built-in rules."""
-        return tuple(span for cell in cells for span in self._detect_cell(cell))
+        return tuple(chain.from_iterable(self._detect_cell(cell) for cell in cells))
 
     def _detect_cell(self, cell: DetectionCell) -> tuple[DetectedSpan, ...]:
         """Run every applicable bounded regex rule against one complete cell."""
-        return tuple(
-            span
-            for rule in _REGEX_RULES
-            if rule.entity_type in cell.allowed_entity_types
-            for span in self._detect_rule(cell, rule)
-        )
+        applicable_rules = (rule for rule in _REGEX_RULES if rule.entity_type in cell.allowed_entity_types)
+        return tuple(chain.from_iterable(self._detect_rule(cell, rule) for rule in applicable_rules))
 
     def _detect_rule(self, cell: DetectionCell, rule: _RegexRule) -> tuple[DetectedSpan, ...]:
         """Apply one regex rule with its timeout, match cap, and structural validator."""
@@ -273,7 +286,7 @@ def _requested_labels(
     config: FreeTextDetectionConfig,
 ) -> dict[str, dict[str, float]]:
     """Return applicable checkpoint labels with their effective thresholds."""
-    allowed = frozenset(entity_type for cell in cells for entity_type in cell.allowed_entity_types)
+    allowed = frozenset(chain.from_iterable(cell.allowed_entity_types for cell in cells))
     return {
         label: {"threshold": _model_label_threshold(label, config)}
         for label, entity_types in sorted(_GLINER_LABEL_ENTITY_TYPES.items())
