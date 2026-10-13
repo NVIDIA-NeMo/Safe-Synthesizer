@@ -261,3 +261,15 @@ class TestDependencyMappings:
 
         assert resolved.inline_plan is not None
         assert resolved.inline_plan.data_to_sampler_value_mapping == {"sex": {"M": ["male"], "f": ["female", "male"]}}
+
+    def test_mapping_inputs_reject_high_cardinality_dependency_columns(self) -> None:
+        dataframe = pd.DataFrame(
+            {"first_name": ["Ada"] * 1001, "sex": [f"value-{i}" for i in range(1001)], "race": ["White"] * 1001}
+        )
+
+        with pytest.raises(ParameterError, match="'sex' has more than 1000 distinct values"):
+            mapping_inputs(
+                dataframe,
+                _plan(),
+                {EntityType.GENDER: ("female", "male"), EntityType.ETHNIC_BACKGROUND: ("white",)},
+            )

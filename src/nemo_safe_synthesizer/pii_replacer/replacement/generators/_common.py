@@ -131,29 +131,39 @@ def _parse_birth_date(original: str, pattern: str | None) -> tuple[datetime, str
     raise GenerationError("date_of_birth value is not parseable without a configured pattern")
 
 
+_MAX_LUHN_ATTEMPTS = 100
+
+
 def _render_luhn_pattern(pattern: str, rng: Random) -> str:
     parts, error = parse_character_mask(pattern)
     if error is not None or parts is None:
         raise GenerationError(error or "invalid credit/debit-card pattern")
     rendered: list[str] = []
-    variable_digit_positions: list[int] = []
+    variable_digits: list[tuple[int, str]] = []
     for part in parts:
         if part.literal is not None:
             rendered.append(part.literal)
             continue
-        digit_choices = "".join(character for character in part.choices or "" if character.isdigit())
+        digit_choices = "".join(dict.fromkeys(character for character in part.choices or "" if character.isdigit()))
         if not digit_choices:
             raise GenerationError("credit/debit-card patterns must generate digits in every variable position")
         rendered.append(rng.choice(digit_choices))
-        variable_digit_positions.append(len(rendered) - 1)
-    if not variable_digit_positions:
+        variable_digits.append((len(rendered) - 1, digit_choices))
+    if not variable_digits:
         raise GenerationError("credit/debit-card pattern has no generated digit")
-    check_position = variable_digit_positions[-1]
-    for digit in "0123456789":
-        rendered[check_position] = digit
-        candidate = "".join(rendered)
-        if is_luhn_valid(candidate):
-            return candidate
+    for _ in range(_MAX_LUHN_ATTEMPTS):
+        # Exactly one digit makes the number Luhn-valid at any one position, so repair
+        # the last position whose allowed digits include it.
+        for position, digit_choices in reversed(variable_digits):
+            current = rendered[position]
+            for digit in digit_choices:
+                rendered[position] = digit
+                candidate = "".join(rendered)
+                if is_luhn_valid(candidate):
+                    return candidate
+            rendered[position] = current
+        for position, digit_choices in variable_digits:
+            rendered[position] = rng.choice(digit_choices)
     raise GenerationError("credit/debit-card pattern cannot produce a Luhn-valid value")
 
 

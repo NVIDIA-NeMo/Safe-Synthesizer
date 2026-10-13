@@ -19,7 +19,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiSamplerBackend,
     PiiSamplerConfig,
 )
-from nemo_safe_synthesizer.errors import GenerationError, InternalError, ParameterError
+from nemo_safe_synthesizer.errors import InternalError, ParameterError
 from nemo_safe_synthesizer.pii_replacer.replacement.generation import (
     ReplacementGenerationRequest,
     ReplacementGenerator,
@@ -325,6 +325,21 @@ class TestReplacementGenerator:
 
         assert generator.generate(request) == "synthetic@mail.societe-acme-inc.co.uk"
 
+    def test_card_check_digit_respects_a_restricted_final_position(self) -> None:
+        generator = _faker_generator()
+
+        for seed in range(50):
+            replacement = generator.generate(
+                _request(
+                    EntityType.CREDIT_DEBIT_CARD, "4111-1111-1111-1110", pattern="4###-####-####-###[05]", seed=seed
+                )
+            )
+            digits = [int(character) for character in replacement if character.isdigit()]
+            checksum = sum(digit if index % 2 else sum(divmod(digit * 2, 10)) for index, digit in enumerate(digits))
+
+            assert re.fullmatch(r"4\d{3}-\d{4}-\d{4}-\d{3}[05]", replacement), replacement
+            assert checksum % 10 == 0
+
     def test_birth_date_is_shifted_within_one_year_and_preserves_pattern(self) -> None:
         generator = _faker_generator()
         request = _request(
@@ -527,7 +542,7 @@ class TestReplacementGenerator:
             seed=1,
         )
 
-        with pytest.raises(GenerationError, match="gender.*candidate_count=0") as error:
+        with pytest.raises(ParameterError, match="gender.*candidate_count=0") as error:
             generator.generate(request)
         assert "Secret Source Label" not in str(error.value)
 
@@ -564,7 +579,7 @@ class TestReplacementGenerator:
             resolved_values=((EntityType.ETHNIC_BACKGROUND, ("east asian",)),),
         )
 
-        with pytest.raises(GenerationError, match=r"conditions on 'ethnic_background'.*'en_US' has no column") as error:
+        with pytest.raises(ParameterError, match=r"conditions on 'ethnic_background'.*'en_US' has no column") as error:
             generator.generate(request)
         assert "'ethnicity'" in str(error.value)
 

@@ -14,7 +14,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiReplacementPlan,
     PiiSamplerBackend,
 )
-from nemo_safe_synthesizer.errors import GenerationError, ParameterError
+from nemo_safe_synthesizer.errors import DataError, GenerationError, ParameterError
 from nemo_safe_synthesizer.pii_replacer.replacement.compiler import compile_plan
 from nemo_safe_synthesizer.pii_replacer.replacement.executor import (
     ReplacementExecutionResult,
@@ -41,6 +41,11 @@ class _RecordingGenerator:
             prefix = dependencies.get(EntityType.FIRST_NAME) or dependencies.get(EntityType.ORGANIZATION) or "user"
             return f"{prefix.casefold()}-{request.seed}@synthetic.test"
         return f"synthetic-{request.entity_type.value}-{request.seed}"
+
+
+class _ParameterErrorGenerator(_RecordingGenerator):
+    def generate(self, request: ReplacementGenerationRequest) -> str:
+        raise ParameterError("the configured sampler cannot produce this value")
 
 
 class _ConstantGenerator(_RecordingGenerator):
@@ -250,6 +255,21 @@ class TestStructuredReplacementExecutor:
             "conflict_count": 1,
         }
         assert result.generation_statistics.generated_replacement_count == 4
+        assert result.generation_statistics.dependency_drift_count == 1
+
+    def test_group_scope_rejects_rows_without_a_group_identifier(self) -> None:
+        dataframe = pd.DataFrame({"patient": ["A", None], "email": ["same@example.com"] * 2})
+        plan = _plan(_target("email", EntityType.EMAIL))
+
+        with pytest.raises(DataError, match="'patient' has 1 missing value"):
+            _execute(dataframe, plan, _RecordingGenerator(), group_column="patient")
+
+    def test_project_errors_from_the_generator_are_not_rewrapped(self) -> None:
+        dataframe = pd.DataFrame({"first_name": ["Ada"]})
+        plan = _plan(_target("first_name", EntityType.FIRST_NAME))
+
+        with pytest.raises(ParameterError, match="configured sampler cannot"):
+            _execute(dataframe, plan, _ParameterErrorGenerator())
 
     def test_free_text_target_fails_before_mutating_the_input(self) -> None:
         dataframe = pd.DataFrame({"notes": ["Ada called"]})

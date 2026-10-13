@@ -20,6 +20,7 @@ from ..sampler_catalog import SamplerValueCatalog
 logger = get_logger(__name__)
 
 MAX_MAPPING_SOURCE_VALUE_LENGTH = 128
+MAX_CONDITIONER_DISTINCT_VALUES = 1000
 
 BUILT_IN_VALUE_MAPPINGS: Mapping[EntityType, Mapping[str, str]] = MappingProxyType(
     {
@@ -198,8 +199,14 @@ def built_in_value_mappings(
 
 def _distinct_source_values(values: pd.Series) -> tuple[str, ...]:
     """Return distinct non-missing values in the form replacement uses to look up mapping keys."""
+    unique = values.dropna().unique()
+    if len(unique) > MAX_CONDITIONER_DISTINCT_VALUES:
+        raise ParameterError(
+            f"dependency column {values.name!r} has more than {MAX_CONDITIONER_DISTINCT_VALUES} distinct values; "
+            "sampler-conditioned dependencies such as gender or ethnic background must be categorical"
+        )
     distinct: dict[str, str] = {}
-    for raw in values.dropna().unique().tolist():
+    for raw in unique.tolist():
         value = readable_value(canonicalize_scalar(raw))
         if len(value) > MAX_MAPPING_SOURCE_VALUE_LENGTH:
             raise ParameterError(

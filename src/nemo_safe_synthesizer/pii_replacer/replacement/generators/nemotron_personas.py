@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 
 from ....config.replace_pii import EntityType, PiiReplacementSettings, PiiSamplerBackend, PiiSamplerConfig
-from ....errors import GenerationError, InternalError, ParameterError
+from ....errors import InternalError, ParameterError
 from ....observability import get_logger
 from ...planning.patterns import render_name_pattern
 from ...sampler_catalog import PERSONA_DEPENDENCY_COLUMN_ALIASES, require_nemotron_personas_dataset
@@ -281,7 +281,7 @@ def _matching_positions(
 
 def _raise_missing_persona_column(entity_type: EntityType, locale: str) -> Never:
     columns = ", ".join(repr(column) for column in PERSONA_DEPENDENCY_COLUMN_ALIASES[entity_type])
-    raise GenerationError(
+    raise ParameterError(
         f"the replacement plan conditions on {entity_type.value!r}, but the Nemotron-Personas data for locale "
         f"{locale!r} has no column for it (looked for {columns}); remove that dependency from the plan or use "
         "a Nemotron-Personas dataset that includes it"
@@ -289,7 +289,7 @@ def _raise_missing_persona_column(entity_type: EntityType, locale: str) -> Never
 
 
 def _raise_no_persona_candidates(entity_type: EntityType) -> Never:
-    raise GenerationError(
+    raise ParameterError(
         "Nemotron-Personas sampling found no candidates after applying dependency "
         f"entity type {entity_type.value!r} (candidate_count=0)"
     )
