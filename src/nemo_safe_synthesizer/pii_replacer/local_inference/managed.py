@@ -163,14 +163,19 @@ def resolve_local_server_request(
 def _log_explicit_destination(environ: Mapping[str, str]) -> None:
     """Tell the user where planning sends column samples when an endpoint is set."""
     endpoint = nonblank(environ.get(ENDPOINT_ENV)) or ""
+    # Log only the host and port; the endpoint is validated later and may embed
+    # credentials or query parameters.
     try:
-        is_local = is_loopback_host(urlparse(endpoint).hostname)
+        parsed = urlparse(endpoint)
+        is_local = is_loopback_host(parsed.hostname)
     except ValueError:
-        is_local = False
+        logger.user.info("PII planning sends column samples to the configured inference endpoint")
+        return
+    destination = parsed.netloc.rpartition("@")[2]
     if is_local:
-        logger.user.info(f"PII planning sends column samples to the local server at {endpoint}")
+        logger.user.info(f"PII planning sends column samples to the local server at {destination}")
     else:
-        logger.user.info(f"PII planning sends column samples to {endpoint}")
+        logger.user.info(f"PII planning sends column samples to {destination}")
 
 
 @contextmanager

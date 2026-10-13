@@ -128,19 +128,19 @@ the duration of plan discovery; see [Local inference server](#local-inference-se
 Plan discovery sends column statistics and cell samples to an LLM. Where they
 go depends only on `NSS_INFERENCE_ENDPOINT` (or `--inference-endpoint-url`):
 
-- **Unset:** NSS starts its own vLLM server on this machine, and the data stays
+- Unset: NSS starts its own vLLM server on this machine, and the data stays
   here. This is the default.
-- **A loopback URL** (`localhost`, `127.0.0.0/8`, or `::1`): the data stays on
+- A loopback URL (`localhost`, `127.0.0.0/8`, or `::1`): the data stays on
   this machine. Without a local profile, NSS calls the server you run at that
   address; with `NSS_INFERENCE_LOCAL_PROFILE`, NSS starts its own server there.
-- **Any other URL:** NSS sends the data to that service over HTTPS, for example
+- Any other URL: NSS sends the data to that service over HTTPS, for example
   `https://integrate.api.nvidia.com/v1` for the hosted NVIDIA service. Only
   enable it when that service is approved to receive the input data.
 
 The run log states which case applies when planning starts.
 
-With an explicit endpoint, NSS never starts a local server, and the model has
-no default: it resolves from `--inference-model-id`, then
+With an explicit endpoint and no local profile, NSS never starts a local server,
+and the model has no default: it resolves from `--inference-model-id`, then
 `replace_pii.llm.model_id`, then `NSS_INFERENCE_MODEL`. `NSS_INFERENCE_MODEL`
 supplies the model only when the configuration omits `model_id`; use
 `--inference-model-id` to override a persisted model for one run. The endpoint
@@ -227,19 +227,19 @@ local profile.
 
 #### How the local server is isolated
 
-- **Reachable only from this machine.** The server listens on a loopback
+- Reachable only from this machine: the server listens on a loopback
   address: a free `127.0.0.1` port by default, or the loopback address in
   `NSS_INFERENCE_ENDPOINT` with a local profile. NSS rejects any other address,
   and a port already in use, before launching.
-- **Usable only by this NSS run.** Each launch generates a random API key and
+- Usable only by this NSS run: each launch generates a random API key and
   gives it only to the server (through its environment, not its command line)
   and to NSS's own client, so other processes on the machine cannot send it
   requests. `NSS_INFERENCE_KEY` is not used.
-- **No proxies or request logs.** Requests to loopback addresses ignore
+- No proxies or request logs: requests to loopback addresses ignore
   `HTTP_PROXY`-style variables, and vLLM request logging stays off because
   prompts contain raw cell samples. Server output goes to the NSS log at debug
   level.
-- **Short-lived.** The server stops when planning ends, and receives SIGTERM if
+- Short-lived: the server stops when planning ends, and receives SIGTERM if
   the NSS process dies without cleaning up.
 
 ### How discovery uses the LLM

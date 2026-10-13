@@ -467,6 +467,7 @@ class InferenceModelCheck(ConfigCheck):
     When a managed local server applies (a local profile, or no endpoint at
     all), validates the profile, managed address, model names, and that vLLM
     and a CUDA GPU are available, instead of the remote endpoint and key.
+    Skipped when an explicit replacement plan makes discovery unnecessary.
     """
 
     name = "env.inference"
@@ -476,7 +477,8 @@ class InferenceModelCheck(ConfigCheck):
     @override
     def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
         replace_pii = ctx.config.replace_pii
-        if replace_pii is None or replace_pii.llm is None:
+        # An explicit plan skips discovery, so no inference request is made.
+        if replace_pii is None or replace_pii.llm is None or not replace_pii.is_auto_discovery:
             return
         # Timeout and request options apply to local and explicit endpoints alike.
         try:

@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import logging
+
 import pytest
 
 from nemo_safe_synthesizer.config.replace_pii import LLMConfig
@@ -143,6 +145,19 @@ class TestPlanningInferenceEnvironment:
             assert yielded is environ
 
         assert fixture_fake_local_servers == []
+
+    def test_explicit_endpoint_log_omits_credentials_and_path(
+        self, fixture_fake_local_servers: list[FakeLocalServer], caplog: pytest.LogCaptureFixture
+    ) -> None:
+        caplog.set_level(logging.INFO)
+        environ = {"NSS_INFERENCE_ENDPOINT": "https://user:secret@hosted.example:8443/v1?key=token"}
+
+        with planning_inference_environment(LLMConfig(), environ=environ):
+            pass
+
+        assert "hosted.example:8443" in caplog.text
+        assert "secret" not in caplog.text
+        assert "token" not in caplog.text
 
     def test_with_profile_runs_the_server_only_inside_the_block(
         self, fixture_fake_local_servers: list[FakeLocalServer]

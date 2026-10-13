@@ -18,7 +18,7 @@ from transformers import PretrainedConfig, PreTrainedTokenizerBase
 from nemo_safe_synthesizer.config.data import DataParameters
 from nemo_safe_synthesizer.config.evaluate import EvaluationParameters
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
-from nemo_safe_synthesizer.config.replace_pii import LLMConfig
+from nemo_safe_synthesizer.config.replace_pii import LLMConfig, PiiReplacementPlan
 from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
 from nemo_safe_synthesizer.config.training import TrainingHyperparams
 from nemo_safe_synthesizer.defaults import DEFAULT_MAX_SEQ_LENGTH, PSEUDO_GROUP_COLUMN
@@ -445,6 +445,15 @@ class TestInferenceModelCheck:
             issues = InferenceModelCheck().run(make_ctx(config=default_config))
 
         assert [issue.code for issue in issues] == ["inference_model_missing"]
+
+    def test_explicit_plan_skips_inference_checks(self, default_config):
+        default_config.replace_pii.llm = LLMConfig()
+        default_config.replace_pii.replacement_plan = PiiReplacementPlan()
+
+        with patch.dict("os.environ", {"NSS_INFERENCE_TIMEOUT": "soon"}, clear=True):
+            issues = InferenceModelCheck().run(make_ctx(config=default_config))
+
+        assert issues == []
 
     @pytest.mark.parametrize(
         ("environ", "runtime_problem", "expected_codes"),

@@ -251,6 +251,14 @@ class CLISettings(BaseSettings):
             return v
         return WandbMode(v)
 
+    @field_validator("inference_timeout_seconds", mode="before")
+    @classmethod
+    def validate_inference_timeout_seconds(cls, v: float | str | None) -> float | str | None:
+        """Treat a blank value as unset, as the PII inference client does."""
+        if isinstance(v, str) and not v.strip():
+            return None
+        return v
+
     @field_validator("verbose", mode="before")
     @classmethod
     def validate_verbose(cls, v: int | str | None) -> int:
