@@ -125,6 +125,7 @@ def test_replace_pii_resolves_and_writes_the_complete_input(tmp_path: Path) -> N
         replacement_plan=PiiReplacementPlan(
             columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
         ),
+        sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
     )
     data_output = tmp_path / "output" / "pii_replaced.csv"
     config_output = tmp_path / "output" / "pii_replacement_config.yaml"

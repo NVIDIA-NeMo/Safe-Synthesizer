@@ -26,6 +26,8 @@ from nemo_safe_synthesizer.config.replace_pii import (
     EntityType,
     PiiColumnPlan,
     PiiReplacementPlan,
+    PiiSamplerBackend,
+    PiiSamplerConfig,
     ReplacePiiConfig,
 )
 from nemo_safe_synthesizer.errors import ParameterError
@@ -266,6 +268,7 @@ class TestProcessDataPiiSeparation:
                     )
                 ]
             ),
+            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
         )
         builder = SafeSynthesizer(
             config=SafeSynthesizerParameters(replace_pii=resolved_pii),

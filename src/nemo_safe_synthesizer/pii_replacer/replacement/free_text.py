@@ -13,7 +13,7 @@ from typing import Literal
 import pandas as pd
 
 from ...config.replace_pii import EntityType, PiiColumnPlan
-from ...errors import GenerationError, ParameterError
+from ...errors import GenerationError, InternalError, ParameterError, SafeSynthesizerError
 from ..planning.patterns import extract_name_components
 from ..transform_result import FreeTextReplacementRecord
 from .detection import FreeTextDetector, fresh_detection_entity_types, resolve_overlapping_spans
@@ -111,7 +111,7 @@ class FreeTextReplacementExecutor:
         try:
             detected = self._detector.detect(cells)
             candidates = _validated_candidates(detected, requested)
-        except GenerationError:
+        except SafeSynthesizerError:
             raise
         except Exception as exc:
             raise GenerationError("free-text PII detection returned invalid spans") from exc
@@ -307,7 +307,7 @@ class FreeTextReplacementExecutor:
         started = time.perf_counter()
         try:
             return self._generator.generate(request)
-        except GenerationError:
+        except SafeSynthesizerError:
             raise
         except Exception as exc:
             raise GenerationError("PII replacement generation failed for an accepted free-text span") from exc
@@ -351,7 +351,7 @@ def _validated_candidates(
     for span in detected:
         cell = requested.get(span.cell_id)
         if cell is None:
-            raise ValueError("detector returned a span for an unknown cell")
+            raise InternalError("free-text PII detector returned a span for an unrequested cell")
         detected_text(cell, span)
         candidates.setdefault(span.cell_id, []).append(span)
     return candidates
