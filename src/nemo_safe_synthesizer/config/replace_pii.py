@@ -396,8 +396,9 @@ class ConditioningColumn(NSSBaseModel):
     ``columns_to_replace``.
 
     When the conditioner is itself a replace target (e.g. email depends on
-    ``first_name``), omit ``entity_type``: the plan infers it from that column's
-    ``entity_type``. Downstream nodes see the cell after upstream replacements.
+    ``first_name``), ``entity_type`` may be omitted: the plan fills it in from that
+    column's entry, and an explicit value must match it. Downstream nodes see the
+    cell after upstream replacements.
     """
 
     column_name: str = Field(description="Existing dataframe column that supplies the conditioning value.")
@@ -405,8 +406,8 @@ class ConditioningColumn(NSSBaseModel):
         default=None,
         description=(
             "Entity this conditioning column holds. Required for read-only "
-            "conditioners; omit when this column_name is also in columns_to_replace "
-            "(inferred from that entry's entity_type)."
+            "conditioners. Optional when this column_name is also in columns_to_replace: "
+            "it is filled in from that entry's entity_type, and an explicit value must match it."
         ),
     )
 
@@ -418,14 +419,6 @@ class ConditioningColumn(NSSBaseModel):
                 f"(allowed: {sorted(e.entity_type.value for e in ENTITIES if e.can_condition)})"
             )
         return self
-
-    @model_serializer(mode="wrap")
-    def _omit_inferred_entity_type(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
-        """Keep runtime-inferred entity types out of reusable plans."""
-        serialized = cast(dict[str, object], handler(self))
-        if "entity_type" not in self.model_fields_set or self.entity_type is None:
-            serialized.pop("entity_type", None)
-        return serialized
 
 
 class PiiColumnPlan(NSSBaseModel):
@@ -558,11 +551,12 @@ class PiiReplacementPlan(Parameters):
 
     @model_validator(mode="after")
     def _resolve_omitted_depends_on_types(self) -> Self:
-        """Infer missing depends_on.entity_type from columns_to_replace entity_type.
+        """Fill in or check depends_on.entity_type for columns that are also replaced.
 
-        Inference is written to copies: callers may reuse a ``PiiColumnPlan``
-        across plans, where the same instance would otherwise carry one plan's
-        inferred types into the next.
+        A dependency on a column in ``columns_to_replace`` may omit ``entity_type`` for convenience; it is filled in
+        from that column's entry and serialized like any other value. An explicit ``entity_type`` must match the entry.
+        Inference is written to copies: callers may reuse a ``PiiColumnPlan`` across plans, where the same instance
+        would otherwise carry one plan's inferred types into the next.
         """
         targets = {spec.column_name: spec for spec in self.columns_to_replace}
         updated: list[PiiColumnPlan] = []
@@ -574,15 +568,14 @@ class PiiReplacementPlan(Parameters):
             inferred_any = False
             for dep in spec.depends_on:
                 source = targets.get(dep.column_name)
-                explicitly_typed = "entity_type" in dep.model_fields_set
                 if source is not None:
-                    if explicitly_typed:
-                        raise ParameterError(
-                            f"column {spec.column_name!r}: depends_on column "
-                            f"{dep.column_name!r} is listed in columns_to_replace; omit its "
-                            "entity_type because it is inferred from that replacement entry"
-                        )
                     inferred = source.entity_type
+                    if dep.entity_type is not None and dep.entity_type is not inferred:
+                        raise ParameterError(
+                            f"column {spec.column_name!r}: depends_on column {dep.column_name!r} has entity_type "
+                            f"{dep.entity_type.value!r}, but its columns_to_replace entry has "
+                            f"{inferred.value!r}; omit entity_type or make them match"
+                        )
                     if not can_condition(inferred):
                         raise ParameterError(
                             f"column {spec.column_name!r}: depends_on column "
@@ -594,15 +587,10 @@ class PiiReplacementPlan(Parameters):
                         inferred,
                         target_column=spec.column_name,
                     )
-                    # Keep entity_type out of model_fields_set so canonical plan
-                    # serialization omits this runtime-inferred value.
-                    dep = ConditioningColumn.model_construct(
-                        _fields_set=set(dep.model_fields_set),
-                        column_name=dep.column_name,
-                        entity_type=inferred,
-                    )
-                    inferred_any = True
-                elif not explicitly_typed or dep.entity_type is None:
+                    if dep.entity_type is None:
+                        dep = dep.model_copy(update={"entity_type": inferred})
+                        inferred_any = True
+                elif dep.entity_type is None:
                     raise ParameterError(
                         f"column {spec.column_name!r}: depends_on column "
                         f"{dep.column_name!r} is missing entity_type; set entity_type "

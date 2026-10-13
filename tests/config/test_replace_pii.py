@@ -126,7 +126,6 @@ class TestPiiReplacementPlan:
         )
         dependency = plan.columns_to_replace[1].depends_on[0]
         assert dependency.entity_type is EntityType.FIRST_NAME
-        assert "entity_type" not in dependency.model_fields_set
 
     def test_inference_does_not_mutate_a_column_plan_reused_across_plans(self) -> None:
         email = PiiColumnPlan(
@@ -168,9 +167,26 @@ class TestPiiReplacementPlan:
                 }
             )
 
-    @pytest.mark.parametrize("entity_type", ["first_name", "last_name", None])
-    def test_replacement_conditioner_type_must_be_omitted(self, entity_type: str | None) -> None:
-        with pytest.raises(ValidationError, match="omit its entity_type because it is inferred"):
+    @pytest.mark.parametrize("entity_type", ["first_name", None])
+    def test_replacement_conditioner_may_repeat_a_matching_type(self, entity_type: str | None) -> None:
+        plan = PiiReplacementPlan.model_validate(
+            {
+                "columns_to_replace": [
+                    {"column_name": "first_name", "entity_type": "first_name"},
+                    {
+                        "column_name": "email",
+                        "entity_type": "email",
+                        "depends_on": [{"column_name": "first_name", "entity_type": entity_type}],
+                    },
+                ]
+            }
+        )
+
+        assert plan.columns_to_replace[1].depends_on[0].entity_type is EntityType.FIRST_NAME
+
+    def test_replacement_conditioner_type_must_match_its_entry(self) -> None:
+        entity_type = "last_name"
+        with pytest.raises(ValidationError, match="but its columns_to_replace entry has 'first_name'"):
             PiiReplacementPlan.model_validate(
                 {
                     "columns_to_replace": [
@@ -431,7 +447,7 @@ class TestReplacePiiConfig:
         assert "pattern" not in serialized_column
         assert replacement_plan["data_to_sampler_value_mapping"] == {}
 
-    def test_config_serialization_omits_runtime_inferred_dependency_type(self) -> None:
+    def test_config_serialization_includes_inferred_dependency_type(self) -> None:
         plan = PiiReplacementPlan(
             columns_to_replace=[
                 PiiColumnPlan(column_name="first", entity_type=EntityType.FIRST_NAME),
@@ -451,7 +467,7 @@ class TestReplacePiiConfig:
 
         assert isinstance(replacement_plan, dict)
         assert replacement_plan["columns_to_replace"][1]["depends_on"] == [
-            {"column_name": "first"},
+            {"column_name": "first", "entity_type": EntityType.FIRST_NAME},
             {"column_name": "company", "entity_type": EntityType.ORGANIZATION},
         ]
 
