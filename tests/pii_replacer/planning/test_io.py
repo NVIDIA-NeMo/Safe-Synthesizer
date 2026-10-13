@@ -27,7 +27,7 @@ class TestPlanIo:
         assert yaml.safe_load(path.read_text())["schema_version"] == 3
         assert load_plan(path) == plan
 
-    def test_save_uses_canonical_sparse_document_and_preserves_inference(self, tmp_path: Path) -> None:
+    def test_save_writes_inferred_dependency_types_and_round_trips(self, tmp_path: Path) -> None:
         plan = PiiReplacementPlan(
             columns_to_replace=[
                 PiiColumnPlan(column_name="first", entity_type=EntityType.FIRST_NAME),
@@ -51,7 +51,7 @@ class TestPlanIo:
                     "column_name": "email",
                     "entity_type": "email",
                     "depends_on": [
-                        {"column_name": "first"},
+                        {"column_name": "first", "entity_type": "first_name"},
                         {"column_name": "company", "entity_type": "organization"},
                     ],
                 },
@@ -60,9 +60,7 @@ class TestPlanIo:
 
         loaded = load_plan(path)
         assert loaded == plan
-        inferred = loaded.columns_to_replace[1].depends_on[0]
-        assert inferred.entity_type is EntityType.FIRST_NAME
-        assert "entity_type" not in inferred.model_fields_set
+        assert loaded.columns_to_replace[1].depends_on[0].entity_type is EntityType.FIRST_NAME
 
         second_path = save_plan(loaded, tmp_path / "second.yaml")
         assert second_path.read_text() == path.read_text()
