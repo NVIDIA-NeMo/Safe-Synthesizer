@@ -10,10 +10,10 @@ set -euo pipefail
 # error here at the top of the script. This list of environment variables
 # and checks also serves as documentation for the script.
 
-# This script is intended to be executed through slurm, so these environment
-# variables would be set automatically as part of the slurm job submission.
-# But being able to run this script standalone for debugging purposes is
-# useful.
+# This script is intended to be executed through slurm, inside the NSS image
+# built by build_image.sh, so these environment variables would be set
+# automatically as part of the slurm job submission. But being able to run
+# this script standalone for debugging purposes is useful.
 
 # If running standalone, manually source env_variables.sh to pick up many
 # needed environment variables.
@@ -30,17 +30,13 @@ if [ -z "${PACKED_CONFIGS:-}" ]; then
     exit 1
 fi
 
-if [ -z "${NSS_DIR:-}" ]; then
-    echo "NSS_DIR must be set" >&2
-    echo "Run script through submit_slurm_jobs.sh, or if running manually source env_variables.sh before running" >&2
-    exit 1
-fi
-
-if [ -z "${LUSTRE_DIR:-}" ]; then
-    echo "LUSTRE_DIR must be set" >&2
-    echo "Run script through submit_slurm_jobs.sh, or if running manually source env_variables.sh before running" >&2
-    exit 1
-fi
+for required in NSS_DIR LUSTRE_DIR NSS_SHARED_DIR USER_NAME; do
+    if [ -z "${!required:-}" ]; then
+        echo "${required} must be set" >&2
+        echo "Run script through submit_slurm_jobs.sh, or if running manually source env_variables.sh before running" >&2
+        exit 1
+    fi
+done
 
 if [[ ! -f "${LUSTRE_DIR}/.api_tokens.sh" ]]; then
     echo "ERROR: ${LUSTRE_DIR}/.api_tokens.sh not found." >&2
@@ -56,11 +52,12 @@ if [[ "${WANDB_MODE:-disabled}" == "online" && -z "${WANDB_API_KEY:-}" ]]; then
     exit 1
 fi
 
-if [ -z "${NSS_SHARED_DIR:-}" ]; then
-    echo "NSS_SHARED_DIR must be set" >&2
-    echo "Run script through submit_slurm_jobs.sh, or if running manually source env_variables.sh before running" >&2
+if [[ ! -x /opt/venv/bin/python || ! -f /opt/nss-image/.python-version ]]; then
+    echo "[NSS SLURM] ERROR: not running inside an NSS image (no /opt/venv)." >&2
+    echo "[NSS SLURM] Build one with script/slurm/build_image.sh and set NSS_IMAGE." >&2
     exit 1
 fi
+
 SLURM_ARRAY_TASK_ID="${SLURM_ARRAY_TASK_ID:-}"
 SLURM_JOB_ID="${SLURM_JOB_ID:-0}"
 NSS_PHASE="${NSS_PHASE:-end_to_end}"
@@ -68,12 +65,61 @@ NSS_PHASE="${NSS_PHASE:-end_to_end}"
 EXP_NAME="${EXP_NAME:-multi_jobs}"
 BASE_LOG_DIR="${BASE_LOG_DIR:-./}"
 
+# Node-local storage. The container runs as root mapped to the submitting
+# user, so paths use USER_NAME rather than USER. NODE_CACHE persists across
+# jobs on the same node; JOB_LOCAL is removed when the job exits.
+NODE_CACHE="/raid/scratch/${USER_NAME}/nss-cache"
+JOB_LOCAL="/raid/scratch/${USER_NAME}/job-${SLURM_JOB_ID}-$$"
+mkdir -p "${NODE_CACHE}/uv" "${NODE_CACHE}/hf" "${NODE_CACHE}/models" "${JOB_LOCAL}/tmp"
+cleanup_job_local() {
+    rm -rf "${JOB_LOCAL}"
+}
+trap cleanup_job_local EXIT
+trap 'exit 143' TERM INT
 
-# Only cd into the repo when using the repo-based install; in PyPI mode the
-# working directory does not matter for package resolution.
-if [[ -z "${NSS_VERSION:-}" ]]; then
-    cd "${NSS_DIR}"
+# Every cache, temp, and config directory points at node-local disk, and any
+# values inherited from the login shell are overridden or removed.
+unset XDG_RUNTIME_DIR UV_PYTHON_BIN_DIR UV_TOOL_DIR UV_TOOL_BIN_DIR VIRTUAL_ENV PYTHONHOME
+export PATH="/opt/venv/bin:/usr/local/bin:/usr/bin:/bin"
+export UV_CACHE_DIR="${NODE_CACHE}/uv"
+export UV_PROJECT_ENVIRONMENT=/opt/venv
+export UV_PYTHON_INSTALL_DIR=/opt/python
+export UV_MANAGED_PYTHON=1
+export UV_LINK_MODE=copy
+export HF_HOME="${NODE_CACHE}/hf"
+export VLLM_CACHE_ROOT="${JOB_LOCAL}/vllm"
+export TRITON_CACHE_DIR="${JOB_LOCAL}/triton"
+export TORCHINDUCTOR_CACHE_DIR="${JOB_LOCAL}/torchinductor"
+export FLASHINFER_WORKSPACE_BASE="${JOB_LOCAL}/flashinfer"
+export XDG_CACHE_HOME="${JOB_LOCAL}/xdg-cache"
+export XDG_CONFIG_HOME="${JOB_LOCAL}/xdg-config"
+export WANDB_DIR="${JOB_LOCAL}/wandb"
+export WANDB_CACHE_DIR="${JOB_LOCAL}/wandb/cache"
+export WANDB_CONFIG_DIR="${JOB_LOCAL}/wandb/config"
+export WANDB_DATA_DIR="${JOB_LOCAL}/wandb/data"
+export TMPDIR="${JOB_LOCAL}/tmp"
+export PYTHONPYCACHEPREFIX="${JOB_LOCAL}/pycache"
+mkdir -p "${WANDB_DIR}"
+
+# Install the project (editable, from the read-only checkout) and any
+# dependency differences between this branch's uv.lock and the image.
+branch_python="$(tr -d '[:space:]' < "${NSS_DIR}/.python-version")"
+image_python="$(tr -d '[:space:]' < /opt/nss-image/.python-version)"
+if [[ "${branch_python}" != "${image_python}" ]]; then
+    echo "[NSS SLURM] ERROR: branch needs Python ${branch_python} but the image has ${image_python}." >&2
+    echo "[NSS SLURM] Build a new image with script/slurm/build_image.sh." >&2
+    exit 1
 fi
+if cmp -s "${NSS_DIR}/uv.lock" /opt/nss-image/uv.lock; then
+    echo "[NSS SLURM] uv.lock matches the image; installing the project only"
+else
+    echo "[NSS SLURM] uv.lock differs from the image; syncing dependency differences"
+fi
+(cd "${NSS_DIR}" && uv sync --frozen --no-dev --extra engine --extra cu129)
+NSS_RUN_CMD="/opt/venv/bin/safe-synthesizer"
+# Run from node-local disk so any relative-path writes stay off Lustre and
+# off the read-only checkout.
+cd "${JOB_LOCAL}"
 
 # Get dataset and config name from packed strings
 declare -a all_datasets
@@ -94,61 +140,6 @@ else
     config=${all_configs[0]}
 fi
 
-# Fail before installing system packages when PyPI mode cannot access uv.
-if [[ -n "${NSS_VERSION:-}" && ! -f "${LUSTRE_DIR}/.uv/bin/env" ]]; then
-    echo "[NSS SLURM] ERROR: PyPI mode requires uv at ${LUSTRE_DIR}/.uv/bin" >&2
-    echo "[NSS SLURM] Install uv as described in script/slurm/README.md," \
-        "or omit --nss-version to use repo mode." >&2
-    exit 1
-fi
-
-# Ensure minimal build toolchain inside container (no-op if already present)
-apt-get update && apt-get install -y --no-install-recommends \
-        curl \
-        g++ \
-        build-essential \
-        ca-certificates \
-        git \
-        libcurl4 \
-        libcurl3-gnutls
-
-# NSS_PYTHON_VERSION is resolved in env_variables.sh (from .python-version, with
-# an optional override), which is always sourced before this script runs.
-
-if [[ -n "${NSS_VERSION:-}" ]]; then
-    # Install nemo-safe-synthesizer from PyPI into a versioned venv cached on
-    # lustre so concurrent array jobs can share it without redundant downloads.
-    source "${LUSTRE_DIR}/.uv/bin/env"
-    PYPI_VENV="${LUSTRE_DIR}/.venv_nss_py${NSS_PYTHON_VERSION}_${NSS_VERSION}"
-    uv venv --python "${NSS_PYTHON_VERSION}" "${PYPI_VENV}"
-    source "${PYPI_VENV}/bin/activate"
-    uv pip install "nemo-safe-synthesizer[cu129,engine]==${NSS_VERSION}" \
-        --find-links https://flashinfer.ai/whl/cu129/flashinfer-jit-cache/ \
-        --find-links https://flashinfer.ai/whl/flashinfer-cubin/ \
-        --find-links https://wheels.vllm.ai/0.27.0/cu129/vllm/ \
-        --find-links https://download.pytorch.org/whl/cu129/torch/ \
-        --find-links https://download.pytorch.org/whl/cu129/torchaudio/ \
-        --find-links https://download.pytorch.org/whl/cu129/torchvision/ \
-        --find-links https://download.pytorch.org/whl/cu129/torchcodec/ \
-        --find-links https://download.pytorch.org/whl/cu129/torchao/ \
-        --find-links https://download.pytorch.org/whl/cu129/triton/
-    NSS_RUN_CMD="${PYPI_VENV}/bin/safe-synthesizer"
-    echo "[NSS SLURM] Using PyPI install: nemo-safe-synthesizer==${NSS_VERSION} on Python ${NSS_PYTHON_VERSION}"
-else
-    # Repo mode: activate the venv pre-built once on the login node by
-    # submit_slurm_jobs.sh, rather than each array task running `uv sync` against
-    # the shared Lustre .venv (which could race and corrupt it).
-    if [[ ! -x "${NSS_DIR}/.venv/bin/safe-synthesizer" ]]; then
-        echo "[NSS SLURM] ERROR: no usable repo venv at ${NSS_DIR}/.venv" \
-            "(missing safe-synthesizer entry point)" >&2
-        echo "[NSS SLURM] Submit via submit_slurm_jobs.sh (it builds the venv once)," \
-            "or build it manually: (cd ${NSS_DIR} && mise run bootstrap-nss-slurm cu129)" >&2
-        exit 1
-    fi
-    echo "[NSS SLURM] Using pre-built repo venv at ${NSS_DIR}/.venv"
-    source "${NSS_DIR}/.venv/bin/activate"
-    NSS_RUN_CMD="${NSS_DIR}/.venv/bin/safe-synthesizer"
-fi
 echo "[NSS SLURM] nemo-safe-synthesizer version: $(python -c 'from nemo_safe_synthesizer.package_info import __version__; print(__version__)')"
 
 
@@ -166,6 +157,27 @@ full_config_path="${CONFIG_DIR}/${config}.yaml"
 if [[ ! -f "$full_config_path" ]]; then
     echo "Config file not found: ${full_config_path}" >&2
     exit 1
+fi
+
+# Stage the pretrained model from the read-only shared copy to node-local
+# disk, once per node. The path keeps the Hugging Face repo name because NSS
+# picks model metadata by matching names such as "Mistral" in the path.
+model_args=()
+model_id="$(python -c 'import sys, yaml; cfg = yaml.safe_load(open(sys.argv[1])) or {}; print((cfg.get("training") or {}).get("pretrained_model") or "")' "$full_config_path")"
+if [[ -n "${model_id}" && "${model_id}" != /* && -d "${NSS_MODELS_DIR:-}/${model_id}" ]]; then
+    staged_model="${NODE_CACHE}/models/${model_id}"
+    if [[ ! -d "${staged_model}" ]]; then
+        echo "[NSS SLURM] staging ${model_id} from ${NSS_MODELS_DIR} to ${staged_model}"
+        mkdir -p "$(dirname "${staged_model}")"
+        staging_tmp="${staged_model}.tmp-${SLURM_JOB_ID}-$$"
+        cp -r "${NSS_MODELS_DIR}/${model_id}" "${staging_tmp}"
+        # Another job on this node may have finished staging first.
+        mv -T "${staging_tmp}" "${staged_model}" 2>/dev/null || rm -rf "${staging_tmp}"
+    fi
+    model_args=(--training__pretrained_model "${staged_model}")
+    echo "[NSS SLURM] using staged model ${staged_model}"
+elif [[ -n "${model_id}" ]]; then
+    echo "[NSS SLURM] ${model_id} not found under ${NSS_MODELS_DIR:-<unset>}; downloading through ${HF_HOME}"
 fi
 
 # Construct run path for WorkdirStructure
@@ -209,12 +221,13 @@ echo "[NSS SLURM] full_config_path=${full_config_path}"
 echo "[NSS SLURM] full dataset path/name=${dataset}"
 echo "[NSS SLURM] run_path=$run_path"
 echo "[NSS SLURM] output_dir=$OUTPUT_DIR"
+echo "[NSS SLURM] job_local=${JOB_LOCAL}"
 echo "CUDA_VISIBLE_DEVICES is set to: ${CUDA_VISIBLE_DEVICES:-not set}"
 
-dataset_registry_arg=""
+dataset_registry_args=()
 dataset_registry_file="${NSS_SHARED_DIR}/dataset_registry.yaml"
 if [ -f "${dataset_registry_file}" ]; then
-    dataset_registry_arg="--dataset-registry ${dataset_registry_file}"
+    dataset_registry_args=(--dataset-registry "${dataset_registry_file}")
     echo "Using dataset registry file: ${dataset_registry_file}"
 else
     echo "No dataset registry file found at ${dataset_registry_file}"
@@ -224,35 +237,38 @@ fi
 if [[ "${NSS_PHASE}" == "train" ]]; then
     # Stage 1: PII replacement + training
     # Creates new workdir at run_path with adapter
-    ${NSS_RUN_CMD} run train \
+    "${NSS_RUN_CMD}" run train \
         --data-source "$dataset" \
         --config "$full_config_path" \
         --run-path "$run_path" \
-        $dataset_registry_arg
+        "${dataset_registry_args[@]}" \
+        "${model_args[@]}"
 elif [[ "${NSS_PHASE}" == "generate" ]]; then
     # Stage 2: generation (+ optional evaluation)
     # Resumes from existing workdir at run_path
     # Each generation run creates unique output files (synthetic_data_TIMESTAMP.csv)
     # Resume wandb run from train phase if the ID file exists
     wandb_id_file="${run_path}/wandb_run_id.txt"
-    wandb_resume_arg=""
+    wandb_resume_args=()
     if [[ -f "$wandb_id_file" ]]; then
-        wandb_resume_arg="--wandb-resume-job-id $wandb_id_file"
+        wandb_resume_args=(--wandb-resume-job-id "$wandb_id_file")
     fi
 
-    ${NSS_RUN_CMD} run generate \
+    "${NSS_RUN_CMD}" run generate \
         --data-source "$dataset" \
         --config "$full_config_path" \
         --run-path "$run_path" \
-        $dataset_registry_arg \
-        $wandb_resume_arg
+        "${dataset_registry_args[@]}" \
+        "${model_args[@]}" \
+        "${wandb_resume_args[@]}"
 else
     # Full end-to-end run
-    ${NSS_RUN_CMD} run \
+    "${NSS_RUN_CMD}" run \
         --data-source "$dataset" \
         --config "$full_config_path" \
         --run-path "$run_path" \
-        $dataset_registry_arg
+        "${dataset_registry_args[@]}" \
+        "${model_args[@]}"
 fi
 
 echo "[NSS SLURM] Done"

@@ -17,7 +17,6 @@ PIPELINE_MODE="end_to_end"  # values: two_stage | end_to_end
 CONFIGS_CSV=""  # optional override for CONFIGS array (comma-separated)
 WANDB_PROJECT="" # optional wandb project name; uses EXP_NAME if not provided
 MAX_CONCURRENT_SLURM_JOBS="" # optional max number of concurrent slurm jobs to run within each array; if not provided, no restriction is applied
-NSS_VERSION="" # optional: install nemo-safe-synthesizer from PyPI at this version instead of syncing the repo
 ACCOUNT="${ACCOUNT:-nemotron_data_dev}"
 TIME_LIMIT="04:00:00"
 TRAIN_TIME_LIMIT=""
@@ -48,8 +47,6 @@ while [ $# -gt 0 ]; do
       WANDB_PROJECT="${2:-}"; shift 2;;
     --max-concurrent-slurm-jobs)
       MAX_CONCURRENT_SLURM_JOBS="${2:-$MAX_CONCURRENT_SLURM_JOBS}"; shift 2;;
-    --nss-version|-V)
-      NSS_VERSION="${2:-}"; shift 2;;
     --time-limit|-t)
       TIME_LIMIT="${2:-$TIME_LIMIT}"; shift 2;;
     --train-time-limit)
@@ -61,17 +58,14 @@ while [ $# -gt 0 ]; do
     --dry-run)
       DRY_RUN="true"; shift;;
     --help|-h)
-      echo "Usage: $0 [--configs c1,c2] [--dataset-urls name1,url1,path1] [--dataset-group short|long] [--runs N] [--exp-name NAME] [--pipeline-mode two_stage|end_to_end] [--partition P] [--wandb-project PROJECT] [--max-concurrent-slurm-jobs N] [--time-limit TIME] [--train-time-limit TIME] [--generate-time-limit TIME] [--nss-version VERSION] [--job-id-file PATH] [--dry-run]"
+      echo "Usage: $0 [--configs c1,c2] [--dataset-urls name1,url1,path1] [--dataset-group short|long] [--runs N] [--exp-name NAME] [--pipeline-mode two_stage|end_to_end] [--partition P] [--wandb-project PROJECT] [--max-concurrent-slurm-jobs N] [--time-limit TIME] [--train-time-limit TIME] [--generate-time-limit TIME] [--job-id-file PATH] [--dry-run]"
       echo ""
       echo "Provide either --dataset-urls to specify a list of datasets by name, url, or path, or --dataset-group to use a predefined set of datasets."
       echo "Time limits:"
       echo "    --time-limit is used for end_to_end mode (defaults to 4 hours)"
       echo "    --train-time-limit and --generate-time-limit are used for two_stage mode, and will default to --time-limit if the more more specific train and generate limits are not provided"
-      echo "Package installation:"
-      echo "    --nss-version VERSION  install nemo-safe-synthesizer==VERSION from PyPI instead of syncing the repo"
-      echo "                           example: --nss-version 0.2.3"
-      echo "                           if omitted, the repo at NSS_DIR is used (default behavior)"
-      echo "    --job-id-file PATH     write submitted Slurm array job id to PATH; in two_stage mode this records the generate array id"
+      echo "Other:"
+      echo "    --job-id-file PATH    write submitted Slurm array job id to PATH; in two_stage mode this records the generate array id"
 
       exit 0;;
     --) shift; break;;
@@ -129,57 +123,46 @@ fi
 
 export ACCOUNT
 export EXP_NAME
-export NSS_VERSION
 
-# nss_prebuild_repo_venv: In repo mode (no --nss-version) the shared
-# ${NSS_DIR}/.venv is bind-mounted into every job container from Lustre. If each
-# array task ran `uv sync`, dozens of jobs would create/recreate the same
-# directory at once and corrupt it. Build it once here on the login node so the
-# array tasks (see slurm_nss_matrix.sh) only activate it.
-prebuild_repo_venv() {
-  if [[ -n "${NSS_VERSION:-}" ]]; then
-    return 0  # PyPI mode manages its own versioned venv
-  fi
-  if [[ -n "${DRY_RUN:-}" ]]; then
-    echo "[submit] --dry-run: skipping repo venv pre-build"
-    return 0
-  fi
-
-  local lock_dir="${LUSTRE_DIR}/.locks"
-  local lock_file="${lock_dir}/nss-repo-venv.lock"
-  mkdir -p "${lock_dir}"
-
-  echo "[submit] pre-building repo venv at ${NSS_DIR}/.venv (python=${NSS_PYTHON_VERSION})"
-  (
-    flock -x 200
-    unset VIRTUAL_ENV
-    cd "${NSS_DIR}"
-    MISE_IGNORED_CONFIG_PATHS="${MISE_IGNORED_CONFIG_PATHS:-${HOME}/.config/mise/config.toml}" \
-      MISE_LOCKED=1 \
-      NSS_SLURM_USER="${USER_NAME}" \
-      mise run bootstrap-nss-slurm cu129
-  ) 200>"${lock_file}"
-
-  local lustre_root
-  local repo_python
-  lustre_root="$(readlink -f "${LUSTRE_DIR}")"
-  repo_python="$(readlink -f "${NSS_DIR}/.venv/bin/python" 2>/dev/null || true)"
-  if [[ -z "${repo_python}" || "${repo_python}" != "${lustre_root}/"* ]]; then
-    echo "[submit] ERROR: repo venv Python is not container-visible under Lustre: ${repo_python:-missing}" >&2
-    echo "[submit] Rebuild it: (cd ${NSS_DIR} && mise run bootstrap-nss-slurm cu129)" >&2
+# check_image: jobs run from the team-shared image built by build_image.sh and
+# install the project from ${NSS_DIR} at job start, so nothing is built here.
+# Compare the image's recorded Python version and uv.lock with this checkout:
+# a Python mismatch cannot be synced at job start, while a uv.lock difference
+# only costs extra installs in each job.
+check_image() {
+  if [[ ! -f "${NSS_IMAGE}" ]]; then
+    echo "ERROR: NSS image not found: ${NSS_IMAGE}" >&2
+    echo "Build it with: bash ${NSS_SLURM_DIR}/build_image.sh" >&2
     exit 1
   fi
+  echo "Using container image: ${NSS_IMAGE}"
 
-  # Functionally verify the venv by running safe-synthesizer once
-  if ! "${NSS_DIR}/.venv/bin/safe-synthesizer" --help >/dev/null 2>&1; then
-    echo "[submit] ERROR: repo venv at ${NSS_DIR}/.venv is not functional (safe-synthesizer failed to run)" >&2
-    echo "[submit] Rebuild it: (cd ${NSS_DIR} && mise run bootstrap-nss-slurm cu129)" >&2
+  # Extract only /opt/nss-image (two small files) to login-node /tmp; this
+  # works with unsquashfs 4.4, which has no -cat.
+  local meta_dir image_python branch_python
+  meta_dir="$(mktemp -d)"
+  if ! unsquashfs -n -d "${meta_dir}/root" "${NSS_IMAGE}" /opt/nss-image >/dev/null 2>&1 \
+      || [[ ! -f "${meta_dir}/root/opt/nss-image/.python-version" ]]; then
+    rm -rf "${meta_dir}"
+    echo "ERROR: could not read /opt/nss-image from ${NSS_IMAGE}; is it an image from build_image.sh?" >&2
     exit 1
   fi
-  echo "[submit] repo venv ready: $("${NSS_DIR}/.venv/bin/python" --version 2>&1)"
+  image_python="$(tr -d '[:space:]' < "${meta_dir}/root/opt/nss-image/.python-version")"
+  branch_python="$(tr -d '[:space:]' < "${NSS_DIR}/.python-version")"
+  if [[ "${image_python}" != "${branch_python}" ]]; then
+    rm -rf "${meta_dir}"
+    echo "ERROR: this checkout needs Python ${branch_python}, but the image has ${image_python}." >&2
+    echo "Build a new image with: bash ${NSS_SLURM_DIR}/build_image.sh" >&2
+    exit 1
+  fi
+  if ! cmp -s "${meta_dir}/root/opt/nss-image/uv.lock" "${NSS_DIR}/uv.lock"; then
+    echo "NOTE: uv.lock differs from the image; each job will install the difference at start."
+    echo "      For large dependency changes, build a new image with build_image.sh."
+  fi
+  rm -rf "${meta_dir}"
 }
 
-prebuild_repo_venv
+check_image
 
 # Build configs list: CLI override (comma-separated) takes precedence; otherwise use CONFIGS from env
 declare -a CONFIGS_LIST
@@ -271,20 +254,6 @@ export PACKED_CONFIGS
 
 echo "PACKED_DATASETS: ${PACKED_DATASETS}"
 echo "PACKED_CONFIGS: ${PACKED_CONFIGS}"
-
-# To reduce startup time and avoid timeouts downloading the image, use an existing
-# image already saved on lustre if possible.
-CACHED_IMAGE_PATH="${NSS_SHARED_DIR}/images/cuda_12_8_1_cudnn_runtime_ubuntu24_04.sqsh"
-if [ -f "${CACHED_IMAGE_PATH}" ]; then
-  CONTAINER_IMAGE="${CACHED_IMAGE_PATH}"
-else
-  CONTAINER_IMAGE="nvcr.io/nvidia/cuda:12.8.1-cudnn-runtime-ubuntu24.04"
-fi
-echo "Using container image: ${CONTAINER_IMAGE}"
-CONTAINER_MOUNTS="/lustre:/lustre"
-
-export CONTAINER_IMAGE
-export CONTAINER_MOUNTS
 
 mkdir -p "${EXP_LOG_DIR}"
 

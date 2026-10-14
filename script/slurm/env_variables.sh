@@ -2,13 +2,23 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+# Storage follows the MARS cluster rules: source code in /home, images, data,
+# and outputs on Lustre, and every cache on node-local /raid/scratch. Caches
+# are set per job in slurm_nss_matrix.sh, not here.
 
 export USER_NAME="${USER_NAME:-}"
 export LUSTRE_DIR="/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/${USER_NAME}" ## do not change this
 
-# NOTE: This directory is only setup on cs-oci-ord and cw-pdx-cs right now,
-# will need to create the same structure on other clusters as we need them.
-export NSS_SHARED_DIR="/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/kendrickb/shared_safe_synthesizer"
+# Team-shared images, data, and models, owned by group llmservice (setgid, 2775).
+# NOTE: This directory is only set up on cs-oci-ord right now; create the same
+# structure on other clusters as we need them (see README).
+export NSS_SHARED_DIR="${NSS_SHARED_DIR:-/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/shared/safe_synthesizer}"
+# Base image for build_image.sh; jobs run from the NSS image built on top of it.
+export NSS_BASE_IMAGE="${NSS_BASE_IMAGE:-${NSS_SHARED_DIR}/images/cuda_12_8_1_cudnn_runtime_ubuntu24_04.sqsh}"
+# Team-shared NSS image from build_image.sh. Bump this when a new image is built.
+export NSS_IMAGE="${NSS_IMAGE:-${NSS_SHARED_DIR}/images/nss-slurm-py3.13-e58529b3b46c.sqsh}"
+# Read-only, pre-downloaded models (<org>/<name>), staged to node-local disk by jobs.
+export NSS_MODELS_DIR="${NSS_MODELS_DIR:-${NSS_SHARED_DIR}/models}"
 
 ## change the followings if you want them to be different
 CONFIGS=(
@@ -19,33 +29,15 @@ CONFIGS=(
     mistral-nodp
     mistral-dp
 ) # the jobs will run all datasets with these configs
-export NSS_DIR="${NSS_DIR:-${LUSTRE_DIR}/Safe-Synthesizer}" # where the nss repo is located
+# Repository checkout in /home that contains this script; jobs mount it at the same path.
+_nss_env_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export NSS_DIR="${NSS_DIR:-$(cd "${_nss_env_dir}/../.." && pwd)}"
+unset _nss_env_dir
 export NSS_SLURM_DIR="${NSS_DIR}/script/slurm" # slurm scripts location (inside repo)
 export CONFIG_DIR="${NSS_SLURM_DIR}/configs" # where the config files are located
 export BASE_LOG_DIR="${LUSTRE_DIR}/nss_results" # where you want the slurm logs to be saved, each job will have err and out files
 export ADAPTER_PATH="${LUSTRE_DIR}/nss_results/adapters" # base path for run directories (each run creates a subdirectory via --run-path)
-export VLLM_CACHE_ROOT="${LUSTRE_DIR}/.cache/vllm/" # where the vllm cache is saved, this is to prevent the login node from blowing up
-export UV_CACHE_DIR="${LUSTRE_DIR}/.cache/uv"
-export UV_PYTHON_INSTALL_DIR="${LUSTRE_DIR}/.local/share/uv/python"
-export UV_PYTHON_BIN_DIR="${LUSTRE_DIR}/.local/bin"
-export UV_TOOL_DIR="${LUSTRE_DIR}/.local/share/uv/tools"
-# Cap concurrent wheel downloads. The repo venv pre-build pulls large CUDA/torch/
-# vLLM/flashinfer wheels, and uv's default high concurrency might spike memory on
-# the login node. Override by exporting UV_CONCURRENT_DOWNLOADS first.
-export UV_CONCURRENT_DOWNLOADS="${UV_CONCURRENT_DOWNLOADS:-20}"
-# Python version for Slurm virtualenvs. Defaults to the repo's pinned version
-# (.python-version) so it tracks dependency/Python bumps automatically; override
-# by exporting NSS_PYTHON_VERSION before sourcing this file.
-if [[ -z "${NSS_PYTHON_VERSION:-}" ]]; then
-    if [[ -f "${NSS_DIR}/.python-version" ]]; then
-        NSS_PYTHON_VERSION="$(tr -d '[:space:]' < "${NSS_DIR}/.python-version")"
-    else
-        NSS_PYTHON_VERSION="3.13"
-    fi
-fi
-export NSS_PYTHON_VERSION
-export HF_HOME="${LUSTRE_DIR}/.cache/huggingface"
-export WANDB_MODE="online" # "online", "offline" or "disabled"
+export WANDB_MODE="${WANDB_MODE:-online}" # "online", "offline" or "disabled"; an exported value wins
 export NEMO_DEPLOYMENT_TYPE="slurm-nvidia-internal" # sets the values for telemetry
 
 # NSS CLI environment variables (used by safe-synthesizer CLI via pydantic-settings)
