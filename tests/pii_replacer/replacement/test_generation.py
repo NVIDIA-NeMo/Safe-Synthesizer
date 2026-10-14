@@ -21,7 +21,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiSamplerBackend,
     PiiSamplerConfig,
 )
-from nemo_safe_synthesizer.errors import GenerationError, InternalError, ParameterError
+from nemo_safe_synthesizer.errors import InternalError, ParameterError
 from nemo_safe_synthesizer.pii_replacer.replacement.generation import (
     ReplacementGenerationRequest,
     ReplacementGenerator,
@@ -427,11 +427,10 @@ class TestReplacementGenerator:
         assert datetime(1989, 4, 5) <= parsed_replacement <= datetime(1991, 4, 5)
         assert replacement != original
 
-    def test_vague_birth_date_is_not_generation_input(self) -> None:
-        generator = _faker_generator()
+    def test_vague_birth_date_is_replaced_with_a_random_complete_date(self) -> None:
+        replacement = _faker_generator().generate(_request(EntityType.DATE_OF_BIRTH, "spring"))
 
-        with pytest.raises(GenerationError, match="complete parseable date"):
-            generator.generate(_request(EntityType.DATE_OF_BIRTH, "spring"))
+        assert datetime(1930, 1, 1) <= datetime.fromisoformat(replacement) <= datetime(2010, 12, 31)
 
     def test_card_pattern_produces_a_luhn_valid_number(self) -> None:
         generator = _faker_generator()
