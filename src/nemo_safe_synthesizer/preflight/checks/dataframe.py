@@ -31,6 +31,7 @@ __all__ = [
     "MiaExcludedColumnsCheck",
     "OrderbyColumnCheck",
     "PseudoColumnCheck",
+    "RollingStatsValueColumnCheck",
     "TimeSeriesDataShapeCheck",
     "TimeSeriesValueColumnCheck",
     "TimestampColumnCheck",
@@ -241,6 +242,37 @@ class TimeSeriesValueColumnCheck(DataFrameCheck):
                 collector.error(
                     "evaluation_column_not_numeric",
                     f"Autocorrelation value column {column!r} must contain numeric training data.",
+                )
+
+
+class RollingStatsValueColumnCheck(DataFrameCheck):
+    """Validate explicitly configured rolling statistics evaluation value columns."""
+
+    name = "timeseries.rolling_stats_columns"
+    label = "Rolling stats evaluation columns"
+
+    @override
+    def enabled(self, ctx: PreflightContext) -> bool:
+        if not super().enabled(ctx):
+            return False
+        return ctx.config.time_series_evaluation_enabled
+
+    @override
+    def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
+        columns = ctx.config.evaluation.time_series.rolling_stats.value_columns
+        if columns is None:
+            return
+        for column in columns:
+            if column not in ctx.data:
+                collector.error(
+                    "rolling_stats_column_not_found",
+                    f"Rolling stats value column {column!r} is missing from the training data.",
+                )
+                continue
+            if not is_numeric_dtype(ctx.data[column]):
+                collector.error(
+                    "rolling_stats_column_not_numeric",
+                    f"Rolling stats value column {column!r} must contain numeric training data.",
                 )
 
 

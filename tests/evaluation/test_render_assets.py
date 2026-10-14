@@ -265,3 +265,120 @@ def test_evaluation_report_uses_reference_icon_geometry() -> None:
     assert 'd="M13 5.293V14H3V2h6.707z' in icons  # Document
     assert 'd="m11.871 1.295.509 2.325' in icons  # CheckmarkBadge
     assert 'd="M5 5a3 3 0 0 1 6 0v2h1v7H4V7h1z' in icons  # LockClosed
+
+
+def test_rolling_stats_card_assets_are_wired_after_autocorrelation() -> None:
+    template = _get_template("jinja/reports/multi_modal_report.j2")
+    rolling_stats_similarity = _get_template("jinja/components/rolling_stats_similarity.j2")
+    stylesheet = _get_template("css/multi_modal_report.css")
+    javascript = _get_template("js/multi_modal_toggle.js")
+
+    assert template is not None
+    assert rolling_stats_similarity is not None
+    assert stylesheet is not None
+    assert javascript is not None
+    assert template.index('"autocorrelation-similarity"') < template.index('"rolling-stats-similarity"')
+    assert template.index('"rolling-stats-similarity"') < template.index('id="data-privacy"')
+    assert "ctx.rolling_stats_similarity.figures" in rolling_stats_similarity
+    assert 'class="rolling-stats-charts"' in rolling_stats_similarity
+    assert rolling_stats_similarity.count('class="rolling-stats-chart-heading"') == 1
+    assert ".rolling-stats-charts" in stylesheet
+    assert ".rolling-stats-column-select" in stylesheet
+    assert "[data-rolling-stats-column-select]" in javascript
+
+
+def _rolling_stats_context(
+    column_count: int, pair_score_column_count: int, constant_synthetic_profile_count: int = 0
+) -> dict[str, object]:
+    columns = [f"column_{index}" for index in range(column_count)]
+    return {
+        "rolling_stats_similarity": {
+            "score": {"notes": None},
+            "details": {},
+            "evaluated_profile_count": column_count,
+            "evaluated_group_count": 1,
+            "evaluated_column_count": column_count,
+            "constant_synthetic_profile_count": constant_synthetic_profile_count,
+            "pair_score_column_count": pair_score_column_count,
+            "summary_columns": columns,
+            "summary_traces_per_column": 4,
+            "figures": [
+                {
+                    "title": "Local average over time",
+                    "html": "<div>level</div>",
+                    "column_select": True,
+                    "tooltip_id": "rolling-stats-level-info",
+                    "tooltip": "Lines should overlap.",
+                },
+                {
+                    "title": "Local spread over time",
+                    "html": "<div>spread</div>",
+                    "column_select": True,
+                    "tooltip_id": "rolling-stats-spread-info",
+                    "tooltip": "Spreads should overlap.",
+                },
+                {
+                    "title": "Pair scores",
+                    "html": "<div>pairs</div>",
+                    "column_select": False,
+                    "tooltip_id": "rolling-stats-pair-scores-info",
+                    "tooltip": "Dots should be near 10.",
+                },
+            ],
+        }
+    }
+
+
+def test_rolling_stats_renders_column_selects_and_pair_score_limit_note() -> None:
+    rendered = _render_template(
+        "jinja/components/rolling_stats_similarity.j2",
+        ctx=_rolling_stats_context(column_count=10, pair_score_column_count=8),
+    )
+
+    assert rendered.count("data-rolling-stats-column-select") == 2
+    assert 'data-traces-per-column="4"' in rendered
+    assert '<option value="9">column_9</option>' in rendered
+    assert "Pair scores shows the 8 lowest-scoring columns." in rendered
+    assert " ".join(rendered.split()).count("Summarizing 10 group-column pairs (1 group, 10 numeric columns).") == 1
+
+
+def test_rolling_stats_renders_info_tooltip_for_each_chart() -> None:
+    rendered = _render_template(
+        "jinja/components/rolling_stats_similarity.j2",
+        ctx=_rolling_stats_context(column_count=2, pair_score_column_count=2),
+    )
+
+    assert rendered.count("data-tooltip-toggle") == 3
+    assert 'aria-controls="rolling-stats-spread-info"' in rendered
+    assert 'id="rolling-stats-pair-scores-info" role="tooltip" hidden' in rendered
+
+
+def test_rolling_stats_omits_column_select_and_note_for_single_column() -> None:
+    rendered = _render_template(
+        "jinja/components/rolling_stats_similarity.j2",
+        ctx=_rolling_stats_context(column_count=1, pair_score_column_count=1),
+    )
+
+    assert "data-rolling-stats-column-select" not in rendered
+    assert "lowest-scoring columns" not in rendered
+    assert "constant synthetic values" not in rendered
+
+
+@pytest.mark.parametrize(
+    ("constant_count", "expected"),
+    [
+        (1, "1 pair has constant synthetic values."),
+        (3, "3 pairs have constant synthetic values."),
+    ],
+)
+def test_rolling_stats_notes_constant_synthetic_pairs_missing_from_profile_charts(
+    constant_count: int, expected: str
+) -> None:
+    rendered = _render_template(
+        "jinja/components/rolling_stats_similarity.j2",
+        ctx=_rolling_stats_context(
+            column_count=2, pair_score_column_count=2, constant_synthetic_profile_count=constant_count
+        ),
+    )
+
+    assert expected in rendered
