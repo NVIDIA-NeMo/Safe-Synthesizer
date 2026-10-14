@@ -1,13 +1,14 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Finite identifier value spaces with deterministic, collision-free allocation.
+"""Finite identifier value spaces with deterministic allocation.
 
-Identifier columns need one replacement per distinct original, distinct from
-every original. Drawing random values and retrying fails once a value space is
-nearly full, as with a dense row counter. These spaces instead enumerate their
-values, so allocation starts at a seeded position and steps to the next unused
-value, which always succeeds while any value is free.
+Identifier replacements must never equal an original value and should be unique.
+Drawing random values and retrying fails once a value space is nearly full, as
+with a dense row counter. These spaces instead enumerate their values, so
+allocation starts at a seeded position and steps to the next unused value. When
+no unused value is left, allocation repeats an earlier replacement instead of
+failing, so uniqueness is best effort while originals are never reused.
 """
 
 from __future__ import annotations
@@ -133,7 +134,7 @@ class NumberSpace:
 
 
 class IdentifierAllocator:
-    """Hand out distinct replacement values from one space, never reusing an original.
+    """Hand out replacement values from one space, never reusing an original and repeating only when full.
 
     Attributes:
         space: Value space replacements are drawn from.
@@ -141,23 +142,32 @@ class IdentifierAllocator:
 
     def __init__(self, space: MaskSpace | NumberSpace, originals: Iterable[str]) -> None:
         self.space = space
-        self._taken = {index for value in originals if (index := space.index_of(value)) is not None}
+        self._originals = {index for value in originals if (index := space.index_of(value)) is not None}
+        self._allocated: list[int] = []
+        self._allocated_set: set[int] = set()
 
     @property
     def free_count(self) -> int:
-        """Number of values still available."""
-        return self.space.size - len(self._taken)
+        """Number of values that are neither originals nor already allocated."""
+        return self.space.size - len(self._originals) - len(self._allocated_set)
 
-    def allocate(self, seed: int) -> str | None:
-        """Return the first unused value at or after the seeded position, or ``None`` when none is left."""
+    def allocate(self, seed: int) -> tuple[str, bool] | None:
+        """Return a replacement and whether it repeats an earlier one, or ``None`` if every value is an original.
+
+        The replacement is the first unused value at or after the seeded position. When no unused
+        value is left, a seeded choice among earlier replacements is repeated.
+        """
         size = self.space.size
-        if len(self._taken) >= size:
-            return None
-        index = seed % size
-        while index in self._taken:
-            index = (index + 1) % size
-        self._taken.add(index)
-        return self.space.value_at(index)
+        if self.free_count > 0:
+            index = seed % size
+            while index in self._originals or index in self._allocated_set:
+                index = (index + 1) % size
+            self._allocated.append(index)
+            self._allocated_set.add(index)
+            return self.space.value_at(index), False
+        if self._allocated:
+            return self.space.value_at(self._allocated[seed % len(self._allocated)]), True
+        return None
 
 
 def number_space_for(originals: Sequence[str]) -> NumberSpace | None:

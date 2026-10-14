@@ -21,7 +21,6 @@ from ...errors import InternalError
 
 __all__ = [
     "CanonicalValue",
-    "DataframeMappingKey",
     "DetectedSpan",
     "DetectionCell",
     "DetectionCellId",
@@ -350,39 +349,13 @@ class GroupMappingKey:
         _require_canonical_value(self.canonical_original_value, "group mapping canonical_original_value")
 
 
-@dataclass(frozen=True, slots=True)
-class DataframeMappingKey:
-    """Mapping identity for dataframe scope, used for identifier-like entity types.
-
-    An identifier such as an email, account number, or hospital ID names one
-    entity wherever it appears, so every occurrence of one canonical original
-    value in the target column reuses one replacement, regardless of row or
-    group. As in group scope, the first occurrence in stable positional row
-    order establishes the replacement and dependencies are not part of identity.
-
-    Example:
-        # Every row with hospital ID 17 gets the same replacement ID.
-        DataframeMappingKey("hospitalid", CanonicalValue("integer", "17"))
-    """
-
-    target_column: str
-    """Column whose value is replaced."""
-
-    canonical_original_value: CanonicalValue = field(repr=False)
-    """Canonical original value. Excluded from ``repr`` because it may contain PII."""
-
-    def __post_init__(self) -> None:
-        _require_str(self.target_column, "dataframe mapping target_column")
-        _require_canonical_value(self.canonical_original_value, "dataframe mapping canonical_original_value")
-
-
-StructuredMappingKey: TypeAlias = RecordMappingKey | GroupMappingKey | DataframeMappingKey
-"""Cache identity for one structured replacement in record, group, or dataframe scope."""
+StructuredMappingKey: TypeAlias = RecordMappingKey | GroupMappingKey
+"""Cache identity for one structured replacement in record or group scope."""
 
 
 @dataclass(frozen=True, slots=True)
 class GroupMappingProvenance:
-    """Effective dependencies used by the first occurrence of a group or dataframe mapping.
+    """Effective dependencies used by the first occurrence of a group mapping.
 
     Later occurrences with different dependencies reuse the first replacement and
     are counted as ``GroupDependencyDrift``.
@@ -404,7 +377,7 @@ class GroupMappingProvenance:
 
 @dataclass(frozen=True, slots=True)
 class GroupDependencyDrift:
-    """PII-free aggregate warning for dependency drift within a group or dataframe mapping.
+    """PII-free aggregate warning for dependency drift within a group mapping.
 
     Example:
         # Three later rows reused a group's email replacement although their company differed.
@@ -412,7 +385,7 @@ class GroupDependencyDrift:
     """
 
     target_column: str
-    """Column whose group or dataframe mapping saw drifting dependencies."""
+    """Column whose group mapping saw drifting dependencies."""
 
     conditioner_entity_types: frozenset[EntityType]
     """Entity types of the dependencies that drifted."""

@@ -59,14 +59,20 @@ class TestIdentifierSpace:
         assert number_space_for(["17", "A42"]) is None
         assert number_space_for([]) is None
 
-    def test_allocator_never_returns_an_original_or_repeats_a_value(self) -> None:
+    def test_allocator_uses_every_unused_value_before_repeating_and_never_returns_an_original(self) -> None:
         originals = [str(value) for value in range(90)]
         allocator = IdentifierAllocator(NumberSpace(2), originals)
 
-        allocated = [allocator.allocate(seed) for seed in range(10)]
+        unique = [allocator.allocate(seed) for seed in range(10)]
+        repeated = [allocator.allocate(seed) for seed in range(5)]
 
-        assert sorted(allocated) == [str(value) for value in range(90, 100)]
-        assert allocator.allocate(0) is None
+        assert sorted(unique) == [(str(value), False) for value in range(90, 100)]
+        assert all(allocation is not None and allocation[1] and int(allocation[0]) >= 90 for allocation in repeated)
+
+    def test_allocator_returns_nothing_when_every_value_is_an_original(self) -> None:
+        allocator = IdentifierAllocator(NumberSpace(1), [str(value) for value in range(10)])
+
+        assert allocator.allocate(3) is None
 
     def test_allocator_is_deterministic_for_the_same_seeds(self) -> None:
         first = IdentifierAllocator(MaskSpace.from_pattern("ID-###"), ["ID-001"])

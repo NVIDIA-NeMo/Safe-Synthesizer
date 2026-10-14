@@ -175,22 +175,21 @@ LLM span-detection experiment.
 - Nina's previous v3 implementation and main's detector are references, not compatibility targets.
 - The complete original-to-replacement map is not persisted by default; explicit secure persistence remains an open
   product decision.
-- Identifier-like entity types use dataframe scope: `email`, `phone_number`, `ssn`, `national_id`,
-  `credit_debit_card`, `api_key`, `ipv4`, `ipv6`, and `unique_identifier`. The same original value names the same
-  entity wherever it appears, so every occurrence in the column reuses one replacement, regardless of row or grouping
-  column. Each distinct original needs only one replacement, kept distinct from every original value in the column.
-  Dataframe scope follows the group-style first-occurrence-wins policy, including the drift warning.
-  Names, addresses, dates, and other types keep record or group scope, because equal values in different rows may
-  describe different people.
-  (Decided 2026-10-14 after an end-to-end eval: record-scoped identifiers gave one hospital several fake IDs and
-  exhausted short ID formats, for example 533 rows of 22 two-digit hospital IDs.)
+- Dataframe scope is not supported. Every entity type uses the same scope: group scope when a grouping column is
+  configured, otherwise record scope. (Decided 2026-10-14: per-entity-type scopes, such as dataframe scope only for
+  identifiers, were judged too hard for users to follow.)
+- For identifier-like entity types (`email`, `phone_number`, `ssn`, `national_id`, `credit_debit_card`, `api_key`,
+  `ipv4`, `ipv6`, `unique_identifier`), a replacement never equals any original value in its column, so real
+  identifiers never reappear on other rows. Replacements stay unique while the column's format has unused values;
+  after that they may repeat, with one warning per column giving the count, instead of failing. Names, addresses, and
+  dates of birth may repeat freely. (Decided 2026-10-14: strict uniqueness exhausted short ID formats.)
 - Identifier replacements come from an enumerated value space, not random retries: a `unique_identifier`, `api_key`,
   or `phone_number` character mask, or, for unpatterned digit-only `unique_identifier` and `api_key` values, every
   integer up to the column's longest length. That range gains one digit at a time until it has at least twice as many
-  unused values as distinct originals, with a warning. Each distinct original takes the first unused value at or
-  after its seeded position, which always succeeds while any value is free. A mask is the format contract and is never
-  widened: planning drops an LLM-proposed mask with too few unused values, and rejects such a mask in an explicit
-  plan. (Decided 2026-10-14: a dense row counter filled every same-length value.)
+  unused values as distinct originals, with a warning. Each replacement takes the first unused value at or after its
+  seeded position. A mask is the format contract and is never widened: planning drops an LLM-proposed mask that cannot
+  give every distinct value its own replacement, and rejects a mask in an explicit plan only when every value it can
+  produce is an original. (Decided 2026-10-14: a dense row counter filled every same-length value.)
 - Automatic discovery skips row counters: columns of unique, non-missing integers that are exactly `0..n-1` or `1..n`,
   such as a saved pandas index (`Unnamed: 0`). The configured grouping column is never a row counter, and explicit
   plans may still replace one.
@@ -479,15 +478,7 @@ or dependency values.
 
 Stable positional row order defines which occurrence is first.
 
-Dataframe scope, used for identifier-like entity types:
-
-```text
-target column
-+ canonical original value
-```
-
-Dataframe scope uses the same first-occurrence-wins policy and drift warning as group scope, rather than adding
-dependencies to mapping identity. It applies with or without a grouping column.
+Dataframe scope is not supported; see the settled decisions above.
 
 ### Interface PR scope
 
@@ -512,11 +503,9 @@ Do not yet:
   become string/object dtype.
 
 For record scope, the mapping key uses target column, stable row position, and canonical original value. Dependencies
-remain generation inputs. Identifier-like entity types always use dataframe scope, keyed by target column and canonical
-original value. For group and dataframe scope, the first replacement wins:
+remain generation inputs. For group scope, the first replacement wins:
 
-1. Encounter the first `(target column, original group, canonical original)` mapping, or `(target column, canonical
-   original)` in dataframe scope, in positional row order.
+1. Encounter the first `(target column, original group, canonical original)` mapping in positional row order.
 2. Generate its replacement using that row's effective dependencies.
 3. Store both the replacement and the initial dependency tuple.
 4. Reuse the replacement for later occurrences of that mapping.

@@ -406,14 +406,13 @@ record, or none. The response schema lists only the candidate columns, so the
 model cannot name another column or choose two sources of one type, such as
 both a person's and a spouse's gender. Each option carries the heuristic
 baseline's choice as fallible prior evidence. NSS, rather than the model, decides how
-replacements stay consistent: identifier-like values (email, phone number, SSN,
-national ID, card number, API key, IP address, unique identifier) get one
-replacement per distinct value across the whole table, and other values are
-consistent within a group when a grouping column is configured, else within a
-row. Identifier replacements never reuse an original value. Without a pattern,
-digit-only identifiers are replaced with numbers up to the column's longest
-length, gaining a digit when that range is too full; with a pattern, the
-pattern must leave an unused value for every distinct original. Automatic
+replacements stay consistent: within a group when a grouping column is
+configured, else within a row. Identifier-like values (email, phone number, SSN,
+national ID, card number, API key, IP address, unique identifier) never reuse an
+original value, and their replacements stay unique while the column's format
+has room; once it runs out, replacements repeat and NSS logs a warning. Without
+a pattern, digit-only identifiers are replaced with numbers up to the column's
+longest length, gaining a digit when that range is too full. Automatic
 discovery skips row counters, such as a saved `Unnamed: 0` index column. NSS also excludes protected ordering and timestamp columns, and validates
 the assembled plan. Grouping columns remain eligible for replacement so
 identifiers such as patient IDs can be anonymized.

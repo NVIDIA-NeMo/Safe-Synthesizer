@@ -48,7 +48,7 @@ from .plan_builder import (
     plan_from_classifications,
 )
 from .resolver import ColumnProfile, PlanDiscoveryInput, PlanEnhancer
-from .validation import column_pattern_issue, column_pattern_syntax_issue
+from .validation import column_pattern_issue, column_pattern_syntax_issue, identifier_mask_capacity_issue
 
 __all__ = [
     "LLMPlanEnhancer",
@@ -179,6 +179,7 @@ def _entity_catalog() -> list[dict[str, object]]:
     return [
         {
             "entity_type": entity.entity_type.value,
+            "description": entity.description,
             "pattern_syntax": entity.pattern_syntax.name.lower() if entity.pattern_syntax is not None else None,
         }
         for entity in ENTITIES
@@ -292,7 +293,8 @@ def _classification_messages(
         "\n"
         "Input\n"
         "- column_profiles: one entry per column, with its name, dtype, counts, and a few sample values.\n"
-        "- entity_catalog: the entity types you may choose from, each with the pattern grammar it supports.\n"
+        "- entity_catalog: the entity types you may choose from, each with a short definition and the pattern grammar "
+        "it supports.\n"
         "- discovery_context.group_column: the column that groups rows (for example, one patient's events).\n"
         "- heuristic_classifications: guesses from a rule-based detector, only for columns it flagged. They can be "
         "wrong, and a column missing from this list may still hold sensitive data.\n"
@@ -904,7 +906,7 @@ class LLMPlanEnhancer(PlanEnhancer):
         profiles = {profile.column_name: profile for profile in discovery_input.column_profiles}
         repaired_specs: list[PiiColumnPlan] = []
         for spec in plan.columns_to_replace:
-            issue = column_pattern_issue(dataframe, spec)
+            issue = column_pattern_issue(dataframe, spec) or identifier_mask_capacity_issue(dataframe, spec)
             if issue is None:
                 repaired_specs.append(spec)
                 continue

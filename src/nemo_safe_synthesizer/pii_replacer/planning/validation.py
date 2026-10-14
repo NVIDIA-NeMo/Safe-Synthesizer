@@ -24,7 +24,13 @@ from ...errors import InternalError, ParameterError
 from ..replacement.identifier_space import MASK_ALLOCATED_ENTITY_TYPES, MaskSpace
 from .patterns import compile_character_mask, compile_name_pattern
 
-__all__ = ["column_pattern_issue", "column_pattern_syntax_issue", "get_protected_columns", "validate_plan"]
+__all__ = [
+    "column_pattern_issue",
+    "column_pattern_syntax_issue",
+    "get_protected_columns",
+    "identifier_mask_capacity_issue",
+    "validate_plan",
+]
 
 # A column has one pattern, so it must describe nearly every value; the small
 # tolerance only absorbs stray malformed cells.
@@ -105,9 +111,9 @@ def column_pattern_issue(df: pd.DataFrame, spec: PiiColumnPlan) -> str | None:
     A pattern must follow its entity's grammar and cover at least
     ``MIN_PATTERN_COVERAGE`` of the column's non-null values. For identifier
     types whose replacements come from the mask (see
-    ``MASK_ALLOCATED_ENTITY_TYPES``), the mask must also have an unused value
-    for every distinct original. Columns without a pattern, or absent from
-    ``df``, have no pattern issue.
+    ``MASK_ALLOCATED_ENTITY_TYPES``), the mask must also be able to produce at
+    least one value that is not an original. Columns without a pattern, or
+    absent from ``df``, have no pattern issue.
 
     Args:
         df: Dataframe whose column values the pattern must describe.
@@ -143,22 +149,41 @@ def column_pattern_issue(df: pd.DataFrame, spec: PiiColumnPlan) -> str | None:
             f"column {spec.column_name!r}: pattern {pattern!r} covers {coverage:.1%} of non-null values; "
             f"at least {MIN_PATTERN_COVERAGE:.0%} is required"
         )
-    if spec.entity_type in MASK_ALLOCATED_ENTITY_TYPES:
-        return _mask_capacity_issue(spec.column_name, pattern, values)
+    if spec.entity_type in MASK_ALLOCATED_ENTITY_TYPES and _unused_mask_values(pattern, values) == 0:
+        return (
+            f"column {spec.column_name!r}: every value pattern {pattern!r} can produce is already in the column, "
+            "so no replacement can differ from the originals"
+        )
     return None
 
 
-def _mask_capacity_issue(column_name: str, pattern: str, values: list[str]) -> str | None:
-    """Return an issue when the mask cannot give every distinct value an unused replacement."""
-    distinct = set(values)
-    space = MaskSpace.from_pattern(pattern)
-    free = space.size - sum(space.index_of(value) is not None for value in distinct)
-    if free >= len(distinct):
+def identifier_mask_capacity_issue(df: pd.DataFrame, spec: PiiColumnPlan) -> str | None:
+    """Return an issue when an identifier mask cannot give every distinct value its own unused replacement.
+
+    Replacement still succeeds with such a mask, but some replacements repeat. Automatic planning
+    uses this to drop an LLM-proposed mask in favor of an unpatterned replacement with more room.
+
+    Example:
+        Pattern ``"USER-#"`` has 10 values; a column holding ``"USER-0"`` through ``"USER-7"`` leaves
+        2 unused values for 8 distinct originals, so this returns an issue.
+    """
+    pattern = spec.pattern
+    if pattern is None or spec.entity_type not in MASK_ALLOCATED_ENTITY_TYPES or spec.column_name not in df.columns:
+        return None
+    values = df[spec.column_name].dropna().astype(str).tolist()
+    distinct = len(set(values))
+    if (unused := _unused_mask_values(pattern, values)) >= distinct:
         return None
     return (
-        f"column {column_name!r}: pattern {pattern!r} has {space.size} possible values, but the column's "
-        f"{len(distinct)} distinct values need as many unused ones and only {free} remain"
+        f"column {spec.column_name!r}: pattern {pattern!r} leaves {unused} unused values for "
+        f"{distinct} distinct values, so some replacements would repeat"
     )
+
+
+def _unused_mask_values(pattern: str, values: list[str]) -> int:
+    """Return how many values the mask can produce that are not among ``values``."""
+    space = MaskSpace.from_pattern(pattern)
+    return space.size - sum(space.index_of(value) is not None for value in set(values))
 
 
 def _iter_pattern_issues(df: pd.DataFrame, plan: PiiReplacementPlan) -> Iterator[str]:
