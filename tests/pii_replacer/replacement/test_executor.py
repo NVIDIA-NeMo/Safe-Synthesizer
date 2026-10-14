@@ -50,12 +50,6 @@ class _ParameterErrorGenerator(_RecordingGenerator):
         raise ParameterError("the configured sampler cannot produce this value")
 
 
-class _TwoDigitGenerator(_RecordingGenerator):
-    def generate(self, request: ReplacementGenerationRequest) -> str:
-        self.requests.append(request)
-        return f"{request.seed % 100:02d}"
-
-
 class _SwapGenerator(_RecordingGenerator):
     def generate(self, request: ReplacementGenerationRequest) -> str:
         self.requests.append(request)
@@ -214,34 +208,23 @@ class TestStructuredReplacementExecutor:
         assert result.generation_statistics.generated_replacement_count == 2
         assert result.column_statistics["first_name"].detected_entity_counts == {"first_name": 2}
 
-    @pytest.mark.parametrize("group_column", [None, "patient"])
-    def test_identifiers_get_one_replacement_per_distinct_value_across_the_dataframe(
+    def test_identifier_replacements_repeat_with_a_warning_once_the_format_runs_out(
         self,
-        group_column: str | None,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
-        dataframe = pd.DataFrame(
-            {"patient": ["A", "A", "B", "C"], "hospitalid": [17, 17, 17, 42]},
-            index=[0, 0, 0, 0],
-        )
-        plan = _plan(_target("hospitalid", EntityType.UNIQUE_IDENTIFIER))
-
-        result = _execute(dataframe, plan, _RecordingGenerator(), group_column=group_column)
-
-        replaced = result.dataframe["hospitalid"].tolist()
-        assert replaced[0] == replaced[1] == replaced[2]
-        assert replaced[0] != replaced[3]
-        assert not {"17", "42"} & set(replaced)
-        assert result.generation_statistics.generated_replacement_count == 2
-
-    def test_identifiers_need_only_as_many_values_as_distinct_originals(self) -> None:
-        # 100 rows share 5 two-digit IDs; per-row replacement would need 100 unused two-digit values.
+        caplog.set_level(logging.WARNING)
+        # 100 rows share 5 two-digit IDs. Each row is replaced independently, and only 95
+        # two-digit values are not originals, so the last 5 replacements repeat earlier ones.
         dataframe = pd.DataFrame({"hospitalid": [f"{10 + row % 5}" for row in range(100)]})
         plan = _plan(_target("hospitalid", EntityType.UNIQUE_IDENTIFIER))
 
-        result = _execute(dataframe, plan, _TwoDigitGenerator())
+        result = _execute(dataframe, plan, _RecordingGenerator())
 
-        assert result.dataframe["hospitalid"].nunique() == 5
-        assert result.generation_statistics.generated_replacement_count == 5
+        replaced = result.dataframe["hospitalid"].tolist()
+        assert len(set(replaced)) == 95
+        assert not set(replaced) & {"10", "11", "12", "13", "14"}
+        repeats = [record for record in caplog.records if "format has no unused values left" in record.getMessage()]
+        assert [getattr(record, "repeated_count", None) for record in repeats] == [5]
 
     def test_natural_attributes_may_repeat_across_independent_mappings(self) -> None:
         dataframe = pd.DataFrame({"first_name": ["Ada", "Grace"]})
@@ -263,12 +246,16 @@ class TestStructuredReplacementExecutor:
         assert len(generator.requests) == 2
         assert generator.requests[0].seed != generator.requests[1].seed
 
-    def test_identifier_replacements_remain_collision_resistant(self) -> None:
+    def test_identifier_replacements_avoid_repeats_before_accepting_one(self) -> None:
         dataframe = pd.DataFrame({"identifier": ["USER-1", "USER-2"]})
         plan = _plan(_target("identifier", EntityType.UNIQUE_IDENTIFIER))
+        generator = _ConstantGenerator()
 
-        with pytest.raises(GenerationError, match="could not generate a distinct value"):
-            _execute(dataframe, plan, _ConstantGenerator())
+        result = _execute(dataframe, plan, generator)
+
+        # The second row retries every attempt for an unused value before repeating "Synthetic".
+        assert result.dataframe["identifier"].tolist() == ["Synthetic", "Synthetic"]
+        assert len(generator.requests) == 11
 
     def test_group_scope_reuses_name_replacements_within_a_group_only(self) -> None:
         dataframe = pd.DataFrame({"patient": ["A", "A", "B"], "first_name": ["Ada", "Ada", "Ada"]})
@@ -280,7 +267,7 @@ class TestStructuredReplacementExecutor:
         assert replaced[0] == replaced[1]
         assert replaced[0] != replaced[2]
 
-    def test_dataframe_scope_snapshots_replaced_group_keys_and_reports_dependency_drift(self) -> None:
+    def test_group_scope_snapshots_replaced_group_keys_and_reports_dependency_drift(self) -> None:
         dataframe = pd.DataFrame(
             {
                 "patient": ["A", "A", "B"],
@@ -299,15 +286,16 @@ class TestStructuredReplacementExecutor:
 
         assert result.dataframe["patient"].iloc[0] == result.dataframe["patient"].iloc[1]
         assert result.dataframe["patient"].iloc[0] != result.dataframe["patient"].iloc[2]
-        assert result.dataframe["email"].nunique() == 1
+        assert result.dataframe["email"].iloc[0] == result.dataframe["email"].iloc[1]
+        assert result.dataframe["email"].iloc[0] != result.dataframe["email"].iloc[2]
         assert len(result.dependency_drifts) == 1
         assert result.dependency_drifts[0].as_log_extra() == {
             "target_column": "email",
             "conditioner_entity_types": ["organization"],
-            "conflict_count": 2,
+            "conflict_count": 1,
         }
-        assert result.generation_statistics.generated_replacement_count == 3
-        assert result.generation_statistics.dependency_drift_count == 2
+        assert result.generation_statistics.generated_replacement_count == 4
+        assert result.generation_statistics.dependency_drift_count == 1
 
     def test_group_scope_rejects_rows_without_a_group_identifier(self) -> None:
         dataframe = pd.DataFrame({"patient": ["A", None], "email": ["same@example.com"] * 2})
@@ -340,11 +328,19 @@ class TestStructuredReplacementExecutor:
 
         assert sorted(result.dataframe["user"]) == [f"USER-{value}" for value in range(5, 10)]
 
-    def test_mask_without_enough_unused_values_is_a_configuration_error(self) -> None:
+    def test_small_mask_repeats_replacements_but_never_reuses_an_original(self) -> None:
         dataframe = pd.DataFrame({"user": [f"USER-{value}" for value in range(8)]})
         plan = _plan(PiiColumnPlan(column_name="user", entity_type=EntityType.UNIQUE_IDENTIFIER, pattern="USER-#"))
 
-        with pytest.raises(ParameterError, match="more distinct values than its identifier format can replace"):
+        result = _execute(dataframe, plan, _RecordingGenerator())
+
+        assert set(result.dataframe["user"]) == {"USER-8", "USER-9"}
+
+    def test_mask_whose_every_value_is_an_original_is_a_configuration_error(self) -> None:
+        dataframe = pd.DataFrame({"user": [f"USER-{value}" for value in range(10)]})
+        plan = _plan(PiiColumnPlan(column_name="user", entity_type=EntityType.UNIQUE_IDENTIFIER, pattern="USER-#"))
+
+        with pytest.raises(ParameterError, match="every value its identifier format can produce is an original"):
             _execute(dataframe, plan, _RecordingGenerator())
 
     def test_float_identifiers_cannot_reuse_another_original(self) -> None:

@@ -432,7 +432,10 @@ class TestLLMPlanEnhancer:
         assert payload["pattern_grammars"]["character_mask"]["tokens"]["&"] == "digit or uppercase letter"
         assert payload["pattern_grammars"]["character_mask"]["tokens"]["%"] == "digit or lowercase letter"
         assert "In email patterns, # emits one digit." in payload["pattern_grammars"]["name_parts"]["rules"]
-        assert all(set(entity) == {"entity_type", "pattern_syntax"} for entity in payload["entity_catalog"])
+        assert all(
+            set(entity) == {"entity_type", "description", "pattern_syntax"} for entity in payload["entity_catalog"]
+        )
+        assert all(entity["description"] for entity in payload["entity_catalog"])
 
     def test_dependency_candidates_include_proposed_target_pattern(self) -> None:
         dataframe = pd.DataFrame(
@@ -1041,7 +1044,7 @@ class TestLLMPlanEnhancer:
 
         assert plan.columns_to_replace[0].pattern is None
         assert len(transport.calls) == 1
-        assert any("only 2 remain" in str(getattr(record, "reason", "")) for record in caplog.records)
+        assert any("leaves 2 unused values" in str(getattr(record, "reason", "")) for record in caplog.records)
 
     @pytest.mark.parametrize(
         ("repair_responses", "final_pattern", "final_syntax"),
