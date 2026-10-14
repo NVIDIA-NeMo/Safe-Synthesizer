@@ -348,8 +348,8 @@ def test_rolling_stats_report_summarizes_all_profiles_in_one_chart_row() -> None
     assert context["evaluated_column_count"] == 2
     assert context["constant_synthetic_profile_count"] == 2
     assert [figure["title"] for figure in context["figures"]] == [
-        "Local average over time",
-        "Local spread over time",
+        "Local average",
+        "Local spread",
         "Pair scores",
     ]
     assert [figure["column_select"] for figure in context["figures"]] == [True, True, False]

@@ -182,13 +182,13 @@ class MultimodalReport(EvaluationReport):
                 if rolling_stats_profiles:
                     rolling_stats_figures = [
                         (
-                            "Local average over time",
+                            "Local average",
                             generate_rolling_stats_level_figure(rolling_stats_profiles),
                             True,
                             "rolling_stats_level_info",
                         ),
                         (
-                            "Local spread over time",
+                            "Local spread",
                             generate_rolling_stats_spread_figure(rolling_stats_profiles),
                             True,
                             "rolling_stats_spread_info",

@@ -304,14 +304,14 @@ def _rolling_stats_context(
             "summary_traces_per_column": 4,
             "figures": [
                 {
-                    "title": "Local average over time",
+                    "title": "Local average",
                     "html": "<div>level</div>",
                     "column_select": True,
                     "tooltip_id": "rolling-stats-level-info",
                     "tooltip": "Lines should overlap.",
                 },
                 {
-                    "title": "Local spread over time",
+                    "title": "Local spread",
                     "html": "<div>spread</div>",
                     "column_select": True,
                     "tooltip_id": "rolling-stats-spread-info",
