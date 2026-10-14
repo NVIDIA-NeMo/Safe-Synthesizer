@@ -97,6 +97,11 @@ def _parse_birth_date(original: str, pattern: str | None) -> _ParsedBirthDate | 
         except ValueError:
             continue
 
+    # Natural-language dates always name a month in words. dateparser costs about 100 ms per value,
+    # so skipping it for values without letters keeps numeric columns, such as an age mislabeled
+    # as a birth date, from taking minutes.
+    if not any(character.isalpha() for character in original):
+        return None
     parsed_natural = dateparser.parse(original, settings=_NATURAL_DATE_SETTINGS)
     if parsed_natural is not None:
         return _ParsedBirthDate(parsed_natural, pattern)
