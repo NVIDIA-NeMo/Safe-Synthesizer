@@ -7,10 +7,10 @@ Each builder summarizes the per-pair segment profiles stored by the metric in
 ``RollingStatsSimilarity.details``.
 
 Functions:
-    generate_rolling_stats_level_figure: Plot median local averages and
-        interquartile bands across groups, one column at a time.
-    generate_rolling_stats_spread_figure: Plot median local spreads and
-        interquartile bands across groups, one column at a time.
+    generate_rolling_stats_profile_figure: Plot median local averages and
+        spreads with interquartile bands across groups, one column at a time.
+    generate_rolling_stats_segment_difference_figure: Plot the mean paired
+        difference in local average and spread in each segment.
     generate_rolling_stats_pair_score_figure: Plot group and column pair
         scores for the lowest-scoring columns against the overall score.
     order_rolling_stats_columns: Order value columns by mean pair score.
@@ -24,6 +24,7 @@ from typing import Any
 
 import numpy as np
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 from ...errors import DataError
 from .autocorrelation_similarity_figures import shorten_column_label
@@ -35,49 +36,123 @@ _TRAINING_BAND_COLOR = "rgba(59, 130, 246, 0.2)"
 _SYNTHETIC_BAND_COLOR = "rgba(245, 158, 11, 0.2)"
 # Matches the Correlation Stability difference heatmap in multi_modal_toggle.js.
 _DIFFERENCE_COLORSCALE = [[0, "#ffffff"], [0.25, "#fee2e2"], [0.5, "#fca5a5"], [0.75, "#f87171"], [1, "#dc2626"]]
+_SEGMENT_DIFFERENCE_COLOR_MAX = 1.0
 _PAIR_SCORE_JITTER = 0.25
-_FIGURE_HEIGHT = 300
+_FIGURE_HEIGHT = 340
 _POSITIONS = 100 * (np.arange(ROLLING_STATS_SEGMENTS) + 0.5) / ROLLING_STATS_SEGMENTS
+_STATISTICS = (("level", "Local average"), ("spread", "Local spread"))
+_POSITION_TICKS = {"tickmode": "array", "tickvals": [0, 50, 100], "ticktext": ["Start", "Middle", "End"]}
 
-ROLLING_STATS_SUMMARY_TRACES_PER_COLUMN = 4
+ROLLING_STATS_SUMMARY_TRACES_PER_COLUMN = 8
 ROLLING_STATS_PAIR_SCORE_MAX_COLUMNS = 8
 
 
-def generate_rolling_stats_level_figure(profiles: Sequence[Mapping[str, Any]]) -> go.Figure:
-    """Plot typical training and synthetic local averages from start to end of the sequence.
+def generate_rolling_stats_profile_figure(profiles: Sequence[Mapping[str, Any]]) -> go.Figure:
+    """Plot typical training and synthetic local averages and spreads from start to end.
 
-    Values are in training standard deviations from the training mean. See
-    ``_summary_figure`` for the trace layout.
+    The top panel shows the local average, in training standard deviations
+    from the training mean, and the bottom panel the local spread, in training
+    standard deviations. Each value column gets a median profile and an
+    interquartile band for both datasets in both panels. Columns contribute
+    ``ROLLING_STATS_SUMMARY_TRACES_PER_COLUMN`` consecutive traces in
+    ``order_rolling_stats_columns`` order, and only the first column is visible
+    so the report can switch columns by trace index. Pairs with fewer segments
+    are interpolated onto the ten segment midpoints.
 
-    Args:
-        profiles: Stored profiles from ``RollingStatsSimilarity.details``.
-
-    Returns:
-        A Plotly figure with one visible column at a time.
-
-    Raises:
-        DataError: If no profiles are supplied.
-    """
-    return _summary_figure(profiles, "level", "Local average", "Local average (training sd)")
-
-
-def generate_rolling_stats_spread_figure(profiles: Sequence[Mapping[str, Any]]) -> go.Figure:
-    """Plot typical training and synthetic local spreads from start to end of the sequence.
-
-    Values are in training standard deviations. See ``_summary_figure`` for
-    the trace layout.
+    Medians across groups can cancel when groups change in opposite directions,
+    so ``generate_rolling_stats_segment_difference_figure`` shows paired gaps.
 
     Args:
         profiles: Stored profiles from ``RollingStatsSimilarity.details``.
 
     Returns:
-        A Plotly figure with one visible column at a time.
+        A two-panel Plotly figure with one visible column at a time.
 
     Raises:
         DataError: If no profiles are supplied.
     """
-    figure = _summary_figure(profiles, "spread", "Local spread", "Local spread (training sd)")
-    figure.update_yaxes(rangemode="tozero")
+    columns = order_rolling_stats_columns(profiles)
+    figure = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.08)
+    for column_index, column in enumerate(columns):
+        column_profiles = [item for item in profiles if str(item["column"]) == column]
+        for row, (statistic, label) in enumerate(_STATISTICS, start=1):
+            _add_median_traces(figure, column_profiles, statistic, label, row, visible=column_index == 0)
+    figure.update_layout(
+        template="plotly_white",
+        height=_FIGURE_HEIGHT,
+        showlegend=False,
+        margin={"l": 54, "r": 16, "t": 24, "b": 48},
+    )
+    figure.update_yaxes(title_text="Average", row=1, col=1)
+    figure.update_yaxes(title_text="Spread", rangemode="tozero", row=2, col=1)
+    figure.update_xaxes(range=[0, 100], **_POSITION_TICKS)
+    figure.update_xaxes(title_text="Position in sequence", row=2, col=1)
+    return figure
+
+
+def generate_rolling_stats_segment_difference_figure(profiles: Sequence[Mapping[str, Any]]) -> go.Figure:
+    """Plot the mean absolute paired difference in local average and local spread in each segment.
+
+    Each group-column pair is compared with itself first, so groups that
+    change in opposite directions cannot cancel. Only segments where both
+    values of a pair are finite contribute. Bars shade from white to red as the
+    difference grows, local spread bars are hatched, and the y-axis spans at
+    least 0 to 1 training standard deviation so bar heights are comparable
+    across reports. Trace names avoid dataset words so the report's dataset
+    theming leaves their colors alone.
+
+    Args:
+        profiles: Stored profiles from ``RollingStatsSimilarity.details``.
+
+    Returns:
+        A Plotly grouped bar figure of mean absolute difference by segment.
+
+    Raises:
+        DataError: If no profiles are supplied.
+    """
+    if not profiles:
+        raise DataError("At least one rolling statistics profile is required.")
+    figure = go.Figure()
+    top = 1.0
+    for statistic, label in _STATISTICS:
+        difference = np.abs(
+            _segment_matrix(profiles, f"training_{statistic}") - _segment_matrix(profiles, f"synthetic_{statistic}")
+        )
+        support = np.sum(np.isfinite(difference), axis=0)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            mean_difference = np.nanmean(difference, axis=0)
+        valid = support > 0
+        top = max(top, float(np.max(mean_difference[valid], initial=0.0)) * 1.05)
+        figure.add_trace(
+            go.Bar(
+                x=_POSITIONS[valid],
+                y=mean_difference[valid],
+                customdata=support[valid],
+                marker={
+                    "color": mean_difference[valid],
+                    "colorscale": _DIFFERENCE_COLORSCALE,
+                    "cmin": 0.0,
+                    "cmax": _SEGMENT_DIFFERENCE_COLOR_MAX,
+                    "line": {"color": "rgba(255,255,255,0.5)", "width": 1},
+                    "pattern": {"shape": "/" if statistic == "spread" else ""},
+                },
+                name=label.removeprefix("Local ").capitalize(),
+                hovertemplate=f"{label}<br>%{{x:.0f}}% through: %{{y:.2f}}<br>%{{customdata}} pairs<extra></extra>",
+            )
+        )
+    figure.update_layout(
+        template="plotly_white",
+        height=_FIGURE_HEIGHT,
+        barmode="group",
+        showlegend=True,
+        legend={"orientation": "h", "x": 0, "xanchor": "left", "y": 1.0, "yanchor": "bottom"},
+        xaxis_title="Position in sequence",
+        yaxis_title="Mean |difference| (training sd)",
+        margin={"l": 54, "r": 16, "t": 40, "b": 48},
+    )
+    figure.update_xaxes(range=[0, 100], **_POSITION_TICKS)
+    figure.update_yaxes(range=[0.0, top])
     return figure
 
 
@@ -179,69 +254,49 @@ def order_rolling_stats_columns(profiles: Sequence[Mapping[str, Any]]) -> list[s
     return sorted(scores, key=lambda column: (float(np.mean(scores[column])), column))
 
 
-def _summary_figure(
+def _add_median_traces(
+    figure: go.Figure,
     profiles: Sequence[Mapping[str, Any]],
     statistic: str,
     label: str,
-    axis_title: str,
-) -> go.Figure:
-    """Plot median segment profiles and interquartile bands for one statistic.
-
-    Each value column gets a median profile and an interquartile band for both
-    datasets. Columns contribute ``ROLLING_STATS_SUMMARY_TRACES_PER_COLUMN``
-    consecutive traces in ``order_rolling_stats_columns`` order, and only the
-    first column is visible so the report can switch columns by trace index.
-    Pairs with fewer segments are interpolated onto the ten segment midpoints.
-    """
-    columns = order_rolling_stats_columns(profiles)
-    figure = go.Figure()
-    for column_index, column in enumerate(columns):
-        column_profiles = [item for item in profiles if str(item["column"]) == column]
-        visible = column_index == 0
-        for dataset, line_color, band_color in (
-            ("Training", _TRAINING_COLOR, _TRAINING_BAND_COLOR),
-            ("Synthetic", _SYNTHETIC_COLOR, _SYNTHETIC_BAND_COLOR),
-        ):
-            positions, lower, median, upper = _segment_quantiles(column_profiles, f"{dataset.lower()}_{statistic}")
-            figure.add_trace(
-                go.Scatter(
-                    x=np.concatenate([positions, positions[::-1]]),
-                    y=np.concatenate([upper, lower[::-1]]),
-                    fill="toself",
-                    fillcolor=band_color,
-                    line={"width": 0},
-                    name=f"{dataset} interquartile range",
-                    hoverinfo="skip",
-                    showlegend=False,
-                    visible=visible,
-                )
-            )
-            figure.add_trace(
-                go.Scatter(
-                    x=positions,
-                    y=median,
-                    mode="lines+markers",
-                    name=f"{dataset} median {label.lower()}",
-                    line={"color": line_color},
-                    hovertemplate=f"{dataset} median<br>%{{x:.0f}}% through: %{{y:.2f}}<extra></extra>",
-                    visible=visible,
-                )
-            )
-    figure.update_layout(
-        template="plotly_white",
-        height=_FIGURE_HEIGHT,
-        showlegend=False,
-        xaxis_title="Position in sequence",
-        yaxis_title=axis_title,
-        margin={"l": 54, "r": 16, "t": 40, "b": 48},
-    )
-    figure.update_xaxes(
-        range=[0, 100],
-        tickmode="array",
-        tickvals=[0, 50, 100],
-        ticktext=["Start", "Middle", "End"],
-    )
-    return figure
+    row: int,
+    *,
+    visible: bool,
+) -> None:
+    """Add an interquartile band and a median line for training and synthetic data to one panel."""
+    for dataset, line_color, band_color in (
+        ("Training", _TRAINING_COLOR, _TRAINING_BAND_COLOR),
+        ("Synthetic", _SYNTHETIC_COLOR, _SYNTHETIC_BAND_COLOR),
+    ):
+        positions, lower, median, upper = _segment_quantiles(profiles, f"{dataset.lower()}_{statistic}")
+        figure.add_trace(
+            go.Scatter(
+                x=np.concatenate([positions, positions[::-1]]),
+                y=np.concatenate([upper, lower[::-1]]),
+                fill="toself",
+                fillcolor=band_color,
+                line={"width": 0},
+                name=f"{dataset} interquartile range",
+                hoverinfo="skip",
+                showlegend=False,
+                visible=visible,
+            ),
+            row=row,
+            col=1,
+        )
+        figure.add_trace(
+            go.Scatter(
+                x=positions,
+                y=median,
+                mode="lines+markers",
+                name=f"{dataset} median {label.lower()}",
+                line={"color": line_color},
+                hovertemplate=f"{dataset} median {label.lower()}<br>%{{x:.0f}}% through: %{{y:.2f}}<extra></extra>",
+                visible=visible,
+            ),
+            row=row,
+            col=1,
+        )
 
 
 def _segment_matrix(profiles: Sequence[Mapping[str, Any]], key: str) -> np.ndarray:

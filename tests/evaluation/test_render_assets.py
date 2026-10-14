@@ -301,21 +301,21 @@ def _rolling_stats_context(
             "constant_synthetic_profile_count": constant_synthetic_profile_count,
             "pair_score_column_count": pair_score_column_count,
             "summary_columns": columns,
-            "summary_traces_per_column": 4,
+            "summary_traces_per_column": 8,
             "figures": [
                 {
-                    "title": "Local average",
-                    "html": "<div>level</div>",
+                    "title": "Average and spread",
+                    "html": "<div>profile</div>",
                     "column_select": True,
-                    "tooltip_id": "rolling-stats-level-info",
+                    "tooltip_id": "rolling-stats-profile-info",
                     "tooltip": "Lines should overlap.",
                 },
                 {
-                    "title": "Local spread",
-                    "html": "<div>spread</div>",
-                    "column_select": True,
-                    "tooltip_id": "rolling-stats-spread-info",
-                    "tooltip": "Spreads should overlap.",
+                    "title": "Difference by segment",
+                    "html": "<div>difference</div>",
+                    "column_select": False,
+                    "tooltip_id": "rolling-stats-difference-info",
+                    "tooltip": "Bars should be short.",
                 },
                 {
                     "title": "Pair scores",
@@ -335,8 +335,8 @@ def test_rolling_stats_renders_column_selects_and_pair_score_limit_note() -> Non
         ctx=_rolling_stats_context(column_count=10, pair_score_column_count=8),
     )
 
-    assert rendered.count("data-rolling-stats-column-select") == 2
-    assert 'data-traces-per-column="4"' in rendered
+    assert rendered.count("data-rolling-stats-column-select") == 1
+    assert 'data-traces-per-column="8"' in rendered
     assert '<option value="9">column_9</option>' in rendered
     assert "Pair scores shows the 8 lowest-scoring columns." in rendered
     assert " ".join(rendered.split()).count("Summarizing 10 group-column pairs (1 group, 10 numeric columns).") == 1
@@ -349,7 +349,7 @@ def test_rolling_stats_renders_info_tooltip_for_each_chart() -> None:
     )
 
     assert rendered.count("data-tooltip-toggle") == 3
-    assert 'aria-controls="rolling-stats-spread-info"' in rendered
+    assert 'aria-controls="rolling-stats-difference-info"' in rendered
     assert 'id="rolling-stats-pair-scores-info" role="tooltip" hidden' in rendered
 
 

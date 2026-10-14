@@ -49,9 +49,9 @@ from ....evaluation.components.rolling_stats_similarity import RollingStatsSimil
 from ....evaluation.components.rolling_stats_similarity_figures import (
     ROLLING_STATS_PAIR_SCORE_MAX_COLUMNS,
     ROLLING_STATS_SUMMARY_TRACES_PER_COLUMN,
-    generate_rolling_stats_level_figure,
     generate_rolling_stats_pair_score_figure,
-    generate_rolling_stats_spread_figure,
+    generate_rolling_stats_profile_figure,
+    generate_rolling_stats_segment_difference_figure,
     order_rolling_stats_columns,
 )
 from ....evaluation.components.sqs_score import SQSScore
@@ -182,16 +182,16 @@ class MultimodalReport(EvaluationReport):
                 if rolling_stats_profiles:
                     rolling_stats_figures = [
                         (
-                            "Local average",
-                            generate_rolling_stats_level_figure(rolling_stats_profiles),
+                            "Average and spread",
+                            generate_rolling_stats_profile_figure(rolling_stats_profiles),
                             True,
-                            "rolling_stats_level_info",
+                            "rolling_stats_profile_info",
                         ),
                         (
-                            "Local spread",
-                            generate_rolling_stats_spread_figure(rolling_stats_profiles),
-                            True,
-                            "rolling_stats_spread_info",
+                            "Difference by segment",
+                            generate_rolling_stats_segment_difference_figure(rolling_stats_profiles),
+                            False,
+                            "rolling_stats_difference_info",
                         ),
                         (
                             "Pair scores",

@@ -80,15 +80,15 @@ tooltips = {
         so 10 means the local average and spread follow the training data and scores near 0 mean the synthetic data has lost or reversed them. A low
         score does not mean the synthetic data is bad overall, only that it does not reproduce how these statistics change over time.
     """,
-    "rolling_stats_level_info": """
-        The average of nearby values over a rolling window, from the start to the end of the sequence, in training standard deviations from the
-        training mean. Lines show the median across groups and bands cover the middle half of groups. In good synthetic data the orange and blue
-        lines overlap. Use the dropdown to switch columns.
+    "rolling_stats_profile_info": """
+        The local average (top) and local spread (bottom) of one numeric column, from the start to the end of the sequence, in training standard
+        deviations. Lines show the median across groups and bands cover the middle half of groups. In good synthetic data the orange and blue lines
+        overlap. Groups that change in opposite directions can cancel in the median, so check Difference by segment too. Use the dropdown to switch columns.
     """,
-    "rolling_stats_spread_info": """
-        How widely values vary around their local average, from the start to the end of the sequence, in training standard deviations. Lines show
-        the median across groups and bands cover the middle half of groups. In good synthetic data the orange and blue lines overlap. Use the
-        dropdown to switch columns.
+    "rolling_stats_difference_info": """
+        The average gap between training and synthetic local average (solid) and local spread (hatched) in each tenth of the sequence, with each
+        group-column pair compared with itself first. Short, pale bars are good. Tall, red bars mark where in the sequence the synthetic data drifts away
+        from the training data.
     """,
     "rolling_stats_pair_scores_info": """
         One dot per group and numeric column, scored from 0 to 10. White dots near 10 match how the training data's local average and spread change

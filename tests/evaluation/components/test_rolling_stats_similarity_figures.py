@@ -8,11 +8,13 @@ import pytest
 from nemo_safe_synthesizer.errors import DataError
 from nemo_safe_synthesizer.evaluation.components.rolling_stats_similarity_figures import (
     ROLLING_STATS_SUMMARY_TRACES_PER_COLUMN,
-    generate_rolling_stats_level_figure,
     generate_rolling_stats_pair_score_figure,
-    generate_rolling_stats_spread_figure,
+    generate_rolling_stats_profile_figure,
+    generate_rolling_stats_segment_difference_figure,
     order_rolling_stats_columns,
 )
+
+_POSITIONS = [5, 15, 25, 35, 45, 55, 65, 75, 85, 95]
 
 
 def _profile(group, column, training_level, synthetic_level, similarity, spread=None):
@@ -38,34 +40,65 @@ _PROFILES = [
 ]
 
 
-def test_level_figure_groups_traces_by_column_with_lowest_scoring_column_visible():
-    figure = generate_rolling_stats_level_figure(_PROFILES)
+def _trace(figure, name):
+    return next(trace for trace in figure.data if trace.name == name)
+
+
+def test_profile_figure_groups_traces_by_column_with_lowest_scoring_column_visible():
+    figure = generate_rolling_stats_profile_figure(_PROFILES)
 
     assert order_rolling_stats_columns(_PROFILES) == ["bad", "good"]
     assert len(figure.data) == 2 * ROLLING_STATS_SUMMARY_TRACES_PER_COLUMN
-    assert [trace.visible for trace in figure.data] == [True] * 4 + [False] * 4
-    training = next(trace for trace in figure.data if trace.name == "Training median local average")
-    synthetic = next(trace for trace in figure.data if trace.name == "Synthetic median local average")
-    assert list(training.x) == pytest.approx([5, 15, 25, 35, 45, 55, 65, 75, 85, 95])
+    assert [trace.visible for trace in figure.data] == [True] * 8 + [False] * 8
+    training = _trace(figure, "Training median local average")
+    synthetic = _trace(figure, "Synthetic median local average")
+    assert list(training.x) == pytest.approx(_POSITIONS)
     assert list(training.y) == pytest.approx(_TEN)
     assert list(synthetic.y) == pytest.approx([0.0] * 10)
-    assert list(figure.layout.xaxis.ticktext) == ["Start", "Middle", "End"]
+    assert _trace(figure, "Training median local spread").yaxis == "y2"
+    assert list(figure.layout.xaxis2.ticktext) == ["Start", "Middle", "End"]
+    assert figure.layout.yaxis2.rangemode == "tozero"
 
 
-def test_level_figure_interpolates_pairs_with_fewer_segments_onto_ten_positions():
-    figure = generate_rolling_stats_level_figure([_profile(None, "short", [0.0, 1.0], [0.0, 1.0], 1.0)])
+def test_profile_figure_interpolates_pairs_with_fewer_segments_onto_ten_positions():
+    figure = generate_rolling_stats_profile_figure([_profile(None, "short", [0.0, 1.0], [0.0, 1.0], 1.0)])
 
-    training = next(trace for trace in figure.data if trace.name == "Training median local average")
+    training = _trace(figure, "Training median local average")
     assert len(training.x) == 10
     assert training.y[0] == pytest.approx(0.0)
     assert training.y[-1] == pytest.approx(1.0)
 
 
-def test_spread_figure_starts_its_axis_at_zero():
-    figure = generate_rolling_stats_spread_figure(_PROFILES)
+def test_segment_difference_figure_averages_paired_gaps_so_opposite_groups_cannot_cancel():
+    rising, falling = _TEN, [-value for value in _TEN]
+    profiles = [
+        _profile("up", "value", rising, falling, 0.0),
+        _profile("down", "value", falling, rising, 0.0),
+    ]
 
-    assert figure.data[1].name == "Training median local spread"
-    assert figure.layout.yaxis.rangemode == "tozero"
+    medians = generate_rolling_stats_profile_figure(profiles)
+    difference = generate_rolling_stats_segment_difference_figure(profiles)
+
+    assert list(_trace(medians, "Training median local average").y) == pytest.approx([0.0] * 10)
+    assert list(_trace(medians, "Synthetic median local average").y) == pytest.approx([0.0] * 10)
+    level = _trace(difference, "Average")
+    assert list(level.x) == pytest.approx(_POSITIONS)
+    assert list(level.y) == pytest.approx([2 * value for value in _TEN])
+    assert list(level.customdata) == [2] * 10
+    assert list(_trace(difference, "Spread").y) == pytest.approx([0.0] * 10)
+
+
+def test_segment_difference_figure_skips_constant_pairs_and_keeps_a_fixed_axis():
+    figure = generate_rolling_stats_segment_difference_figure(_PROFILES)
+
+    level = _trace(figure, "Average")
+    assert list(level.customdata) == [3] * 10
+    assert level.y[1] == pytest.approx(1 / 3)
+    assert level.marker.colorscale[0][1] == "#ffffff"
+    assert _trace(figure, "Spread").marker.pattern.shape == "/"
+    assert figure.layout.yaxis.range[0] == 0.0
+    assert figure.layout.yaxis.range[1] >= 1.0
+    assert all("training" not in trace.name.lower() and "synthetic" not in trace.name.lower() for trace in figure.data)
 
 
 def test_pair_score_figure_plots_every_pair_without_naming_traces_after_columns():
@@ -102,8 +135,8 @@ def test_pair_score_figure_labels_ungrouped_profiles():
 @pytest.mark.parametrize(
     "builder",
     [
-        generate_rolling_stats_level_figure,
-        generate_rolling_stats_spread_figure,
+        generate_rolling_stats_profile_figure,
+        generate_rolling_stats_segment_difference_figure,
         lambda profiles: generate_rolling_stats_pair_score_figure(profiles, None),
     ],
 )

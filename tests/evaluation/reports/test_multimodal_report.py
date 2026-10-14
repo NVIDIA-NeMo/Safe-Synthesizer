@@ -348,17 +348,17 @@ def test_rolling_stats_report_summarizes_all_profiles_in_one_chart_row() -> None
     assert context["evaluated_column_count"] == 2
     assert context["constant_synthetic_profile_count"] == 2
     assert [figure["title"] for figure in context["figures"]] == [
-        "Local average",
-        "Local spread",
+        "Average and spread",
+        "Difference by segment",
         "Pair scores",
     ]
-    assert [figure["column_select"] for figure in context["figures"]] == [True, True, False]
+    assert [figure["column_select"] for figure in context["figures"]] == [True, False, False]
     assert [figure["tooltip_id"] for figure in context["figures"]] == [
-        "rolling-stats-level-info",
-        "rolling-stats-spread-info",
+        "rolling-stats-profile-info",
+        "rolling-stats-difference-info",
         "rolling-stats-pair-scores-info",
     ]
     assert all(figure["tooltip"].strip() for figure in context["figures"])
     assert context["summary_columns"] == ["other", "value"]
-    assert context["summary_traces_per_column"] == 4
+    assert context["summary_traces_per_column"] == 8
     assert context["pair_score_column_count"] == 2

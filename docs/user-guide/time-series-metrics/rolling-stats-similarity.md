@@ -133,7 +133,7 @@ and find the card in the Time-Series Metrics panel, then expand it to see three
 charts built from every evaluated group-column pair. Select the info icon next
 to a chart title for a short reminder of how to read it.
 
-![The Rolling Stats Similarity card in the HTML evaluation report, showing a score of 5.5 with the Local average, Local spread, and Pair scores charts.](assets/rolling-stats-report.png)
+![The Rolling Stats Similarity card in the HTML evaluation report, showing a score of 5.5 with the Average and spread, Difference by segment, and Pair scores charts.](assets/rolling-stats-report.png)
 
 The example above comes from a dataset of eight sensors, grouped by sensor ID,
 with three numeric columns. In the training data, `temperature` rises steadily,
@@ -142,30 +142,45 @@ time. The synthetic data reproduces sensor 0 closely and loses a little more of
 that structure with each sensor after it: a weaker temperature trend, a later
 and smaller pressure step, and a humidity spread that stops growing. Sensor 7
 also has a constant `pressure` series. You can confirm each of these details in
-the report itself: use the column selectors on the first two charts, and hover
-over any point to see its exact values.
+the report itself: use the column selector on the first chart, and hover over
+any point or bar to see its exact values.
 
-- Local average
-  - What it shows: the median training and synthetic local average in each
-    tenth of the sequence for one numeric column, in training standard
-    deviations from the training mean. The shaded bands cover the middle 50%
-    of groups. The chart opens on the column with the lowest mean pair score.
-    Use the column selector next to the title to switch columns. In good
-    synthetic data, the blue and orange lines overlap.
+- Average and spread
+  - What it shows: for one numeric column, the median training and synthetic
+    local average (top panel), in training standard deviations from the
+    training mean, and local spread (bottom panel), in training standard
+    deviations, in each tenth of the sequence. The shaded bands cover the
+    middle 50% of groups. The chart opens on the column with the lowest mean
+    pair score. Use the column selector next to the title to switch columns. In
+    good synthetic data, the blue and orange lines overlap. Medians can cancel
+    when groups change in opposite directions, for example if half the
+    sensors rise and half fall, so overlapping lines do not guarantee that each
+    group matches. Difference by segment covers that case.
   - In this example: the chart opens on `temperature`. The training median
-    rises from about -1.2 at the start to about 1.2 at the end, while the
-    synthetic median rises only to about -0.1, so most synthetic sensors lost
-    part of the trend. Switch to `pressure` to see the training step a little
-    past the middle and the synthetic step arriving later.
-- Local spread
-  - What it shows: the median training and synthetic local spread in each
-    tenth of the sequence for one numeric column, in training standard
-    deviations, with the same bands and column selector as Local average. In
-    good synthetic data, the lines overlap.
-  - In this example: for `temperature`, both lines stay between about 0.5 and
-    0.65, so the spread is reproduced and the low score comes from the local
-    average. Switch to `humidity` to see the training spread grow from about
-    0.6 to about 1.3 while the synthetic median ends near 1.05.
+    local average rises from about -1.2 at the start to about 1.2 at the end,
+    while the synthetic median rises only to about -0.1, so most synthetic
+    sensors lost part of the trend. Both spread lines stay between about 0.5
+    and 0.65, so the spread is reproduced. Switch to `pressure` to see the
+    training step a little past the middle and the synthetic step arriving
+    later, or to `humidity` to see the training spread grow from about 0.6 to
+    about 1.3 while the synthetic median ends near 1.05.
+- Difference by segment
+  - What it shows: the mean absolute difference between the training and
+    synthetic local average (solid bars) and local spread (hatched bars) in
+    each tenth of the sequence, across all group-column pairs. Each pair is
+    compared with itself before averaging, so groups that change in opposite
+    directions cannot cancel. Hover over a bar to see its exact value and how
+    many pairs it averages. The y-axis always spans at least 0 to 1 training
+    standard deviation, so short, pale bars mean small differences, and bars
+    turn red as the difference approaches 1. Bars that grow toward the end
+    point to a missing or weaker trend, and a jump at one segment points to a
+    missing or shifted step.
+  - In this example: the local average difference stays between about 0.25
+    and 0.35 in the first half, then rises to about 0.6 to 0.8 from 60% of the
+    way through, where the pressure step and most of the temperature trend
+    fall. The local spread difference stays between about 0.1 and 0.17
+    throughout, so most of the mismatch is in the level rather than the
+    spread.
 - Pair scores
   - What it shows: the score of every group-column pair on the 0–10 scale,
     with the overall score marked by the dashed line. Each point is one group,
@@ -184,9 +199,9 @@ over any point to see its exact values.
 
 A pair whose synthetic values are constant scores 0 but has no synthetic local
 average or spread, so only Pair scores shows it. In the example, the `pressure`
-point at 0 is sensor 7, and the note above the charts reports it. The Local
-average and Local spread medians for `pressure` use the remaining seven
-sensors.
+point at 0 is sensor 7, and the note above the charts reports it. The Average
+and spread medians for `pressure` and the Difference by segment bars use the
+remaining pairs.
 
 ## Configuration
 
