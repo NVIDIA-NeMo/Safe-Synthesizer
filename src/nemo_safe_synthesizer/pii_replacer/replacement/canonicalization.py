@@ -40,12 +40,9 @@ def readable_value(value: CanonicalValue) -> str:
     """Return the human-readable form of ``value`` used as a data-to-sampler value mapping key.
 
     Planning and replacement both derive mapping keys through this function, so a key written in a plan
-    matches at replacement time. It equals ``normalized_value`` except that floats use Python's shortest
-    round-trip form (``1.0``) instead of their exact hexadecimal identity, and timedeltas use pandas'
+    matches at replacement time. It equals ``normalized_value`` except that timedeltas use pandas'
     string form instead of nanoseconds.
     """
-    if value.type_tag == "float":
-        return repr(float.fromhex(value.normalized_value))
     if value.type_tag == "timedelta_nanoseconds":
         return str(pd.Timedelta(int(value.normalized_value)))
     return value.normalized_value
@@ -82,7 +79,8 @@ def canonicalize_scalar(value: object) -> CanonicalValue:
         number = float(value)
         if not math.isfinite(number):
             raise ParameterError("non-finite numeric values cannot be used for PII replacement")
-        return CanonicalValue("float", number.hex())
+        # repr() is Python's shortest exact round-trip form, so it is both lossless and readable.
+        return CanonicalValue("float", repr(number))
     if isinstance(value, bytes | np.bytes_):
         return CanonicalValue("bytes_hex", bytes(value).hex())
     if isinstance(value, UUID):

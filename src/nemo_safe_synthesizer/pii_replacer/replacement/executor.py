@@ -154,12 +154,15 @@ class StructuredReplacementExecutor:
         return tuple(canonicalize_scalar(value) for value in values)
 
     def _seed_reserved_values(self, dataframe: pd.DataFrame) -> None:
+        # Originals are reserved in the same text form generators receive and return,
+        # so a replacement can never reuse another row's original value.
         for spec in self._plan.columns_to_replace:
             if spec.entity_type not in _COLLISION_SENSITIVE_ENTITY_TYPES:
                 continue
+            column = dataframe[spec.column_name]
             self._reserved_by_target[spec.column_name] = {
-                canonicalize_scalar(value).normalized_value
-                for value in dataframe[spec.column_name].tolist()
+                text
+                for value, text in zip(column.tolist(), column.astype(str).tolist(), strict=True)
                 if not is_missing_scalar(value)
             }
 
