@@ -175,7 +175,15 @@ LLM span-detection experiment.
 - Nina's previous v3 implementation and main's detector are references, not compatibility targets.
 - The complete original-to-replacement map is not persisted by default; explicit secure persistence remains an open
   product decision.
-- Dataframe scope is not supported initially. If added later, it follows group-style first-occurrence-wins behavior.
+- Identifier-like entity types use dataframe scope: `email`, `phone_number`, `ssn`, `national_id`,
+  `credit_debit_card`, `api_key`, `ipv4`, `ipv6`, and `unique_identifier`. The same original value names the same
+  entity wherever it appears, so every occurrence in the column reuses one replacement, regardless of row or grouping
+  column. Each distinct original needs only one replacement, kept distinct from every original value in the column.
+  Dataframe scope follows the group-style first-occurrence-wins policy, including the drift warning.
+  Names, addresses, dates, and other types keep record or group scope, because equal values in different rows may
+  describe different people.
+  (Decided 2026-10-14 after an end-to-end eval: record-scoped identifiers gave one hospital several fake IDs and
+  exhausted short ID formats, for example 533 rows of 22 two-digit hospital IDs.)
 - Repeated accepted detections of the same entity and exact value reuse one replacement across all planned free-text
   columns within the row or group scope, independently of propagation mappings.
 - Structured mapping values use a type-tagged canonical representation. Canonicalization is stable typed
@@ -461,8 +469,15 @@ or dependency values.
 
 Stable positional row order defines which occurrence is first.
 
-Dataframe scope is not part of the initial implementation. A future dataframe scope should use the same
-first-occurrence-wins policy as group scope rather than adding dependencies to mapping identity.
+Dataframe scope, used for identifier-like entity types:
+
+```text
+target column
++ canonical original value
+```
+
+Dataframe scope uses the same first-occurrence-wins policy and drift warning as group scope, rather than adding
+dependencies to mapping identity. It applies with or without a grouping column.
 
 ### Interface PR scope
 
@@ -487,9 +502,11 @@ Do not yet:
   become string/object dtype.
 
 For record scope, the mapping key uses target column, stable row position, and canonical original value. Dependencies
-remain generation inputs. For group scope, the first replacement wins:
+remain generation inputs. Identifier-like entity types always use dataframe scope, keyed by target column and canonical
+original value. For group and dataframe scope, the first replacement wins:
 
-1. Encounter the first `(target column, original group, canonical original)` mapping in positional row order.
+1. Encounter the first `(target column, original group, canonical original)` mapping, or `(target column, canonical
+   original)` in dataframe scope, in positional row order.
 2. Generate its replacement using that row's effective dependencies.
 3. Store both the replacement and the initial dependency tuple.
 4. Reuse the replacement for later occurrences of that mapping.
@@ -506,6 +523,9 @@ quality information, not invalid configuration.
 - Given the same plan, accepted detector spans, and seed, output must be deterministic.
 - Support Nemotron-Personas and Faker person sampling, name patterns, character masks, plus-or-minus 365-day birth-date shifts,
   Luhn-valid cards, IP addresses, and collision-resistant identifiers.
+- A birth-date pattern only has to cover 99% of a column. Parse each cell with the pattern, then common date formats,
+  and shift it. Write the result in the pattern when one is configured. When no format parses the cell, generate a
+  random birth date in the pattern's format and warn once; never keep the original.
 - Apply configured data-to-sampler value mappings and case-insensitive identity matching before sampler candidate
   selection.
 - If the selected Nemotron-Personas dataset for the locale is missing or unreadable, fail with a configuration error;

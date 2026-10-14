@@ -21,6 +21,7 @@ from ._common import (
     looks_like_uuid,
     name_values,
     normalize_organization_domain,
+    random_birth_date,
     render_address,
     render_luhn_pattern,
     render_name,
@@ -66,7 +67,7 @@ class FakerReplacementGenerator:
         if entity_type is EntityType.PHONE_NUMBER and request.pattern is not None:
             return render_character_mask(request.pattern, rng)
         if entity_type is EntityType.DATE_OF_BIRTH:
-            return shift_birth_date(request.original_value, request.pattern, rng)
+            return self._birth_date(request, rng)
         if entity_type is EntityType.CREDIT_DEBIT_CARD and request.pattern is not None:
             return render_luhn_pattern(request.pattern, rng)
         if entity_type in {EntityType.API_KEY, EntityType.UNIQUE_IDENTIFIER} and (
@@ -139,6 +140,13 @@ class FakerReplacementGenerator:
             self._warn_generation_fallback("unresolved_email_organization")
         values["organization"] = organization_domain or fake.domain_word()
         return render_name_pattern(EntityType.EMAIL, request.pattern, values, rng)
+
+    def _birth_date(self, request: ReplacementGenerationRequest, rng: Random) -> str:
+        shifted = shift_birth_date(request.original_value, request.pattern, rng)
+        if shifted is not None:
+            return shifted
+        self._warn_generation_fallback("unparseable_birth_date")
+        return random_birth_date(request.pattern, rng)
 
     def _warn_generation_fallback(self, reason: str) -> None:
         if reason in self._warned_generation_fallbacks:
