@@ -14,6 +14,7 @@ from ....config.replace_pii import EntityType, PiiReplacementSettings, PiiSample
 from ....errors import GenerationError, InternalError
 from ....observability import get_logger
 from ...planning.patterns import render_character_mask, render_name_pattern
+from ..birth_dates import random_birth_date, shift_birth_date
 from ._common import (
     NAME_ENTITY_TYPES,
     dependency_values,
@@ -21,14 +22,12 @@ from ._common import (
     looks_like_uuid,
     name_values,
     normalize_organization_domain,
-    random_birth_date,
     render_address,
     render_luhn_pattern,
     render_name,
     required_pattern_values,
     resolve_dependency_values,
     shape_preserving_value,
-    shift_birth_date,
 )
 
 if TYPE_CHECKING:

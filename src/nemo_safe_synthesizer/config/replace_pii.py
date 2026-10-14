@@ -233,7 +233,7 @@ ENTITIES: tuple[Entity, ...] = (
         EntityType.DATE_OF_BIRTH,
         action=EntityAction.REPLACE,
         can_condition=False,
-        description="A person's date of birth.",
+        description="A person's date of birth, written as a full or partial calendar date.",
         pattern_syntax=PatternSyntax.STRFTIME,
     ),
     Entity(
