@@ -1135,6 +1135,9 @@ to sort within groups.
 
 See [Configuration Reference -- Time Series](configuration.md#time-series) for the full parameter table.
 See [Troubleshooting -- Time Series](troubleshooting.md#time-series) for common issues.
+In time-series mode, the HTML report also includes
+[Autocorrelation Similarity](time-series-metrics/autocorrelation-similarity.md).
+Set `evaluation.time_series.enabled: false` to skip it.
 
 !!! note "How time-series examples are assembled"
     Each training example contains records from a single group in

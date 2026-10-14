@@ -98,6 +98,16 @@ PII Replay counts the total and unique instances of personally identifiable info
 
 You should expect some PII replay, and it is often not a cause for concern. We typically see rarer entities (for example, full address, full name) replayed less frequently than common ones (for example, first name, U.S. state). To reduce replay, we recommend enabling [Replace PII](pii_replacement.md) before synthesis.
 
+## Time-Series Metrics (beta)
+
+Time-series metrics compare the temporal properties of synthetic and training sequences. They run by default when `time_series.is_timeseries` is true and appear in a Time-Series Metrics panel in the Synthetic Quality section of the report. Their scores do not yet contribute to the overall Synthetic Quality Score (SQS) calculation. Set `evaluation.time_series.enabled: false` to skip them.
+
+Each time-series metric measures one specific temporal property, and not every property matters for every use case. Before treating a low score as a sign that a run or its synthetic data is bad, review what the metric measures and consider whether that property matters for how you plan to use the data. A low score on one metric can coexist with values, distributions, and column relationships that match well. In the end, how well the synthetic data performs in its intended use case is the final measure of its quality.
+
+### Autocorrelation Similarity
+
+This score measures whether each synthetic numeric column keeps the persistence and periodicity of its training counterpart: how long values stay close to their recent past, and whether they rise and fall in the same repeating cycles, such as daily or weekly patterns. Focus on this metric when those patterns matter for your use case. We compare the autocorrelation at lags 1 to 20 for every group-column pair, after discounting the differences that sampling noise alone would produce. Synthetic data from the same process scores near 10, and shuffled or constant data scores near 0 when the training data has structure over time. See [Autocorrelation Similarity](../user-guide/time-series-metrics/autocorrelation-similarity.md) for example scenarios, a walkthrough of the report charts, and configuration.
+
 ## Evaluation Reports
 
 Every Safe Synthesizer job automatically generates an HTML evaluation report saved to `generate/evaluation_report.html` inside the run directory (by default `./safe-synthesizer-artifacts/<config>---<dataset>/<run_name>/`). A machine-readable companion file, `generate/evaluation_metrics.json`, contains the same scores and timing data as structured JSON. The report contains:
@@ -143,3 +153,4 @@ evaluation:
 ## Related Topics
 
 - [Synthetic Data Quality](../user-guide/evaluating-data.md): See recommendations for increasing quality and privacy scores
+- [Autocorrelation Similarity](../user-guide/time-series-metrics/autocorrelation-similarity.md): Read and configure the time-series metric

@@ -1,0 +1,79 @@
+{% from "jinja/components/icon.j2" import icon %}
+{% if ctx.autocorrelation_similarity.score.notes %}
+<p class="chart-subheading">{{ ctx.autocorrelation_similarity.score.notes }}</p>
+{% endif %}
+{% if ctx.autocorrelation_similarity.details.skipped %}
+<h3 class="chart-subheading">Skipped comparisons</h3>
+<ul>
+{% for item in ctx.autocorrelation_similarity.details.skipped[:12] %}
+    <li>
+        {{ item.column }}{% if item.group is not none %}, group {{ item.group }}{% endif %}: {{ item.reason }}
+    </li>
+{% endfor %}
+</ul>
+{% endif %}
+{% if ctx.autocorrelation_similarity.details.groups_only_in_training %}
+<p class="chart-subheading">
+    Groups found only in training data: {{ ctx.autocorrelation_similarity.details.groups_only_in_training | length }}.
+</p>
+{% endif %}
+{% if ctx.autocorrelation_similarity.details.groups_only_in_synthetic %}
+<p class="chart-subheading">
+    Groups found only in synthetic data: {{ ctx.autocorrelation_similarity.details.groups_only_in_synthetic | length }}.
+</p>
+{% endif %}
+{% if ctx.autocorrelation_similarity.figures %}
+<p class="chart-subheading">
+    {% set group_count = ctx.autocorrelation_similarity.evaluated_group_count %}
+    {% set column_count = ctx.autocorrelation_similarity.evaluated_column_count %}
+    Summarizing {{ ctx.autocorrelation_similarity.evaluated_profile_count }} group-column pairs
+    ({{ group_count }} {{ "group" if group_count == 1 else "groups" }},
+    {{ column_count }} numeric {{ "column" if column_count == 1 else "columns" }}).
+    {% if column_count > ctx.autocorrelation_similarity.pair_score_column_count %}
+    Pair scores shows the {{ ctx.autocorrelation_similarity.pair_score_column_count }} lowest-scoring columns.
+    {% endif %}
+</p>
+{% if ctx.autocorrelation_similarity.constant_synthetic_profile_count %}
+<p class="chart-subheading">
+    {% set constant_count = ctx.autocorrelation_similarity.constant_synthetic_profile_count %}
+    {% if constant_count == 1 %}
+    1 pair has constant synthetic values. It scores 0 in Pair scores but has no synthetic autocorrelation,
+    so the other two charts leave it out.
+    {% else %}
+    {{ constant_count }} pairs have constant synthetic values. They score 0 in Pair scores but have no synthetic
+    autocorrelation, so the other two charts leave them out.
+    {% endif %}
+</p>
+{% endif %}
+<div class="chart-legend" aria-label="Chart legend">
+    <span><i class="legend-training"></i>Training Data</span>
+    <span><i class="legend-synthetic"></i>Synthetic Data</span>
+</div>
+<div class="autocorrelation-charts">
+{% for row in ctx.autocorrelation_similarity.figures %}
+<figure>
+    <div class="autocorrelation-chart-heading">
+        <span class="autocorrelation-chart-title">
+            <h3 class="chart-subheading">{{ row.title }}</h3>
+            <button class="metric-info" type="button" data-tooltip-toggle
+                    aria-expanded="false" aria-controls="{{ row.tooltip_id }}"
+                    aria-label="About {{ row.title }}">{{ icon("info") }}</button>
+        </span>
+        {% if row.column_select and ctx.autocorrelation_similarity.summary_columns | length > 1 %}
+        <select class="autocorrelation-column-select" data-autocorrelation-column-select
+                data-traces-per-column="{{ ctx.autocorrelation_similarity.summary_traces_per_column }}"
+                aria-label="Numeric column">
+            {% for column in ctx.autocorrelation_similarity.summary_columns %}
+            <option value="{{ loop.index0 }}">{{ column }}</option>
+            {% endfor %}
+        </select>
+        {% endif %}
+    </div>
+    <div class="metric-tooltip autocorrelation-chart-tooltip" id="{{ row.tooltip_id }}" role="tooltip" hidden>
+        {{ row.tooltip | trim }}
+    </div>
+    {{ row.html | safe }}
+</figure>
+{% endfor %}
+</div>
+{% endif %}
