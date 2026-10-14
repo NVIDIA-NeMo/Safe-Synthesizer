@@ -48,6 +48,12 @@ class _ParameterErrorGenerator(_RecordingGenerator):
         raise ParameterError("the configured sampler cannot produce this value")
 
 
+class _SwapGenerator(_RecordingGenerator):
+    def generate(self, request: ReplacementGenerationRequest) -> str:
+        self.requests.append(request)
+        return {"1.5": "2.5", "2.5": "1.5"}[request.original_value]
+
+
 class _ConstantGenerator(_RecordingGenerator):
     def generate(self, request: ReplacementGenerationRequest) -> str:
         self.requests.append(request)
@@ -263,6 +269,13 @@ class TestStructuredReplacementExecutor:
 
         with pytest.raises(DataError, match="'patient' has 1 missing value"):
             _execute(dataframe, plan, _RecordingGenerator(), group_column="patient")
+
+    def test_float_identifiers_cannot_reuse_another_original(self) -> None:
+        dataframe = pd.DataFrame({"id": [1.5, 2.5]})
+        plan = _plan(_target("id", EntityType.UNIQUE_IDENTIFIER))
+
+        with pytest.raises(GenerationError, match="could not generate a distinct value"):
+            _execute(dataframe, plan, _SwapGenerator())
 
     def test_project_errors_from_the_generator_are_not_rewrapped(self) -> None:
         dataframe = pd.DataFrame({"first_name": ["Ada"]})
