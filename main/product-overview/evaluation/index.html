@@ -783,6 +783,34 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#time-series-metrics-beta" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Time-Series Metrics (beta)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Time-Series Metrics (beta)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#autocorrelation-similarity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Autocorrelation Similarity
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#evaluation-reports" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1074,6 +1102,8 @@
   
     
     
+      
+        
       
         
       
@@ -1503,6 +1533,100 @@
     
   
     Environment Variables
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_8" id="__nav_4_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Time-Series Metrics (beta)
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Time-Series Metrics (beta)
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/time-series-metrics/autocorrelation-similarity/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Autocorrelation Similarity
   
 
     
@@ -4268,6 +4392,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -4330,6 +4458,62 @@
     
   
     attribute_inference_protection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/components/autocorrelation_similarity/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    autocorrelation_similarity
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/components/autocorrelation_similarity_figures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    autocorrelation_similarity_figures
   
 
     
@@ -9620,6 +9804,34 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#time-series-metrics-beta" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Time-Series Metrics (beta)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Time-Series Metrics (beta)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#autocorrelation-similarity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Autocorrelation Similarity
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#evaluation-reports" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -9827,6 +10039,11 @@
 <h3 id="pii-replay">PII Replay<a class="headerlink" href="#pii-replay" title="Permanent link">&para;</a></h3>
 <p>PII Replay counts the total and unique instances of personally identifiable information (PII) from your training data that show up in your synthetic data. Lower counts indicate higher privacy.</p>
 <p>You should expect some PII replay, and it is often not a cause for concern. We typically see rarer entities (for example, full address, full name) replayed less frequently than common ones (for example, first name, U.S. state). To reduce replay, we recommend enabling <a href="../pii_replacement/">Replace PII</a> before synthesis.</p>
+<h2 id="time-series-metrics-beta">Time-Series Metrics (beta)<a class="headerlink" href="#time-series-metrics-beta" title="Permanent link">&para;</a></h2>
+<p>Time-series metrics compare the temporal properties of synthetic and training sequences. They run by default when <code>time_series.is_timeseries</code> is true and appear in a Time-Series Metrics panel in the Synthetic Quality section of the report. Their scores do not yet contribute to the overall Synthetic Quality Score (SQS) calculation. Set <code>evaluation.time_series.enabled: false</code> to skip them.</p>
+<p>Each time-series metric measures one specific temporal property, and not every property matters for every use case. Before treating a low score as a sign that a run or its synthetic data is bad, review what the metric measures and consider whether that property matters for how you plan to use the data. A low score on one metric can coexist with values, distributions, and column relationships that match well. In the end, how well the synthetic data performs in its intended use case is the final measure of its quality.</p>
+<h3 id="autocorrelation-similarity">Autocorrelation Similarity<a class="headerlink" href="#autocorrelation-similarity" title="Permanent link">&para;</a></h3>
+<p>This score measures whether each synthetic numeric column keeps the persistence and periodicity of its training counterpart: how long values stay close to their recent past, and whether they rise and fall in the same repeating cycles, such as daily or weekly patterns. Focus on this metric when those patterns matter for your use case. We compare the autocorrelation at lags 1 to 20 for every group-column pair, after discounting the differences that sampling noise alone would produce. Synthetic data from the same process scores near 10, and shuffled or constant data scores near 0 when the training data has structure over time. See <a href="../../user-guide/time-series-metrics/autocorrelation-similarity/">Autocorrelation Similarity</a> for example scenarios, a walkthrough of the report charts, and configuration.</p>
 <h2 id="evaluation-reports">Evaluation Reports<a class="headerlink" href="#evaluation-reports" title="Permanent link">&para;</a></h2>
 <p>Every Safe Synthesizer job automatically generates an HTML evaluation report saved to <code>generate/evaluation_report.html</code> inside the run directory (by default <code>./safe-synthesizer-artifacts/&lt;config&gt;---&lt;dataset&gt;/&lt;run_name&gt;/</code>). A machine-readable companion file, <code>generate/evaluation_metrics.json</code>, contains the same scores and timing data as structured JSON. The report contains:</p>
 <ul>
@@ -9920,6 +10137,7 @@
 <h2 id="related-topics">Related Topics<a class="headerlink" href="#related-topics" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="../../user-guide/evaluating-data/">Synthetic Data Quality</a>: See recommendations for increasing quality and privacy scores</li>
+<li><a href="../../user-guide/time-series-metrics/autocorrelation-similarity/">Autocorrelation Similarity</a>: Read and configure the time-series metric</li>
 </ul>
 
 

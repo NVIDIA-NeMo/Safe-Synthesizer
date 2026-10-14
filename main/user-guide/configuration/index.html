@@ -836,6 +836,8 @@
       
         
       
+        
+      
     
     
     
@@ -1542,6 +1544,103 @@
     
   
     Environment Variables
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_8" id="__nav_4_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Time-Series Metrics (beta)
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Time-Series Metrics (beta)
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../time-series-metrics/autocorrelation-similarity/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Autocorrelation Similarity
   
 
     
@@ -4307,6 +4406,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -4369,6 +4472,62 @@
     
   
     attribute_inference_protection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/components/autocorrelation_similarity/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    autocorrelation_similarity
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/components/autocorrelation_similarity_figures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    autocorrelation_similarity_figures
   
 
     
@@ -10628,6 +10787,36 @@ for the full schema. For detailed descriptions and constraints, see the
 <td>Number of mandatory columns that must be used in evaluation</td>
 <td>Leave at default</td>
 </tr>
+<tr>
+<td><code>evaluation.time_series.enabled</code></td>
+<td><code>null</code></td>
+<td>Add time-series metrics to evaluation and the HTML report. <code>null</code> follows <code>time_series.is_timeseries</code></td>
+<td>Set <code>false</code> to skip in time-series mode; <code>true</code> requires <code>time_series.is_timeseries: true</code></td>
+</tr>
+<tr>
+<td><code>evaluation.time_series.autocorrelation.value_columns</code></td>
+<td><code>null</code></td>
+<td>Numeric columns included in Autocorrelation Similarity</td>
+<td>Leave <code>null</code> for inferred numeric columns or provide an explicit list</td>
+</tr>
+<tr>
+<td><code>evaluation.time_series.autocorrelation.max_lag</code></td>
+<td><code>20</code></td>
+<td>Largest positive lag requested</td>
+<td>Select a horizon relevant to the downstream use case</td>
+</tr>
+<tr>
+<td><code>evaluation.time_series.autocorrelation.min_points</code></td>
+<td><code>4</code></td>
+<td>Minimum finite observations required per sequence</td>
+<td>Leave at default unless short sequences must be excluded</td>
+</tr>
+<tr>
+<td><code>evaluation.time_series.autocorrelation.max_groups</code></td>
+<td><code>128</code></td>
+<td>Maximum shared groups evaluated in a reproducible sample</td>
+<td>Lower to reduce evaluation time for highly grouped data</td>
+</tr>
 </tbody>
 </table>
 <p>See <a class="autorefs autorefs-internal" title="            EvaluationParameters
@@ -10636,7 +10825,9 @@ for the full schema. For detailed descriptions and constraints, see the
   
       pydantic-model
   " href="../../reference/nemo_safe_synthesizer/config/evaluate/#nemo_safe_synthesizer.config.evaluate.EvaluationParameters"><code>EvaluationParameters</code></a>
-for the full API reference.</p>
+for the full API reference. See
+<a href="../time-series-metrics/autocorrelation-similarity/">Autocorrelation Similarity</a>
+for calculation and interpretation guidance.</p>
 <hr />
 <h2 id="validate-and-modify-configuration">Validate and Modify Configuration<a class="headerlink" href="#validate-and-modify-configuration" title="Permanent link">&para;</a></h2>
 <h3 id="config-validate"><code>config validate</code><a class="headerlink" href="#config-validate" title="Permanent link">&para;</a></h3>
