@@ -562,6 +562,17 @@ class TestStructuredReplacementExecutor:
         assert len(generator.requests) == 1
         assert result.generation_statistics.generated_replacement_count == 1
 
+    def test_free_text_identifier_reuses_an_allocated_integer_replacement(self) -> None:
+        dataframe = pd.DataFrame({"api_key": [12345, 67890], "notes": ["Key 12345 issued", "No key"]})
+        plan = _plan(_target("api_key", EntityType.API_KEY), _target("notes", EntityType.FREE_TEXT))
+        detector = _StaticDetector([DetectedSpan(DetectionCellId(0, "notes"), 4, 9, EntityType.API_KEY, "gliner", 0.9)])
+        generator = _RecordingGenerator()
+
+        result = _execute(dataframe, plan, generator, free_text_detector=detector)
+
+        assert result.dataframe.at[0, "notes"] == f"Key {result.dataframe.at[0, 'api_key']} issued"
+        assert generator.requests == []
+
     def test_reused_free_text_replacement_takes_each_occurrence_letter_case(self) -> None:
         dataframe = pd.DataFrame({"notes": ["Ada, ADA, ada"]})
         plan = _plan(_target("notes", EntityType.FREE_TEXT))
