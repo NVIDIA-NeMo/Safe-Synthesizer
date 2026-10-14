@@ -22,11 +22,13 @@ from .compiler import compile_plan
 from .generation import ReplacementGenerationRequest, ReplacementGenerator
 from .types import (
     CanonicalValue,
+    DataframeMappingKey,
     EffectiveDependencyTuple,
     GroupDependencyDrift,
     GroupMappingKey,
     GroupMappingProvenance,
     RecordMappingKey,
+    StructuredMappingKey,
 )
 from .value_checks import generated_value_is_valid
 
@@ -37,7 +39,10 @@ __all__ = ["ReplacementExecutionResult", "StructuredReplacementExecutor", "resol
 _MAX_GENERATION_ATTEMPTS = 10
 _PERSON_RANDOM_SEED_ENV = "PERSON_RANDOM_SEED"
 _CompiledDataToSamplerValueMapping = dict[str, dict[str, tuple[str, ...]]]
-_COLLISION_SENSITIVE_ENTITY_TYPES = frozenset(
+# Identifier-like values name one entity wherever they appear. Each distinct original is
+# replaced once across the whole column (dataframe scope), and its replacement is kept
+# distinct from every original value in that column.
+_IDENTIFIER_ENTITY_TYPES = frozenset(
     {
         EntityType.EMAIL,
         EntityType.PHONE_NUMBER,
@@ -94,7 +99,7 @@ class StructuredReplacementExecutor:
         self._group_column = group_column
         self._base_seed = base_seed
         self._data_to_sampler_value_mapping = _compile_data_to_sampler_value_mapping(plan.data_to_sampler_value_mapping)
-        self._cache: dict[RecordMappingKey | GroupMappingKey, _CachedReplacement] = {}
+        self._cache: dict[StructuredMappingKey, _CachedReplacement] = {}
         self._reserved_by_target: dict[str, set[str]] = {}
         self._dependency_conflicts: dict[tuple[str, frozenset[EntityType]], int] = {}
         self._generation_elapsed = 0.0
@@ -121,7 +126,7 @@ class StructuredReplacementExecutor:
         drifts = self._dependency_drift_results()
         for drift in drifts:
             logger.user.warning(
-                "PII group replacement reused the first value despite dependency drift",
+                "PII replacement reused the first occurrence's value despite dependency drift",
                 extra=drift.as_log_extra(),
             )
         return ReplacementExecutionResult(
@@ -157,7 +162,7 @@ class StructuredReplacementExecutor:
         # Originals are reserved in the same text form generators receive and return,
         # so a replacement can never reuse another row's original value.
         for spec in self._plan.columns_to_replace:
-            if spec.entity_type not in _COLLISION_SENSITIVE_ENTITY_TYPES:
+            if spec.entity_type not in _IDENTIFIER_ENTITY_TYPES:
                 continue
             column = dataframe[spec.column_name]
             self._reserved_by_target[spec.column_name] = {
@@ -187,24 +192,26 @@ class StructuredReplacementExecutor:
                 continue
             canonical_original = canonicalize_scalar(original)
             dependencies = _effective_dependencies(working, row_position, spec)
-            key = self._mapping_key(spec.column_name, row_position, canonical_original, group_identities)
+            key = self._mapping_key(spec, row_position, canonical_original, group_identities)
             replacement = self._replacement_for(key, spec, original_texts[row_position], dependencies)
             working.iat[row_position, column_position] = replacement
 
     def _mapping_key(
         self,
-        target_column: str,
+        spec: PiiColumnPlan,
         row_position: int,
         original: CanonicalValue,
         group_identities: tuple[CanonicalValue, ...] | None,
-    ) -> RecordMappingKey | GroupMappingKey:
+    ) -> StructuredMappingKey:
+        if spec.entity_type in _IDENTIFIER_ENTITY_TYPES:
+            return DataframeMappingKey(spec.column_name, original)
         if group_identities is None:
-            return RecordMappingKey(target_column, row_position, original)
-        return GroupMappingKey(target_column, group_identities[row_position], original)
+            return RecordMappingKey(spec.column_name, row_position, original)
+        return GroupMappingKey(spec.column_name, group_identities[row_position], original)
 
     def _replacement_for(
         self,
-        key: RecordMappingKey | GroupMappingKey,
+        key: StructuredMappingKey,
         spec: PiiColumnPlan,
         original_text: str,
         dependencies: EffectiveDependencyTuple,
@@ -215,7 +222,7 @@ class StructuredReplacementExecutor:
             return cached.value
 
         replacement = self._generate_fresh(key, spec, original_text, dependencies)
-        provenance = GroupMappingProvenance(dependencies) if isinstance(key, GroupMappingKey) else None
+        provenance = None if isinstance(key, RecordMappingKey) else GroupMappingProvenance(dependencies)
         self._cache[key] = _CachedReplacement(replacement, provenance)
         if (reserved_values := self._reserved_by_target.get(spec.column_name)) is not None:
             reserved_values.add(replacement)
@@ -224,7 +231,7 @@ class StructuredReplacementExecutor:
 
     def _generate_fresh(
         self,
-        key: RecordMappingKey | GroupMappingKey,
+        key: StructuredMappingKey,
         spec: PiiColumnPlan,
         original_text: str,
         dependencies: EffectiveDependencyTuple,
@@ -248,9 +255,13 @@ class StructuredReplacementExecutor:
             except SafeSynthesizerError:
                 raise
             except Exception as exc:
+                location = (
+                    f"row position {key.row_position}"
+                    if isinstance(key, RecordMappingKey)
+                    else "a value shared by rows"
+                )
                 raise GenerationError(
-                    f"PII replacement generation failed for column {spec.column_name!r} "
-                    f"at row position {key.row_position if isinstance(key, RecordMappingKey) else 'group'}"
+                    f"PII replacement generation failed for column {spec.column_name!r} at {location}"
                 ) from exc
             finally:
                 self._generation_elapsed += time.perf_counter() - started
@@ -266,11 +277,11 @@ class StructuredReplacementExecutor:
 
     def _record_dependency_drift(
         self,
-        key: RecordMappingKey | GroupMappingKey,
+        key: StructuredMappingKey,
         cached: _CachedReplacement,
         dependencies: EffectiveDependencyTuple,
     ) -> None:
-        if not isinstance(key, GroupMappingKey) or cached.provenance is None:
+        if isinstance(key, RecordMappingKey) or cached.provenance is None:
             return
         if cached.provenance.effective_dependency_tuple == dependencies:
             return
@@ -348,7 +359,7 @@ def _resolved_dependency_values(
 
 def _derive_seed(
     base_seed: int,
-    key: RecordMappingKey | GroupMappingKey,
+    key: StructuredMappingKey,
     *,
     purpose: str,
     attempt: int,
@@ -363,7 +374,7 @@ def _derive_seed(
 
 def _seed_components(
     base_seed: int,
-    key: RecordMappingKey | GroupMappingKey,
+    key: StructuredMappingKey,
     purpose: str,
     attempt: int,
 ) -> tuple[str, ...]:
@@ -378,6 +389,8 @@ def _seed_components(
     )
     if isinstance(key, RecordMappingKey):
         return ("record", *common, str(key.row_position))
+    if isinstance(key, DataframeMappingKey):
+        return ("dataframe", *common)
     group = key.original_group_identity
     if not isinstance(group, CanonicalValue):
         raise InternalError("group mapping identity must be a CanonicalValue")

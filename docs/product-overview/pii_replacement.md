@@ -207,6 +207,10 @@ Date-of-birth patterns use Python `strptime`/`strftime` syntax. Named-month
 formats such as `%B %d, %Y` match values like `December 10, 1815`; patterns do
 not perform general natural-language date parsing, so prose and ordinal forms
 such as `December tenth` or `December 10th` are not supported automatically.
+Birth dates are shifted by up to a year. A value that does not match the
+pattern is parsed with common date formats instead; if none fits, NSS writes a
+random birth date in the pattern's format and logs a warning, so the original
+never remains.
 
 ## Plan-only workflow
 
@@ -401,9 +405,12 @@ chooses at most one candidate column, the one describing the same person or
 record, or none. The response schema lists only the candidate columns, so the
 model cannot name another column or choose two sources of one type, such as
 both a person's and a spouse's gender. Each option carries the heuristic
-baseline's choice as fallible prior evidence. NSS, rather than the model, derives
-group-consistent or record-consistent replacement behavior from the configured
-grouping column, excludes protected ordering and timestamp columns, and validates
+baseline's choice as fallible prior evidence. NSS, rather than the model, decides how
+replacements stay consistent: identifier-like values (email, phone number, SSN,
+national ID, card number, API key, IP address, unique identifier) get one
+replacement per distinct value across the whole table, and other values are
+consistent within a group when a grouping column is configured, else within a
+row. NSS also excludes protected ordering and timestamp columns, and validates
 the assembled plan. Grouping columns remain eligible for replacement so
 identifiers such as patient IDs can be anonymized.
 

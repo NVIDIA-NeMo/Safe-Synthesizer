@@ -370,6 +370,22 @@ class TestReplacementGenerator:
         delta = datetime.strptime(replacement, "%m/%d/%Y") - datetime.strptime(request.original_value, "%m/%d/%Y")
         assert 1 <= abs(delta.days) <= 365
 
+    @pytest.mark.parametrize(
+        ("original", "expected"),
+        [("1990-02-14", r"\d{2}/\d{2}/\d{4}"), ("08/2010", r"\d{2}/\d{2}/\d{4}")],
+    )
+    def test_birth_date_cells_outside_the_pattern_are_still_replaced_in_the_pattern(
+        self,
+        original: str,
+        expected: str,
+    ) -> None:
+        generator = _faker_generator()
+
+        replacement = generator.generate(_request(EntityType.DATE_OF_BIRTH, original, pattern="%m/%d/%Y"))
+
+        assert re.fullmatch(expected, replacement), replacement
+        assert replacement != original
+
     def test_birth_date_pattern_supports_named_months(self) -> None:
         request = _request(
             EntityType.DATE_OF_BIRTH,

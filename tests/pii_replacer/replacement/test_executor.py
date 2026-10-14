@@ -48,6 +48,12 @@ class _ParameterErrorGenerator(_RecordingGenerator):
         raise ParameterError("the configured sampler cannot produce this value")
 
 
+class _TwoDigitGenerator(_RecordingGenerator):
+    def generate(self, request: ReplacementGenerationRequest) -> str:
+        self.requests.append(request)
+        return f"{request.seed % 100:02d}"
+
+
 class _SwapGenerator(_RecordingGenerator):
     def generate(self, request: ReplacementGenerationRequest) -> str:
         self.requests.append(request)
@@ -195,16 +201,45 @@ class TestStructuredReplacementExecutor:
         ].tolist()
 
     def test_record_scope_uses_row_position_and_preserves_nulls(self) -> None:
-        dataframe = pd.DataFrame({"identifier": ["same", "same", None]}, index=[1, 1, 1])
-        plan = _plan(_target("identifier", EntityType.UNIQUE_IDENTIFIER))
+        dataframe = pd.DataFrame({"first_name": ["Ada", "Ada", None]}, index=[1, 1, 1])
+        plan = _plan(_target("first_name", EntityType.FIRST_NAME))
         generator = _RecordingGenerator()
 
         result = _execute(dataframe, plan, generator)
 
-        assert result.dataframe["identifier"].iloc[0] != result.dataframe["identifier"].iloc[1]
-        assert pd.isna(result.dataframe["identifier"].iloc[2])
+        assert result.dataframe["first_name"].iloc[0] != result.dataframe["first_name"].iloc[1]
+        assert pd.isna(result.dataframe["first_name"].iloc[2])
         assert result.generation_statistics.generated_replacement_count == 2
-        assert result.column_statistics["identifier"].detected_entity_counts == {"unique_identifier": 2}
+        assert result.column_statistics["first_name"].detected_entity_counts == {"first_name": 2}
+
+    @pytest.mark.parametrize("group_column", [None, "patient"])
+    def test_identifiers_get_one_replacement_per_distinct_value_across_the_dataframe(
+        self,
+        group_column: str | None,
+    ) -> None:
+        dataframe = pd.DataFrame(
+            {"patient": ["A", "A", "B", "C"], "hospitalid": [17, 17, 17, 42]},
+            index=[0, 0, 0, 0],
+        )
+        plan = _plan(_target("hospitalid", EntityType.UNIQUE_IDENTIFIER))
+
+        result = _execute(dataframe, plan, _RecordingGenerator(), group_column=group_column)
+
+        replaced = result.dataframe["hospitalid"].tolist()
+        assert replaced[0] == replaced[1] == replaced[2]
+        assert replaced[0] != replaced[3]
+        assert not {"17", "42"} & set(replaced)
+        assert result.generation_statistics.generated_replacement_count == 2
+
+    def test_identifiers_need_only_as_many_values_as_distinct_originals(self) -> None:
+        # 100 rows share 5 two-digit IDs; per-row replacement would need 100 unused two-digit values.
+        dataframe = pd.DataFrame({"hospitalid": [f"{10 + row % 5}" for row in range(100)]})
+        plan = _plan(_target("hospitalid", EntityType.UNIQUE_IDENTIFIER))
+
+        result = _execute(dataframe, plan, _TwoDigitGenerator())
+
+        assert result.dataframe["hospitalid"].nunique() == 5
+        assert result.generation_statistics.generated_replacement_count == 5
 
     def test_natural_attributes_may_repeat_across_independent_mappings(self) -> None:
         dataframe = pd.DataFrame({"first_name": ["Ada", "Grace"]})
@@ -233,7 +268,17 @@ class TestStructuredReplacementExecutor:
         with pytest.raises(GenerationError, match="could not generate a distinct value"):
             _execute(dataframe, plan, _ConstantGenerator())
 
-    def test_group_scope_snapshots_replaced_group_keys_and_reports_dependency_drift(self) -> None:
+    def test_group_scope_reuses_name_replacements_within_a_group_only(self) -> None:
+        dataframe = pd.DataFrame({"patient": ["A", "A", "B"], "first_name": ["Ada", "Ada", "Ada"]})
+        plan = _plan(_target("first_name", EntityType.FIRST_NAME))
+
+        result = _execute(dataframe, plan, _RecordingGenerator(), group_column="patient")
+
+        replaced = result.dataframe["first_name"].tolist()
+        assert replaced[0] == replaced[1]
+        assert replaced[0] != replaced[2]
+
+    def test_dataframe_scope_snapshots_replaced_group_keys_and_reports_dependency_drift(self) -> None:
         dataframe = pd.DataFrame(
             {
                 "patient": ["A", "A", "B"],
@@ -252,16 +297,15 @@ class TestStructuredReplacementExecutor:
 
         assert result.dataframe["patient"].iloc[0] == result.dataframe["patient"].iloc[1]
         assert result.dataframe["patient"].iloc[0] != result.dataframe["patient"].iloc[2]
-        assert result.dataframe["email"].iloc[0] == result.dataframe["email"].iloc[1]
-        assert result.dataframe["email"].iloc[0] != result.dataframe["email"].iloc[2]
+        assert result.dataframe["email"].nunique() == 1
         assert len(result.dependency_drifts) == 1
         assert result.dependency_drifts[0].as_log_extra() == {
             "target_column": "email",
             "conditioner_entity_types": ["organization"],
-            "conflict_count": 1,
+            "conflict_count": 2,
         }
-        assert result.generation_statistics.generated_replacement_count == 4
-        assert result.generation_statistics.dependency_drift_count == 1
+        assert result.generation_statistics.generated_replacement_count == 3
+        assert result.generation_statistics.dependency_drift_count == 2
 
     def test_group_scope_rejects_rows_without_a_group_identifier(self) -> None:
         dataframe = pd.DataFrame({"patient": ["A", None], "email": ["same@example.com"] * 2})
