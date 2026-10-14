@@ -24,6 +24,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiSamplerConfig,
 )
 from nemo_safe_synthesizer.errors import InternalError, ParameterError
+from nemo_safe_synthesizer.pii_replacer.replacement import birth_dates
 from nemo_safe_synthesizer.pii_replacer.replacement.generation import (
     ReplacementGenerationRequest,
     ReplacementGenerator,
@@ -478,6 +479,16 @@ class TestReplacementGenerator:
         parsed_replacement = datetime.fromisoformat(replacement)
         assert datetime(1989, 4, 5) <= parsed_replacement <= datetime(1991, 4, 5)
         assert replacement != original
+
+    def test_numeric_non_date_birth_value_skips_natural_language_parsing(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        def fail_parse(*args: object, **kwargs: object) -> None:
+            raise AssertionError("dateparser must not run for a value without letters")
+
+        monkeypatch.setattr(birth_dates.dateparser, "parse", fail_parse)
+
+        replacement = _faker_generator().generate(_request(EntityType.DATE_OF_BIRTH, "45"))
+
+        assert datetime(1930, 1, 1) <= datetime.fromisoformat(replacement) <= datetime(2010, 12, 31)
 
     def test_vague_birth_date_is_replaced_with_a_random_complete_date(self) -> None:
         replacement = _faker_generator().generate(_request(EntityType.DATE_OF_BIRTH, "spring"))
