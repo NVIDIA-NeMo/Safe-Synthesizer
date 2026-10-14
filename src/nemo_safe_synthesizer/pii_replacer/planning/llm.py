@@ -909,11 +909,12 @@ class LLMPlanEnhancer(PlanEnhancer):
                 repaired_specs.append(spec)
                 continue
             if column_pattern_syntax_issue(spec) is None:
-                # The grammar is fine but too few values match, so the column mixes
-                # formats. One pattern cannot describe it, and asking again would not help.
+                # The grammar is fine, but the pattern does not fit the data: too few values
+                # match (the column mixes formats), or an identifier mask has too few unused
+                # values. Asking again would not help, so replace the column without a pattern.
                 logger.user.warning(
-                    "Dropping an LLM-proposed pattern that does not cover the column's values",
-                    extra={"column": spec.column_name},
+                    "Dropping an LLM-proposed pattern that does not fit the column's values",
+                    extra={"column": spec.column_name, "reason": issue},
                 )
                 repaired_specs.append(spec.model_copy(update={"pattern": None}))
                 continue

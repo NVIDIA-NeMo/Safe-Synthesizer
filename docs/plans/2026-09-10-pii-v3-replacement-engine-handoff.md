@@ -184,6 +184,16 @@ LLM span-detection experiment.
   describe different people.
   (Decided 2026-10-14 after an end-to-end eval: record-scoped identifiers gave one hospital several fake IDs and
   exhausted short ID formats, for example 533 rows of 22 two-digit hospital IDs.)
+- Identifier replacements come from an enumerated value space, not random retries: a `unique_identifier`, `api_key`,
+  or `phone_number` character mask, or, for unpatterned digit-only `unique_identifier` and `api_key` values, every
+  integer up to the column's longest length. That range gains one digit at a time until it has at least twice as many
+  unused values as distinct originals, with a warning. Each distinct original takes the first unused value at or
+  after its seeded position, which always succeeds while any value is free. A mask is the format contract and is never
+  widened: planning drops an LLM-proposed mask with too few unused values, and rejects such a mask in an explicit
+  plan. (Decided 2026-10-14: a dense row counter filled every same-length value.)
+- Automatic discovery skips row counters: columns of unique, non-missing integers that are exactly `0..n-1` or `1..n`,
+  such as a saved pandas index (`Unnamed: 0`). The configured grouping column is never a row counter, and explicit
+  plans may still replace one.
 - Repeated accepted detections of the same entity and exact value reuse one replacement across all planned free-text
   columns within the row or group scope, independently of propagation mappings.
 - Structured mapping values use a type-tagged canonical representation. Canonicalization is stable typed

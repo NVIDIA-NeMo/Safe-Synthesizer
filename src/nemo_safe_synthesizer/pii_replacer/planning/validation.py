@@ -21,6 +21,7 @@ from ...config.replace_pii import (
 )
 from ...config.time_series import TimeSeriesParameters
 from ...errors import InternalError, ParameterError
+from ..replacement.identifier_space import MASK_ALLOCATED_ENTITY_TYPES, MaskSpace
 from .patterns import compile_character_mask, compile_name_pattern
 
 __all__ = ["column_pattern_issue", "column_pattern_syntax_issue", "get_protected_columns", "validate_plan"]
@@ -102,8 +103,11 @@ def column_pattern_issue(df: pd.DataFrame, spec: PiiColumnPlan) -> str | None:
     """Return the dataframe-aware pattern issue for one replacement column.
 
     A pattern must follow its entity's grammar and cover at least
-    ``MIN_PATTERN_COVERAGE`` of the column's non-null values. Columns without a
-    pattern, or absent from ``df``, have no pattern issue.
+    ``MIN_PATTERN_COVERAGE`` of the column's non-null values. For identifier
+    types whose replacements come from the mask (see
+    ``MASK_ALLOCATED_ENTITY_TYPES``), the mask must also have an unused value
+    for every distinct original. Columns without a pattern, or absent from
+    ``df``, have no pattern issue.
 
     Args:
         df: Dataframe whose column values the pattern must describe.
@@ -139,7 +143,22 @@ def column_pattern_issue(df: pd.DataFrame, spec: PiiColumnPlan) -> str | None:
             f"column {spec.column_name!r}: pattern {pattern!r} covers {coverage:.1%} of non-null values; "
             f"at least {MIN_PATTERN_COVERAGE:.0%} is required"
         )
+    if spec.entity_type in MASK_ALLOCATED_ENTITY_TYPES:
+        return _mask_capacity_issue(spec.column_name, pattern, values)
     return None
+
+
+def _mask_capacity_issue(column_name: str, pattern: str, values: list[str]) -> str | None:
+    """Return an issue when the mask cannot give every distinct value an unused replacement."""
+    distinct = set(values)
+    space = MaskSpace.from_pattern(pattern)
+    free = space.size - sum(space.index_of(value) is not None for value in distinct)
+    if free >= len(distinct):
+        return None
+    return (
+        f"column {column_name!r}: pattern {pattern!r} has {space.size} possible values, but the column's "
+        f"{len(distinct)} distinct values need as many unused ones and only {free} remain"
+    )
 
 
 def _iter_pattern_issues(df: pd.DataFrame, plan: PiiReplacementPlan) -> Iterator[str]:

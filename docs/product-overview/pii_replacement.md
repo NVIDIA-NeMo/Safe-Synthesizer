@@ -410,7 +410,11 @@ replacements stay consistent: identifier-like values (email, phone number, SSN,
 national ID, card number, API key, IP address, unique identifier) get one
 replacement per distinct value across the whole table, and other values are
 consistent within a group when a grouping column is configured, else within a
-row. NSS also excludes protected ordering and timestamp columns, and validates
+row. Identifier replacements never reuse an original value. Without a pattern,
+digit-only identifiers are replaced with numbers up to the column's longest
+length, gaining a digit when that range is too full; with a pattern, the
+pattern must leave an unused value for every distinct original. Automatic
+discovery skips row counters, such as a saved `Unnamed: 0` index column. NSS also excludes protected ordering and timestamp columns, and validates
 the assembled plan. Grouping columns remain eligible for replacement so
 identifiers such as patient IDs can be anonymized.
 

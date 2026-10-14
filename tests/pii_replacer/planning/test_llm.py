@@ -1023,7 +1023,25 @@ class TestLLMPlanEnhancer:
 
         assert plan.columns_to_replace[0].pattern is None
         assert len(transport.calls) == 1
-        assert "Dropping an LLM-proposed pattern that does not cover the column's values" in caplog.text
+        assert "Dropping an LLM-proposed pattern that does not fit the column's values" in caplog.text
+
+    def test_identifier_pattern_without_room_for_distinct_replacements_is_dropped(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        dataframe = pd.DataFrame({"user": [f"USER-{value}" for value in range(8)]})
+        enhancer, transport = _enhancer([_classifications({"user": "unique_identifier"}, patterns={"user": "USER-#"})])
+
+        plan = resolve_plan(
+            dataframe,
+            ReplacePiiConfig(llm=_local_config()),
+            DataParameters(),
+            enhancer=enhancer,
+        )
+
+        assert plan.columns_to_replace[0].pattern is None
+        assert len(transport.calls) == 1
+        assert any("only 2 remain" in str(getattr(record, "reason", "")) for record in caplog.records)
 
     @pytest.mark.parametrize(
         ("repair_responses", "final_pattern", "final_syntax"),

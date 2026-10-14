@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import logging
+
 import pandas as pd
 import pytest
 
@@ -313,6 +315,37 @@ class TestStructuredReplacementExecutor:
 
         with pytest.raises(DataError, match="'patient' has 1 missing value"):
             _execute(dataframe, plan, _RecordingGenerator(), group_column="patient")
+
+    def test_dense_row_counter_identifiers_are_replaced_from_a_wider_range(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        caplog.set_level(logging.WARNING)
+        dataframe = pd.DataFrame({"row": list(range(1000))})
+        plan = _plan(_target("row", EntityType.UNIQUE_IDENTIFIER))
+
+        result = _execute(dataframe, plan, _RecordingGenerator())
+
+        replaced = result.dataframe["row"].tolist()
+        assert len(set(replaced)) == 1000
+        assert not set(replaced) & {str(value) for value in range(1000)}
+        assert all(value.isdigit() and len(value) <= 4 for value in replaced)
+        assert "Widened replacement identifiers" in caplog.text
+
+    def test_patterned_identifiers_take_every_unused_mask_value(self) -> None:
+        dataframe = pd.DataFrame({"user": [f"USER-{value}" for value in range(5)]})
+        plan = _plan(PiiColumnPlan(column_name="user", entity_type=EntityType.UNIQUE_IDENTIFIER, pattern="USER-#"))
+
+        result = _execute(dataframe, plan, _RecordingGenerator())
+
+        assert sorted(result.dataframe["user"]) == [f"USER-{value}" for value in range(5, 10)]
+
+    def test_mask_without_enough_unused_values_is_a_configuration_error(self) -> None:
+        dataframe = pd.DataFrame({"user": [f"USER-{value}" for value in range(8)]})
+        plan = _plan(PiiColumnPlan(column_name="user", entity_type=EntityType.UNIQUE_IDENTIFIER, pattern="USER-#"))
+
+        with pytest.raises(ParameterError, match="more distinct values than its identifier format can replace"):
+            _execute(dataframe, plan, _RecordingGenerator())
 
     def test_float_identifiers_cannot_reuse_another_original(self) -> None:
         dataframe = pd.DataFrame({"id": [1.5, 2.5]})
