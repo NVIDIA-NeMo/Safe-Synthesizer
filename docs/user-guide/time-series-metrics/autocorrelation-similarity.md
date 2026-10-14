@@ -137,8 +137,11 @@ values.
   - What it shows: the mean absolute difference between the training and
     synthetic autocorrelation of each group-column pair at each lag, across
     all numeric columns. Hover over a bar to see its exact value. The y-axis
-    always spans at least 0 to 1, so short, pale bars mean small differences,
-    and bars turn red as the difference approaches 0.5. Differences that grow
+    always spans at least 0 to 1, so short, pale bars mean small differences
+    (ideal), and bars turn red as the difference approaches 0.5 or more. The
+    color reaches full red at 0.5 because a gap that large already means the
+    synthetic data has lost most of the training pattern at that lag, so
+    larger differences stay full red. Differences that grow
     with lag point to lost long-range persistence, and a peak at one lag points
     to a missing or shifted cycle.
   - In this example: the difference grows from about 0.2 at lag 1 to about
@@ -147,7 +150,7 @@ values.
 - Pair scores
   - What it shows: the score of every group-column pair on the 0–10 scale,
     with the overall score marked by the dashed line. Each point is one group,
-    shaded from white at 10 to red at 0, and each row is one column. Points
+    shaded from white at 10 (excellent) to red at 0 (poor), and each row is one column. Points
     within a row are spread out vertically so that equal scores stay visible.
     Hover over a point to see its full column name, group, and score. The chart
     shows the 8 lowest-scoring columns. Column names longer than 10 characters
