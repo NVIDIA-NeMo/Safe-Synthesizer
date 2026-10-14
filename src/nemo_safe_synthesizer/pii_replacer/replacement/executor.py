@@ -20,6 +20,7 @@ from ..transform_result import ColumnStatistics, ReplacementGenerationStatistics
 from .canonicalization import canonicalize_scalar, is_missing_scalar, readable_value
 from .compiler import compile_plan
 from .generation import ReplacementGenerationRequest, ReplacementGenerator
+from .identifier_space import IdentifierAllocator, NumberSpace, identifier_allocator
 from .types import (
     CanonicalValue,
     DataframeMappingKey,
@@ -101,6 +102,7 @@ class StructuredReplacementExecutor:
         self._data_to_sampler_value_mapping = _compile_data_to_sampler_value_mapping(plan.data_to_sampler_value_mapping)
         self._cache: dict[StructuredMappingKey, _CachedReplacement] = {}
         self._reserved_by_target: dict[str, set[str]] = {}
+        self._identifier_allocators: dict[str, IdentifierAllocator] = {}
         self._dependency_conflicts: dict[tuple[str, frozenset[EntityType]], int] = {}
         self._generation_elapsed = 0.0
         self._generated_count = 0
@@ -119,6 +121,7 @@ class StructuredReplacementExecutor:
         working = dataframe.copy(deep=True)
         original_group_identities = self._snapshot_group_identities(dataframe)
         self._seed_reserved_values(dataframe)
+        self._prepare_identifier_allocators(dataframe)
         for spec in compile_plan(self._plan):
             self._execute_target(working, spec, original_group_identities)
         _verify_result(dataframe, working, self._plan)
@@ -143,6 +146,7 @@ class StructuredReplacementExecutor:
     def _reset_execution_state(self) -> None:
         self._cache.clear()
         self._reserved_by_target.clear()
+        self._identifier_allocators.clear()
         self._dependency_conflicts.clear()
         self._generation_elapsed = 0.0
         self._generated_count = 0
@@ -170,6 +174,31 @@ class StructuredReplacementExecutor:
                 for value, text in zip(column.tolist(), column.astype(str).tolist(), strict=True)
                 if not is_missing_scalar(value)
             }
+
+    def _prepare_identifier_allocators(self, dataframe: pd.DataFrame) -> None:
+        for spec in self._plan.columns_to_replace:
+            if spec.entity_type not in _IDENTIFIER_ENTITY_TYPES:
+                continue
+            column = dataframe[spec.column_name]
+            originals = [
+                text
+                for value, text in zip(column.tolist(), column.astype(str).tolist(), strict=True)
+                if not is_missing_scalar(value)
+            ]
+            allocator = identifier_allocator(spec.entity_type, spec.pattern, originals)
+            if allocator is None:
+                continue
+            self._identifier_allocators[spec.column_name] = allocator
+            longest = max((len(text.split(".", 1)[0]) for text in originals), default=0)
+            if isinstance(allocator.space, NumberSpace) and allocator.space.digits > longest:
+                logger.user.warning(
+                    "Widened replacement identifiers so every distinct value gets an unused replacement",
+                    extra={
+                        "column": spec.column_name,
+                        "original_digits": longest,
+                        "replacement_digits": allocator.space.digits,
+                    },
+                )
 
     def _execute_target(
         self,
@@ -236,6 +265,8 @@ class StructuredReplacementExecutor:
         original_text: str,
         dependencies: EffectiveDependencyTuple,
     ) -> str:
+        if (allocator := self._identifier_allocators.get(spec.column_name)) is not None:
+            return self._allocate_identifier(key, spec, allocator)
         for attempt in range(_MAX_GENERATION_ATTEMPTS):
             request = ReplacementGenerationRequest(
                 entity_type=spec.entity_type,
@@ -274,6 +305,23 @@ class StructuredReplacementExecutor:
             f"PII replacement could not generate a distinct value for column {spec.column_name!r} "
             f"after {_MAX_GENERATION_ATTEMPTS} attempts"
         )
+
+    def _allocate_identifier(
+        self,
+        key: StructuredMappingKey,
+        spec: PiiColumnPlan,
+        allocator: IdentifierAllocator,
+    ) -> str:
+        """Take the next unused value from the column's identifier space, starting at a seeded position."""
+        started = time.perf_counter()
+        replacement = allocator.allocate(_derive_seed(self._base_seed, key, purpose="replacement", attempt=0))
+        self._generation_elapsed += time.perf_counter() - started
+        if replacement is None:
+            raise ParameterError(
+                f"column {spec.column_name!r} has more distinct values than its identifier format can replace; "
+                "use a pattern with more generated positions"
+            )
+        return replacement
 
     def _record_dependency_drift(
         self,

@@ -22,6 +22,7 @@ from nemo_safe_synthesizer.pii_replacer.planning import (
     load_plan,
     resolve_plan,
 )
+from nemo_safe_synthesizer.pii_replacer.planning.resolver import row_counter_columns
 
 from ..conftest import FakeLocalServer
 
@@ -198,6 +199,49 @@ class TestResolvePlan:
         resolve_plan(fixture_patient_df, ReplacePiiConfig(), DataParameters(), discoverer=discoverer)
 
         assert discoverer.inputs[0].group_column is None
+
+    def test_auto_discovery_skips_row_counter_columns(self) -> None:
+        dataframe = pd.DataFrame(
+            {"Unnamed: 0": [2, 0, 1], "customer_id": [1001, 1002, 1003], "name": ["Ada", "Grace", "Alan"]}
+        )
+        discovered = PiiReplacementPlan(
+            columns_to_replace=[
+                PiiColumnPlan(column_name=column, entity_type=entity_type)
+                for column, entity_type in (
+                    ("Unnamed: 0", EntityType.UNIQUE_IDENTIFIER),
+                    ("customer_id", EntityType.UNIQUE_IDENTIFIER),
+                    ("name", EntityType.FULL_NAME),
+                )
+            ]
+        )
+
+        plan = resolve_plan(dataframe, ReplacePiiConfig(), DataParameters(), discoverer=RecordingDiscoverer(discovered))
+
+        assert [spec.column_name for spec in plan.columns_to_replace] == ["customer_id", "name"]
+
+    def test_explicit_plans_may_replace_row_counter_columns(self) -> None:
+        dataframe = pd.DataFrame({"row": [1, 2, 3]})
+        plan = PiiReplacementPlan(
+            columns_to_replace=[PiiColumnPlan(column_name="row", entity_type=EntityType.UNIQUE_IDENTIFIER)]
+        )
+
+        resolved = resolve_plan(dataframe, ReplacePiiConfig(replacement_plan=plan), DataParameters())
+
+        assert [spec.column_name for spec in resolved.columns_to_replace] == ["row"]
+
+    @pytest.mark.parametrize(
+        ("values", "is_counter"),
+        [
+            ([3, 0, 2, 1], True),
+            ([1.0, 2.0, 3.0, 4.0], True),
+            ([0, 1, 3, 4], False),
+            ([17, 18, 19, 20], False),
+            ([0, 1, 1, 2], False),
+            ([True, False, True, False], False),
+        ],
+    )
+    def test_row_counter_detection_uses_values_only(self, values: list[object], is_counter: bool) -> None:
+        assert (row_counter_columns(pd.DataFrame({"column": values})) == {"column"}) is is_counter
 
     def test_output_path_persists_the_final_plan(self, fixture_patient_df: pd.DataFrame, tmp_path: Path) -> None:
         path = tmp_path / "pii_replacement_plan.yaml"

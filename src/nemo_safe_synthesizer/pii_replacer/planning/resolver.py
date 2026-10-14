@@ -12,12 +12,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
+import numpy as np
 import pandas as pd
 
 from ...config.data import DataParameters
 from ...config.replace_pii import DataToSamplerValueMapping, EntityType, LLMConfig, PiiReplacementPlan, ReplacePiiConfig
 from ...config.time_series import TimeSeriesParameters
 from ...errors import InternalError, ParameterError
+from ...observability import get_logger
 from .dependency_mappings import (
     built_in_value_mappings,
     conditioner_columns,
@@ -30,6 +32,8 @@ from .validation import get_protected_columns, validate_plan
 
 if TYPE_CHECKING:
     from .llm import LLMPlanEnhancer
+
+logger = get_logger(__name__)
 
 __all__ = [
     "ColumnProfile",
@@ -220,6 +224,7 @@ def resolve_plan(
             plan = enhancer.enhance(discovery_input, baseline)
         else:
             plan = _enhance_with_default_llm(config.llm, discovery_input, baseline)
+        plan = _without_row_counters(df, plan, discovery_input.group_column)
 
     validate_plan(
         df,
@@ -350,3 +355,46 @@ def _llm_plan_enhancer(config: ReplacePiiConfig) -> LLMPlanEnhancer:
     from .llm import LLMPlanEnhancer
 
     return LLMPlanEnhancer(config.llm)
+
+
+def row_counter_columns(df: pd.DataFrame, *, group_column: str | None = None) -> frozenset[str]:
+    """Return columns whose values number the rows, so automatic discovery does not treat them as PII.
+
+    A row counter holds unique, non-missing integers that are exactly ``0`` to
+    ``n - 1`` or ``1`` to ``n`` for ``n`` rows, in any order. Examples include
+    the ``Unnamed: 0`` column pandas writes for a saved index, and plain
+    ``row_id`` or ``event_id`` sequences. Detection uses the values only, not
+    the column name. The grouping column is never a row counter: it identifies
+    the entity each row belongs to.
+
+    Example:
+        A column holding ``3, 0, 2, 1`` in a four-row dataframe is a row
+        counter; ``0, 1, 3, 4`` and ``17, 18, 19, 20`` are not.
+    """
+    return frozenset(str(column) for column in df.columns if column != group_column and _is_row_counter(df[column]))
+
+
+def _is_row_counter(values: pd.Series) -> bool:
+    if len(values) < 2 or values.isna().any():
+        return False
+    if pd.api.types.is_bool_dtype(values) or not pd.api.types.is_numeric_dtype(values):
+        return False
+    numbers = values.to_numpy(dtype="float64")
+    if not np.array_equal(numbers, np.floor(numbers)):
+        return False
+    start = numbers.min()
+    return start in (0.0, 1.0) and numbers.max() - start + 1 == len(numbers) and len(np.unique(numbers)) == len(numbers)
+
+
+def _without_row_counters(df: pd.DataFrame, plan: PiiReplacementPlan, group_column: str | None) -> PiiReplacementPlan:
+    """Drop automatically discovered replacements for row-counter columns; explicit plans are never changed."""
+    counters = row_counter_columns(df, group_column=group_column)
+    kept = [spec for spec in plan.columns_to_replace if spec.column_name not in counters]
+    if len(kept) == len(plan.columns_to_replace):
+        return plan
+    skipped = sorted(spec.column_name for spec in plan.columns_to_replace if spec.column_name in counters)
+    logger.user.info(
+        "Skipping row-counter columns in automatic PII discovery",
+        extra={"columns": skipped},
+    )
+    return plan.model_copy(update={"columns_to_replace": kept})
