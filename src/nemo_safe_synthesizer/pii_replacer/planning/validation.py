@@ -109,11 +109,8 @@ def column_pattern_issue(df: pd.DataFrame, spec: PiiColumnPlan) -> str | None:
     """Return the dataframe-aware pattern issue for one replacement column.
 
     A pattern must follow its entity's grammar and cover at least
-    ``MIN_PATTERN_COVERAGE`` of the column's non-null values. For identifier
-    types whose replacements come from the mask (see
-    ``MASK_ALLOCATED_ENTITY_TYPES``), the mask must also be able to produce at
-    least one value that is not an original. Columns without a pattern, or
-    absent from ``df``, have no pattern issue.
+    ``MIN_PATTERN_COVERAGE`` of the column's non-null values. Columns without a
+    pattern, or absent from ``df``, have no pattern issue.
 
     Args:
         df: Dataframe whose column values the pattern must describe.
@@ -148,11 +145,6 @@ def column_pattern_issue(df: pd.DataFrame, spec: PiiColumnPlan) -> str | None:
         return (
             f"column {spec.column_name!r}: pattern {pattern!r} covers {coverage:.1%} of non-null values; "
             f"at least {MIN_PATTERN_COVERAGE:.0%} is required"
-        )
-    if spec.entity_type in MASK_ALLOCATED_ENTITY_TYPES and _unused_mask_values(pattern, values) == 0:
-        return (
-            f"column {spec.column_name!r}: every value pattern {pattern!r} can produce is already in the column, "
-            "so no replacement can differ from the originals"
         )
     return None
 

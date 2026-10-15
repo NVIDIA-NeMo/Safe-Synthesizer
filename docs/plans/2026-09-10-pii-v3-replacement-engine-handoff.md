@@ -179,17 +179,19 @@ LLM span-detection experiment.
   configured, otherwise record scope. (Decided 2026-10-14: per-entity-type scopes, such as dataframe scope only for
   identifiers, were judged too hard for users to follow.)
 - For identifier-like entity types (`email`, `phone_number`, `ssn`, `national_id`, `credit_debit_card`, `api_key`,
-  `ipv4`, `ipv6`, `unique_identifier`), a replacement never equals any original value in its column, so real
-  identifiers never reappear on other rows. Replacements stay unique while the column's format has unused values;
-  after that they may repeat, with one warning per column giving the count, instead of failing. Names, addresses, and
-  dates of birth may repeat freely. (Decided 2026-10-14: strict uniqueness exhausted short ID formats.)
+  `ipv4`, `ipv6`, `unique_identifier`), replacements avoid every original value in the column, so real identifiers
+  do not reappear on other rows, and stay unique while the column's format has unused values. Both are best effort:
+  when retries cannot avoid them, a replacement repeats an earlier one or, failing that, equals another row's
+  original, with one warning per column giving the count, instead of failing. Names, addresses, and dates of birth
+  may repeat freely. Every replacement must differ from its own original; that rule stays strict and fails the
+  dataset when retries cannot satisfy it. (Decided 2026-10-14 and 2026-10-15: strict uniqueness exhausted short ID
+  formats, and a dependency-derived email that matched another row's real address failed a whole dataset.)
 - Identifier replacements come from an enumerated value space, not random retries: a `unique_identifier`, `api_key`,
   or `phone_number` character mask, or, for unpatterned digit-only `unique_identifier` and `api_key` values, every
   integer up to the column's longest length. That range gains one digit at a time until it has at least twice as many
   unused values as distinct originals, with a warning. Each replacement takes the first unused value at or after its
   seeded position. A mask is the format contract and is never widened: planning drops an LLM-proposed mask that cannot
-  give every distinct value its own replacement, and rejects a mask in an explicit plan only when every value it can
-  produce is an original. (Decided 2026-10-14: a dense row counter filled every same-length value.)
+  give every distinct value its own replacement. (Decided 2026-10-14: a dense row counter filled every same-length value.)
 - Automatic discovery skips row counters: columns of unique, non-missing integers that are exactly `0..n-1` or `1..n`,
   such as a saved pandas index (`Unnamed: 0`). The configured grouping column is never a row counter, and explicit
   plans may still replace one.

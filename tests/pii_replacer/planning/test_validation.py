@@ -284,22 +284,15 @@ class TestValidatePlan:
         with pytest.raises(ParameterError, match="covers 0.0%.*at least 99%"):
             validate_plan(fixture_pii_df, plan, data_config=DataParameters())
 
-    @pytest.mark.parametrize(("originals", "rejected"), [(8, False), (10, True)])
-    def test_rejects_identifier_mask_only_when_every_value_is_an_original(self, originals: int, rejected: bool) -> None:
-        dataframe = pd.DataFrame({"user": [f"USER-{value}" for value in range(originals)]})
+    def test_accepts_identifier_mask_even_when_every_value_is_an_original(self) -> None:
+        dataframe = pd.DataFrame({"user": [f"USER-{value}" for value in range(10)]})
         plan = PiiReplacementPlan(
             columns_to_replace=[
                 PiiColumnPlan(column_name="user", entity_type=EntityType.UNIQUE_IDENTIFIER, pattern="USER-#")
             ]
         )
 
-        if rejected:
-            with pytest.raises(
-                ParameterError, match="every value pattern 'USER-#' can produce is already in the column"
-            ):
-                validate_plan(dataframe, plan, data_config=DataParameters())
-        else:
-            validate_plan(dataframe, plan, data_config=DataParameters())
+        validate_plan(dataframe, plan, data_config=DataParameters())
 
     def test_missing_matcher_is_an_internal_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         entity = ENTITY_BY_TYPE[EntityType.UNIQUE_IDENTIFIER]

@@ -39,9 +39,10 @@ __all__ = ["ReplacementExecutionResult", "StructuredReplacementExecutor", "resol
 _MAX_GENERATION_ATTEMPTS = 10
 _PERSON_RANDOM_SEED_ENV = "PERSON_RANDOM_SEED"
 _CompiledDataToSamplerValueMapping = dict[str, dict[str, tuple[str, ...]]]
-# Identifier-like values: a replacement never equals any original value in its column, so real
-# identifiers never reappear on other rows. Replacements also stay unique while the column's
-# format has unused values; after that they may repeat, with a warning.
+# Identifier-like values: replacements avoid every original value in the column, so real identifiers
+# do not reappear on other rows, and stay unique while the column's format has unused values. Both
+# are best effort: when retries cannot avoid them, a replacement repeats an earlier one or, failing
+# that, equals another row's original, with a warning. A replacement never equals its own original.
 _IDENTIFIER_ENTITY_TYPES = frozenset(
     {
         EntityType.EMAIL,
@@ -103,6 +104,7 @@ class StructuredReplacementExecutor:
         self._originals_by_target: dict[str, set[str]] = {}
         self._generated_by_target: dict[str, set[str]] = {}
         self._repeated_by_target: dict[str, int] = {}
+        self._reused_originals_by_target: dict[str, int] = {}
         self._identifier_allocators: dict[str, IdentifierAllocator] = {}
         self._dependency_conflicts: dict[tuple[str, frozenset[EntityType]], int] = {}
         self._generation_elapsed = 0.0
@@ -132,6 +134,11 @@ class StructuredReplacementExecutor:
                 "Some identifier replacements repeat because the column's format has no unused values left",
                 extra={"column": column_name, "repeated_count": repeated},
             )
+        for column_name, reused in sorted(self._reused_originals_by_target.items()):
+            logger.user.warning(
+                "Some identifier replacements equal another row's original value because no other value was found",
+                extra={"column": column_name, "reused_original_count": reused},
+            )
         drifts = self._dependency_drift_results()
         for drift in drifts:
             logger.user.warning(
@@ -154,6 +161,7 @@ class StructuredReplacementExecutor:
         self._originals_by_target.clear()
         self._generated_by_target.clear()
         self._repeated_by_target.clear()
+        self._reused_originals_by_target.clear()
         self._identifier_allocators.clear()
         self._dependency_conflicts.clear()
         self._generation_elapsed = 0.0
@@ -273,10 +281,11 @@ class StructuredReplacementExecutor:
         dependencies: EffectiveDependencyTuple,
     ) -> str:
         if (allocator := self._identifier_allocators.get(spec.column_name)) is not None:
-            return self._allocate_identifier(key, spec, allocator)
+            return self._allocate_identifier(key, spec, original_text, allocator)
         originals = self._originals_by_target.get(spec.column_name, set())
         generated = self._generated_by_target.get(spec.column_name, set())
         repeat: str | None = None
+        reused_original: str | None = None
         for attempt in range(_MAX_GENERATION_ATTEMPTS):
             request = ReplacementGenerationRequest(
                 entity_type=spec.entity_type,
@@ -302,38 +311,53 @@ class StructuredReplacementExecutor:
                 ) from exc
             finally:
                 self._generation_elapsed += time.perf_counter() - started
-            if not generated_value_is_valid(request, candidate) or candidate in originals:
+            # A replacement must differ from its own original; that rule is strict.
+            if not generated_value_is_valid(request, candidate):
                 continue
-            if candidate not in generated:
+            if candidate in originals:
+                reused_original = reused_original or candidate
+            elif candidate in generated:
+                repeat = repeat or candidate
+            else:
                 return candidate
-            repeat = repeat or candidate
+        # No new value was found. Prefer repeating an earlier replacement over using another row's original.
         if repeat is not None:
-            # Every candidate was already used; repeating one keeps the column free of originals.
             self._repeated_by_target[spec.column_name] = self._repeated_by_target.get(spec.column_name, 0) + 1
             return repeat
+        if reused_original is not None:
+            self._reused_originals_by_target[spec.column_name] = (
+                self._reused_originals_by_target.get(spec.column_name, 0) + 1
+            )
+            return reused_original
         raise GenerationError(
-            f"PII replacement could not generate a distinct value for column {spec.column_name!r} "
-            f"after {_MAX_GENERATION_ATTEMPTS} attempts"
+            f"PII replacement could not generate a value that differs from the original for column "
+            f"{spec.column_name!r} after {_MAX_GENERATION_ATTEMPTS} attempts"
         )
 
     def _allocate_identifier(
         self,
         key: StructuredMappingKey,
         spec: PiiColumnPlan,
+        original_text: str,
         allocator: IdentifierAllocator,
     ) -> str:
         """Take the next unused value from the column's identifier space, starting at a seeded position."""
         started = time.perf_counter()
-        allocation = allocator.allocate(_derive_seed(self._base_seed, key, purpose="replacement", attempt=0))
+        seed = _derive_seed(self._base_seed, key, purpose="replacement", attempt=0)
+        allocation = allocator.allocate(seed, original_text)
         self._generation_elapsed += time.perf_counter() - started
         if allocation is None:
             raise ParameterError(
-                f"column {spec.column_name!r}: every value its identifier format can produce is an original value; "
-                "use a pattern with more generated positions"
+                f"column {spec.column_name!r}: its identifier format cannot produce any value other than the "
+                "original; use a pattern with more generated positions"
             )
-        replacement, repeated = allocation
-        if repeated:
+        replacement, kind = allocation
+        if kind == "repeat":
             self._repeated_by_target[spec.column_name] = self._repeated_by_target.get(spec.column_name, 0) + 1
+        elif kind == "original":
+            self._reused_originals_by_target[spec.column_name] = (
+                self._reused_originals_by_target.get(spec.column_name, 0) + 1
+            )
         return replacement
 
     def _record_dependency_drift(

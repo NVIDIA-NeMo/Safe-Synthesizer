@@ -59,26 +59,36 @@ class TestIdentifierSpace:
         assert number_space_for(["17", "A42"]) is None
         assert number_space_for([]) is None
 
-    def test_allocator_uses_every_unused_value_before_repeating_and_never_returns_an_original(self) -> None:
+    def test_allocator_prefers_unused_values_then_repeats_before_reusing_originals(self) -> None:
         originals = [str(value) for value in range(90)]
         allocator = IdentifierAllocator(NumberSpace(2), originals)
 
-        unique = [allocator.allocate(seed) for seed in range(10)]
-        repeated = [allocator.allocate(seed) for seed in range(5)]
+        unique = [allocator.allocate(seed, "0") for seed in range(10)]
+        repeated = [allocator.allocate(seed, "0") for seed in range(5)]
 
-        assert sorted(unique) == [(str(value), False) for value in range(90, 100)]
-        assert all(allocation is not None and allocation[1] and int(allocation[0]) >= 90 for allocation in repeated)
+        assert sorted(unique) == [(str(value), "new") for value in range(90, 100)]
+        assert all(allocation is not None and allocation[1] == "repeat" for allocation in repeated)
 
-    def test_allocator_returns_nothing_when_every_value_is_an_original(self) -> None:
+    def test_allocator_uses_another_original_only_when_nothing_else_exists(self) -> None:
         allocator = IdentifierAllocator(NumberSpace(1), [str(value) for value in range(10)])
 
-        assert allocator.allocate(3) is None
+        allocations = [allocator.allocate(seed, "3") for seed in range(20)]
+
+        assert all(allocation is not None and allocation[1] == "original" for allocation in allocations)
+        assert "3" not in {allocation[0] for allocation in allocations if allocation is not None}
+
+    def test_allocator_returns_nothing_when_only_the_own_original_exists(self) -> None:
+        allocator = IdentifierAllocator(MaskSpace.from_pattern("ID-[0]"), ["ID-0"])
+
+        assert allocator.allocate(5, "ID-0") is None
 
     def test_allocator_is_deterministic_for_the_same_seeds(self) -> None:
         first = IdentifierAllocator(MaskSpace.from_pattern("ID-###"), ["ID-001"])
         second = IdentifierAllocator(MaskSpace.from_pattern("ID-###"), ["ID-001"])
 
-        assert [first.allocate(seed) for seed in (1, 1, 7)] == [second.allocate(seed) for seed in (1, 1, 7)]
+        assert [first.allocate(seed, "ID-001") for seed in (1, 1, 7)] == [
+            second.allocate(seed, "ID-001") for seed in (1, 1, 7)
+        ]
 
     @pytest.mark.parametrize(
         ("entity_type", "pattern", "originals", "expected"),

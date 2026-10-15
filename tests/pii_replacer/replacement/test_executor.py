@@ -56,6 +56,24 @@ class _SwapGenerator(_RecordingGenerator):
         return {"1.5": "2.5", "2.5": "1.5"}[request.original_value]
 
 
+class _DerivedEmailGenerator(_RecordingGenerator):
+    def generate(self, request: ReplacementGenerationRequest) -> str:
+        self.requests.append(request)
+        return {"ana.ruiz@acme.com": "zoe.park@acme.com", "ben.cole@acme.com": "ana.ruiz@acme.com"}[
+            request.original_value
+        ]
+
+
+class _EchoGenerator(_RecordingGenerator):
+    def generate(self, request: ReplacementGenerationRequest) -> str:
+        self.requests.append(request)
+        return request.original_value
+
+
+def _warning_counts(caplog: pytest.LogCaptureFixture, field: str) -> list[object]:
+    return [getattr(record, field) for record in caplog.records if hasattr(record, field)]
+
+
 class _ConstantGenerator(_RecordingGenerator):
     def generate(self, request: ReplacementGenerationRequest) -> str:
         self.requests.append(request)
@@ -336,19 +354,61 @@ class TestStructuredReplacementExecutor:
 
         assert set(result.dataframe["user"]) == {"USER-8", "USER-9"}
 
-    def test_mask_whose_every_value_is_an_original_is_a_configuration_error(self) -> None:
-        dataframe = pd.DataFrame({"user": [f"USER-{value}" for value in range(10)]})
+    def test_mask_whose_every_value_is_an_original_reuses_other_originals_with_a_warning(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        caplog.set_level(logging.WARNING)
+        originals = [f"USER-{value}" for value in range(10)]
+        dataframe = pd.DataFrame({"user": originals})
         plan = _plan(PiiColumnPlan(column_name="user", entity_type=EntityType.UNIQUE_IDENTIFIER, pattern="USER-#"))
 
-        with pytest.raises(ParameterError, match="every value its identifier format can produce is an original"):
+        result = _execute(dataframe, plan, _RecordingGenerator())
+
+        replaced = result.dataframe["user"].tolist()
+        assert all(new != old for new, old in zip(replaced, originals, strict=True))
+        assert _warning_counts(caplog, "reused_original_count") == [10]
+
+    def test_mask_that_can_only_produce_the_original_is_a_configuration_error(self) -> None:
+        dataframe = pd.DataFrame({"user": ["USER-0"]})
+        plan = _plan(PiiColumnPlan(column_name="user", entity_type=EntityType.UNIQUE_IDENTIFIER, pattern="USER-[0]"))
+
+        with pytest.raises(ParameterError, match="cannot produce any value other than the original"):
             _execute(dataframe, plan, _RecordingGenerator())
 
-    def test_float_identifiers_cannot_reuse_another_original(self) -> None:
+    def test_float_identifiers_reuse_another_original_only_as_a_last_resort(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        caplog.set_level(logging.WARNING)
         dataframe = pd.DataFrame({"id": [1.5, 2.5]})
         plan = _plan(_target("id", EntityType.UNIQUE_IDENTIFIER))
 
-        with pytest.raises(GenerationError, match="could not generate a distinct value"):
-            _execute(dataframe, plan, _SwapGenerator())
+        result = _execute(dataframe, plan, _SwapGenerator())
+
+        assert result.dataframe["id"].tolist() == ["2.5", "1.5"]
+        assert _warning_counts(caplog, "reused_original_count") == [2]
+
+    def test_derived_email_equal_to_another_rows_original_is_kept_with_a_warning(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        caplog.set_level(logging.WARNING)
+        # Ben's replacement email is fully determined by his replaced name, and it is Ana's real address.
+        dataframe = pd.DataFrame({"email": ["ana.ruiz@acme.com", "ben.cole@acme.com"]})
+        plan = _plan(_target("email", EntityType.EMAIL))
+
+        result = _execute(dataframe, plan, _DerivedEmailGenerator())
+
+        assert result.dataframe["email"].tolist() == ["zoe.park@acme.com", "ana.ruiz@acme.com"]
+        assert _warning_counts(caplog, "reused_original_count") == [1]
+
+    def test_replacement_equal_to_its_own_original_still_fails(self) -> None:
+        dataframe = pd.DataFrame({"first_name": ["Jeremy"]})
+        plan = _plan(_target("first_name", EntityType.FIRST_NAME))
+
+        with pytest.raises(GenerationError, match="differs from the original"):
+            _execute(dataframe, plan, _EchoGenerator())
 
     def test_project_errors_from_the_generator_are_not_rewrapped(self) -> None:
         dataframe = pd.DataFrame({"first_name": ["Ada"]})

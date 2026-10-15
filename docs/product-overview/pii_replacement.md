@@ -407,10 +407,12 @@ model cannot name another column or choose two sources of one type, such as
 both a person's and a spouse's gender. Each option carries the heuristic
 baseline's choice as fallible prior evidence. NSS, rather than the model, decides how
 replacements stay consistent: within a group when a grouping column is
-configured, else within a row. Identifier-like values (email, phone number, SSN,
-national ID, card number, API key, IP address, unique identifier) never reuse an
-original value, and their replacements stay unique while the column's format
-has room; once it runs out, replacements repeat and NSS logs a warning. Without
+configured, else within a row. Every replacement differs from the value it
+replaces. Identifier-like values (email, phone number, SSN, national ID, card
+number, API key, IP address, unique identifier) also avoid every other original
+value in the column and stay unique while the column's format has room; when
+that is not possible, NSS repeats a replacement or, as a last resort, uses
+another row's original value, and logs a warning with the count. Without
 a pattern, digit-only identifiers are replaced with numbers up to the column's
 longest length, gaining a digit when that range is too full. Automatic
 discovery skips row counters, such as a saved `Unnamed: 0` index column. NSS also excludes protected ordering and timestamp columns, and validates
