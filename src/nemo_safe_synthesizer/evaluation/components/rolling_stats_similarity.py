@@ -566,7 +566,7 @@ class RollingStatsSimilarity(Component):
         """
         span_windows = max(int(round(span)), 1)
         weights = np.convolve(np.ones(window), np.ones(span_windows)) / (window * span_windows)
-        overlap = np.correlate(weights, weights, mode="full")[len(weights) - 1 :]
+        overlap = np.asarray(np.correlate(weights, weights, mode="full")[len(weights) - 1 :], dtype=np.float64)
         count = max(int(np.sum(np.isfinite(values))), 1)
         level_variance, level_correlation = RollingStatsSimilarity._ar1_fit(RollingStatsSimilarity._detrend(values))
         mean_square = float(np.nanmean(squares))
