@@ -26,12 +26,18 @@ setattr(HtmlFormatter, "__init__", _patched_html_formatter_init)
 
 
 def on_page_content(html, page, config, **_kwargs):
-    """Rewrite relative doc links in notebook pages to absolute URLs.
+    """Apply per-page HTML adjustments.
+
+    Pages with ``compact_tables: true`` in their front matter are wrapped in a
+    ``compact-tables`` container so docs/css/style.css can tighten their tables.
 
     mkdocs-jupyter renders notebook markdown cells without MkDocs's link
     normalization, so relative .md/.ipynb hrefs land in the HTML as-is and
-    become broken links on the deployed site. This hook fixes them.
+    become broken links on the deployed site. This hook rewrites them.
     """
+    if page.meta.get("compact_tables"):
+        html = f'<div class="compact-tables">{html}</div>'
+
     if not page.file.src_path.endswith(".ipynb"):
         return html
 
