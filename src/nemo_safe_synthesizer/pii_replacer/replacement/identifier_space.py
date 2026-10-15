@@ -3,12 +3,13 @@
 
 """Finite identifier value spaces with deterministic allocation.
 
-Identifier replacements must never equal an original value and should be unique.
-Drawing random values and retrying fails once a value space is nearly full, as
-with a dense row counter. These spaces instead enumerate their values, so
-allocation starts at a seeded position and steps to the next unused value. When
-no unused value is left, allocation repeats an earlier replacement instead of
-failing, so uniqueness is best effort while originals are never reused.
+Identifier replacements should be unique and should not equal any original value
+in the column. Drawing random values and retrying fails once a value space is
+nearly full, as with a dense row counter. These spaces instead enumerate their
+values, so allocation starts at a seeded position and steps to the next unused
+value. When no unused value is left, allocation repeats an earlier replacement,
+and only when none exists does it use another row's original. A replacement
+never equals its own original.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ import math
 import re
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
+from typing import Literal
 
 from ...config.replace_pii import EntityType
 from ...errors import ParameterError
@@ -25,6 +27,7 @@ from ..planning.patterns import parse_character_mask
 __all__ = [
     "MASK_ALLOCATED_ENTITY_TYPES",
     "NUMBER_ALLOCATED_ENTITY_TYPES",
+    "AllocationKind",
     "IdentifierAllocator",
     "MaskSpace",
     "NumberSpace",
@@ -37,6 +40,9 @@ MASK_ALLOCATED_ENTITY_TYPES = frozenset({EntityType.UNIQUE_IDENTIFIER, EntityTyp
 
 NUMBER_ALLOCATED_ENTITY_TYPES = frozenset({EntityType.UNIQUE_IDENTIFIER, EntityType.API_KEY})
 """Entity types whose unpatterned, digit-only values are replaced from a numeric range."""
+
+AllocationKind = Literal["new", "repeat", "original"]
+"""How an allocated replacement was chosen: an unused value, an earlier replacement, or another original."""
 
 _MIN_FREE_RATIO = 2
 """A numeric range is widened until it has at least this many unused values per distinct original."""
@@ -134,7 +140,7 @@ class NumberSpace:
 
 
 class IdentifierAllocator:
-    """Hand out replacement values from one space, never reusing an original and repeating only when full.
+    """Hand out replacement values from one space, preferring unused values, then earlier replacements.
 
     Attributes:
         space: Value space replacements are drawn from.
@@ -151,11 +157,12 @@ class IdentifierAllocator:
         """Number of values that are neither originals nor already allocated."""
         return self.space.size - len(self._originals) - len(self._allocated_set)
 
-    def allocate(self, seed: int) -> tuple[str, bool] | None:
-        """Return a replacement and whether it repeats an earlier one, or ``None`` if every value is an original.
+    def allocate(self, seed: int, own_original: str) -> tuple[str, AllocationKind] | None:
+        """Return a replacement for ``own_original`` and how it was chosen, or ``None`` if none differs from it.
 
         The replacement is the first unused value at or after the seeded position. When no unused
-        value is left, a seeded choice among earlier replacements is repeated.
+        value is left, a seeded choice among earlier replacements is repeated. When there are none,
+        a seeded choice among the other originals is used. The result never equals ``own_original``.
         """
         size = self.space.size
         if self.free_count > 0:
@@ -164,9 +171,12 @@ class IdentifierAllocator:
                 index = (index + 1) % size
             self._allocated.append(index)
             self._allocated_set.add(index)
-            return self.space.value_at(index), False
+            return self.space.value_at(index), "new"
         if self._allocated:
-            return self.space.value_at(self._allocated[seed % len(self._allocated)]), True
+            return self.space.value_at(self._allocated[seed % len(self._allocated)]), "repeat"
+        others = sorted(self._originals - {self.space.index_of(own_original)})
+        if others:
+            return self.space.value_at(others[seed % len(others)]), "original"
         return None
 
 
