@@ -19,6 +19,7 @@ from nemo_safe_synthesizer.config.data import DataParameters
 from nemo_safe_synthesizer.config.evaluate import (
     AutocorrelationSimilarityParameters,
     EvaluationParameters,
+    RollingStatsSimilarityParameters,
     TimeSeriesEvaluationParameters,
 )
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
@@ -45,6 +46,7 @@ from nemo_safe_synthesizer.preflight import (
     PreflightReport,
     PreflightStage,
     PseudoColumnCheck,
+    RollingStatsValueColumnCheck,
     SmallDatasetCheck,
     TimeSeriesDataShapeCheck,
     TimeSeriesValueColumnCheck,
@@ -890,6 +892,47 @@ class TestTimeSeriesValueColumnCheck:
         )
 
         assert any(issue.code == "evaluation_column_not_numeric" for issue in issues)
+
+
+@pytest.mark.unit
+class TestRollingStatsValueColumnCheck:
+    @staticmethod
+    def _make_config(value_columns: list[str]) -> SafeSynthesizerParameters:
+        return SafeSynthesizerParameters(
+            time_series=TimeSeriesParameters(is_timeseries=True, timestamp_interval_seconds=60),
+            evaluation=EvaluationParameters(
+                time_series=TimeSeriesEvaluationParameters(
+                    enabled=True,
+                    rolling_stats=RollingStatsSimilarityParameters(value_columns=value_columns),
+                ),
+            ),
+        )
+
+    def test_disabled_when_time_series_evaluation_is_disabled(self, default_config):
+        assert RollingStatsValueColumnCheck().enabled(make_ctx(config=default_config)) is False
+
+    def test_missing_explicit_column_reports_error(self):
+        issues = RollingStatsValueColumnCheck().run(
+            make_ctx(config=self._make_config(["missing"]), data=pd.DataFrame({"value": [1.0, 2.0, 3.0]}))
+        )
+
+        assert any(issue.code == "rolling_stats_column_not_found" for issue in issues)
+
+    def test_nonnumeric_explicit_column_reports_error(self):
+        issues = RollingStatsValueColumnCheck().run(
+            make_ctx(config=self._make_config(["label"]), data=pd.DataFrame({"label": ["a", "b", "c"]}))
+        )
+
+        assert any(issue.code == "rolling_stats_column_not_numeric" for issue in issues)
+
+    def test_default_columns_report_nothing(self):
+        config = SafeSynthesizerParameters(
+            time_series=TimeSeriesParameters(is_timeseries=True, timestamp_interval_seconds=60),
+        )
+
+        issues = RollingStatsValueColumnCheck().run(make_ctx(config=config, data=pd.DataFrame({"label": ["a"]})))
+
+        assert not issues
 
 
 @pytest.mark.unit

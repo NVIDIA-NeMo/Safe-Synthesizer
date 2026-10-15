@@ -164,6 +164,15 @@
                             expandable=true) %}
                         {% include "jinja/components/autocorrelation_similarity.j2" %}
                     {% endcall %}
+                    {% if ctx.rolling_stats_similarity %}
+                    {% call metric_card("rolling-stats-similarity", ctx.rolling_stats_similarity.name,
+                            ctx.rolling_stats_similarity.score,
+                            "Measures whether the local average and spread of numeric columns change over time like the training data",
+                            ctx.tooltips.rolling_stats_similarity_info,
+                            expandable=true) %}
+                        {% include "jinja/components/rolling_stats_similarity.j2" %}
+                    {% endcall %}
+                    {% endif %}
                 </div>
             </section>
             {% endif %}

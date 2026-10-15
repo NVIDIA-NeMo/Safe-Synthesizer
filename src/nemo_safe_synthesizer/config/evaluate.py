@@ -19,12 +19,17 @@ __all__ = [
     "AutocorrelationSimilarityParameters",
     "DEFAULT_AUTOCORRELATION_MAX_LAG",
     "DEFAULT_AUTOCORRELATION_MIN_POINTS",
+    "DEFAULT_ROLLING_STATS_MIN_POINTS",
+    "DEFAULT_ROLLING_STATS_WINDOW_SIZE",
     "EvaluationParameters",
+    "RollingStatsSimilarityParameters",
     "TimeSeriesEvaluationParameters",
 ]
 
 DEFAULT_AUTOCORRELATION_MAX_LAG = 20
 DEFAULT_AUTOCORRELATION_MIN_POINTS = 4
+DEFAULT_ROLLING_STATS_WINDOW_SIZE = 20
+DEFAULT_ROLLING_STATS_MIN_POINTS = 4
 DEFAULT_SQS_REPORT_COLUMNS: int = 250
 DEFAULT_RECORD_COUNT = 5000
 QUASI_IDENTIFIER_COUNT = 3
@@ -67,6 +72,44 @@ class AutocorrelationSimilarityParameters(Parameters):
     )
 
 
+class RollingStatsSimilarityParameters(Parameters):
+    """Control rolling statistics similarity evaluation.
+
+    Timestamp ordering and sequence grouping use the top-level time-series and
+    data settings. The rolling window is capped at half the shorter sequence,
+    and undersized or constant training sequences are skipped. A constant
+    synthetic sequence paired with varying training data receives zero
+    similarity.
+    """
+
+    value_columns: list[str] | None = Field(
+        default=None,
+        description=(
+            "Numeric value columns to evaluate. Defaults to all shared columns inferred as numeric. "
+            "Changing this selection changes the meaning of the aggregate score."
+        ),
+    )
+    window_size: int = Field(
+        default=DEFAULT_ROLLING_STATS_WINDOW_SIZE,
+        ge=3,
+        description=(
+            "Number of consecutive observations that count as local when computing rolling averages and "
+            "spreads; short sequences use at most half their length. Larger windows smooth over short "
+            "changes. Scores computed with different windows are not directly comparable."
+        ),
+    )
+    min_points: int = Field(
+        default=DEFAULT_ROLLING_STATS_MIN_POINTS,
+        ge=4,
+        description="Minimum finite observations required in each sequence.",
+    )
+    max_groups: int = Field(
+        default=128,
+        ge=1,
+        description="Maximum shared groups to evaluate using a reproducible sample to bound runtime.",
+    )
+
+
 class TimeSeriesEvaluationParameters(Parameters):
     """Metric-specific time-series evaluation configuration."""
 
@@ -80,6 +123,10 @@ class TimeSeriesEvaluationParameters(Parameters):
     autocorrelation: AutocorrelationSimilarityParameters = Field(
         default_factory=AutocorrelationSimilarityParameters,
         description="Autocorrelation similarity metric parameters.",
+    )
+    rolling_stats: RollingStatsSimilarityParameters = Field(
+        default_factory=RollingStatsSimilarityParameters,
+        description="Rolling statistics similarity metric parameters.",
     )
 
 

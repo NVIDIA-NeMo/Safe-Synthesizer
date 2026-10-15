@@ -45,6 +45,15 @@ from ....evaluation.components.membership_inference_protection import (
     MembershipInferenceProtection,
 )
 from ....evaluation.components.pii_replay import PIIReplay
+from ....evaluation.components.rolling_stats_similarity import RollingStatsSimilarity
+from ....evaluation.components.rolling_stats_similarity_figures import (
+    ROLLING_STATS_PAIR_SCORE_MAX_COLUMNS,
+    ROLLING_STATS_SUMMARY_TRACES_PER_COLUMN,
+    generate_rolling_stats_pair_score_figure,
+    generate_rolling_stats_profile_figure,
+    generate_rolling_stats_segment_difference_figure,
+    order_rolling_stats_columns,
+)
 from ....evaluation.components.sqs_score import SQSScore
 from ....evaluation.components.text_semantic_similarity import TextSemanticSimilarity
 from ....evaluation.components.text_structure_similarity import TextStructureSimilarity
@@ -162,6 +171,57 @@ class MultimodalReport(EvaluationReport):
                 autocorrelation["evaluated_column_count"] = len({item["column"] for item in profiles})
                 autocorrelation["constant_synthetic_profile_count"] = sum(
                     1 for item in profiles if item["evaluated_lags"] == 0
+                )
+
+            ctx["with_time_series"] = ctx["with_time_series"] or "rolling_stats_similarity" in ctx
+            if "rolling_stats_similarity" in ctx:
+                rolling_stats = ctx["rolling_stats_similarity"]
+                rolling_stats_profiles = rolling_stats["details"].get("profiles", [])
+                rolling_stats["figures"] = []
+                rolling_stats["summary_columns"] = []
+                if rolling_stats_profiles:
+                    rolling_stats_figures = [
+                        (
+                            "Average and spread",
+                            generate_rolling_stats_profile_figure(rolling_stats_profiles),
+                            True,
+                            "rolling_stats_profile_info",
+                        ),
+                        (
+                            "Difference by segment",
+                            generate_rolling_stats_segment_difference_figure(rolling_stats_profiles),
+                            False,
+                            "rolling_stats_difference_info",
+                        ),
+                        (
+                            "Pair scores",
+                            generate_rolling_stats_pair_score_figure(
+                                rolling_stats_profiles, rolling_stats["score"]["score"]
+                            ),
+                            False,
+                            "rolling_stats_pair_scores_info",
+                        ),
+                    ]
+                    rolling_stats["figures"] = [
+                        {
+                            "title": title,
+                            "html": figure.to_html(full_html=False, include_plotlyjs=False),
+                            "column_select": column_select,
+                            "tooltip_id": tooltip_key.replace("_", "-"),
+                            "tooltip": tooltips[tooltip_key],
+                        }
+                        for title, figure, column_select, tooltip_key in rolling_stats_figures
+                    ]
+                    rolling_stats["summary_columns"] = order_rolling_stats_columns(rolling_stats_profiles)
+                rolling_stats["summary_traces_per_column"] = ROLLING_STATS_SUMMARY_TRACES_PER_COLUMN
+                rolling_stats["pair_score_column_count"] = min(
+                    len(rolling_stats["summary_columns"]), ROLLING_STATS_PAIR_SCORE_MAX_COLUMNS
+                )
+                rolling_stats["evaluated_profile_count"] = len(rolling_stats_profiles)
+                rolling_stats["evaluated_group_count"] = len({str(item["group"]) for item in rolling_stats_profiles})
+                rolling_stats["evaluated_column_count"] = len({item["column"] for item in rolling_stats_profiles})
+                rolling_stats["constant_synthetic_profile_count"] = sum(
+                    1 for item in rolling_stats_profiles if all(value is None for value in item["synthetic_level"])
                 )
 
             return ctx
@@ -289,6 +349,7 @@ class MultimodalReport(EvaluationReport):
                 enable_sampling=False,
             )
             components.append(AutocorrelationSimilarity.from_evaluation_datasets(time_series_datasets, config))
+            components.append(RollingStatsSimilarity.from_evaluation_datasets(time_series_datasets, config))
 
         report = MultimodalReport(config=config, evaluation_datasets=evaluation_datasets, components=components)
         report.evaluation_datasets = evaluation_datasets
