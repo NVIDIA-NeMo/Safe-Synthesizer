@@ -214,7 +214,8 @@ then match its served model name, which defaults to its `model_id`. A profile
 YAML has these fields: `model_id`, `revision`, and optionally
 `served_model_name`, `gpu_memory_utilization`, `max_model_len`,
 `max_num_seqs`, `tensor_parallel_size`, `min_gpu_memory_gib` (checked on each
-of the `tensor_parallel_size` GPUs), `extra_args`, `request_options`,
+of the `tensor_parallel_size` GPUs; choose GPUs with `CUDA_VISIBLE_DEVICES` in
+the shell, not in the profile), `extra_args`, `request_options`,
 `environment` (server process variables), `request_timeout_seconds`,
 `startup_timeout_seconds`, and `shutdown_timeout_seconds`. In vLLM 0.27,
 `thinking_token_budget` needs `VLLM_USE_V2_MODEL_RUNNER: "0"` in `environment`.

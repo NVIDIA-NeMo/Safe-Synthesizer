@@ -60,6 +60,10 @@ _MANAGED_SERVER_VARIABLES = frozenset(
         "VLLM_V1_USE_OUTLINES_CACHE",
         # Kept off because responses can contain cell samples.
         "VLLM_DEBUG_LOG_API_SERVER_RESPONSE",
+        # GPU selection comes only from the shell, so the GPU check before
+        # launch inspects the same GPUs the server uses.
+        "CUDA_VISIBLE_DEVICES",
+        "CUDA_DEVICE_ORDER",
     }
 )
 

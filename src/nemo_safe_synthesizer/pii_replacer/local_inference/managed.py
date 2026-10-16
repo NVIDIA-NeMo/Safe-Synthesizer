@@ -249,7 +249,8 @@ def planning_inference_settings(
             f"ignored. Set {ENDPOINT_ENV} to send planning requests to a remote service instead."
         )
     logger.user.info(
-        f"PII planning runs {inference.profile.served_name!r} in a local vLLM server; column samples stay on this machine"
+        f"PII planning runs {inference.profile.served_name!r} in a local vLLM server; "
+        "column samples stay on this machine"
     )
     with LocalVllmServer(
         inference.profile,

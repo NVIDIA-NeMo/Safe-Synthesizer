@@ -85,6 +85,8 @@ class TestRequestOptionsAndEnvironment:
             "TRANSFORMERS_OFFLINE",
             "VLLM_V1_USE_OUTLINES_CACHE",
             "VLLM_DEBUG_LOG_API_SERVER_RESPONSE",
+            "CUDA_VISIBLE_DEVICES",
+            "CUDA_DEVICE_ORDER",
         ],
     )
     def test_environment_must_not_set_managed_variables(self, name: str) -> None:
