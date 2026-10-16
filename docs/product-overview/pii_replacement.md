@@ -390,12 +390,13 @@ replace_pii:
       first_name: 0.9
       middle_name: 0.9
       last_name: 0.9
-      phone_number: 0.5
-      date_of_birth: 0.5
-      street_address: 0.5
-      ssn: 0.5
-      national_id: 0.5
-      api_key: 0.5
+      phone_number: 0.994
+      date_of_birth: 0.9999
+      street_address: 0.986
+      ssn: 0.079
+      national_id: 0.982
+      api_key: 0.993
+      unique_identifier: 0.953
     batch_size: 8
     chunk_length: 384
     chunk_overlap: 128
@@ -414,6 +415,26 @@ contextual entity types, including the checkpoint's specific `full_name` label.
 NSS does not request the broader `person` label. This avoids duplicate model
 work and prevents generic person or deterministic-format spans from competing
 with more specific detections.
+
+Several checkpoint labels map to one NSS entity type:
+
+| NSS entity type | GLiNER2 labels requested |
+|---|---|
+| `phone_number` | `phone_number`, `fax_number` |
+| `street_address` | `street_address`, `address` |
+| `national_id` | `national_id_number`, `tax_id`, `tax_number`, `license_number`, `drivers_license_number`, and `government_id` values that are not SSNs |
+| `ssn` | `government_id` values shaped `ddd-dd-dddd` with an assignable area, group, and serial (not area 000, 666, or 900-999, group 00, or serial 0000) |
+| `unique_identifier` | `customer_id`, `employee_id`, `medical_record_number`, `member_id`, `health_plan_beneficiary_number` |
+
+Identifiers are requested only by the kinds that text names, such as "customer
+ID 1234", because generic identifier labels mostly match device, vehicle, and
+biometric codes. A detected identifier without a digit is dropped. Licence and
+tax numbers are treated as national IDs, including business tax IDs, which the
+checkpoint does not distinguish from personal ones.
+
+The default thresholds for types other than names come from tuning on the
+development split of the NSS PII detection evaluation. Name thresholds are
+precision-first defaults chosen against medical terms detected as names.
 
 The checkpoint is optimized for recall and can confuse common or domain terms
 with names. NSS therefore configures a confidence threshold for every

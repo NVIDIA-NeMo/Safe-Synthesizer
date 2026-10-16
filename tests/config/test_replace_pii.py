@@ -589,12 +589,13 @@ class TestReplacePiiConfig:
             EntityType.FIRST_NAME: 0.9,
             EntityType.MIDDLE_NAME: 0.9,
             EntityType.LAST_NAME: 0.9,
-            EntityType.PHONE_NUMBER: 0.5,
-            EntityType.DATE_OF_BIRTH: 0.5,
-            EntityType.STREET_ADDRESS: 0.5,
-            EntityType.SSN: 0.5,
-            EntityType.NATIONAL_ID: 0.5,
-            EntityType.API_KEY: 0.5,
+            EntityType.PHONE_NUMBER: 0.994,
+            EntityType.DATE_OF_BIRTH: 0.9999,
+            EntityType.STREET_ADDRESS: 0.986,
+            EntityType.SSN: 0.079,
+            EntityType.NATIONAL_ID: 0.982,
+            EntityType.API_KEY: 0.993,
+            EntityType.UNIQUE_IDENTIFIER: 0.953,
         }
 
         assert config.free_text_detection == FreeTextDetectionConfig(
