@@ -259,6 +259,25 @@ class NSSTrainingAndGenerationEvent(BaseModel):
             "or the plan was not resolved."
         ),
     )
+    pii_llm_mode: str = Field(
+        default="undefined",
+        serialization_alias="piiLlmMode",
+        description=(
+            "Where LLM-assisted PII plan discovery ran: 'none' (no LLM configured, or a user-supplied plan), "
+            "'local' (NSS-managed vLLM server), 'endpoint' (NSS_INFERENCE_ENDPOINT), or 'invalid' when the "
+            "inference settings could not be resolved. 'undefined' when PII replacement is disabled. "
+            "The endpoint URL is never reported."
+        ),
+    )
+    pii_llm_model: str = Field(
+        default="undefined",
+        serialization_alias="piiLlmModel",
+        description=(
+            "Planning model: the served name of an unmodified bundled local profile, or of a bundled model "
+            "behind an endpoint; 'custom_profile' for a user-supplied local profile; 'other' for any other "
+            "endpoint model. 'undefined' when no LLM planning ran."
+        ),
+    )
     pii_locale: str = Field(
         default="undefined",
         serialization_alias="piiLocale",
