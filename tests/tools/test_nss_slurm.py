@@ -8,6 +8,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import importlib.util
+import io
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -262,3 +264,184 @@ class TestCommands:
         args.force = True
         assert cli.cmd_build_image(args, settings, {}) == 0
         assert sbatch_calls[0].env["NSS_FORCE"] == "1"
+
+
+def _settings_env(settings: Any) -> dict[str, str]:
+    return {
+        "USER_NAME": settings.user_name,
+        "LUSTRE_DIR": str(settings.lustre_dir),
+        "NSS_SHARED_DIR": str(settings.shared_dir),
+        "NSS_DIR": str(settings.nss_dir),
+        "NSS_SLURM_DIR": str(settings.slurm_dir),
+        "CONFIG_DIR": str(settings.config_dir),
+        "BASE_LOG_DIR": str(settings.base_log_dir),
+        "NSS_IMAGE": str(settings.image),
+        "NSS_BASE_IMAGE": str(settings.base_image),
+        "NSS_MODELS_DIR": str(settings.models_dir),
+        "NSS_DEFAULT_CONFIGS": ",".join(settings.default_configs),
+    }
+
+
+class TestSideEffects:
+    """Process-launching helpers, with subprocess replaced by fakes."""
+
+    def test_from_env_requires_paths(self, cli: Any, settings: Any):
+        env = _settings_env(settings)
+        del env["NSS_IMAGE"]
+        with pytest.raises(cli.CliError, match="NSS_IMAGE"):
+            cli.Settings.from_env(env)
+
+    def test_read_image_metadata(self, cli: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+        def fake_run(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+            meta = Path(argv[argv.index("-d") + 1]) / "opt" / "nss-image"
+            meta.mkdir(parents=True)
+            (meta / ".python-version").write_text("3.13\n")
+            (meta / "uv.lock").write_bytes(b"lock")
+            return subprocess.CompletedProcess(argv, 0, "", "")
+
+        monkeypatch.setattr(cli.subprocess, "run", fake_run)
+        assert cli.read_image_metadata(tmp_path / "img.sqsh") == ("3.13\n", b"lock")
+
+    def test_read_image_metadata_rejects_non_nss_image(self, cli: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+        monkeypatch.setattr(cli.subprocess, "run", lambda argv, **kwargs: subprocess.CompletedProcess(argv, 1, "", ""))
+        with pytest.raises(cli.CliError, match="Could not read"):
+            cli.read_image_metadata(tmp_path / "img.sqsh")
+
+    def test_run_sbatch(self, cli: Any, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]):
+        seen: dict[str, Any] = {}
+
+        def fake_run(argv: list[str], *, env: dict[str, str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+            seen["env"] = env
+            return subprocess.CompletedProcess(argv, 0, "4242\n", "sbatch: note")
+
+        monkeypatch.setattr(cli.subprocess, "run", fake_run)
+        call = cli.SbatchCall(argv=["sbatch"], env={"EXTRA": "1"})
+        assert cli.run_sbatch(call, {"BASE": "x"}) == "4242"
+        assert seen["env"] == {"BASE": "x", "EXTRA": "1"}
+        assert "sbatch: note" in capsys.readouterr().err
+
+        monkeypatch.setattr(cli.subprocess, "run", lambda argv, **kwargs: subprocess.CompletedProcess(argv, 1, "", ""))
+        with pytest.raises(cli.CliError, match="sbatch failed"):
+            cli.run_sbatch(call, {})
+
+    def test_run_sbatch_wait(self, cli: Any, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]):
+        class FakePopen:
+            def __init__(self, argv: list[str], **kwargs: Any) -> None:
+                self.stdout = io.StringIO("777\n")
+
+            def wait(self) -> int:
+                return 3
+
+        monkeypatch.setattr(cli.subprocess, "Popen", FakePopen)
+        assert cli.run_sbatch_wait(cli.SbatchCall(argv=["sbatch"]), {}, "/logs/build_%j.out") == 3
+        assert "Submitted job 777; log: /logs/build_777.out" in capsys.readouterr().out
+
+
+class TestCommandPaths:
+    @pytest.fixture
+    def fakes(self, cli: Any, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+        state: dict[str, Any] = {"calls": [], "wait_code": 0, "lock": b"lock-v1"}
+
+        def fake_run_sbatch(call: Any, base_env: Any) -> str:
+            state["calls"].append(call)
+            return "500"
+
+        def fake_run_sbatch_wait(call: Any, base_env: Any, log_hint: str) -> int:
+            state["calls"].append(call)
+            if state.get("create") is not None:
+                state["create"].write_bytes(b"")
+            return state["wait_code"]
+
+        monkeypatch.setattr(cli, "run_sbatch", fake_run_sbatch)
+        monkeypatch.setattr(cli, "run_sbatch_wait", fake_run_sbatch_wait)
+        monkeypatch.setattr(cli, "read_image_metadata", lambda image: ("3.13\n", state["lock"]))
+        return state
+
+    def test_main_runs_end_to_end_dry_run(
+        self, cli: Any, settings: Any, fakes: dict[str, Any], capsys: pytest.CaptureFixture[str]
+    ):
+        fakes["lock"] = b"other-lock"
+        argv = ["submit", "-d", "adult", "-e", "dry", "--dry-run"]
+        assert cli.main(argv, _settings_env(settings)) == 0
+        out = capsys.readouterr().out
+        assert "uv.lock differs" in out
+        assert "Dry run completed without errors" in out
+        assert "--test-only" in fakes["calls"][0].argv
+        assert not (settings.base_log_dir / "dry").exists()
+
+    def test_main_reports_errors(self, cli: Any, capsys: pytest.CaptureFixture[str]):
+        assert cli.main(["submit", "-d", "adult"], {}) == 1
+        assert "ERROR: USER_NAME is not set" in capsys.readouterr().err
+
+    def test_submit_checks_tokens_and_image(self, cli: Any, settings: Any, fakes: dict[str, Any]):
+        settings.image.unlink()
+        with pytest.raises(cli.CliError, match="NSS image not found"):
+            cli.cmd_submit(_submit_args(), settings, {})
+        (settings.lustre_dir / ".api_tokens.sh").unlink()
+        with pytest.raises(cli.CliError, match="api_tokens"):
+            cli.cmd_submit(_submit_args(), settings, {})
+
+    def test_submit_end_to_end(self, cli: Any, settings: Any, fakes: dict[str, Any]):
+        assert cli.cmd_submit(_submit_args(configs="tiny", runs=3), settings, {}) == 0
+        (call,) = fakes["calls"]
+        assert "--export=ALL,NSS_PHASE=end_to_end" in call.argv
+        assert call.env["PACKED_DATASETS"] == "adult,adult,adult"
+        assert (settings.base_log_dir / "exp").is_dir()
+
+    def _build_args(self, **overrides: Any) -> argparse.Namespace:
+        values = {"partition": "cpu_short", "time": "01:00:00", "wait": False, "force": False, "dry_run": False}
+        values.update(overrides)
+        return argparse.Namespace(**values)
+
+    @pytest.fixture
+    def mise_lock(self, settings: Any) -> None:
+        (settings.nss_dir / "mise.lock").write_text(
+            '[[tools.uv]]\n[tools.uv."platforms.linux-x64"]\nchecksum = "sha256:abc"\nurl = "https://u"\n'
+        )
+
+    def test_build_image_paths(self, cli: Any, settings: Any, fakes: dict[str, Any], mise_lock: None):
+        final_image = settings.shared_dir / "images" / cli.image_name("3.13", b"lock-v1")
+
+        assert cli.cmd_build_image(self._build_args(dry_run=True), settings, {}) == 0
+        assert fakes["calls"] == []
+
+        assert cli.cmd_build_image(self._build_args(), settings, {}) == 0
+        assert len(fakes["calls"]) == 1
+
+        fakes["create"] = final_image
+        assert cli.cmd_build_image(self._build_args(wait=True, force=True), settings, {}) == 0
+
+        fakes["wait_code"] = 1
+        with pytest.raises(cli.CliError, match="Image build failed"):
+            cli.cmd_build_image(self._build_args(wait=True, force=True), settings, {})
+
+        settings.base_image.unlink()
+        with pytest.raises(cli.CliError, match="Base image not found"):
+            cli.cmd_build_image(self._build_args(force=True), settings, {})
+
+    def test_download_models_paths(
+        self, cli: Any, settings: Any, fakes: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+    ):
+        args = argparse.Namespace(models=[], partition="cpu_short", wait=False)
+        assert cli.cmd_download_models(args, settings, {}) == 0
+        assert fakes["calls"][0].env["NSS_DOWNLOAD_MODELS"] == "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+        assert settings.models_dir.is_dir()
+
+        args = argparse.Namespace(models=["Org/A"], partition="cpu_short", wait=True)
+        assert cli.cmd_download_models(args, settings, {}) == 0
+        fakes["wait_code"] = 1
+        with pytest.raises(cli.CliError, match="Model download failed"):
+            cli.cmd_download_models(args, settings, {})
+
+        monkeypatch.setattr(cli.os, "access", lambda path, mode: False)
+        with pytest.raises(cli.CliError, match="Cannot write"):
+            cli.cmd_download_models(args, settings, {})
+        monkeypatch.setattr(cli.os, "access", lambda path, mode: True)
+
+        settings.image.unlink()
+        with pytest.raises(cli.CliError, match="NSS image not found"):
+            cli.cmd_download_models(args, settings, {})
+        for config in settings.config_dir.glob("*.yaml"):
+            config.unlink()
+        with pytest.raises(cli.CliError, match="No models"):
+            cli.cmd_download_models(argparse.Namespace(models=[], partition="p", wait=False), settings, {})
