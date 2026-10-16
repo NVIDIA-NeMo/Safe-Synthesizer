@@ -118,6 +118,18 @@ class _StaticDetector:
         return tuple(self.spans)
 
 
+def _span(
+    row_position: int, column_name: str, text: str, value: str, entity_type: EntityType, occurrence: int = 0
+) -> DetectedSpan:
+    """Build a GLiNER span for the ``occurrence``-th appearance of ``value`` in ``text``."""
+    start = -1
+    for _ in range(occurrence + 1):
+        start = text.index(value, start + 1)
+    return DetectedSpan(
+        DetectionCellId(row_position, column_name), start, start + len(value), entity_type, "gliner", 0.95
+    )
+
+
 def _target(
     column_name: str,
     entity_type: EntityType,
@@ -667,6 +679,96 @@ class TestStructuredReplacementExecutor:
         assert result.dataframe["notes"].iloc[0] == "Ask Hopper to call"
         assert len(generator.requests) == 1
         assert result.generation_statistics.generated_replacement_count == 1
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "Kenneth Gonzales grew up in Tennessee. Kenneth enjoys skiing.",
+            "Kenneth enjoys skiing. Kenneth Gonzales grew up.",
+        ],
+    )
+    def test_free_text_full_name_and_bare_first_name_share_a_replacement_in_either_order(self, text: str) -> None:
+        dataframe = pd.DataFrame({"notes": [text]})
+        plan = _plan(_target("notes", EntityType.FREE_TEXT))
+        bare_occurrence = 1 if text.startswith("Kenneth Gonzales") else 0
+        detector = _StaticDetector(
+            [
+                _span(0, "notes", text, "Kenneth Gonzales", EntityType.FULL_NAME),
+                _span(0, "notes", text, "Kenneth", EntityType.FIRST_NAME, occurrence=bare_occurrence),
+            ]
+        )
+        generator = _RecordingGenerator()
+
+        result = _execute(dataframe, plan, generator, free_text_detector=detector, capture_replacement_map=True)
+
+        assert result.replacement_map is not None
+        replaced = {record.entity_type: record.replacement_value for record in result.replacement_map.free_text}
+        assert replaced[EntityType.FULL_NAME].split(" ")[0] == replaced[EntityType.FIRST_NAME]
+        assert [request.entity_type for request in generator.requests] == [EntityType.FIRST_NAME, EntityType.LAST_NAME]
+
+    def test_free_text_name_parts_are_shared_across_rows_in_group_scope(self) -> None:
+        dataframe = pd.DataFrame({"patient": ["A", "A"], "notes": ["Kenneth Gonzales visited", "Gonzales called"]})
+        plan = _plan(_target("notes", EntityType.FREE_TEXT))
+        detector = _StaticDetector(
+            [
+                _span(0, "notes", "Kenneth Gonzales visited", "Kenneth Gonzales", EntityType.FULL_NAME),
+                _span(1, "notes", "Gonzales called", "Gonzales", EntityType.LAST_NAME),
+            ]
+        )
+
+        result = _execute(
+            dataframe,
+            plan,
+            _RecordingGenerator(),
+            group_column="patient",
+            free_text_detector=detector,
+            capture_replacement_map=True,
+        )
+
+        assert result.replacement_map is not None
+        full, last = result.replacement_map.free_text
+        assert full.replacement_value.split(" ")[1] == last.replacement_value
+
+    def test_free_text_three_word_name_shares_its_middle_name(self) -> None:
+        text = "Mary Ann Smith said Ann agreed"
+        dataframe = pd.DataFrame({"notes": [text]})
+        plan = _plan(_target("notes", EntityType.FREE_TEXT))
+        detector = _StaticDetector(
+            [
+                _span(0, "notes", text, "Mary Ann Smith", EntityType.FULL_NAME),
+                _span(0, "notes", text, "Ann", EntityType.MIDDLE_NAME, occurrence=1),
+            ]
+        )
+
+        result = _execute(
+            dataframe, plan, _RecordingGenerator(), free_text_detector=detector, capture_replacement_map=True
+        )
+
+        assert result.replacement_map is not None
+        full, middle = result.replacement_map.free_text
+        assert full.replacement_value.split(" ")[1] == middle.replacement_value
+
+    def test_free_text_full_name_with_a_title_is_generated_whole(self) -> None:
+        text = "Dr. Kenneth Gonzales called"
+        dataframe = pd.DataFrame({"notes": [text]})
+        plan = _plan(_target("notes", EntityType.FREE_TEXT))
+        detector = _StaticDetector([_span(0, "notes", text, "Dr. Kenneth Gonzales", EntityType.FULL_NAME)])
+        generator = _RecordingGenerator()
+
+        _execute(dataframe, plan, generator, free_text_detector=detector)
+
+        assert [request.entity_type for request in generator.requests] == [EntityType.FULL_NAME]
+
+    def test_detected_first_name_reuses_an_unpatterned_structured_full_name(self) -> None:
+        dataframe = pd.DataFrame({"full_name": ["Kenneth Gonzales"], "notes": ["Kenneth called"]})
+        plan = _plan(_target("notes", EntityType.FREE_TEXT), _target("full_name", EntityType.FULL_NAME))
+        detector = _StaticDetector([_span(0, "notes", "Kenneth called", "Kenneth", EntityType.FIRST_NAME)])
+        generator = _CompositeNameGenerator()
+
+        result = _execute(dataframe, plan, generator, free_text_detector=detector)
+
+        assert result.dataframe["notes"].iloc[0] == "Grace called"
+        assert len(generator.requests) == 1
 
     def test_detected_street_component_reuses_parent_with_validated_dependency_suffix(self) -> None:
         dataframe = pd.DataFrame(

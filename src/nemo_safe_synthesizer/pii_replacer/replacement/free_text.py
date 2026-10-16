@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import re
 import time
 from collections.abc import Hashable
 from dataclasses import dataclass, field
@@ -37,6 +38,12 @@ from .value_checks import generated_value_is_valid
 __all__ = ["FreeTextColumnStatistics", "FreeTextExecutionResult", "FreeTextReplacementExecutor"]
 
 _MAX_GENERATION_ATTEMPTS = 10
+# One name word: letters, optionally joined by an apostrophe or hyphen, as in "O'Brien" or "Smith-Jones".
+_NAME_WORD = re.compile(r"[^\W\d_]+(?:['\u2019-][^\W\d_]+)*")
+_NAME_PART_TYPES: dict[int, tuple[EntityType, ...]] = {
+    2: (EntityType.FIRST_NAME, EntityType.LAST_NAME),
+    3: (EntityType.FIRST_NAME, EntityType.MIDDLE_NAME, EntityType.LAST_NAME),
+}
 
 
 @dataclass(slots=True)
@@ -183,8 +190,15 @@ class FreeTextReplacementExecutor:
         original: str,
         replacement: str,
     ) -> None:
-        """Register parts only when an explicit name pattern provides semantic alignment."""
-        if spec.entity_type is not EntityType.FULL_NAME or spec.pattern is None:
+        """Register first, middle, and last name parts of a structured full name.
+
+        An explicit name pattern aligns the parts. Without one, only a plain
+        two- or three-word name is split, as described in ``_name_parts``.
+        """
+        if spec.entity_type is not EntityType.FULL_NAME:
+            return
+        if spec.pattern is None:
+            self._register_name_parts(scope_identity, original, replacement)
             return
         original_parts = extract_name_components(spec.entity_type, spec.pattern, original)
         replacement_parts = extract_name_components(spec.entity_type, spec.pattern, replacement)
@@ -197,6 +211,15 @@ class FreeTextReplacementExecutor:
         ):
             if original_type is replacement_type:
                 self._register(scope_identity, original_type, original_value, replacement_value)
+
+    def _register_name_parts(self, scope_identity: Hashable, original: str, replacement: str) -> None:
+        """Register each word of a plain full name against the matching word of its replacement."""
+        original_parts = _name_parts(original)
+        replacement_parts = _name_parts(replacement)
+        if original_parts is None or replacement_parts is None or len(original_parts) != len(replacement_parts):
+            return
+        for (part_type, original_word), (_, replacement_word) in zip(original_parts, replacement_parts, strict=True):
+            self._register(scope_identity, part_type, original_word, replacement_word)
 
     def _register_address_component(
         self,
@@ -270,9 +293,12 @@ class FreeTextReplacementExecutor:
         cursor = 0
         for span in spans:
             value = detected_text(cell, span)
+            key = free_text_mapping_key(cell, span, scope_identity=scope_identity)
             replacement = _match_letter_case(
                 value,
-                self._replacement_for(free_text_mapping_key(cell, span, scope_identity=scope_identity)),
+                self._full_name_replacement(key)
+                if key.entity_type is EntityType.FULL_NAME
+                else self._replacement_for(key),
             )
             parts.extend((cell.text[cursor : span.start], replacement))
             cursor = span.end
@@ -294,6 +320,29 @@ class FreeTextReplacementExecutor:
                 )
         parts.append(cell.text[cursor:])
         return "".join(parts)
+
+    def _full_name_replacement(self, key: FreeTextMappingKey) -> str:
+        """Replace a detected full name so its words agree with first, middle, and last names in the same scope.
+
+        A full name already mapped, for example by a structured column, keeps
+        that mapping and registers its words. Otherwise a plain two- or
+        three-word name is built word by word from the first, middle, and last
+        name mappings, generating any that are missing, so ``Kenneth Gonzales``
+        and a later bare ``Kenneth`` share one first-name replacement in either
+        order. Any other full name is generated whole.
+        """
+        cached = self._cache.get(key)
+        if cached is not None:
+            self._register_name_parts(key.scope_identity, key.original_value, cached)
+            return cached
+        parts = _name_parts(key.original_value)
+        if parts is None:
+            return self._replacement_for(key)
+        replacement = " ".join(
+            self._replacement_for(FreeTextMappingKey(key.scope_identity, part_type, word)) for part_type, word in parts
+        )
+        self._cache[key] = replacement
+        return replacement
 
     def _replacement_for(self, key: FreeTextMappingKey) -> str:
         """Return a cached value or generate one valid deterministic replacement."""
@@ -329,6 +378,24 @@ class FreeTextReplacementExecutor:
             raise GenerationError("PII replacement generation failed for an accepted free-text span") from exc
         finally:
             self._generation_elapsed += time.perf_counter() - started
+
+
+def _name_parts(value: str) -> tuple[tuple[EntityType, str], ...] | None:
+    """Split a plain full name into typed words, or return ``None`` when the split would be a guess.
+
+    Only two or three words separated by single spaces qualify, read as first
+    and last, or first, middle, and last. Titles, initials, suffixes, and
+    digits do not qualify, so ``Dr. Ada Lovelace`` and ``Ada K. Lovelace``
+    return ``None``.
+
+    Example:
+        ``"Kenneth Gonzales"`` returns ``((FIRST_NAME, "Kenneth"), (LAST_NAME, "Gonzales"))``.
+    """
+    words = value.split(" ")
+    part_types = _NAME_PART_TYPES.get(len(words))
+    if part_types is None or not all(_NAME_WORD.fullmatch(word) for word in words):
+        return None
+    return tuple(zip(part_types, words, strict=True))
 
 
 def _match_letter_case(occurrence: str, replacement: str) -> str:
