@@ -132,6 +132,10 @@ jobs:
         timeout-minutes: 10
         run: mise -E gpu-ci run test:smoke:gpu:timeseries
 
+      - name: Run GPU smoke tests - local inference
+        timeout-minutes: 15
+        run: mise -E gpu-ci run test:smoke:gpu:local-inference
+
       - name: Run GPU smoke tests - SmolLM2
         timeout-minutes: 20
         run: mise -E gpu-ci run test:smoke:gpu:smollm2

@@ -31,7 +31,7 @@ from pydantic import (
 )
 
 from ..configurator.parameters import Parameters
-from ..defaults import NSS_NEMOTRON_PERSONAS_PATH_ENV, default_nemotron_personas_path
+from ..defaults import DEFAULT_NSS_INFERENCE_LOCAL_MODEL, NSS_NEMOTRON_PERSONAS_PATH_ENV, default_nemotron_personas_path
 from ..errors import ParameterError
 from .base import NSSBaseModel
 from .unknown_fields import raise_if_removed_legacy_fields
@@ -692,7 +692,8 @@ class PiiReplacementPlan(Parameters):
 class LLMConfig(NSSBaseModel):
     """Inference behavior for LLM-assisted PII plan discovery.
 
-    LLM behavior is disabled when ``ReplacePiiConfig.llm`` is ``None``. The
+    LLM behavior is disabled when ``ReplacePiiConfig.llm`` is ``None``. Without
+    an endpoint, NSS runs the model in a managed local vLLM server. An
     OpenAI-compatible endpoint is supplied at runtime through
     ``NSS_INFERENCE_ENDPOINT`` or ``--inference-endpoint-url`` rather than persisted
     in NSS configuration.
@@ -701,8 +702,9 @@ class LLMConfig(NSSBaseModel):
     model_id: str | None = Field(
         default=None,
         description=(
-            "Model identifier served by the inference endpoint. When unset, uses "
-            "NSS_INFERENCE_MODEL or the NSS default model."
+            "Model identifier for PII inference. When unset, uses NSS_INFERENCE_MODEL. Without an inference "
+            "endpoint, selects the bundled local vLLM profile and defaults to "
+            f"{DEFAULT_NSS_INFERENCE_LOCAL_MODEL}; with an endpoint, a model ID is required."
         ),
     )
     max_workers: int = Field(
