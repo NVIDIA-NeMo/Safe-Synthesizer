@@ -116,52 +116,139 @@ replace_pii:
   schema_version: 3
   replacement_plan: auto_discovery
   llm:
-    model_id: nvidia/nemotron-3-ultra-550b-a55b
     max_workers: 8
 ```
 
-An empty mapping (`llm: {}`) enables the existing NSS inference defaults. Set
-the OpenAI-compatible endpoint at runtime through `NSS_INFERENCE_ENDPOINT` or
-the `--inference-endpoint-url` CLI option. For example, a local vLLM server may
-use `NSS_INFERENCE_ENDPOINT=http://localhost:8000/v1` with its served model ID.
-Plain HTTP is accepted only for loopback addresses (`localhost`, `127.0.0.0/8`,
-or `::1`); any other host must use HTTPS.
+An empty mapping (`llm: {}`) enables the NSS inference defaults: NSS runs
+`nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16` in a local vLLM server for
+the duration of plan discovery; see [Local inference server](#local-inference-server).
 
-The endpoint resolves from the explicit CLI runtime flag, then
-`NSS_INFERENCE_ENDPOINT`, then the NSS default; it is never persisted in NSS
-configuration. The model resolves from the explicit CLI runtime flag, then
-`replace_pii.llm.model_id`, `NSS_INFERENCE_MODEL`, and finally the NSS default.
-`NSS_INFERENCE_MODEL` supplies the model only when the configuration omits
-`model_id`; use `--inference-model-id` to override a persisted model for one run.
-The default hosted NVIDIA endpoint requires an API key. Keyless operation is
-supported for local OpenAI-compatible endpoints.
+### Where planning requests go
 
-Supply the inference API key at runtime through `NSS_INFERENCE_KEY` or the
-`--inference-api-key` CLI option. NSS does not store the key in configuration or
-plan artifacts.
+Plan discovery sends column statistics and cell samples to an LLM. Where they
+go depends only on `NSS_INFERENCE_ENDPOINT` (or `--inference-endpoint-url`):
 
-Free-text columns use GLiNER2 plus applicable deterministic built-in regex
-rules:
+- Unset: NSS starts its own vLLM server on this machine, and the data stays
+  here. This is the default.
+- A loopback URL (`localhost`, `127.0.0.0/8`, or `::1`): the data stays on
+  this machine. Without a local profile, NSS calls the server you run at that
+  address; with `NSS_INFERENCE_LOCAL_PROFILE`, NSS starts its own server there.
+- Any other URL: NSS sends the data to that service over HTTPS, for example
+  `https://integrate.api.nvidia.com/v1` for the hosted NVIDIA service. Only
+  enable it when that service is approved to receive the input data.
 
-```yaml
-replace_pii:
-  free_text_detection:
-    model_id: fastino/gliner2-privacy-filter-PII-multi
-    entity_thresholds:
-      full_name: 0.95
-      first_name: 0.9
-      middle_name: 0.9
-      last_name: 0.9
-      phone_number: 0.5
-      date_of_birth: 0.5
-      street_address: 0.5
-      ssn: 0.5
-      national_id: 0.5
-      api_key: 0.5
-    batch_size: 8
-    chunk_length: 384
-    chunk_overlap: 128
+The run log states which case applies when planning starts.
+
+With an explicit endpoint and no local profile, NSS never starts a local server,
+and the model has no default: it resolves from `--inference-model-id`, then
+`replace_pii.llm.model_id`, then `NSS_INFERENCE_MODEL`. `NSS_INFERENCE_MODEL`
+supplies the model only when the configuration omits `model_id`; use
+`--inference-model-id` to override a persisted model for one run. The endpoint
+is never persisted in NSS configuration. Plain HTTP is accepted only for
+loopback addresses; any other host must use HTTPS.
+
+Supply an API key at runtime through `NSS_INFERENCE_KEY` or the
+`--inference-api-key` CLI option; the hosted NVIDIA service requires one, and
+local OpenAI-compatible servers may be keyless. NSS does not store the key in
+configuration or plan artifacts.
+
+### Local inference server
+
+When no inference endpoint is set, NSS starts a vLLM server on the local GPU for
+plan discovery. The model ID (`replace_pii.llm.model_id`,
+`--inference-model-id`, or `NSS_INFERENCE_MODEL`) selects the bundled profile
+to run, and defaults to `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16`:
+
+```bash
+safe-synthesizer run replace-pii --plan-only \
+  --config config.yaml \
+  --data-source data.csv
 ```
+
+If vLLM or a CUDA GPU is unavailable, or the GPU is smaller than the profile's
+`min_gpu_memory_gib`, preflight and planning fail with an error before
+downloading any weights, rather than sending data to a remote service; set
+`NSS_INFERENCE_ENDPOINT` to choose one. `NSS_INFERENCE_KEY` is ignored while the
+local server runs, and NSS logs a warning if it is set.
+
+Bundled profiles pin each model to a fixed revision, turn on reasoning before
+the schema-constrained answer, and fit one 80 GB GPU, such as an A100 or H100;
+they require at least 75 GiB, since an 80 GB GPU reports about 79 GiB.
+vLLM reserves a fixed share of the GPU's memory for the server, set by the
+profile's `gpu_memory_utilization`, regardless of model size; the reservation
+holds the weights and the context cache:
+
+| Model ID | GPU memory reserved (80 GB GPU) | Request timeout | Notes |
+|----------|---------------------------------|-----------------|-------|
+| `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16` (default) | about 76 GB (95%); weights about 66 GB | 300 s | Hybrid Mamba mixture of experts; 2,000-token thinking budget |
+| `openai/gpt-oss-120b` | about 76 GB (95%); weights about 65 GB | 120 s | Mixture of experts; default medium reasoning effort; fastest |
+| `Qwen/Qwen3.8-27B` | about 74 GB (92%); weights about 56 GB | 300 s | Dense; low reasoning effort, 1,000-token thinking budget; slowest |
+
+Nemotron 3.5 Lightning and GPT-OSS-120B both performed well in our PII planning
+evaluation. Qwen3.8-27B was less consistent: it did well on some datasets but
+scored lower on held-out data, sometimes missed free-text columns, and took
+several times longer per table.
+
+Reasoning makes requests slow, so each profile sets its own request timeout.
+Set `NSS_INFERENCE_TIMEOUT` or `--inference-timeout-seconds` to override it, for
+example for much larger tables. The same setting applies to explicit endpoints,
+where it defaults to 60 seconds.
+
+NSS sends no sampling settings of its own, so the server's defaults apply; vLLM
+takes them from the model's `generation_config.json`, which for the bundled
+models matches their model cards. Each profile also states its sampling
+settings explicitly in `request_options`, and the Qwen and Nemotron profiles
+add a `thinking_token_budget`, which caps reasoning before the JSON answer. Set
+`NSS_INFERENCE_REQUEST_OPTIONS` or `--inference-request-options` to a JSON
+object, such as `{"thinking_token_budget": 500}`, to override individual fields
+of a profile's request options, or to send fields to an explicit endpoint.
+Fields you don't set keep their values; set a field to `null` to drop it.
+
+The first run downloads the weights into the Hugging Face cache; see
+[Hugging Face cache and offline](../user-guide/environment.md#hugging-face-cache-and-offline)
+to choose where it lives. A model ID without a bundled profile is an error. To
+run another model locally, point `NSS_INFERENCE_LOCAL_PROFILE` or the
+`--inference-local-profile` CLI option at your own profile YAML (a bundled
+profile name such as `gpt-oss-120b` also works); any configured model ID must
+then match its served model name, which defaults to its `model_id`. A profile
+YAML has these fields: `model_id`, `revision`, and optionally
+`served_model_name`, `gpu_memory_utilization`, `max_model_len`,
+`max_num_seqs`, `tensor_parallel_size`, `min_gpu_memory_gib` (checked on each
+of the `tensor_parallel_size` GPUs; choose GPUs with `CUDA_VISIBLE_DEVICES` in
+the shell, not in the profile), `extra_args`, `request_options`,
+`environment` (server process variables), `request_timeout_seconds`,
+`startup_timeout_seconds`, and `shutdown_timeout_seconds`. In vLLM 0.27,
+`thinking_token_budget` needs `VLLM_USE_V2_MODEL_RUNNER: "0"` in `environment`.
+Avoid `extra_args` that make vLLM compile kernels at startup, such as
+`--mamba-backend=flashinfer`: compiling needs `ninja` and a CUDA compiler,
+which an NSS install doesn't include, and it lengthens every server launch.
+
+NSS starts the server only when LLM-assisted discovery runs, meaning an
+`auto_discovery` plan with `llm` configured, and stops it before planning
+returns, including when planning fails. Plan validation, replacement, and
+training therefore never run while the server holds the GPU. Each run loads
+the model again; to reuse one server across many runs, start `vllm serve`
+yourself and set `NSS_INFERENCE_ENDPOINT` and `NSS_INFERENCE_MODEL` without a
+local profile.
+
+#### How the local server is isolated
+
+- Reachable only from this machine: the server listens on a loopback
+  address: a free `127.0.0.1` port by default, or the loopback address in
+  `NSS_INFERENCE_ENDPOINT` with a local profile. NSS rejects any other address,
+  and a port already in use, before launching.
+- Usable only by this NSS run: each launch generates a random API key and
+  gives it only to the server (through its environment, not its command line)
+  and to NSS's own client, so other processes on the machine cannot send it
+  requests. `NSS_INFERENCE_KEY` is not used.
+- No proxies or request logs: requests to loopback addresses ignore
+  `HTTP_PROXY`-style variables, and vLLM request logging stays off because
+  prompts contain raw cell samples. Server output goes to the NSS log at debug
+  level.
+- Short-lived: the server stops when planning ends, and receives SIGTERM if
+  the NSS process dies without cleaning up.
+
+### How discovery uses the LLM
 
 Automatic discovery uses two LLM passes. The first classifies every column's
 semantic entity type and may propose a replacement pattern, in bounded batches
@@ -206,3 +293,28 @@ previous response invalid.
     Plan enhancement can send bounded raw cell samples from the full input
     dataframe, including rows that may later be assigned to a holdout set. Enable
     it only when the endpoint is approved to receive the input data.
+
+### Free-text detection
+
+Free-text columns use GLiNER2 plus applicable deterministic built-in regex
+rules:
+
+```yaml
+replace_pii:
+  free_text_detection:
+    model_id: fastino/gliner2-privacy-filter-PII-multi
+    entity_thresholds:
+      full_name: 0.95
+      first_name: 0.9
+      middle_name: 0.9
+      last_name: 0.9
+      phone_number: 0.5
+      date_of_birth: 0.5
+      street_address: 0.5
+      ssn: 0.5
+      national_id: 0.5
+      api_key: 0.5
+    batch_size: 8
+    chunk_length: 384
+    chunk_overlap: 128
+```

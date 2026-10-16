@@ -217,7 +217,7 @@ Path: `src/nemo_safe_synthesizer/data_processing/`
 #### Components:
 
 - Holdout (`holdout/`): Splits data into train/test sets with stratification support
-- `pii_replacer/`: Placeholder for PII replacement v3; only evaluation result models remain
+- `pii_replacer/`: PII replacement v3 plan discovery, its OpenAI-compatible LLM client, and `local_inference/`, which runs a vLLM server on the local GPU only while LLM-assisted planning runs
 - `ActionExecutor` (`actions/`): Executes data transformations (date normalization, distributions)
 - `ExampleAssembler` (`assembler.py`): 
   - Converts records to JSON format
