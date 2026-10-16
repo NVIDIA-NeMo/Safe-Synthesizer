@@ -7,9 +7,10 @@ from __future__ import annotations
 
 from .managed import (
     LOCAL_PROFILE_ENV,
+    InvalidLocalServerSettingsError,
     LocalServerRequest,
-    planning_inference_environment,
-    resolve_local_server_request,
+    planning_inference_settings,
+    resolve_planning_inference,
 )
 from .profile import LocalVllmProfile, bundled_profile_for_model, bundled_profile_names, load_profile
 from .server import (
@@ -22,6 +23,7 @@ from .server import (
 
 __all__ = [
     "LOCAL_PROFILE_ENV",
+    "InvalidLocalServerSettingsError",
     "LocalServerRequest",
     "LocalVllmProfile",
     "LocalVllmServer",
@@ -32,6 +34,6 @@ __all__ = [
     "load_profile",
     "local_runtime_problem",
     "local_runtime_problem_message",
-    "planning_inference_environment",
-    "resolve_local_server_request",
+    "planning_inference_settings",
+    "resolve_planning_inference",
 ]

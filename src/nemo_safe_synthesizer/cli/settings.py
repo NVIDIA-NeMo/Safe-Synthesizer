@@ -198,6 +198,7 @@ class CLISettings(BaseSettings):
     inference_timeout_seconds: float | None = Field(
         default=None,
         gt=0,
+        allow_inf_nan=False,
         validation_alias=AliasChoices("inference_timeout_seconds", "NSS_INFERENCE_TIMEOUT"),
         description="Per-request timeout in seconds for PII inference",
     )

@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import importlib.util
-import json
 import os
 import secrets
 import signal
@@ -29,14 +28,9 @@ from ...outlines_cache import harden_outlines_cache
 from ..llm_client import (
     ENDPOINT_ENV,
     KEY_ENV,
-    MODEL_ENV,
-    REQUEST_OPTIONS_ENV,
-    TIMEOUT_ENV,
     InferenceSettings,
     OpenAICompatibleTransport,
-    nonblank,
-    parse_request_options,
-    resolve_request_options,
+    merge_request_options,
 )
 from .profile import LocalVllmProfile
 
@@ -84,14 +78,37 @@ def is_vllm_installed() -> bool:
     return importlib.util.find_spec("vllm") is not None
 
 
-def local_runtime_problem() -> str | None:
-    """Return why this machine cannot run a managed vLLM server, or ``None`` if it can."""
+def local_runtime_problem(profile: LocalVllmProfile | None = None) -> str | None:
+    """Return why this machine cannot run a managed vLLM server, or ``None`` if it can.
+
+    Args:
+        profile: When given, also check that enough GPUs are visible for its
+            ``tensor_parallel_size`` and that each has its ``min_gpu_memory_gib``.
+    """
     if not is_vllm_installed():
         return "vLLM is not installed (install the engine extra, for example `uv sync --extra cu129 --extra engine`)"
     import torch
 
     if not torch.cuda.is_available():
         return "no CUDA GPU is available"
+    if profile is None:
+        return None
+    needed = profile.tensor_parallel_size
+    visible = torch.cuda.device_count()
+    if visible < needed:
+        return (
+            f"{profile.served_name!r} needs {needed} GPUs, but only {visible} {'is' if visible == 1 else 'are'} visible"
+        )
+    if profile.min_gpu_memory_gib is not None:
+        # vLLM places tensor-parallel ranks on the first visible GPUs.
+        for index in range(needed):
+            properties = torch.cuda.get_device_properties(index)
+            total_gib = properties.total_memory / 1024**3
+            if total_gib < profile.min_gpu_memory_gib:
+                return (
+                    f"{profile.served_name!r} needs a GPU with at least {profile.min_gpu_memory_gib:g} GiB, "
+                    f"but GPU {index} ({properties.name}) has {total_gib:.1f} GiB"
+                )
     return None
 
 
@@ -216,9 +233,12 @@ class LocalVllmServer:
         port: Port to bind, or ``None`` to choose a free port.
         environ: Base environment for the server process; defaults to
             ``os.environ``. ``NSS_INFERENCE_*`` values are not passed on.
+        request_options: Chat-completions fields for the readiness probe and
+            ``inference_settings``; defaults to the profile's request options.
 
     Raises:
-        ParameterError: On entry, if vLLM or a CUDA GPU is unavailable, or the port is in use.
+        ParameterError: On entry, if vLLM, a CUDA GPU, or enough GPU memory is
+            unavailable, or the port is in use.
         GenerationError: On entry, if the server exits, times out, or fails
             its readiness checks.
     """
@@ -230,11 +250,15 @@ class LocalVllmServer:
         host: str = DEFAULT_HOST,
         port: int | None = None,
         environ: Mapping[str, str] | None = None,
+        request_options: Mapping[str, object] | None = None,
     ) -> None:
         self._profile = profile
         self._host = host
         self._requested_port = port
         self._base_environ: Mapping[str, str] = os.environ if environ is None else environ
+        self._request_options = merge_request_options(
+            profile.request_options if request_options is None else request_options
+        )
         self._api_key = secrets.token_urlsafe(32)
         self._port: int | None = None
         self._process: subprocess.Popen[str] | None = None
@@ -249,28 +273,22 @@ class LocalVllmServer:
             raise InternalError("The local vLLM server has not started")
         return f"http://{_url_host(self._host)}:{self._port}/v1"
 
-    def inference_environ(self) -> dict[str, str]:
-        """Return the base environment with ``NSS_INFERENCE_*`` pointing at this server.
+    def inference_settings(self, *, max_workers: int = 1, timeout_seconds: float | None = None) -> InferenceSettings:
+        """Return client settings for this server, available once it has started.
 
-        A non-blank ``NSS_INFERENCE_TIMEOUT`` in the base environment wins over
-        the profile's timeout. A non-blank ``NSS_INFERENCE_REQUEST_OPTIONS``
-        overrides the profile's request options field by field.
+        Args:
+            max_workers: Maximum concurrent requests.
+            timeout_seconds: Per-request timeout; defaults to the profile's
+                ``request_timeout_seconds``.
         """
-        environ = {
-            **self._base_environ,
-            ENDPOINT_ENV: self.endpoint_url,
-            KEY_ENV: self._api_key,
-            MODEL_ENV: self._profile.served_name,
-            TIMEOUT_ENV: nonblank(self._base_environ.get(TIMEOUT_ENV)) or f"{self._profile.request_timeout_seconds:g}",
-        }
-        explicit = nonblank(self._base_environ.get(REQUEST_OPTIONS_ENV))
-        # Keep null overrides in the JSON; resolve_request_options drops them.
-        options = {**self._profile.request_options, **(parse_request_options(explicit) if explicit else {})}
-        if options:
-            environ[REQUEST_OPTIONS_ENV] = json.dumps(options)
-        else:
-            environ.pop(REQUEST_OPTIONS_ENV, None)
-        return environ
+        return InferenceSettings(
+            endpoint_url=self.endpoint_url,
+            model_id=self._profile.served_name,
+            max_workers=max_workers,
+            api_key=self._api_key,
+            timeout_seconds=self._profile.request_timeout_seconds if timeout_seconds is None else timeout_seconds,
+            request_options=self._request_options,
+        )
 
     def __enter__(self) -> Self:
         self.start()
@@ -288,12 +306,13 @@ class LocalVllmServer:
         """Launch the server and block until it is ready.
 
         Raises:
-            ParameterError: If vLLM or a CUDA GPU is unavailable, or the port is in use.
+            ParameterError: If vLLM, a CUDA GPU, or enough GPU memory is
+                unavailable, or the port is in use.
             GenerationError: If the server exits, times out, or fails readiness checks.
         """
         if self._process is not None or self._stopped:
             raise InternalError("A LocalVllmServer can only be started once")
-        if problem := local_runtime_problem():
+        if problem := local_runtime_problem(self._profile):
             raise ParameterError(local_runtime_problem_message(problem))
         self._port = _available_port(self._host, self._requested_port)
         command = build_serve_command(self._profile, host=self._host, port=self._port, parent_pid=os.getpid())
@@ -348,6 +367,8 @@ class LocalVllmServer:
         environ.update(self._profile.environment)
         # Apply the same Outlines diskcache protections as in-process generation.
         harden_outlines_cache(environ)
+        # Responses can contain cell samples; never let the shell turn on response logging.
+        environ["VLLM_DEBUG_LOG_API_SERVER_RESPONSE"] = "false"
         environ["VLLM_API_KEY"] = self._api_key
         return environ
 
@@ -424,15 +445,8 @@ class LocalVllmServer:
         return True
 
     def _probe_structured_output(self, *, timeout: float) -> None:
-        settings = InferenceSettings(
-            endpoint_url=self.endpoint_url,
-            model_id=self._profile.served_name,
-            max_workers=1,
-            api_key=self._api_key,
-            # Probe with the planner's sampling and thinking settings.
-            request_options=resolve_request_options(self.inference_environ()),
-        )
-        transport = OpenAICompatibleTransport(settings, timeout=timeout)
+        # Probe with the planner's sampling and thinking settings.
+        transport = OpenAICompatibleTransport(self.inference_settings(timeout_seconds=timeout))
         try:
             content = transport.complete(
                 messages=[{"role": "user", "content": 'Reply with a JSON object whose "ready" field is true.'}],

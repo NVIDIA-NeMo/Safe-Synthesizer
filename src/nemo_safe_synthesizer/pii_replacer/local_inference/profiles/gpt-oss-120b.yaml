@@ -5,6 +5,8 @@
 model_id: openai/gpt-oss-120b
 revision: b5c939de8f754692c1647ca79fbf85e8c1e70f8a
 gpu_memory_utilization: 0.95
+# Tested on 80 GB GPUs, which report about 79 GiB; fails fast on smaller GPUs.
+min_gpu_memory_gib: 75
 # One classification request carries up to 48 KiB of column samples,
 # roughly 12-16k tokens before instructions and reasoning.
 max_model_len: 32768

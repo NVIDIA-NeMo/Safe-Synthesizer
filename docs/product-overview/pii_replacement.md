@@ -165,11 +165,15 @@ safe-synthesizer run replace-pii --plan-only \
   --data-source data.csv
 ```
 
-If vLLM or a CUDA GPU is unavailable, planning fails with an error rather than
-sending data to a remote service; set `NSS_INFERENCE_ENDPOINT` to choose one.
+If vLLM or a CUDA GPU is unavailable, or the GPU is smaller than the profile's
+`min_gpu_memory_gib`, preflight and planning fail with an error before
+downloading any weights, rather than sending data to a remote service; set
+`NSS_INFERENCE_ENDPOINT` to choose one. `NSS_INFERENCE_KEY` is ignored while the
+local server runs, and NSS logs a warning if it is set.
 
 Bundled profiles pin each model to a fixed revision, turn on reasoning before
-the schema-constrained answer, and fit one 80 GB GPU, such as an A100 or H100.
+the schema-constrained answer, and fit one 80 GB GPU, such as an A100 or H100;
+they require at least 75 GiB, since an 80 GB GPU reports about 79 GiB.
 vLLM reserves a fixed share of the GPU's memory for the server, set by the
 profile's `gpu_memory_utilization`, regardless of model size; the reservation
 holds the weights and the context cache:
@@ -209,7 +213,8 @@ profile name such as `gpt-oss-120b` also works); any configured model ID must
 then match its served model name, which defaults to its `model_id`. A profile
 YAML has these fields: `model_id`, `revision`, and optionally
 `served_model_name`, `gpu_memory_utilization`, `max_model_len`,
-`max_num_seqs`, `tensor_parallel_size`, `extra_args`, `request_options`,
+`max_num_seqs`, `tensor_parallel_size`, `min_gpu_memory_gib` (checked on each
+of the `tensor_parallel_size` GPUs), `extra_args`, `request_options`,
 `environment` (server process variables), `request_timeout_seconds`,
 `startup_timeout_seconds`, and `shutdown_timeout_seconds`. In vLLM 0.27,
 `thinking_token_budget` needs `VLLM_USE_V2_MODEL_RUNNER: "0"` in `environment`.

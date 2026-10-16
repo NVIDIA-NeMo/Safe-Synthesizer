@@ -157,11 +157,11 @@ def _enhance_with_default_llm(
     stops before this returns, so validation, persistence, replacement, and
     training never run while it holds the GPU.
     """
-    from ..local_inference import planning_inference_environment
+    from ..local_inference import planning_inference_settings
     from .llm import LLMPlanEnhancer
 
-    with planning_inference_environment(llm_config) as environ:
-        return LLMPlanEnhancer(llm_config, environ=environ).enhance(discovery_input, baseline)
+    with planning_inference_settings(llm_config) as settings:
+        return LLMPlanEnhancer(llm_config, settings=settings).enhance(discovery_input, baseline)
 
 
 def resolve_plan(

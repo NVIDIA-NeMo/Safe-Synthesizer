@@ -56,10 +56,10 @@ def test_server_starts_answers_and_releases_its_port(fixture_tiny_profile_path: 
     profile = load_profile(fixture_tiny_profile_path)
 
     with LocalVllmServer(profile) as server:
-        environ = server.inference_environ()
+        settings = server.inference_settings()
         response = httpx.get(
             f"{server.endpoint_url}/models",
-            headers={"Authorization": f"Bearer {environ['NSS_INFERENCE_KEY']}"},
+            headers={"Authorization": f"Bearer {settings.api_key}"},
         )
         port = int(server.endpoint_url.rsplit(":", 1)[1].split("/", 1)[0])
         assert not _port_is_free(port)

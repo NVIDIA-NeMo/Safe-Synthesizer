@@ -18,7 +18,7 @@ from ..configurator.pydantic_click_options import (
     parse_overrides,
     pydantic_options,
 )
-from ..defaults import PII_REPLACEMENT_PLAN_FILENAME
+from ..defaults import DEFAULT_NSS_INFERENCE_LOCAL_MODEL, PII_REPLACEMENT_PLAN_FILENAME
 from ..errors import UserError
 from ..observability import traced_user
 from ..telemetry import DeploymentTypeEnum, TaskStatusEnum
@@ -199,8 +199,8 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
             default=None,
             help="Model ID served by the PII inference endpoint. "
             "Can also be set via NSS_INFERENCE_MODEL env var. "
-            "Without an endpoint, selects the bundled local vLLM profile to run (default: nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16); "
-            "required with an explicit endpoint.",
+            "Without an endpoint, selects the bundled local vLLM profile to run "
+            f"(default: {DEFAULT_NSS_INFERENCE_LOCAL_MODEL}); required with an explicit endpoint.",
         )
     )
     options.append(

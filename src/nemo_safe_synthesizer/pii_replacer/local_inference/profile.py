@@ -28,6 +28,7 @@ _PROFILE_SUFFIX = ".yaml"
 RESERVED_VLLM_OPTIONS = frozenset(
     {
         "--api-key",
+        "--config",
         "--enable-log-outputs",
         "--enable-log-requests",
         "--host",
@@ -43,7 +44,8 @@ RESERVED_VLLM_OPTIONS = frozenset(
 
 The launch owns the address and credential, the profile owns the model
 identity, and request logging stays off because planning prompts contain raw
-cell samples.
+cell samples. ``--config`` is reserved because vLLM reads any option, including
+these, from the config file it names.
 """
 
 
@@ -56,6 +58,8 @@ _MANAGED_SERVER_VARIABLES = frozenset(
         "TRANSFORMERS_OFFLINE",
         # Kept off to avoid diskcache poisoning (CVE-2025-69872).
         "VLLM_V1_USE_OUTLINES_CACHE",
+        # Kept off because responses can contain cell samples.
+        "VLLM_DEBUG_LOG_API_SERVER_RESPONSE",
     }
 )
 
@@ -102,6 +106,13 @@ class LocalVllmProfile(BaseModel):
         description="Maximum concurrently scheduled requests. Uses the vLLM default when unset.",
     )
     tensor_parallel_size: int = Field(default=1, gt=0, description="Number of GPUs used for tensor parallelism.")
+    min_gpu_memory_gib: float | None = Field(
+        default=None,
+        gt=0,
+        allow_inf_nan=False,
+        description="Total memory, in GiB, each of the tensor_parallel_size GPUs must have. NSS checks it "
+        "before downloading weights or launching the server; unset skips the check.",
+    )
     extra_args: tuple[str, ...] = Field(
         default=(),
         description="Additional `vllm serve` options. Options NSS manages, such as --host, --port, "

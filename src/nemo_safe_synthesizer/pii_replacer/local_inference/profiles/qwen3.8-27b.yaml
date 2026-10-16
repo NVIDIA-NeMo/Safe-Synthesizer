@@ -5,6 +5,8 @@
 model_id: Qwen/Qwen3.8-27B
 revision: 1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0
 gpu_memory_utilization: 0.92
+# Tested on 80 GB GPUs, which report about 79 GiB; fails fast on smaller GPUs.
+min_gpu_memory_gib: 75
 # One classification request carries up to 48 KiB of column samples,
 # roughly 12-16k tokens before instructions and reasoning.
 max_model_len: 32768

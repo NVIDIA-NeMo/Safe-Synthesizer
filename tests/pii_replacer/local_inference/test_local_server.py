@@ -6,6 +6,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import re
 import signal
 import socket
 import stat
@@ -14,14 +15,19 @@ import sys
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import SimpleNamespace
 from typing import cast
 
 import httpx
 import pytest
 
 from nemo_safe_synthesizer.errors import GenerationError, ParameterError
-from nemo_safe_synthesizer.pii_replacer.llm_client import resolve_request_options
-from nemo_safe_synthesizer.pii_replacer.local_inference import LocalVllmProfile, LocalVllmServer, build_serve_command
+from nemo_safe_synthesizer.pii_replacer.local_inference import (
+    LocalVllmProfile,
+    LocalVllmServer,
+    build_serve_command,
+    local_runtime_problem,
+)
 from nemo_safe_synthesizer.pii_replacer.local_inference import server as server_module
 
 # Captured at import, before the root conftest's autouse guard replaces it.
@@ -121,7 +127,7 @@ def fixture_server_harness(monkeypatch: pytest.MonkeyPatch) -> Iterator[Harness]
         return httpx.Response(200, json={"choices": [{"message": {"content": state.probe_content}}]})
 
     state.models.append(_models_response("tiny"))
-    monkeypatch.setattr(server_module, "local_runtime_problem", lambda: None)
+    monkeypatch.setattr(server_module, "local_runtime_problem", lambda profile=None: None)
     monkeypatch.setattr(server_module, "_launch", launch)
     monkeypatch.setattr(server_module.os, "killpg", state.group.killpg)
     monkeypatch.setattr(server_module.time, "sleep", lambda seconds: None)
@@ -142,60 +148,41 @@ class TestLocalVllmServerLifecycle:
             "NSS_INFERENCE_ENDPOINT": "http://x",
             "OUTLINES_CACHE_DIR": str(cache_dir),
             "VLLM_V1_USE_OUTLINES_CACHE": "1",
+            "VLLM_DEBUG_LOG_API_SERVER_RESPONSE": "true",
         }
 
         with LocalVllmServer(PROFILE, port=None, environ=base) as server:
-            environ = server.inference_environ()
+            settings = server.inference_settings(max_workers=4)
             assert fixture_server_harness.group.signals == []
 
         assert fixture_server_harness.group.signals == [signal.SIGTERM]
-        assert environ["NSS_INFERENCE_ENDPOINT"] == server.endpoint_url
-        assert environ["NSS_INFERENCE_MODEL"] == "tiny"
-        assert environ["NSS_INFERENCE_KEY"] == fixture_server_harness.child_env["VLLM_API_KEY"]
-        assert environ["NSS_INFERENCE_TIMEOUT"] == "60"
-        assert environ["PATH"] == "/bin"
+        assert settings.endpoint_url == server.endpoint_url
+        assert (settings.model_id, settings.max_workers, settings.timeout_seconds) == ("tiny", 4, 60)
+        assert settings.api_key == fixture_server_harness.child_env["VLLM_API_KEY"]
+        assert fixture_server_harness.child_env["PATH"] == "/bin"
         assert "NSS_INFERENCE_KEY" not in fixture_server_harness.child_env
         assert "NSS_INFERENCE_ENDPOINT" not in fixture_server_harness.child_env
         assert fixture_server_harness.child_env["VLLM_API_KEY"] not in " ".join(fixture_server_harness.argv)
         # The server gets the same diskcache protections as in-process generation.
         assert fixture_server_harness.child_env["VLLM_V1_USE_OUTLINES_CACHE"] == "0"
         assert stat.S_IMODE(cache_dir.stat().st_mode) == 0o700
+        # Responses can contain cell samples, so response logging stays off.
+        assert fixture_server_harness.child_env["VLLM_DEBUG_LOG_API_SERVER_RESPONSE"] == "false"
         # The schema probe stays within the profile's startup deadline.
         assert 0 < fixture_server_harness.probe_timeouts[0] <= PROFILE.startup_timeout_seconds
 
     @pytest.mark.parametrize(
-        ("environ", "expected"),
-        [({}, "900"), ({"NSS_INFERENCE_TIMEOUT": "30"}, "30")],
-        ids=["profile-timeout", "explicit-timeout-wins"],
-    )
-    def test_planner_timeout_comes_from_profile_unless_set_explicitly(
-        self,
-        fixture_server_harness: Harness,
-        environ: dict[str, str],
-        expected: str,
-    ) -> None:
-        profile = PROFILE.model_copy(update={"request_timeout_seconds": 900})
-
-        with LocalVllmServer(profile, environ=environ) as server:
-            assert server.inference_environ()["NSS_INFERENCE_TIMEOUT"] == expected
-
-    @pytest.mark.parametrize(
-        ("environ", "expected_options"),
+        ("request_options", "expected_options"),
         [
-            ({}, {"temperature": 1.0, "thinking_token_budget": 500}),
-            (
-                {"NSS_INFERENCE_REQUEST_OPTIONS": '{"temperature": 0.2}'},
-                {"temperature": 0.2, "thinking_token_budget": 500},
-            ),
-            ({"NSS_INFERENCE_REQUEST_OPTIONS": '{"thinking_token_budget": null}'}, {"temperature": 1.0}),
-            ({"NSS_INFERENCE_REQUEST_OPTIONS": "  "}, {"temperature": 1.0, "thinking_token_budget": 500}),
+            (None, {"temperature": 1.0, "thinking_token_budget": 500}),
+            ({"temperature": 0.2, "thinking_token_budget": None}, {"temperature": 0.2}),
         ],
-        ids=["profile-options", "explicit-field-overrides", "null-drops-profile-field", "blank-options-keep-profile"],
+        ids=["profile-options", "given-options"],
     )
     def test_request_options_reach_the_planner_and_the_probe(
         self,
         fixture_server_harness: Harness,
-        environ: dict[str, str],
+        request_options: dict[str, object] | None,
         expected_options: dict[str, object],
     ) -> None:
         profile = PROFILE.model_copy(
@@ -205,8 +192,8 @@ class TestLocalVllmServerLifecycle:
             }
         )
 
-        with LocalVllmServer(profile, environ=environ) as server:
-            planner_options = resolve_request_options(server.inference_environ())
+        with LocalVllmServer(profile, request_options=request_options) as server:
+            planner_options = server.inference_settings().request_options
 
         probe_options = {
             key: value
@@ -301,7 +288,7 @@ class TestLocalVllmServerLifecycle:
         fixture_server_harness: Harness,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        monkeypatch.setattr(server_module, "local_runtime_problem", lambda: "no CUDA GPU is available")
+        monkeypatch.setattr(server_module, "local_runtime_problem", lambda profile=None: "no CUDA GPU is available")
 
         with pytest.raises(ParameterError, match="no CUDA GPU is available. Set NSS_INFERENCE_ENDPOINT"):
             LocalVllmServer(PROFILE).start()
@@ -326,6 +313,57 @@ class TestLocalVllmServerLifecycle:
 
         with LocalVllmServer(PROFILE, port=port) as server:
             assert server.endpoint_url == f"http://127.0.0.1:{port}/v1"
+
+
+@pytest.mark.unit
+class TestLocalRuntimeProblem:
+    @pytest.fixture
+    def fixture_visible_gpus(self, monkeypatch: pytest.MonkeyPatch) -> list[float]:
+        """Fake vLLM as installed and CUDA as available; return the visible GPUs' memory in GiB to fill in."""
+        import torch
+
+        gpus: list[float] = []
+        monkeypatch.setattr(server_module, "is_vllm_installed", lambda: True)
+        monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+        monkeypatch.setattr(torch.cuda, "device_count", lambda: len(gpus))
+        monkeypatch.setattr(
+            torch.cuda,
+            "get_device_properties",
+            lambda index: SimpleNamespace(name="Fake GPU", total_memory=int(gpus[index] * 1024**3)),
+        )
+        return gpus
+
+    @pytest.mark.parametrize(
+        ("gpus", "tensor_parallel_size", "match"),
+        [
+            pytest.param([79.25], 1, None, id="80gb-gpu"),
+            pytest.param([44.4], 1, r"at least 75 GiB, but GPU 0 \(Fake GPU\) has 44.4 GiB", id="small-gpu"),
+            pytest.param([79.25], 2, "needs 2 GPUs, but only 1 is visible", id="too-few-gpus"),
+            pytest.param([79.25, 44.4], 2, "GPU 1", id="second-gpu-too-small"),
+        ],
+    )
+    def test_profile_needs_enough_gpus_with_enough_memory(
+        self,
+        fixture_visible_gpus: list[float],
+        gpus: list[float],
+        tensor_parallel_size: int,
+        match: str | None,
+    ) -> None:
+        fixture_visible_gpus.extend(gpus)
+        profile = PROFILE.model_copy(update={"min_gpu_memory_gib": 75, "tensor_parallel_size": tensor_parallel_size})
+
+        problem = local_runtime_problem(profile)
+
+        if match is None:
+            assert problem is None
+        else:
+            assert problem is not None
+            assert re.search(match, problem)
+
+    def test_profile_without_minimum_skips_the_memory_check(self, fixture_visible_gpus: list[float]) -> None:
+        fixture_visible_gpus.append(8.0)
+
+        assert local_runtime_problem(PROFILE) is None
 
 
 @pytest.mark.unit

@@ -14,6 +14,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiReplacementPlan,
     ReplacePiiConfig,
 )
+from nemo_safe_synthesizer.pii_replacer.llm_client import InferenceSettings
 from nemo_safe_synthesizer.pii_replacer.planning import (
     PlanDiscoverer,
     PlanDiscoveryInput,
@@ -103,12 +104,12 @@ class TestResolvePlan:
         monkeypatch.setenv("NSS_INFERENCE_ENDPOINT", "https://inference.example.com/v1")
         monkeypatch.setattr(
             "nemo_safe_synthesizer.pii_replacer.planning.llm.LLMPlanEnhancer",
-            lambda config, environ=None: enhancer,
+            lambda config, settings=None: enhancer,
         )
 
         result = resolve_plan(
             fixture_patient_df,
-            ReplacePiiConfig(llm=LLMConfig()),
+            ReplacePiiConfig(llm=LLMConfig(model_id="served/model")),
             DataParameters(),
         )
 
@@ -226,8 +227,8 @@ class TestResolvePlanWithLocalServer:
         )
         seen: dict[str, object] = {}
 
-        def make_enhancer(config: LLMConfig, environ: dict[str, str] | None = None) -> PlanEnhancer:
-            seen["environ"] = environ
+        def make_enhancer(config: LLMConfig, settings: InferenceSettings | None = None) -> PlanEnhancer:
+            seen["settings"] = settings
             seen["running_during_enhance"] = fixture_fake_local_servers[0].running
             return RecordingEnhancer(expected)
 
@@ -245,7 +246,7 @@ class TestResolvePlanWithLocalServer:
         )
 
         assert result is expected
-        assert seen["environ"] == fixture_fake_local_servers[0].inference_environ()
+        assert seen["settings"] == fixture_fake_local_servers[0].inference_settings(max_workers=LLMConfig().max_workers)
         assert seen["running_during_enhance"] is True
         assert seen["running_during_validation"] is False
         assert not fixture_fake_local_servers[0].running
@@ -262,7 +263,7 @@ class TestResolvePlanWithLocalServer:
 
         monkeypatch.setattr(
             "nemo_safe_synthesizer.pii_replacer.planning.llm.LLMPlanEnhancer",
-            lambda config, environ=None: FailingEnhancer(),
+            lambda config, settings=None: FailingEnhancer(),
         )
 
         with pytest.raises(RuntimeError, match="inference failed"):

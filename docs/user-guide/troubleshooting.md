@@ -513,7 +513,7 @@ check of its own.
 | `inference_model_missing` | error | `env.inference` | `NSS_INFERENCE_ENDPOINT` is set but no model ID is (`replace_pii.llm.model_id`, `--inference-model-id`, or `NSS_INFERENCE_MODEL`) |
 | `inference_request_settings_invalid` | error | `env.inference` | `NSS_INFERENCE_TIMEOUT` is not a positive number of seconds, or `NSS_INFERENCE_REQUEST_OPTIONS` is not a JSON object or sets a field NSS manages |
 | `inference_local_profile_invalid` | error | `env.inference` | The local vLLM profile cannot be loaded, `NSS_INFERENCE_ENDPOINT` is not a usable loopback address for it, or a configured model differs from the profile's model |
-| `inference_local_runtime_unavailable` | error | `env.inference` | No inference endpoint is set, so NSS would run a local vLLM server, but vLLM or a CUDA GPU is unavailable; set `NSS_INFERENCE_ENDPOINT` to use a remote service |
+| `inference_local_runtime_unavailable` | error | `env.inference` | No inference endpoint is set, so NSS would run a local vLLM server, but vLLM, a CUDA GPU, enough GPUs for the profile's `tensor_parallel_size`, or the profile's `min_gpu_memory_gib` is unavailable; set `NSS_INFERENCE_ENDPOINT` to use a remote service |
 | `inference_endpoint_invalid` | error | `env.inference` | The configured PII inference endpoint is not an absolute HTTP(S) URL, embeds credentials, or uses plain HTTP for a non-loopback host |
 | `hf_token_missing` | warning | `env.hf_model_availability` | Neither `HF_TOKEN` nor `HUGGING_FACE_HUB_TOKEN` set, and model loading may need online Hugging Face access |
 | `hf_model_not_cached` | warning/error | `env.hf_model_availability` | Hugging Face model is not present in the local cache; severity is error when HF offline mode is enabled |

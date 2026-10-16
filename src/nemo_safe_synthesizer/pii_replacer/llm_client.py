@@ -29,19 +29,19 @@ __all__ = [
     "TIMEOUT_ENV",
     "InferenceSettings",
     "InvalidInferenceResponse",
+    "InvalidRequestSettingsError",
     "LLMTransport",
     "MissingInferenceModelError",
     "OpenAICompatibleTransport",
     "TransientInferenceError",
     "configured_model_id",
+    "explicit_inference_timeout",
+    "explicit_request_options",
     "is_loopback_host",
     "merge_request_options",
     "nonblank",
-    "parse_request_options",
     "reserved_request_fields",
     "resolve_inference_settings",
-    "resolve_inference_timeout",
-    "resolve_request_options",
 ]
 
 ENDPOINT_ENV = "NSS_INFERENCE_ENDPOINT"
@@ -111,6 +111,10 @@ class MissingInferenceModelError(ParameterError):
     """An explicit endpoint is configured, but no model ID for it."""
 
 
+class InvalidRequestSettingsError(ParameterError):
+    """``NSS_INFERENCE_TIMEOUT`` or ``NSS_INFERENCE_REQUEST_OPTIONS`` is invalid."""
+
+
 class LLMTransport(Protocol):
     """Transport capable of requesting a structured LLM response."""
 
@@ -160,22 +164,21 @@ def _validate_endpoint(endpoint_url: str) -> None:
         )
 
 
-def resolve_inference_timeout(environ: Mapping[str, str] | None = None) -> float:
-    """Return the per-request timeout from ``NSS_INFERENCE_TIMEOUT``, or the default.
+def explicit_inference_timeout(environ: Mapping[str, str]) -> float | None:
+    """Return the per-request timeout from ``NSS_INFERENCE_TIMEOUT``, or ``None`` when it is unset or blank.
 
     Raises:
-        ParameterError: If the value is not a positive number of seconds.
+        InvalidRequestSettingsError: If the value is not a positive, finite number of seconds.
     """
-    runtime_env = os.environ if environ is None else environ
-    raw = nonblank(runtime_env.get(TIMEOUT_ENV))
+    raw = nonblank(environ.get(TIMEOUT_ENV))
     if raw is None:
-        return DEFAULT_NSS_INFERENCE_TIMEOUT_SECONDS
+        return None
     try:
         timeout = float(raw)
     except ValueError:
         timeout = 0.0
     if not timeout > 0 or timeout == float("inf"):
-        raise ParameterError(f"NSS_INFERENCE_TIMEOUT must be a positive number of seconds, got {raw!r}")
+        raise InvalidRequestSettingsError(f"{TIMEOUT_ENV} must be a positive number of seconds, got {raw!r}")
     return timeout
 
 
@@ -184,21 +187,31 @@ def reserved_request_fields(fields: Iterable[str]) -> list[str]:
     return sorted(RESERVED_REQUEST_FIELDS.intersection(fields))
 
 
-def parse_request_options(raw: str) -> dict[str, object]:
-    """Parse a JSON object of request options from ``NSS_INFERENCE_REQUEST_OPTIONS``.
+def explicit_request_options(environ: Mapping[str, str]) -> dict[str, object]:
+    """Return the JSON object in ``NSS_INFERENCE_REQUEST_OPTIONS``, or ``{}`` when it is unset or blank.
+
+    The object holds chat-completions fields such as
+    ``{"temperature": 1.0, "thinking_token_budget": 1000}``. ``null`` values
+    are kept so that ``merge_request_options`` can drop the field from a
+    lower layer.
 
     Raises:
-        ParameterError: If ``raw`` is not a JSON object or sets a field in
-            ``RESERVED_REQUEST_FIELDS``.
+        InvalidRequestSettingsError: If the value is not a JSON object or sets
+            a field in ``RESERVED_REQUEST_FIELDS``.
     """
+    raw = nonblank(environ.get(REQUEST_OPTIONS_ENV))
+    if raw is None:
+        return {}
     try:
         options = json.loads(raw)
     except json.JSONDecodeError as exc:
-        raise ParameterError(f"{REQUEST_OPTIONS_ENV} must be a JSON object") from exc
+        raise InvalidRequestSettingsError(f"{REQUEST_OPTIONS_ENV} must be a JSON object") from exc
     if not isinstance(options, dict):
-        raise ParameterError(f"{REQUEST_OPTIONS_ENV} must be a JSON object")
+        raise InvalidRequestSettingsError(f"{REQUEST_OPTIONS_ENV} must be a JSON object")
     if reserved := reserved_request_fields(options):
-        raise ParameterError(f"{REQUEST_OPTIONS_ENV} must not set fields NSS manages: {', '.join(reserved)}")
+        raise InvalidRequestSettingsError(
+            f"{REQUEST_OPTIONS_ENV} must not set fields NSS manages: {', '.join(reserved)}"
+        )
     # JSON object keys are always strings.
     return {str(key): value for key, value in options.items()}
 
@@ -215,23 +228,6 @@ def merge_request_options(*layers: Mapping[str, object]) -> dict[str, object]:
     return {field: value for field, value in merged.items() if value is not None}
 
 
-def resolve_request_options(environ: Mapping[str, str] | None = None) -> dict[str, object]:
-    """Return the chat-completions fields sent with every request.
-
-    ``NSS_INFERENCE_REQUEST_OPTIONS`` holds a JSON object, such as
-    ``{"temperature": 1.0, "thinking_token_budget": 1000}``. NSS sends no
-    sampling settings of its own, so fields left out use the server's defaults;
-    a ``null`` field is dropped.
-
-    Raises:
-        ParameterError: If the value is not a JSON object or sets a field in
-            ``RESERVED_REQUEST_FIELDS``.
-    """
-    runtime_env = os.environ if environ is None else environ
-    raw = nonblank(runtime_env.get(REQUEST_OPTIONS_ENV))
-    return merge_request_options({} if raw is None else parse_request_options(raw))
-
-
 def configured_model_id(config: LLMConfig, environ: Mapping[str, str]) -> str | None:
     """Return ``config.model_id``, else ``NSS_INFERENCE_MODEL``, or ``None`` when neither is set."""
     return nonblank(config.model_id) or nonblank(environ.get(MODEL_ENV))
@@ -242,7 +238,7 @@ def resolve_inference_settings(
     *,
     environ: Mapping[str, str] | None = None,
 ) -> InferenceSettings:
-    """Resolve inference settings from persisted configuration and environment.
+    """Resolve settings for an explicit inference endpoint from configuration and environment.
 
     There are no defaults: an endpoint and its model must both be set. The
     model resolves from ``config.model_id``, then ``NSS_INFERENCE_MODEL``. As
@@ -253,10 +249,12 @@ def resolve_inference_settings(
     The endpoint and API key are deliberately absent from persisted
     configuration. They come only from ``NSS_INFERENCE_ENDPOINT`` and
     ``NSS_INFERENCE_KEY``, which the CLI populates from its runtime options.
-    The per-request timeout comes from ``NSS_INFERENCE_TIMEOUT`` and extra
-    request fields from ``NSS_INFERENCE_REQUEST_OPTIONS``.
-    Plan discovery calls this inside ``planning_inference_environment``, which
-    points these variables at the managed local server when no endpoint is set.
+    The per-request timeout comes from ``NSS_INFERENCE_TIMEOUT`` (default 60
+    seconds) and extra request fields from ``NSS_INFERENCE_REQUEST_OPTIONS``;
+    NSS sends no sampling settings of its own, so fields left out use the
+    server's defaults. Plan discovery reaches this through
+    ``resolve_planning_inference``, which selects the managed local server
+    instead when no endpoint is set.
 
     Args:
         config: Persisted LLM behavior from ``replace_pii.llm``.
@@ -266,15 +264,15 @@ def resolve_inference_settings(
         Settings with a validated endpoint and resolved model.
 
     Raises:
+        InvalidRequestSettingsError: If the timeout or request options are invalid.
         ParameterError: If no endpoint is set, or the endpoint is not an
             absolute HTTP(S) URL, embeds credentials, or uses plaintext HTTP
             for a non-loopback host.
         MissingInferenceModelError: If the endpoint has no model ID.
-
-    See ``resolve_inference_timeout`` and ``resolve_request_options`` for
-    their validation errors.
     """
     runtime_env = os.environ if environ is None else environ
+    timeout = explicit_inference_timeout(runtime_env)
+    request_options = merge_request_options(explicit_request_options(runtime_env))
     resolved_endpoint = nonblank(runtime_env.get(ENDPOINT_ENV))
     resolved_model = configured_model_id(config, runtime_env)
     resolved_key = nonblank(runtime_env.get(KEY_ENV))
@@ -293,8 +291,8 @@ def resolve_inference_settings(
         model_id=resolved_model,
         api_key=resolved_key,
         max_workers=config.max_workers,
-        timeout_seconds=resolve_inference_timeout(runtime_env),
-        request_options=resolve_request_options(runtime_env),
+        timeout_seconds=DEFAULT_NSS_INFERENCE_TIMEOUT_SECONDS if timeout is None else timeout,
+        request_options=request_options,
     )
 
 
@@ -348,20 +346,18 @@ class OpenAICompatibleTransport:
     """Minimal privacy-preserving OpenAI chat-completions transport.
 
     Args:
-        settings: Resolved endpoint, model, and credential.
-        timeout: Per-request timeout in seconds; defaults to ``settings.timeout_seconds``.
+        settings: Resolved endpoint, model, credential, timeout, and request options.
 
     Raises:
         ParameterError: If the endpoint is malformed, embeds credentials, or
             uses plaintext HTTP for a non-loopback host.
     """
 
-    def __init__(self, settings: InferenceSettings, *, timeout: float | None = None) -> None:
+    def __init__(self, settings: InferenceSettings) -> None:
         # Settings built directly, not through ``resolve_inference_settings``,
         # must not send samples or the bearer key over an unsafe endpoint.
         _validate_endpoint(settings.endpoint_url)
         self._settings = settings
-        self._timeout = settings.timeout_seconds if timeout is None else timeout
         # Loopback servers never need a proxy, and an environment proxy would
         # receive the bearer key and raw cell samples. Remote endpoints keep
         # the environment's proxy settings.
@@ -411,7 +407,7 @@ class OpenAICompatibleTransport:
                 self._settings.endpoint_url + _CHAT_COMPLETIONS_PATH,
                 headers=headers,
                 json=payload,
-                timeout=self._timeout,
+                timeout=self._settings.timeout_seconds,
                 trust_env=self._trust_env,
             )
         except httpx.HTTPError as exc:

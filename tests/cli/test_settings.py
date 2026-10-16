@@ -5,6 +5,9 @@
 
 from __future__ import annotations
 
+import pytest
+from pydantic import ValidationError
+
 from nemo_safe_synthesizer.cli.settings import CLISettings
 from nemo_safe_synthesizer.cli.wandb_setup import WandbMode
 
@@ -231,6 +234,17 @@ class TestCLISettings:
 
         settings = CLISettings.from_cli_kwargs(inference_local_profile="/profiles/custom.yaml")
         assert settings.inference_local_profile == "/profiles/custom.yaml"
+
+    @pytest.mark.parametrize(("raw", "expected"), [("  ", None), ("90", 90.0)])
+    def test_blank_inference_timeout_is_unset(self, monkeypatch, raw, expected):
+        monkeypatch.setenv("NSS_INFERENCE_TIMEOUT", raw)
+        assert CLISettings().inference_timeout_seconds == expected
+
+    @pytest.mark.parametrize("raw", ["0", "inf", "nan"])
+    def test_invalid_inference_timeout_is_rejected(self, monkeypatch, raw):
+        monkeypatch.setenv("NSS_INFERENCE_TIMEOUT", raw)
+        with pytest.raises(ValidationError, match="inference_timeout_seconds"):
+            CLISettings()
 
     def test_explicit_cli_fields_exclude_environment_loaded_values(self, monkeypatch):
         monkeypatch.setenv("NSS_INFERENCE_ENDPOINT", "https://env.example/v1")

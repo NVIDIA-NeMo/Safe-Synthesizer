@@ -31,7 +31,7 @@ from pydantic import (
 )
 
 from ..configurator.parameters import Parameters
-from ..defaults import NSS_NEMOTRON_PERSONAS_PATH_ENV, default_nemotron_personas_path
+from ..defaults import DEFAULT_NSS_INFERENCE_LOCAL_MODEL, NSS_NEMOTRON_PERSONAS_PATH_ENV, default_nemotron_personas_path
 from ..errors import ParameterError
 from .base import NSSBaseModel
 from .unknown_fields import raise_if_removed_legacy_fields
@@ -703,8 +703,8 @@ class LLMConfig(NSSBaseModel):
         default=None,
         description=(
             "Model identifier for PII inference. When unset, uses NSS_INFERENCE_MODEL. Without an inference "
-            "endpoint, selects the bundled local vLLM profile and defaults to nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16; with an "
-            "endpoint, a model ID is required."
+            "endpoint, selects the bundled local vLLM profile and defaults to "
+            f"{DEFAULT_NSS_INFERENCE_LOCAL_MODEL}; with an endpoint, a model ID is required."
         ),
     )
     max_workers: int = Field(
