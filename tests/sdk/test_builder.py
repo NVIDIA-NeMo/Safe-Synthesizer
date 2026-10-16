@@ -10,6 +10,7 @@ import pytest
 from nemo_safe_synthesizer.config import GenerateParameters, SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.replace_pii import (
     EntityType,
+    LLMConfig,
     PiiColumnPlan,
     PiiReplacementPlan,
     PiiReplacementSettings,
@@ -421,6 +422,84 @@ class TestTelemetryEmission:
 
         assert event.pii_locale == expected
 
+    @pytest.mark.parametrize(
+        ("llm", "replacement_plan", "env", "expected_mode", "expected_model"),
+        [
+            (None, "auto_discovery", {}, "none", "undefined"),
+            ({}, PiiReplacementPlan(), {}, "none", "undefined"),
+            ({}, "auto_discovery", {}, "local", "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16"),
+            ({"model_id": "openai/gpt-oss-120b"}, "auto_discovery", {}, "local", "openai/gpt-oss-120b"),
+            ({"model_id": "acme/unbundled-model"}, "auto_discovery", {}, "invalid", "undefined"),
+            (
+                {"model_id": "openai/gpt-oss-120b"},
+                "auto_discovery",
+                {"NSS_INFERENCE_ENDPOINT": "https://inference.example.com/v1"},
+                "endpoint",
+                "openai/gpt-oss-120b",
+            ),
+            (
+                {"model_id": "acme/private-deployment"},
+                "auto_discovery",
+                {"NSS_INFERENCE_ENDPOINT": "https://inference.example.com/v1"},
+                "endpoint",
+                "other",
+            ),
+            (
+                {},
+                "auto_discovery",
+                {"NSS_INFERENCE_ENDPOINT": "https://inference.example.com/v1"},
+                "invalid",
+                "undefined",
+            ),
+        ],
+        ids=[
+            "no-llm",
+            "user-supplied-plan",
+            "local-default",
+            "local-bundled",
+            "local-unbundled-model",
+            "endpoint-bundled-model",
+            "endpoint-private-model",
+            "endpoint-without-model",
+        ],
+    )
+    def test_build_telemetry_event_reports_pii_llm_mode_and_model(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        llm: dict | None,
+        replacement_plan: PiiReplacementPlan | str,
+        env: dict[str, str],
+        expected_mode: str,
+        expected_model: str,
+    ):
+        for name, value in env.items():
+            monkeypatch.setenv(name, value)
+        builder = _builder_for_telemetry()
+        builder._nss_config = SafeSynthesizerParameters(
+            emit_telemetry=True,
+            replace_pii=ReplacePiiConfig.model_validate({"llm": llm, "replacement_plan": replacement_plan}),
+        )
+
+        event = _build_telemetry_event(builder, TaskStatusEnum.COMPLETED)
+
+        assert (event.pii_llm_mode, event.pii_llm_model) == (expected_mode, expected_model)
+
+    def test_build_telemetry_event_reports_custom_local_profile_without_its_model_name(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ):
+        # Reuses a bundled model name with different settings, so only the label is reported.
+        profile_path = tmp_path / "private-profile.yaml"
+        profile_path.write_text("model_id: openai/gpt-oss-120b\nrevision: main\ngpu_memory_utilization: 0.5\n")
+        monkeypatch.setenv("NSS_INFERENCE_LOCAL_PROFILE", str(profile_path))
+        builder = _builder_for_telemetry()
+        builder._nss_config = SafeSynthesizerParameters(
+            emit_telemetry=True, replace_pii=ReplacePiiConfig(llm=LLMConfig())
+        )
+
+        event = _build_telemetry_event(builder, TaskStatusEnum.COMPLETED)
+
+        assert (event.pii_llm_mode, event.pii_llm_model) == ("local", "custom_profile")
+
     def test_build_telemetry_event_reports_undefined_backend_without_config(self):
         builder = _builder_for_telemetry()
         builder._nss_config = None
@@ -433,6 +512,8 @@ class TestTelemetryEmission:
         assert event.pii_plan_source == "undefined"
         assert event.pii_replaced_columns_bucket == "undefined"
         assert event.pii_locale == "undefined"
+        assert event.pii_llm_mode == "undefined"
+        assert event.pii_llm_model == "undefined"
 
     def test_emit_nss_telemetry_swallows_handler_errors(self, monkeypatch):
         class FailingTelemetryHandler:
