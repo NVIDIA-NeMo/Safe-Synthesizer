@@ -698,6 +698,19 @@ class TestStructuredReplacementExecutor:
         assert len(generator.requests) == 1
         assert result.generation_statistics.generated_replacement_count == 1
 
+    def test_free_text_identifier_reuses_the_structured_unique_identifier_replacement(self) -> None:
+        dataframe = pd.DataFrame({"customer_id": ["cust-00412"], "notes": ["Ticket for cust-00412"]})
+        plan = _plan(_target("customer_id", EntityType.UNIQUE_IDENTIFIER), _target("notes", EntityType.FREE_TEXT))
+        detector = _StaticDetector(
+            [_span(0, "notes", "Ticket for cust-00412", "cust-00412", EntityType.UNIQUE_IDENTIFIER)]
+        )
+        generator = _RecordingGenerator()
+
+        result = _execute(dataframe, plan, generator, free_text_detector=detector)
+
+        assert result.dataframe.at[0, "notes"] == f"Ticket for {result.dataframe.at[0, 'customer_id']}"
+        assert len(generator.requests) == 1
+
     def test_free_text_identifier_reuses_an_allocated_integer_replacement(self) -> None:
         dataframe = pd.DataFrame({"api_key": [12345, 67890], "notes": ["Key 12345 issued", "No key"]})
         plan = _plan(_target("api_key", EntityType.API_KEY), _target("notes", EntityType.FREE_TEXT))
