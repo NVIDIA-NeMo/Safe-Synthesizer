@@ -180,6 +180,24 @@ class TestReplacementGenerator:
         assert replacement != original
         assert generator.generate(request) == replacement
 
+    @pytest.mark.parametrize(
+        ("original", "shape"),
+        [
+            ("123-45-6789", r"[0-9]{3}-[0-9]{2}-[0-9]{4}"),
+            ("D1234567", r"[A-Z][0-9]{7}"),
+            ("12-3456789", r"[0-9]{2}-[0-9]{7}"),
+            ("AB 12 34 56 C", r"[A-Z]{2} [0-9]{2} [0-9]{2} [0-9]{2} [A-Z]"),
+        ],
+    )
+    def test_national_id_keeps_the_original_shape(self, original: str, shape: str) -> None:
+        generator = _faker_generator()
+
+        for seed in range(20):
+            replacement = generator.generate(_request(EntityType.NATIONAL_ID, original, seed=seed))
+
+            assert re.fullmatch(shape, replacement), replacement
+            assert replacement != original
+
     def test_request_is_immutable_and_hides_sensitive_inputs_from_repr(self) -> None:
         request = _request(
             EntityType.FULL_NAME,
