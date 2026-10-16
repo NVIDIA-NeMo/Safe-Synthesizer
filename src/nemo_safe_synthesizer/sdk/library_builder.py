@@ -92,6 +92,35 @@ def _pii_plan_source(config: ReplacePiiConfig) -> str:
     return "inline"
 
 
+def _pii_llm_usage(config: ReplacePiiConfig, plan_source: str) -> tuple[str, str]:
+    """Return the telemetry ``(mode, model)`` labels for LLM-assisted PII planning.
+
+    Resolves where planning runs the same way plan discovery does, without
+    launching a server. Only bundled model names are reported; custom profiles
+    and other endpoint models collapse to fixed labels so private model or
+    deployment names are never sent.
+    """
+    if config.llm is None or plan_source != "auto_discovery":
+        return "none", "undefined"
+
+    from ..pii_replacer.local_inference import (
+        LocalServerRequest,
+        bundled_profile_for_model,
+        resolve_planning_inference,
+    )
+
+    try:
+        inference = resolve_planning_inference(config.llm)
+    except ParameterError:
+        return "invalid", "undefined"
+    if isinstance(inference, LocalServerRequest):
+        profile = inference.profile
+        is_bundled = bundled_profile_for_model(profile.served_name) == profile
+        return "local", profile.served_name if is_bundled else "custom_profile"
+    is_bundled_model = bundled_profile_for_model(inference.model_id) is not None
+    return "endpoint", inference.model_id if is_bundled_model else "other"
+
+
 def _build_telemetry_event(
     ss: SafeSynthesizer, status: TaskStatusEnum, task: str = "run"
 ) -> NSSTrainingAndGenerationEvent:
@@ -118,6 +147,8 @@ def _build_telemetry_event(
     pii_plan_source = "undefined"
     pii_columns_bucket = "undefined"
     pii_locale = "undefined"
+    pii_llm_mode = "undefined"
+    pii_llm_model = "undefined"
     if replace_pii_config is not None:
         pii_sampler_backend = replace_pii_config.sampler.backend.value
         # Planning rewrites replacement_plan to the resolved inline plan, so prefer the source recorded beforehand.
@@ -125,6 +156,7 @@ def _build_telemetry_event(
         if replace_pii_config.inline_plan is not None:
             pii_columns_bucket = bucket_columns(len(replace_pii_config.inline_plan.columns_to_replace))
         pii_locale = sanitize_locale_for_telemetry(replace_pii_config.replacement.locale)
+        pii_llm_mode, pii_llm_model = _pii_llm_usage(replace_pii_config, pii_plan_source)
     dp_enabled = cfg is not None and cfg.privacy is not None and cfg.privacy.dp_enabled
     ts_enabled = cfg is not None and cfg.time_series.is_timeseries
     group_by = cfg is not None and cfg.data.group_training_examples_by is not None
@@ -149,6 +181,8 @@ def _build_telemetry_event(
         pii_plan_source=pii_plan_source,
         pii_replaced_columns_bucket=pii_columns_bucket,
         pii_locale=pii_locale,
+        pii_llm_mode=pii_llm_mode,
+        pii_llm_model=pii_llm_model,
         differential_privacy_enabled=dp_enabled,
         time_series_enabled=ts_enabled,
         group_by_enabled=group_by,
