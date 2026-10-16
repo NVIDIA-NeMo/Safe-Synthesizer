@@ -18,6 +18,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum, StrEnum, auto
 from pathlib import Path
+from types import MappingProxyType
 from typing import Annotated, ClassVar, Literal, Self, cast
 
 from pydantic import (
@@ -323,9 +324,7 @@ ENTITIES: tuple[Entity, ...] = (
 ENTITY_BY_TYPE: dict[EntityType, Entity] = {entity.entity_type: entity for entity in ENTITIES}
 
 FREE_TEXT_DETECTION_ENTITY_TYPES: tuple[EntityType, ...] = tuple(
-    entity.entity_type
-    for entity in ENTITIES
-    if entity.action is EntityAction.REPLACE and entity.entity_type is not EntityType.UNIQUE_IDENTIFIER
+    entity.entity_type for entity in ENTITIES if entity.action is EntityAction.REPLACE
 )
 """Entity types eligible for fresh detection and replacement inside free text."""
 
@@ -346,20 +345,31 @@ The checkpoint's specific ``full_name`` label is used for complete names; its
 broader ``person`` label is intentionally not requested.
 """
 
-_DEFAULT_NAME_ENTITY_THRESHOLDS = {
-    EntityType.FIRST_NAME: 0.9,
-    EntityType.MIDDLE_NAME: 0.9,
-    EntityType.LAST_NAME: 0.9,
-    EntityType.FULL_NAME: 0.95,
-}
+# Name thresholds are precision-first defaults chosen against medical-term false positives. The rest
+# come from the nss-pii-ner-eval v5 tuning on its dev split (entity-type exact F0.5), rounded. That
+# tuning also used exclusion labels that NSS does not request, so its name thresholds are not reused.
+_DEFAULT_GLINER_ENTITY_THRESHOLDS: Mapping[EntityType, float] = MappingProxyType(
+    {
+        EntityType.FIRST_NAME: 0.9,
+        EntityType.MIDDLE_NAME: 0.9,
+        EntityType.LAST_NAME: 0.9,
+        EntityType.FULL_NAME: 0.95,
+        EntityType.PHONE_NUMBER: 0.994,
+        EntityType.DATE_OF_BIRTH: 0.9999,
+        EntityType.STREET_ADDRESS: 0.986,
+        EntityType.SSN: 0.079,
+        EntityType.NATIONAL_ID: 0.982,
+        EntityType.API_KEY: 0.993,
+        EntityType.UNIQUE_IDENTIFIER: 0.953,
+    }
+)
 _ConfidenceThreshold = Annotated[float, Field(ge=0, le=1)]
 
 
 def _default_gliner_entity_thresholds() -> dict[EntityType, float]:
     """Return a fresh, complete set of precision-first GLiNER2 thresholds."""
     return {
-        entity_type: _DEFAULT_NAME_ENTITY_THRESHOLDS.get(entity_type, 0.5)
-        for entity_type in GLINER_DETECTION_ENTITY_TYPES
+        entity_type: _DEFAULT_GLINER_ENTITY_THRESHOLDS[entity_type] for entity_type in GLINER_DETECTION_ENTITY_TYPES
     }
 
 
@@ -783,8 +793,10 @@ class FreeTextDetectionConfig(NSSBaseModel):
         default_factory=_default_gliner_entity_thresholds,
         description=(
             "Minimum GLiNER2 confidence score per entity type. Entity types left out use the defaults: 0.95 for "
-            "full_name, 0.9 for first_name, middle_name, and last_name, and 0.5 for the rest. Email, "
-            "credit_debit_card, ipv4, and ipv6 are detected by regex and take no threshold."
+            "full_name; 0.9 for first_name, middle_name, and last_name; 0.994 for phone_number; 0.9999 for "
+            "date_of_birth; 0.986 for street_address; 0.079 for ssn; 0.982 for national_id; 0.993 for api_key; "
+            "and 0.953 for unique_identifier. Email, credit_debit_card, ipv4, and ipv6 are detected by regex and "
+            "take no threshold."
         ),
     )
     batch_size: int = Field(
