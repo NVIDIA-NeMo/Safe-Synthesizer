@@ -5,22 +5,27 @@
 
 from __future__ import annotations
 
-import hashlib
-import os
 import time
 from dataclasses import dataclass, field
 
 import pandas as pd
 
 from ...config.replace_pii import DataToSamplerValueMapping, EntityType, PiiColumnPlan, PiiReplacementPlan
-from ...defaults import DEFAULT_PII_REPLACEMENT_SEED
 from ...errors import DataError, GenerationError, InternalError, ParameterError, SafeSynthesizerError
 from ...observability import get_logger
-from ..transform_result import ColumnStatistics, ReplacementGenerationStatistics
+from ..transform_result import (
+    ColumnStatistics,
+    ReplacementGenerationStatistics,
+    ReplacementMap,
+    StructuredReplacementRecord,
+)
 from .canonicalization import canonicalize_scalar, is_missing_scalar, readable_value
 from .compiler import compile_plan
+from .detection import FreeTextDetector
+from .free_text import FreeTextColumnStatistics, FreeTextReplacementExecutor
 from .generation import ReplacementGenerationRequest, ReplacementGenerator
 from .identifier_space import IdentifierAllocator, NumberSpace, identifier_allocator
+from .seeding import derive_seed, resolve_base_seed
 from .types import (
     CanonicalValue,
     EffectiveDependencyTuple,
@@ -37,7 +42,6 @@ logger = get_logger(__name__)
 __all__ = ["ReplacementExecutionResult", "StructuredReplacementExecutor", "resolve_base_seed"]
 
 _MAX_GENERATION_ATTEMPTS = 10
-_PERSON_RANDOM_SEED_ENV = "PERSON_RANDOM_SEED"
 _CompiledDataToSamplerValueMapping = dict[str, dict[str, tuple[str, ...]]]
 # Identifier-like values: replacements avoid every original value in the column, so real identifiers
 # do not reappear on other rows, and stay unique while the column's format has unused values. Both
@@ -74,6 +78,9 @@ class ReplacementExecutionResult:
     dependency_drifts: tuple[GroupDependencyDrift, ...]
     """Group mappings reused although their dependency values changed."""
 
+    replacement_map: ReplacementMap | None
+    """Per-occurrence original and replacement values when capture was requested, otherwise ``None``."""
+
 
 @dataclass(frozen=True, slots=True)
 class _CachedReplacement:
@@ -94,13 +101,23 @@ class StructuredReplacementExecutor:
         *,
         group_column: str | None,
         base_seed: int,
+        free_text_detector: FreeTextDetector | None = None,
+        capture_replacement_map: bool = False,
     ) -> None:
         self._plan = plan
         self._generator = generator
         self._group_column = group_column
         self._base_seed = base_seed
         self._data_to_sampler_value_mapping = _compile_data_to_sampler_value_mapping(plan.data_to_sampler_value_mapping)
+        self._capture_replacement_map = capture_replacement_map
         self._cache: dict[StructuredMappingKey, _CachedReplacement] = {}
+        self._free_text = FreeTextReplacementExecutor(
+            generator,
+            free_text_detector,
+            base_seed=base_seed,
+            capture_replacement_map=capture_replacement_map,
+        )
+        self._replacement_records: list[StructuredReplacementRecord] = []
         self._originals_by_target: dict[str, set[str]] = {}
         self._generated_by_target: dict[str, set[str]] = {}
         self._repeated_by_target: dict[str, int] = {}
@@ -113,20 +130,23 @@ class StructuredReplacementExecutor:
     def execute(self, dataframe: pd.DataFrame) -> ReplacementExecutionResult:
         """Return a copy with every structured plan target replaced."""
         self._reset_execution_state()
-        free_text_targets = [
-            spec.column_name for spec in self._plan.columns_to_replace if spec.entity_type is EntityType.FREE_TEXT
-        ]
-        if free_text_targets:
-            raise GenerationError(
-                "free-text replacement targets require the detector and span-resolution implementation"
-            )
+        free_text_specs = [spec for spec in self._plan.columns_to_replace if spec.entity_type is EntityType.FREE_TEXT]
 
         working = dataframe.copy(deep=True)
         original_group_identities = self._snapshot_group_identities(dataframe)
         self._seed_reserved_values(dataframe)
         self._prepare_identifier_allocators(dataframe)
-        for spec in compile_plan(self._plan):
-            self._execute_target(working, spec, original_group_identities)
+        free_text_spans = self._free_text.detect(dataframe, free_text_specs)
+        ordered_specs = compile_plan(self._plan)
+        for spec in ordered_specs:
+            if spec.entity_type is not EntityType.FREE_TEXT:
+                self._execute_target(working, spec, original_group_identities)
+        free_text_result = self._free_text.execute(
+            working,
+            free_text_specs,
+            original_group_identities,
+            free_text_spans,
+        )
         _verify_result(dataframe, working, self._plan)
 
         for column_name, repeated in sorted(self._repeated_by_target.items()):
@@ -147,17 +167,33 @@ class StructuredReplacementExecutor:
             )
         return ReplacementExecutionResult(
             dataframe=working,
-            column_statistics=_column_statistics(dataframe, working, self._plan, self._generator.backend.value),
+            column_statistics=_column_statistics(
+                dataframe,
+                working,
+                self._plan,
+                self._generator.backend.value,
+                free_text_result.column_statistics,
+            ),
             generation_statistics=ReplacementGenerationStatistics(
-                generated_replacement_count=self._generated_count,
-                generator_time_seconds=self._generation_elapsed,
+                generated_replacement_count=(self._generated_count + free_text_result.generated_replacement_count),
+                generator_time_seconds=self._generation_elapsed + free_text_result.generator_time_seconds,
                 dependency_drift_count=sum(drift.conflict_count for drift in drifts),
             ),
             dependency_drifts=drifts,
+            replacement_map=(
+                ReplacementMap(
+                    structured=tuple(self._replacement_records),
+                    free_text=free_text_result.replacement_records,
+                )
+                if self._capture_replacement_map
+                else None
+            ),
         )
 
     def _reset_execution_state(self) -> None:
         self._cache.clear()
+        self._free_text.reset()
+        self._replacement_records.clear()
         self._originals_by_target.clear()
         self._generated_by_target.clear()
         self._repeated_by_target.clear()
@@ -241,6 +277,17 @@ class StructuredReplacementExecutor:
             key = self._mapping_key(spec, row_position, canonical_original, group_identities)
             replacement = self._replacement_for(key, spec, original_texts[row_position], dependencies)
             working.iat[row_position, column_position] = replacement
+            if self._capture_replacement_map:
+                self._replacement_records.append(
+                    StructuredReplacementRecord(
+                        row_position=row_position,
+                        column_name=spec.column_name,
+                        entity_type=spec.entity_type,
+                        scope="record" if group_identities is None else "group",
+                        original_value=original_texts[row_position],
+                        replacement_value=replacement,
+                    )
+                )
 
     def _mapping_key(
         self,
@@ -263,6 +310,7 @@ class StructuredReplacementExecutor:
         cached = self._cache.get(key)
         if cached is not None:
             self._record_dependency_drift(key, cached, dependencies)
+            self._free_text.register_structured_mapping(key, spec, original_text, cached.value, dependencies)
             return cached.value
 
         replacement = self._generate_fresh(key, spec, original_text, dependencies)
@@ -270,6 +318,7 @@ class StructuredReplacementExecutor:
         self._cache[key] = _CachedReplacement(replacement, provenance)
         if (generated_values := self._generated_by_target.get(spec.column_name)) is not None:
             generated_values.add(replacement)
+        self._free_text.register_structured_mapping(key, spec, original_text, replacement, dependencies)
         self._generated_count += 1
         return replacement
 
@@ -292,7 +341,7 @@ class StructuredReplacementExecutor:
                 original_value=original_text,
                 effective_dependency_tuple=dependencies,
                 pattern=spec.pattern,
-                seed=_derive_seed(self._base_seed, key, purpose="replacement", attempt=attempt),
+                seed=derive_seed(self._base_seed, key, purpose="replacement", attempt=attempt),
                 resolved_dependency_values=_resolved_dependency_values(
                     spec,
                     dependencies,
@@ -343,7 +392,7 @@ class StructuredReplacementExecutor:
     ) -> str:
         """Take the next unused value from the column's identifier space, starting at a seeded position."""
         started = time.perf_counter()
-        seed = _derive_seed(self._base_seed, key, purpose="replacement", attempt=0)
+        seed = derive_seed(self._base_seed, key, purpose="replacement", attempt=0)
         allocation = allocator.allocate(seed, original_text)
         self._generation_elapsed += time.perf_counter() - started
         if allocation is None:
@@ -382,19 +431,6 @@ class StructuredReplacementExecutor:
                 key=lambda item: (item[0][0], sorted(entity.value for entity in item[0][1])),
             )
         )
-
-
-def resolve_base_seed(explicit_seed: int | None) -> int:
-    """Resolve the replacement seed from config, environment, then default."""
-    if explicit_seed is not None:
-        return explicit_seed
-    environment_seed = os.environ.get(_PERSON_RANDOM_SEED_ENV)
-    if environment_seed is None:
-        return DEFAULT_PII_REPLACEMENT_SEED
-    try:
-        return int(environment_seed)
-    except ValueError as exc:
-        raise ParameterError(f"{_PERSON_RANDOM_SEED_ENV} must be an integer") from exc
 
 
 def _effective_dependencies(
@@ -442,54 +478,32 @@ def _resolved_dependency_values(
     return tuple(resolved)
 
 
-def _derive_seed(
-    base_seed: int,
-    key: StructuredMappingKey,
-    *,
-    purpose: str,
-    attempt: int,
-) -> int:
-    digest = hashlib.sha256()
-    for component in _seed_components(base_seed, key, purpose, attempt):
-        encoded = component.encode("utf-8")
-        digest.update(len(encoded).to_bytes(8, "big"))
-        digest.update(encoded)
-    return int.from_bytes(digest.digest()[:8], "big")
-
-
-def _seed_components(
-    base_seed: int,
-    key: StructuredMappingKey,
-    purpose: str,
-    attempt: int,
-) -> tuple[str, ...]:
-    original = key.canonical_original_value
-    common = (
-        str(base_seed),
-        purpose,
-        str(attempt),
-        key.target_column,
-        original.type_tag,
-        original.normalized_value,
-    )
-    if isinstance(key, RecordMappingKey):
-        return ("record", *common, str(key.row_position))
-    group = key.original_group_identity
-    if not isinstance(group, CanonicalValue):
-        raise InternalError("group mapping identity must be a CanonicalValue")
-    return ("group", *common, group.type_tag, group.normalized_value)
-
-
 def _column_statistics(
     original: pd.DataFrame,
     transformed: pd.DataFrame,
     plan: PiiReplacementPlan,
     backend: str,
+    free_text_statistics: dict[str, FreeTextColumnStatistics],
 ) -> dict[str, ColumnStatistics]:
     statistics: dict[str, ColumnStatistics] = {}
     for spec in plan.columns_to_replace:
         source = original[spec.column_name]
         entity = spec.entity_type.value
+        if spec.entity_type is EntityType.FREE_TEXT:
+            detected = free_text_statistics.get(spec.column_name, FreeTextColumnStatistics())
+            changed = sum(
+                not _equal_scalars(before, after)
+                for before, after in zip(source.tolist(), transformed[spec.column_name].tolist())
+            )
+            statistics[spec.column_name] = ColumnStatistics(
+                assigned_type="text",
+                assigned_entity=entity,
+                detected_entity_counts=detected.counts,
+                detected_entity_values=detected.values,
+                is_transformed=changed > 0,
+                transform_functions={backend, *detected.sources} if changed else set(),
+            )
+            continue
         non_missing = [value for value in source.tolist() if not is_missing_scalar(value)]
         changed = sum(
             not _equal_scalars(before, after)

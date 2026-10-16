@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 
 import pandas as pd
 import pytest
@@ -24,6 +25,7 @@ from nemo_safe_synthesizer.pii_replacer.replacement.executor import (
     resolve_base_seed,
 )
 from nemo_safe_synthesizer.pii_replacer.replacement.generation import ReplacementGenerationRequest
+from nemo_safe_synthesizer.pii_replacer.replacement.types import DetectedSpan, DetectionCell, DetectionCellId
 
 
 class _RecordingGenerator:
@@ -86,10 +88,49 @@ class _OriginalThenReplacementGenerator(_RecordingGenerator):
         return request.original_value if len(self.requests) == 1 else "Synthetic"
 
 
+class _CompositeNameGenerator(_RecordingGenerator):
+    def generate(self, request: ReplacementGenerationRequest) -> str:
+        self.requests.append(request)
+        if request.entity_type is EntityType.FULL_NAME:
+            return "Grace Hopper"
+        return super().generate(request)
+
+
+class _CompositeAddressGenerator(_RecordingGenerator):
+    def generate(self, request: ReplacementGenerationRequest) -> str:
+        self.requests.append(request)
+        if request.entity_type is EntityType.STREET_ADDRESS:
+            return "9 New Road, Boston, MA"
+        return super().generate(request)
+
+
+class _StaticDetector:
+    def __init__(self, spans: list[DetectedSpan]) -> None:
+        self.spans = spans
+        self.cells: list[DetectionCell] = []
+
+    def detect(self, cells: Sequence[DetectionCell]) -> tuple[DetectedSpan, ...]:
+        self.cells.extend(cells)
+        return tuple(self.spans)
+
+
+def _span(
+    row_position: int, column_name: str, text: str, value: str, entity_type: EntityType, occurrence: int = 0
+) -> DetectedSpan:
+    """Build a GLiNER span for the ``occurrence``-th appearance of ``value`` in ``text``."""
+    start = -1
+    for _ in range(occurrence + 1):
+        start = text.index(value, start + 1)
+    return DetectedSpan(
+        DetectionCellId(row_position, column_name), start, start + len(value), entity_type, "gliner", 0.95
+    )
+
+
 def _target(
     column_name: str,
     entity_type: EntityType,
     *dependencies: tuple[str, EntityType | None],
+    pattern: str | None = None,
 ) -> PiiColumnPlan:
     return PiiColumnPlan(
         column_name=column_name,
@@ -100,6 +141,7 @@ def _target(
             else ConditioningColumn(column_name=name, entity_type=dependency_type)
             for name, dependency_type in dependencies
         ],
+        pattern=pattern,
     )
 
 
@@ -119,12 +161,16 @@ def _execute(
     generator: _RecordingGenerator,
     *,
     group_column: str | None = None,
+    free_text_detector: _StaticDetector | None = None,
+    capture_replacement_map: bool = False,
 ) -> ReplacementExecutionResult:
     return StructuredReplacementExecutor(
         plan,
         generator,
         group_column=group_column,
         base_seed=42,
+        free_text_detector=free_text_detector,
+        capture_replacement_map=capture_replacement_map,
     ).execute(dataframe)
 
 
@@ -159,6 +205,29 @@ class TestPlanCompiler:
 
 @pytest.mark.unit
 class TestStructuredReplacementExecutor:
+    def test_replacement_map_is_opt_in(self) -> None:
+        dataframe = pd.DataFrame({"identifier": ["USER-1"]})
+        plan = _plan(_target("identifier", EntityType.UNIQUE_IDENTIFIER))
+
+        default_result = _execute(dataframe, plan, _RecordingGenerator())
+        captured_result = _execute(
+            dataframe,
+            plan,
+            _RecordingGenerator(),
+            capture_replacement_map=True,
+        )
+
+        assert default_result.replacement_map is None
+        assert captured_result.replacement_map is not None
+        record = captured_result.replacement_map.structured[0]
+        assert record.row_position == 0
+        assert record.column_name == "identifier"
+        assert record.entity_type is EntityType.UNIQUE_IDENTIFIER
+        assert record.scope == "record"
+        assert record.original_value == "USER-1"
+        assert record.replacement_value == captured_result.dataframe.at[0, "identifier"]
+        assert "USER-1" not in repr(record)
+
     def test_resolves_sampler_values_from_the_dependency_source_column(self) -> None:
         dataframe = pd.DataFrame({"first_name": ["Ada"], "sex": ["Woman"]})
         plan = _plan(
@@ -410,6 +479,15 @@ class TestStructuredReplacementExecutor:
         with pytest.raises(GenerationError, match="differs from the original"):
             _execute(dataframe, plan, _EchoGenerator())
 
+    def test_free_text_group_scope_rejects_rows_without_a_group_identifier(self) -> None:
+        dataframe = pd.DataFrame({"patient": ["A", None], "notes": ["Ada called", "Ada called"]})
+        plan = _plan(_target("notes", EntityType.FREE_TEXT))
+        detector = _StaticDetector([])
+
+        with pytest.raises(DataError, match="'patient' has 1 missing value"):
+            _execute(dataframe, plan, _RecordingGenerator(), group_column="patient", free_text_detector=detector)
+        assert detector.cells == []
+
     def test_project_errors_from_the_generator_are_not_rewrapped(self) -> None:
         dataframe = pd.DataFrame({"first_name": ["Ada"]})
         plan = _plan(_target("first_name", EntityType.FIRST_NAME))
@@ -426,6 +504,273 @@ class TestStructuredReplacementExecutor:
             _execute(dataframe, plan, _RecordingGenerator())
 
         pd.testing.assert_frame_equal(dataframe, original)
+
+    def test_free_text_replaces_only_accepted_spans_in_one_pass(self) -> None:
+        dataframe = pd.DataFrame({"notes": ["Ada met Ada at ada@example.com"]})
+        original = dataframe.copy(deep=True)
+        plan = _plan(_target("notes", EntityType.FREE_TEXT))
+        detector = _StaticDetector(
+            [
+                DetectedSpan(DetectionCellId(0, "notes"), 0, 3, EntityType.FIRST_NAME, "gliner", 0.9),
+                DetectedSpan(DetectionCellId(0, "notes"), 15, 30, EntityType.EMAIL, "regex"),
+            ]
+        )
+        generator = _RecordingGenerator()
+
+        result = _execute(
+            dataframe,
+            plan,
+            generator,
+            free_text_detector=detector,
+            capture_replacement_map=True,
+        )
+
+        pd.testing.assert_frame_equal(dataframe, original)
+        assert result.dataframe["notes"].iloc[0].startswith("synthetic-first_name-")
+        assert " met Ada at " in result.dataframe["notes"].iloc[0]
+        assert "ada@example.com" not in result.dataframe["notes"].iloc[0]
+        assert result.column_statistics["notes"].detected_entity_counts == {"first_name": 1, "email": 1}
+        assert result.column_statistics["notes"].detected_entity_values == {
+            "first_name": {"Ada"},
+            "email": {"ada@example.com"},
+        }
+        assert result.replacement_map is not None
+        first, email = result.replacement_map.free_text
+        assert first.model_dump(exclude={"original_value", "replacement_value"}) == {
+            "row_position": 0,
+            "column_name": "notes",
+            "start": 0,
+            "end": 3,
+            "entity_type": EntityType.FIRST_NAME,
+            "detection_source": "gliner",
+            "score": 0.9,
+            "scope": "record",
+        }
+        assert first.original_value == "Ada"
+        assert first.replacement_value in str(result.dataframe.at[0, "notes"])
+        assert email.start == 15
+        assert email.end == 30
+        assert email.detection_source == "regex"
+        assert email.score is None
+
+    def test_equal_detected_values_reuse_one_replacement_across_free_text_columns(self) -> None:
+        dataframe = pd.DataFrame({"primary": ["Ada"], "secondary": ["Call Ada"]})
+        plan = _plan(
+            _target("primary", EntityType.FREE_TEXT),
+            _target("secondary", EntityType.FREE_TEXT),
+        )
+        detector = _StaticDetector(
+            [
+                DetectedSpan(DetectionCellId(0, "primary"), 0, 3, EntityType.FIRST_NAME, "gliner", 0.9),
+                DetectedSpan(DetectionCellId(0, "secondary"), 5, 8, EntityType.FIRST_NAME, "gliner", 0.9),
+            ]
+        )
+        generator = _RecordingGenerator()
+
+        result = _execute(dataframe, plan, generator, free_text_detector=detector)
+
+        replacement = result.dataframe["primary"].iloc[0]
+        assert result.dataframe["secondary"].iloc[0] == f"Call {replacement}"
+        assert len(generator.requests) == 1
+        assert result.generation_statistics.generated_replacement_count == 1
+
+    def test_free_text_identifier_reuses_the_structured_unique_identifier_replacement(self) -> None:
+        dataframe = pd.DataFrame({"customer_id": ["cust-00412"], "notes": ["Ticket for cust-00412"]})
+        plan = _plan(_target("customer_id", EntityType.UNIQUE_IDENTIFIER), _target("notes", EntityType.FREE_TEXT))
+        detector = _StaticDetector(
+            [_span(0, "notes", "Ticket for cust-00412", "cust-00412", EntityType.UNIQUE_IDENTIFIER)]
+        )
+        generator = _RecordingGenerator()
+
+        result = _execute(dataframe, plan, generator, free_text_detector=detector)
+
+        assert result.dataframe.at[0, "notes"] == f"Ticket for {result.dataframe.at[0, 'customer_id']}"
+        assert len(generator.requests) == 1
+
+    def test_free_text_identifier_reuses_an_allocated_integer_replacement(self) -> None:
+        dataframe = pd.DataFrame({"api_key": [12345, 67890], "notes": ["Key 12345 issued", "No key"]})
+        plan = _plan(_target("api_key", EntityType.API_KEY), _target("notes", EntityType.FREE_TEXT))
+        detector = _StaticDetector([DetectedSpan(DetectionCellId(0, "notes"), 4, 9, EntityType.API_KEY, "gliner", 0.9)])
+        generator = _RecordingGenerator()
+
+        result = _execute(dataframe, plan, generator, free_text_detector=detector)
+
+        assert result.dataframe.at[0, "notes"] == f"Key {result.dataframe.at[0, 'api_key']} issued"
+        assert generator.requests == []
+
+    def test_reused_free_text_replacement_takes_each_occurrence_letter_case(self) -> None:
+        dataframe = pd.DataFrame({"notes": ["Ada, ADA, ada"]})
+        plan = _plan(_target("notes", EntityType.FREE_TEXT))
+        detector = _StaticDetector(
+            [
+                DetectedSpan(DetectionCellId(0, "notes"), start, start + 3, EntityType.FIRST_NAME, "gliner", 0.9)
+                for start in (0, 5, 10)
+            ]
+        )
+        generator = _RecordingGenerator()
+
+        result = _execute(dataframe, plan, generator, free_text_detector=detector)
+
+        first, shouted, quiet = str(result.dataframe.at[0, "notes"]).split(", ")
+        assert shouted == first.upper()
+        assert quiet == first.lower()
+        assert len(generator.requests) == 1
+
+    def test_independently_detected_span_reuses_an_exact_structured_mapping(self) -> None:
+        dataframe = pd.DataFrame({"first_name": ["Ada"], "notes": ["Ada met Grace"]})
+        plan = _plan(
+            _target("notes", EntityType.FREE_TEXT),
+            _target("first_name", EntityType.FIRST_NAME),
+        )
+        detector = _StaticDetector(
+            [DetectedSpan(DetectionCellId(0, "notes"), 0, 3, EntityType.FIRST_NAME, "gliner", 0.9)]
+        )
+        generator = _RecordingGenerator()
+
+        result = _execute(dataframe, plan, generator, free_text_detector=detector)
+
+        replacement = result.dataframe["first_name"].iloc[0]
+        assert result.dataframe["notes"].iloc[0] == f"{replacement} met Grace"
+        assert len(generator.requests) == 1
+        assert result.generation_statistics.generated_replacement_count == 1
+
+    def test_detected_name_component_reuses_parent_mapping_from_validated_pattern(self) -> None:
+        dataframe = pd.DataFrame({"full_name": ["John Smith"], "notes": ["Ask Smith to call"]})
+        plan = _plan(
+            _target("notes", EntityType.FREE_TEXT),
+            _target("full_name", EntityType.FULL_NAME, pattern="{First} {Last}"),
+        )
+        detector = _StaticDetector(
+            [DetectedSpan(DetectionCellId(0, "notes"), 4, 9, EntityType.LAST_NAME, "gliner", 0.9)]
+        )
+        generator = _CompositeNameGenerator()
+
+        result = _execute(dataframe, plan, generator, free_text_detector=detector)
+
+        assert result.dataframe["full_name"].iloc[0] == "Grace Hopper"
+        assert result.dataframe["notes"].iloc[0] == "Ask Hopper to call"
+        assert len(generator.requests) == 1
+        assert result.generation_statistics.generated_replacement_count == 1
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "Kenneth Gonzales grew up in Tennessee. Kenneth enjoys skiing.",
+            "Kenneth enjoys skiing. Kenneth Gonzales grew up.",
+        ],
+    )
+    def test_free_text_full_name_and_bare_first_name_share_a_replacement_in_either_order(self, text: str) -> None:
+        dataframe = pd.DataFrame({"notes": [text]})
+        plan = _plan(_target("notes", EntityType.FREE_TEXT))
+        bare_occurrence = 1 if text.startswith("Kenneth Gonzales") else 0
+        detector = _StaticDetector(
+            [
+                _span(0, "notes", text, "Kenneth Gonzales", EntityType.FULL_NAME),
+                _span(0, "notes", text, "Kenneth", EntityType.FIRST_NAME, occurrence=bare_occurrence),
+            ]
+        )
+        generator = _RecordingGenerator()
+
+        result = _execute(dataframe, plan, generator, free_text_detector=detector, capture_replacement_map=True)
+
+        assert result.replacement_map is not None
+        replaced = {record.entity_type: record.replacement_value for record in result.replacement_map.free_text}
+        assert replaced[EntityType.FULL_NAME].split(" ")[0] == replaced[EntityType.FIRST_NAME]
+        assert [request.entity_type for request in generator.requests] == [EntityType.FIRST_NAME, EntityType.LAST_NAME]
+
+    def test_free_text_name_parts_are_shared_across_rows_in_group_scope(self) -> None:
+        dataframe = pd.DataFrame({"patient": ["A", "A"], "notes": ["Kenneth Gonzales visited", "Gonzales called"]})
+        plan = _plan(_target("notes", EntityType.FREE_TEXT))
+        detector = _StaticDetector(
+            [
+                _span(0, "notes", "Kenneth Gonzales visited", "Kenneth Gonzales", EntityType.FULL_NAME),
+                _span(1, "notes", "Gonzales called", "Gonzales", EntityType.LAST_NAME),
+            ]
+        )
+
+        result = _execute(
+            dataframe,
+            plan,
+            _RecordingGenerator(),
+            group_column="patient",
+            free_text_detector=detector,
+            capture_replacement_map=True,
+        )
+
+        assert result.replacement_map is not None
+        full, last = result.replacement_map.free_text
+        assert full.replacement_value.split(" ")[1] == last.replacement_value
+
+    def test_free_text_three_word_name_shares_its_middle_name(self) -> None:
+        text = "Mary Ann Smith said Ann agreed"
+        dataframe = pd.DataFrame({"notes": [text]})
+        plan = _plan(_target("notes", EntityType.FREE_TEXT))
+        detector = _StaticDetector(
+            [
+                _span(0, "notes", text, "Mary Ann Smith", EntityType.FULL_NAME),
+                _span(0, "notes", text, "Ann", EntityType.MIDDLE_NAME, occurrence=1),
+            ]
+        )
+
+        result = _execute(
+            dataframe, plan, _RecordingGenerator(), free_text_detector=detector, capture_replacement_map=True
+        )
+
+        assert result.replacement_map is not None
+        full, middle = result.replacement_map.free_text
+        assert full.replacement_value.split(" ")[1] == middle.replacement_value
+
+    def test_free_text_full_name_with_a_title_is_generated_whole(self) -> None:
+        text = "Dr. Kenneth Gonzales called"
+        dataframe = pd.DataFrame({"notes": [text]})
+        plan = _plan(_target("notes", EntityType.FREE_TEXT))
+        detector = _StaticDetector([_span(0, "notes", text, "Dr. Kenneth Gonzales", EntityType.FULL_NAME)])
+        generator = _RecordingGenerator()
+
+        _execute(dataframe, plan, generator, free_text_detector=detector)
+
+        assert [request.entity_type for request in generator.requests] == [EntityType.FULL_NAME]
+
+    def test_detected_first_name_reuses_an_unpatterned_structured_full_name(self) -> None:
+        dataframe = pd.DataFrame({"full_name": ["Kenneth Gonzales"], "notes": ["Kenneth called"]})
+        plan = _plan(_target("notes", EntityType.FREE_TEXT), _target("full_name", EntityType.FULL_NAME))
+        detector = _StaticDetector([_span(0, "notes", "Kenneth called", "Kenneth", EntityType.FIRST_NAME)])
+        generator = _CompositeNameGenerator()
+
+        result = _execute(dataframe, plan, generator, free_text_detector=detector)
+
+        assert result.dataframe["notes"].iloc[0] == "Grace called"
+        assert len(generator.requests) == 1
+
+    def test_detected_street_component_reuses_parent_with_validated_dependency_suffix(self) -> None:
+        dataframe = pd.DataFrame(
+            {
+                "address": ["1 Main Street, Boston, MA"],
+                "city": ["Boston"],
+                "state": ["MA"],
+                "notes": ["Ship to 1 Main Street tomorrow"],
+            }
+        )
+        plan = _plan(
+            _target("notes", EntityType.FREE_TEXT),
+            _target(
+                "address",
+                EntityType.STREET_ADDRESS,
+                ("city", EntityType.CITY),
+                ("state", EntityType.STATE),
+            ),
+        )
+        detector = _StaticDetector(
+            [DetectedSpan(DetectionCellId(0, "notes"), 8, 21, EntityType.STREET_ADDRESS, "gliner", 0.9)]
+        )
+        generator = _CompositeAddressGenerator()
+
+        result = _execute(dataframe, plan, generator, free_text_detector=detector)
+
+        assert result.dataframe["address"].iloc[0] == "9 New Road, Boston, MA"
+        assert result.dataframe["notes"].iloc[0] == "Ship to 9 New Road tomorrow"
+        assert len(generator.requests) == 1
+        assert result.generation_statistics.generated_replacement_count == 1
 
 
 @pytest.mark.unit

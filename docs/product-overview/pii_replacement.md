@@ -7,9 +7,10 @@ PII replacement v3 uses a dataset-specific replacement plan. The plan names
 the columns NSS should replace, the entity type in each column, optional format
 patterns, and dependencies between related columns.
 
-NSS applies structured-column replacements before training. Free-text named
-entity detection and span replacement are not yet part of replacement
-execution.
+NSS applies structured-column and free-text replacements before training. It
+resolves plans and sampler mappings against the full input, creates the
+holdout, and replaces only the training split so evaluation retains the
+original training and test data.
 
 Set `replace_pii: null`, pass `--no-replace-pii`, or call
 `.with_replace_pii(enable=False)` to run the synthesis pipeline without
@@ -246,6 +247,138 @@ resolved_pii = (
 
 The generated configuration can be reviewed, edited, and reused directly.
 
+## Standalone replacement
+
+Apply replacement to a complete input dataframe without running holdout,
+training, generation, or evaluation:
+
+```bash
+safe-synthesizer run replace-pii \
+  --config config.yaml \
+  --data-source data.csv \
+  --output-file pii_replaced.csv
+```
+
+When `--output-file` is omitted, the command adds `_pii_replaced` to the input
+stem and writes the result beside `pii_replacement_config.yaml` in the run
+directory. For example, `data.csv` produces `data_pii_replaced.csv`. The
+resolved configuration is always written so the exact plan and sampler
+mappings can be reviewed and reused. Replacement maps and raw detector results
+are not persisted.
+
+The SDK equivalent returns the complete `TransformResult` and writes files only
+for paths supplied by the caller:
+
+```python
+result = (
+    SafeSynthesizer(config)
+    .with_data_source("data.csv")
+    .replace_pii(
+        "pii_replaced.csv",
+        config_output_path="pii_replacement_config.yaml",
+    )
+)
+```
+
+## Free-text detection
+
+Columns planned as `free_text` use both the configurable GLiNER2 detector and
+built-in, structurally validated regex detectors for email addresses, payment
+cards, IPv4 addresses, and IPv6 addresses. The default model is
+`fastino/gliner2-privacy-filter-PII-multi` and loads lazily only when the plan
+contains a free-text target.
+
+```yaml
+replace_pii:
+  free_text_detection:
+    model_id: fastino/gliner2-privacy-filter-PII-multi
+    entity_thresholds:
+      full_name: 0.95
+      first_name: 0.9
+      middle_name: 0.9
+      last_name: 0.9
+      phone_number: 0.994
+      date_of_birth: 0.9999
+      street_address: 0.986
+      ssn: 0.079
+      national_id: 0.982
+      api_key: 0.993
+      unique_identifier: 0.953
+    batch_size: 8
+    chunk_length: 384
+    chunk_overlap: 128
+```
+
+Only accepted detector spans are replaced. NSS does not search for other
+occurrences, propagate structured values into text, or replace undetected
+aliases. Overlapping detections are resolved deterministically, and repeated
+accepted values reuse replacements within their configured record or group
+scope.
+
+Detector ownership is disjoint. Structurally validated regex exclusively
+detects `email`, `credit_debit_card`, `ipv4`, and `ipv6`; NSS does not request
+those labels from GLiNER2. GLiNER2 detects the remaining semantic and
+contextual entity types, including the checkpoint's specific `full_name` label.
+NSS does not request the broader `person` label. This avoids duplicate model
+work and prevents generic person or deterministic-format spans from competing
+with more specific detections.
+
+Several checkpoint labels map to one NSS entity type:
+
+| NSS entity type | GLiNER2 labels requested |
+|---|---|
+| `phone_number` | `phone_number`, `fax_number` |
+| `street_address` | `street_address`, `address` |
+| `national_id` | `national_id_number`, `tax_id`, `tax_number`, `license_number`, `drivers_license_number`, and `government_id` values that are not SSNs |
+| `ssn` | `government_id` values shaped `ddd-dd-dddd` with an assignable area, group, and serial (not area 000, 666, or 900-999, group 00, or serial 0000) |
+| `unique_identifier` | `customer_id`, `employee_id`, `medical_record_number`, `member_id`, `health_plan_beneficiary_number` |
+
+Identifiers are requested only by the kinds that text names, such as "customer
+ID 1234", because generic identifier labels mostly match device, vehicle, and
+biometric codes. A detected identifier without a digit is dropped. Licence and
+tax numbers are treated as national IDs, including business tax IDs, which the
+checkpoint does not distinguish from personal ones.
+
+The default thresholds for types other than names come from tuning on the
+development split of the NSS PII detection evaluation. Name thresholds are
+precision-first defaults chosen against medical terms detected as names.
+
+The checkpoint is optimized for recall and can confuse common or domain terms
+with names. NSS therefore configures a confidence threshold for every
+GLiNER2-detected entity type, with a precision-first `0.95` default for
+`full_name`, `0.9` for the specific name-part types, and `0.5` for the remaining
+model-detected types. Regex-owned types have no confidence threshold. Checkpoint
+aliases use the threshold of the NSS entity they normalize to. Lower name
+thresholds only after calibrating against representative domain text.
+
+NSS automatically uses CUDA when available and otherwise runs GLiNER2 on CPU.
+It deduplicates identical cell text, flattens overlapping chunks across unique
+values, and passes `batch_size` to GLiNER2's batched inference API. For CUDA
+out-of-memory errors, reduce `batch_size` before changing chunk geometry. The
+runtime logs model loading and inference progress without including source
+text. See [Program Runtime -- GLiNER2 Device and Throughput](../user-guide/troubleshooting.md#gliner2-device-and-throughput)
+for tuning and language-coverage guidance.
+
+Complete birth dates written in natural language, such as `5 April 1990` or
+`April 5th, 1990`, are parsed strictly, shifted by the same deterministic
+plus-or-minus 365-day policy as structured dates, and rendered as ISO dates
+when no explicit strftime pattern exists. Incomplete or vague candidates such
+as `spring` are ignored and reported only as an aggregate warning without the
+source text.
+
+An independently detected name or street component may reuse a parent
+replacement only when NSS can align it semantically. A full name, whether in a
+structured column or detected in free text, aligns with first, middle, and
+last names through explicit name-pattern placeholders, or, without a pattern,
+when it is a plain two- or three-word name such as `Kenneth Gonzales`. A free-text
+full name like that is replaced word by word, so `Kenneth Gonzales` and a bare
+`Kenneth` in the same record or group get the same first-name replacement.
+Names with titles, initials, or suffixes, such as `Dr. Ada Lovelace` or
+`Ada K. Lovelace`, are replaced whole and not split. Street alignment requires
+an exact suffix built from typed city, state, postal-code, or country
+dependencies. NSS never guesses components from other token positions or
+isolated house numbers.
+
 ## LLM-assisted planning
 
 The `llm` mapping configures the OpenAI-compatible inference service used for
@@ -441,28 +574,3 @@ previous response invalid.
     Plan enhancement can send bounded raw cell samples from the full input
     dataframe, including rows that may later be assigned to a holdout set. Enable
     it only when the endpoint is approved to receive the input data.
-
-### Free-text detection
-
-Free-text columns use GLiNER2 plus applicable deterministic built-in regex
-rules:
-
-```yaml
-replace_pii:
-  free_text_detection:
-    model_id: fastino/gliner2-privacy-filter-PII-multi
-    entity_thresholds:
-      full_name: 0.95
-      first_name: 0.9
-      middle_name: 0.9
-      last_name: 0.9
-      phone_number: 0.5
-      date_of_birth: 0.5
-      street_address: 0.5
-      ssn: 0.5
-      national_id: 0.5
-      api_key: 0.5
-    batch_size: 8
-    chunk_length: 384
-    chunk_overlap: 128
-```
