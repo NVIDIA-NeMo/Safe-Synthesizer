@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""OpenAI-compatible two-pass LLM enhancement for PII replacement plans."""
+"""OpenAI-compatible LLM discovery for PII plans and sampler mappings."""
 
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ from ...config.replace_pii import (
     ENTITIES,
     ENTITY_BY_TYPE,
     EXCLUSIVE_DEPENDS_ON_GROUPS,
+    DataToSamplerValueMapping,
     EntityType,
     LLMConfig,
     PiiColumnPlan,
@@ -36,6 +37,8 @@ from ..llm_client import (
     TransientInferenceError,
     resolve_inference_settings,
 )
+from ..sampler_catalog import SamplerValueCatalog
+from .dependency_mappings import DependencyMappingInput, mapping_inputs
 from .patterns import pattern_grammar_catalog
 from .plan_builder import (
     ColumnClassification,
@@ -45,7 +48,7 @@ from .plan_builder import (
     plan_from_classifications,
 )
 from .resolver import ColumnProfile, PlanDiscoveryInput, PlanEnhancer
-from .validation import column_pattern_issue, column_pattern_syntax_issue
+from .validation import column_pattern_issue, column_pattern_syntax_issue, identifier_mask_capacity_issue
 
 __all__ = [
     "LLMPlanEnhancer",
@@ -58,6 +61,8 @@ MAX_BATCH_BYTES = 48 * 1024
 MAX_REQUEST_ATTEMPTS = 3
 RETRY_BASE_DELAY_SECONDS = 1.0
 RETRY_MAX_DELAY_SECONDS = 30.0
+MAX_MAPPING_SOURCE_VALUES = 256
+MAX_MAPPING_REQUEST_BYTES = 48 * 1024
 
 logger = get_logger(__name__)
 
@@ -91,6 +96,16 @@ class _PatternRepairResponse(_StructuredResponse):
 
 class _InvalidStructuredOutputError(GenerationError):
     """Structured output stayed invalid after every allowed attempt."""
+
+
+class _LLMValueMappingEntry(_StructuredResponse):
+    column_name: str
+    source_value: str
+    sampler_values: list[str]
+
+
+class _LLMValueMappingResponse(_StructuredResponse):
+    mappings: list[_LLMValueMappingEntry]
 
 
 ResponseT = TypeVar("ResponseT", bound=_StructuredResponse)
@@ -164,6 +179,7 @@ def _entity_catalog() -> list[dict[str, object]]:
     return [
         {
             "entity_type": entity.entity_type.value,
+            "description": entity.description,
             "pattern_syntax": entity.pattern_syntax.name.lower() if entity.pattern_syntax is not None else None,
         }
         for entity in ENTITIES
@@ -277,7 +293,8 @@ def _classification_messages(
         "\n"
         "Input\n"
         "- column_profiles: one entry per column, with its name, dtype, counts, and a few sample values.\n"
-        "- entity_catalog: the entity types you may choose from, each with the pattern grammar it supports.\n"
+        "- entity_catalog: the entity types you may choose from, each with a short definition and the pattern grammar "
+        "it supports.\n"
         "- discovery_context.group_column: the column that groups rows (for example, one patient's events).\n"
         "- heuristic_classifications: guesses from a rule-based detector, only for columns it flagged. They can be "
         "wrong, and a column missing from this list may still hold sensitive data.\n"
@@ -515,6 +532,62 @@ def _pattern_repair_messages(
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
+def _dependency_mapping_messages(inputs: Sequence[DependencyMappingInput]) -> list[dict[str, str]]:
+    system = (
+        "Map every submitted dataset value to one or more sampler values from the sampler value catalog for the same "
+        "dependency column. Return exactly one mapping for every submitted column_name/source_value pair. "
+        "sampler_values must be a non-empty list containing only values supplied for that column. Select the sampler "
+        "values that are reasonable semantic subsets of the dataset value. When no subset is more appropriate than the "
+        "others, list every supplied value so NSS does not narrow the sampler for that dataset value. Do not invent "
+        "columns, source values, or sampler values."
+    )
+    payload = [
+        {
+            "column_name": item.column_name,
+            "entity_type": item.entity_type.value,
+            "dataset_values": list(item.source_values),
+            "sampler_values": list(item.sampler_values),
+        }
+        for item in inputs
+    ]
+    return [{"role": "system", "content": system}, {"role": "user", "content": _compact_json(payload)}]
+
+
+def _mapping_coverage_issue(expected: Sequence[tuple[str, str]], actual: Sequence[tuple[str, str]]) -> str | None:
+    """Name the column/value pairs that make ``actual`` differ from one mapping per ``expected`` pair."""
+    counts = Counter(actual)
+    expected_pairs = set(expected)
+    problems = [
+        f"{label}: " + ", ".join(f"{column!r}/{value!r}" for column, value in pairs)
+        for label, pairs in (
+            ("missing", [pair for pair in expected if pair not in counts]),
+            ("duplicated", sorted(pair for pair, count in counts.items() if count > 1)),
+            ("not submitted", sorted(set(counts) - expected_pairs)),
+        )
+        if pairs
+    ]
+    if not problems:
+        return None
+    return "mappings must contain every submitted column_name/source_value pair exactly once; " + "; ".join(problems)
+
+
+def _resolved_sampler_values(sampler_values: Sequence[str], supplied: Sequence[str]) -> list[str]:
+    """Return ``sampler_values`` in their supplied spelling, or raise ``ValueError`` naming the invalid values."""
+    if not sampler_values:
+        raise ValueError("sampler_values must be non-empty")
+    available = {sampler_value.casefold(): sampler_value for sampler_value in supplied}
+    normalized = [sampler_value.casefold() for sampler_value in sampler_values]
+    if duplicates := sorted({sampler_value for sampler_value in normalized if normalized.count(sampler_value) > 1}):
+        raise ValueError("sampler_values must not repeat values: " + _quoted(duplicates))
+    if unknown := sorted(
+        {sampler_value for sampler_value in sampler_values if sampler_value.casefold() not in available}
+    ):
+        raise ValueError(
+            "sampler_values must come from the values supplied for the column; unknown: " + _quoted(unknown)
+        )
+    return [available[sampler_value] for sampler_value in normalized]
+
+
 def _with_feedback(messages: Sequence[Mapping[str, str]], feedback: str | None) -> list[dict[str, str]]:
     result = [dict(message) for message in messages]
     if feedback is not None:
@@ -550,12 +623,13 @@ def _raise_if_invalid_output_exhausted(purpose: str, attempt: int) -> None:
 
 
 class LLMPlanEnhancer(PlanEnhancer):
-    """Enhance a heuristic plan with classification and dependency-selection passes.
+    """Discover plans and sampler mappings through bounded structured requests.
 
     Pass one classifies every column's entity type and optional pattern. NSS
     then derives replacement membership and all permitted dependency
     candidates deterministically, and pass two only selects useful candidate
-    IDs. Invalid optional patterns get focused repair requests.
+    IDs. Invalid optional patterns get focused repair requests. A separate
+    request maps dependency values to sampler values on demand.
 
     Args:
         config: Persisted LLM behavior.
@@ -608,6 +682,69 @@ class LLMPlanEnhancer(PlanEnhancer):
         if candidates:
             plan = self._select_dependencies(plan, candidates, baseline, classifications)
         return plan
+
+    def discover_data_to_sampler_value_mapping(
+        self,
+        dataframe: pd.DataFrame,
+        plan: PiiReplacementPlan,
+        catalog: SamplerValueCatalog,
+    ) -> DataToSamplerValueMapping:
+        """Map conditioner-column values without a sampler match to values from one sampler catalog.
+
+        Args:
+            dataframe: Data whose conditioner-column values need sampler values.
+            plan: Replacement plan naming the conditioner columns.
+            catalog: Sampler values available for each conditioner entity type.
+
+        Returns:
+            Per-column mappings from each dataset value that has no
+            case-insensitive sampler match to one or more sampler values. A
+            value that fits no narrower set maps to every supplied value, so
+            sampling is not narrowed. Returns an empty dict when every value
+            already matches.
+
+            For example, with the catalog
+            ``{ETHNIC_BACKGROUND: ("east asian", "south asian", "white")}`` and
+            a ``race`` column holding ``"Asian"`` and ``"White"``, the result is
+            ``{"race": {"Asian": ["east asian", "south asian"]}}``. ``"White"``
+            is omitted because it already matches.
+
+        Raises:
+            ParameterError: If the mapping request exceeds its size bounds.
+        """
+        inputs = mapping_inputs(dataframe, plan, catalog)
+        if not inputs:
+            return {}
+        source_value_count = sum(len(item.source_values) for item in inputs)
+        messages = _dependency_mapping_messages(inputs)
+        if source_value_count > MAX_MAPPING_SOURCE_VALUES or _json_bytes(messages) > MAX_MAPPING_REQUEST_BYTES:
+            raise ParameterError(
+                "automatic dependency mapping exceeds its bounded request size; provide manual mappings instead"
+            )
+
+        expected: dict[tuple[str, str], tuple[str, DependencyMappingInput]] = {}
+        for item in inputs:
+            for source_value in item.source_values:
+                expected[(item.column_name, source_value.casefold())] = (source_value, item)
+
+        def parse(response: _LLMValueMappingResponse) -> DataToSamplerValueMapping:
+            actual = [(item.column_name, item.source_value.casefold()) for item in response.mappings]
+            if issue := _mapping_coverage_issue(list(expected), actual):
+                raise ValueError(issue)
+            result: DataToSamplerValueMapping = {}
+            for item in response.mappings:
+                source_value, mapping_input = expected[(item.column_name, item.source_value.casefold())]
+                result.setdefault(item.column_name, {})[source_value] = _resolved_sampler_values(
+                    item.sampler_values, mapping_input.sampler_values
+                )
+            return result
+
+        return self._request_structured(
+            purpose="PII data-to-sampler value mapping",
+            messages=messages,
+            response_model=_LLMValueMappingResponse,
+            parse=parse,
+        )
 
     def _classify_columns(
         self,
@@ -769,16 +906,17 @@ class LLMPlanEnhancer(PlanEnhancer):
         profiles = {profile.column_name: profile for profile in discovery_input.column_profiles}
         repaired_specs: list[PiiColumnPlan] = []
         for spec in plan.columns_to_replace:
-            issue = column_pattern_issue(dataframe, spec)
+            issue = column_pattern_issue(dataframe, spec) or identifier_mask_capacity_issue(dataframe, spec)
             if issue is None:
                 repaired_specs.append(spec)
                 continue
             if column_pattern_syntax_issue(spec) is None:
-                # The grammar is fine but too few values match, so the column mixes
-                # formats. One pattern cannot describe it, and asking again would not help.
+                # The grammar is fine, but the pattern does not fit the data: too few values
+                # match (the column mixes formats), or an identifier mask has too few unused
+                # values. Asking again would not help, so replace the column without a pattern.
                 logger.user.warning(
-                    "Dropping an LLM-proposed pattern that does not cover the column's values",
-                    extra={"column": spec.column_name},
+                    "Dropping an LLM-proposed pattern that does not fit the column's values",
+                    extra={"column": spec.column_name, "reason": issue},
                 )
                 repaired_specs.append(spec.model_copy(update={"pattern": None}))
                 continue

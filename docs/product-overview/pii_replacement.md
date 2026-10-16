@@ -7,9 +7,135 @@ PII replacement v3 uses a dataset-specific replacement plan. The plan names
 the columns NSS should replace, the entity type in each column, optional format
 patterns, and dependencies between related columns.
 
+NSS applies structured-column replacements before training. Free-text named
+entity detection and span replacement are not yet part of replacement
+execution.
+
 Set `replace_pii: null`, pass `--no-replace-pii`, or call
 `.with_replace_pii(enable=False)` to run the synthesis pipeline without
 replacement.
+
+## Nemotron-Personas sampling
+
+The default `nemotron-personas` sampler draws names, email addresses, phone numbers, and
+street-address components from the extended Nemotron-Personas locale datasets.
+Choose the NGC resource matching `replace_pii.replacement.locale`. Locale
+resources are versioned independently, so use the version published for the
+selected language and country. For example, download version `0.0.2` of the
+`en_US` resource after installing and authenticating the NGC CLI:
+
+```bash
+ngc registry resource download-version \
+  nvidia/nemotron-personas/nemotron-personas-dataset-en_us:0.0.2
+```
+
+Place the downloaded parquet files in the default managed-assets directory:
+
+```bash
+mkdir -p "${HOME}/.data-designer/managed-assets/datasets"
+cp nemotron-personas-dataset-*/*.parquet \
+  "${HOME}/.data-designer/managed-assets/datasets/"
+```
+
+The sampler loads `<managed-assets>/datasets/<locale>.parquet`. The locale in
+the configuration must match the downloaded parquet filename; for the example
+above, that is `en_US.parquet`:
+
+```yaml
+replace_pii:
+  replacement:
+    locale: en_US
+  sampler:
+    backend: nemotron-personas
+```
+
+To store the files elsewhere, set `replace_pii.sampler.nemotron_personas_path` to
+the directory containing `datasets/`, or set `NSS_NEMOTRON_PERSONAS_PATH`:
+
+```yaml
+replace_pii:
+  sampler:
+    backend: nemotron-personas
+    nemotron_personas_path: /path/to/managed-assets
+```
+
+When the Nemotron-Personas sampler is selected (the default), its dataset for
+the configured locale is required: if the file is missing or cannot be read,
+replacement fails instead of switching to Faker. If the plan conditions on a
+value the dataset has no column for, such as ethnic background, replacement
+also fails. When a persona row lacks one generated field, or the entity type is
+not a persona field, NSS uses Faker for that value. Set `backend: faker` to use
+Faker without a Nemotron-Personas dataset. See NVIDIA's
+[person-sampling setup](https://docs.nvidia.com/nemo/datadesigner/concepts/person-sampling)
+to select a locale resource and the
+[`en_US` NGC resource](https://catalog.ngc.nvidia.com/orgs/nvidia/nemotron-personas/resources/nemotron-personas-dataset-en_us/-)
+for the example above.
+
+### Data-to-sampler value mappings
+
+Dependency values are matched to sampler values case-insensitively, so values
+such as `Female` and `female` need no mapping. NSS also maps a few common
+gender spellings for every sampler: `F`, `Woman`, and `Girl` to `female`, and
+`M`, `Man`, and `Boy` to `male`. These entries are written into the resolved
+plan's `data_to_sampler_value_mapping`, where you can edit them; an entry you
+write for the same value takes precedence. Any other value needs a mapping. When `replacement_plan` is
+`auto_discovery`, NSS discovers `columns_to_replace` and
+`data_to_sampler_value_mapping` together. It compares each dependency column's
+distinct values with the selected sampler's values. If unmatched values remain,
+the configured LLM maps them to that sampler's vocabulary.
+
+Automatic discovery writes a sparse mapping: identity matches are omitted.
+Only unmatched distinct dependency values, each limited to 128 characters,
+and the sampler's allowed values are sent to the LLM. If no LLM is configured,
+unmatched values produce an error asking for an LLM configuration or a manual
+mapping.
+
+For an authoritative plan, place the mapping beside `columns_to_replace`, keyed
+by dependency column names from this dataset:
+
+```yaml
+replace_pii:
+  replacement_plan:
+    columns_to_replace:
+      - column_name: first_name
+        entity_type: first_name
+        depends_on:
+          - column_name: sex
+            entity_type: gender
+          - column_name: race
+            entity_type: ethnic_background
+    data_to_sampler_value_mapping:
+      sex:
+        Non-binary:
+          - female
+          - male
+      race:
+        Asian:
+          - east asian
+          - south asian
+          - southeast asian
+        Black or African American:
+          - black
+  sampler:
+    backend: nemotron-personas
+```
+
+Each list selects the union of sampler rows with those values, so listing every
+sampler value allows any match. Values without an entry use case-insensitive
+identity matching. A value that has no entry and matches no sampler value stops
+plan resolution with an error naming its column. Non-string dataset values use
+their usual text form as keys, for example `1.0` or `2024-01-01T00:00:00`.
+Manual mappings are
+validated against the resolved dependency columns and the selected sampler's
+known values. Faker applies mappings for attributes it supports, such as
+gender; unsupported attributes are ignored.
+
+Mappings are sampler-specific even though they live in the dataset-specific
+replacement plan. NSS does not accept a separate mapping file or combine
+automatic discovery with manual overrides. Generate a resolved configuration,
+edit its inline plan if needed, and run that configuration again. An explicit
+inline or file-based plan never runs a separate mapping-discovery pass; an
+omitted mapping is equivalent to `{}`.
 
 ## Replacement plan sources
 
@@ -21,9 +147,10 @@ includes the version whenever it serializes the configuration.
 
 ### Automatic discovery
 
-Use `auto_discovery` to run the heuristic plan discoverer. When `llm` is
-configured, NSS passes the heuristic result to the LLM plan enhancer before
-validating the final plan.
+Use `auto_discovery` to discover both replacement columns and dependency value
+mappings. When `llm` is configured, NSS passes the heuristic result to the LLM
+plan enhancer before validating the final plan and mapping unmatched dependency
+values.
 
 ```yaml
 replace_pii:
@@ -49,6 +176,7 @@ replace_pii:
         pattern: "{f}.{last}@{domain}"
         depends_on:
           - column_name: full_name
+    data_to_sampler_value_mapping: {}
 ```
 
 ### Plan file
@@ -61,6 +189,7 @@ schema_version: 3
 columns_to_replace:
   - column_name: email
     entity_type: email
+data_to_sampler_value_mapping: {}
 ```
 
 Set `replacement_plan` to its path:
@@ -74,10 +203,20 @@ replace_pii:
 Inline plans and plan files are authoritative: NSS validates them against the
 input dataframe but does not run heuristic or LLM discovery.
 
+Date-of-birth patterns use Python `strptime`/`strftime` syntax. Named-month
+formats such as `%B %d, %Y` match values like `December 10, 1815`; patterns do
+not perform general natural-language date parsing, so prose and ordinal forms
+such as `December tenth` or `December 10th` are not supported automatically.
+Birth dates are shifted by up to a year. A value that does not match the
+pattern is parsed with common date formats instead; if none fits, NSS writes a
+random birth date in the pattern's format and logs a warning, so the original
+never remains.
+
 ## Plan-only workflow
 
-Resolve and save a plan from the full input dataframe without running holdout,
-model metadata, replacement, training, generation, or evaluation:
+Resolve and save the replacement plan—including its sampler-specific dependency
+mappings—from the full input dataframe without running holdout, model metadata,
+replacement, training, generation, or evaluation:
 
 ```bash
 safe-synthesizer run replace-pii --plan-only \
@@ -85,31 +224,32 @@ safe-synthesizer run replace-pii --plan-only \
   --data-source data.csv
 ```
 
-The command writes `pii_replacement_plan.yaml` in the standard timestamped NSS
-run directory under `--artifact-path`.
+The command writes `pii_replacement_config.yaml` in the standard timestamped
+NSS run directory under `--artifact-path`. This is a complete NSS configuration
+with the resolved plan and inline dependency mappings, so it can be edited and
+passed directly to a later run with `--config`.
 
-The matching SDK interface returns the resolved plan and writes YAML only when
-an output path is supplied:
+The matching SDK interface returns the resolved `ReplacePiiConfig` and writes
+the complete reusable NSS configuration only when an output path is supplied:
 
 ```python
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
 
 config = SafeSynthesizerParameters.from_yaml("config.yaml")
-plan = (
+resolved_pii = (
     SafeSynthesizer(config)
     .with_data_source("data.csv")
-    .plan_pii_replacement("pii_replacement_plan.yaml")
+    .plan_pii_replacement("pii_replacement_config.yaml")
 )
 ```
 
-The generated standalone plan can be reviewed, edited, and reused as
-`replace_pii.replacement_plan` in a later run.
+The generated configuration can be reviewed, edited, and reused directly.
 
 ## LLM-assisted planning
 
 The `llm` mapping configures the OpenAI-compatible inference service used for
-automatic plan enhancement.
+automatic plan enhancement and data-to-sampler value mapping discovery.
 
 ```yaml
 replace_pii:
@@ -265,9 +405,17 @@ chooses at most one candidate column, the one describing the same person or
 record, or none. The response schema lists only the candidate columns, so the
 model cannot name another column or choose two sources of one type, such as
 both a person's and a spouse's gender. Each option carries the heuristic
-baseline's choice as fallible prior evidence. NSS, rather than the model, derives
-group-consistent or record-consistent replacement behavior from the configured
-grouping column, excludes protected ordering and timestamp columns, and validates
+baseline's choice as fallible prior evidence. NSS, rather than the model, decides how
+replacements stay consistent: within a group when a grouping column is
+configured, else within a row. Every replacement differs from the value it
+replaces. Identifier-like values (email, phone number, SSN, national ID, card
+number, API key, IP address, unique identifier) also avoid every other original
+value in the column and stay unique while the column's format has room; when
+that is not possible, NSS repeats a replacement or, as a last resort, uses
+another row's original value, and logs a warning with the count. Without
+a pattern, digit-only identifiers are replaced with numbers up to the column's
+longest length, gaining a digit when that range is too full. Automatic
+discovery skips row counters, such as a saved `Unnamed: 0` index column. NSS also excludes protected ordering and timestamp columns, and validates
 the assembled plan. Grouping columns remain eligible for replacement so
 identifiers such as patient IDs can be anonymized.
 

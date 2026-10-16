@@ -7,17 +7,30 @@ from __future__ import annotations
 
 import hashlib
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol
 
+import numpy as np
 import pandas as pd
 
 from ...config.data import DataParameters
-from ...config.replace_pii import LLMConfig, PiiReplacementPlan, ReplacePiiConfig
+from ...config.replace_pii import DataToSamplerValueMapping, EntityType, LLMConfig, PiiReplacementPlan, ReplacePiiConfig
 from ...config.time_series import TimeSeriesParameters
 from ...errors import ParameterError
+from ...observability import get_logger
+from .dependency_mappings import (
+    built_in_value_mappings,
+    conditioner_columns,
+    mapping_inputs,
+    unmatched_dependency_values,
+    validate_data_to_sampler_value_mapping,
+)
 from .io import load_plan, save_plan
 from .validation import get_protected_columns, validate_plan
+
+logger = get_logger(__name__)
 
 __all__ = [
     "ColumnProfile",
@@ -25,6 +38,7 @@ __all__ = [
     "PlanDiscoverer",
     "PlanDiscoveryInput",
     "PlanEnhancer",
+    "resolve_replacement_config",
     "resolve_plan",
 ]
 
@@ -78,6 +92,18 @@ class PlanEnhancer(ABC):
         baseline: PiiReplacementPlan,
     ) -> PiiReplacementPlan:
         """Return a context-free valid replacement for ``baseline``."""
+
+
+class DependencyMappingDiscoverer(Protocol):
+    """Discover sampler-specific mappings for dependency-column values."""
+
+    def discover_data_to_sampler_value_mapping(
+        self,
+        dataframe: pd.DataFrame,
+        plan: PiiReplacementPlan,
+        catalog: Mapping[EntityType, tuple[str, ...]],
+    ) -> DataToSamplerValueMapping:
+        """Return sparse mappings for non-identity dependency values."""
 
 
 class HeuristicPlanDiscoverer(PlanDiscoverer):
@@ -195,6 +221,7 @@ def resolve_plan(
             plan = enhancer.enhance(discovery_input, baseline)
         else:
             plan = _enhance_with_default_llm(config.llm, discovery_input, baseline)
+        plan = _without_row_counters(df, plan, discovery_input.group_column)
 
     validate_plan(
         df,
@@ -205,3 +232,208 @@ def resolve_plan(
     if output_path is not None:
         save_plan(plan, output_path)
     return plan
+
+
+def resolve_replacement_config(
+    df: pd.DataFrame,
+    config: ReplacePiiConfig,
+    data_config: DataParameters,
+    time_series: TimeSeriesParameters | None = None,
+    *,
+    discoverer: PlanDiscoverer | None = None,
+    enhancer: PlanEnhancer | None = None,
+    mapping_discoverer: DependencyMappingDiscoverer | None = None,
+    sampler_value_catalog: Mapping[EntityType, tuple[str, ...]] | None = None,
+) -> ReplacePiiConfig:
+    """Resolve the replacement plan and its data-to-sampler value mapping for ``df``.
+
+    The plan comes from ``config`` or, for ``auto_discovery``, from the
+    discoverer and, when ``config.llm`` is set, the LLM enhancer. The value
+    mapping then combines built-in entries for common gender spellings, the
+    plan's own entries, and, for ``auto_discovery``, discovered entries for any
+    remaining conditioner values without a sampler match.
+
+    Args:
+        df: Data the plan is validated against and whose conditioner values are mapped.
+        config: PII replacement configuration to resolve.
+        data_config: Data parameters, used for grouping and protected columns.
+        time_series: Time-series parameters, used for protected columns.
+        discoverer: Plan discoverer for ``auto_discovery``; defaults to the heuristic discoverer.
+        enhancer: Plan enhancer; defaults to the LLM enhancer when ``config.llm`` is set.
+        mapping_discoverer: Value-mapping discoverer; defaults to the LLM enhancer when ``config.llm`` is set.
+        sampler_value_catalog: Sampler values per entity type; loaded from the configured sampler when omitted.
+
+    Returns:
+        A copy of ``config`` whose ``replacement_plan`` is the resolved inline plan,
+        including its complete ``data_to_sampler_value_mapping``.
+
+    When both plan enhancement and mapping discovery use the default LLM, they share one inference
+    session, so a managed local vLLM server starts once and stops before this returns. Plan
+    validation runs inside that session, between the two LLM steps.
+
+    Raises:
+        ParameterError: If the plan or mapping is invalid, a conditioner value has
+            no sampler match or mapping entry and cannot be discovered, or the
+            selected Nemotron-Personas dataset is missing.
+
+    Example:
+        With a plan where ``first_name`` depends on ``sex``, values ``"F"`` and
+        ``"Woman"`` resolve to ``{"sex": {"F": ["female"], "Woman": ["female"]}}``
+        without an LLM, while a value such as ``"X"`` needs a mapping entry.
+    """
+    if config.llm is not None and config.is_auto_discovery and enhancer is None and mapping_discoverer is None:
+        from ..local_inference import planning_inference_settings
+        from .llm import LLMPlanEnhancer
+
+        with planning_inference_settings(config.llm) as settings:
+            llm = LLMPlanEnhancer(config.llm, settings=settings)
+            return _resolve_replacement_config(
+                df,
+                config,
+                data_config,
+                time_series,
+                discoverer=discoverer,
+                enhancer=llm,
+                mapping_discoverer=llm,
+                sampler_value_catalog=sampler_value_catalog,
+            )
+    return _resolve_replacement_config(
+        df,
+        config,
+        data_config,
+        time_series,
+        discoverer=discoverer,
+        enhancer=enhancer,
+        mapping_discoverer=mapping_discoverer,
+        sampler_value_catalog=sampler_value_catalog,
+    )
+
+
+def _resolve_replacement_config(
+    df: pd.DataFrame,
+    config: ReplacePiiConfig,
+    data_config: DataParameters,
+    time_series: TimeSeriesParameters | None = None,
+    *,
+    discoverer: PlanDiscoverer | None = None,
+    enhancer: PlanEnhancer | None = None,
+    mapping_discoverer: DependencyMappingDiscoverer | None = None,
+    sampler_value_catalog: Mapping[EntityType, tuple[str, ...]] | None = None,
+) -> ReplacePiiConfig:
+    """Resolve the plan and value mapping with the given adapters; see ``resolve_replacement_config``."""
+    discover_plan = config.is_auto_discovery
+    plan = resolve_plan(
+        df,
+        config,
+        data_config,
+        time_series,
+        discoverer=discoverer,
+        enhancer=enhancer,
+    )
+
+    if sampler_value_catalog is None and conditioner_columns(plan):
+        from ..sampler_catalog import load_sampler_value_catalog
+
+        sampler_value_catalog = load_sampler_value_catalog(config.replacement, config.sampler)
+    catalog = dict(sampler_value_catalog or {})
+
+    # Built-in entries for common spellings come first so neither the LLM nor the user has to map them;
+    # the plan's own entries are kept as written.
+    plan = PiiReplacementPlan(
+        columns_to_replace=plan.columns_to_replace,
+        data_to_sampler_value_mapping=_merged_value_mappings(
+            built_in_value_mappings(df, plan, catalog), plan.data_to_sampler_value_mapping
+        ),
+    )
+    mappings = plan.data_to_sampler_value_mapping
+    if discover_plan and mapping_inputs(df, plan, catalog):
+        if mapping_discoverer is not None:
+            discovered = mapping_discoverer.discover_data_to_sampler_value_mapping(df, plan, catalog)
+        elif config.llm is not None:
+            discovered = _discover_mappings_with_default_llm(config.llm, df, plan, catalog)
+        else:
+            raise ParameterError(
+                "automatic data-to-sampler value mapping found dataset values without case-insensitive sampler "
+                "matches; configure replace_pii.llm, or generate and edit an explicit replacement plan"
+            )
+        mappings = _merged_value_mappings(mappings, discovered)
+
+    resolved_plan = PiiReplacementPlan(
+        columns_to_replace=plan.columns_to_replace,
+        data_to_sampler_value_mapping=mappings,
+    )
+    validate_data_to_sampler_value_mapping(resolved_plan, catalog)
+    if unmatched := unmatched_dependency_values(df, resolved_plan, catalog):
+        columns = ", ".join(f"{column!r} ({count})" for column, count in sorted(unmatched.items()))
+        raise ParameterError(
+            "data_to_sampler_value_mapping has no entry for dataset values that match no sampler value, "
+            f"counted by depends_on column: {columns}. Add an entry listing the sampler values each one may "
+            "match, or list every sampler value to allow any match"
+        )
+    return config.model_copy(update={"replacement_plan": resolved_plan})
+
+
+def _merged_value_mappings(*mappings: DataToSamplerValueMapping) -> DataToSamplerValueMapping:
+    """Combine value mappings column by column; a later mapping's entry replaces an earlier one for the same key."""
+    merged: DataToSamplerValueMapping = {}
+    for mapping in mappings:
+        for column_name, value_mappings in mapping.items():
+            merged.setdefault(column_name, {}).update(value_mappings)
+    return merged
+
+
+def _discover_mappings_with_default_llm(
+    llm_config: LLMConfig,
+    df: pd.DataFrame,
+    plan: PiiReplacementPlan,
+    catalog: Mapping[EntityType, tuple[str, ...]],
+) -> DataToSamplerValueMapping:
+    """Run value-mapping discovery with the default LLM inside its own inference session."""
+    from ..local_inference import planning_inference_settings
+    from .llm import LLMPlanEnhancer
+
+    with planning_inference_settings(llm_config) as settings:
+        return LLMPlanEnhancer(llm_config, settings=settings).discover_data_to_sampler_value_mapping(df, plan, catalog)
+
+
+def row_counter_columns(df: pd.DataFrame, *, group_column: str | None = None) -> frozenset[str]:
+    """Return columns whose values number the rows, so automatic discovery does not treat them as PII.
+
+    A row counter holds unique, non-missing integers that are exactly ``0`` to
+    ``n - 1`` or ``1`` to ``n`` for ``n`` rows, in any order. Examples include
+    the ``Unnamed: 0`` column pandas writes for a saved index, and plain
+    ``row_id`` or ``event_id`` sequences. Detection uses the values only, not
+    the column name. The grouping column is never a row counter: it identifies
+    the entity each row belongs to.
+
+    Example:
+        A column holding ``3, 0, 2, 1`` in a four-row dataframe is a row
+        counter; ``0, 1, 3, 4`` and ``17, 18, 19, 20`` are not.
+    """
+    return frozenset(str(column) for column in df.columns if column != group_column and _is_row_counter(df[column]))
+
+
+def _is_row_counter(values: pd.Series) -> bool:
+    if len(values) < 2 or values.isna().any():
+        return False
+    if pd.api.types.is_bool_dtype(values) or not pd.api.types.is_numeric_dtype(values):
+        return False
+    numbers = values.to_numpy(dtype="float64")
+    if not np.array_equal(numbers, np.floor(numbers)):
+        return False
+    start = numbers.min()
+    return start in (0.0, 1.0) and numbers.max() - start + 1 == len(numbers) and len(np.unique(numbers)) == len(numbers)
+
+
+def _without_row_counters(df: pd.DataFrame, plan: PiiReplacementPlan, group_column: str | None) -> PiiReplacementPlan:
+    """Drop automatically discovered replacements for row-counter columns; explicit plans are never changed."""
+    counters = row_counter_columns(df, group_column=group_column)
+    kept = [spec for spec in plan.columns_to_replace if spec.column_name not in counters]
+    if len(kept) == len(plan.columns_to_replace):
+        return plan
+    skipped = sorted(spec.column_name for spec in plan.columns_to_replace if spec.column_name in counters)
+    logger.user.info(
+        "Skipping row-counter columns in automatic PII discovery",
+        extra={"columns": skipped},
+    )
+    return plan.model_copy(update={"columns_to_replace": kept})

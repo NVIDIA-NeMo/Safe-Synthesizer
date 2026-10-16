@@ -31,6 +31,7 @@ __all__ = [
     "GroupMappingKey",
     "GroupMappingProvenance",
     "RecordMappingKey",
+    "StructuredMappingKey",
     "detected_text",
     "free_text_mapping_key",
     "require_effective_dependency_tuple",
@@ -346,6 +347,10 @@ class GroupMappingKey:
         _require_str(self.target_column, "group mapping target_column")
         _require_scope_identity(self.original_group_identity, "group mapping original_group_identity")
         _require_canonical_value(self.canonical_original_value, "group mapping canonical_original_value")
+
+
+StructuredMappingKey: TypeAlias = RecordMappingKey | GroupMappingKey
+"""Cache identity for one structured replacement in record or group scope."""
 
 
 @dataclass(frozen=True, slots=True)

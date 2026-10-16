@@ -177,6 +177,9 @@ class Entity:
     target supplies its post-replacement value.
     """
 
+    description: str
+    """Short, general definition shown to the LLM classifier, so it can tell this entity from similar-looking data."""
+
     pattern_syntax: PatternSyntax | None = None
     """Notation ``pattern`` uses, or ``None`` when this entity allows no pattern."""
 
@@ -187,24 +190,28 @@ ENTITIES: tuple[Entity, ...] = (
         EntityType.FIRST_NAME,
         action=EntityAction.REPLACE,
         can_condition=True,
+        description="A person's given name.",
         pattern_syntax=PatternSyntax.NAME_PARTS,
     ),
     Entity(
         EntityType.MIDDLE_NAME,
         action=EntityAction.REPLACE,
         can_condition=True,
+        description="A person's middle name or middle initial.",
         pattern_syntax=PatternSyntax.NAME_PARTS,
     ),
     Entity(
         EntityType.LAST_NAME,
         action=EntityAction.REPLACE,
         can_condition=True,
+        description="A person's family name or surname.",
         pattern_syntax=PatternSyntax.NAME_PARTS,
     ),
     Entity(
         EntityType.FULL_NAME,
         action=EntityAction.REPLACE,
         can_condition=True,
+        description="A person's full name.",
         pattern_syntax=PatternSyntax.NAME_PARTS,
     ),
     # Replace only.
@@ -212,55 +219,105 @@ ENTITIES: tuple[Entity, ...] = (
         EntityType.EMAIL,
         action=EntityAction.REPLACE,
         can_condition=False,
+        description="An email address.",
         pattern_syntax=PatternSyntax.NAME_PARTS,
     ),
     Entity(
         EntityType.PHONE_NUMBER,
         action=EntityAction.REPLACE,
         can_condition=False,
+        description="A telephone or fax number.",
         pattern_syntax=PatternSyntax.CHARACTER_MASK,
     ),
     Entity(
         EntityType.DATE_OF_BIRTH,
         action=EntityAction.REPLACE,
         can_condition=False,
+        description="A person's date of birth, written as a full or partial calendar date.",
         pattern_syntax=PatternSyntax.STRFTIME,
     ),
-    Entity(EntityType.STREET_ADDRESS, action=EntityAction.REPLACE, can_condition=False),
-    Entity(EntityType.SSN, action=EntityAction.REPLACE, can_condition=False),
-    Entity(EntityType.NATIONAL_ID, action=EntityAction.REPLACE, can_condition=False),
+    Entity(
+        EntityType.STREET_ADDRESS,
+        action=EntityAction.REPLACE,
+        can_condition=False,
+        description="A street address, possibly including city, state, or postal code.",
+    ),
+    Entity(
+        EntityType.SSN, action=EntityAction.REPLACE, can_condition=False, description="A US Social Security number."
+    ),
+    Entity(
+        EntityType.NATIONAL_ID,
+        action=EntityAction.REPLACE,
+        can_condition=False,
+        description="A government-issued personal identification number other than a US Social Security number.",
+    ),
     Entity(
         EntityType.CREDIT_DEBIT_CARD,
         action=EntityAction.REPLACE,
         can_condition=False,
+        description="A payment card number.",
         pattern_syntax=PatternSyntax.CHARACTER_MASK,
     ),
     Entity(
         EntityType.API_KEY,
         action=EntityAction.REPLACE,
         can_condition=False,
+        description="A secret access credential, such as an API key or access token.",
         pattern_syntax=PatternSyntax.CHARACTER_MASK,
     ),
-    Entity(EntityType.IPV4, action=EntityAction.REPLACE, can_condition=False),
-    Entity(EntityType.IPV6, action=EntityAction.REPLACE, can_condition=False),
+    Entity(EntityType.IPV4, action=EntityAction.REPLACE, can_condition=False, description="An IPv4 address."),
+    Entity(EntityType.IPV6, action=EntityAction.REPLACE, can_condition=False, description="An IPv6 address."),
     Entity(
         EntityType.UNIQUE_IDENTIFIER,
         action=EntityAction.REPLACE,
         can_condition=False,
+        description="An identifier that refers to a specific person or their records. Identifiers of products, places, or events, and row numbers, are not this type.",
         pattern_syntax=PatternSyntax.CHARACTER_MASK,
     ),
     # Rewrite spans inside cell text (username/url use this too).
-    Entity(EntityType.FREE_TEXT, action=EntityAction.REPLACE_IN_TEXT, can_condition=False),
+    Entity(
+        EntityType.FREE_TEXT,
+        action=EntityAction.REPLACE_IN_TEXT,
+        can_condition=False,
+        description="Free-form text, such as notes or comments, that may mention personal details.",
+    ),
     # Identify-only.
-    Entity(EntityType.DATE, action=EntityAction.IDENTIFY_ONLY, can_condition=False),
+    Entity(
+        EntityType.DATE,
+        action=EntityAction.IDENTIFY_ONLY,
+        can_condition=False,
+        description="A date other than a date of birth.",
+    ),
     # Identify-only and may condition replacements.
-    Entity(EntityType.GENDER, action=EntityAction.IDENTIFY_ONLY, can_condition=True),
-    Entity(EntityType.ETHNIC_BACKGROUND, action=EntityAction.IDENTIFY_ONLY, can_condition=True),
-    Entity(EntityType.CITY, action=EntityAction.IDENTIFY_ONLY, can_condition=True),
-    Entity(EntityType.STATE, action=EntityAction.IDENTIFY_ONLY, can_condition=True),
-    Entity(EntityType.ZIPCODE, action=EntityAction.IDENTIFY_ONLY, can_condition=True),
-    Entity(EntityType.COUNTRY, action=EntityAction.IDENTIFY_ONLY, can_condition=True),
-    Entity(EntityType.ORGANIZATION, action=EntityAction.IDENTIFY_ONLY, can_condition=True),
+    Entity(
+        EntityType.GENDER,
+        action=EntityAction.IDENTIFY_ONLY,
+        can_condition=True,
+        description="A person's gender or sex.",
+    ),
+    Entity(
+        EntityType.ETHNIC_BACKGROUND,
+        action=EntityAction.IDENTIFY_ONLY,
+        can_condition=True,
+        description="A person's race or ethnicity.",
+    ),
+    Entity(EntityType.CITY, action=EntityAction.IDENTIFY_ONLY, can_condition=True, description="A city or town."),
+    Entity(
+        EntityType.STATE,
+        action=EntityAction.IDENTIFY_ONLY,
+        can_condition=True,
+        description="A state, province, or region.",
+    ),
+    Entity(
+        EntityType.ZIPCODE, action=EntityAction.IDENTIFY_ONLY, can_condition=True, description="A postal or ZIP code."
+    ),
+    Entity(EntityType.COUNTRY, action=EntityAction.IDENTIFY_ONLY, can_condition=True, description="A country."),
+    Entity(
+        EntityType.ORGANIZATION,
+        action=EntityAction.IDENTIFY_ONLY,
+        can_condition=True,
+        description="The name of a company, institution, or other organization.",
+    ),
 )
 
 ENTITY_BY_TYPE: dict[EntityType, Entity] = {entity.entity_type: entity for entity in ENTITIES}

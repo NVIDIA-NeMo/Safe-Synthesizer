@@ -8,6 +8,7 @@ import pytest
 
 from nemo_safe_synthesizer.config.data import DataParameters
 from nemo_safe_synthesizer.config.replace_pii import (
+    ConditioningColumn,
     EntityType,
     LLMConfig,
     PiiColumnPlan,
@@ -21,7 +22,9 @@ from nemo_safe_synthesizer.pii_replacer.planning import (
     PlanEnhancer,
     load_plan,
     resolve_plan,
+    resolve_replacement_config,
 )
+from nemo_safe_synthesizer.pii_replacer.planning.resolver import row_counter_columns
 
 from ..conftest import FakeLocalServer
 
@@ -199,6 +202,49 @@ class TestResolvePlan:
 
         assert discoverer.inputs[0].group_column is None
 
+    def test_auto_discovery_skips_row_counter_columns(self) -> None:
+        dataframe = pd.DataFrame(
+            {"Unnamed: 0": [2, 0, 1], "customer_id": [1001, 1002, 1003], "name": ["Ada", "Grace", "Alan"]}
+        )
+        discovered = PiiReplacementPlan(
+            columns_to_replace=[
+                PiiColumnPlan(column_name=column, entity_type=entity_type)
+                for column, entity_type in (
+                    ("Unnamed: 0", EntityType.UNIQUE_IDENTIFIER),
+                    ("customer_id", EntityType.UNIQUE_IDENTIFIER),
+                    ("name", EntityType.FULL_NAME),
+                )
+            ]
+        )
+
+        plan = resolve_plan(dataframe, ReplacePiiConfig(), DataParameters(), discoverer=RecordingDiscoverer(discovered))
+
+        assert [spec.column_name for spec in plan.columns_to_replace] == ["customer_id", "name"]
+
+    def test_explicit_plans_may_replace_row_counter_columns(self) -> None:
+        dataframe = pd.DataFrame({"row": [1, 2, 3]})
+        plan = PiiReplacementPlan(
+            columns_to_replace=[PiiColumnPlan(column_name="row", entity_type=EntityType.UNIQUE_IDENTIFIER)]
+        )
+
+        resolved = resolve_plan(dataframe, ReplacePiiConfig(replacement_plan=plan), DataParameters())
+
+        assert [spec.column_name for spec in resolved.columns_to_replace] == ["row"]
+
+    @pytest.mark.parametrize(
+        ("values", "is_counter"),
+        [
+            ([3, 0, 2, 1], True),
+            ([1.0, 2.0, 3.0, 4.0], True),
+            ([0, 1, 3, 4], False),
+            ([17, 18, 19, 20], False),
+            ([0, 1, 1, 2], False),
+            ([True, False, True, False], False),
+        ],
+    )
+    def test_row_counter_detection_uses_values_only(self, values: list[object], is_counter: bool) -> None:
+        assert (row_counter_columns(pd.DataFrame({"column": values})) == {"column"}) is is_counter
+
     def test_output_path_persists_the_final_plan(self, fixture_patient_df: pd.DataFrame, tmp_path: Path) -> None:
         path = tmp_path / "pii_replacement_plan.yaml"
 
@@ -310,3 +356,87 @@ class TestResolvePlanWithLocalServer:
         )
 
         assert fixture_fake_local_servers == []
+
+
+class _RecordingLlm(PlanEnhancer):
+    """Stands in for LLMPlanEnhancer; records whether the managed server was running for each LLM step."""
+
+    def __init__(self, plan: PiiReplacementPlan, servers: list[FakeLocalServer]) -> None:
+        self.plan = plan
+        self.servers = servers
+        self.running_during: dict[str, bool] = {}
+
+    def enhance(self, discovery_input: PlanDiscoveryInput, baseline: PiiReplacementPlan) -> PiiReplacementPlan:
+        self.running_during["enhance"] = self.servers[-1].running
+        return self.plan
+
+    def discover_data_to_sampler_value_mapping(
+        self,
+        dataframe: pd.DataFrame,
+        plan: PiiReplacementPlan,
+        catalog: object,
+    ) -> dict[str, dict[str, list[str]]]:
+        self.running_during["map"] = self.servers[-1].running
+        return {"sex": {"X": ["female", "male"]}}
+
+
+def _plan_needing_a_value_mapping() -> PiiReplacementPlan:
+    return PiiReplacementPlan(
+        columns_to_replace=[
+            PiiColumnPlan(
+                column_name="name",
+                entity_type=EntityType.FIRST_NAME,
+                depends_on=[ConditioningColumn(column_name="sex", entity_type=EntityType.GENDER)],
+            )
+        ]
+    )
+
+
+@pytest.mark.unit
+class TestResolveReplacementConfigWithLocalServer:
+    def test_plan_enhancement_and_value_mapping_share_one_server(
+        self,
+        fixture_fake_local_servers: list[FakeLocalServer],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        dataframe = pd.DataFrame({"name": ["Ada", "Alan"], "sex": ["Female", "X"]})
+        llm = _RecordingLlm(_plan_needing_a_value_mapping(), fixture_fake_local_servers)
+        monkeypatch.setattr(
+            "nemo_safe_synthesizer.pii_replacer.planning.llm.LLMPlanEnhancer", lambda config, settings=None: llm
+        )
+
+        resolved = resolve_replacement_config(
+            dataframe,
+            ReplacePiiConfig(llm=LLMConfig()),
+            DataParameters(),
+            sampler_value_catalog={EntityType.GENDER: ("female", "male")},
+        )
+
+        assert len(fixture_fake_local_servers) == 1
+        assert llm.running_during == {"enhance": True, "map": True}
+        assert not fixture_fake_local_servers[0].running
+        assert resolved.inline_plan is not None
+        assert resolved.inline_plan.data_to_sampler_value_mapping == {"sex": {"X": ["female", "male"]}}
+
+    def test_value_mapping_alone_runs_in_its_own_server_session(
+        self,
+        fixture_fake_local_servers: list[FakeLocalServer],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        dataframe = pd.DataFrame({"name": ["Ada", "Alan"], "sex": ["Female", "X"]})
+        llm = _RecordingLlm(_plan_needing_a_value_mapping(), fixture_fake_local_servers)
+        monkeypatch.setattr(
+            "nemo_safe_synthesizer.pii_replacer.planning.llm.LLMPlanEnhancer", lambda config, settings=None: llm
+        )
+
+        resolve_replacement_config(
+            dataframe,
+            ReplacePiiConfig(llm=LLMConfig()),
+            DataParameters(),
+            enhancer=RecordingEnhancer(_plan_needing_a_value_mapping()),
+            sampler_value_catalog={EntityType.GENDER: ("female", "male")},
+        )
+
+        assert len(fixture_fake_local_servers) == 1
+        assert llm.running_during == {"map": True}
+        assert not fixture_fake_local_servers[0].running
