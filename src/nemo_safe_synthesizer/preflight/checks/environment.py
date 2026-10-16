@@ -15,7 +15,14 @@ from typing_extensions import override
 from ...errors import ParameterError
 from ...llm.utils import ModelRef
 from ...observability import get_logger
-from ...pii_replacer.llm_client import MissingInferenceKeyError, resolve_inference_settings
+from ...pii_replacer.llm_client import InvalidRequestSettingsError, MissingInferenceModelError
+from ...pii_replacer.local_inference import (
+    InvalidLocalServerSettingsError,
+    LocalServerRequest,
+    local_runtime_problem,
+    local_runtime_problem_message,
+    resolve_planning_inference,
+)
 from ...utils import hf_offline_enabled
 from ..base import ConfigCheck, IssueCollector, MetadataCheck
 from ..helpers import require_import
@@ -452,7 +459,14 @@ class VRAMHeadroomCheck(MetadataCheck):
 
 
 class InferenceModelCheck(ConfigCheck):
-    """Validate configured PII plan-enhancement inference settings."""
+    """Validate configured PII plan-enhancement inference settings.
+
+    When a managed local server applies (a local profile, or no endpoint at
+    all), validates the profile, managed address, model names, and that vLLM,
+    enough GPUs, and enough GPU memory are available, instead of the remote
+    endpoint and key.
+    Skipped when an explicit replacement plan makes discovery unnecessary.
+    """
 
     name = "env.inference"
     label = "Inference configuration"
@@ -461,14 +475,26 @@ class InferenceModelCheck(ConfigCheck):
     @override
     def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
         replace_pii = ctx.config.replace_pii
-        if replace_pii is None or replace_pii.llm is None:
+        # An explicit plan skips discovery, so no inference request is made.
+        if replace_pii is None or replace_pii.llm is None or not replace_pii.is_auto_discovery:
             return
+        # Plan discovery resolves its settings the same way.
         try:
-            resolve_inference_settings(replace_pii.llm)
-        except MissingInferenceKeyError as exc:
-            collector.error("inference_key_missing", str(exc))
+            inference = resolve_planning_inference(replace_pii.llm)
+        except InvalidRequestSettingsError as exc:
+            collector.error("inference_request_settings_invalid", str(exc))
+            return
+        except InvalidLocalServerSettingsError as exc:
+            collector.error("inference_local_profile_invalid", str(exc))
+            return
+        except MissingInferenceModelError as exc:
+            collector.error("inference_model_missing", str(exc))
+            return
         except ParameterError as exc:
             collector.error("inference_endpoint_invalid", str(exc))
+            return
+        if isinstance(inference, LocalServerRequest) and (problem := local_runtime_problem(inference.profile)):
+            collector.error("inference_local_runtime_unavailable", local_runtime_problem_message(problem))
 
 
 def _has_hf_token() -> bool:

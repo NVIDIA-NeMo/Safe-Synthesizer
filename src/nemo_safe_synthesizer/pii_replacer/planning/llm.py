@@ -29,6 +29,7 @@ from ...config.replace_pii import (
 from ...errors import GenerationError, InternalError, ParameterError
 from ...observability import get_logger
 from ..llm_client import (
+    InferenceSettings,
     InvalidInferenceResponse,
     LLMTransport,
     OpenAICompatibleTransport,
@@ -557,11 +558,12 @@ class LLMPlanEnhancer(PlanEnhancer):
     IDs. Invalid optional patterns get focused repair requests.
 
     Args:
-        config: Persisted LLM behavior; the endpoint, key, and model resolve
-            through ``resolve_inference_settings``.
+        config: Persisted LLM behavior.
+        settings: Endpoint, model, key, and request settings; defaults to
+            ``resolve_inference_settings(config)``, which reads an explicit
+            endpoint from the environment.
         transport: Structured-response transport; defaults to an
-            ``OpenAICompatibleTransport`` for the resolved settings.
-        environ: Environment mapping for settings resolution; defaults to ``os.environ``.
+            ``OpenAICompatibleTransport`` for ``settings``.
         sleep: Function used to wait between transient retries.
 
     Attributes:
@@ -575,11 +577,11 @@ class LLMPlanEnhancer(PlanEnhancer):
         self,
         config: LLMConfig,
         *,
+        settings: InferenceSettings | None = None,
         transport: LLMTransport | None = None,
-        environ: Mapping[str, str] | None = None,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
-        self.settings = resolve_inference_settings(config, environ=environ)
+        self.settings = resolve_inference_settings(config) if settings is None else settings
         self._transport = transport or OpenAICompatibleTransport(self.settings)
         self._sleep = sleep
 

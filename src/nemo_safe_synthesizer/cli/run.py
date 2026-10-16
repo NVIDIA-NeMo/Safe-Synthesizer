@@ -18,7 +18,7 @@ from ..configurator.pydantic_click_options import (
     parse_overrides,
     pydantic_options,
 )
-from ..defaults import PII_REPLACEMENT_PLAN_FILENAME
+from ..defaults import DEFAULT_NSS_INFERENCE_LOCAL_MODEL, PII_REPLACEMENT_PLAN_FILENAME
 from ..errors import UserError
 from ..observability import traced_user
 from ..telemetry import DeploymentTypeEnum, TaskStatusEnum
@@ -177,7 +177,8 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
             type=str,
             required=False,
             default=None,
-            help="OpenAI-compatible inference endpoint URL for LLM-assisted PII plan discovery. "
+            help="OpenAI-compatible inference endpoint URL for LLM-assisted PII plan discovery. When unset, NSS "
+            "runs a local vLLM server instead (see --inference-local-profile). "
             "Can also be set via NSS_INFERENCE_ENDPOINT env var.",
         )
     )
@@ -198,7 +199,45 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
             default=None,
             help="Model ID served by the PII inference endpoint. "
             "Can also be set via NSS_INFERENCE_MODEL env var. "
-            "[default: nvidia/nemotron-3-ultra-550b-a55b]",
+            "Without an endpoint, selects the bundled local vLLM profile to run "
+            f"(default: {DEFAULT_NSS_INFERENCE_LOCAL_MODEL}); required with an explicit endpoint.",
+        )
+    )
+    options.append(
+        click.option(
+            "--inference-timeout-seconds",
+            type=float,
+            required=False,
+            default=None,
+            help="Per-request timeout in seconds for PII inference, including model reasoning. "
+            "Overrides the local profile's timeout. Can also be set via NSS_INFERENCE_TIMEOUT env var. "
+            "[default: the local profile's timeout, or 60]",
+        )
+    )
+    options.append(
+        click.option(
+            "--inference-request-options",
+            type=str,
+            required=False,
+            default=None,
+            help="JSON object of chat-completions fields sent with every PII inference request, such as "
+            '\'{"temperature": 1.0, "thinking_token_budget": 1000}\'. Overrides the local profile\'s options '
+            "field by field; a null value drops a field. Fields left out use the server's defaults. "
+            "Can also be set via NSS_INFERENCE_REQUEST_OPTIONS env var.",
+        )
+    )
+    options.append(
+        click.option(
+            "--inference-local-profile",
+            type=str,
+            required=False,
+            default=None,
+            help="Path to a custom profile YAML, or a bundled profile name, for the local vLLM server that NSS "
+            "starts for LLM-assisted "
+            "PII plan discovery and stops before planning returns. Without it and without an endpoint, "
+            "--inference-model-id selects a bundled profile. With a profile, NSS_INFERENCE_ENDPOINT, if set, "
+            "must be a loopback http URL and selects the listening address. "
+            "Can also be set via NSS_INFERENCE_LOCAL_PROFILE env var.",
         )
     )
     options.append(

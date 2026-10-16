@@ -195,6 +195,41 @@ class CLISettings(BaseSettings):
     )
     """PII inference model ID (env: ``NSS_INFERENCE_MODEL``)."""
 
+    inference_timeout_seconds: float | None = Field(
+        default=None,
+        gt=0,
+        allow_inf_nan=False,
+        validation_alias=AliasChoices("inference_timeout_seconds", "NSS_INFERENCE_TIMEOUT"),
+        description="Per-request timeout in seconds for PII inference",
+    )
+    """PII inference per-request timeout (env: ``NSS_INFERENCE_TIMEOUT``).
+
+    Overrides a local profile's request timeout; defaults to 60 seconds otherwise.
+    """
+
+    inference_request_options: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("inference_request_options", "NSS_INFERENCE_REQUEST_OPTIONS"),
+        description="JSON object of chat-completions fields sent with every PII inference request",
+    )
+    """Extra PII inference request fields as JSON (env: ``NSS_INFERENCE_REQUEST_OPTIONS``).
+
+    Overrides a local profile's request options field by field; a ``null`` value drops a
+    field. Fields left out use the server's defaults.
+    """
+
+    inference_local_profile: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("inference_local_profile", "NSS_INFERENCE_LOCAL_PROFILE"),
+        description="Bundled profile name or YAML path for a managed local vLLM PII inference server",
+    )
+    """Managed local PII inference server profile (env: ``NSS_INFERENCE_LOCAL_PROFILE``).
+
+    NSS starts the server only for LLM-assisted plan discovery and stops it
+    before planning returns. When this and the endpoint are both unset, the
+    configured model ID selects a bundled profile.
+    """
+
     huggingface_remote: bool | None = Field(
         default=None,
         validation_alias=AliasChoices("huggingface_remote"),
@@ -216,6 +251,14 @@ class CLISettings(BaseSettings):
         if isinstance(v, WandbMode):
             return v
         return WandbMode(v)
+
+    @field_validator("inference_timeout_seconds", mode="before")
+    @classmethod
+    def validate_inference_timeout_seconds(cls, v: float | str | None) -> float | str | None:
+        """Treat a blank value as unset, as the PII inference client does."""
+        if isinstance(v, str) and not v.strip():
+            return None
+        return v
 
     @field_validator("verbose", mode="before")
     @classmethod
