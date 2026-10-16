@@ -45,17 +45,30 @@ _FRESH_ENTITY_TYPES = frozenset(GLINER_DETECTION_ENTITY_TYPES + REGEX_DETECTION_
 
 # The selected PII checkpoint uses a slightly broader vocabulary than NSS. Only
 # labels with a well-defined v3 replacement type are requested and normalized.
+# Labels and default thresholds follow the nss-pii-ner-eval v5 study. Identifiers are requested only by
+# the kinds that prose names ("customer ID 1234"); generic labels such as "identifier" or "unique_id"
+# mostly fire on device, vehicle, and biometric codes and stay unrequested.
 _GLINER_LABELS: dict[str, EntityType] = {
     "full_name": EntityType.FULL_NAME,
     "first_name": EntityType.FIRST_NAME,
     "middle_name": EntityType.MIDDLE_NAME,
     "last_name": EntityType.LAST_NAME,
     "phone_number": EntityType.PHONE_NUMBER,
+    "fax_number": EntityType.PHONE_NUMBER,
     "date_of_birth": EntityType.DATE_OF_BIRTH,
     "street_address": EntityType.STREET_ADDRESS,
     "address": EntityType.STREET_ADDRESS,
     "national_id_number": EntityType.NATIONAL_ID,
+    "tax_id": EntityType.NATIONAL_ID,
+    "tax_number": EntityType.NATIONAL_ID,
+    "license_number": EntityType.NATIONAL_ID,
+    "drivers_license_number": EntityType.NATIONAL_ID,
     "api_key": EntityType.API_KEY,
+    "customer_id": EntityType.UNIQUE_IDENTIFIER,
+    "employee_id": EntityType.UNIQUE_IDENTIFIER,
+    "medical_record_number": EntityType.UNIQUE_IDENTIFIER,
+    "member_id": EntityType.UNIQUE_IDENTIFIER,
+    "health_plan_beneficiary_number": EntityType.UNIQUE_IDENTIFIER,
 }
 _GLINER_UNION_LABELS: dict[str, tuple[EntityType, ...]] = {
     "government_id": (EntityType.SSN, EntityType.NATIONAL_ID),
@@ -64,6 +77,7 @@ _GLINER_LABEL_ENTITY_TYPES = {
     **{label: (entity_type,) for label, entity_type in _GLINER_LABELS.items()},
     **_GLINER_UNION_LABELS,
 }
+_SSN_SHAPE = regex.compile(r"(\d{3})-(\d{2})-(\d{4})")
 _ENTITY_ORDER = {entity.entity_type: position for position, entity in enumerate(ENTITIES)}
 _SOURCE_ORDER = {"regex": 0, "gliner": 1}
 
@@ -339,6 +353,10 @@ def _normalize_chunk_span(
     if score < config.entity_thresholds[entity_type]:
         return None, False
 
+    # An identifier without a digit is almost always a word the model mistook for one.
+    if entity_type is EntityType.UNIQUE_IDENTIFIER and not any(character.isdigit() for character in value):
+        return None, False
+
     rejected_birth_date = entity_type is EntityType.DATE_OF_BIRTH and not birth_date_is_supported(value)
     if rejected_birth_date:
         return None, rejected_birth_date
@@ -476,8 +494,21 @@ def _normalize_gliner_label(label: str, value: str) -> EntityType | None:
     normalized = label.strip().casefold().replace("-", "_").replace(" ", "_")
     entity_type = _GLINER_LABELS.get(normalized)
     if normalized == "government_id":
-        return EntityType.SSN if regex.fullmatch(r"\d{3}-\d{2}-\d{4}", value) else EntityType.NATIONAL_ID
+        return EntityType.SSN if _is_valid_ssn(value) else EntityType.NATIONAL_ID
     return entity_type
+
+
+def _is_valid_ssn(value: str) -> bool:
+    """Return whether ``value`` is ``ddd-dd-dddd`` with an SSN-assignable area, group, and serial.
+
+    Area 000, 666, and 900-999 (ITINs and other tax IDs use the 9xx range), group 00, and serial 0000
+    are never assigned, so such values are typed ``national_id`` instead.
+    """
+    match = _SSN_SHAPE.fullmatch(value)
+    if match is None:
+        return False
+    area, group, serial = match.groups()
+    return area not in {"000", "666"} and not area.startswith("9") and group != "00" and serial != "0000"
 
 
 def _load_gliner2_model(model_id: str) -> _GlinerModel:

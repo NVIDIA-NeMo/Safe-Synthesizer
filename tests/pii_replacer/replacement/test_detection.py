@@ -89,7 +89,7 @@ class TestGliner2Detector:
             [
                 {
                     "entities": {
-                        "phone_number": [{"text": text[start:], "start": start, "end": len(text), "confidence": 0.9}]
+                        "phone_number": [{"text": text[start:], "start": start, "end": len(text), "confidence": 0.999}]
                     }
                 }
             ]
@@ -128,7 +128,7 @@ class TestGliner2Detector:
             [
                 {"entities": {"full_name": [{"start": 0, "end": len(texts[0]), "confidence": 0.99}]}},
                 {"entities": {"person": [{"start": 0, "end": len(texts[1]), "confidence": 0.99}]}},
-                {"entities": {"phone_number": [{"start": 0, "end": len(texts[2]), "confidence": 0.89}]}},
+                {"entities": {"phone_number": [{"start": 0, "end": len(texts[2]), "confidence": 0.995}]}},
             ]
         )
         detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda _: model)
@@ -149,7 +149,7 @@ class TestGliner2Detector:
         assert labels["middle_name"] == {"threshold": 0.9}
         assert labels["last_name"] == {"threshold": 0.9}
         assert "person" not in labels
-        assert labels["phone_number"] == {"threshold": 0.5}
+        assert labels["phone_number"] == {"threshold": 0.994}
 
     def test_government_id_uses_the_lower_model_floor_then_the_normalized_entity_threshold(self) -> None:
         texts = ["123-45-6789", "AB-12345"]
@@ -277,7 +277,7 @@ class TestGliner2Detector:
     ) -> None:
         text = "Born sometime in spring"
         model = _FakeModel(
-            [{"entities": {"date_of_birth": [{"text": "spring", "start": 17, "end": 23, "confidence": 0.9}]}}]
+            [{"entities": {"date_of_birth": [{"text": "spring", "start": 17, "end": 23, "confidence": 1.0}]}}]
         )
         detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda _: model)
 
@@ -292,7 +292,7 @@ class TestGliner2Detector:
         text = f"Born on {value}"
         start = text.index(value)
         model = _FakeModel(
-            [{"entities": {"date_of_birth": [{"start": start, "end": start + len(value), "confidence": 0.9}]}}]
+            [{"entities": {"date_of_birth": [{"start": start, "end": start + len(value), "confidence": 1.0}]}}]
         )
         detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda _: model)
 
@@ -309,13 +309,27 @@ class TestGliner2Detector:
             ("middle_name", "Augusta", EntityType.MIDDLE_NAME),
             ("last_name", "Lovelace", EntityType.LAST_NAME),
             ("phone_number", "+1 202 555 0101", EntityType.PHONE_NUMBER),
+            ("fax_number", "+1 202 555 0102", EntityType.PHONE_NUMBER),
             ("date_of_birth", "5 April 1990", EntityType.DATE_OF_BIRTH),
             ("street_address", "12 Main Street", EntityType.STREET_ADDRESS),
             ("address", "12 Main Street", EntityType.STREET_ADDRESS),
             ("government_id", "123-45-6789", EntityType.SSN),
             ("government_id", "AB-12345", EntityType.NATIONAL_ID),
+            ("government_id", "912-45-6789", EntityType.NATIONAL_ID),
+            ("government_id", "666-45-6789", EntityType.NATIONAL_ID),
+            ("government_id", "123-00-6789", EntityType.NATIONAL_ID),
+            ("government_id", "123-45-0000", EntityType.NATIONAL_ID),
             ("national_id_number", "AB-12345", EntityType.NATIONAL_ID),
+            ("tax_id", "12-3456789", EntityType.NATIONAL_ID),
+            ("tax_number", "12-3456789", EntityType.NATIONAL_ID),
+            ("license_number", "D1234567", EntityType.NATIONAL_ID),
+            ("drivers_license_number", "D1234567", EntityType.NATIONAL_ID),
             ("api_key", "sk-ABC123", EntityType.API_KEY),
+            ("customer_id", "CUST-00412", EntityType.UNIQUE_IDENTIFIER),
+            ("employee_id", "E-7731", EntityType.UNIQUE_IDENTIFIER),
+            ("medical_record_number", "MRN 448102", EntityType.UNIQUE_IDENTIFIER),
+            ("member_id", "M90311", EntityType.UNIQUE_IDENTIFIER),
+            ("health_plan_beneficiary_number", "HPB-55102", EntityType.UNIQUE_IDENTIFIER),
         ],
     )
     def test_normalizes_every_requested_checkpoint_label(
@@ -324,12 +338,19 @@ class TestGliner2Detector:
         value: str,
         expected: EntityType,
     ) -> None:
-        model = _FakeModel([{"entities": {label: [{"start": 0, "end": len(value), "confidence": 0.99}]}}])
+        model = _FakeModel([{"entities": {label: [{"start": 0, "end": len(value), "confidence": 1.0}]}}])
         detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda _: model)
 
         spans = detector.detect([_cell(value)])
 
         assert [span.entity_type for span in spans] == [expected]
+
+    def test_drops_identifier_predictions_without_a_digit(self) -> None:
+        text = "Customer Loyalty"
+        model = _FakeModel([{"entities": {"customer_id": [{"start": 0, "end": len(text), "confidence": 1.0}]}}])
+        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda _: model)
+
+        assert detector.detect([_cell(text)]) == ()
 
     def test_normalizes_documented_government_id_label_to_ssn(self) -> None:
         text = "Identifier 123-45-6789"
