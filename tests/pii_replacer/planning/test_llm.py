@@ -22,7 +22,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     ReplacePiiConfig,
 )
 from nemo_safe_synthesizer.errors import GenerationError, ParameterError
-from nemo_safe_synthesizer.pii_replacer.llm_client import TransientInferenceError
+from nemo_safe_synthesizer.pii_replacer.llm_client import TransientInferenceError, resolve_inference_settings
 from nemo_safe_synthesizer.pii_replacer.planning import (
     LLMPlanEnhancer,
     PlanDiscoverer,
@@ -109,7 +109,9 @@ def _enhancer(
     enhancer = LLMPlanEnhancer(
         _local_config(max_workers=max_workers),
         transport=transport,
-        environ={"NSS_INFERENCE_ENDPOINT": "http://localhost:8000/v1"},
+        settings=resolve_inference_settings(
+            _local_config(max_workers=max_workers), environ={"NSS_INFERENCE_ENDPOINT": "http://localhost:8000/v1"}
+        ),
         sleep=recorded_sleeps.append,
     )
     return enhancer, transport

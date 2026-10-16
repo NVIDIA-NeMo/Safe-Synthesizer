@@ -8,10 +8,8 @@ from __future__ import annotations
 import contextlib
 import logging
 import os
-import tempfile
 import time
 from functools import partial
-from pathlib import Path
 from typing import Any, cast
 
 import torch
@@ -49,6 +47,7 @@ from ..generation.vllm_observability import (
 from ..llm.metadata import ModelMetadata
 from ..llm.utils import ModelRef, cleanup_memory, get_max_vram
 from ..observability import get_logger, heartbeat
+from ..outlines_cache import harden_outlines_cache
 from ..utils import all_equal_type, load_json
 
 logger = get_logger(__name__)
@@ -64,17 +63,9 @@ else:
 # in by exporting VLLM_USE_DEEP_GEMM=1.
 os.environ.setdefault("VLLM_USE_DEEP_GEMM", "0")
 
-# CVE-2025-69872: diskcache (pulled in transitively by outlines and used by
-# vLLM's optional on-disk outlines cache) deserializes cached values with
-# pickle/cloudpickle and is therefore RCE-vulnerable if another principal can
-# write into the cache directory. Neither library exposes a way to swap the
-# serializer, so we mitigate at the boundary:
-#   1. Keep vLLM's opt-in diskcache off (its default is an in-memory LRUCache).
-#      Hard-set (not setdefault) so a user env can't silently flip on a
-#      pickle-deserializing code path.
-#   2. Pin OUTLINES_CACHE_DIR to a per-user path and chmod it to 0700, since
-#      outlines always uses diskcache for its FSM/index cache.
-os.environ["VLLM_V1_USE_OUTLINES_CACHE"] = "0"
+# CVE-2025-69872: turn off vLLM's on-disk Outlines cache and lock down
+# OUTLINES_CACHE_DIR before any generation; see ``outlines_cache``.
+harden_outlines_cache()
 
 
 def _build_rope_hf_overrides(model_metadata: ModelMetadata) -> dict[str, Any] | None:
@@ -107,58 +98,6 @@ def _build_rope_hf_overrides(model_metadata: ModelMetadata) -> dict[str, Any] | 
 def _tokens_prompt(prompt_token_ids: list[int]) -> TokensPrompt:
     """Build a vLLM token prompt for pre-tokenized generation."""
     return TokensPrompt(prompt_token_ids=prompt_token_ids)
-
-
-def _secure_outlines_cache_dir() -> None:
-    """Pin ``OUTLINES_CACHE_DIR`` to a per-user path and tighten permissions.
-
-    Respects an explicit ``OUTLINES_CACHE_DIR`` set by the operator (so CI and
-    multi-tenant deployments can choose their own private location), but always
-    creates the directory with 0700 permissions to prevent co-tenants from
-    poisoning the diskcache (CVE-2025-69872).
-
-    When unset, picks a per-user path under ``$XDG_CACHE_HOME`` or
-    ``$HOME/.cache`` and falls back to a UID-scoped subdir of the system temp
-    dir for distroless/rootless containers where ``$HOME`` is ``/``.
-    """
-    cache_dir_env = os.environ.get("OUTLINES_CACHE_DIR")
-    if cache_dir_env:
-        cache_dir = Path(cache_dir_env)
-    else:
-        xdg_cache_home = os.environ.get("XDG_CACHE_HOME")
-        home_dir = os.path.normpath(os.path.expanduser("~"))
-        if xdg_cache_home:
-            cache_root = Path(xdg_cache_home)
-        elif home_dir != "/" and Path(home_dir).is_dir():
-            cache_root = Path(home_dir) / ".cache"
-        else:
-            uid = getattr(os, "getuid", lambda: "default")()
-            cache_root = Path(tempfile.gettempdir()) / f".cache-{uid}"
-        cache_dir = cache_root / "nemo-safe-synthesizer" / "outlines"
-        os.environ["OUTLINES_CACHE_DIR"] = str(cache_dir)
-
-    try:
-        # Set the umask to 077 to prevent other principals from writing to the
-        # cache directory between the mkdir and chmod calls.
-        old_umask = os.umask(0o077)
-        try:
-            cache_dir.mkdir(parents=True, exist_ok=True)
-        finally:
-            os.umask(old_umask)
-        # Also explicitly set permissions to 0700 for the situation where the
-        # directory already exists and is not 0700.
-        cache_dir.chmod(0o700)
-    except OSError as exc:
-        logger.warning(
-            "Could not enforce 0700 permissions on outlines cache dir %s: %s. "
-            "If this path is shared with other principals, set OUTLINES_CACHE_DIR "
-            "to a private location (CVE-2025-69872).",
-            cache_dir,
-            exc,
-        )
-
-
-_secure_outlines_cache_dir()
 
 
 def _is_redis_available() -> bool:
