@@ -388,11 +388,17 @@ when no explicit strftime pattern exists. Incomplete or vague candidates such
 as `spring` are ignored and reported only as an aggregate warning without the
 source text.
 
-An independently detected name or street component may reuse a structured
-parent replacement only when NSS can align it semantically. Name alignment
-requires explicit name-pattern placeholders; street alignment requires an
-exact suffix built from typed city, state, postal-code, or country
-dependencies. NSS never guesses components from arbitrary token positions or
+An independently detected name or street component may reuse a parent
+replacement only when NSS can align it semantically. A full name, whether in a
+structured column or detected in free text, aligns with first, middle, and
+last names through explicit name-pattern placeholders, or, without a pattern,
+when it is a plain two- or three-word name such as `Kenneth Gonzales`. A free-text
+full name like that is replaced word by word, so `Kenneth Gonzales` and a bare
+`Kenneth` in the same record or group get the same first-name replacement.
+Names with titles, initials, or suffixes, such as `Dr. Ada Lovelace` or
+`Ada K. Lovelace`, are replaced whole and not split. Street alignment requires
+an exact suffix built from typed city, state, postal-code, or country
+dependencies. NSS never guesses components from other token positions or
 isolated house numbers.
 
 ## LLM-assisted planning
