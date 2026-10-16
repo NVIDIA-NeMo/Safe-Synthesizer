@@ -10,7 +10,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol
+from typing import Protocol
 
 import numpy as np
 import pandas as pd
@@ -18,7 +18,7 @@ import pandas as pd
 from ...config.data import DataParameters
 from ...config.replace_pii import DataToSamplerValueMapping, EntityType, LLMConfig, PiiReplacementPlan, ReplacePiiConfig
 from ...config.time_series import TimeSeriesParameters
-from ...errors import InternalError, ParameterError
+from ...errors import ParameterError
 from ...observability import get_logger
 from .dependency_mappings import (
     built_in_value_mappings,
@@ -29,9 +29,6 @@ from .dependency_mappings import (
 )
 from .io import load_plan, save_plan
 from .validation import get_protected_columns, validate_plan
-
-if TYPE_CHECKING:
-    from .llm import LLMPlanEnhancer
 
 logger = get_logger(__name__)
 
@@ -270,6 +267,10 @@ def resolve_replacement_config(
         A copy of ``config`` whose ``replacement_plan`` is the resolved inline plan,
         including its complete ``data_to_sampler_value_mapping``.
 
+    When both plan enhancement and mapping discovery use the default LLM, they share one inference
+    session, so a managed local vLLM server starts once and stops before this returns. Plan
+    validation runs inside that session, between the two LLM steps.
+
     Raises:
         ParameterError: If the plan or mapping is invalid, a conditioner value has
             no sampler match or mapping entry and cannot be discovered, or the
@@ -280,21 +281,54 @@ def resolve_replacement_config(
         ``"Woman"`` resolve to ``{"sex": {"F": ["female"], "Woman": ["female"]}}``
         without an LLM, while a value such as ``"X"`` needs a mapping entry.
     """
-    discover_plan = config.is_auto_discovery
-    default_enhancer: PlanEnhancer | None = None
-    default_mapping_discoverer: DependencyMappingDiscoverer | None = None
-    if config.llm is not None and discover_plan and enhancer is None:
-        llm_adapter = _llm_plan_enhancer(config)
-        default_enhancer = llm_adapter
-        default_mapping_discoverer = llm_adapter
+    if config.llm is not None and config.is_auto_discovery and enhancer is None and mapping_discoverer is None:
+        from ..local_inference import planning_inference_settings
+        from .llm import LLMPlanEnhancer
 
+        with planning_inference_settings(config.llm) as settings:
+            llm = LLMPlanEnhancer(config.llm, settings=settings)
+            return _resolve_replacement_config(
+                df,
+                config,
+                data_config,
+                time_series,
+                discoverer=discoverer,
+                enhancer=llm,
+                mapping_discoverer=llm,
+                sampler_value_catalog=sampler_value_catalog,
+            )
+    return _resolve_replacement_config(
+        df,
+        config,
+        data_config,
+        time_series,
+        discoverer=discoverer,
+        enhancer=enhancer,
+        mapping_discoverer=mapping_discoverer,
+        sampler_value_catalog=sampler_value_catalog,
+    )
+
+
+def _resolve_replacement_config(
+    df: pd.DataFrame,
+    config: ReplacePiiConfig,
+    data_config: DataParameters,
+    time_series: TimeSeriesParameters | None = None,
+    *,
+    discoverer: PlanDiscoverer | None = None,
+    enhancer: PlanEnhancer | None = None,
+    mapping_discoverer: DependencyMappingDiscoverer | None = None,
+    sampler_value_catalog: Mapping[EntityType, tuple[str, ...]] | None = None,
+) -> ReplacePiiConfig:
+    """Resolve the plan and value mapping with the given adapters; see ``resolve_replacement_config``."""
+    discover_plan = config.is_auto_discovery
     plan = resolve_plan(
         df,
         config,
         data_config,
         time_series,
         discoverer=discoverer,
-        enhancer=enhancer or default_enhancer,
+        enhancer=enhancer,
     )
 
     if sampler_value_catalog is None and conditioner_columns(plan):
@@ -313,15 +347,15 @@ def resolve_replacement_config(
     )
     mappings = plan.data_to_sampler_value_mapping
     if discover_plan and mapping_inputs(df, plan, catalog):
-        active_discoverer = mapping_discoverer or default_mapping_discoverer
-        if active_discoverer is None and config.llm is not None:
-            active_discoverer = _llm_plan_enhancer(config)
-        if active_discoverer is None:
+        if mapping_discoverer is not None:
+            discovered = mapping_discoverer.discover_data_to_sampler_value_mapping(df, plan, catalog)
+        elif config.llm is not None:
+            discovered = _discover_mappings_with_default_llm(config.llm, df, plan, catalog)
+        else:
             raise ParameterError(
                 "automatic data-to-sampler value mapping found dataset values without case-insensitive sampler "
                 "matches; configure replace_pii.llm, or generate and edit an explicit replacement plan"
             )
-        discovered = active_discoverer.discover_data_to_sampler_value_mapping(df, plan, catalog)
         mappings = _merged_value_mappings(mappings, discovered)
 
     resolved_plan = PiiReplacementPlan(
@@ -348,13 +382,18 @@ def _merged_value_mappings(*mappings: DataToSamplerValueMapping) -> DataToSample
     return merged
 
 
-def _llm_plan_enhancer(config: ReplacePiiConfig) -> LLMPlanEnhancer:
-    """Build the LLM plan enhancer for ``config.llm``, importing the LLM client only when needed."""
-    if config.llm is None:
-        raise InternalError("the LLM plan enhancer requires replace_pii.llm")
+def _discover_mappings_with_default_llm(
+    llm_config: LLMConfig,
+    df: pd.DataFrame,
+    plan: PiiReplacementPlan,
+    catalog: Mapping[EntityType, tuple[str, ...]],
+) -> DataToSamplerValueMapping:
+    """Run value-mapping discovery with the default LLM inside its own inference session."""
+    from ..local_inference import planning_inference_settings
     from .llm import LLMPlanEnhancer
 
-    return LLMPlanEnhancer(config.llm)
+    with planning_inference_settings(llm_config) as settings:
+        return LLMPlanEnhancer(llm_config, settings=settings).discover_data_to_sampler_value_mapping(df, plan, catalog)
 
 
 def row_counter_columns(df: pd.DataFrame, *, group_column: str | None = None) -> frozenset[str]:
