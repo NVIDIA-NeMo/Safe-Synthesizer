@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import re
 from random import Random
 from typing import TYPE_CHECKING, ClassVar
 
@@ -94,8 +95,10 @@ class FakerReplacementGenerator:
             return fake.phone_number()
         if entity_type is EntityType.STREET_ADDRESS:
             return render_address(fake.street_address(), dependencies)
-        if entity_type in {EntityType.SSN, EntityType.NATIONAL_ID}:
+        if entity_type is EntityType.SSN:
             return fake.ssn()
+        if entity_type is EntityType.NATIONAL_ID:
+            return _national_id(request, fake, rng)
         if entity_type is EntityType.CREDIT_DEBIT_CARD:
             return fake.credit_card_number()
         if entity_type in {EntityType.API_KEY, EntityType.UNIQUE_IDENTIFIER}:
@@ -188,3 +191,23 @@ def _shaped_identifier(request: ReplacementGenerationRequest, rng: Random) -> st
         return None
     shaped = shape_preserving_value(request.original_value, rng)
     return shaped if shaped != request.original_value else None
+
+
+_SSN_SHAPE = re.compile(r"[0-9]{3}-[0-9]{2}-[0-9]{4}")
+
+
+def _national_id(request: ReplacementGenerationRequest, fake: Faker, rng: Random) -> str:
+    """Return a national ID in the original's shape: an SSN for SSN-shaped values, else the same layout.
+
+    National IDs include driver's licences, tax IDs, and non-US identifiers, so only an SSN-shaped
+    original gets an SSN. Any other value keeps its layout, with every letter and digit replaced.
+
+    Example:
+        ``"123-45-6789"`` becomes another SSN, ``"D1234567"`` becomes a value such as
+        ``"Q8051937"``, and ``"12-3456789"`` keeps its ``dd-ddddddd`` layout.
+    """
+    if _SSN_SHAPE.fullmatch(request.original_value) is None:
+        shaped = shape_preserving_value(request.original_value, rng)
+        if shaped != request.original_value:
+            return shaped
+    return fake.ssn()
