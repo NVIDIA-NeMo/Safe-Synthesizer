@@ -71,7 +71,15 @@ BASE_LOG_DIR="${BASE_LOG_DIR:-./}"
 NODE_CACHE="/raid/scratch/${USER_NAME}/nss-cache"
 JOB_LOCAL="/raid/scratch/${USER_NAME}/job-${SLURM_JOB_ID}-$$"
 mkdir -p "${NODE_CACHE}/uv" "${NODE_CACHE}/hf" "${NODE_CACHE}/models" "${JOB_LOCAL}/tmp"
+run_path=""  # set below; read by cleanup_job_local
 cleanup_job_local() {
+    # Offline W&B runs exist only under WANDB_DIR. Keep them as one archive in
+    # the run directory so they can be uploaded later with `wandb sync`.
+    if [[ "${WANDB_MODE:-}" == "offline" && -n "${run_path}" && -d "${WANDB_DIR:-}/wandb" ]]; then
+        mkdir -p "${run_path}"
+        tar -C "${WANDB_DIR}" -cf "${run_path}/wandb_offline_${SLURM_JOB_ID}.tar" wandb \
+            || echo "[NSS SLURM] WARNING: could not archive offline W&B files to ${run_path}" >&2
+    fi
     rm -rf "${JOB_LOCAL}"
 }
 trap cleanup_job_local EXIT
@@ -169,10 +177,17 @@ if [[ -n "${model_id}" && "${model_id}" != /* && -d "${NSS_MODELS_DIR:-}/${model
     if [[ ! -d "${staged_model}" ]]; then
         echo "[NSS SLURM] staging ${model_id} from ${NSS_MODELS_DIR} to ${staged_model}"
         mkdir -p "$(dirname "${staged_model}")"
-        staging_tmp="${staged_model}.tmp-${SLURM_JOB_ID}-$$"
+        # Copy inside JOB_LOCAL so the exit trap removes a partial copy if the job
+        # is cancelled or times out. JOB_LOCAL and NODE_CACHE are on the same
+        # /raid/scratch filesystem, so the rename below is atomic.
+        staging_tmp="${JOB_LOCAL}/model-staging"
         cp -r "${NSS_MODELS_DIR}/${model_id}" "${staging_tmp}"
-        # Another job on this node may have finished staging first.
+        # The rename fails if another job on this node finished staging first.
         mv -T "${staging_tmp}" "${staged_model}" 2>/dev/null || rm -rf "${staging_tmp}"
+    fi
+    if [[ ! -d "${staged_model}" ]]; then
+        echo "[NSS SLURM] ERROR: staging ${model_id} to ${staged_model} failed" >&2
+        exit 1
     fi
     model_args=(--training__pretrained_model "${staged_model}")
     echo "[NSS SLURM] using staged model ${staged_model}"

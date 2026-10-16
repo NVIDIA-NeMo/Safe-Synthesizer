@@ -21,6 +21,7 @@ export NSS_IMAGE="${NSS_IMAGE:-${NSS_SHARED_DIR}/images/nss-slurm-py3.13-e58529b
 export NSS_MODELS_DIR="${NSS_MODELS_DIR:-${NSS_SHARED_DIR}/models}"
 
 ## change the followings if you want them to be different
+# shellcheck disable=SC2034 # read by nss_slurm.sh after sourcing this file
 CONFIGS=(
     smollm3-nodp
     smollm3-dp

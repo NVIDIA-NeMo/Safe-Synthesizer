@@ -16,75 +16,14 @@
 # NSS_MODEL_EXCLUDES (default: duplicate consolidated or .pth/.bin weights)
 # are skipped.
 #
-# Modes: submit (default), --job (batch step), --container (inside the NSS image).
+# Submitting is handled by nss_slurm.py ("download-models"). This script keeps
+# the compute-node steps: --job (batch step) and --container (inside the NSS image).
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="${REPO_ROOT:-$(git -C "${SCRIPT_DIR}" rev-parse --show-toplevel)}"
 readonly SCRIPT_DIR REPO_ROOT
-
-configured_models() {
-  sed -n 's/^[[:space:]]*pretrained_model:[[:space:]]*["'\'']\{0,1\}\([^"'\'' #]*\).*/\1/p' \
-    "${REPO_ROOT}/script/slurm/configs/"*.yaml | sort -u
-}
-
-submit_download() {
-  local partition="cpu_short" wait_flag=""
-  local models=()
-  while [[ $# -gt 0 ]]; do
-    case "$1" in
-      --partition) partition="${2:?--partition needs a value}"; shift 2 ;;
-      --wait) wait_flag="--wait"; shift ;;
-      -h|--help) sed -n '4,20p' "$0"; exit 0 ;;
-      -*) echo "Unknown argument: $1" >&2; exit 1 ;;
-      *) models+=("$1"); shift ;;
-    esac
-  done
-  if [[ ${#models[@]} -eq 0 ]]; then
-    mapfile -t models < <(configured_models)
-  fi
-
-  if [[ -z "${USER_NAME:-}" ]]; then
-    echo "ERROR: USER_NAME is not set. Export your cluster user name first." >&2
-    exit 1
-  fi
-  # shellcheck source=script/slurm/env_variables.sh
-  source "${SCRIPT_DIR}/env_variables.sh"
-
-  if ! mkdir -p "${NSS_MODELS_DIR}" 2>/dev/null || [[ ! -w "${NSS_MODELS_DIR}" ]]; then
-    echo "ERROR: cannot write to NSS_MODELS_DIR=${NSS_MODELS_DIR}" >&2
-    echo "Export NSS_MODELS_DIR to a directory you own, or ask its owner to create it." >&2
-    exit 1
-  fi
-  if [[ ! -f "${NSS_IMAGE}" ]]; then
-    echo "ERROR: NSS image not found: ${NSS_IMAGE}; build it with build_image.sh" >&2
-    exit 1
-  fi
-
-  local log_dir="${BASE_LOG_DIR}/model_downloads"
-  mkdir -p "${log_dir}"
-  local sbatch_args=(
-    --parsable
-    --job-name nss_download_models
-    --account "${ACCOUNT:-nemotron_data_dev}"
-    --partition "${partition}"
-    --time 01:00:00
-    --nodes 1
-    --ntasks 1
-    --cpus-per-task 8
-    --mem 32G
-    --output "${log_dir}/download_%j.out"
-    --error "${log_dir}/download_%j.err"
-    --export "ALL,REPO_ROOT=${REPO_ROOT},NSS_DOWNLOAD_MODELS=${models[*]}"
-  )
-  [[ -n "${wait_flag}" ]] && sbatch_args+=("${wait_flag}")
-
-  echo "Downloading to ${NSS_MODELS_DIR}: ${models[*]}"
-  local job_id
-  job_id="$(sbatch "${sbatch_args[@]}" "${SCRIPT_DIR}/download_models.sh" --job)"
-  echo "Submitted download job ${job_id}; log: ${log_dir}/download_${job_id}.out"
-}
 
 run_download_job() {
   : "${NSS_IMAGE:?}" "${NSS_MODELS_DIR:?}"
@@ -139,5 +78,5 @@ download_in_container() {
 case "${1:-}" in
   --job) run_download_job ;;
   --container) download_in_container ;;
-  *) submit_download "$@" ;;
+  *) exec bash "${SCRIPT_DIR}/nss_slurm.sh" download-models "$@" ;;
 esac

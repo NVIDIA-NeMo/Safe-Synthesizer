@@ -24,10 +24,12 @@ Each job runs `uv sync --frozen` against your checkout's `uv.lock`. If it matche
 ### Files
 - `env_variables.sh`: Single source of truth for user, paths, and the image.
 - `submit_slurm_jobs.sh`: Submits Slurm array jobs for each config and dataset. Supports two-stage TRAIN→GEN pipeline.
+- `nss_slurm.py`: Login-node CLI behind `submit_slurm_jobs.sh`, `build_image.sh`, and `download_models.sh` (subcommands `submit`, `build-image`, `download-models`). Standard library only; unit tested in `tests/tools/test_nss_slurm.py`.
+- `nss_slurm.sh`: Launcher for `nss_slurm.py`. Sources `env_variables.sh` and runs the CLI with `uv`, keeping uv's cache and Python in `/tmp` on the login node. Requires `uv` on `PATH`.
 - `slurm_nss_matrix.sh`: Sets up node-local caches, syncs dependencies, picks dataset and config, and launches the python entrypoint inside the container. Honors `NSS_PHASE=train|generate|end_to_end`.
 - `slurm_srun.sh`: Wraps `srun` with container image and mounts, mostly just a pass through, primary logic is in `submit_slurm_jobs.sh` and `slurm_nss_matrix.sh`.
-- `build_image.sh`: Builds the shared NSS image on the cluster, without Docker.
-- `download_models.sh`: Downloads pretrained models once into the shared, read-only models directory.
+- `build_image.sh`: Builds the shared NSS image on the cluster, without Docker. Its `--job` and `--container` steps run on compute nodes.
+- `download_models.sh`: Downloads pretrained models once into the shared, read-only models directory. Its `--job` and `--container` steps run on compute nodes.
 - `configs/*.yaml`: Major configs we support. Use the config basenames from this directory in commands (for example, `smollm3-nodp`, `smollm3-dp`, etc.). The current set is the cross product of 3 pre-trained models and 2 DP settings (on or off).
 
 Pipeline entrypoints invoked from the image's virtualenv:
@@ -134,7 +136,7 @@ In `slurm_nss_matrix.sh`, each job extracts the dataset and config that it shoul
 
 ### Submit jobs
 
-Run the submit script (flags are order-independent) from this directory:
+Run the submit script from any directory (flags are order-independent; unknown flags are an error):
 
 ```bash
 bash submit_slurm_jobs.sh [--configs c1,c2] [--dataset-urls name1,url1,path1] [--dataset-group short|long] [--runs N] [--exp-name NAME] [--pipeline-mode two_stage|end_to_end] [--partition P] [--wandb-project PROJECT] [--max-concurrent-slurm-jobs N] [--time-limit TIME] [--train-time-limit TIME] [--generate-time-limit TIME] [--dry-run]
@@ -199,6 +201,7 @@ Consider using a max of 2-3x the current allocation for nemotron_data_dev PPP in
 tail -f ${BASE_LOG_DIR}/${EXP_NAME}/slurm_*.out
 ```
 - W&B logging: `WANDB_MODE` is set to `online` by default to additionally log experiment configs and metrics to W&B. Make sure to export your `WANDB_API_KEY` (request an account [here](https://confluence.nvidia.com/display/AIALGO/Weights+and+Biases+%28WandB%29+Enterprise+Account)) in `${LUSTRE_DIR}/.api_tokens.sh`. There is an optional flag `--wandb-project` to specify a W&B project name if you don't want to use the experiment name.
+  - W&B's local files go to node-local disk (`WANDB_DIR`) and are removed when the job ends. With `WANDB_MODE=offline`, the job first saves them as `wandb_offline_<jobid>.tar` in the run directory; extract it and run `wandb sync` to upload. If you export `WANDB_DIR` yourself, it now takes priority over the run directory, as in W&B itself.
 
   - When running in `two_stage` mode, be mindful not to submit multiple bash commands that run simutaneously because we aren't able to guarantee unique adapter path for each single run. As a result, two runs might be logged as one on W&B.
 
