@@ -167,11 +167,8 @@ class FreeTextReplacementExecutor:
         ``original_text`` is the source cell's text form, the same value the
         structured generator received, so a typed original such as an integer
         API key matches the digits a detector finds in prose. ``key`` carries
-        its typed identity. Free text never detects ``unique_identifier``, so
-        those mappings are not registered.
+        its typed identity.
         """
-        if spec.entity_type is EntityType.UNIQUE_IDENTIFIER:
-            return
         scope_identity = key.row_position if isinstance(key, RecordMappingKey) else key.original_group_identity
         self._register(scope_identity, spec.entity_type, original_text, replacement)
         self._register_name_components(scope_identity, spec, original_text, replacement)
