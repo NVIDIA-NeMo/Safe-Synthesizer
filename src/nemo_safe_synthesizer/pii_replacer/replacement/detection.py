@@ -9,9 +9,9 @@ import ipaddress
 import math
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from itertools import chain
-from typing import Protocol, TypeGuard
+from typing import NamedTuple, Protocol, TypeGuard
 from unicodedata import normalize
 
 import regex
@@ -23,7 +23,7 @@ from ...config.replace_pii import (
     EntityType,
     FreeTextDetectionConfig,
 )
-from ...errors import GenerationError, InternalError, SafeSynthesizerError
+from ...errors import GenerationError, InternalError, ParameterError, SafeSynthesizerError
 from ...observability import get_logger, heartbeat
 from .birth_dates import birth_date_is_supported
 from .types import DetectedSpan, DetectionCell, DetectionCellId
@@ -57,8 +57,8 @@ _GLINER_LABELS: dict[str, EntityType] = {
     "fax_number": EntityType.PHONE_NUMBER,
     "date_of_birth": EntityType.DATE_OF_BIRTH,
     "street_address": EntityType.STREET_ADDRESS,
-    "address": EntityType.STREET_ADDRESS,
     "national_id_number": EntityType.NATIONAL_ID,
+    "passport_number": EntityType.NATIONAL_ID,
     "tax_id": EntityType.NATIONAL_ID,
     "tax_number": EntityType.NATIONAL_ID,
     "license_number": EntityType.NATIONAL_ID,
@@ -78,6 +78,11 @@ _GLINER_LABEL_ENTITY_TYPES = {
     **_GLINER_UNION_LABELS,
 }
 _SSN_SHAPE = regex.compile(r"(\d{3})-(\d{2})-(\d{4})")
+_NAME_ENTITY_TYPES = frozenset(
+    {EntityType.FIRST_NAME, EntityType.MIDDLE_NAME, EntityType.LAST_NAME, EntityType.FULL_NAME}
+)
+# Characters allowed between a middle name and its neighbouring first or last name.
+_MIDDLE_NAME_NEIGHBOR_GAP = 3
 _ENTITY_ORDER = {entity.entity_type: position for position, entity in enumerate(ENTITIES)}
 _SOURCE_ORDER = {"regex": 0, "gliner": 1}
 
@@ -129,6 +134,33 @@ class _Chunk:
     """Start of the window within ``original_text``."""
 
 
+class _TextSpan(NamedTuple):
+    """One accepted GLiNER2 span in a unique cell text, before it is copied to cells."""
+
+    start: int
+    """Inclusive start offset in the complete cell text."""
+
+    end: int
+    """Exclusive end offset in the complete cell text."""
+
+    entity_type: EntityType
+    """Normalized NSS entity type."""
+
+    score: float
+    """GLiNER2 confidence score."""
+
+
+@dataclass(slots=True)
+class _TextCandidates:
+    """Accepted entity spans and name-exclusion spans for one unique cell text."""
+
+    spans: list[_TextSpan] = field(default_factory=list)
+    """Entity spans that passed their thresholds and validators."""
+
+    exclusions: list[tuple[int, int]] = field(default_factory=list)
+    """Offsets of exclusion-label spans that passed their thresholds."""
+
+
 class Gliner2Detector:
     """Lazy local GLiNER2 adapter with positional chunk remapping."""
 
@@ -138,24 +170,38 @@ class Gliner2Detector:
         *,
         model_loader: Callable[[str], _GlinerModel] | None = None,
     ) -> None:
+        colliding = sorted(set(_exclusion_thresholds(config)) & set(_GLINER_LABEL_ENTITY_TYPES))
+        if colliding:
+            raise ParameterError(
+                f"free_text_detection.name_exclusion_thresholds cannot use GLiNER2 detection labels: {colliding}"
+            )
         self._config = config
         self._model_loader = model_loader or _load_gliner2_model
         self._model: _GlinerModel | None = None
 
     def detect(self, cells: Sequence[DetectionCell]) -> tuple[DetectedSpan, ...]:
-        """Run GLiNER2 once per unique text and copy valid spans to matching cells."""
+        """Run GLiNER2 once per unique text and copy valid spans to matching cells.
+
+        Within each unique text, name spans that overlap a name-exclusion span
+        are dropped, then the middle-name neighbour rule is applied, both before
+        per-cell entity filtering so every cell sees the same model decision.
+        """
         cells_by_text = _cells_by_text(cells)
         if not cells_by_text:
             return ()
 
         chunks = list(chain.from_iterable(_chunks(text, self._config) for text in cells_by_text))
         results = self._infer(chunks, _requested_labels(cells, self._config))
-        spans: list[DetectedSpan] = []
+        candidates: dict[str, _TextCandidates] = defaultdict(_TextCandidates)
         rejected_birth_dates = 0
         for chunk, result in zip(chunks, results, strict=True):
-            chunk_spans, rejected_count = _chunk_spans(chunk, result, cells_by_text, self._config)
-            spans.extend(chunk_spans)
-            rejected_birth_dates += rejected_count
+            rejected_birth_dates += _collect_chunk_candidates(
+                chunk, result, candidates[chunk.original_text], self._config
+            )
+        spans: list[DetectedSpan] = []
+        for text, text_cells in cells_by_text.items():
+            for span in _filter_name_spans(candidates[text], self._config):
+                spans.extend(_copy_span_to_cells(span, text_cells))
         if rejected_birth_dates:
             logger.user.warning(
                 "GLiNER2 birth-date candidates were ignored because they were not complete parseable dates",
@@ -299,54 +345,66 @@ def _requested_labels(
     cells: Sequence[DetectionCell],
     config: FreeTextDetectionConfig,
 ) -> dict[str, dict[str, float]]:
-    """Return applicable checkpoint labels with their effective thresholds."""
+    """Return applicable checkpoint labels with their effective thresholds.
+
+    Name-exclusion labels are requested only when some cell allows a name type.
+    """
     allowed = frozenset(chain.from_iterable(cell.allowed_entity_types for cell in cells))
-    return {
+    labels = {
         label: {"threshold": _model_label_threshold(label, config)}
         for label, entity_types in sorted(_GLINER_LABEL_ENTITY_TYPES.items())
         if allowed.intersection(entity_types)
     }
+    if allowed & _NAME_ENTITY_TYPES:
+        labels.update(
+            {label: {"threshold": threshold} for label, threshold in sorted(_exclusion_thresholds(config).items())}
+        )
+    return labels
 
 
-def _chunk_spans(
+def _exclusion_thresholds(config: FreeTextDetectionConfig) -> dict[str, float]:
+    """Return name-exclusion thresholds keyed by normalized checkpoint label."""
+    return {_normalize_label(label): threshold for label, threshold in config.name_exclusion_thresholds.items()}
+
+
+def _collect_chunk_candidates(
     chunk: _Chunk,
     result: object,
-    cells_by_text: dict[str, list[DetectionCell]],
+    candidates: _TextCandidates,
     config: FreeTextDetectionConfig,
-) -> tuple[list[DetectedSpan], int]:
-    """Normalize one chunk result into complete-cell spans and a rejected-DOB count."""
-    spans: list[DetectedSpan] = []
+) -> int:
+    """Add one chunk's accepted spans to its text's candidates and return the rejected-DOB count."""
+    exclusion_thresholds = _exclusion_thresholds(config)
     rejected_birth_dates = 0
     for raw_span in _result_spans(result):
+        start, end, label, score = raw_span
+        exclusion_threshold = exclusion_thresholds.get(_normalize_label(label))
+        if exclusion_threshold is not None:
+            _validate_score(score)
+            offsets = _original_offsets(chunk, start, end)
+            if offsets is not None and score >= exclusion_threshold:
+                candidates.exclusions.append(offsets)
+            continue
         normalized, rejected_birth_date = _normalize_chunk_span(chunk, raw_span, config)
         rejected_birth_dates += int(rejected_birth_date)
         if normalized is not None:
-            spans.extend(_copy_span_to_cells(normalized, cells_by_text[chunk.original_text]))
-    return spans, rejected_birth_dates
+            candidates.spans.append(normalized)
+    return rejected_birth_dates
 
 
 def _normalize_chunk_span(
     chunk: _Chunk,
     raw_span: tuple[int, int, str, float],
     config: FreeTextDetectionConfig,
-) -> tuple[tuple[int, int, EntityType, float] | None, bool]:
+) -> tuple[_TextSpan | None, bool]:
     """Validate offsets and normalize one checkpoint label to an NSS entity type."""
     start, end, label, score = raw_span
-    if not math.isfinite(score) or not 0 <= score <= 1:
-        raise GenerationError("GLiNER2 free-text PII inference returned an invalid confidence score")
-
-    # GLiNER2's inference collator appends one period to nonempty input that
-    # does not already end in '.', '!', or '?'. A prediction may therefore
-    # include that synthetic character even though it is absent from the
-    # original chunk whose offsets NSS owns.
-    if end == len(chunk.text) + 1 and chunk.text and not chunk.text.endswith((".", "!", "?")):
-        end = len(chunk.text)
-        if start == end:
-            return None, False
-
-    if start < 0 or end <= start or end > len(chunk.text):
-        raise GenerationError("GLiNER2 free-text PII inference returned invalid span offsets")
-    value = chunk.text[start:end]
+    _validate_score(score)
+    offsets = _original_offsets(chunk, start, end)
+    if offsets is None:
+        return None, False
+    original_start, original_end = offsets
+    value = chunk.original_text[original_start:original_end]
     entity_type = _normalize_gliner_label(label, value)
     if entity_type is None:
         return None, False
@@ -360,33 +418,86 @@ def _normalize_chunk_span(
     rejected_birth_date = entity_type is EntityType.DATE_OF_BIRTH and not birth_date_is_supported(value)
     if rejected_birth_date:
         return None, rejected_birth_date
+    return _TextSpan(original_start, original_end, entity_type, score), False
 
+
+def _validate_score(score: float) -> None:
+    """Reject confidence scores outside the closed unit interval."""
+    if not math.isfinite(score) or not 0 <= score <= 1:
+        raise GenerationError("GLiNER2 free-text PII inference returned an invalid confidence score")
+
+
+def _original_offsets(chunk: _Chunk, start: int, end: int) -> tuple[int, int] | None:
+    """Map chunk offsets to the complete cell, or ``None`` for an empty repaired span."""
+    # GLiNER2's inference collator appends one period to nonempty input that
+    # does not already end in '.', '!', or '?'. A prediction may therefore
+    # include that synthetic character even though it is absent from the
+    # original chunk whose offsets NSS owns.
+    if end == len(chunk.text) + 1 and chunk.text and not chunk.text.endswith((".", "!", "?")):
+        end = len(chunk.text)
+        if start == end:
+            return None
+
+    if start < 0 or end <= start or end > len(chunk.text):
+        raise GenerationError("GLiNER2 free-text PII inference returned invalid span offsets")
     original_start = chunk.offset + start
     original_end = chunk.offset + end
     if original_end > len(chunk.original_text):
         raise GenerationError("GLiNER2 free-text PII inference returned invalid span offsets")
-    return (original_start, original_end, entity_type, score), False
+    return original_start, original_end
+
+
+def _filter_name_spans(candidates: _TextCandidates, config: FreeTextDetectionConfig) -> list[_TextSpan]:
+    """Drop names overlapping an exclusion span, then middle names without neighbouring name pieces."""
+    kept = [span for span in candidates.spans if not _is_excluded_name(span, candidates.exclusions)]
+    if config.require_middle_name_neighbors:
+        kept = [
+            span for span in kept if span.entity_type is not EntityType.MIDDLE_NAME or _has_name_neighbors(span, kept)
+        ]
+    return kept
+
+
+def _is_excluded_name(span: _TextSpan, exclusions: Sequence[tuple[int, int]]) -> bool:
+    """Return whether a name span overlaps any accepted exclusion span."""
+    return span.entity_type in _NAME_ENTITY_TYPES and any(
+        span.start < end and start < span.end for start, end in exclusions
+    )
+
+
+def _has_name_neighbors(middle: _TextSpan, spans: Sequence[_TextSpan]) -> bool:
+    """Return whether a middle name sits inside a full name or between a first and last name."""
+    inside_full_name = any(
+        span.entity_type is EntityType.FULL_NAME
+        and span.start <= middle.start
+        and middle.end <= span.end
+        and (span.start, span.end) != (middle.start, middle.end)
+        for span in spans
+    )
+    first_before = any(
+        span.entity_type is EntityType.FIRST_NAME and 0 <= middle.start - span.end <= _MIDDLE_NAME_NEIGHBOR_GAP
+        for span in spans
+    )
+    last_after = any(
+        span.entity_type is EntityType.LAST_NAME and 0 <= span.start - middle.end <= _MIDDLE_NAME_NEIGHBOR_GAP
+        for span in spans
+    )
+    return inside_full_name or (first_before and last_after)
 
 
 def _model_label_threshold(label: str, config: FreeTextDetectionConfig) -> float:
     """Return a safe model-side floor for one checkpoint label."""
-    normalized = label.strip().casefold().replace("-", "_").replace(" ", "_")
-    candidates = _GLINER_LABEL_ENTITY_TYPES[normalized]
+    candidates = _GLINER_LABEL_ENTITY_TYPES[_normalize_label(label)]
     # Union labels are normalized from the returned value, so inference must
     # preserve candidates accepted by any possible NSS entity type.
     return min(config.entity_thresholds[entity_type] for entity_type in candidates)
 
 
-def _copy_span_to_cells(
-    normalized: tuple[int, int, EntityType, float],
-    cells: list[DetectionCell],
-) -> tuple[DetectedSpan, ...]:
+def _copy_span_to_cells(span: _TextSpan, cells: list[DetectionCell]) -> tuple[DetectedSpan, ...]:
     """Copy one unique-text result to cells that allow its normalized entity type."""
-    start, end, entity_type, score = normalized
     return tuple(
-        DetectedSpan(cell.cell_id, start, end, entity_type, "gliner", score)
+        DetectedSpan(cell.cell_id, span.start, span.end, span.entity_type, "gliner", span.score)
         for cell in cells
-        if entity_type in cell.allowed_entity_types
+        if span.entity_type in cell.allowed_entity_types
     )
 
 
@@ -491,11 +602,16 @@ def _entity_result_spans(label: str, values: Sequence[object]) -> Iterable[tuple
 
 def _normalize_gliner_label(label: str, value: str) -> EntityType | None:
     """Normalize one documented checkpoint label, including validated union labels."""
-    normalized = label.strip().casefold().replace("-", "_").replace(" ", "_")
+    normalized = _normalize_label(label)
     entity_type = _GLINER_LABELS.get(normalized)
     if normalized == "government_id":
         return EntityType.SSN if _is_valid_ssn(value) else EntityType.NATIONAL_ID
     return entity_type
+
+
+def _normalize_label(label: str) -> str:
+    """Normalize a checkpoint label's case and separators for lookup."""
+    return label.strip().casefold().replace("-", "_").replace(" ", "_")
 
 
 def _is_valid_ssn(value: str) -> bool:
