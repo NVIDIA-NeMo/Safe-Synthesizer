@@ -345,15 +345,16 @@ The checkpoint's specific ``full_name`` label is used for complete names; its
 broader ``person`` label is intentionally not requested.
 """
 
-# Name thresholds are precision-first defaults chosen against medical-term false positives. The rest
-# come from the nss-pii-ner-eval v5 tuning on its dev split (entity-type exact F0.5), rounded. That
-# tuning also used exclusion labels that NSS does not request, so its name thresholds are not reused.
+# Thresholds come from the nss-pii-ner-eval v5 tuning on its dev split (entity-type exact F0.5),
+# rounded. Name thresholds were tuned together with the name exclusion labels below and assume them.
+# Dev has no gold middle names, so middle_name was set by review and relies on the middle-name
+# neighbour rule to reject words such as clothing sizes.
 _DEFAULT_GLINER_ENTITY_THRESHOLDS: Mapping[EntityType, float] = MappingProxyType(
     {
-        EntityType.FIRST_NAME: 0.9,
-        EntityType.MIDDLE_NAME: 0.9,
-        EntityType.LAST_NAME: 0.9,
-        EntityType.FULL_NAME: 0.95,
+        EntityType.FIRST_NAME: 0.946,
+        EntityType.MIDDLE_NAME: 0.7,
+        EntityType.LAST_NAME: 0.639,
+        EntityType.FULL_NAME: 0.972,
         EntityType.PHONE_NUMBER: 0.994,
         EntityType.DATE_OF_BIRTH: 0.9999,
         EntityType.STREET_ADDRESS: 0.986,
@@ -361,6 +362,19 @@ _DEFAULT_GLINER_ENTITY_THRESHOLDS: Mapping[EntityType, float] = MappingProxyType
         EntityType.NATIONAL_ID: 0.982,
         EntityType.API_KEY: 0.993,
         EntityType.UNIQUE_IDENTIFIER: 0.953,
+    }
+)
+# Same v5 tuning: GLiNER2 tags medical terms and words such as "mother" or "male" as names, so a name
+# span overlapping one of these labels is dropped. medical_procedure tuned to 1.0, which turns it off in
+# practice; it stays requested because the other thresholds were tuned with it in the label set.
+_DEFAULT_NAME_EXCLUSION_THRESHOLDS: Mapping[str, float] = MappingProxyType(
+    {
+        "body_part": 0.057,
+        "family_relationship": 0.192,
+        "gender": 0.393,
+        "medical_condition": 0.739,
+        "medical_procedure": 1.0,
+        "organism": 0.068,
     }
 )
 _ConfidenceThreshold = Annotated[float, Field(ge=0, le=1)]
@@ -371,6 +385,16 @@ def _default_gliner_entity_thresholds() -> dict[EntityType, float]:
     return {
         entity_type: _DEFAULT_GLINER_ENTITY_THRESHOLDS[entity_type] for entity_type in GLINER_DETECTION_ENTITY_TYPES
     }
+
+
+def _default_name_exclusion_thresholds() -> dict[str, float]:
+    """Return a fresh copy of the tuned name exclusion labels."""
+    return dict(_DEFAULT_NAME_EXCLUSION_THRESHOLDS)
+
+
+def _normalize_gliner_label(label: str) -> str:
+    """Normalize a GLiNER2 label's case and separators so equivalent spellings compare equal."""
+    return label.strip().casefold().replace("-", "_").replace(" ", "_")
 
 
 # entity_type → allowed depends_on entity types (optional edges may be omitted).
@@ -792,11 +816,28 @@ class FreeTextDetectionConfig(NSSBaseModel):
     entity_thresholds: dict[EntityType, _ConfidenceThreshold] = Field(
         default_factory=_default_gliner_entity_thresholds,
         description=(
-            "Minimum GLiNER2 confidence score per entity type. Entity types left out use the defaults: 0.95 for "
-            "full_name; 0.9 for first_name, middle_name, and last_name; 0.994 for phone_number; 0.9999 for "
+            "Minimum GLiNER2 confidence score per entity type. Entity types left out use the defaults: 0.946 for "
+            "first_name; 0.7 for middle_name; 0.639 for last_name; 0.972 for full_name; 0.994 for phone_number; 0.9999 for "
             "date_of_birth; 0.986 for street_address; 0.079 for ssn; 0.982 for national_id; 0.993 for api_key; "
             "and 0.953 for unique_identifier. Email, credit_debit_card, ipv4, and ipv6 are detected by regex and "
             "take no threshold."
+        ),
+    )
+    name_exclusion_thresholds: dict[str, _ConfidenceThreshold] = Field(
+        default_factory=_default_name_exclusion_thresholds,
+        description=(
+            "Extra GLiNER2 labels, with their minimum confidence, for terms often mistaken for names, such as "
+            "medical conditions or family relationships. A detected name that overlaps one of these spans is not "
+            "replaced. A value replaces the whole default set; use an empty mapping to turn exclusion off, which "
+            "finds more real names at the cost of more false names in clinical text."
+        ),
+    )
+    require_middle_name_neighbors: bool = Field(
+        default=True,
+        description=(
+            "Replace a detected middle name only when it sits inside a detected full name or directly between a "
+            "detected first and last name. This rejects words such as clothing sizes that GLiNER2 tags as "
+            "middle names."
         ),
     )
     batch_size: int = Field(
@@ -834,6 +875,22 @@ class FreeTextDetectionConfig(NSSBaseModel):
             raise ParameterError(
                 "free_text_detection.entity_thresholds accepts only GLiNER-detected entity types; "
                 f"unsupported: {unsupported}"
+            )
+        return value
+
+    @field_validator("name_exclusion_thresholds")
+    @classmethod
+    def _validate_name_exclusion_labels(cls, value: dict[str, float]) -> dict[str, float]:
+        """Reject blank, duplicate, and entity-type labels, since each would silently change detection."""
+        normalized = {_normalize_gliner_label(label) for label in value}
+        if "" in normalized:
+            raise ParameterError("free_text_detection.name_exclusion_thresholds labels must be nonempty")
+        if len(normalized) != len(value):
+            raise ParameterError("free_text_detection.name_exclusion_thresholds labels must be distinct")
+        colliding = sorted(normalized & {entity_type.value for entity_type in FREE_TEXT_DETECTION_ENTITY_TYPES})
+        if colliding:
+            raise ParameterError(
+                f"free_text_detection.name_exclusion_thresholds cannot use detected entity types: {colliding}"
             )
         return value
 

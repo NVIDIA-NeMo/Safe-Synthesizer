@@ -566,10 +566,10 @@ class TestReplacePiiConfig:
     def test_free_text_detection_defaults_and_serialization(self) -> None:
         config = ReplacePiiConfig()
         expected_thresholds = {
-            EntityType.FULL_NAME: 0.95,
-            EntityType.FIRST_NAME: 0.9,
-            EntityType.MIDDLE_NAME: 0.9,
-            EntityType.LAST_NAME: 0.9,
+            EntityType.FIRST_NAME: 0.946,
+            EntityType.MIDDLE_NAME: 0.7,
+            EntityType.LAST_NAME: 0.639,
+            EntityType.FULL_NAME: 0.972,
             EntityType.PHONE_NUMBER: 0.994,
             EntityType.DATE_OF_BIRTH: 0.9999,
             EntityType.STREET_ADDRESS: 0.986,
@@ -578,10 +578,20 @@ class TestReplacePiiConfig:
             EntityType.API_KEY: 0.993,
             EntityType.UNIQUE_IDENTIFIER: 0.953,
         }
+        expected_exclusions = {
+            "body_part": 0.057,
+            "family_relationship": 0.192,
+            "gender": 0.393,
+            "medical_condition": 0.739,
+            "medical_procedure": 1.0,
+            "organism": 0.068,
+        }
 
         assert config.free_text_detection == FreeTextDetectionConfig(
             model_id=DEFAULT_GLINER2_MODEL_ID,
             entity_thresholds=expected_thresholds,
+            name_exclusion_thresholds=expected_exclusions,
+            require_middle_name_neighbors=True,
             batch_size=8,
             chunk_length=384,
             chunk_overlap=128,
@@ -591,6 +601,8 @@ class TestReplacePiiConfig:
             "entity_thresholds": {
                 entity_type.value: threshold for entity_type, threshold in expected_thresholds.items()
             },
+            "name_exclusion_thresholds": expected_exclusions,
+            "require_middle_name_neighbors": True,
             "batch_size": 8,
             "chunk_length": 384,
             "chunk_overlap": 128,
@@ -628,6 +640,23 @@ class TestReplacePiiConfig:
 
         with pytest.raises(ValidationError, match=rf"unsupported: \['{entity_type.value}'\]"):
             FreeTextDetectionConfig(entity_thresholds=entity_thresholds)
+
+    def test_free_text_detection_exclusion_mapping_replaces_the_defaults(self) -> None:
+        config = FreeTextDetectionConfig.model_validate({"name_exclusion_thresholds": {"medical_condition": 0.2}})
+
+        assert config.name_exclusion_thresholds == {"medical_condition": 0.2}
+
+    @pytest.mark.parametrize(
+        ("labels", "match"),
+        [
+            ({" ": 0.1}, "must be nonempty"),
+            ({"gender": 0.1, "Gender": 0.2}, "must be distinct"),
+            ({"first-name": 0.1}, r"detected entity types: \['first_name'\]"),
+        ],
+    )
+    def test_free_text_detection_rejects_invalid_exclusion_labels(self, labels: dict[str, float], match: str) -> None:
+        with pytest.raises(ValidationError, match=match):
+            FreeTextDetectionConfig.model_validate({"name_exclusion_thresholds": labels})
 
     @pytest.mark.parametrize("field", ["batch_size", "chunk_length"])
     def test_free_text_detection_batch_and_chunk_values_must_be_positive(self, field: str) -> None:

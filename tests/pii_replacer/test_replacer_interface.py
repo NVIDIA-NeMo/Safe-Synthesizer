@@ -36,7 +36,7 @@ class _FakeGlinerModel:
         labels: dict[str, dict[str, float]],
         **kwargs: object,
     ) -> list[object]:
-        return [{"entities": {"first_name": [{"start": 0, "end": 3, "confidence": 0.9}]}} for _ in texts]
+        return [{"entities": {"first_name": [{"start": 0, "end": 3, "confidence": 0.99}]}} for _ in texts]
 
 
 @pytest.mark.unit
