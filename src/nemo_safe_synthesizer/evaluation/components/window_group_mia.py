@@ -102,6 +102,18 @@ class _FlagCounts:
         )
         return overlap * terms
 
+    def exact_copy_loss(self, excess_exact_rate: float) -> float:
+        """Privacy loss implied by exact copies alone, which chance can't explain.
+
+        If ``excess_exact_rate`` of the training windows are certainly flagged
+        and the rest are flagged at the holdout rate, the training flag rate is
+        ``x + (1 - x) * alpha`` against ``alpha``. Exact copies of continuous
+        values almost never arise by chance, so this loss is not reduced by
+        the noise terms.
+        """
+        holdout_rate = (self.flagged_holdout + 0.5) / (self.holdout + 1)
+        return float(np.log1p(excess_exact_rate * (1 - holdout_rate) / holdout_rate))
+
 
 class WindowGroupMIA(Component):
     """Measure how well synthetic data protects training sequences from window membership inference.
@@ -111,8 +123,10 @@ class WindowGroupMIA(Component):
     of holdout windows. The privacy loss is the log ratio of the training and
     holdout flag rates; chance variation from the binomial counts and from the
     holdout groups' own offset is removed before scoring
-    ``10 * exp(-privacy_loss)``. Without a group column or a usable holdout,
-    the score is unavailable and only copy diagnostics are reported.
+    ``10 * exp(-privacy_loss)``. Exact copies beyond the holdout's own
+    exact-match rate set a floor on the privacy loss that chance can't remove,
+    so a small holdout can't hide them. Without a group column or a usable
+    holdout, the score is unavailable and only copy diagnostics are reported.
 
     Attributes:
         name: Display name used in serialized evaluation results.
@@ -271,7 +285,10 @@ class WindowGroupMIA(Component):
         loss = flags.privacy_loss
         noise = flags.binomial_noise(overlap) + offset
         debiased_loss = float(np.sqrt(max(loss**2 - noise, 0.0))) if loss > 0 else 0.0
-        protection = float(np.exp(-debiased_loss))
+        holdout_exact_rate = float(np.mean(holdout_distances == 0.0))
+        exact_loss = flags.exact_copy_loss(max(details["exact_copy_rate"] - holdout_exact_rate, 0.0))
+        scored_loss = max(debiased_loss, exact_loss)
+        protection = float(np.exp(-scored_loss))
         score = EvaluationScore.finalize_grade(raw_score=protection, score=10.0 * protection, is_privacy=True)
         if details["counts"]["holdout_groups_with_windows"] == 1:
             score.notes = "Only one holdout group was available, so this score can vary noticeably between runs."
@@ -289,6 +306,9 @@ class WindowGroupMIA(Component):
                     "binomial_noise": flags.binomial_noise(overlap),
                     "holdout_offset_noise": offset,
                     "privacy_loss_beyond_chance": debiased_loss,
+                    "holdout_exact_match_rate": holdout_exact_rate,
+                    "exact_copy_privacy_loss": exact_loss,
+                    "scored_privacy_loss": scored_loss,
                 },
                 "per_group": WindowGroupMIA._per_group(training_windows, training_distances, flags.threshold),
                 "highest_risk_windows": WindowGroupMIA._highest_risk(training_windows, training_distances),

@@ -122,7 +122,11 @@ def test_window_group_mia_score_removes_chance_from_the_privacy_loss():
     noise = attack["binomial_noise"] + attack["holdout_offset_noise"]
     expected_loss = np.sqrt(max(attack["privacy_loss"] ** 2 - noise, 0.0))
     assert attack["privacy_loss_beyond_chance"] == pytest.approx(expected_loss)
-    assert component.score.score == pytest.approx(10 * np.exp(-expected_loss), abs=0.1)
+    excess_exact = component.details["exact_copy_rate"] - attack["holdout_exact_match_rate"]
+    expected_exact_loss = np.log1p(excess_exact * (1 - holdout_rate) / holdout_rate)
+    assert attack["exact_copy_privacy_loss"] == pytest.approx(expected_exact_loss)
+    assert attack["scored_privacy_loss"] == pytest.approx(max(expected_loss, expected_exact_loss))
+    assert component.score.score == pytest.approx(10 * np.exp(-attack["scored_privacy_loss"]), abs=0.1)
     assert component.details["evaluation_mode"] == "full"
     assert component.details["window_size"] == 10
     assert component.details["stride"] == 5
@@ -158,6 +162,44 @@ def test_window_group_mia_scores_one_copied_group_in_ten_below_five_with_long_se
         return synthetic
 
     assert _mean_score(one_copied, 1000, trials=4) < 5.0
+
+
+def test_window_group_mia_exact_copies_are_not_forgiven_by_a_small_holdout():
+    rng = np.random.default_rng(19)
+    training = _entities(rng, 200, count=16)
+    synthetic = _entities(rng, 200, count=16)
+    synthetic[3] = training[3].copy()
+
+    component = _evaluate(training, synthetic, _entities(rng, 200, count=2))
+
+    attack = component.details["attack"]
+    assert component.details["exact_copy_rate"] == pytest.approx(1 / 16)
+    assert attack["exact_copy_privacy_loss"] > attack["privacy_loss_beyond_chance"]
+    assert component.score.score is not None
+    assert component.score.score < 6.0
+
+
+def test_window_group_mia_exact_matches_also_found_in_the_holdout_do_not_lower_the_score():
+    rng = np.random.default_rng(20)
+
+    def stuck(groups: list[np.ndarray]) -> list[np.ndarray]:
+        out = []
+        for values in groups:
+            values = values.copy()
+            values[40:80] = 0.0
+            out.append(values)
+        return out
+
+    training, holdout = stuck(_entities(rng, 200)), stuck(_entities(rng, 200))
+
+    component = _evaluate(training, stuck(_entities(rng, 200)), holdout)
+
+    attack = component.details["attack"]
+    assert component.details["exact_copy_rate"] > 0
+    assert attack["holdout_exact_match_rate"] > 0
+    assert attack["exact_copy_privacy_loss"] == pytest.approx(0.0, abs=0.05)
+    assert component.score.score is not None
+    assert component.score.score >= 8.0
 
 
 def test_window_group_mia_does_not_penalize_constant_synthetic_data():
