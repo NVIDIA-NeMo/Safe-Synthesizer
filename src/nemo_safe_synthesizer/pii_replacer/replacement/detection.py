@@ -45,7 +45,7 @@ _FRESH_ENTITY_TYPES = frozenset(GLINER_DETECTION_ENTITY_TYPES + REGEX_DETECTION_
 
 # The selected PII checkpoint uses a slightly broader vocabulary than NSS. Only
 # labels with a well-defined v3 replacement type are requested and normalized.
-# Labels and default thresholds follow the nss-pii-ner-eval v5 study. Request only labels from the
+# Labels and default thresholds follow the nss-pii-ner-eval v6 study. Request only labels from the
 # checkpoint's fine-tuning label list: a label outside it competes with the trained labels and collapses
 # their recall. Identifiers are requested only by the kinds that prose names ("customer ID 1234");
 # generic labels such as "identifier" or "unique_id" mostly fire on device, vehicle, and biometric codes
@@ -63,14 +63,13 @@ _GLINER_LABELS: dict[str, EntityType] = {
     "passport_number": EntityType.NATIONAL_ID,
     "tax_id": EntityType.NATIONAL_ID,
     "tax_number": EntityType.NATIONAL_ID,
-    "license_number": EntityType.NATIONAL_ID,
-    "drivers_license_number": EntityType.NATIONAL_ID,
     "api_key": EntityType.API_KEY,
     "customer_id": EntityType.UNIQUE_IDENTIFIER,
     "employee_id": EntityType.UNIQUE_IDENTIFIER,
     "medical_record_number": EntityType.UNIQUE_IDENTIFIER,
     "member_id": EntityType.UNIQUE_IDENTIFIER,
     "health_plan_beneficiary_number": EntityType.UNIQUE_IDENTIFIER,
+    "certificate_number": EntityType.UNIQUE_IDENTIFIER,
 }
 _GLINER_UNION_LABELS: dict[str, tuple[EntityType, ...]] = {
     "government_id": (EntityType.SSN, EntityType.NATIONAL_ID),
@@ -703,9 +702,15 @@ def _valid_email(value: str) -> bool:
 
 
 def _valid_card(value: str) -> bool:
-    """Return whether a candidate contains a 13–19 digit Luhn-valid card number."""
+    """Return whether a candidate contains a 13–19 digit Luhn-valid card number.
+
+    A 15-digit candidate must also start with an American Express prefix (34 or 37): other Luhn-valid
+    15-digit numbers are mostly device IMEIs, which use the same check digit.
+    """
     digits = "".join(character for character in value if character in "0123456789")
     if not 13 <= len(digits) <= 19 or len(set(digits)) == 1:
+        return False
+    if len(digits) == 15 and not digits.startswith(("34", "37")):
         return False
     total = 0
     parity = len(digits) % 2
