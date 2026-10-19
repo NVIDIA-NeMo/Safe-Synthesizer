@@ -45,9 +45,11 @@ _FRESH_ENTITY_TYPES = frozenset(GLINER_DETECTION_ENTITY_TYPES + REGEX_DETECTION_
 
 # The selected PII checkpoint uses a slightly broader vocabulary than NSS. Only
 # labels with a well-defined v3 replacement type are requested and normalized.
-# Labels and default thresholds follow the nss-pii-ner-eval v5 study. Identifiers are requested only by
-# the kinds that prose names ("customer ID 1234"); generic labels such as "identifier" or "unique_id"
-# mostly fire on device, vehicle, and biometric codes and stay unrequested.
+# Labels and default thresholds follow the nss-pii-ner-eval v5 study. Request only labels from the
+# checkpoint's fine-tuning label list: a label outside it competes with the trained labels and collapses
+# their recall. Identifiers are requested only by the kinds that prose names ("customer ID 1234");
+# generic labels such as "identifier" or "unique_id" mostly fire on device, vehicle, and biometric codes
+# and stay unrequested.
 _GLINER_LABELS: dict[str, EntityType] = {
     "full_name": EntityType.FULL_NAME,
     "first_name": EntityType.FIRST_NAME,
