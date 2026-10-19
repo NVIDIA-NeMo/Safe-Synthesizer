@@ -10,7 +10,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from nemo_safe_synthesizer.config.replace_pii import EntityType, FreeTextDetectionConfig
+from nemo_safe_synthesizer.config.replace_pii import (
+    DEFAULT_GLINER2_MODEL_ID,
+    DEFAULT_GLINER2_MODEL_REVISION,
+    EntityType,
+    FreeTextDetectionConfig,
+)
 from nemo_safe_synthesizer.errors import GenerationError, ParameterError
 from nemo_safe_synthesizer.pii_replacer.replacement.detection import (
     CompositeFreeTextDetector,
@@ -67,14 +72,16 @@ class TestGliner2Detector:
         monkeypatch.setitem(sys.modules, "torch", SimpleNamespace(cuda=SimpleNamespace(is_available=lambda: True)))
         monkeypatch.setitem(sys.modules, "gliner2", SimpleNamespace(GLiNER2=FakeGliner2))
 
-        Gliner2Detector(FreeTextDetectionConfig(model_id="model-id")).detect([_cell()])
+        Gliner2Detector(FreeTextDetectionConfig()).detect([_cell()])
 
-        assert calls == [("model-id", {"map_location": "cuda"})]
+        assert calls == [
+            (DEFAULT_GLINER2_MODEL_ID, {"revision": DEFAULT_GLINER2_MODEL_REVISION, "map_location": "cuda"})
+        ]
 
     def test_logs_completion_without_source_text(self, caplog: pytest.LogCaptureFixture) -> None:
         text = "Contact ada@example.com"
         model = _FakeModel([{"entities": {}}])
-        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda _: model)
+        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda *_: model)
 
         with caplog.at_level(logging.INFO):
             detector.detect([_cell(text)])
@@ -94,10 +101,10 @@ class TestGliner2Detector:
                 }
             ]
         )
-        loads: list[str] = []
+        loads: list[tuple[str, str | None]] = []
         detector = Gliner2Detector(
             FreeTextDetectionConfig(),
-            model_loader=lambda model_id: loads.append(model_id) or model,
+            model_loader=lambda model_id, revision: loads.append((model_id, revision)) or model,
         )
         cells = [_cell(text), DetectionCell(DetectionCellId(1, "other_notes"), text, _cell().allowed_entity_types)]
 
@@ -116,7 +123,7 @@ class TestGliner2Detector:
             "ipv4",
             "ipv6",
         } & set(model.calls[0][1])
-        assert loads == [FreeTextDetectionConfig().model_id]
+        assert loads == [(DEFAULT_GLINER2_MODEL_ID, DEFAULT_GLINER2_MODEL_REVISION)]
         assert [(span.cell_id, span.start, span.end) for span in spans] == [
             (cells[0].cell_id, start, len(text)),
             (cells[1].cell_id, start, len(text)),
@@ -131,7 +138,7 @@ class TestGliner2Detector:
                 {"entities": {"phone_number": [{"start": 0, "end": len(texts[2]), "confidence": 0.995}]}},
             ]
         )
-        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda _: model)
+        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda *_: model)
         cells = [
             DetectionCell(DetectionCellId(position, "notes"), text, fresh_detection_entity_types())
             for position, text in enumerate(texts)
@@ -166,7 +173,7 @@ class TestGliner2Detector:
         }
         detector = Gliner2Detector(
             FreeTextDetectionConfig(entity_thresholds=entity_thresholds),
-            model_loader=lambda _: model,
+            model_loader=lambda *_: model,
         )
 
         cells = [
@@ -191,7 +198,7 @@ class TestGliner2Detector:
         )
         detector = Gliner2Detector(
             FreeTextDetectionConfig(chunk_length=10, chunk_overlap=4),
-            model_loader=lambda _: model,
+            model_loader=lambda *_: model,
         )
 
         spans = detector.detect([_cell("0123456789Ada!xx")])
@@ -215,7 +222,7 @@ class TestGliner2Detector:
                 }
             ]
         )
-        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda _: model)
+        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda *_: model)
 
         spans = detector.detect([_cell(text)])
 
@@ -240,7 +247,7 @@ class TestGliner2Detector:
                 }
             ]
         )
-        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda _: model)
+        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda *_: model)
 
         assert detector.detect([_cell(text)]) == ()
 
@@ -267,7 +274,7 @@ class TestGliner2Detector:
                 }
             ]
         )
-        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda _: model)
+        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda *_: model)
 
         with pytest.raises(GenerationError, match="invalid span offsets"):
             detector.detect([_cell(text)])
@@ -280,7 +287,7 @@ class TestGliner2Detector:
         model = _FakeModel(
             [{"entities": {"date_of_birth": [{"text": "spring", "start": 17, "end": 23, "confidence": 1.0}]}}]
         )
-        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda _: model)
+        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda *_: model)
 
         with caplog.at_level(logging.WARNING):
             assert detector.detect([_cell(text)]) == ()
@@ -295,7 +302,7 @@ class TestGliner2Detector:
         model = _FakeModel(
             [{"entities": {"date_of_birth": [{"start": start, "end": start + len(value), "confidence": 1.0}]}}]
         )
-        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda _: model)
+        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda *_: model)
 
         spans = detector.detect([_cell(text)])
 
@@ -340,7 +347,7 @@ class TestGliner2Detector:
         expected: EntityType,
     ) -> None:
         model = _FakeModel([{"entities": {label: [{"start": 0, "end": len(value), "confidence": 1.0}]}}])
-        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda _: model)
+        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda *_: model)
 
         spans = detector.detect([_cell(value)])
 
@@ -369,7 +376,7 @@ class TestGliner2Detector:
                 }
             ]
         )
-        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda _: model)
+        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda *_: model)
 
         spans = detector.detect([_cell(text)])
 
@@ -388,7 +395,7 @@ class TestGliner2Detector:
                 }
             ]
         )
-        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda _: model)
+        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda *_: model)
 
         assert [span.entity_type for span in detector.detect([_cell(text)])] == [EntityType.FIRST_NAME]
 
@@ -404,7 +411,7 @@ class TestGliner2Detector:
                 }
             ]
         )
-        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda _: model)
+        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda *_: model)
 
         assert [span.entity_type for span in detector.detect([_cell(text)])] == [EntityType.PHONE_NUMBER]
 
@@ -413,7 +420,7 @@ class TestGliner2Detector:
         model = _FakeModel([{"entities": {"first_name": [{"start": 0, "end": len(text), "confidence": 0.99}]}}])
         detector = Gliner2Detector(
             FreeTextDetectionConfig(name_exclusion_thresholds={}),
-            model_loader=lambda _: model,
+            model_loader=lambda *_: model,
         )
 
         assert [span.entity_type for span in detector.detect([_cell(text)])] == [EntityType.FIRST_NAME]
@@ -421,7 +428,7 @@ class TestGliner2Detector:
 
     def test_requests_exclusion_labels_only_when_a_name_type_is_allowed(self) -> None:
         model = _FakeModel([{"entities": {}}])
-        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda _: model)
+        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda *_: model)
         cell = DetectionCell(DetectionCellId(0, "notes"), "Call me", frozenset({EntityType.PHONE_NUMBER}))
 
         detector.detect([cell])
@@ -462,7 +469,7 @@ class TestGliner2Detector:
             for label, value in pieces.items()
         }
         model = _FakeModel([{"entities": entities}])
-        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda _: model)
+        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda *_: model)
 
         assert sorted(span.entity_type for span in detector.detect([_cell(text)])) == sorted(kept)
 
@@ -474,7 +481,7 @@ class TestGliner2Detector:
         )
         detector = Gliner2Detector(
             FreeTextDetectionConfig(require_middle_name_neighbors=False),
-            model_loader=lambda _: model,
+            model_loader=lambda *_: model,
         )
 
         assert [span.entity_type for span in detector.detect([_cell(text)])] == [EntityType.MIDDLE_NAME]
@@ -482,7 +489,7 @@ class TestGliner2Detector:
     def test_drops_identifier_predictions_without_a_digit(self) -> None:
         text = "Customer Loyalty"
         model = _FakeModel([{"entities": {"customer_id": [{"start": 0, "end": len(text), "confidence": 1.0}]}}])
-        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda _: model)
+        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda *_: model)
 
         assert detector.detect([_cell(text)]) == ()
 
@@ -491,7 +498,7 @@ class TestGliner2Detector:
         model = _FakeModel(
             [{"entities": {"government_id": [{"text": "123-45-6789", "start": 11, "end": 22, "confidence": 0.9}]}}]
         )
-        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda _: model)
+        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda *_: model)
 
         spans = detector.detect([_cell(text)])
 
@@ -500,7 +507,7 @@ class TestGliner2Detector:
     def test_wraps_model_load_failures_as_generation_errors(self) -> None:
         detector = Gliner2Detector(
             FreeTextDetectionConfig(),
-            model_loader=lambda _: (_ for _ in ()).throw(RuntimeError("secret")),
+            model_loader=lambda *_: (_ for _ in ()).throw(RuntimeError("secret")),
         )
 
         with pytest.raises(GenerationError, match="could not be loaded"):
@@ -516,7 +523,7 @@ class TestGliner2Detector:
             ) -> list[object]:
                 raise RuntimeError("raw secret input")
 
-        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda _: FailingModel())
+        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda *_: FailingModel())
 
         with pytest.raises(GenerationError, match="inference failed") as exc_info:
             detector.detect([_cell()])
@@ -526,7 +533,7 @@ class TestGliner2Detector:
     def test_rejects_invalid_batch_result_shape(self) -> None:
         detector = Gliner2Detector(
             FreeTextDetectionConfig(),
-            model_loader=lambda _: _FakeModel([]),
+            model_loader=lambda *_: _FakeModel([]),
         )
 
         with pytest.raises(GenerationError, match="invalid batch result"):
@@ -537,7 +544,7 @@ class TestGliner2Detector:
         model = _FakeModel([{"entities": {}} for _ in texts])
         detector = Gliner2Detector(
             FreeTextDetectionConfig(batch_size=2),
-            model_loader=lambda _: model,
+            model_loader=lambda *_: model,
         )
 
         assert detector.detect([_cell(text) for text in texts]) == ()

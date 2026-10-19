@@ -170,7 +170,7 @@ class Gliner2Detector:
         self,
         config: FreeTextDetectionConfig,
         *,
-        model_loader: Callable[[str], _GlinerModel] | None = None,
+        model_loader: Callable[[str, str | None], _GlinerModel] | None = None,
     ) -> None:
         colliding = sorted(set(_exclusion_thresholds(config)) & set(_GLINER_LABEL_ENTITY_TYPES))
         if colliding:
@@ -243,7 +243,7 @@ class Gliner2Detector:
         """Load the configured local checkpoint once and reuse it across calls."""
         if self._model is None:
             try:
-                self._model = self._model_loader(self._config.model_id)
+                self._model = self._model_loader(self._config.model_id, self._config.model_revision)
             except Exception as exc:
                 raise GenerationError("GLiNER2 free-text PII model could not be loaded") from exc
         return self._model
@@ -647,8 +647,8 @@ def _is_valid_ssn(value: str) -> bool:
     return area not in {"000", "666"} and not area.startswith("9") and group != "00" and serial != "0000"
 
 
-def _load_gliner2_model(model_id: str) -> _GlinerModel:
-    """Load the configured checkpoint directly onto the best available device."""
+def _load_gliner2_model(model_id: str, revision: str | None) -> _GlinerModel:
+    """Load the configured checkpoint revision directly onto the best available device."""
     import torch
     from gliner2 import GLiNER2
 
@@ -658,9 +658,10 @@ def _load_gliner2_model(model_id: str) -> _GlinerModel:
         interval=30.0,
         logger_name=__name__,
         model_id=model_id,
+        revision=revision,
         device=device,
     ):
-        return GLiNER2.from_pretrained(model_id, map_location=device)
+        return GLiNER2.from_pretrained(model_id, revision=revision, map_location=device)
 
 
 def _valid_ipv4(value: str) -> bool:
