@@ -26,6 +26,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from numpy.lib.stride_tricks import sliding_window_view
 from numpy.typing import NDArray
 from pydantic import Field
 
@@ -42,12 +43,14 @@ logger = get_logger(__name__)
 
 _GROUP_SELECTION_SEED = 2112
 _CONSTANT_TOLERANCE_FACTOR = 32.0
-_MIN_SEGMENT_LENGTH = 8
-_MIN_SEGMENTS = 2
 # Band centers are spaced this many octaves apart in cycle length, starting at
 # the shortest observable cycle of two observations.
 _BAND_SPACING = 0.5
 _SHORTEST_BAND_OCTAVE = 1.0
+# Keeps a longest cycle that falls exactly on a center, such as 128, as a band.
+_CENTER_TOLERANCE = 1e-9
+# The noise level at each frequency is the median over this many frequencies on each side and itself.
+_NOISE_HALF_WIDTH = 2
 
 
 @dataclass(frozen=True)
@@ -56,7 +59,6 @@ class _BandProfile:
 
     shares: NDArray[np.float64]
     noise: NDArray[np.float64]
-    segments: int
 
 
 class SpectralSimilarity(Component):
@@ -406,9 +408,10 @@ class SpectralSimilarity(Component):
     ) -> tuple[dict[str, Any] | None, str | None]:
         """Compare how one training and synthetic sequence spread their variation across cycle lengths.
 
-        Both sequences are cut into the same overlapping segments, and the
-        share of variation in each cycle-length band is averaged over
-        segments. The difference between the two band profiles is scored by
+        Each sequence's spectrum is computed from all of its observations, and
+        its share of variation in each cycle-length band is compared on the
+        same bands, so sequences of different lengths can be compared. The
+        difference between the two band profiles is scored by
         ``_noise_aware_error``, so differences explained by sampling noise do
         not lower the score on average. Level, scale, phase, and a straight-line
         trend do not affect the score.
@@ -432,18 +435,14 @@ class SpectralSimilarity(Component):
         if SpectralSimilarity._is_trend_only(training_values):
             return None, "The training sequence has no variation beyond a straight-line trend."
 
-        segment_length = SpectralSimilarity._segment_length(
+        centers = SpectralSimilarity._band_centers(
             min(len(training_values), len(synthetic_values)), cfg.max_cycle_length
         )
-        weights, cycle_lengths = SpectralSimilarity._band_weights(segment_length)
-        training_profile = SpectralSimilarity._band_profile(training_values, segment_length, weights)
-        if training_profile is None:
-            return None, "Fewer than two training segments have at least half of their observations finite."
-        base = {
-            "segment_length": segment_length,
-            "band_cycle_lengths": cycle_lengths.tolist(),
-            "training_segments": training_profile.segments,
-        }
+        training_weights, synthetic_weights, cycle_lengths = SpectralSimilarity._shared_band_weights(
+            len(training_values), len(synthetic_values), centers
+        )
+        training_profile = SpectralSimilarity._band_profile(training_values, training_weights)
+        base = {"band_cycle_lengths": cycle_lengths.tolist()}
         synthetic_failure = None
         if SpectralSimilarity._is_effectively_constant(synthetic_values):
             synthetic_failure = (
@@ -454,7 +453,6 @@ class SpectralSimilarity(Component):
         if synthetic_failure is not None:
             return {
                 **base,
-                "synthetic_segments": 0,
                 "error": 1.0,
                 "similarity": 0.0,
                 "reason": synthetic_failure,
@@ -463,13 +461,10 @@ class SpectralSimilarity(Component):
                 "band_noise": training_profile.noise.tolist(),
             }, None
 
-        synthetic_profile = SpectralSimilarity._band_profile(synthetic_values, segment_length, weights)
-        if synthetic_profile is None:
-            return None, "Fewer than two synthetic segments have at least half of their observations finite."
+        synthetic_profile = SpectralSimilarity._band_profile(synthetic_values, synthetic_weights)
         error = SpectralSimilarity._noise_aware_error(training_profile, synthetic_profile)
         return {
             **base,
-            "synthetic_segments": synthetic_profile.segments,
             "error": error,
             "similarity": 1.0 - error,
             "training_bands": training_profile.shares.tolist(),
@@ -478,129 +473,104 @@ class SpectralSimilarity(Component):
         }, None
 
     @staticmethod
-    def _segment_length(length: int, max_cycle_length: int) -> int:
-        """Return an even segment length of at most half the shorter sequence and ``max_cycle_length``."""
-        return max(_MIN_SEGMENT_LENGTH, min(max_cycle_length, length // 2) // 2 * 2)
+    def _band_centers(length: int, max_cycle_length: int) -> NDArray[np.float64]:
+        """Return band centers, in octaves of cycle length, from 2 observations up to the longest distinguished cycle.
+
+        The longest cycle is the shorter sequence's length or
+        ``max_cycle_length``, whichever is smaller. Centers are half an octave
+        apart.
+        """
+        longest = np.log2(min(length, max_cycle_length))
+        return np.arange(_SHORTEST_BAND_OCTAVE, longest + _CENTER_TOLERANCE, _BAND_SPACING)
 
     @staticmethod
-    def _band_weights(segment_length: int) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
-        """Return overlapping triangular band weights over a segment's frequencies and each band's cycle length.
+    def _shared_band_weights(
+        training_length: int,
+        synthetic_length: int,
+        centers: NDArray[np.float64],
+    ) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]]:
+        """Return each sequence's band weights over its own frequencies, on the bands both sequences cover.
 
-        A segment of ``L`` observations measures cycles of ``L / j`` observations
-        for ``j = 1 .. L / 2 - 1``. Band centers are spaced half an octave apart
-        in cycle length, from 2 observations up to about ``L``, and each
-        frequency's weight falls linearly to zero at the neighboring centers.
-        Every frequency's weights sum to 1, so band shares sum to 1. Bands that
-        contain no frequency are dropped, which happens for the longest cycles,
-        where ``L / j`` steps are more than half an octave apart.
+        A sequence of ``n`` observations measures cycles of ``n / j``
+        observations for ``j = 1 .. (n - 1) // 2``. Each frequency's weight
+        falls linearly to zero at the neighboring band centers, and cycles
+        longer than the last center belong to the last band. Bands that
+        contain no frequency in either sequence are dropped, which happens for
+        the longest cycles, where ``n / j`` steps are more than half an octave
+        apart. Every frequency's weights sum to 1, so band shares sum to 1.
 
         Args:
-            segment_length: Even number of observations per segment.
+            training_length: Number of training positions, including gaps.
+            synthetic_length: Number of synthetic positions, including gaps.
+            centers: Band centers from ``_band_centers``.
 
         Returns:
-            Weights with one row per band and one column per frequency, and the
-            cycle length at each band center.
+            Training weights and synthetic weights, each with one row per band
+            and one column per frequency, and the cycle length at each band
+            center.
         """
-        frequencies = np.arange(1, segment_length // 2)
-        position = np.log2(segment_length / frequencies)
-        centers = np.arange(_SHORTEST_BAND_OCTAVE, np.log2(segment_length) + _BAND_SPACING, _BAND_SPACING)
-        weights = np.maximum(0.0, 1.0 - np.abs(position[None, :] - centers[:, None]) / _BAND_SPACING)
-        used = np.sum(weights, axis=1) > 0
-        weights = weights[used] / np.sum(weights[used], axis=0)
-        return weights, 2.0 ** centers[used]
+        training_weights = SpectralSimilarity._band_weights(training_length, centers)
+        synthetic_weights = SpectralSimilarity._band_weights(synthetic_length, centers)
+        used = (np.sum(training_weights, axis=1) > 0) & (np.sum(synthetic_weights, axis=1) > 0)
+        return (
+            SpectralSimilarity._normalize_columns(training_weights[used]),
+            SpectralSimilarity._normalize_columns(synthetic_weights[used]),
+            2.0 ** centers[used],
+        )
 
     @staticmethod
-    def _band_profile(
-        values: NDArray[np.float64],
-        segment_length: int,
-        weights: NDArray[np.float64],
-    ) -> _BandProfile | None:
-        """Average band shares over segments and measure their noise from the spread between segments.
+    def _band_weights(length: int, centers: NDArray[np.float64]) -> NDArray[np.float64]:
+        """Return unnormalized triangular band weights over a sequence's frequencies."""
+        frequencies = np.arange(1, (length - 1) // 2 + 1)
+        position = np.clip(np.log2(length / frequencies), centers[0], centers[-1])
+        return np.maximum(0.0, 1.0 - np.abs(position[None, :] - centers[:, None]) / _BAND_SPACING)
 
-        Each segment's band power is linearized around the overall share,
-        ``(band_s - share * total_s) / total``, so the variance across
-        segments accounts for neighboring frequencies sharing leakage and for
-        dividing by the total. A steady cycle, whose power is the same in
-        every segment, has little noise.
+    @staticmethod
+    def _normalize_columns(weights: NDArray[np.float64]) -> NDArray[np.float64]:
+        """Scale each frequency's weights to sum to 1, leaving frequencies outside every band at zero."""
+        totals = np.sum(weights, axis=0)
+        return np.divide(weights, totals, out=np.zeros_like(weights), where=totals > 0)
+
+    @staticmethod
+    def _band_profile(values: NDArray[np.float64], weights: NDArray[np.float64]) -> _BandProfile:
+        """Return the share of variation in each band and the sampling variance of each share.
+
+        The spectrum is the periodogram of the whole sequence after removing a
+        straight-line trend fitted at the original positions. Gaps stay in
+        place: they contribute zero after centering, and power is divided by
+        the number of finite values.
+
+        Periodogram noise is exponential with mean equal to the local noise
+        level, estimated as the running median over neighboring frequencies
+        divided by ``ln 2``, so a single peak doesn't raise it. The level is
+        capped at the frequency's own power. A steady cycle of power ``C`` on
+        noise of level ``N`` varies by ``N^2 + 2 N C``, far less than its own
+        power, so a cycle the synthetic data misses is not forgiven as noise.
+        Band variances follow from these by the delta method, including the
+        division by total power, and are scaled up for missing values.
 
         Args:
             values: Values in temporal order, with gaps as ``NaN``.
-            segment_length: Observations per segment.
-            weights: Band weights from ``_band_weights``.
+            weights: Band weights over this sequence's frequencies.
 
         Returns:
-            Band shares and their sampling variances, or ``None`` when fewer
-            than two segments are usable or the sequence has no power.
-        """
-        powers, inflation = SpectralSimilarity._segment_powers(values, segment_length)
-        if len(powers) < _MIN_SEGMENTS:
-            return None
-        bands = np.einsum("bf,sf->sb", weights, powers)
-        totals = np.sum(powers, axis=1)
-        total = float(np.mean(totals))
-        if total <= 0:
-            return None
-        shares = np.mean(bands, axis=0) / total
-        residuals = (bands - shares[None, :] * totals[:, None]) / total
-        noise = np.var(residuals, axis=0, ddof=1) * inflation / len(powers)
-        return _BandProfile(shares=shares, noise=noise, segments=len(powers))
-
-    @staticmethod
-    def _segment_powers(values: NDArray[np.float64], segment_length: int) -> tuple[NDArray[np.float64], float]:
-        """Return one windowed periodogram per usable segment and the variance inflation of their average.
-
-        Values are detrended by a straight line fitted at their original
-        positions, then cut into Hann-windowed segments that overlap by half
-        (Welch's method). Gaps stay in place: each segment is centered on its
-        finite values, gaps contribute zero, and power is divided by the
-        window energy over finite positions. Segments with fewer than half
-        their values finite are dropped. The inflation corrects the variance
-        of an average of ``K`` segments for their overlap and missing values.
-
-        Args:
-            values: Values in temporal order, with gaps as ``NaN``.
-            segment_length: Observations per segment.
-
-        Returns:
-            Periodograms at frequencies ``1 .. L / 2 - 1``, one row per usable
-            segment, and the variance inflation factor.
+            Band shares and their sampling variances.
         """
         detrended = SpectralSimilarity._detrend(values)
-        window = 0.5 - 0.5 * np.cos(2 * np.pi * np.arange(segment_length) / segment_length)
-        step = segment_length // 2
-        powers: list[NDArray[np.float64]] = []
-        coverage: list[float] = []
-        for start in range(0, len(detrended) - segment_length + 1, step):
-            segment = detrended[start : start + segment_length]
-            finite = np.isfinite(segment)
-            if np.sum(finite) < segment_length / 2:
-                continue
-            centered = np.where(finite, segment - np.mean(segment[finite]), 0.0)
-            power = np.abs(np.fft.rfft(window * centered)) ** 2 / np.sum((window * finite) ** 2)
-            powers.append(power[1:step])
-            coverage.append(float(np.mean(finite)))
-        if not powers:
-            return np.empty((0, step - 1)), 1.0
-        inflation = SpectralSimilarity._overlap_inflation(len(powers), window, step) / float(np.mean(coverage))
-        return np.array(powers), inflation
-
-    @staticmethod
-    def _overlap_inflation(segments: int, window: NDArray[np.float64], step: int) -> float:
-        """Return how much overlap inflates the variance of an average of windowed periodograms.
-
-        For Gaussian noise, periodograms of segments ``k`` steps apart are
-        correlated by the squared normalized window overlap, which is 1/36
-        for Hann windows that overlap by half.
-        """
-        energy = float(np.sum(window**2))
-        inflation = 1.0
-        for lag in range(1, segments):
-            shift = lag * step
-            if shift >= len(window):
-                break
-            overlap = float(np.sum(window[:-shift] * window[shift:])) / energy
-            inflation += 2 * (1 - lag / segments) * overlap**2
-        return inflation
+        finite = np.isfinite(detrended)
+        centered = np.where(finite, detrended - np.mean(detrended[finite]), 0.0)
+        frequencies = weights.shape[1]
+        power = np.abs(np.fft.rfft(centered))[1 : frequencies + 1] ** 2 / float(np.sum(finite))
+        padded = np.pad(power, _NOISE_HALF_WIDTH, mode="edge")
+        neighborhoods = sliding_window_view(padded, 2 * _NOISE_HALF_WIDTH + 1)
+        level = np.minimum(np.median(neighborhoods, axis=1) / np.log(2), power)
+        variance = level**2 + 2 * level * np.maximum(power - level, 0.0)
+        bands = np.einsum("bf,f->b", weights, power)
+        total = float(np.sum(bands))
+        shares = bands / total
+        gradient = (weights - shares[:, None] * np.sum(weights, axis=0)[None, :]) / total
+        noise = np.einsum("bf,f->b", gradient**2, variance) / float(np.mean(finite))
+        return _BandProfile(shares=shares, noise=noise)
 
     @staticmethod
     def _noise_aware_error(training: _BandProfile, synthetic: _BandProfile) -> float:

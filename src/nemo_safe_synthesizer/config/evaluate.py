@@ -119,8 +119,8 @@ class SpectralSimilarityParameters(Parameters):
     """Control spectral similarity evaluation.
 
     Timestamp ordering and sequence grouping use the top-level time-series and
-    data settings. Each sequence is split into overlapping segments of at most
-    half the shorter sequence, and undersized, constant, or trend-only training
+    data settings. Cycles are distinguished up to the shorter sequence's length
+    or ``max_cycle_length``, and undersized, constant, or trend-only training
     sequences are skipped. A constant or trend-only synthetic sequence paired
     with varying training data receives zero similarity.
     """
@@ -134,17 +134,17 @@ class SpectralSimilarityParameters(Parameters):
     )
     max_cycle_length: int = Field(
         default=DEFAULT_SPECTRAL_MAX_CYCLE_LENGTH,
-        ge=8,
+        ge=4,
         description=(
-            "Longest cycle, in observations, that the score can distinguish; short sequences use at most "
-            "half their length. Raise it when cycles longer than this matter, such as a weekly cycle in "
-            "hourly data (168). Longer cycles leave fewer segments to average, so scores of long "
-            "sequences become noisier. Scores computed with different values are not directly comparable."
+            "Longest cycle, in observations, that the score distinguishes; slower variation counts as one "
+            "group, and shorter sequences distinguish cycles up to their own length. Raise it when longer "
+            "cycles matter, such as a weekly cycle in hourly data (168). Scores computed with different "
+            "values are not directly comparable."
         ),
     )
     min_points: int = Field(
         default=DEFAULT_SPECTRAL_MIN_POINTS,
-        ge=16,
+        ge=8,
         description="Minimum finite observations required in each sequence.",
     )
     max_groups: int = Field(

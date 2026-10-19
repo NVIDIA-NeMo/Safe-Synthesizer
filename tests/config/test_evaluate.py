@@ -102,7 +102,7 @@ def test_spectral_parameters_default_to_all_numeric_columns_and_cycles_up_to_128
     assert spectral.max_groups == 128
 
 
-@pytest.mark.parametrize("overrides", [{"max_cycle_length": 7}, {"min_points": 15}])
-def test_spectral_parameters_reject_settings_below_the_shortest_usable_segment(overrides: dict[str, int]) -> None:
+@pytest.mark.parametrize("overrides", [{"max_cycle_length": 3}, {"min_points": 7}])
+def test_spectral_parameters_reject_settings_too_small_for_a_spectrum(overrides: dict[str, int]) -> None:
     with pytest.raises(ValidationError):
         SpectralSimilarityParameters.model_validate(overrides)

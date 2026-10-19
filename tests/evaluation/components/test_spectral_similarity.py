@@ -101,7 +101,6 @@ def test_spectral_similarity_formula_is_noise_aware_and_pooled_over_bands():
     magnitude = np.maximum(np.maximum(training, synthetic), np.sqrt(noise))
     expected = np.sqrt(max(np.sum((training - synthetic) ** 2 - noise), 0.0) / np.sum(magnitude**2))
 
-    assert profile["segment_length"] == 128
     assert len(training) == len(synthetic) == len(profile["band_cycle_lengths"])
     assert training.sum() == pytest.approx(1.0)
     assert 0 < expected < 1
@@ -109,25 +108,23 @@ def test_spectral_similarity_formula_is_noise_aware_and_pooled_over_bands():
     assert component.score.score == pytest.approx(10 * (1 - expected), abs=0.1)
 
 
-def test_spectral_similarity_bands_are_half_an_octave_apart_from_two_steps():
+def test_spectral_similarity_bands_are_half_an_octave_apart_from_two_steps_to_the_longest_cycle():
     rng = np.random.default_rng(3)
     profile = _component(_seasonal(rng, 300), _seasonal(rng, 300)).details["profiles"][0]
 
     cycle_lengths = np.array(profile["band_cycle_lengths"])
-    up_to_64 = cycle_lengths[cycle_lengths <= 64]
 
     assert cycle_lengths[0] == pytest.approx(2.0)
     assert cycle_lengths[-1] == pytest.approx(128.0)
-    assert np.allclose(up_to_64[1:] / up_to_64[:-1], np.sqrt(2))
-    assert 90 not in np.round(cycle_lengths)
+    assert np.allclose(cycle_lengths[1:] / cycle_lengths[:-1], np.sqrt(2))
 
 
-@pytest.mark.parametrize("points", [200, 1000])
+@pytest.mark.parametrize("points", [50, 200, 1000])
 def test_spectral_similarity_scores_same_process_high(points: int):
     assert _mean_score(lambda rng, n: (_seasonal(rng, n), _seasonal(rng, n)), points) >= 8.0
 
 
-@pytest.mark.parametrize("points", [200, 1000])
+@pytest.mark.parametrize("points", [50, 200, 1000])
 def test_spectral_similarity_scores_independent_noise_high(points: int):
     assert _mean_score(lambda rng, n: (rng.normal(size=n), rng.normal(size=n)), points, trials=40) >= 8.0
 
@@ -160,24 +157,35 @@ def test_spectral_similarity_penalizes_a_slightly_long_cycle_in_long_sequences()
     assert _mean_score(make_pair, 1000, trials=10) < 8.0
 
 
-def test_spectral_similarity_compares_different_lengths_on_the_shorter_sequence_segments():
+@pytest.mark.parametrize(
+    ("period", "points"),
+    [pytest.param(24, 50, id="24_step_cycle_in_50_points"), pytest.param(8, 30, id="8_step_cycle_in_30_points")],
+)
+def test_spectral_similarity_scores_a_cycle_half_as_long_low_in_short_sequences(period: int, points: int):
+    def make_pair(rng: np.random.Generator, n: int) -> tuple[np.ndarray, np.ndarray]:
+        return _seasonal(rng, n, period=period), _seasonal(rng, n, period=period / 2)
+
+    assert _mean_score(make_pair, points, trials=40) < 3.0
+
+
+def test_spectral_similarity_compares_different_lengths_on_shared_bands():
     rng = np.random.default_rng(5)
     component = _component(_seasonal(rng, 400), _seasonal(rng, 100))
 
     profile = component.details["profiles"][0]
-    assert profile["segment_length"] == 50
-    assert profile["training_segments"] == 15
-    assert profile["synthetic_segments"] == 3
+    assert profile["band_cycle_lengths"][-1] <= 100
     assert component.score.score >= 8
 
 
-@pytest.mark.parametrize(("points", "max_cycle_length", "expected"), [(1000, 128, 128), (1000, 64, 64), (60, 128, 30)])
-def test_spectral_similarity_caps_segment_length(points: int, max_cycle_length: int, expected: int):
+@pytest.mark.parametrize(("points", "max_cycle_length", "longest"), [(1000, 128, 128), (1000, 64, 64), (60, 128, 60)])
+def test_spectral_similarity_distinguishes_cycles_up_to_the_shorter_of_length_and_max_cycle_length(
+    points: int, max_cycle_length: int, longest: int
+):
     rng = np.random.default_rng(6)
     config = _config(SpectralSimilarityParameters(max_cycle_length=max_cycle_length))
     profile = _component(_seasonal(rng, points), _seasonal(rng, points), config).details["profiles"][0]
 
-    assert profile["segment_length"] == expected
+    assert longest / np.sqrt(2) < profile["band_cycle_lengths"][-1] <= longest
 
 
 def test_spectral_similarity_identical_grouped_series_are_scored_per_pair():
@@ -303,18 +311,6 @@ def test_spectral_similarity_keeps_missing_values_in_place():
     assert in_place is not None and spliced is not None
     assert in_place >= 8
     assert spliced < in_place - 2
-
-
-def test_spectral_similarity_skips_sequences_without_two_mostly_observed_segments():
-    rng = np.random.default_rng(9)
-    training = _seasonal(rng, 200)
-    synthetic = _seasonal(rng, 200)
-    synthetic[40:] = np.nan
-
-    component = _component(training, synthetic)
-
-    assert component.score.score is None
-    assert "Fewer than two synthetic segments" in component.details["skipped"][0]["reason"]
 
 
 def test_spectral_similarity_revalidates_usable_length_with_non_finite_values():
