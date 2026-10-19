@@ -635,6 +635,21 @@ class TestOverlapResolution:
 
         assert resolve_overlapping_spans(spans) == (spans[0], spans[2])
 
+    def test_more_confident_span_wins_a_same_length_partial_overlap(self) -> None:
+        cell_id = DetectionCellId(0, "notes")
+        earlier = DetectedSpan(cell_id, 0, 5, EntityType.FIRST_NAME, "gliner", 0.6)
+        later = DetectedSpan(cell_id, 2, 7, EntityType.LAST_NAME, "gliner", 0.9)
+
+        assert resolve_overlapping_spans([earlier, later]) == (later,)
+        assert resolve_overlapping_spans([later, earlier]) == (later,)
+
+    def test_regex_counts_as_fully_confident_in_a_same_length_partial_overlap(self) -> None:
+        cell_id = DetectionCellId(0, "notes")
+        gliner_span = DetectedSpan(cell_id, 0, 5, EntityType.API_KEY, "gliner", 0.99)
+        regex_span = DetectedSpan(cell_id, 2, 7, EntityType.EMAIL, "regex")
+
+        assert resolve_overlapping_spans([gliner_span, regex_span]) == (regex_span,)
+
     def test_regex_wins_an_exact_cross_source_tie_and_gliner_confidence_breaks_its_ties(self) -> None:
         cell_id = DetectionCellId(0, "notes")
         low = DetectedSpan(cell_id, 0, 4, EntityType.EMAIL, "gliner", 0.5)

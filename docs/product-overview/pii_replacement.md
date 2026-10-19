@@ -361,9 +361,10 @@ replace_pii:
 
 Only accepted detector spans are replaced. NSS does not search for other
 occurrences, propagate structured values into text, or replace undetected
-aliases. Overlapping detections are resolved deterministically, and repeated
-accepted values reuse replacements within their configured record or group
-scope.
+aliases. When detections overlap, the longer span wins; between spans of equal
+length, the more confident one wins, with regex matches counting as fully
+confident. Repeated accepted values reuse replacements within their configured
+record or group scope.
 
 Detector ownership is disjoint. Structurally validated regex exclusively
 detects `email`, `credit_debit_card`, `ipv4`, and `ipv6`; NSS does not request
