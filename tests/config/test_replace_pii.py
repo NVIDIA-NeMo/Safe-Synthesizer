@@ -597,22 +597,22 @@ class TestReplacePiiConfig:
         expected_thresholds = {
             EntityType.FIRST_NAME: 0.946,
             EntityType.MIDDLE_NAME: 0.7,
-            EntityType.LAST_NAME: 0.639,
-            EntityType.FULL_NAME: 0.972,
-            EntityType.PHONE_NUMBER: 0.994,
-            EntityType.DATE_OF_BIRTH: 0.9999,
-            EntityType.STREET_ADDRESS: 0.986,
-            EntityType.SSN: 0.079,
+            EntityType.LAST_NAME: 0.618,
+            EntityType.FULL_NAME: 0.964,
+            EntityType.PHONE_NUMBER: 0.990,
+            EntityType.DATE_OF_BIRTH: 0.9998,
+            EntityType.STREET_ADDRESS: 0.985,
+            EntityType.SSN: 0.050,
             EntityType.NATIONAL_ID: 0.982,
-            EntityType.API_KEY: 0.993,
-            EntityType.UNIQUE_IDENTIFIER: 0.953,
+            EntityType.API_KEY: 0.992,
+            EntityType.UNIQUE_IDENTIFIER: 0.947,
         }
         expected_exclusions = {
-            "body_part": 0.057,
-            "family_relationship": 0.192,
-            "gender": 0.393,
-            "medical_condition": 0.739,
-            "organism": 0.068,
+            "body_part": 0.062,
+            "family_relationship": 0.062,
+            "gender": 0.385,
+            "medical_condition": 0.393,
+            "organism": 0.051,
         }
 
         assert config.free_text_detection == FreeTextDetectionConfig(
