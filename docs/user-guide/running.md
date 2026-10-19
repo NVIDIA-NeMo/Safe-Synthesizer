@@ -1141,6 +1141,9 @@ Set `evaluation.time_series.enabled: false` to skip it.
 The same setting also controls
 [Rolling Stats Similarity](time-series-metrics/rolling-stats-similarity.md),
 which the report includes alongside it.
+It also controls
+[Spectral Similarity](time-series-metrics/spectral-similarity.md),
+which follows them in the report.
 
 !!! note "How time-series examples are assembled"
     Each training example contains records from a single group in

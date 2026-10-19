@@ -112,6 +112,10 @@ This score measures whether each synthetic numeric column keeps the persistence 
 
 This score measures whether each synthetic numeric column keeps the local level and volatility of its training counterpart over the course of a sequence: where the rolling average rises, falls, or steps, and where values vary more or less widely around it. Focus on this metric when trends, level shifts, or changes in volatility matter for your use case, for example a demand series that grows over a quarter or a sensor that gets noisier as it wears. We compare the rolling mean and rolling standard deviation in ten segments from the start to the end of every group-column pair, after discounting the differences that chance alone would produce. Synthetic data from the same process scores highly, and synthetic data whose trend or level change is missing or reversed scores near 0. See [Rolling Stats Similarity](../user-guide/time-series-metrics/rolling-stats-similarity.md) for example scenarios, a walkthrough of the report charts, and configuration.
 
+### Spectral Similarity
+
+This score measures whether each synthetic numeric column repeats in cycles of the same lengths as its training counterpart: which cycles it has, how strong they are compared with the rest of the variation, and how much of that variation comes from slow drifts or fast changes. Focus on this metric when repeating patterns matter for your use case, for example a daily cycle in hourly energy demand or a weekly cycle in daily sales. We compare the share of variation in cycle-length bands half an octave apart for every group-column pair, after discounting the differences that chance alone would produce. Synthetic data from the same process scores highly, and synthetic data whose cycle is missing or has the wrong length scores low when the training data has a cycle. See [Spectral Similarity](../user-guide/time-series-metrics/spectral-similarity.md) for example scenarios, a walkthrough of the report charts, and configuration.
+
 ## Evaluation Reports
 
 Every Safe Synthesizer job automatically generates an HTML evaluation report saved to `generate/evaluation_report.html` inside the run directory (by default `./safe-synthesizer-artifacts/<config>---<dataset>/<run_name>/`). A machine-readable companion file, `generate/evaluation_metrics.json`, contains the same scores and timing data as structured JSON. The report contains:
@@ -159,3 +163,4 @@ evaluation:
 - [Synthetic Data Quality](../user-guide/evaluating-data.md): See recommendations for increasing quality and privacy scores
 - [Autocorrelation Similarity](../user-guide/time-series-metrics/autocorrelation-similarity.md): Read and configure the time-series metric
 - [Rolling Stats Similarity](../user-guide/time-series-metrics/rolling-stats-similarity.md): Read and configure the time-series metric
+- [Spectral Similarity](../user-guide/time-series-metrics/spectral-similarity.md): Read and configure the time-series metric

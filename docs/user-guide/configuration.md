@@ -411,6 +411,10 @@ for the full schema. For detailed descriptions and constraints, see the
 | `evaluation.time_series.rolling_stats.window_size` | `20` | Number of consecutive values that count as local for the rolling average and spread | Match the timescale of the changes the downstream use case depends on |
 | `evaluation.time_series.rolling_stats.min_points` | `4` | Minimum finite observations required per sequence | Leave at default unless short sequences must be excluded |
 | `evaluation.time_series.rolling_stats.max_groups` | `128` | Maximum shared groups evaluated in a reproducible sample | Lower to reduce evaluation time for highly grouped data |
+| `evaluation.time_series.spectral.value_columns` | `null` | Numeric columns included in Spectral Similarity | Leave `null` for inferred numeric columns or provide an explicit list |
+| `evaluation.time_series.spectral.max_cycle_length` | `128` | Longest cycle, in observations, told apart from slower variation | Raise when longer cycles matter, such as `168` for a weekly cycle in hourly data |
+| `evaluation.time_series.spectral.min_points` | `16` | Minimum finite observations required per sequence | Raise to leave out sequences too short to show the cycles of interest |
+| `evaluation.time_series.spectral.max_groups` | `128` | Maximum shared groups evaluated in a reproducible sample | Lower to reduce evaluation time for highly grouped data |
 
 See [`EvaluationParameters`][nemo_safe_synthesizer.config.evaluate.EvaluationParameters]
 for the full API reference. See
@@ -418,6 +422,8 @@ for the full API reference. See
 for calculation and interpretation guidance.
 See [Rolling Stats Similarity](time-series-metrics/rolling-stats-similarity.md)
 for the rolling statistics metric.
+See [Spectral Similarity](time-series-metrics/spectral-similarity.md)
+for the spectral metric.
 
 ---
 
