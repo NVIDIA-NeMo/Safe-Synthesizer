@@ -115,7 +115,7 @@ engine = [
 cpu = [
     "accelerate>=1.1.0",
     "bitsandbytes>=0.46.1",
-    "gliner2[local]",
+    "gliner2[local]>=2.1.0",
     "flashinfer-python==0.6.16.post4; sys_platform == 'linux'",
     "flashinfer-cubin==0.6.16.post4; sys_platform == 'linux'",
     "kernels>=0.12.1,<0.15",
@@ -141,7 +141,7 @@ cpu = [
 cu129 = [
     "accelerate>=1.1.0",
     "bitsandbytes>=0.46.1",
-    "gliner2[local]",
+    "gliner2[local]>=2.1.0",
     "flashinfer-python==0.6.16.post4; sys_platform == 'linux'",
     "flashinfer-cubin==0.6.16.post4; sys_platform == 'linux'",
     "kernels>=0.12.1,<0.15",
@@ -167,7 +167,7 @@ cu129 = [
 cu130 = [
     "accelerate>=1.1.0",
     "bitsandbytes>=0.46.1",
-    "gliner2[local]",
+    "gliner2[local]>=2.1.0",
     "flashinfer-python==0.6.16.post4; sys_platform == 'linux'",
     "flashinfer-cubin==0.6.16.post4; sys_platform == 'linux'",
     "kernels>=0.12.1,<0.15",
