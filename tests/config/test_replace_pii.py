@@ -602,7 +602,6 @@ class TestReplacePiiConfig:
             "family_relationship": 0.192,
             "gender": 0.393,
             "medical_condition": 0.739,
-            "medical_procedure": 1.0,
             "organism": 0.068,
         }
 
