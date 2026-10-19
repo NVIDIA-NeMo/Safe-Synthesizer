@@ -368,15 +368,14 @@ _DEFAULT_GLINER_ENTITY_THRESHOLDS: Mapping[EntityType, float] = MappingProxyType
     }
 )
 # Same v5 tuning: GLiNER2 tags medical terms and words such as "mother" or "male" as names, so a name
-# span overlapping one of these labels is dropped. medical_procedure tuned to 1.0, which turns it off in
-# practice; it stays requested because the other thresholds were tuned with it in the label set.
+# span overlapping one of these labels is dropped. v5 also requested medical_procedure, but tuned it to
+# 1.0, which never fires, so it is not requested.
 _DEFAULT_NAME_EXCLUSION_THRESHOLDS: Mapping[str, float] = MappingProxyType(
     {
         "body_part": 0.057,
         "family_relationship": 0.192,
         "gender": 0.393,
         "medical_condition": 0.739,
-        "medical_procedure": 1.0,
         "organism": 0.068,
     }
 )
