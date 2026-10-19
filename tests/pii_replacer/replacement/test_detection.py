@@ -11,7 +11,7 @@ from types import SimpleNamespace
 import pytest
 
 from nemo_safe_synthesizer.config.replace_pii import EntityType, FreeTextDetectionConfig
-from nemo_safe_synthesizer.errors import GenerationError
+from nemo_safe_synthesizer.errors import GenerationError, ParameterError
 from nemo_safe_synthesizer.pii_replacer.replacement.detection import (
     CompositeFreeTextDetector,
     Gliner2Detector,
@@ -144,11 +144,12 @@ class TestGliner2Detector:
             (2, EntityType.PHONE_NUMBER),
         ]
         labels = model.calls[0][1]
-        assert labels["full_name"] == {"threshold": 0.95}
-        assert labels["first_name"] == {"threshold": 0.9}
-        assert labels["middle_name"] == {"threshold": 0.9}
-        assert labels["last_name"] == {"threshold": 0.9}
+        assert labels["full_name"] == {"threshold": 0.972}
+        assert labels["first_name"] == {"threshold": 0.946}
+        assert labels["middle_name"] == {"threshold": 0.7}
+        assert labels["last_name"] == {"threshold": 0.639}
         assert "person" not in labels
+        assert "address" not in labels
         assert labels["phone_number"] == {"threshold": 0.994}
 
     def test_government_id_uses_the_lower_model_floor_then_the_normalized_entity_threshold(self) -> None:
@@ -306,13 +307,12 @@ class TestGliner2Detector:
         ("label", "value", "expected"),
         [
             ("first_name", "Ada", EntityType.FIRST_NAME),
-            ("middle_name", "Augusta", EntityType.MIDDLE_NAME),
+            ("full_name", "Ada Lovelace", EntityType.FULL_NAME),
             ("last_name", "Lovelace", EntityType.LAST_NAME),
             ("phone_number", "+1 202 555 0101", EntityType.PHONE_NUMBER),
             ("fax_number", "+1 202 555 0102", EntityType.PHONE_NUMBER),
             ("date_of_birth", "5 April 1990", EntityType.DATE_OF_BIRTH),
             ("street_address", "12 Main Street", EntityType.STREET_ADDRESS),
-            ("address", "12 Main Street", EntityType.STREET_ADDRESS),
             ("government_id", "123-45-6789", EntityType.SSN),
             ("government_id", "AB-12345", EntityType.NATIONAL_ID),
             ("government_id", "912-45-6789", EntityType.NATIONAL_ID),
@@ -320,6 +320,7 @@ class TestGliner2Detector:
             ("government_id", "123-00-6789", EntityType.NATIONAL_ID),
             ("government_id", "123-45-0000", EntityType.NATIONAL_ID),
             ("national_id_number", "AB-12345", EntityType.NATIONAL_ID),
+            ("passport_number", "X1234567", EntityType.NATIONAL_ID),
             ("tax_id", "12-3456789", EntityType.NATIONAL_ID),
             ("tax_number", "12-3456789", EntityType.NATIONAL_ID),
             ("license_number", "D1234567", EntityType.NATIONAL_ID),
@@ -344,6 +345,139 @@ class TestGliner2Detector:
         spans = detector.detect([_cell(value)])
 
         assert [span.entity_type for span in spans] == [expected]
+        assert label in model.calls[0][1]
+
+    def test_drops_name_spans_overlapping_an_exclusion_label(self) -> None:
+        text = "Mother reports Raynaud symptoms; Ada called."
+        mother = (0, len("Mother"))
+        raynaud = (text.index("Raynaud"), text.index("Raynaud") + len("Raynaud"))
+        ada = (text.index("Ada"), text.index("Ada") + len("Ada"))
+        model = _FakeModel(
+            [
+                {
+                    "entities": {
+                        "first_name": [
+                            {"start": mother[0], "end": mother[1], "confidence": 0.99},
+                            {"start": ada[0], "end": ada[1], "confidence": 0.99},
+                        ],
+                        "last_name": [{"start": raynaud[0], "end": raynaud[1], "confidence": 0.99}],
+                        "family_relationship": [{"start": mother[0], "end": mother[1], "confidence": 0.5}],
+                        "medical_condition": [
+                            {"start": raynaud[0], "end": text.index(";"), "confidence": 0.8},
+                        ],
+                    }
+                }
+            ]
+        )
+        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda _: model)
+
+        spans = detector.detect([_cell(text)])
+
+        assert [(span.start, span.end, span.entity_type) for span in spans] == [(*ada, EntityType.FIRST_NAME)]
+        assert model.calls[0][1]["family_relationship"] == {"threshold": 0.192}
+
+    def test_exclusion_below_its_threshold_keeps_the_name(self) -> None:
+        text = "Mother"
+        model = _FakeModel(
+            [
+                {
+                    "entities": {
+                        "first_name": [{"start": 0, "end": len(text), "confidence": 0.99}],
+                        "family_relationship": [{"start": 0, "end": len(text), "confidence": 0.05}],
+                    }
+                }
+            ]
+        )
+        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda _: model)
+
+        assert [span.entity_type for span in detector.detect([_cell(text)])] == [EntityType.FIRST_NAME]
+
+    def test_exclusion_labels_do_not_drop_non_name_spans(self) -> None:
+        text = "+1 202 555 0101"
+        model = _FakeModel(
+            [
+                {
+                    "entities": {
+                        "phone_number": [{"start": 0, "end": len(text), "confidence": 1.0}],
+                        "medical_condition": [{"start": 0, "end": len(text), "confidence": 0.9}],
+                    }
+                }
+            ]
+        )
+        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda _: model)
+
+        assert [span.entity_type for span in detector.detect([_cell(text)])] == [EntityType.PHONE_NUMBER]
+
+    def test_empty_exclusion_mapping_requests_no_exclusion_labels(self) -> None:
+        text = "Mother"
+        model = _FakeModel([{"entities": {"first_name": [{"start": 0, "end": len(text), "confidence": 0.99}]}}])
+        detector = Gliner2Detector(
+            FreeTextDetectionConfig(name_exclusion_thresholds={}),
+            model_loader=lambda _: model,
+        )
+
+        assert [span.entity_type for span in detector.detect([_cell(text)])] == [EntityType.FIRST_NAME]
+        assert not set(FreeTextDetectionConfig().name_exclusion_thresholds) & set(model.calls[0][1])
+
+    def test_requests_exclusion_labels_only_when_a_name_type_is_allowed(self) -> None:
+        model = _FakeModel([{"entities": {}}])
+        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda _: model)
+        cell = DetectionCell(DetectionCellId(0, "notes"), "Call me", frozenset({EntityType.PHONE_NUMBER}))
+
+        detector.detect([cell])
+
+        assert set(model.calls[0][1]) == {"fax_number", "phone_number"}
+
+    def test_rejects_exclusion_label_that_is_a_detection_label(self) -> None:
+        config = FreeTextDetectionConfig(name_exclusion_thresholds={"Government ID": 0.5})
+
+        with pytest.raises(ParameterError, match=r"\['government_id'\]"):
+            Gliner2Detector(config)
+
+    @pytest.mark.parametrize(
+        ("text", "pieces", "kept"),
+        [
+            ("between a small and medium", {"middle_name": "medium"}, []),
+            (
+                "Ada Augusta Byron",
+                {"first_name": "Ada", "middle_name": "Augusta", "last_name": "Byron"},
+                [EntityType.FIRST_NAME, EntityType.MIDDLE_NAME, EntityType.LAST_NAME],
+            ),
+            (
+                "Ada Augusta Lovelace",
+                {"full_name": "Ada Augusta Lovelace", "middle_name": "Augusta"},
+                [EntityType.FULL_NAME, EntityType.MIDDLE_NAME],
+            ),
+            ("Ada Augusta", {"first_name": "Ada", "middle_name": "Augusta"}, [EntityType.FIRST_NAME]),
+        ],
+    )
+    def test_keeps_middle_names_only_beside_other_name_pieces(
+        self,
+        text: str,
+        pieces: dict[str, str],
+        kept: list[EntityType],
+    ) -> None:
+        entities = {
+            label: [{"start": text.index(value), "end": text.index(value) + len(value), "confidence": 0.99}]
+            for label, value in pieces.items()
+        }
+        model = _FakeModel([{"entities": entities}])
+        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda _: model)
+
+        assert sorted(span.entity_type for span in detector.detect([_cell(text)])) == sorted(kept)
+
+    def test_middle_name_rule_can_be_disabled(self) -> None:
+        text = "between a small and medium"
+        start = text.index("medium")
+        model = _FakeModel(
+            [{"entities": {"middle_name": [{"start": start, "end": start + len("medium"), "confidence": 0.99}]}}]
+        )
+        detector = Gliner2Detector(
+            FreeTextDetectionConfig(require_middle_name_neighbors=False),
+            model_loader=lambda _: model,
+        )
+
+        assert [span.entity_type for span in detector.detect([_cell(text)])] == [EntityType.MIDDLE_NAME]
 
     def test_drops_identifier_predictions_without_a_digit(self) -> None:
         text = "Customer Loyalty"
