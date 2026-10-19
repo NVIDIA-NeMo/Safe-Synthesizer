@@ -35,6 +35,7 @@ __all__ = [
     "TimeSeriesDataShapeCheck",
     "TimeSeriesValueColumnCheck",
     "TimestampColumnCheck",
+    "WindowGroupMIAValueColumnCheck",
 ]
 
 
@@ -273,6 +274,37 @@ class RollingStatsValueColumnCheck(DataFrameCheck):
                 collector.error(
                     "rolling_stats_column_not_numeric",
                     f"Rolling stats value column {column!r} must contain numeric training data.",
+                )
+
+
+class WindowGroupMIAValueColumnCheck(DataFrameCheck):
+    """Validate explicitly configured window membership inference evaluation value columns."""
+
+    name = "timeseries.window_group_mia_columns"
+    label = "Window membership inference evaluation columns"
+
+    @override
+    def enabled(self, ctx: PreflightContext) -> bool:
+        if not super().enabled(ctx):
+            return False
+        return ctx.config.time_series_evaluation_enabled
+
+    @override
+    def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
+        columns = ctx.config.evaluation.time_series.window_group_mia.value_columns
+        if columns is None:
+            return
+        for column in columns:
+            if column not in ctx.data:
+                collector.error(
+                    "window_group_mia_column_not_found",
+                    f"Window membership inference value column {column!r} is missing from the training data.",
+                )
+                continue
+            if not is_numeric_dtype(ctx.data[column]):
+                collector.error(
+                    "window_group_mia_column_not_numeric",
+                    f"Window membership inference value column {column!r} must contain numeric training data.",
                 )
 
 

@@ -31,6 +31,7 @@ from .checks import (
     TimestampColumnCheck,
     TokenBudgetCheck,
     VRAMHeadroomCheck,
+    WindowGroupMIAValueColumnCheck,
 )
 from .orchestrator import CRASH_CODE, run_preflight
 from .registry import (
@@ -88,6 +89,7 @@ __all__ = [
     "TimestampColumnCheck",
     "TokenBudgetCheck",
     "VRAMHeadroomCheck",
+    "WindowGroupMIAValueColumnCheck",
     "build_registry",
     "get_registry",
     "helpers",
