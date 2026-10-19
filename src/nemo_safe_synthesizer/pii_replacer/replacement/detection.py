@@ -516,7 +516,17 @@ def _validated_regex_span(
 
 
 def resolve_overlapping_spans(spans: Iterable[DetectedSpan]) -> tuple[DetectedSpan, ...]:
-    """Resolve candidates using deterministic longer-span-first selection."""
+    """Resolve overlapping candidates, keeping longer spans first, then more confident ones.
+
+    Spans are ranked by length, then confidence (regex spans count as 1.0),
+    then position, then source, GLiNER2 score, and entity order, and each is
+    kept unless it overlaps an already kept span. This is the rule
+    nss-pii-ner-eval scores with.
+
+    Example:
+        Two overlapping five-character spans at offsets 0 and 2 with scores
+        0.6 and 0.9 keep the span at offset 2.
+    """
     best_duplicates: dict[tuple[DetectionCellId, EntityType, int, int], DetectedSpan] = {}
     for span in spans:
         key = (span.cell_id, span.entity_type, span.start, span.end)
@@ -528,6 +538,7 @@ def resolve_overlapping_spans(spans: Iterable[DetectedSpan]) -> tuple[DetectedSp
         best_duplicates.values(),
         key=lambda span: (
             -(span.end - span.start),
+            -_confidence(span),
             span.start,
             span.end,
             *_tie_rank(span),
@@ -545,6 +556,13 @@ def resolve_overlapping_spans(spans: Iterable[DetectedSpan]) -> tuple[DetectedSp
 def fresh_detection_entity_types() -> frozenset[EntityType]:
     """Return entity types eligible for fresh replacement inside free text."""
     return _FRESH_ENTITY_TYPES
+
+
+def _confidence(span: DetectedSpan) -> float:
+    """Return a span's confidence, treating structurally validated regex matches as certain."""
+    if span.source == "regex":
+        return 1.0
+    return span.score if span.score is not None else 0.0
 
 
 def _tie_rank(span: DetectedSpan) -> tuple[int, float, int]:
