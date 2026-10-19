@@ -572,13 +572,17 @@ headroom; it does not change chunk boundaries or detection semantics.
 
 The checkpoint favors recall and documents that it can over-predict names.
 `free_text_detection.entity_thresholds` contains one threshold for every
-GLiNER2-detected entity. NSS defaults `full_name` to `0.95`, specific name-part
-types to `0.9`, and the remaining model-detected types to `0.5`. Email,
-payment-card, IPv4, and IPv6 detection is owned by structurally validated regex
-and has no confidence threshold. If medical terms, product names, or common
-nouns are replaced as people, raise the relevant name entries. Lower them only
-after checking both false positives and missed real names on a representative
-development sample.
+GLiNER2-detected entity. The defaults are tuned on a PII detection benchmark,
+and most are above 0.97 because the checkpoint's scores cluster just below 1.0,
+so change them in small steps. Email, payment-card, IPv4, and IPv6 detection is
+owned by structurally validated regex and has no confidence threshold. If
+medical terms, product names, or common nouns are replaced as people, raise the
+relevant name entries or add a matching label to
+`free_text_detection.name_exclusion_thresholds`. If real names are missed, try
+`name_exclusion_thresholds: {}`: the default exclusion labels also drop names
+the model scores as, for example, a `gender` term. Check both false positives
+and missed real names on a representative development sample before and after
+any change.
 
 The default checkpoint's documented languages are English, French, Spanish,
 German, Italian, Portuguese, and Dutch. Natural-language date parsing happens
