@@ -151,13 +151,13 @@ class TestGliner2Detector:
             (2, EntityType.PHONE_NUMBER),
         ]
         labels = model.calls[0][1]
-        assert labels["full_name"] == {"threshold": 0.972}
+        assert labels["full_name"] == {"threshold": 0.964}
         assert labels["first_name"] == {"threshold": 0.946}
         assert labels["middle_name"] == {"threshold": 0.7}
-        assert labels["last_name"] == {"threshold": 0.639}
+        assert labels["last_name"] == {"threshold": 0.618}
         assert "person" not in labels
         assert "address" not in labels
-        assert labels["phone_number"] == {"threshold": 0.994}
+        assert labels["phone_number"] == {"threshold": 0.990}
 
     def test_government_id_uses_the_lower_model_floor_then_the_normalized_entity_threshold(self) -> None:
         texts = ["123-45-6789", "AB-12345"]
@@ -330,14 +330,13 @@ class TestGliner2Detector:
             ("passport_number", "X1234567", EntityType.NATIONAL_ID),
             ("tax_id", "12-3456789", EntityType.NATIONAL_ID),
             ("tax_number", "12-3456789", EntityType.NATIONAL_ID),
-            ("license_number", "D1234567", EntityType.NATIONAL_ID),
-            ("drivers_license_number", "D1234567", EntityType.NATIONAL_ID),
             ("api_key", "sk-ABC123", EntityType.API_KEY),
             ("customer_id", "CUST-00412", EntityType.UNIQUE_IDENTIFIER),
             ("employee_id", "E-7731", EntityType.UNIQUE_IDENTIFIER),
             ("medical_record_number", "MRN 448102", EntityType.UNIQUE_IDENTIFIER),
             ("member_id", "M90311", EntityType.UNIQUE_IDENTIFIER),
             ("health_plan_beneficiary_number", "HPB-55102", EntityType.UNIQUE_IDENTIFIER),
+            ("certificate_number", "RN-448102", EntityType.UNIQUE_IDENTIFIER),
         ],
     )
     def test_normalizes_every_requested_checkpoint_label(
@@ -381,7 +380,7 @@ class TestGliner2Detector:
         spans = detector.detect([_cell(text)])
 
         assert [(span.start, span.end, span.entity_type) for span in spans] == [(*ada, EntityType.FIRST_NAME)]
-        assert model.calls[0][1]["family_relationship"] == {"threshold": 0.192}
+        assert model.calls[0][1]["family_relationship"] == {"threshold": 0.062}
 
     def test_exclusion_below_its_threshold_keeps_the_name(self) -> None:
         text = "Mother"
@@ -586,6 +585,15 @@ class TestRegexDetector:
         text = f"{'a' * 65}@example.com"
 
         assert RegexDetector().detect([_cell(text)]) == ()
+
+    def test_accepts_15_digit_cards_only_with_an_american_express_prefix(self) -> None:
+        text = "Amex 3782 822463 10005, device IMEI 490154203237518."
+
+        spans = RegexDetector().detect([_cell(text)])
+
+        assert [(text[span.start : span.end], span.entity_type) for span in spans] == [
+            ("3782 822463 10005", EntityType.CREDIT_DEBIT_CARD)
+        ]
 
     def test_rejects_repeated_digit_and_non_ascii_card_candidates(self) -> None:
         text = "Invalid cards 4111 1111 1111 1112, 0000 0000 0000 0000, and ٤١١١ ١١١١ ١١١١ ١١١١."
