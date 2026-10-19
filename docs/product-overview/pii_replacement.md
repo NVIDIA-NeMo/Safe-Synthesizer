@@ -285,13 +285,16 @@ result = (
 Columns planned as `free_text` use both the configurable GLiNER2 detector and
 built-in, structurally validated regex detectors for email addresses, payment
 cards, IPv4 addresses, and IPv6 addresses. The default model is
-`fastino/gliner2-privacy-filter-PII-multi` and loads lazily only when the plan
-contains a free-text target.
+`fastino/gliner2-privacy-filter-PII-multi`, pinned to the Hugging Face commit
+the default thresholds were tuned on, and it loads lazily only when the plan
+contains a free-text target. A different `model_id` loads its latest revision
+unless `model_revision` is set.
 
 ```yaml
 replace_pii:
   free_text_detection:
     model_id: fastino/gliner2-privacy-filter-PII-multi
+    model_revision: c153999da5f4c509df4322b0c6a1baf3d2c284d7
     entity_thresholds:
       first_name: 0.946
       middle_name: 0.7
