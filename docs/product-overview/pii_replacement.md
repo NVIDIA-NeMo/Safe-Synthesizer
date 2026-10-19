@@ -298,21 +298,21 @@ replace_pii:
     entity_thresholds:
       first_name: 0.946
       middle_name: 0.7
-      last_name: 0.639
-      full_name: 0.972
-      phone_number: 0.994
-      date_of_birth: 0.9999
-      street_address: 0.986
-      ssn: 0.079
+      last_name: 0.618
+      full_name: 0.964
+      phone_number: 0.990
+      date_of_birth: 0.9998
+      street_address: 0.985
+      ssn: 0.050
       national_id: 0.982
-      api_key: 0.993
-      unique_identifier: 0.953
+      api_key: 0.992
+      unique_identifier: 0.947
     name_exclusion_thresholds:
-      body_part: 0.057
-      family_relationship: 0.192
-      gender: 0.393
-      medical_condition: 0.739
-      organism: 0.068
+      body_part: 0.062
+      family_relationship: 0.062
+      gender: 0.385
+      medical_condition: 0.393
+      organism: 0.051
     require_middle_name_neighbors: true
     batch_size: 8
     chunk_length: 384
@@ -340,15 +340,17 @@ Several checkpoint labels map to one NSS entity type:
 |---|---|
 | `phone_number` | `phone_number`, `fax_number` |
 | `street_address` | `street_address` |
-| `national_id` | `national_id_number`, `passport_number`, `tax_id`, `tax_number`, `license_number`, `drivers_license_number`, and `government_id` values that are not SSNs |
+| `national_id` | `national_id_number`, `passport_number`, `tax_id`, `tax_number`, and `government_id` values that are not SSNs |
 | `ssn` | `government_id` values shaped `ddd-dd-dddd` with an assignable area, group, and serial (not area 000, 666, or 900-999, group 00, or serial 0000) |
-| `unique_identifier` | `customer_id`, `employee_id`, `medical_record_number`, `member_id`, `health_plan_beneficiary_number` |
+| `unique_identifier` | `customer_id`, `employee_id`, `medical_record_number`, `member_id`, `health_plan_beneficiary_number`, `certificate_number` |
 
 Identifiers are requested only by the kinds that text names, such as "customer
 ID 1234", because generic identifier labels mostly match device, vehicle, and
-biometric codes. A detected identifier without a digit is dropped. Licence and
-tax numbers are treated as national IDs, including business tax IDs, which the
-checkpoint does not distinguish from personal ones.
+biometric codes. A detected identifier without a digit is dropped. Certificate
+and professional licence numbers are identifiers. Tax numbers are national IDs,
+including business tax IDs, which the checkpoint does not distinguish from
+personal ones. Driver's licence labels are not requested because they mostly
+match licence plates and other vehicle codes.
 
 The checkpoint is optimized for recall and can confuse common or domain terms
 with names. NSS therefore configures a confidence threshold for every
