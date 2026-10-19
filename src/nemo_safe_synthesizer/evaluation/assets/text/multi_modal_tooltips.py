@@ -94,6 +94,28 @@ tooltips = {
         One dot per group and numeric column, scored from 0 to 10. White dots near 10 match how the training data's local average and spread change
         over time, and redder dots further left do not. The dashed line is the overall score. Hover over a dot to see its column and group.
     """,
+    "window_group_mia_info": """
+        Window Membership Inference Protection checks whether the synthetic data sits closer to short stretches of the training sequences than
+        to stretches of holdout sequences it never saw, the trace a generator leaves when it memorizes training data. Each window of consecutive
+        values, across the numeric columns, is compared with its nearest synthetic window. Differences small enough to be explained by chance do
+        not lower the score, so 10 means training windows are no easier to find in the synthetic data than unseen ones, and scores near 0 mean
+        the synthetic data copies training windows. It needs a group column and a holdout of whole groups, and it does not yet count toward the
+        Data Privacy Score.
+    """,
+    "window_group_mia_distance_info": """
+        How close each training and holdout window comes to its nearest synthetic window, as the typical difference per value in training
+        standard deviations. Windows left of the dashed line are flagged. In well-protected synthetic data the blue and gray bars overlap; blue
+        bars piled up near 0 mean training windows were copied.
+    """,
+    "window_group_mia_groups_info": """
+        The share of each training group's windows that are flagged, for the most-flagged groups. Chance alone flags about as many as the dashed
+        holdout line, so white bars near it are expected and redder bars mean a group's sequences are closer to the synthetic data than unseen
+        sequences are. Hover over a bar to see its group, window count, and exact copies.
+    """,
+    "window_group_mia_closest_info": """
+        The training window closest to any synthetic window, with that synthetic window. Lines that lie on top of each other mean the synthetic
+        data contains a copy of this stretch of training data. Use the dropdown to switch columns.
+    """,
     "differential_privacy_info": """
     Differential Privacy (DP) is generally regarded as the highest level of privacy, providing mathematical guarantees around the protection of individual training
     records based on the values of the epsilon and delta parameters. Lower epsilon indicates higher levels of privacy. Note that while applying DP increases privacy,

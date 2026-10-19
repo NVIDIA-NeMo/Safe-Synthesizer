@@ -1,0 +1,82 @@
+{% from "jinja/components/icon.j2" import icon %}
+{% set window_group_mia = ctx.window_membership_inference_protection %}
+{% set window_group_mia_details = window_group_mia.details %}
+{% if window_group_mia.score.notes %}
+<p class="chart-subheading">{{ window_group_mia.score.notes }}</p>
+{% endif %}
+{% if window_group_mia_details.counts %}
+{% set counts = window_group_mia_details.counts %}
+{% set column_count = window_group_mia_details.columns | length %}
+{% set training_group_count = window_group_mia_details.per_group | default([]) | length %}
+{% set full = window_group_mia_details.evaluation_mode == "full" %}
+{% set sampled = [] %}
+{% for split in ["training", "holdout", "synthetic"] %}
+{% if (split != "holdout" or full) and counts[split ~ "_windows"] < counts[split ~ "_windows_total"] %}
+{% set _ = sampled.append("{:,}".format(counts[split ~ "_windows_total"]) ~ " " ~ split) %}
+{% endif %}
+{% endfor %}
+<p class="chart-subheading">
+    Compared {{ "{:,}".format(counts.training_windows) }} training
+    {{ "window" if counts.training_windows == 1 else "windows" }}
+    from {{ training_group_count }} {{ "group" if training_group_count == 1 else "groups" }}
+    {% if full %}
+    and {{ "{:,}".format(counts.holdout_windows) }} holdout {{ "window" if counts.holdout_windows == 1 else "windows" }}
+    from {{ counts.holdout_groups_with_windows }} holdout
+    {{ "group" if counts.holdout_groups_with_windows == 1 else "groups" }}
+    {% endif %}
+    with {{ "{:,}".format(counts.synthetic_windows) }} synthetic
+    {{ "window" if counts.synthetic_windows == 1 else "windows" }}
+    ({{ window_group_mia_details.window_size }} steps across {{ column_count }} numeric
+    {{ "column" if column_count == 1 else "columns" }}).
+    {% if sampled %}
+    Windows were sampled reproducibly from {{ sampled | join(" and ") }} windows.
+    {% endif %}
+</p>
+{% endif %}
+{% if window_group_mia_details.exact_copy_rate is defined %}
+<p class="chart-subheading">
+    {% if window_group_mia_details.attack %}
+    {{ "%.1f" | format(100 * window_group_mia_details.attack.training_flag_rate) }}% of training windows and
+    {{ "%.1f" | format(100 * window_group_mia_details.attack.holdout_flag_rate) }}% of holdout windows are flagged as close
+    to a synthetic window.
+    {% endif %}
+    {{ "%.1f" | format(100 * window_group_mia_details.exact_copy_rate) }}% of training windows have an exact copy in the
+    synthetic data.
+</p>
+{% endif %}
+{% if window_group_mia.figures %}
+<div class="chart-legend" aria-label="Chart legend">
+    <span><i class="legend-training"></i>Training Data</span>
+    <span><i class="legend-synthetic"></i>Synthetic Data</span>
+    {% if window_group_mia_details.attack %}
+    <span><i class="legend-window-group-mia-holdout"></i>Holdout Data</span>
+    {% endif %}
+</div>
+<div class="window-group-mia-charts">
+{% for row in window_group_mia.figures %}
+<figure>
+    <div class="window-group-mia-chart-heading">
+        <span class="window-group-mia-chart-title">
+            <h3 class="chart-subheading">{{ row.title }}</h3>
+            <button class="metric-info" type="button" data-tooltip-toggle
+                    aria-expanded="false" aria-controls="{{ row.tooltip_id }}"
+                    aria-label="About {{ row.title }}">{{ icon("info") }}</button>
+        </span>
+        {% if row.column_select and window_group_mia_details.columns | length > 1 %}
+        <select class="window-group-mia-column-select" data-window-group-mia-column-select
+                data-traces-per-column="{{ window_group_mia.closest_traces_per_column }}"
+                aria-label="Numeric column">
+            {% for column in window_group_mia_details.columns %}
+            <option value="{{ loop.index0 }}">{{ column }}</option>
+            {% endfor %}
+        </select>
+        {% endif %}
+    </div>
+    <div class="metric-tooltip window-group-mia-chart-tooltip" id="{{ row.tooltip_id }}" role="tooltip" hidden>
+        {{ row.tooltip | trim }}
+    </div>
+    {{ row.html | safe }}
+</figure>
+{% endfor %}
+</div>
+{% endif %}

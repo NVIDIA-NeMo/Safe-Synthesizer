@@ -236,8 +236,14 @@ class WindowGroupMIA(Component):
 
         mean, scale = WindowGroupMIA._standardizer(training_windows.values)
         support = (synthetic_windows.values - mean) / scale
-        training_distances = WindowGroupMIA._nearest((training_windows.values - mean) / scale, support)
+        training_distances, matches = WindowGroupMIA._nearest_with_index(
+            (training_windows.values - mean) / scale, support
+        )
         details["exact_copy_rate"] = float(np.mean(training_distances == 0.0))
+        details["closest_match"] = WindowGroupMIA._closest_match(
+            training_windows, synthetic_windows, training_distances, matches, len(columns)
+        )
+        details["distances"] = {"training": training_distances.tolist()}
 
         holdout, holdout_reason = WindowGroupMIA._holdout_sequences(datasets, columns, group_column, timestamp_column)
         holdout_windows = (
@@ -257,7 +263,9 @@ class WindowGroupMIA(Component):
             )
 
         holdout_values = (holdout_windows.values - mean) / scale
-        flags = WindowGroupMIA._flag_counts(training_distances, WindowGroupMIA._nearest(holdout_values, support))
+        holdout_distances = WindowGroupMIA._nearest(holdout_values, support)
+        details["distances"]["holdout"] = holdout_distances.tolist()
+        flags = WindowGroupMIA._flag_counts(training_distances, holdout_distances)
         overlap = window / stride
         offset = WindowGroupMIA._holdout_offset(training, holdout_values, mean, scale, window, stride, cfg.max_windows)
         loss = flags.privacy_loss
@@ -496,21 +504,30 @@ class WindowGroupMIA(Component):
 
     @staticmethod
     def _nearest(query: NDArray[np.float64], support: NDArray[np.float64]) -> NDArray[np.float64]:
-        """Euclidean distance from each query window to its nearest support window.
+        """Euclidean distance from each query window to its nearest support window."""
+        return WindowGroupMIA._nearest_with_index(query, support)[0]
+
+    @staticmethod
+    def _nearest_with_index(
+        query: NDArray[np.float64], support: NDArray[np.float64]
+    ) -> tuple[NDArray[np.float64], NDArray[np.int64]]:
+        """Distance from each query window to its nearest support window, and that window's index.
 
         The nearest window is found with the inner-product form in chunks, then
         its distance is recomputed directly so exact copies come out as exactly 0.
         """
         support_norms = np.einsum("ij,ij->i", support, support)
         distances = np.empty(len(query))
+        indices = np.empty(len(query), dtype=np.int64)
         for start in range(0, len(query), _DISTANCE_CHUNK):
             block = query[start : start + _DISTANCE_CHUNK]
             # macOS Accelerate raises spurious divide-by-zero warnings in matmul on finite input.
             with np.errstate(divide="ignore", over="ignore", invalid="ignore"):
                 squared = support_norms[None, :] - 2.0 * block @ support.T
-            nearest = support[np.argmin(squared, axis=1)]
-            distances[start : start + _DISTANCE_CHUNK] = np.sqrt(np.sum((block - nearest) ** 2, axis=1))
-        return distances
+            best = np.argmin(squared, axis=1)
+            indices[start : start + _DISTANCE_CHUNK] = best
+            distances[start : start + _DISTANCE_CHUNK] = np.sqrt(np.sum((block - support[best]) ** 2, axis=1))
+        return distances, indices
 
     @staticmethod
     def _flag_counts(training: NDArray[np.float64], holdout: NDArray[np.float64]) -> _FlagCounts:
@@ -609,6 +626,31 @@ class WindowGroupMIA(Component):
                 summary["flag_rate"] = float(np.mean(group_distances <= threshold))
             summaries.append(summary)
         return summaries
+
+    @staticmethod
+    def _closest_match(
+        training: _Windows,
+        synthetic: _Windows,
+        distances: NDArray[np.float64],
+        matches: NDArray[np.int64],
+        column_count: int,
+    ) -> dict[str, Any]:
+        """The training window closest to a synthetic window, with both windows' values by column.
+
+        Values are in the data's own units, after gaps are filled, as
+        ``values[column][step]``.
+        """
+        index = int(np.argmin(distances))
+        match = int(matches[index])
+        return {
+            "group": training.groups[index],
+            "start": training.starts[index],
+            "synthetic_group": synthetic.groups[match],
+            "synthetic_start": synthetic.starts[match],
+            "distance": float(distances[index]),
+            "training_values": training.values[index].reshape(-1, column_count).T.tolist(),
+            "synthetic_values": synthetic.values[match].reshape(-1, column_count).T.tolist(),
+        }
 
     @staticmethod
     def _highest_risk(windows: _Windows, distances: NDArray[np.float64]) -> list[dict[str, Any]]:

@@ -382,3 +382,96 @@ def test_rolling_stats_notes_constant_synthetic_pairs_missing_from_profile_chart
     )
 
     assert expected in rendered
+
+
+def test_window_group_mia_card_assets_are_wired_after_row_level_membership_inference() -> None:
+    template = _get_template("jinja/reports/multi_modal_report.j2")
+    window_group_mia = _get_template("jinja/components/window_group_mia.j2")
+    stylesheet = _get_template("css/multi_modal_report.css")
+    javascript = _get_template("js/multi_modal_toggle.js")
+
+    assert template is not None
+    assert window_group_mia is not None
+    assert stylesheet is not None
+    assert javascript is not None
+    assert template.index('id="data-privacy"') < template.index('"window-group-mia"')
+    assert (
+        template.index('metric_card("mia"') < template.index('"window-group-mia"') < template.index('metric_card("aia"')
+    )
+    assert 'class="window-group-mia-charts"' in window_group_mia
+    assert ".window-group-mia-charts" in stylesheet
+    assert ".window-group-mia-column-select" in stylesheet
+    assert ".legend-window-group-mia-holdout" in stylesheet
+    assert "[data-window-group-mia-column-select]" in javascript
+
+
+def _window_group_mia_context(*, full: bool, columns: int = 2, sampled: bool = True) -> dict[str, object]:
+    counts = {
+        "training_windows": 1000,
+        "training_windows_total": 1180 if sampled else 1000,
+        "holdout_windows": 118 if full else 0,
+        "holdout_windows_total": 118 if full else 0,
+        "holdout_groups_with_windows": 1 if full else 0,
+        "synthetic_windows": 5820,
+        "synthetic_windows_total": 5820,
+    }
+    details: dict[str, object] = {
+        "evaluation_mode": "full" if full else "copy_diagnostics_only",
+        "counts": counts,
+        "columns": [f"column_{index}" for index in range(columns)],
+        "window_size": 10,
+        "per_group": [{"group": "a"}, {"group": "b"}],
+        "exact_copy_rate": 0.114,
+    }
+    if full:
+        details["attack"] = {"training_flag_rate": 0.165, "holdout_flag_rate": 0.051}
+    charts = [
+        ("Distance to synthetic data", False, "window-group-mia-distance-info"),
+        ("Groups flagged most", False, "window-group-mia-groups-info"),
+        ("Closest match", True, "window-group-mia-closest-info"),
+    ]
+    figures = [
+        {"title": title, "html": "<div>chart</div>", "column_select": select, "tooltip_id": tooltip_id, "tooltip": "?"}
+        for title, select, tooltip_id in (charts if full else [charts[0], charts[2]])
+    ]
+    return {
+        "window_membership_inference_protection": {
+            "score": {"notes": None},
+            "details": details,
+            "closest_traces_per_column": 2,
+            "figures": figures,
+        }
+    }
+
+
+def test_window_group_mia_renders_summary_flag_rates_and_column_select() -> None:
+    rendered = _render_template("jinja/components/window_group_mia.j2", ctx=_window_group_mia_context(full=True))
+    text = " ".join(rendered.split())
+
+    assert (
+        "Compared 1,000 training windows from 2 groups and 118 holdout windows from 1 holdout group with "
+        "5,820 synthetic windows (10 steps across 2 numeric columns)."
+    ) in text
+    assert "Windows were sampled reproducibly from 1,180 training windows." in text
+    assert "16.5% of training windows and 5.1% of holdout windows are flagged as close to a synthetic window." in text
+    assert "11.4% of training windows have an exact copy in the synthetic data." in text
+    assert "Holdout Data" in rendered
+    assert rendered.count("data-tooltip-toggle") == 3
+    assert rendered.count("data-window-group-mia-column-select") == 1
+    assert 'data-traces-per-column="2"' in rendered
+    assert '<option value="1">column_1</option>' in rendered
+
+
+def test_window_group_mia_copy_diagnostics_render_without_holdout_details() -> None:
+    rendered = _render_template(
+        "jinja/components/window_group_mia.j2",
+        ctx=_window_group_mia_context(full=False, columns=1, sampled=False),
+    )
+    text = " ".join(rendered.split())
+
+    assert "holdout" not in text.lower()
+    assert "flagged" not in text
+    assert "sampled reproducibly" not in text
+    assert "(10 steps across 1 numeric column)." in text
+    assert "11.4% of training windows have an exact copy" in text
+    assert "data-window-group-mia-column-select" not in rendered

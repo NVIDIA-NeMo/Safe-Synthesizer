@@ -1013,6 +1013,61 @@ h3 {
     cursor: pointer;
 }
 
+.legend-window-group-mia-holdout {
+    background: #9ca3af;
+}
+
+.window-group-mia-charts {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.window-group-mia-chart-heading {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    justify-content: space-between;
+    height: 32px;
+    margin-bottom: 8px;
+}
+
+.window-group-mia-charts figure {
+    position: relative;
+}
+
+.window-group-mia-chart-title {
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.window-group-mia-chart-heading .chart-subheading {
+    flex: none;
+    margin: 0;
+}
+
+.window-group-mia-chart-tooltip {
+    top: 36px;
+    left: 0;
+    width: min(320px, 100%);
+}
+
+.window-group-mia-column-select {
+    min-width: 0;
+    max-width: 50%;
+    padding: 6px 30px 6px 10px;
+    border: 1px solid #666666;
+    border-radius: 4px;
+    background: #292929 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23eeeeee' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 10px center;
+    color: var(--text);
+    font: inherit;
+    font-size: 12px;
+    text-overflow: ellipsis;
+    appearance: none;
+    cursor: pointer;
+}
+
 .distribution-charts {
     --distribution-chart-height: 120px;
 
@@ -1365,6 +1420,10 @@ tbody tr:hover td {
     }
 
     .rolling-stats-charts {
+        grid-template-columns: 1fr;
+    }
+
+    .window-group-mia-charts {
         grid-template-columns: 1fr;
     }
 }
