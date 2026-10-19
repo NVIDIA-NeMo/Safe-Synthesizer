@@ -618,6 +618,10 @@ document.querySelectorAll("[data-autocorrelation-column-select]").forEach((selec
 document.querySelectorAll("[data-rolling-stats-column-select]").forEach((select) => {
     select.addEventListener("change", selectAutocorrelationColumn);
 });
+// Spectral band figures use the same trace-per-column layout as autocorrelation.
+document.querySelectorAll("[data-spectral-column-select]").forEach((select) => {
+    select.addEventListener("change", selectAutocorrelationColumn);
+});
 document.addEventListener("click", (event) => {
     if (!event.target.closest(".metric-tooltip, [data-tooltip-toggle]")) {
         closeTooltips();

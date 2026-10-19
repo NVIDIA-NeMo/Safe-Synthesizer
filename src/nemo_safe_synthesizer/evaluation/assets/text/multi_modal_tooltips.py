@@ -94,6 +94,27 @@ tooltips = {
         One dot per group and numeric column, scored from 0 to 10. White dots near 10 match how the training data's local average and spread change
         over time, and redder dots further left do not. The dashed line is the overall score. Hover over a dot to see its column and group.
     """,
+    "spectral_similarity_info": """
+        Spectral Similarity checks whether each numeric column spreads its variation across cycle lengths as the training data does: which repeating
+        cycles it has, such as a daily or weekly pattern, how strong they are, and whether slow or fast movement dominates. Each group and numeric
+        column is scored separately and the scores are averaged. Differences small enough to be explained by chance do not lower the score, so 10
+        means the synthetic data has the training data's cycles and scores near 0 mean it has lost them or has cycles of the wrong length. A low
+        score does not mean the synthetic data is bad overall, only that it does not reproduce the training data's cycles.
+    """,
+    "spectral_bands_info": """
+        The share of each numeric column's variation in cycles of about the length shown, from fast (left) to slow (right). Lines show the median
+        across groups and bands cover the middle half of groups. A peak marks a repeating cycle. In good synthetic data the orange and blue lines
+        overlap. Groups with cycles of different lengths can blur together in the median, so check Difference by cycle length too. Use the dropdown
+        to switch columns.
+    """,
+    "spectral_difference_info": """
+        The average gap between training and synthetic share of variation at each cycle length, in percentage points, with each group-column pair
+        compared with itself first. Short, pale bars are good. Tall, red bars mark cycle lengths the synthetic data has too much or too little of.
+    """,
+    "spectral_pair_scores_info": """
+        One dot per group and numeric column, scored from 0 to 10. White dots near 10 match the training data's cycles, and redder dots further left
+        do not. The dashed line is the overall score. Hover over a dot to see its column and group.
+    """,
     "differential_privacy_info": """
     Differential Privacy (DP) is generally regarded as the highest level of privacy, providing mathematical guarantees around the protection of individual training
     records based on the values of the epsilon and delta parameters. Lower epsilon indicates higher levels of privacy. Note that while applying DP increases privacy,

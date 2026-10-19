@@ -14,6 +14,7 @@ from nemo_safe_synthesizer.evaluation.components.attribute_inference_protection 
 from nemo_safe_synthesizer.evaluation.components.autocorrelation_similarity import AutocorrelationSimilarity
 from nemo_safe_synthesizer.evaluation.components.membership_inference_protection import MembershipInferenceProtection
 from nemo_safe_synthesizer.evaluation.components.rolling_stats_similarity import RollingStatsSimilarity
+from nemo_safe_synthesizer.evaluation.components.spectral_similarity import SpectralSimilarity
 from nemo_safe_synthesizer.evaluation.components.text_semantic_similarity import TextSemanticSimilarity
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import EvaluationScore, Grade, PrivacyGrade
@@ -361,4 +362,77 @@ def test_rolling_stats_report_summarizes_all_profiles_in_one_chart_row() -> None
     assert all(figure["tooltip"].strip() for figure in context["figures"])
     assert context["summary_columns"] == ["other", "value"]
     assert context["summary_traces_per_column"] == 8
+    assert context["pair_score_column_count"] == 2
+
+
+def test_spectral_metric_is_absent_when_time_series_evaluation_is_disabled() -> None:
+    frame = pd.DataFrame({"time": range(24), "value": np.sin(np.arange(24))})
+
+    tabular = MultimodalReport.from_dataframes(frame, frame.copy(), config=SafeSynthesizerParameters())
+    disabled = MultimodalReport.from_dataframes(
+        frame, frame.copy(), config=_time_series_config(time_series_enabled=False)
+    )
+
+    assert not any(isinstance(component, SpectralSimilarity) for component in tabular.components)
+    assert not any(isinstance(component, SpectralSimilarity) for component in disabled.components)
+
+
+def test_spectral_metric_runs_after_rolling_stats_and_renders_its_card() -> None:
+    time = np.arange(400)
+    training = pd.DataFrame({"time": time, "value": time / 40 + np.sin(2 * np.pi * time / 24)})
+
+    report = MultimodalReport.from_dataframes(training, training.copy(), config=_time_series_config())
+
+    component = next(item for item in report.components if isinstance(item, SpectralSimilarity))
+    assert component.score.score == 10
+    assert report.jinja_context["spectral_similarity"]["evaluated_profile_count"] == 1
+    output = render_report(report)
+    assert output is not None
+    assert output.index('id="rolling-stats-similarity"') < output.index('id="spectral-similarity"')
+    assert "Training median share" in output
+    assert "Mean difference" in output
+
+
+def test_spectral_report_summarizes_all_profiles_in_one_chart_row() -> None:
+    report = _minimal_multimodal_report()
+    profiles = [
+        {
+            "group": str(index),
+            "column": column,
+            "band_cycle_lengths": [2.0, 2.828427, 4.0],
+            "training_bands": [0.2, 0.3, 0.5],
+            "synthetic_bands": [None, None, None] if index == 0 else [0.25, 0.3, 0.45],
+            "similarity": index / 13,
+        }
+        for index in range(13)
+        for column in ("value", "other")
+    ]
+    report.components = [
+        SpectralSimilarity(
+            score=EvaluationScore.finalize_grade(raw_score=0.5, score=5.0),
+            details={"profiles": profiles},
+        )
+    ]
+
+    context = report.jinja_context["spectral_similarity"]
+
+    assert report.jinja_context["with_time_series"] is True
+    assert context["evaluated_profile_count"] == 26
+    assert context["evaluated_group_count"] == 13
+    assert context["evaluated_column_count"] == 2
+    assert context["constant_synthetic_profile_count"] == 2
+    assert [figure["title"] for figure in context["figures"]] == [
+        "Cycle lengths",
+        "Difference by cycle length",
+        "Pair scores",
+    ]
+    assert [figure["column_select"] for figure in context["figures"]] == [True, False, False]
+    assert [figure["tooltip_id"] for figure in context["figures"]] == [
+        "spectral-bands-info",
+        "spectral-difference-info",
+        "spectral-pair-scores-info",
+    ]
+    assert all(figure["tooltip"].strip() for figure in context["figures"])
+    assert context["summary_columns"] == ["other", "value"]
+    assert context["summary_traces_per_column"] == 4
     assert context["pair_score_column_count"] == 2

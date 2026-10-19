@@ -54,6 +54,15 @@ from ....evaluation.components.rolling_stats_similarity_figures import (
     generate_rolling_stats_segment_difference_figure,
     order_rolling_stats_columns,
 )
+from ....evaluation.components.spectral_similarity import SpectralSimilarity
+from ....evaluation.components.spectral_similarity_figures import (
+    SPECTRAL_PAIR_SCORE_MAX_COLUMNS,
+    SPECTRAL_SUMMARY_TRACES_PER_COLUMN,
+    generate_spectral_band_difference_figure,
+    generate_spectral_band_figure,
+    generate_spectral_pair_score_figure,
+    order_spectral_columns,
+)
 from ....evaluation.components.sqs_score import SQSScore
 from ....evaluation.components.text_semantic_similarity import TextSemanticSimilarity
 from ....evaluation.components.text_structure_similarity import TextStructureSimilarity
@@ -224,6 +233,55 @@ class MultimodalReport(EvaluationReport):
                     1 for item in rolling_stats_profiles if all(value is None for value in item["synthetic_level"])
                 )
 
+            ctx["with_time_series"] = ctx["with_time_series"] or "spectral_similarity" in ctx
+            if "spectral_similarity" in ctx:
+                spectral = ctx["spectral_similarity"]
+                spectral_profiles = spectral["details"].get("profiles", [])
+                spectral["figures"] = []
+                spectral["summary_columns"] = []
+                if spectral_profiles:
+                    spectral_figures = [
+                        (
+                            "Cycle lengths",
+                            generate_spectral_band_figure(spectral_profiles),
+                            True,
+                            "spectral_bands_info",
+                        ),
+                        (
+                            "Difference by cycle length",
+                            generate_spectral_band_difference_figure(spectral_profiles),
+                            False,
+                            "spectral_difference_info",
+                        ),
+                        (
+                            "Pair scores",
+                            generate_spectral_pair_score_figure(spectral_profiles, spectral["score"]["score"]),
+                            False,
+                            "spectral_pair_scores_info",
+                        ),
+                    ]
+                    spectral["figures"] = [
+                        {
+                            "title": title,
+                            "html": figure.to_html(full_html=False, include_plotlyjs=False),
+                            "column_select": column_select,
+                            "tooltip_id": tooltip_key.replace("_", "-"),
+                            "tooltip": tooltips[tooltip_key],
+                        }
+                        for title, figure, column_select, tooltip_key in spectral_figures
+                    ]
+                    spectral["summary_columns"] = order_spectral_columns(spectral_profiles)
+                spectral["summary_traces_per_column"] = SPECTRAL_SUMMARY_TRACES_PER_COLUMN
+                spectral["pair_score_column_count"] = min(
+                    len(spectral["summary_columns"]), SPECTRAL_PAIR_SCORE_MAX_COLUMNS
+                )
+                spectral["evaluated_profile_count"] = len(spectral_profiles)
+                spectral["evaluated_group_count"] = len({str(item["group"]) for item in spectral_profiles})
+                spectral["evaluated_column_count"] = len({item["column"] for item in spectral_profiles})
+                spectral["constant_synthetic_profile_count"] = sum(
+                    1 for item in spectral_profiles if all(value is None for value in item["synthetic_bands"])
+                )
+
             return ctx
         except Exception:
             logger.exception("Failed to get jinja context")
@@ -350,6 +408,7 @@ class MultimodalReport(EvaluationReport):
             )
             components.append(AutocorrelationSimilarity.from_evaluation_datasets(time_series_datasets, config))
             components.append(RollingStatsSimilarity.from_evaluation_datasets(time_series_datasets, config))
+            components.append(SpectralSimilarity.from_evaluation_datasets(time_series_datasets, config))
 
         report = MultimodalReport(config=config, evaluation_datasets=evaluation_datasets, components=components)
         report.evaluation_datasets = evaluation_datasets
