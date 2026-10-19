@@ -352,7 +352,7 @@ The checkpoint's specific ``full_name`` label is used for complete names; its
 broader ``person`` label is intentionally not requested.
 """
 
-# Thresholds come from the nss-pii-ner-eval v5 tuning on its dev split (entity-type exact F0.5),
+# Thresholds come from the nss-pii-ner-eval v6 tuning on its dev split (entity-type exact F0.5),
 # rounded. Name thresholds were tuned together with the name exclusion labels below and assume them.
 # Dev has no gold middle names, so middle_name was set by review and relies on the middle-name
 # neighbour rule to reject words such as clothing sizes.
@@ -360,27 +360,27 @@ _DEFAULT_GLINER_ENTITY_THRESHOLDS: Mapping[EntityType, float] = MappingProxyType
     {
         EntityType.FIRST_NAME: 0.946,
         EntityType.MIDDLE_NAME: 0.7,
-        EntityType.LAST_NAME: 0.639,
-        EntityType.FULL_NAME: 0.972,
-        EntityType.PHONE_NUMBER: 0.994,
-        EntityType.DATE_OF_BIRTH: 0.9999,
-        EntityType.STREET_ADDRESS: 0.986,
-        EntityType.SSN: 0.079,
+        EntityType.LAST_NAME: 0.618,
+        EntityType.FULL_NAME: 0.964,
+        EntityType.PHONE_NUMBER: 0.990,
+        EntityType.DATE_OF_BIRTH: 0.9998,
+        EntityType.STREET_ADDRESS: 0.985,
+        EntityType.SSN: 0.050,
         EntityType.NATIONAL_ID: 0.982,
-        EntityType.API_KEY: 0.993,
-        EntityType.UNIQUE_IDENTIFIER: 0.953,
+        EntityType.API_KEY: 0.992,
+        EntityType.UNIQUE_IDENTIFIER: 0.947,
     }
 )
-# Same v5 tuning: GLiNER2 tags medical terms and words such as "mother" or "male" as names, so a name
-# span overlapping one of these labels is dropped. v5 also requested medical_procedure, but tuned it to
+# Same v6 tuning: GLiNER2 tags medical terms and words such as "mother" or "male" as names, so a name
+# span overlapping one of these labels is dropped. Earlier tunings also requested medical_procedure, but tuned it to
 # 1.0, which never fires, so it is not requested.
 _DEFAULT_NAME_EXCLUSION_THRESHOLDS: Mapping[str, float] = MappingProxyType(
     {
-        "body_part": 0.057,
-        "family_relationship": 0.192,
-        "gender": 0.393,
-        "medical_condition": 0.739,
-        "organism": 0.068,
+        "body_part": 0.062,
+        "family_relationship": 0.062,
+        "gender": 0.385,
+        "medical_condition": 0.393,
+        "organism": 0.051,
     }
 )
 _ConfidenceThreshold = Annotated[float, Field(ge=0, le=1)]
@@ -877,9 +877,9 @@ class FreeTextDetectionConfig(NSSBaseModel):
         default_factory=_default_gliner_entity_thresholds,
         description=(
             "Minimum GLiNER2 confidence score per entity type. Entity types left out use the defaults: 0.946 for "
-            "first_name; 0.7 for middle_name; 0.639 for last_name; 0.972 for full_name; 0.994 for phone_number; 0.9999 for "
-            "date_of_birth; 0.986 for street_address; 0.079 for ssn; 0.982 for national_id; 0.993 for api_key; "
-            "and 0.953 for unique_identifier. Email, credit_debit_card, ipv4, and ipv6 are detected by regex and "
+            "first_name; 0.7 for middle_name; 0.618 for last_name; 0.964 for full_name; 0.990 for phone_number; 0.9998 for "
+            "date_of_birth; 0.985 for street_address; 0.050 for ssn; 0.982 for national_id; 0.992 for api_key; "
+            "and 0.947 for unique_identifier. Email, credit_debit_card, ipv4, and ipv6 are detected by regex and "
             "take no threshold."
         ),
     )
