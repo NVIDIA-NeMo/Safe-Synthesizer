@@ -193,6 +193,7 @@ nav:
       - Time-Series Metrics (beta):
           - Autocorrelation Similarity: user-guide/time-series-metrics/autocorrelation-similarity.md
           - Rolling Stats Similarity: user-guide/time-series-metrics/rolling-stats-similarity.md
+          - Window Membership Inference Protection: user-guide/time-series-metrics/window-membership-inference-protection.md
   - Developer Guide:
       - Architecture: developer-guide/architecture.md
       - Configuration Management: developer-guide/configuration_management.md
