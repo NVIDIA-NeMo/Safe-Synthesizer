@@ -45,6 +45,7 @@ __all__ = [
     "AUTO_DISCOVERY",
     "ConditioningColumn",
     "DEFAULT_GLINER2_MODEL_ID",
+    "DEFAULT_GLINER2_MODEL_REVISION",
     "DataToSamplerValueMapping",
     "ENTITIES",
     "ENTITY_BY_TYPE",
@@ -73,6 +74,8 @@ __all__ = [
 # entity discovery instead of an explicit plan.
 AUTO_DISCOVERY = "auto_discovery"
 DEFAULT_GLINER2_MODEL_ID = "fastino/gliner2-privacy-filter-PII-multi"
+DEFAULT_GLINER2_MODEL_REVISION = "c153999da5f4c509df4322b0c6a1baf3d2c284d7"
+"""Hugging Face commit of ``DEFAULT_GLINER2_MODEL_ID`` that the default thresholds were tuned on."""
 # Unversioned configurations are permanently interpreted as v3. Adding a new
 # schema may expand the supported set, but must not advance this implicit value.
 _IMPLICIT_REPLACE_PII_SCHEMA_VERSION = 3
@@ -842,10 +845,33 @@ class LLMConfig(NSSBaseModel):
 class FreeTextDetectionConfig(NSSBaseModel):
     """GLiNER2 and deterministic regex settings for free-text PII detection."""
 
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_default_revision_for_other_models(cls, data: object) -> object:
+        """Load the latest revision of a non-default model unless the caller pins one.
+
+        The default revision is a commit of the default model and does not exist in other repositories.
+        """
+        if not isinstance(data, Mapping):
+            return data
+        values = {str(key): value for key, value in data.items()}
+        if "model_revision" in values or values.get("model_id", DEFAULT_GLINER2_MODEL_ID) == DEFAULT_GLINER2_MODEL_ID:
+            return data
+        return {**values, "model_revision": None}
+
     model_id: str = Field(
         default=DEFAULT_GLINER2_MODEL_ID,
         min_length=1,
         description="GLiNER2 model identifier used to detect PII spans in free-text columns. Must be nonempty.",
+    )
+    model_revision: str | None = Field(
+        default=DEFAULT_GLINER2_MODEL_REVISION,
+        min_length=1,
+        description=(
+            "Hugging Face revision (commit, branch, or tag) of model_id to load. Defaults to the commit of the "
+            "default model that the default thresholds were tuned on. When model_id is changed and "
+            "model_revision is not set, the latest revision is loaded. Set null to load the latest revision."
+        ),
     )
     entity_thresholds: dict[EntityType, _ConfidenceThreshold] = Field(
         default_factory=_default_gliner_entity_thresholds,
