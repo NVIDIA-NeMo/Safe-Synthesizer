@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import sys
 from collections.abc import Sequence
 from types import SimpleNamespace
@@ -54,6 +55,35 @@ class _FakeModel:
     ) -> list[object]:
         self.calls.append((texts, labels, kwargs))
         return self.results
+
+
+class _WholeWordModel:
+    """Label each value wherever it stands as a whole word in a chunk, as GLiNER2's word tokens do."""
+
+    def __init__(self, label: str, *values: str) -> None:
+        self.label = label
+        self.values = values
+        self.texts: list[str] = []
+
+    def batch_extract_entities(
+        self,
+        texts: list[str],
+        labels: dict[str, dict[str, float]],
+        **kwargs: object,
+    ) -> list[object]:
+        self.texts.extend(texts)
+        return [
+            {
+                "entities": {
+                    self.label: [
+                        {"start": match.start(), "end": match.end(), "confidence": 0.99}
+                        for value in self.values
+                        for match in re.finditer(rf"\b{re.escape(value)}\b", text)
+                    ]
+                }
+            }
+            for text in texts
+        ]
 
 
 class _StaticDetector:
@@ -207,7 +237,7 @@ class TestGliner2Detector:
             model_loader=lambda *_: model,
         )
 
-        spans = detector.detect([_cell("0123456789Ada!xx")]).spans
+        spans = detector.detect([_cell("012345678 Ada!xx")]).spans
 
         assert [(span.start, span.end, span.entity_type) for span in spans] == [(10, 13, EntityType.FIRST_NAME)]
 
@@ -564,6 +594,59 @@ class TestGliner2Detector:
         assert detector.detect([_cell(text) for text in texts]).spans == ()
         assert model.calls[0][0] == texts
         assert model.calls[0][2]["batch_size"] == 2
+
+    def test_chunk_edges_never_cut_a_word(self) -> None:
+        model = _WholeWordModel("first_name")
+        detector = Gliner2Detector(
+            FreeTextDetectionConfig(chunk_length=12, chunk_overlap=5),
+            model_loader=lambda *_: model,
+        )
+
+        detector.detect([_cell("alpha beta gamma delta")])
+
+        assert model.texts == ["alpha beta ", "beta gamma ", "gamma delta"]
+
+    def test_word_fragment_at_a_chunk_edge_is_not_detected(self) -> None:
+        # "currently" straddles the second default chunk's start at offset 256; a chunk starting
+        # at "ently" led GLiNER2 to label the fragment as a first name.
+        text = "x " * 126 + "currently reviewing the file" + " y" * 100
+        assert text[256:261] == "ently"
+        model = _WholeWordModel("first_name", "ently")
+        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda *_: model)
+
+        assert detector.detect([_cell(text)]).spans == ()
+
+    def test_detects_a_name_straddling_a_default_chunk_edge_whole(self) -> None:
+        text = "x " * 190 + "Kenneth called" + " y" * 100
+        start = text.index("Kenneth")
+        assert start < 384 < start + len("Kenneth")
+        model = _WholeWordModel("first_name", "Kenneth")
+        detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda *_: model)
+
+        spans = detector.detect([_cell(text)]).spans
+
+        assert {(span.start, span.end, span.entity_type) for span in spans} == {
+            (start, start + len("Kenneth"), EntityType.FIRST_NAME)
+        }
+
+    def test_drops_model_spans_inside_a_word_too_long_to_fit_one_chunk(self) -> None:
+        text = "abcdefghijklmnop Ada"
+        model = _FakeModel(
+            [
+                {"entities": {}},
+                {"entities": {"first_name": [{"start": 0, "end": 4, "confidence": 0.99}]}},
+                {"entities": {"first_name": [{"start": 5, "end": 8, "confidence": 0.99}]}},
+            ]
+        )
+        detector = Gliner2Detector(
+            FreeTextDetectionConfig(chunk_length=10, chunk_overlap=4),
+            model_loader=lambda *_: model,
+        )
+
+        spans = detector.detect([_cell(text)]).spans
+
+        assert model.calls[0][0] == ["abcdefghij", "ghijklmnop", "mnop Ada"]
+        assert [(span.start, span.end, span.entity_type) for span in spans] == [(17, 20, EntityType.FIRST_NAME)]
 
 
 @pytest.mark.unit
