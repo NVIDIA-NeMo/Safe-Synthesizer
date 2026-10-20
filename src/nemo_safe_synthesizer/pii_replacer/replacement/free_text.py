@@ -18,6 +18,7 @@ from ...config.replace_pii import EntityType, PiiColumnPlan
 from ...errors import GenerationError, InternalError, ParameterError, SafeSynthesizerError
 from ..planning.patterns import extract_name_components
 from ..transform_result import FreeTextReplacementRecord
+from .common_words import COMMON_WORDS
 from .detection import FreeTextDetector, fresh_detection_entity_types, resolve_overlapping_spans
 from .generation import ReplacementGenerationRequest, ReplacementGenerator
 from .seeding import derive_seed
@@ -29,21 +30,30 @@ from .types import (
     EffectiveDependencyTuple,
     FreeTextMappingKey,
     GroupMappingKey,
+    ProtectedSpan,
     RecordMappingKey,
     detected_text,
     free_text_mapping_key,
 )
 from .value_checks import generated_value_is_valid
 
-__all__ = ["FreeTextColumnStatistics", "FreeTextExecutionResult", "FreeTextReplacementExecutor"]
+__all__ = [
+    "FreeTextCellDetections",
+    "FreeTextColumnStatistics",
+    "FreeTextExecutionResult",
+    "FreeTextReplacementExecutor",
+]
 
 _MAX_GENERATION_ATTEMPTS = 10
+_MIN_KNOWN_VALUE_LENGTH = 3
 # One name word: letters, optionally joined by an apostrophe or hyphen, as in "O'Brien" or "Smith-Jones".
 _NAME_WORD = re.compile(r"[^\W\d_]+(?:['\u2019-][^\W\d_]+)*")
 _NAME_PART_TYPES: dict[int, tuple[EntityType, ...]] = {
     2: (EntityType.FIRST_NAME, EntityType.LAST_NAME),
     3: (EntityType.FIRST_NAME, EntityType.MIDDLE_NAME, EntityType.LAST_NAME),
 }
+
+_KnownValueSource = Literal["structured_value", "detected_value"]
 
 
 @dataclass(slots=True)
@@ -58,6 +68,17 @@ class FreeTextColumnStatistics:
 
     sources: set[str] = field(default_factory=set)
     """Detector sources that produced accepted spans."""
+
+
+@dataclass(frozen=True, slots=True)
+class FreeTextCellDetections:
+    """Validated detector output for the original free-text cells, grouped by cell."""
+
+    spans: dict[DetectionCellId, tuple[DetectedSpan, ...]] = field(default_factory=dict)
+    """Accepted, non-overlapping spans to replace."""
+
+    protected: dict[DetectionCellId, tuple[ProtectedSpan, ...]] = field(default_factory=dict)
+    """Spans that known-value matches must not overlap."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,7 +105,10 @@ class FreeTextReplacementExecutor:
     mutate. Replacement later uses those original offsets to build each cell
     exactly once. Structured mappings are registered through the same module so
     independently detected exact values and validated name components remain
-    consistent within record or group scope.
+    consistent within record or group scope. With ``match_known_values``, every
+    cell is also searched for structured and detected values known in its
+    record or group, so occurrences the detector missed get the same
+    replacement.
     """
 
     def __init__(
@@ -94,11 +118,13 @@ class FreeTextReplacementExecutor:
         *,
         base_seed: int,
         capture_replacement_map: bool = False,
+        match_known_values: bool = False,
     ) -> None:
         self._generator = generator
         self._detector = detector
         self._base_seed = base_seed
         self._capture_replacement_map = capture_replacement_map
+        self._match_known_values = match_known_values
         self._cache: dict[FreeTextMappingKey, str] = {}
         self._statistics: dict[str, FreeTextColumnStatistics] = {}
         self._replacement_records: list[FreeTextReplacementRecord] = []
@@ -117,10 +143,10 @@ class FreeTextReplacementExecutor:
         self,
         dataframe: pd.DataFrame,
         specs: list[PiiColumnPlan],
-    ) -> dict[DetectionCellId, tuple[DetectedSpan, ...]]:
-        """Detect and validate candidate spans against complete original cells."""
+    ) -> FreeTextCellDetections:
+        """Detect and validate candidate and protected spans against complete original cells."""
         if not specs:
-            return {}
+            return FreeTextCellDetections()
         if self._detector is None:
             raise GenerationError(
                 "free-text replacement targets require the detector and span-resolution implementation"
@@ -130,29 +156,73 @@ class FreeTextReplacementExecutor:
         requested = {cell.cell_id: cell for cell in cells}
         try:
             detected = self._detector.detect(cells)
-            candidates = _validated_candidates(detected, requested)
+            candidates = _validated_candidates(detected.spans, requested)
+            protected = _validated_protected(detected.protected, requested)
         except SafeSynthesizerError:
             raise
         except Exception as exc:
             raise GenerationError("free-text PII detection returned invalid spans") from exc
-        return {cell_id: resolve_overlapping_spans(spans) for cell_id, spans in candidates.items()}
+        return FreeTextCellDetections(
+            {cell_id: resolve_overlapping_spans(spans) for cell_id, spans in candidates.items()},
+            {cell_id: tuple(spans) for cell_id, spans in protected.items()},
+        )
 
     def execute(
         self,
         working: pd.DataFrame,
         specs: list[PiiColumnPlan],
         group_identities: tuple[CanonicalValue, ...] | None,
-        spans_by_cell: dict[DetectionCellId, tuple[DetectedSpan, ...]],
+        detections: FreeTextCellDetections,
     ) -> FreeTextExecutionResult:
         """Apply accepted original-cell spans to every planned free-text target."""
+        known_values = (
+            self._known_values(working, specs, group_identities, detections.spans) if self._match_known_values else {}
+        )
         for spec in specs:
-            self._execute_spec(working, spec, group_identities, spans_by_cell)
+            self._execute_spec(working, spec, group_identities, detections, known_values)
         return FreeTextExecutionResult(
             column_statistics=self._statistics,
             generated_replacement_count=self._generated_count,
             generator_time_seconds=self._generation_elapsed,
             replacement_records=tuple(self._replacement_records),
         )
+
+    def _known_values(
+        self,
+        working: pd.DataFrame,
+        specs: list[PiiColumnPlan],
+        group_identities: tuple[CanonicalValue, ...] | None,
+        spans_by_cell: dict[DetectionCellId, tuple[DetectedSpan, ...]],
+    ) -> dict[Hashable, _KnownValues]:
+        """Collect the values to search for in each record or group before any free-text cell changes.
+
+        Structured mappings registered so far come first, so a value that is
+        both keeps its structured entity type. Detected values follow in plan
+        and row order, and a detected plain full name also adds its words.
+        """
+        known: dict[Hashable, _KnownValues] = {}
+        for key in self._cache:
+            known.setdefault(key.scope_identity, _KnownValues()).add(
+                key.original_value, key.entity_type, "structured_value"
+            )
+        for spec in specs:
+            column_position = working.columns.get_loc(spec.column_name)
+            if not isinstance(column_position, int):
+                raise ParameterError(f"replacement column {spec.column_name!r} is duplicated in the dataframe")
+            for row_position in range(len(working)):
+                spans = spans_by_cell.get(DetectionCellId(row_position, spec.column_name), ())
+                text = working.iat[row_position, column_position]
+                if not spans or not isinstance(text, str):
+                    continue
+                scope_identity = row_position if group_identities is None else group_identities[row_position]
+                values = known.setdefault(scope_identity, _KnownValues())
+                for span in spans:
+                    value = text[span.start : span.end]
+                    values.add(value, span.entity_type, "detected_value")
+                    if span.entity_type is EntityType.FULL_NAME:
+                        for part_type, word in _name_parts(value) or ():
+                            values.add(word, part_type, "detected_value")
+        return known
 
     def register_structured_mapping(
         self,
@@ -253,7 +323,8 @@ class FreeTextReplacementExecutor:
         working: pd.DataFrame,
         spec: PiiColumnPlan,
         group_identities: tuple[CanonicalValue, ...] | None,
-        spans_by_cell: dict[DetectionCellId, tuple[DetectedSpan, ...]],
+        detections: FreeTextCellDetections,
+        known_values: dict[Hashable, _KnownValues],
     ) -> None:
         """Replace all accepted cells for one free-text plan target."""
         column_position = working.columns.get_loc(spec.column_name)
@@ -265,9 +336,17 @@ class FreeTextReplacementExecutor:
             if not isinstance(original, str):
                 continue
             cell_id = DetectionCellId(row_position, spec.column_name)
-            spans = spans_by_cell.get(cell_id, ())
+            spans = detections.spans.get(cell_id, ())
+            scope_identity = row_position if group_identities is None else group_identities[row_position]
+            if (values := known_values.get(scope_identity)) is not None:
+                protected = detections.protected.get(cell_id, ())
+                matches = [
+                    match
+                    for match in values.find(cell_id, original)
+                    if not any(span.overlaps(match) for span in protected)
+                ]
+                spans = resolve_overlapping_spans((*spans, *matches))
             if spans:
-                scope_identity = row_position if group_identities is None else group_identities[row_position]
                 scope = "record" if group_identities is None else "group"
                 working.iat[row_position, column_position] = self._replace_cell(
                     DetectionCell(cell_id, original, fresh_detection_entity_types()),
@@ -409,6 +488,59 @@ def _match_letter_case(occurrence: str, replacement: str) -> str:
     return replacement
 
 
+class _KnownValues:
+    """Values known in one record or group, searched for as whole words ignoring case.
+
+    Example:
+        With ``Kenneth`` known as a first name, ``find`` on ``"kenneth called; Kenneths"``
+        returns one ``first_name`` span for ``kenneth`` and none inside ``Kenneths``.
+    """
+
+    def __init__(self) -> None:
+        self._values: dict[str, tuple[str, EntityType, _KnownValueSource]] = {}
+        self._pattern: re.Pattern[str] | None = None
+
+    def add(self, value: str, entity_type: EntityType, source: _KnownValueSource) -> None:
+        """Keep the first entity type and source added for a value, skipping values unsafe to search for."""
+        if not _is_searchable(value) or entity_type not in fresh_detection_entity_types():
+            return
+        if value.casefold() not in self._values:
+            self._values[value.casefold()] = (value, entity_type, source)
+            self._pattern = None
+
+    def find(self, cell_id: DetectionCellId, text: str) -> tuple[DetectedSpan, ...]:
+        """Return a span for each whole-word occurrence in ``text``, taking the longest value at each position."""
+        if not self._values:
+            return ()
+        if self._pattern is None:
+            values = sorted((value for value, _, _ in self._values.values()), key=len, reverse=True)
+            alternatives = "|".join(re.escape(value) for value in values)
+            self._pattern = re.compile(rf"(?<!\w)(?:{alternatives})(?!\w)", re.IGNORECASE)
+        spans: list[DetectedSpan] = []
+        for match in self._pattern.finditer(text):
+            # Case-insensitive matching and case folding disagree on a few characters, such as "ß"; skip those.
+            if (known := self._values.get(match.group().casefold())) is not None:
+                _, entity_type, source = known
+                spans.append(DetectedSpan(cell_id, match.start(), match.end(), entity_type, source))
+        return tuple(spans)
+
+
+def _is_searchable(value: str) -> bool:
+    """Return whether a known value is specific enough to search for in text.
+
+    Values shorter than three characters, values with surrounding whitespace or
+    no letter or digit, and one-word values in ``COMMON_WORDS``, such as
+    ``Will`` or ``Brown``, are left to the detector.
+    """
+    if (
+        len(value) < _MIN_KNOWN_VALUE_LENGTH
+        or value != value.strip()
+        or not any(character.isalnum() for character in value)
+    ):
+        return False
+    return any(character.isspace() for character in value) or value.casefold() not in COMMON_WORDS
+
+
 def _detection_cells(dataframe: pd.DataFrame, spec: PiiColumnPlan) -> tuple[DetectionCell, ...]:
     """Build nonempty string cells for one target while preserving row positions."""
     column_position = dataframe.columns.get_loc(spec.column_name)
@@ -420,6 +552,22 @@ def _detection_cells(dataframe: pd.DataFrame, spec: PiiColumnPlan) -> tuple[Dete
         for row_position in range(len(dataframe))
         if isinstance((value := dataframe.iat[row_position, column_position]), str) and value
     )
+
+
+def _validated_protected(
+    protected: tuple[ProtectedSpan, ...],
+    requested: dict[DetectionCellId, DetectionCell],
+) -> dict[DetectionCellId, list[ProtectedSpan]]:
+    """Validate protected-span ownership and offsets before grouping them by cell."""
+    by_cell: dict[DetectionCellId, list[ProtectedSpan]] = {}
+    for span in protected:
+        cell = requested.get(span.cell_id)
+        if cell is None:
+            raise InternalError("free-text PII detector returned a protected span for an unrequested cell")
+        if span.end > len(cell.text):
+            raise InternalError("protected span end exceeds the original cell length")
+        by_cell.setdefault(span.cell_id, []).append(span)
+    return by_cell
 
 
 def _validated_candidates(
