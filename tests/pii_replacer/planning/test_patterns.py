@@ -16,6 +16,15 @@ class TestPatternRendering:
         with pytest.raises(ParameterError):
             render_character_mask("[", Random(0))
 
+    def test_email_name_parts_join_their_words_with_dots(self) -> None:
+        values = {"first": "Mary Ann", "last": "De  La Cruz", "domain": "example.com"}
+
+        email = render_name_pattern(EntityType.EMAIL, "{first}_{Last}@{domain}", values, Random(0))
+        full_name = render_name_pattern(EntityType.FULL_NAME, "{First} {Last}", values, Random(0))
+
+        assert email == "mary.ann_De.La.Cruz@example.com"
+        assert full_name == "Mary Ann De  La Cruz"
+
     def test_invalid_name_pattern_raises_parameter_error(self) -> None:
         with pytest.raises(ParameterError):
             render_name_pattern(EntityType.EMAIL, "{unknown}@example.com", {}, Random(0))
