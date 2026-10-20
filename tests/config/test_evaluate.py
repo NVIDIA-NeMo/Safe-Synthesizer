@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from nemo_safe_synthesizer.config.evaluate import (
     EvaluationParameters,
     RollingStatsSimilarityParameters,
+    SpectralSimilarityParameters,
     TimeSeriesEvaluationParameters,
 )
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
@@ -90,3 +91,18 @@ def test_rolling_stats_parameters_default_to_all_numeric_columns_and_a_20_point_
 def test_rolling_stats_window_must_hold_at_least_three_points() -> None:
     with pytest.raises(ValidationError):
         RollingStatsSimilarityParameters(window_size=2)
+
+
+def test_spectral_parameters_default_to_all_numeric_columns_and_cycles_up_to_128_points() -> None:
+    spectral = EvaluationParameters().time_series.spectral
+
+    assert spectral.value_columns is None
+    assert spectral.max_cycle_length == 128
+    assert spectral.min_points == 16
+    assert spectral.max_groups == 128
+
+
+@pytest.mark.parametrize("overrides", [{"max_cycle_length": 3}, {"min_points": 7}])
+def test_spectral_parameters_reject_settings_too_small_for_a_spectrum(overrides: dict[str, int]) -> None:
+    with pytest.raises(ValidationError):
+        SpectralSimilarityParameters.model_validate(overrides)

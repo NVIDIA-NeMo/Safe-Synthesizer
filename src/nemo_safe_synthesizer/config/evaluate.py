@@ -21,8 +21,11 @@ __all__ = [
     "DEFAULT_AUTOCORRELATION_MIN_POINTS",
     "DEFAULT_ROLLING_STATS_MIN_POINTS",
     "DEFAULT_ROLLING_STATS_WINDOW_SIZE",
+    "DEFAULT_SPECTRAL_MAX_CYCLE_LENGTH",
+    "DEFAULT_SPECTRAL_MIN_POINTS",
     "EvaluationParameters",
     "RollingStatsSimilarityParameters",
+    "SpectralSimilarityParameters",
     "TimeSeriesEvaluationParameters",
 ]
 
@@ -30,6 +33,8 @@ DEFAULT_AUTOCORRELATION_MAX_LAG = 20
 DEFAULT_AUTOCORRELATION_MIN_POINTS = 4
 DEFAULT_ROLLING_STATS_WINDOW_SIZE = 20
 DEFAULT_ROLLING_STATS_MIN_POINTS = 4
+DEFAULT_SPECTRAL_MAX_CYCLE_LENGTH = 128
+DEFAULT_SPECTRAL_MIN_POINTS = 16
 DEFAULT_SQS_REPORT_COLUMNS: int = 250
 DEFAULT_RECORD_COUNT = 5000
 QUASI_IDENTIFIER_COUNT = 3
@@ -110,6 +115,45 @@ class RollingStatsSimilarityParameters(Parameters):
     )
 
 
+class SpectralSimilarityParameters(Parameters):
+    """Control spectral similarity evaluation.
+
+    Timestamp ordering and sequence grouping use the top-level time-series and
+    data settings. Cycles are distinguished up to the shorter sequence's length
+    or ``max_cycle_length``, and undersized, constant, or trend-only training
+    sequences are skipped. A constant or trend-only synthetic sequence paired
+    with varying training data receives zero similarity.
+    """
+
+    value_columns: list[str] | None = Field(
+        default=None,
+        description=(
+            "Numeric value columns to evaluate. Defaults to all shared columns inferred as numeric. "
+            "Changing this selection changes the meaning of the aggregate score."
+        ),
+    )
+    max_cycle_length: int = Field(
+        default=DEFAULT_SPECTRAL_MAX_CYCLE_LENGTH,
+        ge=4,
+        description=(
+            "Longest cycle, in observations, that the score distinguishes; slower variation counts as one "
+            "group, and shorter sequences distinguish cycles up to their own length. Raise it when longer "
+            "cycles matter, such as a weekly cycle in hourly data (168). Scores computed with different "
+            "values are not directly comparable."
+        ),
+    )
+    min_points: int = Field(
+        default=DEFAULT_SPECTRAL_MIN_POINTS,
+        ge=8,
+        description="Minimum finite observations required in each sequence.",
+    )
+    max_groups: int = Field(
+        default=128,
+        ge=1,
+        description="Maximum shared groups to evaluate using a reproducible sample to bound runtime.",
+    )
+
+
 class TimeSeriesEvaluationParameters(Parameters):
     """Metric-specific time-series evaluation configuration."""
 
@@ -127,6 +171,10 @@ class TimeSeriesEvaluationParameters(Parameters):
     rolling_stats: RollingStatsSimilarityParameters = Field(
         default_factory=RollingStatsSimilarityParameters,
         description="Rolling statistics similarity metric parameters.",
+    )
+    spectral: SpectralSimilarityParameters = Field(
+        default_factory=SpectralSimilarityParameters,
+        description="Spectral similarity metric parameters.",
     )
 
 

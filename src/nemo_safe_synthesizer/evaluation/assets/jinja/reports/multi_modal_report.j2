@@ -173,6 +173,15 @@
                         {% include "jinja/components/rolling_stats_similarity.j2" %}
                     {% endcall %}
                     {% endif %}
+                    {% if ctx.spectral_similarity %}
+                    {% call metric_card("spectral-similarity", ctx.spectral_similarity.name,
+                            ctx.spectral_similarity.score,
+                            "Measures whether numeric columns repeat in cycles of the same lengths as the training data",
+                            ctx.tooltips.spectral_similarity_info,
+                            expandable=true) %}
+                        {% include "jinja/components/spectral_similarity.j2" %}
+                    {% endcall %}
+                    {% endif %}
                 </div>
             </section>
             {% endif %}

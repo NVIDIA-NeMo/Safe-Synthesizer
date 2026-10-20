@@ -382,3 +382,118 @@ def test_rolling_stats_notes_constant_synthetic_pairs_missing_from_profile_chart
     )
 
     assert expected in rendered
+
+
+def test_spectral_card_assets_are_wired_after_rolling_stats() -> None:
+    template = _get_template("jinja/reports/multi_modal_report.j2")
+    spectral_similarity = _get_template("jinja/components/spectral_similarity.j2")
+    stylesheet = _get_template("css/multi_modal_report.css")
+    javascript = _get_template("js/multi_modal_toggle.js")
+
+    assert template is not None
+    assert spectral_similarity is not None
+    assert stylesheet is not None
+    assert javascript is not None
+    assert template.index('"rolling-stats-similarity"') < template.index('"spectral-similarity"')
+    assert template.index('"spectral-similarity"') < template.index('id="data-privacy"')
+    assert "ctx.spectral_similarity.figures" in spectral_similarity
+    assert 'class="spectral-charts"' in spectral_similarity
+    assert spectral_similarity.count('class="spectral-chart-heading"') == 1
+    assert ".spectral-charts" in stylesheet
+    assert ".spectral-column-select" in stylesheet
+    assert "[data-spectral-column-select]" in javascript
+
+
+def _spectral_context(
+    column_count: int, pair_score_column_count: int, constant_synthetic_profile_count: int = 0
+) -> dict[str, object]:
+    columns = [f"column_{index}" for index in range(column_count)]
+    return {
+        "spectral_similarity": {
+            "score": {"notes": None},
+            "details": {},
+            "evaluated_profile_count": column_count,
+            "evaluated_group_count": 1,
+            "evaluated_column_count": column_count,
+            "constant_synthetic_profile_count": constant_synthetic_profile_count,
+            "pair_score_column_count": pair_score_column_count,
+            "summary_columns": columns,
+            "summary_traces_per_column": 4,
+            "figures": [
+                {
+                    "title": "Cycle lengths",
+                    "html": "<div>bands</div>",
+                    "column_select": True,
+                    "tooltip_id": "spectral-bands-info",
+                    "tooltip": "Lines should overlap.",
+                },
+                {
+                    "title": "Difference by cycle length",
+                    "html": "<div>difference</div>",
+                    "column_select": False,
+                    "tooltip_id": "spectral-difference-info",
+                    "tooltip": "Bars should be short.",
+                },
+                {
+                    "title": "Pair scores",
+                    "html": "<div>pairs</div>",
+                    "column_select": False,
+                    "tooltip_id": "spectral-pair-scores-info",
+                    "tooltip": "Dots should be near 10.",
+                },
+            ],
+        }
+    }
+
+
+def test_spectral_renders_column_selects_and_pair_score_limit_note() -> None:
+    rendered = _render_template(
+        "jinja/components/spectral_similarity.j2",
+        ctx=_spectral_context(column_count=10, pair_score_column_count=8),
+    )
+
+    assert rendered.count("data-spectral-column-select") == 1
+    assert 'data-traces-per-column="4"' in rendered
+    assert '<option value="9">column_9</option>' in rendered
+    assert "Pair scores shows the 8 lowest-scoring columns." in rendered
+    assert " ".join(rendered.split()).count("Summarizing 10 group-column pairs (1 group, 10 numeric columns).") == 1
+
+
+def test_spectral_renders_info_tooltip_for_each_chart() -> None:
+    rendered = _render_template(
+        "jinja/components/spectral_similarity.j2",
+        ctx=_spectral_context(column_count=2, pair_score_column_count=2),
+    )
+
+    assert rendered.count("data-tooltip-toggle") == 3
+    assert 'aria-controls="spectral-difference-info"' in rendered
+    assert 'id="spectral-pair-scores-info" role="tooltip" hidden' in rendered
+
+
+def test_spectral_omits_column_select_and_note_for_single_column() -> None:
+    rendered = _render_template(
+        "jinja/components/spectral_similarity.j2",
+        ctx=_spectral_context(column_count=1, pair_score_column_count=1),
+    )
+
+    assert "data-spectral-column-select" not in rendered
+    assert "lowest-scoring columns" not in rendered
+    assert "straight-line synthetic values" not in rendered
+
+
+@pytest.mark.parametrize(
+    ("constant_count", "expected"),
+    [
+        (1, "1 pair has constant or straight-line synthetic values."),
+        (3, "3 pairs have constant or straight-line synthetic values."),
+    ],
+)
+def test_spectral_notes_constant_synthetic_pairs_missing_from_band_charts(constant_count: int, expected: str) -> None:
+    rendered = _render_template(
+        "jinja/components/spectral_similarity.j2",
+        ctx=_spectral_context(
+            column_count=2, pair_score_column_count=2, constant_synthetic_profile_count=constant_count
+        ),
+    )
+
+    assert expected in " ".join(rendered.split())
