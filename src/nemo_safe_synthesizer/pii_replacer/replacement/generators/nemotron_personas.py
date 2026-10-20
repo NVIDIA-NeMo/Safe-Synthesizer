@@ -25,6 +25,7 @@ from ...sampler_catalog import (
 )
 from ._common import (
     NAME_ENTITY_TYPES,
+    default_email_pattern,
     dependency_values,
     email_domain,
     name_values,
@@ -321,16 +322,17 @@ def _generate_persona_value(
             return None
         return render_name(entity_type, request.pattern, rng, values)
     if entity_type is EntityType.EMAIL:
-        if request.pattern is None:
+        pattern = request.pattern or default_email_pattern(dependencies)
+        if pattern is None:
             return sampled.get("email") or None
         values = name_values(dependencies, sampled)
         values["domain"] = email_domain(request.original_value) or ""
         organization = dependencies.get(EntityType.ORGANIZATION)
         values["organization"] = normalize_organization_domain(organization or "")
-        required = required_pattern_values(EntityType.EMAIL, request.pattern)
+        required = required_pattern_values(EntityType.EMAIL, pattern)
         if not _has_values(values, required):
             return None
-        return render_name_pattern(EntityType.EMAIL, request.pattern, values, rng)
+        return render_name_pattern(EntityType.EMAIL, pattern, values, rng)
     if entity_type is EntityType.PHONE_NUMBER:
         if request.pattern is not None:
             return None

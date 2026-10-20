@@ -18,6 +18,7 @@ from ...planning.patterns import render_character_mask, render_name_pattern
 from ..birth_dates import random_birth_date, shift_birth_date
 from ._common import (
     NAME_ENTITY_TYPES,
+    default_email_pattern,
     dependency_values,
     email_domain,
     looks_like_uuid,
@@ -127,10 +128,11 @@ class FakerReplacementGenerator:
         rng: Random,
         dependencies: dict[EntityType, str],
     ) -> str:
-        if request.pattern is None:
+        pattern = request.pattern or default_email_pattern(dependencies)
+        if pattern is None:
             return fake.email()
 
-        required = required_pattern_values(EntityType.EMAIL, request.pattern)
+        required = required_pattern_values(EntityType.EMAIL, pattern)
         values = name_values(dependencies, _faker_name_values(fake, None))
         original_domain = email_domain(request.original_value)
         if original_domain is None and "domain" in required:
@@ -141,7 +143,7 @@ class FakerReplacementGenerator:
         if not organization_domain and "organization" in required:
             self._warn_generation_fallback("unresolved_email_organization")
         values["organization"] = organization_domain or fake.domain_word()
-        return render_name_pattern(EntityType.EMAIL, request.pattern, values, rng)
+        return render_name_pattern(EntityType.EMAIL, pattern, values, rng)
 
     def _birth_date(self, request: ReplacementGenerationRequest, rng: Random) -> str:
         shifted = shift_birth_date(request.original_value, request.pattern, rng)

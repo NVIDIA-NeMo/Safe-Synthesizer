@@ -22,6 +22,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "NAME_ENTITY_TYPES",
+    "default_email_pattern",
     "dependency_values",
     "email_domain",
     "looks_like_uuid",
@@ -72,6 +73,23 @@ def name_values(
         "middle": dependencies.get(EntityType.MIDDLE_NAME) or inferred["middle"] or sampled.get("middle", ""),
         "last": dependencies.get(EntityType.LAST_NAME) or inferred["last"] or sampled.get("last", ""),
     }
+
+
+def default_email_pattern(dependencies: Mapping[EntityType, str]) -> str | None:
+    """Return the email pattern for an email that depends on names but has no plan pattern.
+
+    The local part joins whichever of the first and last names the dependencies resolve, then adds two random digits so
+    that people sharing a name rarely share an address: replaced first and last names, or a full name, follow
+    ``{first}.{last}##@{domain}``, and a first name alone follows ``{first}##@{domain}``. A plan omits the pattern when
+    the column mixes formats, such as ``brenda.rivera@`` and ``hughes_b@`` in one column; the replacement still uses
+    the replaced names.
+
+    Returns:
+        The pattern, or ``None`` when no name dependency resolves and the generator samples a whole email.
+    """
+    values = name_values(dependencies, {})
+    local_parts = [f"{{{part}}}" for part in ("first", "last") if values[part]]
+    return f"{'.'.join(local_parts)}##@{{domain}}" if local_parts else None
 
 
 def render_name(
