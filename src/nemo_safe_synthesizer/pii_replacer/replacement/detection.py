@@ -26,7 +26,7 @@ from ...config.replace_pii import (
 from ...errors import GenerationError, InternalError, ParameterError, SafeSynthesizerError
 from ...observability import get_logger, heartbeat
 from .birth_dates import birth_date_is_supported
-from .types import DetectedSpan, DetectionCell, DetectionCellId
+from .types import DetectedSpan, DetectionCell, DetectionCellId, FreeTextDetections, ProtectedSpan
 
 logger = get_logger(__name__)
 
@@ -85,14 +85,14 @@ _NAME_ENTITY_TYPES = frozenset(
 # Characters allowed between a middle name and its neighbouring first or last name.
 _MIDDLE_NAME_NEIGHBOR_GAP = 3
 _ENTITY_ORDER = {entity.entity_type: position for position, entity in enumerate(ENTITIES)}
-_SOURCE_ORDER = {"regex": 0, "gliner": 1}
+_SOURCE_ORDER = {"regex": 0, "gliner": 1, "structured_value": 2, "detected_value": 3}
 
 
 class FreeTextDetector(Protocol):
     """Detect and resolve PII spans for complete original dataframe cells."""
 
-    def detect(self, cells: Sequence[DetectionCell]) -> tuple[DetectedSpan, ...]:
-        """Return accepted, non-overlapping spans for ``cells``."""
+    def detect(self, cells: Sequence[DetectionCell]) -> FreeTextDetections:
+        """Return accepted, non-overlapping spans for ``cells`` and the spans replacement must leave unchanged."""
 
 
 class _GlinerModel(Protocol):
@@ -180,16 +180,17 @@ class Gliner2Detector:
         self._model_loader = model_loader or _load_gliner2_model
         self._model: _GlinerModel | None = None
 
-    def detect(self, cells: Sequence[DetectionCell]) -> tuple[DetectedSpan, ...]:
+    def detect(self, cells: Sequence[DetectionCell]) -> FreeTextDetections:
         """Run GLiNER2 once per unique text and copy valid spans to matching cells.
 
         Within each unique text, name spans that overlap a name-exclusion span
         are dropped, then the middle-name neighbour rule is applied, both before
         per-cell entity filtering so every cell sees the same model decision.
+        Name-exclusion spans are also returned as protected spans.
         """
         cells_by_text = _cells_by_text(cells)
         if not cells_by_text:
-            return ()
+            return FreeTextDetections(())
 
         chunks = list(chain.from_iterable(_chunks(text, self._config) for text in cells_by_text))
         results = self._infer(chunks, _requested_labels(cells, self._config))
@@ -200,15 +201,19 @@ class Gliner2Detector:
                 chunk, result, candidates[chunk.original_text], self._config
             )
         spans: list[DetectedSpan] = []
+        protected: list[ProtectedSpan] = []
         for text, text_cells in cells_by_text.items():
             for span in _filter_name_spans(candidates[text], self._config):
                 spans.extend(_copy_span_to_cells(span, text_cells))
+            # Overlapping chunks can report the same exclusion span twice.
+            for start, end in sorted(set(candidates[text].exclusions)):
+                protected.extend(ProtectedSpan(cell.cell_id, start, end) for cell in text_cells)
         if rejected_birth_dates:
             logger.user.warning(
                 "GLiNER2 birth-date candidates were ignored because they were not complete parseable dates",
                 extra={"rejected_candidate_count": rejected_birth_dates},
             )
-        return tuple(spans)
+        return FreeTextDetections(tuple(spans), tuple(protected))
 
     def _infer(self, chunks: list[_Chunk], labels: dict[str, dict[str, float]]) -> Sequence[object]:
         """Run one bounded GLiNER2 batch call and validate its outer result shape."""
@@ -281,9 +286,9 @@ class RegexDetector:
         self._timeout_seconds = timeout_seconds
         self._max_matches_per_rule = max_matches_per_rule
 
-    def detect(self, cells: Sequence[DetectionCell]) -> tuple[DetectedSpan, ...]:
-        """Return exact spans from applicable built-in rules."""
-        return tuple(chain.from_iterable(self._detect_cell(cell) for cell in cells))
+    def detect(self, cells: Sequence[DetectionCell]) -> FreeTextDetections:
+        """Return exact spans from applicable built-in rules. Regex rules protect nothing."""
+        return FreeTextDetections(tuple(chain.from_iterable(self._detect_cell(cell) for cell in cells)))
 
     def _detect_cell(self, cell: DetectionCell) -> tuple[DetectedSpan, ...]:
         """Run every applicable bounded regex rule against one complete cell."""
@@ -321,16 +326,17 @@ class CompositeFreeTextDetector:
         self._gliner = gliner or Gliner2Detector(config)
         self._regex = regex_detector or RegexDetector()
 
-    def detect(self, cells: Sequence[DetectionCell]) -> tuple[DetectedSpan, ...]:
-        """Return globally resolved spans from both mandatory detector sources."""
-        candidates = (*self._gliner.detect(cells), *self._regex.detect(cells))
+    def detect(self, cells: Sequence[DetectionCell]) -> FreeTextDetections:
+        """Return globally resolved spans and the protected spans from both mandatory detector sources."""
+        gliner = self._gliner.detect(cells)
+        regex = self._regex.detect(cells)
         by_cell: dict[DetectionCellId, list[DetectedSpan]] = defaultdict(list)
-        for span in candidates:
+        for span in (*gliner.spans, *regex.spans):
             by_cell[span.cell_id].append(span)
         accepted: list[DetectedSpan] = []
         for cell in cells:
             accepted.extend(resolve_overlapping_spans(by_cell.get(cell.cell_id, ())))
-        return tuple(accepted)
+        return FreeTextDetections(tuple(accepted), (*gliner.protected, *regex.protected))
 
 
 def _cells_by_text(cells: Sequence[DetectionCell]) -> dict[str, list[DetectionCell]]:
@@ -517,8 +523,8 @@ def _validated_regex_span(
 def resolve_overlapping_spans(spans: Iterable[DetectedSpan]) -> tuple[DetectedSpan, ...]:
     """Resolve overlapping candidates, keeping longer spans first, then more confident ones.
 
-    Spans are ranked by length, then confidence (regex spans count as 1.0),
-    then position, then source, GLiNER2 score, and entity order, and each is
+    Spans are ranked by length, then confidence (regex spans count as 1.0 and
+    known-value matches as 0.0), then position, then source, GLiNER2 score, and entity order, and each is
     kept unless it overlaps an already kept span. This is the rule
     nss-pii-ner-eval scores with.
 
@@ -558,7 +564,10 @@ def fresh_detection_entity_types() -> frozenset[EntityType]:
 
 
 def _confidence(span: DetectedSpan) -> float:
-    """Return a span's confidence, treating structurally validated regex matches as certain."""
+    """Return a span's confidence, treating structurally validated regex matches as certain.
+
+    Known-value matches have no score and count as 0.0, so a detector span of equal length wins.
+    """
     if span.source == "regex":
         return 1.0
     return span.score if span.score is not None else 0.0
