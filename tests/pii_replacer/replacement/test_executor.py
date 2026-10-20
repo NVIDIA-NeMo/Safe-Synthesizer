@@ -133,7 +133,24 @@ class _StaticDetector:
 
     def detect(self, cells: Sequence[DetectionCell]) -> FreeTextDetections:
         self.cells.extend(cells)
-        return FreeTextDetections(tuple(self.spans), self.protected)
+        requested = {cell.cell_id for cell in cells}
+        return FreeTextDetections(
+            tuple(span for span in self.spans if span.cell_id in requested),
+            tuple(span for span in self.protected if span.cell_id in requested),
+        )
+
+
+class _StreetGenerator(_RecordingGenerator):
+    """Return a bare street when the original locality is kept, otherwise a recognizable whole value."""
+
+    def generate(self, request: ReplacementGenerationRequest) -> str:
+        self.requests.append(request)
+        return "9 New Road" if request.keep_original_locality else "Whole Replacement"
+
+
+class _FailingDetector(_StaticDetector):
+    def detect(self, cells: Sequence[DetectionCell]) -> FreeTextDetections:
+        raise GenerationError("GLiNER2 free-text PII model could not be loaded")
 
 
 def _span(
@@ -1080,6 +1097,131 @@ class TestKnownValueMatching:
         )
         assert full.replacement_value == result.dataframe.at[0, "full_name"]
         assert (jordan.entity_type, jordan.detection_source) == (EntityType.LAST_NAME, "gliner")
+
+
+@pytest.mark.unit
+class TestStreetAddressLocality:
+    def test_full_address_keeps_the_locality_after_the_detected_street(self) -> None:
+        value = "489 Park Blvd, Mesa, IA 76237"
+        dataframe = pd.DataFrame({"address": [value, value]})
+        detector = _StaticDetector([_span(0, "address", value, "489 Park Blvd", EntityType.STREET_ADDRESS)])
+        generator = _StreetGenerator()
+
+        result = _execute(
+            dataframe, _plan(_target("address", EntityType.STREET_ADDRESS)), generator, free_text_detector=detector
+        )
+
+        assert result.dataframe["address"].tolist() == ["9 New Road, Mesa, IA 76237"] * 2
+        # Detection runs once per distinct value; every row with that value keeps its locality.
+        assert [cell.text for cell in detector.cells] == [value]
+        assert [request.original_value for request in generator.requests] == ["489 Park Blvd"] * 2
+        assert all(request.keep_original_locality for request in generator.requests)
+
+    def test_linked_locality_columns_still_condition_generation_without_being_appended(self) -> None:
+        value = "1 Main Street, Boston, MA"
+        dataframe = pd.DataFrame({"address": [value], "city": ["Boston"], "state": ["MA"]})
+        plan = _plan(
+            _target("address", EntityType.STREET_ADDRESS, ("city", EntityType.CITY), ("state", EntityType.STATE))
+        )
+        detector = _StaticDetector([_span(0, "address", value, "1 Main Street", EntityType.STREET_ADDRESS)])
+        generator = _StreetGenerator()
+
+        result = _execute(dataframe, plan, generator, free_text_detector=detector)
+
+        assert result.dataframe["address"].iloc[0] == "9 New Road, Boston, MA"
+        (request,) = generator.requests
+        assert [entity_type for entity_type, _ in request.effective_dependency_tuple] == [
+            EntityType.CITY,
+            EntityType.STATE,
+        ]
+
+    @pytest.mark.parametrize(
+        ("value", "detected"),
+        [
+            pytest.param("489 Park Blvd, Mesa, IA 76237", [], id="no-span"),
+            pytest.param(
+                "Unit 5, 42 George Street, Sydney NSW 2000",
+                [("42 George Street", EntityType.STREET_ADDRESS)],
+                id="street-not-at-start",
+            ),
+            pytest.param(
+                "1420 Fillmore St Apt 3B", [("1420 Fillmore St Apt 3B", EntityType.STREET_ADDRESS)], id="whole-value"
+            ),
+            pytest.param("489 Park Blvd, Mesa", [("489 Park Bl", EntityType.STREET_ADDRESS)], id="ends-mid-word"),
+            pytest.param("489 Park Blvd ,", [("489 Park Blvd", EntityType.STREET_ADDRESS)], id="no-locality-text"),
+            pytest.param(
+                "489 Park Blvd, Mesa, call 202-555-0101",
+                [("489 Park Blvd", EntityType.STREET_ADDRESS), ("202-555-0101", EntityType.PHONE_NUMBER)],
+                id="another-entity",
+            ),
+        ],
+    )
+    def test_values_without_one_leading_street_span_are_replaced_whole(
+        self,
+        value: str,
+        detected: list[tuple[str, EntityType]],
+    ) -> None:
+        dataframe = pd.DataFrame({"address": [value]})
+        detector = _StaticDetector([_span(0, "address", value, text, entity_type) for text, entity_type in detected])
+        generator = _StreetGenerator()
+
+        result = _execute(
+            dataframe, _plan(_target("address", EntityType.STREET_ADDRESS)), generator, free_text_detector=detector
+        )
+
+        assert result.dataframe["address"].iloc[0] == "Whole Replacement"
+        assert generator.requests[0].original_value == value
+
+    def test_detected_street_in_free_text_reuses_the_structured_street_without_linked_columns(self) -> None:
+        address = "489 Park Blvd, Mesa, IA 76237"
+        notes = "Ship to 489 Park Blvd today"
+        dataframe = pd.DataFrame({"address": [address], "notes": [notes]})
+        plan = _plan(_target("notes", EntityType.FREE_TEXT), _target("address", EntityType.STREET_ADDRESS))
+        detector = _StaticDetector(
+            [
+                _span(0, "address", address, "489 Park Blvd", EntityType.STREET_ADDRESS),
+                _span(0, "notes", notes, "489 Park Blvd", EntityType.STREET_ADDRESS),
+            ]
+        )
+        generator = _StreetGenerator()
+
+        result = _execute(dataframe, plan, generator, free_text_detector=detector)
+
+        assert result.dataframe["address"].iloc[0] == "9 New Road, Mesa, IA 76237"
+        assert result.dataframe["notes"].iloc[0] == "Ship to 9 New Road today"
+        assert len(generator.requests) == 1
+
+    def test_find_and_replace_replaces_a_structured_street_the_detector_missed_in_free_text(self) -> None:
+        address = "489 Park Blvd, Mesa, IA 76237"
+        dataframe = pd.DataFrame({"address": [address], "notes": ["Ship to 489 Park Blvd today"]})
+        plan = _plan(_target("notes", EntityType.FREE_TEXT), _target("address", EntityType.STREET_ADDRESS))
+        detector = _StaticDetector([_span(0, "address", address, "489 Park Blvd", EntityType.STREET_ADDRESS)])
+
+        result = _execute(dataframe, plan, _StreetGenerator(), free_text_detector=detector, find_and_replace=True)
+
+        assert result.dataframe["notes"].iloc[0] == "Ship to 9 New Road today"
+
+    def test_detection_failure_replaces_addresses_whole_with_a_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+        dataframe = pd.DataFrame({"address": ["489 Park Blvd, Mesa, IA 76237"]})
+        generator = _StreetGenerator()
+
+        with caplog.at_level(logging.WARNING):
+            result = _execute(
+                dataframe,
+                _plan(_target("address", EntityType.STREET_ADDRESS)),
+                generator,
+                free_text_detector=_FailingDetector([]),
+            )
+
+        assert result.dataframe["address"].iloc[0] == "Whole Replacement"
+        assert any("Street-address values were replaced whole" in record.getMessage() for record in caplog.records)
+
+    def test_without_a_detector_addresses_are_replaced_whole(self) -> None:
+        dataframe = pd.DataFrame({"address": ["489 Park Blvd, Mesa, IA 76237"]})
+
+        result = _execute(dataframe, _plan(_target("address", EntityType.STREET_ADDRESS)), _StreetGenerator())
+
+        assert result.dataframe["address"].iloc[0] == "Whole Replacement"
 
 
 @pytest.mark.unit
