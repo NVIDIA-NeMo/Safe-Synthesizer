@@ -105,10 +105,9 @@ class FreeTextReplacementExecutor:
     mutate. Replacement later uses those original offsets to build each cell
     exactly once. Structured mappings are registered through the same module so
     independently detected exact values and validated name components remain
-    consistent within record or group scope. With ``match_known_values``, every
-    cell is also searched for structured and detected values known in its
-    record or group, so occurrences the detector missed get the same
-    replacement.
+    consistent within record or group scope. With ``find_and_replace``, every
+    cell is also searched for those structured and detected values, so
+    occurrences the detector missed get the same replacement.
     """
 
     def __init__(
@@ -118,13 +117,13 @@ class FreeTextReplacementExecutor:
         *,
         base_seed: int,
         capture_replacement_map: bool = False,
-        match_known_values: bool = False,
+        find_and_replace: bool = False,
     ) -> None:
         self._generator = generator
         self._detector = detector
         self._base_seed = base_seed
         self._capture_replacement_map = capture_replacement_map
-        self._match_known_values = match_known_values
+        self._find_and_replace = find_and_replace
         self._cache: dict[FreeTextMappingKey, str] = {}
         self._statistics: dict[str, FreeTextColumnStatistics] = {}
         self._replacement_records: list[FreeTextReplacementRecord] = []
@@ -176,7 +175,7 @@ class FreeTextReplacementExecutor:
     ) -> FreeTextExecutionResult:
         """Apply accepted original-cell spans to every planned free-text target."""
         known_values = (
-            self._known_values(working, specs, group_identities, detections.spans) if self._match_known_values else {}
+            self._known_values(working, specs, group_identities, detections.spans) if self._find_and_replace else {}
         )
         for spec in specs:
             self._execute_spec(working, spec, group_identities, detections, known_values)
