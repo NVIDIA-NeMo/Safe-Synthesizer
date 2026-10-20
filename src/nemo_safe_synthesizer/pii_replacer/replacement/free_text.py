@@ -18,6 +18,7 @@ from ...config.replace_pii import EntityType, PiiColumnPlan
 from ...errors import GenerationError, InternalError, ParameterError, SafeSynthesizerError
 from ..planning.patterns import extract_name_components
 from ..transform_result import FreeTextReplacementRecord
+from .addresses import AddressParts
 from .common_words import COMMON_WORDS
 from .detection import FreeTextDetector, fresh_detection_entity_types, resolve_overlapping_spans
 from .generation import ReplacementGenerationRequest, ReplacementGenerator
@@ -230,13 +231,15 @@ class FreeTextReplacementExecutor:
         original_text: str,
         replacement: str,
         dependencies: EffectiveDependencyTuple,
+        address_parts: AddressParts | None = None,
     ) -> None:
-        """Expose exact values and pattern-validated name parts to accepted spans.
+        """Expose exact values, pattern-validated name parts, and street parts to accepted spans.
 
         ``original_text`` is the source cell's text form, the same value the
         structured generator received, so a typed original such as an integer
         API key matches the digits a detector finds in prose. ``key`` carries
-        its typed identity.
+        its typed identity. ``address_parts`` is the detected street of a
+        street-address value whose locality was kept.
         """
         scope_identity = key.row_position if isinstance(key, RecordMappingKey) else key.original_group_identity
         self._register(scope_identity, spec.entity_type, original_text, replacement)
@@ -247,6 +250,7 @@ class FreeTextReplacementExecutor:
             original_text,
             replacement,
             dependencies,
+            address_parts,
         )
 
     def _register_name_components(
@@ -294,9 +298,19 @@ class FreeTextReplacementExecutor:
         original: str,
         replacement: str,
         dependencies: EffectiveDependencyTuple,
+        address_parts: AddressParts | None,
     ) -> None:
-        """Register a street component only when typed dependencies prove suffix alignment."""
+        """Register the street of a structured address so the same street in free text gets the same replacement.
+
+        A detected street whose locality was kept is registered directly. Otherwise the street is registered only
+        when typed dependencies prove both values end with the same linked locality suffix.
+        """
         if spec.entity_type is not EntityType.STREET_ADDRESS:
+            return
+        if address_parts is not None:
+            replacement_street = address_parts.replacement_street(replacement)
+            if replacement_street is not None:
+                self._register(scope_identity, EntityType.STREET_ADDRESS, address_parts.street, replacement_street)
             return
         suffix = _address_dependency_suffix(dependencies)
         if not suffix:

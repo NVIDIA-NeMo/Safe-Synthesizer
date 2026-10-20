@@ -63,6 +63,14 @@ class ReplacementGenerationRequest:
     written by ``{Last}, {First}``.
     """
 
+    keep_original_locality: bool = False
+    """Whether the original value's locality text is kept after the generated street.
+
+    When ``True``, street-address generators return only a street and do not append linked city, state, ZIP, or
+    country values; the executor adds back the original text that followed the street. For example, only the street
+    of ``"489 Park Blvd, Mesa, IA 76237"`` is generated, and ``", Mesa, IA 76237"`` is kept.
+    """
+
     def __post_init__(self) -> None:
         if not isinstance(self.entity_type, EntityType):
             raise InternalError("replacement generation entity_type must be a normalized EntityType")
@@ -75,6 +83,8 @@ class ReplacementGenerationRequest:
             raise InternalError("replacement generation seed must be an integer")
         if not isinstance(self.resolved_dependency_values, tuple):
             raise InternalError("resolved_dependency_values must be a tuple")
+        if type(self.keep_original_locality) is not bool:
+            raise InternalError("keep_original_locality must be a boolean")
 
 
 class ReplacementGenerator(Protocol):

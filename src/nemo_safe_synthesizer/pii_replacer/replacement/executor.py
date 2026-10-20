@@ -21,6 +21,7 @@ from ..transform_result import (
     ReplacementMap,
     StructuredReplacementRecord,
 )
+from .addresses import AddressParts, detect_address_parts
 from .canonicalization import canonicalize_scalar, is_missing_scalar, readable_value
 from .collisions import IDENTIFIER_ENTITY_TYPES, CandidateChooser, ReplacementOutcome, all_distinct
 from .compiler import compile_plan
@@ -106,6 +107,8 @@ class StructuredReplacementExecutor:
         self._full_name_patterns = _full_name_patterns(plan)
         self._capture_replacement_map = capture_replacement_map
         self._cache: dict[StructuredMappingKey, _CachedReplacement] = {}
+        self._detector = free_text_detector
+        self._address_parts: dict[str, dict[str, AddressParts]] = {}
         self._free_text = FreeTextReplacementExecutor(
             generator,
             free_text_detector,
@@ -140,6 +143,11 @@ class StructuredReplacementExecutor:
         for spec in self._plan.columns_to_replace:
             if self._own_replacements(spec) is not None:
                 self._used_by_format.setdefault(self._format_key(spec), set())
+        self._address_parts = detect_address_parts(
+            self._detector,
+            dataframe,
+            [spec for spec in self._plan.columns_to_replace if spec.entity_type is EntityType.STREET_ADDRESS],
+        )
         free_text_detections = self._free_text.detect(dataframe, free_text_specs)
         ordered_specs = compile_plan(self._plan)
         for spec in ordered_specs:
@@ -201,6 +209,7 @@ class StructuredReplacementExecutor:
 
     def _reset_execution_state(self) -> None:
         self._cache.clear()
+        self._address_parts = {}
         self._free_text.reset()
         self._replacement_records.clear()
         self._shared.clear()
@@ -271,6 +280,7 @@ class StructuredReplacementExecutor:
         original_texts = working.iloc[:, column_position].astype(str).tolist()
         if working.iloc[:, column_position].notna().any():
             working[spec.column_name] = working[spec.column_name].astype(object)
+        address_parts = self._address_parts.get(spec.column_name, {})
 
         for row_position in range(len(working)):
             original = working.iat[row_position, column_position]
@@ -281,7 +291,9 @@ class StructuredReplacementExecutor:
             key = self._mapping_key(spec, row_position, canonical_original, group_identities)
             original_text = original_texts[row_position]
             replacement = _in_occurrence_case(
-                spec, original_text, self._replacement_for(key, spec, original_text, dependencies)
+                spec,
+                original_text,
+                self._replacement_for(key, spec, original_text, dependencies, address_parts.get(original_text)),
             )
             working.iat[row_position, column_position] = replacement
             if self._capture_replacement_map:
@@ -315,11 +327,14 @@ class StructuredReplacementExecutor:
         spec: PiiColumnPlan,
         original_text: str,
         dependencies: EffectiveDependencyTuple,
+        address_parts: AddressParts | None,
     ) -> str:
         cached = self._cache.get(key)
         if cached is not None:
             self._record_dependency_drift(key, cached, dependencies)
-            self._free_text.register_structured_mapping(key, spec, original_text, cached.value, dependencies)
+            self._free_text.register_structured_mapping(
+                key, spec, original_text, cached.value, dependencies, address_parts
+            )
             return cached.value
 
         provenance = None if isinstance(key, RecordMappingKey) else GroupMappingProvenance(dependencies)
@@ -331,12 +346,18 @@ class StructuredReplacementExecutor:
         if shared is not None and ((own := self._own_replacements(spec)) is None or shared.casefold() not in own):
             self._cache[key] = _CachedReplacement(shared, provenance)
             self._record_used(spec, shared)
+            self._free_text.register_structured_mapping(key, spec, original_text, shared, dependencies, address_parts)
             return shared
-        replacement = self._generate_fresh(key, spec, original_text, dependencies)
+        if address_parts is None:
+            replacement = self._generate_fresh(key, spec, original_text, dependencies)
+        else:
+            # Only the detected street is generated; the original locality text after it is kept as written.
+            street = self._generate_fresh(key, spec, address_parts.street, dependencies, keep_original_locality=True)
+            replacement = street + address_parts.locality
         self._cache[key] = _CachedReplacement(replacement, provenance)
         self._shared.setdefault(shared_key, replacement)
         self._record_used(spec, replacement)
-        self._free_text.register_structured_mapping(key, spec, original_text, replacement, dependencies)
+        self._free_text.register_structured_mapping(key, spec, original_text, replacement, dependencies, address_parts)
         self._generated_count += 1
         return replacement
 
@@ -396,6 +417,8 @@ class StructuredReplacementExecutor:
         spec: PiiColumnPlan,
         original_text: str,
         dependencies: EffectiveDependencyTuple,
+        *,
+        keep_original_locality: bool = False,
     ) -> str:
         if (allocator := self._identifier_allocators.get(spec.column_name)) is not None:
             return self._allocate_identifier(key, spec, original_text, allocator)
@@ -422,6 +445,7 @@ class StructuredReplacementExecutor:
                     self._data_to_sampler_value_mapping,
                 ),
                 full_name_pattern=self._full_name_patterns.get(spec.column_name),
+                keep_original_locality=keep_original_locality,
             )
             started = time.perf_counter()
             try:

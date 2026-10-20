@@ -645,6 +645,53 @@ class TestReplacementGenerator:
         assert unnamed != "sampled@example.test"
         assert "@" in unnamed
 
+    def test_faker_street_address_appends_linked_locality_unless_the_original_locality_is_kept(self) -> None:
+        generator = _faker_generator()
+        city = ((EntityType.CITY, CanonicalValue("string", "Boston")),)
+
+        appended = generator.generate(_request(EntityType.STREET_ADDRESS, "1 Main Street", dependencies=city))
+        kept = ReplacementGenerationRequest(
+            entity_type=EntityType.STREET_ADDRESS,
+            original_value="1 Main Street",
+            effective_dependency_tuple=city,
+            pattern=None,
+            seed=42,
+            keep_original_locality=True,
+        )
+
+        assert appended.endswith(", Boston")
+        assert generator.generate(kept) == appended.removesuffix(", Boston")
+
+    def test_nemotron_personas_street_address_omits_linked_locality_when_the_original_locality_is_kept(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        people = pd.DataFrame({"street_number": ["42"], "street_name": ["Analytical Engine Way"], "city": ["Boston"]})
+        generator = _nemotron_personas_generator(tmp_path, people)
+        request = ReplacementGenerationRequest(
+            entity_type=EntityType.STREET_ADDRESS,
+            original_value="1 Main Street",
+            effective_dependency_tuple=((EntityType.CITY, CanonicalValue("string", "Boston")),),
+            pattern=None,
+            seed=42,
+            resolved_dependency_values=((EntityType.CITY, ("boston",)),),
+            keep_original_locality=True,
+        )
+
+        assert generator.generate(request) == "42 Analytical Engine Way"
+
+    def test_request_rejects_a_non_boolean_keep_original_locality(self) -> None:
+        with pytest.raises(InternalError, match="keep_original_locality must be a boolean"):
+            _construct(
+                ReplacementGenerationRequest,
+                entity_type=EntityType.STREET_ADDRESS,
+                original_value="1 Main Street",
+                effective_dependency_tuple=(),
+                pattern=None,
+                seed=42,
+                keep_original_locality="yes",
+            )
+
     def test_nemotron_personas_generator_uses_address_components_from_the_selected_asset_row(
         self,
         tmp_path: Path,
