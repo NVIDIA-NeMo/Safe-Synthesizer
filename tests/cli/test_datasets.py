@@ -181,6 +181,28 @@ class TestDatasetInfo:
         assert list(result.columns) == ["col1", "col2"]
         assert len(result) == 2
 
+    def test_fetch_text_keeps_cells_as_written(self, tmp_path: Path):
+        """Test fetch_text keeps zero padding, blanks, and placeholders instead of inferring types."""
+        csv_file = tmp_path / "test.csv"
+        csv_file.write_text("zip;count;note\n02054;7;N/A\n10001;;None\n")
+
+        info = DatasetInfo(
+            name="test",
+            url=str(csv_file),
+            load_args={"sep": ";", "dtype": {"zip": int}, "na_values": ["N/A"]},
+        )
+        result = info.fetch_text()
+
+        assert result is not None
+        assert result.to_dict("list") == {"zip": ["02054", "10001"], "count": ["7", ""], "note": ["N/A", "None"]}
+
+    def test_fetch_text_skips_typed_formats(self, tmp_path: Path):
+        """Test fetch_text returns None for formats that keep their own types."""
+        json_file = tmp_path / "test.json"
+        json_file.write_text('[{"col1": 1}]')
+
+        assert DatasetInfo(name="test", url=str(json_file)).fetch_text() is None
+
     def test_fetch_rejects_non_dataframe_reader_result(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         """Test fetch raises a clear error when a pandas reader returns an unexpected type."""
         csv_file = tmp_path / "test.csv"
