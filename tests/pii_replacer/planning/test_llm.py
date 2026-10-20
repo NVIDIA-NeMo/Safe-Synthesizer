@@ -330,10 +330,14 @@ class TestLLMPlanEnhancer:
             "unique_ratio",
             "samples",
         }
-        assert classification_payload["heuristic_classifications"] == [
-            {"column_name": "company", "entity_type": "full_name", "pattern": None}
-        ]
-        assert "heuristic_baseline" not in classification_payload
+        # The baseline's guess that company is a full name never reaches the model.
+        assert set(classification_payload) == {
+            "discovery_context",
+            "entity_catalog",
+            "pattern_grammars",
+            "column_profiles",
+        }
+        assert "heuristic" not in classification_messages[0]["content"]
         assert "disposition" not in json.dumps(classification_model.model_json_schema())
 
         dependency_messages, dependency_model = transport.calls[1]
@@ -345,7 +349,7 @@ class TestLLMPlanEnhancer:
                     "target_entity_type": "email",
                     "target_pattern": None,
                     "target_pattern_syntax": None,
-                    "source_options": {"organization": {"columns": ["company"], "heuristic_choice": None}},
+                    "source_options": {"organization": {"columns": ["company"]}},
                 }
             ],
             "exclusive_dependency_groups": [
@@ -367,7 +371,7 @@ class TestLLMPlanEnhancer:
         allowed = email_choices["properties"]["organization"]["anyOf"][0]
         assert allowed.get("enum", [allowed.get("const")]) == ["company"]
 
-    def test_dependency_candidates_preserve_heuristic_selections_as_prior_evidence(self) -> None:
+    def test_dependency_prompt_omits_baseline_choices_and_prefers_linking_the_same_record(self) -> None:
         dataframe = pd.DataFrame(
             {
                 "company": ["Analytical Engines", "US Navy"],
@@ -406,8 +410,12 @@ class TestLLMPlanEnhancer:
         dependency_messages, _ = transport.calls[1]
         dependency_payload = json.loads(dependency_messages[1]["content"])
         [target] = dependency_payload["dependency_targets"]
-        assert target["source_options"]["organization"]["heuristic_choice"] == "company"
-        assert "treat it as a hint, not a requirement" in dependency_messages[0]["content"]
+        assert target["source_options"] == {"organization": {"columns": ["company"]}}
+        assert "heuristic" not in dependency_messages[0]["content"]
+        assert (
+            "Choose null only when no column of that type describes the same person or record"
+            in dependency_messages[0]["content"]
+        )
 
     def test_classification_prompt_includes_exact_supported_pattern_grammars(self) -> None:
         dataframe = pd.DataFrame(
@@ -464,7 +472,7 @@ class TestLLMPlanEnhancer:
         dependency_payload = json.loads(transport.calls[1][0][1]["content"])
         [target] = dependency_payload["dependency_targets"]
         assert target["target_column"] == "email"
-        assert target["source_options"] == {"first_name": {"columns": ["first_name"], "heuristic_choice": None}}
+        assert target["source_options"] == {"first_name": {"columns": ["first_name"]}}
         assert target["target_pattern"] == "{first}@{domain}"
         assert target["target_pattern_syntax"] == "name_parts"
         assert set(dependency_payload["pattern_grammars"]) == {"name_parts"}
@@ -517,7 +525,7 @@ class TestLLMPlanEnhancer:
                 "target_entity_type": "first_name",
                 "target_pattern": None,
                 "target_pattern_syntax": None,
-                "source_options": {"gender": {"columns": ["sex"], "heuristic_choice": None}},
+                "source_options": {"gender": {"columns": ["sex"]}},
             }
         ]
 
