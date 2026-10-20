@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import ipaddress
 import math
+from bisect import bisect_right
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -84,6 +85,9 @@ _NAME_ENTITY_TYPES = frozenset(
 )
 # Characters allowed between a middle name and its neighbouring first or last name.
 _MIDDLE_NAME_NEIGHBOR_GAP = 3
+# A word as GLiNER2's default splitter tokenizes it: word characters, combining marks, and zero-width
+# joiners, with inner hyphens or underscores. GLiNER2 spans start and end on these words within a chunk.
+_GLINER_WORD = regex.compile(r"[\w\p{M}\u200c\u200d]+(?:[-_][\w\p{M}\u200c\u200d]+)*")
 _ENTITY_ORDER = {entity.entity_type: position for position, entity in enumerate(ENTITIES)}
 _SOURCE_ORDER = {"regex": 0, "gliner": 1, "structured_value": 2, "detected_value": 3}
 
@@ -133,6 +137,9 @@ class _Chunk:
 
     offset: int
     """Start of the window within ``original_text``."""
+
+    words: tuple[tuple[int, int], ...]
+    """Ascending offsets of every word in ``original_text``."""
 
 
 class _TextSpan(NamedTuple):
@@ -451,6 +458,10 @@ def _original_offsets(chunk: _Chunk, start: int, end: int) -> tuple[int, int] | 
     original_end = chunk.offset + end
     if original_end > len(chunk.original_text):
         raise GenerationError("GLiNER2 free-text PII inference returned invalid span offsets")
+    # A word too long to fit one chunk is still cut at a chunk edge, and the model can label the
+    # fragment; replacing it would rewrite part of a word.
+    if _cuts_word(chunk.words, original_start) or _cuts_word(chunk.words, original_end):
+        return None
     return original_start, original_end
 
 
@@ -585,16 +596,46 @@ def _overlaps(left: DetectedSpan, right: DetectedSpan) -> bool:
 
 
 def _chunks(text: str, config: FreeTextDetectionConfig) -> tuple[_Chunk, ...]:
-    """Split a complete cell into overlapping chunks with original offsets."""
-    step = config.chunk_length - config.chunk_overlap
+    """Split a complete cell into overlapping chunks with original offsets.
+
+    A chunk edge that would cut a word moves back to that word's start, so the
+    model sees whole words. A word too long for that is cut where it falls.
+
+    Example:
+        With ``chunk_length=12`` and ``chunk_overlap=5``, ``"alpha beta gamma delta"``
+        becomes ``"alpha beta "``, ``"beta gamma "``, and ``"gamma delta"``.
+    """
+    words = tuple((match.start(), match.end()) for match in _GLINER_WORD.finditer(text))
     chunks: list[_Chunk] = []
-    offset = 0
-    while offset < len(text):
-        chunks.append(_Chunk(text[offset : offset + config.chunk_length], text, offset))
-        if offset + config.chunk_length >= len(text):
-            break
-        offset += step
+    start = 0
+    while start + config.chunk_length < len(text):
+        end = _word_start_before(words, start + config.chunk_length, floor=start)
+        chunks.append(_Chunk(text[start:end], text, start, words))
+        start = _word_start_before(words, max(end - config.chunk_overlap, start + 1), floor=start)
+    if text:
+        chunks.append(_Chunk(text[start:], text, start, words))
     return tuple(chunks)
+
+
+def _word_start_before(words: Sequence[tuple[int, int]], index: int, *, floor: int) -> int:
+    """Move ``index`` back to the start of a word it cuts, unless that start is at or before ``floor``."""
+    word = _word_at(words, index)
+    if word is None or word[0] <= floor:
+        return index
+    return word[0]
+
+
+def _cuts_word(words: Sequence[tuple[int, int]], index: int) -> bool:
+    """Return whether ``index`` falls strictly inside a word."""
+    return _word_at(words, index) is not None
+
+
+def _word_at(words: Sequence[tuple[int, int]], index: int) -> tuple[int, int] | None:
+    """Return the word ``index`` falls strictly inside, if any."""
+    position = bisect_right(words, (index, math.inf)) - 1
+    if position >= 0 and words[position][0] < index < words[position][1]:
+        return words[position]
+    return None
 
 
 def _result_spans(result: object) -> Iterable[tuple[int, int, str, float]]:
