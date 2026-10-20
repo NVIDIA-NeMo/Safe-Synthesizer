@@ -94,6 +94,7 @@ class StructuredReplacementExecutor:
         base_seed: int,
         free_text_detector: FreeTextDetector | None = None,
         capture_replacement_map: bool = False,
+        match_known_values: bool = False,
     ) -> None:
         self._plan = plan
         self._generator = generator
@@ -107,6 +108,7 @@ class StructuredReplacementExecutor:
             free_text_detector,
             base_seed=base_seed,
             capture_replacement_map=capture_replacement_map,
+            match_known_values=match_known_values,
         )
         self._replacement_records: list[StructuredReplacementRecord] = []
         self._shared: dict[_SharedMappingKey, str] = {}
@@ -129,7 +131,7 @@ class StructuredReplacementExecutor:
         original_group_identities = self._snapshot_group_identities(dataframe)
         self._seed_reserved_values(dataframe)
         self._prepare_identifier_allocators(dataframe)
-        free_text_spans = self._free_text.detect(dataframe, free_text_specs)
+        free_text_detections = self._free_text.detect(dataframe, free_text_specs)
         ordered_specs = compile_plan(self._plan)
         for spec in ordered_specs:
             if spec.entity_type is not EntityType.FREE_TEXT:
@@ -138,7 +140,7 @@ class StructuredReplacementExecutor:
             working,
             free_text_specs,
             original_group_identities,
-            free_text_spans,
+            free_text_detections,
         )
         _verify_result(dataframe, working, self._plan)
 

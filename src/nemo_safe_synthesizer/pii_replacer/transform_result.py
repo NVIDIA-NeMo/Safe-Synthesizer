@@ -53,7 +53,12 @@ class FreeTextReplacementRecord(BaseModel):
     start: int = Field(ge=0, description="Inclusive start offset in the original cell.")
     end: int = Field(gt=0, description="Exclusive end offset in the original cell. Must be greater than start.")
     entity_type: EntityType = Field(description="Normalized entity type assigned to the accepted span.")
-    detection_source: Literal["gliner", "regex"] = Field(description="Detector that produced the accepted span.")
+    detection_source: Literal["gliner", "regex", "structured_value", "detected_value"] = Field(
+        description=(
+            "Detector that produced the accepted span, or, for structured_value and detected_value, the known "
+            "value whose occurrence was found by searching the text."
+        )
+    )
     score: float | None = Field(
         default=None,
         ge=0,
