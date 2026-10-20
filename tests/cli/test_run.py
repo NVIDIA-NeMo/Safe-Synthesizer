@@ -6,7 +6,7 @@
 import os
 from pathlib import Path
 from typing import cast
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import httpx
 import pytest
@@ -720,7 +720,10 @@ class TestRunReplacePii:
         nss.replace_pii.assert_called_once_with(
             output_path=mock_workdir.run_dir / "input_pii_replaced.csv",
             config_output_path=mock_workdir.run_dir / "pii_replacement_config.yaml",
+            source_text=ANY,
         )
+        source_text = nss.replace_pii.call_args.kwargs["source_text"]
+        assert source_text.to_dict("list") == {"col1": ["1", "3"], "col2": ["2", "4"]}
         nss.plan_pii_replacement.assert_not_called()
         nss.process_data.assert_not_called()
         nss.train.assert_not_called()
@@ -754,6 +757,7 @@ class TestRunReplacePii:
         patched_run_dependencies["safe_synthesizer"].replace_pii.assert_called_once_with(
             output_path=output_file,
             config_output_path=mock_workdir.run_dir / "pii_replacement_config.yaml",
+            source_text=ANY,
         )
 
     def test_plan_only_reports_missing_input_dataframe(
