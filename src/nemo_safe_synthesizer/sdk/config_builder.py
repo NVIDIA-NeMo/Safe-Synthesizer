@@ -84,6 +84,7 @@ class ConfigBuilder:
             self._emit_telemetry_config = _telemetry_enabled()
 
         self._data_source: DataSource | None = None
+        self._data_source_csv_path: str | None = None
         self._hf_token_secret: str | None = None
 
     @property
@@ -104,6 +105,7 @@ class ConfigBuilder:
             This builder instance with the data source configured.
         """
         self._data_source = df_source
+        self._data_source_csv_path = None
         return self
 
     def with_data(self, config: DataParameters | RawConfig | None = None, **kwargs: object) -> Self:
@@ -310,5 +312,6 @@ class ConfigBuilder:
                 pass
             case str(url):
                 self._data_source: pd.DataFrame = pd.read_csv(url, **kwargs)
+                self._data_source_csv_path = url
             case _:
                 raise ValueError("Data source must be a pandas DataFrame or a URL")

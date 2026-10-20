@@ -259,10 +259,7 @@ def common_setup(
     )
 
     # 3. Create DatasetRegistry
-    if settings.dataset_registry:
-        dataset_registry = DatasetRegistry.from_yaml(settings.dataset_registry)
-    else:
-        dataset_registry = DatasetRegistry()
+    dataset_registry = _dataset_registry(settings)
 
     # 4. Load dataset (or check for cached dataset in resume mode)
 
@@ -306,6 +303,24 @@ def common_setup(
         initialize_wandb_run(workdir, resume_job_id=wandb_resume_job_id, cfg=config)
 
     return run_logger, config, df, workdir
+
+
+def _dataset_registry(settings: "CLISettings") -> DatasetRegistry:
+    if settings.dataset_registry:
+        return DatasetRegistry.from_yaml(settings.dataset_registry)
+    return DatasetRegistry()
+
+
+def fetch_data_source_text(settings: "CLISettings") -> pd.DataFrame | None:
+    """Read ``settings.data_source`` with every cell kept as the text in the file.
+
+    Returns:
+        The dataset as text from ``DatasetInfo.fetch_text``, or ``None`` when there is no data
+        source or it is not a CSV or TXT file.
+    """
+    if not settings.data_source:
+        return None
+    return _dataset_registry(settings).get_dataset(settings.data_source).fetch_text()
 
 
 def _apply_inference_cli_overrides(

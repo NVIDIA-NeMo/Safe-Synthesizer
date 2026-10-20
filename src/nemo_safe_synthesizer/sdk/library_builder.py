@@ -146,6 +146,30 @@ def _emit_nss_telemetry(ss: SafeSynthesizer, status: TaskStatusEnum) -> None:
         pass  # Telemetry is best-effort; never disrupt the pipeline
 
 
+def _restore_unchanged_text(
+    original: pd.DataFrame,
+    transformed: pd.DataFrame,
+    source_text: pd.DataFrame,
+) -> pd.DataFrame:
+    """Return ``transformed`` with every cell that replacement left unchanged taken from ``source_text``.
+
+    Example:
+        A ZIP code column read as integers holds ``2054`` for the file's ``"02054"``. Replacement
+        leaves it unchanged, so the output gets ``"02054"`` back, while replaced cells keep their
+        new values.
+    """
+    text = source_text.set_axis(original.index)
+    output = transformed.copy()
+    for position in range(original.shape[1]):
+        before = original.iloc[:, position]
+        after = transformed.iloc[:, position]
+        # Nullable dtypes compare missing values as NA, which counts as changed until filled.
+        unchanged = before.eq(after).astype("boolean").fillna(False) | (before.isna() & after.isna())
+        merged = after.astype(object).where(~unchanged, text.iloc[:, position])
+        output.isetitem(position, merged.to_numpy(dtype=object))
+    return output
+
+
 class SafeSynthesizer(ConfigBuilder):
     """Fluent builder and runner for Safe Synthesizer workflows.
 
@@ -414,6 +438,7 @@ class SafeSynthesizer(ConfigBuilder):
         output_path: Path | str | None = None,
         *,
         config_output_path: Path | str | None = None,
+        source_text: pd.DataFrame | None = None,
     ) -> TransformResult:
         """Replace PII in the complete configured input dataframe.
 
@@ -426,14 +451,22 @@ class SafeSynthesizer(ConfigBuilder):
             output_path: Optional destination for the replaced CSV.
             config_output_path: Optional destination for the complete reusable
                 configuration containing the resolved plan and sampler mappings.
+            source_text: Optional copy of the input with every cell as the
+                text in its source file, such as ``pd.read_csv(path, dtype=str,
+                na_filter=False)``. The replaced CSV takes every cell that
+                replacement left unchanged from it, so values such as ZIP code
+                ``"02054"`` and ``"N/A"`` are written exactly as they appeared
+                instead of as ``2054`` and an empty cell. Defaults to that read
+                of the CSV path given to ``with_data_source``, if any.
 
         Returns:
             The replacement result, including aggregate statistics and the
             transformed dataframe.
 
         Raises:
-            ParameterError: If PII replacement is disabled or invalid, or no
-                dataframe data source is configured.
+            ParameterError: If PII replacement is disabled or invalid, no
+                dataframe data source is configured, or ``source_text`` does
+                not have the input's columns and row count.
         """
         self._ensure_observability()
         resolved = self.plan_pii_replacement(output_path=config_output_path)
@@ -442,6 +475,12 @@ class SafeSynthesizer(ConfigBuilder):
         dataframe = self._data_source
         if config is None or not isinstance(dataframe, pd.DataFrame):
             raise InternalError("PII replacement planning finished without a dataframe data source")
+        if source_text is None and output_path is not None and self._data_source_csv_path is not None:
+            source_text = pd.read_csv(self._data_source_csv_path, dtype=str, na_filter=False)
+        if source_text is not None and (
+            list(source_text.columns) != list(dataframe.columns) or len(source_text) != len(dataframe)
+        ):
+            raise ParameterError("source_text must have the same columns and row count as the data source")
         from ..pii_replacer import TabularPiiReplacer
 
         result = TabularPiiReplacer(
@@ -457,7 +496,12 @@ class SafeSynthesizer(ConfigBuilder):
         if output_path is not None:
             replacement_output_path = Path(output_path)
             replacement_output_path.parent.mkdir(parents=True, exist_ok=True)
-            result.transformed_df.to_csv(replacement_output_path, index=False)
+            output = (
+                result.transformed_df
+                if source_text is None
+                else _restore_unchanged_text(dataframe, result.transformed_df, source_text)
+            )
+            output.to_csv(replacement_output_path, index=False)
             logger.info(f"Saved PII-replaced data to {replacement_output_path}")
         return result
 
