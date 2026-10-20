@@ -89,9 +89,13 @@ class TabularPiiReplacer:
         plan = resolved_config.inline_plan
         if plan is None:
             raise InternalError("PII replacement configuration was not fully resolved")
+        # Street-address columns also use the detector, to find the street inside a full address.
         free_text_detector = (
             CompositeFreeTextDetector(resolved_config.free_text_detection)
-            if any(spec.entity_type is EntityType.FREE_TEXT for spec in plan.columns_to_replace)
+            if any(
+                spec.entity_type in {EntityType.FREE_TEXT, EntityType.STREET_ADDRESS}
+                for spec in plan.columns_to_replace
+            )
             else None
         )
         executor = StructuredReplacementExecutor(
