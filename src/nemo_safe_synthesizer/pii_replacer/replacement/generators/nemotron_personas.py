@@ -339,7 +339,9 @@ def _generate_persona_value(
         return sampled.get("phone") or None
     if entity_type is EntityType.STREET_ADDRESS:
         street = sampled.get("street") or _persona_street_components(sampled)
-        return render_address(street, dependencies) if street else None
+        if not street:
+            return None
+        return render_address(street, dependencies, keep_original_locality=request.keep_original_locality)
     return None
 
 

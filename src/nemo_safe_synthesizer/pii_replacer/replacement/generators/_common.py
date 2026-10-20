@@ -122,7 +122,10 @@ def email_domain(value: str) -> str | None:
     return domain if domain and not any(character.isspace() for character in domain) else None
 
 
-def render_address(street: str, dependencies: Mapping[EntityType, str]) -> str:
+def render_address(street: str, dependencies: Mapping[EntityType, str], *, keep_original_locality: bool) -> str:
+    """Append linked locality values to a generated street, unless the original's own locality is kept."""
+    if keep_original_locality:
+        return street
     locality = [
         dependencies.get(EntityType.CITY),
         dependencies.get(EntityType.STATE),
