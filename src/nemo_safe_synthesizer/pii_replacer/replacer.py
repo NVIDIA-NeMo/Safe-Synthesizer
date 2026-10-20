@@ -89,7 +89,7 @@ class TabularPiiReplacer:
             base_seed=resolve_base_seed(self._config.replacement.seed),
             free_text_detector=free_text_detector,
             capture_replacement_map=capture_replacement_map,
-            match_known_values=resolved_config.free_text_detection.match_known_values,
+            find_and_replace=resolved_config.free_text_detection.find_and_replace,
         )
         execution = executor.execute(df)
         return TransformResult(

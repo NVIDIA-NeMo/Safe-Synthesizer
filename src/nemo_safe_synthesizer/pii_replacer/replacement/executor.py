@@ -103,7 +103,7 @@ class StructuredReplacementExecutor:
         base_seed: int,
         free_text_detector: FreeTextDetector | None = None,
         capture_replacement_map: bool = False,
-        match_known_values: bool = False,
+        find_and_replace: bool = False,
     ) -> None:
         self._plan = plan
         self._generator = generator
@@ -117,7 +117,7 @@ class StructuredReplacementExecutor:
             free_text_detector,
             base_seed=base_seed,
             capture_replacement_map=capture_replacement_map,
-            match_known_values=match_known_values,
+            find_and_replace=find_and_replace,
         )
         self._replacement_records: list[StructuredReplacementRecord] = []
         self._originals_by_target: dict[str, set[str]] = {}
