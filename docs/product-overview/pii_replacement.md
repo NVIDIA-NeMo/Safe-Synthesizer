@@ -321,17 +321,37 @@ replace_pii:
       medical_condition: 0.393
       organism: 0.051
     require_middle_name_neighbors: true
+    match_known_values: true
     batch_size: 8
     chunk_length: 384
     chunk_overlap: 128
 ```
 
-Only accepted detector spans are replaced. NSS does not search for other
-occurrences, propagate structured values into text, or replace undetected
-aliases. When detections overlap, the longer span wins; between spans of equal
-length, the more confident one wins, with regex matches counting as fully
-confident. Repeated accepted values reuse replacements within their configured
-record or group scope.
+When detections overlap, the longer span wins; between spans of equal length,
+the more confident one wins, with regex matches counting as fully confident.
+Repeated accepted values reuse replacements within their configured record or
+group scope.
+
+With `match_known_values` (the default), NSS also searches every free-text
+cell for values it already knows in the same record or group and replaces
+occurrences the detectors missed with the same replacement. Known values are
+the original values of structured replacement columns, including the words of
+a plain full name, and the values detected anywhere in that record's or
+group's free text. For example, if the `first_name` column holds `Kenneth`,
+then `kenneth called back` in the notes of that row is replaced even when the
+detector misses it. The search matches whole words and ignores case, so
+`Kenneth` matches `Kenneth's` but not `Kenneths`. It skips values shorter than
+three characters, one-word values that are also common English words, such as
+`Will`, `Brown`, or `June`, and missing-value placeholders such as `Unknown`,
+because replacing those would also change ordinary words. A match is also
+skipped when it overlaps a span GLiNER2 tagged with a `name_exclusion_thresholds`
+label, so a structured last name `Parkinson` does not change
+`Parkinson's disease` when the model tags it as a medical condition. When a
+match overlaps a detected span, the longer span wins, and a detected span wins over a
+match of equal length. Replacement traces mark matches with the detection
+source `structured_value` or `detected_value`. Set `match_known_values: false`
+to replace only detected spans. NSS does not replace undetected aliases, such
+as nicknames.
 
 Detector ownership is disjoint. Structurally validated regex exclusively
 detects `email`, `credit_debit_card`, `ipv4`, and `ipv6`; NSS does not request

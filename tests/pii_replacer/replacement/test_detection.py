@@ -24,7 +24,13 @@ from nemo_safe_synthesizer.pii_replacer.replacement.detection import (
     fresh_detection_entity_types,
     resolve_overlapping_spans,
 )
-from nemo_safe_synthesizer.pii_replacer.replacement.types import DetectedSpan, DetectionCell, DetectionCellId
+from nemo_safe_synthesizer.pii_replacer.replacement.types import (
+    DetectedSpan,
+    DetectionCell,
+    DetectionCellId,
+    FreeTextDetections,
+    ProtectedSpan,
+)
 
 
 def _cell(text: str = "Contact ada@example.com") -> DetectionCell:
@@ -54,8 +60,8 @@ class _StaticDetector:
     def __init__(self, spans: Sequence[DetectedSpan]) -> None:
         self.spans = tuple(spans)
 
-    def detect(self, cells: Sequence[DetectionCell]) -> tuple[DetectedSpan, ...]:
-        return self.spans
+    def detect(self, cells: Sequence[DetectionCell]) -> FreeTextDetections:
+        return FreeTextDetections(self.spans)
 
 
 @pytest.mark.unit
@@ -72,7 +78,7 @@ class TestGliner2Detector:
         monkeypatch.setitem(sys.modules, "torch", SimpleNamespace(cuda=SimpleNamespace(is_available=lambda: True)))
         monkeypatch.setitem(sys.modules, "gliner2", SimpleNamespace(GLiNER2=FakeGliner2))
 
-        Gliner2Detector(FreeTextDetectionConfig()).detect([_cell()])
+        Gliner2Detector(FreeTextDetectionConfig()).detect([_cell()]).spans
 
         assert calls == [
             (DEFAULT_GLINER2_MODEL_ID, {"revision": DEFAULT_GLINER2_MODEL_REVISION, "map_location": "cuda"})
@@ -84,7 +90,7 @@ class TestGliner2Detector:
         detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda *_: model)
 
         with caplog.at_level(logging.INFO):
-            detector.detect([_cell(text)])
+            detector.detect([_cell(text)]).spans
 
         assert "GLiNER2 free-text PII inference complete" in caplog.text
         assert text not in caplog.text
@@ -109,7 +115,7 @@ class TestGliner2Detector:
         cells = [_cell(text), DetectionCell(DetectionCellId(1, "other_notes"), text, _cell().allowed_entity_types)]
 
         assert loads == []
-        spans = detector.detect(cells)
+        spans = detector.detect(cells).spans
 
         assert len(model.calls) == 1
         assert model.calls[0][0] == [text]
@@ -144,7 +150,7 @@ class TestGliner2Detector:
             for position, text in enumerate(texts)
         ]
 
-        spans = detector.detect(cells)
+        spans = detector.detect(cells).spans
 
         assert [(span.cell_id.row_position, span.entity_type) for span in spans] == [
             (0, EntityType.FULL_NAME),
@@ -181,7 +187,7 @@ class TestGliner2Detector:
             for position, text in enumerate(texts)
         ]
 
-        spans = detector.detect(cells)
+        spans = detector.detect(cells).spans
 
         assert [(span.cell_id.row_position, span.entity_type) for span in spans] == [
             (1, EntityType.NATIONAL_ID),
@@ -201,7 +207,7 @@ class TestGliner2Detector:
             model_loader=lambda *_: model,
         )
 
-        spans = detector.detect([_cell("0123456789Ada!xx")])
+        spans = detector.detect([_cell("0123456789Ada!xx")]).spans
 
         assert [(span.start, span.end, span.entity_type) for span in spans] == [(10, 13, EntityType.FIRST_NAME)]
 
@@ -224,7 +230,7 @@ class TestGliner2Detector:
         )
         detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda *_: model)
 
-        spans = detector.detect([_cell(text)])
+        spans = detector.detect([_cell(text)]).spans
 
         assert [(span.start, span.end, span.entity_type) for span in spans] == [
             (text.index("Ada"), len(text), EntityType.FIRST_NAME)
@@ -249,7 +255,7 @@ class TestGliner2Detector:
         )
         detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda *_: model)
 
-        assert detector.detect([_cell(text)]) == ()
+        assert detector.detect([_cell(text)]).spans == ()
 
     @pytest.mark.parametrize(
         ("text", "end"),
@@ -277,7 +283,7 @@ class TestGliner2Detector:
         detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda *_: model)
 
         with pytest.raises(GenerationError, match="invalid span offsets"):
-            detector.detect([_cell(text)])
+            detector.detect([_cell(text)]).spans
 
     def test_rejects_unparseable_birth_date_model_spans_without_logging_the_value(
         self,
@@ -290,7 +296,7 @@ class TestGliner2Detector:
         detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda *_: model)
 
         with caplog.at_level(logging.WARNING):
-            assert detector.detect([_cell(text)]) == ()
+            assert detector.detect([_cell(text)]).spans == ()
 
         assert "birth-date candidates were ignored" in caplog.text
         assert "spring" not in caplog.text
@@ -304,7 +310,7 @@ class TestGliner2Detector:
         )
         detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda *_: model)
 
-        spans = detector.detect([_cell(text)])
+        spans = detector.detect([_cell(text)]).spans
 
         assert [(span.start, span.end, span.entity_type) for span in spans] == [
             (start, start + len(value), EntityType.DATE_OF_BIRTH)
@@ -348,12 +354,12 @@ class TestGliner2Detector:
         model = _FakeModel([{"entities": {label: [{"start": 0, "end": len(value), "confidence": 1.0}]}}])
         detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda *_: model)
 
-        spans = detector.detect([_cell(value)])
+        spans = detector.detect([_cell(value)]).spans
 
         assert [span.entity_type for span in spans] == [expected]
         assert label in model.calls[0][1]
 
-    def test_drops_name_spans_overlapping_an_exclusion_label(self) -> None:
+    def test_drops_name_spans_overlapping_an_exclusion_label_and_protects_the_exclusion(self) -> None:
         text = "Mother reports Raynaud symptoms; Ada called."
         mother = (0, len("Mother"))
         raynaud = (text.index("Raynaud"), text.index("Raynaud") + len("Raynaud"))
@@ -377,9 +383,16 @@ class TestGliner2Detector:
         )
         detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda *_: model)
 
-        spans = detector.detect([_cell(text)])
+        cell = _cell(text)
+        detections = detector.detect([cell])
 
-        assert [(span.start, span.end, span.entity_type) for span in spans] == [(*ada, EntityType.FIRST_NAME)]
+        assert [(span.start, span.end, span.entity_type) for span in detections.spans] == [
+            (*ada, EntityType.FIRST_NAME)
+        ]
+        assert detections.protected == (
+            ProtectedSpan(cell.cell_id, *mother),
+            ProtectedSpan(cell.cell_id, raynaud[0], text.index(";")),
+        )
         assert model.calls[0][1]["family_relationship"] == {"threshold": 0.062}
 
     def test_exclusion_below_its_threshold_keeps_the_name(self) -> None:
@@ -395,8 +408,10 @@ class TestGliner2Detector:
             ]
         )
         detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda *_: model)
+        detections = detector.detect([_cell(text)])
 
-        assert [span.entity_type for span in detector.detect([_cell(text)])] == [EntityType.FIRST_NAME]
+        assert [span.entity_type for span in detections.spans] == [EntityType.FIRST_NAME]
+        assert detections.protected == ()
 
     def test_exclusion_labels_do_not_drop_non_name_spans(self) -> None:
         text = "+1 202 555 0101"
@@ -412,7 +427,7 @@ class TestGliner2Detector:
         )
         detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda *_: model)
 
-        assert [span.entity_type for span in detector.detect([_cell(text)])] == [EntityType.PHONE_NUMBER]
+        assert [span.entity_type for span in detector.detect([_cell(text)]).spans] == [EntityType.PHONE_NUMBER]
 
     def test_empty_exclusion_mapping_requests_no_exclusion_labels(self) -> None:
         text = "Mother"
@@ -422,7 +437,7 @@ class TestGliner2Detector:
             model_loader=lambda *_: model,
         )
 
-        assert [span.entity_type for span in detector.detect([_cell(text)])] == [EntityType.FIRST_NAME]
+        assert [span.entity_type for span in detector.detect([_cell(text)]).spans] == [EntityType.FIRST_NAME]
         assert not set(FreeTextDetectionConfig().name_exclusion_thresholds) & set(model.calls[0][1])
 
     def test_requests_exclusion_labels_only_when_a_name_type_is_allowed(self) -> None:
@@ -430,7 +445,7 @@ class TestGliner2Detector:
         detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda *_: model)
         cell = DetectionCell(DetectionCellId(0, "notes"), "Call me", frozenset({EntityType.PHONE_NUMBER}))
 
-        detector.detect([cell])
+        detector.detect([cell]).spans
 
         assert set(model.calls[0][1]) == {"fax_number", "phone_number"}
 
@@ -470,7 +485,7 @@ class TestGliner2Detector:
         model = _FakeModel([{"entities": entities}])
         detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda *_: model)
 
-        assert sorted(span.entity_type for span in detector.detect([_cell(text)])) == sorted(kept)
+        assert sorted(span.entity_type for span in detector.detect([_cell(text)]).spans) == sorted(kept)
 
     def test_middle_name_rule_can_be_disabled(self) -> None:
         text = "between a small and medium"
@@ -483,14 +498,14 @@ class TestGliner2Detector:
             model_loader=lambda *_: model,
         )
 
-        assert [span.entity_type for span in detector.detect([_cell(text)])] == [EntityType.MIDDLE_NAME]
+        assert [span.entity_type for span in detector.detect([_cell(text)]).spans] == [EntityType.MIDDLE_NAME]
 
     def test_drops_identifier_predictions_without_a_digit(self) -> None:
         text = "Customer Loyalty"
         model = _FakeModel([{"entities": {"customer_id": [{"start": 0, "end": len(text), "confidence": 1.0}]}}])
         detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda *_: model)
 
-        assert detector.detect([_cell(text)]) == ()
+        assert detector.detect([_cell(text)]).spans == ()
 
     def test_normalizes_documented_government_id_label_to_ssn(self) -> None:
         text = "Identifier 123-45-6789"
@@ -499,7 +514,7 @@ class TestGliner2Detector:
         )
         detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda *_: model)
 
-        spans = detector.detect([_cell(text)])
+        spans = detector.detect([_cell(text)]).spans
 
         assert [(span.entity_type, span.start, span.end) for span in spans] == [(EntityType.SSN, 11, 22)]
 
@@ -510,7 +525,7 @@ class TestGliner2Detector:
         )
 
         with pytest.raises(GenerationError, match="could not be loaded"):
-            detector.detect([_cell()])
+            detector.detect([_cell()]).spans
 
     def test_wraps_inference_failures_without_exposing_model_details(self) -> None:
         class FailingModel:
@@ -525,7 +540,7 @@ class TestGliner2Detector:
         detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda *_: FailingModel())
 
         with pytest.raises(GenerationError, match="inference failed") as exc_info:
-            detector.detect([_cell()])
+            detector.detect([_cell()]).spans
 
         assert "raw secret input" not in str(exc_info.value)
 
@@ -536,7 +551,7 @@ class TestGliner2Detector:
         )
 
         with pytest.raises(GenerationError, match="invalid batch result"):
-            detector.detect([_cell()])
+            detector.detect([_cell()]).spans
 
     def test_forwards_batch_size_for_multiple_unique_texts(self) -> None:
         texts = ["First value", "Second value", "Third value"]
@@ -546,7 +561,7 @@ class TestGliner2Detector:
             model_loader=lambda *_: model,
         )
 
-        assert detector.detect([_cell(text) for text in texts]) == ()
+        assert detector.detect([_cell(text) for text in texts]).spans == ()
         assert model.calls[0][0] == texts
         assert model.calls[0][2]["batch_size"] == 2
 
@@ -556,7 +571,7 @@ class TestRegexDetector:
     def test_detects_only_supported_structurally_valid_values(self) -> None:
         text = "Email ada@example.com, card 4111 1111 1111 1111, IP 192.168.1.1, invalid 999.2.3.4."
 
-        spans = RegexDetector().detect([_cell(text)])
+        spans = RegexDetector().detect([_cell(text)]).spans
 
         assert [(text[span.start : span.end], span.entity_type) for span in spans] == [
             ("ada@example.com", EntityType.EMAIL),
@@ -568,13 +583,13 @@ class TestRegexDetector:
         text = " ".join(f"person{index}@example.com" for index in range(5))
 
         with pytest.raises(GenerationError, match="exceeded the maximum of 2 matches") as exc_info:
-            RegexDetector(max_matches_per_rule=2).detect([_cell(text)])
+            RegexDetector(max_matches_per_rule=2).detect([_cell(text)]).spans
         assert "person0@example.com" not in str(exc_info.value)
 
     def test_detects_unicode_email_and_rejects_invalid_local_part(self) -> None:
         text = "Valid élise@exämple.fr and 用户@example.公司, invalid ada..lovelace@example.com."
 
-        spans = RegexDetector().detect([_cell(text)])
+        spans = RegexDetector().detect([_cell(text)]).spans
 
         assert [(text[span.start : span.end], span.entity_type) for span in spans] == [
             ("élise@exämple.fr", EntityType.EMAIL),
@@ -584,12 +599,12 @@ class TestRegexDetector:
     def test_rejects_overlong_email_local_part(self) -> None:
         text = f"{'a' * 65}@example.com"
 
-        assert RegexDetector().detect([_cell(text)]) == ()
+        assert RegexDetector().detect([_cell(text)]).spans == ()
 
     def test_accepts_15_digit_cards_only_with_an_american_express_prefix(self) -> None:
         text = "Amex 3782 822463 10005, device IMEI 490154203237518."
 
-        spans = RegexDetector().detect([_cell(text)])
+        spans = RegexDetector().detect([_cell(text)]).spans
 
         assert [(text[span.start : span.end], span.entity_type) for span in spans] == [
             ("3782 822463 10005", EntityType.CREDIT_DEBIT_CARD)
@@ -598,12 +613,12 @@ class TestRegexDetector:
     def test_rejects_repeated_digit_and_non_ascii_card_candidates(self) -> None:
         text = "Invalid cards 4111 1111 1111 1112, 0000 0000 0000 0000, and ٤١١١ ١١١١ ١١١١ ١١١١."
 
-        assert RegexDetector().detect([_cell(text)]) == ()
+        assert RegexDetector().detect([_cell(text)]).spans == ()
 
     def test_ipv4_can_be_followed_by_sentence_punctuation(self) -> None:
         text = "Connect to 192.168.1.1. Then continue."
 
-        spans = RegexDetector().detect([_cell(text)])
+        spans = RegexDetector().detect([_cell(text)]).spans
 
         assert [(text[span.start : span.end], span.entity_type) for span in spans] == [("192.168.1.1", EntityType.IPV4)]
 
@@ -611,12 +626,12 @@ class TestRegexDetector:
         text = "person@example.com " * 100
 
         with pytest.raises(GenerationError, match="timed out"):
-            RegexDetector(timeout_seconds=1e-12).detect([_cell(text)])
+            RegexDetector(timeout_seconds=1e-12).detect([_cell(text)]).spans
 
     def test_detects_valid_ipv6(self) -> None:
         text = "Connect to 2001:db8::1 now"
 
-        spans = RegexDetector().detect([_cell(text)])
+        spans = RegexDetector().detect([_cell(text)]).spans
 
         assert [(text[span.start : span.end], span.entity_type) for span in spans] == [("2001:db8::1", EntityType.IPV6)]
 
@@ -629,13 +644,13 @@ class TestRegexDetector:
         ],
     )
     def test_ipv6_after_a_label_colon_and_ipv4_mapped_ipv6_are_replaced_whole(self, text: str, address: str) -> None:
-        spans = resolve_overlapping_spans(RegexDetector().detect([_cell(text)]))
+        spans = resolve_overlapping_spans(RegexDetector().detect([_cell(text)]).spans)
 
         assert [(text[span.start : span.end], span.entity_type) for span in spans] == [(address, EntityType.IPV6)]
 
     @pytest.mark.parametrize("text", ["Meet at 12:30:45 today", "a:::1", "1::2::3", "2001:db8::1:"])
     def test_rejects_ipv6_shaped_non_addresses(self, text: str) -> None:
-        assert RegexDetector().detect([_cell(text)]) == ()
+        assert RegexDetector().detect([_cell(text)]).spans == ()
 
 
 @pytest.mark.unit
@@ -684,7 +699,7 @@ class TestOverlapResolution:
             regex_detector=_StaticDetector([regex_span]),
         )
 
-        assert detector.detect([cell]) == (regex_span,)
+        assert detector.detect([cell]).spans == (regex_span,)
 
     def test_nested_duplicates_have_stable_order_independent_of_input_order(self) -> None:
         first_cell = DetectionCellId(0, "notes")
