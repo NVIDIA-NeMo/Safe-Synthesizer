@@ -433,7 +433,8 @@ its grammar but covers fewer is dropped with a warning and no repair request,
 since a column with mixed formats has no single pattern. An email column without
 a pattern that depends on name columns is still built from the replaced names, as
 `{first}.{last}##@{domain}` with two random digits and the original domain, or
-`{first}##@{domain}` when only one name part is known. Patterns that break their
+`{first}##@{domain}` when only one name part is known. In any email, spaces
+inside a name become dots, so `De La Cruz` is written as `de.la.cruz`. Patterns that break their
 grammar receive up to three focused repair attempts; NSS drops only the pattern
 and warns if every repair response is invalid. Transient failures that persist
 through all repair attempts still fail planning, as for any other request. Retry

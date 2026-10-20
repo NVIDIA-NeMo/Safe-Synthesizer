@@ -284,7 +284,11 @@ def render_name_pattern(
     values: Mapping[str, str],
     rng: Random,
 ) -> str:
-    """Render a valid name/email pattern from normalized component values."""
+    """Render a valid name/email pattern from normalized component values.
+
+    In an email, each run of whitespace inside a name part becomes one dot, so the last name ``De La Cruz`` renders
+    ``{first}.{last}@{domain}`` as ``kyle.de.la.cruz@example.com`` rather than an address containing spaces.
+    """
     parts, error = parse_name_pattern(entity_type, pattern)
     if error is not None or parts is None:
         raise ParameterError(error or "invalid name pattern")
@@ -308,6 +312,8 @@ def render_name_pattern(
             component = component.title()
         elif placeholder.capitalization == "lower":
             component = component.lower()
+        if entity_type is EntityType.EMAIL and placeholder.part not in _EMAIL_ONLY_NAME_PARTS:
+            component = ".".join(component.split())
         rendered.append(component)
     return "".join(rendered)
 
