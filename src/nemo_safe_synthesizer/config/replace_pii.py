@@ -888,7 +888,7 @@ class FreeTextDetectionConfig(NSSBaseModel):
         description=(
             "Extra GLiNER2 labels, with their minimum confidence, for terms often mistaken for names, such as "
             "medical conditions or family relationships. A detected name that overlaps one of these spans is not "
-            "replaced. A value replaces the whole default set; use an empty mapping to turn exclusion off, which "
+            "replaced, and match_known_values does not replace text inside them. A value replaces the whole default set; use an empty mapping to turn exclusion off, which "
             "finds more real names at the cost of more false names in clinical text."
         ),
     )
@@ -898,6 +898,18 @@ class FreeTextDetectionConfig(NSSBaseModel):
             "Replace a detected middle name only when it sits inside a detected full name or directly between a "
             "detected first and last name. This rejects words such as clothing sizes that GLiNER2 tags as "
             "middle names."
+        ),
+    )
+    match_known_values: bool = Field(
+        default=True,
+        description=(
+            "Also replace occurrences the detectors missed of values already known in the same record or group: "
+            "original values of structured replacement columns, including the words of a plain full name, and "
+            "values detected elsewhere in free text. Only whole words are matched, ignoring case. Values shorter "
+            "than three characters, one-word values that are common English words, such as 'Will' or "
+            "'Brown', and missing-value placeholders such as 'Unknown' are not searched for, and text inside a "
+            "name-exclusion span, such as a medical condition, is never replaced this way. Set false to replace "
+            "only detected spans."
         ),
     )
     batch_size: int = Field(

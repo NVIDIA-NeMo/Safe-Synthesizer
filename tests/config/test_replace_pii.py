@@ -624,6 +624,7 @@ class TestReplacePiiConfig:
             },
             "name_exclusion_thresholds": expected_exclusions,
             "require_middle_name_neighbors": True,
+            "match_known_values": True,
             "batch_size": 8,
             "chunk_length": 384,
             "chunk_overlap": 128,
