@@ -74,7 +74,18 @@ class _StructuredResponse(BaseModel):
 
 
 class _ProposedClassification(_StructuredResponse):
-    """One LLM classification before NSS drops a pattern it cannot use.
+    """One LLM entity-type classification; its pattern comes from a separate request."""
+
+    column_name: str
+    entity_type: EntityType | None
+
+
+class _ClassificationResponse(_StructuredResponse):
+    classifications: list[_ProposedClassification]
+
+
+class _ProposedPattern(_StructuredResponse):
+    """One LLM pattern proposal before NSS drops a pattern it cannot use.
 
     ``ColumnClassification`` rejects ineligible patterns, which is right for
     heuristic and user-authored input. An LLM pattern that cannot apply is
@@ -82,12 +93,11 @@ class _ProposedClassification(_StructuredResponse):
     """
 
     column_name: str
-    entity_type: EntityType | None
     pattern: str | None
 
 
-class _ClassificationResponse(_StructuredResponse):
-    classifications: list[_ProposedClassification]
+class _PatternResponse(_StructuredResponse):
+    patterns: list[_ProposedPattern]
 
 
 class _PatternRepairResponse(_StructuredResponse):
@@ -176,18 +186,14 @@ def _profile_batches(profiles: Sequence[ColumnProfile]) -> list[list[dict[str, o
 
 
 def _entity_catalog() -> list[dict[str, object]]:
-    return [
-        {
-            "entity_type": entity.entity_type.value,
-            "description": entity.description,
-            "pattern_syntax": entity.pattern_syntax.name.lower() if entity.pattern_syntax is not None else None,
-        }
-        for entity in ENTITIES
-    ]
+    return [{"entity_type": entity.entity_type.value, "description": entity.description} for entity in ENTITIES]
 
 
-def _entity_types_without_pattern() -> str:
-    return ", ".join(entity.entity_type.value for entity in ENTITIES if entity.pattern_syntax is None)
+def _pattern_syntax(entity_type: EntityType | None) -> str | None:
+    """Name the pattern grammar ``entity_type`` supports, or ``None`` when it takes no pattern."""
+    if entity_type is None or (syntax := ENTITY_BY_TYPE[entity_type].pattern_syntax) is None:
+        return None
+    return syntax.name.lower()
 
 
 def _exclusive_dependency_groups_payload() -> list[list[list[str]]]:
@@ -218,27 +224,35 @@ def _quoted(names: Sequence[str]) -> str:
     return ", ".join(repr(name) for name in names)
 
 
-def _usable_pattern(item: _ProposedClassification, protected_columns: Set[str]) -> str | None:
+def _usable_pattern(
+    column_name: str,
+    entity_type: EntityType | None,
+    pattern: str | None,
+    protected_columns: Set[str],
+) -> str | None:
     """Return the proposed pattern, or ``None`` when NSS could not use it for this column.
 
     Unclassified columns, protected columns, and entity types without a pattern
     syntax never take a pattern, so dropping one loses nothing.
     """
-    pattern = item.pattern
     if (
         pattern is None
         or not pattern.strip()
-        or item.entity_type is None
-        or item.column_name in protected_columns
-        or ENTITY_BY_TYPE[item.entity_type].pattern_syntax is None
+        or column_name in protected_columns
+        or _pattern_syntax(entity_type) is None
     ):
         if pattern is not None:
-            logger.debug("Ignoring an LLM-proposed pattern the column cannot use", extra={"column": item.column_name})
+            logger.debug("Ignoring an LLM-proposed pattern the column cannot use", extra={"column": column_name})
         return None
     return pattern
 
 
-def _classification_coverage_issue(expected: Sequence[str], actual: Sequence[str]) -> str | None:
+def _classification_coverage_issue(
+    expected: Sequence[str],
+    actual: Sequence[str],
+    *,
+    key: str = "classifications",
+) -> str | None:
     """Name the columns that make ``actual`` differ from exactly one entry per ``expected`` column."""
     counts = Counter(actual)
     expected_names = set(expected)
@@ -253,61 +267,88 @@ def _classification_coverage_issue(expected: Sequence[str], actual: Sequence[str
     ]
     if not problems:
         return None
-    return "classifications must contain every submitted column exactly once; " + "; ".join(problems)
+    return f"{key} must contain every submitted column exactly once; " + "; ".join(problems)
 
 
 def _classification_messages(
     discovery_input: PlanDiscoveryInput,
     batch: Sequence[Mapping[str, object]],
 ) -> list[dict[str, str]]:
+    """Ask for each column's entity type only; patterns are a separate, smaller request.
+
+    Keeping pattern rules out of this request leaves the model's reasoning for the entity types themselves.
+    """
     system = (
         "You are helping NVIDIA NeMo Safe Synthesizer (NSS) de-identify a table before it is used to train a "
         "synthetic-data model. NSS replaces sensitive values with realistic fake values of the same kind. Your job is "
-        "only to say what kind of data each column holds, and optionally describe its format so the fake values look "
-        "like the real ones. NSS decides on its own which columns to replace.\n"
+        "only to say what kind of data each column holds. NSS decides on its own which columns to replace.\n"
         "\n"
         "Input\n"
         "- column_profiles: one entry per column, with its name, dtype, counts, and a few sample values.\n"
-        "- entity_catalog: the entity types you may choose from, each with a short definition and the pattern grammar "
-        "it supports.\n"
+        "- entity_catalog: the entity types you may choose from, each with a short definition.\n"
         "- discovery_context.group_column: the column that groups rows (for example, one patient's events).\n"
-        "- pattern_grammars: the pattern languages you may use.\n"
         "\n"
         "For each column\n"
-        "1. Set entity_type to the catalog entry that matches what the values mean, or null if none fits. Classify "
+        "Set entity_type to the catalog entry that matches what the values mean, or null if none fits. Classify "
         "every column, including the group column.\n"
-        "2. Set pattern to null unless all of these are true:\n"
-        "   - entity_type is not null and that entity has a pattern_syntax. These entity types never take a "
-        f"pattern: {_entity_types_without_pattern()};\n"
-        "   - every sample value shares one format that the entity type alone does not capture. If the values mix "
-        "formats, set pattern to null.\n"
-        "3. A pattern must use exactly the grammar named by the entity's pattern_syntax and describe the whole cell "
-        "value. Patterns are not regular expressions. Name placeholders such as {first} or {last} do not require "
-        "name columns in the table; NSS fills them with a generated name when no related column exists.\n"
         "\n"
         "Output\n"
         "Return a JSON object with one key, classifications: a list with one object per submitted column, in the "
-        "same order. Do not skip, repeat, or add columns. Each object has exactly the keys column_name, entity_type "
-        "(a catalog value or null), and pattern (a string or null). Example:\n"
-        '{"classifications":[{"column_name":"phone","entity_type":"phone_number","pattern":"###-###-####"},'
-        '{"column_name":"visit_count","entity_type":null,"pattern":null}]}'
+        "same order. Do not skip, repeat, or add columns. Each object has exactly the keys column_name and "
+        "entity_type (a catalog value or null). Example:\n"
+        '{"classifications":[{"column_name":"phone","entity_type":"phone_number"},'
+        '{"column_name":"visit_count","entity_type":null}]}'
     )
     user = _compact_json(
         {
             "discovery_context": {"group_column": discovery_input.group_column},
             "entity_catalog": _entity_catalog(),
-            "pattern_grammars": pattern_grammar_catalog(),
             "column_profiles": batch,
         }
     )
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
+def _pattern_messages(columns: Sequence[Mapping[str, object]]) -> list[dict[str, str]]:
+    """Ask for the format of classified columns whose entity type has a pattern syntax."""
+    system = (
+        "You are helping NVIDIA NeMo Safe Synthesizer (NSS) de-identify a table. NSS replaces sensitive values with "
+        "realistic fake values of the same kind. Each submitted column has already been classified; your job is "
+        "only to describe its format, if it has a fixed one, so the fake values look like the real ones.\n"
+        "\n"
+        "Input\n"
+        "- columns: one entry per column, with its profile (name, dtype, counts, and sample values), its "
+        "entity_type, and the pattern_syntax that entity type supports.\n"
+        "- pattern_grammars: the pattern languages you may use.\n"
+        "\n"
+        "For each column\n"
+        "1. Give a pattern only if the sample values all follow one fixed layout (the same prefix, length, "
+        "separators, letter case or date order). Names follow a layout when they share letter case and arrangement, "
+        "even though their lengths differ. Otherwise set pattern to null.\n"
+        "2. A pattern must use exactly the grammar named by the column's pattern_syntax and describe the whole cell "
+        "value. Patterns are not regular expressions. Name placeholders such as {first} or {last} do not require "
+        "name columns in the table; NSS fills them with a generated name when no related column exists.\n"
+        "\n"
+        "Output\n"
+        "Return a JSON object with one key, patterns: a list with one object per submitted column, in the same "
+        "order. Do not skip, repeat, or add columns. Each object has exactly the keys column_name and pattern (a "
+        "string or null). Example:\n"
+        '{"patterns":[{"column_name":"phone","pattern":"###-###-####"}]}'
+    )
+    used_syntaxes = {str(column["pattern_syntax"]) for column in columns}
+    user = _compact_json(
+        {
+            "columns": list(columns),
+            "pattern_grammars": {
+                name: grammar for name, grammar in pattern_grammar_catalog().items() if name in used_syntaxes
+            },
+        }
+    )
+    return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+
+
 def _pattern_syntax_name(entity_type: EntityType, pattern: str | None) -> str | None:
-    pattern_syntax = ENTITY_BY_TYPE[entity_type].pattern_syntax
-    if pattern is None or pattern_syntax is None:
-        return None
-    return pattern_syntax.name.lower()
+    return None if pattern is None else _pattern_syntax(entity_type)
 
 
 DependencyOptions = dict[str, dict[EntityType, list[str]]]
@@ -733,27 +774,63 @@ class LLMPlanEnhancer(PlanEnhancer):
         discovery_input: PlanDiscoveryInput,
         batch: list[dict[str, object]],
     ) -> list[ColumnClassification]:
+        """Classify a batch's entity types, then ask for patterns of the columns whose type takes one."""
         expected = [str(profile["column_name"]) for profile in batch]
         protected = discovery_input.protected_columns.intersection(expected)
 
-        def parse(response: _ClassificationResponse) -> list[ColumnClassification]:
+        def parse_types(response: _ClassificationResponse) -> dict[str, EntityType | None]:
             actual = [classification.column_name for classification in response.classifications]
             if issue := _classification_coverage_issue(expected, actual):
                 raise ValueError(issue)
-            by_name = {
-                item.column_name: ColumnClassification(
-                    column_name=item.column_name,
-                    entity_type=item.entity_type,
-                    pattern=_usable_pattern(item, protected),
-                )
-                for item in response.classifications
-            }
-            return [by_name[name] for name in expected]
+            return {item.column_name: item.entity_type for item in response.classifications}
 
-        return self._request_structured(
+        entity_types = self._request_structured(
             purpose="PII column classification",
             messages=_classification_messages(discovery_input, batch),
             response_model=_ClassificationResponse,
+            parse=parse_types,
+        )
+        patterns = self._propose_patterns(batch, entity_types, protected)
+        return [
+            ColumnClassification(
+                column_name=name,
+                entity_type=entity_types[name],
+                pattern=_usable_pattern(name, entity_types[name], patterns.get(name), protected),
+            )
+            for name in expected
+        ]
+
+    def _propose_patterns(
+        self,
+        batch: Sequence[Mapping[str, object]],
+        entity_types: Mapping[str, EntityType | None],
+        protected: Set[str],
+    ) -> dict[str, str | None]:
+        """Return proposed patterns for unprotected columns whose entity type has a pattern syntax.
+
+        No request is made when no column in the batch can take a pattern.
+        """
+        columns = [
+            {**profile, "entity_type": entity_type.value, "pattern_syntax": syntax}
+            for profile in batch
+            if (name := str(profile["column_name"])) not in protected
+            and (entity_type := entity_types[name]) is not None
+            and (syntax := _pattern_syntax(entity_type)) is not None
+        ]
+        if not columns:
+            return {}
+        eligible = [str(column["column_name"]) for column in columns]
+
+        def parse(response: _PatternResponse) -> dict[str, str | None]:
+            actual = [item.column_name for item in response.patterns]
+            if issue := _classification_coverage_issue(eligible, actual, key="patterns"):
+                raise ValueError(issue)
+            return {item.column_name: item.pattern for item in response.patterns}
+
+        return self._request_structured(
+            purpose="PII column patterns",
+            messages=_pattern_messages(columns),
+            response_model=_PatternResponse,
             parse=parse,
         )
 

@@ -391,11 +391,15 @@ local profile.
 ### How discovery uses the LLM
 
 Automatic discovery uses two LLM passes. The first classifies every column's
-semantic entity type and may propose a replacement pattern, in bounded batches
-of at most 32 profiles and 48 KiB of profile evidence. Each profile contains
-deterministic statistics and up to eight distinct cell samples truncated to 128
-characters. The prompt includes the entity catalog and the exact supported
-pattern grammars. The grouping column is sent as discovery context; protected
+semantic entity type, in bounded batches of at most 32 profiles and 48 KiB of
+profile evidence. Each profile contains deterministic statistics and up to eight
+distinct cell samples truncated to 128 characters. Each batch makes two requests.
+The first asks only for entity types, with the entity catalog. The second asks
+for a replacement pattern, and only for the batch's unprotected columns whose
+entity type has a pattern syntax, sending their profiles, entity types, and the
+pattern grammars they use; it is skipped when no column qualifies. Keeping
+pattern rules out of the type request leaves the model's reasoning for the types.
+The grouping column is sent as discovery context; protected
 columns are not mentioned, because NSS excludes them itself. NSS then derives replacement columns and all permitted
 dependency candidates deterministically from those classifications. The second
 pass sees only column names, entity types, and proposed patterns, not cell

@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 from threading import Lock
 
 import pandas as pd
@@ -42,11 +43,31 @@ from nemo_safe_synthesizer.pii_replacer.planning.llm import (
 )
 
 
+@dataclass(frozen=True)
+class ClassificationScript:
+    """One scripted classification reply, plus the patterns to answer that batch's patterns request with."""
+
+    response: str
+    patterns: Mapping[str, str] = field(default_factory=dict)
+    pattern_responses: Sequence[str | Exception] = ()
+    """Raw patterns replies used before ``patterns``, to script invalid replies or failures."""
+
+
 class ScriptedTransport:
-    def __init__(self, responses: Sequence[str | Exception]) -> None:
+    """Answer requests in script order.
+
+    A patterns request follows each classification request that has a column whose type takes a pattern. It is
+    answered from the classification scripts already used, so a script stays one entry per classification reply,
+    and it is recorded in ``pattern_calls`` rather than ``calls``.
+    """
+
+    def __init__(self, responses: Sequence[str | Exception | ClassificationScript]) -> None:
         self._responses = list(responses)
         self._lock = Lock()
+        self._patterns: dict[str, str] = {}
+        self._pattern_responses: list[str | Exception] = []
         self.calls: list[tuple[list[dict[str, str]], type[BaseModel]]] = []
+        self.pattern_calls: list[list[dict[str, str]]] = []
 
     def complete(
         self,
@@ -55,11 +76,29 @@ class ScriptedTransport:
         response_model: type[BaseModel],
     ) -> str:
         with self._lock:
+            if response_model is llm_module._PatternResponse:
+                return self._answer_patterns(messages)
             self.calls.append(([dict(message) for message in messages], response_model))
             response = self._responses.pop(0)
+            if isinstance(response, ClassificationScript):
+                self._patterns.update(response.patterns)
+                self._pattern_responses.extend(response.pattern_responses)
+                response = response.response
         if isinstance(response, Exception):
             raise response
         return response
+
+    def _answer_patterns(self, messages: Sequence[Mapping[str, str]]) -> str:
+        self.pattern_calls.append([dict(message) for message in messages])
+        if self._pattern_responses:
+            response = self._pattern_responses.pop(0)
+            if isinstance(response, Exception):
+                raise response
+            return response
+        columns = [str(column["column_name"]) for column in json.loads(messages[1]["content"])["columns"]]
+        return json.dumps(
+            {"patterns": [{"column_name": column, "pattern": self._patterns.get(column)} for column in columns]}
+        )
 
 
 class FixedDiscoverer(PlanDiscoverer):
@@ -78,20 +117,17 @@ def _classifications(
     entities: Mapping[str, str | None],
     *,
     patterns: Mapping[str, str] | None = None,
-) -> str:
-    pattern_by_column = patterns or {}
-    return json.dumps(
+    pattern_responses: Sequence[str | Exception] = (),
+) -> ClassificationScript:
+    """Script a classification reply and the patterns its batch's patterns request returns."""
+    response = json.dumps(
         {
             "classifications": [
-                {
-                    "column_name": column,
-                    "entity_type": entity_type,
-                    "pattern": pattern_by_column.get(column),
-                }
-                for column, entity_type in entities.items()
+                {"column_name": column, "entity_type": entity_type} for column, entity_type in entities.items()
             ]
         }
     )
+    return ClassificationScript(response, dict(patterns or {}), tuple(pattern_responses))
 
 
 def _dependency_selection(choices: Mapping[str, Mapping[str, str | None]] | None = None) -> str:
@@ -115,7 +151,7 @@ def _dependency_mappings(*mappings: tuple[str, str, list[str]]) -> str:
 
 
 def _enhancer(
-    responses: Sequence[str | Exception],
+    responses: Sequence[str | Exception | ClassificationScript],
     *,
     max_workers: int = 8,
     sleeps: list[float] | None = None,
@@ -331,12 +367,7 @@ class TestLLMPlanEnhancer:
             "samples",
         }
         # The baseline's guess that company is a full name never reaches the model.
-        assert set(classification_payload) == {
-            "discovery_context",
-            "entity_catalog",
-            "pattern_grammars",
-            "column_profiles",
-        }
+        assert set(classification_payload) == {"discovery_context", "entity_catalog", "column_profiles"}
         assert "heuristic" not in classification_messages[0]["content"]
         assert "disposition" not in json.dumps(classification_model.model_json_schema())
 
@@ -417,33 +448,53 @@ class TestLLMPlanEnhancer:
             in dependency_messages[0]["content"]
         )
 
-    def test_classification_prompt_includes_exact_supported_pattern_grammars(self) -> None:
+    def test_types_and_patterns_are_separate_requests(self) -> None:
         dataframe = pd.DataFrame(
             {
                 "phone": ["A7-a8"],
                 "email": ["ada1@example.com"],
+                "ssn": ["123-45-6789"],
+                "visits": [3],
             }
         )
-        enhancer, transport = _enhancer([_classifications({"phone": "phone_number", "email": "email"})])
-
-        resolve_plan(
-            dataframe,
-            ReplacePiiConfig(llm=_local_config()),
-            DataParameters(),
-            enhancer=enhancer,
+        enhancer, transport = _enhancer(
+            [
+                _classifications(
+                    {"phone": "phone_number", "email": "email", "ssn": "ssn", "visits": None},
+                    patterns={"phone": "&#-%#"},
+                )
+            ]
         )
 
-        messages, _ = transport.calls[0]
-        assert "NSS decides on its own which columns to replace" in messages[0]["content"]
-        assert "do not require name columns in the table" in messages[0]["content"]
-        payload = json.loads(messages[1]["content"])
-        assert payload["pattern_grammars"]["character_mask"]["tokens"]["&"] == "digit or uppercase letter"
-        assert payload["pattern_grammars"]["character_mask"]["tokens"]["%"] == "digit or lowercase letter"
-        assert "In email patterns, # emits one digit." in payload["pattern_grammars"]["name_parts"]["rules"]
-        assert all(
-            set(entity) == {"entity_type", "description", "pattern_syntax"} for entity in payload["entity_catalog"]
-        )
-        assert all(entity["description"] for entity in payload["entity_catalog"])
+        plan = resolve_plan(dataframe, ReplacePiiConfig(llm=_local_config()), DataParameters(), enhancer=enhancer)
+
+        assert {spec.column_name: spec.pattern for spec in plan.columns_to_replace} == {
+            "phone": "&#-%#",
+            "email": None,
+            "ssn": None,
+        }
+        type_messages, _ = transport.calls[0]
+        assert "NSS decides on its own which columns to replace" in type_messages[0]["content"]
+        assert "pattern" not in type_messages[0]["content"]
+        type_payload = json.loads(type_messages[1]["content"])
+        assert all(set(entity) == {"entity_type", "description"} for entity in type_payload["entity_catalog"])
+        assert all(entity["description"] for entity in type_payload["entity_catalog"])
+
+        # Only classified columns whose entity type has a pattern syntax are asked for a pattern.
+        [pattern_messages] = transport.pattern_calls
+        assert "do not require name columns in the table" in pattern_messages[0]["content"]
+        assert "Names follow a layout when they share letter case and arrangement" in pattern_messages[0]["content"]
+        pattern_payload = json.loads(pattern_messages[1]["content"])
+        assert [
+            (column["column_name"], column["entity_type"], column["pattern_syntax"])
+            for column in pattern_payload["columns"]
+        ] == [("phone", "phone_number", "character_mask"), ("email", "email", "name_parts")]
+        assert pattern_payload["columns"][0]["samples"] == ["A7-a8"]
+        grammars = pattern_payload["pattern_grammars"]
+        assert set(grammars) == {"character_mask", "name_parts"}
+        assert grammars["character_mask"]["tokens"]["&"] == "digit or uppercase letter"
+        assert grammars["character_mask"]["tokens"]["%"] == "digit or lowercase letter"
+        assert "In email patterns, # emits one digit." in grammars["name_parts"]["rules"]
 
     def test_dependency_candidates_include_proposed_target_pattern(self) -> None:
         dataframe = pd.DataFrame(
@@ -673,8 +724,8 @@ class TestLLMPlanEnhancer:
         duplicate = json.dumps(
             {
                 "classifications": [
-                    {"column_name": "name", "entity_type": None, "pattern": None},
-                    {"column_name": "name", "entity_type": None, "pattern": None},
+                    {"column_name": "name", "entity_type": None},
+                    {"column_name": "name", "entity_type": None},
                 ]
             }
         )
@@ -802,15 +853,37 @@ class TestLLMPlanEnhancer:
         assert all(spec.pattern is None for spec in plan.columns_to_replace)
         assert len(transport.calls) == 1
 
-    def test_classification_prompt_names_entity_types_without_patterns(self) -> None:
-        dataframe = pd.DataFrame({"email": ["ada@example.com"]})
-        enhancer, transport = _enhancer([_classifications({"email": "email"})])
+    def test_patterns_request_is_skipped_when_no_column_takes_a_pattern(self) -> None:
+        dataframe = pd.DataFrame({"ssn": ["123-45-6789"], "visits": [3]})
+        enhancer, transport = _enhancer([_classifications({"ssn": "ssn", "visits": None})])
 
-        resolve_plan(dataframe, ReplacePiiConfig(llm=_local_config()), DataParameters(), enhancer=enhancer)
+        plan = resolve_plan(dataframe, ReplacePiiConfig(llm=_local_config()), DataParameters(), enhancer=enhancer)
 
-        system_prompt = transport.calls[0][0][0]["content"]
-        assert "These entity types never take a pattern: street_address, ssn, national_id" in system_prompt
-        assert "If the values mix formats, set pattern to null." in system_prompt
+        assert [spec.column_name for spec in plan.columns_to_replace] == ["ssn"]
+        assert transport.pattern_calls == []
+
+    def test_patterns_reply_missing_a_column_retries_with_validation_feedback(self) -> None:
+        dataframe = pd.DataFrame({"phone": ["555-0100"], "email": ["ada@example.com"]})
+        missing_email = json.dumps({"patterns": [{"column_name": "phone", "pattern": "###-####"}]})
+        enhancer, transport = _enhancer(
+            [
+                _classifications(
+                    {"phone": "phone_number", "email": "email"},
+                    patterns={"phone": "###-####"},
+                    pattern_responses=[missing_email],
+                )
+            ]
+        )
+
+        plan = resolve_plan(dataframe, ReplacePiiConfig(llm=_local_config()), DataParameters(), enhancer=enhancer)
+
+        assert {spec.column_name: spec.pattern for spec in plan.columns_to_replace} == {
+            "phone": "###-####",
+            "email": None,
+        }
+        assert len(transport.pattern_calls) == 2
+        feedback = transport.pattern_calls[1][-1]["content"]
+        assert "patterns must contain every submitted column exactly once; missing: 'email'" in feedback
 
     def test_pattern_for_protected_ordering_column_is_ignored(self) -> None:
         dataframe = pd.DataFrame(
