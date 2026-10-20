@@ -190,30 +190,6 @@ def _entity_types_without_pattern() -> str:
     return ", ".join(entity.entity_type.value for entity in ENTITIES if entity.pattern_syntax is None)
 
 
-def _heuristic_classifications_payload(
-    baseline: PiiReplacementPlan,
-    batch: Sequence[Mapping[str, object]],
-) -> list[dict[str, object]]:
-    submitted = {str(profile["column_name"]) for profile in batch}
-    return [
-        {
-            "column_name": spec.column_name,
-            "entity_type": spec.entity_type.value,
-            "pattern": spec.pattern,
-        }
-        for spec in baseline.columns_to_replace
-        if spec.column_name in submitted
-    ]
-
-
-def _heuristic_dependency_edges(baseline: PiiReplacementPlan) -> frozenset[tuple[str, str]]:
-    return frozenset(
-        (spec.column_name, dependency.column_name)
-        for spec in baseline.columns_to_replace
-        for dependency in spec.depends_on
-    )
-
-
 def _exclusive_dependency_groups_payload() -> list[list[list[str]]]:
     return [
         [sorted(entity_type.value for entity_type in group) for group in family]
@@ -283,7 +259,6 @@ def _classification_coverage_issue(expected: Sequence[str], actual: Sequence[str
 def _classification_messages(
     discovery_input: PlanDiscoveryInput,
     batch: Sequence[Mapping[str, object]],
-    baseline: PiiReplacementPlan,
 ) -> list[dict[str, str]]:
     system = (
         "You are helping NVIDIA NeMo Safe Synthesizer (NSS) de-identify a table before it is used to train a "
@@ -296,8 +271,6 @@ def _classification_messages(
         "- entity_catalog: the entity types you may choose from, each with a short definition and the pattern grammar "
         "it supports.\n"
         "- discovery_context.group_column: the column that groups rows (for example, one patient's events).\n"
-        "- heuristic_classifications: guesses from a rule-based detector, only for columns it flagged. They can be "
-        "wrong, and a column missing from this list may still hold sensitive data.\n"
         "- pattern_grammars: the pattern languages you may use.\n"
         "\n"
         "For each column\n"
@@ -324,7 +297,6 @@ def _classification_messages(
             "discovery_context": {"group_column": discovery_input.group_column},
             "entity_catalog": _entity_catalog(),
             "pattern_grammars": pattern_grammar_catalog(),
-            "heuristic_classifications": _heuristic_classifications_payload(baseline, batch),
             "column_profiles": batch,
         }
     )
@@ -410,10 +382,8 @@ def _selected_dependencies(response: _StructuredResponse, options: DependencyOpt
 def _dependency_target_payloads(
     plan: PiiReplacementPlan,
     options: DependencyOptions,
-    baseline: PiiReplacementPlan,
 ) -> list[dict[str, object]]:
     """Describe each dependency target and its permitted sources, in ``options`` order."""
-    heuristic_edges = _heuristic_dependency_edges(baseline)
     specs = {spec.column_name: spec for spec in plan.columns_to_replace}
     targets: list[dict[str, object]] = []
     for target_column, sources_by_type in options.items():
@@ -426,13 +396,7 @@ def _dependency_target_payloads(
                 "target_pattern": spec.pattern,
                 "target_pattern_syntax": _pattern_syntax_name(spec.entity_type, spec.pattern),
                 "source_options": {
-                    entity_type.value: {
-                        "columns": source_columns,
-                        "heuristic_choice": next(
-                            (source for source in source_columns if (target_column, source) in heuristic_edges),
-                            None,
-                        ),
-                    }
+                    entity_type.value: {"columns": source_columns}
                     for entity_type, source_columns in sources_by_type.items()
                 },
             }
@@ -452,8 +416,7 @@ def _dependency_selection_messages(targets: Sequence[Mapping[str, object]]) -> l
         "- dependency_targets: one entry per target column, with its entity type and target_pattern, the format "
         "proposed for its fake values (or null; target_pattern_syntax names its grammar in pattern_grammars). "
         "source_options lists, for each source entity type the target may depend on, the columns of that type. "
-        "heuristic_choice is the column a rule-based detector chose for that type, or null; it can be wrong, so "
-        "treat it as a hint, not a requirement. When the pattern uses a name part such as {first} or {last}, a "
+        "When the pattern uses a name part such as {first} or {last}, a "
         "source column holding that name part lets the fake value match the fake name in the same row.\n"
         "- exclusive_dependency_groups: families of source entity types that must not be mixed (see rule 3).\n"
         "\n"
@@ -462,8 +425,9 @@ def _dependency_selection_messages(targets: Sequence[Mapping[str, object]]) -> l
         "same person or record as the target. Tables can describe several people per row, such as a customer and "
         "a spouse or several children; match each target to its own "
         "person by column name, for example a spouse's first name to the spouse's gender, never to another person's.\n"
-        "2. Choose null when no column of that type describes the same person or record, or when the source adds "
-        "nothing beyond the other sources chosen for the same target.\n"
+        "2. When a listed column describes the same person or record as the target, choose it, so the fake value "
+        "stays consistent with that column. Choose null only when no column of that type describes the same person "
+        "or record.\n"
         "3. Check exclusivity separately for each target column. Each outer list in exclusive_dependency_groups is a "
         "family of inner groups. Within a family, the source entity types chosen for one target may come from at "
         "most one inner group; several types from the same inner group are fine. For example, with the family "
@@ -664,8 +628,12 @@ class LLMPlanEnhancer(PlanEnhancer):
         discovery_input: PlanDiscoveryInput,
         baseline: PiiReplacementPlan,
     ) -> PiiReplacementPlan:
-        """Return a semantically classified, deterministically assembled plan."""
-        classifications = self._classify_columns(discovery_input, baseline)
+        """Return a semantically classified, deterministically assembled plan.
+
+        ``baseline`` is not sent to the model. The heuristic discoverer returns an empty plan, and a hint that always
+        says nothing reads as a negative signal, so prompts carry no heuristic classifications or dependency choices.
+        """
+        classifications = self._classify_columns(discovery_input)
         expected_columns = {profile.column_name for profile in discovery_input.column_profiles}
         plan = plan_from_classifications(
             classifications,
@@ -680,7 +648,7 @@ class LLMPlanEnhancer(PlanEnhancer):
             protected_columns=discovery_input.protected_columns,
         )
         if candidates:
-            plan = self._select_dependencies(plan, candidates, baseline, classifications)
+            plan = self._select_dependencies(plan, candidates, classifications)
         return plan
 
     def discover_data_to_sampler_value_mapping(
@@ -746,15 +714,11 @@ class LLMPlanEnhancer(PlanEnhancer):
             parse=parse,
         )
 
-    def _classify_columns(
-        self,
-        discovery_input: PlanDiscoveryInput,
-        baseline: PiiReplacementPlan,
-    ) -> list[ColumnClassification]:
+    def _classify_columns(self, discovery_input: PlanDiscoveryInput) -> list[ColumnClassification]:
         batches = _profile_batches(discovery_input.column_profiles)
         if not batches:
             return []
-        classify = partial(self._classify_batch, discovery_input, baseline)
+        classify = partial(self._classify_batch, discovery_input)
         return [classification for batch in self._map_batches(classify, batches) for classification in batch]
 
     def _map_batches(self, request: Callable[[BatchT], ResultT], batches: Sequence[BatchT]) -> list[ResultT]:
@@ -767,7 +731,6 @@ class LLMPlanEnhancer(PlanEnhancer):
     def _classify_batch(
         self,
         discovery_input: PlanDiscoveryInput,
-        baseline: PiiReplacementPlan,
         batch: list[dict[str, object]],
     ) -> list[ColumnClassification]:
         expected = [str(profile["column_name"]) for profile in batch]
@@ -789,7 +752,7 @@ class LLMPlanEnhancer(PlanEnhancer):
 
         return self._request_structured(
             purpose="PII column classification",
-            messages=_classification_messages(discovery_input, batch, baseline),
+            messages=_classification_messages(discovery_input, batch),
             response_model=_ClassificationResponse,
             parse=parse,
         )
@@ -798,7 +761,6 @@ class LLMPlanEnhancer(PlanEnhancer):
         self,
         plan: PiiReplacementPlan,
         candidates: Sequence[DependencyCandidate],
-        baseline: PiiReplacementPlan,
         classifications: Sequence[ColumnClassification],
     ) -> PiiReplacementPlan:
         entity_types = {
@@ -808,7 +770,7 @@ class LLMPlanEnhancer(PlanEnhancer):
         }
         options = _dependency_options(candidates, entity_types)
         batches = _bounded_batches(
-            _dependency_target_payloads(plan, options, baseline),
+            _dependency_target_payloads(plan, options),
             kind="Dependency options",
             name_key="target_column",
         )

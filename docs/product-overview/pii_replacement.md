@@ -148,9 +148,9 @@ includes the version whenever it serializes the configuration.
 ### Automatic discovery
 
 Use `auto_discovery` to discover both replacement columns and dependency value
-mappings. When `llm` is configured, NSS passes the heuristic result to the LLM
-plan enhancer before validating the final plan and mapping unmatched dependency
-values.
+mappings. When `llm` is configured, the LLM plan enhancer classifies the
+columns and chooses dependencies before NSS validates the final plan and maps
+unmatched dependency values.
 
 ```yaml
 replace_pii:
@@ -404,8 +404,9 @@ each replacement column and each permitted source entity type, it
 chooses at most one candidate column, the one describing the same person or
 record, or none. The response schema lists only the candidate columns, so the
 model cannot name another column or choose two sources of one type, such as
-both a person's and a spouse's gender. Each option carries the heuristic
-baseline's choice as fallible prior evidence. NSS, rather than the model, decides how
+both a person's and a spouse's gender. The prompt asks the model to choose a
+candidate whenever it describes the same person or record, so the fake value
+stays consistent with it. NSS, rather than the model, decides how
 replacements stay consistent: within a group when a grouping column is
 configured, else within a row. Every replacement differs from the value it
 replaces. Identifier-like values (email, phone number, SSN, national ID, card
