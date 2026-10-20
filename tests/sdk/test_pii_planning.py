@@ -128,3 +128,46 @@ def test_replace_pii_resolves_and_writes_the_complete_input(tmp_path: Path) -> N
     assert SafeSynthesizerParameters.from_yaml(config_output).replace_pii == result.resolved_config
     assert nss._column_statistics == result.column_statistics
     assert nss._pii_replacer_time == result.replacement_time_seconds
+
+
+def test_replace_pii_writes_unchanged_cells_as_in_the_source_csv(tmp_path: Path) -> None:
+    source = tmp_path / "input.csv"
+    source.write_text("email,zip,count,note\nada@example.com,02054,7,N/A\n,10001,,None\n")
+    resolved = ReplacePiiConfig(
+        replacement_plan=PiiReplacementPlan(
+            columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
+        ),
+        sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+    )
+    data_output = tmp_path / "pii_replaced.csv"
+    nss = SafeSynthesizer(
+        config=SafeSynthesizerParameters(replace_pii=resolved),
+        save_path=tmp_path / "artifacts",
+    ).with_data_source(str(source))
+
+    result = nss.replace_pii(data_output)
+
+    written = pd.read_csv(data_output, dtype=str, na_filter=False)
+    assert written["email"].tolist() == [result.transformed_df.loc[0, "email"], ""]
+    assert written["email"][0] != "ada@example.com"
+    assert written.drop(columns="email").to_dict("list") == {
+        "zip": ["02054", "10001"],
+        "count": ["7", ""],
+        "note": ["N/A", "None"],
+    }
+
+
+def test_replace_pii_rejects_source_text_with_other_columns(tmp_path: Path) -> None:
+    resolved = ReplacePiiConfig(
+        replacement_plan=PiiReplacementPlan(
+            columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
+        ),
+        sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+    )
+    nss = SafeSynthesizer(
+        config=SafeSynthesizerParameters(replace_pii=resolved),
+        save_path=tmp_path / "artifacts",
+    ).with_data_source(pd.DataFrame({"email": ["ada@example.com"]}))
+
+    with pytest.raises(ParameterError, match="same columns and row count"):
+        nss.replace_pii(tmp_path / "out.csv", source_text=pd.DataFrame({"other": ["x"]}))

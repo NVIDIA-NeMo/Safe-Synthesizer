@@ -28,6 +28,7 @@ from .utils import (
     CLI_NESTED_FIELD_SEPARATOR,
     PathT,
     common_setup,
+    fetch_data_source_text,
 )
 from .wandb_setup import publish_evaluation_report
 
@@ -542,6 +543,7 @@ def run_replace_pii(
                 result = nss.replace_pii(
                     output_path=data_output_path,
                     config_output_path=config_output_path,
+                    source_text=fetch_data_source_text(settings),
                 )
                 run_logger.info(
                     f"PII replacement complete: {result.generation_statistics.generated_replacement_count} "
