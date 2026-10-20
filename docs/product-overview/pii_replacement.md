@@ -309,6 +309,13 @@ resolved configuration is always written so the exact plan and sampler
 mappings can be reviewed and reused. Replacement maps and raw detector results
 are not persisted.
 
+For CSV and TXT inputs, every cell that replacement leaves unchanged is written
+exactly as it appears in the input file. For example, ZIP code `02054` stays
+`02054` rather than becoming `2054`, and `N/A` stays `N/A` rather than
+becoming an empty cell. The SDK does the same when `with_data_source` is given
+a CSV path; for a dataframe source, pass the input read as text with
+`source_text=pd.read_csv(path, dtype=str, na_filter=False)`.
+
 The SDK equivalent returns the complete `TransformResult` and writes files only
 for paths supplied by the caller:
 
