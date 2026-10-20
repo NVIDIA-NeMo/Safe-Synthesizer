@@ -184,7 +184,7 @@ def _execute(
     group_column: str | None = None,
     free_text_detector: _StaticDetector | None = None,
     capture_replacement_map: bool = False,
-    match_known_values: bool = False,
+    find_and_replace: bool = False,
 ) -> ReplacementExecutionResult:
     return StructuredReplacementExecutor(
         plan,
@@ -193,7 +193,7 @@ def _execute(
         base_seed=42,
         free_text_detector=free_text_detector,
         capture_replacement_map=capture_replacement_map,
-        match_known_values=match_known_values,
+        find_and_replace=find_and_replace,
     ).execute(dataframe)
 
 
@@ -933,8 +933,10 @@ class TestStructuredReplacementExecutor:
 
 @pytest.mark.unit
 class TestKnownValueMatching:
-    @pytest.mark.parametrize("match_known_values", [True, False])
-    def test_structured_value_the_detector_missed_is_replaced_only_when_enabled(self, match_known_values: bool) -> None:
+    @pytest.mark.parametrize("find_and_replace", [True, False])
+    def test_structured_value_the_detector_missed_is_replaced_only_with_find_and_replace(
+        self, find_and_replace: bool
+    ) -> None:
         dataframe = pd.DataFrame({"first_name": ["Kenneth"], "notes": ["kenneth called back"]})
         plan = _plan(_target("first_name", EntityType.FIRST_NAME), _target("notes", EntityType.FREE_TEXT))
 
@@ -944,11 +946,11 @@ class TestKnownValueMatching:
             _RecordingGenerator(),
             free_text_detector=_StaticDetector([]),
             capture_replacement_map=True,
-            match_known_values=match_known_values,
+            find_and_replace=find_and_replace,
         )
 
         assert result.replacement_map is not None
-        if not match_known_values:
+        if not find_and_replace:
             assert result.dataframe.at[0, "notes"] == "kenneth called back"
             assert result.replacement_map.free_text == ()
             return
@@ -978,7 +980,7 @@ class TestKnownValueMatching:
             _RecordingGenerator(),
             free_text_detector=detector,
             capture_replacement_map=True,
-            match_known_values=True,
+            find_and_replace=True,
         )
 
         full = str(result.dataframe.at[0, "notes"]).removesuffix(" visited")
@@ -1008,7 +1010,7 @@ class TestKnownValueMatching:
             _RecordingGenerator(),
             group_column="patient",
             free_text_detector=_StaticDetector([]),
-            match_known_values=True,
+            find_and_replace=True,
         )
 
         assert result.dataframe["notes"].tolist() == [
@@ -1030,7 +1032,7 @@ class TestKnownValueMatching:
         )
 
         result = _execute(
-            dataframe, plan, _RecordingGenerator(), free_text_detector=_StaticDetector([]), match_known_values=True
+            dataframe, plan, _RecordingGenerator(), free_text_detector=_StaticDetector([]), find_and_replace=True
         )
 
         last = str(result.dataframe.at[0, "last_name"])
@@ -1047,7 +1049,7 @@ class TestKnownValueMatching:
             plan,
             _RecordingGenerator(),
             free_text_detector=_StaticDetector([], protected=[condition]),
-            match_known_values=True,
+            find_and_replace=True,
         )
 
         assert (
@@ -1075,7 +1077,7 @@ class TestKnownValueMatching:
             _RecordingGenerator(),
             free_text_detector=detector,
             capture_replacement_map=True,
-            match_known_values=True,
+            find_and_replace=True,
         )
 
         assert result.replacement_map is not None
