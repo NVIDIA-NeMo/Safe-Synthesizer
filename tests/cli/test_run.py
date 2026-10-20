@@ -801,8 +801,8 @@ class TestRunReplacePii:
         responses = iter(
             [
                 '{"classifications":['
-                '{"column_name":"col1","entity_type":null,"pattern":null},'
-                '{"column_name":"col2","entity_type":null,"pattern":null}'
+                '{"column_name":"col1","entity_type":null},'
+                '{"column_name":"col2","entity_type":null}'
                 "]}",
             ]
         )
