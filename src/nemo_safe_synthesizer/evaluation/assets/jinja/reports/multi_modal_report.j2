@@ -238,6 +238,15 @@
                             expandable=ctx.membership_inference_protection.figure) %}
                         {% include "jinja/components/membership_inference_protection.j2" %}
                     {% endcall %}
+                    {% if ctx.window_membership_inference_protection %}
+                    {% call metric_card("window-group-mia", ctx.window_membership_inference_protection.name,
+                            ctx.window_membership_inference_protection.score,
+                            "Protection against attacks that determine whether a sequence was in training data, from short windows of consecutive values",
+                            ctx.tooltips.window_group_mia_info,
+                            expandable=true) %}
+                        {% include "jinja/components/window_group_mia.j2" %}
+                    {% endcall %}
+                    {% endif %}
                     {% call metric_card("aia", ctx.attribute_inference_protection.name,
                             ctx.attribute_inference_protection.score,
                             "Protection against attacks that infer sensitive attributes",

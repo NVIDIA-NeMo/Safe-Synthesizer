@@ -8,6 +8,7 @@ from functools import cached_property
 from typing import Any
 
 import pandas as pd
+import plotly.graph_objects as go
 from pydantic import Field
 
 from ....config.evaluate import (
@@ -57,6 +58,14 @@ from ....evaluation.components.rolling_stats_similarity_figures import (
 from ....evaluation.components.sqs_score import SQSScore
 from ....evaluation.components.text_semantic_similarity import TextSemanticSimilarity
 from ....evaluation.components.text_structure_similarity import TextStructureSimilarity
+from ....evaluation.components.window_group_mia import WindowGroupMIA
+from ....evaluation.components.window_group_mia_figures import (
+    WINDOW_GROUP_MIA_CLOSEST_TRACES_PER_COLUMN,
+    WINDOW_GROUP_MIA_GROUP_MAX_ROWS,
+    generate_window_group_mia_closest_match_figure,
+    generate_window_group_mia_distance_figure,
+    generate_window_group_mia_group_figure,
+)
 from ....evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from ....evaluation.data_model.evaluation_report import EvaluationReport
 from ....evaluation.data_model.evaluation_score import (
@@ -224,10 +233,60 @@ class MultimodalReport(EvaluationReport):
                     1 for item in rolling_stats_profiles if all(value is None for value in item["synthetic_level"])
                 )
 
+            if "window_membership_inference_protection" in ctx:
+                MultimodalReport._add_window_group_mia_figures(ctx["window_membership_inference_protection"])
+
             return ctx
         except Exception:
             logger.exception("Failed to get jinja context")
             raise
+
+    @staticmethod
+    def _add_window_group_mia_figures(window_group_mia: dict[str, Any]) -> None:
+        """Add the window membership inference charts and summary counts to the card context."""
+        details = window_group_mia["details"]
+        figures: list[tuple[str, go.Figure, bool, str]] = []
+        if details.get("distances", {}).get("training"):
+            figures.append(
+                (
+                    "Distance to synthetic data",
+                    generate_window_group_mia_distance_figure(details),
+                    False,
+                    "window_group_mia_distance_info",
+                )
+            )
+        if "attack" in details:
+            figures.append(
+                (
+                    "Groups flagged most",
+                    generate_window_group_mia_group_figure(
+                        details["per_group"], details["attack"]["holdout_flag_rate"]
+                    ),
+                    False,
+                    "window_group_mia_groups_info",
+                )
+            )
+        if details.get("closest_match"):
+            figures.append(
+                (
+                    "Closest match",
+                    generate_window_group_mia_closest_match_figure(details),
+                    True,
+                    "window_group_mia_closest_info",
+                )
+            )
+        window_group_mia["figures"] = [
+            {
+                "title": title,
+                "html": figure.to_html(full_html=False, include_plotlyjs=False),
+                "column_select": column_select,
+                "tooltip_id": tooltip_key.replace("_", "-"),
+                "tooltip": tooltips[tooltip_key],
+            }
+            for title, figure, column_select, tooltip_key in figures
+        ]
+        window_group_mia["closest_traces_per_column"] = WINDOW_GROUP_MIA_CLOSEST_TRACES_PER_COLUMN
+        window_group_mia["group_row_count"] = min(len(details.get("per_group", [])), WINDOW_GROUP_MIA_GROUP_MAX_ROWS)
 
     @staticmethod
     def _get_config_value(param: str, default: Any, config: SafeSynthesizerParameters | None = None) -> Any:
@@ -350,6 +409,7 @@ class MultimodalReport(EvaluationReport):
             )
             components.append(AutocorrelationSimilarity.from_evaluation_datasets(time_series_datasets, config))
             components.append(RollingStatsSimilarity.from_evaluation_datasets(time_series_datasets, config))
+            components.append(WindowGroupMIA.from_evaluation_datasets(time_series_datasets, config))
 
         report = MultimodalReport(config=config, evaluation_datasets=evaluation_datasets, components=components)
         report.evaluation_datasets = evaluation_datasets

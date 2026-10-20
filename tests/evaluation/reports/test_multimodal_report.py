@@ -12,9 +12,11 @@ from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
 from nemo_safe_synthesizer.evaluation.components.attribute_inference_protection import AttributeInferenceProtection
 from nemo_safe_synthesizer.evaluation.components.autocorrelation_similarity import AutocorrelationSimilarity
+from nemo_safe_synthesizer.evaluation.components.data_privacy_score import DataPrivacyScore
 from nemo_safe_synthesizer.evaluation.components.membership_inference_protection import MembershipInferenceProtection
 from nemo_safe_synthesizer.evaluation.components.rolling_stats_similarity import RollingStatsSimilarity
 from nemo_safe_synthesizer.evaluation.components.text_semantic_similarity import TextSemanticSimilarity
+from nemo_safe_synthesizer.evaluation.components.window_group_mia import WindowGroupMIA
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import EvaluationScore, Grade, PrivacyGrade
 from nemo_safe_synthesizer.evaluation.render import render_report
@@ -362,3 +364,75 @@ def test_rolling_stats_report_summarizes_all_profiles_in_one_chart_row() -> None
     assert context["summary_columns"] == ["other", "value"]
     assert context["summary_traces_per_column"] == 8
     assert context["pair_score_column_count"] == 2
+
+
+def _window_group_mia_frame(groups: int, prefix: str, seed: int) -> pd.DataFrame:
+    rng = np.random.default_rng(seed)
+    parts = [
+        pd.DataFrame(
+            {
+                "entity": f"{prefix}{index}",
+                "time": np.arange(60),
+                "value": rng.normal(size=60).cumsum(),
+                "other": np.sin(np.arange(60) / 4 + rng.uniform(0, 6)),
+            }
+        )
+        for index in range(groups)
+    ]
+    return pd.concat(parts, ignore_index=True)
+
+
+def test_window_group_mia_metric_is_absent_when_time_series_evaluation_is_disabled() -> None:
+    frame = _window_group_mia_frame(2, "t", seed=0)
+
+    disabled = MultimodalReport.from_dataframes(
+        frame, frame.copy(), config=_time_series_config(time_series_enabled=False)
+    )
+
+    assert not any(isinstance(component, WindowGroupMIA) for component in disabled.components)
+
+
+def test_window_group_mia_metric_renders_after_row_level_membership_inference() -> None:
+    training = _window_group_mia_frame(10, "t", seed=1)
+    holdout = _window_group_mia_frame(5, "h", seed=2)
+    config = _time_series_config()
+    config.data.group_training_examples_by = "entity"
+
+    report = MultimodalReport.from_dataframes(training, training.copy(), test=holdout, config=config)
+    report.components.append(
+        DataPrivacyScore(score=EvaluationScore.finalize_grade(raw_score=0.5, score=5.0, is_privacy=True))
+    )
+
+    component = next(item for item in report.components if isinstance(item, WindowGroupMIA))
+    assert component.score.score is not None
+    assert component.score.score < 1.0
+    context = report.jinja_context["window_membership_inference_protection"]
+    assert [figure["title"] for figure in context["figures"]] == [
+        "Distance to synthetic data",
+        "Groups flagged most",
+        "Closest match",
+    ]
+    assert [figure["column_select"] for figure in context["figures"]] == [False, False, True]
+    assert [figure["tooltip_id"] for figure in context["figures"]] == [
+        "window-group-mia-distance-info",
+        "window-group-mia-groups-info",
+        "window-group-mia-closest-info",
+    ]
+    assert all(figure["tooltip"].strip() for figure in context["figures"])
+    assert context["closest_traces_per_column"] == 2
+    output = render_report(report)
+    assert output is not None
+    assert output.index('id="mia"') < output.index('id="window-group-mia"') < output.index('id="aia"')
+    assert "100.0% of training windows have an exact copy in the synthetic data." in " ".join(output.split())
+
+
+def test_window_group_mia_context_without_holdout_keeps_copy_diagnostics_charts() -> None:
+    training = _window_group_mia_frame(4, "t", seed=3)
+    config = _time_series_config()
+    config.data.group_training_examples_by = "entity"
+
+    report = MultimodalReport.from_dataframes(training, training.copy(), config=config)
+
+    context = report.jinja_context["window_membership_inference_protection"]
+    assert context["details"]["evaluation_mode"] == "copy_diagnostics_only"
+    assert [figure["title"] for figure in context["figures"]] == ["Distance to synthetic data", "Closest match"]

@@ -10,6 +10,7 @@ from nemo_safe_synthesizer.config.evaluate import (
     EvaluationParameters,
     RollingStatsSimilarityParameters,
     TimeSeriesEvaluationParameters,
+    WindowGroupMIAParameters,
 )
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
@@ -90,3 +91,21 @@ def test_rolling_stats_parameters_default_to_all_numeric_columns_and_a_20_point_
 def test_rolling_stats_window_must_hold_at_least_three_points() -> None:
     with pytest.raises(ValidationError):
         RollingStatsSimilarityParameters(window_size=2)
+
+
+def test_window_group_mia_parameters_default_to_10_point_windows_and_bounded_windows() -> None:
+    window_group_mia = EvaluationParameters().time_series.window_group_mia
+
+    assert window_group_mia.value_columns is None
+    assert window_group_mia.window_size == 10
+    assert window_group_mia.max_windows == 1000
+    assert window_group_mia.max_columns == 12
+
+
+def test_window_group_mia_parameters_reject_unusable_values() -> None:
+    with pytest.raises(ValidationError):
+        WindowGroupMIAParameters(window_size=1)
+    with pytest.raises(ValidationError):
+        WindowGroupMIAParameters(max_windows=19)
+    with pytest.raises(ValidationError):
+        WindowGroupMIAParameters(max_columns=0)

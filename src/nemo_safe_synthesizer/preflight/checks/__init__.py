@@ -27,6 +27,7 @@ from .dataframe import (
     TimeSeriesDataShapeCheck,
     TimeSeriesValueColumnCheck,
     TimestampColumnCheck,
+    WindowGroupMIAValueColumnCheck,
 )
 from .environment import (
     CUDAAvailabilityCheck,
@@ -54,6 +55,7 @@ __all__ = [
     "TimestampColumnCheck",
     "TokenBudgetCheck",
     "VRAMHeadroomCheck",
+    "WindowGroupMIAValueColumnCheck",
     "_CORE_CHECKS",
 ]
 
@@ -77,6 +79,7 @@ _CORE_CHECKS: tuple[PreflightCheck, ...] = (
     TimestampColumnCheck(),
     TimeSeriesValueColumnCheck(),
     RollingStatsValueColumnCheck(),
+    WindowGroupMIAValueColumnCheck(),
     TimeSeriesDataShapeCheck(),
     # METADATA
     VRAMHeadroomCheck(),

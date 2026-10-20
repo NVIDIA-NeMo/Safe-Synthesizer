@@ -618,6 +618,10 @@ document.querySelectorAll("[data-autocorrelation-column-select]").forEach((selec
 document.querySelectorAll("[data-rolling-stats-column-select]").forEach((select) => {
     select.addEventListener("change", selectAutocorrelationColumn);
 });
+// The window membership closest-match figure uses the same trace-per-column layout.
+document.querySelectorAll("[data-window-group-mia-column-select]").forEach((select) => {
+    select.addEventListener("change", selectAutocorrelationColumn);
+});
 document.addEventListener("click", (event) => {
     if (!event.target.closest(".metric-tooltip, [data-tooltip-toggle]")) {
         closeTooltips();

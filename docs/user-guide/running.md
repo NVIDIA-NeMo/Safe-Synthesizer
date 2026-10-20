@@ -1140,7 +1140,9 @@ In time-series mode, the HTML report also includes
 Set `evaluation.time_series.enabled: false` to skip it.
 The same setting also controls
 [Rolling Stats Similarity](time-series-metrics/rolling-stats-similarity.md),
-which the report includes alongside it.
+which the report includes alongside it, and
+[Window Membership Inference Protection](time-series-metrics/window-membership-inference-protection.md),
+which appears in the report's Data Privacy section when the data is grouped and a holdout is set.
 
 !!! note "How time-series examples are assembled"
     Each training example contains records from a single group in

@@ -21,6 +21,7 @@ from nemo_safe_synthesizer.config.evaluate import (
     EvaluationParameters,
     RollingStatsSimilarityParameters,
     TimeSeriesEvaluationParameters,
+    WindowGroupMIAParameters,
 )
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
@@ -53,6 +54,7 @@ from nemo_safe_synthesizer.preflight import (
     TimestampColumnCheck,
     TokenBudgetCheck,
     VRAMHeadroomCheck,
+    WindowGroupMIAValueColumnCheck,
     get_registry,
     run_preflight,
 )
@@ -931,6 +933,47 @@ class TestRollingStatsValueColumnCheck:
         )
 
         issues = RollingStatsValueColumnCheck().run(make_ctx(config=config, data=pd.DataFrame({"label": ["a"]})))
+
+        assert not issues
+
+
+@pytest.mark.unit
+class TestWindowGroupMIAValueColumnCheck:
+    @staticmethod
+    def _make_config(value_columns: list[str]) -> SafeSynthesizerParameters:
+        return SafeSynthesizerParameters(
+            time_series=TimeSeriesParameters(is_timeseries=True, timestamp_interval_seconds=60),
+            evaluation=EvaluationParameters(
+                time_series=TimeSeriesEvaluationParameters(
+                    enabled=True,
+                    window_group_mia=WindowGroupMIAParameters(value_columns=value_columns),
+                ),
+            ),
+        )
+
+    def test_disabled_when_time_series_evaluation_is_disabled(self, default_config):
+        assert WindowGroupMIAValueColumnCheck().enabled(make_ctx(config=default_config)) is False
+
+    def test_missing_explicit_column_reports_error(self):
+        issues = WindowGroupMIAValueColumnCheck().run(
+            make_ctx(config=self._make_config(["missing"]), data=pd.DataFrame({"value": [1.0, 2.0, 3.0]}))
+        )
+
+        assert any(issue.code == "window_group_mia_column_not_found" for issue in issues)
+
+    def test_nonnumeric_explicit_column_reports_error(self):
+        issues = WindowGroupMIAValueColumnCheck().run(
+            make_ctx(config=self._make_config(["label"]), data=pd.DataFrame({"label": ["a", "b", "c"]}))
+        )
+
+        assert any(issue.code == "window_group_mia_column_not_numeric" for issue in issues)
+
+    def test_default_columns_report_nothing(self):
+        config = SafeSynthesizerParameters(
+            time_series=TimeSeriesParameters(is_timeseries=True, timestamp_interval_seconds=60),
+        )
+
+        issues = WindowGroupMIAValueColumnCheck().run(make_ctx(config=config, data=pd.DataFrame({"label": ["a"]})))
 
         assert not issues
 
