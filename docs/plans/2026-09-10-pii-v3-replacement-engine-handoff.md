@@ -546,7 +546,9 @@ quality information, not invalid configuration.
   hyphens, retain all words, do not guess legal-suffix removal, and enforce the 63-character DNS-label limit.
 - If `{domain}` or `{organization}` cannot be resolved, generate a deterministic compatible value and issue an
   aggregate PII-free warning.
-- Without an email pattern, generate the complete synthetic email address and domain through the sampler.
+- Without an email pattern, build an email that depends on names as `{first}.{last}##@{domain}` from the replaced
+  names (or `{first}##@{domain}` with the one name part available). Otherwise, generate the complete synthetic email address and domain through
+  the sampler.
 
 ## Free-text detection and replacement
 

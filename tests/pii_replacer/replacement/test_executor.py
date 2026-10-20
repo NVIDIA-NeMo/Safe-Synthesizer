@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import logging
+import re
 
 import pandas as pd
 import pytest
@@ -14,7 +15,9 @@ from nemo_safe_synthesizer.config.replace_pii import (
     EntityType,
     PiiColumnPlan,
     PiiReplacementPlan,
+    PiiReplacementSettings,
     PiiSamplerBackend,
+    PiiSamplerConfig,
 )
 from nemo_safe_synthesizer.errors import DataError, GenerationError, ParameterError
 from nemo_safe_synthesizer.pii_replacer.replacement.compiler import compile_plan
@@ -24,6 +27,7 @@ from nemo_safe_synthesizer.pii_replacer.replacement.executor import (
     resolve_base_seed,
 )
 from nemo_safe_synthesizer.pii_replacer.replacement.generation import ReplacementGenerationRequest
+from nemo_safe_synthesizer.pii_replacer.replacement.generators import FakerReplacementGenerator
 
 
 class _RecordingGenerator:
@@ -402,6 +406,43 @@ class TestStructuredReplacementExecutor:
 
         assert result.dataframe["email"].tolist() == ["zoe.park@acme.com", "ana.ruiz@acme.com"]
         assert _warning_counts(caplog, "reused_original_count") == [1]
+
+    def test_unpatterned_email_is_built_from_the_replaced_names_it_depends_on(self) -> None:
+        # Mixed local-part formats leave the planned email without a pattern; the dependency must still apply.
+        dataframe = pd.DataFrame(
+            {
+                "first_name": ["Brenda", "Bobby", "Patrick"],
+                "last_name": ["Rivera", "Hughes", "Adams"],
+                "email": ["brenda.rivera@yahoo.com", "hughes_b@gmail.com", "padams@hotmail.com"],
+            }
+        )
+        plan = _plan(
+            _target(
+                "email", EntityType.EMAIL, ("first_name", EntityType.FIRST_NAME), ("last_name", EntityType.LAST_NAME)
+            ),
+            _target("first_name", EntityType.FIRST_NAME),
+            _target("last_name", EntityType.LAST_NAME),
+        )
+        generator = FakerReplacementGenerator(
+            settings=PiiReplacementSettings(),
+            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+        )
+
+        replaced = (
+            StructuredReplacementExecutor(plan, generator, group_column=None, base_seed=42).execute(dataframe).dataframe
+        )
+
+        for first, last, domain, email in zip(
+            replaced["first_name"],
+            replaced["last_name"],
+            ["yahoo.com", "gmail.com", "hotmail.com"],
+            replaced["email"],
+            strict=True,
+        ):
+            assert re.fullmatch(
+                rf"{re.escape(first.lower())}\.{re.escape(last.lower())}\d{{2}}@{re.escape(domain)}", email
+            )
+        assert not set(replaced["first_name"]) & set(dataframe["first_name"])
 
     def test_replacement_equal_to_its_own_original_still_fails(self) -> None:
         dataframe = pd.DataFrame({"first_name": ["Jeremy"]})

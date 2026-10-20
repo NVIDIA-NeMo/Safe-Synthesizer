@@ -360,6 +360,42 @@ class TestReplacementGenerator:
 
         assert generator.generate(request) == "synthetic@mail.societe-acme-inc.co.uk"
 
+    @pytest.mark.parametrize(
+        ("dependencies", "expected"),
+        [
+            (
+                (
+                    (EntityType.FIRST_NAME, CanonicalValue("string", "Synthetic")),
+                    (EntityType.LAST_NAME, CanonicalValue("string", "Person")),
+                ),
+                r"synthetic\.person\d{2}@original\.example",
+            ),
+            (
+                ((EntityType.FULL_NAME, CanonicalValue("string", "Synthetic Person")),),
+                r"synthetic\.person\d{2}@original\.example",
+            ),
+            (((EntityType.FIRST_NAME, CanonicalValue("string", "Synthetic")),), r"synthetic\d{2}@original\.example"),
+            (((EntityType.LAST_NAME, CanonicalValue("string", "Person")),), r"person\d{2}@original\.example"),
+        ],
+    )
+    def test_unpatterned_email_uses_name_dependencies(
+        self,
+        dependencies: tuple[tuple[EntityType, CanonicalValue | None], ...],
+        expected: str,
+    ) -> None:
+        request = _request(EntityType.EMAIL, "hughes_b@original.example", dependencies=dependencies)
+
+        assert re.fullmatch(expected, _faker_generator().generate(request))
+
+    def test_unpatterned_email_without_name_dependencies_is_sampled_whole(self) -> None:
+        dependencies = ((EntityType.ORGANIZATION, CanonicalValue("string", "Acme")),)
+        request = _request(EntityType.EMAIL, "ada@original.example", dependencies=dependencies)
+
+        replacement = _faker_generator().generate(request)
+
+        assert "@" in replacement
+        assert not replacement.endswith("@original.example")
+
     def test_card_check_digit_respects_a_restricted_final_position(self) -> None:
         generator = _faker_generator()
 
@@ -446,6 +482,29 @@ class TestReplacementGenerator:
         )
 
         assert _nemotron_personas_generator(tmp_path, people).generate(_request()) == "SyntheticAda"
+
+    def test_nemotron_personas_unpatterned_email_uses_name_dependencies_over_the_sampled_email(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        people = pd.DataFrame(
+            {
+                "first_name": ["SampledAda"],
+                "last_name": ["SampledLovelace"],
+                "email_address": ["sampled@example.test"],
+            }
+        )
+        generator = _nemotron_personas_generator(tmp_path, people)
+        dependencies = (
+            (EntityType.FIRST_NAME, CanonicalValue("string", "Synthetic")),
+            (EntityType.LAST_NAME, CanonicalValue("string", "Person")),
+        )
+
+        named = generator.generate(_request(EntityType.EMAIL, "padams@hotmail.com", dependencies=dependencies))
+        unnamed = generator.generate(_request(EntityType.EMAIL, "padams@hotmail.com"))
+
+        assert re.fullmatch(r"synthetic\.person\d{2}@hotmail\.com", named), named
+        assert unnamed == "sampled@example.test"
 
     def test_nemotron_personas_generator_uses_address_components_from_the_selected_asset_row(
         self,
