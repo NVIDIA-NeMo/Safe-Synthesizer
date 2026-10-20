@@ -376,7 +376,7 @@ built-in, structurally validated regex detectors for email addresses, payment
 cards, IPv4 addresses, and IPv6 addresses. The default model is
 `fastino/gliner2-privacy-filter-PII-multi`, pinned to the Hugging Face commit
 the default thresholds were tuned on, and it loads lazily only when the plan
-contains a free-text target. A different `model_id` loads its latest revision
+contains a free-text or street-address target. A different `model_id` loads its latest revision
 unless `model_revision` is set.
 
 ```yaml
@@ -507,10 +507,34 @@ when it is a plain two- or three-word name such as `Kenneth Gonzales`. A free-te
 full name like that is replaced word by word, so `Kenneth Gonzales` and a bare
 `Kenneth` in the same record or group get the same first-name replacement.
 Names with titles, initials, or suffixes, such as `Dr. Ada Lovelace` or
-`Ada K. Lovelace`, are replaced whole and not split. Street alignment requires
-an exact suffix built from typed city, state, postal-code, or country
+`Ada K. Lovelace`, are replaced whole and not split. A street in free text
+reuses the street of a structured address whose locality was kept, as
+described below, or, otherwise, of a structured address that ends with the
+exact suffix built from its typed city, state, postal-code, or country
 dependencies. NSS never guesses components from other token positions or
 isolated house numbers.
+
+### Full street addresses
+
+A `street_address` column may hold a full address such as
+`489 Park Blvd, Mesa, IA 76237`. NSS runs the GLiNER2 detector on each distinct
+value, and when the only detected entity is a street at the start of the value,
+followed by a comma or space, it replaces only that street and keeps the rest as
+written: `489 Park Blvd, Mesa, IA 76237` becomes, for example,
+`67911 Johnson Knoll, Mesa, IA 76237`. This works for any address format the
+detector recognizes, such as `Bahnhofstraße 21, 10115 Berlin, Germany`; the new
+street comes from the configured sampler and locale. Linked city, state,
+postal-code, or country columns still condition the sampler but are not
+appended again. Every other value, including one that starts with a unit
+outside the detected street or one the detector does not recognize, is replaced
+whole, with linked locality values appended as before. If the detector cannot
+run, for example because the `gliner2` package or model is unavailable, NSS
+logs a warning and replaces every street-address value whole.
+
+Keeping the locality means the original city, state, postal code, and country
+remain in the output, as they already do in linked locality columns and in free
+text around a detected street. Combined with other columns, such as a birth
+date, a postal code can help re-identify a person.
 
 ## LLM-assisted planning
 
