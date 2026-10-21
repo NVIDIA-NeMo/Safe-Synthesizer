@@ -15,9 +15,20 @@ All workflows that use `.github/actions/setup-python-env` now default to the ver
 | [gpu-tests.yml](gpu-tests.yml)                     | Nightly, manual             | GPU smoke tests (required) and E2E tests                                                                   |
 | [container-build.yml](container-build.yml)         | `v*`, manual                 | Builds the extra-driven GPU container image and publishes GHCR tags for release tags                       |
 | [conventional-commit.yml](conventional-commit.yml) | PRs                         | Validates PR titles follow conventional commit format                                                      |
+| [pr-linked-issue.yml](pr-linked-issue.yml)         | PRs, issue triage/state changes | Requires an open, triaged issue for external PRs and closes invalid new or reopened PRs                   |
 | [docs.yml](docs.yml)                               | Push to `main` (docs paths) | Publishes `main` docs as the `latest` GitHub Pages version                                                 |
 | [release.yml](release.yml)                         | Push tags to `v*`           | Publishes the package, release-coupled installer, a GitHub release, and versioned docs                      |
 | [secrets-detector.yml](secrets-detector.yml)       | PRs                         | Scans for accidentally committed secrets                                                                   |
+
+## External pull request issue triage
+
+`pr-linked-issue.yml` requires external PRs to reference at least one open issue labeled `triaged` using `Fixes #NNN`, `Closes #NNN`, or `Resolves #NNN`. It ignores HTML comments and rejects references to other PRs. Collaborators with write or admin permission and Dependabot are exempt.
+
+Invalid newly opened or reopened PRs, including drafts, receive an explanatory comment and are closed on the first workflow attempt. The workflow reads the current PR body and revalidates immediately before closure. A `keep-open` label prevents closure but leaves the check failing. API failures stop the job without closing a PR. Once the issue is triaged, contributors may reopen their PR; closed PRs do not receive issue-change notifications.
+
+Later PR updates and changes to referenced issues update the check without closing PRs already under review. Issue events rerun the latest linked-issue workflow for each matching open PR; reruns never close PRs. This workflow uses `pull_request_target` and only reads PR metadata through the API, without checking out PR code.
+
+Repository administrators can require the `Check linked issue` job from `Linked Issue Check` in the `main` branch ruleset to block merging when a later PR edit or issue change makes the check fail. Adding this workflow does not change repository rulesets. Maintainers should ensure the `triaged` and `keep-open` labels exist and verify that each PR addresses its linked issue.
 
 ## Pull Request Testing
 

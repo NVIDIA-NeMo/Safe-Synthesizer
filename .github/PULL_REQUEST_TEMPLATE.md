@@ -2,9 +2,15 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
 <!-- Thank you for contributing to Safe Synthesizer! -->
+<!-- External contributors: before submitting (including drafts), link an existing, open issue labeled `triaged` by a maintainer. Newly opened or reopened PRs without one are automatically closed. See CONTRIBUTING.md. -->
 
 # Summary
 <!-- Brief description of changes -->
+
+## Related Issue
+
+<!-- Use Fixes #NNN, Closes #NNN, or Resolves #NNN. At least one issue must be open and labeled `triaged` for external contributions. Check the issue for that label before reopening an automatically closed PR. -->
+- Closes #<issue>
 
 ## Human review
 
@@ -40,6 +46,3 @@ Ensure that the following pass:
 - [ ] Updated documentation for new features and behaviors, including docstrings for API docs.
 
 ## Other Notes
-
-<!-- Please add the issue number that should be closed when this PR is merged. -->
-- Closes #<issue>
