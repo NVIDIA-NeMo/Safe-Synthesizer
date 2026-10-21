@@ -413,7 +413,9 @@ candidate whenever it describes the same person or record, so the fake value
 stays consistent with it. NSS, rather than the model, decides how
 replacements stay consistent: within a group when a grouping column is
 configured, else within a row. Every replacement differs from the value it
-replaces. Identifier-like values (email, phone number, SSN, national ID, card
+replaces. A replaced full name also avoids the original's first and last name;
+when no such name is found, NSS keeps one that shares a part and logs a warning
+with the count. Identifier-like values (email, phone number, SSN, national ID, card
 number, API key, IP address, unique identifier) also avoid every other original
 value in the column and stay unique while the column's format has room; when
 that is not possible, NSS repeats a replacement or, as a last resort, uses

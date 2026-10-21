@@ -28,6 +28,7 @@ from nemo_safe_synthesizer.pii_replacer.replacement.executor import (
 )
 from nemo_safe_synthesizer.pii_replacer.replacement.generation import ReplacementGenerationRequest
 from nemo_safe_synthesizer.pii_replacer.replacement.generators import FakerReplacementGenerator
+from nemo_safe_synthesizer.pii_replacer.replacement.value_checks import keeps_original_name_part
 
 
 class _RecordingGenerator:
@@ -72,6 +73,16 @@ class _EchoGenerator(_RecordingGenerator):
     def generate(self, request: ReplacementGenerationRequest) -> str:
         self.requests.append(request)
         return request.original_value
+
+
+class _ScriptedNameGenerator(_RecordingGenerator):
+    def __init__(self, *names: str) -> None:
+        super().__init__()
+        self._names = names
+
+    def generate(self, request: ReplacementGenerationRequest) -> str:
+        self.requests.append(request)
+        return self._names[min(len(self.requests), len(self._names)) - 1]
 
 
 def _warning_counts(caplog: pytest.LogCaptureFixture, field: str) -> list[object]:
@@ -443,6 +454,57 @@ class TestStructuredReplacementExecutor:
                 rf"{re.escape(first.lower())}\.{re.escape(last.lower())}\d{{2}}@{re.escape(domain)}", email
             )
         assert not set(replaced["first_name"]) & set(dataframe["first_name"])
+
+    def test_full_name_replacement_that_keeps_the_original_first_name_is_retried(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        caplog.set_level(logging.WARNING)
+        dataframe = pd.DataFrame({"full_name": ["John Smith"]})
+
+        result = _execute(
+            dataframe,
+            _plan(_target("full_name", EntityType.FULL_NAME)),
+            _ScriptedNameGenerator("John Brown", "Mary Jones"),
+        )
+
+        assert result.dataframe["full_name"].tolist() == ["Mary Jones"]
+        assert _warning_counts(caplog, "kept_name_part_count") == []
+
+    def test_full_name_that_can_only_keep_a_name_part_is_used_with_a_warning(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        # A dependency can fix the first name, as when it is copied from a linked first-name column.
+        caplog.set_level(logging.WARNING)
+        dataframe = pd.DataFrame({"full_name": ["John Smith"]})
+
+        result = _execute(
+            dataframe, _plan(_target("full_name", EntityType.FULL_NAME)), _ScriptedNameGenerator("John Brown")
+        )
+
+        assert result.dataframe["full_name"].tolist() == ["John Brown"]
+        assert _warning_counts(caplog, "kept_name_part_count") == [1]
+
+    @pytest.mark.parametrize(
+        ("original", "candidate", "pattern", "keeps"),
+        [
+            ("John Smith", "John Brown", None, True),
+            ("John Smith", "Mary Smith", None, True),
+            ("John Smith", "Mary Brown", None, False),
+            ("Smith, John", "Brown, John", "{Last}, {First}", True),
+            ("Dr. Ana Ruiz", "Dr. Maria Lopez", "Dr. {First} {Last}", False),
+            ("J. Smith", "J. Brown", None, False),
+        ],
+    )
+    def test_keeps_original_name_part_compares_first_and_last_names(
+        self,
+        original: str,
+        candidate: str,
+        pattern: str | None,
+        keeps: bool,
+    ) -> None:
+        assert keeps_original_name_part(original, candidate, pattern) is keeps
 
     def test_replacement_equal_to_its_own_original_still_fails(self) -> None:
         dataframe = pd.DataFrame({"first_name": ["Jeremy"]})
