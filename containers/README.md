@@ -69,7 +69,7 @@ Key flags:
 | `PACKAGE_VERSION` | unset | Optional PEP 440 version passed to `uv-dynamic-versioning` |
 | `PYTHON_VERSION` | `3.13` | Python slim image version |
 | `PYTHON_IMAGE` | `python:${PYTHON_VERSION}-slim-bookworm` | Runtime and dev base image |
-| `UV_IMAGE` | `ghcr.io/astral-sh/uv:0.9.30` | Source image for pinned `uv` binaries |
+| `UV_IMAGE` | `ghcr.io/astral-sh/uv:0.13.4` | Source image for pinned `uv` binaries |
 
 Override at build time:
 
