@@ -3,12 +3,17 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
 
 from nemo_safe_synthesizer.config import SafeSynthesizerTiming
+from nemo_safe_synthesizer.evaluation.components.autocorrelation_similarity import AutocorrelationSimilarity
+from nemo_safe_synthesizer.evaluation.data_model.evaluation_datasets import EvaluationDatasets
+from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import EvaluationScore
+from nemo_safe_synthesizer.evaluation.reports.multimodal.multimodal_report import MultimodalReport
 from nemo_safe_synthesizer.generation.results import GenerateJobResults
 from nemo_safe_synthesizer.generation.utils import GenerationStatus
 from nemo_safe_synthesizer.results import make_nss_summary
@@ -46,6 +51,32 @@ def _stub_generate_results(*, with_token_stats: bool = True) -> GenerateJobResul
         batch_valid_record_fractions=[0.67],
         elapsed_time=2.0,
     )
+
+
+def _report_with_autocorrelation(score: float | None) -> MultimodalReport:
+    frame = pd.DataFrame({"value": [1, 2]})
+    components = []
+    if score is not None:
+        components.append(
+            AutocorrelationSimilarity(score=EvaluationScore.finalize_grade(raw_score=score / 10, score=score))
+        )
+    return MultimodalReport(
+        evaluation_datasets=EvaluationDatasets(training=frame, synthetic=frame.copy()), components=components
+    )
+
+
+class TestMakeNssSummaryTimeSeriesScores:
+    """Verify time-series metric scores reach the saved evaluation metrics."""
+
+    def test_exports_autocorrelation_score(self):
+        summary = make_nss_summary(SafeSynthesizerTiming(), None, _report_with_autocorrelation(7.5))
+
+        assert json.loads(summary.model_dump_json())["autocorrelation_similarity_score"] == 7.5
+
+    def test_autocorrelation_score_is_none_without_the_component(self):
+        summary = make_nss_summary(SafeSynthesizerTiming(), None, _report_with_autocorrelation(None))
+
+        assert json.loads(summary.model_dump_json())["autocorrelation_similarity_score"] is None
 
 
 class TestMakeNssSummaryTokenStats:
@@ -131,6 +162,17 @@ class TestSafeSynthesizerSummaryLogWandb:
         logged = mock_wandb.run.summary.update.call_args.args[0]
         assert logged["gen/num_completion_tokens"] is None
         assert logged["gen/tokens_per_second"] is None
+
+    def test_log_wandb_includes_time_series_scores(self):
+        summary = make_nss_summary(SafeSynthesizerTiming(), None, _report_with_autocorrelation(7.5))
+
+        mock_wandb = MagicMock()
+        mock_wandb.run = MagicMock()
+        with patch.dict(sys.modules, {"wandb": mock_wandb}):
+            summary.log_wandb()
+
+        logged = mock_wandb.run.summary.update.call_args.args[0]
+        assert logged["eval/autocorrelation_similarity_score"] == 7.5
 
     def test_log_wandb_noop_when_no_run(self):
         timing = SafeSynthesizerTiming(generation_time_sec=2.0)

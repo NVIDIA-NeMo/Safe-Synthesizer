@@ -405,8 +405,8 @@ function themePlotlyCharts(container = document) {
     container.querySelectorAll(".js-plotly-plot").forEach((plot) => {
         commonPlotUpdate(plot);
         const card = plot.closest("[data-metric-card]");
-        // Autocorrelation traces are named after value columns and colored by score.
-        if (card?.id !== "autocorrelation-similarity") {
+        // These traces are named after value columns and colored by score.
+        if (!plot.closest("[data-score-colored-traces]")) {
             themeDatasetTraces(plot);
         }
         if (!card) {
@@ -582,7 +582,7 @@ function activateReportView() {
     });
 }
 
-function selectAutocorrelationColumn(event) {
+function selectTimeSeriesColumn(event) {
     const select = event.currentTarget;
     const plot = select.closest("figure")?.querySelector(".js-plotly-plot");
     if (!window.Plotly || !plot) {
@@ -611,8 +611,8 @@ document.querySelectorAll("[data-dismiss]").forEach((button) => {
     button.addEventListener("click", () => button.closest("[data-dismissible]")?.remove());
 });
 document.querySelector("[data-columns-toggle]")?.addEventListener("click", toggleColumns);
-document.querySelectorAll("[data-autocorrelation-column-select]").forEach((select) => {
-    select.addEventListener("change", selectAutocorrelationColumn);
+document.querySelectorAll("[data-time-series-column-select]").forEach((select) => {
+    select.addEventListener("change", selectTimeSeriesColumn);
 });
 document.addEventListener("click", (event) => {
     if (!event.target.closest(".metric-tooltip, [data-tooltip-toggle]")) {

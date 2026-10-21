@@ -911,13 +911,13 @@ h3 {
     background: var(--synthetic);
 }
 
-.autocorrelation-charts {
+.time-series-charts {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 16px;
 }
 
-.autocorrelation-chart-heading {
+.time-series-chart-heading {
     display: flex;
     gap: 8px;
     align-items: center;
@@ -926,28 +926,28 @@ h3 {
     margin-bottom: 8px;
 }
 
-.autocorrelation-charts figure {
+.time-series-charts figure {
     position: relative;
 }
 
-.autocorrelation-chart-title {
+.time-series-chart-title {
     display: inline-flex;
     gap: 6px;
     align-items: center;
 }
 
-.autocorrelation-chart-heading .chart-subheading {
+.time-series-chart-heading .chart-subheading {
     flex: none;
     margin: 0;
 }
 
-.autocorrelation-chart-tooltip {
+.time-series-chart-tooltip {
     top: 36px;
     left: 0;
     width: min(320px, 100%);
 }
 
-.autocorrelation-column-select {
+.time-series-column-select {
     min-width: 0;
     max-width: 60%;
     padding: 6px 30px 6px 10px;
@@ -1309,7 +1309,7 @@ tbody tr:hover td {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    .autocorrelation-charts {
+    .time-series-charts {
         grid-template-columns: 1fr;
     }
 }

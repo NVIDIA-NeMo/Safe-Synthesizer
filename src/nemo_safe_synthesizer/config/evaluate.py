@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from typing import (
     Annotated,
+    ClassVar,
 )
 
 from pydantic import (
@@ -21,6 +22,7 @@ __all__ = [
     "DEFAULT_AUTOCORRELATION_MIN_POINTS",
     "EvaluationParameters",
     "TimeSeriesEvaluationParameters",
+    "TimeSeriesMetricParameters",
 ]
 
 DEFAULT_AUTOCORRELATION_MAX_LAG = 20
@@ -30,7 +32,25 @@ DEFAULT_RECORD_COUNT = 5000
 QUASI_IDENTIFIER_COUNT = 3
 
 
-class AutocorrelationSimilarityParameters(Parameters):
+class TimeSeriesMetricParameters(Parameters):
+    """Base for one time-series metric's parameters.
+
+    Preflight validates ``value_columns`` for every subclass instance found on
+    ``TimeSeriesEvaluationParameters``, naming the metric by ``metric_label``.
+    """
+
+    metric_label: ClassVar[str]
+
+    value_columns: list[str] | None = Field(
+        default=None,
+        description=(
+            "Numeric value columns to evaluate. Defaults to all shared columns inferred as numeric. "
+            "Changing this selection changes the meaning of the aggregate score."
+        ),
+    )
+
+
+class AutocorrelationSimilarityParameters(TimeSeriesMetricParameters):
     """Control autocorrelation similarity evaluation.
 
     Timestamp ordering and sequence grouping use the top-level time-series and
@@ -40,13 +60,8 @@ class AutocorrelationSimilarityParameters(Parameters):
     similarity.
     """
 
-    value_columns: list[str] | None = Field(
-        default=None,
-        description=(
-            "Numeric value columns to evaluate. Defaults to all shared columns inferred as numeric. "
-            "Changing this selection changes the meaning of the aggregate score."
-        ),
-    )
+    metric_label: ClassVar[str] = "Autocorrelation"
+
     max_lag: int = Field(
         default=DEFAULT_AUTOCORRELATION_MAX_LAG,
         ge=1,
@@ -68,7 +83,10 @@ class AutocorrelationSimilarityParameters(Parameters):
 
 
 class TimeSeriesEvaluationParameters(Parameters):
-    """Metric-specific time-series evaluation configuration."""
+    """Metric-specific time-series evaluation configuration.
+
+    Each metric's parameters are one ``TimeSeriesMetricParameters`` field.
+    """
 
     enabled: bool | None = Field(
         default=None,

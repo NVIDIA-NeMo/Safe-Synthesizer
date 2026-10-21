@@ -16,8 +16,6 @@ Classes:
 
 from __future__ import annotations
 
-import random
-from collections import defaultdict
 from functools import cached_property
 from typing import Any
 
@@ -26,14 +24,19 @@ import pandas as pd
 from numpy.typing import NDArray
 from pydantic import Field
 
-from ...artifacts.analyzers.field_features import FieldType
 from ...config.evaluate import AutocorrelationSimilarityParameters
 from ...config.parameters import SafeSynthesizerParameters
-from ...defaults import PSEUDO_GROUP_COLUMN
 from ...evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from ...evaluation.data_model.evaluation_score import EvaluationScore
 from ...observability import get_logger
 from .component import Component
+from .time_series_common import (
+    group_frame,
+    resolve_group_column,
+    select_value_columns,
+    shared_groups,
+    summaries,
+)
 
 logger = get_logger(__name__)
 
@@ -125,35 +128,24 @@ class AutocorrelationSimilarity(Component):
             notes when no usable comparison remains.
         """
         timestamp_column = config.time_series.timestamp_column if config is not None else None
-        group_column = config.data.group_training_examples_by if config is not None else None
-        if (
-            group_column == PSEUDO_GROUP_COLUMN
-            and group_column not in datasets.training
-            and group_column not in datasets.synthetic
-        ):
-            # Training injects this reserved column to reuse grouped sequence
-            # infrastructure, but evaluation receives frames with it removed.
-            group_column = None
-        elif group_column is not None and (
-            group_column not in datasets.training or group_column not in datasets.synthetic
-        ):
-            return AutocorrelationSimilarity(
-                score=EvaluationScore(notes=f"Configured group column {group_column!r} is missing from a dataset.")
-            )
+        group_column, group_error = resolve_group_column(datasets, config)
+        if group_error is not None:
+            return AutocorrelationSimilarity(score=EvaluationScore(notes=group_error))
 
-        columns, column_error = AutocorrelationSimilarity._numeric_columns(
-            datasets, cfg, timestamp_column, group_column
+        columns, column_error, excluded_columns = select_value_columns(
+            datasets, cfg.value_columns, timestamp_column, group_column, "autocorrelation"
         )
         if column_error is not None:
             return AutocorrelationSimilarity(score=EvaluationScore(notes=column_error))
         if not columns:
             return AutocorrelationSimilarity(score=EvaluationScore(notes="No shared numeric value columns."))
 
-        groups, missing_training, missing_synthetic, shared_group_count = AutocorrelationSimilarity._shared_groups(
+        groups, missing_training, missing_synthetic, shared_group_count = shared_groups(
             datasets.training,
             datasets.synthetic,
             group_column,
             cfg.max_groups,
+            _GROUP_SELECTION_SEED,
         )
         if not groups:
             return AutocorrelationSimilarity(score=EvaluationScore(notes="No shared groups to evaluate."))
@@ -168,12 +160,8 @@ class AutocorrelationSimilarity(Component):
         profiles: list[dict[str, Any]] = []
         skipped: list[dict[str, Any]] = []
         for group_value in groups:
-            training_group = AutocorrelationSimilarity._group_frame(
-                datasets.training, group_column, group_value, timestamp_column
-            )
-            synthetic_group = AutocorrelationSimilarity._group_frame(
-                datasets.synthetic, group_column, group_value, timestamp_column
-            )
+            training_group = group_frame(datasets.training, group_column, group_value, timestamp_column)
+            synthetic_group = group_frame(datasets.synthetic, group_column, group_value, timestamp_column)
             for column in columns:
                 result, reason = AutocorrelationSimilarity._profile_score(
                     training_group[column], synthetic_group[column], cfg
@@ -219,6 +207,11 @@ class AutocorrelationSimilarity(Component):
             notes.append(f"Skipped {len(skipped)} unusable group/column comparisons.")
         if omitted_groups:
             notes.append(f"Evaluated {len(groups)} of {shared_group_count} shared groups using a reproducible sample.")
+        if excluded_columns:
+            notes.append(
+                f"Left out {len(excluded_columns)} numeric training columns that synthetic data lacks "
+                f"or stores as non-numeric values: {', '.join(excluded_columns)}."
+            )
         if notes:
             score.notes = " ".join(notes)
 
@@ -237,10 +230,11 @@ class AutocorrelationSimilarity(Component):
                 "skipped": len(skipped),
             },
             "group_selection": group_selection,
-            "per_group": AutocorrelationSimilarity._summaries(profiles, "group"),
-            "per_column": AutocorrelationSimilarity._summaries(profiles, "column"),
+            "per_group": summaries(profiles, "group"),
+            "per_column": summaries(profiles, "column"),
             "profiles": profiles,
             "skipped": skipped,
+            "excluded_columns": excluded_columns,
             "groups_only_in_training": missing_training,
             "groups_only_in_synthetic": missing_synthetic,
         }
@@ -260,142 +254,6 @@ class AutocorrelationSimilarity(Component):
             skipped.append({"group": group_label, "column": column, "reason": reason})
             return
         profiles.append({"group": group_label, "column": column, **result})
-
-    @staticmethod
-    def _numeric_columns(
-        datasets: EvaluationDatasets,
-        cfg: AutocorrelationSimilarityParameters,
-        timestamp_column: str | None,
-        group_column: str | None,
-    ) -> tuple[list[str], str | None]:
-        """Select shared numeric value columns eligible for evaluation.
-
-        Explicit ``value_columns`` retain their configured order. Automatic
-        selection is sorted for deterministic output. Timestamp and grouping
-        columns are excluded even when their storage dtype is numeric.
-
-        Args:
-            datasets: Training and synthetic datasets with inferred field types.
-            cfg: Resolved metric parameters.
-            timestamp_column: Column used only to order observations.
-            group_column: Column used only to separate sequences.
-
-        Returns:
-            Shared numeric value column names and an optional validation error.
-        """
-        if cfg.value_columns is not None:
-            invalid_columns = AutocorrelationSimilarity._invalid_value_columns(
-                datasets,
-                cfg.value_columns,
-                timestamp_column,
-                group_column,
-            )
-            if invalid_columns:
-                return [], "Invalid autocorrelation value columns: " + "; ".join(invalid_columns)
-            return list(dict.fromkeys(cfg.value_columns)), None
-        numeric = set(datasets.get_columns_of_type({FieldType.NUMERIC}, based_on="both"))
-        numeric.difference_update([timestamp_column, group_column, PSEUDO_GROUP_COLUMN])
-        return sorted(numeric), None
-
-    @staticmethod
-    def _invalid_value_columns(
-        datasets: EvaluationDatasets,
-        columns: list[str],
-        timestamp_column: str | None,
-        group_column: str | None,
-    ) -> list[str]:
-        """Return actionable validation failures for explicit value columns."""
-        invalid: list[str] = []
-        reserved = {timestamp_column, group_column, PSEUDO_GROUP_COLUMN}
-        for column in columns:
-            if column in reserved:
-                invalid.append(f"{column!r} is used for timestamp or sequence grouping")
-                continue
-            missing_from = [
-                name
-                for name, frame in (("training", datasets.training), ("synthetic", datasets.synthetic))
-                if column not in frame
-            ]
-            if missing_from:
-                invalid.append(f"{column!r} is missing from {' and '.join(missing_from)} data")
-                continue
-            if not pd.api.types.is_numeric_dtype(datasets.training[column]):
-                invalid.append(f"{column!r} is not numeric in training data")
-                continue
-            if not pd.api.types.is_numeric_dtype(datasets.synthetic[column]):
-                invalid.append(f"{column!r} is not numeric in synthetic data")
-        return invalid
-
-    @staticmethod
-    def _shared_groups(
-        training: pd.DataFrame,
-        synthetic: pd.DataFrame,
-        group_column: str | None,
-        max_groups: int,
-    ) -> tuple[list[Any], list[str], list[str], int]:
-        """Find a deterministic, bounded set of groups shared by both datasets.
-
-        A ``None`` sentinel represents one global sequence when grouping is not
-        configured. Group labels present in only one dataset are returned for
-        diagnostics but do not contribute to the score.
-
-        Args:
-            training: Training records containing candidate group labels.
-            synthetic: Synthetic records containing candidate group labels.
-            group_column: Optional column that identifies independent sequences.
-            max_groups: Maximum number of shared groups to evaluate.
-
-        Returns:
-            Shared group keys, training-only labels, synthetic-only labels,
-            and the total number of shared groups before limiting.
-        """
-        if group_column is None:
-            return [None], [], [], 1
-        if group_column not in training or group_column not in synthetic:
-            return [], [], [], 0
-        training_groups = set(training[group_column].dropna().unique())
-        synthetic_groups = set(synthetic[group_column].dropna().unique())
-        shared_groups = training_groups & synthetic_groups
-        ordered_shared = sorted(shared_groups, key=AutocorrelationSimilarity._group_sort_key)
-        shared = ordered_shared
-        if len(ordered_shared) > max_groups:
-            shared = random.Random(_GROUP_SELECTION_SEED).sample(ordered_shared, k=max_groups)
-            shared.sort(key=AutocorrelationSimilarity._group_sort_key)
-        only_training = [str(value) for value in sorted(training_groups - synthetic_groups, key=str)]
-        only_synthetic = [str(value) for value in sorted(synthetic_groups - training_groups, key=str)]
-        return shared, only_training, only_synthetic, len(shared_groups)
-
-    @staticmethod
-    def _group_sort_key(value: Any) -> tuple[str, str]:
-        """Return a stable ordering key for heterogeneous group values."""
-        type_name = f"{type(value).__module__}.{type(value).__qualname__}"
-        return type_name, str(value)
-
-    @staticmethod
-    def _group_frame(
-        df: pd.DataFrame,
-        group_column: str | None,
-        group_value: Any,
-        timestamp_column: str | None,
-    ) -> pd.DataFrame:
-        """Return one sequence in deterministic timestamp order.
-
-        ``mergesort`` preserves input order for equal timestamps, which makes
-        repeated runs stable without inventing a secondary ordering key.
-
-        Args:
-            df: Dataset containing one or more sequences.
-            group_column: Optional sequence identifier column.
-            group_value: Group to select, or ``None`` for the full dataset.
-            timestamp_column: Optional column used to order the selected rows.
-
-        Returns:
-            A filtered and time-ordered DataFrame view or copy.
-        """
-        frame = df if group_column is None else df[df[group_column] == group_value]
-        if timestamp_column and timestamp_column in frame:
-            frame = frame.sort_values(timestamp_column, kind="mergesort")
-        return frame
 
     @staticmethod
     def _profile_score(
@@ -588,22 +446,3 @@ class AutocorrelationSimilarity(Component):
             correlation = float(np.corrcoef(earlier, later)[0, 1])
             acf[lag - 1] = np.clip(correlation, -1.0, 1.0)
         return acf, support
-
-    @staticmethod
-    def _summaries(profiles: list[dict[str, Any]], key: str) -> list[dict[str, Any]]:
-        """Average profile similarities by a diagnostic key.
-
-        Args:
-            profiles: Successful group-and-column comparison details.
-            key: Detail key to group by, such as ``group`` or ``column``.
-
-        Returns:
-            Deterministically ordered summaries with similarity and count.
-        """
-        scores: defaultdict[Any, list[float]] = defaultdict(list)
-        for item in profiles:
-            scores[item[key]].append(item["similarity"])
-        return [
-            {key: value, "similarity": float(np.mean(values)), "count": len(values)}
-            for value, values in sorted(scores.items(), key=lambda item: str(item[0]))
-        ]

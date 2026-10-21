@@ -37,7 +37,7 @@ Time series support enables Safe Synthesizer to generate synthetic tabular data 
   range and interval. Flexible generation learns a final-row marker, and the
   maximum observed group length is a hard limit for synthetic groups.
 - Chronological constraint enforcement: Validates that generated timestamps follow the expected interval pattern.
-- Autocorrelation-based evaluation: Measures how well the synthetic data preserves temporal patterns from the original data. (ToDo)
+- Time-series evaluation: Measures how well the synthetic data preserves temporal patterns from the original data, starting with Autocorrelation Similarity.
 
 ---
 
@@ -457,46 +457,39 @@ Key Design Decision: If records don't continue from the group's last timestamp, 
 
 ---
 
-## Evaluation Metrics (ToDo)
+## Evaluation Metrics
 
 ### Autocorrelation Similarity
 
 Located in `src/nemo_safe_synthesizer/evaluation/components/autocorrelation_similarity.py`.
 
 Purpose: Measures how well the synthetic data preserves temporal autocorrelation patterns from the reference data.
+It compares training and synthetic autocorrelation profiles for each shared group and numeric column, discounts differences explained by sampling noise, and averages the pair similarities into a 0--10 score.
+See `docs/user-guide/time-series-metrics/autocorrelation-similarity.md` for the full calculation.
 
-Algorithm:
-
-1. Compute ACF vectors for each numeric column:
-   - Mean-center the data.
-   - Calculate autocorrelation for lags 1 to `max_lag`.
-   - Clip values to [-1, 1].
-
-2. Calculate distance between reference and synthetic ACF:
-   - MAE: Mean Absolute Error.
-   - Euclidean: L2 norm.
-
-3. Normalize and score:
-   - Normalize by realistic max distance.
-   - Use RMS of normalized differences across columns.
-   - Final score = 1 - RMS (higher is better).
-
-Evaluation Modes:
-
-- Global: Computes ACF over entire dataset.
-- Per-Group: Computes ACF per group, averages scores.
-
-Auto-Enable: When `is_timeseries=True`, autocorrelation similarity is automatically computed even without explicit evaluation config.
+Auto-Enable: When `is_timeseries=True`, time-series evaluation runs even without explicit evaluation config.
 
 ### Integration with Multimodal Report
 
-The multimodal report automatically includes time series components when:
-- `is_timeseries=True` in config.
-- Time series evaluation is explicitly enabled.
+The multimodal report runs every registered time-series metric when time-series evaluation is enabled.
+It is enabled by default when `is_timeseries=True`, and can be turned off with `evaluation.time_series.enabled: false`.
 
-Components added:
-- `AutocorrelationSimilarity`: Temporal pattern preservation score.
-- `TimeSeriesLineChart`: Visual comparison of time series.
+Shared pieces every time-series metric uses:
+
+- `evaluation/components/time_series_common.py`: grouping column resolution, value column selection, shared-group sampling, and per-group and per-column summaries.
+- `evaluation/reports/multimodal/time_series_cards.py`: `TIME_SERIES_CARDS`, the registry the report uses to run each metric, build its figures, and render its card.
+- `evaluation/assets/jinja/components/time_series_charts.j2`: `comparison_notes` and `chart_grid` macros for the card body.
+- `TimeSeriesValueColumnCheck` in `preflight/checks/dataframe.py`: validates `value_columns` for every `TimeSeriesMetricParameters` field.
+
+### Adding a time-series metric
+
+1. Add a `TimeSeriesMetricParameters` subclass with a `metric_label` to `config/evaluate.py`, and a field for it on `TimeSeriesEvaluationParameters`. Preflight then validates its `value_columns` with no further code.
+2. Write the component, using `time_series_common` for grouping, column selection, and group sampling.
+3. Write its figures module with an `add_<metric>_context(context)` function that adds summary fields to the card context and returns the card's figures.
+4. Write its card template from the `time_series_charts.j2` macros, and add its tooltip keys to `evaluation/assets/text/multi_modal_tooltips.py`.
+5. Append one `TimeSeriesCard` to `TIME_SERIES_CARDS`.
+6. Export the score: a `SafeSynthesizerSummary` field and its `eval/` W&B key in `config/external_results.py`, and an entry in `_REPORT_SCORE_FIELDS` in `results.py`.
+7. Document it: a guide under `docs/user-guide/time-series-metrics/`, its `mkdocs.yml` nav entry, and its paragraphs in `docs/product-overview/evaluation.md`, `docs/user-guide/configuration.md`, and `docs/user-guide/running.md`.
 
 ---
 
@@ -661,5 +654,7 @@ The `timestamp_validation_mode` parameter controls how timestamps are handled du
 | `generation/processors.py` | `TimeSeriesDataProcessor` class |
 | `generation/timeseries_backend.py` | `TimeseriesBackend` generation class |
 | `evaluation/components/autocorrelation_similarity.py` | ACF evaluation metric |
+| `evaluation/components/time_series_common.py` | Grouping and column helpers shared by time-series metrics |
+| `evaluation/reports/multimodal/time_series_cards.py` | Registry of time-series metric report cards |
 | `llm/metadata.py` | Typed time-series group registry and source column order |
 | `defaults.py` | `PSEUDO_GROUP_COLUMN` constant |

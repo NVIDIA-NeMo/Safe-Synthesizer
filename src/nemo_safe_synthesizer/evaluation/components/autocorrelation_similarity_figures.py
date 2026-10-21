@@ -14,6 +14,8 @@ Functions:
     generate_autocorrelation_pair_score_figure: Plot group and column pair
         scores for the lowest-scoring columns against the overall score.
     order_autocorrelation_columns: Order value columns by mean pair score.
+    add_autocorrelation_context: Add report summary fields and return the
+        card's figures.
     shorten_column_label: Shorten long column names for axis labels.
 """
 
@@ -272,6 +274,50 @@ def order_autocorrelation_columns(profiles: Sequence[Mapping[str, Any]]) -> list
     for item in profiles:
         scores.setdefault(str(item["column"]), []).append(float(item["similarity"]))
     return sorted(scores, key=lambda column: (float(np.mean(scores[column])), column))
+
+
+def add_autocorrelation_context(context: dict[str, Any]) -> list[tuple[str, go.Figure, bool, str]]:
+    """Add report summary fields to the Autocorrelation Similarity card context.
+
+    Args:
+        context: The component's report context, updated in place.
+
+    Returns:
+        Chart title, figure, whether the chart gets the column select, and
+        tooltip key for each chart, or an empty list without profiles.
+    """
+    profiles = context["details"].get("profiles", [])
+    figures: list[tuple[str, go.Figure, bool, str]] = []
+    context["summary_columns"] = []
+    if profiles:
+        figures = [
+            (
+                "Typical autocorrelation",
+                generate_autocorrelation_summary_figure(profiles),
+                True,
+                "autocorrelation_typical_info",
+            ),
+            (
+                "Difference by lag",
+                generate_autocorrelation_lag_error_figure(profiles),
+                False,
+                "autocorrelation_difference_info",
+            ),
+            (
+                "Pair scores",
+                generate_autocorrelation_pair_score_figure(profiles, context["score"]["score"]),
+                False,
+                "autocorrelation_pair_scores_info",
+            ),
+        ]
+        context["summary_columns"] = order_autocorrelation_columns(profiles)
+    context["summary_traces_per_column"] = AUTOCORRELATION_SUMMARY_TRACES_PER_COLUMN
+    context["pair_score_column_count"] = min(len(context["summary_columns"]), AUTOCORRELATION_PAIR_SCORE_MAX_COLUMNS)
+    context["evaluated_profile_count"] = len(profiles)
+    context["evaluated_group_count"] = len({str(item["group"]) for item in profiles})
+    context["evaluated_column_count"] = len({item["column"] for item in profiles})
+    context["constant_synthetic_profile_count"] = sum(1 for item in profiles if item["evaluated_lags"] == 0)
+    return figures
 
 
 def _profile_matrix(profiles: Sequence[Mapping[str, Any]], key: str) -> np.ndarray:

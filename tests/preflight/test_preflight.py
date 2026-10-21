@@ -7,11 +7,12 @@ import json
 from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
-from typing import cast
+from typing import ClassVar, cast
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
+from pydantic import Field
 from rich.console import Console
 from transformers import PretrainedConfig, PreTrainedTokenizerBase
 
@@ -20,6 +21,7 @@ from nemo_safe_synthesizer.config.evaluate import (
     AutocorrelationSimilarityParameters,
     EvaluationParameters,
     TimeSeriesEvaluationParameters,
+    TimeSeriesMetricParameters,
 )
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
@@ -890,6 +892,31 @@ class TestTimeSeriesValueColumnCheck:
         )
 
         assert any(issue.code == "evaluation_column_not_numeric" for issue in issues)
+
+    def test_checks_value_columns_of_every_time_series_metric(self):
+        class FakeMetricParameters(TimeSeriesMetricParameters):
+            metric_label: ClassVar[str] = "Fake metric"
+
+        class TwoMetricParameters(TimeSeriesEvaluationParameters):
+            fake: FakeMetricParameters = Field(default_factory=FakeMetricParameters)
+
+        config = SafeSynthesizerParameters(
+            time_series=TimeSeriesParameters(is_timeseries=True, timestamp_interval_seconds=60),
+            evaluation=EvaluationParameters(
+                time_series=TwoMetricParameters(
+                    enabled=True,
+                    autocorrelation=AutocorrelationSimilarityParameters(value_columns=["value"]),
+                    fake=FakeMetricParameters(value_columns=["missing"]),
+                ),
+            ),
+        )
+
+        issues = TimeSeriesValueColumnCheck().run(
+            make_ctx(config=config, data=pd.DataFrame({"value": [1.0, 2.0, 3.0]}))
+        )
+
+        assert [issue.code for issue in issues] == ["evaluation_column_not_found"]
+        assert "Fake metric value column 'missing'" in issues[0].message
 
 
 @pytest.mark.unit
