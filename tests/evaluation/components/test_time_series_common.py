@@ -78,9 +78,7 @@ def test_select_value_columns_keeps_training_numeric_column_that_collapsed_in_sy
     synthetic_df = training_df.copy()
     synthetic_df["count"] = 0
 
-    columns, error, excluded = select_value_columns(
-        _datasets(training_df, synthetic_df), None, "time", "group", "test"
-    )
+    columns, error, excluded = select_value_columns(_datasets(training_df, synthetic_df), None, "time", "group", "test")
 
     assert error is None
     assert "count" in columns
