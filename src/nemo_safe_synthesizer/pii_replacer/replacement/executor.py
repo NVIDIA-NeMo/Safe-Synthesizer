@@ -30,7 +30,7 @@ from .types import (
     RecordMappingKey,
     StructuredMappingKey,
 )
-from .value_checks import generated_value_is_valid
+from .value_checks import generated_value_is_valid, keeps_original_name_part
 
 logger = get_logger(__name__)
 
@@ -105,6 +105,7 @@ class StructuredReplacementExecutor:
         self._generated_by_target: dict[str, set[str]] = {}
         self._repeated_by_target: dict[str, int] = {}
         self._reused_originals_by_target: dict[str, int] = {}
+        self._kept_name_parts_by_target: dict[str, int] = {}
         self._identifier_allocators: dict[str, IdentifierAllocator] = {}
         self._dependency_conflicts: dict[tuple[str, frozenset[EntityType]], int] = {}
         self._generation_elapsed = 0.0
@@ -139,6 +140,11 @@ class StructuredReplacementExecutor:
                 "Some identifier replacements equal another row's original value because no other value was found",
                 extra={"column": column_name, "reused_original_count": reused},
             )
+        for column_name, kept in sorted(self._kept_name_parts_by_target.items()):
+            logger.user.warning(
+                "Some full-name replacements keep the original's first or last name because no other name was found",
+                extra={"column": column_name, "kept_name_part_count": kept},
+            )
         drifts = self._dependency_drift_results()
         for drift in drifts:
             logger.user.warning(
@@ -162,6 +168,7 @@ class StructuredReplacementExecutor:
         self._generated_by_target.clear()
         self._repeated_by_target.clear()
         self._reused_originals_by_target.clear()
+        self._kept_name_parts_by_target.clear()
         self._identifier_allocators.clear()
         self._dependency_conflicts.clear()
         self._generation_elapsed = 0.0
@@ -286,6 +293,7 @@ class StructuredReplacementExecutor:
         generated = self._generated_by_target.get(spec.column_name, set())
         repeat: str | None = None
         reused_original: str | None = None
+        kept_name_part: str | None = None
         for attempt in range(_MAX_GENERATION_ATTEMPTS):
             request = ReplacementGenerationRequest(
                 entity_type=spec.entity_type,
@@ -314,6 +322,14 @@ class StructuredReplacementExecutor:
             # A replacement must differ from its own original; that rule is strict.
             if not generated_value_is_valid(request, candidate):
                 continue
+            # A full name that differs as a whole can still keep the real first or last name. Prefer one that
+            # keeps neither; fall back to it only when no other name was found, so a plan whose dependencies
+            # fix a name part cannot fail the run.
+            if spec.entity_type is EntityType.FULL_NAME and keeps_original_name_part(
+                original_text, candidate, spec.pattern
+            ):
+                kept_name_part = kept_name_part or candidate
+                continue
             if candidate in originals:
                 reused_original = reused_original or candidate
             elif candidate in generated:
@@ -329,6 +345,11 @@ class StructuredReplacementExecutor:
                 self._reused_originals_by_target.get(spec.column_name, 0) + 1
             )
             return reused_original
+        if kept_name_part is not None:
+            self._kept_name_parts_by_target[spec.column_name] = (
+                self._kept_name_parts_by_target.get(spec.column_name, 0) + 1
+            )
+            return kept_name_part
         raise GenerationError(
             f"PII replacement could not generate a value that differs from the original for column "
             f"{spec.column_name!r} after {_MAX_GENERATION_ATTEMPTS} attempts"
