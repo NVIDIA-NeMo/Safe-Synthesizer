@@ -22,8 +22,13 @@ __all__ = ["generated_value_is_valid", "is_luhn_valid", "keeps_original_name_par
 
 
 def generated_value_is_valid(request: ReplacementGenerationRequest, value: str) -> bool:
-    """Return whether a generated value meets the request's local constraints."""
-    if not value or value == request.original_value:
+    """Return whether a generated value meets the request's local constraints.
+
+    A replacement must differ from its original ignoring letter case, because a reused replacement may be
+    written in the case of each occurrence it replaces: ``Ada`` accepted for ``ADA`` would be written back
+    as ``ADA``.
+    """
+    if not value or value.casefold() == request.original_value.casefold():
         return False
     if request.entity_type is EntityType.CREDIT_DEBIT_CARD:
         return is_luhn_valid(value)

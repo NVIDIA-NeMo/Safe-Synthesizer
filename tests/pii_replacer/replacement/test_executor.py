@@ -279,6 +279,16 @@ class TestStructuredReplacementExecutor:
         assert len(generator.requests) == 2
         assert generator.requests[0].seed != generator.requests[1].seed
 
+    def test_candidate_equal_to_the_original_ignoring_case_is_resampled(self) -> None:
+        dataframe = pd.DataFrame({"first_name": ["Ada"]})
+        plan = _plan(_target("first_name", EntityType.FIRST_NAME))
+        generator = _ScriptedNameGenerator("ADA", "Kathleen")
+
+        result = _execute(dataframe, plan, generator)
+
+        assert result.dataframe["first_name"].tolist() == ["Kathleen"]
+        assert len(generator.requests) == 2
+
     def test_identifier_replacements_avoid_repeats_before_accepting_one(self) -> None:
         dataframe = pd.DataFrame({"identifier": ["USER-1", "USER-2"]})
         plan = _plan(_target("identifier", EntityType.UNIQUE_IDENTIFIER))
