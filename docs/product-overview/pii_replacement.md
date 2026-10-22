@@ -412,8 +412,10 @@ both a person's and a spouse's gender. The prompt asks the model to choose a
 candidate whenever it describes the same person or record, so the fake value
 stays consistent with it. NSS, rather than the model, decides how
 replacements stay consistent: within a group when a grouping column is
-configured, else within a row. Every replacement differs from the value it
-replaces. A replaced full name also avoids the original's first and last name;
+configured, else within a row. Values that differ only in letter case count as
+the same value: `Ada`, `ADA`, and `ada` share one replacement, written in each
+occurrence's case, such as `Kathleen`, `KATHLEEN`, and `kathleen`. Every
+replacement differs from the value it replaces, ignoring case. A replaced full name also avoids the original's first and last name;
 when no such name is found, NSS keeps one that shares a part and logs a warning
 with the count. Identifier-like values (email, phone number, SSN, national ID, card
 number, API key, IP address, unique identifier) also avoid every other original

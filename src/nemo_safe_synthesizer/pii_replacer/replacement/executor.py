@@ -21,6 +21,7 @@ from .canonicalization import canonicalize_scalar, is_missing_scalar, readable_v
 from .compiler import compile_plan
 from .generation import ReplacementGenerationRequest, ReplacementGenerator
 from .identifier_space import IdentifierAllocator, NumberSpace, identifier_allocator
+from .letter_case import case_insensitive_identity, match_letter_case
 from .types import (
     CanonicalValue,
     EffectiveDependencyTuple,
@@ -246,8 +247,9 @@ class StructuredReplacementExecutor:
             canonical_original = canonicalize_scalar(original)
             dependencies = _effective_dependencies(working, row_position, spec)
             key = self._mapping_key(spec, row_position, canonical_original, group_identities)
-            replacement = self._replacement_for(key, spec, original_texts[row_position], dependencies)
-            working.iat[row_position, column_position] = replacement
+            original_text = original_texts[row_position]
+            replacement = self._replacement_for(key, spec, original_text, dependencies)
+            working.iat[row_position, column_position] = match_letter_case(original_text, replacement)
 
     def _mapping_key(
         self,
@@ -256,9 +258,11 @@ class StructuredReplacementExecutor:
         original: CanonicalValue,
         group_identities: tuple[CanonicalValue, ...] | None,
     ) -> StructuredMappingKey:
+        # Values that differ only in letter case share a mapping; each occurrence is written in its own case.
+        identity = case_insensitive_identity(original)
         if group_identities is None:
-            return RecordMappingKey(spec.column_name, row_position, original)
-        return GroupMappingKey(spec.column_name, group_identities[row_position], original)
+            return RecordMappingKey(spec.column_name, row_position, identity)
+        return GroupMappingKey(spec.column_name, group_identities[row_position], identity)
 
     def _replacement_for(
         self,
