@@ -20,7 +20,9 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiSamplerConfig,
     ReplacePiiConfig,
 )
+from nemo_safe_synthesizer.data_processing.csv_source import CsvSource
 from nemo_safe_synthesizer.errors import ParameterError
+from nemo_safe_synthesizer.pii_replacer import TabularPiiReplacer, TransformResult
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
 
 
@@ -170,6 +172,50 @@ def test_replace_pii_writes_unchanged_cells_as_in_the_source_csv(tmp_path: Path)
         "count": ["7", ""],
         "note": ["N/A", "None"],
     }
+
+
+def _email_replacement_config() -> SafeSynthesizerParameters:
+    return SafeSynthesizerParameters(
+        replace_pii=ReplacePiiConfig(
+            replacement_plan=PiiReplacementPlan(
+                columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
+            ),
+            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+        )
+    )
+
+
+def test_replace_pii_takes_unchanged_cells_from_the_bytes_it_replaced(tmp_path: Path) -> None:
+    source = tmp_path / "input.csv"
+    source.write_text("email,zip\nada@example.com,02054\n")
+    nss = SafeSynthesizer(config=_email_replacement_config(), save_path=tmp_path / "artifacts").with_data_source(
+        str(source)
+    )
+    original_replace = TabularPiiReplacer.replace
+
+    def replace_then_change_the_file(replacer: TabularPiiReplacer, dataframe: pd.DataFrame) -> TransformResult:
+        source.write_text("email,zip\nother@example.com,99999\nmore@example.com,11111\n")
+        return original_replace(replacer, dataframe)
+
+    with patch.object(TabularPiiReplacer, "replace", replace_then_change_the_file):
+        nss.replace_pii(tmp_path / "pii_replaced.csv")
+
+    written = pd.read_csv(tmp_path / "pii_replaced.csv", dtype=str, na_filter=False)
+    assert written["zip"].tolist() == ["02054"]
+
+
+def test_replace_pii_accepts_a_csv_source(tmp_path: Path) -> None:
+    source = tmp_path / "input.csv"
+    source.write_text("email;zip\nada@example.com;02054\n")
+    nss = SafeSynthesizer(config=_email_replacement_config(), save_path=tmp_path / "artifacts").with_data_source(
+        CsvSource.load(str(source), {"sep": ";"})
+    )
+
+    result = nss.replace_pii(tmp_path / "pii_replaced.csv")
+
+    written = pd.read_csv(tmp_path / "pii_replaced.csv", dtype=str, na_filter=False)
+    assert result.transformed_df["zip"].tolist() == [2054]
+    assert written["zip"].tolist() == ["02054"]
 
 
 def test_replace_pii_rejects_source_text_with_other_columns(tmp_path: Path) -> None:

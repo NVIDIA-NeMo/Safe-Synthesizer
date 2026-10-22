@@ -146,6 +146,11 @@ def _emit_nss_telemetry(ss: SafeSynthesizer, status: TaskStatusEnum) -> None:
         pass  # Telemetry is best-effort; never disrupt the pipeline
 
 
+def _has_input_shape(dataframe: pd.DataFrame, source_text: pd.DataFrame) -> bool:
+    """Return whether ``source_text`` has the columns and row count of ``dataframe``."""
+    return list(source_text.columns) == list(dataframe.columns) and len(source_text) == len(dataframe)
+
+
 def _restore_unchanged_text(
     original: pd.DataFrame,
     transformed: pd.DataFrame,
@@ -468,8 +473,9 @@ class SafeSynthesizer(ConfigBuilder):
                 na_filter=False)``. The replaced CSV takes every cell that
                 replacement left unchanged from it, so values such as ZIP code
                 ``"02054"`` and ``"N/A"`` are written exactly as they appeared
-                instead of as ``2054`` and an empty cell. Defaults to that read
-                of the CSV path given to ``with_data_source``, if any.
+                instead of as ``2054`` and an empty cell. Defaults to a text
+                parse of the same bytes the input was read from when
+                ``with_data_source`` was given a CSV path, URL, or ``CsvSource``.
 
         Returns:
             The replacement result, including aggregate statistics and the
@@ -487,11 +493,7 @@ class SafeSynthesizer(ConfigBuilder):
         dataframe = self._data_source
         if config is None or not isinstance(dataframe, pd.DataFrame):
             raise InternalError("PII replacement planning finished without a dataframe data source")
-        if source_text is None and output_path is not None and self._data_source_csv_path is not None:
-            source_text = pd.read_csv(self._data_source_csv_path, dtype=str, na_filter=False)
-        if source_text is not None and (
-            list(source_text.columns) != list(dataframe.columns) or len(source_text) != len(dataframe)
-        ):
+        if source_text is not None and not _has_input_shape(dataframe, source_text):
             raise ParameterError("source_text must have the same columns and row count as the data source")
         from ..pii_replacer import TabularPiiReplacer
 
@@ -508,6 +510,12 @@ class SafeSynthesizer(ConfigBuilder):
         if output_path is not None:
             replacement_output_path = Path(output_path)
             replacement_output_path.parent.mkdir(parents=True, exist_ok=True)
+            # The text form is parsed only now, from the bytes the input was read from, so it costs no
+            # memory during planning and cannot disagree with the input if the file has since changed.
+            if source_text is None and self._data_source_csv is not None:
+                source_text = self._data_source_csv.read_text()
+                if not _has_input_shape(dataframe, source_text):
+                    raise InternalError("the text read of the CSV data source does not match its typed read")
             output = (
                 result.transformed_df
                 if source_text is None

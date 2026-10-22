@@ -6,7 +6,7 @@
 import os
 from pathlib import Path
 from typing import cast
-from unittest.mock import ANY, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
@@ -20,6 +20,7 @@ from nemo_safe_synthesizer.cli.settings import CLISettings
 from nemo_safe_synthesizer.cli.utils import merge_overrides
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.replace_pii import EntityType
+from nemo_safe_synthesizer.data_processing.csv_source import CsvSource
 from nemo_safe_synthesizer.telemetry import DeploymentTypeEnum, TaskStatusEnum
 from nemo_safe_synthesizer.tooling import PreflightRenderContext
 
@@ -674,7 +675,6 @@ class TestRunReplacePii:
         self,
         cli_runner: CliRunner,
         dummy_csv: Path,
-        mock_dataframe: MagicMock,
         mock_workdir: MagicMock,
         patched_run_dependencies: dict,
     ) -> None:
@@ -688,9 +688,10 @@ class TestRunReplacePii:
         setup_kwargs = patched_run_dependencies["common_setup"].call_args.kwargs
         assert setup_kwargs["phase"] == "replace_pii"
         assert setup_kwargs["skip_wandb"] is True
+        assert setup_kwargs["load_data"] is False
 
         nss = patched_run_dependencies["safe_synthesizer"]
-        nss.with_data_source.assert_called_once_with(mock_dataframe)
+        nss.with_data_source.assert_called_once_with(CsvSource.load(str(dummy_csv)))
         nss.plan_pii_replacement.assert_called_once_with(
             output_path=mock_workdir.run_dir / "safe-synthesizer-config.yaml"
         )
@@ -704,7 +705,6 @@ class TestRunReplacePii:
         self,
         cli_runner: CliRunner,
         dummy_csv: Path,
-        mock_dataframe: MagicMock,
         mock_workdir: MagicMock,
         patched_run_dependencies: dict,
     ) -> None:
@@ -716,14 +716,14 @@ class TestRunReplacePii:
 
         assert result.exit_code == 0
         nss = patched_run_dependencies["safe_synthesizer"]
-        nss.with_data_source.assert_called_once_with(mock_dataframe)
         nss.replace_pii.assert_called_once_with(
             output_path=mock_workdir.run_dir / "input_pii_replaced.csv",
             config_output_path=mock_workdir.run_dir / "pii_replacement_config.yaml",
-            source_text=ANY,
         )
-        source_text = nss.replace_pii.call_args.kwargs["source_text"]
-        assert source_text.to_dict("list") == {"col1": ["1", "3"], "col2": ["2", "4"]}
+        (data_source,) = nss.with_data_source.call_args.args
+        assert isinstance(data_source, CsvSource)
+        assert data_source.content == dummy_csv.read_bytes()
+        assert data_source.read_text().to_dict("list") == {"col1": ["1", "3"], "col2": ["2", "4"]}
         nss.plan_pii_replacement.assert_not_called()
         nss.process_data.assert_not_called()
         nss.train.assert_not_called()
@@ -757,13 +757,26 @@ class TestRunReplacePii:
         patched_run_dependencies["safe_synthesizer"].replace_pii.assert_called_once_with(
             output_path=output_file,
             config_output_path=mock_workdir.run_dir / "pii_replacement_config.yaml",
-            source_text=ANY,
         )
+
+    def test_apply_reads_a_non_csv_source_as_a_dataframe(
+        self,
+        cli_runner: CliRunner,
+        tmp_path: Path,
+        patched_run_dependencies: dict,
+    ) -> None:
+        json_source = tmp_path / "input.json"
+        json_source.write_text('[{"col1": 1}]')
+
+        result = cli_runner.invoke(run, ["replace-pii", "--data-source", str(json_source)], catch_exceptions=False)
+
+        assert result.exit_code == 0
+        (data_source,) = patched_run_dependencies["safe_synthesizer"].with_data_source.call_args.args
+        assert data_source.to_dict("list") == {"col1": [1]}
 
     def test_plan_only_reports_missing_input_dataframe(
         self,
         cli_runner: CliRunner,
-        dummy_csv: Path,
         mock_logger: MagicMock,
         mock_config: MagicMock,
         mock_workdir: MagicMock,
@@ -773,10 +786,7 @@ class TestRunReplacePii:
         common_setup.side_effect = None
         common_setup.return_value = (mock_logger, mock_config, None, mock_workdir)
 
-        result = cli_runner.invoke(
-            run,
-            ["replace-pii", "--plan-only", "--data-source", str(dummy_csv)],
-        )
+        result = cli_runner.invoke(run, ["replace-pii", "--plan-only"])
 
         assert result.exit_code == 1
         assert "Input data is required to plan or apply PII replacement." in result.output

@@ -351,8 +351,12 @@ are not persisted.
 For CSV and TXT inputs, every cell that replacement leaves unchanged is written
 exactly as it appears in the input file. For example, ZIP code `02054` stays
 `02054` rather than becoming `2054`, and `N/A` stays `N/A` rather than
-becoming an empty cell. The SDK does the same when `with_data_source` is given
-a CSV path; for a dataframe source, pass the input read as text with
+becoming an empty cell. The file is read once, and the unchanged cells come
+from those same bytes, so editing the file during a long run cannot mix rows
+from two versions. Local paths and HTTP(S) URLs are read this way; for other
+URLs, such as `s3://`, the text is read again when the output is written. The
+SDK does the same when `with_data_source` is given a CSV path or URL; for a
+dataframe source, pass the input read as text with
 `source_text=pd.read_csv(path, dtype=str, na_filter=False)`.
 
 The SDK equivalent returns the complete `TransformResult` and writes files only
