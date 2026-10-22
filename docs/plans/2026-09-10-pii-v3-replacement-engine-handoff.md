@@ -522,7 +522,8 @@ quality information, not invalid configuration.
 - Derive a per-mapping RNG seed using SHA-256 over the base seed, complete mapping key, and operation-purpose tag.
 - Use randomness for Nemotron-Personas/Faker choices, masks, birth-date shifts, retries, and collision avoidance.
 - Given the same plan, accepted detector spans, and seed, output must be deterministic.
-- Support Nemotron-Personas and Faker person sampling, name patterns, character masks, plus-or-minus 365-day birth-date shifts,
+- Support Nemotron-Personas and Faker person sampling, name patterns, character masks, nonzero birth-date shifts drawn from a normal distribution
+  (30-day standard deviation, at most 180 days either way),
   Luhn-valid cards, IP addresses, and collision-resistant identifiers.
 - A birth-date pattern only has to cover 99% of a column. Parse each cell with the pattern, then common date formats,
   and shift it. Write the result in the pattern when one is configured. When no format parses the cell, generate a

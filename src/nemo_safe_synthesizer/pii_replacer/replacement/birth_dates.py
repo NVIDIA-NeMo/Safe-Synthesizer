@@ -18,10 +18,16 @@ __all__ = ["birth_date_is_supported", "random_birth_date", "shift_birth_date"]
 _FALLBACK_BIRTH_DATE_FORMATS = ("%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y", "%m-%d-%Y", "%d-%m-%Y")
 _RANDOM_BIRTH_DATE_START = date(1930, 1, 1)
 _RANDOM_BIRTH_DATE_DAYS = (date(2010, 12, 31) - _RANDOM_BIRTH_DATE_START).days
+_SHIFT_STANDARD_DEVIATION_DAYS = 30
+_MAX_SHIFT_DAYS = 180
 
 
 def shift_birth_date(original: str, pattern: str | None, rng: Random) -> str | None:
-    """Shift a parseable birth date by 1 to 365 days in either direction, or return ``None``.
+    """Shift a parseable birth date by a small nonzero number of days, or return ``None``.
+
+    The shift is drawn from a normal distribution with a 30-day standard deviation and never
+    exceeds 180 days, so the original date does not survive while ages and the column's
+    distribution stay close to the original.
 
     The plan's pattern only has to cover 99% of a column, so each cell is tried
     against the pattern first and then against common date formats. The
@@ -38,11 +44,20 @@ def shift_birth_date(original: str, pattern: str | None, rng: Random) -> str | N
     if parsed is None:
         return None
     value, output_pattern = parsed
-    offset = rng.randint(-365, 365)
-    if offset == 0:
-        offset = 1
-    shifted = value + timedelta(days=offset)
+    shifted = value + timedelta(days=_shift_days(rng))
     return shifted.strftime(output_pattern) if output_pattern is not None else shifted.date().isoformat()
+
+
+def _shift_days(rng: Random) -> int:
+    """Draw a nonzero shift in days from a normal distribution, at most ``_MAX_SHIFT_DAYS`` either way.
+
+    A draw that rounds to zero or falls beyond the cap is redrawn rather than moved, so no day
+    collects the extra probability and the distribution stays symmetric.
+    """
+    while True:
+        days = round(rng.gauss(0, _SHIFT_STANDARD_DEVIATION_DAYS))
+        if days != 0 and abs(days) <= _MAX_SHIFT_DAYS:
+            return days
 
 
 def random_birth_date(pattern: str | None, rng: Random) -> str:
