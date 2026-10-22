@@ -9,6 +9,7 @@ from collections.abc import Callable
 from dataclasses import FrozenInstanceError
 from datetime import datetime
 from pathlib import Path
+from random import Random
 from typing import Literal
 
 import numpy as np
@@ -488,6 +489,20 @@ class TestReplacementGenerator:
         replacement = _faker_generator().generate(_request(EntityType.DATE_OF_BIRTH, "spring"))
 
         assert datetime(1930, 1, 1) <= datetime.fromisoformat(replacement) <= datetime(2010, 12, 31)
+
+    @pytest.mark.parametrize(
+        "original",
+        ["yesterday", "today", "in 2 days", "last week", "30 years", "2 weeks", "now", "an hour ago"],
+    )
+    def test_relative_date_expression_is_not_parsed_as_a_birth_date(self, original: str) -> None:
+        assert birth_dates.shift_birth_date(original, None, Random(0)) is None
+
+    @pytest.mark.parametrize("original", ["March 3, 1990", "3/4/1990", "Jan 12 99"])
+    def test_fixed_calendar_date_is_still_shifted(self, original: str) -> None:
+        replacement = birth_dates.shift_birth_date(original, None, Random(0))
+
+        assert replacement is not None
+        assert replacement != original
 
     def test_card_pattern_produces_a_luhn_valid_number(self) -> None:
         generator = _faker_generator()

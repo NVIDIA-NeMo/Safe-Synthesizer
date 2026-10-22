@@ -459,8 +459,9 @@ Complete birth dates written in natural language, such as `5 April 1990` or
 `April 5th, 1990`, are parsed strictly, shifted by the same deterministic
 plus-or-minus 365-day policy as structured dates, and rendered as ISO dates
 when no explicit strftime pattern exists. Incomplete or vague candidates such
-as `spring` are ignored and reported only as an aggregate warning without the
-source text.
+as `spring`, and relative expressions such as `yesterday`, `in 2 days`, or an
+age like `30 years`, are not treated as dates. Such candidates are ignored and
+reported only as an aggregate warning without the source text.
 
 An independently detected name or street component may reuse a parent
 replacement only when NSS can align it semantically. A full name, whether in a
