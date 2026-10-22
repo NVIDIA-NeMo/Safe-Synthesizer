@@ -43,6 +43,7 @@ NAME_ENTITY_TYPES = frozenset(
 
 
 def dependency_values(dependencies: EffectiveDependencyTuple) -> dict[EntityType, str]:
+    """Return each present dependency's normalized value by entity type, skipping missing ones."""
     return {entity_type: value.normalized_value for entity_type, value in dependencies if value is not None}
 
 
@@ -98,6 +99,14 @@ def render_name(
     rng: Random,
     values: Mapping[str, str],
 ) -> str:
+    """Render a name from ``first``, ``middle``, and ``last`` parts, following ``pattern`` when one is set.
+
+    Without a pattern, a full name is ``"First Last"`` and a name part is that part alone.
+
+    Example:
+        ``render_name(EntityType.FULL_NAME, None, rng, {"first": "Ada", "middle": "", "last": "Lovelace"})``
+        is ``"Ada Lovelace"``.
+    """
     if pattern is not None:
         return render_name_pattern(entity_type, pattern, values, rng)
     return {
@@ -109,6 +118,11 @@ def render_name(
 
 
 def required_pattern_values(entity_type: EntityType, pattern: str) -> frozenset[str]:
+    """Return the name parts a name or email ``pattern`` uses, such as ``{"first", "last"}``.
+
+    Raises:
+        GenerationError: If ``pattern`` is not a valid pattern for ``entity_type``.
+    """
     parts, error = parse_name_pattern(entity_type, pattern)
     if error is not None or parts is None:
         raise GenerationError(error or "invalid name pattern")
@@ -116,6 +130,7 @@ def required_pattern_values(entity_type: EntityType, pattern: str) -> frozenset[
 
 
 def email_domain(value: str) -> str | None:
+    """Return the text after the last ``@`` in ``value``, or ``None`` if there is none or it contains spaces."""
     if "@" not in value:
         return None
     domain = value.rsplit("@", 1)[1]
@@ -123,6 +138,11 @@ def email_domain(value: str) -> str | None:
 
 
 def render_address(street: str, dependencies: Mapping[EntityType, str]) -> str:
+    """Append the city, state, ZIP code, and country found in ``dependencies`` to ``street``.
+
+    Example:
+        ``"12 Elm St"`` with a city ``"Mesa"`` and state ``"AZ"`` becomes ``"12 Elm St, Mesa, AZ"``.
+    """
     locality = [
         dependencies.get(EntityType.CITY),
         dependencies.get(EntityType.STATE),
@@ -144,6 +164,15 @@ _MAX_LUHN_ATTEMPTS = 100
 
 
 def render_luhn_pattern(pattern: str, rng: Random) -> str:
+    """Render a card number from a character mask so that it passes the Luhn checksum.
+
+    Literal characters are kept, every generated position gets a random allowed digit, and one
+    position is then adjusted so the checksum holds.
+
+    Raises:
+        GenerationError: If the mask is invalid, a generated position allows no digit, or no
+            Luhn-valid value fits the mask.
+    """
     parts, error = parse_character_mask(pattern)
     if error is not None or parts is None:
         raise GenerationError(error or "invalid credit/debit-card pattern")
@@ -177,6 +206,14 @@ def render_luhn_pattern(pattern: str, rng: Random) -> str:
 
 
 def shape_preserving_value(original: str, rng: Random) -> str:
+    """Return ``original`` with every digit and letter replaced at random, keeping its layout.
+
+    Digits stay digits, lowercase letters stay lowercase, other letters become uppercase ASCII,
+    and every other character is kept.
+
+    Example:
+        ``"D123-456x"`` becomes a value such as ``"Q804-913k"``.
+    """
     rendered: list[str] = []
     for character in original:
         # Every letter and digit is replaced, including non-ASCII ones, so no identifying text survives.
@@ -193,6 +230,7 @@ def shape_preserving_value(original: str, rng: Random) -> str:
 
 
 def looks_like_uuid(value: str) -> bool:
+    """Return whether ``value`` is written as a hyphenated, 36-character UUID."""
     return (
         re.fullmatch(
             r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
