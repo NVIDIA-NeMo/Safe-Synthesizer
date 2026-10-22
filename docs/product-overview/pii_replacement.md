@@ -426,11 +426,19 @@ An independently detected name or street component may reuse a parent
 replacement only when NSS can align it semantically. A full name, whether in a
 structured column or detected in free text, aligns with first, middle, and
 last names through explicit name-pattern placeholders, or, without a pattern,
-when it is a plain two- or three-word name such as `Kenneth Gonzales`. A free-text
+when it is a two- or three-word name such as `Kenneth Gonzales`. A free-text
 full name like that is replaced word by word, so `Kenneth Gonzales` and a bare
 `Kenneth` in the same record or group get the same first-name replacement.
-Names with titles, initials, or suffixes, such as `Dr. Ada Lovelace` or
-`Ada K. Lovelace`, are replaced whole and not split. A street in free text
+Titles and suffixes such as `Dr`, `Mrs`, `Prof`, `Jr`, or `III` are kept
+unchanged and do not count as name words, so `Dr. Ada Lovelace` becomes
+`Dr. <first> <last>`. A single-letter initial is replaced by a different
+letter: when the record or group has exactly one replaced name of that kind
+starting with the same letter, the initial takes the first letter of that
+replacement, so after `Ada Lovelace` becomes `Grace Hopper`, `Ada L.` becomes
+`Grace H.`. Initials are never reused on their own in other text. A name that
+does not leave two or three words after removing titles and suffixes is
+replaced whole.
+A street in free text
 reuses the street of a structured address whose locality was kept, as
 described below, or, otherwise, of a structured address that ends with the
 exact suffix built from its typed city, state, postal-code, or country
