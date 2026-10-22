@@ -3,20 +3,19 @@
 
 """Finite identifier value spaces with deterministic allocation.
 
-Identifier replacements should be unique and should not equal any original value
-in the column. Drawing random values and retrying fails once a value space is
-nearly full, as with a dense row counter. These spaces instead enumerate their
-values, so allocation starts at a seeded position and steps to the next unused
-value. When no unused value is left, allocation repeats an earlier replacement,
-and only when none exists does it use another row's original. A replacement
-never equals its own original.
+A replacement never equals its own original, and in a column whose originals are
+all distinct, replacements should stay distinct too. Drawing random values and
+retrying fails once a value space is nearly full, as with a dense row counter.
+These spaces instead enumerate their values, so allocation starts at a seeded
+position and steps to the next usable value. When a column that must stay
+distinct has no unused value left, allocation repeats an earlier replacement.
 """
 
 from __future__ import annotations
 
 import math
 import re
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal
 
@@ -41,8 +40,8 @@ MASK_ALLOCATED_ENTITY_TYPES = frozenset({EntityType.UNIQUE_IDENTIFIER, EntityTyp
 NUMBER_ALLOCATED_ENTITY_TYPES = frozenset({EntityType.UNIQUE_IDENTIFIER, EntityType.API_KEY})
 """Entity types whose unpatterned, digit-only values are replaced from a numeric range."""
 
-AllocationKind = Literal["new", "repeat", "original"]
-"""How an allocated replacement was chosen: an unused value, an earlier replacement, or another original."""
+AllocationKind = Literal["new", "repeat"]
+"""How an allocated replacement was chosen: a usable value, or a repeat of an earlier replacement."""
 
 _MIN_FREE_RATIO = 2
 """A numeric range is widened until it has at least this many unused values per distinct original."""
@@ -157,76 +156,66 @@ class NumberSpace:
 
 
 class IdentifierAllocator:
-    """Hand out replacement values from one space, preferring unused values, then earlier replacements.
+    """Hand out replacement values from one space; each differs from its own original.
 
     Attributes:
         space: Value space replacements are drawn from.
     """
 
-    def __init__(self, space: MaskSpace | NumberSpace, originals: Iterable[str]) -> None:
+    def __init__(self, space: MaskSpace | NumberSpace) -> None:
         self.space = space
-        self._originals = {index for value in originals if (index := space.index_of(value)) is not None}
         self._allocated: list[int] = []
         self._allocated_set: set[int] = set()
 
     @property
     def free_count(self) -> int:
-        """Number of values that are neither originals nor already allocated."""
-        return self.space.size - len(self._originals) - len(self._allocated_set)
+        """Number of values not yet allocated to a column that must stay distinct."""
+        return self.space.size - len(self._allocated_set)
 
-    def allocate(
-        self,
-        seed: int,
-        own_original: str,
-        *,
-        is_taken: Callable[[str], bool] | None = None,
-    ) -> tuple[str, AllocationKind] | None:
+    def allocate(self, seed: int, own_original: str, *, distinct: bool) -> tuple[str, AllocationKind] | None:
         """Return a replacement for ``own_original`` and how it was chosen, or ``None`` if none differs from it.
 
-        The replacement is the first unused value at or after the seeded position. A value is unused when
-        it is neither an original of this space nor allocated here, and ``is_taken`` (for values used or
-        found elsewhere, such as another column of the same type) does not reject it. When no unused value
-        is left, a seeded choice among earlier replacements is repeated. When there are none, a seeded
-        choice among the other originals is used. The result never equals ``own_original``.
+        The replacement is the first value at or after the seeded position that differs from
+        ``own_original``. When ``distinct`` is true it must also not have been allocated before; if no
+        such value is left, a seeded choice among earlier replacements is repeated.
+
+        Example:
+            In ``NumberSpace(1)``, ``allocate(7, "7", distinct=False)`` skips ``"7"`` and returns ``("8", "new")``.
         """
         size = self.space.size
-        if self.free_count > 0:
-            index = seed % size
-            # free_count ignores is_taken, so the scan is bounded by the space size.
-            for _ in range(size):
-                if index not in self._originals and index not in self._allocated_set:
-                    value = self.space.value_at(index)
-                    if is_taken is None or not is_taken(value):
-                        self._allocated.append(index)
-                        self._allocated_set.add(index)
-                        return value, "new"
-                index = (index + 1) % size
-        if self._allocated:
-            return self.space.value_at(self._allocated[seed % len(self._allocated)]), "repeat"
-        others = sorted(self._originals - {self.space.index_of(own_original)})
-        if others:
-            return self.space.value_at(others[seed % len(others)]), "original"
+        own = self.space.index_of(own_original)
+        index = seed % size
+        for _ in range(size):
+            if index != own and not (distinct and index in self._allocated_set):
+                if distinct:
+                    self._allocated.append(index)
+                    self._allocated_set.add(index)
+                return self.space.value_at(index), "new"
+            index = (index + 1) % size
+        repeats = [allocated for allocated in self._allocated if allocated != own]
+        if repeats:
+            return self.space.value_at(repeats[seed % len(repeats)]), "repeat"
         return None
 
 
-def number_space_for(originals: Sequence[str]) -> NumberSpace | None:
-    """Return a numeric range that fits every distinct original and leaves room to replace them.
+def number_space_for(originals: Sequence[str], *, distinct: bool) -> NumberSpace | None:
+    """Return a numeric range for replacing ``originals``, or ``None`` unless they are all integers.
 
-    The range starts with the longest original's digit count and gains one digit
-    at a time until it has at least twice as many unused values as there are
-    distinct originals. Returns ``None`` unless every original is a non-negative
-    integer, written with digits only or with a ``.0`` fraction.
+    The range covers every integer up to the longest original's digit count. When the replacements must
+    stay distinct, it gains one digit at a time until it holds at least twice as many values as there
+    are distinct originals. Originals must be non-negative integers, written with digits only or with a
+    ``.0`` fraction.
 
     Example:
-        For a row counter ``"0"`` through ``"23485"``, the result is
-        ``NumberSpace(5)``: 76,514 unused values for 23,486 originals.
+        For a unique key ``"0"`` through ``"23485"``, the result is ``NumberSpace(5)``: 100,000 values
+        for 23,486 originals.
     """
     numbers = {_integer_value(value) for value in originals}
     if not numbers or None in numbers:
         return None
     integers = {number for number in numbers if number is not None}
     digits = len(str(max(integers)))
-    while 10**digits - sum(number < 10**digits for number in integers) < _MIN_FREE_RATIO * len(integers):
+    while distinct and 10**digits < _MIN_FREE_RATIO * len(integers):
         digits += 1
     return NumberSpace(digits)
 
@@ -235,6 +224,8 @@ def identifier_allocator(
     entity_type: EntityType,
     pattern: str | None,
     originals: Sequence[str],
+    *,
+    distinct: bool,
 ) -> IdentifierAllocator | None:
     """Return the allocator for an identifier column, or ``None`` if the generator should produce its values.
 
@@ -242,13 +233,14 @@ def identifier_allocator(
         entity_type: The column's entity type.
         pattern: The column's character mask, if any.
         originals: Text forms of the column's non-missing original values.
+        distinct: Whether the column's replacements must stay distinct, which sizes a numeric range.
     """
     if pattern is not None and entity_type in MASK_ALLOCATED_ENTITY_TYPES:
-        return IdentifierAllocator(MaskSpace.from_pattern(pattern), originals)
+        return IdentifierAllocator(MaskSpace.from_pattern(pattern))
     if pattern is None and entity_type in NUMBER_ALLOCATED_ENTITY_TYPES:
-        space = number_space_for(originals)
+        space = number_space_for(originals, distinct=distinct)
         if space is not None:
-            return IdentifierAllocator(space, originals)
+            return IdentifierAllocator(space)
     return None
 
 

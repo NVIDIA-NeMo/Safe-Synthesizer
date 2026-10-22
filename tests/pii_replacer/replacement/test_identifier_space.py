@@ -43,53 +43,55 @@ class TestIdentifierSpace:
         ]
 
     @pytest.mark.parametrize(
-        ("originals", "digits"),
+        ("originals", "distinct", "digits"),
         [
-            ([str(row) for row in range(23_486)], 5),
-            ([str(row) for row in range(1, 9)], 2),
-            (["17", "42", "103"], 3),
+            ([str(row) for row in range(23_486)], True, 5),
+            ([str(row) for row in range(1, 9)], True, 2),
+            (["17", "42", "103"], True, 3),
+            ([str(row) for row in range(1, 9)], False, 1),
         ],
     )
-    def test_number_space_widens_until_there_is_room_to_replace_every_value(
+    def test_number_space_widens_only_when_replacements_must_stay_distinct(
         self,
         originals: list[str],
+        distinct: bool,
         digits: int,
     ) -> None:
-        assert number_space_for(originals) == NumberSpace(digits)
+        assert number_space_for(originals, distinct=distinct) == NumberSpace(digits)
 
     def test_number_space_rejects_columns_with_non_integer_values(self) -> None:
-        assert number_space_for(["17", "A42"]) is None
-        assert number_space_for([]) is None
+        assert number_space_for(["17", "A42"], distinct=True) is None
+        assert number_space_for([], distinct=True) is None
 
-    def test_allocator_prefers_unused_values_then_repeats_before_reusing_originals(self) -> None:
-        originals = [str(value) for value in range(90)]
-        allocator = IdentifierAllocator(NumberSpace(2), originals)
+    def test_distinct_allocation_uses_every_other_value_before_repeating(self) -> None:
+        allocator = IdentifierAllocator(NumberSpace(1))
 
-        unique = [allocator.allocate(seed, "0") for seed in range(10)]
-        repeated = [allocator.allocate(seed, "0") for seed in range(5)]
+        first = [allocator.allocate(seed, "0", distinct=True) for seed in range(9)]
+        repeated = [allocator.allocate(seed, "0", distinct=True) for seed in range(3)]
 
-        assert sorted(unique) == [(str(value), "new") for value in range(90, 100)]
+        assert sorted(first) == [(str(value), "new") for value in range(1, 10)]
         assert all(allocation is not None and allocation[1] == "repeat" for allocation in repeated)
 
-    def test_allocator_uses_another_original_only_when_nothing_else_exists(self) -> None:
-        allocator = IdentifierAllocator(NumberSpace(1), [str(value) for value in range(10)])
+    def test_allocation_without_distinctness_only_skips_the_own_original(self) -> None:
+        allocator = IdentifierAllocator(NumberSpace(1))
 
-        allocations = [allocator.allocate(seed, "3") for seed in range(20)]
+        allocations = [allocator.allocate(seed, "7", distinct=False) for seed in range(20)]
 
-        assert all(allocation is not None and allocation[1] == "original" for allocation in allocations)
-        assert "3" not in {allocation[0] for allocation in allocations if allocation is not None}
+        assert all(allocation is not None and allocation[1] == "new" for allocation in allocations)
+        assert "7" not in {allocation[0] for allocation in allocations if allocation is not None}
+        assert allocator.allocate(7, "7", distinct=False) == ("8", "new")
 
     def test_allocator_returns_nothing_when_only_the_own_original_exists(self) -> None:
-        allocator = IdentifierAllocator(MaskSpace.from_pattern("ID-[0]"), ["ID-0"])
+        allocator = IdentifierAllocator(MaskSpace.from_pattern("ID-[0]"))
 
-        assert allocator.allocate(5, "ID-0") is None
+        assert allocator.allocate(5, "ID-0", distinct=True) is None
 
     def test_allocator_is_deterministic_for_the_same_seeds(self) -> None:
-        first = IdentifierAllocator(MaskSpace.from_pattern("ID-###"), ["ID-001"])
-        second = IdentifierAllocator(MaskSpace.from_pattern("ID-###"), ["ID-001"])
+        first = IdentifierAllocator(MaskSpace.from_pattern("ID-###"))
+        second = IdentifierAllocator(MaskSpace.from_pattern("ID-###"))
 
-        assert [first.allocate(seed, "ID-001") for seed in (1, 1, 7)] == [
-            second.allocate(seed, "ID-001") for seed in (1, 1, 7)
+        assert [first.allocate(seed, "ID-001", distinct=True) for seed in (1, 1, 7)] == [
+            second.allocate(seed, "ID-001", distinct=True) for seed in (1, 1, 7)
         ]
 
     @pytest.mark.parametrize(
@@ -110,7 +112,7 @@ class TestIdentifierSpace:
         originals: list[str],
         expected: type | None,
     ) -> None:
-        allocator = identifier_allocator(entity_type, pattern, originals)
+        allocator = identifier_allocator(entity_type, pattern, originals, distinct=True)
 
         if expected is None:
             assert allocator is None

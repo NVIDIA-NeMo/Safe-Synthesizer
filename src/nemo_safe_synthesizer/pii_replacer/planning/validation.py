@@ -21,6 +21,7 @@ from ...config.replace_pii import (
 )
 from ...config.time_series import TimeSeriesParameters
 from ...errors import InternalError, ParameterError
+from ..replacement.collisions import all_distinct
 from ..replacement.identifier_space import MASK_ALLOCATED_ENTITY_TYPES, MaskSpace
 from .patterns import compile_character_mask, compile_name_pattern
 
@@ -165,32 +166,29 @@ def column_pattern_issue(df: pd.DataFrame, spec: PiiColumnPlan) -> str | None:
 
 
 def identifier_mask_capacity_issue(df: pd.DataFrame, spec: PiiColumnPlan) -> str | None:
-    """Return an issue when an identifier mask cannot give every distinct value its own unused replacement.
+    """Return an issue when an identifier mask is too small to keep a distinct column's replacements distinct.
 
-    Replacement still succeeds with such a mask, but some replacements repeat. Automatic planning
-    uses this to drop an LLM-proposed mask in favor of an unpatterned replacement with more room.
+    Replacements must stay distinct only when the column's original values are all distinct. Each also
+    differs from its own original, so the mask needs more values than the column has. Replacement still
+    succeeds with a smaller mask, but some replacements repeat. Automatic planning uses this to drop an
+    LLM-proposed mask in favor of an unpatterned replacement with more room.
 
     Example:
-        Pattern ``"USER-#"`` has 10 values; a column holding ``"USER-0"`` through ``"USER-7"`` leaves
-        2 unused values for 8 distinct originals, so this returns an issue.
+        Pattern ``"USER-#"`` has 10 values; a column holding the 10 distinct values ``"USER-0"`` through
+        ``"USER-9"`` returns an issue, while a column where values repeat does not.
     """
     pattern = spec.pattern
     if pattern is None or spec.entity_type not in MASK_ALLOCATED_ENTITY_TYPES or spec.column_name not in df.columns:
         return None
     values = df[spec.column_name].dropna().astype(str).tolist()
-    distinct = len(set(values))
-    if (unused := _unused_mask_values(pattern, values)) >= distinct:
+    if not all_distinct(values):
+        return None
+    if (size := MaskSpace.from_pattern(pattern).size) > len(values):
         return None
     return (
-        f"column {spec.column_name!r}: pattern {pattern!r} leaves {unused} unused values for "
-        f"{distinct} distinct values, so some replacements would repeat"
+        f"column {spec.column_name!r}: pattern {pattern!r} has {size} possible values, too few to give each of "
+        f"the column's {len(values)} distinct values its own replacement"
     )
-
-
-def _unused_mask_values(pattern: str, values: list[str]) -> int:
-    """Return how many values the mask can produce that are not among ``values``."""
-    space = MaskSpace.from_pattern(pattern)
-    return space.size - sum(space.index_of(value) is not None for value in set(values))
 
 
 def _iter_pattern_issues(df: pd.DataFrame, plan: PiiReplacementPlan, *, check_coverage: bool) -> Iterator[str]:

@@ -1112,7 +1112,7 @@ class TestLLMPlanEnhancer:
         self,
         caplog: pytest.LogCaptureFixture,
     ) -> None:
-        dataframe = pd.DataFrame({"user": [f"USER-{value}" for value in range(8)]})
+        dataframe = pd.DataFrame({"user": [f"USER-{value}" for value in range(10)]})
         enhancer, transport = _enhancer([_classifications({"user": "unique_identifier"}, patterns={"user": "USER-#"})])
 
         plan = resolve_plan(
@@ -1124,7 +1124,7 @@ class TestLLMPlanEnhancer:
 
         assert plan.columns_to_replace[0].pattern is None
         assert len(transport.calls) == 1
-        assert any("leaves 2 unused values" in str(getattr(record, "reason", "")) for record in caplog.records)
+        assert any("too few to give each" in str(getattr(record, "reason", "")) for record in caplog.records)
 
     @pytest.mark.parametrize(
         ("repair_responses", "final_pattern", "final_syntax"),

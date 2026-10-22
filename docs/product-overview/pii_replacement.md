@@ -421,15 +421,15 @@ the same address, while phones written as `(###) ###-####` in one column and
 `###.###.####` in another are replaced separately. Every replacement differs
 from the value it replaces, ignoring case. A replaced full name also avoids the original's first and last name;
 when no such name is found, NSS keeps one that shares a part and logs a warning
-with the count. Identifier-like values (email, phone number, SSN, national ID, card
-number, API key, IP address, unique identifier) also avoid every original value
-of their type in any column, and every replacement already used for that type,
-ignoring case. So two SSN columns never swap real SSNs or share a replacement
-while the format has room. When that is not possible, NSS repeats a
-replacement or, as a last resort, uses another original value, and logs a
-warning with the count. Without
-a pattern, digit-only identifiers are replaced with numbers up to the column's
-longest length, gaining a digit when that range is too full. Automatic
+with the count. A replacement may equal another row's original value, and
+replacements may repeat across rows. The exception is an identifier-like column
+(email, phone number, SSN, national ID, card number, API key, IP address, unique
+identifier) whose original values are all distinct, such as a key column: its
+replacements stay distinct too, ignoring case, and when no unused value is
+found, NSS repeats one and logs a warning with the count. Without a pattern,
+digit-only identifiers are replaced with numbers up to the column's longest
+length; for a column that must stay distinct, the range gains a digit when it is
+too small. Automatic
 discovery skips row counters, such as a saved `Unnamed: 0` index column. NSS also excludes protected ordering and timestamp columns, and validates
 the assembled plan. Grouping columns remain eligible for replacement so
 identifiers such as patient IDs can be anonymized. A replaced grouping column

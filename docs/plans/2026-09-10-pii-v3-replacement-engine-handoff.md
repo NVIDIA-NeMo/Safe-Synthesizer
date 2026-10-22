@@ -178,20 +178,20 @@ LLM span-detection experiment.
 - Dataframe scope is not supported. Every entity type uses the same scope: group scope when a grouping column is
   configured, otherwise record scope. (Decided 2026-10-14: per-entity-type scopes, such as dataframe scope only for
   identifiers, were judged too hard for users to follow.)
-- For identifier-like entity types (`email`, `phone_number`, `ssn`, `national_id`, `credit_debit_card`, `api_key`,
-  `ipv4`, `ipv6`, `unique_identifier`), replacements avoid every original value in the column, so real identifiers
-  do not reappear on other rows, and stay unique while the column's format has unused values. Both are best effort:
-  when retries cannot avoid them, a replacement repeats an earlier one or, failing that, equals another row's
-  original, with one warning per column giving the count, instead of failing. Names, addresses, and dates of birth
-  may repeat freely. Every replacement must differ from its own original; that rule stays strict and fails the
-  dataset when retries cannot satisfy it. (Decided 2026-10-14 and 2026-10-15: strict uniqueness exhausted short ID
-  formats, and a dependency-derived email that matched another row's real address failed a whole dataset.)
+- Every replacement must differ from its own original, ignoring case; that rule is strict and fails the dataset when
+  retries cannot satisfy it. A replacement may equal another row's original, and replacements may repeat across rows,
+  since record scope replaces every row independently. The exception is an identifier-like column (`email`,
+  `phone_number`, `ssn`, `national_id`, `credit_debit_card`, `api_key`, `ipv4`, `ipv6`, `unique_identifier`) whose
+  original values are all distinct: its replacements stay distinct too, best effort, repeating one with a warning
+  and count when retries find no unused value. A grouping column's replacements are always one-to-one. (Decided
+  2026-10-22 after review: avoiding every original across columns and free text, and run-wide uniqueness, added
+  machinery for collisions that record scope already allows.)
 - Identifier replacements come from an enumerated value space, not random retries: a `unique_identifier`, `api_key`,
   or `phone_number` character mask, or, for unpatterned digit-only `unique_identifier` and `api_key` values, every
-  integer up to the column's longest length. That range gains one digit at a time until it has at least twice as many
-  unused values as distinct originals, with a warning. Each replacement takes the first unused value at or after its
-  seeded position. A mask is the format contract and is never widened: planning drops an LLM-proposed mask that cannot
-  give every distinct value its own replacement. (Decided 2026-10-14: a dense row counter filled every same-length value.)
+  integer up to the column's longest length. For a column that must stay distinct, that range gains one digit at a
+  time until it holds at least twice as many values as distinct originals, with a warning. Each replacement takes the
+  first usable value at or after its seeded position. A mask is the format contract and is never widened, except for
+  a grouping column: planning drops an LLM-proposed mask that is too small to keep a distinct column distinct. (Decided 2026-10-14: a dense row counter filled every same-length value.)
 - Automatic discovery skips row counters: columns of unique, non-missing integers that are exactly `0..n-1` or `1..n`,
   such as a saved pandas index (`Unnamed: 0`). The configured grouping column is never a row counter, and explicit
   plans may still replace one.
