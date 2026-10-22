@@ -594,11 +594,13 @@ class SafeSynthesizer(ConfigBuilder):
         if not check_only and self._nss_config.replace_pii is not None:
             from ..pii_replacer import TabularPiiReplacer
 
+            # Pattern coverage was checked against the full input during planning; the training split is a
+            # subset and can fall just below the 99% threshold.
             replacement_result = TabularPiiReplacer(
                 self._nss_config.replace_pii,
                 data_config=self._nss_config.data,
                 time_series=self._nss_config.time_series,
-            ).replace(original_training_df)
+            ).replace(original_training_df, check_pattern_coverage=False)
             self._training_df = replacement_result.transformed_df
             self._column_statistics = replacement_result.column_statistics
             self._pii_replacer_time = replacement_result.replacement_time_seconds
