@@ -103,9 +103,24 @@ def _download(url: str, path: Path) -> Path:
 
 
 def name_key(name: object) -> str:
-    """Return the lookup key for a name: accents stripped, casefolded, letters, spaces, hyphens, and apostrophes."""
-    ascii_name = unicodedata.normalize("NFKD", str(name)).encode("ascii", "ignore").decode("ascii")
-    return re.sub(r"[^a-z' -]", "", ascii_name.casefold().strip())
+    """Return the lookup key for a name: casefolded, Latin accents removed, letters of any script, spaces, hyphens,
+    and apostrophes kept.
+
+    Example:
+        ``"Hélène"`` and ``"Helene"`` both become ``"helene"``, and Hangul such as ``"지우"`` is kept as is.
+    """
+    decomposed = unicodedata.normalize("NFKD", str(name).casefold().strip())
+    # Only the combining diacritics block is removed, so Japanese voicing marks such as the one in "が" are kept.
+    kept = "".join(
+        character
+        for character in decomposed
+        if not _COMBINING_DIACRITICS.match(character)
+        and (unicodedata.category(character)[0] in "LM" or character in " '-")
+    )
+    return unicodedata.normalize("NFC", kept)
+
+
+_COMBINING_DIACRITICS = re.compile("[̀-ͯ]")
 
 
 def _sex_label(female_share: float) -> str:
@@ -119,21 +134,29 @@ def _read_wgnd(path: Path) -> pd.DataFrame:
     return wgnd[~wgnd.key.isin(PLACEHOLDER_FIRST_NAMES)]
 
 
-def _wgnd_female_shares(wgnd: pd.DataFrame, code: str) -> pd.DataFrame:
-    shares = wgnd[wgnd.code == code].pivot_table(index="key", columns="gender", values="wgt", aggfunc="sum")
+def _wgnd_female_shares(wgnd: pd.DataFrame, code: str, by: str = "key") -> pd.DataFrame:
+    shares = wgnd[wgnd.code == code].pivot_table(index=by, columns="gender", values="wgt", aggfunc="sum")
     shares = shares.reindex(columns=["F", "M", "?"]).fillna(0.0)
+    # Each spelling's shares sum to 1, so dividing by the total averages over spellings that are grouped together.
     known = shares.F + shares.M
+    total = known + shares["?"]
     return pd.DataFrame(
-        {"female_share": (shares.F / known.where(known > 0)).round(4), "unknown_share": shares["?"].round(4)}
+        {
+            "female_share": (shares.F / known.where(known > 0)).round(4),
+            "unknown_share": (shares["?"] / total.where(total > 0)).round(4),
+        }
     )
 
 
 def _wgnd_locale_sex(wgnd: pd.DataFrame, code: str) -> pd.DataFrame:
-    shares = _wgnd_female_shares(wgnd, code)
-    names = wgnd[wgnd.code == code].groupby("key").name.first().str.title()
-    result = shares.assign(name=names).dropna(subset=["female_share"]).sort_index()
+    # One row per spelling: WGND lists many names both with and without accents, such as "hélène" and "helene".
+    # Spellings that differ only in case are merged, and `key` shows which rows a lookup treats as one name.
+    spellings = wgnd.assign(spelling=wgnd.name.str.title())
+    result = _wgnd_female_shares(spellings, code, by="spelling").dropna(subset=["female_share"])
+    result = result.rename_axis("name").reset_index()
+    result["key"] = result.name.map(name_key)
     result["label"] = result.female_share.map(_sex_label)
-    return result[["name", "female_share", "unknown_share", "label"]]
+    return result.sort_values(["key", "name"])[["name", "key", "female_share", "unknown_share", "label"]]
 
 
 def _ssa_first_name_sex(tarball: Path, wgnd: pd.DataFrame) -> pd.DataFrame:

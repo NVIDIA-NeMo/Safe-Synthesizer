@@ -27,6 +27,15 @@ All sources are CC0 or US-government public domain, so they can be redistributed
 
 ssa.gov blocks automated downloads, so the SSA data comes from the CRAN package, which stops at 2017.
 
+SSA, Census, and Tzioumis publish names in plain ASCII, so the en_US files have "Jose", not "José". WGND's few
+accented US spellings are mostly typos ("jérry", "ródney"), so none are added. WGND lists many names in other locales
+both with and without accents, and the locale files keep both spellings as separate rows, such as "Hélène" and
+"Helene", each with its own shares.
+
+A lookup key matches names that differ only in case or Latin accents: "Hélène" and "Helene" both become "helene", and
+"Nguyễn" becomes "nguyen". Letters of other scripts are kept, including Japanese voicing marks, so "지우" and "がく" are
+their own keys. The locale files show this key in a `key` column.
+
 ## Sex labels
 
 Each name gets a label from its female share:
@@ -61,18 +70,18 @@ suppressed cells, and `suppressed_cells` counts them.
 
 `en_US/first_name_ethnicity.csv` holds the Tzioumis percentages, with the same groups, per first name.
 
-`other_locales/{locale}_first_name_sex.csv` holds the WGND female share and `label` for one locale. `unknown_share` is
-the share WGND could not assign to a sex.
+`other_locales/{locale}_first_name_sex.csv` holds one row per WGND spelling for one locale, with its `key`,
+`female_share`, `unknown_share` (the share WGND could not assign to a sex), and `label`.
 
 | Locale | Names | Notes |
 | ------ | ----- | ----- |
-| en_GB | 72,056 | Good. Some names differ from the US: Jamie is 94% male in the UK and 76% female in the US. |
+| en_GB | 72,070 | Good. Some names differ from the US: Jamie is 94% male in the UK and 76% female in the US. |
 | en_IN | — | Not committed: 2.5M noisy entries (63 MB), and WGND has shares, not counts, to filter them by. |
-| de_DE | 5,299 | |
-| ja_JP | 3,472 | Romanized only. Won't match names written in kanji. |
-| ko_KR | 2,844 | Romanized only. |
-| fr_FR | 2,511 | |
-| pt_BR | 372 | Too thin to use. |
+| de_DE | 5,429 | 130 spellings with umlauts or accents. |
+| ja_JP | 3,473 | Romanized only. Won't match names written in kanji or kana. |
+| ko_KR | 10,538 | 7,696 in Hangul and the rest romanized. For example, 서연 is female, 민준 male, and 지우 unisex. |
+| fr_FR | 2,963 | 452 names have both an accented and an unaccented row. |
+| pt_BR | 448 | Too thin to use. |
 | en_SG | 8 | Unusable. |
 | hi_Deva_IN, hi_Latn_IN | — | Not built. WGND has no separate entry for them. |
 
