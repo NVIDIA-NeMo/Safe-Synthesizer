@@ -336,9 +336,7 @@ class StructuredReplacementExecutor:
         cached = self._cache.get(key)
         if cached is not None:
             self._record_dependency_drift(key, cached, dependencies)
-            self._free_text.register_structured_mapping(
-                key, spec, original_text, cached.value, dependencies, address_parts
-            )
+            self._free_text.register_structured_mapping(key, spec, original_text, cached.value, address_parts)
             return cached.value
 
         provenance = None if isinstance(key, RecordMappingKey) else GroupMappingProvenance(dependencies)
@@ -350,7 +348,7 @@ class StructuredReplacementExecutor:
         if shared is not None and ((own := self._own_replacements(spec)) is None or shared.casefold() not in own):
             self._cache[key] = _CachedReplacement(shared, provenance)
             self._record_used(spec, shared)
-            self._free_text.register_structured_mapping(key, spec, original_text, shared, dependencies, address_parts)
+            self._free_text.register_structured_mapping(key, spec, original_text, shared, address_parts)
             return shared
         if address_parts is None:
             replacement = self._generate_fresh(key, spec, original_text, dependencies)
@@ -363,7 +361,7 @@ class StructuredReplacementExecutor:
         self._cache[key] = _CachedReplacement(replacement, provenance)
         self._shared.setdefault(shared_key, replacement)
         self._record_used(spec, replacement)
-        self._free_text.register_structured_mapping(key, spec, original_text, replacement, dependencies, address_parts)
+        self._free_text.register_structured_mapping(key, spec, original_text, replacement, address_parts)
         self._generated_count += 1
         return replacement
 
@@ -658,8 +656,6 @@ def _resolved_dependency_values(
         normalized = readable_value(value).casefold()
         resolved.append((entity_type, source_mappings.get(normalized, (normalized,))))
     return tuple(resolved)
-
-
 
 
 def _drift_counts_by_target(drifts: tuple[GroupDependencyDrift, ...]) -> dict[str, int]:

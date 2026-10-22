@@ -30,7 +30,6 @@ from .types import (
     DetectedSpan,
     DetectionCell,
     DetectionCellId,
-    EffectiveDependencyTuple,
     FreeTextMappingKey,
     GroupMappingKey,
     ProtectedSpan,
@@ -264,7 +263,6 @@ class FreeTextReplacementExecutor:
         spec: PiiColumnPlan,
         original_text: str,
         replacement: str,
-        dependencies: EffectiveDependencyTuple,
         address_parts: AddressParts | None = None,
     ) -> None:
         """Expose exact values, pattern-validated name parts, and street parts to accepted spans.
@@ -278,14 +276,7 @@ class FreeTextReplacementExecutor:
         scope_identity = key.row_position if isinstance(key, RecordMappingKey) else key.original_group_identity
         self._register(scope_identity, spec.entity_type, original_text, replacement)
         self._register_name_components(scope_identity, spec, original_text, replacement)
-        self._register_address_component(
-            scope_identity,
-            spec,
-            original_text,
-            replacement,
-            dependencies,
-            address_parts,
-        )
+        self._register_address_component(scope_identity, spec, replacement, address_parts)
 
     def _register_name_components(
         self,
@@ -339,30 +330,20 @@ class FreeTextReplacementExecutor:
         self,
         scope_identity: Hashable,
         spec: PiiColumnPlan,
-        original: str,
         replacement: str,
-        dependencies: EffectiveDependencyTuple,
         address_parts: AddressParts | None,
     ) -> None:
         """Register the street of a structured address so the same street in free text gets the same replacement.
 
-        A detected street whose locality was kept is registered directly. Otherwise the street is registered only
-        when typed dependencies prove both values end with the same linked locality suffix.
+        Only a detected street whose original locality was kept is registered: the replacement then has the
+        same locality text after a new street, so the two streets line up. A street address replaced whole
+        has no such alignment and registers only as a whole value.
         """
-        if spec.entity_type is not EntityType.STREET_ADDRESS:
+        if spec.entity_type is not EntityType.STREET_ADDRESS or address_parts is None:
             return
-        if address_parts is not None:
-            replacement_street = address_parts.replacement_street(replacement)
-            if replacement_street is not None:
-                self._register(scope_identity, EntityType.STREET_ADDRESS, address_parts.street, replacement_street)
-            return
-        suffix = _address_dependency_suffix(dependencies)
-        if not suffix:
-            return
-        original_street = _street_before_suffix(original, suffix)
-        replacement_street = _street_before_suffix(replacement, suffix)
-        if original_street is not None and replacement_street is not None:
-            self._register(scope_identity, EntityType.STREET_ADDRESS, original_street, replacement_street)
+        replacement_street = address_parts.replacement_street(replacement)
+        if replacement_street is not None:
+            self._register(scope_identity, EntityType.STREET_ADDRESS, address_parts.street, replacement_street)
 
     def _register(
         self,
@@ -751,24 +732,3 @@ def _record_detection(statistics: FreeTextColumnStatistics, span: DetectedSpan, 
     statistics.counts[entity] = statistics.counts.get(entity, 0) + 1
     statistics.values.setdefault(entity, set()).add(value)
     statistics.sources.add(span.source)
-
-
-def _address_dependency_suffix(dependencies: EffectiveDependencyTuple) -> str:
-    """Render the typed locality suffix shared by structured address generation."""
-    values = {entity_type: value.normalized_value for entity_type, value in dependencies if value is not None}
-    locality = (
-        values.get(EntityType.CITY),
-        values.get(EntityType.STATE),
-        values.get(EntityType.ZIPCODE),
-        values.get(EntityType.COUNTRY),
-    )
-    return ", ".join(value for value in locality if value)
-
-
-def _street_before_suffix(value: str, suffix: str) -> str | None:
-    """Return a nonempty street prefix only when the complete typed suffix matches."""
-    marker = f", {suffix}"
-    if not value.endswith(marker):
-        return None
-    street = value[: -len(marker)]
-    return street or None
