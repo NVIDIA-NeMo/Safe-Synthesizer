@@ -356,7 +356,9 @@ class StructuredReplacementExecutor:
             replacement = self._generate_fresh(key, spec, original_text, dependencies)
         else:
             # Only the detected street is generated; the original locality text after it is kept as written.
-            street = self._generate_fresh(key, spec, address_parts.street, dependencies, keep_original_locality=True)
+            street = self._generate_fresh(
+                key, spec, address_parts.street, dependencies, kept_locality=address_parts.locality
+            )
             replacement = street + address_parts.locality
         self._cache[key] = _CachedReplacement(replacement, provenance)
         self._shared.setdefault(shared_key, replacement)
@@ -390,8 +392,14 @@ class StructuredReplacementExecutor:
         original_text: str,
         dependencies: EffectiveDependencyTuple,
         *,
-        keep_original_locality: bool = False,
+        kept_locality: str | None = None,
     ) -> str:
+        """Generate one replacement for ``original_text`` under the shared collision rules.
+
+        ``kept_locality`` is the original locality written after a generated street; the
+        generator then produces only the street, and grouping-column uniqueness is checked on
+        the complete address.
+        """
         if (allocator := self._identifier_allocators.get(spec.column_name)) is not None:
             return self._allocate_identifier(key, spec, original_text, allocator)
         one_to_one = spec.column_name == self._group_column
@@ -401,6 +409,7 @@ class StructuredReplacementExecutor:
             original_text,
             spec.pattern,
             one_to_one=self._group_replacements if one_to_one else None,
+            written_suffix=kept_locality or "",
         )
         attempts = _MAX_GROUP_GENERATION_ATTEMPTS if one_to_one else _MAX_GENERATION_ATTEMPTS
         for attempt in range(attempts):
@@ -415,7 +424,7 @@ class StructuredReplacementExecutor:
                     dependencies,
                     self._data_to_sampler_value_mapping,
                 ),
-                keep_original_locality=keep_original_locality,
+                keep_original_locality=kept_locality is not None,
             )
             started = time.perf_counter()
             try:

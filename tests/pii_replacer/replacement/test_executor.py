@@ -1265,6 +1265,28 @@ class TestStreetAddressLocality:
         assert [request.original_value for request in generator.requests] == ["489 Park Blvd"] * 2
         assert all(request.keep_original_locality for request in generator.requests)
 
+    def test_grouping_addresses_with_the_same_locality_get_distinct_streets(self) -> None:
+        first, second = "489 Park Blvd, Mesa, IA 76237", "12 Elm St, Mesa, IA 76237"
+        dataframe = pd.DataFrame({"address": [first, second]})
+        detector = _StaticDetector(
+            [
+                _span(0, "address", first, "489 Park Blvd", EntityType.STREET_ADDRESS),
+                _span(1, "address", second, "12 Elm St", EntityType.STREET_ADDRESS),
+            ]
+        )
+        # The second group is first offered the street the first group already got.
+        generator = _ScriptedNameGenerator("9 New Road", "9 New Road", "7 Oak Lane")
+
+        result = _execute(
+            dataframe,
+            _plan(_target("address", EntityType.STREET_ADDRESS)),
+            generator,
+            group_column="address",
+            free_text_detector=detector,
+        )
+
+        assert result.dataframe["address"].tolist() == ["9 New Road, Mesa, IA 76237", "7 Oak Lane, Mesa, IA 76237"]
+
     def test_linked_locality_columns_still_condition_generation_without_being_appended(self) -> None:
         value = "1 Main Street, Boston, MA"
         dataframe = pd.DataFrame({"address": [value], "city": ["Boston"], "state": ["MA"]})
