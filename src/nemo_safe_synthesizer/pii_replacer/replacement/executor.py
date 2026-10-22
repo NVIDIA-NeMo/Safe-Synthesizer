@@ -140,7 +140,8 @@ class StructuredReplacementExecutor:
         drifts = self._dependency_drift_results()
         for drift in drifts:
             logger.user.warning(
-                "PII group replacement reused the first value despite dependency drift",
+                "Some rows reused their group's first replacement although a column it depends on had a different "
+                "value in that row",
                 extra=drift.as_log_extra(),
             )
         return ReplacementExecutionResult(
@@ -360,8 +361,8 @@ class StructuredReplacementExecutor:
         if one_to_one:
             raise GenerationError(
                 f"PII replacement could not give grouping column {spec.column_name!r} a value that no other "
-                f"group uses after {attempts} attempts, so two groups would merge; group by a column with more "
-                "possible values, such as an ID, or remove the grouping column from the replacement plan"
+                f"group uses after {attempts} attempts, so two groups would merge; widen the column's pattern in "
+                "the plan so it can produce more values, or remove the grouping column from the replacement plan"
             )
         raise GenerationError(
             f"PII replacement could not generate a value that differs from the original for column "

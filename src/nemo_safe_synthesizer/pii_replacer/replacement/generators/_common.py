@@ -25,7 +25,6 @@ __all__ = [
     "default_email_pattern",
     "dependency_values",
     "email_domain",
-    "looks_like_uuid",
     "name_values",
     "normalize_organization_domain",
     "render_luhn_pattern",
@@ -210,14 +209,3 @@ def shape_preserving_value(original: str, rng: Random) -> str:
         else:
             rendered.append(character)
     return "".join(rendered)
-
-
-def looks_like_uuid(value: str) -> bool:
-    """Return whether ``value`` is written as a hyphenated, 36-character UUID."""
-    return (
-        re.fullmatch(
-            r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
-            value,
-        )
-        is not None
-    )
