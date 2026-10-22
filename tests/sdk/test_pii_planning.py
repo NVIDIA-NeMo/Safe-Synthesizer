@@ -217,3 +217,33 @@ def test_replace_pii_rejects_source_text_with_other_columns(tmp_path: Path) -> N
 
     with pytest.raises(ParameterError, match="same columns and row count"):
         nss.replace_pii(tmp_path / "out.csv", source_text=pd.DataFrame({"other": ["x"]}))
+
+
+def test_replace_pii_writes_parquet_output_with_its_column_types(tmp_path: Path) -> None:
+    source = tmp_path / "input.parquet"
+    pd.DataFrame(
+        {
+            "email": ["ada@example.com", "grace@example.com"],
+            "zip": ["02054", "10001"],
+            "visits": pd.array([3, None], dtype="Int64"),
+        }
+    ).to_parquet(source)
+    resolved = ReplacePiiConfig(
+        replacement_plan=PiiReplacementPlan(
+            columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
+        ),
+        sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+    )
+    output = tmp_path / "pii_replaced.parquet"
+    nss = SafeSynthesizer(
+        config=SafeSynthesizerParameters(replace_pii=resolved),
+        save_path=tmp_path / "artifacts",
+    ).with_data_source(str(source))
+
+    result = nss.replace_pii(output)
+
+    written = pd.read_parquet(output)
+    pd.testing.assert_frame_equal(written, result.transformed_df.reset_index(drop=True), check_dtype=False)
+    assert written["zip"].tolist() == ["02054", "10001"]
+    assert str(written["visits"].dtype) == "Int64"
+    assert not set(written["email"]) & {"ada@example.com", "grace@example.com"}
