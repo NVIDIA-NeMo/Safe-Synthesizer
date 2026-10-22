@@ -214,3 +214,46 @@ def test_resolve_preserves_preflight_from_existing_config():
 
     assert builder._nss_config is not None
     assert builder._nss_config.preflight.disabled_checks == ["gpu.vram"]
+
+
+@pytest.mark.parametrize(
+    ("file_name", "write"),
+    [
+        ("people.parquet", lambda df, path: df.to_parquet(path)),
+        ("people.json", lambda df, path: df.to_json(path, orient="records")),
+        ("people.jsonl", lambda df, path: df.to_json(path, orient="records", lines=True)),
+    ],
+)
+def test_typed_file_paths_are_read_with_their_own_reader(tmp_path, file_name, write):
+    dataframe = pd.DataFrame({"zip": ["02054", "10001"], "visits": [3, 4]})
+    path = tmp_path / file_name
+    write(dataframe, path)
+    builder = ConfigBuilder().with_data_source(str(path))
+
+    builder._resolve_datasource()
+
+    assert isinstance(builder._data_source, pd.DataFrame)
+    assert builder._data_source["visits"].tolist() == [3, 4]
+    assert builder._data_source_csv is None
+
+
+def test_parquet_paths_keep_their_stored_column_types(tmp_path):
+    path = tmp_path / "people.parquet"
+    pd.DataFrame({"zip": ["02054", "10001"]}).to_parquet(path)
+    builder = ConfigBuilder().with_data_source(str(path))
+
+    builder._resolve_datasource()
+
+    assert isinstance(builder._data_source, pd.DataFrame)
+    assert builder._data_source["zip"].tolist() == ["02054", "10001"]
+
+
+def test_csv_paths_are_still_read_as_csv(tmp_path):
+    path = tmp_path / "people.csv"
+    path.write_text("zip,visits\n02054,3\n")
+    builder = ConfigBuilder().with_data_source(str(path))
+
+    builder._resolve_datasource()
+
+    assert builder._data_source_csv is not None
+    assert builder._data_source_csv.read_text()["zip"].tolist() == ["02054"]
