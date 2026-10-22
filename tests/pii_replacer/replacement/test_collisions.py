@@ -204,3 +204,14 @@ class TestMaskWidening:
 
         with pytest.raises(ParameterError, match="use a pattern with more generated positions"):
             executor.execute(dataframe)
+
+
+@pytest.mark.unit
+class TestPatternsSurviveLetterCase:
+    def test_occurrence_case_is_dropped_when_it_would_break_the_mask(self) -> None:
+        dataframe = pd.DataFrame({"code": ["B"]})
+        spec = PiiColumnPlan(column_name="code", entity_type=EntityType.UNIQUE_IDENTIFIER, pattern="[aB]")
+
+        result = _execute(dataframe, spec, generator=_ScriptedGenerator())
+
+        assert result["code"].tolist() == ["a"]
