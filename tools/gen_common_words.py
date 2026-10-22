@@ -32,7 +32,10 @@ from faker.providers.person.en_US import Provider as FakerPersonProvider
 
 OUTPUT = Path(__file__).parents[1] / "src/nemo_safe_synthesizer/pii_replacer/replacement/common_words.py"
 
-_SCOWL_WORD_FILES = tuple(f"{variant}-words.{size}" for variant in ("english", "american") for size in (10, 20, 35))
+_SCOWL_WORD_FILES = (
+    *(f"english-words.{size}" for size in (10, 20, 35)),
+    *(f"american-words.{size}" for size in (10, 20, 35)),
+)
 _SCOWL_NAME_FILES = ("english-proper-names.35", "english-proper-names.50", "american-proper-names.50")
 
 # Words in the overlap that text almost always uses as names, so a missed occurrence should still be searched for.
