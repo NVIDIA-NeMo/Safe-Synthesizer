@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import re
+import statistics
 import subprocess
 import sys
 from collections.abc import Callable
@@ -411,18 +412,21 @@ class TestReplacementGenerator:
             assert re.fullmatch(r"4\d{3}-\d{4}-\d{4}-\d{3}[05]", replacement), replacement
             assert checksum % 10 == 0
 
-    def test_birth_date_is_shifted_within_one_year_and_preserves_pattern(self) -> None:
+    def test_birth_date_shift_is_small_nonzero_and_preserves_pattern(self) -> None:
         generator = _faker_generator()
-        request = _request(
-            EntityType.DATE_OF_BIRTH,
-            "12/10/1815",
-            pattern="%m/%d/%Y",
-        )
+        original = datetime.strptime("12/10/1815", "%m/%d/%Y")
 
-        replacement = generator.generate(request)
+        shifts = []
+        for seed in range(2000):
+            replacement = generator.generate(
+                _request(EntityType.DATE_OF_BIRTH, "12/10/1815", pattern="%m/%d/%Y", seed=seed)
+            )
+            shifts.append((datetime.strptime(replacement, "%m/%d/%Y") - original).days)
 
-        delta = datetime.strptime(replacement, "%m/%d/%Y") - datetime.strptime(request.original_value, "%m/%d/%Y")
-        assert 1 <= abs(delta.days) <= 365
+        assert all(1 <= abs(days) <= 180 for days in shifts)
+        assert 25 <= statistics.pstdev(shifts) <= 35
+        # Redrawing zero instead of moving it leaves +1 and -1 no more likely than +2 and -2.
+        assert shifts.count(1) + shifts.count(-1) <= 2 * (shifts.count(2) + shifts.count(-2)) + 10
 
     @pytest.mark.parametrize(
         ("original", "expected"),

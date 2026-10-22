@@ -207,7 +207,7 @@ Date-of-birth patterns use Python `strptime`/`strftime` syntax. Named-month
 formats such as `%B %d, %Y` match values like `December 10, 1815`; patterns do
 not perform general natural-language date parsing, so prose and ordinal forms
 such as `December tenth` or `December 10th` are not supported automatically.
-Birth dates are shifted by up to a year. A value that does not match the
+Birth dates are shifted by a small random number of days (typically within a month, never more than 180 days, and never zero). A value that does not match the
 pattern is parsed with common date formats instead; if none fits, NSS writes a
 random birth date in the pattern's format and logs a warning, so the original
 never remains.
