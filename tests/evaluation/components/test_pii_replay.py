@@ -2,11 +2,17 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
+import random
+import re
 
 import pandas as pd
 import pytest
 
-from nemo_safe_synthesizer.evaluation.components.pii_replay import PIIReplay
+from nemo_safe_synthesizer.evaluation.components.pii_replay import (
+    PIIReplay,
+    _EmbeddedValueIndex,
+    _synthetic_replay_counts,
+)
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from nemo_safe_synthesizer.pii_replacer.transform_result import ColumnStatistics
 
@@ -145,3 +151,61 @@ def test_pii_replay_ignores_detected_values_inside_longer_words():
     assert datum.total_synthetic_data == 1
     assert datum.unique_synthetic_data == 1
     assert datum.unique_synthetic_data_percentage == 50.0
+
+
+_REFERENCE_WORD_CHARACTER = re.compile(r"\w")
+
+
+def _reference_replayed_values(text: str, values: set[str]) -> set[str]:
+    """The original one-regex-per-value search that ``_EmbeddedValueIndex`` must match exactly."""
+
+    def pattern(value: str) -> re.Pattern[str]:
+        start = r"(?<!\w)" if _REFERENCE_WORD_CHARACTER.match(value[0]) else ""
+        end = r"(?!\w)" if _REFERENCE_WORD_CHARACTER.match(value[-1]) else ""
+        return re.compile(f"{start}{re.escape(value)}{end}")
+
+    return {value for value in values if pattern(value).search(text)}
+
+
+def _random_text(rng: random.Random, max_length: int) -> str:
+    # Word characters (ASCII, accented, digit, underscore) and non-word characters (space, punctuation, newline).
+    alphabet = ["a", "b", "A", "é", "1", "_", " ", " ", "'", "-", ".", "\n", "@"]
+    return "".join(rng.choice(alphabet) for _ in range(rng.randint(1, max_length)))
+
+
+@pytest.mark.parametrize("seed", range(20))
+def test_embedded_value_index_matches_the_regex_search(seed: int):
+    rng = random.Random(seed)
+    texts = [_random_text(rng, 40) for _ in range(30)]
+    values = {_random_text(rng, 4) for _ in range(40)}
+    # Add substrings of the texts so many values do occur, including ones that start or end mid-word.
+    for _ in range(40):
+        text = rng.choice(texts)
+        start = rng.randrange(len(text))
+        values.add(text[start : rng.randint(start + 1, len(text))])
+    index = _EmbeddedValueIndex(values)
+
+    for text in texts:
+        assert index.find(text) == _reference_replayed_values(text, values), (text, values)
+    expected_rows = sum(1 for text in texts if _reference_replayed_values(text, values))
+    expected_values = set().union(*(_reference_replayed_values(text, values) for text in texts))
+    assert _synthetic_replay_counts(pd.Series(texts), values, substring_match=True) == (
+        expected_rows,
+        len(expected_values),
+    )
+
+
+@pytest.mark.parametrize(
+    ("text", "value", "matches"),
+    [
+        ("Flights to Canada", "Ada", False),
+        ("Ada's file", "Ada", True),
+        ("x-7 left", "-7", True),
+        ("x-7y", "-7", False),
+        ("call (555)", "(555)", True),
+        ("a.b.", ".b.", True),
+        ("ab.", "b.", False),
+    ],
+)
+def test_embedded_value_index_respects_word_boundaries(text: str, value: str, matches: bool):
+    assert (value in _EmbeddedValueIndex([value]).find(text)) is matches
