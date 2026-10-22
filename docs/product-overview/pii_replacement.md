@@ -489,9 +489,7 @@ does not leave two or three words after removing titles and suffixes is
 replaced whole.
 A street in free text
 reuses the street of a structured address whose locality was kept, as
-described below, or, otherwise, of a structured address that ends with the
-exact suffix built from its typed city, state, postal-code, or country
-dependencies. NSS never guesses components from other token positions or
+described below. NSS never guesses components from other token positions or
 isolated house numbers.
 
 ### Full street addresses
@@ -503,17 +501,16 @@ followed by a comma or space, it replaces only that street and keeps the rest as
 written: `489 Park Blvd, Mesa, IA 76237` becomes, for example,
 `67911 Johnson Knoll, Mesa, IA 76237`. This works for any address format the
 detector recognizes, such as `Bahnhofstraße 21, 10115 Berlin, Germany`; the new
-street comes from the configured sampler and locale. Linked city, state,
-postal-code, or country columns still condition the sampler but are not
-appended again. Every other value, including one that starts with a unit
-outside the detected street or one the detector does not recognize, is replaced
-whole, with linked locality values appended as before. If the detector cannot
+street comes from the configured sampler and locale. Every other value,
+including one that starts with a unit outside the detected street or one the
+detector does not recognize, is replaced whole with a generated street. If the
+detector cannot
 run, for example because the `gliner2` package or model is unavailable, NSS
 logs a warning and replaces every street-address value whole.
 
 Keeping the locality means the original city, state, postal code, and country
-remain in the output, as they already do in linked locality columns and in free
-text around a detected street. Combined with other columns, such as a birth
+remain in the output, as they already do in separate city, state, or postal-code
+columns that are not replaced and in free text around a detected street. Combined with other columns, such as a birth
 date, a postal code can help re-identify a person.
 
 ## LLM-assisted planning
