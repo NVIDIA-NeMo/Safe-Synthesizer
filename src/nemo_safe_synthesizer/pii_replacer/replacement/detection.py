@@ -12,10 +12,11 @@ from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from itertools import chain
-from typing import NamedTuple, Protocol, TypeGuard
+from typing import NamedTuple, Protocol
 from unicodedata import normalize
 
 import regex
+from typing_extensions import TypeIs
 
 from ...config.replace_pii import (
     ENTITIES,
@@ -170,7 +171,23 @@ class _TextCandidates:
 
 
 class Gliner2Detector:
-    """Lazy local GLiNER2 adapter with positional chunk remapping."""
+    """Lazy local GLiNER2 adapter with positional chunk remapping.
+
+    The model is loaded on the first ``detect`` call and reused afterwards.
+    Long texts are split into overlapping chunks, and detected offsets are
+    mapped back to the original text.
+
+    Args:
+        config: Detection settings: model ID and revision, entity and
+            name-exclusion thresholds, chunk geometry, and batch size.
+        model_loader: Callable that loads a model from a model ID and an
+            optional revision. Defaults to loading the local GLiNER2
+            checkpoint; tests pass a fake.
+
+    Raises:
+        ParameterError: If a name-exclusion threshold label is also a GLiNER2
+            detection label.
+    """
 
     def __init__(
         self,
@@ -278,7 +295,22 @@ class _RegexRule:
 
 
 class RegexDetector:
-    """Bounded deterministic detector for structurally validated PII."""
+    """Bounded deterministic detector for structurally validated PII.
+
+    Each built-in rule runs with a timeout and a cap on matches per cell, so
+    an adversarial cell cannot stall or flood detection, and each match must
+    pass the rule's structural validator, such as a Luhn check for card
+    numbers, to become a span.
+
+    Args:
+        timeout_seconds: Time limit for one rule on one cell.
+        max_matches_per_rule: Largest number of matches one rule may produce
+            for one cell before detection fails.
+
+    Raises:
+        InternalError: If ``timeout_seconds`` or ``max_matches_per_rule`` is
+            not positive.
+    """
 
     def __init__(
         self,
@@ -306,18 +338,28 @@ class RegexDetector:
         """Apply one regex rule with its timeout, match cap, and structural validator."""
         try:
             matches = rule.expression.finditer(cell.text, timeout=self._timeout_seconds)
-            spans: list[DetectedSpan] = []
-            for match_count, match in enumerate(matches, start=1):
-                if match_count > self._max_matches_per_rule:
-                    raise GenerationError(
-                        f"built-in PII regex rule {rule.rule_id!r} exceeded the maximum of "
-                        f"{self._max_matches_per_rule} matches for one cell"
-                    )
-                if span := _validated_regex_span(cell, rule, match):
-                    spans.append(span)
-            return tuple(spans)
+            return self._validated_spans(cell, rule, matches)
         except TimeoutError as exc:
             raise GenerationError(f"built-in PII regex rule {rule.rule_id!r} timed out") from exc
+
+    def _validated_spans(
+        self, cell: DetectionCell, rule: _RegexRule, matches: Iterable[_RegexMatch]
+    ) -> tuple[DetectedSpan, ...]:
+        """Return the spans of ``matches`` that pass the rule's validator, enforcing the match cap.
+
+        ``matches`` is consumed lazily, so a ``TimeoutError`` from the regex
+        engine propagates to the caller.
+        """
+        spans: list[DetectedSpan] = []
+        for match_count, match in enumerate(matches, start=1):
+            if match_count > self._max_matches_per_rule:
+                raise GenerationError(
+                    f"built-in PII regex rule {rule.rule_id!r} exceeded the maximum of "
+                    f"{self._max_matches_per_rule} matches for one cell"
+                )
+            if span := _validated_regex_span(cell, rule, match):
+                spans.append(span)
+        return tuple(spans)
 
 
 class CompositeFreeTextDetector:
@@ -651,7 +693,7 @@ def _result_spans(result: object) -> Iterable[tuple[int, int, str, float]]:
         yield from _entity_result_spans(label, values)
 
 
-def _is_string_keyed_mapping(value: object) -> TypeGuard[Mapping[str, object]]:
+def _is_string_keyed_mapping(value: object) -> TypeIs[Mapping[str, object]]:
     """Return whether ``value`` is a mapping whose keys are all strings."""
     return isinstance(value, Mapping) and all(isinstance(key, str) for key in value)
 

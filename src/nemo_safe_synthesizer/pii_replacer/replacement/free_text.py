@@ -12,9 +12,7 @@ from dataclasses import dataclass, field
 from itertools import chain
 from random import Random
 from string import ascii_uppercase
-from typing import Literal
-
-import pandas as pd
+from typing import TYPE_CHECKING, Literal
 
 from ...config.replace_pii import EntityType, PiiColumnPlan
 from ...errors import GenerationError, InternalError, ParameterError, SafeSynthesizerError
@@ -40,6 +38,9 @@ from .types import (
     detected_text,
     free_text_mapping_key,
 )
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 __all__ = [
     "FreeTextCellDetections",
@@ -134,6 +135,16 @@ class FreeTextReplacementExecutor:
     consistent within record or group scope. With ``find_and_replace``, every
     cell is also searched for those structured and detected values, so
     occurrences the detector missed get the same replacement.
+
+    Args:
+        generator: Produces a replacement for each value that has no mapping yet.
+        detector: Finds candidate spans in free-text cells, or ``None`` when the
+            plan has no free-text targets; ``detect`` then fails if called with any.
+        base_seed: Seed from which every replacement's deterministic seed is derived.
+        capture_replacement_map: Whether to keep a per-span record of each
+            original and replacement value in the execution result.
+        find_and_replace: Whether to also replace occurrences of known
+            structured and detected values that the detector missed.
     """
 
     def __init__(
