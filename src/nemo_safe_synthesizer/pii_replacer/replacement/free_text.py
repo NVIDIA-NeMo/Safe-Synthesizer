@@ -291,8 +291,10 @@ class FreeTextReplacementExecutor:
     ) -> None:
         """Register first, middle, and last name parts of a structured full name.
 
-        An explicit name pattern aligns the parts. Without one, the name is
-        split as described in ``_name_parts``.
+        An explicit name pattern aligns the parts, except that a pattern with
+        two placeholders next to each other, such as ``{First}{Last}``,
+        registers nothing because the split would be a guess. Without a
+        pattern, the name is split as described in ``_name_parts``.
         """
         if spec.entity_type is not EntityType.FULL_NAME:
             return
