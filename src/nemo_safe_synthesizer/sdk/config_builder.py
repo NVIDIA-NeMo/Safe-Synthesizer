@@ -6,10 +6,13 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from pathlib import PurePosixPath
 from typing import Self, TypeAlias
+from urllib.parse import urlparse
 
 import pandas as pd
 
+from ..cli.datasets import DatasetInfo
 from ..config import (
     DataParameters,
     DifferentialPrivacyHyperparams,
@@ -30,6 +33,8 @@ from ..data_processing.csv_source import CsvSource
 from ..telemetry import _telemetry_enabled
 
 DataSource = pd.DataFrame | str | CsvSource
+# File formats that store their own column types, read with their pandas reader instead of as CSV.
+_TYPED_FILE_SUFFIXES = frozenset({".parquet", ".json", ".jsonl"})
 RawConfig: TypeAlias = Mapping[str, object]
 
 
@@ -100,8 +105,9 @@ class ConfigBuilder:
         """Set the data source for synthetic data generation.
 
         Args:
-            df_source: Training dataset as a pandas DataFrame, a CSV path or
-                URL, or a ``CsvSource`` already read from one.
+            df_source: Training dataset as a pandas DataFrame, a path or URL
+                to a CSV, Parquet, JSON, or JSONL file, or a ``CsvSource``
+                already read from a CSV file.
 
         Returns:
             This builder instance with the data source configured.
@@ -299,13 +305,15 @@ class ConfigBuilder:
     def _resolve_datasource(self, **kwargs) -> None:
         """Convert the data source into a ``pandas.DataFrame``.
 
-        If ``_data_source`` is already a DataFrame it is kept as-is.
-        A string is treated as a CSV path or URL and read once into a
-        ``CsvSource``, which is kept so the standalone PII replacement output
-        can write unchanged cells exactly as they appear in the same bytes.
+        If ``_data_source`` is already a DataFrame it is kept as-is. A string
+        ending in ``.parquet``, ``.json``, or ``.jsonl`` is read with the
+        matching pandas reader, as the CLI does. Any other string is treated as
+        a CSV path or URL and read once into a ``CsvSource``, which is kept so
+        the standalone PII replacement output can write unchanged cells exactly
+        as they appear in the same bytes.
 
         Args:
-            **kwargs: Forwarded to ``pd.read_csv`` when loading from URL.
+            **kwargs: Forwarded to the pandas reader when loading from a path or URL.
 
         Raises:
             ValueError: If ``_data_source`` is not a DataFrame, string, or ``CsvSource``.
@@ -313,9 +321,11 @@ class ConfigBuilder:
         match self._data_source:
             case pd.DataFrame():
                 pass
+            case str(url) if PurePosixPath(urlparse(url).path).suffix.lower() in _TYPED_FILE_SUFFIXES:
+                self._data_source: pd.DataFrame = DatasetInfo(name=url, url=url, load_args=kwargs or None).fetch()
             case str(url):
                 self._data_source_csv = CsvSource.load(url, kwargs)
-                self._data_source: pd.DataFrame = self._data_source_csv.read()
+                self._data_source = self._data_source_csv.read()
             case CsvSource() as source:
                 self._data_source_csv = source
                 self._data_source = source.read()
