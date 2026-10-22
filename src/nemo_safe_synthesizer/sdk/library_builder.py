@@ -485,6 +485,24 @@ class SafeSynthesizer(ConfigBuilder):
             ParameterError: If PII replacement is disabled or invalid, no
                 dataframe data source is configured, or ``source_text`` does
                 not have the input's columns and row count.
+
+        Example::
+
+            nss = (
+                SafeSynthesizer()
+                .with_data_source("patients.csv")
+                .with_replace_pii(
+                    replacement_plan={"columns_to_replace": [{"column_name": "email", "entity_type": "email"}]},
+                )
+            )
+            # Both paths are optional; without them nothing is written and only the result is returned.
+            result = nss.replace_pii(
+                "patients_pii_replaced.csv",
+                config_output_path="pii_replacement_config.yaml",
+            )
+            result.transformed_df  # Emails replaced; other columns unchanged.
+            result.generation_statistics.generated_replacement_count  # Distinct replacements generated.
+            result.resolved_config  # The plan and sampler mappings written to the YAML file.
         """
         self._ensure_observability()
         resolved = self.plan_pii_replacement(output_path=config_output_path)
