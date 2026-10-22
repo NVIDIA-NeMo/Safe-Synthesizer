@@ -10,7 +10,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from nemo_safe_synthesizer.cli.datasets import DatasetInfo, DatasetRegistry
+from nemo_safe_synthesizer.cli.datasets import DatasetInfo, DatasetRegistry, file_extension
 
 
 class TestDatasetInfo:
@@ -148,6 +148,28 @@ class TestDatasetInfo:
         assert isinstance(result, pd.DataFrame)
         assert list(result.columns) == ["col1", "col2"]
         assert len(result) == 2
+
+    def test_fetch_reads_an_uppercase_extension(self, tmp_path: Path):
+        """Test fetch picks the reader from the extension regardless of letter case."""
+        parquet_file = tmp_path / "test.PARQUET"
+        pd.DataFrame({"zip": ["02054"]}).to_parquet(parquet_file)
+
+        result = DatasetInfo(name="test", url=str(parquet_file)).fetch()
+
+        assert result["zip"].tolist() == ["02054"]
+
+    @pytest.mark.parametrize(
+        ("url", "extension"),
+        [
+            ("people.PARQUET", "parquet"),
+            ("https://host/people.parquet?token=abc", "parquet"),
+            ("file:///data/people.csv", "csv"),
+            ("C:\\data\\people.JSONL", "jsonl"),
+            ("data/no_extension", ""),
+        ],
+    )
+    def test_file_extension_ignores_case_and_query_strings(self, url: str, extension: str):
+        assert file_extension(url) == extension
 
     def test_fetch_unsupported_extension(self, tmp_path: Path):
         """Test fetch raises ValueError for unsupported file extension."""
