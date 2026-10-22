@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import os
 import time
+from collections.abc import Hashable
 from dataclasses import dataclass, field
 
 import pandas as pd
@@ -40,6 +41,9 @@ __all__ = ["ReplacementExecutionResult", "StructuredReplacementExecutor", "resol
 _MAX_GENERATION_ATTEMPTS = 10
 _PERSON_RANDOM_SEED_ENV = "PERSON_RANDOM_SEED"
 _CompiledDataToSamplerValueMapping = dict[str, dict[str, tuple[str, ...]]]
+# Identity shared by every column that gets the same replacement for a value: scope, entity type,
+# the column's format, and the case-folded original.
+_SharedMappingKey = tuple[tuple[str, Hashable], EntityType, tuple[str | None, int | None], CanonicalValue]
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,6 +89,7 @@ class StructuredReplacementExecutor:
         self._base_seed = base_seed
         self._data_to_sampler_value_mapping = _compile_data_to_sampler_value_mapping(plan.data_to_sampler_value_mapping)
         self._cache: dict[StructuredMappingKey, _CachedReplacement] = {}
+        self._shared: dict[_SharedMappingKey, str] = {}
         self._pool = ReplacementPool()
         self._repeated_by_target: dict[str, int] = {}
         self._reused_originals_by_target: dict[str, int] = {}
@@ -147,6 +152,7 @@ class StructuredReplacementExecutor:
 
     def _reset_execution_state(self) -> None:
         self._cache.clear()
+        self._shared.clear()
         self._pool = ReplacementPool()
         self._repeated_by_target.clear()
         self._reused_originals_by_target.clear()
@@ -259,12 +265,34 @@ class StructuredReplacementExecutor:
             self._record_dependency_drift(key, cached, dependencies)
             return cached.value
 
-        replacement = self._generate_fresh(key, spec, original_text, dependencies)
         provenance = None if isinstance(key, RecordMappingKey) else GroupMappingProvenance(dependencies)
+        shared_key = self._shared_key(key, spec)
+        if (shared := self._shared.get(shared_key)) is not None:
+            # Another column of the same type and format already replaced this value in this record or group.
+            self._cache[key] = _CachedReplacement(shared, provenance)
+            return shared
+        replacement = self._generate_fresh(key, spec, original_text, dependencies)
         self._cache[key] = _CachedReplacement(replacement, provenance)
+        self._shared[shared_key] = replacement
         self._pool.record_used(spec.entity_type, replacement)
         self._generated_count += 1
         return replacement
+
+    def _shared_key(self, key: StructuredMappingKey, spec: PiiColumnPlan) -> _SharedMappingKey:
+        """Return the identity under which columns of one entity type and format share replacements.
+
+        Columns share only when their formats match, since one value cannot fit two patterns: an email in
+        ``email`` and ``backup_email`` gets one replacement, while phones written as ``(###) ###-####`` and
+        ``###.###.####`` are replaced separately.
+        """
+        scope: tuple[str, Hashable] = (
+            ("record", key.row_position)
+            if isinstance(key, RecordMappingKey)
+            else ("group", key.original_group_identity)
+        )
+        allocator = self._identifier_allocators.get(spec.column_name)
+        digits = allocator.space.digits if allocator is not None and isinstance(allocator.space, NumberSpace) else None
+        return (scope, spec.entity_type, (spec.pattern, digits), key.canonical_original_value)
 
     def _generate_fresh(
         self,

@@ -414,8 +414,12 @@ stays consistent with it. NSS, rather than the model, decides how
 replacements stay consistent: within a group when a grouping column is
 configured, else within a row. Values that differ only in letter case count as
 the same value: `Ada`, `ADA`, and `ada` share one replacement, written in each
-occurrence's case, such as `Kathleen`, `KATHLEEN`, and `kathleen`. Every
-replacement differs from the value it replaces, ignoring case. A replaced full name also avoids the original's first and last name;
+occurrence's case, such as `Kathleen`, `KATHLEEN`, and `kathleen`. The same
+value of the same type also gets one replacement across columns that share a
+format: an address in `email` and `backup_email` of one record is replaced with
+the same address, while phones written as `(###) ###-####` in one column and
+`###.###.####` in another are replaced separately. Every replacement differs
+from the value it replaces, ignoring case. A replaced full name also avoids the original's first and last name;
 when no such name is found, NSS keeps one that shares a part and logs a warning
 with the count. Identifier-like values (email, phone number, SSN, national ID, card
 number, API key, IP address, unique identifier) also avoid every original value
