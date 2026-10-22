@@ -9921,7 +9921,7 @@ uses <code>python:3.13-slim-bookworm</code> for the runtime and dev stages. CUDA
 comes from the selected Python extra rather than from an <code>nvidia/cuda</code> base
 image.</p>
 <pre class="mermaid"><code>flowchart TD
-    uvImage["ghcr.io/astral-sh/uv:0.9.30\n(uv stage)"]
+    uvImage["ghcr.io/astral-sh/uv:0.13.4\n(uv stage)"]
     pythonBase["python:PYTHON_VERSION-slim-bookworm"]
 
     subgraph stages [Build Stages]
@@ -10027,7 +10027,7 @@ as <code>--help</code>, <code>--version</code>, and <code>config</code> skip run
 </tr>
 <tr>
 <td><code>UV_IMAGE</code></td>
-<td><code>ghcr.io/astral-sh/uv:0.9.30</code></td>
+<td><code>ghcr.io/astral-sh/uv:0.13.4</code></td>
 <td>Source image for pinned <code>uv</code> binaries</td>
 </tr>
 </tbody>
