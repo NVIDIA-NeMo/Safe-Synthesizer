@@ -20,7 +20,11 @@ _PRESERVED_PATTERNS = (
     "%m-%d-%Y",
     "%d-%m-%Y",
 )
+# Only fixed calendar dates are accepted. dateparser's other parsers read values such as "yesterday",
+# "in 2 days", or an age like "30 years" relative to the current time, which would make the output
+# depend on the run day and turn ages into dates. Timestamps are excluded for the same reason.
 _NATURAL_DATE_SETTINGS: dict[str, object] = {
+    "PARSERS": ["custom-formats", "absolute-time"],
     "STRICT_PARSING": True,
     "REQUIRE_PARTS": ["day", "month", "year"],
     "RETURN_AS_TIMEZONE_AWARE": False,
@@ -56,7 +60,8 @@ def shift_birth_date(original: str, pattern: str | None, rng: Random) -> str | N
 
     The plan's pattern only has to cover 99% of a column, so each value is tried
     against the pattern first, then ISO 8601, common numeric formats, and strict
-    complete natural-language dates. The replacement uses the pattern when one
+    complete natural-language dates. Relative expressions such as ``"yesterday"``
+    or an age such as ``"30 years"`` are not fixed dates and are not parsed. The replacement uses the pattern when one
     is configured, else the numeric format that parsed, else ISO 8601. ``None``
     means the value could not be parsed; the caller then generates a random
     birth date so the original never survives.
