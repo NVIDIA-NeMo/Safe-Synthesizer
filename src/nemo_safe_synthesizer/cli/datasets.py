@@ -16,6 +16,7 @@ import pandas as pd
 import yaml
 from pydantic import BaseModel, Field
 
+from ..data_processing.csv_source import CsvSource
 from ..observability import get_logger
 
 logger = get_logger(__name__)
@@ -141,28 +142,24 @@ class DatasetInfo(BaseModel):
             logger.error(f"Error reading dataset from {url}: {e}", exc_info=True)
             raise
 
-    def fetch_text(self) -> pd.DataFrame | None:
-        """Read a CSV or TXT dataset with every cell kept as the text in the file.
+    def fetch_csv_source(self) -> CsvSource | None:
+        """Read a CSV or TXT dataset's bytes once, so its typed and text forms parse the same content.
 
         ``fetch`` infers column types, which changes how some cells are written back out:
         ``"02054"`` becomes the integer ``2054``, an integer column with blanks becomes float so
         ``"7"`` is written as ``"7.0"``, and ``"N/A"`` becomes an empty cell. Callers that write
-        unchanged cells back out use this frame to keep them exactly as they appeared.
+        unchanged cells back out use ``CsvSource.read_text`` to keep them exactly as they appeared,
+        parsed from the same bytes as ``CsvSource.read`` even if the file changes later.
 
         Returns:
-            The dataset with every cell as a string, or ``None`` for formats other than CSV and
-            TXT.
+            The file's bytes with this dataset's ``load_args``, or ``None`` for formats other
+            than CSV and TXT.
         """
         url = self.get_url()
         if Path(url).suffix.lstrip(".") not in {"csv", "txt"}:
             return None
-        # Drop the user's type options so they cannot override the text read.
-        load_args = {key: value for key, value in (self.load_args or {}).items() if key not in _TYPE_LOAD_ARGS}
-        reader = _dynamic_callable(pd.read_csv)
-        return _require_dataframe(reader(url, **load_args, dtype=str, na_filter=False), url=url)
-
-
-_TYPE_LOAD_ARGS = frozenset({"converters", "dtype", "keep_default_na", "na_filter", "na_values", "parse_dates"})
+        logger.info(f"Reading dataset from {url}")
+        return CsvSource.load(url, self.load_args)
 
 
 class DatasetRegistry(BaseModel):

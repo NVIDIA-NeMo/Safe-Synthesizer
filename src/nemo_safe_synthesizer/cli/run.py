@@ -28,7 +28,7 @@ from .utils import (
     CLI_NESTED_FIELD_SEPARATOR,
     PathT,
     common_setup,
-    fetch_data_source_text,
+    fetch_data_source_for_replacement,
 )
 from .wandb_setup import publish_evaluation_report
 
@@ -513,24 +513,27 @@ def run_replace_pii(
     """Plan or apply PII replacement to the full input dataset."""
     _set_cli_deployment_type_default()
     settings = _settings_from_run_kwargs(kwargs)
-    run_logger, config, df, workdir = common_setup(
+    run_logger, config, _, workdir = common_setup(
         settings=settings,
         phase="replace_pii",
         skip_wandb=True,
+        load_data=False,
     )
 
     try:
         with traced_user("SafeSynthesizer"):
             from ..sdk.library_builder import SafeSynthesizer
 
-            if df is None:
+            # A CSV source keeps its bytes, so the output's unchanged cells are parsed from the same read.
+            data_source = fetch_data_source_for_replacement(settings)
+            if data_source is None:
                 raise UserError("Input data is required to plan or apply PII replacement.")
             config_output_path = workdir.run_dir / PII_REPLACEMENT_CONFIG_FILENAME
             nss = SafeSynthesizer(
                 config=config,
                 workdir=workdir,
                 emit_telemetry=config.emit_telemetry,
-            ).with_data_source(df)
+            ).with_data_source(data_source)
             if plan_only:
                 nss.plan_pii_replacement(output_path=config_output_path)
                 run_logger.info(f"Resolved PII replacement configuration saved to: {config_output_path}")
@@ -543,7 +546,6 @@ def run_replace_pii(
                 result = nss.replace_pii(
                     output_path=data_output_path,
                     config_output_path=config_output_path,
-                    source_text=fetch_data_source_text(settings),
                 )
                 run_logger.info(
                     f"PII replacement complete: {result.generation_statistics.generated_replacement_count} "
