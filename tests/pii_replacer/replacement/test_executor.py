@@ -773,6 +773,16 @@ class TestStructuredReplacementExecutor:
         assert result.dataframe.at[0, "notes"] == f"Key {result.dataframe.at[0, 'api_key']} issued"
         assert generator.requests == []
 
+    def test_free_text_replacement_equal_to_the_original_ignoring_case_is_resampled(self) -> None:
+        dataframe = pd.DataFrame({"notes": ["ada called"]})
+        plan = _plan(_target("notes", EntityType.FREE_TEXT))
+        detector = _StaticDetector([_span(0, "notes", "ada called", "ada", EntityType.FIRST_NAME)])
+        generator = _ScriptedNameGenerator("Ada", "Kathleen")
+
+        result = _execute(dataframe, plan, generator, free_text_detector=detector)
+
+        assert result.dataframe.at[0, "notes"] == "kathleen called"
+
     def test_reused_free_text_replacement_takes_each_occurrence_letter_case(self) -> None:
         dataframe = pd.DataFrame({"notes": ["Ada, ADA, ada"]})
         plan = _plan(_target("notes", EntityType.FREE_TEXT))
