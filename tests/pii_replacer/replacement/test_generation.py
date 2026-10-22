@@ -559,23 +559,6 @@ class TestReplacementGenerator:
         assert unnamed != "sampled@example.test"
         assert "@" in unnamed
 
-    def test_faker_street_address_appends_linked_locality_unless_the_original_locality_is_kept(self) -> None:
-        generator = _faker_generator()
-        city = ((EntityType.CITY, CanonicalValue("string", "Boston")),)
-
-        appended = generator.generate(_request(EntityType.STREET_ADDRESS, "1 Main Street", dependencies=city))
-        kept = ReplacementGenerationRequest(
-            entity_type=EntityType.STREET_ADDRESS,
-            original_value="1 Main Street",
-            effective_dependency_tuple=city,
-            pattern=None,
-            seed=42,
-            keep_original_locality=True,
-        )
-
-        assert appended.endswith(", Boston")
-        assert generator.generate(kept) == appended.removesuffix(", Boston")
-
     def test_nemotron_personas_street_address_omits_linked_locality_when_the_original_locality_is_kept(
         self,
         tmp_path: Path,

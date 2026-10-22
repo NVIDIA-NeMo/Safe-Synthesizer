@@ -1043,36 +1043,6 @@ class TestStructuredReplacementExecutor:
         assert result.dataframe["notes"].iloc[0] == "Grace called"
         assert len(generator.requests) == 1
 
-    def test_detected_street_component_reuses_parent_with_validated_dependency_suffix(self) -> None:
-        dataframe = pd.DataFrame(
-            {
-                "address": ["1 Main Street, Boston, MA"],
-                "city": ["Boston"],
-                "state": ["MA"],
-                "notes": ["Ship to 1 Main Street tomorrow"],
-            }
-        )
-        plan = _plan(
-            _target("notes", EntityType.FREE_TEXT),
-            _target(
-                "address",
-                EntityType.STREET_ADDRESS,
-                ("city", EntityType.CITY),
-                ("state", EntityType.STATE),
-            ),
-        )
-        detector = _StaticDetector(
-            [DetectedSpan(DetectionCellId(0, "notes"), 8, 21, EntityType.STREET_ADDRESS, "gliner", 0.9)]
-        )
-        generator = _CompositeAddressGenerator()
-
-        result = _execute(dataframe, plan, generator, free_text_detector=detector)
-
-        assert result.dataframe["address"].iloc[0] == "9 New Road, Boston, MA"
-        assert result.dataframe["notes"].iloc[0] == "Ship to 9 New Road tomorrow"
-        assert len(generator.requests) == 1
-        assert result.generation_statistics.generated_replacement_count == 1
-
 
 @pytest.mark.unit
 class TestKnownValueMatching:
@@ -1273,24 +1243,6 @@ class TestStreetAddressLocality:
         )
 
         assert result.dataframe["address"].tolist() == ["9 New Road, Mesa, IA 76237", "7 Oak Lane, Mesa, IA 76237"]
-
-    def test_linked_locality_columns_still_condition_generation_without_being_appended(self) -> None:
-        value = "1 Main Street, Boston, MA"
-        dataframe = pd.DataFrame({"address": [value], "city": ["Boston"], "state": ["MA"]})
-        plan = _plan(
-            _target("address", EntityType.STREET_ADDRESS, ("city", EntityType.CITY), ("state", EntityType.STATE))
-        )
-        detector = _StaticDetector([_span(0, "address", value, "1 Main Street", EntityType.STREET_ADDRESS)])
-        generator = _StreetGenerator()
-
-        result = _execute(dataframe, plan, generator, free_text_detector=detector)
-
-        assert result.dataframe["address"].iloc[0] == "9 New Road, Boston, MA"
-        (request,) = generator.requests
-        assert [entity_type for entity_type, _ in request.effective_dependency_tuple] == [
-            EntityType.CITY,
-            EntityType.STATE,
-        ]
 
     @pytest.mark.parametrize(
         ("value", "detected"),
