@@ -64,6 +64,11 @@ class ReplacementPool:
         self._originals: dict[EntityType, set[str]] = {}
         self._used: dict[EntityType, set[str]] = {}
 
+    def clear(self) -> None:
+        """Forget every original and replacement, as before a new dataframe execution."""
+        self._originals.clear()
+        self._used.clear()
+
     @staticmethod
     def tracks(entity_type: EntityType) -> bool:
         """Return whether ``entity_type`` is identifier-like and therefore tracked."""

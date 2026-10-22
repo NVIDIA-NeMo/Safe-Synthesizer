@@ -106,16 +106,17 @@ class StructuredReplacementExecutor:
         self._cache: dict[StructuredMappingKey, _CachedReplacement] = {}
         self._detector = free_text_detector
         self._address_parts: dict[str, dict[str, AddressParts]] = {}
+        self._pool = ReplacementPool()
         self._free_text = FreeTextReplacementExecutor(
             generator,
             free_text_detector,
             base_seed=base_seed,
+            pool=self._pool,
             capture_replacement_map=capture_replacement_map,
             find_and_replace=find_and_replace,
         )
         self._replacement_records: list[StructuredReplacementRecord] = []
         self._shared: dict[_SharedMappingKey, str] = {}
-        self._pool = ReplacementPool()
         self._group_replacements: set[str] = set()
         self._repeated_by_target: dict[str, int] = {}
         self._reused_originals_by_target: dict[str, int] = {}
@@ -204,7 +205,7 @@ class StructuredReplacementExecutor:
         self._free_text.reset()
         self._replacement_records.clear()
         self._shared.clear()
-        self._pool = ReplacementPool()
+        self._pool.clear()
         self._group_replacements.clear()
         self._repeated_by_target.clear()
         self._reused_originals_by_target.clear()

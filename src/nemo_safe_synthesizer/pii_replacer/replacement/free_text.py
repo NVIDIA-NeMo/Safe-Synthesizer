@@ -16,12 +16,15 @@ import pandas as pd
 
 from ...config.replace_pii import EntityType, PiiColumnPlan
 from ...errors import GenerationError, InternalError, ParameterError, SafeSynthesizerError
+from ...observability import get_logger
 from ..planning.patterns import extract_name_components
 from ..transform_result import FreeTextReplacementRecord
 from .addresses import AddressParts
+from .collisions import CandidateChooser, ReplacementOutcome, ReplacementPool
 from .common_words import COMMON_WORDS
 from .detection import FreeTextDetector, fresh_detection_entity_types, resolve_overlapping_spans
 from .generation import ReplacementGenerationRequest, ReplacementGenerator
+from .letter_case import match_letter_case
 from .seeding import derive_seed
 from .types import (
     CanonicalValue,
@@ -36,7 +39,6 @@ from .types import (
     detected_text,
     free_text_mapping_key,
 )
-from .value_checks import generated_value_is_valid
 
 __all__ = [
     "FreeTextCellDetections",
@@ -44,6 +46,8 @@ __all__ = [
     "FreeTextExecutionResult",
     "FreeTextReplacementExecutor",
 ]
+
+logger = get_logger(__name__)
 
 _MAX_GENERATION_ATTEMPTS = 10
 _MIN_KNOWN_VALUE_LENGTH = 3
@@ -117,12 +121,16 @@ class FreeTextReplacementExecutor:
         detector: FreeTextDetector | None,
         *,
         base_seed: int,
+        pool: ReplacementPool | None = None,
         capture_replacement_map: bool = False,
         find_and_replace: bool = False,
     ) -> None:
         self._generator = generator
         self._detector = detector
         self._base_seed = base_seed
+        # Shared with structured replacement, so notes and columns follow the same collision rules.
+        self._pool = pool if pool is not None else ReplacementPool()
+        self._fallbacks: dict[tuple[EntityType, ReplacementOutcome], int] = {}
         self._capture_replacement_map = capture_replacement_map
         self._find_and_replace = find_and_replace
         self._cache: dict[FreeTextMappingKey, str] = {}
@@ -136,6 +144,7 @@ class FreeTextReplacementExecutor:
         self._cache.clear()
         self._statistics.clear()
         self._replacement_records.clear()
+        self._fallbacks.clear()
         self._generation_elapsed = 0.0
         self._generated_count = 0
 
@@ -162,10 +171,12 @@ class FreeTextReplacementExecutor:
             raise
         except Exception as exc:
             raise GenerationError("free-text PII detection returned invalid spans") from exc
-        return FreeTextCellDetections(
-            {cell_id: resolve_overlapping_spans(spans) for cell_id, spans in candidates.items()},
-            {cell_id: tuple(spans) for cell_id, spans in protected.items()},
-        )
+        accepted = {cell_id: resolve_overlapping_spans(spans) for cell_id, spans in candidates.items()}
+        # Detected values are originals too: no replacement, in a column or a note, may reuse one.
+        for cell_id, spans in accepted.items():
+            for span in spans:
+                self._pool.reserve_originals(span.entity_type, (detected_text(requested[cell_id], span),))
+        return FreeTextCellDetections(accepted, {cell_id: tuple(spans) for cell_id, spans in protected.items()})
 
     def execute(
         self,
@@ -180,6 +191,7 @@ class FreeTextReplacementExecutor:
         )
         for spec in specs:
             self._execute_spec(working, spec, group_identities, detections, known_values)
+        self._warn_fallbacks()
         return FreeTextExecutionResult(
             column_statistics=self._statistics,
             generated_replacement_count=self._generated_count,
@@ -383,7 +395,7 @@ class FreeTextReplacementExecutor:
         for span in spans:
             value = detected_text(cell, span)
             key = free_text_mapping_key(cell, span, scope_identity=scope_identity)
-            replacement = _match_letter_case(
+            replacement = match_letter_case(
                 value,
                 self._full_name_replacement(key)
                 if key.entity_type is EntityType.FULL_NAME
@@ -438,6 +450,8 @@ class FreeTextReplacementExecutor:
         cached = self._cache.get(key)
         if cached is not None:
             return cached
+        chooser = CandidateChooser(self._pool, key.entity_type, key.original_value)
+        replacement: str | None = None
         for attempt in range(_MAX_GENERATION_ATTEMPTS):
             request = ReplacementGenerationRequest(
                 entity_type=key.entity_type,
@@ -447,14 +461,35 @@ class FreeTextReplacementExecutor:
                 seed=derive_seed(self._base_seed, key, purpose="free_text_replacement", attempt=attempt),
             )
             candidate = self._generate(request)
-            if generated_value_is_valid(request, candidate):
-                self._cache[key] = candidate
-                self._generated_count += 1
-                return candidate
+            if chooser.offer(request, candidate):
+                replacement = candidate
+                break
+        else:
+            if (fallback := chooser.fallback()) is not None:
+                replacement, outcome = fallback
+                self._fallbacks[(key.entity_type, outcome)] = self._fallbacks.get((key.entity_type, outcome), 0) + 1
+        if replacement is not None:
+            self._cache[key] = replacement
+            self._pool.record_used(key.entity_type, replacement)
+            self._generated_count += 1
+            return replacement
         raise GenerationError(
             f"PII replacement could not generate a distinct {key.entity_type.value!r} free-text value "
             f"after {_MAX_GENERATION_ATTEMPTS} attempts"
         )
+
+    def _warn_fallbacks(self) -> None:
+        """Log one aggregate, PII-free warning per entity type and fallback kind."""
+        messages = {
+            "repeat": "Some free-text replacements repeat an earlier replacement because no unused value was found",
+            "original": "Some free-text replacements equal another original value because no other value was found",
+            "kept_name_part": "Some free-text full-name replacements keep an original name part",
+        }
+        for (entity_type, outcome), count in sorted(
+            self._fallbacks.items(), key=lambda item: (item[0][0].value, item[0][1])
+        ):
+            if (message := messages.get(outcome)) is not None:
+                logger.user.warning(message, extra={"entity_type": entity_type.value, "count": count})
 
     def _generate(self, request: ReplacementGenerationRequest) -> str:
         """Call the configured generator while recording aggregate elapsed time."""
@@ -485,20 +520,6 @@ def _name_parts(value: str) -> tuple[tuple[EntityType, str], ...] | None:
     if part_types is None or not all(_NAME_WORD.fullmatch(word) for word in words):
         return None
     return tuple(zip(part_types, words, strict=True))
-
-
-def _match_letter_case(occurrence: str, replacement: str) -> str:
-    """Give a shared replacement the letter case of the occurrence it replaces.
-
-    Free-text reuse ignores case, so ``MARGARET`` and ``margaret`` share one generated replacement. An
-    all-capitals or all-lowercase occurrence gets the replacement in the same case; any other occurrence keeps
-    the replacement as generated.
-    """
-    if occurrence.isupper():
-        return replacement.upper()
-    if occurrence.islower():
-        return replacement.lower()
-    return replacement
 
 
 class _KnownValues:

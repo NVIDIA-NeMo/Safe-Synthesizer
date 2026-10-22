@@ -748,6 +748,44 @@ class TestStructuredReplacementExecutor:
         assert result.dataframe.at[0, "notes"] == f"Key {result.dataframe.at[0, 'api_key']} issued"
         assert generator.requests == []
 
+    def test_different_detected_identifiers_never_share_a_replacement(self) -> None:
+        text = "SSNs 111-11-1111 and 222-22-2222"
+        dataframe = pd.DataFrame({"notes": [text]})
+        plan = _plan(_target("notes", EntityType.FREE_TEXT))
+        detector = _StaticDetector(
+            [
+                _span(0, "notes", text, "111-11-1111", EntityType.SSN),
+                _span(0, "notes", text, "222-22-2222", EntityType.SSN),
+            ]
+        )
+        # The second SSN is offered the first one's replacement, then the first original, then a new value.
+        generator = _ScriptedNameGenerator("333-33-3333", "333-33-3333", "111-11-1111", "444-44-4444")
+
+        result = _execute(dataframe, plan, generator, free_text_detector=detector)
+
+        assert result.dataframe.at[0, "notes"] == "SSNs 333-33-3333 and 444-44-4444"
+
+    def test_detected_identifiers_avoid_originals_of_structured_columns(self) -> None:
+        dataframe = pd.DataFrame({"ssn": ["111-11-1111"], "notes": ["Spouse SSN 222-22-2222"]})
+        plan = _plan(_target("ssn", EntityType.SSN), _target("notes", EntityType.FREE_TEXT))
+        detector = _StaticDetector([_span(0, "notes", "Spouse SSN 222-22-2222", "222-22-2222", EntityType.SSN)])
+        generator = _ScriptedNameGenerator("333-33-3333", "111-11-1111", "444-44-4444")
+
+        result = _execute(dataframe, plan, generator, free_text_detector=detector)
+
+        assert result.dataframe.at[0, "ssn"] == "333-33-3333"
+        assert result.dataframe.at[0, "notes"] == "Spouse SSN 444-44-4444"
+
+    def test_free_text_replacement_equal_to_the_original_ignoring_case_is_resampled(self) -> None:
+        dataframe = pd.DataFrame({"notes": ["ada called"]})
+        plan = _plan(_target("notes", EntityType.FREE_TEXT))
+        detector = _StaticDetector([_span(0, "notes", "ada called", "ada", EntityType.FIRST_NAME)])
+        generator = _ScriptedNameGenerator("Ada", "Kathleen")
+
+        result = _execute(dataframe, plan, generator, free_text_detector=detector)
+
+        assert result.dataframe.at[0, "notes"] == "kathleen called"
+
     def test_reused_free_text_replacement_takes_each_occurrence_letter_case(self) -> None:
         dataframe = pd.DataFrame({"notes": ["Ada, ADA, ada"]})
         plan = _plan(_target("notes", EntityType.FREE_TEXT))

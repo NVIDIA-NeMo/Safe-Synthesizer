@@ -330,7 +330,11 @@ replace_pii:
 When detections overlap, the longer span wins; between spans of equal length,
 the more confident one wins, with regex matches counting as fully confident.
 Repeated accepted values reuse replacements within their configured record or
-group scope.
+group scope. Free-text replacements follow the same rules as structured
+columns, described under the replacement plan below: they ignore letter case,
+and identifier-like values share one pool with the columns, so an SSN detected
+in notes never gets the same replacement as a different SSN in a column or
+another note.
 
 A detected span whose text equals a value already known in the same record or
 group always reuses that value's replacement. With `find_and_replace` (the
