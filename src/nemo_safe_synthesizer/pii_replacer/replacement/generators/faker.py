@@ -8,6 +8,7 @@ from __future__ import annotations
 import re
 from random import Random
 from typing import TYPE_CHECKING, ClassVar
+from uuid import UUID
 
 from faker import Faker
 
@@ -21,7 +22,6 @@ from ._common import (
     default_email_pattern,
     dependency_values,
     email_domain,
-    looks_like_uuid,
     name_values,
     normalize_organization_domain,
     render_luhn_pattern,
@@ -102,7 +102,7 @@ class FakerReplacementGenerator:
         if entity_type is EntityType.CREDIT_DEBIT_CARD:
             return fake.credit_card_number()
         if entity_type in {EntityType.API_KEY, EntityType.UNIQUE_IDENTIFIER}:
-            if entity_type is EntityType.UNIQUE_IDENTIFIER and looks_like_uuid(request.original_value):
+            if entity_type is EntityType.UNIQUE_IDENTIFIER and _is_uuid(request.original_value):
                 return str(fake.uuid4())
             fallback = str(fake.uuid4()).replace("-", "")
             return fallback if entity_type is EntityType.UNIQUE_IDENTIFIER else f"key-{fallback}"
@@ -188,7 +188,7 @@ def _shaped_identifier(request: ReplacementGenerationRequest, rng: Random) -> st
     """Return a masked or shape-preserving identifier, or ``None`` to generate one with Faker."""
     if request.pattern is not None:
         return render_character_mask(request.pattern, rng)
-    if request.entity_type is EntityType.UNIQUE_IDENTIFIER and looks_like_uuid(request.original_value):
+    if request.entity_type is EntityType.UNIQUE_IDENTIFIER and _is_uuid(request.original_value):
         return None
     shaped = shape_preserving_value(request.original_value, rng)
     return shaped if shaped != request.original_value else None
@@ -212,3 +212,12 @@ def _national_id(request: ReplacementGenerationRequest, fake: Faker, rng: Random
         if shaped != request.original_value:
             return shaped
     return fake.ssn()
+
+
+def _is_uuid(value: str) -> bool:
+    """Return whether ``value`` is a UUID written in its canonical hyphenated form, in either letter case."""
+    try:
+        parsed = UUID(value)
+    except ValueError:
+        return False
+    return str(parsed) == value.casefold()
