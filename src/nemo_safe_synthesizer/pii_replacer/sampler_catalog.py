@@ -15,9 +15,11 @@ from ..errors import ParameterError
 
 SamplerValueCatalog = Mapping[EntityType, tuple[str, ...]]
 
+# The persona column each conditioning entity type reads. Every locale calls sex ``sex``; the ethnicity
+# column is named differently by locale (en_US and en_SG, en_GB, pt_BR), and most locales have none.
 PERSONA_DEPENDENCY_COLUMN_ALIASES: Mapping[EntityType, tuple[str, ...]] = {
-    EntityType.GENDER: ("gender", "sex"),
-    EntityType.ETHNIC_BACKGROUND: ("ethnic_background", "ethnicity"),
+    EntityType.GENDER: ("sex",),
+    EntityType.ETHNIC_BACKGROUND: ("ethnic_background", "ethnicity", "race"),
 }
 
 _FAKER_DEPENDENCY_VALUES: SamplerValueCatalog = {

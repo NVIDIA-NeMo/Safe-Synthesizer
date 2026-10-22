@@ -17,7 +17,6 @@ import pandas as pd
 from ....config.replace_pii import EntityType, PiiReplacementSettings, PiiSamplerBackend, PiiSamplerConfig
 from ....errors import InternalError, ParameterError
 from ....observability import get_logger
-from ...planning.patterns import render_name_pattern
 from ...sampler_catalog import (
     PERSONA_DEPENDENCY_COLUMN_ALIASES,
     available_parquet_columns,
@@ -25,11 +24,8 @@ from ...sampler_catalog import (
 )
 from ._common import (
     NAME_ENTITY_TYPES,
-    default_email_pattern,
     dependency_values,
-    email_domain,
     name_values,
-    normalize_organization_domain,
     render_address,
     render_name,
     required_pattern_values,
@@ -159,24 +155,27 @@ class NemotronPersonasReplacementGenerator:
             return
         self._warned_fallbacks.add(entity_type)
         logger.user.warning(
-            "Nemotron-Personas sampling is unavailable for an entity category; using Faker",
+            "Some replacements of this entity type used Faker because the Nemotron-Personas data for this locale "
+            "has no value for them, for example street addresses outside en_US or an empty middle name",
             extra={"entity_type": entity_type.value, "locale": self._settings.locale},
         )
 
 
-_PERSONA_ENTITY_TYPES = NAME_ENTITY_TYPES | {EntityType.EMAIL, EntityType.PHONE_NUMBER, EntityType.STREET_ADDRESS}
-_PERSONA_COLUMN_ALIASES: Mapping[str, tuple[str, ...]] = {
-    "first": ("first_name", "given_name", "firstname"),
-    "middle": ("middle_name", "middlename"),
-    "last": ("last_name", "family_name", "surname", "lastname"),
-    "email": ("email", "email_address"),
-    "phone": ("phone_number", "phone"),
-    "street": ("street_address", "address"),
-    "street_number": ("street_number", "building_number"),
-    "street_name": ("street_name",),
+# Nemotron-Personas datasets have no email or phone column, so those entity types always use Faker.
+_PERSONA_ENTITY_TYPES = NAME_ENTITY_TYPES | {EntityType.STREET_ADDRESS}
+# Value keys and the persona columns they come from. Every locale names these columns the same way; only
+# en_US has street columns, so other locales fall back to Faker for street addresses.
+_PERSONA_VALUE_COLUMNS: Mapping[str, str] = {
+    "first": "first_name",
+    "middle": "middle_name",
+    "last": "last_name",
+    "street_number": "street_number",
+    "street_name": "street_name",
 }
 _PERSONA_READ_COLUMNS = tuple(
-    dict.fromkeys(chain.from_iterable((*_PERSONA_COLUMN_ALIASES.values(), *PERSONA_DEPENDENCY_COLUMN_ALIASES.values())))
+    dict.fromkeys(
+        chain(_PERSONA_VALUE_COLUMNS.values(), chain.from_iterable(PERSONA_DEPENDENCY_COLUMN_ALIASES.values()))
+    )
 )
 
 
@@ -282,11 +281,7 @@ def _first_existing_column(dataframe: pd.DataFrame, aliases: tuple[str, ...]) ->
 
 
 def _persona_value_columns(dataframe: pd.DataFrame) -> dict[str, str]:
-    return {
-        key: column
-        for key, aliases in _PERSONA_COLUMN_ALIASES.items()
-        if (column := _first_existing_column(dataframe, aliases)) is not None
-    }
+    return {key: column for key, column in _PERSONA_VALUE_COLUMNS.items() if column in dataframe.columns}
 
 
 def _persona_row_values(
@@ -321,24 +316,8 @@ def _generate_persona_value(
         if not _has_values(values, required):
             return None
         return render_name(entity_type, request.pattern, rng, values)
-    if entity_type is EntityType.EMAIL:
-        pattern = request.pattern or default_email_pattern(dependencies)
-        if pattern is None:
-            return sampled.get("email") or None
-        values = name_values(dependencies, sampled)
-        values["domain"] = email_domain(request.original_value) or ""
-        organization = dependencies.get(EntityType.ORGANIZATION)
-        values["organization"] = normalize_organization_domain(organization or "")
-        required = required_pattern_values(EntityType.EMAIL, pattern)
-        if not _has_values(values, required):
-            return None
-        return render_name_pattern(EntityType.EMAIL, pattern, values, rng)
-    if entity_type is EntityType.PHONE_NUMBER:
-        if request.pattern is not None:
-            return None
-        return sampled.get("phone") or None
     if entity_type is EntityType.STREET_ADDRESS:
-        street = sampled.get("street") or _persona_street_components(sampled)
+        street = _persona_street_components(sampled)
         return render_address(street, dependencies) if street else None
     return None
 
