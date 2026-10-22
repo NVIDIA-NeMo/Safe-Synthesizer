@@ -14,7 +14,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiReplacementPlan,
     PiiSamplerBackend,
 )
-from nemo_safe_synthesizer.errors import GenerationError
+from nemo_safe_synthesizer.errors import GenerationError, ParameterError
 from nemo_safe_synthesizer.pii_replacer.replacement.collisions import CandidateChooser, ReplacementPool
 from nemo_safe_synthesizer.pii_replacer.replacement.executor import StructuredReplacementExecutor
 from nemo_safe_synthesizer.pii_replacer.replacement.generation import ReplacementGenerationRequest
@@ -191,3 +191,16 @@ class TestGroupingColumnIsOneToOne:
         assert result["gid"].nunique() == 8
         assert result["gid"].str.fullmatch(r"ID-\d\d").all()
         assert any("Widened grouping-column identifiers" in record.getMessage() for record in caplog.records)
+
+
+@pytest.mark.unit
+class TestMaskWidening:
+    def test_a_mask_without_a_multi_choice_position_fails_instead_of_widening_forever(self) -> None:
+        dataframe = pd.DataFrame({"gid": ["ID-0", "ID-1"]})
+        spec = PiiColumnPlan(column_name="gid", entity_type=EntityType.UNIQUE_IDENTIFIER, pattern="ID-[0]")
+        executor = StructuredReplacementExecutor(
+            PiiReplacementPlan(columns_to_replace=[spec]), _ScriptedGenerator(), group_column="gid", base_seed=42
+        )
+
+        with pytest.raises(ParameterError, match="use a pattern with more generated positions"):
+            executor.execute(dataframe)
