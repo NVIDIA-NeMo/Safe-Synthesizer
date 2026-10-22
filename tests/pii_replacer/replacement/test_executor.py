@@ -241,23 +241,21 @@ class TestStructuredReplacementExecutor:
         assert result.generation_statistics.generated_replacement_count == 2
         assert result.column_statistics["first_name"].detected_entity_counts == {"first_name": 2}
 
-    def test_identifier_replacements_repeat_with_a_warning_once_the_format_runs_out(
+    def test_repeated_identifiers_only_need_to_differ_from_their_own_original(
         self,
         caplog: pytest.LogCaptureFixture,
     ) -> None:
         caplog.set_level(logging.WARNING)
-        # 100 rows share 5 two-digit IDs. Each row is replaced independently, and only 95
-        # two-digit values are not originals, so the last 5 replacements repeat earlier ones.
-        dataframe = pd.DataFrame({"hospitalid": [f"{10 + row % 5}" for row in range(100)]})
+        # 100 rows share 5 two-digit IDs, so the column is not all distinct and replacements may repeat.
+        originals = [f"{10 + row % 5}" for row in range(100)]
+        dataframe = pd.DataFrame({"hospitalid": originals})
         plan = _plan(_target("hospitalid", EntityType.UNIQUE_IDENTIFIER))
 
         result = _execute(dataframe, plan, _RecordingGenerator())
 
         replaced = result.dataframe["hospitalid"].tolist()
-        assert len(set(replaced)) == 95
-        assert not set(replaced) & {"10", "11", "12", "13", "14"}
-        repeats = [record for record in caplog.records if "format has no unused values left" in record.getMessage()]
-        assert [getattr(record, "repeated_count", None) for record in repeats] == [5]
+        assert all(new != old and len(new) <= 2 for new, old in zip(replaced, originals, strict=True))
+        assert _warning_counts(caplog, "repeated_count") == []
 
     def test_natural_attributes_may_repeat_across_independent_mappings(self) -> None:
         dataframe = pd.DataFrame({"first_name": ["Ada", "Grace"]})
@@ -358,7 +356,7 @@ class TestStructuredReplacementExecutor:
         with pytest.raises(DataError, match="'patient' has 1 missing value"):
             _execute(dataframe, plan, _RecordingGenerator(), group_column="patient")
 
-    def test_dense_row_counter_identifiers_are_replaced_from_a_wider_range(
+    def test_a_distinct_numeric_key_is_replaced_from_a_range_wide_enough_to_stay_distinct(
         self,
         caplog: pytest.LogCaptureFixture,
     ) -> None:
@@ -370,31 +368,33 @@ class TestStructuredReplacementExecutor:
 
         replaced = result.dataframe["row"].tolist()
         assert len(set(replaced)) == 1000
-        assert not set(replaced) & {str(value) for value in range(1000)}
+        assert all(new != str(old) for new, old in zip(replaced, range(1000), strict=True))
         assert all(value.isdigit() and len(value) <= 4 for value in replaced)
         assert "Widened replacement identifiers" in caplog.text
 
-    def test_patterned_identifiers_take_every_unused_mask_value(self) -> None:
-        dataframe = pd.DataFrame({"user": [f"USER-{value}" for value in range(5)]})
+    def test_patterned_distinct_identifiers_get_distinct_mask_values(self) -> None:
+        originals = [f"USER-{value}" for value in range(5)]
+        dataframe = pd.DataFrame({"user": originals})
         plan = _plan(PiiColumnPlan(column_name="user", entity_type=EntityType.UNIQUE_IDENTIFIER, pattern="USER-#"))
 
         result = _execute(dataframe, plan, _RecordingGenerator())
 
-        assert sorted(result.dataframe["user"]) == [f"USER-{value}" for value in range(5, 10)]
+        replaced = result.dataframe["user"].tolist()
+        assert len(set(replaced)) == 5
+        assert all(re.fullmatch(r"USER-\d", new) and new != old for new, old in zip(replaced, originals, strict=True))
 
-    def test_small_mask_repeats_replacements_but_never_reuses_an_original(self) -> None:
-        dataframe = pd.DataFrame({"user": [f"USER-{value}" for value in range(8)]})
+    def test_mask_with_room_keeps_a_distinct_column_distinct(self) -> None:
+        originals = [f"USER-{value}" for value in range(8)]
+        dataframe = pd.DataFrame({"user": originals})
         plan = _plan(PiiColumnPlan(column_name="user", entity_type=EntityType.UNIQUE_IDENTIFIER, pattern="USER-#"))
 
         result = _execute(dataframe, plan, _RecordingGenerator())
 
-        assert set(result.dataframe["user"]) == {"USER-8", "USER-9"}
+        replaced = result.dataframe["user"].tolist()
+        assert len(set(replaced)) == 8
+        assert all(new != old for new, old in zip(replaced, originals, strict=True))
 
-    def test_mask_whose_every_value_is_an_original_reuses_other_originals_with_a_warning(
-        self,
-        caplog: pytest.LogCaptureFixture,
-    ) -> None:
-        caplog.set_level(logging.WARNING)
+    def test_mask_with_no_spare_values_never_returns_the_own_original(self) -> None:
         originals = [f"USER-{value}" for value in range(10)]
         dataframe = pd.DataFrame({"user": originals})
         plan = _plan(PiiColumnPlan(column_name="user", entity_type=EntityType.UNIQUE_IDENTIFIER, pattern="USER-#"))
@@ -403,7 +403,6 @@ class TestStructuredReplacementExecutor:
 
         replaced = result.dataframe["user"].tolist()
         assert all(new != old for new, old in zip(replaced, originals, strict=True))
-        assert _warning_counts(caplog, "reused_original_count") == [10]
 
     def test_mask_that_can_only_produce_the_original_is_a_configuration_error(self) -> None:
         dataframe = pd.DataFrame({"user": ["USER-0"]})
@@ -412,10 +411,7 @@ class TestStructuredReplacementExecutor:
         with pytest.raises(ParameterError, match="cannot produce any value other than the original"):
             _execute(dataframe, plan, _RecordingGenerator())
 
-    def test_float_identifiers_reuse_another_original_only_as_a_last_resort(
-        self,
-        caplog: pytest.LogCaptureFixture,
-    ) -> None:
+    def test_an_identifier_may_take_another_rows_original(self, caplog: pytest.LogCaptureFixture) -> None:
         caplog.set_level(logging.WARNING)
         dataframe = pd.DataFrame({"id": [1.5, 2.5]})
         plan = _plan(_target("id", EntityType.UNIQUE_IDENTIFIER))
@@ -423,12 +419,9 @@ class TestStructuredReplacementExecutor:
         result = _execute(dataframe, plan, _SwapGenerator())
 
         assert result.dataframe["id"].tolist() == ["2.5", "1.5"]
-        assert _warning_counts(caplog, "reused_original_count") == [2]
+        assert caplog.records == []
 
-    def test_derived_email_equal_to_another_rows_original_is_kept_with_a_warning(
-        self,
-        caplog: pytest.LogCaptureFixture,
-    ) -> None:
+    def test_derived_email_equal_to_another_rows_original_is_accepted(self, caplog: pytest.LogCaptureFixture) -> None:
         caplog.set_level(logging.WARNING)
         # Ben's replacement email is fully determined by his replaced name, and it is Ana's real address.
         dataframe = pd.DataFrame({"email": ["ana.ruiz@acme.com", "ben.cole@acme.com"]})
@@ -437,7 +430,7 @@ class TestStructuredReplacementExecutor:
         result = _execute(dataframe, plan, _DerivedEmailGenerator())
 
         assert result.dataframe["email"].tolist() == ["zoe.park@acme.com", "ana.ruiz@acme.com"]
-        assert _warning_counts(caplog, "reused_original_count") == [1]
+        assert caplog.records == []
 
     def test_unpatterned_email_is_built_from_the_replaced_names_it_depends_on(self) -> None:
         # Mixed local-part formats leave the planned email without a pattern; the dependency must still apply.

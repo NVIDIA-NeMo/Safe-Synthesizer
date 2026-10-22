@@ -15,7 +15,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiSamplerBackend,
 )
 from nemo_safe_synthesizer.errors import GenerationError, ParameterError
-from nemo_safe_synthesizer.pii_replacer.replacement.collisions import CandidateChooser, ReplacementPool
+from nemo_safe_synthesizer.pii_replacer.replacement.collisions import CandidateChooser, all_distinct
 from nemo_safe_synthesizer.pii_replacer.replacement.executor import StructuredReplacementExecutor
 from nemo_safe_synthesizer.pii_replacer.replacement.generation import ReplacementGenerationRequest
 
@@ -46,44 +46,35 @@ def _execute(dataframe: pd.DataFrame, *specs: PiiColumnPlan, generator: _Scripte
 
 
 @pytest.mark.unit
-class TestReplacementPool:
-    def test_identifier_values_are_compared_ignoring_case(self) -> None:
-        pool = ReplacementPool()
-        pool.reserve_originals(EntityType.EMAIL, ["Ada@x.com"])
-        pool.record_used(EntityType.EMAIL, "KATE@y.com")
-
-        assert pool.is_original(EntityType.EMAIL, "ada@X.COM")
-        assert pool.is_used(EntityType.EMAIL, "kate@Y.com")
-        assert not pool.is_taken(EntityType.PHONE_NUMBER, "ada@x.com")
-
-    def test_names_are_not_tracked(self) -> None:
-        pool = ReplacementPool()
-        pool.reserve_originals(EntityType.FIRST_NAME, ["Ada"])
-        pool.record_used(EntityType.FIRST_NAME, "Kathleen")
-
-        assert not pool.is_taken(EntityType.FIRST_NAME, "Ada")
-        assert not pool.is_taken(EntityType.FIRST_NAME, "Kathleen")
+class TestAllDistinct:
+    @pytest.mark.parametrize(
+        ("values", "expected"),
+        [(["A-1", "a-2"], True), (["A-1", "a-1"], False), ([], False)],
+    )
+    def test_values_are_compared_ignoring_case(self, values: list[str], expected: bool) -> None:
+        assert all_distinct(values) is expected
 
 
 @pytest.mark.unit
 class TestCandidateChooser:
-    def test_fallbacks_prefer_a_repeat_then_another_original(self) -> None:
-        pool = ReplacementPool()
-        pool.reserve_originals(EntityType.SSN, ["111-11-1111", "222-22-2222"])
-        pool.record_used(EntityType.SSN, "333-33-3333")
-        chooser = CandidateChooser(pool, EntityType.SSN, "111-11-1111")
+    def test_another_original_is_accepted_and_a_used_value_only_repeats(self) -> None:
+        chooser = CandidateChooser(EntityType.SSN, "111-11-1111", used={"333-33-3333"})
         request = _request(EntityType.SSN, "111-11-1111")
 
         assert not chooser.offer(request, "111-11-1111")
-        assert not chooser.offer(request, "222-22-2222")
-        assert chooser.fallback() == ("222-22-2222", "original")
         assert not chooser.offer(request, "333-33-3333")
         assert chooser.fallback() == ("333-33-3333", "repeat")
-        assert chooser.offer(request, "444-44-4444")
+        assert chooser.offer(request, "222-22-2222")
+
+    def test_without_a_used_set_any_value_but_the_own_original_is_accepted(self) -> None:
+        chooser = CandidateChooser(EntityType.SSN, "111-11-1111")
+        request = _request(EntityType.SSN, "111-11-1111")
+
+        assert not chooser.offer(request, "111-11-1111")
+        assert chooser.offer(request, "222-22-2222")
 
     def test_one_to_one_target_rejects_taken_values_without_a_fallback(self) -> None:
-        pool = ReplacementPool()
-        chooser = CandidateChooser(pool, EntityType.FIRST_NAME, "Ada", one_to_one={"grace"})
+        chooser = CandidateChooser(EntityType.FIRST_NAME, "Ada", one_to_one={"grace"})
         request = _request(EntityType.FIRST_NAME, "Ada")
 
         assert not chooser.offer(request, "Grace")
@@ -92,11 +83,26 @@ class TestCandidateChooser:
 
 
 @pytest.mark.unit
-class TestCrossColumnIdentifierCollisions:
-    def test_replacements_avoid_originals_and_replacements_of_other_columns_of_the_same_type(self) -> None:
+class TestDistinctColumns:
+    def test_a_column_of_distinct_values_keeps_its_replacements_distinct(self) -> None:
+        dataframe = pd.DataFrame({"ssn": ["111-11-1111", "222-22-2222"]})
+        generator = _ScriptedGenerator("333-33-3333", "333-33-3333", "444-44-4444")
+
+        result = _execute(dataframe, PiiColumnPlan(column_name="ssn", entity_type=EntityType.SSN), generator=generator)
+
+        assert result["ssn"].tolist() == ["333-33-3333", "444-44-4444"]
+
+    def test_a_column_with_repeated_values_may_repeat_replacements(self) -> None:
+        dataframe = pd.DataFrame({"ssn": ["111-11-1111", "111-11-1111", "222-22-2222"]})
+        generator = _ScriptedGenerator("333-33-3333", "333-33-3333", "333-33-3333")
+
+        result = _execute(dataframe, PiiColumnPlan(column_name="ssn", entity_type=EntityType.SSN), generator=generator)
+
+        assert result["ssn"].tolist() == ["333-33-3333"] * 3
+
+    def test_a_replacement_may_equal_another_rows_or_columns_original(self) -> None:
         dataframe = pd.DataFrame({"ssn": ["111-11-1111"], "spouse_ssn": ["222-22-2222"]})
-        # spouse_ssn is first offered ssn's original, then ssn's replacement, then a new value.
-        generator = _ScriptedGenerator("333-33-3333", "111-11-1111", "333-33-3333", "444-44-4444")
+        generator = _ScriptedGenerator("222-22-2222", "111-11-1111")
 
         result = _execute(
             dataframe,
@@ -105,20 +111,16 @@ class TestCrossColumnIdentifierCollisions:
             generator=generator,
         )
 
-        assert result.iloc[0].tolist() == ["333-33-3333", "444-44-4444"]
+        assert result.iloc[0].tolist() == ["222-22-2222", "111-11-1111"]
 
-    def test_mask_allocation_skips_values_used_by_another_column(self) -> None:
-        dataframe = pd.DataFrame({"user": ["U-1", "U-2"], "manager": ["U-3", "U-4"]})
-        specs = (
-            PiiColumnPlan(column_name="user", entity_type=EntityType.UNIQUE_IDENTIFIER, pattern="U-#"),
-            PiiColumnPlan(column_name="manager", entity_type=EntityType.UNIQUE_IDENTIFIER, pattern="U-#"),
-        )
+    def test_mask_allocation_keeps_a_distinct_column_distinct(self) -> None:
+        dataframe = pd.DataFrame({"user": [f"U-{value}" for value in range(9)]})
+        spec = PiiColumnPlan(column_name="user", entity_type=EntityType.UNIQUE_IDENTIFIER, pattern="U-#")
 
-        result = _execute(dataframe, *specs, generator=_ScriptedGenerator())
+        result = _execute(dataframe, spec, generator=_ScriptedGenerator())
 
-        replaced = result["user"].tolist() + result["manager"].tolist()
-        assert len(set(replaced)) == 4
-        assert not set(replaced) & {"U-1", "U-2", "U-3", "U-4"}
+        assert result["user"].nunique() == 9
+        assert all(new != old for new, old in zip(result["user"], dataframe["user"], strict=True))
 
 
 @pytest.mark.unit
@@ -183,12 +185,12 @@ class TestGroupingColumnIsOneToOne:
 
     def test_a_mask_too_small_for_every_group_is_widened(self, caplog: pytest.LogCaptureFixture) -> None:
         caplog.set_level(logging.WARNING)
-        dataframe = pd.DataFrame({"gid": [f"ID-{group}" for group in range(8) for _ in range(3)]})
+        dataframe = pd.DataFrame({"gid": [f"ID-{group}" for group in range(10) for _ in range(3)]})
         spec = PiiColumnPlan(column_name="gid", entity_type=EntityType.UNIQUE_IDENTIFIER, pattern="ID-#")
 
         result = self._execute_grouped(dataframe, spec, _ScriptedGenerator())
 
-        assert result["gid"].nunique() == 8
+        assert result["gid"].nunique() == 10
         assert result["gid"].str.fullmatch(r"ID-\d\d").all()
         assert any("Widened grouping-column identifiers" in record.getMessage() for record in caplog.records)
 

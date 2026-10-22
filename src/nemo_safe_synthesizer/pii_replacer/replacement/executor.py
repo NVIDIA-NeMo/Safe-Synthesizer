@@ -20,7 +20,7 @@ from ...observability import get_logger
 from ..planning.validation import value_matches_pattern
 from ..transform_result import ColumnStatistics, ReplacementGenerationStatistics
 from .canonicalization import canonicalize_scalar, is_missing_scalar, readable_value
-from .collisions import CandidateChooser, ReplacementOutcome, ReplacementPool
+from .collisions import IDENTIFIER_ENTITY_TYPES, CandidateChooser, ReplacementOutcome, all_distinct
 from .compiler import compile_plan
 from .generation import ReplacementGenerationRequest, ReplacementGenerator
 from .identifier_space import IdentifierAllocator, MaskSpace, NumberSpace, identifier_allocator
@@ -93,10 +93,10 @@ class StructuredReplacementExecutor:
         self._data_to_sampler_value_mapping = _compile_data_to_sampler_value_mapping(plan.data_to_sampler_value_mapping)
         self._cache: dict[StructuredMappingKey, _CachedReplacement] = {}
         self._shared: dict[_SharedMappingKey, str] = {}
-        self._pool = ReplacementPool()
+        # Case-folded replacements used so far in each identifier column whose originals are all distinct.
+        self._used_by_distinct_column: dict[str, set[str]] = {}
         self._group_replacements: set[str] = set()
         self._repeated_by_target: dict[str, int] = {}
-        self._reused_originals_by_target: dict[str, int] = {}
         self._kept_name_parts_by_target: dict[str, int] = {}
         self._identifier_allocators: dict[str, IdentifierAllocator] = {}
         self._dependency_conflicts: dict[tuple[str, frozenset[EntityType]], int] = {}
@@ -124,13 +124,9 @@ class StructuredReplacementExecutor:
 
         for column_name, repeated in sorted(self._repeated_by_target.items()):
             logger.user.warning(
-                "Some identifier replacements repeat because the column's format has no unused values left",
+                "Some replacements repeat in a column whose original values are all distinct, because no unused "
+                "value was found",
                 extra={"column": column_name, "repeated_count": repeated},
-            )
-        for column_name, reused in sorted(self._reused_originals_by_target.items()):
-            logger.user.warning(
-                "Some identifier replacements equal another row's original value because no other value was found",
-                extra={"column": column_name, "reused_original_count": reused},
             )
         for column_name, kept in sorted(self._kept_name_parts_by_target.items()):
             logger.user.warning(
@@ -158,10 +154,9 @@ class StructuredReplacementExecutor:
     def _reset_execution_state(self) -> None:
         self._cache.clear()
         self._shared.clear()
-        self._pool = ReplacementPool()
+        self._used_by_distinct_column.clear()
         self._group_replacements.clear()
         self._repeated_by_target.clear()
-        self._reused_originals_by_target.clear()
         self._kept_name_parts_by_target.clear()
         self._identifier_allocators.clear()
         self._dependency_conflicts.clear()
@@ -180,41 +175,30 @@ class StructuredReplacementExecutor:
         return tuple(canonicalize_scalar(value) for value in values)
 
     def _seed_reserved_values(self, dataframe: pd.DataFrame) -> None:
-        # Originals are recorded in the same text form generators receive and return, so a replacement
-        # avoids the original values of every column of its entity type, not only its own column.
+        # Replacements stay distinct only in identifier columns whose original values are all distinct,
+        # such as key columns, compared in the same text form generators receive and return.
         for spec in self._plan.columns_to_replace:
-            if not self._pool.tracks(spec.entity_type):
-                continue
-            column = dataframe[spec.column_name]
-            self._pool.reserve_originals(
-                spec.entity_type,
-                (
-                    text
-                    for value, text in zip(column.tolist(), column.astype(str).tolist(), strict=True)
-                    if not is_missing_scalar(value)
-                ),
-            )
+            if spec.entity_type in IDENTIFIER_ENTITY_TYPES and all_distinct(_original_texts(dataframe, spec)):
+                self._used_by_distinct_column[spec.column_name] = set()
 
     def _prepare_identifier_allocators(self, dataframe: pd.DataFrame) -> None:
         for spec in self._plan.columns_to_replace:
-            if not self._pool.tracks(spec.entity_type):
+            if spec.entity_type not in IDENTIFIER_ENTITY_TYPES:
                 continue
-            column = dataframe[spec.column_name]
-            originals = [
-                text
-                for value, text in zip(column.tolist(), column.astype(str).tolist(), strict=True)
-                if not is_missing_scalar(value)
-            ]
-            allocator = identifier_allocator(spec.entity_type, spec.pattern, originals)
+            originals = _original_texts(dataframe, spec)
+            distinct = spec.column_name in self._used_by_distinct_column or spec.column_name == self._group_column
+            allocator = identifier_allocator(spec.entity_type, spec.pattern, originals, distinct=distinct)
             if allocator is None:
                 continue
             if spec.column_name == self._group_column:
-                allocator = _widen_for_one_to_one(spec.column_name, allocator, originals)
+                allocator = _widen_for_one_to_one(
+                    spec.column_name, allocator, len({text.casefold() for text in originals})
+                )
             self._identifier_allocators[spec.column_name] = allocator
             longest = max((len(text.split(".", 1)[0]) for text in originals), default=0)
             if isinstance(allocator.space, NumberSpace) and allocator.space.digits > longest:
                 logger.user.warning(
-                    "Widened replacement identifiers so every distinct value can get an unused replacement",
+                    "Widened replacement identifiers so every distinct value can get its own replacement",
                     extra={
                         "column": spec.column_name,
                         "original_digits": longest,
@@ -281,17 +265,22 @@ class StructuredReplacementExecutor:
         # A grouping column reuses it only if no other group has that replacement.
         if shared is not None and not (one_to_one and shared.casefold() in self._group_replacements):
             self._cache[key] = _CachedReplacement(shared, provenance)
+            self._record_used(spec.column_name, shared)
             if one_to_one:
                 self._group_replacements.add(shared.casefold())
             return shared
         replacement = self._generate_fresh(key, spec, original_text, dependencies)
         self._cache[key] = _CachedReplacement(replacement, provenance)
         self._shared.setdefault(shared_key, replacement)
-        self._pool.record_used(spec.entity_type, replacement)
+        self._record_used(spec.column_name, replacement)
         if one_to_one:
             self._group_replacements.add(replacement.casefold())
         self._generated_count += 1
         return replacement
+
+    def _record_used(self, column_name: str, replacement: str) -> None:
+        if (used := self._used_by_distinct_column.get(column_name)) is not None:
+            used.add(replacement.casefold())
 
     def _shared_key(self, key: StructuredMappingKey, spec: PiiColumnPlan) -> _SharedMappingKey:
         """Return the identity under which columns of one entity type and format share replacements.
@@ -320,10 +309,10 @@ class StructuredReplacementExecutor:
             return self._allocate_identifier(key, spec, original_text, allocator)
         one_to_one = spec.column_name == self._group_column
         chooser = CandidateChooser(
-            self._pool,
             spec.entity_type,
             original_text,
             spec.pattern,
+            used=None if one_to_one else self._used_by_distinct_column.get(spec.column_name),
             one_to_one=self._group_replacements if one_to_one else None,
         )
         attempts = _MAX_GROUP_GENERATION_ATTEMPTS if one_to_one else _MAX_GENERATION_ATTEMPTS
@@ -372,7 +361,6 @@ class StructuredReplacementExecutor:
     def _count_fallback(self, column_name: str, outcome: ReplacementOutcome) -> None:
         counters = {
             "repeat": self._repeated_by_target,
-            "original": self._reused_originals_by_target,
             "kept_name_part": self._kept_name_parts_by_target,
         }
         if (counter := counters.get(outcome)) is not None:
@@ -385,14 +373,11 @@ class StructuredReplacementExecutor:
         original_text: str,
         allocator: IdentifierAllocator,
     ) -> str:
-        """Take the next unused value from the column's identifier space, starting at a seeded position."""
+        """Take the next usable value from the column's identifier space, starting at a seeded position."""
         started = time.perf_counter()
         seed = _derive_seed(self._base_seed, key, purpose="replacement", attempt=0)
-        allocation = allocator.allocate(
-            seed,
-            original_text,
-            is_taken=lambda value: self._pool.is_taken(spec.entity_type, value),
-        )
+        distinct = spec.column_name in self._used_by_distinct_column or spec.column_name == self._group_column
+        allocation = allocator.allocate(seed, original_text, distinct=distinct)
         self._generation_elapsed += time.perf_counter() - started
         if allocation is None:
             raise ParameterError(
@@ -448,25 +433,27 @@ def _in_occurrence_case(spec: PiiColumnPlan, occurrence: str, replacement: str) 
 def _widen_for_one_to_one(
     column_name: str,
     allocator: IdentifierAllocator,
-    originals: list[str],
+    distinct: int,
 ) -> IdentifierAllocator:
-    """Widen a grouping column's mask until every distinct group can get its own unused value.
+    """Widen a grouping column's mask until it has more values than there are groups.
+
+    Each group then gets its own value that differs from its original.
 
     Example:
-        Pattern ``ID-#`` has 10 values; eight groups ``ID-0`` through ``ID-7`` leave only two unused, so
-        the mask widens to ``ID-##`` and the groups get values such as ``ID-37``.
+        Pattern ``ID-#`` has 10 values; twelve groups need more, so the mask widens to ``ID-##`` and the
+        groups get values such as ``ID-37``.
     """
     space = allocator.space
     if not isinstance(space, MaskSpace):
         return allocator
-    distinct = len(set(originals))
     widened: MaskSpace | None = space
     final_space = space
-    while widened is not None and allocator.free_count < distinct:
+    # Each group needs its own value that differs from its original, so the mask needs more values than groups.
+    while widened is not None and allocator.space.size <= distinct:
         widened = widened.widened()
         if widened is not None:
             final_space = widened
-            allocator = IdentifierAllocator(widened, originals)
+            allocator = IdentifierAllocator(widened)
     if final_space is not space:
         logger.user.warning(
             "Widened grouping-column identifiers so every group gets its own replacement",
@@ -629,3 +616,13 @@ def _verify_result(original: pd.DataFrame, transformed: pd.DataFrame, plan: PiiR
         missing_after = [is_missing_scalar(value) for value in transformed[column].tolist()]
         if missing_before != missing_after:
             raise InternalError(f"PII replacement changed missing-value positions in column {column!r}")
+
+
+def _original_texts(dataframe: pd.DataFrame, spec: PiiColumnPlan) -> list[str]:
+    """Return the text forms of the column's non-missing original values, as generators receive them."""
+    column = dataframe[spec.column_name]
+    return [
+        text
+        for value, text in zip(column.tolist(), column.astype(str).tolist(), strict=True)
+        if not is_missing_scalar(value)
+    ]
