@@ -151,6 +151,10 @@ class StructuredReplacementExecutor:
             free_text_detections,
         )
         _verify_result(dataframe, working, self._plan)
+        # Free-text fallbacks are warned about with the structured ones, per column.
+        for column_name, free_text_statistics in free_text_result.column_statistics.items():
+            if free_text_statistics.kept_name_part_count:
+                self._kept_name_parts_by_target[column_name] = free_text_statistics.kept_name_part_count
 
         for column_name, repeated in sorted(self._repeated_by_target.items()):
             logger.user.warning(
@@ -628,6 +632,7 @@ def _column_statistics(
                 detected_entity_values=detected.values,
                 is_transformed=changed > 0,
                 transform_functions={backend, *detected.sources} if changed else set(),
+                kept_name_part_count=detected.kept_name_part_count,
             )
             continue
         non_missing = [value for value in source.tolist() if not is_missing_scalar(value)]

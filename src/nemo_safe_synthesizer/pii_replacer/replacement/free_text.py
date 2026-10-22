@@ -19,9 +19,11 @@ from ...errors import GenerationError, InternalError, ParameterError, SafeSynthe
 from ..planning.patterns import extract_name_components
 from ..transform_result import FreeTextReplacementRecord
 from .addresses import AddressParts
+from .collisions import CandidateChooser
 from .common_words import COMMON_WORDS
 from .detection import FreeTextDetector, fresh_detection_entity_types, resolve_overlapping_spans
 from .generation import ReplacementGenerationRequest, ReplacementGenerator
+from .letter_case import match_letter_case
 from .seeding import derive_seed
 from .types import (
     CanonicalValue,
@@ -36,7 +38,6 @@ from .types import (
     detected_text,
     free_text_mapping_key,
 )
-from .value_checks import generated_value_is_valid
 
 __all__ = [
     "FreeTextCellDetections",
@@ -69,6 +70,9 @@ class FreeTextColumnStatistics:
 
     sources: set[str] = field(default_factory=set)
     """Detector sources that produced accepted spans."""
+
+    kept_name_part_count: int = 0
+    """Full-name replacements that kept an original first or last name because no other name was found."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -383,11 +387,11 @@ class FreeTextReplacementExecutor:
         for span in spans:
             value = detected_text(cell, span)
             key = free_text_mapping_key(cell, span, scope_identity=scope_identity)
-            replacement = _match_letter_case(
+            replacement = match_letter_case(
                 value,
-                self._full_name_replacement(key)
+                self._full_name_replacement(key, statistics)
                 if key.entity_type is EntityType.FULL_NAME
-                else self._replacement_for(key),
+                else self._replacement_for(key, statistics),
             )
             parts.extend((cell.text[cursor : span.start], replacement))
             cursor = span.end
@@ -410,7 +414,7 @@ class FreeTextReplacementExecutor:
         parts.append(cell.text[cursor:])
         return "".join(parts)
 
-    def _full_name_replacement(self, key: FreeTextMappingKey) -> str:
+    def _full_name_replacement(self, key: FreeTextMappingKey, statistics: FreeTextColumnStatistics) -> str:
         """Replace a detected full name so its words agree with first, middle, and last names in the same scope.
 
         A full name already mapped, for example by a structured column, keeps
@@ -426,18 +430,26 @@ class FreeTextReplacementExecutor:
             return cached
         parts = _name_parts(key.original_value)
         if parts is None:
-            return self._replacement_for(key)
+            return self._replacement_for(key, statistics)
         replacement = " ".join(
-            self._replacement_for(FreeTextMappingKey(key.scope_identity, part_type, word)) for part_type, word in parts
+            self._replacement_for(FreeTextMappingKey(key.scope_identity, part_type, word), statistics)
+            for part_type, word in parts
         )
         self._cache[key] = replacement
         return replacement
 
-    def _replacement_for(self, key: FreeTextMappingKey) -> str:
-        """Return a cached value or generate one valid deterministic replacement."""
+    def _replacement_for(self, key: FreeTextMappingKey, statistics: FreeTextColumnStatistics | None = None) -> str:
+        """Return a cached value or generate one valid deterministic replacement.
+
+        Candidates follow the same collision rules as structured columns: a replacement must differ
+        from the detected text ignoring case, and a full name generated whole prefers one that keeps
+        neither original name part, counting the fallback in ``statistics``.
+        """
         cached = self._cache.get(key)
         if cached is not None:
             return cached
+        chooser = CandidateChooser(key.entity_type, key.original_value)
+        replacement: str | None = None
         for attempt in range(_MAX_GENERATION_ATTEMPTS):
             request = ReplacementGenerationRequest(
                 entity_type=key.entity_type,
@@ -447,10 +459,18 @@ class FreeTextReplacementExecutor:
                 seed=derive_seed(self._base_seed, key, purpose="free_text_replacement", attempt=attempt),
             )
             candidate = self._generate(request)
-            if generated_value_is_valid(request, candidate):
-                self._cache[key] = candidate
-                self._generated_count += 1
-                return candidate
+            if chooser.offer(request, candidate):
+                replacement = candidate
+                break
+        else:
+            if (fallback := chooser.fallback()) is not None:
+                replacement, _ = fallback
+                if statistics is not None:
+                    statistics.kept_name_part_count += 1
+        if replacement is not None:
+            self._cache[key] = replacement
+            self._generated_count += 1
+            return replacement
         raise GenerationError(
             f"PII replacement could not generate a distinct {key.entity_type.value!r} free-text value "
             f"after {_MAX_GENERATION_ATTEMPTS} attempts"
@@ -485,20 +505,6 @@ def _name_parts(value: str) -> tuple[tuple[EntityType, str], ...] | None:
     if part_types is None or not all(_NAME_WORD.fullmatch(word) for word in words):
         return None
     return tuple(zip(part_types, words, strict=True))
-
-
-def _match_letter_case(occurrence: str, replacement: str) -> str:
-    """Give a shared replacement the letter case of the occurrence it replaces.
-
-    Free-text reuse ignores case, so ``MARGARET`` and ``margaret`` share one generated replacement. An
-    all-capitals or all-lowercase occurrence gets the replacement in the same case; any other occurrence keeps
-    the replacement as generated.
-    """
-    if occurrence.isupper():
-        return replacement.upper()
-    if occurrence.islower():
-        return replacement.lower()
-    return replacement
 
 
 class _KnownValues:
