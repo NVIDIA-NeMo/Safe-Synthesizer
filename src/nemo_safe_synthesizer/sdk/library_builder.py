@@ -453,7 +453,10 @@ class SafeSynthesizer(ConfigBuilder):
         training split after holdout creation.
 
         Args:
-            output_path: Optional destination for the replaced CSV.
+            output_path: Optional destination for the replaced data, written as
+                Parquet when it ends in ``.parquet`` and as CSV otherwise.
+                Parquet keeps the dataframe's column types; CSV keeps unchanged
+                cells as they appeared in a CSV input (see ``source_text``).
             config_output_path: Optional destination for the complete reusable
                 configuration containing the resolved plan and sampler mappings.
             source_text: Optional copy of the input with every cell as the
@@ -513,7 +516,12 @@ class SafeSynthesizer(ConfigBuilder):
         self._column_statistics = result.column_statistics
         self._pii_replacer_time = result.replacement_time_seconds
 
-        if output_path is not None:
+        if output_path is not None and Path(output_path).suffix.lower() == ".parquet":
+            # Parquet stores column types, so the replaced frame is written as is.
+            Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+            result.transformed_df.to_parquet(output_path, index=False)
+            logger.info(f"Saved PII-replaced data to {output_path}")
+        elif output_path is not None:
             replacement_output_path = Path(output_path)
             replacement_output_path.parent.mkdir(parents=True, exist_ok=True)
             # The text form is parsed only now, from the bytes the input was read from, so it costs no
