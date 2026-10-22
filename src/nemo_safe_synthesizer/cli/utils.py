@@ -317,6 +317,18 @@ def _dataset_registry(settings: "CLISettings") -> DatasetRegistry:
     return DatasetRegistry()
 
 
+def data_source_suffix(settings: "CLISettings") -> str:
+    """Return the lowercase file extension of ``settings.data_source``, resolved through the dataset registry.
+
+    Example:
+        ``"people.parquet"``, or a registry entry whose URL ends in ``.parquet``, returns ``".parquet"``.
+    """
+    if not settings.data_source:
+        return ""
+    url = _dataset_registry(settings).get_dataset(settings.data_source).get_url()
+    return Path(url).suffix.lower()
+
+
 def fetch_data_source_for_replacement(settings: "CLISettings") -> pd.DataFrame | CsvSource | None:
     """Load ``settings.data_source`` for standalone PII replacement.
 
