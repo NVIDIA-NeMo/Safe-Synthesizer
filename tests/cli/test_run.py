@@ -9,6 +9,7 @@ from typing import cast
 from unittest.mock import MagicMock, patch
 
 import httpx
+import pandas as pd
 import pytest
 import yaml
 from click.testing import CliRunner
@@ -730,6 +731,32 @@ class TestRunReplacePii:
         nss.generate.assert_not_called()
         nss.evaluate.assert_not_called()
         nss.run.assert_not_called()
+
+    def test_parquet_input_is_written_back_as_parquet_by_default(
+        self,
+        cli_runner: CliRunner,
+        tmp_path: Path,
+        mock_workdir: MagicMock,
+        patched_run_dependencies: dict,
+    ) -> None:
+        parquet_path = tmp_path / "input.parquet"
+        pd.DataFrame({"zip": ["02054", "10001"]}).to_parquet(parquet_path)
+
+        result = cli_runner.invoke(
+            run,
+            ["replace-pii", "--data-source", str(parquet_path)],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0
+        nss = patched_run_dependencies["safe_synthesizer"]
+        nss.replace_pii.assert_called_once_with(
+            output_path=mock_workdir.run_dir / "input_pii_replaced.parquet",
+            config_output_path=mock_workdir.run_dir / "pii_replacement_config.yaml",
+        )
+        (data_source,) = nss.with_data_source.call_args.args
+        assert isinstance(data_source, pd.DataFrame)
+        assert data_source["zip"].tolist() == ["02054", "10001"]
 
     def test_apply_honors_output_file(
         self,
