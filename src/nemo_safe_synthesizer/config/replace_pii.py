@@ -271,7 +271,10 @@ ENTITIES: tuple[Entity, ...] = (
         EntityType.UNIQUE_IDENTIFIER,
         action=EntityAction.REPLACE,
         can_condition=False,
-        description="An identifier that refers to a specific person or their records. Identifiers of products, places, or events, and row numbers, are not this type.",
+        description=(
+            "An identifier that refers to a specific person or their records. "
+            "Identifiers of products, places, or events, and row numbers, are not this type."
+        ),
         pattern_syntax=PatternSyntax.CHARACTER_MASK,
     ),
     # Rewrite spans inside cell text (username/url use this too).
@@ -844,7 +847,9 @@ class PiiReplacementSettings(NSSBaseModel):
     )
     seed: int | None = Field(
         default=None,
-        description="Seed for synthetic value generation; when unset the sampler will fall back to PERSON_RANDOM_SEED or 42.",
+        description=(
+            "Seed for synthetic value generation; when unset the sampler will fall back to PERSON_RANDOM_SEED or 42."
+        ),
     )
 
 
