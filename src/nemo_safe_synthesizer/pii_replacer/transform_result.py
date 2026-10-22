@@ -112,7 +112,12 @@ class ColumnStatistics(BaseModel):
     )
     detected_entity_values: dict[str, set] = Field(
         default_factory=dict,
-        description="Entity name to set of detected values.",
+        exclude=True,
+        repr=False,
+        description=(
+            "Entity name to set of detected values. These are original PII values, kept in memory for the PII "
+            "replay metric and excluded from serialization and repr so they cannot be written out."
+        ),
     )
     is_transformed: bool = Field(
         default=False,
@@ -121,6 +126,27 @@ class ColumnStatistics(BaseModel):
     transform_functions: set[str] = Field(
         default_factory=set,
         description="Names of transform functions applied to the column.",
+    )
+    dependency_drift_count: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "Number of later rows in a group that reused the group's first replacement although a column it "
+            "depends on had a different value in that row."
+        ),
+    )
+    repeated_replacement_count: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "Number of replacements that repeat an earlier one in a column whose original values are all "
+            "distinct, because no unused value was found."
+        ),
+    )
+    kept_name_part_count: int = Field(
+        default=0,
+        ge=0,
+        description="Number of full-name replacements that keep the original's first or last name.",
     )
 
 
