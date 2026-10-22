@@ -17,6 +17,7 @@ from ...config.replace_pii import DataToSamplerValueMapping, EntityType, PiiColu
 from ...defaults import DEFAULT_PII_REPLACEMENT_SEED
 from ...errors import DataError, GenerationError, InternalError, ParameterError, SafeSynthesizerError
 from ...observability import get_logger
+from ..planning.validation import value_matches_pattern
 from ..transform_result import ColumnStatistics, ReplacementGenerationStatistics
 from .canonicalization import canonicalize_scalar, is_missing_scalar, readable_value
 from .collisions import CandidateChooser, ReplacementOutcome, ReplacementPool
@@ -244,7 +245,7 @@ class StructuredReplacementExecutor:
             key = self._mapping_key(spec, row_position, canonical_original, group_identities)
             original_text = original_texts[row_position]
             replacement = self._replacement_for(key, spec, original_text, dependencies)
-            working.iat[row_position, column_position] = match_letter_case(original_text, replacement)
+            working.iat[row_position, column_position] = _in_occurrence_case(spec, original_text, replacement)
 
     def _mapping_key(
         self,
@@ -429,6 +430,18 @@ class StructuredReplacementExecutor:
                 key=lambda item: (item[0][0], sorted(entity.value for entity in item[0][1])),
             )
         )
+
+
+def _in_occurrence_case(spec: PiiColumnPlan, occurrence: str, replacement: str) -> str:
+    """Write ``replacement`` in the letter case of ``occurrence`` unless that would break the column's pattern.
+
+    Example:
+        With pattern ``"[aB]"``, an allocated ``"a"`` replacing ``"B"`` stays ``"a"``: ``"A"`` is not allowed.
+    """
+    cased = match_letter_case(occurrence, replacement)
+    if cased == replacement or spec.pattern is None:
+        return cased
+    return cased if value_matches_pattern(spec.entity_type, spec.pattern, cased) else replacement
 
 
 def _widen_for_one_to_one(

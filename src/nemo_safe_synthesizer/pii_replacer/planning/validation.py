@@ -30,6 +30,7 @@ __all__ = [
     "get_protected_columns",
     "identifier_mask_capacity_issue",
     "validate_plan",
+    "value_matches_pattern",
 ]
 
 # A column has one pattern, so it must describe nearly every value; the small
@@ -72,6 +73,20 @@ def _pattern_matcher(
     if pattern_syntax is PatternSyntax.NAME_PARTS:
         return compile_name_pattern(entity_type, pattern)
     return None, None
+
+
+def value_matches_pattern(entity_type: EntityType, pattern: str, value: str) -> bool:
+    """Return whether ``value`` follows ``pattern`` under ``entity_type``'s pattern grammar.
+
+    Patterns without a matcher accept every value.
+
+    Example:
+        ``value_matches_pattern(EntityType.UNIQUE_IDENTIFIER, "[aB]", "A")`` is ``False``.
+    """
+    if ENTITY_BY_TYPE[entity_type].pattern_syntax is PatternSyntax.STRFTIME:
+        return _parses_datetime(value, pattern)
+    matcher, _ = _pattern_matcher(entity_type, pattern)
+    return matcher is None or matcher.fullmatch(value) is not None
 
 
 def column_pattern_syntax_issue(spec: PiiColumnPlan) -> str | None:
