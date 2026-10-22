@@ -354,7 +354,11 @@ safe-synthesizer run replace-pii \
 
 When `--output-file` is omitted, the command adds `_pii_replaced` to the input
 stem and writes the result beside `pii_replacement_config.yaml` in the run
-directory. For example, `data.csv` produces `data_pii_replaced.csv`. The
+directory. For example, `data.csv` produces `data_pii_replaced.csv`, and
+`data.parquet` produces `data_pii_replaced.parquet`. Output is written as
+Parquet when its path ends in `.parquet`, which keeps every column's stored
+type, and as CSV otherwise. The input can be CSV, TXT, Parquet, JSON, or JSONL,
+from the CLI or from a path passed to the SDK's `with_data_source`. The
 resolved configuration is always written so the exact plan and sampler
 mappings can be reviewed and reused. Replacement maps and raw detector results
 are not persisted.
