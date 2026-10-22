@@ -440,6 +440,12 @@ class TestReplacementGenerator:
         assert re.fullmatch(expected, replacement), replacement
         assert replacement != original
 
+    @pytest.mark.parametrize("pattern", ["%Y-%m-%d %z", "%Y-%m-%dT%H:%M:%S%z", "%d %b %Y %Z"])
+    def test_unparseable_birth_date_fallback_keeps_a_timezone_pattern(self, pattern: str) -> None:
+        replacement = _faker_generator().generate(_request(EntityType.DATE_OF_BIRTH, "unknown", pattern=pattern))
+
+        datetime.strptime(replacement, pattern)
+
     def test_birth_date_pattern_supports_named_months(self) -> None:
         request = _request(
             EntityType.DATE_OF_BIRTH,
