@@ -27,6 +27,19 @@ class TestSamplerValueCatalog:
 
         assert catalog == {EntityType.GENDER: ("female", "male")}
 
+    @pytest.mark.parametrize("ethnicity_column", ["ethnic_background", "ethnicity", "race"])
+    def test_nemotron_personas_reads_each_locale_ethnicity_column(self, tmp_path: Path, ethnicity_column: str) -> None:
+        dataset_path = tmp_path / "datasets" / "pt_BR.parquet"
+        dataset_path.parent.mkdir()
+        pd.DataFrame({"sex": ["Female", "Male"], ethnicity_column: ["Parda", "Branca"]}).to_parquet(dataset_path)
+
+        catalog = sampler_catalog.load_sampler_value_catalog(
+            PiiReplacementSettings(locale="pt_BR"),
+            PiiSamplerConfig(backend=PiiSamplerBackend.NEMOTRON_PERSONAS, nemotron_personas_path=str(tmp_path)),
+        )
+
+        assert catalog[EntityType.ETHNIC_BACKGROUND] == ("branca", "parda")
+
     def test_nemotron_personas_reads_only_dependency_columns(
         self,
         tmp_path: Path,

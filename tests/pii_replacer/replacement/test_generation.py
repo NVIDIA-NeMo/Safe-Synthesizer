@@ -493,17 +493,12 @@ class TestReplacementGenerator:
 
         assert _nemotron_personas_generator(tmp_path, people).generate(_request()) == "SyntheticAda"
 
-    def test_nemotron_personas_unpatterned_email_uses_name_dependencies_over_the_sampled_email(
+    def test_nemotron_personas_generator_builds_emails_with_faker_from_name_dependencies(
         self,
         tmp_path: Path,
     ) -> None:
-        people = pd.DataFrame(
-            {
-                "first_name": ["SampledAda"],
-                "last_name": ["SampledLovelace"],
-                "email_address": ["sampled@example.test"],
-            }
-        )
+        # Persona datasets have no email column; any email column in the data is ignored.
+        people = pd.DataFrame({"first_name": ["SampledAda"], "email_address": ["sampled@example.test"]})
         generator = _nemotron_personas_generator(tmp_path, people)
         dependencies = (
             (EntityType.FIRST_NAME, CanonicalValue("string", "Synthetic")),
@@ -514,7 +509,8 @@ class TestReplacementGenerator:
         unnamed = generator.generate(_request(EntityType.EMAIL, "padams@hotmail.com"))
 
         assert re.fullmatch(r"synthetic\.person\d{2}@hotmail\.com", named), named
-        assert unnamed == "sampled@example.test"
+        assert unnamed != "sampled@example.test"
+        assert "@" in unnamed
 
     def test_nemotron_personas_generator_uses_address_components_from_the_selected_asset_row(
         self,
