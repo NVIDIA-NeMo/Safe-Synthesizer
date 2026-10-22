@@ -54,7 +54,7 @@ Source code lives in `src/nemo_safe_synthesizer/`:
 | `cli/` | Click CLI, main entry point |
 | `config/` | Pydantic parameter models, SafeSynthesizerParameters |
 | `configurator/` | Pydantic-to-Click mapping, Parameter types, validators |
-| `data_processing/` | Holdout, actions, assembler, records, shared token budget (`budget.py`), shared column validators (`validation.py`) |
+| `data_processing/` | Holdout, actions, assembler, records, shared token budget (`budget.py`), shared column validators (`validation.py`), read-once CSV sources (`csv_source.py`) |
 | `evaluation/` | Evaluator, components (privacy, MI, AIA, PII replay), reports |
 | `generation/` | GeneratorBackend, VllmBackend, regex manager, batch gen |
 | `holdout/` | Train/test splitting |
