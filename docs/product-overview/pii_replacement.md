@@ -418,10 +418,12 @@ occurrence's case, such as `Kathleen`, `KATHLEEN`, and `kathleen`. Every
 replacement differs from the value it replaces, ignoring case. A replaced full name also avoids the original's first and last name;
 when no such name is found, NSS keeps one that shares a part and logs a warning
 with the count. Identifier-like values (email, phone number, SSN, national ID, card
-number, API key, IP address, unique identifier) also avoid every other original
-value in the column and stay unique while the column's format has room; when
-that is not possible, NSS repeats a replacement or, as a last resort, uses
-another row's original value, and logs a warning with the count. Without
+number, API key, IP address, unique identifier) also avoid every original value
+of their type in any column, and every replacement already used for that type,
+ignoring case. So two SSN columns never swap real SSNs or share a replacement
+while the format has room. When that is not possible, NSS repeats a
+replacement or, as a last resort, uses another original value, and logs a
+warning with the count. Without
 a pattern, digit-only identifiers are replaced with numbers up to the column's
 longest length, gaining a digit when that range is too full. Automatic
 discovery skips row counters, such as a saved `Unnamed: 0` index column. NSS also excludes protected ordering and timestamp columns, and validates
