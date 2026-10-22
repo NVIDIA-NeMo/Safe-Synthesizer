@@ -154,7 +154,9 @@ class PIIReplay(Component):
         )
 
 
-_WORD_CHARACTER = re.compile(r"\w")
+# Text splits into maximal runs of word characters and single other characters, so "Ada's file" is
+# "Ada", "'", "s", " ", "file". A replayed value always covers whole tokens; see ``_EmbeddedValueIndex``.
+_TOKEN = re.compile(r"\w+|\W")
 
 
 def _synthetic_replay_counts(
@@ -168,23 +170,55 @@ def _synthetic_replay_counts(
         matches = synthetic[synthetic.isin(training_values)]
         return len(matches), len(matches.unique())
 
-    candidates = tuple(
-        (value, _embedded_value_pattern(value)) for value in training_values if isinstance(value, str) and value
-    )
+    index = _EmbeddedValueIndex(value for value in training_values if isinstance(value, str) and value)
     replayed_values: set[str] = set()
     matching_rows = 0
     for synthetic_value in synthetic:
         if not isinstance(synthetic_value, str):
             continue
-        row_matches = {value for value, pattern in candidates if pattern.search(synthetic_value)}
+        row_matches = index.find(synthetic_value)
         if row_matches:
             matching_rows += 1
             replayed_values.update(row_matches)
     return matching_rows, len(replayed_values)
 
 
-def _embedded_value_pattern(value: str) -> re.Pattern[str]:
-    """Match ``value`` in text only where no word character extends it, so ``Ada`` does not match ``Canada``."""
-    start = r"(?<!\w)" if _WORD_CHARACTER.match(value[0]) else ""
-    end = r"(?!\w)" if _WORD_CHARACTER.match(value[-1]) else ""
-    return re.compile(f"{start}{re.escape(value)}{end}")
+class _EmbeddedValueIndex:
+    """Find training values embedded in text where no word character extends them.
+
+    A value matches where it is not extended by a word character at an end
+    that is itself a word character, so ``Ada`` does not match ``Canada``,
+    while ``-7`` matches in ``x-7`` because its first character is not a word
+    character. Every such match starts and ends on a token boundary of
+    ``_TOKEN``, so it is a run of whole tokens, and every run of whole tokens
+    equal to a value is such a match. ``find`` therefore looks up token runs
+    in a set instead of searching for each value, which takes time
+    proportional to the text length rather than to the number of values.
+
+    Example:
+        With values ``{"Ada", "Ada Lovelace"}``, ``find("Ada Lovelace met Canada")``
+        returns both values.
+    """
+
+    def __init__(self, values: Iterable[str]) -> None:
+        self._values = frozenset(values)
+        # For each possible first token, the token counts of the values that start with it.
+        self._token_counts_by_first_token: dict[str, set[int]] = {}
+        for value in self._values:
+            tokens = _TOKEN.findall(value)
+            self._token_counts_by_first_token.setdefault(tokens[0], set()).add(len(tokens))
+
+    def find(self, text: str) -> set[str]:
+        """Return the distinct values that occur in ``text``."""
+        tokens = list(_TOKEN.finditer(text))
+        found: set[str] = set()
+        for first in range(len(tokens)):
+            found.update(self._values_starting_at(text, tokens, first))
+        return found
+
+    def _values_starting_at(self, text: str, tokens: list[re.Match[str]], first: int) -> set[str]:
+        """Return the values that cover whole tokens of ``text`` starting with token ``first``."""
+        start = tokens[first].start()
+        counts = self._token_counts_by_first_token.get(tokens[first].group(), ())
+        candidates = (text[start : tokens[first + count - 1].end()] for count in counts if first + count <= len(tokens))
+        return {candidate for candidate in candidates if candidate in self._values}
