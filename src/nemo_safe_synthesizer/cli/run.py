@@ -28,7 +28,7 @@ from .utils import (
     CLI_NESTED_FIELD_SEPARATOR,
     PathT,
     common_setup,
-    data_source_suffix,
+    data_source_extension,
     fetch_data_source_for_replacement,
 )
 from .wandb_setup import publish_evaluation_report
@@ -540,7 +540,7 @@ def run_replace_pii(
                 run_logger.info(f"Resolved PII replacement configuration saved to: {config_output_path}")
             else:
                 # Parquet input is written back as Parquet so its column types survive; otherwise CSV.
-                output_suffix = ".parquet" if data_source_suffix(settings) == ".parquet" else ".csv"
+                output_suffix = ".parquet" if data_source_extension(settings) == "parquet" else ".csv"
                 data_output_path = (
                     Path(settings.output_file)
                     if settings.output_file
