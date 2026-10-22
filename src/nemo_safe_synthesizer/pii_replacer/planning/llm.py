@@ -109,13 +109,21 @@ class _InvalidStructuredOutputError(GenerationError):
 
 
 class _LLMValueMappingEntry(_StructuredResponse):
+    # Fields are documented with attribute docstrings rather than Field(description=...), because this
+    # model's JSON schema is sent to the LLM and descriptions would change the planner's input.
     column_name: str
+    """Conditioner column whose value is mapped."""
+
     source_value: str
+    """Value as written in the data, such as ``"F"``."""
+
     sampler_values: list[str]
+    """Sampler values the source value stands for, such as ``["female"]``."""
 
 
 class _LLMValueMappingResponse(_StructuredResponse):
     mappings: list[_LLMValueMappingEntry]
+    """One entry per mapped source value."""
 
 
 ResponseT = TypeVar("ResponseT", bound=_StructuredResponse)
