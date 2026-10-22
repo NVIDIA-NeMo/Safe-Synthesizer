@@ -6,13 +6,11 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from pathlib import PurePosixPath
 from typing import Self, TypeAlias
-from urllib.parse import urlparse
 
 import pandas as pd
 
-from ..cli.datasets import DatasetInfo
+from ..cli.datasets import DatasetInfo, file_extension
 from ..config import (
     DataParameters,
     DifferentialPrivacyHyperparams,
@@ -33,8 +31,8 @@ from ..data_processing.csv_source import CsvSource
 from ..telemetry import _telemetry_enabled
 
 DataSource = pd.DataFrame | str | CsvSource
-# File formats that store their own column types, read with their pandas reader instead of as CSV.
-_TYPED_FILE_SUFFIXES = frozenset({".parquet", ".json", ".jsonl"})
+# File formats read with their own pandas reader instead of as CSV.
+_TYPED_FILE_EXTENSIONS = frozenset({"parquet", "json", "jsonl"})
 RawConfig: TypeAlias = Mapping[str, object]
 
 
@@ -321,7 +319,7 @@ class ConfigBuilder:
         match self._data_source:
             case pd.DataFrame():
                 pass
-            case str(url) if PurePosixPath(urlparse(url).path).suffix.lower() in _TYPED_FILE_SUFFIXES:
+            case str(url) if file_extension(url) in _TYPED_FILE_EXTENSIONS:
                 self._data_source: pd.DataFrame = DatasetInfo(name=url, url=url, load_args=kwargs or None).fetch()
             case str(url):
                 self._data_source_csv = CsvSource.load(url, kwargs)

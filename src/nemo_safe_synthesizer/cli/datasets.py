@@ -9,8 +9,9 @@ URLs or file paths.
 
 from __future__ import annotations
 
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Self
+from urllib.parse import urlparse
 
 import pandas as pd
 import yaml
@@ -20,6 +21,15 @@ from ..data_processing.csv_source import CsvSource
 from ..observability import get_logger
 
 logger = get_logger(__name__)
+
+
+def file_extension(url: str) -> str:
+    """Return the lowercase extension of a path or URL, without the dot, ignoring any query string.
+
+    Example:
+        ``"people.PARQUET"`` and ``"https://host/people.parquet?token=abc"`` both return ``"parquet"``.
+    """
+    return PurePosixPath(urlparse(url).path.replace("\\", "/")).suffix.lower().lstrip(".")
 
 
 def _require_dataframe(value: object, *, url: str) -> pd.DataFrame:
@@ -114,7 +124,7 @@ class DatasetInfo(BaseModel):
 
         # Determine the file extension and appropriate reader
         reader: Any
-        extension = Path(url).suffix.lstrip(".")
+        extension = file_extension(url)
         match extension:
             case "csv" | "txt":
                 reader = _dynamic_callable(pd.read_csv)
@@ -156,7 +166,7 @@ class DatasetInfo(BaseModel):
             than CSV and TXT.
         """
         url = self.get_url()
-        if Path(url).suffix.lstrip(".") not in {"csv", "txt"}:
+        if file_extension(url) not in {"csv", "txt"}:
             return None
         logger.info(f"Reading dataset from {url}")
         return CsvSource.load(url, self.load_args)
