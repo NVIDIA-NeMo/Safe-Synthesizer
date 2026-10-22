@@ -232,6 +232,43 @@ class TestProcessDataPiiSeparation:
         assert persisted.inline_plan.columns_to_replace == resolved_pii.inline_plan.columns_to_replace
         assert persisted.inline_plan.data_to_sampler_value_mapping == {"sex": {"F": ["female"]}}
 
+    @patch("nemo_safe_synthesizer.preflight.run_preflight", return_value=_EMPTY_PREFLIGHT)
+    @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
+    @patch("nemo_safe_synthesizer.config.autoconfig.AutoConfigResolver")
+    @patch("nemo_safe_synthesizer.holdout.holdout.Holdout")
+    def test_process_data_keeps_the_full_input_pattern_coverage_decision(
+        self,
+        mock_holdout_cls,
+        mock_resolver_cls,
+        mock_metadata_cls,
+        mock_preflight,
+        fixture_workdir: Workdir,
+    ) -> None:
+        # 990 of 1,000 phones match (99.0%); the 950-row training split keeps all 10 exceptions (98.9%).
+        phones = [f"555-{row:04d}" for row in range(990)] + [f"(555) {row:03d}-0000" for row in range(10)]
+        original_df = pd.DataFrame({"phone": phones})
+        train_split = original_df.iloc[50:].copy()
+        config = ReplacePiiConfig(
+            replacement_plan=PiiReplacementPlan(
+                columns_to_replace=[
+                    PiiColumnPlan(column_name="phone", entity_type=EntityType.PHONE_NUMBER, pattern="###-####")
+                ]
+            ),
+            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+        )
+        builder = SafeSynthesizer(
+            config=SafeSynthesizerParameters(replace_pii=config),
+            workdir=fixture_workdir,
+        ).with_data_source(original_df)
+        mock_holdout_cls.return_value.train_test_split.return_value = (train_split, original_df.head(50).copy())
+        mock_resolver_cls.side_effect = lambda _training_df, config: lambda: config
+        mock_metadata_cls.from_config.return_value = MagicMock()
+
+        builder.process_data()
+
+        assert builder._training_df is not None
+        assert len(builder._training_df) == 950
+
 
 # ---------------------------------------------------------------------------
 # Tests: metadata lifecycle in validate mode
