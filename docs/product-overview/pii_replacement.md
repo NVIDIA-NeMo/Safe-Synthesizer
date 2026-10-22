@@ -474,10 +474,10 @@ Several checkpoint labels map to one NSS entity type:
 Identifiers are requested only by the kinds that text names, such as "customer
 ID 1234", because generic identifier labels mostly match device, vehicle, and
 biometric codes. A detected identifier without a digit is dropped. Certificate
-and professional licence numbers are identifiers. Tax numbers are national IDs,
+and professional license numbers are identifiers. Tax numbers are national IDs,
 including business tax IDs, which the checkpoint does not distinguish from
-personal ones. Driver's licence labels are not requested because they mostly
-match licence plates and other vehicle codes.
+personal ones. Driver's license labels are not requested because they mostly
+match license plates and other vehicle codes.
 
 The checkpoint is optimized for recall and can confuse common or domain terms
 with names. NSS therefore configures a confidence threshold for every

@@ -208,7 +208,7 @@ _SSN_SHAPE = re.compile(r"[0-9]{3}-[0-9]{2}-[0-9]{4}")
 def _national_id(request: ReplacementGenerationRequest, fake: Faker, rng: Random) -> str:
     """Return a national ID in the original's shape: an SSN for SSN-shaped values, else the same layout.
 
-    National IDs include driver's licences, tax IDs, and non-US identifiers, so only an SSN-shaped
+    National IDs include driver's licenses, tax IDs, and non-US identifiers, so only an SSN-shaped
     original gets an SSN. Any other value keeps its layout, with every letter and digit replaced.
 
     Example:

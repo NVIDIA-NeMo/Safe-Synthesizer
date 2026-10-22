@@ -7,8 +7,8 @@ import math
 import re
 from collections.abc import Iterable
 from functools import cached_property
+from typing import TYPE_CHECKING
 
-import pandas as pd
 from pydantic import BaseModel, Field
 
 from ...config.parameters import SafeSynthesizerParameters
@@ -16,6 +16,9 @@ from ...evaluation.components.component import Component
 from ...evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from ...evaluation.data_model.evaluation_score import EvaluationScore
 from ...observability import get_logger
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 logger = get_logger(__name__)
 
