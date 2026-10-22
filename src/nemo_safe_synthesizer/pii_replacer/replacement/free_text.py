@@ -255,13 +255,7 @@ class FreeTextReplacementExecutor:
                 if not spans or not isinstance(text, str):
                     continue
                 scope_identity = row_position if group_identities is None else group_identities[row_position]
-                values = known.setdefault(scope_identity, _KnownValues())
-                for span in spans:
-                    value = text[span.start : span.end]
-                    values.add(value, span.entity_type, "detected_value")
-                    if span.entity_type is EntityType.FULL_NAME:
-                        for part_type, word in _registrable_name_words(value):
-                            values.add(word, part_type, "detected_value")
+                _add_detected_values(known.setdefault(scope_identity, _KnownValues()), text, spans)
         return known
 
     def register_structured_mapping(
@@ -642,6 +636,16 @@ def _is_name_affix(word: str) -> bool:
 def _is_other_letter(candidate: str, letter: str) -> bool:
     """Return whether ``candidate`` is one letter that differs from ``letter`` ignoring case."""
     return len(candidate) == 1 and candidate.isalpha() and candidate.casefold() != letter.casefold()
+
+
+def _add_detected_values(values: _KnownValues, text: str, spans: tuple[DetectedSpan, ...]) -> None:
+    """Add each detected value in ``text``, and the words of a detected plain full name, as known values."""
+    for span in spans:
+        value = text[span.start : span.end]
+        values.add(value, span.entity_type, "detected_value")
+        if span.entity_type is EntityType.FULL_NAME:
+            for part_type, word in _registrable_name_words(value):
+                values.add(word, part_type, "detected_value")
 
 
 class _KnownValues:
