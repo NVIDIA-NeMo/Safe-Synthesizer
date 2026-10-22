@@ -296,9 +296,20 @@ class TestStructuredReplacementExecutor:
 
         result = _execute(dataframe, plan, generator)
 
-        # The second row retries every attempt for an unused value before repeating "Synthetic".
-        assert result.dataframe["identifier"].tolist() == ["Synthetic", "Synthetic"]
+        # The second row retries every attempt for an unused value before repeating "Synthetic",
+        # written in capitals like the originals.
+        assert result.dataframe["identifier"].tolist() == ["SYNTHETIC", "SYNTHETIC"]
         assert len(generator.requests) == 11
+
+    def test_values_differing_only_in_letter_case_share_a_replacement_in_their_own_case(self) -> None:
+        dataframe = pd.DataFrame({"patient": ["A", "A", "A", "B"], "first_name": ["Ada", "ADA", "ada", "Ada"]})
+        plan = _plan(_target("first_name", EntityType.FIRST_NAME))
+        generator = _ScriptedNameGenerator("Kathleen", "Grace")
+
+        result = _execute(dataframe, plan, generator, group_column="patient")
+
+        assert result.dataframe["first_name"].tolist() == ["Kathleen", "KATHLEEN", "kathleen", "Grace"]
+        assert result.generation_statistics.generated_replacement_count == 2
 
     def test_group_scope_reuses_name_replacements_within_a_group_only(self) -> None:
         dataframe = pd.DataFrame({"patient": ["A", "A", "B"], "first_name": ["Ada", "Ada", "Ada"]})
