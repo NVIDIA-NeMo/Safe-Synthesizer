@@ -35,8 +35,8 @@ _COMPRESSION_BY_EXTENSION: tuple[tuple[str, _Compression], ...] = (
     (".xz", "xz"),
     (".zst", "zstd"),
 )
-# Options that only apply when pandas opens the location itself.
-_LOCATION_ONLY_LOAD_ARGS = frozenset({"compression", "storage_options"})
+# Options that only apply when pandas opens the location itself; memory_map needs a real file descriptor.
+_LOCATION_ONLY_LOAD_ARGS = frozenset({"compression", "memory_map", "storage_options"})
 
 
 @dataclass(frozen=True, slots=True)

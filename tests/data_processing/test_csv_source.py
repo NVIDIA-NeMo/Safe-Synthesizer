@@ -26,6 +26,15 @@ class TestCsvSource:
         assert source.read()["zip"].tolist() == [2054, 10001]
         assert source.read_text().to_dict("list") == {"zip": ["02054", "10001"], "note": ["N/A", ""]}
 
+    def test_memory_map_is_ignored_when_parsing_retained_bytes(self, tmp_path: Path) -> None:
+        path = tmp_path / "input.csv"
+        path.write_text(_CSV)
+
+        source = CsvSource.load(str(path), {"memory_map": True})
+
+        assert source.read()["zip"].tolist() == [2054, 10001]
+        assert source.read_text()["zip"].tolist() == ["02054", "10001"]
+
     def test_compression_is_inferred_from_the_file_name(self, tmp_path: Path) -> None:
         path = tmp_path / "input.csv.gz"
         path.write_bytes(gzip.compress(_CSV.encode()))
