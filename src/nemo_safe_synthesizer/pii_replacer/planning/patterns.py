@@ -9,6 +9,7 @@ import re
 import string
 from collections.abc import Mapping
 from dataclasses import dataclass
+from itertools import pairwise
 from random import Random
 from types import MappingProxyType
 from typing import Literal
@@ -280,11 +281,15 @@ def extract_name_components(
 
     The explicit placeholders provide the semantic alignment; this helper does
     not infer first, middle, or last names from arbitrary token positions.
+    A pattern with two placeholders next to each other and no literal between
+    them returns no components, because the boundary between them would be a
+    guess: ``{First}{Last}`` could split ``AdaLovelace`` into ``AdaLovelac``
+    and ``e``.
     """
     if entity_type is not EntityType.FULL_NAME:
         return ()
     parts, error = parse_name_pattern(entity_type, pattern)
-    if error is not None or parts is None:
+    if error is not None or parts is None or _has_adjacent_placeholders(parts):
         return ()
 
     expression: list[str] = []
@@ -304,6 +309,13 @@ def extract_name_components(
     if match is None:
         return ()
     return tuple((component_type, match.group(group_name)) for group_name, component_type in groups)
+
+
+def _has_adjacent_placeholders(parts: tuple[NamePatternPart, ...]) -> bool:
+    """Return whether any two consecutive parsed parts are both placeholders."""
+    return any(
+        previous.placeholder is not None and current.placeholder is not None for previous, current in pairwise(parts)
+    )
 
 
 def _name_literal_regex(literal: str, entity_type: EntityType) -> str:
