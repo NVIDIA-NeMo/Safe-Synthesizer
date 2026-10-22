@@ -10,7 +10,7 @@ generator implementations.
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from random import Random
 
 __all__ = ["birth_date_is_supported", "random_birth_date", "shift_birth_date"]
@@ -46,9 +46,18 @@ def shift_birth_date(original: str, pattern: str | None, rng: Random) -> str | N
 
 
 def random_birth_date(pattern: str | None, rng: Random) -> str:
-    """Return a random birth date between 1930 and 2010, written with ``pattern`` or as ISO 8601."""
+    """Return a random birth date between 1930 and 2010, written with ``pattern`` or as ISO 8601.
+
+    The date is taken at midnight UTC, so a pattern with ``%z`` or ``%Z`` still renders a timezone and the
+    value parses with that pattern.
+
+    Example:
+        With pattern ``"%Y-%m-%d %z"``, the result looks like ``"1974-06-02 +0000"``.
+    """
     value = _RANDOM_BIRTH_DATE_START + timedelta(days=rng.randrange(_RANDOM_BIRTH_DATE_DAYS + 1))
-    return value.strftime(pattern) if pattern is not None else value.isoformat()
+    if pattern is None:
+        return value.isoformat()
+    return datetime.combine(value, time(), tzinfo=UTC).strftime(pattern)
 
 
 def birth_date_is_supported(value: str) -> bool:
