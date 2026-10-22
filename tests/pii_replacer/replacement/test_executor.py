@@ -116,6 +116,28 @@ class _CompositeNameGenerator(_RecordingGenerator):
         return super().generate(request)
 
 
+class _NamePartGenerator(_RecordingGenerator):
+    def __init__(
+        self,
+        *,
+        first_name: str = "Grace",
+        middle_name: str = "Mary",
+        last_name: str = "Hopper",
+        full_name: str = "Grace Hopper",
+    ) -> None:
+        super().__init__()
+        self._names = {
+            EntityType.FIRST_NAME: first_name,
+            EntityType.MIDDLE_NAME: middle_name,
+            EntityType.LAST_NAME: last_name,
+            EntityType.FULL_NAME: full_name,
+        }
+
+    def generate(self, request: ReplacementGenerationRequest) -> str:
+        self.requests.append(request)
+        return self._names[request.entity_type]
+
+
 class _CompositeAddressGenerator(_RecordingGenerator):
     def generate(self, request: ReplacementGenerationRequest) -> str:
         self.requests.append(request)
@@ -905,16 +927,120 @@ class TestStructuredReplacementExecutor:
         full, middle = result.replacement_map.free_text
         assert full.replacement_value.split(" ")[1] == middle.replacement_value
 
-    def test_free_text_full_name_with_a_title_is_generated_whole(self) -> None:
-        text = "Dr. Kenneth Gonzales called"
+    @pytest.mark.parametrize(
+        ("name", "expected"),
+        [
+            ("Dr Ada Lovelace", "Dr Grace Hopper"),
+            ("dr. Ada Lovelace", "dr. Grace Hopper"),
+            ("Prof Ada Byron Lovelace", "Prof Grace Mary Hopper"),
+            ("John Smith Jr", "Grace Hopper Jr"),
+            ("Mr. John Smith III", "Mr. Grace Hopper III"),
+        ],
+    )
+    def test_free_text_full_name_keeps_titles_and_suffixes(self, name: str, expected: str) -> None:
+        text = f"{name} called"
         dataframe = pd.DataFrame({"notes": [text]})
         plan = _plan(_target("notes", EntityType.FREE_TEXT))
-        detector = _StaticDetector([_span(0, "notes", text, "Dr. Kenneth Gonzales", EntityType.FULL_NAME)])
-        generator = _RecordingGenerator()
+        detector = _StaticDetector([_span(0, "notes", text, name, EntityType.FULL_NAME)])
 
-        _execute(dataframe, plan, generator, free_text_detector=detector)
+        result = _execute(dataframe, plan, _NamePartGenerator(), free_text_detector=detector)
 
-        assert [request.entity_type for request in generator.requests] == [EntityType.FULL_NAME]
+        assert result.dataframe["notes"].iloc[0] == f"{expected} called"
+
+    def test_free_text_full_name_with_a_suffix_shares_its_surname(self) -> None:
+        text = "John Smith Jr called. Smith agreed."
+        dataframe = pd.DataFrame({"notes": [text]})
+        plan = _plan(_target("notes", EntityType.FREE_TEXT))
+        detector = _StaticDetector(
+            [
+                _span(0, "notes", text, "John Smith Jr", EntityType.FULL_NAME),
+                _span(0, "notes", text, "Smith", EntityType.LAST_NAME, occurrence=1),
+            ]
+        )
+        generator = _NamePartGenerator()
+
+        result = _execute(dataframe, plan, generator, free_text_detector=detector)
+
+        assert result.dataframe["notes"].iloc[0] == "Grace Hopper Jr called. Hopper agreed."
+        assert [request.entity_type for request in generator.requests] == [EntityType.FIRST_NAME, EntityType.LAST_NAME]
+
+    def test_structured_full_name_with_a_suffix_registers_its_surname(self) -> None:
+        dataframe = pd.DataFrame({"full_name": ["John Smith Jr"], "notes": ["Ask Smith to call"]})
+        plan = _plan(_target("notes", EntityType.FREE_TEXT), _target("full_name", EntityType.FULL_NAME))
+        detector = _StaticDetector([_span(0, "notes", "Ask Smith to call", "Smith", EntityType.LAST_NAME)])
+
+        result = _execute(dataframe, plan, _CompositeNameGenerator(), free_text_detector=detector)
+
+        assert result.dataframe["notes"].iloc[0] == "Ask Hopper to call"
+
+    @pytest.mark.parametrize(("initial", "expected"), [("L", "H"), ("L.", "H."), ("l", "h")])
+    def test_free_text_initial_takes_the_first_letter_of_the_matching_replaced_name(
+        self, initial: str, expected: str
+    ) -> None:
+        text = f"Ada Lovelace called. Ada {initial} agreed."
+        dataframe = pd.DataFrame({"notes": [text]})
+        plan = _plan(_target("notes", EntityType.FREE_TEXT))
+        detector = _StaticDetector(
+            [
+                _span(0, "notes", text, "Ada Lovelace", EntityType.FULL_NAME),
+                # "Ada L" is also a prefix of "Ada Lovelace", so take its last occurrence.
+                _span(0, "notes", text, f"Ada {initial}", EntityType.FULL_NAME, text.count(f"Ada {initial}") - 1),
+            ]
+        )
+        generator = _NamePartGenerator()
+
+        result = _execute(dataframe, plan, generator, free_text_detector=detector)
+
+        assert result.dataframe["notes"].iloc[0] == f"Grace Hopper called. Grace {expected} agreed."
+        assert [request.entity_type for request in generator.requests] == [EntityType.FIRST_NAME, EntityType.LAST_NAME]
+
+    def test_free_text_initial_without_a_matching_name_uses_a_generated_name_part(self) -> None:
+        text = "Ada K. Lovelace called"
+        dataframe = pd.DataFrame({"notes": [text]})
+        plan = _plan(_target("notes", EntityType.FREE_TEXT))
+        detector = _StaticDetector([_span(0, "notes", text, "Ada K. Lovelace", EntityType.FULL_NAME)])
+        generator = _NamePartGenerator()
+
+        result = _execute(dataframe, plan, generator, free_text_detector=detector)
+
+        assert result.dataframe["notes"].iloc[0] == "Grace M. Hopper called"
+        assert [(request.entity_type, request.original_value) for request in generator.requests] == [
+            (EntityType.FIRST_NAME, "Ada"),
+            (EntityType.MIDDLE_NAME, "K"),
+            (EntityType.LAST_NAME, "Lovelace"),
+        ]
+
+    def test_free_text_initial_always_changes_its_letter(self) -> None:
+        text = "Ada Lovelace called. Ada L. agreed."
+        dataframe = pd.DataFrame({"notes": [text]})
+        plan = _plan(_target("notes", EntityType.FREE_TEXT))
+        detector = _StaticDetector(
+            [
+                _span(0, "notes", text, "Ada Lovelace", EntityType.FULL_NAME),
+                _span(0, "notes", text, "Ada L.", EntityType.FULL_NAME),
+            ]
+        )
+
+        result = _execute(dataframe, plan, _NamePartGenerator(last_name="Lopez"), free_text_detector=detector)
+
+        replaced = str(result.dataframe["notes"].iloc[0])
+        assert re.fullmatch(r"Grace Lopez called\. Grace [A-KM-Z]\. agreed\.", replaced), replaced
+
+    def test_structured_name_initial_is_not_registered(self) -> None:
+        dataframe = pd.DataFrame({"full_name": ["Ada K Lovelace"], "notes": ["Ada and K called"]})
+        plan = _plan(_target("notes", EntityType.FREE_TEXT), _target("full_name", EntityType.FULL_NAME))
+        detector = _StaticDetector(
+            [
+                _span(0, "notes", "Ada and K called", "Ada", EntityType.FIRST_NAME),
+                _span(0, "notes", "Ada and K called", "K", EntityType.MIDDLE_NAME),
+            ]
+        )
+        generator = _NamePartGenerator(full_name="Grace Mary Hopper", middle_name="Zoe")
+
+        result = _execute(dataframe, plan, generator, free_text_detector=detector)
+
+        # The all-capitals "K" gets its fresh replacement in capitals.
+        assert result.dataframe["notes"].iloc[0] == "Grace and ZOE called"
 
     def test_detected_first_name_reuses_an_unpatterned_structured_full_name(self) -> None:
         dataframe = pd.DataFrame({"full_name": ["Kenneth Gonzales"], "notes": ["Kenneth called"]})
