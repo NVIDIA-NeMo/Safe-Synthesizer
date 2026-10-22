@@ -52,7 +52,13 @@ class TabularPiiReplacer:
         self._data_config = data_config
         self._time_series = time_series
 
-    def replace(self, df: pd.DataFrame, *, capture_replacement_map: bool = False) -> TransformResult:
+    def replace(
+        self,
+        df: pd.DataFrame,
+        *,
+        capture_replacement_map: bool = False,
+        check_pattern_coverage: bool = True,
+    ) -> TransformResult:
         """Return a replacement result for ``df`` without mutating ``df``.
 
         Args:
@@ -61,6 +67,11 @@ class TabularPiiReplacer:
                 provenance and accepted free-text span traces in the result. The
                 default leaves this data unavailable so ordinary calls do not
                 accidentally persist original PII.
+            check_pattern_coverage: Require each pattern to cover at least 99%
+                of ``df``'s values. Pass ``False`` when ``df`` is a subset of
+                data the plan was already resolved against, such as the
+                pipeline's training split, so a subset that falls just below
+                the threshold does not reject a plan the full input accepted.
 
         Raises:
             ParameterError: If the configured plan is invalid for ``df``.
@@ -76,6 +87,7 @@ class TabularPiiReplacer:
             self._config,
             self._data_config,
             self._time_series,
+            check_pattern_coverage=check_pattern_coverage,
         )
         plan = resolved_config.inline_plan
         if plan is None:
