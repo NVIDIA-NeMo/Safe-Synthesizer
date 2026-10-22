@@ -257,3 +257,14 @@ def test_csv_paths_are_still_read_as_csv(tmp_path):
 
     assert builder._data_source_csv is not None
     assert builder._data_source_csv.read_text()["zip"].tolist() == ["02054"]
+
+
+def test_typed_file_extensions_ignore_letter_case(tmp_path):
+    path = tmp_path / "people.PARQUET"
+    pd.DataFrame({"zip": ["02054"]}).to_parquet(path)
+    builder = ConfigBuilder().with_data_source(str(path))
+
+    builder._resolve_datasource()
+
+    assert isinstance(builder._data_source, pd.DataFrame)
+    assert builder._data_source["zip"].tolist() == ["02054"]

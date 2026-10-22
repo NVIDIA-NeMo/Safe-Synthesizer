@@ -29,7 +29,7 @@ from ..defaults import DEFAULT_ARTIFACTS_PATH
 from ..observability import configure_logging_from_workdir, get_logger, initialize_observability
 from ..utils import merge_dicts
 from .artifact_structure import Workdir
-from .datasets import DatasetRegistry
+from .datasets import DatasetRegistry, file_extension
 from .wandb_setup import WandbMode, initialize_wandb_run
 
 if TYPE_CHECKING:
@@ -317,16 +317,15 @@ def _dataset_registry(settings: "CLISettings") -> DatasetRegistry:
     return DatasetRegistry()
 
 
-def data_source_suffix(settings: "CLISettings") -> str:
+def data_source_extension(settings: "CLISettings") -> str:
     """Return the lowercase file extension of ``settings.data_source``, resolved through the dataset registry.
 
     Example:
-        ``"people.parquet"``, or a registry entry whose URL ends in ``.parquet``, returns ``".parquet"``.
+        ``"people.PARQUET"``, or a registry entry whose URL ends in ``.parquet?token=abc``, returns ``"parquet"``.
     """
     if not settings.data_source:
         return ""
-    url = _dataset_registry(settings).get_dataset(settings.data_source).get_url()
-    return Path(url).suffix.lower()
+    return file_extension(_dataset_registry(settings).get_dataset(settings.data_source).get_url())
 
 
 def fetch_data_source_for_replacement(settings: "CLISettings") -> pd.DataFrame | CsvSource | None:
