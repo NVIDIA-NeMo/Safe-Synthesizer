@@ -81,6 +81,7 @@ suppressed cells, and `suppressed_cells` counts them.
 | ja_JP | 3,473 | Romanized only. Won't match names written in kanji or kana. |
 | ko_KR | 10,538 | 7,696 in Hangul and the rest romanized. For example, 서연 is female, 민준 male, and 지우 unisex. |
 | fr_FR | 2,963 | 452 names have both an accented and an unaccented row. |
+| es_ES | 53,938 | Not a Nemotron-Personas locale; included for Spanish names in any dataset. 65% are compound names such as "José María". Only 311 names have an accented spelling in WGND, so most, such as "Maria Jose", appear only without accents. Latin American countries have fewer than 41 names each in WGND and are not built. |
 | pt_BR | 448 | Too thin to use. |
 | en_SG | 8 | Unusable. |
 | hi_Deva_IN, hi_Latn_IN | — | Not built. WGND has no separate entry for them. |

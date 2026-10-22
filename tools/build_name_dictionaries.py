@@ -57,9 +57,19 @@ PLACEHOLDER_FIRST_NAMES = PLACEHOLDER_NAMES | {"baby", "babyboy", "babygirl", "b
 PLACEHOLDER_LAST_NAMES = PLACEHOLDER_NAMES | {"boy", "daughter", "girl"}
 # Rows that aggregate every name below a source's publication threshold.
 CATCH_ALL_NAMES = frozenset({"all other names", "all other first names"})
-# WGND country codes per Nemotron-Personas locale. en_IN is left out: WGND has 2.5M noisy Indian entries and no
-# counts to filter them by.
-WGND_LOCALES = {"en_GB": "GB", "de_DE": "DE", "fr_FR": "FR", "pt_BR": "BR", "en_SG": "SG", "ja_JP": "JP", "ko_KR": "KR"}
+# WGND country codes per locale. en_IN is left out: WGND has 2.5M noisy Indian entries and no counts to filter them
+# by. es_ES is not a Nemotron-Personas locale but covers Spanish names in any dataset; WGND has fewer than 41 names for
+# each Latin American country, so Spain is the only Spanish source.
+WGND_LOCALES = {
+    "en_GB": "GB",
+    "de_DE": "DE",
+    "fr_FR": "FR",
+    "es_ES": "ES",
+    "pt_BR": "BR",
+    "en_SG": "SG",
+    "ja_JP": "JP",
+    "ko_KR": "KR",
+}
 
 
 def main() -> None:
