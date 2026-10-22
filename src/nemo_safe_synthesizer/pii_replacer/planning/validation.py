@@ -178,9 +178,13 @@ def _unused_mask_values(pattern: str, values: list[str]) -> int:
     return space.size - sum(space.index_of(value) is not None for value in set(values))
 
 
-def _iter_pattern_issues(df: pd.DataFrame, plan: PiiReplacementPlan) -> Iterator[str]:
+def _iter_pattern_issues(df: pd.DataFrame, plan: PiiReplacementPlan, *, check_coverage: bool) -> Iterator[str]:
     for spec in plan.columns_to_replace:
-        if (issue := column_pattern_issue(df, spec)) is not None:
+        if check_coverage:
+            issue = column_pattern_issue(df, spec)
+        else:
+            issue = column_pattern_syntax_issue(spec) if spec.pattern is not None else None
+        if issue is not None:
             yield issue
 
 
@@ -217,12 +221,24 @@ def validate_plan(
     *,
     data_config: DataParameters,
     time_series: TimeSeriesParameters | None = None,
+    check_pattern_coverage: bool = True,
 ) -> None:
     """Validate the selected final plan against the dataframe and data configuration.
 
     This is the resolver's single dataframe-aware validation gate. Pydantic
     model construction and LLM response parsing are separate, context-free
     checks performed at their respective seams.
+
+    Args:
+        df: Data the plan is validated against.
+        plan: Final replacement plan.
+        data_config: Data parameters, used for grouping and protected columns.
+        time_series: Time-series parameters, used for protected columns.
+        check_pattern_coverage: Require each pattern to cover at least 99% of
+            the column's values. Pass ``False`` when ``df`` is a subset of
+            data the plan was already validated against, such as a training
+            split: a subset can fall just below the threshold although the
+            full input met it. Pattern syntax is checked either way.
     """
     issues: list[str] = []
     group_column = data_config.group_training_examples_by
@@ -233,7 +249,7 @@ def validate_plan(
         issues.append(f"group column {group_column!r} is not present in the dataframe")
 
     issues.extend(_iter_reference_issues(df, plan, get_protected_columns(data_config, time_series)))
-    issues.extend(_iter_pattern_issues(df, plan))
+    issues.extend(_iter_pattern_issues(df, plan, check_coverage=check_pattern_coverage))
 
     if issues:
         details = "\n".join(f"  - {issue}" for issue in issues)

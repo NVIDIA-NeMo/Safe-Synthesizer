@@ -16,7 +16,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiSamplerConfig,
     ReplacePiiConfig,
 )
-from nemo_safe_synthesizer.errors import GenerationError, InternalError
+from nemo_safe_synthesizer.errors import GenerationError, InternalError, ParameterError
 from nemo_safe_synthesizer.pii_replacer import (
     FreeTextReplacementRecord,
     ReplacementGenerationStatistics,
@@ -78,6 +78,27 @@ class TestTabularPiiReplacerInterface:
         assert result.transformed_df["dob"].str.fullmatch(r"\d{4}-\d{2}-\d{2}").all()
         assert result.transformed_df["id"].tolist()[0].count(".") == 1
         assert result.transformed_df["id"].str.fullmatch(r"\d\.\d|\d\.\d{2}").all()
+
+    def test_subset_below_pattern_coverage_is_replaced_when_coverage_was_checked_on_the_full_input(self) -> None:
+        # 990 of 1,000 phones match the pattern (99.0%); a 950-row split that keeps all 10 exceptions is at 98.9%.
+        phones = [f"555-{row:04d}" for row in range(990)] + [f"(555) {row:03d}-0000" for row in range(10)]
+        config = ReplacePiiConfig(
+            replacement_plan=PiiReplacementPlan(
+                columns_to_replace=[
+                    PiiColumnPlan(column_name="phone", entity_type=EntityType.PHONE_NUMBER, pattern="###-####")
+                ]
+            ),
+            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+        )
+        replacer = TabularPiiReplacer(config, data_config=DataParameters())
+        replacer.replace(pd.DataFrame({"phone": phones}))
+        training_split = pd.DataFrame({"phone": phones[50:]})
+
+        with pytest.raises(ParameterError, match="covers 98.9%"):
+            replacer.replace(training_split)
+        result = replacer.replace(training_split, check_pattern_coverage=False)
+
+        assert len(result.transformed_df) == 950
 
     def test_replace_executes_an_explicit_structured_plan(self) -> None:
         dataframe = pd.DataFrame({"identifier": ["USER-001", "USER-002"]}, index=[3, 3])

@@ -199,6 +199,7 @@ def resolve_plan(
     discoverer: PlanDiscoverer | None = None,
     enhancer: PlanEnhancer | None = None,
     output_path: str | Path | None = None,
+    check_pattern_coverage: bool = True,
 ) -> PiiReplacementPlan:
     """Resolve, validate, and optionally persist one replacement plan.
 
@@ -228,6 +229,7 @@ def resolve_plan(
         plan,
         data_config=data_config,
         time_series=time_series,
+        check_pattern_coverage=check_pattern_coverage,
     )
     if output_path is not None:
         save_plan(plan, output_path)
@@ -244,6 +246,7 @@ def resolve_replacement_config(
     enhancer: PlanEnhancer | None = None,
     mapping_discoverer: DependencyMappingDiscoverer | None = None,
     sampler_value_catalog: Mapping[EntityType, tuple[str, ...]] | None = None,
+    check_pattern_coverage: bool = True,
 ) -> ReplacePiiConfig:
     """Resolve the replacement plan and its data-to-sampler value mapping for ``df``.
 
@@ -262,6 +265,8 @@ def resolve_replacement_config(
         enhancer: Plan enhancer; defaults to the LLM enhancer when ``config.llm`` is set.
         mapping_discoverer: Value-mapping discoverer; defaults to the LLM enhancer when ``config.llm`` is set.
         sampler_value_catalog: Sampler values per entity type; loaded from the configured sampler when omitted.
+        check_pattern_coverage: Require each pattern to cover at least 99% of ``df``'s values; see
+            ``validate_plan``.
 
     Returns:
         A copy of ``config`` whose ``replacement_plan`` is the resolved inline plan,
@@ -296,6 +301,7 @@ def resolve_replacement_config(
                 enhancer=llm,
                 mapping_discoverer=llm,
                 sampler_value_catalog=sampler_value_catalog,
+                check_pattern_coverage=check_pattern_coverage,
             )
     return _resolve_replacement_config(
         df,
@@ -306,6 +312,7 @@ def resolve_replacement_config(
         enhancer=enhancer,
         mapping_discoverer=mapping_discoverer,
         sampler_value_catalog=sampler_value_catalog,
+        check_pattern_coverage=check_pattern_coverage,
     )
 
 
@@ -319,6 +326,7 @@ def _resolve_replacement_config(
     enhancer: PlanEnhancer | None = None,
     mapping_discoverer: DependencyMappingDiscoverer | None = None,
     sampler_value_catalog: Mapping[EntityType, tuple[str, ...]] | None = None,
+    check_pattern_coverage: bool = True,
 ) -> ReplacePiiConfig:
     """Resolve the plan and value mapping with the given adapters; see ``resolve_replacement_config``."""
     discover_plan = config.is_auto_discovery
@@ -329,6 +337,7 @@ def _resolve_replacement_config(
         time_series,
         discoverer=discoverer,
         enhancer=enhancer,
+        check_pattern_coverage=check_pattern_coverage,
     )
 
     if sampler_value_catalog is None and conditioner_columns(plan):
