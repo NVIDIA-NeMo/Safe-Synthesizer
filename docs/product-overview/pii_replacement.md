@@ -432,7 +432,11 @@ a pattern, digit-only identifiers are replaced with numbers up to the column's
 longest length, gaining a digit when that range is too full. Automatic
 discovery skips row counters, such as a saved `Unnamed: 0` index column. NSS also excludes protected ordering and timestamp columns, and validates
 the assembled plan. Grouping columns remain eligible for replacement so
-identifiers such as patient IDs can be anonymized.
+identifiers such as patient IDs can be anonymized. A replaced grouping column
+is one-to-one: no two groups get the same replacement, so their series never
+merge. A masked identifier such as `ID-#` gains a position when it has too few
+unused values for every group, and the run fails rather than merge two groups
+when no distinct value can be found.
 
 Each prompt describes the expected JSON response, and the request also
 constrains decoding to that response's strict schema. Each request permits up to

@@ -22,7 +22,7 @@ from .canonicalization import canonicalize_scalar, is_missing_scalar, readable_v
 from .collisions import CandidateChooser, ReplacementOutcome, ReplacementPool
 from .compiler import compile_plan
 from .generation import ReplacementGenerationRequest, ReplacementGenerator
-from .identifier_space import IdentifierAllocator, NumberSpace, identifier_allocator
+from .identifier_space import IdentifierAllocator, MaskSpace, NumberSpace, identifier_allocator
 from .letter_case import case_insensitive_identity, match_letter_case
 from .types import (
     CanonicalValue,
@@ -39,6 +39,8 @@ logger = get_logger(__name__)
 __all__ = ["ReplacementExecutionResult", "StructuredReplacementExecutor", "resolve_base_seed"]
 
 _MAX_GENERATION_ATTEMPTS = 10
+# A grouping column has no fallback, so it gets more attempts to find a value no other group uses.
+_MAX_GROUP_GENERATION_ATTEMPTS = 50
 _PERSON_RANDOM_SEED_ENV = "PERSON_RANDOM_SEED"
 _CompiledDataToSamplerValueMapping = dict[str, dict[str, tuple[str, ...]]]
 # Identity shared by every column that gets the same replacement for a value: scope, entity type,
@@ -91,6 +93,7 @@ class StructuredReplacementExecutor:
         self._cache: dict[StructuredMappingKey, _CachedReplacement] = {}
         self._shared: dict[_SharedMappingKey, str] = {}
         self._pool = ReplacementPool()
+        self._group_replacements: set[str] = set()
         self._repeated_by_target: dict[str, int] = {}
         self._reused_originals_by_target: dict[str, int] = {}
         self._kept_name_parts_by_target: dict[str, int] = {}
@@ -154,6 +157,7 @@ class StructuredReplacementExecutor:
         self._cache.clear()
         self._shared.clear()
         self._pool = ReplacementPool()
+        self._group_replacements.clear()
         self._repeated_by_target.clear()
         self._reused_originals_by_target.clear()
         self._kept_name_parts_by_target.clear()
@@ -202,6 +206,8 @@ class StructuredReplacementExecutor:
             allocator = identifier_allocator(spec.entity_type, spec.pattern, originals)
             if allocator is None:
                 continue
+            if spec.column_name == self._group_column:
+                allocator = _widen_for_one_to_one(spec.column_name, allocator, originals)
             self._identifier_allocators[spec.column_name] = allocator
             longest = max((len(text.split(".", 1)[0]) for text in originals), default=0)
             if isinstance(allocator.space, NumberSpace) and allocator.space.digits > longest:
@@ -266,15 +272,22 @@ class StructuredReplacementExecutor:
             return cached.value
 
         provenance = None if isinstance(key, RecordMappingKey) else GroupMappingProvenance(dependencies)
+        one_to_one = spec.column_name == self._group_column
         shared_key = self._shared_key(key, spec)
-        if (shared := self._shared.get(shared_key)) is not None:
-            # Another column of the same type and format already replaced this value in this record or group.
+        shared = self._shared.get(shared_key)
+        # Another column of the same type and format already replaced this value in this record or group.
+        # A grouping column reuses it only if no other group has that replacement.
+        if shared is not None and not (one_to_one and shared.casefold() in self._group_replacements):
             self._cache[key] = _CachedReplacement(shared, provenance)
+            if one_to_one:
+                self._group_replacements.add(shared.casefold())
             return shared
         replacement = self._generate_fresh(key, spec, original_text, dependencies)
         self._cache[key] = _CachedReplacement(replacement, provenance)
-        self._shared[shared_key] = replacement
+        self._shared.setdefault(shared_key, replacement)
         self._pool.record_used(spec.entity_type, replacement)
+        if one_to_one:
+            self._group_replacements.add(replacement.casefold())
         self._generated_count += 1
         return replacement
 
@@ -303,8 +316,16 @@ class StructuredReplacementExecutor:
     ) -> str:
         if (allocator := self._identifier_allocators.get(spec.column_name)) is not None:
             return self._allocate_identifier(key, spec, original_text, allocator)
-        chooser = CandidateChooser(self._pool, spec.entity_type, original_text, spec.pattern)
-        for attempt in range(_MAX_GENERATION_ATTEMPTS):
+        one_to_one = spec.column_name == self._group_column
+        chooser = CandidateChooser(
+            self._pool,
+            spec.entity_type,
+            original_text,
+            spec.pattern,
+            one_to_one=self._group_replacements if one_to_one else None,
+        )
+        attempts = _MAX_GROUP_GENERATION_ATTEMPTS if one_to_one else _MAX_GENERATION_ATTEMPTS
+        for attempt in range(attempts):
             request = ReplacementGenerationRequest(
                 entity_type=spec.entity_type,
                 original_value=original_text,
@@ -335,9 +356,15 @@ class StructuredReplacementExecutor:
             replacement, outcome = fallback
             self._count_fallback(spec.column_name, outcome)
             return replacement
+        if one_to_one:
+            raise GenerationError(
+                f"PII replacement could not give grouping column {spec.column_name!r} a value that no other "
+                f"group uses after {attempts} attempts, so two groups would merge; group by a column with more "
+                "possible values, such as an ID, or remove the grouping column from the replacement plan"
+            )
         raise GenerationError(
             f"PII replacement could not generate a value that differs from the original for column "
-            f"{spec.column_name!r} after {_MAX_GENERATION_ATTEMPTS} attempts"
+            f"{spec.column_name!r} after {attempts} attempts"
         )
 
     def _count_fallback(self, column_name: str, outcome: ReplacementOutcome) -> None:
@@ -371,6 +398,11 @@ class StructuredReplacementExecutor:
                 "original; use a pattern with more generated positions"
             )
         replacement, kind = allocation
+        if kind != "new" and spec.column_name == self._group_column:
+            raise GenerationError(
+                f"grouping column {spec.column_name!r}: its identifier format ran out of unused values, so two "
+                "groups would merge; use a pattern with more generated positions"
+            )
         if kind != "new":
             self._count_fallback(spec.column_name, kind)
         return replacement
@@ -397,6 +429,40 @@ class StructuredReplacementExecutor:
                 key=lambda item: (item[0][0], sorted(entity.value for entity in item[0][1])),
             )
         )
+
+
+def _widen_for_one_to_one(
+    column_name: str,
+    allocator: IdentifierAllocator,
+    originals: list[str],
+) -> IdentifierAllocator:
+    """Widen a grouping column's mask until every distinct group can get its own unused value.
+
+    Example:
+        Pattern ``ID-#`` has 10 values; eight groups ``ID-0`` through ``ID-7`` leave only two unused, so
+        the mask widens to ``ID-##`` and the groups get values such as ``ID-37``.
+    """
+    space = allocator.space
+    if not isinstance(space, MaskSpace):
+        return allocator
+    distinct = len(set(originals))
+    widened: MaskSpace | None = space
+    final_space = space
+    while widened is not None and allocator.free_count < distinct:
+        widened = widened.widened()
+        if widened is not None:
+            final_space = widened
+            allocator = IdentifierAllocator(widened, originals)
+    if final_space is not space:
+        logger.user.warning(
+            "Widened grouping-column identifiers so every group gets its own replacement",
+            extra={
+                "column": column_name,
+                "original_length": len(space.positions),
+                "replacement_length": len(final_space.positions),
+            },
+        )
+    return allocator
 
 
 def resolve_base_seed(explicit_seed: int | None) -> int:
