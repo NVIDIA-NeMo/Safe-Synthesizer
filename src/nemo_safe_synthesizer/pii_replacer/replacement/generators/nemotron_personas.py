@@ -26,7 +26,6 @@ from ._common import (
     NAME_ENTITY_TYPES,
     dependency_values,
     name_values,
-    render_address,
     render_name,
     required_pattern_values,
     resolve_dependency_values,
@@ -318,7 +317,7 @@ def _generate_persona_value(
         return render_name(entity_type, request.pattern, rng, values)
     if entity_type is EntityType.STREET_ADDRESS:
         street = _persona_street_components(sampled)
-        return render_address(street, dependencies) if street else None
+        return street or None
     return None
 
 

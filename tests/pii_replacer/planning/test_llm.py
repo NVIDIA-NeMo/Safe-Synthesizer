@@ -386,7 +386,6 @@ class TestLLMPlanEnhancer:
             "exclusive_dependency_groups": [
                 [["first_name", "last_name", "middle_name"], ["full_name"]],
                 [["full_name"], ["ethnic_background", "gender"]],
-                [["zipcode"], ["city", "country", "state"]],
             ],
             "pattern_grammars": {},
         }

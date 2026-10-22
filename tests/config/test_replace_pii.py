@@ -305,23 +305,6 @@ class TestPiiReplacementPlan:
             }
         )
 
-    def test_zipcode_cannot_mix_with_city(self) -> None:
-        with pytest.raises(ValidationError, match="mutually exclusive conditioner groups"):
-            PiiReplacementPlan.model_validate(
-                {
-                    "columns_to_replace": [
-                        {
-                            "column_name": "street",
-                            "entity_type": "street_address",
-                            "depends_on": [
-                                {"column_name": "zip", "entity_type": "zipcode"},
-                                {"column_name": "city", "entity_type": "city"},
-                            ],
-                        }
-                    ]
-                }
-            )
-
     def test_inferred_depends_on_must_still_be_in_the_allowlist(self) -> None:
         with pytest.raises(ValidationError, match="is not allowed for entity_type 'last_name'"):
             PiiReplacementPlan.model_validate(
@@ -386,22 +369,24 @@ class TestPiiReplacementPlan:
                 }
             )
 
-    def test_street_address_may_depend_on_city_state_country(self) -> None:
-        PiiReplacementPlan.model_validate(
-            {
-                "columns_to_replace": [
-                    {
-                        "column_name": "street",
-                        "entity_type": "street_address",
-                        "depends_on": [
-                            {"column_name": "city", "entity_type": "city"},
-                            {"column_name": "state", "entity_type": "state"},
-                            {"column_name": "country", "entity_type": "country"},
-                        ],
-                    }
-                ]
-            }
-        )
+    def test_street_address_takes_no_locality_dependencies(self) -> None:
+        # Only the street is replaced; the original locality text stays as written.
+        with pytest.raises(ValidationError, match="cannot be used in depends_on"):
+            PiiReplacementPlan.model_validate(
+                {
+                    "columns_to_replace": [
+                        {
+                            "column_name": "street",
+                            "entity_type": "street_address",
+                            "depends_on": [
+                                {"column_name": "city", "entity_type": "city"},
+                                {"column_name": "state", "entity_type": "state"},
+                                {"column_name": "country", "entity_type": "country"},
+                            ],
+                        }
+                    ]
+                }
+            )
 
 
 @pytest.mark.unit
