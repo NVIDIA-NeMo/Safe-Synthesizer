@@ -18,6 +18,7 @@ from ...errors import DataError, GenerationError, InternalError, ParameterError,
 from ...observability import get_logger
 from ..transform_result import ColumnStatistics, ReplacementGenerationStatistics
 from .canonicalization import canonicalize_scalar, is_missing_scalar, readable_value
+from .collisions import CandidateChooser, ReplacementOutcome, ReplacementPool
 from .compiler import compile_plan
 from .generation import ReplacementGenerationRequest, ReplacementGenerator
 from .identifier_space import IdentifierAllocator, NumberSpace, identifier_allocator
@@ -31,7 +32,6 @@ from .types import (
     RecordMappingKey,
     StructuredMappingKey,
 )
-from .value_checks import generated_value_is_valid, keeps_original_name_part
 
 logger = get_logger(__name__)
 
@@ -40,23 +40,6 @@ __all__ = ["ReplacementExecutionResult", "StructuredReplacementExecutor", "resol
 _MAX_GENERATION_ATTEMPTS = 10
 _PERSON_RANDOM_SEED_ENV = "PERSON_RANDOM_SEED"
 _CompiledDataToSamplerValueMapping = dict[str, dict[str, tuple[str, ...]]]
-# Identifier-like values: replacements avoid every original value in the column, so real identifiers
-# do not reappear on other rows, and stay unique while the column's format has unused values. Both
-# are best effort: when retries cannot avoid them, a replacement repeats an earlier one or, failing
-# that, equals another row's original, with a warning. A replacement never equals its own original.
-_IDENTIFIER_ENTITY_TYPES = frozenset(
-    {
-        EntityType.EMAIL,
-        EntityType.PHONE_NUMBER,
-        EntityType.SSN,
-        EntityType.NATIONAL_ID,
-        EntityType.CREDIT_DEBIT_CARD,
-        EntityType.API_KEY,
-        EntityType.IPV4,
-        EntityType.IPV6,
-        EntityType.UNIQUE_IDENTIFIER,
-    }
-)
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,8 +85,7 @@ class StructuredReplacementExecutor:
         self._base_seed = base_seed
         self._data_to_sampler_value_mapping = _compile_data_to_sampler_value_mapping(plan.data_to_sampler_value_mapping)
         self._cache: dict[StructuredMappingKey, _CachedReplacement] = {}
-        self._originals_by_target: dict[str, set[str]] = {}
-        self._generated_by_target: dict[str, set[str]] = {}
+        self._pool = ReplacementPool()
         self._repeated_by_target: dict[str, int] = {}
         self._reused_originals_by_target: dict[str, int] = {}
         self._kept_name_parts_by_target: dict[str, int] = {}
@@ -165,8 +147,7 @@ class StructuredReplacementExecutor:
 
     def _reset_execution_state(self) -> None:
         self._cache.clear()
-        self._originals_by_target.clear()
-        self._generated_by_target.clear()
+        self._pool = ReplacementPool()
         self._repeated_by_target.clear()
         self._reused_originals_by_target.clear()
         self._kept_name_parts_by_target.clear()
@@ -187,22 +168,24 @@ class StructuredReplacementExecutor:
         return tuple(canonicalize_scalar(value) for value in values)
 
     def _seed_reserved_values(self, dataframe: pd.DataFrame) -> None:
-        # Originals are recorded in the same text form generators receive and return,
-        # so a replacement can never reuse another row's original value.
+        # Originals are recorded in the same text form generators receive and return, so a replacement
+        # avoids the original values of every column of its entity type, not only its own column.
         for spec in self._plan.columns_to_replace:
-            if spec.entity_type not in _IDENTIFIER_ENTITY_TYPES:
+            if not self._pool.tracks(spec.entity_type):
                 continue
             column = dataframe[spec.column_name]
-            self._originals_by_target[spec.column_name] = {
-                text
-                for value, text in zip(column.tolist(), column.astype(str).tolist(), strict=True)
-                if not is_missing_scalar(value)
-            }
-            self._generated_by_target[spec.column_name] = set()
+            self._pool.reserve_originals(
+                spec.entity_type,
+                (
+                    text
+                    for value, text in zip(column.tolist(), column.astype(str).tolist(), strict=True)
+                    if not is_missing_scalar(value)
+                ),
+            )
 
     def _prepare_identifier_allocators(self, dataframe: pd.DataFrame) -> None:
         for spec in self._plan.columns_to_replace:
-            if spec.entity_type not in _IDENTIFIER_ENTITY_TYPES:
+            if not self._pool.tracks(spec.entity_type):
                 continue
             column = dataframe[spec.column_name]
             originals = [
@@ -279,8 +262,7 @@ class StructuredReplacementExecutor:
         replacement = self._generate_fresh(key, spec, original_text, dependencies)
         provenance = None if isinstance(key, RecordMappingKey) else GroupMappingProvenance(dependencies)
         self._cache[key] = _CachedReplacement(replacement, provenance)
-        if (generated_values := self._generated_by_target.get(spec.column_name)) is not None:
-            generated_values.add(replacement)
+        self._pool.record_used(spec.entity_type, replacement)
         self._generated_count += 1
         return replacement
 
@@ -293,11 +275,7 @@ class StructuredReplacementExecutor:
     ) -> str:
         if (allocator := self._identifier_allocators.get(spec.column_name)) is not None:
             return self._allocate_identifier(key, spec, original_text, allocator)
-        originals = self._originals_by_target.get(spec.column_name, set())
-        generated = self._generated_by_target.get(spec.column_name, set())
-        repeat: str | None = None
-        reused_original: str | None = None
-        kept_name_part: str | None = None
+        chooser = CandidateChooser(self._pool, spec.entity_type, original_text, spec.pattern)
         for attempt in range(_MAX_GENERATION_ATTEMPTS):
             request = ReplacementGenerationRequest(
                 entity_type=spec.entity_type,
@@ -323,41 +301,25 @@ class StructuredReplacementExecutor:
                 ) from exc
             finally:
                 self._generation_elapsed += time.perf_counter() - started
-            # A replacement must differ from its own original; that rule is strict.
-            if not generated_value_is_valid(request, candidate):
-                continue
-            # A full name that differs as a whole can still keep the real first or last name. Prefer one that
-            # keeps neither; fall back to it only when no other name was found, so a plan whose dependencies
-            # fix a name part cannot fail the run.
-            if spec.entity_type is EntityType.FULL_NAME and keeps_original_name_part(
-                original_text, candidate, spec.pattern
-            ):
-                kept_name_part = kept_name_part or candidate
-                continue
-            if candidate in originals:
-                reused_original = reused_original or candidate
-            elif candidate in generated:
-                repeat = repeat or candidate
-            else:
+            if chooser.offer(request, candidate):
                 return candidate
-        # No new value was found. Prefer repeating an earlier replacement over using another row's original.
-        if repeat is not None:
-            self._repeated_by_target[spec.column_name] = self._repeated_by_target.get(spec.column_name, 0) + 1
-            return repeat
-        if reused_original is not None:
-            self._reused_originals_by_target[spec.column_name] = (
-                self._reused_originals_by_target.get(spec.column_name, 0) + 1
-            )
-            return reused_original
-        if kept_name_part is not None:
-            self._kept_name_parts_by_target[spec.column_name] = (
-                self._kept_name_parts_by_target.get(spec.column_name, 0) + 1
-            )
-            return kept_name_part
+        if (fallback := chooser.fallback()) is not None:
+            replacement, outcome = fallback
+            self._count_fallback(spec.column_name, outcome)
+            return replacement
         raise GenerationError(
             f"PII replacement could not generate a value that differs from the original for column "
             f"{spec.column_name!r} after {_MAX_GENERATION_ATTEMPTS} attempts"
         )
+
+    def _count_fallback(self, column_name: str, outcome: ReplacementOutcome) -> None:
+        counters = {
+            "repeat": self._repeated_by_target,
+            "original": self._reused_originals_by_target,
+            "kept_name_part": self._kept_name_parts_by_target,
+        }
+        if (counter := counters.get(outcome)) is not None:
+            counter[column_name] = counter.get(column_name, 0) + 1
 
     def _allocate_identifier(
         self,
@@ -369,7 +331,11 @@ class StructuredReplacementExecutor:
         """Take the next unused value from the column's identifier space, starting at a seeded position."""
         started = time.perf_counter()
         seed = _derive_seed(self._base_seed, key, purpose="replacement", attempt=0)
-        allocation = allocator.allocate(seed, original_text)
+        allocation = allocator.allocate(
+            seed,
+            original_text,
+            is_taken=lambda value: self._pool.is_taken(spec.entity_type, value),
+        )
         self._generation_elapsed += time.perf_counter() - started
         if allocation is None:
             raise ParameterError(
@@ -377,12 +343,8 @@ class StructuredReplacementExecutor:
                 "original; use a pattern with more generated positions"
             )
         replacement, kind = allocation
-        if kind == "repeat":
-            self._repeated_by_target[spec.column_name] = self._repeated_by_target.get(spec.column_name, 0) + 1
-        elif kind == "original":
-            self._reused_originals_by_target[spec.column_name] = (
-                self._reused_originals_by_target.get(spec.column_name, 0) + 1
-            )
+        if kind != "new":
+            self._count_fallback(spec.column_name, kind)
         return replacement
 
     def _record_dependency_drift(

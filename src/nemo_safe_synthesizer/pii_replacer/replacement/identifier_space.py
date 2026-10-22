@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import math
 import re
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from typing import Literal
 
@@ -157,21 +157,33 @@ class IdentifierAllocator:
         """Number of values that are neither originals nor already allocated."""
         return self.space.size - len(self._originals) - len(self._allocated_set)
 
-    def allocate(self, seed: int, own_original: str) -> tuple[str, AllocationKind] | None:
+    def allocate(
+        self,
+        seed: int,
+        own_original: str,
+        *,
+        is_taken: Callable[[str], bool] | None = None,
+    ) -> tuple[str, AllocationKind] | None:
         """Return a replacement for ``own_original`` and how it was chosen, or ``None`` if none differs from it.
 
-        The replacement is the first unused value at or after the seeded position. When no unused
-        value is left, a seeded choice among earlier replacements is repeated. When there are none,
-        a seeded choice among the other originals is used. The result never equals ``own_original``.
+        The replacement is the first unused value at or after the seeded position. A value is unused when
+        it is neither an original of this space nor allocated here, and ``is_taken`` (for values used or
+        found elsewhere, such as another column of the same type) does not reject it. When no unused value
+        is left, a seeded choice among earlier replacements is repeated. When there are none, a seeded
+        choice among the other originals is used. The result never equals ``own_original``.
         """
         size = self.space.size
         if self.free_count > 0:
             index = seed % size
-            while index in self._originals or index in self._allocated_set:
+            # free_count ignores is_taken, so the scan is bounded by the space size.
+            for _ in range(size):
+                if index not in self._originals and index not in self._allocated_set:
+                    value = self.space.value_at(index)
+                    if is_taken is None or not is_taken(value):
+                        self._allocated.append(index)
+                        self._allocated_set.add(index)
+                        return value, "new"
                 index = (index + 1) % size
-            self._allocated.append(index)
-            self._allocated_set.add(index)
-            return self.space.value_at(index), "new"
         if self._allocated:
             return self.space.value_at(self._allocated[seed % len(self._allocated)]), "repeat"
         others = sorted(self._originals - {self.space.index_of(own_original)})
