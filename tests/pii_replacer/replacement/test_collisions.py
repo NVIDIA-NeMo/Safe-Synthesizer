@@ -116,3 +116,35 @@ class TestCrossColumnIdentifierCollisions:
         replaced = result["user"].tolist() + result["manager"].tolist()
         assert len(set(replaced)) == 4
         assert not set(replaced) & {"U-1", "U-2", "U-3", "U-4"}
+
+
+@pytest.mark.unit
+class TestCrossColumnSharing:
+    def test_the_same_value_in_two_columns_of_one_type_and_format_shares_a_replacement(self) -> None:
+        dataframe = pd.DataFrame({"email": ["ada@x.com", "bo@x.com"], "backup_email": ["ADA@X.COM", "cy@x.com"]})
+        generator = _ScriptedGenerator("kate@y.com", "jo@y.com", "max@y.com")
+
+        result = _execute(
+            dataframe,
+            PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL),
+            PiiColumnPlan(column_name="backup_email", entity_type=EntityType.EMAIL),
+            generator=generator,
+        )
+
+        assert result.to_dict("list") == {
+            "email": ["kate@y.com", "jo@y.com"],
+            "backup_email": ["KATE@Y.COM", "max@y.com"],
+        }
+        assert len(generator.requests) == 3
+
+    def test_columns_with_different_patterns_are_replaced_separately(self) -> None:
+        dataframe = pd.DataFrame({"phone": ["(555) 123-4567"], "work_phone": ["(555) 123-4567"]})
+        specs = (
+            PiiColumnPlan(column_name="phone", entity_type=EntityType.PHONE_NUMBER, pattern="(###) ###-####"),
+            PiiColumnPlan(column_name="work_phone", entity_type=EntityType.PHONE_NUMBER),
+        )
+
+        result = _execute(dataframe, *specs, generator=_ScriptedGenerator("555.987.6543"))
+
+        assert result["work_phone"].tolist() == ["555.987.6543"]
+        assert result["phone"].iloc[0] != "555.987.6543"
