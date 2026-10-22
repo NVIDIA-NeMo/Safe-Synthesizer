@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import logging
+
 import pandas as pd
 import pytest
 
@@ -12,6 +14,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiReplacementPlan,
     PiiSamplerBackend,
 )
+from nemo_safe_synthesizer.errors import GenerationError
 from nemo_safe_synthesizer.pii_replacer.replacement.collisions import CandidateChooser, ReplacementPool
 from nemo_safe_synthesizer.pii_replacer.replacement.executor import StructuredReplacementExecutor
 from nemo_safe_synthesizer.pii_replacer.replacement.generation import ReplacementGenerationRequest
@@ -148,3 +151,43 @@ class TestCrossColumnSharing:
 
         assert result["work_phone"].tolist() == ["555.987.6543"]
         assert result["phone"].iloc[0] != "555.987.6543"
+
+
+@pytest.mark.unit
+class TestGroupingColumnIsOneToOne:
+    @staticmethod
+    def _execute_grouped(dataframe: pd.DataFrame, spec: PiiColumnPlan, generator: _ScriptedGenerator) -> pd.DataFrame:
+        executor = StructuredReplacementExecutor(
+            PiiReplacementPlan(columns_to_replace=[spec]), generator, group_column=spec.column_name, base_seed=42
+        )
+        return executor.execute(dataframe).dataframe
+
+    def test_a_name_another_group_already_got_is_rejected(self) -> None:
+        dataframe = pd.DataFrame({"owner": ["Ada Lovelace", "Ada Lovelace", "Bo Diddley"]})
+        generator = _ScriptedGenerator("Kate Moss", "KATE MOSS", "Grace Hopper")
+
+        result = self._execute_grouped(
+            dataframe, PiiColumnPlan(column_name="owner", entity_type=EntityType.FULL_NAME), generator
+        )
+
+        assert result["owner"].tolist() == ["Kate Moss", "Kate Moss", "Grace Hopper"]
+
+    def test_running_out_of_distinct_values_fails_instead_of_merging_groups(self) -> None:
+        dataframe = pd.DataFrame({"owner": ["Ada", "Bo"]})
+        generator = _ScriptedGenerator(*["Kate"] * 60)
+
+        with pytest.raises(GenerationError, match="two groups would merge"):
+            self._execute_grouped(
+                dataframe, PiiColumnPlan(column_name="owner", entity_type=EntityType.FIRST_NAME), generator
+            )
+
+    def test_a_mask_too_small_for_every_group_is_widened(self, caplog: pytest.LogCaptureFixture) -> None:
+        caplog.set_level(logging.WARNING)
+        dataframe = pd.DataFrame({"gid": [f"ID-{group}" for group in range(8) for _ in range(3)]})
+        spec = PiiColumnPlan(column_name="gid", entity_type=EntityType.UNIQUE_IDENTIFIER, pattern="ID-#")
+
+        result = self._execute_grouped(dataframe, spec, _ScriptedGenerator())
+
+        assert result["gid"].nunique() == 8
+        assert result["gid"].str.fullmatch(r"ID-\d\d").all()
+        assert any("Widened grouping-column identifiers" in record.getMessage() for record in caplog.records)

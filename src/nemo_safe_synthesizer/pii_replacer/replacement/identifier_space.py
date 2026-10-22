@@ -96,6 +96,20 @@ class MaskSpace:
             characters.append(position[offset])
         return "".join(reversed(characters))
 
+    def widened(self) -> MaskSpace | None:
+        """Return this mask with its last generated position repeated, or ``None`` if it has none.
+
+        Example:
+            ``MaskSpace.from_pattern("ID-#").widened()`` produces ``"ID-00"`` through ``"ID-99"``.
+        """
+        for position_index in range(len(self.positions) - 1, -1, -1):
+            position = self.positions[position_index]
+            if isinstance(position, tuple):
+                return MaskSpace(
+                    (*self.positions[: position_index + 1], position, *self.positions[position_index + 1 :])
+                )
+        return None
+
     def index_of(self, value: str) -> int | None:
         """Return the index of ``value`` in this space, or ``None`` if the mask cannot produce it."""
         if len(value) != len(self.positions):
