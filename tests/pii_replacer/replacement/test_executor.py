@@ -319,6 +319,29 @@ class TestStructuredReplacementExecutor:
         assert replaced[0] == replaced[1]
         assert replaced[0] != replaced[2]
 
+    def test_column_statistics_report_per_column_fallbacks_without_serializing_originals(self) -> None:
+        dataframe = pd.DataFrame(
+            {
+                "patient": ["A", "A", "B"],
+                "organization": ["First Org", "Different Org", "Third Org"],
+                "email": ["same@example.com"] * 3,
+                "ssn": ["111-11-1111", "222-22-2222", "333-33-3333"],
+            }
+        )
+        plan = _plan(
+            _target("email", EntityType.EMAIL, ("organization", EntityType.ORGANIZATION)),
+            _target("ssn", EntityType.SSN),
+        )
+
+        result = _execute(dataframe, plan, _ConstantGenerator(), group_column="patient")
+
+        email, ssn = result.column_statistics["email"], result.column_statistics["ssn"]
+        assert email.dependency_drift_count == 1
+        assert ssn.repeated_replacement_count == 2
+        assert ssn.detected_entity_values == {"ssn": {"111-11-1111", "222-22-2222", "333-33-3333"}}
+        assert "detected_entity_values" not in ssn.model_dump()
+        assert "111-11-1111" not in repr(ssn)
+
     def test_group_scope_snapshots_replaced_group_keys_and_reports_dependency_drift(self) -> None:
         dataframe = pd.DataFrame(
             {

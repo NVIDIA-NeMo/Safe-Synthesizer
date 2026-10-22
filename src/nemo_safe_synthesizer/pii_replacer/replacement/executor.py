@@ -8,7 +8,7 @@ from __future__ import annotations
 import hashlib
 import os
 import time
-from collections.abc import Hashable
+from collections.abc import Hashable, Mapping
 from dataclasses import dataclass, field
 
 import pandas as pd
@@ -142,7 +142,15 @@ class StructuredReplacementExecutor:
             )
         return ReplacementExecutionResult(
             dataframe=working,
-            column_statistics=_column_statistics(dataframe, working, self._plan, self._generator.backend.value),
+            column_statistics=_column_statistics(
+                dataframe,
+                working,
+                self._plan,
+                self._generator.backend.value,
+                drift_by_target=_drift_counts_by_target(drifts),
+                repeated_by_target=self._repeated_by_target,
+                kept_name_parts_by_target=self._kept_name_parts_by_target,
+            ),
             generation_statistics=ReplacementGenerationStatistics(
                 generated_replacement_count=self._generated_count,
                 generator_time_seconds=self._generation_elapsed,
@@ -562,11 +570,22 @@ def _seed_components(
     return ("group", *common, group.type_tag, group.normalized_value)
 
 
+def _drift_counts_by_target(drifts: tuple[GroupDependencyDrift, ...]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for drift in drifts:
+        counts[drift.target_column] = counts.get(drift.target_column, 0) + drift.conflict_count
+    return counts
+
+
 def _column_statistics(
     original: pd.DataFrame,
     transformed: pd.DataFrame,
     plan: PiiReplacementPlan,
     backend: str,
+    *,
+    drift_by_target: Mapping[str, int],
+    repeated_by_target: Mapping[str, int],
+    kept_name_parts_by_target: Mapping[str, int],
 ) -> dict[str, ColumnStatistics]:
     statistics: dict[str, ColumnStatistics] = {}
     for spec in plan.columns_to_replace:
@@ -584,6 +603,9 @@ def _column_statistics(
             detected_entity_values={entity: {str(value) for value in non_missing}},
             is_transformed=changed > 0,
             transform_functions={"pattern" if spec.pattern is not None else backend} if changed else set(),
+            dependency_drift_count=drift_by_target.get(spec.column_name, 0),
+            repeated_replacement_count=repeated_by_target.get(spec.column_name, 0),
+            kept_name_part_count=kept_name_parts_by_target.get(spec.column_name, 0),
         )
     return statistics
 
