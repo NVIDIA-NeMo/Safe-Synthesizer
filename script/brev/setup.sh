@@ -14,7 +14,7 @@
 # because a deploy failed without it -- read it before simplifying anything.
 set -euo pipefail
 
-readonly UV_VERSION="0.9.30"
+readonly UV_VERSION="0.13.4"
 readonly PYTHON_VERSION="3.13"
 # No .git suffix: this is only used to build archive URLs, not to clone.
 readonly REPO_URL="https://github.com/NVIDIA-NeMo/Safe-Synthesizer"

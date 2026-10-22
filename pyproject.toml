@@ -200,8 +200,8 @@ cu130 = [
 
 [tool.uv]
 # Version pinned in .mise.toml but keep here as a fallback constraint
-# Allow current 0.9.x line while staying below 0.10.0
-required-version = ">=0.9.30, <0.10.0"
+# Allow the patched 0.13.x line while staying below 0.14.0
+required-version = ">=0.13.4, <0.14.0"
 
 cache-keys = [
     { file = "pyproject.toml" },
@@ -239,6 +239,7 @@ constraint-dependencies = [
     "aiohttp>=3.14.3",
     "bleach>=6.4.0",
     "cbor2>=5.9.0",
+    "certifi>=2026.10.19", # Updated CA bundle for the eMudhra compromise
     "cryptography>=50.0.0",
     "grpcio>=1.80.0",
     "idna>=3.15",
