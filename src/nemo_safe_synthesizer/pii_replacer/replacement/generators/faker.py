@@ -24,7 +24,6 @@ from ._common import (
     looks_like_uuid,
     name_values,
     normalize_organization_domain,
-    render_address,
     render_luhn_pattern,
     render_name,
     required_pattern_values,
@@ -95,7 +94,7 @@ class FakerReplacementGenerator:
         if entity_type is EntityType.PHONE_NUMBER:
             return fake.phone_number()
         if entity_type is EntityType.STREET_ADDRESS:
-            return render_address(fake.street_address(), dependencies)
+            return fake.street_address()
         if entity_type is EntityType.SSN:
             return fake.ssn()
         if entity_type is EntityType.NATIONAL_ID:

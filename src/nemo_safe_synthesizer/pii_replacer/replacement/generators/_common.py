@@ -28,7 +28,6 @@ __all__ = [
     "looks_like_uuid",
     "name_values",
     "normalize_organization_domain",
-    "render_address",
     "render_luhn_pattern",
     "render_name",
     "required_pattern_values",
@@ -135,22 +134,6 @@ def email_domain(value: str) -> str | None:
         return None
     domain = value.rsplit("@", 1)[1]
     return domain if domain and not any(character.isspace() for character in domain) else None
-
-
-def render_address(street: str, dependencies: Mapping[EntityType, str]) -> str:
-    """Append the city, state, ZIP code, and country found in ``dependencies`` to ``street``.
-
-    Example:
-        ``"12 Elm St"`` with a city ``"Mesa"`` and state ``"AZ"`` becomes ``"12 Elm St, Mesa, AZ"``.
-    """
-    locality = [
-        dependencies.get(EntityType.CITY),
-        dependencies.get(EntityType.STATE),
-        dependencies.get(EntityType.ZIPCODE),
-        dependencies.get(EntityType.COUNTRY),
-    ]
-    suffix = ", ".join(value for value in locality if value)
-    return f"{street}, {suffix}" if suffix else street
 
 
 def normalize_organization_domain(value: str) -> str:
