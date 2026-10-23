@@ -71,15 +71,15 @@ configuration reference.
 `uv sync` fails with an error mentioning incompatible `transformers` and
 `vllm` requirements.
 
-Safe Synthesizer requires `transformers>=5.12,<5.12.1` with vLLM 0.27.0.
-Keep vLLM's constraints intact so the resolver selects the tested
+Safe Synthesizer requires `transformers>=5.12,<5.12.1` with vLLM 0.30.0.
+Keep vLLM's constraints intact so the resolver selects the configured
 Transformers/vLLM pairing.
 
 ```toml
 [project]
 dependencies = [
   "transformers>=5.12,<5.12.1",
-  "vllm==0.27.0",
+  "vllm==0.30.0",
 ]
 ```
 
