@@ -16,6 +16,7 @@ from ....config.replace_pii import EntityType, PiiReplacementSettings, PiiSample
 from ....errors import GenerationError, InternalError
 from ....observability import get_logger
 from ...planning.patterns import render_character_mask, render_name_pattern
+from ...sampler_catalog import PERSONA_SEX_VALUES
 from ..birth_dates import random_birth_date, shift_birth_date
 from ._common import (
     NAME_ENTITY_TYPES,
@@ -176,7 +177,8 @@ def _select_dependency_value(sampler_values: tuple[str, ...] | None, seed: int) 
 
 
 def _faker_first_name(fake: Faker, gender: str | None) -> str:
-    normalized = gender.casefold() if gender else ""
+    # Nemotron-Personas falls back to Faker with its own sex value, such as "femme" in fr_FR.
+    normalized = PERSONA_SEX_VALUES.get(gender.casefold(), "") if gender else ""
     if normalized == "female":
         return fake.first_name_female()
     if normalized == "male":

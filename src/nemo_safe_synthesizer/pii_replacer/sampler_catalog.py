@@ -26,6 +26,29 @@ _FAKER_DEPENDENCY_VALUES: SamplerValueCatalog = {
     EntityType.GENDER: ("female", "male"),
 }
 
+PERSONA_SEX_VALUES: Mapping[str, str] = {
+    "female": "female",
+    "male": "male",
+    "女": "female",
+    "男": "male",
+    "여자": "female",
+    "남자": "male",
+    "महिला": "female",
+    "पुरुष": "male",
+    "mahila": "female",
+    "purush": "male",
+    "femme": "female",
+    "homme": "male",
+    "weiblich": "female",
+    "männlich": "male",
+    "feminino": "female",
+    "masculino": "male",
+}
+"""Casefolded Nemotron-Personas ``sex`` values by locale and the Faker gender each one means.
+
+Only the English locales use ``Female`` and ``Male``; ja_JP uses ``女``, fr_FR ``Femme``, de_DE ``Weiblich``, and so on.
+"""
+
 
 def require_nemotron_personas_dataset(settings: PiiReplacementSettings, sampler: PiiSamplerConfig) -> Path:
     """Return the Nemotron-Personas dataset for the configured locale, or raise when it is missing.

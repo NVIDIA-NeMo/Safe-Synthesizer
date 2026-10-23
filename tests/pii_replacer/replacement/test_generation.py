@@ -15,6 +15,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from faker.providers.person.en_US import Provider as FakerPersonProvider
+from faker.providers.person.fr_FR import Provider as FrenchFakerPersonProvider
 
 from nemo_safe_synthesizer.config.replace_pii import (
     EntityType,
@@ -72,16 +73,18 @@ def _faker_generator(*, locale: str = "en_US") -> FakerReplacementGenerator:
 def _nemotron_personas_generator(
     tmp_path: Path,
     people: pd.DataFrame | None = None,
+    *,
+    locale: str = "en_US",
 ) -> NemotronPersonasReplacementGenerator:
     """Build a generator over ``people`` written as the locale dataset, or over an empty, unreadable file."""
-    asset_path = tmp_path / "datasets" / "en_US.parquet"
+    asset_path = tmp_path / "datasets" / f"{locale}.parquet"
     asset_path.parent.mkdir(exist_ok=True)
     if people is None:
         asset_path.touch()
     else:
         people.to_parquet(asset_path)
     return NemotronPersonasReplacementGenerator(
-        settings=PiiReplacementSettings(),
+        settings=PiiReplacementSettings(locale=locale),
         sampler=PiiSamplerConfig(
             backend=PiiSamplerBackend.NEMOTRON_PERSONAS,
             nemotron_personas_path=str(tmp_path),
@@ -276,6 +279,9 @@ class TestReplacementGenerator:
             ("Female", (), _FAKER_FEMALE_FIRST_NAMES),
             ("Woman", ((EntityType.GENDER, ("female",)),), _FAKER_FEMALE_FIRST_NAMES),
             ("M", ((EntityType.GENDER, ("male",)),), _FAKER_MALE_FIRST_NAMES),
+            ("F", ((EntityType.GENDER, ("femme",)),), _FAKER_FEMALE_FIRST_NAMES),
+            ("F", ((EntityType.GENDER, ("女",)),), _FAKER_FEMALE_FIRST_NAMES),
+            ("M", ((EntityType.GENDER, ("männlich",)),), _FAKER_MALE_FIRST_NAMES),
         ],
     )
     def test_faker_applies_gender_dependency_mappings(
@@ -799,3 +805,30 @@ class TestReplacementGenerator:
 
         assert generator.generate(request) == "202-555-0101"
         assert delegated_requests == [request]
+
+    def test_nemotron_personas_faker_fallback_keeps_localized_sex_conditioning(self, tmp_path: Path) -> None:
+        # fr_FR personas write sex as Femme and Homme and have no middle names, so middle names come from Faker.
+        people = pd.DataFrame(
+            {
+                "first_name": ["Claire", "Louis"],
+                "middle_name": [None, None],
+                "last_name": ["Martin", "Martin"],
+                "sex": ["Femme", "Homme"],
+            }
+        )
+        generator = _nemotron_personas_generator(tmp_path, people, locale="fr_FR")
+
+        names = {
+            generator.generate(
+                _request(
+                    EntityType.MIDDLE_NAME,
+                    "Marie",
+                    dependencies=((EntityType.GENDER, CanonicalValue("string", "F")),),
+                    resolved_values=((EntityType.GENDER, ("femme",)),),
+                    seed=seed,
+                )
+            )
+            for seed in range(40)
+        }
+
+        assert names <= frozenset(FrenchFakerPersonProvider.first_names_female)
