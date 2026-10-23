@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for the plan-only PII replacement SDK interface."""
+"""Tests for the standalone PII planning and replacement SDK interfaces."""
 
 import subprocess
 import sys
@@ -16,9 +16,13 @@ from nemo_safe_synthesizer.config.replace_pii import (
     EntityType,
     PiiColumnPlan,
     PiiReplacementPlan,
+    PiiSamplerBackend,
+    PiiSamplerConfig,
     ReplacePiiConfig,
 )
+from nemo_safe_synthesizer.data_processing.csv_source import CsvSource
 from nemo_safe_synthesizer.errors import ParameterError
+from nemo_safe_synthesizer.pii_replacer import TabularPiiReplacer, TransformResult
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
 
 
@@ -100,3 +104,146 @@ def test_plan_pii_replacement_rejects_disabled_pii(tmp_path: Path) -> None:
 
     with pytest.raises(ParameterError, match="PII replacement is disabled"):
         nss.plan_pii_replacement()
+
+
+def test_replace_pii_resolves_and_writes_the_complete_input(tmp_path: Path) -> None:
+    dataframe = pd.DataFrame({"email": ["ada@example.com", "grace@example.com"]})
+    resolved = ReplacePiiConfig(
+        replacement_plan=PiiReplacementPlan(
+            columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
+        ),
+        sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+    )
+    data_output = tmp_path / "output" / "pii_replaced.csv"
+    config_output = tmp_path / "output" / "pii_replacement_config.yaml"
+    nss = SafeSynthesizer(
+        config=SafeSynthesizerParameters(replace_pii=resolved),
+        save_path=tmp_path / "artifacts",
+    ).with_data_source(dataframe)
+
+    result = nss.replace_pii(data_output, config_output_path=config_output)
+
+    assert result.replacement_plan == resolved.inline_plan
+    assert result.transformed_df["email"].tolist() != dataframe["email"].tolist()
+    assert result.transformed_df["email"].str.contains("@").all()
+    pd.testing.assert_frame_equal(pd.read_csv(data_output), result.transformed_df)
+    assert SafeSynthesizerParameters.from_yaml(config_output).replace_pii == result.resolved_config
+    assert nss._column_statistics == result.column_statistics
+    assert nss._pii_replacer_time == result.replacement_time_seconds
+
+
+def test_replace_pii_writes_unchanged_cells_as_in_the_source_csv(tmp_path: Path) -> None:
+    source = tmp_path / "input.csv"
+    source.write_text("email,zip,count,note\nada@example.com,02054,7,N/A\n,10001,,None\n")
+    resolved = ReplacePiiConfig(
+        replacement_plan=PiiReplacementPlan(
+            columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
+        ),
+        sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+    )
+    data_output = tmp_path / "pii_replaced.csv"
+    nss = SafeSynthesizer(
+        config=SafeSynthesizerParameters(replace_pii=resolved),
+        save_path=tmp_path / "artifacts",
+    ).with_data_source(str(source))
+
+    result = nss.replace_pii(data_output)
+
+    written = pd.read_csv(data_output, dtype=str, na_filter=False)
+    assert written["email"].tolist() == [result.transformed_df.loc[0, "email"], ""]
+    assert written["email"][0] != "ada@example.com"
+    assert written.drop(columns="email").to_dict("list") == {
+        "zip": ["02054", "10001"],
+        "count": ["7", ""],
+        "note": ["N/A", "None"],
+    }
+
+
+def _email_replacement_config() -> SafeSynthesizerParameters:
+    return SafeSynthesizerParameters(
+        replace_pii=ReplacePiiConfig(
+            replacement_plan=PiiReplacementPlan(
+                columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
+            ),
+            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+        )
+    )
+
+
+def test_replace_pii_takes_unchanged_cells_from_the_bytes_it_replaced(tmp_path: Path) -> None:
+    source = tmp_path / "input.csv"
+    source.write_text("email,zip\nada@example.com,02054\n")
+    nss = SafeSynthesizer(config=_email_replacement_config(), save_path=tmp_path / "artifacts").with_data_source(
+        str(source)
+    )
+    original_replace = TabularPiiReplacer.replace
+
+    def replace_then_change_the_file(replacer: TabularPiiReplacer, dataframe: pd.DataFrame) -> TransformResult:
+        source.write_text("email,zip\nother@example.com,99999\nmore@example.com,11111\n")
+        return original_replace(replacer, dataframe)
+
+    with patch.object(TabularPiiReplacer, "replace", replace_then_change_the_file):
+        nss.replace_pii(tmp_path / "pii_replaced.csv")
+
+    written = pd.read_csv(tmp_path / "pii_replaced.csv", dtype=str, na_filter=False)
+    assert written["zip"].tolist() == ["02054"]
+
+
+def test_replace_pii_accepts_a_csv_source(tmp_path: Path) -> None:
+    source = tmp_path / "input.csv"
+    source.write_text("email;zip\nada@example.com;02054\n")
+    nss = SafeSynthesizer(config=_email_replacement_config(), save_path=tmp_path / "artifacts").with_data_source(
+        CsvSource.load(str(source), {"sep": ";"})
+    )
+
+    result = nss.replace_pii(tmp_path / "pii_replaced.csv")
+
+    written = pd.read_csv(tmp_path / "pii_replaced.csv", dtype=str, na_filter=False)
+    assert result.transformed_df["zip"].tolist() == [2054]
+    assert written["zip"].tolist() == ["02054"]
+
+
+def test_replace_pii_rejects_source_text_with_other_columns(tmp_path: Path) -> None:
+    resolved = ReplacePiiConfig(
+        replacement_plan=PiiReplacementPlan(
+            columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
+        ),
+        sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+    )
+    nss = SafeSynthesizer(
+        config=SafeSynthesizerParameters(replace_pii=resolved),
+        save_path=tmp_path / "artifacts",
+    ).with_data_source(pd.DataFrame({"email": ["ada@example.com"]}))
+
+    with pytest.raises(ParameterError, match="same columns and row count"):
+        nss.replace_pii(tmp_path / "out.csv", source_text=pd.DataFrame({"other": ["x"]}))
+
+
+def test_replace_pii_writes_parquet_output_with_its_column_types(tmp_path: Path) -> None:
+    source = tmp_path / "input.parquet"
+    pd.DataFrame(
+        {
+            "email": ["ada@example.com", "grace@example.com"],
+            "zip": ["02054", "10001"],
+            "visits": pd.array([3, None], dtype="Int64"),
+        }
+    ).to_parquet(source)
+    resolved = ReplacePiiConfig(
+        replacement_plan=PiiReplacementPlan(
+            columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
+        ),
+        sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+    )
+    output = tmp_path / "pii_replaced.parquet"
+    nss = SafeSynthesizer(
+        config=SafeSynthesizerParameters(replace_pii=resolved),
+        save_path=tmp_path / "artifacts",
+    ).with_data_source(str(source))
+
+    result = nss.replace_pii(output)
+
+    written = pd.read_parquet(output)
+    pd.testing.assert_frame_equal(written, result.transformed_df.reset_index(drop=True), check_dtype=False)
+    assert written["zip"].tolist() == ["02054", "10001"]
+    assert str(written["visits"].dtype) == "Int64"
+    assert not set(written["email"]) & {"ada@example.com", "grace@example.com"}

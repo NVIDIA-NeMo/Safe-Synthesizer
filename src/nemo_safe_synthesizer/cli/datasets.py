@@ -9,16 +9,27 @@ URLs or file paths.
 
 from __future__ import annotations
 
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Self
+from urllib.parse import urlparse
 
 import pandas as pd
 import yaml
 from pydantic import BaseModel, Field
 
+from ..data_processing.csv_source import CsvSource
 from ..observability import get_logger
 
 logger = get_logger(__name__)
+
+
+def file_extension(url: str) -> str:
+    """Return the lowercase extension of a path or URL, without the dot, ignoring any query string.
+
+    Example:
+        ``"people.PARQUET"`` and ``"https://host/people.parquet?token=abc"`` both return ``"parquet"``.
+    """
+    return PurePosixPath(urlparse(url).path.replace("\\", "/")).suffix.lower().lstrip(".")
 
 
 def _require_dataframe(value: object, *, url: str) -> pd.DataFrame:
@@ -113,7 +124,7 @@ class DatasetInfo(BaseModel):
 
         # Determine the file extension and appropriate reader
         reader: Any
-        extension = Path(url).suffix.lstrip(".")
+        extension = file_extension(url)
         match extension:
             case "csv" | "txt":
                 reader = _dynamic_callable(pd.read_csv)
@@ -140,6 +151,25 @@ class DatasetInfo(BaseModel):
         except Exception as e:
             logger.error(f"Error reading dataset from {url}: {e}", exc_info=True)
             raise
+
+    def fetch_csv_source(self) -> CsvSource | None:
+        """Read a CSV or TXT dataset's bytes once, so its typed and text forms parse the same content.
+
+        ``fetch`` infers column types, which changes how some cells are written back out:
+        ``"02054"`` becomes the integer ``2054``, an integer column with blanks becomes float so
+        ``"7"`` is written as ``"7.0"``, and ``"N/A"`` becomes an empty cell. Callers that write
+        unchanged cells back out use ``CsvSource.read_text`` to keep them exactly as they appeared,
+        parsed from the same bytes as ``CsvSource.read`` even if the file changes later.
+
+        Returns:
+            The file's bytes with this dataset's ``load_args``, or ``None`` for formats other
+            than CSV and TXT.
+        """
+        url = self.get_url()
+        if file_extension(url) not in {"csv", "txt"}:
+            return None
+        logger.info(f"Reading dataset from {url}")
+        return CsvSource.load(url, self.load_args)
 
 
 class DatasetRegistry(BaseModel):

@@ -4,7 +4,10 @@
 from __future__ import annotations
 
 import math
+import re
+from collections.abc import Iterable
 from functools import cached_property
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
@@ -13,6 +16,9 @@ from ...evaluation.components.component import Component
 from ...evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from ...evaluation.data_model.evaluation_score import EvaluationScore
 from ...observability import get_logger
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 logger = get_logger(__name__)
 
@@ -113,15 +119,21 @@ class PIIReplay(Component):
                     entity_name
                 ]
 
-            # These are the same in both cases. We want the size of that set of training[col] unique values.
             training_entity_unique_count = len(training_entity_unique_values)
-            # We want the total number of rows in synthetic[column] that contain some value from the training[col] unique values.
             synthetic_col = evaluation_datasets.synthetic[col]
-            synthetic_entity_values = synthetic_col[synthetic_col.isin(training_entity_unique_values)]
-            synthetic_entity_count = len(synthetic_entity_values)
-            # With those query results, we also want the count of unique items in those filtered synthetic results.
-            synthetic_entity_unique_count = len(synthetic_entity_values.unique())
-            replay_percentage = synthetic_entity_unique_count / training_entity_unique_count * 100
+            synthetic_entity_count, synthetic_entity_unique_count = _synthetic_replay_counts(
+                synthetic_col,
+                training_entity_unique_values,
+                substring_match=(
+                    entity_name != UNKNOWN_ENTITY
+                    and evaluation_datasets.column_statistics[col].assigned_entity == "free_text"
+                ),
+            )
+            replay_percentage = (
+                synthetic_entity_unique_count / training_entity_unique_count * 100
+                if training_entity_unique_count
+                else 0
+            )
             replay_percentage = math.ceil(replay_percentage * 10) / 10
 
             pii_replay_data.append(
@@ -143,3 +155,73 @@ class PIIReplay(Component):
             synthetic_total_records=evaluation_datasets.synthetic.shape[0],
             pii_replay_data=pii_replay_data,
         )
+
+
+# Text splits into maximal runs of word characters and single other characters, so "Ada's file" is
+# "Ada", "'", "s", " ", "file". A replayed value always covers whole tokens; see ``_EmbeddedValueIndex``.
+_TOKEN = re.compile(r"\w+|\W")
+
+
+def _synthetic_replay_counts(
+    synthetic: pd.Series,
+    training_values: Iterable[object],
+    *,
+    substring_match: bool,
+) -> tuple[int, int]:
+    """Count synthetic rows and distinct training PII values that are replayed."""
+    if not substring_match:
+        matches = synthetic[synthetic.isin(training_values)]
+        return len(matches), len(matches.unique())
+
+    index = _EmbeddedValueIndex(value for value in training_values if isinstance(value, str) and value)
+    replayed_values: set[str] = set()
+    matching_rows = 0
+    for synthetic_value in synthetic:
+        if not isinstance(synthetic_value, str):
+            continue
+        row_matches = index.find(synthetic_value)
+        if row_matches:
+            matching_rows += 1
+            replayed_values.update(row_matches)
+    return matching_rows, len(replayed_values)
+
+
+class _EmbeddedValueIndex:
+    """Find training values embedded in text where no word character extends them.
+
+    A value matches where it is not extended by a word character at an end
+    that is itself a word character, so ``Ada`` does not match ``Canada``,
+    while ``-7`` matches in ``x-7`` because its first character is not a word
+    character. Every such match starts and ends on a token boundary of
+    ``_TOKEN``, so it is a run of whole tokens, and every run of whole tokens
+    equal to a value is such a match. ``find`` therefore looks up token runs
+    in a set instead of searching for each value, which takes time
+    proportional to the text length rather than to the number of values.
+
+    Example:
+        With values ``{"Ada", "Ada Lovelace"}``, ``find("Ada Lovelace met Canada")``
+        returns both values.
+    """
+
+    def __init__(self, values: Iterable[str]) -> None:
+        self._values = frozenset(values)
+        # For each possible first token, the token counts of the values that start with it.
+        self._token_counts_by_first_token: dict[str, set[int]] = {}
+        for value in self._values:
+            tokens = _TOKEN.findall(value)
+            self._token_counts_by_first_token.setdefault(tokens[0], set()).add(len(tokens))
+
+    def find(self, text: str) -> set[str]:
+        """Return the distinct values that occur in ``text``."""
+        tokens = list(_TOKEN.finditer(text))
+        found: set[str] = set()
+        for first in range(len(tokens)):
+            found.update(self._values_starting_at(text, tokens, first))
+        return found
+
+    def _values_starting_at(self, text: str, tokens: list[re.Match[str]], first: int) -> set[str]:
+        """Return the values that cover whole tokens of ``text`` starting with token ``first``."""
+        start = tokens[first].start()
+        counts = self._token_counts_by_first_token.get(tokens[first].group(), ())
+        candidates = (text[start : tokens[first + count - 1].end()] for count in counts if first + count <= len(tokens))
+        return {candidate for candidate in candidates if candidate in self._values}
