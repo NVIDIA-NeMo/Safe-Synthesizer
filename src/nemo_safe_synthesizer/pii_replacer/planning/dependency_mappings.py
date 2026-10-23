@@ -15,7 +15,7 @@ from ...config.replace_pii import DataToSamplerValueMapping, EntityType, PiiRepl
 from ...errors import ParameterError
 from ...observability import get_logger
 from ..replacement.canonicalization import canonicalize_scalar, readable_value
-from ..sampler_catalog import SamplerValueCatalog
+from ..sampler_catalog import PERSONA_SEX_VALUES, SamplerValueCatalog
 
 logger = get_logger(__name__)
 
@@ -25,14 +25,25 @@ MAX_CONDITIONER_DISTINCT_VALUES = 1000
 BUILT_IN_VALUE_MAPPINGS: Mapping[EntityType, Mapping[str, str]] = MappingProxyType(
     {
         EntityType.GENDER: MappingProxyType(
-            {"f": "female", "woman": "female", "girl": "female", "m": "male", "man": "male", "boy": "male"}
+            {
+                "f": "female",
+                "female": "female",
+                "woman": "female",
+                "girl": "female",
+                "m": "male",
+                "male": "male",
+                "man": "male",
+                "boy": "male",
+            }
         ),
     }
 )
 """Common dataset spellings and the sampler value each maps to, matched ignoring case.
 
 Resolution writes matching entries into the plan's ``data_to_sampler_value_mapping``
-for every sampler, so they are visible and editable in the saved plan.
+for every sampler, so they are visible and editable in the saved plan. A target
+such as ``female`` also matches a Nemotron-Personas locale's own value for it,
+such as ``Femme`` in fr_FR (see ``PERSONA_SEX_VALUES``).
 """
 
 
@@ -186,7 +197,9 @@ def built_in_value_mappings(
     Example:
         With the catalog ``{GENDER: ("female", "male")}`` and a ``sex`` column
         holding ``"F"``, ``"Female"`` and ``"Man"``, the result is
-        ``{"sex": {"F": ["female"], "Man": ["male"]}}``.
+        ``{"sex": {"F": ["female"], "Man": ["male"]}}``. With the fr_FR
+        catalog ``{GENDER: ("femme", "homme")}``, the same column gives
+        ``{"sex": {"F": ["femme"], "Female": ["femme"], "Man": ["homme"]}}``.
     """
     entries: DataToSamplerValueMapping = {}
     for column_name, entity_type in conditioner_columns(plan).items():
@@ -194,14 +207,22 @@ def built_in_value_mappings(
         sampler_values = {sampler_value.casefold(): sampler_value for sampler_value in catalog.get(entity_type, ())}
         if not variants or not sampler_values:
             continue
+        targets = _built_in_targets(entity_type, sampler_values)
         covered = {source.casefold() for source in plan.data_to_sampler_value_mapping.get(column_name, {})}
         for value in _distinct_source_values(dataframe[column_name]):
             key = value.casefold()
             target = variants.get(key)
-            if key in sampler_values or key in covered or target not in sampler_values:
+            if key in sampler_values or key in covered or target not in targets:
                 continue
-            entries.setdefault(column_name, {})[value] = [sampler_values[target]]
+            entries.setdefault(column_name, {})[value] = [targets[target]]
     return entries
+
+
+def _built_in_targets(entity_type: EntityType, sampler_values: Mapping[str, str]) -> dict[str, str]:
+    """Return each built-in target, such as ``female``, with the catalog value that means it."""
+    if entity_type is not EntityType.GENDER:
+        return dict(sampler_values)
+    return {PERSONA_SEX_VALUES.get(key, key): value for key, value in sampler_values.items()}
 
 
 def _distinct_source_values(values: pd.Series) -> tuple[str, ...]:

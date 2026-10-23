@@ -246,6 +246,31 @@ class TestDependencyMappings:
             "sex": {"F": ["female"], "Woman": ["female"], "M": ["male"]}
         }
 
+    def test_built_in_variants_map_to_localized_persona_sex_values(self) -> None:
+        dataframe = pd.DataFrame(
+            {
+                "first_name": ["Ada", "Grace", "Alan", "Mae"],
+                "sex": ["F", "Female", "Man", "Homme"],
+                "race": ["White"] * 4,
+            }
+        )
+
+        resolved = resolve_replacement_config(
+            dataframe,
+            ReplacePiiConfig(),
+            DataParameters(),
+            discoverer=_StaticPlanDiscoverer(),
+            sampler_value_catalog={
+                EntityType.GENDER: ("femme", "homme"),
+                EntityType.ETHNIC_BACKGROUND: ("white",),
+            },
+        )
+
+        assert resolved.inline_plan is not None
+        assert resolved.inline_plan.data_to_sampler_value_mapping == {
+            "sex": {"F": ["femme"], "Female": ["femme"], "Man": ["homme"]}
+        }
+
     def test_plan_entries_take_precedence_over_built_in_variants(self) -> None:
         dataframe = pd.DataFrame({"first_name": ["Ada", "Alan"], "sex": ["F", "M"], "race": ["White"] * 2})
 
