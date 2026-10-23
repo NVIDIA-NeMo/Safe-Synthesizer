@@ -9,7 +9,11 @@ import pytest
 
 from nemo_safe_synthesizer.config.replace_pii import EntityType
 from nemo_safe_synthesizer.errors import ParameterError
-from nemo_safe_synthesizer.pii_replacer.planning.patterns import render_character_mask, render_name_pattern
+from nemo_safe_synthesizer.pii_replacer.planning.patterns import (
+    extract_name_components,
+    render_character_mask,
+    render_name_pattern,
+)
 
 
 @pytest.mark.unit
@@ -30,3 +34,18 @@ class TestPatternRendering:
     def test_invalid_name_pattern_raises_parameter_error(self) -> None:
         with pytest.raises(ParameterError):
             render_name_pattern(EntityType.EMAIL, "{unknown}@example.com", {}, Random(0))
+
+
+@pytest.mark.unit
+class TestNameComponentExtraction:
+    def test_separated_placeholders_are_extracted(self) -> None:
+        components = extract_name_components(EntityType.FULL_NAME, "{Last}, {First}", "Lovelace, Ada")
+
+        assert components == ((EntityType.LAST_NAME, "Lovelace"), (EntityType.FIRST_NAME, "Ada"))
+
+    @pytest.mark.parametrize(
+        ("pattern", "value"),
+        [("{First}{Last}", "AdaLovelace"), ("{F}{Last}", "ALovelace"), ("{First} {Middle}{Last}", "Ada ByronLovelace")],
+    )
+    def test_adjacent_placeholders_are_not_split_by_guessing(self, pattern: str, value: str) -> None:
+        assert extract_name_components(EntityType.FULL_NAME, pattern, value) == ()

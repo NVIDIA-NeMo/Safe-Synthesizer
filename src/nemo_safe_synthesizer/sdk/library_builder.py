@@ -20,7 +20,8 @@ from ..config import (
 )
 from ..config.unknown_fields import UnknownFieldBehavior, normalize_unknown_fields
 from ..configurator.parameters import Parameters
-from ..errors import ParameterError
+from ..defaults import PII_REPLACEMENT_CONFIG_FILENAME
+from ..errors import InternalError, ParameterError
 from ..llm.utils import get_device_name
 from ..observability import LogCategory, configure_logging_from_workdir, get_logger, initialize_observability, traced
 from ..package_info import __version__
@@ -44,6 +45,7 @@ if TYPE_CHECKING:
     from ..evaluation.evaluator import Evaluator
     from ..generation.backend import GeneratorBackend
     from ..llm.metadata import ModelMetadata
+    from ..pii_replacer import TransformResult
     from ..preflight import PreflightReport
     from ..results import SafeSynthesizerResults
     from ..training.backend import TrainingBackend
@@ -142,6 +144,35 @@ def _emit_nss_telemetry(ss: SafeSynthesizer, status: TaskStatusEnum) -> None:
         handler.stop()  # Flushes the queue and sends
     except Exception:  # noqa: BLE001
         pass  # Telemetry is best-effort; never disrupt the pipeline
+
+
+def _has_input_shape(dataframe: pd.DataFrame, source_text: pd.DataFrame) -> bool:
+    """Return whether ``source_text`` has the columns and row count of ``dataframe``."""
+    return list(source_text.columns) == list(dataframe.columns) and len(source_text) == len(dataframe)
+
+
+def _restore_unchanged_text(
+    original: pd.DataFrame,
+    transformed: pd.DataFrame,
+    source_text: pd.DataFrame,
+) -> pd.DataFrame:
+    """Return ``transformed`` with every cell that replacement left unchanged taken from ``source_text``.
+
+    Example:
+        A ZIP code column read as integers holds ``2054`` for the file's ``"02054"``. Replacement
+        leaves it unchanged, so the output gets ``"02054"`` back, while replaced cells keep their
+        new values.
+    """
+    text = source_text.set_axis(original.index)
+    output = transformed.copy()
+    for position in range(original.shape[1]):
+        before = original.iloc[:, position]
+        after = transformed.iloc[:, position]
+        # Nullable dtypes compare missing values as NA, which counts as changed until filled.
+        unchanged = before.eq(after).astype("boolean").fillna(False) | (before.isna() & after.isna())
+        merged = after.astype(object).where(~unchanged, text.iloc[:, position])
+        output.isetitem(position, merged.to_numpy(dtype=object))
+    return output
 
 
 class SafeSynthesizer(ConfigBuilder):
@@ -376,32 +407,137 @@ class SafeSynthesizer(ConfigBuilder):
             The dataframe-aware resolved PII replacement configuration.
 
         Raises:
-            ParameterError: If PII replacement is disabled.
-            ValueError: If no valid data source is configured.
+            ParameterError: If PII replacement is disabled or no dataframe
+                data source is configured.
         """
         self._ensure_observability()
         self.resolve()
 
-        assert self._nss_config is not None
-        assert isinstance(self._data_source, pd.DataFrame)
-        replace_pii = self._nss_config.replace_pii
+        config = self._nss_config
+        dataframe = self._data_source
+        if config is None or not isinstance(dataframe, pd.DataFrame):
+            raise ParameterError("PII replacement planning requires a configured dataframe data source")
+        replace_pii = config.replace_pii
         if replace_pii is None:
             raise ParameterError("PII replacement is disabled; configure replace_pii before planning")
 
         from ..pii_replacer.planning import resolve_replacement_config
 
         resolved = resolve_replacement_config(
-            self._data_source,
+            dataframe,
             replace_pii,
-            self._nss_config.data,
-            self._nss_config.time_series,
+            config.data,
+            config.time_series,
         )
-        self._nss_config = self._nss_config.model_copy(update={"replace_pii": resolved})
+        self._nss_config = config.model_copy(update={"replace_pii": resolved})
+        self._replace_pii_config = resolved
         if output_path is not None:
             from ..pii_replacer.planning.io import save_config
 
             save_config(self._nss_config, Path(output_path))
         return resolved
+
+    @traced("SafeSynthesizer.replace_pii", category=LogCategory.RUNTIME)
+    def replace_pii(
+        self,
+        output_path: Path | str | None = None,
+        *,
+        config_output_path: Path | str | None = None,
+        source_text: pd.DataFrame | None = None,
+    ) -> TransformResult:
+        """Replace PII in the complete configured input dataframe.
+
+        This standalone workflow resolves planning and sampler mappings against
+        the full input and replaces that same dataframe. The end-to-end
+        pipeline instead resolves against the full input and replaces only its
+        training split after holdout creation.
+
+        Args:
+            output_path: Optional destination for the replaced data, written as
+                Parquet when it ends in ``.parquet`` and as CSV otherwise.
+                Parquet keeps the dataframe's column types; CSV keeps unchanged
+                cells as they appeared in a CSV input (see ``source_text``).
+            config_output_path: Optional destination for the complete reusable
+                configuration containing the resolved plan and sampler mappings.
+            source_text: Optional copy of the input with every cell as the
+                text in its source file, such as ``pd.read_csv(path, dtype=str,
+                na_filter=False)``. The replaced CSV takes every cell that
+                replacement left unchanged from it, so values such as ZIP code
+                ``"02054"`` and ``"N/A"`` are written exactly as they appeared
+                instead of as ``2054`` and an empty cell. Defaults to a text
+                parse of the same bytes the input was read from when
+                ``with_data_source`` was given a CSV path, URL, or ``CsvSource``.
+
+        Returns:
+            The replacement result, including aggregate statistics and the
+            transformed dataframe.
+
+        Raises:
+            ParameterError: If PII replacement is disabled or invalid, no
+                dataframe data source is configured, or ``source_text`` does
+                not have the input's columns and row count.
+
+        Example::
+
+            nss = (
+                SafeSynthesizer()
+                .with_data_source("patients.csv")
+                .with_replace_pii(
+                    replacement_plan={"columns_to_replace": [{"column_name": "email", "entity_type": "email"}]},
+                )
+            )
+            # Both paths are optional; without them nothing is written and only the result is returned.
+            result = nss.replace_pii(
+                "patients_pii_replaced.csv",
+                config_output_path="pii_replacement_config.yaml",
+            )
+            result.transformed_df  # Emails replaced; other columns unchanged.
+            result.generation_statistics.generated_replacement_count  # Distinct replacements generated.
+            result.resolved_config  # The plan and sampler mappings written to the YAML file.
+        """
+        self._ensure_observability()
+        resolved = self.plan_pii_replacement(output_path=config_output_path)
+
+        config = self._nss_config
+        dataframe = self._data_source
+        if config is None or not isinstance(dataframe, pd.DataFrame):
+            raise InternalError("PII replacement planning finished without a dataframe data source")
+        if source_text is not None and not _has_input_shape(dataframe, source_text):
+            raise ParameterError("source_text must have the same columns and row count as the data source")
+        from ..pii_replacer import TabularPiiReplacer
+
+        result = TabularPiiReplacer(
+            resolved,
+            data_config=config.data,
+            time_series=config.time_series,
+        ).replace(dataframe)
+        self._nss_config = config.model_copy(update={"replace_pii": result.resolved_config})
+        self._replace_pii_config = result.resolved_config
+        self._column_statistics = result.column_statistics
+        self._pii_replacer_time = result.replacement_time_seconds
+
+        if output_path is not None and Path(output_path).suffix.lower() == ".parquet":
+            # Parquet stores column types, so the replaced frame is written as is.
+            Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+            result.transformed_df.to_parquet(output_path, index=False)
+            logger.info(f"Saved PII-replaced data to {output_path}")
+        elif output_path is not None:
+            replacement_output_path = Path(output_path)
+            replacement_output_path.parent.mkdir(parents=True, exist_ok=True)
+            # The text form is parsed only now, from the bytes the input was read from, so it costs no
+            # memory during planning and cannot disagree with the input if the file has since changed.
+            if source_text is None and self._data_source_csv is not None:
+                source_text = self._data_source_csv.read_text()
+                if not _has_input_shape(dataframe, source_text):
+                    raise InternalError("the text read of the CSV data source does not match its typed read")
+            output = (
+                result.transformed_df
+                if source_text is None
+                else _restore_unchanged_text(dataframe, result.transformed_df, source_text)
+            )
+            output.to_csv(replacement_output_path, index=False)
+            logger.info(f"Saved PII-replaced data to {replacement_output_path}")
+        return result
 
     @traced("SafeSynthesizer.process_data", category=LogCategory.RUNTIME)
     def process_data(self, check_only: bool = False) -> SafeSynthesizer:
@@ -445,6 +581,9 @@ class SafeSynthesizer(ConfigBuilder):
 
         self._resolve_nss_config()
         self._resolve_datasource()
+        workdir = self._workdir
+        if workdir is None:
+            raise InternalError("SafeSynthesizer workdir is unavailable")
 
         if TYPE_CHECKING:
             assert self._nss_config is not None
@@ -465,9 +604,14 @@ class SafeSynthesizer(ConfigBuilder):
             summary = "\n".join(f"  {e.code}: {e.message}" for e in preflight.errors)
             raise ParameterError(f"Pre-flight check failed with {len(preflight.errors)} error(s):\n{summary}")
 
-        # Keep replacement-plan discovery before this boundary when execution
-        # is integrated. Plan-only and pipeline runs must inspect the same full
-        # input, while replacement itself applies to the training split.
+        # Plan-only and pipeline runs inspect the same full input. Replacement
+        # itself is deferred until after holdout and applies only to training.
+        if not check_only and self._nss_config.replace_pii is not None:
+            workdir.ensure_directories()
+            self.plan_pii_replacement(
+                output_path=workdir.run_dir / PII_REPLACEMENT_CONFIG_FILENAME,
+            )
+
         holdout = Holdout(self._nss_config)
         original_training_df, self._test_df = holdout.train_test_split(self._data_source)
 
@@ -481,12 +625,24 @@ class SafeSynthesizer(ConfigBuilder):
         resolved_config = resolver()
         self._nss_config = resolved_config
 
-        # Keep validation usable while replacement execution is unavailable,
-        # but require callers running the pipeline to disable PII explicitly.
         if not check_only and self._nss_config.replace_pii is not None:
-            raise ParameterError(
-                "PII replacement execution is not available. Set replace_pii to null, "
-                "pass --no-replace-pii, or call with_replace_pii(enable=False)."
+            from ..pii_replacer import TabularPiiReplacer
+
+            # Pattern coverage was checked against the full input during planning; the training split is a
+            # subset and can fall just below the 99% threshold.
+            replacement_result = TabularPiiReplacer(
+                self._nss_config.replace_pii,
+                data_config=self._nss_config.data,
+                time_series=self._nss_config.time_series,
+            ).replace(original_training_df, check_pattern_coverage=False)
+            self._training_df = replacement_result.transformed_df
+            self._column_statistics = replacement_result.column_statistics
+            self._pii_replacer_time = replacement_result.replacement_time_seconds
+            self._nss_config = self._nss_config.model_copy(update={"replace_pii": replacement_result.resolved_config})
+            self._replace_pii_config = replacement_result.resolved_config
+            self._nss_config.to_yaml(
+                workdir.run_dir / PII_REPLACEMENT_CONFIG_FILENAME,
+                exclude_unset=False,
             )
 
         # Only create new metadata if not already loaded (e.g., from load_from_save_path)

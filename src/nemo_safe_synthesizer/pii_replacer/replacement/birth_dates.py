@@ -1,25 +1,54 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Parsing and rendering for birth-date replacements.
-
-This module lives outside ``replacement.generators`` so planning can check a
-``date_of_birth`` column with the same parser replacement uses, without loading
-generator implementations.
-"""
+"""Shared parsing and rendering for structured and free-text birth dates."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from random import Random
 
+import dateparser
+
 __all__ = ["birth_date_is_supported", "random_birth_date", "shift_birth_date"]
 
-_FALLBACK_BIRTH_DATE_FORMATS = ("%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y", "%m-%d-%Y", "%d-%m-%Y")
+_PRESERVED_PATTERNS = (
+    "%Y-%m-%d",
+    "%m/%d/%Y",
+    "%d/%m/%Y",
+    "%m-%d-%Y",
+    "%d-%m-%Y",
+)
+# Only fixed calendar dates are accepted. dateparser's other parsers read values such as "yesterday",
+# "in 2 days", or an age like "30 years" relative to the current time, which would make the output
+# depend on the run day and turn ages into dates. Timestamps are excluded for the same reason.
+_NATURAL_DATE_SETTINGS: dict[str, object] = {
+    "PARSERS": ["custom-formats", "absolute-time"],
+    "STRICT_PARSING": True,
+    "REQUIRE_PARTS": ["day", "month", "year"],
+    "RETURN_AS_TIMEZONE_AWARE": False,
+}
 _RANDOM_BIRTH_DATE_START = date(1930, 1, 1)
 _RANDOM_BIRTH_DATE_DAYS = (date(2010, 12, 31) - _RANDOM_BIRTH_DATE_START).days
 _SHIFT_STANDARD_DEVIATION_DAYS = 30
 _MAX_SHIFT_DAYS = 180
+
+
+@dataclass(frozen=True, slots=True)
+class _ParsedBirthDate:
+    """A complete birth date and the format that can be safely preserved."""
+
+    value: datetime
+    """Parsed calendar date."""
+
+    output_pattern: str | None
+    """``strftime`` pattern to render the shifted date in, or ``None`` to emit ISO format."""
+
+
+def birth_date_is_supported(value: str) -> bool:
+    """Return whether ``value`` contains one complete, deterministic date."""
+    return _parse_birth_date(value, None) is not None
 
 
 def shift_birth_date(original: str, pattern: str | None, rng: Random) -> str | None:
@@ -29,11 +58,13 @@ def shift_birth_date(original: str, pattern: str | None, rng: Random) -> str | N
     exceeds 180 days, so the original date does not survive while ages and the column's
     distribution stay close to the original.
 
-    The plan's pattern only has to cover 99% of a column, so each cell is tried
-    against the pattern first and then against common date formats. The
-    replacement uses the pattern when one is configured, else the format that
-    parsed. ``None`` means the cell could not be parsed; the caller then
-    generates a random birth date so the original never survives.
+    The plan's pattern only has to cover 99% of a column, so each value is tried
+    against the pattern first, then ISO 8601, common numeric formats, and strict
+    complete natural-language dates. Relative expressions such as ``"yesterday"``
+    or an age such as ``"30 years"`` are not fixed dates and are not parsed. The replacement uses the pattern when one
+    is configured, else the numeric format that parsed, else ISO 8601. ``None``
+    means the value could not be parsed; the caller then generates a random
+    birth date so the original never survives.
 
     Example:
         With pattern ``"%m/%d/%Y"``, ``"02/14/1990"`` shifts to a date such as
@@ -43,9 +74,10 @@ def shift_birth_date(original: str, pattern: str | None, rng: Random) -> str | N
     parsed = _parse_birth_date(original, pattern)
     if parsed is None:
         return None
-    value, output_pattern = parsed
-    shifted = value + timedelta(days=_shift_days(rng))
-    return shifted.strftime(output_pattern) if output_pattern is not None else shifted.date().isoformat()
+    shifted = parsed.value + timedelta(days=_shift_days(rng))
+    if parsed.output_pattern is not None:
+        return shifted.strftime(parsed.output_pattern)
+    return shifted.date().isoformat()
 
 
 def _shift_days(rng: Random) -> int:
@@ -75,31 +107,31 @@ def random_birth_date(pattern: str | None, rng: Random) -> str:
     return datetime.combine(value, time(), tzinfo=UTC).strftime(pattern)
 
 
-def birth_date_is_supported(value: str) -> bool:
-    """Return whether ``value`` parses as a complete date without a configured pattern.
-
-    Planning uses this to check that an unpatterned ``date_of_birth`` column really holds dates.
-
-    Example:
-        ``"1990-02-14"`` and ``"02/14/1990"`` are supported; an age such as ``"65"`` is not.
-    """
-    return _parse_birth_date(value, None) is not None
-
-
-def _parse_birth_date(original: str, pattern: str | None) -> tuple[datetime, str | None] | None:
+def _parse_birth_date(original: str, pattern: str | None) -> _ParsedBirthDate | None:
     """Return the parsed date and the format to write its replacement in, or ``None`` if no format fits."""
     if pattern is not None:
         try:
-            return datetime.strptime(original, pattern), pattern
+            return _ParsedBirthDate(datetime.strptime(original, pattern), pattern)
         except ValueError:
             pass
+
     try:
-        return datetime.fromisoformat(original), pattern
+        return _ParsedBirthDate(datetime.fromisoformat(original), pattern)
     except ValueError:
         pass
-    for candidate in _FALLBACK_BIRTH_DATE_FORMATS:
+
+    for candidate in _PRESERVED_PATTERNS:
         try:
-            return datetime.strptime(original, candidate), pattern or candidate
+            return _ParsedBirthDate(datetime.strptime(original, candidate), pattern or candidate)
         except ValueError:
             continue
+
+    # Natural-language dates always name a month in words. dateparser costs about 100 ms per value,
+    # so skipping it for values without letters keeps numeric columns, such as an age mislabeled
+    # as a birth date, from taking minutes.
+    if not any(character.isalpha() for character in original):
+        return None
+    parsed_natural = dateparser.parse(original, settings=_NATURAL_DATE_SETTINGS)
+    if parsed_natural is not None:
+        return _ParsedBirthDate(parsed_natural, pattern)
     return None

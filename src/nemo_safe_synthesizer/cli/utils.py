@@ -29,10 +29,11 @@ from ..defaults import DEFAULT_ARTIFACTS_PATH
 from ..observability import configure_logging_from_workdir, get_logger, initialize_observability
 from ..utils import merge_dicts
 from .artifact_structure import Workdir
-from .datasets import DatasetRegistry
+from .datasets import DatasetRegistry, file_extension
 from .wandb_setup import WandbMode, initialize_wandb_run
 
 if TYPE_CHECKING:
+    from ..data_processing.csv_source import CsvSource
     from ..observability import CategoryLogger
     from .settings import CLISettings
 
@@ -205,6 +206,7 @@ def common_setup(
     skip_wandb: bool = False,
     quiet: bool = False,
     run_name: str | None = None,
+    load_data: bool = True,
 ) -> tuple["CategoryLogger", SafeSynthesizerParameters, pd.DataFrame | None, Workdir]:
     """Common setup for all run commands using unified CLISettings.
 
@@ -226,6 +228,9 @@ def common_setup(
         quiet: If ``True``, suppress console log output (file logging is unaffected)
         run_name: Explicit run name for the artifact directory (e.g. ``"validate"``).
             When set, replaces the auto-generated timestamp so repeated runs reuse the same path.
+        load_data: If ``False``, skip step 4's dataset read and return ``None`` for the dataframe.
+            Dataset overrides from the registry still apply. ``replace-pii`` uses this to read the
+            source itself with ``fetch_data_source_for_replacement``.
 
     Returns:
         Tuple of (logger, config, dataframe, workdir). For generate-only runs with
@@ -259,10 +264,7 @@ def common_setup(
     )
 
     # 3. Create DatasetRegistry
-    if settings.dataset_registry:
-        dataset_registry = DatasetRegistry.from_yaml(settings.dataset_registry)
-    else:
-        dataset_registry = DatasetRegistry()
+    dataset_registry = _dataset_registry(settings)
 
     # 4. Load dataset (or check for cached dataset in resume mode)
 
@@ -278,7 +280,8 @@ def common_setup(
         dataset_info = dataset_registry.get_dataset(settings.data_source)
         if not resume:
             synthesis_overrides = merge_dicts(synthesis_overrides, dataset_info.overrides or dict())
-        df = dataset_info.fetch()
+        if load_data:
+            df = dataset_info.fetch()
     elif resume:
         # For generate-only runs without --data-source, verify cached dataset exists.
         # test.csv may legitimately be absent when holdout=0.
@@ -306,6 +309,40 @@ def common_setup(
         initialize_wandb_run(workdir, resume_job_id=wandb_resume_job_id, cfg=config)
 
     return run_logger, config, df, workdir
+
+
+def _dataset_registry(settings: "CLISettings") -> DatasetRegistry:
+    if settings.dataset_registry:
+        return DatasetRegistry.from_yaml(settings.dataset_registry)
+    return DatasetRegistry()
+
+
+def data_source_extension(settings: "CLISettings") -> str:
+    """Return the lowercase file extension of ``settings.data_source``, resolved through the dataset registry.
+
+    Example:
+        ``"people.PARQUET"``, or a registry entry whose URL ends in ``.parquet?token=abc``, returns ``"parquet"``.
+    """
+    if not settings.data_source:
+        return ""
+    return file_extension(_dataset_registry(settings).get_dataset(settings.data_source).get_url())
+
+
+def fetch_data_source_for_replacement(settings: "CLISettings") -> pd.DataFrame | CsvSource | None:
+    """Load ``settings.data_source`` for standalone PII replacement.
+
+    A CSV or TXT file is returned as a ``CsvSource`` holding the file's bytes, read once, so
+    the replaced output can later take unchanged cells from a text parse of those same bytes.
+    Other formats are returned as the dataframe from ``DatasetInfo.fetch``.
+
+    Returns:
+        The data source, or ``None`` when ``settings.data_source`` is not set.
+    """
+    if not settings.data_source:
+        return None
+    dataset = _dataset_registry(settings).get_dataset(settings.data_source)
+    csv_source = dataset.fetch_csv_source()
+    return dataset.fetch() if csv_source is None else csv_source
 
 
 def _apply_inference_cli_overrides(

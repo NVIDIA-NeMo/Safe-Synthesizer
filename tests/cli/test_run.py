@@ -9,6 +9,7 @@ from typing import cast
 from unittest.mock import MagicMock, patch
 
 import httpx
+import pandas as pd
 import pytest
 import yaml
 from click.testing import CliRunner
@@ -20,6 +21,7 @@ from nemo_safe_synthesizer.cli.settings import CLISettings
 from nemo_safe_synthesizer.cli.utils import merge_overrides
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.replace_pii import EntityType
+from nemo_safe_synthesizer.data_processing.csv_source import CsvSource
 from nemo_safe_synthesizer.telemetry import DeploymentTypeEnum, TaskStatusEnum
 from nemo_safe_synthesizer.tooling import PreflightRenderContext
 
@@ -60,6 +62,7 @@ def mock_safe_synthesizer() -> MagicMock:
     ss.evaluate.return_value = ss
     ss.load_from_save_path.return_value = ss
     ss.plan_pii_replacement.return_value = MagicMock()
+    ss.replace_pii.return_value.generation_statistics.generated_replacement_count = 3
     ss.run.return_value = ss
     ss.save_results.return_value = ss  # Return self for method chaining
     ss.generator.teardown.return_value = None
@@ -649,7 +652,7 @@ class TestValidateMode:
 
 
 class TestRunReplacePii:
-    """Tests for the plan-only PII replacement command."""
+    """Tests for standalone PII planning and replacement."""
 
     @pytest.fixture(autouse=True)
     def _reset_observability(self, monkeypatch: pytest.MonkeyPatch):
@@ -673,7 +676,6 @@ class TestRunReplacePii:
         self,
         cli_runner: CliRunner,
         dummy_csv: Path,
-        mock_dataframe: MagicMock,
         mock_workdir: MagicMock,
         patched_run_dependencies: dict,
     ) -> None:
@@ -687,9 +689,10 @@ class TestRunReplacePii:
         setup_kwargs = patched_run_dependencies["common_setup"].call_args.kwargs
         assert setup_kwargs["phase"] == "replace_pii"
         assert setup_kwargs["skip_wandb"] is True
+        assert setup_kwargs["load_data"] is False
 
         nss = patched_run_dependencies["safe_synthesizer"]
-        nss.with_data_source.assert_called_once_with(mock_dataframe)
+        nss.with_data_source.assert_called_once_with(CsvSource.load(str(dummy_csv)))
         nss.plan_pii_replacement.assert_called_once_with(
             output_path=mock_workdir.run_dir / "pii_replacement_config.yaml"
         )
@@ -699,22 +702,108 @@ class TestRunReplacePii:
         nss.evaluate.assert_not_called()
         nss.run.assert_not_called()
 
-    def test_command_requires_plan_only_until_replacement_exists(
+    def test_apply_replaces_full_input_without_pipeline_stages(
         self,
         cli_runner: CliRunner,
         dummy_csv: Path,
+        mock_workdir: MagicMock,
         patched_run_dependencies: dict,
     ) -> None:
-        result = cli_runner.invoke(run, ["replace-pii", "--data-source", str(dummy_csv)])
+        result = cli_runner.invoke(
+            run,
+            ["replace-pii", "--data-source", str(dummy_csv)],
+            catch_exceptions=False,
+        )
 
-        assert result.exit_code != 0
-        assert "requires --plan-only" in result.output
-        patched_run_dependencies["common_setup"].assert_not_called()
+        assert result.exit_code == 0
+        nss = patched_run_dependencies["safe_synthesizer"]
+        nss.replace_pii.assert_called_once_with(
+            output_path=mock_workdir.run_dir / "input_pii_replaced.csv",
+            config_output_path=mock_workdir.run_dir / "pii_replacement_config.yaml",
+        )
+        (data_source,) = nss.with_data_source.call_args.args
+        assert isinstance(data_source, CsvSource)
+        assert data_source.content == dummy_csv.read_bytes()
+        assert data_source.read_text().to_dict("list") == {"col1": ["1", "3"], "col2": ["2", "4"]}
+        nss.plan_pii_replacement.assert_not_called()
+        nss.process_data.assert_not_called()
+        nss.train.assert_not_called()
+        nss.generate.assert_not_called()
+        nss.evaluate.assert_not_called()
+        nss.run.assert_not_called()
+
+    def test_parquet_input_is_written_back_as_parquet_by_default(
+        self,
+        cli_runner: CliRunner,
+        tmp_path: Path,
+        mock_workdir: MagicMock,
+        patched_run_dependencies: dict,
+    ) -> None:
+        parquet_path = tmp_path / "input.parquet"
+        pd.DataFrame({"zip": ["02054", "10001"]}).to_parquet(parquet_path)
+
+        result = cli_runner.invoke(
+            run,
+            ["replace-pii", "--data-source", str(parquet_path)],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0
+        nss = patched_run_dependencies["safe_synthesizer"]
+        nss.replace_pii.assert_called_once_with(
+            output_path=mock_workdir.run_dir / "input_pii_replaced.parquet",
+            config_output_path=mock_workdir.run_dir / "pii_replacement_config.yaml",
+        )
+        (data_source,) = nss.with_data_source.call_args.args
+        assert isinstance(data_source, pd.DataFrame)
+        assert data_source["zip"].tolist() == ["02054", "10001"]
+
+    def test_apply_honors_output_file(
+        self,
+        cli_runner: CliRunner,
+        dummy_csv: Path,
+        tmp_path: Path,
+        mock_workdir: MagicMock,
+        patched_run_dependencies: dict,
+    ) -> None:
+        output_file = tmp_path / "custom" / "replaced.csv"
+
+        result = cli_runner.invoke(
+            run,
+            [
+                "replace-pii",
+                "--data-source",
+                str(dummy_csv),
+                "--output-file",
+                str(output_file),
+            ],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0
+        patched_run_dependencies["safe_synthesizer"].replace_pii.assert_called_once_with(
+            output_path=output_file,
+            config_output_path=mock_workdir.run_dir / "pii_replacement_config.yaml",
+        )
+
+    def test_apply_reads_a_non_csv_source_as_a_dataframe(
+        self,
+        cli_runner: CliRunner,
+        tmp_path: Path,
+        patched_run_dependencies: dict,
+    ) -> None:
+        json_source = tmp_path / "input.json"
+        json_source.write_text('[{"col1": 1}]')
+
+        result = cli_runner.invoke(run, ["replace-pii", "--data-source", str(json_source)], catch_exceptions=False)
+
+        assert result.exit_code == 0
+        (data_source,) = patched_run_dependencies["safe_synthesizer"].with_data_source.call_args.args
+        assert data_source.to_dict("list") == {"col1": [1]}
 
     def test_plan_only_reports_missing_input_dataframe(
         self,
         cli_runner: CliRunner,
-        dummy_csv: Path,
         mock_logger: MagicMock,
         mock_config: MagicMock,
         mock_workdir: MagicMock,
@@ -724,13 +813,10 @@ class TestRunReplacePii:
         common_setup.side_effect = None
         common_setup.return_value = (mock_logger, mock_config, None, mock_workdir)
 
-        result = cli_runner.invoke(
-            run,
-            ["replace-pii", "--plan-only", "--data-source", str(dummy_csv)],
-        )
+        result = cli_runner.invoke(run, ["replace-pii", "--plan-only"])
 
         assert result.exit_code == 1
-        assert "Input data is required to plan PII replacement." in result.output
+        assert "Input data is required to plan or apply PII replacement." in result.output
         patched_run_dependencies["safe_synthesizer_cls"].assert_not_called()
 
     def test_plan_only_writes_reusable_yaml(

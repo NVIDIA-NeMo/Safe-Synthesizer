@@ -9,10 +9,11 @@ import time
 from typing import TYPE_CHECKING
 
 from ..config.data import DataParameters
-from ..config.replace_pii import PiiSamplerBackend, ReplacePiiConfig
+from ..config.replace_pii import EntityType, PiiSamplerBackend, ReplacePiiConfig
 from ..config.time_series import TimeSeriesParameters
 from ..errors import InternalError
 from .planning import resolve_replacement_config
+from .replacement.detection import CompositeFreeTextDetector
 from .replacement.executor import StructuredReplacementExecutor, resolve_base_seed
 from .replacement.generation import ReplacementGenerator
 from .transform_result import TransformResult
@@ -26,12 +27,12 @@ __all__ = ["TabularPiiReplacer"]
 class TabularPiiReplacer:
     """Replace PII in a dataframe through one plan-driven interface.
 
-    The replacement module owns plan resolution and structured DAG execution,
-    positional row identity, scope keys, synthetic value generation, and
-    statistics. Free-text detection and span replacement are deferred.
-    ``replace`` returns a new dataframe and never mutates the caller's frame or
-    writes artifacts. The pipeline remains responsible for deciding whether
-    and where to persist the resolved configuration.
+    The replacement module owns plan resolution, DAG execution, free-text span
+    detection and rewriting, positional row identity, scope keys, synthetic
+    value generation, and statistics. ``replace`` returns a new dataframe and
+    never mutates the caller's frame or writes artifacts. The pipeline remains
+    responsible for deciding whether and where to persist the resolved
+    configuration.
 
     Args:
         config: PII replacement configuration, including the replacement plan.
@@ -76,11 +77,7 @@ class TabularPiiReplacer:
         Raises:
             ParameterError: If the configured plan is invalid for ``df``.
             GenerationError: If a replacement cannot be generated.
-            NotImplementedError: If ``capture_replacement_map`` is requested;
-                capture is introduced with free-text replacement.
         """
-        if capture_replacement_map:
-            raise NotImplementedError("replacement map capture is not implemented")
         started = time.perf_counter()
         resolved_config = resolve_replacement_config(
             df,
@@ -92,11 +89,23 @@ class TabularPiiReplacer:
         plan = resolved_config.inline_plan
         if plan is None:
             raise InternalError("PII replacement configuration was not fully resolved")
+        # Street-address columns also use the detector, to find the street inside a full address.
+        free_text_detector = (
+            CompositeFreeTextDetector(resolved_config.free_text_detection)
+            if any(
+                spec.entity_type in {EntityType.FREE_TEXT, EntityType.STREET_ADDRESS}
+                for spec in plan.columns_to_replace
+            )
+            else None
+        )
         executor = StructuredReplacementExecutor(
             plan,
             self._replacement_generator(resolved_config),
             group_column=self._data_config.group_training_examples_by,
             base_seed=resolve_base_seed(self._config.replacement.seed),
+            free_text_detector=free_text_detector,
+            capture_replacement_map=capture_replacement_map,
+            find_and_replace=resolved_config.free_text_detection.find_and_replace,
         )
         execution = executor.execute(df)
         return TransformResult(
@@ -105,6 +114,7 @@ class TabularPiiReplacer:
             resolved_config=resolved_config,
             generation_statistics=execution.generation_statistics,
             replacement_time_seconds=time.perf_counter() - started,
+            replacement_map=execution.replacement_map,
         )
 
     def _replacement_generator(self, config: ReplacePiiConfig) -> ReplacementGenerator:
