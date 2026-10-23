@@ -117,6 +117,17 @@ class WandbSettings(BaseSettings):
     )
     """WandB project name override (env variable: ``WANDB_PROJECT`` or ``NSS_WANDB_PROJECT``)."""
 
+    wandb_dir: Path | None = Field(
+        default=None,
+        description="Directory for WandB's local run files; defaults to the run directory.",
+        validation_alias=AliasChoices("WANDB_DIR", "NSS_WANDB_DIR"),
+    )
+    """Directory for WandB's local run files (env variable: ``WANDB_DIR`` or ``NSS_WANDB_DIR``).
+
+    Slurm jobs point this at node-local disk so WandB's many small writes stay off shared storage.
+    When unset, files go to the run directory.
+    """
+
     exp_name: str = Field(
         default="nss_experiments", description="Fallback project name when ``wandb_project`` is not set."
     )
@@ -486,6 +497,10 @@ def initialize_wandb_run(
 
     phase = settings.phase
     run_id_file = workdir.wandb_run_id_file
+    # The run ID file stays in the run directory because the generate phase reads it.
+    wandb_dir = settings.wandb_dir or workdir.run_dir
+    if settings.wandb_dir is not None:
+        settings.wandb_dir.mkdir(parents=True, exist_ok=True)
 
     if TYPE_CHECKING:
         assert isinstance(run_id_file, Path)
@@ -519,7 +534,7 @@ def initialize_wandb_run(
             resume="allow",
             mode=settings.wandb_mode.value,
             settings=wandb_settings,
-            dir=workdir.run_dir,
+            dir=wandb_dir,
         )
         if wandb.run is not None:
             run_id_file.parent.mkdir(parents=True, exist_ok=True)
@@ -535,7 +550,7 @@ def initialize_wandb_run(
             resume="allow",
             mode=settings.wandb_mode.value,
             settings=wandb_settings,
-            dir=workdir.run_dir,
+            dir=wandb_dir,
         )
         if wandb.run is not None:
             run_id_file.write_text(wandb.run.id, encoding="utf-8")
@@ -549,7 +564,7 @@ def initialize_wandb_run(
             name=workdir.run_name,
             mode=settings.wandb_mode.value,
             settings=wandb_settings,
-            dir=workdir.run_dir,
+            dir=wandb_dir,
         )
         if wandb.run is not None:
             run_id_file.write_text(wandb.run.id, encoding="utf-8")

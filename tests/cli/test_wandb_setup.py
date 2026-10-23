@@ -67,3 +67,45 @@ def test_failure_reporting_updates_summary_without_history() -> None:
         "generate/error_type": "ValueError",
         "generate/error_message": "bad input",
     }
+
+
+class TestInitializeWandbRunDir:
+    """Tests for where initialize_wandb_run puts WandB's local files."""
+
+    @staticmethod
+    def _workdir(tmp_path: Path) -> MagicMock:
+        workdir = MagicMock()
+        workdir.run_dir = tmp_path / "run"
+        workdir.wandb_run_id_file = tmp_path / "run" / "wandb_run_id.txt"
+        return workdir
+
+    def test_uses_wandb_dir_when_set(self, tmp_path: Path, monkeypatch):
+        local_dir = tmp_path / "node-local" / "wandb"
+        monkeypatch.setenv("WANDB_MODE", "offline")
+        monkeypatch.setenv("WANDB_DIR", str(local_dir))
+        workdir = self._workdir(tmp_path)
+
+        with (
+            patch.object(wandb_setup.wandb, "run", None),
+            patch.object(wandb_setup.wandb, "init") as mock_init,
+            patch.object(wandb_setup, "update_wandb_config"),
+        ):
+            wandb_setup.initialize_wandb_run(workdir)
+
+        assert mock_init.call_args.kwargs["dir"] == local_dir
+        assert local_dir.is_dir()
+
+    def test_defaults_to_run_dir(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("WANDB_MODE", "offline")
+        monkeypatch.delenv("WANDB_DIR", raising=False)
+        monkeypatch.delenv("NSS_WANDB_DIR", raising=False)
+        workdir = self._workdir(tmp_path)
+
+        with (
+            patch.object(wandb_setup.wandb, "run", None),
+            patch.object(wandb_setup.wandb, "init") as mock_init,
+            patch.object(wandb_setup, "update_wandb_config"),
+        ):
+            wandb_setup.initialize_wandb_run(workdir)
+
+        assert mock_init.call_args.kwargs["dir"] == workdir.run_dir

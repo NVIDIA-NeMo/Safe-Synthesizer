@@ -23,18 +23,13 @@ mise run bootstrap-nss cu129     # + engine + CUDA 12.9 PyTorch
 mise run bootstrap-nss cu130     # + engine + CUDA 13.0 PyTorch
 mise run bootstrap-nss cuda      # alias for cu129
 mise run bootstrap-nss engine    # + engine (no torch)
-
-# Slurm: force Python, caches, and the project venv onto Lustre
-LUSTRE_DIR="/path/to/container-visible/project/directory" \
-  MISE_IGNORED_CONFIG_PATHS="$HOME/.config/mise/config.toml" \
-  MISE_LOCKED=1 mise run bootstrap-nss-slurm cu129
 ```
 
 Under the hood: `uv sync --frozen --extra <extra> [--extra engine] --group dev`
 
-`bootstrap-nss-slurm` requires `LUSTRE_DIR`, installs the pinned Python under
-that directory, recreates `.venv` if its interpreter is not container-visible,
-then runs the same frozen profile sync as `bootstrap-nss`.
+Slurm jobs do not use a local `.venv`. Dependencies come from a shared image
+built by `script/slurm/build_image.sh`, and each job runs `uv sync --frozen`
+into the image venv on node-local disk; see `script/slurm/README.md`.
 
 ## Extras and Conflicts
 
