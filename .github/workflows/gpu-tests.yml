@@ -95,9 +95,6 @@ jobs:
       matrix:
         python-version: ["3.11", "3.12", "3.13", "3.14"]
         cuda-extra: [cu129, cu130]
-    env:
-      # Authenticated Hub downloads get a higher rate limit than anonymous ones.
-      HF_TOKEN: ${{ secrets.HF_TOKEN }}
     steps:
       - name: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -113,30 +110,46 @@ jobs:
 
       - name: Run GPU unit tests
         timeout-minutes: 30
+        # Authenticated Hub downloads get a higher rate limit than anonymous ones.
+        # Scoped to test steps so checkout and setup actions never see the token.
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: mise -E gpu-ci run test:unit:gpu
 
       - name: Run GPU smoke tests - train only
         timeout-minutes: 10
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: mise -E gpu-ci run test:smoke:gpu:train-only
 
       - name: Run GPU smoke tests - generation
         timeout-minutes: 10
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: mise -E gpu-ci run test:smoke:gpu:generation
 
       - name: Run GPU smoke tests - resume
         timeout-minutes: 10
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: mise -E gpu-ci run test:smoke:gpu:resume
 
       - name: Run GPU smoke tests - structured generation
         timeout-minutes: 10
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: mise -E gpu-ci run test:smoke:gpu:structured-generation
 
       - name: Run GPU smoke tests - timeseries
         timeout-minutes: 10
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: mise -E gpu-ci run test:smoke:gpu:timeseries
 
       - name: Run GPU smoke tests - SmolLM2
         timeout-minutes: 20
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: mise -E gpu-ci run test:smoke:gpu:smollm2
 
   gpu-e2e-test:
@@ -177,9 +190,6 @@ jobs:
           - python-version: "3.13"
             cuda-extra: cu130
             required: false
-    env:
-      # Authenticated Hub downloads get a higher rate limit than anonymous ones.
-      HF_TOKEN: ${{ secrets.HF_TOKEN }}
     steps:
       - name: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -195,6 +205,8 @@ jobs:
 
       - name: Run GPU E2E tests
         id: e2e_tests
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: mise run test:e2e:prepared
         timeout-minutes: 190
 
