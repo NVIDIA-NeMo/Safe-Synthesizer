@@ -14,7 +14,7 @@ torch_runtime_deps = [
     "kernels>=0.12.1,<0.15",
     "opacus",
     "peft>=0.18.0",
-    "sentence-transformers",
+    "sentence-transformers>=5.6.0",
     "openai>=2.25.0",
     "trl>=0.23.0",
     "xgrammar>=0.2.0; sys_platform == 'linux'",
