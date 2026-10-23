@@ -28,6 +28,7 @@ def test_evaluation_report_uses_versioned_plotly_cdn() -> None:
 def test_evaluation_report_themes_charts_in_report_assets() -> None:
     template = _get_template("jinja/reports/multi_modal_report.j2")
     autocorrelation_similarity = _get_template("jinja/components/autocorrelation_similarity.j2")
+    time_series_charts = _get_template("jinja/components/time_series_charts.j2")
     dataset_statistics = _get_template("jinja/components/dataset_statistics.j2")
     gauge = _get_template("jinja/components/score_gauge.j2")
     metric_card = _get_template("jinja/components/metric_card.j2")
@@ -39,6 +40,7 @@ def test_evaluation_report_themes_charts_in_report_assets() -> None:
 
     assert template is not None
     assert autocorrelation_similarity is not None
+    assert time_series_charts is not None
     assert dataset_statistics is not None
     assert gauge is not None
     assert metric_card is not None
@@ -51,15 +53,20 @@ def test_evaluation_report_themes_charts_in_report_assets() -> None:
     assert 'data-report-view="time-series"' not in template
     assert template.index("Text Metrics") < template.index("Time-Series Metrics")
     assert template.index("Time-Series Metrics") < template.index('id="data-privacy"')
-    assert "ctx.autocorrelation_similarity.figures" in autocorrelation_similarity
-    assert "{{ row.html | safe }}" in autocorrelation_similarity
-    assert 'class="autocorrelation-charts"' in autocorrelation_similarity
-    assert ".autocorrelation-charts" in stylesheet
-    assert "data-autocorrelation-column-select" in autocorrelation_similarity
-    assert ".autocorrelation-column-select" in stylesheet
-    assert autocorrelation_similarity.count('class="autocorrelation-chart-heading"') == 1
-    assert ".autocorrelation-chart-heading" in stylesheet
-    assert "selectAutocorrelationColumn" in javascript
+    assert "{% for card in ctx.time_series_cards %}" in template
+    assert "{% include card.template %}" in template
+    assert "chart_grid(metric)" in autocorrelation_similarity
+    assert "{{ row.html | safe }}" in time_series_charts
+    assert 'class="time-series-charts"' in time_series_charts
+    assert ".time-series-charts" in stylesheet
+    assert "data-time-series-column-select" in time_series_charts
+    assert ".time-series-column-select" in stylesheet
+    assert time_series_charts.count('class="time-series-chart-heading"') == 1
+    assert ".time-series-chart-heading" in stylesheet
+    assert ".autocorrelation-" not in stylesheet
+    assert "selectTimeSeriesColumn" in javascript
+    assert "[data-time-series-column-select]" in javascript
+    assert "[data-score-colored-traces]" in javascript
     assert "score-ring-canvas" in gauge
     assert "brand-assets.cne.ngc.nvidia.com/assets/fonts/nvidia-sans" in stylesheet
     assert "data-metric-toggle" in metric_card
@@ -144,12 +151,16 @@ def test_training_columns_render_distribution_links_grades_and_entity_counts() -
 
 
 def _autocorrelation_context(
-    column_count: int, pair_score_column_count: int, constant_synthetic_profile_count: int = 0
+    column_count: int,
+    pair_score_column_count: int,
+    constant_synthetic_profile_count: int = 0,
+    score_colored_traces: bool = True,
 ) -> dict[str, object]:
     columns = [f"column_{index}" for index in range(column_count)]
     return {
         "autocorrelation_similarity": {
             "score": {"notes": None},
+            "score_colored_traces": score_colored_traces,
             "details": {},
             "evaluated_profile_count": column_count,
             "evaluated_group_count": 1,
@@ -184,7 +195,7 @@ def test_autocorrelation_renders_column_select_and_pair_score_limit_note() -> No
         ctx=_autocorrelation_context(column_count=10, pair_score_column_count=8),
     )
 
-    assert rendered.count("data-autocorrelation-column-select") == 1
+    assert rendered.count("data-time-series-column-select") == 1
     assert 'data-traces-per-column="4"' in rendered
     assert '<option value="9">column_9</option>' in rendered
     assert "Pair scores shows the 8 lowest-scoring columns." in rendered
@@ -210,9 +221,21 @@ def test_autocorrelation_omits_column_select_and_note_for_single_column() -> Non
         ctx=_autocorrelation_context(column_count=1, pair_score_column_count=1),
     )
 
-    assert "data-autocorrelation-column-select" not in rendered
+    assert "data-time-series-column-select" not in rendered
     assert "lowest-scoring columns" not in rendered
     assert "constant synthetic values" not in rendered
+
+
+@pytest.mark.parametrize("score_colored_traces", [True, False])
+def test_time_series_chart_grid_marks_score_colored_traces(score_colored_traces: bool) -> None:
+    rendered = _render_template(
+        "jinja/components/autocorrelation_similarity.j2",
+        ctx=_autocorrelation_context(
+            column_count=2, pair_score_column_count=2, score_colored_traces=score_colored_traces
+        ),
+    )
+
+    assert ('class="time-series-charts" data-score-colored-traces' in rendered) is score_colored_traces
 
 
 @pytest.mark.parametrize(

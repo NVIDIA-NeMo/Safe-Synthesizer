@@ -106,6 +106,11 @@ class SafeSynthesizerSummary(NSSBaseModel):
         description="Jensen-Shannon divergence over sentence count, words-per-sentence, and characters-per-word distributions between real and synthetic free-text columns.",
     )
 
+    autocorrelation_similarity_score: float | None = Field(
+        default=None,
+        description="How closely lagged self-correlation in synthetic time-series sequences matches the training sequences.",
+    )
+
     data_privacy_score: float | None = Field(default=None, description="Composite of MIA and AIA protection scores.")
 
     membership_inference_protection_score: float | None = Field(
@@ -203,6 +208,7 @@ class SafeSynthesizerSummary(NSSBaseModel):
             "eval/column_distribution_stability_score": self.column_distribution_stability_score,
             "eval/text_semantic_similarity_score": self.text_semantic_similarity_score,
             "eval/text_structure_similarity_score": self.text_structure_similarity_score,
+            "eval/autocorrelation_similarity_score": self.autocorrelation_similarity_score,
             "eval/success": 1
             if self.data_privacy_score is not None
             and self.synthetic_data_quality_score is not None
