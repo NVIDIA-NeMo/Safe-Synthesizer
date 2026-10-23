@@ -3,9 +3,13 @@
 
 # PII Replacement
 
-PII replacement v3 uses a dataset-specific replacement plan. The plan names
-the columns NSS should replace, the entity type in each column, optional format
-patterns, and dependencies between related columns.
+Personally identifiable information (PII) is information that can identify a
+person, such as a name, email address, phone number, or ID number. Before
+training, NSS replaces PII in the input data with realistic fake values, so the
+model does not learn the real ones. Replacement follows a dataset-specific
+replacement plan. The plan names the columns NSS should replace, the entity
+type in each column, optional format patterns, and dependencies between related
+columns.
 
 NSS applies structured-column replacements before training. Free-text named
 entity detection and span replacement are not yet part of replacement
@@ -17,12 +21,26 @@ replacement.
 
 ## Nemotron-Personas sampling
 
-The default `nemotron-personas` sampler draws names, email addresses, phone numbers, and
-street-address components from the extended Nemotron-Personas locale datasets.
+Nemotron-Personas are NVIDIA datasets of synthetic people, one per locale,
+whose names, sex, ethnic background, and addresses follow that locale's census
+distributions. The default `nemotron-personas` sampler draws replacement names
+and, for `en_US`, street-address components from them, so names look like the
+locale's real population and can match the row's gender and ethnic background
+(see [Dependencies](#dependencies)). Email addresses and phone numbers come
+from Faker; an email that depends on name columns is built from the replaced
+names.
+
+Downloading a dataset requires an NGC API key and the NGC CLI. Data Designer's
+[person-sampling setup](https://docs.nvidia.com/nemo/datadesigner/concepts/person-sampling)
+explains how to get both, lists the available locales, and describes the same
+download steps. NSS reads datasets from the same directory as Data Designer, so
+a dataset already downloaded for Data Designer needs no further setup.
+
 Choose the NGC resource matching `replace_pii.replacement.locale`. Locale
-resources are versioned independently, so use the version published for the
-selected language and country. For example, download version `0.0.2` of the
-`en_US` resource after installing and authenticating the NGC CLI:
+resources are versioned independently. NSS was tested with version `0.0.2` of
+the [`en_US` resource](https://catalog.ngc.nvidia.com/orgs/nvidia/nemotron-personas/resources/nemotron-personas-dataset-en_us/-),
+and a later version may rename the columns NSS reads, so download a specific
+version rather than the latest:
 
 ```bash
 ngc registry resource download-version \
@@ -65,11 +83,34 @@ replacement fails instead of switching to Faker. If the plan conditions on a
 value the dataset has no column for, such as ethnic background, replacement
 also fails. When a persona row lacks one generated field, or the entity type is
 not a persona field, NSS uses Faker for that value. Set `backend: faker` to use
-Faker without a Nemotron-Personas dataset. See NVIDIA's
-[person-sampling setup](https://docs.nvidia.com/nemo/datadesigner/concepts/person-sampling)
-to select a locale resource and the
-[`en_US` NGC resource](https://catalog.ngc.nvidia.com/orgs/nvidia/nemotron-personas/resources/nemotron-personas-dataset-en_us/-)
-for the example above.
+Faker without a Nemotron-Personas dataset.
+
+### Dependencies
+
+A column's `depends_on` lists other columns of the same record that its
+replacement must stay consistent with. A dependency works in one of two ways:
+
+- A column that is not replaced, such as `sex` or `race`, narrows what the
+  sampler draws and keeps its original value. A first name that depends on
+  `sex` comes from a persona of that sex. Give such a column's `entity_type`,
+  `gender` or `ethnic_background`, in `depends_on`. Its values must be ones the
+  sampler understands; the next section explains how other values are mapped.
+- A column that is replaced passes on its new value. An email that depends on
+  `first_name` and `last_name` is built from their replacements, and a first
+  name that depends on a full-name column takes the first word of the replaced
+  full name.
+
+Only these dependencies are allowed:
+
+- First and middle names: gender, ethnic background, or a full name.
+- Last names: ethnic background or a full name.
+- Full names: gender and ethnic background.
+- Email addresses: first, middle, last, or full name, and organization.
+
+A name that depends on a full name cannot also depend on gender or ethnic
+background, and an email depends on either name parts or a full name, not both.
+Automatic discovery chooses dependencies for you; in a written plan, list them
+under `depends_on`.
 
 ### Data-to-sampler value mappings
 
@@ -123,15 +164,17 @@ replace_pii:
 Each list selects the union of sampler rows with those values, so listing every
 sampler value allows any match. Values without an entry use case-insensitive
 identity matching. A value that has no entry and matches no sampler value stops
-plan resolution with an error naming its column. Non-string dataset values use
-their usual text form as keys, for example `1.0` or `2024-01-01T00:00:00`.
-Manual mappings are
+plan resolution with an error naming its column. Manual mappings are
 validated against the resolved dependency columns and the selected sampler's
 known values. Faker applies mappings for attributes it supports, such as
 gender; unsupported attributes are ignored.
 
 Mappings are sampler-specific even though they live in the dataset-specific
-replacement plan. NSS does not accept a separate mapping file or combine
+replacement plan, so a plan with a mapping belongs to one dataset and one
+sampler. If you switch samplers, rerun automatic discovery or review the
+mapping. For the same reason, the [plan-only workflow](#plan-only-workflow)
+writes a complete configuration that includes the sampler, not just the plan.
+NSS does not accept a separate mapping file or combine
 automatic discovery with manual overrides. Generate a resolved configuration,
 edit its inline plan if needed, and run that configuration again. An explicit
 inline or file-based plan never runs a separate mapping-discovery pass; an
@@ -390,27 +433,38 @@ local profile.
 
 ### How discovery uses the LLM
 
-Automatic discovery uses two LLM passes. The first classifies every column's
-semantic entity type, in bounded batches of at most 32 profiles and 48 KiB of
-profile evidence. Each profile contains deterministic statistics and up to eight
-distinct cell samples truncated to 128 characters. Each batch makes two requests.
-The first asks only for entity types, with the entity catalog. The second asks
-for a replacement pattern, and only for the batch's unprotected columns whose
-entity type has a pattern syntax, sending their profiles, entity types, and the
-pattern grammars they use; it is skipped when no column qualifies. Keeping
-pattern rules out of the type request leaves the model's reasoning for the types.
-The grouping column is sent as discovery context; protected
-columns are not mentioned, because NSS excludes them itself. NSS then derives replacement columns and all permitted
-dependency candidates deterministically from those classifications. The second
-pass sees only column names, entity types, and proposed patterns, not cell
-values, and is split into batches under the same 32-entry and 48 KiB limits. For
-each replacement column and each permitted source entity type, it
-chooses at most one candidate column, the one describing the same person or
-record, or none. The response schema lists only the candidate columns, so the
-model cannot name another column or choose two sources of one type, such as
-both a person's and a spouse's gender. The prompt asks the model to choose a
-candidate whenever it describes the same person or record, so the fake value
-stays consistent with it. NSS, rather than the model, decides how
+Automatic discovery sends four kinds of LLM request, in this order:
+
+1. Entity types. Each column's profile, made of deterministic statistics and up
+   to eight distinct cell samples truncated to 128 characters, is sent with the
+   entity catalog, and the model classifies the column. The grouping column is
+   sent as context; protected columns are not sent, because NSS excludes them
+   itself.
+2. Patterns. For unprotected columns whose entity type has a pattern syntax,
+   the model proposes a replacement pattern from their profiles, entity types,
+   and the pattern grammars they use. The request is skipped when no column
+   qualifies. Keeping pattern rules out of the type request leaves the model's
+   reasoning for the types.
+3. Dependencies. NSS derives the replacement columns and every permitted
+   dependency candidate from the classifications. This request sees only column
+   names, entity types, and proposed patterns, not cell values. For each
+   replacement column and each permitted source entity type, the model chooses
+   at most one candidate column, the one describing the same person or record,
+   or none. The response schema lists only the candidate columns, so the model
+   cannot name another column or choose two sources of one type, such as both a
+   person's and a spouse's gender. The prompt asks the model to choose a
+   candidate whenever it describes the same person or record, so the fake value
+   stays consistent with it.
+4. Value mappings. After NSS validates the plan, dependency values that match
+   no sampler value are sent with the sampler's values in one request; see
+   [Data-to-sampler value mappings](#data-to-sampler-value-mappings). When the
+   request would exceed its size limit, planning fails and asks for a manual
+   mapping.
+
+The first three are split into batches of at most 32 columns and 48 KiB; the
+type and pattern requests share batches.
+
+NSS, rather than the model, decides how
 replacements stay consistent: within a group when a grouping column is
 configured, else within a row. Values that differ only in letter case count as
 the same value: `Ada`, `ADA`, and `ada` share one replacement, written in each
