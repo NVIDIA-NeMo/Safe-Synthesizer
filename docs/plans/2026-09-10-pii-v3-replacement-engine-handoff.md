@@ -162,6 +162,12 @@ LLM span-detection experiment.
 - `NemotronPersonasReplacementGenerator` and `FakerReplacementGenerator` are the two adapters at the replacement-generator
   seam.
 - The flat `depends_on` DAG is the execution architecture.
+- Dataset-specific dependency-label adaptation belongs to `PiiReplacementPlan` beside `columns_to_replace`, not to
+  `PiiSamplerConfig` or individual `depends_on` edges.
+- `replacement_plan: auto_discovery` discovers both columns and data-to-sampler value mappings. An explicit plan accepts one
+  authoritative inline map keyed by dependency source column and never runs a separate mapping-discovery pass.
+  Automatic results are sparse; an input label that differs only in case from a sampler label needs no explicit
+  mapping.
 - Record mappings use stable positional row identity. Dependencies are generation inputs, not record mapping identity.
 - For group-scoped mappings, group consistency wins over dependency consistency.
 - The first group occurrence establishes the replacement. If later dependency values differ, reuse the first
@@ -169,7 +175,26 @@ LLM span-detection experiment.
 - Nina's previous v3 implementation and main's detector are references, not compatibility targets.
 - The complete original-to-replacement map is not persisted by default; explicit secure persistence remains an open
   product decision.
-- Dataframe scope is not supported initially. If added later, it follows group-style first-occurrence-wins behavior.
+- Dataframe scope is not supported. Every entity type uses the same scope: group scope when a grouping column is
+  configured, otherwise record scope. (Decided 2026-10-14: per-entity-type scopes, such as dataframe scope only for
+  identifiers, were judged too hard for users to follow.)
+- Every replacement must differ from its own original, ignoring case; that rule is strict and fails the dataset when
+  retries cannot satisfy it. A replacement may equal another row's original, and replacements may repeat across rows,
+  since record scope replaces every row independently. The exception is an identifier-like column (`email`,
+  `phone_number`, `ssn`, `national_id`, `credit_debit_card`, `api_key`, `ipv4`, `ipv6`, `unique_identifier`) whose
+  original values are all distinct: its replacements stay distinct too, best effort, repeating one with a warning
+  and count when retries find no unused value. A grouping column's replacements are always one-to-one. (Decided
+  2026-10-22 after review: avoiding every original across columns and free text, and run-wide uniqueness, added
+  machinery for collisions that record scope already allows.)
+- Identifier replacements come from an enumerated value space, not random retries: a `unique_identifier`, `api_key`,
+  or `phone_number` character mask, or, for unpatterned digit-only `unique_identifier` and `api_key` values, every
+  integer up to the column's longest length. For a column that must stay distinct, that range gains one digit at a
+  time until it holds at least twice as many values as distinct originals, with a warning. Each replacement takes the
+  first usable value at or after its seeded position. A mask is the format contract and is never widened, except for
+  a grouping column: planning drops an LLM-proposed mask that is too small to keep a distinct column distinct. (Decided 2026-10-14: a dense row counter filled every same-length value.)
+- Automatic discovery skips row counters: columns of unique, non-missing integers that are exactly `0..n-1` or `1..n`,
+  such as a saved pandas index (`Unnamed: 0`). The configured grouping column is never a row counter, and explicit
+  plans may still replace one.
 - Repeated accepted detections of the same entity and exact value reuse one replacement across all planned free-text
   columns within the row or group scope, independently of propagation mappings.
 - Structured mapping values use a type-tagged canonical representation. Canonicalization is stable typed
@@ -202,18 +227,19 @@ The intended contract is:
 - `replace()` returns a new dataframe and does not mutate the caller's frame.
 - The module owns DAG execution, scope keys, generation, detection, overlap handling, and statistics.
 - `replace()` does not write artifacts.
-- The pipeline decides whether and where to persist the resolved plan.
+- The pipeline decides whether and where to persist the resolved configuration.
 
 Extend `TransformResult` with:
 
 ```python
 replacement_plan: PiiReplacementPlan
+resolved_config: ReplacePiiConfig
 generation_statistics: ReplacementGenerationStatistics
-elapsed_time_seconds: float
+replacement_time_seconds: float
 ```
 
-`ReplacementGenerationStatistics` records elapsed generation time and the number of distinct replacements generated
-after cache reuse.
+`ReplacementGenerationStatistics` records `generator_time_seconds`, the time spent inside generator calls, and the
+number of distinct replacements generated after cache reuse.
 
 Do not add a persisted replacement-map path to this interface. If an in-memory mapping is needed, design it as an
 explicit sensitive result with a separate persistence decision.
@@ -228,6 +254,114 @@ the replacement executor.
 `NemotronPersonasReplacementGenerator` and `FakerReplacementGenerator` are the two adapters. Each declares its
 `PiiSamplerBackend` and accepts `PiiReplacementSettings` plus `PiiSamplerConfig` at construction. Implement their
 generation behavior in the follow-up without widening the public `TabularPiiReplacer` constructor.
+
+### Data-to-sampler value mappings
+
+Add dataset-specific label adaptation beside the replacement columns it
+describes:
+
+```python
+DataToSamplerValueMapping = dict[str, dict[str, list[str]]]
+
+
+class PiiReplacementPlan(Parameters):
+    columns_to_replace: list[PiiColumnPlan] = Field(default_factory=list)
+    data_to_sampler_value_mapping: DataToSamplerValueMapping = Field(default_factory=dict)
+```
+
+There is one discovery switch. `replacement_plan: auto_discovery` discovers
+both the columns and their dependency mappings:
+
+```yaml
+replace_pii:
+  replacement_plan: auto_discovery
+```
+
+The authoritative manual form is inline and keyed by dependency source column,
+because dataset columns—not entity types—own the source vocabularies:
+
+```yaml
+replace_pii:
+  replacement_plan:
+    columns_to_replace:
+      - column_name: first_name
+        entity_type: first_name
+        depends_on:
+          - column_name: sex
+            entity_type: gender
+          - column_name: race
+            entity_type: ethnic_background
+    data_to_sampler_value_mapping:
+      sex:
+        Non-binary:
+          - female
+          - male
+      race:
+        Asian:
+          - east asian
+          - south asian
+          - southeast asian
+          - central asian
+          - asian other
+        Black or African American:
+          - black
+        Hispanic:
+          - mexican
+          - puerto rican
+          - cuban
+          - spanish
+          - hispanic or latino other
+        American Indian or Alaska Native:
+          - american indian
+          - alaska native
+        Native Hawaiian or Other Pacific Islander:
+          - pacific islander
+          - polynesian
+          - melanesian
+          - micronesian
+```
+
+This mapping adapts labels from the input dataset to labels understood by the selected sampler. It remains
+sampler-specific; switching sampler backends requires rediscovery or review of the inline mapping. It lives in the
+dataset-specific plan so the replacement columns, dependency edges, and vocabulary adaptation travel together.
+
+Do not accept a separate mapping file, a separate mapping-discovery sentinel, or automatic/manual overrides. An inline
+or file-based plan is authoritative, and an omitted mapping means `{}`. Plan-only writes one complete NSS configuration
+with the resolved plan and sparse inline mapping. Users who want to adjust an automatic result edit that generated
+configuration and run it again.
+
+Resolve each dependency value as follows:
+
+1. Compare input and sampler values case-insensitively. Identity matches need no persisted mapping. For every sampler,
+   resolution also writes built-in entries for common gender spellings (`F`, `Woman`, `Girl` to `female`; `M`, `Man`,
+   `Boy` to `male`) into the resolved mapping unless the plan already has an entry for that value.
+2. In automatic mode, send only unmatched distinct source values and the selected sampler's allowed values to the LLM.
+   Each source value is capped at 128 characters. If unmatched values exist without an LLM, require a manual mapping.
+3. Match inline source-label keys case-insensitively. The inline mapping is authoritative and bypasses mapping discovery.
+4. A nonempty list selects the union of candidates carrying any listed sampler label. Preserve the asset's natural row
+   frequency within that union; do not add per-label weights initially.
+5. There is no `null` entry. To allow any candidate for a source label, list every sampler value.
+6. Without an explicit entry, compare the original dependency value directly to sampler values case-insensitively.
+   Therefore values such as `Female`/`female` and `White`/`white` require no mapping.
+7. For Nemotron-Personas sampling, fail when neither an explicit mapping nor the implicit identity value selects any asset
+   candidates. Do not silently discard the condition. Report only the conditioner entity type and aggregate count,
+   never the raw dependency value.
+
+Reject empty target lists, empty labels, source or target labels duplicated after case-folding, columns not used as plan
+dependencies, and labels unsupported by a sampler that exposes a label catalog. A mapping for a column whose entity type
+the selected sampler cannot condition on, such as ethnic background with Faker, is kept with a warning so the plan still
+works if the sampler is switched back. Applying a mapping must not alter
+`CanonicalValue`, mapping identity, dependency-drift comparison, or persisted source data; case-folding exists only
+inside sampler candidate selection.
+
+Both adapters accept the configuration. Faker applies mapped labels to dependency attributes it supports, such as
+gender, and continues to ignore unsupported attributes such as ethnic background. Do not reject the configuration or
+warn merely because the active backend does not use one of its mapped entity types.
+
+Compile mappings once in the executor by dependency source column, then carry resolved sampler values on each
+generation request. Build candidate indexes once when a Nemotron-Personas locale asset is loaded. Read only columns needed for
+sampling, filtering, and rendering; do not load the large persona-description columns. A generation call must select
+from pre-indexed candidate rows rather than case-folding and scanning the complete asset for every replacement.
 
 ### Free-text configuration
 
@@ -346,8 +480,7 @@ or dependency values.
 
 Stable positional row order defines which occurrence is first.
 
-Dataframe scope is not part of the initial implementation. A future dataframe scope should use the same
-first-occurrence-wins policy as group scope rather than adding dependencies to mapping identity.
+Dataframe scope is not supported; see the settled decisions above.
 
 ### Interface PR scope
 
@@ -389,9 +522,18 @@ quality information, not invalid configuration.
 - Derive a per-mapping RNG seed using SHA-256 over the base seed, complete mapping key, and operation-purpose tag.
 - Use randomness for Nemotron-Personas/Faker choices, masks, birth-date shifts, retries, and collision avoidance.
 - Given the same plan, accepted detector spans, and seed, output must be deterministic.
-- Support Nemotron-Personas and Faker person sampling, name patterns, character masks, plus-or-minus 365-day birth-date shifts,
+- Support Nemotron-Personas and Faker person sampling, name patterns, character masks, nonzero birth-date shifts drawn from a normal distribution
+  (30-day standard deviation, at most 180 days either way),
   Luhn-valid cards, IP addresses, and collision-resistant identifiers.
-- If Nemotron-Personas sampling fails, warn once per affected category and fall back deterministically to Faker.
+- A birth-date pattern only has to cover 99% of a column. Parse each cell with the pattern, then common date formats,
+  and shift it. Write the result in the pattern when one is configured. When no format parses the cell, generate a
+  random birth date in the pattern's format and warn once; never keep the original.
+- Apply configured data-to-sampler value mappings and case-insensitive identity matching before sampler candidate
+  selection.
+- If the selected Nemotron-Personas dataset for the locale is missing or unreadable, fail with a configuration error;
+  do not substitute Faker. If a persona row lacks a required generated field, warn once per affected category and fall
+  back deterministically to Faker. A configured or implicit dependency label that selects no Nemotron-Personas candidates is a
+  configuration error, not a fallback condition.
 - Require generated values to differ from originals and satisfy entity-specific constraints.
 - Use one pattern parser for validation and rendering so their grammars cannot drift.
 
@@ -405,7 +547,9 @@ quality information, not invalid configuration.
   hyphens, retain all words, do not guess legal-suffix removal, and enforce the 63-character DNS-label limit.
 - If `{domain}` or `{organization}` cannot be resolved, generate a deterministic compatible value and issue an
   aggregate PII-free warning.
-- Without an email pattern, generate the complete synthetic email address and domain through the sampler.
+- Without an email pattern, build an email that depends on names as `{first}.{last}##@{domain}` from the replaced
+  names (or `{first}##@{domain}` with the one name part available). Otherwise, generate the complete synthetic email address and domain through
+  the sampler.
 
 ## Free-text detection and replacement
 
@@ -516,7 +660,8 @@ than a fixed byte limit. The earlier 48 KiB proposal is removed.
 - Automatic LLM plan discovery reads the full input dataset.
 - Replacement runs after holdout and transforms only the training split.
 - Retain original training and test frames for evaluation.
-- Persist the resolved plan as `<run_dir>/pii_replacement_plan.yaml`.
+- Persist one reusable configuration with the resolved plan and its dependency mappings as
+  `<run_dir>/pii_replacement_config.yaml`.
 - Populate `ColumnStatistics` for every planned target:
   - Structured counts include every non-missing occurrence.
   - Detected-value sets contain unique originals.
@@ -539,9 +684,10 @@ make it explicit opt-in, label the artifact as sensitive, and define access cont
 1. Add the model adapter for `fastino/gliner2-privacy-filter-PII-multi` (already the configured default) and adapt the deterministic regex layer from
    Anonymizer PR 265.
 2. Implement the deep `TabularPiiReplacer` module, DAG compiler, scopes, deterministic mapping keys, group conflict
-   handling, and programmatic entity generators.
+   handling, sampler data-to-sampler value mappings, indexed Nemotron-Personas loading, and programmatic entity generators.
 3. Implement span normalization, cross-source overlap resolution, component-map reuse, and one-pass text construction.
-4. Integrate the replacer after holdout, return the expanded result, persist the resolved plan, and populate statistics.
+4. Integrate the replacer after holdout, return the expanded result, persist the resolved configuration, and populate
+   statistics.
 5. Add focused unit tests, pipeline integration tests, and opt-in live-model evaluations.
 6. Run `mise run check ::: test` before handoff or PR work.
 
@@ -564,6 +710,11 @@ make it explicit opt-in, label the artifact as sensitive, and define access cont
   aggregate warning/count without raw values.
 - Test deterministic seeds, Nemotron-Personas fallback, supported generators, patterns, email-domain behavior, organization
   normalization, masks, birth dates, Luhn cards, original inequality, and collision retries.
+- Test automatic and manual sparse dependency mappings, the shared plan-discovery switch, implicit case-insensitive
+  identity matching, one-to-many candidate unions, full-list entries, unmatched values without entries, missing Nemotron-Personas candidates, mapping validation by
+  source column, and acceptance by both Nemotron-Personas and Faker configurations.
+- Test that Nemotron-Personas assets load only required columns and build reusable candidate indexes rather than scanning the
+  complete asset per generated value.
 - Test component replacement reuse only for independently detected spans.
 - Test generation elapsed time and distinct-generation counts after cache reuse.
 
@@ -586,7 +737,8 @@ make it explicit opt-in, label the artifact as sensitive, and define access cont
 - Only the training split is transformed.
 - Original training and test frames remain available to evaluation.
 - PII replay consumes complete `ColumnStatistics`, including planned columns with no matches.
-- The resolved plan is written to the normal run artifact directory.
+- The resolved plan and its dependency mappings are written as one reusable configuration in the normal run artifact
+  directory.
 - Output shape and index match the input, protected values remain unchanged, and no unplanned columns change.
 - No raw PII, detector content, dependency values, or replacement map appears in logs or error messages.
 

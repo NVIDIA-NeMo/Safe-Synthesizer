@@ -40,7 +40,10 @@ class ReplacementGenerationRequest:
     """
 
     pattern: str | None
-    """Plan pattern the generated value must follow, or ``None`` for the entity default."""
+    """Plan pattern the generated value must follow, or ``None`` for the entity default.
+
+    The default for an email that depends on names is ``{first}.{last}##@{domain}``, built from the dependency values.
+    """
 
     seed: int
     """Seed that makes generation deterministic for equal requests."""

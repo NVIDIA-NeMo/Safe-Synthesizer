@@ -1,0 +1,585 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+from __future__ import annotations
+
+import logging
+import re
+
+import pandas as pd
+import pytest
+
+from nemo_safe_synthesizer.config.replace_pii import (
+    ConditioningColumn,
+    DataToSamplerValueMapping,
+    EntityType,
+    PiiColumnPlan,
+    PiiReplacementPlan,
+    PiiReplacementSettings,
+    PiiSamplerBackend,
+    PiiSamplerConfig,
+)
+from nemo_safe_synthesizer.errors import DataError, GenerationError, ParameterError
+from nemo_safe_synthesizer.pii_replacer.replacement.compiler import compile_plan
+from nemo_safe_synthesizer.pii_replacer.replacement.executor import (
+    ReplacementExecutionResult,
+    StructuredReplacementExecutor,
+    resolve_base_seed,
+)
+from nemo_safe_synthesizer.pii_replacer.replacement.generation import ReplacementGenerationRequest
+from nemo_safe_synthesizer.pii_replacer.replacement.generators import FakerReplacementGenerator
+from nemo_safe_synthesizer.pii_replacer.replacement.value_checks import keeps_original_name_part
+
+
+class _RecordingGenerator:
+    backend = PiiSamplerBackend.FAKER
+
+    def __init__(self) -> None:
+        self.requests: list[ReplacementGenerationRequest] = []
+
+    def generate(self, request: ReplacementGenerationRequest) -> str:
+        self.requests.append(request)
+        dependencies = {
+            entity_type: value.normalized_value
+            for entity_type, value in request.effective_dependency_tuple
+            if value is not None
+        }
+        if request.entity_type is EntityType.EMAIL:
+            prefix = dependencies.get(EntityType.FIRST_NAME) or dependencies.get(EntityType.ORGANIZATION) or "user"
+            return f"{prefix.casefold()}-{request.seed}@synthetic.test"
+        return f"synthetic-{request.entity_type.value}-{request.seed}"
+
+
+class _ParameterErrorGenerator(_RecordingGenerator):
+    def generate(self, request: ReplacementGenerationRequest) -> str:
+        raise ParameterError("the configured sampler cannot produce this value")
+
+
+class _SwapGenerator(_RecordingGenerator):
+    def generate(self, request: ReplacementGenerationRequest) -> str:
+        self.requests.append(request)
+        return {"1.5": "2.5", "2.5": "1.5"}[request.original_value]
+
+
+class _DerivedEmailGenerator(_RecordingGenerator):
+    def generate(self, request: ReplacementGenerationRequest) -> str:
+        self.requests.append(request)
+        return {"ana.ruiz@acme.com": "zoe.park@acme.com", "ben.cole@acme.com": "ana.ruiz@acme.com"}[
+            request.original_value
+        ]
+
+
+class _EchoGenerator(_RecordingGenerator):
+    def generate(self, request: ReplacementGenerationRequest) -> str:
+        self.requests.append(request)
+        return request.original_value
+
+
+class _ScriptedNameGenerator(_RecordingGenerator):
+    def __init__(self, *names: str) -> None:
+        super().__init__()
+        self._names = names
+
+    def generate(self, request: ReplacementGenerationRequest) -> str:
+        self.requests.append(request)
+        return self._names[min(len(self.requests), len(self._names)) - 1]
+
+
+def _warning_counts(caplog: pytest.LogCaptureFixture, field: str) -> list[object]:
+    return [getattr(record, field) for record in caplog.records if hasattr(record, field)]
+
+
+class _ConstantGenerator(_RecordingGenerator):
+    def generate(self, request: ReplacementGenerationRequest) -> str:
+        self.requests.append(request)
+        return "Synthetic"
+
+
+class _OriginalThenReplacementGenerator(_RecordingGenerator):
+    def generate(self, request: ReplacementGenerationRequest) -> str:
+        self.requests.append(request)
+        return request.original_value if len(self.requests) == 1 else "Synthetic"
+
+
+def _target(
+    column_name: str,
+    entity_type: EntityType,
+    *dependencies: tuple[str, EntityType | None],
+) -> PiiColumnPlan:
+    return PiiColumnPlan(
+        column_name=column_name,
+        entity_type=entity_type,
+        depends_on=[
+            ConditioningColumn(column_name=name)
+            if dependency_type is None
+            else ConditioningColumn(column_name=name, entity_type=dependency_type)
+            for name, dependency_type in dependencies
+        ],
+    )
+
+
+def _plan(
+    *targets: PiiColumnPlan,
+    data_to_sampler_value_mapping: DataToSamplerValueMapping | None = None,
+) -> PiiReplacementPlan:
+    return PiiReplacementPlan(
+        columns_to_replace=list(targets),
+        data_to_sampler_value_mapping=data_to_sampler_value_mapping or {},
+    )
+
+
+def _execute(
+    dataframe: pd.DataFrame,
+    plan: PiiReplacementPlan,
+    generator: _RecordingGenerator,
+    *,
+    group_column: str | None = None,
+) -> ReplacementExecutionResult:
+    return StructuredReplacementExecutor(
+        plan,
+        generator,
+        group_column=group_column,
+        base_seed=42,
+    ).execute(dataframe)
+
+
+@pytest.mark.unit
+class TestPlanCompiler:
+    def test_stable_topological_order_preserves_independent_plan_order(self) -> None:
+        plan = _plan(
+            _target("email", EntityType.EMAIL, ("first", None)),
+            _target("unrelated", EntityType.UNIQUE_IDENTIFIER),
+            _target("first", EntityType.FIRST_NAME),
+        )
+
+        assert [spec.column_name for spec in compile_plan(plan)] == ["unrelated", "first", "email"]
+
+    def test_defensively_rejects_a_cycle_when_model_validation_is_bypassed(self) -> None:
+        first = PiiColumnPlan.model_construct(
+            column_name="first",
+            entity_type=EntityType.FIRST_NAME,
+            pattern=None,
+            depends_on=[ConditioningColumn.model_construct(column_name="full", entity_type=EntityType.FULL_NAME)],
+        )
+        full = PiiColumnPlan.model_construct(
+            column_name="full",
+            entity_type=EntityType.FULL_NAME,
+            pattern=None,
+            depends_on=[ConditioningColumn.model_construct(column_name="first", entity_type=EntityType.FIRST_NAME)],
+        )
+
+        with pytest.raises(ParameterError, match="cycle involving"):
+            compile_plan(PiiReplacementPlan.model_construct(columns_to_replace=[first, full]))
+
+
+@pytest.mark.unit
+class TestStructuredReplacementExecutor:
+    def test_resolves_sampler_values_from_the_dependency_source_column(self) -> None:
+        dataframe = pd.DataFrame({"first_name": ["Ada"], "sex": ["Woman"]})
+        plan = _plan(
+            _target("first_name", EntityType.FIRST_NAME, ("sex", EntityType.GENDER)),
+            data_to_sampler_value_mapping={"sex": {"Woman": ["female"]}},
+        )
+        generator = _RecordingGenerator()
+
+        _execute(dataframe, plan, generator)
+
+        assert generator.requests[0].resolved_dependency_values == ((EntityType.GENDER, ("female",)),)
+
+    def test_matches_mapping_keys_for_non_string_dependency_values(self) -> None:
+        dataframe = pd.DataFrame({"first_name": ["Ada", "Grace"], "sex": [1.0, 2.0]})
+        plan = _plan(
+            _target("first_name", EntityType.FIRST_NAME, ("sex", EntityType.GENDER)),
+            data_to_sampler_value_mapping={"sex": {"1.0": ["female"], "2.0": ["male"]}},
+        )
+        generator = _RecordingGenerator()
+
+        _execute(dataframe, plan, generator)
+
+        assert [request.resolved_dependency_values for request in generator.requests] == [
+            ((EntityType.GENDER, ("female",)),),
+            ((EntityType.GENDER, ("male",)),),
+        ]
+
+    def test_reads_upstream_replacements_and_preserves_duplicate_indexes(self) -> None:
+        dataframe = pd.DataFrame(
+            {"first": ["Ada", "Grace"], "email": ["ada@example.com", "grace@example.com"]},
+            index=[7, 7],
+        )
+        original = dataframe.copy(deep=True)
+        plan = _plan(
+            _target("email", EntityType.EMAIL, ("first", None)),
+            _target("first", EntityType.FIRST_NAME),
+        )
+        generator = _RecordingGenerator()
+
+        result = _execute(dataframe, plan, generator)
+
+        pd.testing.assert_frame_equal(dataframe, original)
+        assert result.dataframe.index.tolist() == [7, 7]
+        assert [request.entity_type for request in generator.requests] == [
+            EntityType.FIRST_NAME,
+            EntityType.FIRST_NAME,
+            EntityType.EMAIL,
+            EntityType.EMAIL,
+        ]
+        dependency_values = [request.effective_dependency_tuple[0][1] for request in generator.requests[2:]]
+        assert all(value is not None for value in dependency_values)
+        assert [value.normalized_value for value in dependency_values if value is not None] == result.dataframe[
+            "first"
+        ].tolist()
+
+    def test_record_scope_uses_row_position_and_preserves_nulls(self) -> None:
+        dataframe = pd.DataFrame({"first_name": ["Ada", "Ada", None]}, index=[1, 1, 1])
+        plan = _plan(_target("first_name", EntityType.FIRST_NAME))
+        generator = _RecordingGenerator()
+
+        result = _execute(dataframe, plan, generator)
+
+        assert result.dataframe["first_name"].iloc[0] != result.dataframe["first_name"].iloc[1]
+        assert pd.isna(result.dataframe["first_name"].iloc[2])
+        assert result.generation_statistics.generated_replacement_count == 2
+        assert result.column_statistics["first_name"].detected_entity_counts == {"first_name": 2}
+
+    def test_repeated_identifiers_only_need_to_differ_from_their_own_original(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        caplog.set_level(logging.WARNING)
+        # 100 rows share 5 two-digit IDs, so the column is not all distinct and replacements may repeat.
+        originals = [f"{10 + row % 5}" for row in range(100)]
+        dataframe = pd.DataFrame({"hospitalid": originals})
+        plan = _plan(_target("hospitalid", EntityType.UNIQUE_IDENTIFIER))
+
+        result = _execute(dataframe, plan, _RecordingGenerator())
+
+        replaced = result.dataframe["hospitalid"].tolist()
+        assert all(new != old and len(new) <= 2 for new, old in zip(replaced, originals, strict=True))
+        assert _warning_counts(caplog, "repeated_count") == []
+
+    def test_natural_attributes_may_repeat_across_independent_mappings(self) -> None:
+        dataframe = pd.DataFrame({"first_name": ["Ada", "Grace"]})
+        plan = _plan(_target("first_name", EntityType.FIRST_NAME))
+
+        result = _execute(dataframe, plan, _ConstantGenerator())
+
+        assert result.dataframe["first_name"].tolist() == ["Synthetic", "Synthetic"]
+        assert result.generation_statistics.generated_replacement_count == 2
+
+    def test_unchanged_candidate_is_resampled_with_a_new_seed(self) -> None:
+        dataframe = pd.DataFrame({"first_name": ["Ada"]})
+        plan = _plan(_target("first_name", EntityType.FIRST_NAME))
+        generator = _OriginalThenReplacementGenerator()
+
+        result = _execute(dataframe, plan, generator)
+
+        assert result.dataframe["first_name"].tolist() == ["Synthetic"]
+        assert len(generator.requests) == 2
+        assert generator.requests[0].seed != generator.requests[1].seed
+
+    def test_candidate_equal_to_the_original_ignoring_case_is_resampled(self) -> None:
+        dataframe = pd.DataFrame({"first_name": ["Ada"]})
+        plan = _plan(_target("first_name", EntityType.FIRST_NAME))
+        generator = _ScriptedNameGenerator("ADA", "Kathleen")
+
+        result = _execute(dataframe, plan, generator)
+
+        assert result.dataframe["first_name"].tolist() == ["Kathleen"]
+        assert len(generator.requests) == 2
+
+    def test_identifier_replacements_avoid_repeats_before_accepting_one(self) -> None:
+        dataframe = pd.DataFrame({"identifier": ["USER-1", "USER-2"]})
+        plan = _plan(_target("identifier", EntityType.UNIQUE_IDENTIFIER))
+        generator = _ConstantGenerator()
+
+        result = _execute(dataframe, plan, generator)
+
+        # The second row retries every attempt for an unused value before repeating "Synthetic",
+        # written in capitals like the originals.
+        assert result.dataframe["identifier"].tolist() == ["SYNTHETIC", "SYNTHETIC"]
+        assert len(generator.requests) == 11
+
+    def test_values_differing_only_in_letter_case_share_a_replacement_in_their_own_case(self) -> None:
+        dataframe = pd.DataFrame({"patient": ["A", "A", "A", "B"], "first_name": ["Ada", "ADA", "ada", "Ada"]})
+        plan = _plan(_target("first_name", EntityType.FIRST_NAME))
+        generator = _ScriptedNameGenerator("Kathleen", "Grace")
+
+        result = _execute(dataframe, plan, generator, group_column="patient")
+
+        assert result.dataframe["first_name"].tolist() == ["Kathleen", "KATHLEEN", "kathleen", "Grace"]
+        assert result.generation_statistics.generated_replacement_count == 2
+
+    def test_group_scope_reuses_name_replacements_within_a_group_only(self) -> None:
+        dataframe = pd.DataFrame({"patient": ["A", "A", "B"], "first_name": ["Ada", "Ada", "Ada"]})
+        plan = _plan(_target("first_name", EntityType.FIRST_NAME))
+
+        result = _execute(dataframe, plan, _RecordingGenerator(), group_column="patient")
+
+        replaced = result.dataframe["first_name"].tolist()
+        assert replaced[0] == replaced[1]
+        assert replaced[0] != replaced[2]
+
+    def test_column_statistics_report_per_column_fallbacks_without_serializing_originals(self) -> None:
+        dataframe = pd.DataFrame(
+            {
+                "patient": ["A", "A", "B"],
+                "organization": ["First Org", "Different Org", "Third Org"],
+                "email": ["same@example.com"] * 3,
+                "ssn": ["111-11-1111", "222-22-2222", "333-33-3333"],
+            }
+        )
+        plan = _plan(
+            _target("email", EntityType.EMAIL, ("organization", EntityType.ORGANIZATION)),
+            _target("ssn", EntityType.SSN),
+        )
+
+        result = _execute(dataframe, plan, _ConstantGenerator(), group_column="patient")
+
+        email, ssn = result.column_statistics["email"], result.column_statistics["ssn"]
+        assert email.dependency_drift_count == 1
+        assert ssn.repeated_replacement_count == 2
+        assert ssn.detected_entity_values == {"ssn": {"111-11-1111", "222-22-2222", "333-33-3333"}}
+        assert "detected_entity_values" not in ssn.model_dump()
+        assert "111-11-1111" not in repr(ssn)
+
+    def test_group_scope_snapshots_replaced_group_keys_and_reports_dependency_drift(self) -> None:
+        dataframe = pd.DataFrame(
+            {
+                "patient": ["A", "A", "B"],
+                "organization": ["First Org", "Different Org", "Third Org"],
+                "email": ["same@example.com"] * 3,
+            },
+            index=[4, 4, 4],
+        )
+        plan = _plan(
+            _target("patient", EntityType.UNIQUE_IDENTIFIER),
+            _target("email", EntityType.EMAIL, ("organization", EntityType.ORGANIZATION)),
+        )
+        generator = _RecordingGenerator()
+
+        result = _execute(dataframe, plan, generator, group_column="patient")
+
+        assert result.dataframe["patient"].iloc[0] == result.dataframe["patient"].iloc[1]
+        assert result.dataframe["patient"].iloc[0] != result.dataframe["patient"].iloc[2]
+        assert result.dataframe["email"].iloc[0] == result.dataframe["email"].iloc[1]
+        assert result.dataframe["email"].iloc[0] != result.dataframe["email"].iloc[2]
+        assert len(result.dependency_drifts) == 1
+        assert result.dependency_drifts[0].as_log_extra() == {
+            "target_column": "email",
+            "conditioner_entity_types": ["organization"],
+            "conflict_count": 1,
+        }
+        assert result.generation_statistics.generated_replacement_count == 4
+        assert result.generation_statistics.dependency_drift_count == 1
+
+    def test_group_scope_rejects_rows_without_a_group_identifier(self) -> None:
+        dataframe = pd.DataFrame({"patient": ["A", None], "email": ["same@example.com"] * 2})
+        plan = _plan(_target("email", EntityType.EMAIL))
+
+        with pytest.raises(DataError, match="'patient' has 1 missing value"):
+            _execute(dataframe, plan, _RecordingGenerator(), group_column="patient")
+
+    def test_a_distinct_numeric_key_is_replaced_from_a_range_wide_enough_to_stay_distinct(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        caplog.set_level(logging.WARNING)
+        dataframe = pd.DataFrame({"row": list(range(1000))})
+        plan = _plan(_target("row", EntityType.UNIQUE_IDENTIFIER))
+
+        result = _execute(dataframe, plan, _RecordingGenerator())
+
+        replaced = result.dataframe["row"].tolist()
+        assert len(set(replaced)) == 1000
+        assert all(new != str(old) for new, old in zip(replaced, range(1000), strict=True))
+        assert all(value.isdigit() and len(value) <= 4 for value in replaced)
+        assert "Widened replacement identifiers" in caplog.text
+
+    def test_patterned_distinct_identifiers_get_distinct_mask_values(self) -> None:
+        originals = [f"USER-{value}" for value in range(5)]
+        dataframe = pd.DataFrame({"user": originals})
+        plan = _plan(PiiColumnPlan(column_name="user", entity_type=EntityType.UNIQUE_IDENTIFIER, pattern="USER-#"))
+
+        result = _execute(dataframe, plan, _RecordingGenerator())
+
+        replaced = result.dataframe["user"].tolist()
+        assert len(set(replaced)) == 5
+        assert all(re.fullmatch(r"USER-\d", new) and new != old for new, old in zip(replaced, originals, strict=True))
+
+    def test_mask_with_room_keeps_a_distinct_column_distinct(self) -> None:
+        originals = [f"USER-{value}" for value in range(8)]
+        dataframe = pd.DataFrame({"user": originals})
+        plan = _plan(PiiColumnPlan(column_name="user", entity_type=EntityType.UNIQUE_IDENTIFIER, pattern="USER-#"))
+
+        result = _execute(dataframe, plan, _RecordingGenerator())
+
+        replaced = result.dataframe["user"].tolist()
+        assert len(set(replaced)) == 8
+        assert all(new != old for new, old in zip(replaced, originals, strict=True))
+
+    def test_mask_with_no_spare_values_never_returns_the_own_original(self) -> None:
+        originals = [f"USER-{value}" for value in range(10)]
+        dataframe = pd.DataFrame({"user": originals})
+        plan = _plan(PiiColumnPlan(column_name="user", entity_type=EntityType.UNIQUE_IDENTIFIER, pattern="USER-#"))
+
+        result = _execute(dataframe, plan, _RecordingGenerator())
+
+        replaced = result.dataframe["user"].tolist()
+        assert all(new != old for new, old in zip(replaced, originals, strict=True))
+
+    def test_mask_that_can_only_produce_the_original_is_a_configuration_error(self) -> None:
+        dataframe = pd.DataFrame({"user": ["USER-0"]})
+        plan = _plan(PiiColumnPlan(column_name="user", entity_type=EntityType.UNIQUE_IDENTIFIER, pattern="USER-[0]"))
+
+        with pytest.raises(ParameterError, match="cannot produce any value other than the original"):
+            _execute(dataframe, plan, _RecordingGenerator())
+
+    def test_an_identifier_may_take_another_rows_original(self, caplog: pytest.LogCaptureFixture) -> None:
+        caplog.set_level(logging.WARNING)
+        dataframe = pd.DataFrame({"id": [1.5, 2.5]})
+        plan = _plan(_target("id", EntityType.UNIQUE_IDENTIFIER))
+
+        result = _execute(dataframe, plan, _SwapGenerator())
+
+        assert result.dataframe["id"].tolist() == ["2.5", "1.5"]
+        assert caplog.records == []
+
+    def test_derived_email_equal_to_another_rows_original_is_accepted(self, caplog: pytest.LogCaptureFixture) -> None:
+        caplog.set_level(logging.WARNING)
+        # Ben's replacement email is fully determined by his replaced name, and it is Ana's real address.
+        dataframe = pd.DataFrame({"email": ["ana.ruiz@acme.com", "ben.cole@acme.com"]})
+        plan = _plan(_target("email", EntityType.EMAIL))
+
+        result = _execute(dataframe, plan, _DerivedEmailGenerator())
+
+        assert result.dataframe["email"].tolist() == ["zoe.park@acme.com", "ana.ruiz@acme.com"]
+        assert caplog.records == []
+
+    def test_unpatterned_email_is_built_from_the_replaced_names_it_depends_on(self) -> None:
+        # Mixed local-part formats leave the planned email without a pattern; the dependency must still apply.
+        dataframe = pd.DataFrame(
+            {
+                "first_name": ["Brenda", "Bobby", "Patrick"],
+                "last_name": ["Rivera", "Hughes", "Adams"],
+                "email": ["brenda.rivera@yahoo.com", "hughes_b@gmail.com", "padams@hotmail.com"],
+            }
+        )
+        plan = _plan(
+            _target(
+                "email", EntityType.EMAIL, ("first_name", EntityType.FIRST_NAME), ("last_name", EntityType.LAST_NAME)
+            ),
+            _target("first_name", EntityType.FIRST_NAME),
+            _target("last_name", EntityType.LAST_NAME),
+        )
+        generator = FakerReplacementGenerator(
+            settings=PiiReplacementSettings(),
+            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+        )
+
+        replaced = (
+            StructuredReplacementExecutor(plan, generator, group_column=None, base_seed=42).execute(dataframe).dataframe
+        )
+
+        for first, last, domain, email in zip(
+            replaced["first_name"],
+            replaced["last_name"],
+            ["yahoo.com", "gmail.com", "hotmail.com"],
+            replaced["email"],
+            strict=True,
+        ):
+            assert re.fullmatch(
+                rf"{re.escape(first.lower())}\.{re.escape(last.lower())}\d{{2}}@{re.escape(domain)}", email
+            )
+        assert not set(replaced["first_name"]) & set(dataframe["first_name"])
+
+    def test_full_name_replacement_that_keeps_the_original_first_name_is_retried(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        caplog.set_level(logging.WARNING)
+        dataframe = pd.DataFrame({"full_name": ["John Smith"]})
+
+        result = _execute(
+            dataframe,
+            _plan(_target("full_name", EntityType.FULL_NAME)),
+            _ScriptedNameGenerator("John Brown", "Mary Jones"),
+        )
+
+        assert result.dataframe["full_name"].tolist() == ["Mary Jones"]
+        assert _warning_counts(caplog, "kept_name_part_count") == []
+
+    def test_full_name_that_can_only_keep_a_name_part_is_used_with_a_warning(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        # A dependency can fix the first name, as when it is copied from a linked first-name column.
+        caplog.set_level(logging.WARNING)
+        dataframe = pd.DataFrame({"full_name": ["John Smith"]})
+
+        result = _execute(
+            dataframe, _plan(_target("full_name", EntityType.FULL_NAME)), _ScriptedNameGenerator("John Brown")
+        )
+
+        assert result.dataframe["full_name"].tolist() == ["John Brown"]
+        assert _warning_counts(caplog, "kept_name_part_count") == [1]
+
+    @pytest.mark.parametrize(
+        ("original", "candidate", "pattern", "keeps"),
+        [
+            ("John Smith", "John Brown", None, True),
+            ("John Smith", "Mary Smith", None, True),
+            ("John Smith", "Mary Brown", None, False),
+            ("Smith, John", "Brown, John", "{Last}, {First}", True),
+            ("Dr. Ana Ruiz", "Dr. Maria Lopez", "Dr. {First} {Last}", False),
+            ("J. Smith", "J. Brown", None, False),
+        ],
+    )
+    def test_keeps_original_name_part_compares_first_and_last_names(
+        self,
+        original: str,
+        candidate: str,
+        pattern: str | None,
+        keeps: bool,
+    ) -> None:
+        assert keeps_original_name_part(original, candidate, pattern) is keeps
+
+    def test_replacement_equal_to_its_own_original_still_fails(self) -> None:
+        dataframe = pd.DataFrame({"first_name": ["Jeremy"]})
+        plan = _plan(_target("first_name", EntityType.FIRST_NAME))
+
+        with pytest.raises(GenerationError, match="differs from the original"):
+            _execute(dataframe, plan, _EchoGenerator())
+
+    def test_project_errors_from_the_generator_are_not_rewrapped(self) -> None:
+        dataframe = pd.DataFrame({"first_name": ["Ada"]})
+        plan = _plan(_target("first_name", EntityType.FIRST_NAME))
+
+        with pytest.raises(ParameterError, match="configured sampler cannot"):
+            _execute(dataframe, plan, _ParameterErrorGenerator())
+
+    def test_free_text_target_fails_before_mutating_the_input(self) -> None:
+        dataframe = pd.DataFrame({"notes": ["Ada called"]})
+        original = dataframe.copy(deep=True)
+        plan = _plan(_target("notes", EntityType.FREE_TEXT))
+
+        with pytest.raises(GenerationError, match="detector and span-resolution"):
+            _execute(dataframe, plan, _RecordingGenerator())
+
+        pd.testing.assert_frame_equal(dataframe, original)
+
+
+@pytest.mark.unit
+class TestResolveBaseSeed:
+    def test_precedence_is_explicit_then_environment_then_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("PERSON_RANDOM_SEED", "17")
+
+        assert resolve_base_seed(9) == 9
+        assert resolve_base_seed(None) == 17
+        monkeypatch.delenv("PERSON_RANDOM_SEED")
+        assert resolve_base_seed(None) == 42
+
+    def test_invalid_environment_seed_is_a_parameter_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("PERSON_RANDOM_SEED", "not-an-integer")
+
+        with pytest.raises(ParameterError, match="PERSON_RANDOM_SEED must be an integer"):
+            resolve_base_seed(None)
