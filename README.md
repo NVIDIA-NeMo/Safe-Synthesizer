@@ -476,6 +476,10 @@ export NEMO_TELEMETRY_ENABLED=false
 
 Use of third-party endpoints, including NVIDIA Build: NeMo Safe Synthesizer can be configured to use various inference endpoints, including build.nvidia.com (NVIDIA Build). If you choose to use NVIDIA Build or any other third-party endpoint, that endpoint's own terms of service and privacy practices apply independently of this library. Any opt-out you exercise within NeMo Safe Synthesizer does not extend to data collection by your chosen endpoint. NVIDIA Build is intended for evaluation and testing purposes only and may not be used in production environments. Do not submit any confidential information or personal data when using NVIDIA Build.
 
+## Contributing
+
+See the [Contributing Guide](CONTRIBUTING.md) for development setup and contribution requirements. Before submitting an external PR, including a draft, link an existing, open issue that a maintainer has labeled `triaged`. Newly opened or reopened external PRs without one are automatically closed; you may reopen after the issue is triaged.
+
 ## License
 
 NeMo Safe Synthesizer is licensed under the [Apache License 2.0](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/LICENSE).
