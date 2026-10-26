@@ -27,28 +27,28 @@ resolution-markers = [
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
 ]
 supported-markers = [
@@ -85,7 +85,7 @@ constraints = [
     { name = "pandas", specifier = "<3" },
     { name = "pillow", specifier = ">=13.0.0" },
     { name = "pygments", specifier = ">=2.20.0" },
-    { name = "pyjwt", specifier = ">=2.15.0" },
+    { name = "pyjwt", specifier = ">=2.15.1" },
     { name = "pymdown-extensions", specifier = ">=11.0.1" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "python-multipart", specifier = ">=0.0.31" },
@@ -600,20 +600,20 @@ resolution-markers = [
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/c7/0e/7fa0ef50764b67090eca4114772a2abf8b6148198475e54c660b97caeee6/click-8.5.0.tar.gz", hash = "sha256:ba0d2089de75ea0310e2dde03160e6ca10009947fb95a182f9b54021bb272e34", size = 382235, upload-time = "2026-08-26T13:33:14.56Z" }
@@ -808,8 +808,8 @@ resolution-markers = [
     "python_full_version == '3.12.*' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -842,8 +842,8 @@ resolution-markers = [
     "python_full_version == '3.12.*' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -903,8 +903,8 @@ resolution-markers = [
     "python_full_version == '3.12.*' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -926,8 +926,8 @@ resolution-markers = [
     "python_full_version == '3.12.*' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -970,8 +970,8 @@ resolution-markers = [
     "python_full_version == '3.12.*' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux'",
 ]
 wheels = [
@@ -1025,8 +1025,8 @@ resolution-markers = [
     "python_full_version == '3.12.*' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux'",
 ]
 wheels = [
@@ -1103,28 +1103,28 @@ resolution-markers = [
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
 ]
 dependencies = [
@@ -1514,8 +1514,8 @@ resolution-markers = [
     "python_full_version == '3.12.*' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux'",
 ]
 wheels = [
@@ -1535,8 +1535,8 @@ resolution-markers = [
     "python_full_version == '3.12.*' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux'",
 ]
 wheels = [
@@ -1687,28 +1687,28 @@ resolution-markers = [
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/10/a1/ae4e3e5003468d6391d2c77b6fa1cd73bd5d13511d81c642d7b28ac90ed4/fsspec-2026.6.0.tar.gz", hash = "sha256:f5bac145310fe30e16e1471bd6840b2d990d609e872251d7e674241822abf01a", size = 313646, upload-time = "2026-06-16T01:57:28.105Z" }
@@ -1919,20 +1919,20 @@ resolution-markers = [
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/9e/27/06d899ea7bd721d272f84aac98bdb238de98af4cc767a69056d967d68c71/hf_xet-1.7.0.tar.gz", hash = "sha256:d406ec79053c0871817f700c2ac8c36ba0d87f9c34b7458b0f0063bb218b0466", size = 985689, upload-time = "2026-10-06T20:18:43.89Z" }
@@ -2089,20 +2089,20 @@ resolution-markers = [
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
 ]
 dependencies = [
@@ -2204,20 +2204,20 @@ resolution-markers = [
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/f5/08/8eea9d4b8302028f3abb2c0813953f7aec26d33b7a8960ed760e65ff29fa/idna-3.20.tar.gz", hash = "sha256:a7db850025b95ded1eae8a46181a1a6c56c92c96f0e2b005d9ff8dc0210cab44", size = 216463, upload-time = "2026-09-17T14:11:04.752Z" }
@@ -3889,8 +3889,8 @@ resolution-markers = [
     "python_full_version == '3.12.*' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux'",
 ]
 wheels = [
@@ -3910,8 +3910,8 @@ resolution-markers = [
     "python_full_version == '3.12.*' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux'",
 ]
 wheels = [
@@ -3940,8 +3940,8 @@ resolution-markers = [
     "python_full_version == '3.12.*' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux'",
 ]
 wheels = [
@@ -3961,8 +3961,8 @@ resolution-markers = [
     "python_full_version == '3.12.*' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux'",
 ]
 wheels = [
@@ -5085,28 +5085,28 @@ resolution-markers = [
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
-    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'arm64' and sys_platform == 'darwin' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra == 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
+    "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
     "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-21-nemo-safe-synthesizer-cpu' and extra != 'extra-21-nemo-safe-synthesizer-cu129' and extra != 'extra-21-nemo-safe-synthesizer-cu130'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/88/22/134986a4cc224d593c1afde5494d18ff629393d74cc2eddb176669f234a4/pyarrow-23.0.1.tar.gz", hash = "sha256:b8c5873e33440b2bc2f4a79d2b47017a89c5a24116c055625e6f2ee50523f019", size = 1167336, upload-time = "2026-02-16T10:14:12.39Z" }
@@ -6554,8 +6554,8 @@ resolution-markers = [
     "python_full_version == '3.12.*' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -6593,8 +6593,8 @@ resolution-markers = [
     "python_full_version == '3.12.*' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -6639,8 +6639,8 @@ resolution-markers = [
     "python_full_version == '3.12.*' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -6712,10 +6712,10 @@ resolution-markers = [
     "python_full_version >= '3.12' and platform_machine == 'arm64' and sys_platform == 'darwin'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'arm64' and sys_platform == 'darwin'",
-    "python_full_version < '3.11.5' and platform_machine == 'arm64' and sys_platform == 'darwin'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
+    "python_full_version < '3.11.5' and platform_machine == 'arm64' and sys_platform == 'darwin'",
     "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux'",
 ]
 wheels = [
@@ -6795,8 +6795,8 @@ resolution-markers = [
     "python_full_version == '3.12.*' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux'",
 ]
 wheels = [
@@ -6826,8 +6826,8 @@ resolution-markers = [
     "python_full_version == '3.12.*' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux'",
 ]
 wheels = [
@@ -6857,8 +6857,8 @@ resolution-markers = [
     "python_full_version == '3.12.*' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux'",
 ]
 wheels = [
@@ -6915,8 +6915,8 @@ resolution-markers = [
     "python_full_version == '3.12.*' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux'",
 ]
 wheels = [
@@ -6944,8 +6944,8 @@ resolution-markers = [
     "python_full_version == '3.12.*' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux'",
 ]
 wheels = [
@@ -6973,8 +6973,8 @@ resolution-markers = [
     "python_full_version == '3.12.*' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux'",
 ]
 wheels = [
@@ -7034,8 +7034,8 @@ resolution-markers = [
     "python_full_version == '3.12.*' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -7068,8 +7068,8 @@ resolution-markers = [
     "python_full_version == '3.12.*' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -7102,8 +7102,8 @@ resolution-markers = [
     "python_full_version == '3.12.*' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -7193,8 +7193,8 @@ resolution-markers = [
     "python_full_version == '3.12.*' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux'",
 ]
 wheels = [
@@ -7222,8 +7222,8 @@ resolution-markers = [
     "python_full_version == '3.12.*' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux'",
 ]
 wheels = [
@@ -7251,8 +7251,8 @@ resolution-markers = [
     "python_full_version == '3.12.*' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux'",
 ]
 wheels = [
@@ -7460,8 +7460,8 @@ resolution-markers = [
     "python_full_version == '3.12.*' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -7559,8 +7559,8 @@ resolution-markers = [
     "python_full_version == '3.12.*' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -7657,8 +7657,8 @@ resolution-markers = [
     "python_full_version == '3.12.*' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
-    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version >= '3.11.5' and python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "python_full_version < '3.11.5' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version < '3.11.5' and platform_machine == 'aarch64' and sys_platform == 'linux'",
 ]
 dependencies = [
