@@ -204,8 +204,8 @@ def resolve_plan(
     """Resolve, validate, and optionally persist one replacement plan.
 
     Inline plans and plan files are authoritative and bypass discovery.
-    Auto-discovery always runs the heuristic adapter first, then runs an LLM
-    enhancer only when ``config.llm`` is configured. When no ``enhancer`` is
+    Auto-discovery runs the heuristic adapter first, then the LLM enhancer
+    configured by ``config.llm``. When no ``enhancer`` is
     supplied, the default enhancer runs against a managed local vLLM server
     unless ``NSS_INFERENCE_ENDPOINT`` selects another service; that server
     stops as soon as enhancement ends. Dataframe-aware validation occurs once, after the final plan has
@@ -216,9 +216,7 @@ def resolve_plan(
     else:
         discovery_input = _prepare_discovery_input(df, data_config, time_series)
         baseline = (discoverer or HeuristicPlanDiscoverer()).discover(discovery_input)
-        if config.llm is None:
-            plan = baseline
-        elif enhancer is not None:
+        if enhancer is not None:
             plan = enhancer.enhance(discovery_input, baseline)
         else:
             plan = _enhance_with_default_llm(config.llm, discovery_input, baseline)
@@ -251,7 +249,7 @@ def resolve_replacement_config(
     """Resolve the replacement plan and its data-to-sampler value mapping for ``df``.
 
     The plan comes from ``config`` or, for ``auto_discovery``, from the
-    discoverer and, when ``config.llm`` is set, the LLM enhancer. The value
+    discoverer and the LLM enhancer. The value
     mapping then combines built-in entries for common gender spellings, the
     plan's own entries, and, for ``auto_discovery``, discovered entries for any
     remaining conditioner values without a sampler match.
@@ -262,8 +260,8 @@ def resolve_replacement_config(
         data_config: Data parameters, used for grouping and protected columns.
         time_series: Time-series parameters, used for protected columns.
         discoverer: Plan discoverer for ``auto_discovery``; defaults to the heuristic discoverer.
-        enhancer: Plan enhancer; defaults to the LLM enhancer when ``config.llm`` is set.
-        mapping_discoverer: Value-mapping discoverer; defaults to the LLM enhancer when ``config.llm`` is set.
+        enhancer: Plan enhancer; defaults to the LLM enhancer configured by ``config.llm``.
+        mapping_discoverer: Value-mapping discoverer; defaults to the LLM enhancer configured by ``config.llm``.
         sampler_value_catalog: Sampler values per entity type; loaded from the configured sampler when omitted.
         check_pattern_coverage: Require each pattern to cover at least 99% of ``df``'s values; see
             ``validate_plan``.
@@ -286,7 +284,7 @@ def resolve_replacement_config(
         ``"Woman"`` resolve to ``{"sex": {"F": ["female"], "Woman": ["female"]}}``
         without an LLM, while a value such as ``"X"`` needs a mapping entry.
     """
-    if config.llm is not None and config.is_auto_discovery and enhancer is None and mapping_discoverer is None:
+    if config.is_auto_discovery and enhancer is None and mapping_discoverer is None:
         from ..local_inference import planning_inference_settings
         from .llm import LLMPlanEnhancer
 
@@ -358,13 +356,8 @@ def _resolve_replacement_config(
     if discover_plan and mapping_inputs(df, plan, catalog):
         if mapping_discoverer is not None:
             discovered = mapping_discoverer.discover_data_to_sampler_value_mapping(df, plan, catalog)
-        elif config.llm is not None:
-            discovered = _discover_mappings_with_default_llm(config.llm, df, plan, catalog)
         else:
-            raise ParameterError(
-                "automatic data-to-sampler value mapping found dataset values without case-insensitive sampler "
-                "matches; configure replace_pii.llm, or generate and edit an explicit replacement plan"
-            )
+            discovered = _discover_mappings_with_default_llm(config.llm, df, plan, catalog)
         mappings = _merged_value_mappings(mappings, discovered)
 
     resolved_plan = PiiReplacementPlan(

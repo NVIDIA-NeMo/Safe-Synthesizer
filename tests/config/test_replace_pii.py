@@ -398,9 +398,13 @@ class TestReplacePiiConfig:
         assert config.is_auto_discovery
         assert config.plan_path is None
         assert config.inline_plan is None
-        assert config.llm is None
+        assert config.llm == LLMConfig()
         assert config.sampler.backend is PiiSamplerBackend.NEMOTRON_PERSONAS
         assert ENTITY_BY_TYPE[EntityType.FREE_TEXT].action is EntityAction.REPLACE_IN_TEXT
+
+    def test_null_llm_is_rejected_with_the_ways_to_skip_it(self) -> None:
+        with pytest.raises(ValidationError, match="give an inline plan or plan file"):
+            ReplacePiiConfig.model_validate({"llm": None})
 
     def test_missing_schema_version_is_v3_and_sparse_serialization_includes_it(self) -> None:
         config = ReplacePiiConfig.model_validate({})
