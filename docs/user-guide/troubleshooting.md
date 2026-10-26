@@ -598,10 +598,10 @@ complete date is unexpectedly skipped, inspect the aggregate warning count
 with `-v` and report the date format without sharing the original value.
 
 Nemotron-Personas sampling expects `<managed-assets>/datasets/<locale>.parquet`. Set
-`replace_pii.sampler.nemotron_personas_path` or `NSS_NEMOTRON_PERSONAS_PATH` when the
+`replace_pii.replacement.sampler.nemotron_personas_path` or `NSS_NEMOTRON_PERSONAS_PATH` when the
 assets are stored elsewhere. When this sampler is selected and the locale file is
 missing or unreadable, replacement fails with a configuration error; set
-`replace_pii.sampler.backend: faker` to replace PII without persona data. Fields a
+`replace_pii.replacement.sampler.backend: faker` to replace PII without persona data. Fields a
 persona row lacks, and entity types that are not persona fields, still use Faker.
 Dependency values that select no Nemotron-Personas candidates are configuration
 errors and must be fixed in `data_to_sampler_value_mapping`.
