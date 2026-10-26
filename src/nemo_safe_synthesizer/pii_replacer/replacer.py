@@ -112,10 +112,9 @@ class TabularPiiReplacer:
         from .replacement.generators import FakerReplacementGenerator, NemotronPersonasReplacementGenerator
 
         settings = config.replacement
-        sampler = config.sampler
-        match sampler.backend:
+        match settings.sampler.backend:
             case PiiSamplerBackend.NEMOTRON_PERSONAS:
-                return NemotronPersonasReplacementGenerator(settings=settings, sampler=sampler)
+                return NemotronPersonasReplacementGenerator(settings=settings)
             case PiiSamplerBackend.FAKER:
-                return FakerReplacementGenerator(settings=settings, sampler=sampler)
-        raise InternalError(f"Unsupported PII sampler backend: {sampler.backend!r}")
+                return FakerReplacementGenerator(settings=settings)
+        raise InternalError(f"Unsupported PII sampler backend: {settings.sampler.backend!r}")

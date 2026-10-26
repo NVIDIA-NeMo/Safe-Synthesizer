@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, ClassVar, Never
 import numpy as np
 import pandas as pd
 
-from ....config.replace_pii import EntityType, PiiReplacementSettings, PiiSamplerBackend, PiiSamplerConfig
+from ....config.replace_pii import EntityType, PiiReplacementSettings, PiiSamplerBackend
 from ....errors import InternalError, ParameterError
 from ....observability import get_logger
 from ...sampler_catalog import (
@@ -44,25 +44,24 @@ class NemotronPersonasReplacementGenerator:
     """Generate structured replacements using Nemotron-Personas assets.
 
     Args:
-        settings: Locale and seed configuration shared by replacement
-            generators.
-        sampler: Nemotron-Personas sampler configuration, including its asset path.
+        settings: Locale, seed, and sampler configuration; the sampler backend must be
+            Nemotron-Personas, and its asset path locates the locale's dataset.
 
     """
 
     backend: ClassVar[PiiSamplerBackend] = PiiSamplerBackend.NEMOTRON_PERSONAS
 
-    def __init__(self, *, settings: PiiReplacementSettings, sampler: PiiSamplerConfig) -> None:
-        if sampler.backend is not self.backend:
+    def __init__(self, *, settings: PiiReplacementSettings) -> None:
+        backend = settings.sampler.backend
+        if backend is not self.backend:
             raise InternalError(
-                f"{type(self).__name__} requires the {self.backend.value} sampler backend, got {sampler.backend.value}"
+                f"{type(self).__name__} requires the {self.backend.value} sampler backend, got {backend.value}"
             )
         self._settings = settings
-        self._sampler = sampler
-        self._dataset_path = require_nemotron_personas_dataset(settings, sampler)
+        self._dataset_path = require_nemotron_personas_dataset(settings)
+        faker_sampler = settings.sampler.model_copy(update={"backend": PiiSamplerBackend.FAKER})
         self._fallback_generator = FakerReplacementGenerator(
-            settings=settings,
-            sampler=sampler.model_copy(update={"backend": PiiSamplerBackend.FAKER}),
+            settings=settings.model_copy(update={"sampler": faker_sampler})
         )
         self._personas: pd.DataFrame | None = None
         self._persona_value_columns: dict[str, str] = {}

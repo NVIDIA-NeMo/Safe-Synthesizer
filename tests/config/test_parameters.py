@@ -79,7 +79,7 @@ def test_emit_telemetry_from_yaml_uses_env_when_unset(monkeypatch):
     ],
 )
 def test_replace_pii_v2_fields_raise_schema_compatibility_error(payload: dict[str, object], field: str):
-    message = "configuration uses the PII replacement v2 schema.*Configure replace_pii.replacement_plan instead"
+    message = "configuration uses the PII replacement v2 schema.*Configure replace_pii.replacement instead"
     pattern = rf"{message}.*{field}"
     with pytest.raises((ParameterError, ValidationError), match=pattern):
         SafeSynthesizerParameters.model_validate({"replace_pii": payload})

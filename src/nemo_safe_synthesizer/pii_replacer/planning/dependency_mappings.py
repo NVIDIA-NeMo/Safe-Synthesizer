@@ -96,7 +96,7 @@ def mapping_inputs(
         covered = {sampler_value.casefold() for sampler_value in sampler_values} | {
             source.casefold() for source in plan.data_to_sampler_value_mapping.get(column_name, {})
         }
-        source_values = _distinct_source_values(dataframe[column_name])
+        source_values = distinct_source_values(dataframe[column_name])
         unmatched = tuple(value for value in source_values if value.casefold() not in covered)
         if unmatched:
             inputs.append(
@@ -209,7 +209,7 @@ def built_in_value_mappings(
             continue
         targets = _built_in_targets(entity_type, sampler_values)
         covered = {source.casefold() for source in plan.data_to_sampler_value_mapping.get(column_name, {})}
-        for value in _distinct_source_values(dataframe[column_name]):
+        for value in distinct_source_values(dataframe[column_name]):
             key = value.casefold()
             target = variants.get(key)
             if key in sampler_values or key in covered or target not in targets:
@@ -225,7 +225,7 @@ def _built_in_targets(entity_type: EntityType, sampler_values: Mapping[str, str]
     return {PERSONA_SEX_VALUES.get(key, key): value for key, value in sampler_values.items()}
 
 
-def _distinct_source_values(values: pd.Series) -> tuple[str, ...]:
+def distinct_source_values(values: pd.Series) -> tuple[str, ...]:
     """Return distinct non-missing values in the form replacement uses to look up mapping keys."""
     unique = values.dropna().unique()
     if len(unique) > MAX_CONDITIONER_DISTINCT_VALUES:

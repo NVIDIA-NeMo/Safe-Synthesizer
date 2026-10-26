@@ -1,103 +1,112 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Load and save dataset-specific PII replacement plans."""
+"""Save PII replacement settings and configurations with comments for review."""
 
 from __future__ import annotations
 
 import json
+import os
 import re
 import textwrap
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import yaml
-from pydantic import ValidationError
 
-from ...config.replace_pii import PiiReplacementPlan
-from ...config.unknown_fields import normalize_unknown_fields
-from ...config.validation import format_pydantic_validation_error
-from ...errors import ParameterError
+from ...config.replace_pii import PiiReplacementPlan, PiiReplacementSettings
 
 if TYPE_CHECKING:
     from ...config.parameters import SafeSynthesizerParameters
+    from .review import PlanReviewNotes
 
-__all__ = ["load_plan", "save_config", "save_plan"]
+__all__ = ["save_config", "save_replacement"]
 
-# Unversioned documents are permanently interpreted as v3. A new schema must
-# opt into a new output version without changing how existing documents load.
-_IMPLICIT_PLAN_SCHEMA_VERSION = 3
-_OUTPUT_PLAN_SCHEMA_VERSION = 3
-_SUPPORTED_PLAN_SCHEMA_VERSIONS = frozenset({3})
-
-_PLAN_FILE_HEADER = (
-    "# PII replacement plan for this dataset. Edit it and pass it back through\n"
-    "# replace_pii.replacement_plan to skip automatic discovery.\n\n"
+_REPLACEMENT_FILE_HEADER = (
+    "# PII replacement for this dataset: the plan, and the locale, seed, and sampler it depends on.\n"
+    "# Review and edit it, then name this file in replace_pii.replacement to reuse it.\n\n"
 )
 # Extra guidance appended to a field's description in written YAML comments.
 _PLAN_FIELD_NOTES = {
     "data_to_sampler_value_mapping": "You can usually leave this section as is.",
 }
 _COMMENT_WIDTH = 100
+# Review notes list at most this many dataset values or columns, then a total.
+_MAX_LISTED_VALUES = 20
+_MAX_LISTED_COLUMNS = 50
 _YAML_KEY_LINE = re.compile(r"^(?P<indent> *)(?P<key>[A-Za-z_][A-Za-z0-9_]*):(?: |$)")
 
 
-def _plan_body(raw: dict[object, object], plan_path: Path) -> dict[object, object]:
-    """Validate document metadata and return the unversioned runtime plan body."""
-    body = dict(raw)
-    version = body.pop("schema_version", _IMPLICIT_PLAN_SCHEMA_VERSION)
-    if type(version) is not int:
-        raise ParameterError(f"PII replacement plan file {str(plan_path)!r} schema_version must be an integer")
-    if version not in _SUPPORTED_PLAN_SCHEMA_VERSIONS:
-        supported = ", ".join(str(item) for item in sorted(_SUPPORTED_PLAN_SCHEMA_VERSIONS))
-        raise ParameterError(
-            f"PII replacement plan file {str(plan_path)!r} uses unsupported schema version {version}; "
-            f"this NSS release supports version {supported}"
-        )
-    return body
+def save_replacement(
+    settings: PiiReplacementSettings, path: str | Path, *, review_notes: PlanReviewNotes | None = None
+) -> Path:
+    """Save ``replace_pii.replacement`` as a standalone YAML file for review and reuse.
 
-
-def load_plan(path: str | Path) -> PiiReplacementPlan:
-    """Load a replacement plan from a standalone YAML file.
-
-    A plan file contains ``schema_version`` metadata followed by the same fields
-    accepted as an inline ``replace_pii.replacement_plan`` value. A missing
-    version is interpreted as version 3.
+    Fields keep their model order, so the plan follows the locale, seed, and
+    sampler it depends on. Each plan section is preceded by a comment copied
+    from its field description, then by ``review_notes`` when given.
 
     Args:
-        path: YAML file containing a replacement-plan mapping.
+        settings: Replacement settings to save.
+        path: Destination YAML file; parent directories are created.
+        review_notes: Dataset context to add as comments for a person reviewing a drafted plan.
 
     Returns:
-        The parsed, context-free validated plan.
-
-    Raises:
-        ParameterError: If the file cannot be read, parsed, or validated.
+        The path written.
     """
-    plan_path = Path(path)
-    try:
-        raw = yaml.safe_load(plan_path.read_text())
-    except OSError as exc:
-        raise ParameterError(f"Could not read PII replacement plan file {str(plan_path)!r}: {exc}") from exc
-    except yaml.YAMLError as exc:
-        raise ParameterError(f"Invalid YAML in PII replacement plan file {str(plan_path)!r}: {exc}") from exc
+    replacement_path = Path(path)
+    replacement_path.parent.mkdir(parents=True, exist_ok=True)
+    text = yaml.safe_dump(_replacement_document(settings), sort_keys=False)
+    comments = _plan_field_comments(("plan",), review_notes)
+    replacement_path.write_text(_REPLACEMENT_FILE_HEADER + _with_key_comments(text, comments))
+    return replacement_path
 
-    if not isinstance(raw, dict):
-        raise ParameterError(f"PII replacement plan file {str(plan_path)!r} must contain a mapping")
 
-    body = _plan_body(raw, plan_path)
-    try:
-        normalized = normalize_unknown_fields(
-            PiiReplacementPlan,
-            cast(dict[str, object], body),
-            "reject",
-        )
-        return PiiReplacementPlan.model_validate(normalized)
-    except ValidationError as exc:
-        details = format_pydantic_validation_error(exc)
-        raise ParameterError(f"Invalid PII replacement plan in {str(plan_path)!r} ({details})") from exc
-    except ParameterError as exc:
-        raise ParameterError(f"Invalid PII replacement plan in {str(plan_path)!r} ({exc})") from exc
+def save_config(
+    config: SafeSynthesizerParameters,
+    path: str | Path,
+    *,
+    review_notes: PlanReviewNotes | None = None,
+    replacement_path: str | Path | None = None,
+) -> Path:
+    """Save a complete NSS configuration.
+
+    With ``replacement_path``, ``replace_pii.replacement`` is written to that
+    file by ``save_replacement``, and the configuration names it by a path
+    relative to the configuration's directory, so loading the configuration
+    reads the file back. Otherwise the section is written inline, and the output
+    matches ``config.to_yaml(path, exclude_unset=False)`` apart from the same
+    plan comments.
+
+    Args:
+        config: Configuration to save.
+        path: Destination YAML file; parent directories are created.
+        review_notes: Dataset context to add as comments for a person reviewing a drafted plan.
+        replacement_path: Separate file for ``replace_pii.replacement``.
+
+    Returns:
+        The path written.
+    """
+    config_path = Path(path)
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    document = json.loads(config.model_dump_json(exclude_unset=False))
+    comments: dict[tuple[str, ...], list[str]] = {}
+    if replacement_path is not None and config.replace_pii is not None:
+        written = save_replacement(config.replace_pii.replacement, replacement_path, review_notes=review_notes)
+        document["replace_pii"]["replacement"] = Path(os.path.relpath(written, config_path.parent)).as_posix()
+    else:
+        comments = _plan_field_comments(("replace_pii", "replacement", "plan"), review_notes)
+    config_path.write_text(_with_key_comments(yaml.safe_dump(document), comments))
+    return config_path
+
+
+def _replacement_document(settings: PiiReplacementSettings) -> dict[str, object]:
+    """Return the settings as YAML data with a sparse plan, in field order."""
+    document = settings.model_dump(mode="json", exclude_unset=False)
+    if (plan := settings.inline_plan) is not None:
+        document["plan"] = _plan_document(plan)
+    return document
 
 
 def _plan_document(plan: PiiReplacementPlan) -> dict[str, object]:
@@ -120,52 +129,72 @@ def _plan_document(plan: PiiReplacementPlan) -> dict[str, object]:
             serialized_spec["depends_on"] = dependencies
         columns.append(serialized_spec)
     return {
-        "schema_version": _OUTPUT_PLAN_SCHEMA_VERSION,
         "columns_to_replace": columns,
         "data_to_sampler_value_mapping": plan.data_to_sampler_value_mapping,
     }
 
 
-def save_plan(plan: PiiReplacementPlan, path: str | Path) -> Path:
-    """Save a replacement plan as a versioned reusable standalone YAML document.
-
-    Each plan section is preceded by a comment copied from its field description.
-    """
-    plan_path = Path(path)
-    plan_path.parent.mkdir(parents=True, exist_ok=True)
-    text = yaml.safe_dump(_plan_document(plan), sort_keys=False)
-    plan_path.write_text(_PLAN_FILE_HEADER + _with_key_comments(text, _plan_field_comments(())))
-    return plan_path
-
-
-def save_config(config: SafeSynthesizerParameters, path: str | Path) -> Path:
-    """Save a complete NSS configuration with comments on its replacement plan sections.
-
-    The output matches ``config.to_yaml(path, exclude_unset=False)`` apart from comments copied from the
-    ``PiiReplacementPlan`` field descriptions above ``replace_pii.replacement_plan`` sections.
-    """
-    config_path = Path(path)
-    config_path.parent.mkdir(parents=True, exist_ok=True)
-    text = yaml.safe_dump(json.loads(config.model_dump_json(exclude_unset=False)))
-    config_path.write_text(_with_key_comments(text, _plan_field_comments(("replace_pii", "replacement_plan"))))
-    return config_path
-
-
-def _plan_field_comments(prefix: tuple[str, ...]) -> dict[tuple[str, ...], str]:
-    """Return comment text for each described plan field, keyed by its YAML key path under ``prefix``."""
-    comments: dict[tuple[str, ...], str] = {}
+def _plan_field_comments(
+    prefix: tuple[str, ...], review_notes: PlanReviewNotes | None = None
+) -> dict[tuple[str, ...], list[str]]:
+    """Return comment paragraphs for each described plan field, keyed by its YAML key path under ``prefix``."""
+    comments: dict[tuple[str, ...], list[str]] = {}
     for name, field in PiiReplacementPlan.model_fields.items():
         if field.description:
             note = _PLAN_FIELD_NOTES.get(name)
-            comments[(*prefix, name)] = f"{field.description} {note}" if note else field.description
+            comments[(*prefix, name)] = [f"{field.description} {note}" if note else field.description]
+    if review_notes is not None:
+        for name, paragraphs in _review_comments(review_notes).items():
+            comments.setdefault((*prefix, name), []).extend(paragraphs)
     return comments
 
 
-def _with_key_comments(text: str, comments: Mapping[tuple[str, ...], str]) -> str:
+def _review_comments(notes: PlanReviewNotes) -> dict[str, list[str]]:
+    """Return review paragraphs for the ``columns_to_replace`` and ``data_to_sampler_value_mapping`` sections.
+
+    For example, a plan that leaves ``admission_id`` unchanged and conditions on ``sex`` gives
+    ``Draft review: not in this plan, so kept unchanged: admission_id. ...`` and
+    ``Draft review: sex (gender): Female, Male are used as is. Sampler values: female, male.``
+    """
+    unchanged = (
+        f"not in this plan, so kept unchanged: {_listed(notes.unchanged_columns, _MAX_LISTED_COLUMNS)}"
+        if notes.unchanged_columns
+        else "every dataset column is in this plan"
+    )
+    comments = {
+        "columns_to_replace": [
+            f"Draft review: {unchanged}. Review notes describe the plan as drafted and are not updated "
+            "when you edit it."
+        ]
+    }
+    if notes.dependency_values:
+        mapping_notes: list[str] = []
+        for review in notes.dependency_values:
+            if review.used_as_is:
+                verb = "is" if len(review.used_as_is) == 1 else "are"
+                used = f"{_listed(review.used_as_is, _MAX_LISTED_VALUES)} {verb} used as is"
+            else:
+                used = "no value is used as is"
+            mapping_notes.append(
+                f"Draft review: {review.column_name} ({review.entity_type.value}): {used}. "
+                f"Sampler values: {_listed(review.sampler_values, _MAX_LISTED_VALUES)}."
+            )
+        comments["data_to_sampler_value_mapping"] = mapping_notes
+    return comments
+
+
+def _listed(values: Sequence[str], limit: int) -> str:
+    """Join up to ``limit`` values with commas, noting the total when some are left out."""
+    if len(values) <= limit:
+        return ", ".join(values)
+    return f"{', '.join(values[:limit])}, ... ({len(values)} in total)"
+
+
+def _with_key_comments(text: str, comments: Mapping[tuple[str, ...], Sequence[str]]) -> str:
     """Insert wrapped ``#`` comments above block-style YAML mapping keys whose path appears in ``comments``.
 
-    Paths follow nested mapping keys by indentation; keys inside sequence items never match a path that does
-    not pass through them, so only the intended sections receive comments.
+    Each paragraph is wrapped separately. Paths follow nested mapping keys by indentation; keys inside sequence
+    items never match a path that does not pass through them, so only the intended sections receive comments.
     """
     lines: list[str] = []
     path: list[tuple[int, str]] = []
@@ -175,9 +204,8 @@ def _with_key_comments(text: str, comments: Mapping[tuple[str, ...], str]) -> st
             while path and path[-1][0] >= indent:
                 path.pop()
             path.append((indent, match["key"]))
-            comment = comments.get(tuple(key for _, key in path))
-            if comment:
-                width = max(_COMMENT_WIDTH - indent - 2, 40)
-                lines.extend(f"{match['indent']}# {part}" for part in textwrap.wrap(comment, width))
+            width = max(_COMMENT_WIDTH - indent - 2, 40)
+            for paragraph in comments.get(tuple(key for _, key in path), ()):
+                lines.extend(f"{match['indent']}# {part}" for part in textwrap.wrap(paragraph, width))
         lines.append(line)
     return "\n".join(lines) + "\n"

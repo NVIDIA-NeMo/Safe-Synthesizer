@@ -80,7 +80,10 @@ DEFAULT_NSS_INFERENCE_TIMEOUT_SECONDS = 60.0
 # PII replacement v3 runs this model in a local vLLM server, from its bundled
 # profile, when no inference endpoint or model is configured.
 DEFAULT_NSS_INFERENCE_LOCAL_MODEL = "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16"
-PII_REPLACEMENT_CONFIG_FILENAME = "pii_replacement_config.yaml"
+# A planning run writes the complete configuration, which names the reviewed
+# ``replace_pii.replacement`` section written beside it.
+RESOLVED_CONFIG_FILENAME = "safe-synthesizer-config.yaml"
+PII_REPLACEMENT_FILENAME = "pii_replacement.yaml"
 
 # Nemotron-Personas parquet assets for the PII sampler (``datasets/{locale}.parquet``).
 NSS_NEMOTRON_PERSONAS_PATH_ENV = "NSS_NEMOTRON_PERSONAS_PATH"

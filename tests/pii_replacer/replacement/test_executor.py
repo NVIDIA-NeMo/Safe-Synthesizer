@@ -472,8 +472,7 @@ class TestStructuredReplacementExecutor:
             _target("last_name", EntityType.LAST_NAME),
         )
         generator = FakerReplacementGenerator(
-            settings=PiiReplacementSettings(),
-            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+            settings=PiiReplacementSettings(sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER)),
         )
 
         replaced = (
