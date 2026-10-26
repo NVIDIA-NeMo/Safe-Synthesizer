@@ -84,12 +84,14 @@ def _create_process_data_setup(
     train_split = original_df.head(100).copy()
     test_split = original_df.tail(100).copy()
 
-    config = SafeSynthesizerParameters()
+    # Disable PII in the config the builder is built from: process_data rebuilds _nss_config from
+    # the builder's settings, so clearing _nss_config.replace_pii afterwards would not stick.
+    config = SafeSynthesizerParameters(replace_pii=None)
 
     builder = SafeSynthesizer(config=config, workdir=fixture_workdir)
     builder._data_source = original_df
     assert builder._nss_config is not None
-    builder._nss_config.replace_pii = None
+    assert builder._nss_config.replace_pii is None
 
     # Retained in the fixture tuple for tests that inspect transformed state.
     mock_replacer_instance = MagicMock()
