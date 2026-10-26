@@ -12,7 +12,7 @@ from uuid import UUID
 
 from faker import Faker
 
-from ....config.replace_pii import EntityType, PiiReplacementSettings, PiiSamplerBackend, PiiSamplerConfig
+from ....config.replace_pii import EntityType, PiiReplacementSettings, PiiSamplerBackend
 from ....errors import GenerationError, InternalError
 from ....observability import get_logger
 from ...planning.patterns import render_character_mask, render_name_pattern
@@ -44,21 +44,19 @@ class FakerReplacementGenerator:
     """Generate structured replacements using Faker.
 
     Args:
-        settings: Locale and seed configuration shared by replacement
-            generators.
-        sampler: Faker sampler configuration.
+        settings: Locale, seed, and sampler configuration; the sampler backend must be Faker.
 
     """
 
     backend: ClassVar[PiiSamplerBackend] = PiiSamplerBackend.FAKER
 
-    def __init__(self, *, settings: PiiReplacementSettings, sampler: PiiSamplerConfig) -> None:
-        if sampler.backend is not self.backend:
+    def __init__(self, *, settings: PiiReplacementSettings) -> None:
+        backend = settings.sampler.backend
+        if backend is not self.backend:
             raise InternalError(
-                f"{type(self).__name__} requires the {self.backend.value} sampler backend, got {sampler.backend.value}"
+                f"{type(self).__name__} requires the {self.backend.value} sampler backend, got {backend.value}"
             )
         self._settings = settings
-        self._sampler = sampler
         self._warned_generation_fallbacks: set[str] = set()
 
     def generate(self, request: ReplacementGenerationRequest) -> str:

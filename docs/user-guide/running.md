@@ -320,14 +320,16 @@ safe-synthesizer run replace-pii --plan-only \
   --data-source data.csv
 ```
 
-The command writes `pii_replacement_config.yaml` in the standard timestamped
-run directory beneath `--artifact-path`. The artifact is a complete reusable
-NSS configuration containing the resolved inline plan and dependency mappings.
-The command currently requires `--plan-only`.
+The command writes two files in the standard timestamped run directory beneath
+`--artifact-path`: `pii_replacement.yaml`, the resolved plan with the locale,
+seed, and sampler it depends on, and `safe-synthesizer-config.yaml`, a complete
+reusable NSS configuration that names it. Comments in `pii_replacement.yaml`
+list the columns left unchanged and the dependency values used as is. The
+command currently requires `--plan-only`.
 
 The SDK equivalent returns the resolved `ReplacePiiConfig`. Supplying
-`output_path` writes the complete reusable NSS configuration; omitting it
-performs no configuration write.
+`output_path` writes the complete configuration there and
+`pii_replacement.yaml` beside it; omitting it performs no write.
 
 ```python
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
@@ -337,7 +339,7 @@ config = SafeSynthesizerParameters.from_yaml("config.yaml")
 resolved_pii = (
     SafeSynthesizer(config)
     .with_data_source("data.csv")
-    .plan_pii_replacement(output_path="pii_replacement_config.yaml")
+    .plan_pii_replacement(output_path="safe-synthesizer-config.yaml")
 )
 ```
 

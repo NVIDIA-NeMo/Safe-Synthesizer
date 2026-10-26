@@ -13,6 +13,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     LLMConfig,
     PiiColumnPlan,
     PiiReplacementPlan,
+    PiiReplacementSettings,
     ReplacePiiConfig,
 )
 from nemo_safe_synthesizer.pii_replacer.llm_client import InferenceSettings
@@ -20,7 +21,6 @@ from nemo_safe_synthesizer.pii_replacer.planning import (
     PlanDiscoverer,
     PlanDiscoveryInput,
     PlanEnhancer,
-    load_plan,
     resolve_plan,
     resolve_replacement_config,
 )
@@ -147,7 +147,7 @@ class TestResolvePlan:
         plan = PiiReplacementPlan(columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)])
         discoverer = RecordingDiscoverer()
         enhancer = RecordingEnhancer(PiiReplacementPlan())
-        config = ReplacePiiConfig(replacement_plan=plan, llm=LLMConfig())
+        config = ReplacePiiConfig(replacement=PiiReplacementSettings(plan=plan), llm=LLMConfig())
 
         result = resolve_plan(
             fixture_patient_df,
@@ -160,21 +160,6 @@ class TestResolvePlan:
         assert result is plan
         assert discoverer.inputs == []
         assert enhancer.calls == []
-
-    def test_plan_file_bypasses_discovery(self, fixture_patient_df: pd.DataFrame, tmp_path: Path) -> None:
-        path = tmp_path / "plan.yaml"
-        path.write_text("columns_to_replace:\n  - column_name: email\n    entity_type: email\n")
-        discoverer = RecordingDiscoverer()
-
-        result = resolve_plan(
-            fixture_patient_df,
-            ReplacePiiConfig(replacement_plan=str(path)),
-            DataParameters(),
-            discoverer=discoverer,
-        )
-
-        assert result.columns_to_replace[0].column_name == "email"
-        assert discoverer.inputs == []
 
     def test_profiles_select_a_stable_bounded_set_in_dataframe_order(self) -> None:
         dataframe = pd.DataFrame(
@@ -260,7 +245,9 @@ class TestResolvePlan:
             columns_to_replace=[PiiColumnPlan(column_name="row", entity_type=EntityType.UNIQUE_IDENTIFIER)]
         )
 
-        resolved = resolve_plan(dataframe, ReplacePiiConfig(replacement_plan=plan), DataParameters())
+        resolved = resolve_plan(
+            dataframe, ReplacePiiConfig(replacement=PiiReplacementSettings(plan=plan)), DataParameters()
+        )
 
         assert [spec.column_name for spec in resolved.columns_to_replace] == ["row"]
 
@@ -277,20 +264,6 @@ class TestResolvePlan:
     )
     def test_row_counter_detection_uses_values_only(self, values: list[object], is_counter: bool) -> None:
         assert (row_counter_columns(pd.DataFrame({"column": values})) == {"column"}) is is_counter
-
-    def test_output_path_persists_the_final_plan(self, fixture_patient_df: pd.DataFrame, tmp_path: Path) -> None:
-        path = tmp_path / "pii_replacement_plan.yaml"
-
-        plan = resolve_plan(
-            fixture_patient_df,
-            ReplacePiiConfig(),
-            DataParameters(),
-            enhancer=PassThroughEnhancer(),
-            output_path=path,
-        )
-
-        assert path.exists()
-        assert load_plan(path) == plan
 
 
 @pytest.mark.unit
@@ -322,7 +295,6 @@ class TestResolvePlanWithLocalServer:
             fixture_patient_df,
             ReplacePiiConfig(llm=LLMConfig()),
             DataParameters(),
-            output_path=tmp_path / "plan.yaml",
         )
 
         assert result is expected
@@ -358,8 +330,10 @@ class TestResolvePlanWithLocalServer:
         fixture_fake_local_servers: list[FakeLocalServer],
     ) -> None:
         config = ReplacePiiConfig(
-            replacement_plan=PiiReplacementPlan(
-                columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
+            replacement=PiiReplacementSettings(
+                plan=PiiReplacementPlan(
+                    columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
+                )
             )
         )
 

@@ -9,7 +9,6 @@ import hashlib
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Protocol
 
 import numpy as np
@@ -27,7 +26,6 @@ from .dependency_mappings import (
     unmatched_dependency_values,
     validate_data_to_sampler_value_mapping,
 )
-from .io import load_plan, save_plan
 from .validation import get_protected_columns, validate_plan
 
 logger = get_logger(__name__)
@@ -164,14 +162,6 @@ def _prepare_discovery_input(
     )
 
 
-def _configured_plan(config: ReplacePiiConfig) -> PiiReplacementPlan:
-    if config.plan_path is not None:
-        return load_plan(config.plan_path)
-    if config.inline_plan is not None:
-        return config.inline_plan
-    raise ParameterError("replacement_plan must be auto_discovery, an inline plan, or a path to a plan file")
-
-
 def _enhance_with_default_llm(
     llm_config: LLMConfig,
     discovery_input: PlanDiscoveryInput,
@@ -198,12 +188,11 @@ def resolve_plan(
     *,
     discoverer: PlanDiscoverer | None = None,
     enhancer: PlanEnhancer | None = None,
-    output_path: str | Path | None = None,
     check_pattern_coverage: bool = True,
 ) -> PiiReplacementPlan:
-    """Resolve, validate, and optionally persist one replacement plan.
+    """Resolve and validate one replacement plan.
 
-    Inline plans and plan files are authoritative and bypass discovery.
+    An inline plan is authoritative and bypasses discovery.
     Auto-discovery runs the heuristic adapter first, then the LLM enhancer
     configured by ``config.llm``. When no ``enhancer`` is
     supplied, the default enhancer runs against a managed local vLLM server
@@ -211,8 +200,8 @@ def resolve_plan(
     stops as soon as enhancement ends. Dataframe-aware validation occurs once, after the final plan has
     been selected.
     """
-    if not config.is_auto_discovery:
-        plan = _configured_plan(config)
+    if (inline_plan := config.inline_plan) is not None:
+        plan = inline_plan
     else:
         discovery_input = _prepare_discovery_input(df, data_config, time_series)
         baseline = (discoverer or HeuristicPlanDiscoverer()).discover(discovery_input)
@@ -229,8 +218,6 @@ def resolve_plan(
         time_series=time_series,
         check_pattern_coverage=check_pattern_coverage,
     )
-    if output_path is not None:
-        save_plan(plan, output_path)
     return plan
 
 
@@ -267,7 +254,7 @@ def resolve_replacement_config(
             ``validate_plan``.
 
     Returns:
-        A copy of ``config`` whose ``replacement_plan`` is the resolved inline plan,
+        A copy of ``config`` whose ``replacement.plan`` is the resolved inline plan,
         including its complete ``data_to_sampler_value_mapping``.
 
     When both plan enhancement and mapping discovery use the default LLM, they share one inference
@@ -341,7 +328,7 @@ def _resolve_replacement_config(
     if sampler_value_catalog is None and conditioner_columns(plan):
         from ..sampler_catalog import load_sampler_value_catalog
 
-        sampler_value_catalog = load_sampler_value_catalog(config.replacement, config.sampler)
+        sampler_value_catalog = load_sampler_value_catalog(config.replacement)
     catalog = dict(sampler_value_catalog or {})
 
     # Built-in entries for common spellings come first so neither the LLM nor the user has to map them;
@@ -372,7 +359,7 @@ def _resolve_replacement_config(
             f"counted by depends_on column: {columns}. Add an entry listing the sampler values each one may "
             "match, or list every sampler value to allow any match"
         )
-    return config.model_copy(update={"replacement_plan": resolved_plan})
+    return config.with_plan(resolved_plan)
 
 
 def _merged_value_mappings(*mappings: DataToSamplerValueMapping) -> DataToSamplerValueMapping:

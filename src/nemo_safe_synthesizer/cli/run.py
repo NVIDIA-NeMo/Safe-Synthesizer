@@ -18,7 +18,7 @@ from ..configurator.pydantic_click_options import (
     parse_overrides,
     pydantic_options,
 )
-from ..defaults import DEFAULT_NSS_INFERENCE_LOCAL_MODEL, PII_REPLACEMENT_CONFIG_FILENAME
+from ..defaults import DEFAULT_NSS_INFERENCE_LOCAL_MODEL, RESOLVED_CONFIG_FILENAME
 from ..errors import UserError
 from ..observability import traced_user
 from ..telemetry import DeploymentTypeEnum, TaskStatusEnum
@@ -529,7 +529,7 @@ def run_replace_pii(
 
             if df is None:
                 raise UserError("Input data is required to plan PII replacement.")
-            output_path = workdir.run_dir / PII_REPLACEMENT_CONFIG_FILENAME
+            output_path = workdir.run_dir / RESOLVED_CONFIG_FILENAME
             nss = SafeSynthesizer(
                 config=config,
                 workdir=workdir,

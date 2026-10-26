@@ -12,6 +12,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     EntityType,
     PiiColumnPlan,
     PiiReplacementPlan,
+    PiiReplacementSettings,
     PiiSamplerBackend,
     PiiSamplerConfig,
     ReplacePiiConfig,
@@ -52,7 +53,9 @@ class TestTabularPiiReplacerInterface:
         dataframe = pd.DataFrame({"email": ["ada@example.com"]}, index=[7])
         original = dataframe.copy(deep=True)
         config = ReplacePiiConfig(
-            replacement_plan=PiiReplacementPlan(), sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER)
+            replacement=PiiReplacementSettings(
+                sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER), plan=PiiReplacementPlan()
+            )
         )
         replacer = TabularPiiReplacer(config, data_config=DataParameters())
 
@@ -66,13 +69,15 @@ class TestTabularPiiReplacerInterface:
     def test_generators_receive_the_text_form_that_patterns_were_validated_against(self) -> None:
         dataframe = pd.DataFrame({"dob": pd.to_datetime(["2000-01-01", "1990-05-17"]), "id": [1.5, 2.25]})
         config = ReplacePiiConfig(
-            replacement_plan=PiiReplacementPlan(
-                columns_to_replace=[
-                    PiiColumnPlan(column_name="dob", entity_type=EntityType.DATE_OF_BIRTH, pattern="%Y-%m-%d"),
-                    PiiColumnPlan(column_name="id", entity_type=EntityType.UNIQUE_IDENTIFIER),
-                ]
-            ),
-            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+            replacement=PiiReplacementSettings(
+                sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+                plan=PiiReplacementPlan(
+                    columns_to_replace=[
+                        PiiColumnPlan(column_name="dob", entity_type=EntityType.DATE_OF_BIRTH, pattern="%Y-%m-%d"),
+                        PiiColumnPlan(column_name="id", entity_type=EntityType.UNIQUE_IDENTIFIER),
+                    ]
+                ),
+            )
         )
 
         result = TabularPiiReplacer(config, data_config=DataParameters()).replace(dataframe)
@@ -85,12 +90,14 @@ class TestTabularPiiReplacerInterface:
         # 990 of 1,000 phones match the pattern (99.0%); a 950-row split that keeps all 10 exceptions is at 98.9%.
         phones = [f"555-{row:04d}" for row in range(990)] + [f"(555) {row:03d}-0000" for row in range(10)]
         config = ReplacePiiConfig(
-            replacement_plan=PiiReplacementPlan(
-                columns_to_replace=[
-                    PiiColumnPlan(column_name="phone", entity_type=EntityType.PHONE_NUMBER, pattern="###-####")
-                ]
-            ),
-            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+            replacement=PiiReplacementSettings(
+                sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+                plan=PiiReplacementPlan(
+                    columns_to_replace=[
+                        PiiColumnPlan(column_name="phone", entity_type=EntityType.PHONE_NUMBER, pattern="###-####")
+                    ]
+                ),
+            )
         )
         replacer = TabularPiiReplacer(config, data_config=DataParameters())
         replacer.replace(pd.DataFrame({"phone": phones}))
@@ -105,16 +112,18 @@ class TestTabularPiiReplacerInterface:
     def test_replace_executes_an_explicit_structured_plan(self) -> None:
         dataframe = pd.DataFrame({"identifier": ["USER-001", "USER-002"]}, index=[3, 3])
         config = ReplacePiiConfig(
-            replacement_plan=PiiReplacementPlan(
-                columns_to_replace=[
-                    PiiColumnPlan(
-                        column_name="identifier",
-                        entity_type=EntityType.UNIQUE_IDENTIFIER,
-                        pattern="USER-###",
-                    )
-                ]
-            ),
-            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+            replacement=PiiReplacementSettings(
+                sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+                plan=PiiReplacementPlan(
+                    columns_to_replace=[
+                        PiiColumnPlan(
+                            column_name="identifier",
+                            entity_type=EntityType.UNIQUE_IDENTIFIER,
+                            pattern="USER-###",
+                        )
+                    ]
+                ),
+            )
         )
 
         first = TabularPiiReplacer(config, data_config=DataParameters()).replace(dataframe)
@@ -132,10 +141,12 @@ class TestTabularPiiReplacerInterface:
         dataframe = pd.DataFrame({"notes": ["Ada called"]})
         original = dataframe.copy(deep=True)
         config = ReplacePiiConfig(
-            replacement_plan=PiiReplacementPlan(
-                columns_to_replace=[PiiColumnPlan(column_name="notes", entity_type=EntityType.FREE_TEXT)]
-            ),
-            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+            replacement=PiiReplacementSettings(
+                sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+                plan=PiiReplacementPlan(
+                    columns_to_replace=[PiiColumnPlan(column_name="notes", entity_type=EntityType.FREE_TEXT)]
+                ),
+            )
         )
 
         with pytest.raises(GenerationError, match="detector and span-resolution"):
@@ -157,7 +168,7 @@ class TestTransformResult:
         result = TransformResult(
             transformed_df=dataframe,
             column_statistics={},
-            resolved_config=ReplacePiiConfig(replacement_plan=plan),
+            resolved_config=ReplacePiiConfig(replacement=PiiReplacementSettings(plan=plan)),
             generation_statistics=generation_statistics,
             replacement_time_seconds=0.25,
         )
@@ -190,7 +201,7 @@ class TestTransformResult:
         values: dict[str, object] = {
             "transformed_df": pd.DataFrame(),
             "column_statistics": {},
-            "resolved_config": ReplacePiiConfig(replacement_plan=PiiReplacementPlan()),
+            "resolved_config": ReplacePiiConfig(replacement=PiiReplacementSettings(plan=PiiReplacementPlan())),
             "generation_statistics": {
                 "generated_replacement_count": 1,
                 "generator_time_seconds": 0.1,
@@ -206,7 +217,9 @@ class TestTransformResult:
 
     def test_result_keeps_its_own_copy_of_the_executed_config(self) -> None:
         email = PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)
-        config = ReplacePiiConfig(replacement_plan=PiiReplacementPlan(columns_to_replace=[email]))
+        config = ReplacePiiConfig(
+            replacement=PiiReplacementSettings(plan=PiiReplacementPlan(columns_to_replace=[email]))
+        )
 
         result = _result(config)
         assert config.inline_plan is not None
@@ -220,7 +233,7 @@ class TestTransformResult:
             _result(ReplacePiiConfig())
 
     def test_result_rejects_a_separate_replacement_plan(self) -> None:
-        config = ReplacePiiConfig(replacement_plan=PiiReplacementPlan())
+        config = ReplacePiiConfig(replacement=PiiReplacementSettings(plan=PiiReplacementPlan()))
 
         with pytest.raises(ValidationError, match="replacement_plan"):
             TransformResult.model_validate(
