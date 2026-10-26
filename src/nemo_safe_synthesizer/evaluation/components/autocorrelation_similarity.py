@@ -8,16 +8,12 @@ sequences. It evaluates each shared group and numeric value column separately,
 skips profiles with unusable training data, treats constant synthetic output
 as a fidelity failure, and averages the remaining similarities into a 0--10
 score.
-
-Classes:
-    AutocorrelationSimilarity: Component that computes and summarizes the
-        autocorrelation fidelity score.
 """
 
 from __future__ import annotations
 
 from functools import cached_property
-from typing import Any
+from typing import Any, ClassVar
 
 import numpy as np
 import pandas as pd
@@ -29,8 +25,18 @@ from ...config.parameters import SafeSynthesizerParameters
 from ...evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from ...evaluation.data_model.evaluation_score import EvaluationScore
 from ...observability import get_logger
-from .component import Component
+from .autocorrelation_similarity_figures import (
+    AUTOCORRELATION_PAIR_SCORE_MAX_COLUMNS,
+    AUTOCORRELATION_SUMMARY_TRACES_PER_COLUMN,
+    generate_autocorrelation_lag_error_figure,
+    generate_autocorrelation_pair_score_figure,
+    generate_autocorrelation_summary_figure,
+    order_autocorrelation_columns,
+)
 from .time_series_common import (
+    FigureSpec,
+    TimeSeriesComponent,
+    excluded_columns_note,
     group_frame,
     resolve_group_column,
     select_value_columns,
@@ -45,7 +51,7 @@ _GROUP_SELECTION_SEED = 2112
 _CONSTANT_TOLERANCE_FACTOR = 32.0
 
 
-class AutocorrelationSimilarity(Component):
+class AutocorrelationSimilarity(TimeSeriesComponent):
     """Measure fidelity of lagged self-dependence in numeric time-series data.
 
     The component compares training and synthetic autocorrelation profiles
@@ -59,6 +65,12 @@ class AutocorrelationSimilarity(Component):
         details: Per-group/column profiles, skipped comparisons, and summaries.
     """
 
+    card_id: ClassVar[str] = "autocorrelation-similarity"
+    description: ClassVar[str] = "Measures whether numeric columns change over time like the training data"
+    tooltip_key: ClassVar[str] = "autocorrelation_similarity_info"
+    template: ClassVar[str] = "jinja/components/autocorrelation_similarity.j2"
+    score_colored_traces: ClassVar[bool] = True
+
     name: str = Field(
         default="Autocorrelation Similarity",
         description="Display name used in serialized evaluation results.",
@@ -70,9 +82,41 @@ class AutocorrelationSimilarity(Component):
 
     @cached_property
     def jinja_context(self) -> dict[str, Any]:
-        """Return score and diagnostic details for report rendering."""
+        """Return score, details, card attributes, and chart figures for report rendering."""
         context = super().jinja_context
-        context["details"] = self.details
+        profiles = self.details.get("profiles", [])
+        figures: list[FigureSpec] = []
+        summary_columns: list[str] = []
+        if profiles:
+            figures = [
+                (
+                    "Typical autocorrelation",
+                    generate_autocorrelation_summary_figure(profiles),
+                    True,
+                    "autocorrelation_typical_info",
+                ),
+                (
+                    "Difference by lag",
+                    generate_autocorrelation_lag_error_figure(profiles),
+                    False,
+                    "autocorrelation_difference_info",
+                ),
+                (
+                    "Pair scores",
+                    generate_autocorrelation_pair_score_figure(profiles, self.score.score),
+                    False,
+                    "autocorrelation_pair_scores_info",
+                ),
+            ]
+            summary_columns = order_autocorrelation_columns(profiles)
+        context["figures"] = self.figure_rows(figures)
+        context["summary_columns"] = summary_columns
+        context["summary_traces_per_column"] = AUTOCORRELATION_SUMMARY_TRACES_PER_COLUMN
+        context["pair_score_column_count"] = min(len(summary_columns), AUTOCORRELATION_PAIR_SCORE_MAX_COLUMNS)
+        context["evaluated_profile_count"] = len(profiles)
+        context["evaluated_group_count"] = len({str(item["group"]) for item in profiles})
+        context["evaluated_column_count"] = len({item["column"] for item in profiles})
+        context["constant_synthetic_profile_count"] = sum(1 for item in profiles if item["evaluated_lags"] == 0)
         return context
 
     @staticmethod
@@ -138,7 +182,7 @@ class AutocorrelationSimilarity(Component):
         if column_error is not None:
             return AutocorrelationSimilarity(score=EvaluationScore(notes=column_error))
         if not columns:
-            return AutocorrelationSimilarity(score=EvaluationScore(notes="No shared numeric value columns."))
+            return AutocorrelationSimilarity._unavailable("No shared numeric value columns.", excluded_columns)
 
         groups, missing_training, missing_synthetic, shared_group_count = shared_groups(
             datasets.training,
@@ -148,7 +192,7 @@ class AutocorrelationSimilarity(Component):
             _GROUP_SELECTION_SEED,
         )
         if not groups:
-            return AutocorrelationSimilarity(score=EvaluationScore(notes="No shared groups to evaluate."))
+            return AutocorrelationSimilarity._unavailable("No shared groups to evaluate.", excluded_columns)
         omitted_groups = shared_group_count - len(groups)
         group_selection = {
             "shared_groups": shared_group_count,
@@ -182,9 +226,10 @@ class AutocorrelationSimilarity(Component):
                 unavailable_note += (
                     f" Evaluated {len(groups)} of {shared_group_count} shared groups using a reproducible sample."
                 )
-            return AutocorrelationSimilarity(
-                score=EvaluationScore(notes=unavailable_note),
-                details={
+            return AutocorrelationSimilarity._unavailable(
+                unavailable_note,
+                excluded_columns,
+                {
                     "counts": {
                         "groups": len(groups),
                         "shared_groups": shared_group_count,
@@ -207,11 +252,9 @@ class AutocorrelationSimilarity(Component):
             notes.append(f"Skipped {len(skipped)} unusable group/column comparisons.")
         if omitted_groups:
             notes.append(f"Evaluated {len(groups)} of {shared_group_count} shared groups using a reproducible sample.")
-        if excluded_columns:
-            notes.append(
-                f"Left out {len(excluded_columns)} numeric training columns that synthetic data lacks "
-                f"or stores as non-numeric values: {', '.join(excluded_columns)}."
-            )
+        excluded_note = excluded_columns_note(excluded_columns)
+        if excluded_note is not None:
+            notes.append(excluded_note)
         if notes:
             score.notes = " ".join(notes)
 
@@ -239,6 +282,19 @@ class AutocorrelationSimilarity(Component):
             "groups_only_in_synthetic": missing_synthetic,
         }
         return AutocorrelationSimilarity(score=score, details=details)
+
+    @staticmethod
+    def _unavailable(
+        note: str,
+        excluded_columns: list[str],
+        details: dict[str, Any] | None = None,
+    ) -> AutocorrelationSimilarity:
+        """Return an unscored component whose notes and details still name left-out columns."""
+        excluded_note = excluded_columns_note(excluded_columns)
+        return AutocorrelationSimilarity(
+            score=EvaluationScore(notes=note if excluded_note is None else f"{note} {excluded_note}"),
+            details={**(details or {}), "excluded_columns": excluded_columns},
+        )
 
     @staticmethod
     def _record_profile_result(

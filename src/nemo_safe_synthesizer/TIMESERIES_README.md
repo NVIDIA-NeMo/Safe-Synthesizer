@@ -471,25 +471,23 @@ Auto-Enable: When `is_timeseries=True`, time-series evaluation runs even without
 
 ### Integration with Multimodal Report
 
-The multimodal report runs every registered time-series metric when time-series evaluation is enabled.
+The multimodal report runs every component in `TIME_SERIES_COMPONENTS` (in `multimodal_report.py`) when time-series evaluation is enabled, and renders each as a card in the Time-Series Metrics panel.
 It is enabled by default when `is_timeseries=True`, and can be turned off with `evaluation.time_series.enabled: false`.
 
 Shared pieces every time-series metric uses:
 
-- `evaluation/components/time_series_common.py`: grouping column resolution, value column selection, shared-group sampling, and per-group and per-column summaries.
-- `evaluation/reports/multimodal/time_series_cards.py`: `TIME_SERIES_CARDS`, the registry the report uses to run each metric, build its figures, and render its card.
+- `evaluation/components/time_series_common.py`: the `TimeSeriesComponent` base class with the card attributes, plus grouping column resolution, value column selection, shared-group sampling, and per-group and per-column summaries.
 - `evaluation/assets/jinja/components/time_series_charts.j2`: `comparison_notes` and `chart_grid` macros for the card body.
 - `TimeSeriesValueColumnCheck` in `preflight/checks/dataframe.py`: validates `value_columns` for every `TimeSeriesMetricParameters` field.
 
 ### Adding a time-series metric
 
 1. Add a `TimeSeriesMetricParameters` subclass with a `metric_label` to `config/evaluate.py`, and a field for it on `TimeSeriesEvaluationParameters`. Preflight then validates its `value_columns` with no further code.
-2. Write the component, using `time_series_common` for grouping, column selection, and group sampling.
-3. Write its figures module with an `add_<metric>_context(context)` function that adds summary fields to the card context and returns the card's figures.
-4. Write its card template from the `time_series_charts.j2` macros, and add its tooltip keys to `evaluation/assets/text/multi_modal_tooltips.py`.
-5. Append one `TimeSeriesCard` to `TIME_SERIES_CARDS`.
-6. Export the score: a `SafeSynthesizerSummary` field and its `eval/` W&B key in `config/external_results.py`, and an entry in `_REPORT_SCORE_FIELDS` in `results.py`.
-7. Document it: a guide under `docs/user-guide/time-series-metrics/`, its `mkdocs.yml` nav entry, and its paragraphs in `docs/product-overview/evaluation.md`, `docs/user-guide/configuration.md`, and `docs/user-guide/running.md`.
+2. Write the component as a `TimeSeriesComponent` subclass, using `time_series_common` for grouping, column selection, and group sampling. Set its card attributes, and build its figures in `jinja_context` with `figure_rows`.
+3. Write its card template from the `time_series_charts.j2` macros, and add its tooltip keys to `evaluation/assets/text/multi_modal_tooltips.py`.
+4. Add the component class to `TIME_SERIES_COMPONENTS`.
+5. Export the score: a `SafeSynthesizerSummary` field and its `eval/` W&B key in `config/external_results.py`, and an entry in `_REPORT_SCORE_FIELDS` in `results.py`.
+6. Document it: a guide under `docs/user-guide/time-series-metrics/`, its `mkdocs.yml` nav entry, and its paragraphs in `docs/product-overview/evaluation.md`, `docs/user-guide/configuration.md`, and `docs/user-guide/running.md`.
 
 ---
 
@@ -654,7 +652,6 @@ The `timestamp_validation_mode` parameter controls how timestamps are handled du
 | `generation/processors.py` | `TimeSeriesDataProcessor` class |
 | `generation/timeseries_backend.py` | `TimeseriesBackend` generation class |
 | `evaluation/components/autocorrelation_similarity.py` | ACF evaluation metric |
-| `evaluation/components/time_series_common.py` | Grouping and column helpers shared by time-series metrics |
-| `evaluation/reports/multimodal/time_series_cards.py` | Registry of time-series metric report cards |
+| `evaluation/components/time_series_common.py` | Component base class and grouping and column helpers shared by time-series metrics |
 | `llm/metadata.py` | Typed time-series group registry and source column order |
 | `defaults.py` | `PSEUDO_GROUP_COLUMN` constant |

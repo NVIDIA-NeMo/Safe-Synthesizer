@@ -158,8 +158,8 @@
                 </header>
                 <div class="metric-list">
                     {% for card in ctx.time_series_cards %}
-                    {% call metric_card(card.card_id, ctx[card.context_key].name,
-                            ctx[card.context_key].score,
+                    {% call metric_card(card.card_id, card.name,
+                            card.score,
                             card.description,
                             ctx.tooltips[card.tooltip_key],
                             expandable=true) %}

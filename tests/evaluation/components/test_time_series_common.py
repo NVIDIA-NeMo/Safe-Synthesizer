@@ -63,6 +63,16 @@ def test_select_value_columns_reports_invalid_explicit_columns_with_label():
     assert "'group' is used for timestamp or sequence grouping" in error
 
 
+def test_select_value_columns_rejects_explicit_column_stored_as_text_in_synthetic_data():
+    training_df = _frame()
+    synthetic_df = training_df.copy()
+    synthetic_df["count"] = synthetic_df["count"].map(lambda value: f"n{value}")
+
+    _, error, _ = select_value_columns(_datasets(training_df, synthetic_df), ["count"], "time", "group", "test")
+
+    assert error == "Invalid test value columns: 'count' is not numeric in synthetic data"
+
+
 def test_select_value_columns_excludes_timestamp_group_and_pseudo_group_columns():
     frame = _frame()
     frame[PSEUDO_GROUP_COLUMN] = frame["count"]
@@ -133,6 +143,13 @@ def test_shared_groups_sample_is_seeded_sorted_and_reports_one_sided_groups():
     assert only_training == ["X"]
     assert only_synthetic == ["Y"]
     assert shared_count == 6
+
+
+def test_shared_groups_is_empty_when_a_dataset_lacks_the_group_column():
+    training = pd.DataFrame({"group": list("AB")})
+    synthetic = pd.DataFrame({"other": list("AB")})
+
+    assert shared_groups(training, synthetic, "group", 3, seed=5) == ([], [], [], 0)
 
 
 def test_shared_groups_without_group_column_is_one_global_sequence():

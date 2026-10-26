@@ -340,6 +340,22 @@ def test_autocorrelation_similarity_notes_columns_synthetic_data_stores_as_text(
     assert "count" in component.score.notes
 
 
+def test_autocorrelation_similarity_names_left_out_columns_when_none_remain():
+    training_df = pd.DataFrame({"time": range(12), "value": range(12), "count": range(12)})
+    synthetic_df = training_df.copy()
+    synthetic_df["value"] = [f"v{index}" for index in range(12)]
+    synthetic_df["count"] = [f"n{index}" for index in range(12)]
+
+    component = AutocorrelationSimilarity.from_evaluation_datasets(_datasets(training_df, synthetic_df), _config())
+
+    assert component.score.score is None
+    assert component.details["excluded_columns"] == ["count", "value"]
+    assert component.score.notes == (
+        "No shared numeric value columns. Left out 2 numeric training columns that synthetic data lacks "
+        "or stores as non-numeric values: count, value."
+    )
+
+
 def test_autocorrelation_similarity_revalidates_usable_length_with_non_finite_values():
     frame = pd.DataFrame({"time": range(4), "value": [0.0, np.inf, np.nan, 1.0]})
 

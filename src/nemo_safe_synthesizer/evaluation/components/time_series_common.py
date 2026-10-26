@@ -1,35 +1,97 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Shared sequence and column handling for time-series evaluation metrics.
+"""Shared component base and sequence handling for time-series evaluation metrics.
 
 Every time-series metric resolves the same grouping column, selects the same
-numeric value columns, and walks the same shared groups in the same order.
-Keeping that logic here means a fix applies to every metric at once.
-
-Functions:
-    resolve_group_column: Return the grouping column evaluation should use.
-    select_value_columns: Select numeric value columns to evaluate.
-    invalid_value_columns: Validate explicitly configured value columns.
-    shared_groups: Find a deterministic, bounded set of shared groups.
-    group_sort_key: Return a stable ordering key for group values.
-    group_frame: Return one sequence in timestamp order.
-    summaries: Average similarities by group or column.
+numeric value columns, walks the same shared groups in the same order, and
+renders as one card in the report's Time-Series Metrics panel. Keeping that
+logic here means a fix applies to every metric at once.
 """
 
 from __future__ import annotations
 
 import random
 from collections import defaultdict
-from typing import Any
+from collections.abc import Sequence
+from functools import cached_property
+from typing import Any, ClassVar
 
 import numpy as np
 import pandas as pd
+import plotly.graph_objects as go
+from pydantic import Field
 
 from ...artifacts.analyzers.field_features import FieldType
 from ...config.parameters import SafeSynthesizerParameters
 from ...defaults import PSEUDO_GROUP_COLUMN
+from ...evaluation.assets.text.multi_modal_tooltips import tooltips
 from ...evaluation.data_model.evaluation_datasets import EvaluationDatasets
+from .component import Component
+
+FigureSpec = tuple[str, go.Figure, bool, str]
+"""Chart title, figure, whether it gets the column select, and its tooltip key."""
+
+
+class TimeSeriesComponent(Component):
+    """Base for components shown in the report's Time-Series Metrics panel.
+
+    The report runs every component in ``TIME_SERIES_COMPONENTS`` and renders
+    each as a metric card from the class attributes below. Subclasses extend
+    ``jinja_context`` with their figures, built with ``figure_rows``.
+
+    Attributes:
+        card_id: HTML id of the metric card.
+        description: One-line description shown on the card.
+        tooltip_key: Key of the card's info tooltip in ``tooltips``.
+        template: Jinja template rendered inside the card.
+        score_colored_traces: Whether chart traces are colored by score, so
+            the report keeps their colors instead of applying dataset colors.
+    """
+
+    card_id: ClassVar[str]
+    description: ClassVar[str]
+    tooltip_key: ClassVar[str]
+    template: ClassVar[str]
+    score_colored_traces: ClassVar[bool] = False
+
+    details: dict[str, Any] = Field(default_factory=dict, description="Metric-specific diagnostic details.")
+
+    @cached_property
+    def jinja_context(self) -> dict[str, Any]:
+        """Return score, details, and card attributes for report rendering."""
+        context = super().jinja_context
+        context["details"] = self.details
+        context["card_id"] = self.card_id
+        context["description"] = self.description
+        context["tooltip_key"] = self.tooltip_key
+        context["template"] = self.template
+        context["score_colored_traces"] = self.score_colored_traces
+        return context
+
+    @staticmethod
+    def figure_rows(figures: Sequence[FigureSpec]) -> list[dict[str, Any]]:
+        """Convert figure specs into the rows the chart grid template renders."""
+        return [
+            {
+                "title": title,
+                "html": figure.to_html(full_html=False, include_plotlyjs=False),
+                "column_select": column_select,
+                "tooltip_id": tooltip_key.replace("_", "-"),
+                "tooltip": tooltips[tooltip_key],
+            }
+            for title, figure, column_select, tooltip_key in figures
+        ]
+
+
+def excluded_columns_note(excluded: list[str]) -> str | None:
+    """Return a report note naming numeric training columns left out of evaluation."""
+    if not excluded:
+        return None
+    return (
+        f"Left out {len(excluded)} numeric training columns that synthetic data lacks "
+        f"or stores as non-numeric values: {', '.join(excluded)}."
+    )
 
 
 def resolve_group_column(

@@ -17,6 +17,7 @@ from ....config.evaluate import (
 from ....config.parameters import SafeSynthesizerParameters
 from ....evaluation.assets.text.multi_modal_tooltips import tooltips
 from ....evaluation.components.attribute_inference_protection import AttributeInferenceProtection
+from ....evaluation.components.autocorrelation_similarity import AutocorrelationSimilarity
 from ....evaluation.components.column_distribution import (
     ColumnDistribution,
     ColumnDistributionPlotRow,
@@ -39,6 +40,7 @@ from ....evaluation.components.pii_replay import PIIReplay
 from ....evaluation.components.sqs_score import SQSScore
 from ....evaluation.components.text_semantic_similarity import TextSemanticSimilarity
 from ....evaluation.components.text_structure_similarity import TextStructureSimilarity
+from ....evaluation.components.time_series_common import TimeSeriesComponent
 from ....evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from ....evaluation.data_model.evaluation_report import EvaluationReport
 from ....evaluation.data_model.evaluation_score import (
@@ -47,9 +49,11 @@ from ....evaluation.data_model.evaluation_score import (
 )
 from ....observability import get_logger
 from ....pii_replacer.transform_result import ColumnStatistics
-from .time_series_cards import TIME_SERIES_CARDS, figure_rows
 
 logger = get_logger(__name__)
+
+TIME_SERIES_COMPONENTS: tuple[type[TimeSeriesComponent], ...] = (AutocorrelationSimilarity,)
+"""Components run when time-series evaluation is enabled, in report display order."""
 
 
 class MultimodalReport(EvaluationReport):
@@ -107,22 +111,7 @@ class MultimodalReport(EvaluationReport):
                     self.evaluation_datasets
                 )
 
-            ctx["time_series_cards"] = []
-            for card in TIME_SERIES_CARDS:
-                if card.context_key not in ctx:
-                    continue
-                card_context = ctx[card.context_key]
-                card_context["figures"] = figure_rows(card.add_context(card_context))
-                card_context["score_colored_traces"] = card.score_colored_traces
-                ctx["time_series_cards"].append(
-                    {
-                        "context_key": card.context_key,
-                        "card_id": card.card_id,
-                        "description": card.description,
-                        "tooltip_key": card.tooltip_key,
-                        "template": card.template,
-                    }
-                )
+            ctx["time_series_cards"] = [c.jinja_context for c in self.components if isinstance(c, TimeSeriesComponent)]
             ctx["with_time_series"] = bool(ctx["time_series_cards"])
 
             return ctx
@@ -250,7 +239,8 @@ class MultimodalReport(EvaluationReport):
                 enable_sampling=False,
             )
             components.extend(
-                card.component_cls.from_evaluation_datasets(time_series_datasets, config) for card in TIME_SERIES_CARDS
+                component_cls.from_evaluation_datasets(time_series_datasets, config)
+                for component_cls in TIME_SERIES_COMPONENTS
             )
 
         report = MultimodalReport(config=config, evaluation_datasets=evaluation_datasets, components=components)
