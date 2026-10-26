@@ -127,9 +127,7 @@ the configured LLM maps them to that sampler's vocabulary.
 
 Automatic discovery writes a sparse mapping: identity matches are omitted.
 Only unmatched distinct dependency values, each limited to 128 characters,
-and the sampler's allowed values are sent to the LLM. If no LLM is configured,
-unmatched values produce an error asking for an LLM configuration or a manual
-mapping.
+and the sampler's allowed values are sent to the LLM.
 
 For an authoritative plan, place the mapping beside `columns_to_replace`, keyed
 by dependency column names from this dataset:
@@ -190,10 +188,13 @@ includes the version whenever it serializes the configuration.
 
 ### Automatic discovery
 
-Use `auto_discovery` to discover both replacement columns and dependency value
-mappings. When `llm` is configured, the LLM plan enhancer classifies the
-columns and chooses dependencies before NSS validates the final plan and maps
-unmatched dependency values.
+Use `auto_discovery`, the default, to discover both replacement columns and
+dependency value mappings. An LLM classifies the columns and chooses
+dependencies, then NSS validates the final plan and maps unmatched dependency
+values. Automatic discovery always uses an LLM, which by default runs on this
+machine's GPU (see [LLM-assisted planning](#llm-assisted-planning)). To replace
+PII without an LLM, use an inline plan or plan file; to skip replacement, set
+`replace_pii: null`.
 
 ```yaml
 replace_pii:
@@ -291,8 +292,14 @@ The generated configuration can be reviewed, edited, and reused directly.
 
 ## LLM-assisted planning
 
-The `llm` mapping configures the OpenAI-compatible inference service used for
-automatic plan enhancement and data-to-sampler value mapping discovery.
+Automatic discovery uses an LLM for plan enhancement and data-to-sampler value
+mapping discovery. By default, NSS runs
+`nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16` in a local vLLM server for
+the duration of plan discovery; see [Local inference server](#local-inference-server).
+Without a GPU, set an inference endpoint instead (see
+[Where planning requests go](#where-planning-requests-go)); otherwise preflight
+and planning fail with an error. The optional `llm` mapping changes how requests
+are made:
 
 ```yaml
 replace_pii:
@@ -302,9 +309,8 @@ replace_pii:
     max_workers: 8
 ```
 
-An empty mapping (`llm: {}`) enables the NSS inference defaults: NSS runs
-`nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16` in a local vLLM server for
-the duration of plan discovery; see [Local inference server](#local-inference-server).
+`llm` cannot be `null`. To replace PII without an LLM, give an inline plan or
+plan file.
 
 ### Where planning requests go
 
@@ -406,8 +412,8 @@ Avoid `extra_args` that make vLLM compile kernels at startup, such as
 `--mamba-backend=flashinfer`: compiling needs `ninja` and a CUDA compiler,
 which an NSS install doesn't include, and it lengthens every server launch.
 
-NSS starts the server only when LLM-assisted discovery runs, meaning an
-`auto_discovery` plan with `llm` configured, and stops it before planning
+NSS starts the server only when automatic discovery runs without an inference
+endpoint, and stops it before planning
 returns, including when planning fails. Plan validation, replacement, and
 training therefore never run while the server holds the GPU. Each run loads
 the model again; to reuse one server across many runs, start `vllm serve`

@@ -21,6 +21,7 @@ from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.pii_replacer.planning import (
     PlanDiscoverer,
     PlanDiscoveryInput,
+    PlanEnhancer,
     resolve_replacement_config,
 )
 from nemo_safe_synthesizer.pii_replacer.planning.dependency_mappings import mapping_inputs
@@ -46,6 +47,11 @@ class _StaticPlanDiscoverer(PlanDiscoverer):
     def discover(self, discovery_input: PlanDiscoveryInput) -> PiiReplacementPlan:
         del discovery_input
         return _plan()
+
+
+class _PassThroughEnhancer(PlanEnhancer):
+    def enhance(self, discovery_input: PlanDiscoveryInput, baseline: PiiReplacementPlan) -> PiiReplacementPlan:
+        return baseline
 
 
 @pytest.mark.unit
@@ -97,22 +103,6 @@ class TestDependencyMappings:
                 },
             )
 
-    def test_auto_mapping_without_llm_fails_only_for_unmatched_values(self) -> None:
-        dataframe = pd.DataFrame({"first_name": ["Ada"], "sex": ["Nonbinary"], "race": ["White"]})
-        config = ReplacePiiConfig()
-
-        with pytest.raises(ParameterError, match="configure replace_pii.llm, or generate and edit"):
-            resolve_replacement_config(
-                dataframe,
-                config,
-                DataParameters(),
-                discoverer=_StaticPlanDiscoverer(),
-                sampler_value_catalog={
-                    EntityType.GENDER: ("female", "male"),
-                    EntityType.ETHNIC_BACKGROUND: ("white",),
-                },
-            )
-
     def test_identity_only_auto_mapping_resolves_to_an_empty_inline_mapping(self) -> None:
         dataframe = pd.DataFrame({"first_name": ["Ada"], "sex": ["Female"], "race": ["WHITE"]})
 
@@ -121,6 +111,7 @@ class TestDependencyMappings:
             ReplacePiiConfig(),
             DataParameters(),
             discoverer=_StaticPlanDiscoverer(),
+            enhancer=_PassThroughEnhancer(),
             sampler_value_catalog={
                 EntityType.GENDER: ("female", "male"),
                 EntityType.ETHNIC_BACKGROUND: ("white",),
@@ -235,6 +226,7 @@ class TestDependencyMappings:
             ReplacePiiConfig(),
             DataParameters(),
             discoverer=_StaticPlanDiscoverer(),
+            enhancer=_PassThroughEnhancer(),
             sampler_value_catalog={
                 EntityType.GENDER: ("female", "male"),
                 EntityType.ETHNIC_BACKGROUND: ("white",),
@@ -260,6 +252,7 @@ class TestDependencyMappings:
             ReplacePiiConfig(),
             DataParameters(),
             discoverer=_StaticPlanDiscoverer(),
+            enhancer=_PassThroughEnhancer(),
             sampler_value_catalog={
                 EntityType.GENDER: ("femme", "homme"),
                 EntityType.ETHNIC_BACKGROUND: ("white",),

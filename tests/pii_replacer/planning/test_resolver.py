@@ -53,6 +53,11 @@ class RecordingEnhancer(PlanEnhancer):
         return self.plan
 
 
+class PassThroughEnhancer(PlanEnhancer):
+    def enhance(self, discovery_input: PlanDiscoveryInput, baseline: PiiReplacementPlan) -> PiiReplacementPlan:
+        return baseline
+
+
 @pytest.fixture
 def fixture_patient_df() -> pd.DataFrame:
     """Return grouped patient rows for replacement-plan discovery tests."""
@@ -68,10 +73,26 @@ def fixture_patient_df() -> pd.DataFrame:
 
 @pytest.mark.unit
 class TestResolvePlan:
-    def test_auto_discovery_uses_empty_heuristic_by_default(self, fixture_patient_df: pd.DataFrame) -> None:
-        plan = resolve_plan(fixture_patient_df, ReplacePiiConfig(), DataParameters())
+    def test_auto_discovery_uses_the_llm_by_default(
+        self,
+        fixture_patient_df: pd.DataFrame,
+        fixture_fake_local_servers: list[FakeLocalServer],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        expected = PiiReplacementPlan(
+            columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
+        )
+        enhancer = RecordingEnhancer(expected)
+        monkeypatch.setattr(
+            "nemo_safe_synthesizer.pii_replacer.planning.llm.LLMPlanEnhancer",
+            lambda config, settings=None: enhancer,
+        )
 
-        assert plan == PiiReplacementPlan()
+        result = resolve_plan(fixture_patient_df, ReplacePiiConfig(), DataParameters())
+
+        assert result is expected
+        assert len(enhancer.calls) == 1
+        assert len(fixture_fake_local_servers) == 1
 
     def test_llm_enhancer_receives_heuristic_baseline(self, fixture_patient_df: pd.DataFrame) -> None:
         baseline = PiiReplacementPlan(
@@ -137,7 +158,6 @@ class TestResolvePlan:
         )
 
         assert result is plan
-        assert config.llm is not None
         assert discoverer.inputs == []
         assert enhancer.calls == []
 
@@ -171,13 +191,14 @@ class TestResolvePlan:
             order_training_examples_by="event_index",
         )
 
-        resolve_plan(dataframe, ReplacePiiConfig(), data_config, discoverer=discoverer)
+        resolve_plan(dataframe, ReplacePiiConfig(), data_config, discoverer=discoverer, enhancer=PassThroughEnhancer())
         first_input = discoverer.inputs[0]
         resolve_plan(
             shuffled,
             ReplacePiiConfig(),
             data_config,
             discoverer=discoverer,
+            enhancer=PassThroughEnhancer(),
         )
         second_input = discoverer.inputs[1]
 
@@ -198,7 +219,13 @@ class TestResolvePlan:
     ) -> None:
         discoverer = RecordingDiscoverer()
 
-        resolve_plan(fixture_patient_df, ReplacePiiConfig(), DataParameters(), discoverer=discoverer)
+        resolve_plan(
+            fixture_patient_df,
+            ReplacePiiConfig(),
+            DataParameters(),
+            discoverer=discoverer,
+            enhancer=PassThroughEnhancer(),
+        )
 
         assert discoverer.inputs[0].group_column is None
 
@@ -217,7 +244,13 @@ class TestResolvePlan:
             ]
         )
 
-        plan = resolve_plan(dataframe, ReplacePiiConfig(), DataParameters(), discoverer=RecordingDiscoverer(discovered))
+        plan = resolve_plan(
+            dataframe,
+            ReplacePiiConfig(),
+            DataParameters(),
+            discoverer=RecordingDiscoverer(discovered),
+            enhancer=PassThroughEnhancer(),
+        )
 
         assert [spec.column_name for spec in plan.columns_to_replace] == ["customer_id", "name"]
 
@@ -252,6 +285,7 @@ class TestResolvePlan:
             fixture_patient_df,
             ReplacePiiConfig(),
             DataParameters(),
+            enhancer=PassThroughEnhancer(),
             output_path=path,
         )
 
@@ -318,27 +352,17 @@ class TestResolvePlanWithLocalServer:
         assert len(fixture_fake_local_servers) == 1
         assert not fixture_fake_local_servers[0].running
 
-    @pytest.mark.parametrize(
-        "config",
-        [
-            pytest.param(ReplacePiiConfig(), id="llm-disabled"),
-            pytest.param(
-                ReplacePiiConfig(
-                    replacement_plan=PiiReplacementPlan(
-                        columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
-                    ),
-                    llm=LLMConfig(),
-                ),
-                id="explicit-plan",
-            ),
-        ],
-    )
-    def test_no_server_starts_without_llm_discovery(
+    def test_explicit_plan_starts_no_server(
         self,
         fixture_patient_df: pd.DataFrame,
         fixture_fake_local_servers: list[FakeLocalServer],
-        config: ReplacePiiConfig,
     ) -> None:
+        config = ReplacePiiConfig(
+            replacement_plan=PiiReplacementPlan(
+                columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
+            )
+        )
+
         resolve_plan(fixture_patient_df, config, DataParameters())
 
         assert fixture_fake_local_servers == []

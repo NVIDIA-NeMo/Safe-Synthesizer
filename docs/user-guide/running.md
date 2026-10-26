@@ -358,7 +358,7 @@ execute in order (`config` → `dataframe` → `metadata` → `advisory`).
 | Check name | Stage | What it validates |
 |-------|-------|-------------------|
 | `gpu.cuda` | config | PyTorch is importable and a CUDA GPU is visible |
-| `env.inference` | config | Validates the endpoint and hosted authentication when `replace_pii.llm` is enabled |
+| `env.inference` | config | Validates the PII planning endpoint and hosted authentication, or that the local vLLM server can run, when the replacement plan is discovered automatically |
 | `env.hf_model_availability` | config | The pretrained model reference is usable locally or can be fetched from Hugging Face; warns about a missing HF token only when online HF access may be needed |
 | `dataset.size` | dataframe | Training split meets the hard minimum row count |
 | `columns.groupby` | dataframe | `group_training_examples_by` column is present and has no nulls |

@@ -28,6 +28,7 @@ from nemo_safe_synthesizer.pii_replacer.planning import (
     LLMPlanEnhancer,
     PlanDiscoverer,
     PlanDiscoveryInput,
+    PlanEnhancer,
     resolve_plan,
     resolve_replacement_config,
 )
@@ -180,7 +181,17 @@ class TestClassificationBatching:
                 captured.append(discovery_input)
                 return PiiReplacementPlan()
 
-        resolve_plan(dataframe, ReplacePiiConfig(), DataParameters(), discoverer=CapturingDiscoverer())
+        class PassThroughEnhancer(PlanEnhancer):
+            def enhance(self, discovery_input: PlanDiscoveryInput, baseline: PiiReplacementPlan) -> PiiReplacementPlan:
+                return baseline
+
+        resolve_plan(
+            dataframe,
+            ReplacePiiConfig(),
+            DataParameters(),
+            discoverer=CapturingDiscoverer(),
+            enhancer=PassThroughEnhancer(),
+        )
         batches = _profile_batches(captured[0].column_profiles)
 
         assert len(batches) > 1

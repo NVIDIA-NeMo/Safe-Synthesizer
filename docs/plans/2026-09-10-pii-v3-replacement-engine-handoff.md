@@ -389,9 +389,9 @@ nonnegative and smaller than the chunk length.
 Built-in regex runs as part of this detector pipeline. Do not expose an LLM method. Whether reviewers want an explicit
 regex disable switch is an open first-PR question; the minimal interface has no switch.
 
-`ReplacePiiConfig.llm` remains the existing opt-in for LLM-assisted plan discovery. Revise its descriptions so it no
-longer claims to configure replacement-time detection. An explicit replacement plan does not require initializing the
-LLM.
+`ReplacePiiConfig.llm` configures LLM-assisted plan discovery, which automatic discovery always uses: it defaults to the
+NSS inference defaults and cannot be `null`. Its descriptions must not claim to configure replacement-time detection.
+An explicit replacement plan does not require initializing the LLM; it is the way to replace PII without one.
 
 ### Internal detection contracts
 

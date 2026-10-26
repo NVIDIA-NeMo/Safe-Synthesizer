@@ -391,7 +391,9 @@ class TestVRAMHeadroomCheck:
 
 @pytest.mark.unit
 class TestInferenceModelCheck:
-    def test_disabled_llm_skips_inference_environment(self, default_config):
+    def test_explicit_plan_skips_inference_environment(self, default_config):
+        default_config.replace_pii.replacement_plan = PiiReplacementPlan()
+
         with patch.dict(
             "os.environ",
             {"NSS_INFERENCE_MODEL": "", "NSS_INFERENCE_ENDPOINT": "not-a-url"},

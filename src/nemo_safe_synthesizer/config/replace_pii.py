@@ -747,8 +747,8 @@ class PiiReplacementPlan(Parameters):
 class LLMConfig(NSSBaseModel):
     """Inference behavior for LLM-assisted PII plan discovery.
 
-    LLM behavior is disabled when ``ReplacePiiConfig.llm`` is ``None``. Without
-    an endpoint, NSS runs the model in a managed local vLLM server. An
+    Automatic discovery always uses the LLM. Without an endpoint, NSS runs the
+    model in a managed local vLLM server. An
     OpenAI-compatible endpoint is supplied at runtime through
     ``NSS_INFERENCE_ENDPOINT`` or ``--inference-endpoint-url`` rather than persisted
     in NSS configuration.
@@ -889,9 +889,10 @@ class ReplacePiiConfig(Parameters):
     * an inline ``PiiReplacementPlan`` mapping in the main NSS config; or
     * a string path to a separate plan YAML containing that same mapping.
 
-    ``llm=None`` leaves auto-discovery at the heuristic baseline. Supplying an
-    ``llm`` mapping enables LLM enhancement after heuristic discovery. An
-    inline plan or plan file bypasses discovery, so it does not require an LLM.
+    Auto-discovery classifies columns with the LLM configured by ``llm``, which
+    defaults to the NSS inference defaults. An inline plan or plan file bypasses
+    discovery, so it makes no LLM request; that is the way to replace PII
+    without an LLM.
     The API key remains a runtime secret supplied through ``NSS_INFERENCE_KEY``
     or the corresponding CLI option; it is never stored in this model.
 
@@ -922,12 +923,12 @@ class ReplacePiiConfig(Parameters):
             "sentinel or a path."
         ),
     )
-    llm: LLMConfig | None = Field(
-        default=None,
+    llm: LLMConfig = Field(
+        default_factory=LLMConfig,
         description=(
-            "Optional inference behavior for LLM-assisted plan discovery. "
+            "Inference behavior for LLM-assisted plan discovery; the defaults run a local vLLM server. "
             "The endpoint is configured at runtime through NSS_INFERENCE_ENDPOINT or --inference-endpoint-url. "
-            "Use an empty mapping to enable NSS inference defaults."
+            "An inline plan or plan file makes no LLM request."
         ),
     )
     free_text_detection: FreeTextDetectionConfig = Field(
@@ -973,6 +974,17 @@ class ReplacePiiConfig(Parameters):
         serialized = cast(dict[str, object], handler(self))
         serialized["schema_version"] = self.schema_version
         return serialized
+
+    @field_validator("llm", mode="before")
+    @classmethod
+    def _reject_null_llm(cls, value: object) -> object:
+        if value is None:
+            raise ParameterError(
+                "replace_pii.llm cannot be null because automatic discovery needs an LLM; to replace PII without "
+                "one, give an inline plan or plan file in replace_pii.replacement_plan, or set replace_pii to null "
+                "to skip replacement"
+            )
+        return value
 
     @field_validator("replacement_plan", mode="before")
     @classmethod
