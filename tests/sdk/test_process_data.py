@@ -27,6 +27,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     EntityType,
     PiiColumnPlan,
     PiiReplacementPlan,
+    PiiReplacementSettings,
     PiiSamplerBackend,
     PiiSamplerConfig,
     ReplacePiiConfig,
@@ -265,17 +266,19 @@ class TestProcessDataPiiSeparation:
         train_split = original_df.head(100).copy()
         test_split = original_df.tail(100).copy()
         resolved_pii = ReplacePiiConfig(
-            replacement_plan=PiiReplacementPlan(
-                columns_to_replace=[
-                    PiiColumnPlan(
-                        column_name="patient_name",
-                        entity_type=EntityType.FULL_NAME,
-                        depends_on=[ConditioningColumn(column_name="sex", entity_type=EntityType.GENDER)],
-                        pattern="{First} {Last}",
-                    )
-                ]
+            replacement=PiiReplacementSettings(
+                sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+                plan=PiiReplacementPlan(
+                    columns_to_replace=[
+                        PiiColumnPlan(
+                            column_name="patient_name",
+                            entity_type=EntityType.FULL_NAME,
+                            depends_on=[ConditioningColumn(column_name="sex", entity_type=EntityType.GENDER)],
+                            pattern="{First} {Last}",
+                        )
+                    ]
+                ),
             ),
-            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
         )
         builder = SafeSynthesizer(
             config=SafeSynthesizerParameters(replace_pii=resolved_pii),
@@ -301,13 +304,16 @@ class TestProcessDataPiiSeparation:
         pd.testing.assert_frame_equal(pd.read_csv(fixture_workdir.dataset.transformed_training), builder._training_df)
         pd.testing.assert_frame_equal(pd.read_csv(fixture_workdir.dataset.test), test_split.reset_index(drop=True))
         persisted = SafeSynthesizerParameters.from_yaml(
-            fixture_workdir.run_dir / "pii_replacement_config.yaml"
+            fixture_workdir.run_dir / "safe-synthesizer-config.yaml"
         ).replace_pii
         assert persisted is not None
         assert persisted.inline_plan is not None
         assert resolved_pii.inline_plan is not None
         assert persisted.inline_plan.columns_to_replace == resolved_pii.inline_plan.columns_to_replace
         assert persisted.inline_plan.data_to_sampler_value_mapping == {"sex": {"F": ["female"]}}
+        # A full pipeline run also leaves the reviewable replacement section, with its review comments.
+        replacement_file = (fixture_workdir.run_dir / "pii_replacement.yaml").read_text()
+        assert "# Draft review:" in replacement_file
 
     @patch("nemo_safe_synthesizer.preflight.run_preflight", return_value=_EMPTY_PREFLIGHT)
     @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
@@ -326,12 +332,14 @@ class TestProcessDataPiiSeparation:
         original_df = pd.DataFrame({"phone": phones})
         train_split = original_df.iloc[50:].copy()
         config = ReplacePiiConfig(
-            replacement_plan=PiiReplacementPlan(
-                columns_to_replace=[
-                    PiiColumnPlan(column_name="phone", entity_type=EntityType.PHONE_NUMBER, pattern="###-####")
-                ]
+            replacement=PiiReplacementSettings(
+                sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+                plan=PiiReplacementPlan(
+                    columns_to_replace=[
+                        PiiColumnPlan(column_name="phone", entity_type=EntityType.PHONE_NUMBER, pattern="###-####")
+                    ]
+                ),
             ),
-            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
         )
         builder = SafeSynthesizer(
             config=SafeSynthesizerParameters(replace_pii=config),

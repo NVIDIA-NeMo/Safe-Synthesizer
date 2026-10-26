@@ -467,7 +467,10 @@ class SafeSynthesizer(ConfigBuilder):
                 Parquet keeps the dataframe's column types; CSV keeps unchanged
                 cells as they appeared in a CSV input (see ``source_text``).
             config_output_path: Optional destination for the complete reusable
-                configuration containing the resolved plan and sampler mappings.
+                configuration. Its ``replace_pii.replacement`` section, with the
+                resolved plan, sampler mappings, and review comments, is also
+                written to ``pii_replacement.yaml`` beside it; see
+                ``plan_pii_replacement``.
             source_text: Optional copy of the input with every cell as the
                 text in its source file, such as ``pd.read_csv(path, dtype=str,
                 na_filter=False)``. The replaced CSV takes every cell that
@@ -492,13 +495,13 @@ class SafeSynthesizer(ConfigBuilder):
                 SafeSynthesizer()
                 .with_data_source("patients.csv")
                 .with_replace_pii(
-                    replacement_plan={"columns_to_replace": [{"column_name": "email", "entity_type": "email"}]},
+                    replacement={"plan": {"columns_to_replace": [{"column_name": "email", "entity_type": "email"}]}},
                 )
             )
             # Both paths are optional; without them nothing is written and only the result is returned.
             result = nss.replace_pii(
                 "patients_pii_replaced.csv",
-                config_output_path="pii_replacement_config.yaml",
+                config_output_path="safe-synthesizer-config.yaml",
             )
             result.transformed_df  # Emails replaced; other columns unchanged.
             result.generation_statistics.generated_replacement_count  # Distinct replacements generated.
@@ -617,9 +620,7 @@ class SafeSynthesizer(ConfigBuilder):
         # itself is deferred until after holdout and applies only to training.
         if not check_only and self._nss_config.replace_pii is not None:
             workdir.ensure_directories()
-            self.plan_pii_replacement(
-                output_path=workdir.run_dir / PII_REPLACEMENT_CONFIG_FILENAME,
-            )
+            self.plan_pii_replacement(output_path=workdir.run_dir / RESOLVED_CONFIG_FILENAME)
 
         holdout = Holdout(self._nss_config)
         original_training_df, self._test_df = holdout.train_test_split(self._data_source)
@@ -649,9 +650,16 @@ class SafeSynthesizer(ConfigBuilder):
             self._pii_replacer_time = replacement_result.replacement_time_seconds
             self._nss_config = self._nss_config.model_copy(update={"replace_pii": replacement_result.resolved_config})
             self._replace_pii_config = replacement_result.resolved_config
-            self._nss_config.to_yaml(
-                workdir.run_dir / PII_REPLACEMENT_CONFIG_FILENAME,
-                exclude_unset=False,
+            from ..pii_replacer.planning.io import save_config
+            from ..pii_replacer.planning.review import plan_review_notes
+
+            # Rewrite both files with the review comments, which are computed from the full input like the plan.
+            assert isinstance(self._data_source, pd.DataFrame)
+            save_config(
+                self._nss_config,
+                workdir.run_dir / RESOLVED_CONFIG_FILENAME,
+                review_notes=plan_review_notes(self._data_source, replacement_result.resolved_config),
+                replacement_path=workdir.run_dir / PII_REPLACEMENT_FILENAME,
             )
 
         # Only create new metadata if not already loaded (e.g., from load_from_save_path)

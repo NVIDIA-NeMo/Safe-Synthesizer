@@ -367,7 +367,7 @@ result = (
     .with_data_source("data.csv")
     .replace_pii(
         "pii_replaced.csv",
-        config_output_path="pii_replacement_config.yaml",
+        config_output_path="safe-synthesizer-config.yaml",
     )
 )
 ```

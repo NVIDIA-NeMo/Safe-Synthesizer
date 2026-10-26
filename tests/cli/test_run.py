@@ -719,7 +719,7 @@ class TestRunReplacePii:
         nss = patched_run_dependencies["safe_synthesizer"]
         nss.replace_pii.assert_called_once_with(
             output_path=mock_workdir.run_dir / "input_pii_replaced.csv",
-            config_output_path=mock_workdir.run_dir / "pii_replacement_config.yaml",
+            config_output_path=mock_workdir.run_dir / "safe-synthesizer-config.yaml",
         )
         (data_source,) = nss.with_data_source.call_args.args
         assert isinstance(data_source, CsvSource)
@@ -752,7 +752,7 @@ class TestRunReplacePii:
         nss = patched_run_dependencies["safe_synthesizer"]
         nss.replace_pii.assert_called_once_with(
             output_path=mock_workdir.run_dir / "input_pii_replaced.parquet",
-            config_output_path=mock_workdir.run_dir / "pii_replacement_config.yaml",
+            config_output_path=mock_workdir.run_dir / "safe-synthesizer-config.yaml",
         )
         (data_source,) = nss.with_data_source.call_args.args
         assert isinstance(data_source, pd.DataFrame)
@@ -783,7 +783,7 @@ class TestRunReplacePii:
         assert result.exit_code == 0
         patched_run_dependencies["safe_synthesizer"].replace_pii.assert_called_once_with(
             output_path=output_file,
-            config_output_path=mock_workdir.run_dir / "pii_replacement_config.yaml",
+            config_output_path=mock_workdir.run_dir / "safe-synthesizer-config.yaml",
         )
 
     def test_apply_reads_a_non_csv_source_as_a_dataframe(
