@@ -27,7 +27,6 @@ from nemo_safe_synthesizer.config.replace_pii import (
     EntityType,
     PiiColumnPlan,
     PiiReplacementPlan,
-    PiiReplacementSettings,
     PiiSamplerBackend,
     PiiSamplerConfig,
     ReplacePiiConfig,
@@ -266,18 +265,16 @@ class TestProcessDataPiiSeparation:
         train_split = original_df.head(100).copy()
         test_split = original_df.tail(100).copy()
         resolved_pii = ReplacePiiConfig(
-            replacement=PiiReplacementSettings(
+            replacement_plan=PiiReplacementPlan(
                 sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
-                plan=PiiReplacementPlan(
-                    columns_to_replace=[
-                        PiiColumnPlan(
-                            column_name="patient_name",
-                            entity_type=EntityType.FULL_NAME,
-                            depends_on=[ConditioningColumn(column_name="sex", entity_type=EntityType.GENDER)],
-                            pattern="{First} {Last}",
-                        )
-                    ]
-                ),
+                columns_to_replace=[
+                    PiiColumnPlan(
+                        column_name="patient_name",
+                        entity_type=EntityType.FULL_NAME,
+                        depends_on=[ConditioningColumn(column_name="sex", entity_type=EntityType.GENDER)],
+                        pattern="{First} {Last}",
+                    )
+                ],
             ),
         )
         builder = SafeSynthesizer(
@@ -311,9 +308,9 @@ class TestProcessDataPiiSeparation:
         assert resolved_pii.inline_plan is not None
         assert persisted.inline_plan.columns_to_replace == resolved_pii.inline_plan.columns_to_replace
         assert persisted.inline_plan.data_to_sampler_value_mapping == {"sex": {"F": ["female"]}}
-        # A full pipeline run also leaves the reviewable replacement section, with its review comments.
-        replacement_file = (fixture_workdir.run_dir / "pii_replacement.yaml").read_text()
-        assert "# Draft review:" in replacement_file
+        # A full pipeline run also leaves the reviewable plan file, with its review comments.
+        plan_file = (fixture_workdir.run_dir / "pii_replacement_plan.yaml").read_text()
+        assert "# Draft review:" in plan_file
 
     @patch("nemo_safe_synthesizer.preflight.run_preflight", return_value=_EMPTY_PREFLIGHT)
     @patch("nemo_safe_synthesizer.llm.metadata.ModelMetadata")
@@ -332,13 +329,11 @@ class TestProcessDataPiiSeparation:
         original_df = pd.DataFrame({"phone": phones})
         train_split = original_df.iloc[50:].copy()
         config = ReplacePiiConfig(
-            replacement=PiiReplacementSettings(
+            replacement_plan=PiiReplacementPlan(
                 sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
-                plan=PiiReplacementPlan(
-                    columns_to_replace=[
-                        PiiColumnPlan(column_name="phone", entity_type=EntityType.PHONE_NUMBER, pattern="###-####")
-                    ]
-                ),
+                columns_to_replace=[
+                    PiiColumnPlan(column_name="phone", entity_type=EntityType.PHONE_NUMBER, pattern="###-####")
+                ],
             ),
         )
         builder = SafeSynthesizer(
