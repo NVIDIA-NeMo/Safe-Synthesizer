@@ -7,7 +7,7 @@ A replacement never equals its own original, and in a column whose originals are
 all distinct, replacements should stay distinct too. Drawing random values and
 retrying fails once a value space is nearly full, as with a dense row counter.
 These spaces instead enumerate their values, so allocation starts at a seeded
-position and steps to the next usable value. When a column that must stay
+random position and steps to the next usable value. When a column that must stay
 distinct has no unused value left, allocation repeats an earlier replacement.
 """
 
@@ -17,6 +17,7 @@ import math
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
+from random import Random
 from typing import Literal
 
 from ...config.replace_pii import EntityType
@@ -175,16 +176,22 @@ class IdentifierAllocator:
     def allocate(self, seed: int, own_original: str, *, distinct: bool) -> tuple[str, AllocationKind] | None:
         """Return a replacement for ``own_original`` and how it was chosen, or ``None`` if none differs from it.
 
-        The replacement is the first value at or after the seeded position that differs from
-        ``own_original``. When ``distinct`` is true it must also not have been allocated before; if no
-        such value is left, a seeded choice among earlier replacements is repeated.
+        The replacement is the first value at or after a position drawn uniformly from the whole space
+        by ``seed`` that differs from ``own_original``. When ``distinct`` is true it must also not have
+        been allocated before; if no such value is left, a seeded choice among earlier replacements is
+        repeated.
+
+        The start is drawn over the whole space rather than taken as ``seed % size``: a seed has 64 bits,
+        and a long mask such as ``ADM-`` followed by 32 alphanumeric positions has far more, so a modulo
+        would only ever vary the last positions and leave the rest at the first allowed character.
 
         Example:
-            In ``NumberSpace(1)``, ``allocate(7, "7", distinct=False)`` skips ``"7"`` and returns ``("8", "new")``.
+            In ``NumberSpace(1)``, seed 9 starts at 7, so ``allocate(9, "7", distinct=False)`` skips ``"7"``
+            and returns ``("8", "new")``.
         """
         size = self.space.size
         own = self.space.index_of(own_original)
-        index = seed % size
+        index = Random(seed).randrange(size)
         for _ in range(size):
             if index != own and not (distinct and index in self._allocated_set):
                 if distinct:
