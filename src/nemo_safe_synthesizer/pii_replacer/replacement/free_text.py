@@ -12,7 +12,9 @@ from dataclasses import dataclass, field
 from itertools import chain
 from random import Random
 from string import ascii_uppercase
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
+
+import pandas as pd
 
 from ...config.replace_pii import EntityType, PiiColumnPlan
 from ...errors import GenerationError, InternalError, ParameterError, SafeSynthesizerError
@@ -37,9 +39,6 @@ from .types import (
     detected_text,
     free_text_mapping_key,
 )
-
-if TYPE_CHECKING:
-    import pandas as pd
 
 __all__ = [
     "FreeTextCellDetections",
@@ -379,6 +378,9 @@ class FreeTextReplacementExecutor:
         if not isinstance(column_position, int):
             raise ParameterError(f"replacement column {spec.column_name!r} is duplicated in the dataframe")
         statistics = self._statistics.setdefault(spec.column_name, FreeTextColumnStatistics())
+        # A categorical column accepts only its existing categories, so rewritten text needs a plain object column.
+        if isinstance(working.iloc[:, column_position].dtype, pd.CategoricalDtype):
+            working[spec.column_name] = working[spec.column_name].astype(object)
         for row_position in range(len(working)):
             original = working.iat[row_position, column_position]
             if not isinstance(original, str):

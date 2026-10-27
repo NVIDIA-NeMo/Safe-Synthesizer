@@ -224,6 +224,22 @@ def test_replace_pii_accepts_a_csv_source(tmp_path: Path) -> None:
     assert written["zip"].tolist() == ["02054"]
 
 
+@pytest.mark.filterwarnings("ignore:Support for nested sequences for 'parse_dates':FutureWarning")
+def test_replace_pii_keeps_dates_combined_from_csv_columns(tmp_path: Path) -> None:
+    source = tmp_path / "input.csv"
+    source.write_text("email,date,time,zip\nada@example.com,2024-01-02,03:04,02054\n")
+    nss = SafeSynthesizer(config=_email_replacement_config(), save_path=tmp_path / "artifacts").with_data_source(
+        CsvSource.load(str(source), {"parse_dates": {"timestamp": ["date", "time"]}})
+    )
+
+    nss.replace_pii(tmp_path / "pii_replaced.csv")
+
+    written = pd.read_csv(tmp_path / "pii_replaced.csv", dtype=str, na_filter=False)
+    assert written.columns.tolist() == ["timestamp", "email", "zip"]
+    assert written["timestamp"].tolist() == ["2024-01-02 03:04:00"]
+    assert written["zip"].tolist() == ["02054"]
+
+
 def test_replace_pii_rejects_source_text_with_other_columns(tmp_path: Path) -> None:
     resolved = ReplacePiiConfig(
         replacement=PiiReplacementSettings(
