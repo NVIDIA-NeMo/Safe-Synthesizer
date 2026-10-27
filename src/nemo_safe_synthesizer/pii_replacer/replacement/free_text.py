@@ -65,6 +65,20 @@ _KnownValueSource = Literal["structured_value", "detected_value"]
 
 
 @dataclass(frozen=True, slots=True)
+class _CellToReplace:
+    """One free-text cell with the spans to replace in it."""
+
+    cell: DetectionCell
+    """The cell and its original text."""
+
+    spans: tuple[DetectedSpan, ...]
+    """Accepted spans in ascending offset order."""
+
+    scope_identity: Hashable
+    """Row position, or group identity when a grouping column is set."""
+
+
+@dataclass(frozen=True, slots=True)
 class _NameWord:
     """One space-separated word of a full name and its role."""
 
@@ -216,8 +230,17 @@ class FreeTextReplacementExecutor:
         known_values = (
             self._known_values(working, specs, group_identities, detections.spans) if self._find_and_replace else {}
         )
+        cells = {
+            spec.column_name: self._cells_to_replace(working, spec, group_identities, detections, known_values)
+            for spec in specs
+        }
+        # Every whole name word in a record or group is mapped before any initial is written, so an
+        # initial takes its name's replacement letter wherever the name appears.
         for spec in specs:
-            self._execute_spec(working, spec, group_identities, detections, known_values)
+            self._map_name_words(cells[spec.column_name], self._statistics_for(spec))
+        scope = "record" if group_identities is None else "group"
+        for spec in specs:
+            self._write_cells(working, spec, cells[spec.column_name], scope)
         return FreeTextExecutionResult(
             column_statistics=self._statistics,
             generated_replacement_count=self._generated_count,
@@ -365,22 +388,23 @@ class FreeTextReplacementExecutor:
             self._name_words_by_initial.setdefault(index_key, {}).setdefault(key.folded_value, stored)
         return stored
 
-    def _execute_spec(
+    def _statistics_for(self, spec: PiiColumnPlan) -> FreeTextColumnStatistics:
+        """Return the statistics of one free-text target, creating them on first use."""
+        return self._statistics.setdefault(spec.column_name, FreeTextColumnStatistics())
+
+    def _cells_to_replace(
         self,
         working: pd.DataFrame,
         spec: PiiColumnPlan,
         group_identities: tuple[CanonicalValue, ...] | None,
         detections: FreeTextCellDetections,
         known_values: dict[Hashable, _KnownValues],
-    ) -> None:
-        """Replace all accepted cells for one free-text plan target."""
+    ) -> list[_CellToReplace]:
+        """Return each cell of one free-text target with its accepted spans, in row order."""
         column_position = working.columns.get_loc(spec.column_name)
         if not isinstance(column_position, int):
             raise ParameterError(f"replacement column {spec.column_name!r} is duplicated in the dataframe")
-        statistics = self._statistics.setdefault(spec.column_name, FreeTextColumnStatistics())
-        # A categorical column accepts only its existing categories, so rewritten text needs a plain object column.
-        if isinstance(working.iloc[:, column_position].dtype, pd.CategoricalDtype):
-            working[spec.column_name] = working[spec.column_name].astype(object)
+        cells: list[_CellToReplace] = []
         for row_position in range(len(working)):
             original = working.iat[row_position, column_position]
             if not isinstance(original, str):
@@ -397,14 +421,46 @@ class FreeTextReplacementExecutor:
                 ]
                 spans = resolve_overlapping_spans((*spans, *matches))
             if spans:
-                scope = "record" if group_identities is None else "group"
-                working.iat[row_position, column_position] = self._replace_cell(
-                    DetectionCell(cell_id, original, fresh_detection_entity_types()),
-                    spans,
-                    scope_identity,
-                    scope,
-                    statistics,
-                )
+                cell = DetectionCell(cell_id, original, fresh_detection_entity_types())
+                cells.append(_CellToReplace(cell, spans, scope_identity))
+        return cells
+
+    def _map_name_words(self, cells: list[_CellToReplace], statistics: FreeTextColumnStatistics) -> None:
+        """Map every whole first, middle, and last name word in ``cells``, leaving initials for the write pass.
+
+        Example:
+            In ``Ada L. called. Ada Lovelace agreed.``, ``Lovelace`` is mapped
+            here, so the earlier ``L.`` takes the first letter of its replacement.
+        """
+        for to_replace in cells:
+            for span in to_replace.spans:
+                key = free_text_mapping_key(to_replace.cell, span, scope_identity=to_replace.scope_identity)
+                if key.entity_type in _NAME_PART_ENTITY_TYPES:
+                    self._replacement_for(key, statistics)
+                elif key.entity_type is EntityType.FULL_NAME and key not in self._cache:
+                    for word in _name_parts(key.original_value) or ():
+                        if word.part_type is not None and not word.is_initial:
+                            self._name_word_replacement(key.scope_identity, word)
+
+    def _write_cells(
+        self,
+        working: pd.DataFrame,
+        spec: PiiColumnPlan,
+        cells: list[_CellToReplace],
+        scope: Literal["record", "group"],
+    ) -> None:
+        """Write the replaced text of ``cells`` into one free-text target column."""
+        column_position = working.columns.get_loc(spec.column_name)
+        if not isinstance(column_position, int):
+            raise ParameterError(f"replacement column {spec.column_name!r} is duplicated in the dataframe")
+        # A categorical column accepts only its existing categories, so rewritten text needs a plain object column.
+        if cells and isinstance(working.iloc[:, column_position].dtype, pd.CategoricalDtype):
+            working[spec.column_name] = working[spec.column_name].astype(object)
+        statistics = self._statistics_for(spec)
+        for to_replace in cells:
+            working.iat[to_replace.cell.cell_id.row_position, column_position] = self._replace_cell(
+                to_replace.cell, to_replace.spans, to_replace.scope_identity, scope, statistics
+            )
 
     def _replace_cell(
         self,
