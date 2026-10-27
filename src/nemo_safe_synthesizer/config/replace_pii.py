@@ -898,6 +898,8 @@ def _load_plan_file(path: Path) -> dict[str, object]:
 def _with_personas_path_under(plan: Mapping[str, object], base_dir: Path) -> dict[str, object]:
     """Return ``plan`` with a relative ``sampler.nemotron_personas_path`` joined to ``base_dir``.
 
+    The joined path is made absolute, so a plan saved elsewhere still names the same directory.
+
     Example:
         A plan file in ``/runs/a`` naming ``personas`` reads personas from ``/runs/a/personas``,
         wherever NSS is started.
@@ -909,7 +911,7 @@ def _with_personas_path_under(plan: Mapping[str, object], base_dir: Path) -> dic
     sampler = cast(Mapping[str, object], sampler)
     personas_path = sampler.get("nemotron_personas_path")
     if isinstance(personas_path, str) and not Path(personas_path).expanduser().is_absolute():
-        resolved["sampler"] = {**sampler, "nemotron_personas_path": str(base_dir / personas_path)}
+        resolved["sampler"] = {**sampler, "nemotron_personas_path": str((base_dir / personas_path).absolute())}
     return resolved
 
 

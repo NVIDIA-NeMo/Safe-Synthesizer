@@ -91,6 +91,24 @@ class TestPlanFile:
 
         assert sampler.resolved_nemotron_personas_path() == tmp_path / "plans" / "personas"
 
+    def test_relative_personas_path_survives_saving_the_plan_elsewhere(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        (tmp_path / "configs").mkdir()
+        (tmp_path / "configs" / "config.yaml").write_text(
+            "replace_pii:\n  replacement_plan:\n    sampler:\n      nemotron_personas_path: personas\n"
+        )
+        monkeypatch.chdir(tmp_path)
+        config = SafeSynthesizerParameters.from_yaml(Path("configs") / "config.yaml")
+        run_dir = tmp_path / "runs" / "example"
+
+        config_path = save_config(config, run_dir / "config.yaml", plan_path=run_dir / "pii_replacement_plan.yaml")
+
+        reloaded = SafeSynthesizerParameters.from_yaml(config_path).replace_pii
+        assert reloaded is not None
+        assert reloaded.inline_plan is not None
+        assert reloaded.inline_plan.sampler.resolved_nemotron_personas_path() == tmp_path / "configs" / "personas"
+
     def test_saved_config_names_the_plan_file_beside_it(self, tmp_path: Path) -> None:
         plan = PiiReplacementPlan(columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)])
         config = SafeSynthesizerParameters(replace_pii=ReplacePiiConfig(replacement_plan=plan))
