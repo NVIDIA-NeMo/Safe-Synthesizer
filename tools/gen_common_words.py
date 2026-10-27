@@ -93,6 +93,8 @@ Free-text replacement does not search for a known one-word value in this list. G
 notice is in ``THIRD_PARTY.md``.
 """
 
+from __future__ import annotations
+
 __all__ = ["COMMON_WORDS"]
 
 COMMON_WORDS: frozenset[str] = frozenset(

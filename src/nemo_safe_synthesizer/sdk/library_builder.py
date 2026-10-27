@@ -158,19 +158,25 @@ def _restore_unchanged_text(
 ) -> pd.DataFrame:
     """Return ``transformed`` with every cell that replacement left unchanged taken from ``source_text``.
 
+    Columns are matched by name. A column ``source_text`` lacks keeps its transformed values, such as a
+    date the typed read combined from separate date and time columns with ``parse_dates``.
+
     Example:
         A ZIP code column read as integers holds ``2054`` for the file's ``"02054"``. Replacement
         leaves it unchanged, so the output gets ``"02054"`` back, while replaced cells keep their
         new values.
     """
     text = source_text.set_axis(original.index)
+    text_names = text.columns.tolist()
     output = transformed.copy()
-    for position in range(original.shape[1]):
+    for position, name in enumerate(original.columns):
+        if text_names.count(name) != 1:
+            continue
         before = original.iloc[:, position]
         after = transformed.iloc[:, position]
         # Nullable dtypes compare missing values as NA, which counts as changed until filled.
         unchanged = before.eq(after).astype("boolean").fillna(False) | (before.isna() & after.isna())
-        merged = after.astype(object).where(~unchanged, text.iloc[:, position])
+        merged = after.astype(object).where(~unchanged, text.iloc[:, text_names.index(name)])
         output.isetitem(position, merged.to_numpy(dtype=object))
     return output
 
@@ -543,8 +549,9 @@ class SafeSynthesizer(ConfigBuilder):
             # memory during planning and cannot disagree with the input if the file has since changed.
             if source_text is None and self._data_source_csv is not None:
                 source_text = self._data_source_csv.read_text()
-                if not _has_input_shape(dataframe, source_text):
-                    raise InternalError("the text read of the CSV data source does not match its typed read")
+                # The text read can lack columns the typed read derived, such as combined dates, but has every row.
+                if len(source_text) != len(dataframe):
+                    raise InternalError("the text read of the CSV data source has a different row count")
             output = (
                 result.transformed_df
                 if source_text is None

@@ -795,6 +795,21 @@ class TestStructuredReplacementExecutor:
 
         assert result.dataframe.at[0, "notes"] == "kathleen called"
 
+    def test_free_text_in_a_categorical_column_is_replaced(self) -> None:
+        dataframe = pd.DataFrame({"notes": pd.Categorical(["ada called", "ada called", "no names"])})
+        plan = _plan(_target("notes", EntityType.FREE_TEXT))
+        detector = _StaticDetector(
+            [
+                _span(0, "notes", "ada called", "ada", EntityType.FIRST_NAME),
+                _span(1, "notes", "ada called", "ada", EntityType.FIRST_NAME),
+            ]
+        )
+
+        result = _execute(dataframe, plan, _ScriptedNameGenerator("Kathleen"), free_text_detector=detector)
+
+        assert result.dataframe["notes"].tolist() == ["kathleen called", "kathleen called", "no names"]
+        assert isinstance(dataframe["notes"].dtype, pd.CategoricalDtype)
+
     def test_reused_free_text_replacement_takes_each_occurrence_letter_case(self) -> None:
         dataframe = pd.DataFrame({"notes": ["Ada, ADA, ada"]})
         plan = _plan(_target("notes", EntityType.FREE_TEXT))
