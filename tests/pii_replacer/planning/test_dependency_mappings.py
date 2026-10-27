@@ -15,7 +15,6 @@ from nemo_safe_synthesizer.config.replace_pii import (
     EntityType,
     PiiColumnPlan,
     PiiReplacementPlan,
-    PiiReplacementSettings,
     ReplacePiiConfig,
 )
 from nemo_safe_synthesizer.errors import ParameterError
@@ -127,7 +126,7 @@ class TestDependencyMappings:
 
         resolved = resolve_replacement_config(
             dataframe,
-            ReplacePiiConfig(replacement=PiiReplacementSettings(plan=_plan())),
+            ReplacePiiConfig(replacement_plan=_plan()),
             DataParameters(),
             sampler_value_catalog={
                 EntityType.GENDER: ("female", "male"),
@@ -144,7 +143,7 @@ class TestDependencyMappings:
         with pytest.raises(ParameterError, match=r"'sex' \(1\)"):
             resolve_replacement_config(
                 dataframe,
-                ReplacePiiConfig(replacement=PiiReplacementSettings(plan=_plan())),
+                ReplacePiiConfig(replacement_plan=_plan()),
                 DataParameters(),
                 sampler_value_catalog={
                     EntityType.GENDER: ("female", "male"),
@@ -154,7 +153,7 @@ class TestDependencyMappings:
 
     def test_manual_mapping_is_authoritative_and_validated_by_dependency_column(self) -> None:
         dataframe = pd.DataFrame({"first_name": ["Ada"], "sex": ["Woman"], "race": ["White"]})
-        config = ReplacePiiConfig(replacement=PiiReplacementSettings(plan=_plan({"sex": {"Woman": ["female"]}})))
+        config = ReplacePiiConfig(replacement_plan=_plan({"sex": {"Woman": ["female"]}}))
 
         resolved = resolve_replacement_config(
             dataframe,
@@ -182,7 +181,7 @@ class TestDependencyMappings:
         error: str,
     ) -> None:
         dataframe = pd.DataFrame({"first_name": ["Ada"], "sex": ["Woman"], "race": ["White"]})
-        config = ReplacePiiConfig(replacement=PiiReplacementSettings(plan=_plan(mappings)))
+        config = ReplacePiiConfig(replacement_plan=_plan(mappings))
 
         with pytest.raises(ParameterError, match=error):
             resolve_replacement_config(
@@ -202,7 +201,7 @@ class TestDependencyMappings:
 
         resolved = resolve_replacement_config(
             dataframe,
-            ReplacePiiConfig(replacement=PiiReplacementSettings(plan=_plan(mappings))),
+            ReplacePiiConfig(replacement_plan=_plan(mappings)),
             DataParameters(),
             sampler_value_catalog={EntityType.GENDER: ("female", "male")},
         )
@@ -266,7 +265,7 @@ class TestDependencyMappings:
 
         resolved = resolve_replacement_config(
             dataframe,
-            ReplacePiiConfig(replacement=PiiReplacementSettings(plan=_plan({"sex": {"f": ["female", "male"]}}))),
+            ReplacePiiConfig(replacement_plan=_plan({"sex": {"f": ["female", "male"]}})),
             DataParameters(),
             sampler_value_catalog={
                 EntityType.GENDER: ("female", "male"),

@@ -164,7 +164,7 @@ LLM span-detection experiment.
 - The flat `depends_on` DAG is the execution architecture.
 - Dataset-specific dependency-label adaptation belongs to `PiiReplacementPlan` beside `columns_to_replace`, not to
   `PiiSamplerConfig` or individual `depends_on` edges.
-- `replacement.plan: auto_discovery` discovers both columns and data-to-sampler value mappings. An explicit plan accepts one
+- `replacement_plan: auto_discovery` discovers both columns and data-to-sampler value mappings. An explicit plan accepts one
   authoritative inline map keyed by dependency source column and never runs a separate mapping-discovery pass.
   Automatic results are sparse; an input label that differs only in case from a sampler label needs no explicit
   mapping.
@@ -252,7 +252,7 @@ dependencies, optional pattern, and derived seed. Mapping scope, cache reuse, ti
 the replacement executor.
 
 `NemotronPersonasReplacementGenerator` and `FakerReplacementGenerator` are the two adapters. Each declares its
-`PiiSamplerBackend` and accepts `PiiReplacementSettings` plus `PiiSamplerConfig` at construction. Implement their
+`PiiSamplerBackend` and accepts the plan's `PiiSamplerConfig` and `replace_pii.locale` at construction. Implement their
 generation behavior in the follow-up without widening the public `TabularPiiReplacer` constructor.
 
 ### Data-to-sampler value mappings
@@ -269,62 +269,61 @@ class PiiReplacementPlan(Parameters):
     data_to_sampler_value_mapping: DataToSamplerValueMapping = Field(default_factory=dict)
 ```
 
-There is one discovery switch. `replacement.plan: auto_discovery` discovers
+There is one discovery switch. `replacement_plan: auto_discovery` discovers
 both the columns and their dependency mappings:
 
 ```yaml
 replace_pii:
-  replacement:
-    plan: auto_discovery
+  replacement_plan: auto_discovery
 ```
 
-`replace_pii.replacement` holds the plan with the `locale`, `seed`, and `sampler` it depends on, the part a person
-reviews. It may be the path of a YAML file holding those fields, resolved relative to the configuration file that names
-it; plan files are not accepted. `llm` and `free_text_detection` stay outside it.
+`replace_pii.replacement_plan` holds the plan with the `sampler` it depends on, the part a person reviews. It may be
+the path of a YAML plan file, resolved relative to the configuration file that names it. Automatic discovery uses the
+default sampler, or Faker when the Nemotron-Personas data for the locale is missing. `locale`, `seed`, `llm`, and
+`free_text_detection` stay outside it.
 
 The authoritative manual form is inline and keyed by dependency source column,
 because dataset columns—not entity types—own the source vocabularies:
 
 ```yaml
 replace_pii:
-  replacement:
-    plan:
-      columns_to_replace:
-        - column_name: first_name
-          entity_type: first_name
-          depends_on:
-            - column_name: sex
-              entity_type: gender
-            - column_name: race
-              entity_type: ethnic_background
-      data_to_sampler_value_mapping:
-        sex:
-          Non-binary:
-            - female
-            - male
-        race:
-          Asian:
-            - east asian
-            - south asian
-            - southeast asian
-            - central asian
-            - asian other
-          Black or African American:
-            - black
-          Hispanic:
-            - mexican
-            - puerto rican
-            - cuban
-            - spanish
-            - hispanic or latino other
-          American Indian or Alaska Native:
-            - american indian
-            - alaska native
-          Native Hawaiian or Other Pacific Islander:
-            - pacific islander
-            - polynesian
-            - melanesian
-            - micronesian
+  replacement_plan:
+    columns_to_replace:
+      - column_name: first_name
+        entity_type: first_name
+        depends_on:
+          - column_name: sex
+            entity_type: gender
+          - column_name: race
+            entity_type: ethnic_background
+    data_to_sampler_value_mapping:
+      sex:
+        Non-binary:
+          - female
+          - male
+      race:
+        Asian:
+          - east asian
+          - south asian
+          - southeast asian
+          - central asian
+          - asian other
+        Black or African American:
+          - black
+        Hispanic:
+          - mexican
+          - puerto rican
+          - cuban
+          - spanish
+          - hispanic or latino other
+        American Indian or Alaska Native:
+          - american indian
+          - alaska native
+        Native Hawaiian or Other Pacific Islander:
+          - pacific islander
+          - polynesian
+          - melanesian
+          - micronesian
 ```
 
 This mapping adapts labels from the input dataset to labels understood by the selected sampler. It remains
@@ -666,8 +665,8 @@ than a fixed byte limit. The earlier 48 KiB proposal is removed.
 - Automatic LLM plan discovery reads the full input dataset.
 - Replacement runs after holdout and transforms only the training split.
 - Retain original training and test frames for evaluation.
-- Persist the resolved `replace_pii.replacement` section, with the plan and its dependency mappings, as
-  `<run_dir>/pii_replacement.yaml`, and a reusable configuration that names it as
+- Persist the resolved `replace_pii.replacement_plan`, with its dependency mappings, as
+  `<run_dir>/pii_replacement_plan.yaml`, and a reusable configuration that names it as
   `<run_dir>/safe-synthesizer-config.yaml`.
 - Populate `ColumnStatistics` for every planned target:
   - Structured counts include every non-missing occurrence.

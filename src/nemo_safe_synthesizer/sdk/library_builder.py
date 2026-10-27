@@ -20,7 +20,7 @@ from ..config import (
 )
 from ..config.unknown_fields import UnknownFieldBehavior, normalize_unknown_fields
 from ..configurator.parameters import Parameters
-from ..defaults import PII_REPLACEMENT_FILENAME, RESOLVED_CONFIG_FILENAME
+from ..defaults import PII_REPLACEMENT_PLAN_FILENAME, RESOLVED_CONFIG_FILENAME
 from ..errors import ParameterError
 from ..llm.utils import get_device_name
 from ..observability import LogCategory, configure_logging_from_workdir, get_logger, initialize_observability, traced
@@ -368,8 +368,8 @@ class SafeSynthesizer(ConfigBuilder):
         This plan-only workflow does not split the input or enter model
         metadata, training, generation, replacement, or evaluation stages.
         When ``output_path`` is provided, the complete NSS configuration is
-        written there, and its ``replace_pii.replacement`` section, the part to
-        review, is written to ``pii_replacement.yaml`` in the same directory;
+        written there, and its ``replace_pii.replacement_plan``, the part to
+        review, is written to ``pii_replacement_plan.yaml`` in the same directory;
         the configuration names that file, so either can be reused. Comments in
         the plan help a person review it: they list the columns left unchanged
         and, for each depends_on column, the dataset values used as is and the
@@ -383,12 +383,12 @@ class SafeSynthesizer(ConfigBuilder):
 
         Raises:
             ParameterError: If PII replacement is disabled, or ``output_path`` is named
-                ``pii_replacement.yaml``.
+                ``pii_replacement_plan.yaml``.
             ValueError: If no valid data source is configured.
         """
-        if output_path is not None and Path(output_path).name == PII_REPLACEMENT_FILENAME:
+        if output_path is not None and Path(output_path).name == PII_REPLACEMENT_PLAN_FILENAME:
             raise ParameterError(
-                f"output_path cannot be named {PII_REPLACEMENT_FILENAME}; NSS writes the replacement section to that "
+                f"output_path cannot be named {PII_REPLACEMENT_PLAN_FILENAME}; NSS writes the replacement plan to that "
                 "file next to the configuration"
             )
         self._ensure_observability()
@@ -415,8 +415,8 @@ class SafeSynthesizer(ConfigBuilder):
 
             config_path = Path(output_path)
             notes = plan_review_notes(self._data_source, resolved)
-            replacement_path = config_path.parent / PII_REPLACEMENT_FILENAME
-            save_config(self._nss_config, config_path, review_notes=notes, replacement_path=replacement_path)
+            plan_path = config_path.parent / PII_REPLACEMENT_PLAN_FILENAME
+            save_config(self._nss_config, config_path, review_notes=notes, plan_path=plan_path)
         return resolved
 
     @traced("SafeSynthesizer.process_data", category=LogCategory.RUNTIME)

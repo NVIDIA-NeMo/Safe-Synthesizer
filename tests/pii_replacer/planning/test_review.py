@@ -9,7 +9,6 @@ from nemo_safe_synthesizer.config.replace_pii import (
     EntityType,
     PiiColumnPlan,
     PiiReplacementPlan,
-    PiiReplacementSettings,
     ReplacePiiConfig,
 )
 from nemo_safe_synthesizer.pii_replacer.planning.review import DependencyValueReview, plan_review_notes
@@ -42,7 +41,7 @@ class TestPlanReviewNotes:
 
         notes = plan_review_notes(
             dataframe,
-            ReplacePiiConfig(replacement=PiiReplacementSettings(plan=plan)),
+            ReplacePiiConfig(replacement_plan=plan),
             sampler_value_catalog={EntityType.GENDER: ("female", "male")},
         )
 

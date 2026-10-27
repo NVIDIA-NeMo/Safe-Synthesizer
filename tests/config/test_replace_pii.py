@@ -23,7 +23,6 @@ from nemo_safe_synthesizer.config.replace_pii import (
     LLMConfig,
     PiiColumnPlan,
     PiiReplacementPlan,
-    PiiReplacementSettings,
     PiiSamplerBackend,
     ReplacePiiConfig,
     can_condition,
@@ -395,15 +394,17 @@ class TestReplacePiiConfig:
     def test_defaults_are_auto_discovery(self) -> None:
         config = ReplacePiiConfig()
         assert config.schema_version == 3
-        assert config.replacement.plan == AUTO_DISCOVERY
+        assert config.replacement_plan == AUTO_DISCOVERY
+        assert config.locale == "en_US"
+        assert config.seed is None
         assert config.is_auto_discovery
         assert config.inline_plan is None
         assert config.llm == LLMConfig()
-        assert config.replacement.sampler.backend is PiiSamplerBackend.NEMOTRON_PERSONAS
+        assert PiiReplacementPlan().sampler.backend is PiiSamplerBackend.NEMOTRON_PERSONAS
         assert ENTITY_BY_TYPE[EntityType.FREE_TEXT].action is EntityAction.REPLACE_IN_TEXT
 
     def test_null_llm_is_rejected_with_the_ways_to_skip_it(self) -> None:
-        with pytest.raises(ValidationError, match="give an inline plan in replace_pii.replacement.plan"):
+        with pytest.raises(ValidationError, match="give an inline plan in replace_pii.replacement_plan"):
             ReplacePiiConfig.model_validate({"llm": None})
 
     def test_missing_schema_version_is_v3_and_sparse_serialization_includes_it(self) -> None:
@@ -427,8 +428,8 @@ class TestReplacePiiConfig:
                 )
             ]
         )
-        serialized = ReplacePiiConfig(replacement=PiiReplacementSettings(plan=plan)).model_dump()
-        replacement_plan = serialized["replacement"]["plan"]
+        serialized = ReplacePiiConfig(replacement_plan=plan).model_dump()
+        replacement_plan = serialized["replacement_plan"]
 
         assert isinstance(replacement_plan, dict)
         serialized_column = replacement_plan["columns_to_replace"][0]
@@ -451,8 +452,8 @@ class TestReplacePiiConfig:
             ]
         )
 
-        serialized = ReplacePiiConfig(replacement=PiiReplacementSettings(plan=plan)).model_dump(exclude_unset=False)
-        replacement_plan = serialized["replacement"]["plan"]
+        serialized = ReplacePiiConfig(replacement_plan=plan).model_dump(exclude_unset=False)
+        replacement_plan = serialized["replacement_plan"]
 
         assert isinstance(replacement_plan, dict)
         assert replacement_plan["columns_to_replace"][1]["depends_on"] == [
@@ -474,25 +475,30 @@ class TestReplacePiiConfig:
 
     def test_inline_plan_property(self) -> None:
         plan = PiiReplacementPlan()
-        inline = ReplacePiiConfig(replacement=PiiReplacementSettings(plan=plan))
+        inline = ReplacePiiConfig(replacement_plan=plan)
 
         assert inline.inline_plan is plan
         assert not inline.is_auto_discovery
 
-    @pytest.mark.parametrize("value", ["plans/pii.yaml", "plan", Path("plan.yaml")])
-    def test_a_plan_file_path_is_rejected(self, value: object) -> None:
-        with pytest.raises(ValidationError, match="put the whole replacement section in that file"):
-            PiiReplacementSettings.model_validate({"plan": value})
+    @pytest.mark.parametrize("value", [42, ["auto_discovery"]])
+    def test_a_value_that_is_no_plan_or_path_is_rejected(self, value: object) -> None:
+        with pytest.raises(ValidationError, match="must be 'auto_discovery', an inline plan, or the path"):
+            ReplacePiiConfig.model_validate({"replacement_plan": value})
+
+    def test_schema_offers_the_sentinel_or_file_path_and_the_inline_plan(self) -> None:
+        schema = ReplacePiiConfig.model_json_schema()
+
+        options = schema["properties"]["replacement_plan"]["anyOf"]
+        assert {"type": "string"} in options
+        assert any(option.get("title") == "PiiReplacementPlan" for option in options)
 
     def test_inline_mapping_is_validated_as_a_plan(self) -> None:
         config = ReplacePiiConfig.model_validate(
             {
-                "replacement": {
-                    "plan": {
-                        "columns_to_replace": [
-                            {"column_name": "phone", "entity_type": "phone_number"},
-                        ],
-                    }
+                "replacement_plan": {
+                    "columns_to_replace": [
+                        {"column_name": "phone", "entity_type": "phone_number"},
+                    ],
                 }
             }
         )
@@ -500,7 +506,7 @@ class TestReplacePiiConfig:
         assert config.inline_plan.columns_to_replace[0].column_name == "phone"
 
     def test_parsed_inline_plan_skips_redundant_union_validation(self) -> None:
-        annotation = PiiReplacementSettings.model_fields["plan"].annotation
+        annotation = ReplacePiiConfig.model_fields["replacement_plan"].annotation
         plan_arm = next(member for member in get_args(annotation) if get_origin(member) is Annotated)
 
         assert get_args(plan_arm)[0] is PiiReplacementPlan
@@ -509,31 +515,47 @@ class TestReplacePiiConfig:
     def test_full_config_rejects_unknown_inline_plan_field(self) -> None:
         with pytest.raises(
             ValidationError,
-            match="Unknown configuration field 'replace_pii.replacement.plan.unexpected'",
+            match="Unknown configuration field 'replace_pii.replacement_plan.unexpected'",
         ):
-            SafeSynthesizerParameters.model_validate({"replace_pii": {"replacement": {"plan": {"unexpected": True}}}})
+            SafeSynthesizerParameters.model_validate({"replace_pii": {"replacement_plan": {"unexpected": True}}})
 
-    def test_replacement_file_is_read_relative_to_the_config_file(
+    def test_plan_file_is_read_relative_to_the_config_file(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         config_dir = tmp_path / "configs"
         config_dir.mkdir()
-        (config_dir / "pii_replacement.yaml").write_text(
-            "locale: en_GB\nplan:\n  columns_to_replace:\n  - column_name: email\n    entity_type: email\n"
+        (config_dir / "pii_replacement_plan.yaml").write_text(
+            "sampler:\n  backend: faker\ncolumns_to_replace:\n- column_name: email\n  entity_type: email\n"
         )
-        (config_dir / "config.yaml").write_text("replace_pii:\n  replacement: pii_replacement.yaml\n")
+        (config_dir / "config.yaml").write_text("replace_pii:\n  replacement_plan: pii_replacement_plan.yaml\n")
         monkeypatch.chdir(tmp_path)
 
         replace_pii = SafeSynthesizerParameters.from_yaml(config_dir / "config.yaml").replace_pii
 
         assert replace_pii is not None
-        assert replace_pii.replacement.locale == "en_GB"
         assert replace_pii.inline_plan is not None
+        assert replace_pii.inline_plan.sampler.backend is PiiSamplerBackend.FAKER
         assert replace_pii.inline_plan.columns_to_replace[0].column_name == "email"
 
-    def test_missing_replacement_file_is_reported_by_path(self, tmp_path: Path) -> None:
-        with pytest.raises(ValidationError, match="Could not read the PII replacement file"):
-            ReplacePiiConfig.model_validate({"replacement": str(tmp_path / "missing.yaml")})
+    def test_inline_relative_personas_path_resolves_against_the_config_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        config_dir = tmp_path / "configs"
+        config_dir.mkdir()
+        (config_dir / "config.yaml").write_text(
+            "replace_pii:\n  replacement_plan:\n    sampler:\n      nemotron_personas_path: personas\n"
+        )
+        monkeypatch.chdir(tmp_path)
+
+        replace_pii = SafeSynthesizerParameters.from_yaml(config_dir / "config.yaml").replace_pii
+
+        assert replace_pii is not None
+        assert replace_pii.inline_plan is not None
+        assert replace_pii.inline_plan.sampler.resolved_nemotron_personas_path() == config_dir / "personas"
+
+    def test_missing_plan_file_is_reported_by_path(self, tmp_path: Path) -> None:
+        with pytest.raises(ValidationError, match="is not 'auto_discovery' or an inline plan, and the plan file"):
+            ReplacePiiConfig.model_validate({"replacement_plan": str(tmp_path / "missing.yaml")})
 
     def test_llm_mapping_configures_planning_inference_behavior(self) -> None:
         config = ReplacePiiConfig.model_validate(
@@ -647,9 +669,10 @@ class TestReplacePiiConfig:
 
     def test_resolved_nemotron_personas_path_uses_override(self, tmp_path: Path) -> None:
         config = ReplacePiiConfig.model_validate(
-            {"replacement": {"sampler": {"backend": "faker", "nemotron_personas_path": str(tmp_path)}}}
+            {"replacement_plan": {"sampler": {"backend": "faker", "nemotron_personas_path": str(tmp_path)}}}
         )
-        assert config.replacement.sampler.resolved_nemotron_personas_path() == tmp_path
+        assert config.inline_plan is not None
+        assert config.inline_plan.sampler.resolved_nemotron_personas_path() == tmp_path
 
     def test_plan_accepts_manual_data_to_sampler_value_mapping(self) -> None:
         plan = PiiReplacementPlan.model_validate(
@@ -703,5 +726,4 @@ class TestReplacePiiConfig:
         assert default_nemotron_personas_path() == Path.home() / ".data-designer" / "managed-assets"
         monkeypatch.setenv(NSS_NEMOTRON_PERSONAS_PATH_ENV, str(tmp_path))
         assert default_nemotron_personas_path() == tmp_path
-        config = ReplacePiiConfig()
-        assert config.replacement.sampler.resolved_nemotron_personas_path() == tmp_path
+        assert PiiReplacementPlan().sampler.resolved_nemotron_personas_path() == tmp_path

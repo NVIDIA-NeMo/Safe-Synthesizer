@@ -62,7 +62,7 @@ def plan_review_notes(
         dataframe: Data the plan was resolved against.
         config: Resolved replacement configuration.
         sampler_value_catalog: Values the sampler accepts per entity type; loaded from
-            ``config.replacement.sampler`` when omitted and the plan has depends_on columns.
+            the plan's ``sampler`` in ``config.locale`` when omitted and the plan has depends_on columns.
 
     Raises:
         ParameterError: If the sampler catalog must be loaded and cannot be.
@@ -74,7 +74,7 @@ def plan_review_notes(
     if sampler_value_catalog is None and dependencies:
         from ..sampler_catalog import load_sampler_value_catalog
 
-        sampler_value_catalog = load_sampler_value_catalog(config.replacement)
+        sampler_value_catalog = load_sampler_value_catalog(plan.sampler, config.locale)
     catalog = sampler_value_catalog or {}
     replaced = {spec.column_name for spec in plan.columns_to_replace}
     return PlanReviewNotes(

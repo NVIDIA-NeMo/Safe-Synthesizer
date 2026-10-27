@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from ..config.replace_pii import EntityType, PiiReplacementSettings, PiiSamplerBackend
+from ..config.replace_pii import EntityType, PiiSamplerBackend, PiiSamplerConfig
 from ..errors import ParameterError
 
 SamplerValueCatalog = Mapping[EntityType, tuple[str, ...]]
@@ -50,7 +50,12 @@ Only the English locales use ``Female`` and ``Male``; ja_JP uses ``女``, fr_FR 
 """
 
 
-def require_nemotron_personas_dataset(settings: PiiReplacementSettings) -> Path:
+def nemotron_personas_dataset_path(sampler: PiiSamplerConfig, locale: str) -> Path:
+    """Return where the Nemotron-Personas dataset for ``locale`` is read from, whether or not it exists."""
+    return sampler.resolved_nemotron_personas_path() / "datasets" / f"{locale}.parquet"
+
+
+def require_nemotron_personas_dataset(sampler: PiiSamplerConfig, locale: str) -> Path:
     """Return the Nemotron-Personas dataset for the configured locale, or raise when it is missing.
 
     Selecting the Nemotron-Personas sampler requires its data; NSS does not
@@ -59,28 +64,28 @@ def require_nemotron_personas_dataset(settings: PiiReplacementSettings) -> Path:
     Raises:
         ParameterError: If the locale's dataset file does not exist.
     """
-    path = settings.sampler.resolved_nemotron_personas_path() / "datasets" / f"{settings.locale}.parquet"
+    path = nemotron_personas_dataset_path(sampler, locale)
     if not path.is_file():
         raise ParameterError(
-            f"replace_pii.replacement.sampler.backend is {PiiSamplerBackend.NEMOTRON_PERSONAS.value}, but no "
-            f"Nemotron-Personas data for locale {settings.locale!r} was found at {path}. Download the "
+            f"the replacement plan's sampler.backend is {PiiSamplerBackend.NEMOTRON_PERSONAS.value}, but no "
+            f"Nemotron-Personas data for locale {locale!r} was found at {path}. Download the "
             "Nemotron-Personas dataset, point "
-            "replace_pii.replacement.sampler.nemotron_personas_path or NSS_NEMOTRON_PERSONAS_PATH at it, or set "
-            f"replace_pii.replacement.sampler.backend to {PiiSamplerBackend.FAKER.value}"
+            "the plan's sampler.nemotron_personas_path or NSS_NEMOTRON_PERSONAS_PATH at it, or set "
+            f"the plan's sampler.backend to {PiiSamplerBackend.FAKER.value}"
         )
     return path
 
 
-def load_sampler_value_catalog(settings: PiiReplacementSettings) -> SamplerValueCatalog:
+def load_sampler_value_catalog(sampler: PiiSamplerConfig, locale: str) -> SamplerValueCatalog:
     """Return the dependency values understood by the selected sampler.
 
     Raises:
         ParameterError: If the Nemotron-Personas dataset is missing or cannot be read.
     """
-    if settings.sampler.backend is PiiSamplerBackend.FAKER:
+    if sampler.backend is PiiSamplerBackend.FAKER:
         return dict(_FAKER_DEPENDENCY_VALUES)
 
-    path = require_nemotron_personas_dataset(settings)
+    path = require_nemotron_personas_dataset(sampler, locale)
     try:
         available_columns = available_parquet_columns(path)
         selected = {

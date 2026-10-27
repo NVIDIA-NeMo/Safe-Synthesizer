@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import logging
 from pathlib import Path
 
 import pandas as pd
@@ -13,7 +14,8 @@ from nemo_safe_synthesizer.config.replace_pii import (
     LLMConfig,
     PiiColumnPlan,
     PiiReplacementPlan,
-    PiiReplacementSettings,
+    PiiSamplerBackend,
+    PiiSamplerConfig,
     ReplacePiiConfig,
 )
 from nemo_safe_synthesizer.pii_replacer.llm_client import InferenceSettings
@@ -147,7 +149,7 @@ class TestResolvePlan:
         plan = PiiReplacementPlan(columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)])
         discoverer = RecordingDiscoverer()
         enhancer = RecordingEnhancer(PiiReplacementPlan())
-        config = ReplacePiiConfig(replacement=PiiReplacementSettings(plan=plan), llm=LLMConfig())
+        config = ReplacePiiConfig(replacement_plan=plan, llm=LLMConfig())
 
         result = resolve_plan(
             fixture_patient_df,
@@ -245,9 +247,7 @@ class TestResolvePlan:
             columns_to_replace=[PiiColumnPlan(column_name="row", entity_type=EntityType.UNIQUE_IDENTIFIER)]
         )
 
-        resolved = resolve_plan(
-            dataframe, ReplacePiiConfig(replacement=PiiReplacementSettings(plan=plan)), DataParameters()
-        )
+        resolved = resolve_plan(dataframe, ReplacePiiConfig(replacement_plan=plan), DataParameters())
 
         assert [spec.column_name for spec in resolved.columns_to_replace] == ["row"]
 
@@ -330,10 +330,8 @@ class TestResolvePlanWithLocalServer:
         fixture_fake_local_servers: list[FakeLocalServer],
     ) -> None:
         config = ReplacePiiConfig(
-            replacement=PiiReplacementSettings(
-                plan=PiiReplacementPlan(
-                    columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
-                )
+            replacement_plan=PiiReplacementPlan(
+                columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
             )
         )
 
@@ -438,3 +436,63 @@ class TestResolveReplacementConfigWithLocalServer:
         assert len(fixture_fake_local_servers) == 1
         assert llm.running_during == {"map": True}
         assert not fixture_fake_local_servers[0].running
+
+
+def _email_plan(sampler: PiiSamplerConfig | None = None) -> PiiReplacementPlan:
+    return PiiReplacementPlan(
+        sampler=sampler or PiiSamplerConfig(),
+        columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)],
+    )
+
+
+@pytest.mark.unit
+class TestDiscoveredSampler:
+    def test_missing_persona_data_switches_a_discovered_plan_to_faker(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+        fixture_patient_df: pd.DataFrame,
+    ) -> None:
+        caplog.set_level(logging.WARNING)
+        monkeypatch.setenv("NSS_NEMOTRON_PERSONAS_PATH", str(tmp_path))
+
+        resolved = resolve_replacement_config(
+            fixture_patient_df,
+            ReplacePiiConfig(locale="fr_FR"),
+            DataParameters(),
+            enhancer=RecordingEnhancer(_email_plan()),
+        )
+
+        assert resolved.inline_plan is not None
+        assert resolved.inline_plan.sampler.backend is PiiSamplerBackend.FAKER
+        assert "no Nemotron-Personas data for locale 'fr_FR'" in caplog.text
+
+    def test_present_persona_data_keeps_the_default_sampler(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fixture_patient_df: pd.DataFrame
+    ) -> None:
+        (tmp_path / "datasets").mkdir()
+        (tmp_path / "datasets" / "fr_FR.parquet").touch()
+        monkeypatch.setenv("NSS_NEMOTRON_PERSONAS_PATH", str(tmp_path))
+
+        resolved = resolve_replacement_config(
+            fixture_patient_df,
+            ReplacePiiConfig(locale="fr_FR"),
+            DataParameters(),
+            enhancer=RecordingEnhancer(_email_plan()),
+        )
+
+        assert resolved.inline_plan is not None
+        assert resolved.inline_plan.sampler.backend is PiiSamplerBackend.NEMOTRON_PERSONAS
+
+    def test_an_inline_plan_keeps_its_sampler_when_persona_data_is_missing(
+        self, tmp_path: Path, fixture_patient_df: pd.DataFrame
+    ) -> None:
+        sampler = PiiSamplerConfig(nemotron_personas_path=str(tmp_path))
+
+        resolved = resolve_replacement_config(
+            fixture_patient_df, ReplacePiiConfig(replacement_plan=_email_plan(sampler)), DataParameters()
+        )
+
+        assert resolved.inline_plan is not None
+        assert resolved.inline_plan.sampler == sampler
