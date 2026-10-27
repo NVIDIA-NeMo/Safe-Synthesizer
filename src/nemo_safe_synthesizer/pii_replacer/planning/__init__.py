@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from .io import save_config, save_replacement
+from .io import save_config, save_plan
 from .llm import LLMPlanEnhancer
 from .patterns import pattern_grammar_catalog
 from .plan_builder import (
@@ -43,6 +43,6 @@ __all__ = [
     "resolve_plan",
     "resolve_replacement_config",
     "save_config",
-    "save_replacement",
+    "save_plan",
     "validate_plan",
 ]

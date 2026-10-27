@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, ClassVar, Never
 import numpy as np
 import pandas as pd
 
-from ....config.replace_pii import EntityType, PiiReplacementSettings, PiiSamplerBackend
+from ....config.replace_pii import EntityType, PiiSamplerBackend, PiiSamplerConfig
 from ....errors import InternalError, ParameterError
 from ....observability import get_logger
 from ...sampler_catalog import (
@@ -44,25 +44,24 @@ class NemotronPersonasReplacementGenerator:
     """Generate structured replacements using Nemotron-Personas assets.
 
     Args:
-        settings: Locale, seed, and sampler configuration; the sampler backend must be
-            Nemotron-Personas, and its asset path locates the locale's dataset.
+        sampler: Sampler configuration; its backend must be Nemotron-Personas, and its
+            asset path locates the locale's dataset.
+        locale: Locale of the Nemotron-Personas dataset and of the Faker fallback.
 
     """
 
     backend: ClassVar[PiiSamplerBackend] = PiiSamplerBackend.NEMOTRON_PERSONAS
 
-    def __init__(self, *, settings: PiiReplacementSettings) -> None:
-        backend = settings.sampler.backend
+    def __init__(self, *, sampler: PiiSamplerConfig, locale: str) -> None:
+        backend = sampler.backend
         if backend is not self.backend:
             raise InternalError(
                 f"{type(self).__name__} requires the {self.backend.value} sampler backend, got {backend.value}"
             )
-        self._settings = settings
-        self._dataset_path = require_nemotron_personas_dataset(settings)
-        faker_sampler = settings.sampler.model_copy(update={"backend": PiiSamplerBackend.FAKER})
-        self._fallback_generator = FakerReplacementGenerator(
-            settings=settings.model_copy(update={"sampler": faker_sampler})
-        )
+        self._locale = locale
+        self._dataset_path = require_nemotron_personas_dataset(sampler, locale)
+        faker_sampler = sampler.model_copy(update={"backend": PiiSamplerBackend.FAKER})
+        self._fallback_generator = FakerReplacementGenerator(sampler=faker_sampler, locale=locale)
         self._personas: pd.DataFrame | None = None
         self._persona_value_columns: dict[str, str] = {}
         self._candidate_indexes: dict[EntityType, dict[str, np.ndarray]] = {}
@@ -123,7 +122,7 @@ class NemotronPersonasReplacementGenerator:
         for entity_type, sampler_values in resolved:
             value_index = self._candidate_indexes.get(entity_type)
             if value_index is None:
-                _raise_missing_persona_column(entity_type, self._settings.locale)
+                _raise_missing_persona_column(entity_type, self._locale)
             matching = _matching_positions(value_index, sampler_values)
             if matching is None:
                 _raise_no_persona_candidates(entity_type)
@@ -155,7 +154,7 @@ class NemotronPersonasReplacementGenerator:
         logger.user.warning(
             "Some replacements of this entity type used Faker because the Nemotron-Personas data for this locale "
             "has no value for them, for example street addresses outside en_US or an empty middle name",
-            extra={"entity_type": entity_type.value, "locale": self._settings.locale},
+            extra={"entity_type": entity_type.value, "locale": self._locale},
         )
 
 

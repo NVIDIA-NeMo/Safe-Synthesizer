@@ -440,8 +440,8 @@ def test_no_replace_pii_flag_on_nss_params():
 
     param_names = {p.name for p in cmd.params}
     assert "no_replace_pii" in param_names
-    assert "no_replace_pii__replacement" not in param_names
-    assert "replace_pii__replacement__plan" in param_names
+    assert "no_replace_pii__replacement_plan" not in param_names
+    assert "replace_pii__replacement_plan" in param_names
 
 
 def test_no_privacy_flag_on_nss_params():

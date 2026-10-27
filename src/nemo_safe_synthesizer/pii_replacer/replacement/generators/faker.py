@@ -12,7 +12,7 @@ from uuid import UUID
 
 from faker import Faker
 
-from ....config.replace_pii import EntityType, PiiReplacementSettings, PiiSamplerBackend
+from ....config.replace_pii import EntityType, PiiSamplerBackend, PiiSamplerConfig
 from ....errors import GenerationError, InternalError
 from ....observability import get_logger
 from ...planning.patterns import render_character_mask, render_name_pattern
@@ -44,19 +44,20 @@ class FakerReplacementGenerator:
     """Generate structured replacements using Faker.
 
     Args:
-        settings: Locale, seed, and sampler configuration; the sampler backend must be Faker.
+        sampler: Sampler configuration; its backend must be Faker.
+        locale: Faker locale for generated values.
 
     """
 
     backend: ClassVar[PiiSamplerBackend] = PiiSamplerBackend.FAKER
 
-    def __init__(self, *, settings: PiiReplacementSettings) -> None:
-        backend = settings.sampler.backend
+    def __init__(self, *, sampler: PiiSamplerConfig, locale: str) -> None:
+        backend = sampler.backend
         if backend is not self.backend:
             raise InternalError(
                 f"{type(self).__name__} requires the {self.backend.value} sampler backend, got {backend.value}"
             )
-        self._settings = settings
+        self._locale = locale
         self._warned_generation_fallbacks: set[str] = set()
 
     def generate(self, request: ReplacementGenerationRequest) -> str:
@@ -113,7 +114,7 @@ class FakerReplacementGenerator:
 
     def _faker(self, seed: int) -> Faker:
         try:
-            fake = Faker(self._settings.locale)
+            fake = Faker(self._locale)
         except Exception as exc:
             raise GenerationError("PII replacement could not initialize Faker for the configured locale") from exc
         fake.seed_instance(seed)

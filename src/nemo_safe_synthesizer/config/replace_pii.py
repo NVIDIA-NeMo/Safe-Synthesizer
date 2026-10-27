@@ -59,7 +59,6 @@ __all__ = [
     "PatternSyntax",
     "PiiColumnPlan",
     "PiiReplacementPlan",
-    "PiiReplacementSettings",
     "PiiSamplerBackend",
     "PiiSamplerConfig",
     "ReplacePiiConfig",
@@ -69,7 +68,7 @@ __all__ = [
     "validate_pattern_eligibility",
 ]
 
-# Sentinel value for ``PiiReplacementSettings.plan`` requesting automatic
+# Sentinel value for ``ReplacePiiConfig.replacement_plan`` requesting automatic
 # entity discovery instead of an explicit plan.
 AUTO_DISCOVERY = "auto_discovery"
 DEFAULT_GLINER2_MODEL_ID = "fastino/gliner2-privacy-filter-PII-multi"
@@ -537,15 +536,53 @@ class PiiColumnPlan(NSSBaseModel):
         return self
 
 
-class PiiReplacementPlan(Parameters):
-    """Dataset-specific detection/replacement plan (column-oriented).
+class PiiSamplerBackend(StrEnum):
+    """Source of synthetic values for names and related person-like fields."""
 
-    Flat ``columns_to_replace`` list with adjacent data-to-sampler value mappings;
-    cross-column relationships are expressed via ``depends_on`` edges (a DAG).
-    Context-free dependency and graph checks are enforced here; plan-vs-dataframe checks live in
-    ``pii_replacer.planning.validation``.
+    NEMOTRON_PERSONAS = "nemotron-personas"
+    """Draw from downloaded Nemotron-Personas locale assets."""
+
+    FAKER = "faker"
+    """Draw from the Faker library; ignores ``ethnic_background`` conditioners."""
+
+
+class PiiSamplerConfig(NSSBaseModel):
+    """Settings for Nemotron-Personas or Faker-backed person sampling."""
+
+    backend: PiiSamplerBackend = Field(
+        default=PiiSamplerBackend.NEMOTRON_PERSONAS,
+        description="Person sampler backend: downloaded Nemotron-Personas assets or Faker.",
+    )
+    nemotron_personas_path: str | None = Field(
+        default=None,
+        description=(
+            "Root directory containing downloaded Nemotron-Personas files as datasets/{locale}.parquet. "
+            f"Defaults to {NSS_NEMOTRON_PERSONAS_PATH_ENV} or ~/.data-designer/managed-assets."
+        ),
+    )
+
+    def resolved_nemotron_personas_path(self) -> Path:
+        """Return ``nemotron_personas_path`` if set, else the environment or built-in default."""
+        if self.nemotron_personas_path is not None:
+            return Path(self.nemotron_personas_path)
+        return default_nemotron_personas_path()
+
+
+class PiiReplacementPlan(Parameters):
+    """Dataset-specific replacement plan: the part of ``replace_pii`` a person reviews.
+
+    ``sampler`` comes first because the plan depends on it:
+    ``data_to_sampler_value_mapping`` targets the values of ``sampler`` in
+    ``replace_pii.locale``. ``columns_to_replace`` is a flat list whose
+    cross-column relationships are ``depends_on`` edges (a DAG). Context-free
+    dependency and graph checks are enforced here; plan-vs-dataframe checks
+    live in ``pii_replacer.planning.validation``.
     """
 
+    sampler: PiiSamplerConfig = Field(
+        default_factory=PiiSamplerConfig,
+        description="Synthetic value sampler backend and asset paths.",
+    )
     columns_to_replace: list[PiiColumnPlan] = Field(
         default_factory=list,
         description="Columns to replace or (for free_text) scan for PII spans to rewrite.",
@@ -554,12 +591,12 @@ class PiiReplacementPlan(Parameters):
         default_factory=dict,
         description=(
             "Maps dataset values in depends_on columns to the values used by the person sampler "
-            "(replace_pii.replacement.sampler). Unlike most NSS settings, all matching here ignores case: dataset values, "
+            "(sampler, above). Unlike most NSS settings, all matching here ignores case: dataset values, "
             "mapping keys, and sampler values, so Female, female, and FEMALE are the same value. For example, "
             "{sex: {Woman: [female], Non-binary: [female, male]}} makes rows where sex is Woman sample a female "
             "persona and rows where sex is Non-binary sample either. A dataset value without an entry is looked "
             "up in the sampler as is; a value that has no entry and matches no sampler value is an error. "
-            "When replace_pii.replacement.plan is 'auto_discovery', NSS generates this mapping for you."
+            "When replace_pii.replacement_plan is 'auto_discovery', NSS generates this mapping for you."
         ),
     )
 
@@ -835,127 +872,59 @@ class FreeTextDetectionConfig(NSSBaseModel):
         return self
 
 
-class PiiSamplerBackend(StrEnum):
-    """Source of synthetic values for names and related person-like fields."""
+def _load_plan_file(path: Path) -> dict[str, object]:
+    """Return the mapping in a replacement plan file, rejecting fields the plan does not have.
 
-    NEMOTRON_PERSONAS = "nemotron-personas"
-    """Draw from downloaded Nemotron-Personas locale assets."""
-
-    FAKER = "faker"
-    """Draw from the Faker library; ignores ``ethnic_background`` conditioners."""
-
-
-class PiiSamplerConfig(NSSBaseModel):
-    """Settings for Nemotron-Personas or Faker-backed person sampling."""
-
-    backend: PiiSamplerBackend = Field(
-        default=PiiSamplerBackend.NEMOTRON_PERSONAS,
-        description="Person sampler backend: downloaded Nemotron-Personas assets or Faker.",
-    )
-    nemotron_personas_path: str | None = Field(
-        default=None,
-        description=(
-            "Root directory containing downloaded Nemotron-Personas files as datasets/{locale}.parquet. "
-            f"Defaults to {NSS_NEMOTRON_PERSONAS_PATH_ENV} or ~/.data-designer/managed-assets."
-        ),
-    )
-
-    def resolved_nemotron_personas_path(self) -> Path:
-        """Return ``nemotron_personas_path`` if set, else the environment or built-in default."""
-        if self.nemotron_personas_path is not None:
-            return Path(self.nemotron_personas_path)
-        return default_nemotron_personas_path()
-
-
-class PiiReplacementSettings(NSSBaseModel):
-    """What to replace and how: the part of ``replace_pii`` a person reviews.
-
-    ``plan`` is ``"auto_discovery"`` (the default), which discovers the plan
-    from the data, or an inline ``PiiReplacementPlan``. Its
-    ``data_to_sampler_value_mapping`` targets the values of ``sampler`` in
-    ``locale``, so the plan and the settings it depends on stay together.
-    ``replace_pii.replacement`` can also be the path of a YAML file holding
-    these fields.
+    A relative ``sampler.nemotron_personas_path`` in the file is resolved against the file's directory.
     """
-
-    locale: str = Field(
-        default="en_US",
-        description="Locale for generated names, addresses, and phone numbers.",
-    )
-    seed: int | None = Field(
-        default=None,
-        description=(
-            "Seed for synthetic value generation; when unset the sampler will fall back to PERSON_RANDOM_SEED or 42."
-        ),
-    )
-    sampler: PiiSamplerConfig = Field(
-        default_factory=PiiSamplerConfig,
-        description="Synthetic value sampler backend and asset paths.",
-    )
-    plan: SkipValidation[PiiReplacementPlan] | str = Field(
-        default=AUTO_DISCOVERY,
-        description=(
-            f"{AUTO_DISCOVERY!r} to discover the plan from the data, or an inline plan naming the columns to replace."
-        ),
-    )
-
-    @field_validator("plan", mode="before")
-    @classmethod
-    def _resolve_plan(cls, value: object) -> object:
-        """Resolve the plan/sentinel union here so errors describe the plan, not the union.
-
-        Left to the union, a malformed inline plan reports the plan's own errors
-        *and* a sentinel mismatch. Validating a mapping as a plan up front keeps
-        the report to the fields the user actually got wrong.
-        """
-        if isinstance(value, Mapping):
-            try:
-                return PiiReplacementPlan.model_validate(value)
-            except ValidationError as exc:
-                details = format_pydantic_validation_error(exc)
-                raise ParameterError(f"invalid inline replacement plan ({details})") from exc
-        if value == AUTO_DISCOVERY or isinstance(value, PiiReplacementPlan):
-            return value
-        raise ParameterError(
-            f"replace_pii.replacement.plan must be {AUTO_DISCOVERY!r} or an inline plan; to keep the plan in a "
-            "separate file, put the whole replacement section in that file and set replace_pii.replacement to its "
-            f"path (got {value!r})"
-        )
-
-    @property
-    def is_auto_discovery(self) -> bool:
-        """Whether replacements should be auto-discovered (no explicit plan)."""
-        return self.plan == AUTO_DISCOVERY
-
-    @property
-    def inline_plan(self) -> PiiReplacementPlan | None:
-        """The inline plan, or ``None`` for auto-discovery."""
-        return self.plan if isinstance(self.plan, PiiReplacementPlan) else None
-
-
-def _load_replacement_file(path: Path) -> dict[str, object]:
-    """Return the mapping in a ``replace_pii.replacement`` file, rejecting fields the settings do not have."""
     try:
         raw = yaml.safe_load(path.read_text())
     except OSError as exc:
-        raise ParameterError(f"Could not read the PII replacement file {str(path)!r}: {exc}") from exc
+        raise ParameterError(
+            f"replace_pii.replacement_plan is not {AUTO_DISCOVERY!r} or an inline plan, and the plan file "
+            f"{str(path)!r} could not be read: {exc}"
+        ) from exc
     except yaml.YAMLError as exc:
-        raise ParameterError(f"Invalid YAML in the PII replacement file {str(path)!r}: {exc}") from exc
+        raise ParameterError(f"Invalid YAML in the PII replacement plan file {str(path)!r}: {exc}") from exc
     if not isinstance(raw, Mapping):
-        raise ParameterError(f"The PII replacement file {str(path)!r} must contain a mapping")
+        raise ParameterError(f"The PII replacement plan file {str(path)!r} must contain a mapping")
     try:
-        return normalize_unknown_fields(PiiReplacementSettings, cast(Mapping[str, object], raw), "reject")
+        plan = normalize_unknown_fields(PiiReplacementPlan, cast(Mapping[str, object], raw), "reject")
     except ParameterError as exc:
-        raise ParameterError(f"Invalid PII replacement file {str(path)!r}: {exc}") from exc
+        raise ParameterError(f"Invalid PII replacement plan file {str(path)!r}: {exc}") from exc
+    return _with_personas_path_under(plan, path.parent)
+
+
+def _with_personas_path_under(plan: Mapping[str, object], base_dir: Path) -> dict[str, object]:
+    """Return ``plan`` with a relative ``sampler.nemotron_personas_path`` joined to ``base_dir``.
+
+    Example:
+        A plan file in ``/runs/a`` naming ``personas`` reads personas from ``/runs/a/personas``,
+        wherever NSS is started.
+    """
+    resolved = dict(plan)
+    sampler = resolved.get("sampler")
+    if not isinstance(sampler, Mapping):
+        return resolved
+    sampler = cast(Mapping[str, object], sampler)
+    personas_path = sampler.get("nemotron_personas_path")
+    if isinstance(personas_path, str) and not Path(personas_path).expanduser().is_absolute():
+        resolved["sampler"] = {**sampler, "nemotron_personas_path": str(base_dir / personas_path)}
+    return resolved
 
 
 class ReplacePiiConfig(Parameters):
     """Top-level ``replace_pii`` config.
 
-    ``replacement`` holds what a person reviews: the plan, and the locale,
-    seed, and sampler it depends on. It is written inline or as the path of a
-    separate YAML file, resolved relative to the configuration file that names
-    it. ``llm`` and ``free_text_detection`` configure how NSS finds PII.
+    ``replacement_plan`` holds what a person reviews: the columns to replace,
+    the value mapping, and the sampler they depend on. It is
+    ``"auto_discovery"`` (the default), an inline plan, or the path of a YAML
+    plan file, resolved relative to the configuration file that names it.
+    Auto-discovery uses the default sampler, or Faker when the
+    Nemotron-Personas data for ``locale`` is missing; to change the sampler,
+    edit the plan it writes and use that plan. ``locale`` and ``seed``
+    configure generation, and ``llm`` and ``free_text_detection`` configure
+    how NSS finds PII.
 
     Auto-discovery classifies columns with the LLM configured by ``llm``, which
     defaults to the NSS inference defaults. An inline plan bypasses discovery,
@@ -969,7 +938,7 @@ class ReplacePiiConfig(Parameters):
     removed_legacy_fields: ClassVar[frozenset[str]] = frozenset({"globals", "steps"})
     removed_legacy_fields_message: ClassVar[str] = (
         "This configuration uses the PII replacement v2 schema, which is not supported by PII replacement v3. "
-        "Configure replace_pii.replacement instead. "
+        "Configure replace_pii.replacement_plan instead. "
         "See docs/user-guide/configuration.md#replacing-pii "
         "for the current configuration."
     )
@@ -981,11 +950,26 @@ class ReplacePiiConfig(Parameters):
             "this release accepts only version 3."
         ),
     )
-    replacement: PiiReplacementSettings = Field(
-        default_factory=PiiReplacementSettings,
+    locale: str = Field(
+        default="en_US",
         description=(
-            "The replacement plan with the locale, seed, and sampler it depends on, inline or as the path of a YAML "
-            "file holding them. A relative path is resolved against the directory of the configuration file."
+            "Locale for generated names, addresses, and phone numbers, and of the Nemotron-Personas dataset "
+            "(datasets/{locale}.parquet). A plan's value mapping targets the sampler values of this locale."
+        ),
+    )
+    seed: int | None = Field(
+        default=None,
+        description=(
+            "Seed for synthetic value generation; when unset the sampler will fall back to PERSON_RANDOM_SEED or 42."
+        ),
+    )
+    replacement_plan: SkipValidation[PiiReplacementPlan] | str = Field(
+        default=AUTO_DISCOVERY,
+        description=(
+            f"{AUTO_DISCOVERY!r} to discover the plan from the data with the default sampler; "
+            "an inline plan; or the path of a YAML plan file. A relative path is resolved against the directory "
+            "of the configuration file, and a relative sampler.nemotron_personas_path against the directory of "
+            "the file that names it."
         ),
     )
     llm: LLMConfig = Field(
@@ -1038,33 +1022,52 @@ class ReplacePiiConfig(Parameters):
         if value is None:
             raise ParameterError(
                 "replace_pii.llm cannot be null because automatic discovery needs an LLM; to replace PII without "
-                "one, give an inline plan in replace_pii.replacement.plan, or set replace_pii to null to skip "
+                "one, give an inline plan in replace_pii.replacement_plan, or set replace_pii to null to skip "
                 "replacement"
             )
         return value
 
-    @field_validator("replacement", mode="before")
+    @field_validator("replacement_plan", mode="before")
     @classmethod
-    def _load_replacement_file(cls, value: object, info: ValidationInfo) -> object:
-        """Load a ``replacement`` given as a path, relative to the configuration file when one is known."""
-        if not isinstance(value, str | Path):
+    def _resolve_replacement_plan(cls, value: object, info: ValidationInfo) -> object:
+        """Resolve the sentinel, an inline plan, or a plan file path, relative to the configuration file.
+
+        Left to the union, a malformed inline plan reports the plan's own errors
+        *and* a sentinel mismatch. Validating a mapping as a plan up front keeps
+        the report to the fields the user actually got wrong.
+        """
+        if value == AUTO_DISCOVERY or isinstance(value, PiiReplacementPlan):
             return value
-        path = Path(value)
-        config_dir = (info.context or {}).get(CONFIG_DIR_CONTEXT_KEY)
-        if not path.is_absolute() and config_dir is not None:
-            path = Path(config_dir) / path
-        return _load_replacement_file(path)
+        context_dir = (info.context or {}).get(CONFIG_DIR_CONTEXT_KEY)
+        config_dir = Path(context_dir) if context_dir is not None else None
+        if isinstance(value, str | Path):
+            path = Path(value)
+            if not path.is_absolute() and config_dir is not None:
+                path = config_dir / path
+            value = _load_plan_file(path)
+        elif isinstance(value, Mapping) and config_dir is not None:
+            value = _with_personas_path_under(cast(Mapping[str, object], value), config_dir)
+        if not isinstance(value, Mapping):
+            raise ParameterError(
+                f"replace_pii.replacement_plan must be {AUTO_DISCOVERY!r}, an inline plan, or the path of a YAML "
+                f"plan file (got {value!r})"
+            )
+        try:
+            return PiiReplacementPlan.model_validate(value)
+        except ValidationError as exc:
+            details = format_pydantic_validation_error(exc)
+            raise ParameterError(f"invalid replacement plan ({details})") from exc
 
     @property
     def is_auto_discovery(self) -> bool:
         """Whether replacements should be auto-discovered (no explicit plan)."""
-        return self.replacement.is_auto_discovery
+        return self.replacement_plan == AUTO_DISCOVERY
 
     @property
     def inline_plan(self) -> PiiReplacementPlan | None:
         """The inline plan, or ``None`` for auto-discovery."""
-        return self.replacement.inline_plan
+        return self.replacement_plan if isinstance(self.replacement_plan, PiiReplacementPlan) else None
 
     def with_plan(self, plan: PiiReplacementPlan) -> Self:
-        """Return a copy whose ``replacement.plan`` is ``plan``."""
-        return self.model_copy(update={"replacement": self.replacement.model_copy(update={"plan": plan})})
+        """Return a copy whose ``replacement_plan`` is ``plan``."""
+        return self.model_copy(update={"replacement_plan": plan})

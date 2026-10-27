@@ -16,7 +16,6 @@ from nemo_safe_synthesizer.config.replace_pii import (
     EntityType,
     PiiColumnPlan,
     PiiReplacementPlan,
-    PiiReplacementSettings,
     ReplacePiiConfig,
 )
 from nemo_safe_synthesizer.errors import ParameterError
@@ -43,7 +42,7 @@ def test_importing_safe_synthesizer_does_not_load_model_stack() -> None:
 def test_plan_pii_replacement_delegates_full_input_without_pipeline_stages(tmp_path: Path) -> None:
     dataframe = pd.DataFrame({"row_id": range(100), "email": [f"person-{i}@example.com" for i in range(100)]})
     config = SafeSynthesizerParameters(replace_pii=ReplacePiiConfig())
-    expected = ReplacePiiConfig(replacement=PiiReplacementSettings(plan=PiiReplacementPlan()))
+    expected = ReplacePiiConfig(replacement_plan=PiiReplacementPlan())
     nss = SafeSynthesizer(config=config, save_path=tmp_path).with_data_source(dataframe)
 
     with (
@@ -76,9 +75,7 @@ def test_plan_pii_replacement_persists_when_output_path_is_supplied(tmp_path: Pa
     inline_plan = PiiReplacementPlan(
         columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
     )
-    config = SafeSynthesizerParameters(
-        replace_pii=ReplacePiiConfig(replacement=PiiReplacementSettings(plan=inline_plan))
-    )
+    config = SafeSynthesizerParameters(replace_pii=ReplacePiiConfig(replacement_plan=inline_plan))
     output_path = tmp_path / "review" / "safe-synthesizer-config.yaml"
 
     result = (
@@ -91,16 +88,16 @@ def test_plan_pii_replacement_persists_when_output_path_is_supplied(tmp_path: Pa
     assert result.inline_plan is not None
     assert result.inline_plan.data_to_sampler_value_mapping == {}
     assert SafeSynthesizerParameters.from_yaml(output_path).replace_pii == result
-    replacement_text = (output_path.parent / "pii_replacement.yaml").read_text()
-    assert "# Draft review: not in this plan, so kept unchanged: visit_id." in replacement_text
+    plan_text = (output_path.parent / "pii_replacement_plan.yaml").read_text()
+    assert "# Draft review: not in this plan, so kept unchanged: visit_id." in plan_text
 
 
-def test_plan_pii_replacement_rejects_an_output_path_named_like_the_replacement_file(tmp_path: Path) -> None:
+def test_plan_pii_replacement_rejects_an_output_path_named_like_the_plan_file(tmp_path: Path) -> None:
     nss = SafeSynthesizer(save_path=tmp_path).with_data_source(pd.DataFrame({"email": ["a@example.com"]}))
-    nss.with_replace_pii(replacement={"plan": {"columns_to_replace": []}})
+    nss.with_replace_pii(replacement_plan={"columns_to_replace": []})
 
-    with pytest.raises(ParameterError, match="output_path cannot be named pii_replacement.yaml"):
-        nss.plan_pii_replacement(output_path=tmp_path / "pii_replacement.yaml")
+    with pytest.raises(ParameterError, match="output_path cannot be named pii_replacement_plan.yaml"):
+        nss.plan_pii_replacement(output_path=tmp_path / "pii_replacement_plan.yaml")
 
 
 def test_plan_pii_replacement_rejects_disabled_pii(tmp_path: Path) -> None:

@@ -742,11 +742,10 @@ class TestRunReplacePii:
         config_path = tmp_path / "config.yaml"
         config_path.write_text(
             "replace_pii:\n"
-            "  replacement:\n"
-            "    plan:\n"
-            "      columns_to_replace:\n"
-            "        - column_name: col1\n"
-            "          entity_type: unique_identifier\n"
+            "  replacement_plan:\n"
+            "    columns_to_replace:\n"
+            "      - column_name: col1\n"
+            "        entity_type: unique_identifier\n"
         )
         run_path = tmp_path / "plan-run"
 
@@ -767,8 +766,9 @@ class TestRunReplacePii:
 
         assert result.exit_code == 0
         resolved_config_path = run_path / "safe-synthesizer-config.yaml"
-        assert yaml.safe_load(resolved_config_path.read_text())["replace_pii"]["replacement"] == "pii_replacement.yaml"
-        serialized = yaml.safe_load((run_path / "pii_replacement.yaml").read_text())["plan"]
+        resolved_yaml = yaml.safe_load(resolved_config_path.read_text())
+        assert resolved_yaml["replace_pii"]["replacement_plan"] == "pii_replacement_plan.yaml"
+        serialized = yaml.safe_load((run_path / "pii_replacement_plan.yaml").read_text())
         assert serialized["data_to_sampler_value_mapping"] == {}
         assert "pattern" not in serialized["columns_to_replace"][0]
         assert "depends_on" not in serialized["columns_to_replace"][0]
@@ -796,9 +796,7 @@ class TestRunReplacePii:
         expected_model: str,
     ) -> None:
         config_path = tmp_path / "config.yaml"
-        config_path.write_text(
-            "replace_pii:\n  replacement:\n    plan: auto_discovery\n  llm:\n    model_id: test-model\n"
-        )
+        config_path.write_text("replace_pii:\n  replacement_plan: auto_discovery\n  llm:\n    model_id: test-model\n")
         monkeypatch.setenv("NSS_INFERENCE_ENDPOINT", "http://localhost:8000/v1")
         monkeypatch.setenv("NSS_INFERENCE_MODEL", "env-model")
         responses = iter(
@@ -843,7 +841,7 @@ class TestRunReplacePii:
         assert request_payloads[0]["model"] == expected_model
         messages = cast(list[dict[str, str]], request_payloads[0]["messages"])
         assert '"non_null_count":2' in messages[1]["content"]
-        assert (run_path / "pii_replacement.yaml").exists()
+        assert (run_path / "pii_replacement_plan.yaml").exists()
 
 
 class TestRunGenerateOptions:

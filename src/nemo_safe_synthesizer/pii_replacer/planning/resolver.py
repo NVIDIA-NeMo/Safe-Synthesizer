@@ -15,7 +15,14 @@ import numpy as np
 import pandas as pd
 
 from ...config.data import DataParameters
-from ...config.replace_pii import DataToSamplerValueMapping, EntityType, LLMConfig, PiiReplacementPlan, ReplacePiiConfig
+from ...config.replace_pii import (
+    DataToSamplerValueMapping,
+    EntityType,
+    LLMConfig,
+    PiiReplacementPlan,
+    PiiSamplerBackend,
+    ReplacePiiConfig,
+)
 from ...config.time_series import TimeSeriesParameters
 from ...errors import ParameterError
 from ...observability import get_logger
@@ -254,7 +261,7 @@ def resolve_replacement_config(
             ``validate_plan``.
 
     Returns:
-        A copy of ``config`` whose ``replacement.plan`` is the resolved inline plan,
+        A copy of ``config`` whose ``replacement_plan`` is the resolved inline plan,
         including its complete ``data_to_sampler_value_mapping``.
 
     When both plan enhancement and mapping discovery use the default LLM, they share one inference
@@ -324,20 +331,19 @@ def _resolve_replacement_config(
         enhancer=enhancer,
         check_pattern_coverage=check_pattern_coverage,
     )
+    if discover_plan:
+        plan = _with_available_sampler(plan, config.locale)
 
     if sampler_value_catalog is None and conditioner_columns(plan):
         from ..sampler_catalog import load_sampler_value_catalog
 
-        sampler_value_catalog = load_sampler_value_catalog(config.replacement)
+        sampler_value_catalog = load_sampler_value_catalog(plan.sampler, config.locale)
     catalog = dict(sampler_value_catalog or {})
 
     # Built-in entries for common spellings come first so neither the LLM nor the user has to map them;
     # the plan's own entries are kept as written.
-    plan = PiiReplacementPlan(
-        columns_to_replace=plan.columns_to_replace,
-        data_to_sampler_value_mapping=_merged_value_mappings(
-            built_in_value_mappings(df, plan, catalog), plan.data_to_sampler_value_mapping
-        ),
+    plan = _with_value_mapping(
+        plan, _merged_value_mappings(built_in_value_mappings(df, plan, catalog), plan.data_to_sampler_value_mapping)
     )
     mappings = plan.data_to_sampler_value_mapping
     if discover_plan and mapping_inputs(df, plan, catalog):
@@ -347,10 +353,7 @@ def _resolve_replacement_config(
             discovered = _discover_mappings_with_default_llm(config.llm, df, plan, catalog)
         mappings = _merged_value_mappings(mappings, discovered)
 
-    resolved_plan = PiiReplacementPlan(
-        columns_to_replace=plan.columns_to_replace,
-        data_to_sampler_value_mapping=mappings,
-    )
+    resolved_plan = _with_value_mapping(plan, mappings)
     validate_data_to_sampler_value_mapping(resolved_plan, catalog)
     if unmatched := unmatched_dependency_values(df, resolved_plan, catalog):
         columns = ", ".join(f"{column!r} ({count})" for column, count in sorted(unmatched.items()))
@@ -360,6 +363,34 @@ def _resolve_replacement_config(
             "match, or list every sampler value to allow any match"
         )
     return config.with_plan(resolved_plan)
+
+
+def _with_available_sampler(plan: PiiReplacementPlan, locale: str) -> PiiReplacementPlan:
+    """Return a discovered ``plan`` that uses Faker when its Nemotron-Personas data for ``locale`` is missing.
+
+    A discovered plan has the default sampler, which the user has not chosen, so a missing dataset switches it
+    to Faker with a warning instead of failing. The resolved plan records the switch for review.
+    """
+    from ..sampler_catalog import nemotron_personas_dataset_path
+
+    sampler = plan.sampler
+    if sampler.backend is not PiiSamplerBackend.NEMOTRON_PERSONAS:
+        return plan
+    path = nemotron_personas_dataset_path(sampler, locale)
+    if path.is_file():
+        return plan
+    logger.user.warning(
+        f"Using the Faker sampler because no Nemotron-Personas data for locale {locale!r} was found at {path}. "
+        "To use Nemotron-Personas, download its dataset and point the plan's sampler.nemotron_personas_path or "
+        "NSS_NEMOTRON_PERSONAS_PATH at it."
+    )
+    return plan.model_copy(update={"sampler": sampler.model_copy(update={"backend": PiiSamplerBackend.FAKER})})
+
+
+def _with_value_mapping(plan: PiiReplacementPlan, mapping: DataToSamplerValueMapping) -> PiiReplacementPlan:
+    """Return ``plan`` with ``mapping`` as its value mapping, validated, keeping its other fields."""
+    fields = {name: getattr(plan, name) for name in PiiReplacementPlan.model_fields}
+    return PiiReplacementPlan.model_validate({**fields, "data_to_sampler_value_mapping": mapping})
 
 
 def _merged_value_mappings(*mappings: DataToSamplerValueMapping) -> DataToSamplerValueMapping:

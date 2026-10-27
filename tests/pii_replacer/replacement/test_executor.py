@@ -15,7 +15,6 @@ from nemo_safe_synthesizer.config.replace_pii import (
     EntityType,
     PiiColumnPlan,
     PiiReplacementPlan,
-    PiiReplacementSettings,
     PiiSamplerBackend,
     PiiSamplerConfig,
 )
@@ -472,7 +471,8 @@ class TestStructuredReplacementExecutor:
             _target("last_name", EntityType.LAST_NAME),
         )
         generator = FakerReplacementGenerator(
-            settings=PiiReplacementSettings(sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER)),
+            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+            locale="en_US",
         )
 
         replaced = (

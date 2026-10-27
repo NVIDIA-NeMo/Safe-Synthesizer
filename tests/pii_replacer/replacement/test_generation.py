@@ -19,7 +19,6 @@ from faker.providers.person.fr_FR import Provider as FrenchFakerPersonProvider
 
 from nemo_safe_synthesizer.config.replace_pii import (
     EntityType,
-    PiiReplacementSettings,
     PiiSamplerBackend,
     PiiSamplerConfig,
 )
@@ -65,7 +64,8 @@ def _request(
 
 def _faker_generator(*, locale: str = "en_US") -> FakerReplacementGenerator:
     return FakerReplacementGenerator(
-        settings=PiiReplacementSettings(locale=locale, sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER)),
+        sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+        locale=locale,
     )
 
 
@@ -83,13 +83,11 @@ def _nemotron_personas_generator(
     else:
         people.to_parquet(asset_path)
     return NemotronPersonasReplacementGenerator(
-        settings=PiiReplacementSettings(
-            locale=locale,
-            sampler=PiiSamplerConfig(
-                backend=PiiSamplerBackend.NEMOTRON_PERSONAS,
-                nemotron_personas_path=str(tmp_path),
-            ),
+        sampler=PiiSamplerConfig(
+            backend=PiiSamplerBackend.NEMOTRON_PERSONAS,
+            nemotron_personas_path=str(tmp_path),
         ),
+        locale=locale,
     )
 
 
@@ -128,9 +126,8 @@ class TestReplacementGenerator:
         (tmp_path / "datasets").mkdir()
         pd.DataFrame({"first_name": ["Persona"]}).to_parquet(tmp_path / "datasets" / "en_US.parquet")
         generator = generator_class(
-            settings=PiiReplacementSettings(
-                sampler=PiiSamplerConfig(backend=backend, nemotron_personas_path=str(tmp_path))
-            ),
+            sampler=PiiSamplerConfig(backend=backend, nemotron_personas_path=str(tmp_path)),
+            locale="en_US",
         )
 
         assert generator.backend is backend
@@ -152,7 +149,8 @@ class TestReplacementGenerator:
     ) -> None:
         with pytest.raises(InternalError, match="requires the .* sampler backend"):
             generator_class(
-                settings=PiiReplacementSettings(sampler=PiiSamplerConfig(backend=backend)),
+                sampler=PiiSamplerConfig(backend=backend),
+                locale="en_US",
             )
 
     @pytest.mark.parametrize(
@@ -672,12 +670,11 @@ class TestReplacementGenerator:
     def test_nemotron_personas_generator_requires_its_locale_dataset(self, tmp_path: Path) -> None:
         with pytest.raises(ParameterError, match="no Nemotron-Personas data for locale 'en_US' was found"):
             NemotronPersonasReplacementGenerator(
-                settings=PiiReplacementSettings(
-                    sampler=PiiSamplerConfig(
-                        backend=PiiSamplerBackend.NEMOTRON_PERSONAS,
-                        nemotron_personas_path=str(tmp_path),
-                    )
+                sampler=PiiSamplerConfig(
+                    backend=PiiSamplerBackend.NEMOTRON_PERSONAS,
+                    nemotron_personas_path=str(tmp_path),
                 ),
+                locale="en_US",
             )
 
     def test_nemotron_personas_generator_fails_when_its_dataset_cannot_be_read(

@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+from __future__ import annotations
+
 from pathlib import Path
 from typing import Literal
 
@@ -9,7 +11,6 @@ import pytest
 
 from nemo_safe_synthesizer.config.replace_pii import (
     EntityType,
-    PiiReplacementSettings,
     PiiSamplerBackend,
     PiiSamplerConfig,
 )
@@ -21,7 +22,8 @@ from nemo_safe_synthesizer.pii_replacer import sampler_catalog
 class TestSamplerValueCatalog:
     def test_faker_exposes_only_supported_conditioning_values(self) -> None:
         catalog = sampler_catalog.load_sampler_value_catalog(
-            PiiReplacementSettings(sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER)),
+            PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+            "en_US",
         )
 
         assert catalog == {EntityType.GENDER: ("female", "male")}
@@ -33,12 +35,8 @@ class TestSamplerValueCatalog:
         pd.DataFrame({"sex": ["Female", "Male"], ethnicity_column: ["Parda", "Branca"]}).to_parquet(dataset_path)
 
         catalog = sampler_catalog.load_sampler_value_catalog(
-            PiiReplacementSettings(
-                locale="pt_BR",
-                sampler=PiiSamplerConfig(
-                    backend=PiiSamplerBackend.NEMOTRON_PERSONAS, nemotron_personas_path=str(tmp_path)
-                ),
-            ),
+            PiiSamplerConfig(backend=PiiSamplerBackend.NEMOTRON_PERSONAS, nemotron_personas_path=str(tmp_path)),
+            "pt_BR",
         )
 
         assert catalog[EntityType.ETHNIC_BACKGROUND] == ("branca", "parda")
@@ -67,12 +65,8 @@ class TestSamplerValueCatalog:
         monkeypatch.setattr(pd, "read_parquet", read_parquet)
 
         catalog = sampler_catalog.load_sampler_value_catalog(
-            PiiReplacementSettings(
-                locale="en_US",
-                sampler=PiiSamplerConfig(
-                    backend=PiiSamplerBackend.NEMOTRON_PERSONAS, nemotron_personas_path=str(tmp_path)
-                ),
-            ),
+            PiiSamplerConfig(backend=PiiSamplerBackend.NEMOTRON_PERSONAS, nemotron_personas_path=str(tmp_path)),
+            "en_US",
         )
 
         assert reads == [(dataset_path, {"columns": ["sex", "ethnic_background"], "dtype_backend": "pyarrow"})]
@@ -84,10 +78,6 @@ class TestSamplerValueCatalog:
     def test_missing_nemotron_personas_locale_is_a_configuration_error(self, tmp_path: Path) -> None:
         with pytest.raises(ParameterError, match="no Nemotron-Personas data for locale 'fr_FR' was found"):
             sampler_catalog.load_sampler_value_catalog(
-                PiiReplacementSettings(
-                    locale="fr_FR",
-                    sampler=PiiSamplerConfig(
-                        backend=PiiSamplerBackend.NEMOTRON_PERSONAS, nemotron_personas_path=str(tmp_path)
-                    ),
-                ),
+                PiiSamplerConfig(backend=PiiSamplerBackend.NEMOTRON_PERSONAS, nemotron_personas_path=str(tmp_path)),
+                "fr_FR",
             )
