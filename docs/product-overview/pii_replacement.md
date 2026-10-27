@@ -411,11 +411,11 @@ replace_pii:
     columns_to_replace: [...]
 ```
 
-Automatic discovery uses Nemotron-Personas when the dataset for the configured
-locale is present, and otherwise uses Faker, logs a warning, and records
-`backend: faker` in the plan it writes. A written plan that selects
-Nemotron-Personas requires its dataset: if the file is missing or cannot be
-read, replacement fails instead of switching to Faker. If the plan conditions on a
+A plan without a `sampler`, including one from automatic discovery, uses
+Nemotron-Personas when the dataset for the configured locale is present, and
+otherwise uses Faker, logs a warning, and records `backend: faker` in the plan
+it writes. A plan that names Nemotron-Personas requires its dataset: if the file
+is missing or cannot be read, replacement fails instead of switching to Faker. If the plan conditions on a
 value the dataset has no column for, such as ethnic background, replacement
 also fails. When a persona row lacks one generated field, or the entity type is
 not a persona field, NSS uses Faker for that value.
