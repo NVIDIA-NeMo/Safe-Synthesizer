@@ -75,10 +75,13 @@ def test_plan_pii_replacement_delegates_full_input_without_pipeline_stages(tmp_p
 def test_plan_pii_replacement_persists_when_output_path_is_supplied(tmp_path: Path) -> None:
     dataframe = pd.DataFrame({"email": ["ada@example.com", "grace@example.com"], "visit_id": ["V1", "V2"]})
     inline_plan = PiiReplacementPlan(
-        sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
         columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)],
     )
-    config = SafeSynthesizerParameters(replace_pii=ReplacePiiConfig(replacement_plan=inline_plan))
+    config = SafeSynthesizerParameters(
+        replace_pii=ReplacePiiConfig(
+            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER), replacement_plan=inline_plan
+        )
+    )
     output_path = tmp_path / "review" / "safe-synthesizer-config.yaml"
 
     result = (
@@ -92,7 +95,10 @@ def test_plan_pii_replacement_persists_when_output_path_is_supplied(tmp_path: Pa
     assert result.inline_plan.data_to_sampler_value_mapping == {}
     assert SafeSynthesizerParameters.from_yaml(output_path).replace_pii == result
     plan_text = (output_path.parent / "pii_replacement_plan.yaml").read_text()
-    assert "# Draft review: not in this plan, so kept unchanged: visit_id." in plan_text
+    assert plan_text.startswith(
+        "# PII replacement plan for this dataset, written for the faker sampler in locale en_US."
+    )
+    assert "Draft review" not in plan_text
 
 
 def test_plan_pii_replacement_rejects_an_output_path_named_like_the_plan_file(tmp_path: Path) -> None:

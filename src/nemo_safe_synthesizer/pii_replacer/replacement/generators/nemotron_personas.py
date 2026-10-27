@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from itertools import chain
 from pathlib import Path
 from random import Random
@@ -20,6 +20,7 @@ from ....observability import get_logger
 from ...sampler_catalog import (
     PERSONA_DEPENDENCY_COLUMN_ALIASES,
     available_parquet_columns,
+    gender_sampler_value,
     require_nemotron_personas_dataset,
 )
 from ._common import (
@@ -109,6 +110,9 @@ class NemotronPersonasReplacementGenerator:
                 entity_type,
                 dependency_value,
             )
+            if entity_type is EntityType.GENDER:
+                # Gender rows are indexed by female and male; see _build_candidate_indexes.
+                sampler_values = tuple(dict.fromkeys(gender_sampler_value(value) for value in sampler_values))
             resolved.append((entity_type, sampler_values))
 
         if not resolved:
@@ -192,8 +196,23 @@ def _build_candidate_indexes(
         if column is None:
             continue
         dependency_columns.add(column)
-        indexes[entity_type] = _build_value_index(people[column])
+        index = _build_value_index(people[column])
+        # Index each locale's own sex words, such as femme in fr_FR, under female and male.
+        indexes[entity_type] = (
+            _merged_value_index(index, gender_sampler_value) if entity_type is EntityType.GENDER else index
+        )
     return indexes, frozenset(dependency_columns)
+
+
+def _merged_value_index(index: Mapping[str, np.ndarray], key: Callable[[str], str]) -> dict[str, np.ndarray]:
+    """Return ``index`` with the row positions of values that share ``key(value)`` combined, in row order."""
+    grouped: dict[str, list[np.ndarray]] = {}
+    for value, positions in index.items():
+        grouped.setdefault(key(value), []).append(positions)
+    return {
+        value: positions[0] if len(positions) == 1 else np.sort(np.concatenate(positions))
+        for value, positions in grouped.items()
+    }
 
 
 def _build_value_index(values: pd.Series) -> dict[str, np.ndarray]:

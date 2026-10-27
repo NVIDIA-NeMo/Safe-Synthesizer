@@ -805,6 +805,30 @@ class TestReplacementGenerator:
         assert generator.generate(request) == "202-555-0101"
         assert delegated_requests == [request]
 
+    @pytest.mark.parametrize("sampler_value", ["female", "femme", "Female"])
+    def test_nemotron_personas_matches_localized_sex_by_female_or_the_locale_word(
+        self, tmp_path: Path, sampler_value: str
+    ) -> None:
+        people = pd.DataFrame(
+            {"first_name": ["Claire", "Louis"], "last_name": ["Martin", "Martin"], "sex": ["Femme", "Homme"]}
+        )
+        generator = _nemotron_personas_generator(tmp_path, people, locale="fr_FR")
+
+        names = {
+            generator.generate(
+                _request(
+                    EntityType.FIRST_NAME,
+                    "Marie",
+                    dependencies=((EntityType.GENDER, CanonicalValue("string", "F")),),
+                    resolved_values=((EntityType.GENDER, (sampler_value,)),),
+                    seed=seed,
+                )
+            )
+            for seed in range(10)
+        }
+
+        assert names == {"Claire"}
+
     def test_nemotron_personas_faker_fallback_keeps_localized_sex_conditioning(self, tmp_path: Path) -> None:
         # fr_FR personas write sex as Femme and Homme and have no middle names, so middle names come from Faker.
         people = pd.DataFrame(

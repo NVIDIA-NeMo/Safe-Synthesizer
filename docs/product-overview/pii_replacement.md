@@ -65,27 +65,30 @@ replace_pii:
 ```
 
 To store the files elsewhere, set `NSS_NEMOTRON_PERSONAS_PATH` to the directory
-containing `datasets/`, or set the plan's `sampler.nemotron_personas_path`. A
-relative path is resolved against the directory of the file that names it:
+containing `datasets/`, or set `replace_pii.sampler.nemotron_personas_path`. A
+relative path is resolved against the directory of the configuration file:
 
 ```yaml
 replace_pii:
-  replacement_plan:
-    sampler:
-      backend: nemotron-personas
-      nemotron_personas_path: /path/to/managed-assets
-    columns_to_replace: [...]
+  locale: en_US
+  sampler:
+    backend: nemotron-personas
+    nemotron_personas_path: /path/to/managed-assets
 ```
 
-A plan without a `sampler`, including one from automatic discovery, uses
-Nemotron-Personas when the dataset for the configured locale is present, and
-otherwise uses Faker, logs a warning, and records `backend: faker` in the plan
-it writes. A plan that names Nemotron-Personas requires its dataset: if the file
-is missing or cannot be read, replacement fails instead of switching to Faker. If the plan conditions on a
-value the dataset has no column for, such as ethnic background, replacement
-also fails. When a persona row lacks one generated field, or the entity type is
-not a persona field, NSS uses Faker for that value. Set `backend: faker` to use
-Faker without a Nemotron-Personas dataset.
+When `replace_pii.sampler` is not set, NSS uses Nemotron-Personas if the
+dataset for the configured locale is present. Otherwise it uses Faker, logs a
+warning, and records `backend: faker` in the configuration it writes, unless
+the plan maps ethnicity values, which only Nemotron-Personas has; then
+resolution fails. A `sampler` you set is always used: if it names
+Nemotron-Personas and the file is missing or cannot be read, replacement fails
+instead of switching to Faker. If the plan conditions on a value the dataset
+has no column for, such as ethnic background, replacement also fails. When a
+persona row lacks one generated field, or the entity type is not a persona
+field, NSS uses Faker for that value. Set `backend: faker` to use Faker without
+a Nemotron-Personas dataset. Faker generates values in `replace_pii.locale`
+too, such as French names for `fr_FR`, but cannot condition on ethnic
+background.
 
 ### Dependencies
 
@@ -137,8 +140,6 @@ by dependency column names from this dataset:
 ```yaml
 replace_pii:
   replacement_plan:
-    sampler:
-      backend: nemotron-personas
     columns_to_replace:
       - column_name: first_name
         entity_type: first_name
@@ -164,15 +165,19 @@ replace_pii:
 Each list selects the union of sampler rows with those values, so listing every
 sampler value allows any match. Values without an entry use case-insensitive
 identity matching. A value that has no entry and matches no sampler value stops
-plan resolution with an error naming its column. Manual mappings are
-validated against the resolved dependency columns and the selected sampler's
-known values. Faker applies mappings for attributes it supports, such as
-gender; unsupported attributes are ignored.
+plan resolution with an error naming its column.
 
-Mappings target the values of one sampler in one locale, so the plan names
-its `sampler`, and it was resolved for `replace_pii.locale`. If you switch
-samplers or locales, rerun automatic discovery or review the mapping; a mapped
-value the new sampler does not have stops plan resolution with an error. NSS does not accept a separate mapping file or combine automatic
+Gender values are `female` and `male` for every sampler and locale.
+Nemotron-Personas also accepts its locale's own words, such as `femme` and
+`homme` in `fr_FR`. Ethnicity values exist only in Nemotron-Personas, in
+locales whose dataset has an ethnicity column, such as `en_US`.
+
+A plan does not name its sampler: each run checks the mapping against its own
+`replace_pii.sampler` and `replace_pii.locale`. An entry the sampler cannot
+use stops plan resolution with one error that lists every such entry and names
+the sampler, for example a gender value such as `femme` with Faker, or any
+ethnicity mapping with Faker. If you switch samplers or locales, rerun automatic
+discovery or edit those entries. NSS does not accept a separate mapping file or combine automatic
 discovery with manual overrides. Generate a resolved configuration, edit its
 plan if needed, and run that configuration again. An inline plan never runs a
 separate mapping-discovery pass; an omitted mapping is equivalent to `{}`.
@@ -184,8 +189,10 @@ accepts version `3`; an omitted version is interpreted as version `3`. NSS
 includes the version whenever it serializes the configuration.
 
 `replace_pii.replacement_plan` is the part of the configuration to review: the
-columns to replace, the data-to-sampler value mapping, and the `sampler` they
-depend on. `replace_pii.locale` sets the locale of generated values and of the
+columns to replace and the data-to-sampler value mapping.
+`replace_pii.sampler` chooses where generated names and addresses come from
+(see [Nemotron-Personas sampling](#nemotron-personas-sampling)).
+`replace_pii.locale` sets the locale of generated values and of the
 Nemotron-Personas dataset, and `replace_pii.seed` makes replacement
 reproducible; when the seed is unset, NSS uses `PERSON_RANDOM_SEED` or `42`, so
 the same input gets the same replacements in every run. `llm` and
@@ -209,10 +216,8 @@ replace_pii:
   replacement_plan: auto_discovery
 ```
 
-Automatic discovery uses the default sampler (see
-[Nemotron-Personas sampling](#nemotron-personas-sampling)). To choose another,
-run the [plan-only workflow](#plan-only-workflow), edit the plan's `sampler`,
-and use that plan.
+Automatic discovery maps dependency values to the values of
+`replace_pii.sampler`, so set the sampler before discovering the plan.
 
 ### Inline plan
 
@@ -221,9 +226,9 @@ An inline plan is written directly under `replacement_plan`:
 ```yaml
 replace_pii:
   schema_version: 3
+  sampler:
+    backend: faker
   replacement_plan:
-    sampler:
-      backend: faker
     columns_to_replace:
       - column_name: full_name
         entity_type: full_name
@@ -252,8 +257,6 @@ replace_pii:
 
 ```yaml
 # pii_replacement_plan.yaml
-sampler:
-  backend: nemotron-personas
 columns_to_replace:
   - column_name: email
     entity_type: email
@@ -289,26 +292,18 @@ safe-synthesizer run replace-pii --plan-only \
 The command writes two files in the standard timestamped NSS run directory
 under `--artifact-path`:
 
-- `pii_replacement_plan.yaml`: the resolved `replace_pii.replacement_plan`,
-  with the sampler it depends on. This is the file to review and edit.
+- `pii_replacement_plan.yaml`: the resolved `replace_pii.replacement_plan`.
+  This is the file to review and edit.
 - `safe-synthesizer-config.yaml`: the complete NSS configuration, which names
-  `pii_replacement_plan.yaml`, so it can be passed directly to a later run with
-  `--config`.
+  `pii_replacement_plan.yaml` and records the sampler used, so it can be passed
+  directly to a later run with `--config`.
 
-Comments in the plan help you review the draft. The comment above
-`columns_to_replace` lists the dataset columns the plan leaves unchanged, so you
-can spot a column the plan missed. For each `depends_on` column, the comment
-above `data_to_sampler_value_mapping` lists the dataset values used as is and
-the values the sampler accepts, for example:
-
-```yaml
-# Draft review: sex (gender): Female, Male are used as is. Sampler values: female, male.
-data_to_sampler_value_mapping: {}
-```
-
-Long lists show the first 20 values and the total. These comments contain
-dataset values and describe the plan as drafted; they are not updated when you
-edit the plan.
+The plan file starts with a comment naming the sampler and locale it was
+written for. That comment is for the reader only; each run checks the plan
+against its own `replace_pii.sampler` and `replace_pii.locale`. A short comment
+above `columns_to_replace` explains `pattern` and `depends_on`, and the comment
+above `data_to_sampler_value_mapping` notes that the section is safe to ignore
+unless a run reports an error about it.
 
 The matching SDK interface returns the resolved `ReplacePiiConfig`. When an
 output path is supplied, it writes the complete configuration there and

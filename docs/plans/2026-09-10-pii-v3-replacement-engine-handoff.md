@@ -277,11 +277,11 @@ replace_pii:
   replacement_plan: auto_discovery
 ```
 
-`replace_pii.replacement_plan` holds the plan with the `sampler` it depends on, the part a person reviews. It may be
-the path of a YAML plan file, resolved relative to the configuration file that names it. A plan without a `sampler`,
-including a discovered one, uses the default sampler, or Faker when the Nemotron-Personas data for the locale is
-missing; a plan that names Nemotron-Personas fails instead. `locale`, `seed`, `llm`, and
-`free_text_detection` stay outside it.
+`replace_pii.replacement_plan` holds the plan, the part a person reviews. It may be the path of a YAML plan file,
+resolved relative to the configuration file that names it. `sampler`, `locale`, `seed`, `llm`, and
+`free_text_detection` stay outside it, so a plan file is checked against the sampler of each run that uses it. When
+`replace_pii.sampler` is unset, NSS uses Nemotron-Personas, or Faker with a warning when its data for the locale is
+missing and the plan maps no ethnicity values; a `sampler` that is set fails instead.
 
 The authoritative manual form is inline and keyed by dependency source column,
 because dataset columns—not entity types—own the source vocabularies:
@@ -327,9 +327,11 @@ replace_pii:
           - micronesian
 ```
 
-This mapping adapts labels from the input dataset to labels understood by the selected sampler. It remains
-sampler-specific; switching sampler backends requires rediscovery or review of the inline mapping. It lives in the
-dataset-specific plan so the replacement columns, dependency edges, and vocabulary adaptation travel together.
+This mapping adapts labels from the input dataset to labels understood by the selected sampler. Gender labels are
+`female` and `male` for every sampler; Nemotron-Personas also accepts its locale's own words, such as `femme`.
+Ethnicity labels are Nemotron-Personas only, so switching samplers can require rediscovery or review of the mapping.
+It lives in the dataset-specific plan so the replacement columns, dependency edges, and vocabulary adaptation travel
+together.
 
 Do not accept a separate mapping file, a separate mapping-discovery sentinel, or automatic/manual overrides. An inline
 or file-based plan is authoritative, and an omitted mapping means `{}`. Plan-only writes one complete NSS configuration
@@ -354,9 +356,9 @@ Resolve each dependency value as follows:
    never the raw dependency value.
 
 Reject empty target lists, empty labels, source or target labels duplicated after case-folding, columns not used as plan
-dependencies, and labels unsupported by a sampler that exposes a label catalog. A mapping for a column whose entity type
-the selected sampler cannot condition on, such as ethnic background with Faker, is kept with a warning so the plan still
-works if the sampler is switched back. Applying a mapping must not alter
+dependencies, labels unsupported by a sampler that exposes a label catalog, and a mapping for a column whose entity type
+the selected sampler cannot condition on, such as ethnic background with Faker. One error lists every unsupported entry
+and names the sampler. Applying a mapping must not alter
 `CanonicalValue`, mapping identity, dependency-drift comparison, or persisted source data; case-folding exists only
 inside sampler candidate selection.
 

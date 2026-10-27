@@ -18,6 +18,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiSamplerConfig,
     ReplacePiiConfig,
 )
+from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.pii_replacer.llm_client import InferenceSettings
 from nemo_safe_synthesizer.pii_replacer.planning import (
     PlanDiscoverer,
@@ -438,15 +439,27 @@ class TestResolveReplacementConfigWithLocalServer:
         assert not fixture_fake_local_servers[0].running
 
 
-def _email_plan(sampler: PiiSamplerConfig | None = None) -> PiiReplacementPlan:
+def _email_plan() -> PiiReplacementPlan:
+    return PiiReplacementPlan(columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)])
+
+
+def _name_plan(mapping: dict[str, dict[str, list[str]]], *, with_race: bool = True) -> PiiReplacementPlan:
+    depends_on = [ConditioningColumn(column_name="sex", entity_type=EntityType.GENDER)]
+    if with_race:
+        depends_on.append(ConditioningColumn(column_name="race", entity_type=EntityType.ETHNIC_BACKGROUND))
     return PiiReplacementPlan(
-        sampler=sampler or PiiSamplerConfig(),
-        columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)],
+        columns_to_replace=[
+            PiiColumnPlan(column_name="name", entity_type=EntityType.FIRST_NAME, depends_on=depends_on)
+        ],
+        data_to_sampler_value_mapping=mapping,
     )
 
 
+_PEOPLE = pd.DataFrame({"name": ["Ada", "Alan"], "sex": ["Female", "Male"], "race": ["Latino", "White"]})
+
+
 @pytest.mark.unit
-class TestDiscoveredSampler:
+class TestSamplerFallback:
     def test_missing_persona_data_switches_a_discovered_plan_to_faker(
         self,
         tmp_path: Path,
@@ -464,8 +477,9 @@ class TestDiscoveredSampler:
             enhancer=RecordingEnhancer(_email_plan()),
         )
 
-        assert resolved.inline_plan is not None
-        assert resolved.inline_plan.sampler.backend is PiiSamplerBackend.FAKER
+        assert resolved.sampler.backend is PiiSamplerBackend.FAKER
+        # Recorded as set, so the saved configuration names Faker and a rerun does not switch again.
+        assert "sampler" in resolved.model_fields_set
         assert "no Nemotron-Personas data for locale 'fr_FR'" in caplog.text
 
     def test_present_persona_data_keeps_the_default_sampler(
@@ -482,10 +496,9 @@ class TestDiscoveredSampler:
             enhancer=RecordingEnhancer(_email_plan()),
         )
 
-        assert resolved.inline_plan is not None
-        assert resolved.inline_plan.sampler.backend is PiiSamplerBackend.NEMOTRON_PERSONAS
+        assert resolved.sampler.backend is PiiSamplerBackend.NEMOTRON_PERSONAS
 
-    def test_a_written_plan_without_a_sampler_switches_to_faker_when_persona_data_is_missing(
+    def test_a_written_plan_switches_to_faker_when_the_sampler_is_not_set(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
@@ -494,24 +507,56 @@ class TestDiscoveredSampler:
     ) -> None:
         caplog.set_level(logging.WARNING)
         monkeypatch.setenv("NSS_NEMOTRON_PERSONAS_PATH", str(tmp_path))
-        config = ReplacePiiConfig.model_validate(
-            {"replacement_plan": {"columns_to_replace": [{"column_name": "email", "entity_type": "email"}]}}
+
+        resolved = resolve_replacement_config(
+            fixture_patient_df, ReplacePiiConfig(replacement_plan=_email_plan()), DataParameters()
         )
 
-        resolved = resolve_replacement_config(fixture_patient_df, config, DataParameters())
-
-        assert resolved.inline_plan is not None
-        assert resolved.inline_plan.sampler.backend is PiiSamplerBackend.FAKER
+        assert resolved.sampler.backend is PiiSamplerBackend.FAKER
         assert "no Nemotron-Personas data for locale 'en_US'" in caplog.text
 
-    def test_an_inline_plan_keeps_its_sampler_when_persona_data_is_missing(
+    def test_a_set_sampler_is_kept_when_persona_data_is_missing(
         self, tmp_path: Path, fixture_patient_df: pd.DataFrame
     ) -> None:
         sampler = PiiSamplerConfig(nemotron_personas_path=str(tmp_path))
 
         resolved = resolve_replacement_config(
-            fixture_patient_df, ReplacePiiConfig(replacement_plan=_email_plan(sampler)), DataParameters()
+            fixture_patient_df, ReplacePiiConfig(sampler=sampler, replacement_plan=_email_plan()), DataParameters()
         )
 
-        assert resolved.inline_plan is not None
-        assert resolved.inline_plan.sampler == sampler
+        assert resolved.sampler == sampler
+
+    def test_a_plan_mapping_ethnicity_does_not_switch_to_faker(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("NSS_NEMOTRON_PERSONAS_PATH", str(tmp_path))
+        config = ReplacePiiConfig(replacement_plan=_name_plan({"race": {"Latino": ["hispanic"]}}))
+
+        with pytest.raises(ParameterError, match="maps ethnicity values for 'race', which need Nemotron-Personas"):
+            resolve_replacement_config(_PEOPLE, config, DataParameters())
+
+
+@pytest.mark.unit
+class TestMappingMatchesTheSampler:
+    def test_every_mismatch_is_reported_with_the_sampler(self) -> None:
+        config = ReplacePiiConfig(
+            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+            replacement_plan=_name_plan({"sex": {"Female": ["femme"]}, "race": {"Latino": ["hispanic"]}}),
+        )
+
+        with pytest.raises(ParameterError) as excinfo:
+            resolve_replacement_config(_PEOPLE, config, DataParameters())
+
+        message = str(excinfo.value)
+        assert "does not match the faker (locale en_US) sampler" in message
+        assert "column 'sex' maps to femme, which this sampler does not accept (it accepts female, male)" in message
+        assert "column 'race' maps ethnic_background values, which this sampler does not have" in message
+
+    def test_the_error_says_when_faker_replaced_missing_persona_data(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("NSS_NEMOTRON_PERSONAS_PATH", str(tmp_path))
+        config = ReplacePiiConfig(replacement_plan=_name_plan({"sex": {"Female": ["femme"]}}, with_race=False))
+
+        with pytest.raises(ParameterError, match="used because no Nemotron-Personas data was found"):
+            resolve_replacement_config(_PEOPLE, config, DataParameters())

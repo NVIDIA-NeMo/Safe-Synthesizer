@@ -44,10 +44,21 @@ PERSONA_SEX_VALUES: Mapping[str, str] = {
     "feminino": "female",
     "masculino": "male",
 }
-"""Casefolded Nemotron-Personas ``sex`` values by locale and the Faker gender each one means.
+"""Casefolded Nemotron-Personas ``sex`` values by locale and the gender each one means.
 
 Only the English locales use ``Female`` and ``Male``; ja_JP uses ``女``, fr_FR ``Femme``, de_DE ``Weiblich``, and so on.
+Every sampler accepts ``female`` and ``male``, so a value mapping need not depend on the locale.
 """
+
+
+def gender_sampler_value(value: str) -> str:
+    """Return ``female`` or ``male`` for a Nemotron-Personas ``sex`` value, else ``value`` casefolded.
+
+    Example:
+        ``Femme`` and ``female`` both give ``female``; a value missing from ``PERSONA_SEX_VALUES`` is kept.
+    """
+    key = value.casefold()
+    return PERSONA_SEX_VALUES.get(key, key)
 
 
 def nemotron_personas_dataset_path(sampler: PiiSamplerConfig, locale: str) -> Path:
@@ -59,7 +70,8 @@ def require_nemotron_personas_dataset(sampler: PiiSamplerConfig, locale: str) ->
     """Return the Nemotron-Personas dataset for the configured locale, or raise when it is missing.
 
     Selecting the Nemotron-Personas sampler requires its data; NSS does not
-    silently substitute Faker for a missing dataset.
+    silently substitute Faker here. An unset ``replace_pii.sampler`` switches
+    to Faker before this check; see ``resolve_replacement_config``.
 
     Raises:
         ParameterError: If the locale's dataset file does not exist.
@@ -67,17 +79,19 @@ def require_nemotron_personas_dataset(sampler: PiiSamplerConfig, locale: str) ->
     path = nemotron_personas_dataset_path(sampler, locale)
     if not path.is_file():
         raise ParameterError(
-            f"the replacement plan's sampler.backend is {PiiSamplerBackend.NEMOTRON_PERSONAS.value}, but no "
+            f"replace_pii.sampler.backend is {PiiSamplerBackend.NEMOTRON_PERSONAS.value}, but no "
             f"Nemotron-Personas data for locale {locale!r} was found at {path}. Download the "
-            "Nemotron-Personas dataset, point "
-            "the plan's sampler.nemotron_personas_path or NSS_NEMOTRON_PERSONAS_PATH at it, or set "
-            f"the plan's sampler.backend to {PiiSamplerBackend.FAKER.value}"
+            "Nemotron-Personas dataset, point replace_pii.sampler.nemotron_personas_path or "
+            f"NSS_NEMOTRON_PERSONAS_PATH at it, or set replace_pii.sampler.backend to {PiiSamplerBackend.FAKER.value}"
         )
     return path
 
 
 def load_sampler_value_catalog(sampler: PiiSamplerConfig, locale: str) -> SamplerValueCatalog:
     """Return the dependency values understood by the selected sampler.
+
+    Nemotron-Personas gender values include ``female`` and ``male`` as well as the locale's own words, such as
+    ``femme`` and ``homme`` in fr_FR, so a mapping written for Faker also works with personas.
 
     Raises:
         ParameterError: If the Nemotron-Personas dataset is missing or cannot be read.
@@ -97,10 +111,13 @@ def load_sampler_value_catalog(sampler: PiiSamplerConfig, locale: str) -> Sample
     except Exception as exc:
         raise ParameterError(f"Nemotron-Personas data at {path} could not be read") from exc
 
-    return {
-        entity_type: tuple(sorted({str(value).casefold() for value in dataframe[column].dropna().unique().tolist()}))
-        for entity_type, column in selected.items()
-    }
+    catalog: dict[EntityType, tuple[str, ...]] = {}
+    for entity_type, column in selected.items():
+        values = {str(value).casefold() for value in dataframe[column].dropna().unique().tolist()}
+        if entity_type is EntityType.GENDER:
+            values |= {gender_sampler_value(value) for value in values}
+        catalog[entity_type] = tuple(sorted(values))
+    return catalog
 
 
 def available_parquet_columns(path: Path) -> frozenset[str]:
