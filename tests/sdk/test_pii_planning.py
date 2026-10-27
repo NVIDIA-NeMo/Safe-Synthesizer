@@ -16,6 +16,8 @@ from nemo_safe_synthesizer.config.replace_pii import (
     EntityType,
     PiiColumnPlan,
     PiiReplacementPlan,
+    PiiSamplerBackend,
+    PiiSamplerConfig,
     ReplacePiiConfig,
 )
 from nemo_safe_synthesizer.errors import ParameterError
@@ -73,7 +75,8 @@ def test_plan_pii_replacement_delegates_full_input_without_pipeline_stages(tmp_p
 def test_plan_pii_replacement_persists_when_output_path_is_supplied(tmp_path: Path) -> None:
     dataframe = pd.DataFrame({"email": ["ada@example.com", "grace@example.com"], "visit_id": ["V1", "V2"]})
     inline_plan = PiiReplacementPlan(
-        columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
+        sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+        columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)],
     )
     config = SafeSynthesizerParameters(replace_pii=ReplacePiiConfig(replacement_plan=inline_plan))
     output_path = tmp_path / "review" / "safe-synthesizer-config.yaml"

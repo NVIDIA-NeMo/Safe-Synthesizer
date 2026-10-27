@@ -278,8 +278,9 @@ replace_pii:
 ```
 
 `replace_pii.replacement_plan` holds the plan with the `sampler` it depends on, the part a person reviews. It may be
-the path of a YAML plan file, resolved relative to the configuration file that names it. Automatic discovery uses the
-default sampler, or Faker when the Nemotron-Personas data for the locale is missing. `locale`, `seed`, `llm`, and
+the path of a YAML plan file, resolved relative to the configuration file that names it. A plan without a `sampler`,
+including a discovered one, uses the default sampler, or Faker when the Nemotron-Personas data for the locale is
+missing; a plan that names Nemotron-Personas fails instead. `locale`, `seed`, `llm`, and
 `free_text_detection` stay outside it.
 
 The authoritative manual form is inline and keyed by dependency source column,

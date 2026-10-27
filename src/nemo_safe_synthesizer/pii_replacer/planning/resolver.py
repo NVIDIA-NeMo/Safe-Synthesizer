@@ -331,7 +331,7 @@ def _resolve_replacement_config(
         enhancer=enhancer,
         check_pattern_coverage=check_pattern_coverage,
     )
-    if discover_plan:
+    if discover_plan or "sampler" not in plan.model_fields_set:
         plan = _with_available_sampler(plan, config.locale)
 
     if sampler_value_catalog is None and conditioner_columns(plan):
@@ -366,10 +366,12 @@ def _resolve_replacement_config(
 
 
 def _with_available_sampler(plan: PiiReplacementPlan, locale: str) -> PiiReplacementPlan:
-    """Return a discovered ``plan`` that uses Faker when its Nemotron-Personas data for ``locale`` is missing.
+    """Return ``plan`` using Faker when its default Nemotron-Personas sampler has no data for ``locale``.
 
-    A discovered plan has the default sampler, which the user has not chosen, so a missing dataset switches it
-    to Faker with a warning instead of failing. The resolved plan records the switch for review.
+    Called for a discovered plan and for a written plan without a ``sampler``: the user has not chosen
+    the sampler, so a missing dataset switches it to Faker with a warning instead of failing. A plan that
+    names a sampler keeps it and fails later if its data is missing. The resolved plan records the switch
+    for review.
     """
     from ..sampler_catalog import nemotron_personas_dataset_path
 
