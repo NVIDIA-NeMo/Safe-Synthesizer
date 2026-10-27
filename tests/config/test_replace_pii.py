@@ -400,7 +400,8 @@ class TestReplacePiiConfig:
         assert config.is_auto_discovery
         assert config.inline_plan is None
         assert config.llm == LLMConfig()
-        assert PiiReplacementPlan().sampler.backend is PiiSamplerBackend.NEMOTRON_PERSONAS
+        assert config.sampler.backend is PiiSamplerBackend.NEMOTRON_PERSONAS
+        assert "sampler" not in config.model_fields_set
         assert ENTITY_BY_TYPE[EntityType.FREE_TEXT].action is EntityAction.REPLACE_IN_TEXT
 
     def test_null_llm_is_rejected_with_the_ways_to_skip_it(self) -> None:
@@ -525,7 +526,7 @@ class TestReplacePiiConfig:
         config_dir = tmp_path / "configs"
         config_dir.mkdir()
         (config_dir / "pii_replacement_plan.yaml").write_text(
-            "sampler:\n  backend: faker\ncolumns_to_replace:\n- column_name: email\n  entity_type: email\n"
+            "columns_to_replace:\n- column_name: email\n  entity_type: email\n"
         )
         (config_dir / "config.yaml").write_text("replace_pii:\n  replacement_plan: pii_replacement_plan.yaml\n")
         monkeypatch.chdir(tmp_path)
@@ -534,24 +535,29 @@ class TestReplacePiiConfig:
 
         assert replace_pii is not None
         assert replace_pii.inline_plan is not None
-        assert replace_pii.inline_plan.sampler.backend is PiiSamplerBackend.FAKER
         assert replace_pii.inline_plan.columns_to_replace[0].column_name == "email"
 
-    def test_inline_relative_personas_path_resolves_against_the_config_file(
+    @pytest.mark.parametrize("in_file", [True, False])
+    def test_a_plan_that_sets_sampler_is_pointed_at_replace_pii_sampler(self, tmp_path: Path, in_file: bool) -> None:
+        plan = {"sampler": {"backend": "faker"}}
+        if in_file:
+            path = tmp_path / "plan.yaml"
+            path.write_text("sampler:\n  backend: faker\n")
+        with pytest.raises(ValidationError, match="sets sampler, which is now set in replace_pii.sampler"):
+            ReplacePiiConfig.model_validate({"replacement_plan": str(path) if in_file else plan})
+
+    def test_relative_personas_path_resolves_against_the_config_file(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         config_dir = tmp_path / "configs"
         config_dir.mkdir()
-        (config_dir / "config.yaml").write_text(
-            "replace_pii:\n  replacement_plan:\n    sampler:\n      nemotron_personas_path: personas\n"
-        )
+        (config_dir / "config.yaml").write_text("replace_pii:\n  sampler:\n    nemotron_personas_path: personas\n")
         monkeypatch.chdir(tmp_path)
 
         replace_pii = SafeSynthesizerParameters.from_yaml(Path("configs") / "config.yaml").replace_pii
 
         assert replace_pii is not None
-        assert replace_pii.inline_plan is not None
-        assert replace_pii.inline_plan.sampler.nemotron_personas_path == str(config_dir / "personas")
+        assert replace_pii.sampler.nemotron_personas_path == str(config_dir / "personas")
 
     def test_missing_plan_file_is_reported_by_path(self, tmp_path: Path) -> None:
         with pytest.raises(ValidationError, match="is not 'auto_discovery' or an inline plan, and the plan file"):
@@ -669,10 +675,9 @@ class TestReplacePiiConfig:
 
     def test_resolved_nemotron_personas_path_uses_override(self, tmp_path: Path) -> None:
         config = ReplacePiiConfig.model_validate(
-            {"replacement_plan": {"sampler": {"backend": "faker", "nemotron_personas_path": str(tmp_path)}}}
+            {"sampler": {"backend": "faker", "nemotron_personas_path": str(tmp_path)}}
         )
-        assert config.inline_plan is not None
-        assert config.inline_plan.sampler.resolved_nemotron_personas_path() == tmp_path
+        assert config.sampler.resolved_nemotron_personas_path() == tmp_path
 
     def test_plan_accepts_manual_data_to_sampler_value_mapping(self) -> None:
         plan = PiiReplacementPlan.model_validate(
@@ -726,4 +731,4 @@ class TestReplacePiiConfig:
         assert default_nemotron_personas_path() == Path.home() / ".data-designer" / "managed-assets"
         monkeypatch.setenv(NSS_NEMOTRON_PERSONAS_PATH_ENV, str(tmp_path))
         assert default_nemotron_personas_path() == tmp_path
-        assert PiiReplacementPlan().sampler.resolved_nemotron_personas_path() == tmp_path
+        assert ReplacePiiConfig().sampler.resolved_nemotron_personas_path() == tmp_path

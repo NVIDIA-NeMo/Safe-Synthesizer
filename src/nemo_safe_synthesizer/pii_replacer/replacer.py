@@ -9,7 +9,7 @@ import time
 from typing import TYPE_CHECKING
 
 from ..config.data import DataParameters
-from ..config.replace_pii import PiiReplacementPlan, PiiSamplerBackend, ReplacePiiConfig
+from ..config.replace_pii import PiiSamplerBackend, PiiSamplerConfig, ReplacePiiConfig
 from ..config.time_series import TimeSeriesParameters
 from ..errors import InternalError
 from .planning import resolve_replacement_config
@@ -94,7 +94,7 @@ class TabularPiiReplacer:
             raise InternalError("PII replacement configuration was not fully resolved")
         executor = StructuredReplacementExecutor(
             plan,
-            self._replacement_generator(plan, resolved_config.locale),
+            self._replacement_generator(resolved_config.sampler, resolved_config.locale),
             group_column=self._data_config.group_training_examples_by,
             base_seed=resolve_base_seed(resolved_config.seed),
         )
@@ -107,13 +107,13 @@ class TabularPiiReplacer:
             replacement_time_seconds=time.perf_counter() - started,
         )
 
-    def _replacement_generator(self, plan: PiiReplacementPlan, locale: str) -> ReplacementGenerator:
+    def _replacement_generator(self, sampler: PiiSamplerConfig, locale: str) -> ReplacementGenerator:
         # Imported here so loading the package does not load generator implementations.
         from .replacement.generators import FakerReplacementGenerator, NemotronPersonasReplacementGenerator
 
-        match plan.sampler.backend:
+        match sampler.backend:
             case PiiSamplerBackend.NEMOTRON_PERSONAS:
-                return NemotronPersonasReplacementGenerator(sampler=plan.sampler, locale=locale)
+                return NemotronPersonasReplacementGenerator(sampler=sampler, locale=locale)
             case PiiSamplerBackend.FAKER:
-                return FakerReplacementGenerator(sampler=plan.sampler, locale=locale)
-        raise InternalError(f"Unsupported PII sampler backend: {plan.sampler.backend!r}")
+                return FakerReplacementGenerator(sampler=sampler, locale=locale)
+        raise InternalError(f"Unsupported PII sampler backend: {sampler.backend!r}")

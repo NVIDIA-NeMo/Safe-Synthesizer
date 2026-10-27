@@ -41,6 +41,18 @@ class TestSamplerValueCatalog:
 
         assert catalog[EntityType.ETHNIC_BACKGROUND] == ("branca", "parda")
 
+    def test_nemotron_personas_gender_accepts_female_and_male_and_the_locale_words(self, tmp_path: Path) -> None:
+        dataset_path = tmp_path / "datasets" / "fr_FR.parquet"
+        dataset_path.parent.mkdir()
+        pd.DataFrame({"sex": ["Femme", "Homme"]}).to_parquet(dataset_path)
+
+        catalog = sampler_catalog.load_sampler_value_catalog(
+            PiiSamplerConfig(backend=PiiSamplerBackend.NEMOTRON_PERSONAS, nemotron_personas_path=str(tmp_path)),
+            "fr_FR",
+        )
+
+        assert catalog == {EntityType.GENDER: ("female", "femme", "homme", "male")}
+
     def test_nemotron_personas_reads_only_dependency_columns(
         self,
         tmp_path: Path,

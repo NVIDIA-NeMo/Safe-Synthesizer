@@ -3,8 +3,6 @@
 
 from __future__ import annotations
 
-import logging
-
 import pandas as pd
 import pytest
 
@@ -15,6 +13,8 @@ from nemo_safe_synthesizer.config.replace_pii import (
     EntityType,
     PiiColumnPlan,
     PiiReplacementPlan,
+    PiiSamplerBackend,
+    PiiSamplerConfig,
     ReplacePiiConfig,
 )
 from nemo_safe_synthesizer.errors import ParameterError
@@ -172,7 +172,7 @@ class TestDependencyMappings:
         ("mappings", "error"),
         [
             ({"unknown": {"Woman": ["female"]}}, "not used as a dependency"),
-            ({"sex": {"Woman": ["unknown"]}}, "values not supported"),
+            ({"sex": {"Woman": ["unknown"]}}, "maps to unknown, which this sampler does not accept"),
         ],
     )
     def test_manual_mapping_rejects_invalid_plan_or_sampler_bindings(
@@ -191,26 +191,19 @@ class TestDependencyMappings:
                 sampler_value_catalog={EntityType.GENDER: ("female", "male")},
             )
 
-    def test_mapping_for_a_column_the_sampler_cannot_condition_on_is_kept_with_a_warning(
-        self,
-        caplog: pytest.LogCaptureFixture,
-    ) -> None:
-        caplog.set_level(logging.WARNING)
+    def test_mapping_for_a_column_the_sampler_cannot_condition_on_is_rejected(self) -> None:
         dataframe = pd.DataFrame({"first_name": ["Ada"], "sex": ["Female"], "race": ["Asian"]})
         mappings: DataToSamplerValueMapping = {"race": {"Asian": ["east asian"]}}
 
-        resolved = resolve_replacement_config(
-            dataframe,
-            ReplacePiiConfig(replacement_plan=_plan(mappings)),
-            DataParameters(),
-            sampler_value_catalog={EntityType.GENDER: ("female", "male")},
-        )
-
-        assert resolved.inline_plan is not None
-        assert resolved.inline_plan.data_to_sampler_value_mapping == mappings
-        assert "Ignoring data_to_sampler_value_mapping for a column the configured sampler cannot condition on" in (
-            caplog.text
-        )
+        with pytest.raises(ParameterError, match="column 'race' maps ethnic_background values, which this sampler"):
+            resolve_replacement_config(
+                dataframe,
+                ReplacePiiConfig(
+                    sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER), replacement_plan=_plan(mappings)
+                ),
+                DataParameters(),
+                sampler_value_catalog={EntityType.GENDER: ("female", "male")},
+            )
 
     def test_built_in_variants_resolve_without_an_llm_or_manual_entries(self) -> None:
         dataframe = pd.DataFrame(
@@ -234,7 +227,7 @@ class TestDependencyMappings:
             "sex": {"F": ["female"], "Woman": ["female"], "M": ["male"]}
         }
 
-    def test_built_in_variants_map_to_localized_persona_sex_values(self) -> None:
+    def test_built_in_variants_map_to_female_and_male_for_a_localized_persona_catalog(self) -> None:
         dataframe = pd.DataFrame(
             {
                 "first_name": ["Ada", "Grace", "Alan", "Mae"],
@@ -250,15 +243,13 @@ class TestDependencyMappings:
             discoverer=_StaticPlanDiscoverer(),
             enhancer=_PassThroughEnhancer(),
             sampler_value_catalog={
-                EntityType.GENDER: ("femme", "homme"),
+                EntityType.GENDER: ("female", "femme", "homme", "male"),
                 EntityType.ETHNIC_BACKGROUND: ("white",),
             },
         )
 
         assert resolved.inline_plan is not None
-        assert resolved.inline_plan.data_to_sampler_value_mapping == {
-            "sex": {"F": ["femme"], "Female": ["femme"], "Man": ["homme"]}
-        }
+        assert resolved.inline_plan.data_to_sampler_value_mapping == {"sex": {"F": ["female"], "Man": ["male"]}}
 
     def test_plan_entries_take_precedence_over_built_in_variants(self) -> None:
         dataframe = pd.DataFrame({"first_name": ["Ada", "Alan"], "sex": ["F", "M"], "race": ["White"] * 2})

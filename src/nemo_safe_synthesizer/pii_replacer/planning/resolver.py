@@ -243,10 +243,14 @@ def resolve_replacement_config(
     """Resolve the replacement plan and its data-to-sampler value mapping for ``df``.
 
     The plan comes from ``config`` or, for ``auto_discovery``, from the
-    discoverer and the LLM enhancer. The value
+    discoverer and the LLM enhancer. When ``config.sampler`` is not set and
+    the Nemotron-Personas data for ``config.locale`` is missing, the sampler
+    switches to Faker with a warning, unless the plan maps ethnicity values,
+    which only Nemotron-Personas has. The value
     mapping then combines built-in entries for common gender spellings, the
     plan's own entries, and, for ``auto_discovery``, discovered entries for any
-    remaining conditioner values without a sampler match.
+    remaining conditioner values without a sampler match, and is checked
+    against the sampler.
 
     Args:
         df: Data the plan is validated against and whose conditioner values are mapped.
@@ -262,16 +266,19 @@ def resolve_replacement_config(
 
     Returns:
         A copy of ``config`` whose ``replacement_plan`` is the resolved inline plan,
-        including its complete ``data_to_sampler_value_mapping``.
+        including its complete ``data_to_sampler_value_mapping``, and whose
+        ``sampler`` is the one used.
 
     When both plan enhancement and mapping discovery use the default LLM, they share one inference
     session, so a managed local vLLM server starts once and stops before this returns. Plan
     validation runs inside that session, between the two LLM steps.
 
     Raises:
-        ParameterError: If the plan or mapping is invalid, a conditioner value has
-            no sampler match or mapping entry and cannot be discovered, or the
-            selected Nemotron-Personas dataset is missing.
+        ParameterError: If the plan or mapping is invalid, the mapping does not
+            match the sampler, a conditioner value has no sampler match or
+            mapping entry and cannot be discovered, or the Nemotron-Personas
+            dataset is missing while the sampler is set to it or the plan maps
+            ethnicity values.
 
     Example:
         With a plan where ``first_name`` depends on ``sex``, values ``"F"`` and
@@ -331,13 +338,12 @@ def _resolve_replacement_config(
         enhancer=enhancer,
         check_pattern_coverage=check_pattern_coverage,
     )
-    if discover_plan or "sampler" not in plan.model_fields_set:
-        plan = _with_available_sampler(plan, config.locale)
+    config, sampler_name = _with_available_sampler(config, plan)
 
     if sampler_value_catalog is None and conditioner_columns(plan):
         from ..sampler_catalog import load_sampler_value_catalog
 
-        sampler_value_catalog = load_sampler_value_catalog(plan.sampler, config.locale)
+        sampler_value_catalog = load_sampler_value_catalog(config.sampler, config.locale)
     catalog = dict(sampler_value_catalog or {})
 
     # Built-in entries for common spellings come first so neither the LLM nor the user has to map them;
@@ -354,39 +360,65 @@ def _resolve_replacement_config(
         mappings = _merged_value_mappings(mappings, discovered)
 
     resolved_plan = _with_value_mapping(plan, mappings)
-    validate_data_to_sampler_value_mapping(resolved_plan, catalog)
+    validate_data_to_sampler_value_mapping(resolved_plan, catalog, sampler_name=sampler_name)
     if unmatched := unmatched_dependency_values(df, resolved_plan, catalog):
         columns = ", ".join(f"{column!r} ({count})" for column, count in sorted(unmatched.items()))
         raise ParameterError(
-            "data_to_sampler_value_mapping has no entry for dataset values that match no sampler value, "
-            f"counted by depends_on column: {columns}. Add an entry listing the sampler values each one may "
+            "data_to_sampler_value_mapping has no entry for dataset values that match no value of the "
+            f"{sampler_name} sampler, counted by depends_on column: {columns}. Add an entry listing the sampler values each one may "
             "match, or list every sampler value to allow any match"
         )
     return config.with_plan(resolved_plan)
 
 
-def _with_available_sampler(plan: PiiReplacementPlan, locale: str) -> PiiReplacementPlan:
-    """Return ``plan`` using Faker when its default Nemotron-Personas sampler has no data for ``locale``.
+def _with_available_sampler(config: ReplacePiiConfig, plan: PiiReplacementPlan) -> tuple[ReplacePiiConfig, str]:
+    """Return ``config`` using Faker when its unset sampler has no Nemotron-Personas data, and the sampler's name.
 
-    Called for a discovered plan and for a written plan without a ``sampler``: the user has not chosen
-    the sampler, so a missing dataset switches it to Faker with a warning instead of failing. A plan that
-    names a sampler keeps it and fails later if its data is missing. The resolved plan records the switch
-    for review.
+    When ``replace_pii.sampler`` is not set, a missing dataset switches it to
+    Faker with a warning instead of failing, and the resolved configuration
+    records the switch. A plan that maps ethnicity values needs
+    Nemotron-Personas, so it fails instead. A sampler that is set is kept and
+    fails later if its data is missing.
+
+    Raises:
+        ParameterError: If the plan maps ethnicity values and the Nemotron-Personas data is missing.
     """
     from ..sampler_catalog import nemotron_personas_dataset_path
 
-    sampler = plan.sampler
-    if sampler.backend is not PiiSamplerBackend.NEMOTRON_PERSONAS:
-        return plan
+    locale = config.locale
+    sampler = config.sampler
+    name = f"{sampler.backend.value} (locale {locale})"
+    if "sampler" in config.model_fields_set or sampler.backend is not PiiSamplerBackend.NEMOTRON_PERSONAS:
+        return config, name
     path = nemotron_personas_dataset_path(sampler, locale)
     if path.is_file():
-        return plan
+        return config, name
+    if ethnicity_columns := _ethnicity_mapping_columns(plan):
+        raise ParameterError(
+            f"data_to_sampler_value_mapping maps ethnicity values for {', '.join(map(repr, ethnicity_columns))}, "
+            f"which need Nemotron-Personas, but no Nemotron-Personas data for locale {locale!r} was found at "
+            f"{path}. Download the Nemotron-Personas dataset and point replace_pii.sampler.nemotron_personas_path "
+            "or NSS_NEMOTRON_PERSONAS_PATH at it, or remove those entries"
+        )
     logger.user.warning(
         f"Using the Faker sampler because no Nemotron-Personas data for locale {locale!r} was found at {path}. "
-        "To use Nemotron-Personas, download its dataset and point the plan's sampler.nemotron_personas_path or "
+        "To use Nemotron-Personas, download its dataset and point replace_pii.sampler.nemotron_personas_path or "
         "NSS_NEMOTRON_PERSONAS_PATH at it."
     )
-    return plan.model_copy(update={"sampler": sampler.model_copy(update={"backend": PiiSamplerBackend.FAKER})})
+    return (
+        config.with_sampler_backend(PiiSamplerBackend.FAKER),
+        f"faker (locale {locale}, used because no Nemotron-Personas data was found at {path})",
+    )
+
+
+def _ethnicity_mapping_columns(plan: PiiReplacementPlan) -> list[str]:
+    """Return the columns whose value mapping targets ethnicity values."""
+    columns = conditioner_columns(plan)
+    return [
+        column_name
+        for column_name in plan.data_to_sampler_value_mapping
+        if columns.get(column_name) is EntityType.ETHNIC_BACKGROUND
+    ]
 
 
 def _with_value_mapping(plan: PiiReplacementPlan, mapping: DataToSamplerValueMapping) -> PiiReplacementPlan:

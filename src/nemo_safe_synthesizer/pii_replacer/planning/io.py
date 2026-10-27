@@ -14,52 +14,54 @@ from typing import TYPE_CHECKING
 
 import yaml
 
-from ...config.replace_pii import PiiReplacementPlan
-
 if TYPE_CHECKING:
     from ...config.parameters import SafeSynthesizerParameters
-    from .review import PlanReviewNotes
+    from ...config.replace_pii import PiiReplacementPlan, PiiSamplerConfig
 
 __all__ = ["save_config", "save_plan"]
 
-_PLAN_FILE_HEADER = (
-    "# PII replacement plan for this dataset, with the sampler it depends on.\n"
-    "# Review and edit it, then name this file in replace_pii.replacement_plan to reuse it.\n\n"
-)
-# Plan fields whose descriptions are written as comments; the sampler needs none.
-_COMMENTED_PLAN_FIELDS = ("columns_to_replace", "data_to_sampler_value_mapping")
-# Extra guidance appended to a field's description in written YAML comments.
-_PLAN_FIELD_NOTES = {
-    "data_to_sampler_value_mapping": "You can usually leave this section as is.",
+# Comments written above plan sections, for a person reviewing or editing the plan.
+_PLAN_SECTION_COMMENTS = {
+    "columns_to_replace": (
+        "Columns whose values are replaced. pattern sets the format of the new values, such as pmc-###### "
+        "for an ID or %m/%d/%Y for a date. depends_on makes a new value fit other columns in the same row, "
+        "such as a first name that matches the row's sex, or an email built from the row's new name."
+    ),
+    "data_to_sampler_value_mapping": (
+        "THE NEXT SECTION IS SAFE TO IGNORE unless a run reports an error about it. It translates values in "
+        "depends_on columns, such as Latino in a race column, to values the sampler understands. NSS fills it "
+        "in, and it can get long."
+    ),
 }
 _COMMENT_WIDTH = 100
-# Review notes list at most this many dataset values or columns, then a total.
-_MAX_LISTED_VALUES = 20
-_MAX_LISTED_COLUMNS = 50
 _YAML_KEY_LINE = re.compile(r"^(?P<indent> *)(?P<key>[A-Za-z_][A-Za-z0-9_]*):(?: |$)")
 
 
-def save_plan(plan: PiiReplacementPlan, path: str | Path, *, review_notes: PlanReviewNotes | None = None) -> Path:
+def save_plan(plan: PiiReplacementPlan, path: str | Path, *, sampler: PiiSamplerConfig, locale: str) -> Path:
     """Save ``replace_pii.replacement_plan`` as a standalone YAML file for review and reuse.
 
-    Fields keep their model order, so the columns to replace follow the
-    sampler they depend on. The ``columns_to_replace`` and
-    ``data_to_sampler_value_mapping`` sections are each preceded by a comment
-    copied from the field description, then by ``review_notes`` when given.
+    The file starts with a header naming the sampler and locale the plan was
+    written for, and each section is preceded by a short comment. The header
+    only informs the reader: each run checks the plan against its own
+    ``replace_pii.sampler`` and ``replace_pii.locale``.
 
     Args:
         plan: Replacement plan to save.
         path: Destination YAML file; parent directories are created.
-        review_notes: Dataset context to add as comments for a person reviewing a drafted plan.
+        sampler: Sampler the plan was written for.
+        locale: Locale the plan was written for.
 
     Returns:
         The path written.
     """
     plan_path = Path(path)
     plan_path.parent.mkdir(parents=True, exist_ok=True)
+    header = (
+        f"# PII replacement plan for this dataset, written for the {sampler.backend.value} sampler in locale "
+        f"{locale}.\n# Review and edit it, then name this file in replace_pii.replacement_plan to reuse it.\n\n"
+    )
     text = yaml.safe_dump(_plan_document(plan), sort_keys=False)
-    comments = _plan_field_comments((), review_notes)
-    plan_path.write_text(_PLAN_FILE_HEADER + _with_key_comments(text, comments))
+    plan_path.write_text(header + _with_key_comments(text, _plan_section_comments(())))
     return plan_path
 
 
@@ -67,7 +69,6 @@ def save_config(
     config: SafeSynthesizerParameters,
     path: str | Path,
     *,
-    review_notes: PlanReviewNotes | None = None,
     plan_path: str | Path | None = None,
 ) -> Path:
     """Save a complete NSS configuration.
@@ -83,7 +84,6 @@ def save_config(
     Args:
         config: Configuration to save.
         path: Destination YAML file; parent directories are created.
-        review_notes: Dataset context to add as comments for a person reviewing a drafted plan.
         plan_path: Separate file for ``replace_pii.replacement_plan``.
 
     Returns:
@@ -93,12 +93,13 @@ def save_config(
     config_path.parent.mkdir(parents=True, exist_ok=True)
     document = json.loads(config.model_dump_json(exclude_unset=False))
     comments: dict[tuple[str, ...], list[str]] = {}
-    plan = config.replace_pii.inline_plan if config.replace_pii is not None else None
-    if plan_path is not None and plan is not None:
-        written = save_plan(plan, plan_path, review_notes=review_notes)
+    replace_pii = config.replace_pii
+    plan = replace_pii.inline_plan if replace_pii is not None else None
+    if replace_pii is not None and plan is not None and plan_path is not None:
+        written = save_plan(plan, plan_path, sampler=replace_pii.sampler, locale=replace_pii.locale)
         document["replace_pii"]["replacement_plan"] = _path_from(config_path.parent, written)
     else:
-        comments = _plan_field_comments(("replace_pii", "replacement_plan"), review_notes)
+        comments = _plan_section_comments(("replace_pii", "replacement_plan"))
     config_path.write_text(_with_key_comments(yaml.safe_dump(document), comments))
     return config_path
 
@@ -132,66 +133,14 @@ def _plan_document(plan: PiiReplacementPlan) -> dict[str, object]:
             serialized_spec["depends_on"] = dependencies
         columns.append(serialized_spec)
     return {
-        "sampler": plan.sampler.model_dump(mode="json", exclude_unset=False),
         "columns_to_replace": columns,
         "data_to_sampler_value_mapping": plan.data_to_sampler_value_mapping,
     }
 
 
-def _plan_field_comments(
-    prefix: tuple[str, ...], review_notes: PlanReviewNotes | None = None
-) -> dict[tuple[str, ...], list[str]]:
-    """Return comment paragraphs for each described plan field, keyed by its YAML key path under ``prefix``."""
-    comments: dict[tuple[str, ...], list[str]] = {}
-    for name in _COMMENTED_PLAN_FIELDS:
-        if (field := PiiReplacementPlan.model_fields[name]).description:
-            note = _PLAN_FIELD_NOTES.get(name)
-            comments[(*prefix, name)] = [f"{field.description} {note}" if note else field.description]
-    if review_notes is not None:
-        for name, paragraphs in _review_comments(review_notes).items():
-            comments.setdefault((*prefix, name), []).extend(paragraphs)
-    return comments
-
-
-def _review_comments(notes: PlanReviewNotes) -> dict[str, list[str]]:
-    """Return review paragraphs for the ``columns_to_replace`` and ``data_to_sampler_value_mapping`` sections.
-
-    For example, a plan that leaves ``admission_id`` unchanged and conditions on ``sex`` gives
-    ``Draft review: not in this plan, so kept unchanged: admission_id. ...`` and
-    ``Draft review: sex (gender): Female, Male are used as is. Sampler values: female, male.``
-    """
-    unchanged = (
-        f"not in this plan, so kept unchanged: {_listed(notes.unchanged_columns, _MAX_LISTED_COLUMNS)}"
-        if notes.unchanged_columns
-        else "every dataset column is in this plan"
-    )
-    comments = {
-        "columns_to_replace": [
-            f"Draft review: {unchanged}. Review notes describe the plan as drafted and are not updated "
-            "when you edit it."
-        ]
-    }
-    if notes.dependency_values:
-        mapping_notes: list[str] = []
-        for review in notes.dependency_values:
-            if review.used_as_is:
-                verb = "is" if len(review.used_as_is) == 1 else "are"
-                used = f"{_listed(review.used_as_is, _MAX_LISTED_VALUES)} {verb} used as is"
-            else:
-                used = "no value is used as is"
-            mapping_notes.append(
-                f"Draft review: {review.column_name} ({review.entity_type.value}): {used}. "
-                f"Sampler values: {_listed(review.sampler_values, _MAX_LISTED_VALUES)}."
-            )
-        comments["data_to_sampler_value_mapping"] = mapping_notes
-    return comments
-
-
-def _listed(values: Sequence[str], limit: int) -> str:
-    """Join up to ``limit`` values with commas, noting the total when some are left out."""
-    if len(values) <= limit:
-        return ", ".join(values)
-    return f"{', '.join(values[:limit])}, ... ({len(values)} in total)"
+def _plan_section_comments(prefix: tuple[str, ...]) -> dict[tuple[str, ...], list[str]]:
+    """Return the comment for each plan section, keyed by its YAML key path under ``prefix``."""
+    return {(*prefix, name): [comment] for name, comment in _PLAN_SECTION_COMMENTS.items()}
 
 
 def _with_key_comments(text: str, comments: Mapping[tuple[str, ...], Sequence[str]]) -> str:

@@ -321,10 +321,10 @@ safe-synthesizer run replace-pii --plan-only \
 ```
 
 The command writes two files in the standard timestamped run directory beneath
-`--artifact-path`: `pii_replacement_plan.yaml`, the resolved plan with the
-sampler it depends on, and `safe-synthesizer-config.yaml`, a complete reusable
-NSS configuration that names it. Comments in `pii_replacement_plan.yaml`
-list the columns left unchanged and the dependency values used as is. The
+`--artifact-path`: `pii_replacement_plan.yaml`, the resolved plan, and
+`safe-synthesizer-config.yaml`, a complete reusable NSS configuration that
+names it and records the sampler used. Comments in `pii_replacement_plan.yaml`
+name the sampler and locale it was written for and explain its sections. The
 command currently requires `--plan-only`.
 
 The SDK equivalent returns the resolved `ReplacePiiConfig`. Supplying

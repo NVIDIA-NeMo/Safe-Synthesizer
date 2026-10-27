@@ -15,7 +15,7 @@ from ...config.replace_pii import DataToSamplerValueMapping, EntityType, PiiRepl
 from ...errors import ParameterError
 from ...observability import get_logger
 from ..replacement.canonicalization import canonicalize_scalar, readable_value
-from ..sampler_catalog import PERSONA_SEX_VALUES, SamplerValueCatalog
+from ..sampler_catalog import SamplerValueCatalog
 
 logger = get_logger(__name__)
 
@@ -41,9 +41,9 @@ BUILT_IN_VALUE_MAPPINGS: Mapping[EntityType, Mapping[str, str]] = MappingProxyTy
 """Common dataset spellings and the sampler value each maps to, matched ignoring case.
 
 Resolution writes matching entries into the plan's ``data_to_sampler_value_mapping``
-for every sampler, so they are visible and editable in the saved plan. A target
-such as ``female`` also matches a Nemotron-Personas locale's own value for it,
-such as ``Femme`` in fr_FR (see ``PERSONA_SEX_VALUES``).
+for every sampler, so they are visible and editable in the saved plan. Every
+sampler accepts ``female`` and ``male`` (see ``PERSONA_SEX_VALUES``), so the
+entries are the same for every sampler and locale.
 """
 
 
@@ -110,20 +110,25 @@ def mapping_inputs(
     return tuple(inputs)
 
 
-def validate_data_to_sampler_value_mapping(plan: PiiReplacementPlan, catalog: SamplerValueCatalog) -> None:
+def validate_data_to_sampler_value_mapping(
+    plan: PiiReplacementPlan, catalog: SamplerValueCatalog, *, sampler_name: str
+) -> None:
     """Validate the plan's value mappings against its conditioner columns and the sampler catalog.
 
-    A mapping for a column whose entity type the sampler has no values for is
-    kept but logged as ignored: the configured sampler cannot condition on it,
-    but the same plan may later run with a sampler that can.
+    Every entry the sampler cannot use is reported in one error: a target that
+    is not a sampler value, and any mapping for a column whose entity type the
+    sampler has no values for, such as ethnicity with Faker. A plan is checked
+    against the sampler of the run that uses it, so a plan written for another
+    sampler or locale fails here.
 
     Args:
         plan: Replacement plan whose ``data_to_sampler_value_mapping`` is checked.
         catalog: Sampler values available for each conditioner entity type.
+        sampler_name: The sampler the catalog belongs to, as error messages name it.
 
     Raises:
         ParameterError: If a mapped column is not a conditioner column, or a
-            mapped sampler value is not in the catalog for that column.
+            mapping entry does not match the sampler.
 
     Example:
         With a plan where ``first_name`` depends on ``sex`` (``gender``), the
@@ -132,6 +137,7 @@ def validate_data_to_sampler_value_mapping(plan: PiiReplacementPlan, catalog: Sa
         ``{"sex": {"Woman": ["woman"]}}``.
     """
     columns = conditioner_columns(plan)
+    problems: list[str] = []
     for column_name, value_mappings in plan.data_to_sampler_value_mapping.items():
         entity_type = columns.get(column_name)
         if entity_type is None:
@@ -141,19 +147,28 @@ def validate_data_to_sampler_value_mapping(plan: PiiReplacementPlan, catalog: Sa
             )
         supported = catalog.get(entity_type)
         if not supported:
-            logger.user.warning(
-                "Ignoring data_to_sampler_value_mapping for a column the configured sampler cannot condition on",
-                extra={"column": column_name, "entity_type": entity_type.value},
-            )
+            problems.append(f"column {column_name!r} maps {entity_type.value} values, which this sampler does not have")
             continue
         supported_keys = {sampler_value.casefold() for sampler_value in supported}
-        for targets in value_mappings.values():
-            unknown = sorted(target for target in targets if target.casefold() not in supported_keys)
-            if unknown:
-                raise ParameterError(
-                    f"data_to_sampler_value_mapping for column {column_name!r} contains values not supported "
-                    f"by the configured sampler: {unknown}"
-                )
+        unknown = sorted(
+            {
+                target
+                for targets in value_mappings.values()
+                for target in targets
+                if target.casefold() not in supported_keys
+            }
+        )
+        if unknown:
+            problems.append(
+                f"column {column_name!r} maps to {', '.join(unknown)}, which this sampler does not accept "
+                f"(it accepts {', '.join(supported)})"
+            )
+    if problems:
+        raise ParameterError(
+            f"data_to_sampler_value_mapping does not match the {sampler_name} sampler: {'; '.join(problems)}. "
+            "The plan may have been written for another sampler or locale; change these entries, or set "
+            "replace_pii.sampler and replace_pii.locale to the ones the plan was written for"
+        )
 
 
 def unmatched_dependency_values(
@@ -197,9 +212,8 @@ def built_in_value_mappings(
     Example:
         With the catalog ``{GENDER: ("female", "male")}`` and a ``sex`` column
         holding ``"F"``, ``"Female"`` and ``"Man"``, the result is
-        ``{"sex": {"F": ["female"], "Man": ["male"]}}``. With the fr_FR
-        catalog ``{GENDER: ("femme", "homme")}``, the same column gives
-        ``{"sex": {"F": ["femme"], "Female": ["femme"], "Man": ["homme"]}}``.
+        ``{"sex": {"F": ["female"], "Man": ["male"]}}``. The fr_FR Nemotron-Personas
+        catalog ``{GENDER: ("female", "femme", "homme", "male")}`` gives the same result.
     """
     entries: DataToSamplerValueMapping = {}
     for column_name, entity_type in conditioner_columns(plan).items():
@@ -207,22 +221,14 @@ def built_in_value_mappings(
         sampler_values = {sampler_value.casefold(): sampler_value for sampler_value in catalog.get(entity_type, ())}
         if not variants or not sampler_values:
             continue
-        targets = _built_in_targets(entity_type, sampler_values)
         covered = {source.casefold() for source in plan.data_to_sampler_value_mapping.get(column_name, {})}
         for value in distinct_source_values(dataframe[column_name]):
             key = value.casefold()
             target = variants.get(key)
-            if key in sampler_values or key in covered or target not in targets:
+            if key in sampler_values or key in covered or target is None or target not in sampler_values:
                 continue
-            entries.setdefault(column_name, {})[value] = [targets[target]]
+            entries.setdefault(column_name, {})[value] = [sampler_values[target]]
     return entries
-
-
-def _built_in_targets(entity_type: EntityType, sampler_values: Mapping[str, str]) -> dict[str, str]:
-    """Return each built-in target, such as ``female``, with the catalog value that means it."""
-    if entity_type is not EntityType.GENDER:
-        return dict(sampler_values)
-    return {PERSONA_SEX_VALUES.get(key, key): value for key, value in sampler_values.items()}
 
 
 def distinct_source_values(values: pd.Series) -> tuple[str, ...]:
