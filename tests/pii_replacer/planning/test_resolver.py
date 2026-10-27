@@ -485,6 +485,25 @@ class TestDiscoveredSampler:
         assert resolved.inline_plan is not None
         assert resolved.inline_plan.sampler.backend is PiiSamplerBackend.NEMOTRON_PERSONAS
 
+    def test_a_written_plan_without_a_sampler_switches_to_faker_when_persona_data_is_missing(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+        fixture_patient_df: pd.DataFrame,
+    ) -> None:
+        caplog.set_level(logging.WARNING)
+        monkeypatch.setenv("NSS_NEMOTRON_PERSONAS_PATH", str(tmp_path))
+        config = ReplacePiiConfig.model_validate(
+            {"replacement_plan": {"columns_to_replace": [{"column_name": "email", "entity_type": "email"}]}}
+        )
+
+        resolved = resolve_replacement_config(fixture_patient_df, config, DataParameters())
+
+        assert resolved.inline_plan is not None
+        assert resolved.inline_plan.sampler.backend is PiiSamplerBackend.FAKER
+        assert "no Nemotron-Personas data for locale 'en_US'" in caplog.text
+
     def test_an_inline_plan_keeps_its_sampler_when_persona_data_is_missing(
         self, tmp_path: Path, fixture_patient_df: pd.DataFrame
     ) -> None:

@@ -922,9 +922,9 @@ class ReplacePiiConfig(Parameters):
     the value mapping, and the sampler they depend on. It is
     ``"auto_discovery"`` (the default), an inline plan, or the path of a YAML
     plan file, resolved relative to the configuration file that names it.
-    Auto-discovery uses the default sampler, or Faker when the
-    Nemotron-Personas data for ``locale`` is missing; to change the sampler,
-    edit the plan it writes and use that plan. ``locale`` and ``seed``
+    A plan without a ``sampler``, including a discovered one, uses the
+    default sampler, or Faker when the Nemotron-Personas data for ``locale``
+    is missing; to change the sampler, set it in the plan. ``locale`` and ``seed``
     configure generation, and ``llm`` and ``free_text_detection`` configure
     how NSS finds PII.
 
