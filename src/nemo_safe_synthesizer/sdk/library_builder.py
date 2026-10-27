@@ -406,10 +406,9 @@ class SafeSynthesizer(ConfigBuilder):
         When ``output_path`` is provided, the complete NSS configuration is
         written there, and its ``replace_pii.replacement_plan``, the part to
         review, is written to ``pii_replacement_plan.yaml`` in the same directory;
-        the configuration names that file, so either can be reused. Comments in
-        the plan help a person review it: they list the columns left unchanged
-        and, for each depends_on column, the dataset values used as is and the
-        values the sampler accepts.
+        the configuration names that file, so either can be reused. The plan
+        file names the sampler and locale it was written for and explains its
+        sections in comments.
 
         Args:
             output_path: Optional destination for the reusable NSS configuration YAML.
@@ -476,8 +475,8 @@ class SafeSynthesizer(ConfigBuilder):
                 Parquet keeps the dataframe's column types; CSV keeps unchanged
                 cells as they appeared in a CSV input (see ``source_text``).
             config_output_path: Optional destination for the complete reusable
-                configuration. Its ``replace_pii.replacement_plan``, with the
-                sampler mappings and review comments, is also written to
+                configuration. Its ``replace_pii.replacement_plan``, with its
+                comments, is also written to
                 ``pii_replacement_plan.yaml`` beside it; see
                 ``plan_pii_replacement``.
             source_text: Optional copy of the input with every cell as the
@@ -661,14 +660,11 @@ class SafeSynthesizer(ConfigBuilder):
             self._nss_config = self._nss_config.model_copy(update={"replace_pii": replacement_result.resolved_config})
             self._replace_pii_config = replacement_result.resolved_config
             from ..pii_replacer.planning.io import save_config
-            from ..pii_replacer.planning.review import plan_review_notes
 
-            # Rewrite both files with the review comments, which are computed from the full input like the plan.
-            assert isinstance(self._data_source, pd.DataFrame)
+            # Rewrite both files with the resolved plan and the sampler used.
             save_config(
                 self._nss_config,
                 workdir.run_dir / RESOLVED_CONFIG_FILENAME,
-                review_notes=plan_review_notes(self._data_source, replacement_result.resolved_config),
                 plan_path=workdir.run_dir / PII_REPLACEMENT_PLAN_FILENAME,
             )
 

@@ -124,8 +124,8 @@ def test_plan_pii_replacement_rejects_disabled_pii(tmp_path: Path) -> None:
 def test_replace_pii_resolves_and_writes_the_complete_input(tmp_path: Path) -> None:
     dataframe = pd.DataFrame({"email": ["ada@example.com", "grace@example.com"]})
     resolved = ReplacePiiConfig(
+        sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
         replacement_plan=PiiReplacementPlan(
-            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
             columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)],
         ),
     )
@@ -151,8 +151,8 @@ def test_replace_pii_writes_unchanged_cells_as_in_the_source_csv(tmp_path: Path)
     source = tmp_path / "input.csv"
     source.write_text("email,zip,count,note\nada@example.com,02054,7,N/A\n,10001,,None\n")
     resolved = ReplacePiiConfig(
+        sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
         replacement_plan=PiiReplacementPlan(
-            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
             columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)],
         ),
     )
@@ -177,8 +177,8 @@ def test_replace_pii_writes_unchanged_cells_as_in_the_source_csv(tmp_path: Path)
 def _email_replacement_config() -> SafeSynthesizerParameters:
     return SafeSynthesizerParameters(
         replace_pii=ReplacePiiConfig(
+            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
             replacement_plan=PiiReplacementPlan(
-                sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
                 columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)],
             ),
         )
@@ -236,8 +236,8 @@ def test_replace_pii_keeps_dates_combined_from_csv_columns(tmp_path: Path) -> No
 
 def test_replace_pii_rejects_source_text_with_other_columns(tmp_path: Path) -> None:
     resolved = ReplacePiiConfig(
+        sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
         replacement_plan=PiiReplacementPlan(
-            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
             columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)],
         ),
     )
@@ -260,8 +260,8 @@ def test_replace_pii_writes_parquet_output_with_its_column_types(tmp_path: Path)
         }
     ).to_parquet(source)
     resolved = ReplacePiiConfig(
+        sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
         replacement_plan=PiiReplacementPlan(
-            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
             columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)],
         ),
     )
