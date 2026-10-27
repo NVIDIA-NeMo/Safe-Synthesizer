@@ -138,6 +138,14 @@ class _NamePartGenerator(_RecordingGenerator):
         return self._names[request.entity_type]
 
 
+class _InitialDistinctNamePartGenerator(_NamePartGenerator):
+    """Generates ``Morgan`` for a last name given only as an initial, so its letter differs from ``Hopper``'s."""
+
+    def generate(self, request: ReplacementGenerationRequest) -> str:
+        name = super().generate(request)
+        return "Morgan" if request.entity_type is EntityType.LAST_NAME and len(request.original_value) == 1 else name
+
+
 class _CompositeAddressGenerator(_RecordingGenerator):
     def generate(self, request: ReplacementGenerationRequest) -> str:
         self.requests.append(request)
@@ -1009,11 +1017,44 @@ class TestStructuredReplacementExecutor:
         result = _execute(dataframe, plan, generator, free_text_detector=detector)
 
         assert result.dataframe["notes"].iloc[0] == "Grace M. Hopper called"
+        # Whole name words are mapped before any initial.
         assert [(request.entity_type, request.original_value) for request in generator.requests] == [
             (EntityType.FIRST_NAME, "Ada"),
-            (EntityType.MIDDLE_NAME, "K"),
             (EntityType.LAST_NAME, "Lovelace"),
+            (EntityType.MIDDLE_NAME, "K"),
         ]
+
+    def test_free_text_initial_before_its_name_takes_the_name_letter(self) -> None:
+        text = "Ada L. called. Ada Lovelace agreed. Dr Ada L. left."
+        dataframe = pd.DataFrame({"notes": [text]})
+        plan = _plan(_target("notes", EntityType.FREE_TEXT))
+        detector = _StaticDetector(
+            [
+                _span(0, "notes", text, "Ada L.", EntityType.FULL_NAME),
+                _span(0, "notes", text, "Ada Lovelace", EntityType.FULL_NAME),
+                _span(0, "notes", text, "Dr Ada L.", EntityType.FULL_NAME),
+            ]
+        )
+
+        result = _execute(dataframe, plan, _InitialDistinctNamePartGenerator(), free_text_detector=detector)
+
+        assert result.dataframe["notes"].iloc[0] == "Grace H. called. Grace Hopper agreed. Dr Grace H. left."
+
+    def test_free_text_initial_in_an_earlier_row_takes_its_group_name_letter(self) -> None:
+        dataframe = pd.DataFrame({"gid": [1, 1], "notes": ["Ada L. called", "Ada Lovelace agreed"]})
+        plan = _plan(_target("notes", EntityType.FREE_TEXT))
+        detector = _StaticDetector(
+            [
+                _span(0, "notes", "Ada L. called", "Ada L.", EntityType.FULL_NAME),
+                _span(1, "notes", "Ada Lovelace agreed", "Ada Lovelace", EntityType.FULL_NAME),
+            ]
+        )
+
+        result = _execute(
+            dataframe, plan, _InitialDistinctNamePartGenerator(), free_text_detector=detector, group_column="gid"
+        )
+
+        assert result.dataframe["notes"].tolist() == ["Grace H. called", "Grace Hopper agreed"]
 
     def test_free_text_initial_always_changes_its_letter(self) -> None:
         text = "Ada Lovelace called. Ada L. agreed."
