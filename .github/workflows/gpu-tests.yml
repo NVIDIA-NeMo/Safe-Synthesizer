@@ -123,7 +123,7 @@ jobs:
       # that runs only on a miss, so a hit never uploads an empty cache.
       - name: Compute uv cache key
         id: uv-key
-        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           version: ${{ steps.uv-version.outputs.version }}
           enable-cache: true
@@ -155,7 +155,7 @@ jobs:
 
       - name: Enable saving the uv cache
         if: steps.lookup.outputs.hit != 'true'
-        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           version: ${{ steps.uv-version.outputs.version }}
           enable-cache: true
