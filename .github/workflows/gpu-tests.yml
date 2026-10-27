@@ -67,9 +67,139 @@ jobs:
         id: changes
         uses: ./.github/actions/detect-changes
 
+  # ---------------------------------------------------------------------------
+  # Fill the uv download cache on a CPU runner before the GPU jobs start.
+  #
+  # GPU jobs restore one uv cache entry per CUDA extra (see
+  # setup-gpu-test-env). When that entry is missing -- the first run after a
+  # pyproject.toml change, or after eviction -- every GPU job downloads ~280
+  # packages, and on slow nights that has run past the 60-minute GPU job
+  # timeout while holding an A100. This job does the download once per CUDA
+  # extra, for every smoke-test Python version, with a longer timeout. On a
+  # cache hit it only looks the entry up and exits.
+  # ---------------------------------------------------------------------------
+  warm-uv-cache:
+    name: Warm uv cache (${{ matrix.cuda-extra }})
+    needs: changes
+    if: >-
+      ${{
+        always() &&
+        (
+          github.event_name == 'workflow_dispatch' ||
+          needs.changes.outputs.src_test_deps == 'true'
+        )
+      }}
+    timeout-minutes: 120
+    runs-on: linux-amd64-cpu4
+    permissions:
+      contents: read
+      actions: read # look up existing cache entries
+    strategy:
+      fail-fast: false
+      matrix:
+        cuda-extra: [cu129, cu130]
+    env:
+      # Keep in sync with the gpu-smoke-test matrix. Torch wheels are built per
+      # Python version, so each version is installed once to cache its wheels.
+      PYTHON_VERSIONS: "3.11 3.12 3.13 3.14"
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # uv-dynamic-versioning reads the wheel version from git tags.
+          fetch-depth: 0
+
+      # GPU jobs install with the mise-pinned uv; use the same version so the
+      # cache layout matches. The uv version is not part of the cache key.
+      - name: Read pinned uv version
+        id: uv-version
+        run: echo "version=$(sed -n 's/^uv = "\(.*\)"$/\1/p' .mise.toml)" >> "$GITHUB_OUTPUT"
+
+      # The inputs that feed the cache key (enable-cache, cache-suffix,
+      # cache-dependency-glob, and no python-version) must match
+      # setup-gpu-test-env exactly, or this job fills a key the GPU jobs never
+      # read. Saving is off here; the save happens in a second setup-uv step
+      # that runs only on a miss, so a hit never uploads an empty cache.
+      - name: Compute uv cache key
+        id: uv-key
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: ${{ steps.uv-version.outputs.version }}
+          enable-cache: true
+          restore-cache: false
+          save-cache: false
+          cache-suffix: ${{ matrix.cuda-extra }}
+          cache-dependency-glob: |
+            .python-version
+            pyproject.toml
+
+      # Checked through the API rather than by restoring, so a hit costs
+      # seconds instead of a multi-GB download.
+      - name: Look up cache entry
+        id: lookup
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CACHE_KEY: ${{ steps.uv-key.outputs.cache-key }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch || 'main' }}
+        run: |
+          # GPU jobs can restore entries saved on this ref or the default branch.
+          matches=$(gh api "repos/${GITHUB_REPOSITORY}/actions/caches?key=${CACHE_KEY}" \
+            --jq '[.actions_caches[] | select(.key == env.CACHE_KEY and (.ref == env.GITHUB_REF or .ref == "refs/heads/" + env.DEFAULT_BRANCH))] | length')
+          if (( matches > 0 )); then
+            echo "Cache entry exists for ${CACHE_KEY}; nothing to warm."
+            echo "hit=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "hit=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Enable saving the uv cache
+        if: steps.lookup.outputs.hit != 'true'
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: ${{ steps.uv-version.outputs.version }}
+          enable-cache: true
+          restore-cache: false
+          cache-suffix: ${{ matrix.cuda-extra }}
+          cache-dependency-glob: |
+            .python-version
+            pyproject.toml
+
+      - name: Build wheel
+        if: steps.lookup.outputs.hit != 'true'
+        run: |
+          rm -rf dist/
+          uv build --wheel
+
+      # Same install as setup-gpu-test-env, once per Python version. No GPU is
+      # needed to download and install; only the CUDA check there needs one.
+      - name: Download GPU dependencies into the uv cache
+        if: steps.lookup.outputs.hit != 'true'
+        env:
+          CUDA: ${{ matrix.cuda-extra }}
+          NSS_INSTALLER_ISOLATED: "1"
+          PRIVATE_DEP_GROUPS: "test"
+        run: |
+          shopt -s nullglob
+          wheels=("${GITHUB_WORKSPACE}"/dist/*.whl)
+          if (( ${#wheels[@]} != 1 )); then
+            echo "Error: expected exactly one wheel under ${GITHUB_WORKSPACE}/dist, found ${#wheels[@]}" >&2
+            exit 1
+          fi
+
+          venv="${RUNNER_TEMP}/warm-uv-cache-venv"
+          for python_version in ${PYTHON_VERSIONS}; do
+            uv --no-config venv --clear --python "${python_version}" "${venv}"
+            UV_PROJECT_ENVIRONMENT="${venv}" PACKAGE_WHEEL="${wheels[0]}" \
+              "${GITHUB_WORKSPACE}/install_nss.sh"
+            rm -rf "${venv}"
+          done
+
   gpu-smoke-test:
     name: GPU Smoke Tests (Python ${{ matrix.python-version }}, ${{ matrix.cuda-extra }})
-    needs: changes
+    # warm-uv-cache only fills the cache; if it fails, GPU jobs still run and
+    # download what they need (`always()` below).
+    needs: [changes, warm-uv-cache]
     # `changes` is intentionally skipped on workflow_dispatch. `always()` lets
     # manual runs bypass that skipped dependency and run the selected GPU suite.
     if: >-
@@ -154,7 +284,7 @@ jobs:
 
   gpu-e2e-test:
     name: GPU E2E Tests (${{ matrix.cuda-extra }})
-    needs: changes
+    needs: [changes, warm-uv-cache]
     outputs:
       cu129_result: ${{ steps.record_result.outputs.cu129_result }}
       cu130_result: ${{ steps.record_result.outputs.cu130_result }}
