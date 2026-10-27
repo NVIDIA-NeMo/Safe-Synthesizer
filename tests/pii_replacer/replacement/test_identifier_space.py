@@ -79,7 +79,17 @@ class TestIdentifierSpace:
 
         assert all(allocation is not None and allocation[1] == "new" for allocation in allocations)
         assert "7" not in {allocation[0] for allocation in allocations if allocation is not None}
-        assert allocator.allocate(7, "7", distinct=False) == ("8", "new")
+        # Seed 9 starts at 7, the own original, so allocation steps to the next value.
+        assert allocator.allocate(9, "7", distinct=False) == ("8", "new")
+
+    def test_long_masks_vary_their_leading_positions(self) -> None:
+        allocator = IdentifierAllocator(MaskSpace.from_pattern("ADM-" + "&" * 32))
+
+        values = [allocator.allocate(seed, "ADM-" + "0" * 32, distinct=True) for seed in range(20)]
+
+        leading = {allocation[0][4:16] for allocation in values if allocation is not None}
+        assert len(leading) == 20
+        assert all(prefix != "0" * 12 for prefix in leading)
 
     def test_allocator_returns_nothing_when_only_the_own_original_exists(self) -> None:
         allocator = IdentifierAllocator(MaskSpace.from_pattern("ID-[0]"))
