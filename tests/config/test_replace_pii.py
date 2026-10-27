@@ -547,11 +547,11 @@ class TestReplacePiiConfig:
         )
         monkeypatch.chdir(tmp_path)
 
-        replace_pii = SafeSynthesizerParameters.from_yaml(config_dir / "config.yaml").replace_pii
+        replace_pii = SafeSynthesizerParameters.from_yaml(Path("configs") / "config.yaml").replace_pii
 
         assert replace_pii is not None
         assert replace_pii.inline_plan is not None
-        assert replace_pii.inline_plan.sampler.resolved_nemotron_personas_path() == config_dir / "personas"
+        assert replace_pii.inline_plan.sampler.nemotron_personas_path == str(config_dir / "personas")
 
     def test_missing_plan_file_is_reported_by_path(self, tmp_path: Path) -> None:
         with pytest.raises(ValidationError, match="is not 'auto_discovery' or an inline plan, and the plan file"):
