@@ -476,9 +476,9 @@ class SafeSynthesizer(ConfigBuilder):
                 Parquet keeps the dataframe's column types; CSV keeps unchanged
                 cells as they appeared in a CSV input (see ``source_text``).
             config_output_path: Optional destination for the complete reusable
-                configuration. Its ``replace_pii.replacement`` section, with the
-                resolved plan, sampler mappings, and review comments, is also
-                written to ``pii_replacement.yaml`` beside it; see
+                configuration. Its ``replace_pii.replacement_plan``, with the
+                sampler mappings and review comments, is also written to
+                ``pii_replacement_plan.yaml`` beside it; see
                 ``plan_pii_replacement``.
             source_text: Optional copy of the input with every cell as the
                 text in its source file, such as ``pd.read_csv(path, dtype=str,
@@ -504,7 +504,7 @@ class SafeSynthesizer(ConfigBuilder):
                 SafeSynthesizer()
                 .with_data_source("patients.csv")
                 .with_replace_pii(
-                    replacement={"plan": {"columns_to_replace": [{"column_name": "email", "entity_type": "email"}]}},
+                    replacement_plan={"columns_to_replace": [{"column_name": "email", "entity_type": "email"}]},
                 )
             )
             # Both paths are optional; without them nothing is written and only the result is returned.
@@ -669,7 +669,7 @@ class SafeSynthesizer(ConfigBuilder):
                 self._nss_config,
                 workdir.run_dir / RESOLVED_CONFIG_FILENAME,
                 review_notes=plan_review_notes(self._data_source, replacement_result.resolved_config),
-                replacement_path=workdir.run_dir / PII_REPLACEMENT_FILENAME,
+                plan_path=workdir.run_dir / PII_REPLACEMENT_PLAN_FILENAME,
             )
 
         # Only create new metadata if not already loaded (e.g., from load_from_save_path)

@@ -160,17 +160,15 @@ class TestTabularPiiReplacerInterface:
     def test_replace_can_capture_sensitive_replacement_provenance(self) -> None:
         dataframe = pd.DataFrame({"identifier": ["USER-001"]})
         config = ReplacePiiConfig(
-            replacement=PiiReplacementSettings(
+            replacement_plan=PiiReplacementPlan(
                 sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
-                plan=PiiReplacementPlan(
-                    columns_to_replace=[
-                        PiiColumnPlan(
-                            column_name="identifier",
-                            entity_type=EntityType.UNIQUE_IDENTIFIER,
-                            pattern="USER-###",
-                        )
-                    ]
-                ),
+                columns_to_replace=[
+                    PiiColumnPlan(
+                        column_name="identifier",
+                        entity_type=EntityType.UNIQUE_IDENTIFIER,
+                        pattern="USER-###",
+                    )
+                ],
             ),
         )
 

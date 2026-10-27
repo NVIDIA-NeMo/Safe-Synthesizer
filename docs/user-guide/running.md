@@ -293,7 +293,7 @@ safe-synthesizer run replace-pii \
   --output-file pii_replaced.csv
 ```
 
-The command also writes `safe-synthesizer-config.yaml` and `pii_replacement.yaml` to the run
+The command also writes `safe-synthesizer-config.yaml` and `pii_replacement_plan.yaml` to the run
 directory. Without `--output-file`, replaced data is written there using the
 input name with a `_pii_replaced` suffix, such as
 `data_pii_replaced.csv` for `data.csv`.
