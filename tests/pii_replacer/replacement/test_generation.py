@@ -532,6 +532,17 @@ class TestReplacementGenerator:
         assert 0 < abs((datetime.strptime(replacement, written_as) - datetime(1990, 4, 5)).days) <= 180
         assert birth_dates.birth_date_is_supported(original)
 
+    @pytest.mark.parametrize("locale", ["fr_FR", "en_GB", "de_DE"])
+    @pytest.mark.parametrize(
+        ("entity_type", "original"), [(EntityType.SSN, "123-45-6789"), (EntityType.NATIONAL_ID, "123-45-6789")]
+    )
+    def test_ssn_is_a_us_ssn_in_every_locale(self, locale: str, entity_type: EntityType, original: str) -> None:
+        generator = _faker_generator(locale=locale)
+
+        replacement = generator.generate(_request(entity_type, original))
+
+        assert re.fullmatch(r"[0-8][0-9]{2}-[0-9]{2}-[0-9]{4}", replacement)
+
     def test_street_address_stays_on_one_line(self) -> None:
         generator = _faker_generator(locale="en_GB")
 

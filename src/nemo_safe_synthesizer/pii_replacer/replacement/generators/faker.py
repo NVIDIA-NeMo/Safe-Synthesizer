@@ -97,9 +97,9 @@ class FakerReplacementGenerator:
             # Some locales, such as en_GB, put a flat or unit on its own line.
             return fake.street_address().replace("\n", ", ")
         if entity_type is EntityType.SSN:
-            return fake.ssn()
+            return _us_ssn(request.seed)
         if entity_type is EntityType.NATIONAL_ID:
-            return _national_id(request, fake, rng)
+            return _national_id(request, rng)
         if entity_type is EntityType.CREDIT_DEBIT_CARD:
             return fake.credit_card_number()
         if entity_type in {EntityType.API_KEY, EntityType.UNIQUE_IDENTIFIER}:
@@ -199,7 +199,18 @@ def _shaped_identifier(request: ReplacementGenerationRequest, rng: Random) -> st
 _SSN_SHAPE = re.compile(r"[0-9]{3}-[0-9]{2}-[0-9]{4}")
 
 
-def _national_id(request: ReplacementGenerationRequest, fake: Faker, rng: Random) -> str:
+def _us_ssn(seed: int) -> str:
+    """Return a US Social Security number whatever the configured locale.
+
+    The ``ssn`` entity is a US SSN, but ``Faker.ssn()`` returns each locale's own national ID, such as a
+    15-digit French number for ``fr_FR``.
+    """
+    fake = Faker("en_US")
+    fake.seed_instance(seed)
+    return fake.ssn()
+
+
+def _national_id(request: ReplacementGenerationRequest, rng: Random) -> str:
     """Return a national ID in the original's shape: an SSN for SSN-shaped values, else the same layout.
 
     National IDs include driver's licenses, tax IDs, and non-US identifiers, so only an SSN-shaped
@@ -213,7 +224,7 @@ def _national_id(request: ReplacementGenerationRequest, fake: Faker, rng: Random
         shaped = shape_preserving_value(request.original_value, rng)
         if shaped != request.original_value:
             return shaped
-    return fake.ssn()
+    return _us_ssn(request.seed)
 
 
 def _is_uuid(value: str) -> bool:
