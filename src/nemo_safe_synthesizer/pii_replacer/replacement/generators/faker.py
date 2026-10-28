@@ -96,7 +96,8 @@ class FakerReplacementGenerator:
         if entity_type is EntityType.PHONE_NUMBER:
             return fake.phone_number()
         if entity_type is EntityType.STREET_ADDRESS:
-            return fake.street_address()
+            # Some locales, such as en_GB, put a flat or unit on its own line.
+            return fake.street_address().replace("\n", ", ")
         if entity_type is EntityType.SSN:
             return fake.ssn()
         if entity_type is EntityType.NATIONAL_ID:

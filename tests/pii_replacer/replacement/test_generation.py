@@ -633,6 +633,16 @@ class TestReplacementGenerator:
         assert 0 < abs((datetime.strptime(replacement, written_as) - datetime(1990, 4, 5)).days) <= 180
         assert birth_dates.birth_date_is_supported(original)
 
+    def test_street_address_stays_on_one_line(self) -> None:
+        generator = _faker_generator(locale="en_GB")
+
+        streets = [
+            generator.generate(_request(EntityType.STREET_ADDRESS, "1 High St", seed=seed)) for seed in range(40)
+        ]
+
+        assert not any("\n" in street for street in streets)
+        assert any(", " in street for street in streets)
+
     def test_card_pattern_produces_a_luhn_valid_number(self) -> None:
         generator = _faker_generator()
         request = _request(
