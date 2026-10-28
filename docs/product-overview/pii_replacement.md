@@ -548,8 +548,8 @@ off for text where missed names matter more than false ones. Second, with
 full name or directly between a detected first and last name, which rejects
 clothing sizes such as "medium" in product reviews.
 
-NSS automatically uses CUDA when available and otherwise runs GLiNER2 on CPU.
-It deduplicates identical cell text, flattens overlapping chunks across unique
+GLiNER2 runs on a CUDA GPU; a run that needs it fails when PyTorch reports no
+GPU, because CPU inference is too slow for real datasets. NSS deduplicates identical cell text, flattens overlapping chunks across unique
 values, and passes `batch_size` to GLiNER2's batched inference API. For CUDA
 out-of-memory errors, reduce `batch_size` before changing chunk geometry. The
 runtime logs model loading and inference progress without including source
