@@ -560,9 +560,10 @@ instead of silently continuing with regex detection only.
 
 ### GLiNER2 Device and Throughput
 
-NSS loads GLiNER2 on CUDA. When PyTorch reports no GPU, a run with free-text or
-full street-address columns stops with `GLiNER2 free-text PII detection needs a
-CUDA GPU` instead of falling back to CPU, which is too slow for real datasets.
+NSS loads GLiNER2 on CUDA. When PyTorch reports no GPU, a run with free-text
+columns stops with `GLiNER2 free-text PII detection needs a CUDA GPU` instead of
+falling back to CPU, which is too slow for real datasets; full street-address
+values are then replaced whole, with a warning.
 Agent sandboxes and containers often hide a GPU the machine has; run NSS where
 `nvidia-smi` lists it. Model loading and inference emit completion records and a progress
 heartbeat every 30 seconds; the records include the selected device, chunk
