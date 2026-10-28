@@ -92,16 +92,25 @@ def _address_cells(dataframe: pd.DataFrame, specs: Sequence[PiiColumnPlan]) -> l
     allowed = fresh_detection_entity_types()
     cells: list[DetectionCell] = []
     for spec in specs:
-        column_position = dataframe.columns.get_loc(spec.column_name)
-        if not isinstance(column_position, int):
-            raise ParameterError(f"replacement column {spec.column_name!r} is duplicated in the dataframe")
-        column = dataframe.iloc[:, column_position]
-        seen: set[str] = set()
-        for row_position, (value, text) in enumerate(zip(column.tolist(), column.astype(str).tolist(), strict=True)):
-            if is_missing_scalar(value) or not text or text in seen:
-                continue
-            seen.add(text)
-            cells.append(DetectionCell(DetectionCellId(row_position, spec.column_name), text, allowed))
+        cells.extend(_column_address_cells(dataframe, spec.column_name, allowed))
+    return cells
+
+
+def _column_address_cells(
+    dataframe: pd.DataFrame, column_name: str, allowed: frozenset[EntityType]
+) -> list[DetectionCell]:
+    """Build one detection cell per distinct nonempty value text in one street-address column."""
+    column_position = dataframe.columns.get_loc(column_name)
+    if not isinstance(column_position, int):
+        raise ParameterError(f"replacement column {column_name!r} is duplicated in the dataframe")
+    column = dataframe.iloc[:, column_position]
+    cells: list[DetectionCell] = []
+    seen: set[str] = set()
+    for row_position, (value, text) in enumerate(zip(column.tolist(), column.astype(str).tolist(), strict=True)):
+        if is_missing_scalar(value) or not text or text in seen:
+            continue
+        seen.add(text)
+        cells.append(DetectionCell(DetectionCellId(row_position, column_name), text, allowed))
     return cells
 
 
