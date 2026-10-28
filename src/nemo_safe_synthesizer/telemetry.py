@@ -237,17 +237,17 @@ class NSSTrainingAndGenerationEvent(BaseModel):
         default="undefined",
         serialization_alias="piiSamplerBackend",
         description=(
-            "Configured PII replacement sampler backend ('nemotron-personas' or 'faker'). "
-            "'undefined' when PII replacement is disabled. Reports the configured backend, not per-entity "
-            "Faker fallbacks when Nemotron Personas locale assets are missing."
+            "PII replacement sampler backend ('nemotron-personas' or 'faker'). 'undefined' when PII replacement "
+            "is disabled. After planning, this includes NSS switching an unset sampler to Faker when the "
+            "Nemotron-Personas data for the locale is missing."
         ),
     )
     pii_plan_source: str = Field(
         default="undefined",
         serialization_alias="piiPlanSource",
         description=(
-            "How the PII replacement plan was supplied: 'auto_discovery', 'inline' (in the main config), "
-            "or 'file' (a separate plan YAML). 'undefined' when PII replacement is disabled."
+            "How the PII replacement plan was supplied: 'auto_discovery', or 'provided' for an inline plan or "
+            "plan file. 'undefined' when PII replacement is disabled."
         ),
     )
     pii_replaced_columns_bucket: str = Field(
@@ -263,7 +263,7 @@ class NSSTrainingAndGenerationEvent(BaseModel):
         default="undefined",
         serialization_alias="piiLlmMode",
         description=(
-            "Where LLM-assisted PII plan discovery ran: 'none' (no LLM configured, or a user-supplied plan), "
+            "Where LLM-assisted PII plan discovery ran: 'none' (a user-supplied plan, which needs no LLM), "
             "'local' (NSS-managed vLLM server), 'endpoint' (NSS_INFERENCE_ENDPOINT), or 'invalid' when the "
             "inference settings could not be resolved. 'undefined' when PII replacement is disabled. "
             "The endpoint URL is never reported."
