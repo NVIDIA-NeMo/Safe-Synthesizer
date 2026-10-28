@@ -495,7 +495,10 @@ written as `de.la.cruz`.
 
 Birth dates are shifted by a small random number of days (typically within a
 month, never more than 180 days, and never zero). A value that does not match
-the pattern is parsed with common date formats instead; if none fits, NSS writes
+the pattern is parsed with common date formats instead, including dotted and
+year-first forms such as `05.04.1990` and `1990/04/05`. Numeric dates are read
+month first for `en_US` and day first for every other locale, so `05/04/1990`
+is May 4 in `en_US` and April 5 in `fr_FR`. If no format fits, NSS writes
 a random birth date in the pattern's format and logs a warning, so the original
 never remains.
 
