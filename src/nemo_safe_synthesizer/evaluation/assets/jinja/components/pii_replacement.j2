@@ -1,0 +1,92 @@
+{% from "jinja/components/icon.j2" import icon %}
+{% set pii = ctx.pii_replacement %}
+{% macro count(value) %}{{ "—" if value is none else "{:,}".format(value) }}{% endmacro %}
+<section class="metric-panel pii-panel pii-replacement" id="pii-replay">
+    <header class="metric-panel-heading">
+        <span class="panel-icon">{{ icon("warning") }}</span>
+        <div>
+            <h2>PII Replacement and Replay</h2>
+            <p>PII found in the training data, how it was replaced before fine-tuning, and how many original
+               values reappear in the synthetic data. Sampler: {{ pii.sampler }}, locale {{ pii.locale }},
+               {{ "random seed" if pii.seed is none else "seed " ~ pii.seed }}. The test data is not replaced.</p>
+        </div>
+    </header>
+
+    <div class="table-wrap">
+        <table class="pii-replacement-table">
+            <thead>
+                <tr>
+                    <th>Column Name</th>
+                    <th>Replaced With</th>
+                    <th>PII Type</th>
+                    <th>Training Total</th>
+                    <th>Training Unique</th>
+                    <th title="Synthetic rows containing at least one original training value of this type">Synthetic Rows Matched</th>
+                    <th>PII Replay</th>
+                </tr>
+            </thead>
+            {% for group in pii.groups %}
+            <tbody class="pii-group">
+                {% for entity in group.entities %}
+                <tr>
+                    {% if loop.first %}
+                    {# Long column names may break only after underscores. #}
+                    <td class="pii-group-cell" rowspan="{{ group.entities | length }}">
+                        {%- for part in group.column_name.split("_") %}{{ part }}{% if not loop.last %}_<wbr>{% endif %}{% endfor -%}
+                    </td>
+                    <td class="pii-group-cell" rowspan="{{ group.entities | length }}">
+                        {% if group.replaced_with %}
+                        {{ group.replaced_with }}
+                        {% if group.pattern %}<code>{{ group.pattern }}</code>
+                        <ul class="pattern-symbols">
+                            {% for symbol, meaning in group.pattern_symbols %}
+                            <li>{% if symbol != group.pattern %}<code>{{ symbol }}</code> {% endif %}{{ meaning }}</li>
+                            {% endfor %}
+                        </ul>
+                        {% endif %}
+                        {% if group.depends_on %}<small>Depends on {{ group.depends_on | map(attribute="column_name") | join(", ") }}</small>{% endif %}
+                        {% if group.found_by %}<small>Found by {{ group.found_by | join(", ") }}</small>{% endif %}
+                        {% else %}
+                        <span class="pii-none">Not replaced</span>
+                        {% endif %}
+                    </td>
+                    {% endif %}
+                    <td><span class="type-tag">{{ entity.pii_type }}</span></td>
+                    <td class="tnum">{{ count(entity.found) }}</td>
+                    <td class="tnum">{{ count(entity.unique) }}</td>
+                    <td class="tnum">{{ count(entity.synthetic) }}</td>
+                    <td class="tnum">
+                        {% if entity.replayed is none %}—{% else %}{{ entity.replay_percentage }}%
+                        <small>{{ "{:,}".format(entity.replayed) }} of {{ "{:,}".format(entity.unique) }}</small>{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            {% endfor %}
+        </table>
+    </div>
+
+    {% if pii.mappings %}
+    <h3>Value Mappings</h3>
+    <div class="table-wrap">
+        <table class="pii-mapping-table">
+            <thead><tr><th>Column Name</th><th>Data Value</th><th>Sampler Values</th></tr></thead>
+            <tbody>
+                {% for column, values in pii.mappings.items() %}
+                {% for value, sampler_values in values.items() %}
+                <tr><td>{{ column }}</td><td>{{ value }}</td><td>{{ sampler_values | join(", ") }}</td></tr>
+                {% endfor %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    <p class="pii-kept"><strong>Kept as is ({{ pii.kept_columns | length }}):</strong> {{ pii.kept_columns | join(", ") }}</p>
+
+    <footer class="panel-footer">{{ icon("info") }}
+        <span>Matches are against the original training values, before replacement. Synthetic Rows Matched counts
+              synthetic rows containing at least one of them. PII Replay counts distinct training values that
+              reappear in the synthetic data; lower is better. In free text, a value counts when it appears
+              anywhere in a synthetic text.</span>
+    </footer>
+</section>
