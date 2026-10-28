@@ -804,16 +804,16 @@ def _valid_card(value: str) -> bool:
         return False
     if len(digits) == 15 and not digits.startswith(("34", "37")):
         return False
-    total = 0
     parity = len(digits) % 2
-    for position, character in enumerate(digits):
-        digit = int(character)
-        if position % 2 == parity:
-            digit *= 2
-            if digit > 9:
-                digit -= 9
-        total += digit
+    total = sum(_luhn_term(int(character), doubled=position % 2 == parity) for position, character in enumerate(digits))
     return total % 10 == 0
+
+
+def _luhn_term(digit: int, *, doubled: bool) -> int:
+    """Return one digit's contribution to a Luhn sum: doubled digits above 9 contribute their digit sum."""
+    if not doubled:
+        return digit
+    return digit * 2 - 9 if digit > 4 else digit * 2
 
 
 _REGEX_RULES = (

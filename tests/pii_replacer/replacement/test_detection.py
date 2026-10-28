@@ -72,18 +72,16 @@ class _WholeWordModel:
         **kwargs: object,
     ) -> list[object]:
         self.texts.extend(texts)
-        return [
-            {
-                "entities": {
-                    self.label: [
-                        {"start": match.start(), "end": match.end(), "confidence": 0.99}
-                        for value in self.values
-                        for match in re.finditer(rf"\b{re.escape(value)}\b", text)
-                    ]
-                }
-            }
-            for text in texts
-        ]
+        return [{"entities": {self.label: self._matches(text)}} for text in texts]
+
+    def _matches(self, text: str) -> list[dict[str, object]]:
+        matches: list[dict[str, object]] = []
+        for value in self.values:
+            matches.extend(
+                {"start": match.start(), "end": match.end(), "confidence": 0.99}
+                for match in re.finditer(rf"\b{re.escape(value)}\b", text)
+            )
+        return matches
 
 
 class _StaticDetector:
