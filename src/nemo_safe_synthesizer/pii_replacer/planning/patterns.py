@@ -9,12 +9,13 @@ import re
 import string
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from itertools import pairwise
 from random import Random
 from types import MappingProxyType
 from typing import Literal
 
-from ...config.replace_pii import EntityType, PatternSyntax
+from ...config.replace_pii import ENTITY_BY_TYPE, EntityType, PatternSyntax
 from ...errors import InternalError, ParameterError
 
 __all__ = [
@@ -27,6 +28,7 @@ __all__ = [
     "NamePatternPart",
     "compile_character_mask",
     "compile_name_pattern",
+    "describe_pattern",
     "extract_name_components",
     "parse_character_mask",
     "parse_name_pattern",
@@ -411,3 +413,46 @@ def pattern_grammar_catalog() -> dict[str, dict[str, object]]:
             "examples": ["%m/%d/%Y", "%Y-%m-%d"],
         },
     }
+
+
+# Date shown for a strftime pattern; every field differs so each format code is visible.
+_STRFTIME_EXAMPLE = datetime(1987, 6, 25, 14, 30, 5)
+
+
+def describe_pattern(entity_type: EntityType, pattern: str) -> tuple[tuple[str, str], ...]:
+    """Return each symbol in a valid ``pattern`` with its meaning, in order of first use.
+
+    Character masks list their tokens and bracket choices, and name patterns their placeholders, using the
+    descriptions in ``CHARACTER_MASK_TOKENS`` and ``NAME_PART_PLACEHOLDERS``. A strftime pattern uses Python's
+    format codes, so it is described by an example date written in it.
+
+    Example:
+        ``describe_pattern(EntityType.PHONE_NUMBER, "1-###")`` returns ``(("#", "digit 0-9"),)``, and
+        ``describe_pattern(EntityType.DATE_OF_BIRTH, "%Y-%m-%d")`` returns
+        ``(("%Y-%m-%d", "a date such as 1987-06-25"),)``.
+    """
+    syntax = ENTITY_BY_TYPE[entity_type].pattern_syntax
+    if syntax is PatternSyntax.STRFTIME:
+        return ((pattern, f"a date such as {_STRFTIME_EXAMPLE.strftime(pattern)}"),)
+    symbols: dict[str, str] = {}
+    if syntax is PatternSyntax.NAME_PARTS:
+        for match in _NAME_PART_PATTERN.finditer(pattern):
+            if (placeholder := NAME_PART_PLACEHOLDERS.get(match.group(0))) is not None:
+                symbols.setdefault(match.group(0), placeholder.description)
+        if entity_type is EntityType.EMAIL and "#" in _NAME_PART_PATTERN.sub("", pattern):
+            symbols.setdefault("#", CHARACTER_MASK_TOKENS["#"].description)
+    elif syntax is PatternSyntax.CHARACTER_MASK:
+        index = 0
+        while index < len(pattern):
+            character = pattern[index]
+            if character == "\\":
+                index += 2
+                continue
+            if character == "[" and (end := pattern.find("]", index + 1)) > index:
+                symbols.setdefault(pattern[index : end + 1], f"one of {', '.join(pattern[index + 1 : end])}")
+                index = end + 1
+                continue
+            if (token := CHARACTER_MASK_TOKENS.get(character)) is not None:
+                symbols.setdefault(character, token.description)
+            index += 1
+    return tuple(symbols.items())

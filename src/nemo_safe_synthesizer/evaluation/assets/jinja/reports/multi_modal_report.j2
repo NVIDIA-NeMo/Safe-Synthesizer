@@ -30,7 +30,7 @@
                 <span class="nav-icon">{{ icon("quality") }}</span>Synthetic Quality
             </a>
             {% endif %}
-            {% if (ctx.with_data_privacy) or (ctx.pii_replay and ctx.pii_replay.pii_replay_data) %}
+            {% if ctx.with_data_privacy or ctx.pii_replacement or (ctx.pii_replay and ctx.pii_replay.pii_replay_data) %}
             <a href="#data-privacy" data-report-nav="data-privacy">
                 <span class="nav-icon">{{ icon("lock") }}</span>Data Privacy
             </a>
@@ -170,7 +170,7 @@
         </section>
         {% endif %}
 
-        {% if (ctx.with_data_privacy) or (ctx.pii_replay and ctx.pii_replay.pii_replay_data) %}
+        {% if ctx.with_data_privacy or ctx.pii_replacement or (ctx.pii_replay and ctx.pii_replay.pii_replay_data) %}
         <section class="report-view" id="data-privacy" data-report-view="data-privacy">
             <h1>Data Privacy</h1>
 
@@ -240,7 +240,9 @@
             </section>
             {% endif %}
 
-            {% if ctx.pii_replay and ctx.pii_replay.pii_replay_data %}
+            {% if ctx.pii_replacement %}
+                {% include "jinja/components/pii_replacement.j2" %}
+            {% elif ctx.pii_replay and ctx.pii_replay.pii_replay_data %}
                 {% include "jinja/components/pii_replay.j2" %}
             {% endif %}
         </section>
