@@ -152,7 +152,7 @@ class FakerReplacementGenerator:
         return render_name_pattern(EntityType.EMAIL, pattern, values, rng)
 
     def _birth_date(self, request: ReplacementGenerationRequest, rng: Random) -> str:
-        shifted = shift_birth_date(request.original_value, request.pattern, rng)
+        shifted = shift_birth_date(request.original_value, request.pattern, rng, locale=self._locale)
         if shifted is not None:
             return shifted
         self._warn_generation_fallback("unparseable_birth_date")

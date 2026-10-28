@@ -13,13 +13,12 @@ import dateparser
 
 __all__ = ["birth_date_is_supported", "random_birth_date", "shift_birth_date"]
 
-_PRESERVED_PATTERNS = (
-    "%Y-%m-%d",
-    "%m/%d/%Y",
-    "%d/%m/%Y",
-    "%m-%d-%Y",
-    "%d-%m-%Y",
-)
+_YEAR_FIRST_PATTERNS = ("%Y-%m-%d", "%Y/%m/%d", "%Y.%m.%d")
+_MONTH_FIRST_PATTERNS = ("%m/%d/%Y", "%m-%d-%Y")
+_DAY_FIRST_PATTERNS = ("%d/%m/%Y", "%d-%m-%Y", "%d.%m.%Y")
+# Only en_US writes numeric dates month first, so other locales try day-first formats before
+# month-first ones: "05/04/1990" is 5 April in fr_FR and 4 May in en_US.
+_MONTH_FIRST_LOCALE = "en_US"
 # Only fixed calendar dates are accepted. dateparser's other parsers read values such as "yesterday",
 # "in 2 days", or an age like "30 years" relative to the current time, which would make the output
 # depend on the run day and turn ages into dates. Timestamps are excluded for the same reason.
@@ -48,10 +47,10 @@ class _ParsedBirthDate:
 
 def birth_date_is_supported(value: str) -> bool:
     """Return whether ``value`` contains one complete, deterministic date."""
-    return _parse_birth_date(value, None) is not None
+    return _parse_birth_date(value, None, _MONTH_FIRST_LOCALE) is not None
 
 
-def shift_birth_date(original: str, pattern: str | None, rng: Random) -> str | None:
+def shift_birth_date(original: str, pattern: str | None, rng: Random, *, locale: str) -> str | None:
     """Shift a parseable birth date by a small nonzero number of days, or return ``None``.
 
     The shift is drawn from a normal distribution with a 30-day standard deviation and never
@@ -60,7 +59,8 @@ def shift_birth_date(original: str, pattern: str | None, rng: Random) -> str | N
 
     The plan's pattern only has to cover 99% of a column, so each value is tried
     against the pattern first, then ISO 8601, common numeric formats, and strict
-    complete natural-language dates. Relative expressions such as ``"yesterday"``
+    complete natural-language dates. Numeric formats are tried month first for
+    ``en_US`` and day first for every other ``locale``. Relative expressions such as ``"yesterday"``
     or an age such as ``"30 years"`` are not fixed dates and are not parsed. The replacement uses the pattern when one
     is configured, else the numeric format that parsed, else ISO 8601. ``None``
     means the value could not be parsed; the caller then generates a random
@@ -71,7 +71,7 @@ def shift_birth_date(original: str, pattern: str | None, rng: Random) -> str | N
         ``"11/03/1989"``, ``"1990-02-14"`` also shifts and is written as
         ``%m/%d/%Y``, and ``"08/2010"`` returns ``None``.
     """
-    parsed = _parse_birth_date(original, pattern)
+    parsed = _parse_birth_date(original, pattern, locale)
     if parsed is None:
         return None
     shifted = parsed.value + timedelta(days=_shift_days(rng))
@@ -107,7 +107,7 @@ def random_birth_date(pattern: str | None, rng: Random) -> str:
     return datetime.combine(value, time(), tzinfo=UTC).strftime(pattern)
 
 
-def _parse_birth_date(original: str, pattern: str | None) -> _ParsedBirthDate | None:
+def _parse_birth_date(original: str, pattern: str | None, locale: str) -> _ParsedBirthDate | None:
     """Return the parsed date and the format to write its replacement in, or ``None`` if no format fits."""
     if pattern is not None:
         try:
@@ -120,7 +120,7 @@ def _parse_birth_date(original: str, pattern: str | None) -> _ParsedBirthDate | 
     except ValueError:
         pass
 
-    for candidate in _PRESERVED_PATTERNS:
+    for candidate in _numeric_patterns(locale):
         try:
             return _ParsedBirthDate(datetime.strptime(original, candidate), pattern or candidate)
         except ValueError:
@@ -135,3 +135,10 @@ def _parse_birth_date(original: str, pattern: str | None) -> _ParsedBirthDate | 
     if parsed_natural is not None:
         return _ParsedBirthDate(parsed_natural, pattern)
     return None
+
+
+def _numeric_patterns(locale: str) -> tuple[str, ...]:
+    """Return the numeric date formats to try, in order, for ``locale``."""
+    if locale == _MONTH_FIRST_LOCALE:
+        return (*_YEAR_FIRST_PATTERNS, *_MONTH_FIRST_PATTERNS, *_DAY_FIRST_PATTERNS)
+    return (*_YEAR_FIRST_PATTERNS, *_DAY_FIRST_PATTERNS, *_MONTH_FIRST_PATTERNS)

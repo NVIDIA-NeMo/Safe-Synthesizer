@@ -601,14 +601,37 @@ class TestReplacementGenerator:
         ["yesterday", "today", "in 2 days", "last week", "30 years", "2 weeks", "now", "an hour ago"],
     )
     def test_relative_date_expression_is_not_parsed_as_a_birth_date(self, original: str) -> None:
-        assert birth_dates.shift_birth_date(original, None, Random(0)) is None
+        assert birth_dates.shift_birth_date(original, None, Random(0), locale="en_US") is None
 
     @pytest.mark.parametrize("original", ["March 3, 1990", "3/4/1990", "Jan 12 99"])
     def test_fixed_calendar_date_is_still_shifted(self, original: str) -> None:
-        replacement = birth_dates.shift_birth_date(original, None, Random(0))
+        replacement = birth_dates.shift_birth_date(original, None, Random(0), locale="en_US")
 
         assert replacement is not None
         assert replacement != original
+
+    @pytest.mark.parametrize(
+        ("locale", "written_as", "meant"),
+        [("en_US", "%m/%d/%Y", datetime(1990, 1, 12)), ("fr_FR", "%d/%m/%Y", datetime(1990, 12, 1))],
+    )
+    def test_numeric_birth_date_is_read_month_first_only_for_en_us(
+        self, locale: str, written_as: str, meant: datetime
+    ) -> None:
+        replacement = birth_dates.shift_birth_date("01/12/1990", None, Random(0), locale=locale)
+
+        assert replacement is not None
+        assert 0 < abs((datetime.strptime(replacement, written_as) - meant).days) <= 180
+
+    @pytest.mark.parametrize(
+        ("original", "written_as"),
+        [("05.04.1990", "%d.%m.%Y"), ("1990/04/05", "%Y/%m/%d"), ("1990.04.05", "%Y.%m.%d")],
+    )
+    def test_dotted_and_year_first_birth_dates_keep_their_format(self, original: str, written_as: str) -> None:
+        replacement = birth_dates.shift_birth_date(original, None, Random(0), locale="de_DE")
+
+        assert replacement is not None
+        assert 0 < abs((datetime.strptime(replacement, written_as) - datetime(1990, 4, 5)).days) <= 180
+        assert birth_dates.birth_date_is_supported(original)
 
     def test_card_pattern_produces_a_luhn_valid_number(self) -> None:
         generator = _faker_generator()
