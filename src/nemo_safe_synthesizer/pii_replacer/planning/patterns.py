@@ -9,11 +9,13 @@ import re
 import string
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import datetime
+from itertools import pairwise
 from random import Random
 from types import MappingProxyType
 from typing import Literal
 
-from ...config.replace_pii import EntityType, PatternSyntax
+from ...config.replace_pii import ENTITY_BY_TYPE, EntityType, PatternSyntax
 from ...errors import InternalError, ParameterError
 
 __all__ = [
@@ -26,6 +28,8 @@ __all__ = [
     "NamePatternPart",
     "compile_character_mask",
     "compile_name_pattern",
+    "describe_pattern",
+    "extract_name_components",
     "parse_character_mask",
     "parse_name_pattern",
     "pattern_grammar_catalog",
@@ -137,6 +141,11 @@ class NamePatternPart:
 
 _EMAIL_ONLY_NAME_PARTS = frozenset({"domain", "organization"})
 _NAME_PART_PATTERN = re.compile(r"\{([^{}]+)\}")
+_NAME_COMPONENT_TYPES = {
+    "first": EntityType.FIRST_NAME,
+    "middle": EntityType.MIDDLE_NAME,
+    "last": EntityType.LAST_NAME,
+}
 
 
 def parse_character_mask(pattern: str) -> tuple[tuple[CharacterMaskPart, ...] | None, str | None]:
@@ -261,21 +270,71 @@ def compile_name_pattern(
         placeholder = part.placeholder
         if placeholder is None:
             raise InternalError("parsed name pattern part has no literal or placeholder")
-        if placeholder.part in _EMAIL_ONLY_NAME_PARTS:
-            expression.append(r"[^@\s]+")
-        elif placeholder.initial:
-            expression.append(r"[^\W\d_]")
-        elif entity_type is EntityType.EMAIL:
-            expression.append(r"[^@\s.]+")
-        else:
-            expression.append(r"[^@\s]+")
+        expression.append(_name_placeholder_regex(placeholder, entity_type))
     return re.compile("".join(expression), re.UNICODE), None
+
+
+def extract_name_components(
+    entity_type: EntityType,
+    pattern: str,
+    value: str,
+) -> tuple[tuple[EntityType, str], ...]:
+    """Extract semantically named parts from a value matching a validated name pattern.
+
+    The explicit placeholders provide the semantic alignment; this helper does
+    not infer first, middle, or last names from arbitrary token positions.
+    A pattern with two placeholders next to each other and no literal between
+    them returns no components, because the boundary between them would be a
+    guess: ``{First}{Last}`` could split ``AdaLovelace`` into ``AdaLovelac``
+    and ``e``.
+    """
+    if entity_type is not EntityType.FULL_NAME:
+        return ()
+    parts, error = parse_name_pattern(entity_type, pattern)
+    if error is not None or parts is None or _has_adjacent_placeholders(parts):
+        return ()
+
+    expression: list[str] = []
+    groups: list[tuple[str, EntityType]] = []
+    for part in parts:
+        if part.literal is not None:
+            expression.append(re.escape(part.literal))
+            continue
+        placeholder = part.placeholder
+        if placeholder is None or placeholder.part in _EMAIL_ONLY_NAME_PARTS:
+            return ()
+        group_name = f"part_{len(groups)}"
+        expression.append(f"(?P<{group_name}>{_name_placeholder_regex(placeholder, entity_type)})")
+        groups.append((group_name, _NAME_COMPONENT_TYPES[placeholder.part]))
+
+    match = re.fullmatch("".join(expression), value, re.UNICODE)
+    if match is None:
+        return ()
+    return tuple((component_type, match.group(group_name)) for group_name, component_type in groups)
+
+
+def _has_adjacent_placeholders(parts: tuple[NamePatternPart, ...]) -> bool:
+    """Return whether any two consecutive parsed parts are both placeholders."""
+    return any(
+        previous.placeholder is not None and current.placeholder is not None for previous, current in pairwise(parts)
+    )
 
 
 def _name_literal_regex(literal: str, entity_type: EntityType) -> str:
     if entity_type is not EntityType.EMAIL:
         return re.escape(literal)
     return "".join(r"\d" if character == "#" else re.escape(character) for character in literal)
+
+
+def _name_placeholder_regex(placeholder: NamePartPlaceholder, entity_type: EntityType) -> str:
+    """Return the shared matcher for one parsed name-pattern placeholder."""
+    if placeholder.part in _EMAIL_ONLY_NAME_PARTS:
+        return r"[^@\s]+"
+    if placeholder.initial:
+        return r"[^\W\d_]"
+    if entity_type is EntityType.EMAIL:
+        return r"[^@\s.]+"
+    return r"[^@\s]+"
 
 
 def render_name_pattern(
@@ -354,3 +413,46 @@ def pattern_grammar_catalog() -> dict[str, dict[str, object]]:
             "examples": ["%m/%d/%Y", "%Y-%m-%d"],
         },
     }
+
+
+# Date shown for a strftime pattern; every field differs so each format code is visible.
+_STRFTIME_EXAMPLE = datetime(1987, 6, 25, 14, 30, 5)
+
+
+def describe_pattern(entity_type: EntityType, pattern: str) -> tuple[tuple[str, str], ...]:
+    """Return each symbol in a valid ``pattern`` with its meaning, in order of first use.
+
+    Character masks list their tokens and bracket choices, and name patterns their placeholders, using the
+    descriptions in ``CHARACTER_MASK_TOKENS`` and ``NAME_PART_PLACEHOLDERS``. A strftime pattern uses Python's
+    format codes, so it is described by an example date written in it.
+
+    Example:
+        ``describe_pattern(EntityType.PHONE_NUMBER, "1-###")`` returns ``(("#", "digit 0-9"),)``, and
+        ``describe_pattern(EntityType.DATE_OF_BIRTH, "%Y-%m-%d")`` returns
+        ``(("%Y-%m-%d", "a date such as 1987-06-25"),)``.
+    """
+    syntax = ENTITY_BY_TYPE[entity_type].pattern_syntax
+    if syntax is PatternSyntax.STRFTIME:
+        return ((pattern, f"a date such as {_STRFTIME_EXAMPLE.strftime(pattern)}"),)
+    symbols: dict[str, str] = {}
+    if syntax is PatternSyntax.NAME_PARTS:
+        for match in _NAME_PART_PATTERN.finditer(pattern):
+            if (placeholder := NAME_PART_PLACEHOLDERS.get(match.group(0))) is not None:
+                symbols.setdefault(match.group(0), placeholder.description)
+        if entity_type is EntityType.EMAIL and "#" in _NAME_PART_PATTERN.sub("", pattern):
+            symbols.setdefault("#", CHARACTER_MASK_TOKENS["#"].description)
+    elif syntax is PatternSyntax.CHARACTER_MASK:
+        index = 0
+        while index < len(pattern):
+            character = pattern[index]
+            if character == "\\":
+                index += 2
+                continue
+            if character == "[" and (end := pattern.find("]", index + 1)) > index:
+                symbols.setdefault(pattern[index : end + 1], f"one of {', '.join(pattern[index + 1 : end])}")
+                index = end + 1
+                continue
+            if (token := CHARACTER_MASK_TOKENS.get(character)) is not None:
+                symbols.setdefault(character, token.description)
+            index += 1
+    return tuple(symbols.items())

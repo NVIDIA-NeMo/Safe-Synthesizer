@@ -9,6 +9,7 @@ from collections.abc import Callable
 from dataclasses import FrozenInstanceError
 from datetime import datetime
 from pathlib import Path
+from random import Random
 from typing import Literal
 
 import numpy as np
@@ -23,6 +24,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiSamplerConfig,
 )
 from nemo_safe_synthesizer.errors import InternalError, ParameterError
+from nemo_safe_synthesizer.pii_replacer.replacement import birth_dates
 from nemo_safe_synthesizer.pii_replacer.replacement.generation import (
     ReplacementGenerationRequest,
     ReplacementGenerator,
@@ -467,6 +469,90 @@ class TestReplacementGenerator:
         datetime.strptime(replacement, "%B %d, %Y")
         assert replacement != request.original_value
 
+    @pytest.mark.parametrize("original", ["5 April 1990", "April 5th, 1990", "5 avril 1990"])
+    def test_natural_language_birth_date_is_shifted_to_a_safe_complete_date(self, original: str) -> None:
+        generator = _faker_generator()
+        request = _request(EntityType.DATE_OF_BIRTH, original)
+
+        replacement = generator.generate(request)
+
+        parsed_replacement = datetime.fromisoformat(replacement)
+        assert datetime(1989, 4, 5) <= parsed_replacement <= datetime(1991, 4, 5)
+        assert replacement != original
+
+    def test_numeric_non_date_birth_value_skips_natural_language_parsing(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        def fail_parse(*args: object, **kwargs: object) -> None:
+            raise AssertionError("dateparser must not run for a value without letters")
+
+        monkeypatch.setattr(birth_dates.dateparser, "parse", fail_parse)
+
+        replacement = _faker_generator().generate(_request(EntityType.DATE_OF_BIRTH, "45"))
+
+        assert datetime(1930, 1, 1) <= datetime.fromisoformat(replacement) <= datetime(2010, 12, 31)
+
+    def test_vague_birth_date_is_replaced_with_a_random_complete_date(self) -> None:
+        replacement = _faker_generator().generate(_request(EntityType.DATE_OF_BIRTH, "spring"))
+
+        assert datetime(1930, 1, 1) <= datetime.fromisoformat(replacement) <= datetime(2010, 12, 31)
+
+    @pytest.mark.parametrize(
+        "original",
+        ["yesterday", "today", "in 2 days", "last week", "30 years", "2 weeks", "now", "an hour ago"],
+    )
+    def test_relative_date_expression_is_not_parsed_as_a_birth_date(self, original: str) -> None:
+        assert birth_dates.shift_birth_date(original, None, Random(0), locale="en_US") is None
+
+    @pytest.mark.parametrize("original", ["March 3, 1990", "3/4/1990", "Jan 12 99"])
+    def test_fixed_calendar_date_is_still_shifted(self, original: str) -> None:
+        replacement = birth_dates.shift_birth_date(original, None, Random(0), locale="en_US")
+
+        assert replacement is not None
+        assert replacement != original
+
+    @pytest.mark.parametrize(
+        ("locale", "written_as", "meant"),
+        [("en_US", "%m/%d/%Y", datetime(1990, 1, 12)), ("fr_FR", "%d/%m/%Y", datetime(1990, 12, 1))],
+    )
+    def test_numeric_birth_date_is_read_month_first_only_for_en_us(
+        self, locale: str, written_as: str, meant: datetime
+    ) -> None:
+        replacement = birth_dates.shift_birth_date("01/12/1990", None, Random(0), locale=locale)
+
+        assert replacement is not None
+        assert 0 < abs((datetime.strptime(replacement, written_as) - meant).days) <= 180
+
+    @pytest.mark.parametrize(
+        ("original", "written_as"),
+        [("05.04.1990", "%d.%m.%Y"), ("1990/04/05", "%Y/%m/%d"), ("1990.04.05", "%Y.%m.%d")],
+    )
+    def test_dotted_and_year_first_birth_dates_keep_their_format(self, original: str, written_as: str) -> None:
+        replacement = birth_dates.shift_birth_date(original, None, Random(0), locale="de_DE")
+
+        assert replacement is not None
+        assert 0 < abs((datetime.strptime(replacement, written_as) - datetime(1990, 4, 5)).days) <= 180
+        assert birth_dates.birth_date_is_supported(original)
+
+    @pytest.mark.parametrize("locale", ["fr_FR", "en_GB", "de_DE"])
+    @pytest.mark.parametrize(
+        ("entity_type", "original"), [(EntityType.SSN, "123-45-6789"), (EntityType.NATIONAL_ID, "123-45-6789")]
+    )
+    def test_ssn_is_a_us_ssn_in_every_locale(self, locale: str, entity_type: EntityType, original: str) -> None:
+        generator = _faker_generator(locale=locale)
+
+        replacement = generator.generate(_request(entity_type, original))
+
+        assert re.fullmatch(r"[0-8][0-9]{2}-[0-9]{2}-[0-9]{4}", replacement)
+
+    def test_street_address_stays_on_one_line(self) -> None:
+        generator = _faker_generator(locale="en_GB")
+
+        streets = [
+            generator.generate(_request(EntityType.STREET_ADDRESS, "1 High St", seed=seed)) for seed in range(40)
+        ]
+
+        assert not any("\n" in street for street in streets)
+        assert any(", " in street for street in streets)
+
     def test_card_pattern_produces_a_luhn_valid_number(self) -> None:
         generator = _faker_generator()
         request = _request(
@@ -516,6 +602,36 @@ class TestReplacementGenerator:
         assert re.fullmatch(r"synthetic\.person\d{2}@hotmail\.com", named), named
         assert unnamed != "sampled@example.test"
         assert "@" in unnamed
+
+    def test_nemotron_personas_street_address_omits_linked_locality_when_the_original_locality_is_kept(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        people = pd.DataFrame({"street_number": ["42"], "street_name": ["Analytical Engine Way"], "city": ["Boston"]})
+        generator = _nemotron_personas_generator(tmp_path, people)
+        request = ReplacementGenerationRequest(
+            entity_type=EntityType.STREET_ADDRESS,
+            original_value="1 Main Street",
+            effective_dependency_tuple=((EntityType.CITY, CanonicalValue("string", "Boston")),),
+            pattern=None,
+            seed=42,
+            resolved_dependency_values=((EntityType.CITY, ("boston",)),),
+            keep_original_locality=True,
+        )
+
+        assert generator.generate(request) == "42 Analytical Engine Way"
+
+    def test_request_rejects_a_non_boolean_keep_original_locality(self) -> None:
+        with pytest.raises(InternalError, match="keep_original_locality must be a boolean"):
+            _construct(
+                ReplacementGenerationRequest,
+                entity_type=EntityType.STREET_ADDRESS,
+                original_value="1 Main Street",
+                effective_dependency_tuple=(),
+                pattern=None,
+                seed=42,
+                keep_original_locality="yes",
+            )
 
     def test_nemotron_personas_generator_uses_address_components_from_the_selected_asset_row(
         self,

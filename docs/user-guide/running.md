@@ -118,8 +118,9 @@ You can also run stages individually:
 
 - `safe-synthesizer run train` -- train only, saves the adapter
 - `safe-synthesizer run generate` -- generate only (use `--auto-discover-adapter` or `--run-path`)
-- `safe-synthesizer run replace-pii --plan-only` -- resolve a PII replacement configuration without entering the
-  pipeline
+- `safe-synthesizer run replace-pii` -- replace PII in the complete input without entering the synthesis pipeline
+- `safe-synthesizer run replace-pii --plan-only` -- resolve a reusable PII replacement configuration without
+  replacing rows
 - SDK stepwise: `process_data()` → `train()` → `generate()` → `evaluate()`
 
 ## Pre-flight Validation
@@ -280,12 +281,28 @@ Accepts the same common options and synthesis parameter override syntax as `run`
     are always inherited from the trained run and cannot be changed at generate
     time, since they describe how the adapter was produced.
 
-### `run replace-pii --plan-only`
+### `run replace-pii`
 
-Resolve a PII replacement plan and sampler-specific dependency mappings against
-the full input dataframe, then exit. This planning operation does not produce a
-train/test split or any replaced rows. It does not invoke holdout, model
-metadata, replacement, training, generation, or evaluation.
+Apply PII replacement to the complete input dataframe without running holdout,
+training, generation, or evaluation:
+
+```bash
+safe-synthesizer run replace-pii \
+  --config config.yaml \
+  --data-source data.csv \
+  --output-file pii_replaced.csv
+```
+
+The command also writes `safe-synthesizer-config.yaml` and `pii_replacement_plan.yaml` to the run
+directory. Without `--output-file`, replaced data is written there using the
+input name with a `_pii_replaced` suffix, such as
+`data_pii_replaced.csv` for `data.csv`.
+
+Add `--plan-only` to resolve a PII replacement plan and sampler-specific
+dependency mappings against the full input dataframe without replacing rows.
+This planning operation does not produce a train/test split or any replaced
+rows. It does not invoke holdout, model metadata, replacement, training,
+generation, or evaluation.
 
 ```bash
 safe-synthesizer run replace-pii --plan-only \
@@ -293,12 +310,12 @@ safe-synthesizer run replace-pii --plan-only \
   --data-source data.csv
 ```
 
-The command writes two files in the standard timestamped run directory beneath
-`--artifact-path`: `pii_replacement_plan.yaml`, the resolved plan, and
-`safe-synthesizer-config.yaml`, a complete reusable NSS configuration that
-names it and records the sampler used. Comments in `pii_replacement_plan.yaml`
-name the sampler and locale it was written for and explain its sections. The
-command currently requires `--plan-only`.
+The plan-only command writes two files in the standard timestamped run
+directory beneath `--artifact-path`: `pii_replacement_plan.yaml`, the resolved
+plan, and `safe-synthesizer-config.yaml`, a complete reusable NSS configuration
+that names it and records the sampler used. Comments in
+`pii_replacement_plan.yaml` name the sampler and locale it was written for and
+explain its sections.
 
 The SDK equivalent returns the resolved `ReplacePiiConfig`. Supplying
 `output_path` writes the complete configuration there and
@@ -313,6 +330,20 @@ resolved_pii = (
     SafeSynthesizer(config)
     .with_data_source("data.csv")
     .plan_pii_replacement(output_path="safe-synthesizer-config.yaml")
+)
+```
+
+For standalone replacement, call `replace_pii()` instead. It returns a
+`TransformResult`; output files are optional:
+
+```python
+result = (
+    SafeSynthesizer(config)
+    .with_data_source("data.csv")
+    .replace_pii(
+        "pii_replaced.csv",
+        config_output_path="safe-synthesizer-config.yaml",
+    )
 )
 ```
 
@@ -578,8 +609,17 @@ See [Configuration Reference -- Data](configuration.md#data) for the full parame
 
 ## PII Replacement
 
-PII replacement v3 supports resolving a reviewable plan from the full input
-without entering the synthesis pipeline:
+PII replacement v3 can run against the full input without entering the
+synthesis pipeline:
+
+```bash
+safe-synthesizer run replace-pii \
+  --config config.yaml \
+  --data-source data.csv \
+  --output-file pii_replaced.csv
+```
+
+Add `--plan-only` to resolve a reviewable configuration without replacing rows:
 
 ```bash
 safe-synthesizer run replace-pii --plan-only \
@@ -587,10 +627,11 @@ safe-synthesizer run replace-pii --plan-only \
   --data-source data.csv
 ```
 
-During the normal synthesis pipeline, NSS applies structured-column replacements
-from the resolved plan before training. See
+During the normal synthesis pipeline, NSS resolves the plan against the full
+input and applies structured-column and free-text replacements only to the
+post-holdout training split. See
 [PII Replacement](../product-overview/pii_replacement.md) for Nemotron
-Personas setup and current free-text limitations.
+Personas setup and detector configuration.
 
 ---
 

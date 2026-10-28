@@ -547,7 +547,76 @@ check of its own.
 
 ## PII Replacement
 
-PII replacement v3 troubleshooting guidance will be added in a later update.
+`safe-synthesizer run replace-pii` resolves the plan and applies replacement in
+one run. Add `--plan-only` only when you want to validate and persist the
+resolved plan without replacing rows. Plan, dependency, and pattern errors are
+reported as configuration errors without logging source values.
+
+Free-text targets require the configured GLiNER2 checkpoint. The default is
+`fastino/gliner2-privacy-filter-PII-multi`; allow Hugging Face downloads on the
+first run or pre-populate the model cache before using
+`--disable-huggingface-remote`. A model-load or inference failure stops the run
+instead of silently continuing with regex detection only.
+
+### GLiNER2 Device and Throughput
+
+NSS loads GLiNER2 on CUDA. When PyTorch reports no GPU, a run with free-text
+columns stops with `GLiNER2 free-text PII detection needs a CUDA GPU` instead of
+falling back to CPU, which is too slow for real datasets; full street-address
+values are then replaced whole, with a warning.
+Agent sandboxes and containers often hide a GPU the machine has; run NSS where
+`nvidia-smi` lists it. Model loading and inference emit completion records and a progress
+heartbeat every 30 seconds; the records include the selected device, chunk
+count, configured batch size, and requested-label count without source text.
+
+Free-text inference deduplicates exact cell values, splits each unique value
+into overlapping character chunks, and sends the flattened chunks through
+GLiNER2's batched API. Start with the defaults (`batch_size: 8`,
+`chunk_length: 384`, and `chunk_overlap: 128`). Reduce `batch_size` to 4, 2, or
+1 after a CUDA out-of-memory error. Increase it gradually only when a GPU has
+headroom; it does not change chunk boundaries or detection semantics.
+
+The checkpoint favors recall and documents that it can over-predict names.
+`free_text_detection.entity_thresholds` contains one threshold for every
+GLiNER2-detected entity. The defaults are tuned on a PII detection benchmark,
+and most are above 0.97 because the checkpoint's scores cluster just below 1.0,
+so change them in small steps. Email, payment-card, IPv4, and IPv6 detection is
+owned by structurally validated regex and has no confidence threshold. If
+medical terms, product names, or common nouns are replaced as people, raise the
+relevant name entries or add a matching label to
+`free_text_detection.name_exclusion_thresholds`. If real names are missed, try
+`name_exclusion_thresholds: {}`: the default exclusion labels also drop names
+the model scores as, for example, a `gender` term. Check both false positives
+and missed real names on a representative development sample before and after
+any change.
+
+The default checkpoint's documented languages are English, French, Spanish,
+German, Italian, Portuguese, and Dutch. Natural-language date parsing happens
+only after GLiNER2 detects a birth-date span, so the parser does not extend the
+checkpoint's detection-language coverage.
+
+GLiNER2 birth-date candidates must contain a complete parseable day, month,
+and year. Natural-language and multilingual complete dates are accepted; vague
+phrases such as `spring` are skipped with a PII-free aggregate warning. If a
+complete date is unexpectedly skipped, inspect the aggregate warning count
+with `-v` and report the date format without sharing the original value.
+
+Nemotron-Personas sampling expects `<managed-assets>/datasets/<locale>.parquet`. If the file is
+missing, first download the dataset for `replace_pii.locale`, as described under
+[Nemotron-Personas](../product-overview/pii_replacement.md#nemotron-personas). Set
+`replace_pii.sampler.nemotron_personas_path` or `NSS_NEMOTRON_PERSONAS_PATH` when the assets are
+stored elsewhere. When `replace_pii.sampler` is not set, NSS uses Faker if the locale file is
+missing, unless the plan maps ethnicity values. When `replace_pii.sampler` names this sampler, or
+the plan maps ethnicity values, and the locale file is missing or unreadable, replacement fails
+with a configuration error; set `replace_pii.sampler.backend: faker` and remove any ethnicity
+mapping to replace PII without persona data. Fields a persona row lacks, and entity types that are
+not persona fields, still use Faker. Dependency values that select no Nemotron-Personas candidates
+are configuration errors and must be fixed in `data_to_sampler_value_mapping`.
+
+If `data_to_sampler_value_mapping does not match the ... sampler` stops a run, the plan was likely
+written for another sampler or locale. The error lists every entry the sampler cannot use; change
+those entries, or set `replace_pii.sampler` and `replace_pii.locale` to the ones the plan was
+written for. Gender entries may always use `female` and `male`.
 
 ---
 
