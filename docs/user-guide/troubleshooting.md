@@ -600,7 +600,9 @@ phrases such as `spring` are skipped with a PII-free aggregate warning. If a
 complete date is unexpectedly skipped, inspect the aggregate warning count
 with `-v` and report the date format without sharing the original value.
 
-Nemotron-Personas sampling expects `<managed-assets>/datasets/<locale>.parquet`. Set
+Nemotron-Personas sampling expects `<managed-assets>/datasets/<locale>.parquet`. If the file is
+missing, first download the dataset for `replace_pii.locale`, as described under
+[Nemotron-Personas](../product-overview/pii_replacement.md#nemotron-personas). Set
 `replace_pii.sampler.nemotron_personas_path` or `NSS_NEMOTRON_PERSONAS_PATH` when the assets are
 stored elsewhere. When `replace_pii.sampler` is not set, NSS uses Faker if the locale file is
 missing, unless the plan maps ethnicity values. When `replace_pii.sampler` names this sampler, or

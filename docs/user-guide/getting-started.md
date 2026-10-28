@@ -137,6 +137,26 @@ Commands:
   run        Run the Safe Synthesizer end-to-end pipeline.
 ```
 
+### Optional Nemotron-Personas Data
+
+PII replacement draws replacement names from the Nemotron-Personas dataset for
+`replace_pii.locale` when it is downloaded. Names then follow the locale's real
+population and can match a row's ethnic background. Without it, NSS uses Faker
+and logs a warning. Downloading requires an NGC API key and the
+[NGC CLI](https://docs.nvidia.com/nemo/datadesigner/concepts/person-sampling).
+For `en_US`:
+
+```bash
+ngc registry resource download-version \
+  nvidia/nemotron-personas/nemotron-personas-dataset-en_us:0.0.2
+mkdir -p "${HOME}/.data-designer/managed-assets/datasets"
+cp nemotron-personas-dataset-*/*.parquet \
+  "${HOME}/.data-designer/managed-assets/datasets/"
+```
+
+See [PII Replacement -- Nemotron-Personas](../product-overview/pii_replacement.md#nemotron-personas)
+for other locales and storage locations.
+
 ### Optional Agent Skill
 
 This repository includes an Agent Skill at `skills/safe-synthesizer/`. The
