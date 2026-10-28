@@ -112,6 +112,12 @@ class TestGliner2Detector:
             (DEFAULT_GLINER2_MODEL_ID, {"revision": DEFAULT_GLINER2_MODEL_REVISION, "map_location": "cuda"})
         ]
 
+    def test_loader_refuses_to_run_without_a_gpu(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setitem(sys.modules, "torch", SimpleNamespace(cuda=SimpleNamespace(is_available=lambda: False)))
+
+        with pytest.raises(GenerationError, match="needs a CUDA GPU"):
+            Gliner2Detector(FreeTextDetectionConfig()).detect([_cell()])
+
     def test_logs_completion_without_source_text(self, caplog: pytest.LogCaptureFixture) -> None:
         text = "Contact ada@example.com"
         model = _FakeModel([{"entities": {}}])

@@ -272,6 +272,8 @@ class Gliner2Detector:
         if self._model is None:
             try:
                 self._model = self._model_loader(self._config.model_id, self._config.model_revision)
+            except SafeSynthesizerError:
+                raise
             except Exception as exc:
                 raise GenerationError("GLiNER2 free-text PII model could not be loaded") from exc
         return self._model
@@ -739,11 +741,22 @@ def _is_valid_ssn(value: str) -> bool:
 
 
 def _load_gliner2_model(model_id: str, revision: str | None) -> _GlinerModel:
-    """Load the configured checkpoint revision directly onto the best available device."""
+    """Load the configured checkpoint revision onto the GPU.
+
+    Raises:
+        GenerationError: If PyTorch reports no CUDA GPU. CPU inference is too slow for real datasets, and a
+            sandbox that hides the GPU would otherwise turn a fast run into one that appears to hang.
+    """
     import torch
+
+    if not torch.cuda.is_available():
+        raise GenerationError(
+            "GLiNER2 free-text PII detection needs a CUDA GPU, but PyTorch reports none. Run NSS where the GPU is "
+            "visible; a sandbox or container without GPU access hides it"
+        )
     from gliner2 import GLiNER2
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = "cuda"
     with heartbeat(
         "GLiNER2 model loading",
         interval=30.0,
