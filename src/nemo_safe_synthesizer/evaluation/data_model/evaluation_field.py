@@ -103,6 +103,14 @@ class EvaluationField(BaseModel):
                 synthetic_distribution = None
                 distribution_distance = None
                 distribution_stability = None
+            elif EvaluationField.is_structured_pii(column_statistics):
+                # PII values are replaced, or should not reappear, so compare value shares by rank instead.
+                training_distribution = stats.get_ranked_field_distribution(training)
+                synthetic_distribution = stats.get_ranked_field_distribution(synthetic)
+                distribution_distance = stats.compute_distribution_distance(
+                    training_distribution, synthetic_distribution
+                )
+                distribution_stability = EvaluationField.get_field_distribution_stability(distribution_distance)
             else:
                 training_distribution = stats.get_categorical_field_distribution(training)
                 synthetic_distribution = stats.get_categorical_field_distribution(synthetic)
@@ -121,6 +129,15 @@ class EvaluationField(BaseModel):
             distribution_stability=distribution_stability,
             column_statistics=column_statistics,
         )
+
+    @staticmethod
+    def is_structured_pii(column_statistics: ColumnStatistics | None) -> bool:
+        """Return whether the PII plan lists the column as structured PII, not free text.
+
+        Such a column's original values are not expected in the synthetic data: replacement changes them,
+        and without replacement PII replay, not the quality score, checks whether they reappear.
+        """
+        return column_statistics is not None and column_statistics.assigned_type == "structured"
 
     @staticmethod
     def get_average_divergence(fields: list[EvaluationField]) -> float:
