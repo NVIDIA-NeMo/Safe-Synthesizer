@@ -258,7 +258,7 @@ class TestNSSTrainingAndGenerationEvent:
             task_status=TaskStatusEnum.COMPLETED,
             replace_pii_enabled=True,
             pii_sampler_backend="faker",
-            pii_plan_source="inline",
+            pii_plan_source="provided",
             pii_replaced_columns_bucket="1-5",
             pii_locale="en_US",
             pii_llm_mode="local",
@@ -279,7 +279,7 @@ class TestNSSTrainingAndGenerationEvent:
         assert "dataPrivacyScore" in dumped
         assert dumped["replacePiiEnabled"] is True
         assert dumped["piiSamplerBackend"] == "faker"
-        assert dumped["piiPlanSource"] == "inline"
+        assert dumped["piiPlanSource"] == "provided"
         assert dumped["piiReplacedColumnsBucket"] == "1-5"
         assert dumped["piiLocale"] == "en_US"
         assert dumped["piiLlmMode"] == "local"
