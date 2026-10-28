@@ -109,6 +109,9 @@ replace_pii:
   replacement_plan: pii_replacement_plan.yaml
 ```
 
+A path given with a command-line flag such as `--replace_pii__replacement_plan`,
+or set through the SDK, is resolved against the working directory instead.
+
 ```yaml
 # pii_replacement_plan.yaml
 columns_to_replace:
