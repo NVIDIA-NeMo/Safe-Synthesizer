@@ -323,7 +323,7 @@ def test_replace_pii_emits_completed_telemetry_with_sampler_backend(
     assert event.task_status == TaskStatusEnum.COMPLETED
     assert event.replace_pii_enabled is True
     assert event.pii_sampler_backend == "faker"
-    assert event.pii_plan_source == "inline"
+    assert event.pii_plan_source == "provided"
     assert event.pii_replaced_columns_bucket == "1-5"
     assert event.pii_locale == "en_US"
     assert event.job_duration_sec >= 0.0
@@ -348,8 +348,14 @@ def test_replace_pii_emits_error_telemetry_when_pii_is_disabled(
 def test_plan_pii_replacement_does_not_emit_telemetry(
     tmp_path: Path, fixture_no_telemetry_network: list[NSSTrainingAndGenerationEvent]
 ) -> None:
+    inline_plan = PiiReplacementPlan(
+        columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
+    )
     nss = SafeSynthesizer(
-        config=SafeSynthesizerParameters(replace_pii=ReplacePiiConfig(), emit_telemetry=True),
+        config=SafeSynthesizerParameters(
+            replace_pii=ReplacePiiConfig(replacement_plan=inline_plan),
+            emit_telemetry=True,
+        ),
         save_path=tmp_path,
     ).with_data_source(pd.DataFrame({"email": ["a@example.com", "b@example.com"]}))
 

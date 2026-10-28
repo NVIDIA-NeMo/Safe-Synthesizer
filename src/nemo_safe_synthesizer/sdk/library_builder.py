@@ -84,12 +84,13 @@ def _warn_for_saved_default_drift(saved_config: SafeSynthesizerParameters) -> No
 
 
 def _pii_plan_source(config: ReplacePiiConfig) -> str:
-    """Return how the user supplied the PII replacement plan, before resolution replaces it inline."""
-    if config.is_auto_discovery:
-        return "auto_discovery"
-    if config.plan_path is not None:
-        return "file"
-    return "inline"
+    """Return whether the PII replacement plan is auto-discovered or user-supplied.
+
+    Call this before planning: resolution replaces ``"auto_discovery"`` with the
+    discovered plan. A plan file is loaded into an inline plan when the config is
+    validated, so files and inline plans are both ``"provided"``.
+    """
+    return "auto_discovery" if config.is_auto_discovery else "provided"
 
 
 def _pii_llm_usage(config: ReplacePiiConfig, plan_source: str) -> tuple[str, str]:
@@ -100,7 +101,7 @@ def _pii_llm_usage(config: ReplacePiiConfig, plan_source: str) -> tuple[str, str
     and other endpoint models collapse to fixed labels so private model or
     deployment names are never sent.
     """
-    if config.llm is None or plan_source != "auto_discovery":
+    if plan_source != "auto_discovery":
         return "none", "undefined"
 
     from ..pii_replacer.local_inference import (
@@ -155,7 +156,7 @@ def _build_telemetry_event(
         pii_plan_source = ss._pii_plan_source or _pii_plan_source(replace_pii_config)
         if replace_pii_config.inline_plan is not None:
             pii_columns_bucket = bucket_columns(len(replace_pii_config.inline_plan.columns_to_replace))
-        pii_locale = sanitize_locale_for_telemetry(replace_pii_config.replacement.locale)
+        pii_locale = sanitize_locale_for_telemetry(replace_pii_config.locale)
         pii_llm_mode, pii_llm_model = _pii_llm_usage(replace_pii_config, pii_plan_source)
     dp_enabled = cfg is not None and cfg.privacy is not None and cfg.privacy.dp_enabled
     ts_enabled = cfg is not None and cfg.time_series.is_timeseries
