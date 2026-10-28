@@ -21,14 +21,22 @@ from ...config.replace_pii import (
 )
 from ...config.time_series import TimeSeriesParameters
 from ...errors import InternalError, ParameterError
-from .patterns import CHARACTER_MASK_ESCAPABLE_CHARACTERS, CHARACTER_MASK_TOKENS, NAME_PART_PLACEHOLDERS
+from ..replacement.collisions import all_distinct
+from ..replacement.identifier_space import MASK_ALLOCATED_ENTITY_TYPES, MaskSpace
+from .patterns import compile_character_mask, compile_name_pattern
 
-__all__ = ["column_pattern_issue", "column_pattern_syntax_issue", "get_protected_columns", "validate_plan"]
+__all__ = [
+    "column_pattern_issue",
+    "column_pattern_syntax_issue",
+    "get_protected_columns",
+    "identifier_mask_capacity_issue",
+    "validate_plan",
+    "value_matches_pattern",
+]
 
 # A column has one pattern, so it must describe nearly every value; the small
 # tolerance only absorbs stray malformed cells.
 MIN_PATTERN_COVERAGE = 0.99
-_NAME_PART_PATTERN = re.compile(r"\{([^{}]+)\}")
 
 
 def get_protected_columns(
@@ -41,107 +49,6 @@ def get_protected_columns(
         time_series.timestamp_column if time_series is not None else None,
     }
     return frozenset(column for column in candidates if column is not None)
-
-
-def _template_regex(pattern: str) -> tuple[re.Pattern[str] | None, str | None]:
-    parts: list[str] = []
-    has_variable = False
-    index = 0
-
-    while index < len(pattern):
-        char = pattern[index]
-        if char == "\\":
-            if index + 1 >= len(pattern):
-                return None, "ends with a trailing '\\'"
-            index += 1
-            escaped = pattern[index]
-            if escaped not in CHARACTER_MASK_ESCAPABLE_CHARACTERS:
-                allowed = " ".join(sorted(CHARACTER_MASK_ESCAPABLE_CHARACTERS))
-                return None, f"escapes unsupported character {escaped!r}; only {allowed} may be escaped"
-            parts.append(re.escape(pattern[index]))
-        elif char in CHARACTER_MASK_TOKENS:
-            parts.append(CHARACTER_MASK_TOKENS[char].regex)
-            has_variable = True
-        elif char == "[":
-            choices, end, error = _character_class(pattern, index)
-            if error is not None:
-                return None, error
-            assert choices is not None
-            parts.append("[" + re.escape(choices) + "]")
-            has_variable = True
-            index = end
-        else:
-            parts.append(re.escape(char))
-        index += 1
-
-    if not has_variable:
-        return None, "has no variable placeholder"
-    return re.compile("".join(parts)), None
-
-
-def _character_class(pattern: str, start: int) -> tuple[str | None, int, str | None]:
-    """Parse one literal-choice class, honoring the same restricted escapes."""
-    choices: list[str] = []
-    index = start + 1
-    while index < len(pattern):
-        char = pattern[index]
-        if char == "]":
-            if not choices:
-                return None, index, "has an empty '[]' character class"
-            return "".join(choices), index, None
-        if char == "\\":
-            if index + 1 >= len(pattern):
-                return None, index, "ends with a trailing '\\'"
-            index += 1
-            char = pattern[index]
-            if char not in CHARACTER_MASK_ESCAPABLE_CHARACTERS:
-                allowed = " ".join(sorted(CHARACTER_MASK_ESCAPABLE_CHARACTERS))
-                return None, index, f"escapes unsupported character {char!r}; only {allowed} may be escaped"
-        choices.append(char)
-        index += 1
-    return None, index, "has an unclosed '[' character class"
-
-
-def _name_parts_regex(
-    entity_type: EntityType,
-    pattern: str,
-) -> tuple[re.Pattern[str] | None, str | None]:
-    matches = list(_NAME_PART_PATTERN.finditer(pattern))
-    if not matches:
-        return None, "has no name-part placeholder"
-    if "{" in _NAME_PART_PATTERN.sub("", pattern) or "}" in _NAME_PART_PATTERN.sub("", pattern):
-        return None, "has an unmatched '{' or '}'"
-
-    parts: list[str] = []
-    cursor = 0
-    for match in matches:
-        literal = pattern[cursor : match.start()]
-        parts.append(_name_parts_literal_regex(literal, entity_type))
-        placeholder = NAME_PART_PLACEHOLDERS.get(match.group(0))
-        if placeholder is None:
-            return None, f"uses unknown placeholder {match.group(0)!r}"
-        if placeholder.part == "domain" and entity_type is not EntityType.EMAIL:
-            return None, "uses {domain} outside an email pattern"
-        if placeholder.part == "domain":
-            parts.append(r"[^@\s]+")
-        elif placeholder.initial:
-            parts.append(r"[^\W\d_]")
-        elif entity_type is EntityType.EMAIL:
-            parts.append(r"[^@\s.]+")
-        else:
-            parts.append(r"[^@\s]+")
-        cursor = match.end()
-    parts.append(_name_parts_literal_regex(pattern[cursor:], entity_type))
-
-    if entity_type is EntityType.EMAIL and "@" not in pattern:
-        return None, "does not contain '@'"
-    return re.compile("".join(parts), re.UNICODE), None
-
-
-def _name_parts_literal_regex(literal: str, entity_type: EntityType) -> str:
-    if entity_type is not EntityType.EMAIL:
-        return re.escape(literal)
-    return "".join(r"\d" if character == "#" else re.escape(character) for character in literal)
 
 
 def _strftime_pattern_error(pattern: str) -> str | None:
@@ -163,10 +70,24 @@ def _pattern_matcher(
 ) -> tuple[re.Pattern[str] | None, str | None]:
     pattern_syntax = ENTITY_BY_TYPE[entity_type].pattern_syntax
     if pattern_syntax is PatternSyntax.CHARACTER_MASK:
-        return _template_regex(pattern)
+        return compile_character_mask(pattern)
     if pattern_syntax is PatternSyntax.NAME_PARTS:
-        return _name_parts_regex(entity_type, pattern)
+        return compile_name_pattern(entity_type, pattern)
     return None, None
+
+
+def value_matches_pattern(entity_type: EntityType, pattern: str, value: str) -> bool:
+    """Return whether ``value`` follows ``pattern`` under ``entity_type``'s pattern grammar.
+
+    Patterns without a matcher accept every value.
+
+    Example:
+        ``value_matches_pattern(EntityType.UNIQUE_IDENTIFIER, "[aB]", "A")`` is ``False``.
+    """
+    if ENTITY_BY_TYPE[entity_type].pattern_syntax is PatternSyntax.STRFTIME:
+        return _parses_datetime(value, pattern)
+    matcher, _ = _pattern_matcher(entity_type, pattern)
+    return matcher is None or matcher.fullmatch(value) is not None
 
 
 def column_pattern_syntax_issue(spec: PiiColumnPlan) -> str | None:
@@ -244,9 +165,39 @@ def column_pattern_issue(df: pd.DataFrame, spec: PiiColumnPlan) -> str | None:
     return None
 
 
-def _iter_pattern_issues(df: pd.DataFrame, plan: PiiReplacementPlan) -> Iterator[str]:
+def identifier_mask_capacity_issue(df: pd.DataFrame, spec: PiiColumnPlan) -> str | None:
+    """Return an issue when an identifier mask is too small to keep a distinct column's replacements distinct.
+
+    Replacements must stay distinct only when the column's original values are all distinct. Each also
+    differs from its own original, so the mask needs more values than the column has. Replacement still
+    succeeds with a smaller mask, but some replacements repeat. Automatic planning uses this to drop an
+    LLM-proposed mask in favor of an unpatterned replacement with more room.
+
+    Example:
+        Pattern ``"USER-#"`` has 10 values; a column holding the 10 distinct values ``"USER-0"`` through
+        ``"USER-9"`` returns an issue, while a column where values repeat does not.
+    """
+    pattern = spec.pattern
+    if pattern is None or spec.entity_type not in MASK_ALLOCATED_ENTITY_TYPES or spec.column_name not in df.columns:
+        return None
+    values = df[spec.column_name].dropna().astype(str).tolist()
+    if not all_distinct(values):
+        return None
+    if (size := MaskSpace.from_pattern(pattern).size) > len(values):
+        return None
+    return (
+        f"column {spec.column_name!r}: pattern {pattern!r} has {size} possible values, too few to give each of "
+        f"the column's {len(values)} distinct values its own replacement"
+    )
+
+
+def _iter_pattern_issues(df: pd.DataFrame, plan: PiiReplacementPlan, *, check_coverage: bool) -> Iterator[str]:
     for spec in plan.columns_to_replace:
-        if (issue := column_pattern_issue(df, spec)) is not None:
+        if check_coverage:
+            issue = column_pattern_issue(df, spec)
+        else:
+            issue = column_pattern_syntax_issue(spec) if spec.pattern is not None else None
+        if issue is not None:
             yield issue
 
 
@@ -283,12 +234,24 @@ def validate_plan(
     *,
     data_config: DataParameters,
     time_series: TimeSeriesParameters | None = None,
+    check_pattern_coverage: bool = True,
 ) -> None:
     """Validate the selected final plan against the dataframe and data configuration.
 
     This is the resolver's single dataframe-aware validation gate. Pydantic
     model construction and LLM response parsing are separate, context-free
     checks performed at their respective seams.
+
+    Args:
+        df: Data the plan is validated against.
+        plan: Final replacement plan.
+        data_config: Data parameters, used for grouping and protected columns.
+        time_series: Time-series parameters, used for protected columns.
+        check_pattern_coverage: Require each pattern to cover at least 99% of
+            the column's values. Pass ``False`` when ``df`` is a subset of
+            data the plan was already validated against, such as a training
+            split: a subset can fall just below the threshold although the
+            full input met it. Pattern syntax is checked either way.
     """
     issues: list[str] = []
     group_column = data_config.group_training_examples_by
@@ -299,7 +262,7 @@ def validate_plan(
         issues.append(f"group column {group_column!r} is not present in the dataframe")
 
     issues.extend(_iter_reference_issues(df, plan, get_protected_columns(data_config, time_series)))
-    issues.extend(_iter_pattern_issues(df, plan))
+    issues.extend(_iter_pattern_issues(df, plan, check_coverage=check_pattern_coverage))
 
     if issues:
         details = "\n".join(f"  - {issue}" for issue in issues)

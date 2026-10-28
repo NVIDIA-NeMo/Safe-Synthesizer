@@ -476,7 +476,7 @@ class InferenceModelCheck(ConfigCheck):
     def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
         replace_pii = ctx.config.replace_pii
         # An explicit plan skips discovery, so no inference request is made.
-        if replace_pii is None or replace_pii.llm is None or not replace_pii.is_auto_discovery:
+        if replace_pii is None or not replace_pii.is_auto_discovery:
             return
         # Plan discovery resolves its settings the same way.
         try:

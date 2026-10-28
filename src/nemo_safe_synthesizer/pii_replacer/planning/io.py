@@ -1,89 +1,120 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Load and save dataset-specific PII replacement plans."""
+"""Save PII replacement plans and configurations with comments for review."""
 
 from __future__ import annotations
 
+import json
+import re
+import textwrap
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING
 
 import yaml
-from pydantic import ValidationError
 
-from ...config.replace_pii import PiiReplacementPlan
-from ...config.unknown_fields import normalize_unknown_fields
-from ...config.validation import format_pydantic_validation_error
-from ...errors import ParameterError
+if TYPE_CHECKING:
+    from ...config.parameters import SafeSynthesizerParameters
+    from ...config.replace_pii import PiiReplacementPlan, PiiSamplerConfig
 
-__all__ = ["load_plan", "save_plan"]
+__all__ = ["save_config", "save_plan"]
 
-# Unversioned documents are permanently interpreted as v3. A new schema must
-# opt into a new output version without changing how existing documents load.
-_IMPLICIT_PLAN_SCHEMA_VERSION = 3
-_OUTPUT_PLAN_SCHEMA_VERSION = 3
-_SUPPORTED_PLAN_SCHEMA_VERSIONS = frozenset({3})
-
-
-def _plan_body(raw: dict[object, object], plan_path: Path) -> dict[object, object]:
-    """Validate document metadata and return the unversioned runtime plan body."""
-    body = dict(raw)
-    version = body.pop("schema_version", _IMPLICIT_PLAN_SCHEMA_VERSION)
-    if type(version) is not int:
-        raise ParameterError(f"PII replacement plan file {str(plan_path)!r} schema_version must be an integer")
-    if version not in _SUPPORTED_PLAN_SCHEMA_VERSIONS:
-        supported = ", ".join(str(item) for item in sorted(_SUPPORTED_PLAN_SCHEMA_VERSIONS))
-        raise ParameterError(
-            f"PII replacement plan file {str(plan_path)!r} uses unsupported schema version {version}; "
-            f"this NSS release supports version {supported}"
-        )
-    return body
+# Comments written above plan sections, for a person reviewing or editing the plan.
+_PLAN_SECTION_COMMENTS = {
+    "columns_to_replace": (
+        "Columns whose values are replaced. pattern sets the format of the new values, such as pmc-###### "
+        "for an ID or %m/%d/%Y for a date. depends_on makes a new value fit other columns in the same row, "
+        "such as a first name that matches the row's sex, or an email built from the row's new name."
+    ),
+    "data_to_sampler_value_mapping": (
+        "THE NEXT SECTION IS SAFE TO IGNORE unless a run reports an error about it. It translates values in "
+        "depends_on columns, such as Latino in a race column, to values the sampler understands. NSS fills it "
+        "in, and it can get long."
+    ),
+}
+_COMMENT_WIDTH = 100
+_YAML_KEY_LINE = re.compile(r"^(?P<indent> *)(?P<key>[A-Za-z_][A-Za-z0-9_]*):(?: |$)")
 
 
-def load_plan(path: str | Path) -> PiiReplacementPlan:
-    """Load a replacement plan from a standalone YAML file.
+def save_plan(plan: PiiReplacementPlan, path: str | Path, *, sampler: PiiSamplerConfig, locale: str) -> Path:
+    """Save ``replace_pii.replacement_plan`` as a standalone YAML file for review and reuse.
 
-    A plan file contains ``schema_version`` metadata followed by the same fields
-    accepted as an inline ``replace_pii.replacement_plan`` value. A missing
-    version is interpreted as version 3.
+    The file starts with a header naming the sampler and locale the plan was
+    written for, and each section is preceded by a short comment. The header
+    only informs the reader: each run checks the plan against its own
+    ``replace_pii.sampler`` and ``replace_pii.locale``.
 
     Args:
-        path: YAML file containing a replacement-plan mapping.
+        plan: Replacement plan to save.
+        path: Destination YAML file; parent directories are created.
+        sampler: Sampler the plan was written for.
+        locale: Locale the plan was written for.
 
     Returns:
-        The parsed, context-free validated plan.
-
-    Raises:
-        ParameterError: If the file cannot be read, parsed, or validated.
+        The path written.
     """
     plan_path = Path(path)
-    try:
-        raw = yaml.safe_load(plan_path.read_text())
-    except OSError as exc:
-        raise ParameterError(f"Could not read PII replacement plan file {str(plan_path)!r}: {exc}") from exc
-    except yaml.YAMLError as exc:
-        raise ParameterError(f"Invalid YAML in PII replacement plan file {str(plan_path)!r}: {exc}") from exc
+    plan_path.parent.mkdir(parents=True, exist_ok=True)
+    header = (
+        f"# PII replacement plan for this dataset, written for the {sampler.backend.value} sampler in locale "
+        f"{locale}.\n# Review and edit it, then name this file in replace_pii.replacement_plan to reuse it.\n\n"
+    )
+    text = yaml.safe_dump(_plan_document(plan), sort_keys=False)
+    plan_path.write_text(header + _with_key_comments(text, _plan_section_comments(())))
+    return plan_path
 
-    if not isinstance(raw, dict):
-        raise ParameterError(f"PII replacement plan file {str(plan_path)!r} must contain a mapping")
 
-    body = _plan_body(raw, plan_path)
+def save_config(
+    config: SafeSynthesizerParameters,
+    path: str | Path,
+    *,
+    plan_path: str | Path | None = None,
+) -> Path:
+    """Save a complete NSS configuration.
+
+    With ``plan_path`` and an inline plan, ``replace_pii.replacement_plan`` is
+    written to that file by ``save_plan``, and the configuration names it by a
+    path relative to the configuration's directory when the file is inside it,
+    or by its absolute path otherwise, so loading the configuration reads the
+    file back. Otherwise the plan is written inline, and the output matches
+    ``config.to_yaml(path, exclude_unset=False)`` apart from the same plan
+    comments.
+
+    Args:
+        config: Configuration to save.
+        path: Destination YAML file; parent directories are created.
+        plan_path: Separate file for ``replace_pii.replacement_plan``.
+
+    Returns:
+        The path written.
+    """
+    config_path = Path(path)
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    document = json.loads(config.model_dump_json(exclude_unset=False))
+    comments: dict[tuple[str, ...], list[str]] = {}
+    replace_pii = config.replace_pii
+    plan = replace_pii.inline_plan if replace_pii is not None else None
+    if replace_pii is not None and plan is not None and plan_path is not None:
+        written = save_plan(plan, plan_path, sampler=replace_pii.sampler, locale=replace_pii.locale)
+        document["replace_pii"]["replacement_plan"] = _path_from(config_path.parent, written)
+    else:
+        comments = _plan_section_comments(("replace_pii", "replacement_plan"))
+    config_path.write_text(_with_key_comments(yaml.safe_dump(document), comments))
+    return config_path
+
+
+def _path_from(directory: Path, path: Path) -> str:
+    """Return ``path`` relative to ``directory`` when it is inside it, else absolute, in POSIX form."""
+    resolved = path.resolve()
     try:
-        normalized = normalize_unknown_fields(
-            PiiReplacementPlan,
-            cast(dict[str, object], body),
-            "reject",
-        )
-        return PiiReplacementPlan.model_validate(normalized)
-    except ValidationError as exc:
-        details = format_pydantic_validation_error(exc)
-        raise ParameterError(f"Invalid PII replacement plan in {str(plan_path)!r} ({details})") from exc
-    except ParameterError as exc:
-        raise ParameterError(f"Invalid PII replacement plan in {str(plan_path)!r} ({exc})") from exc
+        return resolved.relative_to(directory.resolve()).as_posix()
+    except ValueError:
+        return resolved.as_posix()
 
 
 def _plan_document(plan: PiiReplacementPlan) -> dict[str, object]:
-    """Return canonical sparse YAML data while preserving inferred-type omission."""
+    """Return the plan as YAML data in field order, with sparse column specs that omit inferred types."""
     columns: list[dict[str, object]] = []
     for spec in plan.columns_to_replace:
         serialized_spec: dict[str, object] = {
@@ -102,14 +133,32 @@ def _plan_document(plan: PiiReplacementPlan) -> dict[str, object]:
             serialized_spec["depends_on"] = dependencies
         columns.append(serialized_spec)
     return {
-        "schema_version": _OUTPUT_PLAN_SCHEMA_VERSION,
         "columns_to_replace": columns,
+        "data_to_sampler_value_mapping": plan.data_to_sampler_value_mapping,
     }
 
 
-def save_plan(plan: PiiReplacementPlan, path: str | Path) -> Path:
-    """Save a replacement plan as a versioned reusable standalone YAML document."""
-    plan_path = Path(path)
-    plan_path.parent.mkdir(parents=True, exist_ok=True)
-    plan_path.write_text(yaml.safe_dump(_plan_document(plan), sort_keys=False))
-    return plan_path
+def _plan_section_comments(prefix: tuple[str, ...]) -> dict[tuple[str, ...], list[str]]:
+    """Return the comment for each plan section, keyed by its YAML key path under ``prefix``."""
+    return {(*prefix, name): [comment] for name, comment in _PLAN_SECTION_COMMENTS.items()}
+
+
+def _with_key_comments(text: str, comments: Mapping[tuple[str, ...], Sequence[str]]) -> str:
+    """Insert wrapped ``#`` comments above block-style YAML mapping keys whose path appears in ``comments``.
+
+    Each paragraph is wrapped separately. Paths follow nested mapping keys by indentation; keys inside sequence
+    items never match a path that does not pass through them, so only the intended sections receive comments.
+    """
+    lines: list[str] = []
+    path: list[tuple[int, str]] = []
+    for line in text.splitlines():
+        if match := _YAML_KEY_LINE.match(line):
+            indent = len(match["indent"])
+            while path and path[-1][0] >= indent:
+                path.pop()
+            path.append((indent, match["key"]))
+            width = max(_COMMENT_WIDTH - indent - 2, 40)
+            for paragraph in comments.get(tuple(key for _, key in path), ()):
+                lines.extend(f"{match['indent']}# {part}" for part in textwrap.wrap(paragraph, width))
+        lines.append(line)
+    return "\n".join(lines) + "\n"

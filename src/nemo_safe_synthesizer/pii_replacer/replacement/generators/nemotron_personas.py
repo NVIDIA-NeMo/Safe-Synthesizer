@@ -5,13 +5,38 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar
+from collections.abc import Callable, Mapping
+from itertools import chain
+from pathlib import Path
+from random import Random
+from typing import TYPE_CHECKING, ClassVar, Never
 
-from ....config.replace_pii import PiiReplacementSettings, PiiSamplerBackend, PiiSamplerConfig
-from ....errors import InternalError
+import numpy as np
+import pandas as pd
+
+from ....config.replace_pii import EntityType, PiiSamplerBackend, PiiSamplerConfig
+from ....errors import InternalError, ParameterError
+from ....observability import get_logger
+from ...sampler_catalog import (
+    PERSONA_DEPENDENCY_COLUMN_ALIASES,
+    available_parquet_columns,
+    gender_sampler_value,
+    require_nemotron_personas_dataset,
+)
+from ._common import (
+    NAME_ENTITY_TYPES,
+    dependency_values,
+    name_values,
+    render_name,
+    required_pattern_values,
+    resolve_dependency_values,
+)
+from .faker import FakerReplacementGenerator
 
 if TYPE_CHECKING:
     from ..generation import ReplacementGenerationRequest
+
+logger = get_logger(__name__)
 
 __all__ = ["NemotronPersonasReplacementGenerator"]
 
@@ -20,23 +45,314 @@ class NemotronPersonasReplacementGenerator:
     """Generate structured replacements using Nemotron-Personas assets.
 
     Args:
-        settings: Locale and seed configuration shared by replacement
-            generators.
-        sampler: Nemotron-Personas sampler configuration, including its asset path.
+        sampler: Sampler configuration; its backend must be Nemotron-Personas, and its
+            asset path locates the locale's dataset.
+        locale: Locale of the Nemotron-Personas dataset and of the Faker fallback.
 
-    Replacement execution is introduced by a follow-up change.
     """
 
     backend: ClassVar[PiiSamplerBackend] = PiiSamplerBackend.NEMOTRON_PERSONAS
 
-    def __init__(self, *, settings: PiiReplacementSettings, sampler: PiiSamplerConfig) -> None:
-        if sampler.backend is not self.backend:
+    def __init__(self, *, sampler: PiiSamplerConfig, locale: str) -> None:
+        backend = sampler.backend
+        if backend is not self.backend:
             raise InternalError(
-                f"{type(self).__name__} requires the {self.backend.value} sampler backend, got {sampler.backend.value}"
+                f"{type(self).__name__} requires the {self.backend.value} sampler backend, got {backend.value}"
             )
-        self._settings = settings
-        self._sampler = sampler
+        self._locale = locale
+        self._dataset_path = require_nemotron_personas_dataset(sampler, locale)
+        faker_sampler = sampler.model_copy(update={"backend": PiiSamplerBackend.FAKER})
+        self._fallback_generator = FakerReplacementGenerator(sampler=faker_sampler, locale=locale)
+        self._personas: pd.DataFrame | None = None
+        self._persona_value_columns: dict[str, str] = {}
+        self._candidate_indexes: dict[EntityType, dict[str, np.ndarray]] = {}
+        self._candidate_position_cache: dict[
+            tuple[tuple[EntityType, tuple[str, ...]], ...],
+            np.ndarray,
+        ] = {}
+        self._warned_fallbacks: set[EntityType] = set()
 
     def generate(self, request: ReplacementGenerationRequest) -> str:
         """Generate a Nemotron-Personas replacement for ``request``."""
-        raise NotImplementedError("Nemotron-Personas replacement generation is not implemented")
+        if request.entity_type not in _PERSONA_ENTITY_TYPES:
+            return self._fallback_generator.generate(request)
+
+        persona_values = self._persona_values(request)
+        replacement = None if persona_values is None else _generate_persona_value(request, persona_values)
+        if replacement is not None:
+            # The executor rejects unchanged values and retries this generator
+            # with a new seed, producing another Nemotron-Personas sample.
+            return replacement
+        self._warn_fallback(request.entity_type)
+        return self._fallback_generator.generate(request)
+
+    def _persona_values(self, request: ReplacementGenerationRequest) -> dict[str, str] | None:
+        people = self._load_personas()
+        if people.empty:
+            return None
+
+        candidate_positions = self._candidate_positions(request)
+        if candidate_positions is None:
+            row_position = request.seed % len(people)
+        else:
+            row_position = int(candidate_positions[request.seed % len(candidate_positions)])
+        return _persona_row_values(people, row_position, self._persona_value_columns)
+
+    def _candidate_positions(self, request: ReplacementGenerationRequest) -> np.ndarray | None:
+        dependencies = dependency_values(request.effective_dependency_tuple)
+        resolved: list[tuple[EntityType, tuple[str, ...]]] = []
+        for entity_type in PERSONA_DEPENDENCY_COLUMN_ALIASES:
+            dependency_value = dependencies.get(entity_type)
+            if dependency_value is None:
+                continue
+            sampler_values = resolve_dependency_values(
+                request,
+                entity_type,
+                dependency_value,
+            )
+            if entity_type is EntityType.GENDER:
+                # Gender rows are indexed by female and male; see _build_candidate_indexes.
+                sampler_values = tuple(dict.fromkeys(gender_sampler_value(value) for value in sampler_values))
+            resolved.append((entity_type, sampler_values))
+
+        if not resolved:
+            return None
+        cache_key = tuple(resolved)
+        cached = self._candidate_position_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        candidates: np.ndarray | None = None
+        for entity_type, sampler_values in resolved:
+            value_index = self._candidate_indexes.get(entity_type)
+            if value_index is None:
+                _raise_missing_persona_column(entity_type, self._locale)
+            matching = _matching_positions(value_index, sampler_values)
+            if matching is None:
+                _raise_no_persona_candidates(entity_type)
+            candidates = matching if candidates is None else np.intersect1d(candidates, matching, assume_unique=True)
+            if not len(candidates):
+                _raise_no_persona_candidates(entity_type)
+        if candidates is None:
+            return None
+        self._candidate_position_cache[cache_key] = candidates
+        return candidates
+
+    def _load_personas(self) -> pd.DataFrame:
+        if self._personas is not None:
+            return self._personas
+        try:
+            people = _read_personas(self._dataset_path)
+        except Exception as exc:
+            raise ParameterError(f"Nemotron-Personas data at {self._dataset_path} could not be read") from exc
+        self._candidate_indexes, dependency_columns = _build_candidate_indexes(people)
+        personas = people.drop(columns=dependency_columns)
+        self._persona_value_columns = _persona_value_columns(personas)
+        self._personas = personas
+        return personas
+
+    def _warn_fallback(self, entity_type: EntityType) -> None:
+        if entity_type in self._warned_fallbacks:
+            return
+        self._warned_fallbacks.add(entity_type)
+        logger.user.warning(
+            "Some replacements of this entity type used Faker because the Nemotron-Personas data for this locale "
+            "has no value for them, for example street addresses outside en_US or an empty middle name",
+            extra={"entity_type": entity_type.value, "locale": self._locale},
+        )
+
+
+# Nemotron-Personas datasets have no email or phone column, so those entity types always use Faker.
+_PERSONA_ENTITY_TYPES = NAME_ENTITY_TYPES | {EntityType.STREET_ADDRESS}
+# Value keys and the persona columns they come from. Every locale names these columns the same way; only
+# en_US has street columns, so other locales fall back to Faker for street addresses.
+_PERSONA_VALUE_COLUMNS: Mapping[str, str] = {
+    "first": "first_name",
+    "middle": "middle_name",
+    "last": "last_name",
+    "street_number": "street_number",
+    "street_name": "street_name",
+}
+_PERSONA_READ_COLUMNS = tuple(
+    dict.fromkeys(
+        chain(_PERSONA_VALUE_COLUMNS.values(), chain.from_iterable(PERSONA_DEPENDENCY_COLUMN_ALIASES.values()))
+    )
+)
+
+
+def _read_personas(path: Path) -> pd.DataFrame:
+    available_columns = available_parquet_columns(path)
+    columns = [column for column in _PERSONA_READ_COLUMNS if column in available_columns]
+    return pd.read_parquet(path, columns=columns, dtype_backend="pyarrow")
+
+
+def _build_candidate_indexes(
+    people: pd.DataFrame,
+) -> tuple[dict[EntityType, dict[str, np.ndarray]], frozenset[str]]:
+    indexes: dict[EntityType, dict[str, np.ndarray]] = {}
+    dependency_columns: set[str] = set()
+    for entity_type, aliases in PERSONA_DEPENDENCY_COLUMN_ALIASES.items():
+        column = _first_existing_column(people, aliases)
+        if column is None:
+            continue
+        dependency_columns.add(column)
+        index = _build_value_index(people[column])
+        # Index each locale's own sex words, such as femme in fr_FR, under female and male.
+        indexes[entity_type] = (
+            _merged_value_index(index, gender_sampler_value) if entity_type is EntityType.GENDER else index
+        )
+    return indexes, frozenset(dependency_columns)
+
+
+def _merged_value_index(index: Mapping[str, np.ndarray], key: Callable[[str], str]) -> dict[str, np.ndarray]:
+    """Return ``index`` with the row positions of values that share ``key(value)`` combined, in row order."""
+    grouped: dict[str, list[np.ndarray]] = {}
+    for value, positions in index.items():
+        grouped.setdefault(key(value), []).append(positions)
+    return {
+        value: positions[0] if len(positions) == 1 else np.sort(np.concatenate(positions))
+        for value, positions in grouped.items()
+    }
+
+
+def _build_value_index(values: pd.Series) -> dict[str, np.ndarray]:
+    if isinstance(values.dtype, pd.ArrowDtype):
+        return _build_arrow_value_index(values)
+
+    # Preserve compatibility with tests and alternate parquet engines that
+    # return ordinary pandas dtypes instead of Arrow-backed columns.
+    normalized = values.astype("string").str.casefold()
+    return {
+        str(sampler_value): np.asarray(positions, dtype=np.int64)
+        for sampler_value, positions in normalized.groupby(normalized, sort=False, dropna=True).indices.items()
+    }
+
+
+def _build_arrow_value_index(values: pd.Series) -> dict[str, np.ndarray]:
+    import pyarrow as pa
+    import pyarrow.compute as pc
+
+    arrow_values = pa.array(values)
+    if isinstance(arrow_values, pa.ChunkedArray):
+        arrow_values = arrow_values.combine_chunks()
+    encoded = arrow_values.dictionary_encode()
+    codes = pc.fill_null(encoded.indices, -1).to_numpy(zero_copy_only=False)
+    if not len(codes):
+        return {}
+
+    # Sort integer dictionary codes once instead of materializing and grouping
+    # one Python string per Nemotron-Personas row. Stable sorting keeps each value's row
+    # positions in their original order, preserving deterministic sampling.
+    order = np.argsort(codes, kind="stable")
+    sorted_codes = codes[order]
+    starts = np.concatenate(([0], np.flatnonzero(sorted_codes[1:] != sorted_codes[:-1]) + 1))
+    stops = np.concatenate((starts[1:], [len(codes)]))
+    dictionary = encoded.dictionary.to_pylist()
+    grouped: dict[str, list[np.ndarray]] = {}
+    for start, stop in zip(starts, stops, strict=True):
+        code = int(sorted_codes[start])
+        if code < 0:
+            continue
+        sampler_value = str(dictionary[code]).casefold()
+        grouped.setdefault(sampler_value, []).append(order[start:stop])
+
+    return {
+        sampler_value: positions[0] if len(positions) == 1 else np.sort(np.concatenate(positions))
+        for sampler_value, positions in grouped.items()
+    }
+
+
+def _matching_positions(
+    value_index: Mapping[str, np.ndarray] | None,
+    sampler_values: tuple[str, ...],
+) -> np.ndarray | None:
+    if value_index is None:
+        return None
+    matches = [value_index[sampler_value] for sampler_value in sampler_values if sampler_value in value_index]
+    if not matches:
+        return None
+    if len(matches) == 1:
+        return matches[0]
+    return np.sort(np.concatenate(matches))
+
+
+def _raise_missing_persona_column(entity_type: EntityType, locale: str) -> Never:
+    columns = ", ".join(repr(column) for column in PERSONA_DEPENDENCY_COLUMN_ALIASES[entity_type])
+    raise ParameterError(
+        f"the replacement plan conditions on {entity_type.value!r}, but the Nemotron-Personas data for locale "
+        f"{locale!r} has no column for it (looked for {columns}); remove that dependency from the plan or use "
+        "a Nemotron-Personas dataset that includes it"
+    )
+
+
+def _raise_no_persona_candidates(entity_type: EntityType) -> Never:
+    raise ParameterError(
+        "Nemotron-Personas sampling found no candidates after applying dependency "
+        f"entity type {entity_type.value!r} (candidate_count=0)"
+    )
+
+
+def _first_existing_column(dataframe: pd.DataFrame, aliases: tuple[str, ...]) -> str | None:
+    return next((column for column in aliases if column in dataframe.columns), None)
+
+
+def _persona_value_columns(dataframe: pd.DataFrame) -> dict[str, str]:
+    return {key: column for key, column in _PERSONA_VALUE_COLUMNS.items() if column in dataframe.columns}
+
+
+def _persona_row_values(
+    dataframe: pd.DataFrame,
+    row_position: int,
+    columns: Mapping[str, str],
+) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for key, column in columns.items():
+        value = dataframe[column].iat[row_position]
+        if pd.isna(value):
+            continue
+        values[key] = str(value)
+    return values
+
+
+def _generate_persona_value(
+    request: ReplacementGenerationRequest,
+    sampled: Mapping[str, str],
+) -> str | None:
+    dependencies = dependency_values(request.effective_dependency_tuple)
+    entity_type = request.entity_type
+    rng = Random(request.seed)
+
+    if entity_type in NAME_ENTITY_TYPES:
+        values = name_values(dependencies, sampled)
+        required = (
+            required_pattern_values(entity_type, request.pattern)
+            if request.pattern is not None
+            else _required_name_values(entity_type)
+        )
+        if not _has_values(values, required):
+            return None
+        return render_name(entity_type, request.pattern, rng, values)
+    if entity_type is EntityType.STREET_ADDRESS:
+        street = _persona_street_components(sampled)
+        return street or None
+    return None
+
+
+def _required_name_values(entity_type: EntityType) -> frozenset[str]:
+    if entity_type is EntityType.FULL_NAME:
+        return frozenset({"first", "last"})
+    key = {
+        EntityType.FIRST_NAME: "first",
+        EntityType.MIDDLE_NAME: "middle",
+        EntityType.LAST_NAME: "last",
+    }[entity_type]
+    return frozenset({key})
+
+
+def _has_values(values: Mapping[str, str], required: frozenset[str]) -> bool:
+    return all(values.get(key) for key in required)
+
+
+def _persona_street_components(values: Mapping[str, str]) -> str:
+    parts = [values.get("street_number", ""), values.get("street_name", "")]
+    return " ".join(part for part in parts if part)

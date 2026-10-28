@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from .io import load_plan, save_plan
+from .io import save_config, save_plan
 from .llm import LLMPlanEnhancer
 from .patterns import pattern_grammar_catalog
 from .plan_builder import (
@@ -22,6 +22,7 @@ from .resolver import (
     PlanDiscoveryInput,
     PlanEnhancer,
     resolve_plan,
+    resolve_replacement_config,
 )
 from .validation import get_protected_columns, validate_plan
 
@@ -36,11 +37,12 @@ __all__ = [
     "PlanEnhancer",
     "apply_dependencies",
     "derive_dependency_candidates",
-    "load_plan",
     "pattern_grammar_catalog",
     "plan_from_classifications",
     "get_protected_columns",
     "resolve_plan",
+    "resolve_replacement_config",
+    "save_config",
     "save_plan",
     "validate_plan",
 ]

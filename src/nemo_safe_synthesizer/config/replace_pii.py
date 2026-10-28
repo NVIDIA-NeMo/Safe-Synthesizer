@@ -20,21 +20,23 @@ from enum import Enum, StrEnum, auto
 from pathlib import Path
 from typing import Annotated, ClassVar, Literal, Self, cast
 
+import yaml
 from pydantic import (
     Field,
     SerializerFunctionWrapHandler,
     SkipValidation,
     ValidationError,
+    ValidationInfo,
     field_validator,
     model_serializer,
     model_validator,
 )
 
-from ..configurator.parameters import Parameters
+from ..configurator.parameters import CONFIG_DIR_CONTEXT_KEY, Parameters
 from ..defaults import DEFAULT_NSS_INFERENCE_LOCAL_MODEL, NSS_NEMOTRON_PERSONAS_PATH_ENV, default_nemotron_personas_path
 from ..errors import ParameterError
 from .base import NSSBaseModel
-from .unknown_fields import raise_if_removed_legacy_fields
+from .unknown_fields import normalize_unknown_fields, raise_if_removed_legacy_fields
 from .validation import format_pydantic_validation_error
 
 __all__ = [
@@ -57,7 +59,6 @@ __all__ = [
     "PatternSyntax",
     "PiiColumnPlan",
     "PiiReplacementPlan",
-    "PiiReplacementSettings",
     "PiiSamplerBackend",
     "PiiSamplerConfig",
     "ReplacePiiConfig",
@@ -177,6 +178,9 @@ class Entity:
     target supplies its post-replacement value.
     """
 
+    description: str
+    """Short, general definition shown to the LLM classifier, so it can tell this entity from similar-looking data."""
+
     pattern_syntax: PatternSyntax | None = None
     """Notation ``pattern`` uses, or ``None`` when this entity allows no pattern."""
 
@@ -187,24 +191,28 @@ ENTITIES: tuple[Entity, ...] = (
         EntityType.FIRST_NAME,
         action=EntityAction.REPLACE,
         can_condition=True,
+        description="A person's given name.",
         pattern_syntax=PatternSyntax.NAME_PARTS,
     ),
     Entity(
         EntityType.MIDDLE_NAME,
         action=EntityAction.REPLACE,
         can_condition=True,
+        description="A person's middle name or middle initial.",
         pattern_syntax=PatternSyntax.NAME_PARTS,
     ),
     Entity(
         EntityType.LAST_NAME,
         action=EntityAction.REPLACE,
         can_condition=True,
+        description="A person's family name or surname.",
         pattern_syntax=PatternSyntax.NAME_PARTS,
     ),
     Entity(
         EntityType.FULL_NAME,
         action=EntityAction.REPLACE,
         can_condition=True,
+        description="A person's full name.",
         pattern_syntax=PatternSyntax.NAME_PARTS,
     ),
     # Replace only.
@@ -212,55 +220,108 @@ ENTITIES: tuple[Entity, ...] = (
         EntityType.EMAIL,
         action=EntityAction.REPLACE,
         can_condition=False,
+        description="An email address.",
         pattern_syntax=PatternSyntax.NAME_PARTS,
     ),
     Entity(
         EntityType.PHONE_NUMBER,
         action=EntityAction.REPLACE,
         can_condition=False,
+        description="A telephone or fax number.",
         pattern_syntax=PatternSyntax.CHARACTER_MASK,
     ),
     Entity(
         EntityType.DATE_OF_BIRTH,
         action=EntityAction.REPLACE,
         can_condition=False,
+        description="A person's date of birth, written as a full or partial calendar date.",
         pattern_syntax=PatternSyntax.STRFTIME,
     ),
-    Entity(EntityType.STREET_ADDRESS, action=EntityAction.REPLACE, can_condition=False),
-    Entity(EntityType.SSN, action=EntityAction.REPLACE, can_condition=False),
-    Entity(EntityType.NATIONAL_ID, action=EntityAction.REPLACE, can_condition=False),
+    Entity(
+        EntityType.STREET_ADDRESS,
+        action=EntityAction.REPLACE,
+        can_condition=False,
+        description="A street address, possibly including city, state, or postal code.",
+    ),
+    Entity(
+        EntityType.SSN, action=EntityAction.REPLACE, can_condition=False, description="A US Social Security number."
+    ),
+    Entity(
+        EntityType.NATIONAL_ID,
+        action=EntityAction.REPLACE,
+        can_condition=False,
+        description="A government-issued personal identification number other than a US Social Security number.",
+    ),
     Entity(
         EntityType.CREDIT_DEBIT_CARD,
         action=EntityAction.REPLACE,
         can_condition=False,
+        description="A payment card number.",
         pattern_syntax=PatternSyntax.CHARACTER_MASK,
     ),
     Entity(
         EntityType.API_KEY,
         action=EntityAction.REPLACE,
         can_condition=False,
+        description="A secret access credential, such as an API key or access token.",
         pattern_syntax=PatternSyntax.CHARACTER_MASK,
     ),
-    Entity(EntityType.IPV4, action=EntityAction.REPLACE, can_condition=False),
-    Entity(EntityType.IPV6, action=EntityAction.REPLACE, can_condition=False),
+    Entity(EntityType.IPV4, action=EntityAction.REPLACE, can_condition=False, description="An IPv4 address."),
+    Entity(EntityType.IPV6, action=EntityAction.REPLACE, can_condition=False, description="An IPv6 address."),
     Entity(
         EntityType.UNIQUE_IDENTIFIER,
         action=EntityAction.REPLACE,
         can_condition=False,
+        description=(
+            "An identifier that refers to a specific person or their records. "
+            "Identifiers of products, places, or events, and row numbers, are not this type."
+        ),
         pattern_syntax=PatternSyntax.CHARACTER_MASK,
     ),
     # Rewrite spans inside cell text (username/url use this too).
-    Entity(EntityType.FREE_TEXT, action=EntityAction.REPLACE_IN_TEXT, can_condition=False),
+    Entity(
+        EntityType.FREE_TEXT,
+        action=EntityAction.REPLACE_IN_TEXT,
+        can_condition=False,
+        description="Free-form text, such as notes or comments, that may mention personal details.",
+    ),
     # Identify-only.
-    Entity(EntityType.DATE, action=EntityAction.IDENTIFY_ONLY, can_condition=False),
+    Entity(
+        EntityType.DATE,
+        action=EntityAction.IDENTIFY_ONLY,
+        can_condition=False,
+        description="A date other than a date of birth.",
+    ),
     # Identify-only and may condition replacements.
-    Entity(EntityType.GENDER, action=EntityAction.IDENTIFY_ONLY, can_condition=True),
-    Entity(EntityType.ETHNIC_BACKGROUND, action=EntityAction.IDENTIFY_ONLY, can_condition=True),
-    Entity(EntityType.CITY, action=EntityAction.IDENTIFY_ONLY, can_condition=True),
-    Entity(EntityType.STATE, action=EntityAction.IDENTIFY_ONLY, can_condition=True),
-    Entity(EntityType.ZIPCODE, action=EntityAction.IDENTIFY_ONLY, can_condition=True),
-    Entity(EntityType.COUNTRY, action=EntityAction.IDENTIFY_ONLY, can_condition=True),
-    Entity(EntityType.ORGANIZATION, action=EntityAction.IDENTIFY_ONLY, can_condition=True),
+    Entity(
+        EntityType.GENDER,
+        action=EntityAction.IDENTIFY_ONLY,
+        can_condition=True,
+        description="A person's gender or sex.",
+    ),
+    Entity(
+        EntityType.ETHNIC_BACKGROUND,
+        action=EntityAction.IDENTIFY_ONLY,
+        can_condition=True,
+        description="A person's race or ethnicity.",
+    ),
+    Entity(EntityType.CITY, action=EntityAction.IDENTIFY_ONLY, can_condition=False, description="A city or town."),
+    Entity(
+        EntityType.STATE,
+        action=EntityAction.IDENTIFY_ONLY,
+        can_condition=False,
+        description="A state, province, or region.",
+    ),
+    Entity(
+        EntityType.ZIPCODE, action=EntityAction.IDENTIFY_ONLY, can_condition=False, description="A postal or ZIP code."
+    ),
+    Entity(EntityType.COUNTRY, action=EntityAction.IDENTIFY_ONLY, can_condition=False, description="A country."),
+    Entity(
+        EntityType.ORGANIZATION,
+        action=EntityAction.IDENTIFY_ONLY,
+        can_condition=True,
+        description="The name of a company, institution, or other organization.",
+    ),
 )
 
 ENTITY_BY_TYPE: dict[EntityType, Entity] = {entity.entity_type: entity for entity in ENTITIES}
@@ -321,7 +382,6 @@ ALLOWED_DEPENDS_ON: dict[EntityType, frozenset[EntityType]] = {
             EntityType.ORGANIZATION,
         }
     ),
-    EntityType.STREET_ADDRESS: frozenset({EntityType.CITY, EntityType.STATE, EntityType.ZIPCODE, EntityType.COUNTRY}),
 }
 
 # Each inner tuple is one exclusivity family: at most one group from that family
@@ -335,10 +395,6 @@ EXCLUSIVE_DEPENDS_ON_GROUPS: tuple[tuple[frozenset[EntityType], ...], ...] = (
     (
         frozenset({EntityType.FULL_NAME}),
         frozenset({EntityType.GENDER, EntityType.ETHNIC_BACKGROUND}),
-    ),
-    (
-        frozenset({EntityType.ZIPCODE}),
-        frozenset({EntityType.CITY, EntityType.STATE, EntityType.COUNTRY}),
     ),
 )
 
@@ -480,13 +536,47 @@ class PiiColumnPlan(NSSBaseModel):
         return self
 
 
-class PiiReplacementPlan(Parameters):
-    """Dataset-specific detection/replacement plan (column-oriented).
+class PiiSamplerBackend(StrEnum):
+    """Source of synthetic values for names and related person-like fields."""
 
-    Flat ``columns_to_replace`` list with adjacent data-to-sampler value mappings;
-    cross-column relationships are expressed via ``depends_on`` edges (a DAG).
-    Context-free dependency and graph checks are enforced here; plan-vs-dataframe checks live in
-    ``pii_replacer.planning.validation``.
+    NEMOTRON_PERSONAS = "nemotron-personas"
+    """Draw from downloaded Nemotron-Personas locale assets."""
+
+    FAKER = "faker"
+    """Draw from the Faker library; ignores ``ethnic_background`` conditioners."""
+
+
+class PiiSamplerConfig(NSSBaseModel):
+    """Settings for Nemotron-Personas or Faker-backed person sampling."""
+
+    backend: PiiSamplerBackend = Field(
+        default=PiiSamplerBackend.NEMOTRON_PERSONAS,
+        description="Person sampler backend: downloaded Nemotron-Personas assets or Faker.",
+    )
+    nemotron_personas_path: str | None = Field(
+        default=None,
+        description=(
+            "Root directory containing downloaded Nemotron-Personas files as datasets/{locale}.parquet. "
+            f"Defaults to {NSS_NEMOTRON_PERSONAS_PATH_ENV} or ~/.data-designer/managed-assets."
+        ),
+    )
+
+    def resolved_nemotron_personas_path(self) -> Path:
+        """Return ``nemotron_personas_path`` if set, else the environment or built-in default."""
+        if self.nemotron_personas_path is not None:
+            return Path(self.nemotron_personas_path)
+        return default_nemotron_personas_path()
+
+
+class PiiReplacementPlan(Parameters):
+    """Dataset-specific replacement plan: the part of ``replace_pii`` a person reviews.
+
+    ``data_to_sampler_value_mapping`` targets the values of ``replace_pii.sampler``
+    in ``replace_pii.locale``, so a plan is checked against the sampler of each
+    run that uses it. ``columns_to_replace`` is a flat list whose
+    cross-column relationships are ``depends_on`` edges (a DAG). Context-free
+    dependency and graph checks are enforced here; plan-vs-dataframe checks
+    live in ``pii_replacer.planning.validation``.
     """
 
     columns_to_replace: list[PiiColumnPlan] = Field(
@@ -496,13 +586,15 @@ class PiiReplacementPlan(Parameters):
     data_to_sampler_value_mapping: DataToSamplerValueMapping = Field(
         default_factory=dict,
         description=(
-            "Maps dataset values in depends_on columns to the values used by the person sampler "
-            "(replace_pii.sampler). Unlike most NSS settings, all matching here ignores case: dataset values, "
-            "mapping keys, and sampler values, so Female, female, and FEMALE are the same value. For example, "
-            "{sex: {Woman: [female], Non-binary: [female, male]}} makes rows where sex is Woman sample a female "
-            "persona and rows where sex is Non-binary sample either. A dataset value without an entry is looked "
-            "up in the sampler as is; a value that has no entry and matches no sampler value is an error. "
-            "When replace_pii.replacement_plan is 'auto_discovery', NSS generates this mapping for you."
+            "Maps dataset values in depends_on columns to the values used by replace_pii.sampler. Unlike most "
+            "NSS settings, all matching here ignores case: dataset values, mapping keys, and sampler values, so "
+            "Female, female, and FEMALE are the same value. For example, {sex: {Woman: [female], Non-binary: "
+            "[female, male]}} makes rows where sex is Woman sample a female persona and rows where sex is "
+            "Non-binary sample either. Gender values are female and male for every sampler; Nemotron-Personas "
+            "also accepts its locale's own words, such as femme in fr_FR. Ethnicity values need "
+            "Nemotron-Personas in a locale with ethnicity data. A dataset value without an entry is looked up in "
+            "the sampler as is; a value that has no entry and matches no sampler value is an error. When "
+            "replace_pii.replacement_plan is 'auto_discovery', NSS generates this mapping for you."
         ),
     )
 
@@ -692,8 +784,8 @@ class PiiReplacementPlan(Parameters):
 class LLMConfig(NSSBaseModel):
     """Inference behavior for LLM-assisted PII plan discovery.
 
-    LLM behavior is disabled when ``ReplacePiiConfig.llm`` is ``None``. Without
-    an endpoint, NSS runs the model in a managed local vLLM server. An
+    Automatic discovery always uses the LLM. Without an endpoint, NSS runs the
+    model in a managed local vLLM server. An
     OpenAI-compatible endpoint is supplied at runtime through
     ``NSS_INFERENCE_ENDPOINT`` or ``--inference-endpoint-url`` rather than persisted
     in NSS configuration.
@@ -778,63 +870,49 @@ class FreeTextDetectionConfig(NSSBaseModel):
         return self
 
 
-class PiiReplacementSettings(NSSBaseModel):
-    """Apply-time replacement basics."""
-
-    locale: str = Field(
-        default="en_US",
-        description="Locale for generated names, addresses, and phone numbers.",
-    )
-    seed: int | None = Field(
-        default=None,
-        description="Seed for synthetic value generation; when unset the sampler will fall back to PERSON_RANDOM_SEED or 42.",
-    )
-
-
-class PiiSamplerBackend(StrEnum):
-    """Source of synthetic values for names and related person-like fields."""
-
-    NEMOTRON_PERSONAS = "nemotron-personas"
-    """Draw from downloaded Nemotron-Personas locale assets."""
-
-    FAKER = "faker"
-    """Draw from the Faker library; ignores ``ethnic_background`` conditioners."""
+def _load_plan_file(path: Path) -> dict[str, object]:
+    """Return the mapping in a replacement plan file, rejecting fields the plan does not have."""
+    try:
+        raw = yaml.safe_load(path.read_text())
+    except OSError as exc:
+        raise ParameterError(
+            f"replace_pii.replacement_plan is not {AUTO_DISCOVERY!r} or an inline plan, and the plan file "
+            f"{str(path)!r} could not be read: {exc}"
+        ) from exc
+    except yaml.YAMLError as exc:
+        raise ParameterError(f"Invalid YAML in the PII replacement plan file {str(path)!r}: {exc}") from exc
+    if not isinstance(raw, Mapping):
+        raise ParameterError(f"The PII replacement plan file {str(path)!r} must contain a mapping")
+    _reject_plan_sampler(cast(Mapping[str, object], raw), f"The PII replacement plan file {str(path)!r}")
+    try:
+        plan = normalize_unknown_fields(PiiReplacementPlan, cast(Mapping[str, object], raw), "reject")
+    except ParameterError as exc:
+        raise ParameterError(f"Invalid PII replacement plan file {str(path)!r}: {exc}") from exc
+    return plan
 
 
-class PiiSamplerConfig(NSSBaseModel):
-    """Settings for Nemotron-Personas or Faker-backed person sampling."""
-
-    backend: PiiSamplerBackend = Field(
-        default=PiiSamplerBackend.NEMOTRON_PERSONAS,
-        description="Person sampler backend: downloaded Nemotron-Personas assets or Faker.",
-    )
-    nemotron_personas_path: str | None = Field(
-        default=None,
-        description=(
-            "Root directory containing downloaded Nemotron-Personas files as datasets/{locale}.parquet. "
-            f"Defaults to {NSS_NEMOTRON_PERSONAS_PATH_ENV} or ~/.data-designer/managed-assets."
-        ),
-    )
-
-    def resolved_nemotron_personas_path(self) -> Path:
-        """Return ``nemotron_personas_path`` if set, else the environment or built-in default."""
-        if self.nemotron_personas_path is not None:
-            return Path(self.nemotron_personas_path)
-        return default_nemotron_personas_path()
+def _reject_plan_sampler(plan: Mapping[str, object], source: str) -> None:
+    """Reject a plan that still sets ``sampler``, which now belongs to ``replace_pii``."""
+    if "sampler" in plan:
+        raise ParameterError(
+            f"{source} sets sampler, which is now set in replace_pii.sampler, next to replace_pii.locale; move it there"
+        )
 
 
 class ReplacePiiConfig(Parameters):
-    """Top-level ``replace_pii`` config wrapping the replacement plan.
+    """Top-level ``replace_pii`` config.
 
-    ``replacement_plan`` accepts three forms:
+    ``replacement_plan`` holds what a person reviews: the columns to replace
+    and the value mapping. It is ``"auto_discovery"`` (the default), an inline
+    plan, or the path of a YAML plan file, resolved relative to the
+    configuration file that names it. ``locale``, ``seed``, and ``sampler``
+    configure generation; a plan's value mapping is checked against the
+    ``sampler`` and ``locale`` of each run. ``llm`` and ``free_text_detection``
+    configure how NSS finds PII.
 
-    * ``"auto_discovery"`` (default) detects and plans replacements automatically;
-    * an inline ``PiiReplacementPlan`` mapping in the main NSS config; or
-    * a string path to a separate plan YAML containing that same mapping.
-
-    ``llm=None`` leaves auto-discovery at the heuristic baseline. Supplying an
-    ``llm`` mapping enables LLM enhancement after heuristic discovery. An
-    inline plan or plan file bypasses discovery, so it does not require an LLM.
+    Auto-discovery classifies columns with the LLM configured by ``llm``, which
+    defaults to the NSS inference defaults. An inline plan bypasses discovery,
+    so it makes no LLM request; that is the way to replace PII without an LLM.
     The API key remains a runtime secret supplied through ``NSS_INFERENCE_KEY``
     or the corresponding CLI option; it is never stored in this model.
 
@@ -856,34 +934,46 @@ class ReplacePiiConfig(Parameters):
             "this release accepts only version 3."
         ),
     )
+    locale: str = Field(
+        default="en_US",
+        description=(
+            "Locale for generated names, addresses, and phone numbers, and of the Nemotron-Personas dataset "
+            "(datasets/{locale}.parquet)."
+        ),
+    )
+    seed: int | None = Field(
+        default=None,
+        description=(
+            "Seed for synthetic value generation; when unset the sampler will fall back to PERSON_RANDOM_SEED or 42."
+        ),
+    )
+    sampler: PiiSamplerConfig = Field(
+        default_factory=PiiSamplerConfig,
+        description=(
+            "Sampler that generates names and addresses: Nemotron-Personas or Faker. When sampler is not set, "
+            "NSS uses Nemotron-Personas, or Faker with a warning when the Nemotron-Personas data for locale is "
+            "missing and the plan maps no ethnicity values. A relative nemotron_personas_path is resolved "
+            "against the directory of the configuration file."
+        ),
+    )
     replacement_plan: SkipValidation[PiiReplacementPlan] | str = Field(
         default=AUTO_DISCOVERY,
         description=(
-            f"{AUTO_DISCOVERY!r} to discover the plan from the data, an inline plan "
-            "mapping in the main NSS config, or a path to a separate plan YAML. "
-            "Other strings are treated as paths. The CLI option only accepts the "
-            "sentinel or a path."
+            f"{AUTO_DISCOVERY!r} to discover the plan from the data; an inline plan; or the path of a YAML "
+            "plan file. A relative path is resolved against the directory of the configuration file."
         ),
     )
-    llm: LLMConfig | None = Field(
-        default=None,
+    llm: LLMConfig = Field(
+        default_factory=LLMConfig,
         description=(
-            "Optional inference behavior for LLM-assisted plan discovery. "
+            "Inference behavior for LLM-assisted plan discovery; the defaults run a local vLLM server. "
             "The endpoint is configured at runtime through NSS_INFERENCE_ENDPOINT or --inference-endpoint-url. "
-            "Use an empty mapping to enable NSS inference defaults."
+            "An inline plan makes no LLM request."
         ),
     )
     free_text_detection: FreeTextDetectionConfig = Field(
         default_factory=FreeTextDetectionConfig,
         description="GLiNER2 and deterministic built-in regex settings for detecting PII spans in free-text columns.",
-    )
-    replacement: PiiReplacementSettings = Field(
-        default_factory=PiiReplacementSettings,
-        description="Locale and seed for synthetic value generation.",
-    )
-    sampler: PiiSamplerConfig = Field(
-        default_factory=PiiSamplerConfig,
-        description="Synthetic value sampler backend and asset paths.",
     )
 
     @model_validator(mode="before")
@@ -917,30 +1007,67 @@ class ReplacePiiConfig(Parameters):
         serialized["schema_version"] = self.schema_version
         return serialized
 
+    @field_validator("llm", mode="before")
+    @classmethod
+    def _reject_null_llm(cls, value: object) -> object:
+        if value is None:
+            raise ParameterError(
+                "replace_pii.llm cannot be null because automatic discovery needs an LLM; to replace PII without "
+                "one, give an inline plan in replace_pii.replacement_plan, or set replace_pii to null to skip "
+                "replacement"
+            )
+        return value
+
+    @field_validator("sampler", mode="before")
+    @classmethod
+    def _resolve_personas_path(cls, value: object, info: ValidationInfo) -> object:
+        """Resolve a relative ``nemotron_personas_path`` against the configuration file's directory.
+
+        The joined path is made absolute, so a configuration saved elsewhere still names the same directory.
+
+        Example:
+            A configuration in ``/runs/a`` naming ``personas`` reads personas from ``/runs/a/personas``,
+            wherever NSS is started.
+        """
+        context_dir = (info.context or {}).get(CONFIG_DIR_CONTEXT_KEY)
+        if context_dir is None or not isinstance(value, Mapping):
+            return value
+        sampler = cast(Mapping[str, object], value)
+        personas_path = sampler.get("nemotron_personas_path")
+        if isinstance(personas_path, str) and not Path(personas_path).expanduser().is_absolute():
+            return {**sampler, "nemotron_personas_path": str((Path(context_dir) / personas_path).absolute())}
+        return value
+
     @field_validator("replacement_plan", mode="before")
     @classmethod
-    def _resolve_replacement_plan(cls, value: object) -> object:
-        """Resolve the plan/string union here so errors describe the plan, not the union.
+    def _resolve_replacement_plan(cls, value: object, info: ValidationInfo) -> object:
+        """Resolve the sentinel, an inline plan, or a plan file path, relative to the configuration file.
 
         Left to the union, a malformed inline plan reports the plan's own errors
-        *and* "input should be a valid string", which reads as though a file path
-        was expected. Validating a mapping as a plan up front keeps the report to
-        the fields the user actually got wrong.
+        *and* a sentinel mismatch. Validating a mapping as a plan up front keeps
+        the report to the fields the user actually got wrong.
         """
-        if isinstance(value, Mapping):
-            try:
-                return PiiReplacementPlan.model_validate(value)
-            except ValidationError as exc:
-                details = format_pydantic_validation_error(exc)
-                raise ParameterError(f"invalid inline replacement plan ({details})") from exc
-        if isinstance(value, Path):
-            return str(value)
-        if isinstance(value, str | PiiReplacementPlan):
+        if value == AUTO_DISCOVERY or isinstance(value, PiiReplacementPlan):
             return value
-        raise ParameterError(
-            f"replacement_plan must be {AUTO_DISCOVERY!r}, an inline plan, or a path to a plan file; "
-            f"got {type(value).__name__}"
-        )
+        context_dir = (info.context or {}).get(CONFIG_DIR_CONTEXT_KEY)
+        config_dir = Path(context_dir) if context_dir is not None else None
+        if isinstance(value, str | Path):
+            path = Path(value)
+            if not path.is_absolute() and config_dir is not None:
+                path = config_dir / path
+            value = _load_plan_file(path)
+        elif isinstance(value, Mapping):
+            _reject_plan_sampler(cast(Mapping[str, object], value), "replace_pii.replacement_plan")
+        if not isinstance(value, Mapping):
+            raise ParameterError(
+                f"replace_pii.replacement_plan must be {AUTO_DISCOVERY!r}, an inline plan, or the path of a YAML "
+                f"plan file (got {value!r})"
+            )
+        try:
+            return PiiReplacementPlan.model_validate(value)
+        except ValidationError as exc:
+            details = format_pydantic_validation_error(exc)
+            raise ParameterError(f"invalid replacement plan ({details})") from exc
 
     @property
     def is_auto_discovery(self) -> bool:
@@ -948,13 +1075,14 @@ class ReplacePiiConfig(Parameters):
         return self.replacement_plan == AUTO_DISCOVERY
 
     @property
-    def plan_path(self) -> str | None:
-        """Path to an external plan file, or ``None`` if not a path reference."""
-        if isinstance(self.replacement_plan, str) and self.replacement_plan != AUTO_DISCOVERY:
-            return self.replacement_plan
-        return None
-
-    @property
     def inline_plan(self) -> PiiReplacementPlan | None:
-        """The inline plan, or ``None`` for auto-discovery or a plan file."""
+        """The inline plan, or ``None`` for auto-discovery."""
         return self.replacement_plan if isinstance(self.replacement_plan, PiiReplacementPlan) else None
+
+    def with_plan(self, plan: PiiReplacementPlan) -> Self:
+        """Return a copy whose ``replacement_plan`` is ``plan``."""
+        return self.model_copy(update={"replacement_plan": plan})
+
+    def with_sampler_backend(self, backend: PiiSamplerBackend) -> Self:
+        """Return a copy whose ``sampler`` uses ``backend``, keeping its other settings."""
+        return self.model_copy(update={"sampler": self.sampler.model_copy(update={"backend": backend})})

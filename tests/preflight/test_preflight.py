@@ -386,7 +386,9 @@ class TestVRAMHeadroomCheck:
 
 @pytest.mark.unit
 class TestInferenceModelCheck:
-    def test_disabled_llm_skips_inference_environment(self, default_config):
+    def test_explicit_plan_skips_inference_environment(self, default_config):
+        default_config.replace_pii = default_config.replace_pii.with_plan(PiiReplacementPlan())
+
         with patch.dict(
             "os.environ",
             {"NSS_INFERENCE_MODEL": "", "NSS_INFERENCE_ENDPOINT": "not-a-url"},
@@ -448,7 +450,7 @@ class TestInferenceModelCheck:
 
     def test_explicit_plan_skips_inference_checks(self, default_config):
         default_config.replace_pii.llm = LLMConfig()
-        default_config.replace_pii.replacement_plan = PiiReplacementPlan()
+        default_config.replace_pii = default_config.replace_pii.with_plan(PiiReplacementPlan())
 
         with patch.dict("os.environ", {"NSS_INFERENCE_TIMEOUT": "soon"}, clear=True):
             issues = InferenceModelCheck().run(make_ctx(config=default_config))
