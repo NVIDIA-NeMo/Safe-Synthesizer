@@ -692,6 +692,29 @@ columns that are not replaced and in free text around a detected street.
 Combined with other columns, such as a birth date, a postal code can help
 re-identify a person.
 
+### Locales other than en_US
+
+`replace_pii.locale` sets the locale of generated values, but parts of
+replacement were built and tuned for English text and US conventions:
+
+- Free-text detection was tuned on English text. The default GLiNER2
+  checkpoint covers English, French, Spanish, German, Italian, Portuguese, and
+  Dutch, and it needs spaces between words, so most PII in Chinese, Japanese,
+  Korean, or Thai sentences is not detected.
+- Free-text name handling recognizes only English titles and suffixes, such as
+  `Dr` and `Jr`, and reads a full name's words as first, middle, and last. A
+  title such as `Mme` or a particle such as `van` is replaced as a name, and
+  names written family name first have their parts swapped.
+- Generated full names are written first name first in every locale.
+- Email addresses built from generated names keep accented and non-Latin
+  letters, such as `françois.prévost42@example.com`.
+- `ssn` replacements use the locale's Faker national ID, so a US Social
+  Security number in an `fr_FR` run is replaced with a French number.
+- Full street addresses keep the locality only when the street comes first;
+  other address orders are replaced whole.
+- `find_and_replace` runs only for `en_US`, as described under
+  [Free-text replacement](#free-text-replacement).
+
 ### Standalone replacement
 
 Apply replacement to a complete input dataframe without running holdout,
