@@ -1,6 +1,6 @@
 {% set pii = ctx.pii_replacement %}
 {% macro count(value) %}{{ "—" if value is none else "{:,}".format(value) }}{% endmacro %}
-{# Collapsed by default, like the inference protection cards; the summary replaces their score ring. #}
+{# Collapsed by default, like the inference protection cards; a short summary sits under the description. #}
 <article class="metric-card metric-card--expandable pii-replacement" id="pii-replay" data-metric-card>
     <div class="metric-card-summary">
         <button class="metric-card-toggle" type="button" data-metric-toggle
@@ -16,8 +16,8 @@
                 PII found in the training data, how it was replaced, and how many original values reappear in the synthetic data
                 {%- endif -%}
             </span>
+            <span class="metric-card-stat">{{ pii.headline }}</span>
         </span>
-        <span class="metric-card-stat">{{ pii.headline }}</span>
     </div>
 
     <div class="metric-card-details" id="pii-replay-details" hidden>
@@ -38,10 +38,10 @@
                         <th>Column Name</th>
                         <th>Replaced With</th>
                         <th>PII Type</th>
-                        <th>Training Total</th>
-                        <th>Training Unique</th>
-                        <th title="Synthetic rows containing at least one original training value of this type">Synthetic Rows Matched</th>
-                        <th>PII Replay</th>
+                        <th title="PII values found in the training data: a column's non-empty cells, or every value found in a free-text column">Training Total</th>
+                        <th title="Distinct values among the Training Total">Training Unique</th>
+                        <th title="Synthetic rows containing at least one original training value of this type">Synthetic Values</th>
+                        <th title="Share of the distinct training values that reappear in the synthetic data; lower is better">PII Replay</th>
                     </tr>
                 </thead>
                 {% for group in pii.groups %}
@@ -70,7 +70,7 @@
                             {% endif %}
                         </td>
                         {% endif %}
-                        <td><span class="type-tag">{{ entity.pii_type }}</span></td>
+                        <td class="pii-type-cell"><span class="type-tag">{{ entity.pii_type }}</span></td>
                         <td class="tnum">{{ count(entity.found) }}</td>
                         <td class="tnum">{{ count(entity.unique) }}</td>
                         <td class="tnum">{{ count(entity.synthetic) }}</td>
@@ -107,8 +107,8 @@
         <p class="pii-kept"><strong>Kept as is ({{ pii.kept_columns | length }}):</strong> {{ pii.kept_columns | join(", ") }}</p>
         {% endif %}
 
-        <p class="pii-footnote">Matches are against the original training values, before replacement. Synthetic Rows
-           Matched counts synthetic rows containing at least one of them. PII Replay counts distinct training values
+        <p class="pii-footnote">Matches are against the original training values, before replacement. Synthetic
+           Values counts synthetic rows containing at least one of them. PII Replay counts distinct training values
            that reappear in the synthetic data; lower is better. In free text, a value counts when it appears
            anywhere in a synthetic text.</p>
     </div>

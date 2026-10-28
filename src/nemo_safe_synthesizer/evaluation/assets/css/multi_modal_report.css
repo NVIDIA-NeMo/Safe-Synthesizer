@@ -1246,10 +1246,10 @@ tbody tr:hover td {
 }
 
 .metric-card-stat {
-    flex: 0 0 auto;
+    margin-top: 4px;
     color: var(--muted);
-    font-size: 13px;
-    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+    line-height: 18px;
 }
 
 .pii-replacement .table-wrap {
@@ -1378,9 +1378,10 @@ tbody tr:hover td {
     }
 }
 
+/* Content sets the column widths: PII types and counts stay on one line, and the method text takes the rest. */
 .pii-replacement table.pii-replacement-table {
-    min-width: 760px;
-    table-layout: fixed;
+    min-width: 700px;
+    table-layout: auto;
 }
 
 
@@ -1389,23 +1390,16 @@ tbody tr:hover td {
 }
 
 .pii-replacement-table th:nth-child(1) {
-    width: 17%;
+    width: 14%;
 }
 
 .pii-replacement-table th:nth-child(2) {
-    width: 28%;
+    width: 32%;
 }
 
-.pii-replacement-table th:nth-child(3) {
-    width: 14%;
-}
-
-.pii-replacement-table th:nth-child(n + 4) {
-    width: 9%;
-}
-
-.pii-replacement-table th:nth-child(7) {
-    width: 14%;
+.pii-replacement-table td.pii-type-cell,
+.pii-replacement-table td.tnum {
+    white-space: nowrap;
 }
 
 .pii-replacement-table td.pii-group-cell:first-child {
