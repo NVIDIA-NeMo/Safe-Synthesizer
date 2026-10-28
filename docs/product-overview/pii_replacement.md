@@ -3,173 +3,318 @@
 
 # PII Replacement
 
-PII (Personally Identifiable Information) replacement is a critical privacy protection step that detects and replaces sensitive information in your datasets before synthesis. This ensures that the model never has the opportunity to learn the most sensitive information (e.g. names, addresses, identifiers) from the training data.
+PII replacement v3 uses a dataset-specific replacement plan. The plan names
+the columns NSS should replace, the entity type in each column, optional format
+patterns, and dependencies between related columns.
 
-## How It Works
+Set `replace_pii: null`, pass `--no-replace-pii`, or call
+`.with_replace_pii(enable=False)` to run the synthesis pipeline without
+replacement.
 
-The PII replacement pipeline operates in multiple stages:
+## Replacement plan sources
 
-1. Detection: Classifies PII entities within free text and entire columns.
-2. Replacement: Substitutes PII using configurable rules.
+The `replace_pii` configuration has an integer `schema_version`. This release
+accepts version `3`; an omitted version is interpreted as version `3`. NSS
+includes the version whenever it serializes the configuration.
 
-## Detection Methods
+`replace_pii.replacement_plan` accepts three forms.
 
-NeMo Safe Synthesizer supports multiple PII detection approaches described in the table below:
+### Automatic discovery
 
-| Method | Scope | Description | Key Features |
-|--------|--------|--------------|---------------|
-| LLM Classification | Entire columns | Leverages language models for column classification when the entire column is a single entity | - Contextual understanding of entities<br>- Handles complex PII patterns<br>- Flexible entity definitions<br>- Configurable prompts and models |
-| [GLiNER PII](https://huggingface.co/nvidia/gliner-PII#evaluation-datasets) | Free text | Uses the GLiNER PII model for entity recognition within free text columns | - Zero-shot entity detection<br>- Supports custom entity types<br>- High accuracy for standard PII categories<br>- Configurable confidence thresholds |
+Use `auto_discovery` to run the heuristic plan discoverer. When `llm` is
+configured, NSS passes the heuristic result to the LLM plan enhancer before
+validating the final plan.
 
-
-## Replacement Methods
-
-After detection, PII can be handled in multiple ways:
-
-| Strategy   | Description                                  | Example                     |
-|------------|----------------------------------------------|-----------------------------|
-| Annotate   | Add identified entity to original PII        | Alice → &lt;entity type="first_name" value="Alice"&gt; |
-| Redact     | Replace PII with a generic tag               | Alice → &lt;first_name&gt;     |
-| Hash       | Replace PII with a hashed value               | Alice → 3bf676c57     |
-| Substitute | Replace PII with a context-relevant alternative | Alice → Erica            |
-
-## Supported Entity Types
-GLiNER PII will attempt to identify any custom entity type you provide. However, it has specifically been fine-tuned to detect the following entities, organized by category:
-
-!!! note "Default entity set"
-    The default configuration detects and replaces a focused subset of these entities: `first_name`,
-    `last_name`, `name`, `street_address`, `city`, `state`, `postcode`, `address`, `phone_number`,
-    `fax_number`, `email`, `ssn`, `national_id`, `tax_id`, and `credit_debit_card`. To detect additional
-    entity types, add them to `replace_pii.globals.classify.entities` and
-    `replace_pii.globals.ner.ner_entities` in your configuration. Also add replacement steps to `replace_pii.steps`.
-
-### Personal Information
-- `first_name` - Given names
-- `last_name` - Surnames and family names
-- `name` - Full names
-- `age` - Ages
-- `email` - Email addresses
-- `phone_number` - Phone numbers in various formats
-- `fax_number` - Fax numbers in various formats
-
-
-
-### Addresses
-
-- `address` - Complete physical addresses (for example, 123 Main Street, Anytown, CA 90210)
-- `street_address` - Street addresses (for example, 123 Main Street)
-- `city` - City names
-- `county` - County names
-- `state` - State/province names
-- `postcode` - Postal/ZIP codes
-- `country` - Country names
-
-### Personal Identifiers
-- `ssn` - Social Security Numbers
-- `national_id` - National ID numbers
-- `tax_id` - Tax ID numbers
-- `certificate_license_number` - Driver’s license numbers
-- `unique_identifier` - Generic unique IDs
-- `customer_id` - Customer identifiers
-- `employee_id` - Employee identifiers
-
-### Financial Information
-
-- `credit_debit_card` - Credit and debit card numbers
-- `cvv` - Credit card verification code
-- `pin` - Personal identification numbers
-- `account_number` - Bank account numbers
-- `bank_routing_number` - Bank routing numbers
-- `swift_bic` - Swift/BIC codes
-- `iban` - International bank account numbers
-
-### Medical Information
-
-- `medical_record_number` - Medical record numbers
-- `health_plan_beneficiary_number` - Insurance IDs
-- `biometric_identifier` - Biometric data references
-
-### Technical Identifiers
-
-- `url` - Web URLs
-- `ipv4` - IPv4 addresses
-- `ipv6` - IPv6 addresses
-- `mac_address` - Hardware MAC addresses
-- `api_key` - API keys and tokens
-- `user_name` - Usernames
-- `password` - Passwords
-- `http_cookie` - HTTP Cookies
-- `device_identifier` - Device IDs
-
-### Vehicle Identifiers
-
-- `vehicle_identifier` - Vehicle identification numbers (VINs)
-- `license_plate` - License plates
-
-### Geographic Information
-
-- `latitude` - Latitude coordinates
-- `longitude` - Longitude coordinates
-- `coordinate` - Coordinate pairs
-
-### Quasi Identifiers
-
-- `date` - Date values
-- `date_time` - Date and time values
-- `blood_type` - Blood type information
-- `gender` - Gender information
-- `sexuality` - Sexual orientation
-- `political_view` - Political affiliations
-- `race` - Race
-- `ethnicity` - Ethnicity information
-- `religious_belief` - Religious affiliations
-- `language` - Language preferences
-- `education` - Education level
-- `job_title` - Professional titles
-- `employment_status` - Employment information
-- `company_name` - Organization names
-
-### Custom Entity Types
-
-Beyond these built-in types, you can define custom entities using:
-
-```yaml title="Custom entity configuration"
-globals:
-  classify:
-    enable_classify: true
-    entities:
-      - first_name
-      - last_name
-      - email
-      - employee_id
-      - project_code
-```
-
-## Configuration
-
-PII replacement is configured through the `replace_pii` section. For the full schema, refer to [Configuration Reference -- Replacing PII](../user-guide/configuration.md#replacing-pii).
-
-```yaml title="replace_pii section"
+```yaml
 replace_pii:
-  globals:
-    locales:
-      - en_US
-  steps:
-    - rows:
-        update:
-          - entity:
-              - email
-              - phone_number
-            value: "column.entity | fake"
+  schema_version: 3
+  replacement_plan: auto_discovery
 ```
 
-## When to Use PII Replacement
+### Inline plan
 
-Consider using PII replacement when:
+An inline plan is written directly under `replacement_plan` in the main NSS
+configuration:
 
-- Your data contains names, addresses, or other direct identifiers
-- Compliance requires PII removal before processing
-- You want to ensure the model cannot memorize sensitive values
-- You need to share synthetic data with external parties
+```yaml
+replace_pii:
+  schema_version: 3
+  replacement_plan:
+    columns_to_replace:
+      - column_name: full_name
+        entity_type: full_name
+        pattern: "{First} {Last}"
+      - column_name: email
+        entity_type: email
+        pattern: "{f}.{last}@{domain}"
+        depends_on:
+          - column_name: full_name
+```
 
-PII replacement is on by default as a pre-processing step before synthesis.
+### Plan file
+
+A plan file is a separately versioned YAML document containing
+`schema_version` followed by the same fields as an inline plan:
+
+```yaml
+schema_version: 3
+columns_to_replace:
+  - column_name: email
+    entity_type: email
+```
+
+Set `replacement_plan` to its path:
+
+```yaml
+replace_pii:
+  schema_version: 3
+  replacement_plan: ./pii_replacement_plan.yaml
+```
+
+Inline plans and plan files are authoritative: NSS validates them against the
+input dataframe but does not run heuristic or LLM discovery.
+
+## Plan-only workflow
+
+Resolve and save a plan from the full input dataframe without running holdout,
+model metadata, replacement, training, generation, or evaluation:
+
+```bash
+safe-synthesizer run replace-pii --plan-only \
+  --config config.yaml \
+  --data-source data.csv
+```
+
+The command writes `pii_replacement_plan.yaml` in the standard timestamped NSS
+run directory under `--artifact-path`.
+
+The matching SDK interface returns the resolved plan and writes YAML only when
+an output path is supplied:
+
+```python
+from nemo_safe_synthesizer.config import SafeSynthesizerParameters
+from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+
+config = SafeSynthesizerParameters.from_yaml("config.yaml")
+plan = (
+    SafeSynthesizer(config)
+    .with_data_source("data.csv")
+    .plan_pii_replacement("pii_replacement_plan.yaml")
+)
+```
+
+The generated standalone plan can be reviewed, edited, and reused as
+`replace_pii.replacement_plan` in a later run.
+
+## LLM-assisted planning
+
+The `llm` mapping configures the OpenAI-compatible inference service used for
+automatic plan enhancement.
+
+```yaml
+replace_pii:
+  schema_version: 3
+  replacement_plan: auto_discovery
+  llm:
+    max_workers: 8
+```
+
+An empty mapping (`llm: {}`) enables the NSS inference defaults: NSS runs
+`nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16` in a local vLLM server for
+the duration of plan discovery; see [Local inference server](#local-inference-server).
+
+### Where planning requests go
+
+Plan discovery sends column statistics and cell samples to an LLM. Where they
+go depends only on `NSS_INFERENCE_ENDPOINT` (or `--inference-endpoint-url`):
+
+- Unset: NSS starts its own vLLM server on this machine, and the data stays
+  here. This is the default.
+- A loopback URL (`localhost`, `127.0.0.0/8`, or `::1`): the data stays on
+  this machine. Without a local profile, NSS calls the server you run at that
+  address; with `NSS_INFERENCE_LOCAL_PROFILE`, NSS starts its own server there.
+- Any other URL: NSS sends the data to that service over HTTPS, for example
+  `https://integrate.api.nvidia.com/v1` for the hosted NVIDIA service. Only
+  enable it when that service is approved to receive the input data.
+
+The run log states which case applies when planning starts.
+
+With an explicit endpoint and no local profile, NSS never starts a local server,
+and the model has no default: it resolves from `--inference-model-id`, then
+`replace_pii.llm.model_id`, then `NSS_INFERENCE_MODEL`. `NSS_INFERENCE_MODEL`
+supplies the model only when the configuration omits `model_id`; use
+`--inference-model-id` to override a persisted model for one run. The endpoint
+is never persisted in NSS configuration. Plain HTTP is accepted only for
+loopback addresses; any other host must use HTTPS.
+
+Supply an API key at runtime through `NSS_INFERENCE_KEY` or the
+`--inference-api-key` CLI option; the hosted NVIDIA service requires one, and
+local OpenAI-compatible servers may be keyless. NSS does not store the key in
+configuration or plan artifacts.
+
+### Local inference server
+
+When no inference endpoint is set, NSS starts a vLLM server on the local GPU for
+plan discovery. The model ID (`replace_pii.llm.model_id`,
+`--inference-model-id`, or `NSS_INFERENCE_MODEL`) selects the bundled profile
+to run, and defaults to `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16`:
+
+```bash
+safe-synthesizer run replace-pii --plan-only \
+  --config config.yaml \
+  --data-source data.csv
+```
+
+If vLLM or a CUDA GPU is unavailable, or the GPU is smaller than the profile's
+`min_gpu_memory_gib`, preflight and planning fail with an error before
+downloading any weights, rather than sending data to a remote service; set
+`NSS_INFERENCE_ENDPOINT` to choose one. `NSS_INFERENCE_KEY` is ignored while the
+local server runs, and NSS logs a warning if it is set.
+
+Bundled profiles pin each model to a fixed revision, turn on reasoning before
+the schema-constrained answer, and fit one 80 GB GPU, such as an A100 or H100;
+they require at least 75 GiB, since an 80 GB GPU reports about 79 GiB.
+vLLM reserves a fixed share of the GPU's memory for the server, set by the
+profile's `gpu_memory_utilization`, regardless of model size; the reservation
+holds the weights and the context cache:
+
+| Model ID | GPU memory reserved (80 GB GPU) | Request timeout | Notes |
+|----------|---------------------------------|-----------------|-------|
+| `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16` (default) | about 76 GB (95%); weights about 66 GB | 300 s | Hybrid Mamba mixture of experts; 2,000-token thinking budget |
+| `openai/gpt-oss-120b` | about 76 GB (95%); weights about 65 GB | 120 s | Mixture of experts; default medium reasoning effort; fastest |
+| `Qwen/Qwen3.8-27B` | about 74 GB (92%); weights about 56 GB | 300 s | Dense; low reasoning effort, 1,000-token thinking budget; slowest |
+
+Nemotron 3.5 Lightning and GPT-OSS-120B both performed well in our PII planning
+evaluation. Qwen3.8-27B was less consistent: it did well on some datasets but
+scored lower on held-out data, sometimes missed free-text columns, and took
+several times longer per table.
+
+Reasoning makes requests slow, so each profile sets its own request timeout.
+Set `NSS_INFERENCE_TIMEOUT` or `--inference-timeout-seconds` to override it, for
+example for much larger tables. The same setting applies to explicit endpoints,
+where it defaults to 60 seconds.
+
+NSS sends no sampling settings of its own, so the server's defaults apply; vLLM
+takes them from the model's `generation_config.json`, which for the bundled
+models matches their model cards. Each profile also states its sampling
+settings explicitly in `request_options`, and the Qwen and Nemotron profiles
+add a `thinking_token_budget`, which caps reasoning before the JSON answer. Set
+`NSS_INFERENCE_REQUEST_OPTIONS` or `--inference-request-options` to a JSON
+object, such as `{"thinking_token_budget": 500}`, to override individual fields
+of a profile's request options, or to send fields to an explicit endpoint.
+Fields you don't set keep their values; set a field to `null` to drop it.
+
+The first run downloads the weights into the Hugging Face cache; see
+[Hugging Face cache and offline](../user-guide/environment.md#hugging-face-cache-and-offline)
+to choose where it lives. A model ID without a bundled profile is an error. To
+run another model locally, point `NSS_INFERENCE_LOCAL_PROFILE` or the
+`--inference-local-profile` CLI option at your own profile YAML (a bundled
+profile name such as `gpt-oss-120b` also works); any configured model ID must
+then match its served model name, which defaults to its `model_id`. A profile
+YAML has these fields: `model_id`, `revision`, and optionally
+`served_model_name`, `gpu_memory_utilization`, `max_model_len`,
+`max_num_seqs`, `tensor_parallel_size`, `min_gpu_memory_gib` (checked on each
+of the `tensor_parallel_size` GPUs; choose GPUs with `CUDA_VISIBLE_DEVICES` in
+the shell, not in the profile), `extra_args`, `request_options`,
+`environment` (server process variables), `request_timeout_seconds`,
+`startup_timeout_seconds`, and `shutdown_timeout_seconds`. In vLLM 0.27,
+`thinking_token_budget` needs `VLLM_USE_V2_MODEL_RUNNER: "0"` in `environment`.
+Avoid `extra_args` that make vLLM compile kernels at startup, such as
+`--mamba-backend=flashinfer`: compiling needs `ninja` and a CUDA compiler,
+which an NSS install doesn't include, and it lengthens every server launch.
+
+NSS starts the server only when LLM-assisted discovery runs, meaning an
+`auto_discovery` plan with `llm` configured, and stops it before planning
+returns, including when planning fails. Plan validation, replacement, and
+training therefore never run while the server holds the GPU. Each run loads
+the model again; to reuse one server across many runs, start `vllm serve`
+yourself and set `NSS_INFERENCE_ENDPOINT` and `NSS_INFERENCE_MODEL` without a
+local profile.
+
+#### How the local server is isolated
+
+- Reachable only from this machine: the server listens on a loopback
+  address: a free `127.0.0.1` port by default, or the loopback address in
+  `NSS_INFERENCE_ENDPOINT` with a local profile. NSS rejects any other address,
+  and a port already in use, before launching.
+- Usable only by this NSS run: each launch generates a random API key and
+  gives it only to the server (through its environment, not its command line)
+  and to NSS's own client, so other processes on the machine cannot send it
+  requests. `NSS_INFERENCE_KEY` is not used.
+- No proxies or request logs: requests to loopback addresses ignore
+  `HTTP_PROXY`-style variables, and vLLM request logging stays off because
+  prompts contain raw cell samples. Server output goes to the NSS log at debug
+  level.
+- Short-lived: the server stops when planning ends, and receives SIGTERM if
+  the NSS process dies without cleaning up.
+
+### How discovery uses the LLM
+
+Automatic discovery uses two LLM passes. The first classifies every column's
+semantic entity type and may propose a replacement pattern, in bounded batches
+of at most 32 profiles and 48 KiB of profile evidence. Each profile contains
+deterministic statistics and up to eight distinct cell samples truncated to 128
+characters. The prompt includes the entity catalog and the exact supported
+pattern grammars. The grouping column is sent as discovery context; protected
+columns are not mentioned, because NSS excludes them itself. NSS then derives replacement columns and all permitted
+dependency candidates deterministically from those classifications. The second
+pass sees only column names, entity types, and proposed patterns, not cell
+values, and is split into batches under the same 32-entry and 48 KiB limits. For
+each replacement column and each permitted source entity type, it
+chooses at most one candidate column, the one describing the same person or
+record, or none. The response schema lists only the candidate columns, so the
+model cannot name another column or choose two sources of one type, such as
+both a person's and a spouse's gender. Each option carries the heuristic
+baseline's choice as fallible prior evidence. NSS, rather than the model, derives
+group-consistent or record-consistent replacement behavior from the configured
+grouping column, excludes protected ordering and timestamp columns, and validates
+the assembled plan. Grouping columns remain eligible for replacement so
+identifiers such as patient IDs can be anonymized.
+
+Each prompt describes the expected JSON response, and the request also
+constrains decoding to that response's strict schema. Each request permits up to
+three attempts for transient transport failures or invalid structured responses. Transient failures wait before retrying: the
+server's `Retry-After` delay when supplied, otherwise an exponentially growing,
+jittered delay, capped at 30 seconds. Authentication, authorization, and
+permanent configuration failures stop immediately. If structured output remains invalid,
+planning fails instead of falling back to the heuristic baseline. A proposed
+pattern that a column cannot use (on an unclassified or protected column, on an
+entity type without a pattern syntax, or blank) is ignored rather than rejected.
+A pattern must cover at least 99% of a column's non-null values; one that follows
+its grammar but covers fewer is dropped with a warning and no repair request,
+since a column with mixed formats has no single pattern. Patterns that break their
+grammar receive up to three focused repair attempts; NSS drops only the pattern
+and warns if every repair response is invalid. Transient failures that persist
+through all repair attempts still fail planning, as for any other request. Retry
+feedback names the specific columns or dependency conflicts that made the
+previous response invalid.
+
+!!! warning "Inference endpoints receive source data"
+    Plan enhancement can send bounded raw cell samples from the full input
+    dataframe, including rows that may later be assigned to a holdout set. Enable
+    it only when the endpoint is approved to receive the input data.
+
+### Free-text detection
+
+Free-text columns use GLiNER2 plus applicable deterministic built-in regex
+rules:
+
+```yaml
+replace_pii:
+  free_text_detection:
+    model_id: fastino/gliner2-privacy-filter-PII-multi
+    entity_thresholds:
+      full_name: 0.95
+      first_name: 0.9
+      middle_name: 0.9
+      last_name: 0.9
+      phone_number: 0.5
+      date_of_birth: 0.5
+      street_address: 0.5
+      ssn: 0.5
+      national_id: 0.5
+      api_key: 0.5
+    batch_size: 8
+    chunk_length: 384
+    chunk_overlap: 128
+```

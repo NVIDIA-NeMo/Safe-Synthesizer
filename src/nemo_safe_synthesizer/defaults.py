@@ -10,6 +10,7 @@ modules.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 # default artifacts path
@@ -71,8 +72,29 @@ NUM_EVAL_BATCHES_GROUPED = 1
 PSEUDO_GROUP_COLUMN = "__nss_sequence_id"
 DEFAULT_EXCLUDE_COLUMNS: tuple[str, ...] = (PSEUDO_GROUP_COLUMN,)
 
-# default LLM inference endpoint for PII column classification.
-DEFAULT_NSS_INFERENCE_ENDPOINT = "https://integrate.api.nvidia.com/v1"
+# Per-request PII inference timeout unless NSS_INFERENCE_TIMEOUT or a local
+# serving profile sets one.
+DEFAULT_NSS_INFERENCE_TIMEOUT_SECONDS = 60.0
+# PII replacement v3 runs this model in a local vLLM server, from its bundled
+# profile, when no inference endpoint or model is configured.
+DEFAULT_NSS_INFERENCE_LOCAL_MODEL = "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16"
+PII_REPLACEMENT_PLAN_FILENAME = "pii_replacement_plan.yaml"
+
+# Nemotron-Personas parquet assets for the PII sampler (``datasets/{locale}.parquet``).
+NSS_NEMOTRON_PERSONAS_PATH_ENV = "NSS_NEMOTRON_PERSONAS_PATH"
+
+
+def default_nemotron_personas_path() -> Path:
+    """Return the Nemotron-Personas sampler assets root directory.
+
+    Resolution order: ``NSS_NEMOTRON_PERSONAS_PATH`` environment variable, then
+    ``~/.data-designer/managed-assets``.
+    """
+    env = os.environ.get(NSS_NEMOTRON_PERSONAS_PATH_ENV)
+    if env:
+        return Path(env)
+    return Path.home() / ".data-designer" / "managed-assets"
+
 
 # training +  parameters
 DEFAULT_BASE_SEQ_LENGTH = 2048

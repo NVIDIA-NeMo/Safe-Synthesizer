@@ -30,7 +30,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import AliasChoices, Field, field_validator
+from pydantic import AliasChoices, Field, PrivateAttr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from ..defaults import DEFAULT_ARTIFACTS_PATH
@@ -58,6 +58,8 @@ class CLISettings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
     )
+
+    _explicit_cli_fields: frozenset[str] = PrivateAttr(default_factory=frozenset)
 
     observability: NSSObservabilitySettings = Field(
         default_factory=NSSObservabilitySettings, description="Observability sub-settings (log level, format, color)."
@@ -175,47 +177,70 @@ class CLISettings(BaseSettings):
     inference_endpoint_url: str | None = Field(
         default=None,
         validation_alias=AliasChoices("inference_endpoint_url", "NSS_INFERENCE_ENDPOINT"),
-        description="OpenAI-compatible inference endpoint URL for PII column classification",
+        description="OpenAI-compatible inference endpoint URL for LLM-assisted PII plan discovery",
     )
-    """OpenAI-compatible inference endpoint URL for PII column classification
-    (env: ``NSS_INFERENCE_ENDPOINT``)."""
+    """OpenAI-compatible PII inference endpoint (env: ``NSS_INFERENCE_ENDPOINT``)."""
 
     inference_api_key: str | None = Field(
         default=None,
         validation_alias=AliasChoices("inference_api_key", "NSS_INFERENCE_KEY"),
-        description="API key for the inference endpoint used in PII column classification",
+        description="API key for the PII inference endpoint",
     )
-    """API key for the inference endpoint used in PII column classification
-    (env: ``NSS_INFERENCE_KEY``)."""
+    """PII inference API key (env: ``NSS_INFERENCE_KEY``)."""
 
     inference_model_id: str | None = Field(
         default=None,
         validation_alias=AliasChoices("inference_model_id", "NSS_INFERENCE_MODEL"),
-        description="Model ID sent to the inference endpoint for PII column classification",
+        description="Model ID served by the PII inference endpoint",
     )
-    """Model ID sent to the inference endpoint for PII column classification
-    (env: ``NSS_INFERENCE_MODEL``)."""
+    """PII inference model ID (env: ``NSS_INFERENCE_MODEL``)."""
+
+    inference_timeout_seconds: float | None = Field(
+        default=None,
+        gt=0,
+        allow_inf_nan=False,
+        validation_alias=AliasChoices("inference_timeout_seconds", "NSS_INFERENCE_TIMEOUT"),
+        description="Per-request timeout in seconds for PII inference",
+    )
+    """PII inference per-request timeout (env: ``NSS_INFERENCE_TIMEOUT``).
+
+    Overrides a local profile's request timeout; defaults to 60 seconds otherwise.
+    """
+
+    inference_request_options: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("inference_request_options", "NSS_INFERENCE_REQUEST_OPTIONS"),
+        description="JSON object of chat-completions fields sent with every PII inference request",
+    )
+    """Extra PII inference request fields as JSON (env: ``NSS_INFERENCE_REQUEST_OPTIONS``).
+
+    Overrides a local profile's request options field by field; a ``null`` value drops a
+    field. Fields left out use the server's defaults.
+    """
+
+    inference_local_profile: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("inference_local_profile", "NSS_INFERENCE_LOCAL_PROFILE"),
+        description="Bundled profile name or YAML path for a managed local vLLM PII inference server",
+    )
+    """Managed local PII inference server profile (env: ``NSS_INFERENCE_LOCAL_PROFILE``).
+
+    NSS starts the server only for LLM-assisted plan discovery and stops it
+    before planning returns. When this and the endpoint are both unset, the
+    configured model ID selects a bundled profile.
+    """
 
     huggingface_remote: bool | None = Field(
         default=None,
         validation_alias=AliasChoices("huggingface_remote"),
-        description="Whether to allow Hugging Face remote downloads (base model and GLiNER)",
+        description="Whether to allow Hugging Face remote downloads for Hub assets",
     )
-    """Whether to allow Hugging Face remote downloads for the base model and GLiNER.
+    """Whether to allow Hugging Face remote downloads for Hub assets (base model, etc.).
 
     ``None`` leaves the environment untouched. ``True`` / ``False`` is propagated
     to the standard ``HF_HUB_OFFLINE`` and ``TRANSFORMERS_OFFLINE`` variables (the
     canonical env switch) by ``_propagate_runtime_settings_to_env``; there is no
     separate NSS env var."""
-
-    cpu_count: int | None = Field(
-        default=None,
-        ge=1,
-        validation_alias=AliasChoices("cpu_count", "NSS_PII_REPLACER_CPU_COUNT"),
-        description="Number of CPU worker processes used for NER (PII replacement)",
-    )
-    """Number of CPU worker processes used for NER (PII replacement)
-    (env: ``NSS_PII_REPLACER_CPU_COUNT``)."""
 
     @field_validator("wandb_mode", mode="before")
     @classmethod
@@ -226,6 +251,14 @@ class CLISettings(BaseSettings):
         if isinstance(v, WandbMode):
             return v
         return WandbMode(v)
+
+    @field_validator("inference_timeout_seconds", mode="before")
+    @classmethod
+    def validate_inference_timeout_seconds(cls, v: float | str | None) -> float | str | None:
+        """Treat a blank value as unset, as the PII inference client does."""
+        if isinstance(v, str) and not v.strip():
+            return None
+        return v
 
     @field_validator("verbose", mode="before")
     @classmethod
@@ -252,7 +285,14 @@ class CLISettings(BaseSettings):
         """
         # Filter out None values so env vars can provide defaults
         filtered = {k: v for k, v in kwargs.items() if v is not None}
-        return cls(**filtered)
+        settings = cls(**filtered)
+        settings._explicit_cli_fields = frozenset(filtered)
+        return settings
+
+    @property
+    def explicit_cli_fields(self) -> frozenset[str]:
+        """Fields explicitly supplied by Click rather than loaded from the environment."""
+        return self._explicit_cli_fields
 
     @property
     def effective_artifact_path(self) -> Path:

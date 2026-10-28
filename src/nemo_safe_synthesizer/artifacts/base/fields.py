@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 class FieldType(StrEnum):
     """Column type classification assigned by the field analyzer.
 
-    Used by ``evaluation`` and ``pii_replacer`` to dispatch type-specific
+    Used by ``evaluation`` to dispatch type-specific
     processing logic (e.g., numeric metrics vs. text similarity).
     """
 
@@ -84,7 +84,7 @@ class FieldFeatures(BaseModel):
 
     classification: dict | None = Field(
         default=None,
-        description="NER-based classification metadata, when available.",
+        description="Optional PII metadata for the column, when available.",
     )
 
     def to_dict(self, **kwargs) -> dict:

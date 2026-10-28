@@ -1,0 +1,345 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+from __future__ import annotations
+
+from typing import cast
+
+import httpx
+import pytest
+from pydantic import BaseModel, ConfigDict, Field
+
+from nemo_safe_synthesizer.config.replace_pii import LLMConfig
+from nemo_safe_synthesizer.errors import GenerationError, ParameterError
+from nemo_safe_synthesizer.pii_replacer.llm_client import (
+    InferenceSettings,
+    InvalidInferenceResponse,
+    MissingInferenceModelError,
+    OpenAICompatibleTransport,
+    TransientInferenceError,
+    resolve_inference_settings,
+)
+
+LOCAL_ENDPOINT = "http://localhost:8000/v1"
+
+
+class _StructuredResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class _OptionalItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    pattern: str | None = None
+
+
+class _OptionalFieldsResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[_OptionalItem]
+    note: str | None = Field(default=None)
+
+
+def _local_settings(*, api_key: str | None = None) -> InferenceSettings:
+    environ = {"NSS_INFERENCE_ENDPOINT": LOCAL_ENDPOINT}
+    if api_key is not None:
+        environ["NSS_INFERENCE_KEY"] = api_key
+    return resolve_inference_settings(LLMConfig(model_id="local-model"), environ=environ)
+
+
+def _as_dict(value: object) -> dict[str, object]:
+    return cast(dict[str, object], value)
+
+
+def _capture_request(monkeypatch: pytest.MonkeyPatch, response_model: type[BaseModel]) -> dict[str, object]:
+    captured: dict[str, object] = {}
+
+    def post(url: str, **kwargs: object) -> httpx.Response:
+        captured["url"] = url
+        captured.update(kwargs)
+        return httpx.Response(200, json={"choices": [{"message": {"content": "{}"}}]})
+
+    monkeypatch.setattr(httpx, "post", post)
+    content = OpenAICompatibleTransport(_local_settings(api_key="runtime-key")).complete(  # pragma: allowlist secret
+        messages=[{"role": "user", "content": "request"}],
+        response_model=response_model,
+    )
+    assert content == "{}"
+    return captured
+
+
+@pytest.mark.unit
+class TestInferenceSettings:
+    @pytest.mark.parametrize(
+        ("config_model", "environ", "expected_model"),
+        [
+            pytest.param("config-model", {"NSS_INFERENCE_MODEL": "env-model"}, "config-model", id="yaml-before-env"),
+            pytest.param(None, {"NSS_INFERENCE_MODEL": "env-model"}, "env-model", id="env-when-yaml-unset"),
+        ],
+    )
+    def test_model_precedence(
+        self,
+        config_model: str | None,
+        environ: dict[str, str],
+        expected_model: str,
+    ) -> None:
+        settings = resolve_inference_settings(
+            LLMConfig(model_id=config_model),
+            environ={"NSS_INFERENCE_ENDPOINT": LOCAL_ENDPOINT, **environ},
+        )
+
+        assert settings.endpoint_url == LOCAL_ENDPOINT
+        assert settings.model_id == expected_model
+
+    @pytest.mark.parametrize("model_env", [{}, {"NSS_INFERENCE_MODEL": "  "}], ids=["unset", "blank"])
+    def test_explicit_endpoint_has_no_default_model(self, model_env: dict[str, str]) -> None:
+        with pytest.raises(MissingInferenceModelError, match="model it serves must be set"):
+            resolve_inference_settings(LLMConfig(), environ={"NSS_INFERENCE_ENDPOINT": LOCAL_ENDPOINT, **model_env})
+
+    def test_missing_endpoint_has_no_hosted_fallback(self) -> None:
+        with pytest.raises(ParameterError, match="No PII inference endpoint is set"):
+            resolve_inference_settings(
+                LLMConfig(model_id="model"),
+                environ={"NSS_INFERENCE_KEY": "hosted-key"},  # pragma: allowlist secret
+            )
+
+    @pytest.mark.parametrize(("raw", "expected"), [(None, 60.0), ("900", 900.0), (" 12.5 ", 12.5)])
+    def test_timeout_comes_from_environment(self, raw: str | None, expected: float) -> None:
+        environ = {"NSS_INFERENCE_ENDPOINT": LOCAL_ENDPOINT}
+        if raw is not None:
+            environ["NSS_INFERENCE_TIMEOUT"] = raw
+
+        settings = resolve_inference_settings(LLMConfig(model_id="model"), environ=environ)
+
+        assert settings.timeout_seconds == expected
+
+    @pytest.mark.parametrize("raw", ["0", "-5", "soon", "inf", "nan"])
+    def test_invalid_timeout_is_rejected(self, raw: str) -> None:
+        with pytest.raises(ParameterError, match="NSS_INFERENCE_TIMEOUT must be a positive number"):
+            resolve_inference_settings(
+                LLMConfig(model_id="model"),
+                environ={"NSS_INFERENCE_ENDPOINT": LOCAL_ENDPOINT, "NSS_INFERENCE_TIMEOUT": raw},
+            )
+
+    def test_local_openai_compatible_endpoint_can_be_keyless(self) -> None:
+        assert _local_settings().api_key is None
+
+    def test_api_key_is_redacted_from_repr(self) -> None:
+        settings = _local_settings(api_key="do-not-render")  # pragma: allowlist secret
+
+        assert "do-not-render" not in repr(settings)
+
+    @pytest.mark.parametrize(
+        "endpoint",
+        [
+            "http://localhost:8000/v1",
+            "http://LOCALHOST:8000/v1",
+            "http://127.0.0.1:8000/v1",
+            "http://127.1.2.3/v1",
+            "http://[::1]:8000/v1",
+            "https://inference.example.com/v1",
+        ],
+    )
+    def test_accepts_https_or_loopback_http(self, endpoint: str) -> None:
+        settings = resolve_inference_settings(LLMConfig(model_id="model"), environ={"NSS_INFERENCE_ENDPOINT": endpoint})
+
+        assert settings.endpoint_url == endpoint
+
+    @pytest.mark.parametrize(
+        ("endpoint", "message"),
+        [
+            pytest.param("localhost:8000", "absolute HTTP", id="missing-scheme"),
+            pytest.param("ftp://localhost/v1", "absolute HTTP", id="unsupported-scheme"),
+            pytest.param(
+                "https://user:password@example.com/v1",  # pragma: allowlist secret
+                "must not contain credentials",
+                id="embedded-credentials",
+            ),
+            pytest.param("http://inference.example.com/v1", "must use HTTPS", id="remote-http"),
+            pytest.param("http://10.0.0.5:8000/v1", "must use HTTPS", id="private-network-http"),
+            pytest.param("http://localhost.example.com/v1", "must use HTTPS", id="localhost-lookalike"),
+        ],
+    )
+    def test_rejects_invalid_or_plaintext_remote_endpoints(self, endpoint: str, message: str) -> None:
+        with pytest.raises(ParameterError, match=message):
+            resolve_inference_settings(LLMConfig(), environ={"NSS_INFERENCE_ENDPOINT": endpoint})
+
+    def test_retryable_errors_belong_to_the_generation_error_hierarchy(self) -> None:
+        assert issubclass(TransientInferenceError, GenerationError)
+        assert issubclass(InvalidInferenceResponse, GenerationError)
+
+
+@pytest.mark.unit
+class TestOpenAICompatibleTransport:
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            (None, {}),
+            (
+                '{"temperature": 1.0, "top_k": 20, "thinking_token_budget": 1000}',
+                {"temperature": 1.0, "top_k": 20, "thinking_token_budget": 1000},
+            ),
+            ('{"top_p": 0.9, "temperature": null}', {"top_p": 0.9}),
+        ],
+        ids=["server-defaults", "options-sent", "null-drops-field"],
+    )
+    def test_request_options_are_sent_with_every_request(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        raw: str | None,
+        expected: dict[str, object],
+    ) -> None:
+        payloads: list[dict[str, object]] = []
+
+        def post(url: str, **kwargs: object) -> httpx.Response:
+            payloads.append(cast(dict[str, object], kwargs["json"]))
+            return httpx.Response(200, json={"choices": [{"message": {"content": "{}"}}]})
+
+        monkeypatch.setattr(httpx, "post", post)
+        environ = {"NSS_INFERENCE_ENDPOINT": LOCAL_ENDPOINT}
+        if raw is not None:
+            environ["NSS_INFERENCE_REQUEST_OPTIONS"] = raw
+        settings = resolve_inference_settings(LLMConfig(model_id="model"), environ=environ)
+
+        OpenAICompatibleTransport(settings).complete(messages=[], response_model=_StructuredResponse)
+
+        sent = {key: value for key, value in payloads[0].items() if key not in {"model", "messages", "response_format"}}
+        assert sent == expected
+
+    @pytest.mark.parametrize(
+        ("raw", "match"),
+        [
+            ("not json", "must be a JSON object"),
+            ("[1, 2]", "must be a JSON object"),
+            ('{"model": "other", "temperature": 1}', "must not set fields NSS manages: model"),
+        ],
+        ids=["invalid-json", "not-an-object", "reserved-field"],
+    )
+    def test_invalid_request_options_are_rejected(self, raw: str, match: str) -> None:
+        with pytest.raises(ParameterError, match=match):
+            resolve_inference_settings(
+                LLMConfig(model_id="model"),
+                environ={"NSS_INFERENCE_ENDPOINT": LOCAL_ENDPOINT, "NSS_INFERENCE_REQUEST_OPTIONS": raw},
+            )
+
+    @pytest.mark.parametrize(
+        ("endpoint", "trust_env"),
+        [(LOCAL_ENDPOINT, False), ("http://127.0.0.1:8000/v1", False), ("https://inference.example.com/v1", True)],
+        ids=["localhost", "ipv4-loopback", "remote"],
+    )
+    def test_environment_proxies_apply_only_to_remote_endpoints(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        endpoint: str,
+        trust_env: bool,
+    ) -> None:
+        seen: list[object] = []
+
+        def post(url: str, **kwargs: object) -> httpx.Response:
+            seen.append(kwargs["trust_env"])
+            return httpx.Response(200, json={"choices": [{"message": {"content": "{}"}}]})
+
+        monkeypatch.setattr(httpx, "post", post)
+        settings = resolve_inference_settings(
+            LLMConfig(model_id="model"),
+            environ={"NSS_INFERENCE_ENDPOINT": endpoint},
+        )
+
+        OpenAICompatibleTransport(settings).complete(messages=[], response_model=_StructuredResponse)
+
+        assert seen == [trust_env]
+
+    def test_requests_use_the_resolved_timeout(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        timeouts: list[object] = []
+
+        def post(url: str, **kwargs: object) -> httpx.Response:
+            timeouts.append(kwargs["timeout"])
+            return httpx.Response(200, json={"choices": [{"message": {"content": "{}"}}]})
+
+        monkeypatch.setattr(httpx, "post", post)
+        settings = resolve_inference_settings(
+            LLMConfig(model_id="model"),
+            environ={"NSS_INFERENCE_ENDPOINT": LOCAL_ENDPOINT, "NSS_INFERENCE_TIMEOUT": "900"},
+        )
+
+        OpenAICompatibleTransport(settings).complete(messages=[], response_model=_StructuredResponse)
+
+        assert timeouts == [900.0]
+
+    def test_rejects_plaintext_remote_endpoint_from_direct_settings(self) -> None:
+        settings = InferenceSettings(
+            endpoint_url="http://inference.example.com/v1",
+            model_id="remote-model",
+            max_workers=1,
+            api_key="private-key",  # pragma: allowlist secret
+        )
+
+        with pytest.raises(ParameterError, match="must use HTTPS"):
+            OpenAICompatibleTransport(settings)
+
+    def test_sends_chat_completions_with_strict_json_schema(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        captured = _capture_request(monkeypatch, _StructuredResponse)
+
+        assert captured["url"] == "http://localhost:8000/v1/chat/completions"
+        assert captured["headers"] == {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer runtime-key",  # pragma: allowlist secret
+        }
+        payload = _as_dict(captured["json"])
+        assert payload["model"] == "local-model"
+        response_format = _as_dict(payload["response_format"])
+        assert response_format["type"] == "json_schema"
+        assert _as_dict(response_format["json_schema"])["strict"] is True
+
+    def test_strict_schema_requires_every_property_without_defaults(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        captured = _capture_request(monkeypatch, _OptionalFieldsResponse)
+
+        response_format = _as_dict(_as_dict(captured["json"])["response_format"])
+        schema = _as_dict(_as_dict(response_format["json_schema"])["schema"])
+        item_schema = _as_dict(_as_dict(schema["$defs"])["_OptionalItem"])
+        note_schema = _as_dict(_as_dict(schema["properties"])["note"])
+        pattern_schema = _as_dict(_as_dict(item_schema["properties"])["pattern"])
+        assert schema["required"] == ["items", "note"]
+        assert item_schema["required"] == ["name", "pattern"]
+        assert "default" not in note_schema
+        assert "default" not in pattern_schema
+        assert {"type": "null"} in cast(list[object], pattern_schema["anyOf"])
+
+    def test_auth_error_does_not_include_response_body_or_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        transport = OpenAICompatibleTransport(_local_settings(api_key="private-key"))  # pragma: allowlist secret
+        monkeypatch.setattr(
+            httpx,
+            "post",
+            lambda *args, **kwargs: httpx.Response(401, text="raw-private-response"),
+        )
+
+        with pytest.raises(ParameterError) as exc_info:
+            transport.complete(
+                messages=[{"role": "user", "content": "raw-private-prompt"}],
+                response_model=_StructuredResponse,
+            )
+
+        rendered = str(exc_info.value)
+        assert "raw-private-response" not in rendered
+        assert "private-key" not in rendered
+
+    @pytest.mark.parametrize(
+        ("headers", "expected_retry_after"),
+        [({"Retry-After": "5"}, 5.0), ({"Retry-After": "Wed, 21 Oct 2026 07:28:00 GMT"}, None), ({}, None)],
+    )
+    def test_transient_status_reports_numeric_retry_after(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        headers: dict[str, str],
+        expected_retry_after: float | None,
+    ) -> None:
+        monkeypatch.setattr(httpx, "post", lambda *args, **kwargs: httpx.Response(429, headers=headers))
+
+        with pytest.raises(TransientInferenceError) as exc_info:
+            OpenAICompatibleTransport(_local_settings()).complete(
+                messages=[{"role": "user", "content": "request"}],
+                response_model=_StructuredResponse,
+            )
+
+        assert exc_info.value.retry_after == expected_retry_after

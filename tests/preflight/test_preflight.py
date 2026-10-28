@@ -22,6 +22,7 @@ from nemo_safe_synthesizer.config.evaluate import (
     TimeSeriesEvaluationParameters,
 )
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
+from nemo_safe_synthesizer.config.replace_pii import LLMConfig, PiiReplacementPlan
 from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
 from nemo_safe_synthesizer.config.training import TrainingHyperparams
 from nemo_safe_synthesizer.defaults import DEFAULT_MAX_SEQ_LENGTH, PSEUDO_GROUP_COLUMN
@@ -390,102 +391,100 @@ class TestVRAMHeadroomCheck:
 
 @pytest.mark.unit
 class TestInferenceModelCheck:
-    def test_empty_env_emits_key_warning(self, default_config):
-        with patch.dict("os.environ", {}, clear=True):
-            issues = InferenceModelCheck().run(make_ctx(config=default_config))
-        assert any(i.code == "inference_key_missing" and i.severity == "warning" for i in issues)
-
-    def test_inference_key_present_is_silent(self, default_config):
-        with patch.dict("os.environ", {"NSS_INFERENCE_KEY": "test-key", "HF_TOKEN": "hf_xxx"}):
-            issues = InferenceModelCheck().run(make_ctx(config=default_config))
-        assert not any(i.code == "inference_key_missing" for i in issues)
-
-    def test_pii_disabled_skips_all_checks(self):
-        config = SafeSynthesizerParameters(replace_pii=None)
+    def test_disabled_llm_skips_inference_environment(self, default_config):
         with patch.dict(
             "os.environ",
             {"NSS_INFERENCE_MODEL": "", "NSS_INFERENCE_ENDPOINT": "not-a-url"},
             clear=True,
         ):
-            issues = InferenceModelCheck().run(make_ctx(config=config))
+            issues = InferenceModelCheck().run(make_ctx(config=default_config))
         assert issues == []
 
-    def test_blank_model_emits_warning(self, default_config):
-        with patch.dict(
-            "os.environ",
-            {"NSS_INFERENCE_KEY": "test-key", "NSS_INFERENCE_MODEL": "   "},
+    @pytest.mark.parametrize(
+        ("environ", "expected_codes"),
+        [
+            pytest.param({"NSS_INFERENCE_ENDPOINT": "http://localhost:8000/v1"}, [], id="keyless-local"),
+            pytest.param(
+                {"NSS_INFERENCE_ENDPOINT": "not-a-url", "NSS_INFERENCE_KEY": "key"},
+                ["inference_endpoint_invalid"],
+                id="malformed-endpoint",
+            ),
+            pytest.param(
+                {"NSS_INFERENCE_ENDPOINT": "http://inference.example.com/v1"},
+                ["inference_endpoint_invalid"],
+                id="remote-plaintext-http",
+            ),
+        ],
+    )
+    def test_explicit_endpoint_validates_inference_environment(self, default_config, environ, expected_codes):
+        default_config.replace_pii.llm = LLMConfig(model_id="local-model")
+
+        with patch.dict("os.environ", environ, clear=True):
+            issues = InferenceModelCheck().run(make_ctx(config=default_config))
+
+        assert [issue.code for issue in issues] == expected_codes
+        assert all(issue.severity == "error" for issue in issues)
+
+    @pytest.mark.parametrize(
+        "environ",
+        [
+            pytest.param(
+                {"NSS_INFERENCE_ENDPOINT": "https://inference.example.com/v1", "NSS_INFERENCE_TIMEOUT": "soon"},
+                id="explicit-endpoint-timeout",
+            ),
+            pytest.param({"NSS_INFERENCE_REQUEST_OPTIONS": "[1]"}, id="local-server-options"),
+        ],
+    )
+    def test_invalid_request_settings_have_their_own_code(self, default_config, environ):
+        default_config.replace_pii.llm = LLMConfig(model_id="model")
+
+        with patch.dict("os.environ", environ, clear=True):
+            issues = InferenceModelCheck().run(make_ctx(config=default_config))
+
+        assert [issue.code for issue in issues] == ["inference_request_settings_invalid"]
+
+    def test_explicit_endpoint_without_model_is_an_error(self, default_config):
+        default_config.replace_pii.llm = LLMConfig()
+
+        with patch.dict("os.environ", {"NSS_INFERENCE_ENDPOINT": "http://localhost:8000/v1"}, clear=True):
+            issues = InferenceModelCheck().run(make_ctx(config=default_config))
+
+        assert [issue.code for issue in issues] == ["inference_model_missing"]
+
+    def test_explicit_plan_skips_inference_checks(self, default_config):
+        default_config.replace_pii.llm = LLMConfig()
+        default_config.replace_pii.replacement_plan = PiiReplacementPlan()
+
+        with patch.dict("os.environ", {"NSS_INFERENCE_TIMEOUT": "soon"}, clear=True):
+            issues = InferenceModelCheck().run(make_ctx(config=default_config))
+
+        assert issues == []
+
+    @pytest.mark.parametrize(
+        ("environ", "runtime_problem", "expected_codes"),
+        [
+            pytest.param({}, None, [], id="default-local-server"),
+            pytest.param({}, "no CUDA GPU is available", ["inference_local_runtime_unavailable"], id="no-gpu"),
+            pytest.param(
+                {"NSS_INFERENCE_LOCAL_PROFILE": "missing"}, None, ["inference_local_profile_invalid"], id="bad-profile"
+            ),
+        ],
+    )
+    def test_managed_local_server_replaces_endpoint_validation(
+        self, default_config, environ, runtime_problem, expected_codes
+    ):
+        default_config.replace_pii.llm = LLMConfig()
+
+        with (
+            patch.dict("os.environ", environ, clear=True),
+            patch(
+                "nemo_safe_synthesizer.preflight.checks.environment.local_runtime_problem",
+                return_value=runtime_problem,
+            ),
         ):
             issues = InferenceModelCheck().run(make_ctx(config=default_config))
-        assert any(i.code == "inference_model_blank" and i.severity == "warning" for i in issues)
 
-    def test_unset_model_is_silent(self, default_config):
-        with patch.dict("os.environ", {"NSS_INFERENCE_KEY": "test-key"}, clear=True):
-            issues = InferenceModelCheck().run(make_ctx(config=default_config))
-        assert not any(i.code == "inference_model_blank" for i in issues)
-
-    def test_valid_model_is_silent(self, default_config):
-        with patch.dict(
-            "os.environ",
-            {"NSS_INFERENCE_KEY": "test-key", "NSS_INFERENCE_MODEL": "nvidia/nemotron-3-ultra-550b-a55b"},
-        ):
-            issues = InferenceModelCheck().run(make_ctx(config=default_config))
-        assert not any(i.code == "inference_model_blank" for i in issues)
-
-    @pytest.mark.parametrize("endpoint", ["not-a-url", "ftp://example.com", "http://"])
-    def test_invalid_endpoint_emits_error(self, default_config, endpoint):
-        # An invalid endpoint cannot succeed, so it must fail preflight (error),
-        # not merely warn -- otherwise --validate passes a config that fails on
-        # the first classification request.
-        with patch.dict(
-            "os.environ",
-            {"NSS_INFERENCE_KEY": "test-key", "NSS_INFERENCE_ENDPOINT": endpoint},
-        ):
-            issues = InferenceModelCheck().run(make_ctx(config=default_config))
-        assert any(i.code == "inference_endpoint_invalid" and i.severity == "error" for i in issues)
-
-    def test_valid_endpoint_is_silent(self, default_config):
-        with patch.dict(
-            "os.environ",
-            {"NSS_INFERENCE_KEY": "test-key", "NSS_INFERENCE_ENDPOINT": "https://integrate.api.nvidia.com/v1"},
-        ):
-            issues = InferenceModelCheck().run(make_ctx(config=default_config))
-        assert not any(i.code == "inference_endpoint_invalid" for i in issues)
-
-    @pytest.mark.parametrize("blank", ["", "   "])
-    def test_blank_endpoint_is_silent(self, default_config, blank):
-        # A blank endpoint is treated as unset (falls back to the default base
-        # URL), not as an invalid endpoint.
-        with patch.dict(
-            "os.environ",
-            {"NSS_INFERENCE_KEY": "test-key", "NSS_INFERENCE_ENDPOINT": blank},
-        ):
-            issues = InferenceModelCheck().run(make_ctx(config=default_config))
-        assert not any(i.code == "inference_endpoint_invalid" for i in issues)
-
-    def test_invalid_endpoint_takes_priority_over_warnings(self, default_config):
-        # Single-dispatch match: the invalid-endpoint error is checked first, so
-        # it wins over the missing-key and blank-model warnings.
-        with patch.dict(
-            "os.environ",
-            {"NSS_INFERENCE_MODEL": "", "NSS_INFERENCE_ENDPOINT": "not-a-url"},
-            clear=True,
-        ):
-            issues = InferenceModelCheck().run(make_ctx(config=default_config))
-        codes = {i.code for i in issues}
-        assert codes == {"inference_endpoint_invalid"}
-        assert all(i.severity == "error" for i in issues if i.code == "inference_endpoint_invalid")
-
-    def test_missing_key_takes_priority_over_blank_model(self, default_config):
-        # With a valid endpoint, the missing-key warning outranks the blank-model
-        # warning.
-        with patch.dict(
-            "os.environ",
-            {"NSS_INFERENCE_MODEL": "   ", "NSS_INFERENCE_ENDPOINT": "https://integrate.api.nvidia.com/v1"},
-            clear=True,
-        ):
-            issues = InferenceModelCheck().run(make_ctx(config=default_config))
-        codes = {i.code for i in issues}
-        assert codes == {"inference_key_missing"}
+        assert [issue.code for issue in issues] == expected_codes
 
 
 @pytest.mark.unit

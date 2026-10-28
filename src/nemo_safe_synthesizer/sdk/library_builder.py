@@ -13,27 +13,17 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pandas as pd
-from datasets import Dataset
 
 from ..cli.artifact_structure import Workdir
 from ..config import (
     SafeSynthesizerParameters,
 )
-from ..config.autoconfig import AutoConfigResolver
 from ..config.unknown_fields import UnknownFieldBehavior, normalize_unknown_fields
 from ..configurator.parameters import Parameters
 from ..errors import ParameterError
-from ..evaluation.evaluator import Evaluator
-from ..generation.timeseries_backend import TimeseriesBackend
-from ..generation.vllm_backend import VllmBackend
-from ..holdout.holdout import Holdout
-from ..llm.metadata import ModelMetadata
 from ..llm.utils import get_device_name
 from ..observability import LogCategory, configure_logging_from_workdir, get_logger, initialize_observability, traced
 from ..package_info import __version__
-from ..pii_replacer.nemo_pii import NemoPII
-from ..preflight import PreflightReport, PreflightStage, run_preflight
-from ..results import SafeSynthesizerResults, make_nss_results
 from ..telemetry import (
     DeploymentTypeEnum,
     NSSTrainingAndGenerationEvent,
@@ -45,13 +35,17 @@ from ..telemetry import (
     bucket_records,
     sanitize_model_for_telemetry,
 )
-from ..training.huggingface_backend import HuggingFaceBackend
 from .config_builder import ConfigBuilder
 
 logger = get_logger(__name__)
 
 if TYPE_CHECKING:
+    from ..config.replace_pii import PiiReplacementPlan
+    from ..evaluation.evaluator import Evaluator
     from ..generation.backend import GeneratorBackend
+    from ..llm.metadata import ModelMetadata
+    from ..preflight import PreflightReport
+    from ..results import SafeSynthesizerResults
     from ..training.backend import TrainingBackend
 
 
@@ -292,6 +286,8 @@ class SafeSynthesizer(ConfigBuilder):
         Returns:
             Self for method chaining.
         """
+        from ..llm.metadata import ModelMetadata
+
         self._ensure_observability()
         assert self._workdir is not None
         # Use source paths which point to parent workdir when resuming for generation
@@ -364,6 +360,44 @@ class SafeSynthesizer(ConfigBuilder):
             )
         return self
 
+    @traced("SafeSynthesizer.plan_pii_replacement", category=LogCategory.RUNTIME)
+    def plan_pii_replacement(self, output_path: Path | str | None = None) -> PiiReplacementPlan:
+        """Resolve a PII replacement plan from the full input dataframe.
+
+        This plan-only workflow does not split the input or enter model
+        metadata, training, generation, replacement, or evaluation stages.
+        When ``output_path`` is provided, the resolved plan is also written as
+        reusable YAML.
+
+        Args:
+            output_path: Optional destination for the replacement-plan YAML.
+
+        Returns:
+            The dataframe-aware validated replacement plan.
+
+        Raises:
+            ParameterError: If PII replacement is disabled.
+            ValueError: If no valid data source is configured.
+        """
+        self._ensure_observability()
+        self.resolve()
+
+        assert self._nss_config is not None
+        assert isinstance(self._data_source, pd.DataFrame)
+        replace_pii = self._nss_config.replace_pii
+        if replace_pii is None:
+            raise ParameterError("PII replacement is disabled; configure replace_pii before planning")
+
+        from ..pii_replacer.planning import resolve_plan
+
+        return resolve_plan(
+            self._data_source,
+            replace_pii,
+            self._nss_config.data,
+            self._nss_config.time_series,
+            output_path=output_path,
+        )
+
     @traced("SafeSynthesizer.process_data", category=LogCategory.RUNTIME)
     def process_data(self, check_only: bool = False) -> SafeSynthesizer:
         """Perform train/test split, auto-config resolution, and optional PII replacement.
@@ -389,6 +423,11 @@ class SafeSynthesizer(ConfigBuilder):
         Returns:
             Self for method chaining.
         """
+        from ..config.autoconfig import AutoConfigResolver
+        from ..holdout.holdout import Holdout
+        from ..llm.metadata import ModelMetadata
+        from ..preflight import PreflightStage, run_preflight
+
         self._total_start = time.monotonic()
         if not os.environ.get("NSS_PHASE"):
             os.environ["NSS_PHASE"] = "process_data"
@@ -421,6 +460,9 @@ class SafeSynthesizer(ConfigBuilder):
             summary = "\n".join(f"  {e.code}: {e.message}" for e in preflight.errors)
             raise ParameterError(f"Pre-flight check failed with {len(preflight.errors)} error(s):\n{summary}")
 
+        # Keep replacement-plan discovery before this boundary when execution
+        # is integrated. Plan-only and pipeline runs must inspect the same full
+        # input, while replacement itself applies to the training split.
         holdout = Holdout(self._nss_config)
         original_training_df, self._test_df = holdout.train_test_split(self._data_source)
 
@@ -434,22 +476,13 @@ class SafeSynthesizer(ConfigBuilder):
         resolved_config = resolver()
         self._nss_config = resolved_config
 
-        # PII replacement is skipped on the validate path (``check_only=True``).
-        # Rationale: the replacer makes network calls to the PII classifier
-        # and can take minutes on large datasets -- incompatible with the
-        # fast fail-fast semantics of ``--validate``. The consequence is
-        # that preflight sees the pre-replacement training split; replacement
-        # text can shift token lengths, so ``--validate`` is documented as
-        # best-effort rather than a guarantee (see user-guide/running.md).
+        # Keep validation usable while replacement execution is unavailable,
+        # but require callers running the pipeline to disable PII explicitly.
         if not check_only and self._nss_config.replace_pii is not None:
-            replacer = NemoPII(self._nss_config.replace_pii)
-            replacer.transform_df(original_training_df)
-            assert replacer.result is not None
-            self._training_df = replacer.result.transformed_df
-            self._column_statistics = replacer.result.column_statistics
-            self._pii_replacer_time = replacer.elapsed_time
-            # We explicitly do not replace PII in the test set so that the
-            # privacy metrics are valid.
+            raise ParameterError(
+                "PII replacement execution is not available. Set replace_pii to null, "
+                "pass --no-replace-pii, or call with_replace_pii(enable=False)."
+            )
 
         # Only create new metadata if not already loaded (e.g., from load_from_save_path)
         metadata_for_preflight = self._llm_metadata
@@ -528,6 +561,10 @@ class SafeSynthesizer(ConfigBuilder):
             RuntimeError: If called after ``load_from_save_path()`` or
                 before ``process_data()``.
         """
+        from datasets import Dataset
+
+        from ..training.huggingface_backend import HuggingFaceBackend
+
         if self._loaded_from_save_path:
             raise RuntimeError(
                 "train() cannot be called after load_from_save_path(). "
@@ -575,6 +612,9 @@ class SafeSynthesizer(ConfigBuilder):
         Returns:
             Self for method chaining.
         """
+        from ..generation.timeseries_backend import TimeseriesBackend
+        from ..generation.vllm_backend import VllmBackend
+
         if not os.environ.get("NSS_PHASE"):
             os.environ["NSS_PHASE"] = "generate"
         if TYPE_CHECKING:
@@ -614,6 +654,9 @@ class SafeSynthesizer(ConfigBuilder):
         Returns:
             Self for method chaining.
         """
+        from ..evaluation.evaluator import Evaluator
+        from ..results import make_nss_results
+
         if not os.environ.get("NSS_PHASE"):
             os.environ["NSS_PHASE"] = "evaluate"
         if TYPE_CHECKING:

@@ -1,0 +1,312 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+from pathlib import Path
+
+import pandas as pd
+import pytest
+
+from nemo_safe_synthesizer.config.data import DataParameters
+from nemo_safe_synthesizer.config.replace_pii import (
+    EntityType,
+    LLMConfig,
+    PiiColumnPlan,
+    PiiReplacementPlan,
+    ReplacePiiConfig,
+)
+from nemo_safe_synthesizer.pii_replacer.llm_client import InferenceSettings
+from nemo_safe_synthesizer.pii_replacer.planning import (
+    PlanDiscoverer,
+    PlanDiscoveryInput,
+    PlanEnhancer,
+    load_plan,
+    resolve_plan,
+)
+
+from ..conftest import FakeLocalServer
+
+
+class RecordingDiscoverer(PlanDiscoverer):
+    def __init__(self, plan: PiiReplacementPlan | None = None) -> None:
+        self.plan = plan
+        self.inputs: list[PlanDiscoveryInput] = []
+
+    def discover(self, discovery_input: PlanDiscoveryInput) -> PiiReplacementPlan:
+        self.inputs.append(discovery_input)
+        return self.plan or PiiReplacementPlan()
+
+
+class RecordingEnhancer(PlanEnhancer):
+    def __init__(self, plan: PiiReplacementPlan) -> None:
+        self.plan = plan
+        self.calls: list[tuple[PlanDiscoveryInput, PiiReplacementPlan]] = []
+
+    def enhance(
+        self,
+        discovery_input: PlanDiscoveryInput,
+        baseline: PiiReplacementPlan,
+    ) -> PiiReplacementPlan:
+        self.calls.append((discovery_input, baseline))
+        return self.plan
+
+
+@pytest.fixture
+def fixture_patient_df() -> pd.DataFrame:
+    """Return grouped patient rows for replacement-plan discovery tests."""
+    return pd.DataFrame(
+        {
+            "patient_id": [1, 1, 2, 2],
+            "event_index": [1, 2, 1, 2],
+            "name": ["Ada Lovelace", "Ada Lovelace", "Grace Hopper", "Grace Hopper"],
+            "email": ["ada@example.com", "ada@example.com", "grace@example.com", "grace@example.com"],
+        }
+    )
+
+
+@pytest.mark.unit
+class TestResolvePlan:
+    def test_auto_discovery_uses_empty_heuristic_by_default(self, fixture_patient_df: pd.DataFrame) -> None:
+        plan = resolve_plan(fixture_patient_df, ReplacePiiConfig(), DataParameters())
+
+        assert plan == PiiReplacementPlan()
+
+    def test_llm_enhancer_receives_heuristic_baseline(self, fixture_patient_df: pd.DataFrame) -> None:
+        baseline = PiiReplacementPlan(
+            columns_to_replace=[PiiColumnPlan(column_name="name", entity_type=EntityType.FULL_NAME)]
+        )
+        enhanced = PiiReplacementPlan(
+            columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
+        )
+        discoverer = RecordingDiscoverer(baseline)
+        enhancer = RecordingEnhancer(enhanced)
+
+        result = resolve_plan(
+            fixture_patient_df,
+            ReplacePiiConfig(llm=LLMConfig()),
+            DataParameters(),
+            discoverer=discoverer,
+            enhancer=enhancer,
+        )
+
+        assert result is enhanced
+        assert len(discoverer.inputs) == 1
+        assert enhancer.calls == [(discoverer.inputs[0], baseline)]
+
+    def test_configured_llm_constructs_default_enhancer(
+        self,
+        fixture_patient_df: pd.DataFrame,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        expected = PiiReplacementPlan(
+            columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
+        )
+        enhancer = RecordingEnhancer(expected)
+        monkeypatch.setenv("NSS_INFERENCE_ENDPOINT", "https://inference.example.com/v1")
+        monkeypatch.setattr(
+            "nemo_safe_synthesizer.pii_replacer.planning.llm.LLMPlanEnhancer",
+            lambda config, settings=None: enhancer,
+        )
+
+        result = resolve_plan(
+            fixture_patient_df,
+            ReplacePiiConfig(llm=LLMConfig(model_id="served/model")),
+            DataParameters(),
+        )
+
+        assert result is expected
+        assert len(enhancer.calls) == 1
+
+    def test_inline_plan_bypasses_discovery_but_retains_llm_for_replacement(
+        self,
+        fixture_patient_df: pd.DataFrame,
+    ) -> None:
+        plan = PiiReplacementPlan(columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)])
+        discoverer = RecordingDiscoverer()
+        enhancer = RecordingEnhancer(PiiReplacementPlan())
+        config = ReplacePiiConfig(replacement_plan=plan, llm=LLMConfig())
+
+        result = resolve_plan(
+            fixture_patient_df,
+            config,
+            DataParameters(),
+            discoverer=discoverer,
+            enhancer=enhancer,
+        )
+
+        assert result is plan
+        assert config.llm is not None
+        assert discoverer.inputs == []
+        assert enhancer.calls == []
+
+    def test_plan_file_bypasses_discovery(self, fixture_patient_df: pd.DataFrame, tmp_path: Path) -> None:
+        path = tmp_path / "plan.yaml"
+        path.write_text("columns_to_replace:\n  - column_name: email\n    entity_type: email\n")
+        discoverer = RecordingDiscoverer()
+
+        result = resolve_plan(
+            fixture_patient_df,
+            ReplacePiiConfig(replacement_plan=str(path)),
+            DataParameters(),
+            discoverer=discoverer,
+        )
+
+        assert result.columns_to_replace[0].column_name == "email"
+        assert discoverer.inputs == []
+
+    def test_profiles_select_a_stable_bounded_set_in_dataframe_order(self) -> None:
+        dataframe = pd.DataFrame(
+            {
+                "patient_id": [index // 2 for index in range(12)],
+                "event_index": list(range(12)),
+                "name": [f"person-{index}" for index in range(12)],
+            }
+        )
+        shuffled = dataframe.sample(frac=1, random_state=7)
+        discoverer = RecordingDiscoverer()
+        data_config = DataParameters(
+            group_training_examples_by="patient_id",
+            order_training_examples_by="event_index",
+        )
+
+        resolve_plan(dataframe, ReplacePiiConfig(), data_config, discoverer=discoverer)
+        first_input = discoverer.inputs[0]
+        resolve_plan(
+            shuffled,
+            ReplacePiiConfig(),
+            data_config,
+            discoverer=discoverer,
+        )
+        second_input = discoverer.inputs[1]
+
+        first_profiles = {profile.column_name: profile for profile in first_input.column_profiles}
+        second_profiles = {profile.column_name: profile for profile in second_input.column_profiles}
+        assert first_input.group_column == "patient_id"
+        assert first_input.protected_columns == frozenset({"event_index"})
+        first_samples = first_profiles["name"].samples
+        second_samples = second_profiles["name"].samples
+        assert len(first_samples) == 8
+        assert set(first_samples) == set(second_samples)
+        assert first_samples == tuple(value for value in dataframe["name"] if value in set(first_samples))
+        assert second_samples == tuple(value for value in shuffled["name"] if value in set(second_samples))
+
+    def test_discovery_input_uses_no_group_column_for_record_consistency(
+        self,
+        fixture_patient_df: pd.DataFrame,
+    ) -> None:
+        discoverer = RecordingDiscoverer()
+
+        resolve_plan(fixture_patient_df, ReplacePiiConfig(), DataParameters(), discoverer=discoverer)
+
+        assert discoverer.inputs[0].group_column is None
+
+    def test_output_path_persists_the_final_plan(self, fixture_patient_df: pd.DataFrame, tmp_path: Path) -> None:
+        path = tmp_path / "pii_replacement_plan.yaml"
+
+        plan = resolve_plan(
+            fixture_patient_df,
+            ReplacePiiConfig(),
+            DataParameters(),
+            output_path=path,
+        )
+
+        assert path.exists()
+        assert load_plan(path) == plan
+
+
+@pytest.mark.unit
+class TestResolvePlanWithLocalServer:
+    def test_server_runs_for_enhancement_and_stops_before_validation(
+        self,
+        fixture_patient_df: pd.DataFrame,
+        fixture_fake_local_servers: list[FakeLocalServer],
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        expected = PiiReplacementPlan(
+            columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
+        )
+        seen: dict[str, object] = {}
+
+        def make_enhancer(config: LLMConfig, settings: InferenceSettings | None = None) -> PlanEnhancer:
+            seen["settings"] = settings
+            seen["running_during_enhance"] = fixture_fake_local_servers[0].running
+            return RecordingEnhancer(expected)
+
+        def record_validation(*args: object, **kwargs: object) -> None:
+            seen["running_during_validation"] = fixture_fake_local_servers[0].running
+
+        monkeypatch.setattr("nemo_safe_synthesizer.pii_replacer.planning.llm.LLMPlanEnhancer", make_enhancer)
+        monkeypatch.setattr("nemo_safe_synthesizer.pii_replacer.planning.resolver.validate_plan", record_validation)
+
+        result = resolve_plan(
+            fixture_patient_df,
+            ReplacePiiConfig(llm=LLMConfig()),
+            DataParameters(),
+            output_path=tmp_path / "plan.yaml",
+        )
+
+        assert result is expected
+        assert seen["settings"] == fixture_fake_local_servers[0].inference_settings(max_workers=LLMConfig().max_workers)
+        assert seen["running_during_enhance"] is True
+        assert seen["running_during_validation"] is False
+        assert not fixture_fake_local_servers[0].running
+
+    def test_server_stops_when_enhancement_fails(
+        self,
+        fixture_patient_df: pd.DataFrame,
+        fixture_fake_local_servers: list[FakeLocalServer],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        class FailingEnhancer(PlanEnhancer):
+            def enhance(self, discovery_input: PlanDiscoveryInput, baseline: PiiReplacementPlan) -> PiiReplacementPlan:
+                raise RuntimeError("inference failed")
+
+        monkeypatch.setattr(
+            "nemo_safe_synthesizer.pii_replacer.planning.llm.LLMPlanEnhancer",
+            lambda config, settings=None: FailingEnhancer(),
+        )
+
+        with pytest.raises(RuntimeError, match="inference failed"):
+            resolve_plan(fixture_patient_df, ReplacePiiConfig(llm=LLMConfig()), DataParameters())
+
+        assert len(fixture_fake_local_servers) == 1
+        assert not fixture_fake_local_servers[0].running
+
+    @pytest.mark.parametrize(
+        "config",
+        [
+            pytest.param(ReplacePiiConfig(), id="llm-disabled"),
+            pytest.param(
+                ReplacePiiConfig(
+                    replacement_plan=PiiReplacementPlan(
+                        columns_to_replace=[PiiColumnPlan(column_name="email", entity_type=EntityType.EMAIL)]
+                    ),
+                    llm=LLMConfig(),
+                ),
+                id="explicit-plan",
+            ),
+        ],
+    )
+    def test_no_server_starts_without_llm_discovery(
+        self,
+        fixture_patient_df: pd.DataFrame,
+        fixture_fake_local_servers: list[FakeLocalServer],
+        config: ReplacePiiConfig,
+    ) -> None:
+        resolve_plan(fixture_patient_df, config, DataParameters())
+
+        assert fixture_fake_local_servers == []
+
+    def test_caller_supplied_enhancer_starts_no_server(
+        self,
+        fixture_patient_df: pd.DataFrame,
+        fixture_fake_local_servers: list[FakeLocalServer],
+    ) -> None:
+        resolve_plan(
+            fixture_patient_df,
+            ReplacePiiConfig(llm=LLMConfig()),
+            DataParameters(),
+            enhancer=RecordingEnhancer(PiiReplacementPlan()),
+        )
+
+        assert fixture_fake_local_servers == []

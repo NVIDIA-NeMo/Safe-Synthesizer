@@ -18,6 +18,7 @@ from ..configurator.pydantic_click_options import (
     parse_overrides,
     pydantic_options,
 )
+from ..defaults import DEFAULT_NSS_INFERENCE_LOCAL_MODEL, PII_REPLACEMENT_PLAN_FILENAME
 from ..errors import UserError
 from ..observability import traced_user
 from ..telemetry import DeploymentTypeEnum, TaskStatusEnum
@@ -176,7 +177,8 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
             type=str,
             required=False,
             default=None,
-            help="OpenAI-compatible inference endpoint URL for PII column classification. "
+            help="OpenAI-compatible inference endpoint URL for LLM-assisted PII plan discovery. When unset, NSS "
+            "runs a local vLLM server instead (see --inference-local-profile). "
             "Can also be set via NSS_INFERENCE_ENDPOINT env var.",
         )
     )
@@ -186,8 +188,7 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
             type=str,
             required=False,
             default=None,
-            help="API key for the inference endpoint used in PII column classification. "
-            "Can also be set via NSS_INFERENCE_KEY env var.",
+            help="API key for the PII inference endpoint. Can also be set via NSS_INFERENCE_KEY env var.",
         )
     )
     options.append(
@@ -196,9 +197,47 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
             type=str,
             required=False,
             default=None,
-            help="Model ID sent to the inference endpoint for PII column classification. "
+            help="Model ID served by the PII inference endpoint. "
             "Can also be set via NSS_INFERENCE_MODEL env var. "
-            "[default: nvidia/nemotron-3-ultra-550b-a55b]",
+            "Without an endpoint, selects the bundled local vLLM profile to run "
+            f"(default: {DEFAULT_NSS_INFERENCE_LOCAL_MODEL}); required with an explicit endpoint.",
+        )
+    )
+    options.append(
+        click.option(
+            "--inference-timeout-seconds",
+            type=float,
+            required=False,
+            default=None,
+            help="Per-request timeout in seconds for PII inference, including model reasoning. "
+            "Overrides the local profile's timeout. Can also be set via NSS_INFERENCE_TIMEOUT env var. "
+            "[default: the local profile's timeout, or 60]",
+        )
+    )
+    options.append(
+        click.option(
+            "--inference-request-options",
+            type=str,
+            required=False,
+            default=None,
+            help="JSON object of chat-completions fields sent with every PII inference request, such as "
+            '\'{"temperature": 1.0, "thinking_token_budget": 1000}\'. Overrides the local profile\'s options '
+            "field by field; a null value drops a field. Fields left out use the server's defaults. "
+            "Can also be set via NSS_INFERENCE_REQUEST_OPTIONS env var.",
+        )
+    )
+    options.append(
+        click.option(
+            "--inference-local-profile",
+            type=str,
+            required=False,
+            default=None,
+            help="Path to a custom profile YAML, or a bundled profile name, for the local vLLM server that NSS "
+            "starts for LLM-assisted "
+            "PII plan discovery and stops before planning returns. Without it and without an endpoint, "
+            "--inference-model-id selects a bundled profile. With a profile, NSS_INFERENCE_ENDPOINT, if set, "
+            "must be a loopback http URL and selects the listening address. "
+            "Can also be set via NSS_INFERENCE_LOCAL_PROFILE env var.",
         )
     )
     options.append(
@@ -207,24 +246,14 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
             "huggingface_remote",
             required=False,
             default=None,
-            help="Allow or block Hugging Face remote downloads for both the base model "
-            "and GLiNER. --disable-huggingface-remote forces a fully offline run by "
-            "setting HF_HUB_OFFLINE and TRANSFORMERS_OFFLINE; both must already be "
+            help="Allow or block Hugging Face remote downloads for Hub assets "
+            "(base model, evaluation embeddings, and similar). "
+            "--disable-huggingface-remote blocks Hugging Face asset downloads by "
+            "setting HF_HUB_OFFLINE and TRANSFORMERS_OFFLINE; required assets must already be "
             "cached. Equivalent to setting HF_HUB_OFFLINE in the environment. When "
             "neither flag is given, the run inherits HF_HUB_OFFLINE/TRANSFORMERS_OFFLINE "
             "from the environment (remote downloads enabled when unset). "
             "[default: --enable-huggingface-remote]",
-        )
-    )
-    options.append(
-        click.option(
-            "--cpu-count",
-            type=int,
-            required=False,
-            default=None,
-            help="Number of CPU worker processes used for NER (PII replacement). "
-            "Can also be set via NSS_PII_REPLACER_CPU_COUNT env var. "
-            "[default: max(1, cpu_count - 1)]",
         )
     )
     # Apply each option decorator in reverse order (decorators apply bottom-up)
@@ -410,7 +439,8 @@ def run(
     """Run the Safe Synthesizer end-to-end pipeline.
 
     Without a subcommand, runs the full end-to-end pipeline.
-    Use 'run train' or 'run generate' for individual stages.
+    Use 'run train' or 'run generate' for individual stages, or
+    'run replace-pii --plan-only' to resolve a PII replacement plan.
     """
     # If a subcommand is invoked, skip the default behavior
     if ctx.invoked_subcommand is not None:
@@ -460,6 +490,53 @@ def run(
             finally:
                 if hasattr(nss, "generator") and nss.generator is not None:
                     nss.generator.teardown()
+    except UserError as exc:
+        click.secho(str(exc), fg="red", err=True)
+        raise SystemExit(1)
+
+
+@run.command("replace-pii")
+@common_run_options
+@pydantic_options(SafeSynthesizerParameters, field_separator=CLI_NESTED_FIELD_SEPARATOR)
+@click.option(
+    "--plan-only",
+    is_flag=True,
+    default=False,
+    help="Resolve and write the PII replacement plan without running replacement, training, generation, or evaluation.",
+)
+def run_replace_pii(
+    plan_only: bool = False,
+    **kwargs: Any,
+) -> None:
+    """Plan PII replacement for the full input dataset.
+
+    This command currently requires ``--plan-only``.
+    """
+    if not plan_only:
+        raise click.UsageError("run replace-pii currently requires --plan-only")
+
+    _set_cli_deployment_type_default()
+    settings = _settings_from_run_kwargs(kwargs)
+    run_logger, config, df, workdir = common_setup(
+        settings=settings,
+        phase="replace_pii",
+        skip_wandb=True,
+    )
+
+    try:
+        with traced_user("SafeSynthesizer"):
+            from ..sdk.library_builder import SafeSynthesizer
+
+            if df is None:
+                raise UserError("Input data is required to plan PII replacement.")
+            output_path = workdir.run_dir / PII_REPLACEMENT_PLAN_FILENAME
+            nss = SafeSynthesizer(
+                config=config,
+                workdir=workdir,
+                emit_telemetry=config.emit_telemetry,
+            ).with_data_source(df)
+            nss.plan_pii_replacement(output_path=output_path)
+            run_logger.info(f"PII replacement plan saved to: {output_path}")
     except UserError as exc:
         click.secho(str(exc), fg="red", err=True)
         raise SystemExit(1)

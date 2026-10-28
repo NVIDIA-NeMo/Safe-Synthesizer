@@ -49,6 +49,7 @@ run = [
     { task = "test:smoke:gpu:resume" },
     { task = "test:smoke:gpu:structured-generation" },
     { task = "test:smoke:gpu:timeseries" },
+    { task = "test:smoke:gpu:local-inference" },
     { task = "test:smoke:gpu:smollm2" },
 ]
 
@@ -76,6 +77,11 @@ run = "uv run --frozen pytest --dist loadscope -vv -n 0 tests/smoke/test_nss_str
 description = "Run GPU timeseries smoke tests"
 alias = "test-smoke-gpu-timeseries"
 run = "uv run --frozen pytest --dist loadscope -vv -n 0 tests/smoke/test_nss_timeseries_gpu.py"
+
+["test:smoke:gpu:local-inference"]
+description = "Run GPU smoke tests for the managed local vLLM PII planning server"
+alias = "test-smoke-gpu-local-inference"
+run = "uv run --frozen pytest --dist loadscope -vv -n 0 tests/smoke/test_local_inference_gpu.py"
 
 ["test:smoke:gpu:smollm2"]
 description = "Run GPU SmolLM2 smoke tests"
