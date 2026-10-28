@@ -708,8 +708,6 @@ replacement were built and tuned for English text and US conventions:
 - Generated full names are written first name first in every locale.
 - Email addresses built from generated names keep accented and non-Latin
   letters, such as `françois.prévost42@example.com`.
-- `ssn` replacements use the locale's Faker national ID, so a US Social
-  Security number in an `fr_FR` run is replaced with a French number.
 - Full street addresses keep the locality only when the street comes first;
   other address orders are replaced whole.
 - `find_and_replace` runs only for `en_US`, as described under
