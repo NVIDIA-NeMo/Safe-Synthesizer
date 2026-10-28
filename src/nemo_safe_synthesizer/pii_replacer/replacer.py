@@ -9,9 +9,16 @@ import time
 from typing import TYPE_CHECKING
 
 from ..config.data import DataParameters
-from ..config.replace_pii import EntityType, PiiSamplerBackend, PiiSamplerConfig, ReplacePiiConfig
+from ..config.replace_pii import (
+    EntityType,
+    PiiReplacementPlan,
+    PiiSamplerBackend,
+    PiiSamplerConfig,
+    ReplacePiiConfig,
+)
 from ..config.time_series import TimeSeriesParameters
 from ..errors import InternalError
+from ..observability import get_logger
 from .planning import resolve_replacement_config
 from .replacement.detection import CompositeFreeTextDetector
 from .replacement.executor import StructuredReplacementExecutor, resolve_base_seed
@@ -22,6 +29,11 @@ if TYPE_CHECKING:
     import pandas as pd
 
 __all__ = ["TabularPiiReplacer"]
+
+logger = get_logger(__name__)
+
+# find_and_replace skips known values that are common English words, so it runs only for this locale.
+_FIND_AND_REPLACE_LOCALE = "en_US"
 
 
 class TabularPiiReplacer:
@@ -105,7 +117,7 @@ class TabularPiiReplacer:
             base_seed=resolve_base_seed(resolved_config.seed),
             free_text_detector=free_text_detector,
             capture_replacement_map=capture_replacement_map,
-            find_and_replace=resolved_config.free_text_detection.find_and_replace,
+            find_and_replace=_find_and_replace_enabled(resolved_config, plan),
         )
         execution = executor.execute(df)
         return TransformResult(
@@ -127,3 +139,18 @@ class TabularPiiReplacer:
             case PiiSamplerBackend.FAKER:
                 return FakerReplacementGenerator(sampler=sampler, locale=locale)
         raise InternalError(f"Unsupported PII sampler backend: {sampler.backend!r}")
+
+
+def _find_and_replace_enabled(config: ReplacePiiConfig, plan: PiiReplacementPlan) -> bool:
+    """Return whether to search free text for known values, warning when the locale turns the search off."""
+    if not config.free_text_detection.find_and_replace:
+        return False
+    if config.locale == _FIND_AND_REPLACE_LOCALE:
+        return True
+    if any(spec.entity_type is EntityType.FREE_TEXT for spec in plan.columns_to_replace):
+        logger.user.warning(
+            f"Skipping free_text_detection.find_and_replace for locale {config.locale!r}: it relies on a list of "
+            f"common English words and runs only for {_FIND_AND_REPLACE_LOCALE}. Detected free-text spans are "
+            "still replaced."
+        )
+    return False

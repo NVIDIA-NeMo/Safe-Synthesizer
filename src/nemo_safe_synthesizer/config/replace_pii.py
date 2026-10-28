@@ -910,7 +910,8 @@ class FreeTextDetectionConfig(NSSBaseModel):
             "than three characters, one-word values that are common English words, such as 'Will' or "
             "'Brown', and missing-value placeholders such as 'Unknown' are not searched for, and text inside a "
             "name-exclusion span, such as a medical condition, is never replaced this way. Set false to replace "
-            "only detected spans, for example to measure what the search adds."
+            "only detected spans, for example to measure what the search adds. The search runs only when "
+            "replace_pii.locale is en_US, because the common-word list is English."
         ),
     )
     batch_size: int = Field(

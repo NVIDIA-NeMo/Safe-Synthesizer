@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import inspect
+import logging
 import sys
 from types import SimpleNamespace
 
@@ -37,6 +38,28 @@ class _FakeGlinerModel:
         **kwargs: object,
     ) -> list[object]:
         return [{"entities": {"first_name": [{"start": 0, "end": 3, "confidence": 0.99}]}} for _ in texts]
+
+
+class _NoSpanGlinerModel:
+    def batch_extract_entities(
+        self,
+        texts: list[str],
+        labels: dict[str, dict[str, float]],
+        **kwargs: object,
+    ) -> list[object]:
+        return [{"entities": {}} for _ in texts]
+
+
+def _use_fake_gliner2(monkeypatch: pytest.MonkeyPatch, model: object) -> None:
+    """Load ``model`` through the real GLiNER2 loader, as if a GPU were available."""
+
+    class FakeGliner2:
+        @classmethod
+        def from_pretrained(cls, model_id: str, **kwargs: object) -> object:
+            return model
+
+    monkeypatch.setitem(sys.modules, "torch", SimpleNamespace(cuda=SimpleNamespace(is_available=lambda: True)))
+    monkeypatch.setitem(sys.modules, "gliner2", SimpleNamespace(GLiNER2=FakeGliner2))
 
 
 @pytest.mark.unit
@@ -191,18 +214,36 @@ class TestTabularPiiReplacerInterface:
             ),
         )
 
-        class FakeGliner2:
-            @classmethod
-            def from_pretrained(cls, model_id: str, **kwargs: object) -> _FakeGlinerModel:
-                return _FakeGlinerModel()
-
-        monkeypatch.setitem(sys.modules, "gliner2", SimpleNamespace(GLiNER2=FakeGliner2))
+        _use_fake_gliner2(monkeypatch, _FakeGlinerModel())
 
         result = TabularPiiReplacer(config, data_config=DataParameters()).replace(dataframe)
 
         pd.testing.assert_frame_equal(dataframe, original)
         assert result.transformed_df["notes"].iloc[0] != "Ada called"
         assert result.transformed_df["notes"].iloc[0].endswith(" called")
+
+    @pytest.mark.parametrize(("locale", "searched"), [("en_US", True), ("fr_FR", False)])
+    def test_find_and_replace_runs_only_for_en_us(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, locale: str, searched: bool
+    ) -> None:
+        dataframe = pd.DataFrame({"first_name": ["Adeline"], "notes": ["Adeline called"]})
+        config = ReplacePiiConfig(
+            locale=locale,
+            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+            replacement_plan=PiiReplacementPlan(
+                columns_to_replace=[
+                    PiiColumnPlan(column_name="first_name", entity_type=EntityType.FIRST_NAME),
+                    PiiColumnPlan(column_name="notes", entity_type=EntityType.FREE_TEXT),
+                ],
+            ),
+        )
+        _use_fake_gliner2(monkeypatch, _NoSpanGlinerModel())
+
+        with caplog.at_level(logging.WARNING):
+            result = TabularPiiReplacer(config, data_config=DataParameters()).replace(dataframe)
+
+        assert ("Adeline" not in result.transformed_df["notes"].iloc[0]) is searched
+        assert ("Skipping free_text_detection.find_and_replace" in caplog.text) is not searched
 
 
 @pytest.mark.unit

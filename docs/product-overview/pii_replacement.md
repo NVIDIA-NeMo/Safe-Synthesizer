@@ -622,7 +622,7 @@ detected text ignoring case, and is written in each occurrence's case.
 
 A detected span whose text equals a value already known in the same record or
 group always reuses that value's replacement. With `find_and_replace` (the
-default), NSS also searches every free-text cell for those known values and
+default) and `replace_pii.locale: en_US`, NSS also searches every free-text cell for those known values and
 replaces the occurrences the detectors missed. Known values are
 the original values of structured replacement columns, including the words of
 a plain full name, and the values detected anywhere in that record's or
@@ -640,7 +640,8 @@ match overlaps a detected span, the longer span wins, and a detected span wins o
 match of equal length. Replacement traces mark matches with the detection
 source `structured_value` or `detected_value`. Set `find_and_replace: false`
 to replace only detected spans, for example to measure what the search adds. NSS does not replace undetected aliases, such
-as nicknames.
+as nicknames. For other locales the search is skipped with a warning, because
+its list of common words is English.
 
 Complete birth dates written in natural language, such as `5 April 1990` or
 `April 5th, 1990`, are parsed strictly, shifted the same way as structured
