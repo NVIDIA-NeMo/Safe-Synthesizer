@@ -245,6 +245,33 @@ class TestTabularPiiReplacerInterface:
         assert ("Adeline" not in result.transformed_df["notes"].iloc[0]) is searched
         assert ("Skipping free_text_detection.find_and_replace" in caplog.text) is not searched
 
+    def test_detect_reports_replace_statistics_without_changing_the_data(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # The fake detector finds the leading "Ada"; "Adeline" is found only by matching row 0's first name.
+        dataframe = pd.DataFrame({"first_name": ["Adeline", "Ada"], "notes": ["Ada met Adeline", "Ada left"]})
+        original = dataframe.copy(deep=True)
+        config = ReplacePiiConfig(
+            sampler=PiiSamplerConfig(backend=PiiSamplerBackend.FAKER),
+            replacement_plan=PiiReplacementPlan(
+                columns_to_replace=[
+                    PiiColumnPlan(column_name="first_name", entity_type=EntityType.FIRST_NAME),
+                    PiiColumnPlan(column_name="notes", entity_type=EntityType.FREE_TEXT),
+                ],
+            ),
+        )
+        _use_fake_gliner2(monkeypatch, _FakeGlinerModel())
+        replacer = TabularPiiReplacer(config, data_config=DataParameters())
+
+        detected = replacer.detect(dataframe)
+        replaced = replacer.replace(dataframe)
+
+        pd.testing.assert_frame_equal(dataframe, original)
+        assert detected.resolved_config.inline_plan == replaced.resolved_config.inline_plan
+        for column_name, statistics in detected.column_statistics.items():
+            assert statistics.detected_entity_counts == replaced.column_statistics[column_name].detected_entity_counts
+            assert statistics.detected_entity_values == replaced.column_statistics[column_name].detected_entity_values
+            assert not statistics.is_transformed
+        assert detected.column_statistics["notes"].detected_entity_values == {"first_name": {"Ada", "Adeline"}}
+
 
 @pytest.mark.unit
 class TestTransformResult:

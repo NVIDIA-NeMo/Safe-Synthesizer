@@ -248,6 +248,27 @@ class FreeTextReplacementExecutor:
             replacement_records=tuple(self._replacement_records),
         )
 
+    def detect_statistics(
+        self,
+        dataframe: pd.DataFrame,
+        specs: list[PiiColumnPlan],
+        group_identities: tuple[CanonicalValue, ...] | None,
+        detections: FreeTextCellDetections,
+    ) -> dict[str, FreeTextColumnStatistics]:
+        """Record the spans ``execute`` would replace in each free-text target, without replacing them.
+
+        Structured mappings must be registered first, as ``execute`` expects, so known-value matches are the same.
+        """
+        known_values = (
+            self._known_values(dataframe, specs, group_identities, detections.spans) if self._find_and_replace else {}
+        )
+        for spec in specs:
+            statistics = self._statistics_for(spec)
+            for to_replace in self._cells_to_replace(dataframe, spec, group_identities, detections, known_values):
+                for span in to_replace.spans:
+                    _record_detection(statistics, span, detected_text(to_replace.cell, span))
+        return self._statistics
+
     def _known_values(
         self,
         working: pd.DataFrame,

@@ -232,3 +232,32 @@ class TransformResult(BaseModel):
         if plan is None:
             raise InternalError("resolved_config must contain the executed replacement plan")
         return plan
+
+
+class DetectionResult(BaseModel):
+    """Result of PII detection without replacement: per-column statistics for the unchanged data.
+
+    The statistics are those ``TransformResult`` would report for the same data and plan, so PII replay
+    can use them when replacement is off. Like ``TransformResult``, the result keeps its own deep copy of
+    ``resolved_config``.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    column_statistics: dict[str, ColumnStatistics] = Field(
+        description="Column name to ``ColumnStatistics`` for that column; no column is marked transformed.",
+    )
+    resolved_config: ReplacePiiConfig = Field(
+        description="Resolved PII configuration containing the plan used for detection. Stored as a deep copy.",
+    )
+    detection_time_seconds: float = Field(
+        ge=0,
+        description="Wall-clock time for this detection call, in seconds, including plan resolution.",
+    )
+
+    @field_validator("resolved_config")
+    @classmethod
+    def _own_a_resolved_config_snapshot(cls, value: ReplacePiiConfig) -> ReplacePiiConfig:
+        if value.inline_plan is None:
+            raise InternalError("resolved_config must contain the detection plan")
+        return value.model_copy(deep=True)

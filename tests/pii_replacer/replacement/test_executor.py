@@ -1399,6 +1399,77 @@ class TestStreetAddressLocality:
         assert result.dataframe["address"].iloc[0] == "Whole Replacement"
 
 
+class _TwoWordNameGenerator(_RecordingGenerator):
+    """Return two-word full names, as the samplers do, so name parts line up with the original's."""
+
+    def generate(self, request: ReplacementGenerationRequest) -> str:
+        if request.entity_type is EntityType.FULL_NAME:
+            self.requests.append(request)
+            # Name words may not contain digits, so the seed's digits are spelled as letters.
+            letters = "".join(chr(ord("a") + int(digit)) for digit in str(request.seed))
+            return f"Given{letters[:6]} Family{letters[-6:]}"
+        return super().generate(request)
+
+
+@pytest.mark.unit
+class TestDetect:
+    @pytest.mark.parametrize("group_column", [None, "patient"])
+    def test_detect_reports_the_detections_of_execute_without_generating(self, group_column: str | None) -> None:
+        address = "489 Park Blvd, Mesa, IA 76237"
+        notes = [
+            "Kenneth Gonzales called; ship to 489 Park Blvd. Ref P-1",
+            "Gonzales paid. Ada left",
+            "Ada Lovelace visited",
+        ]
+        dataframe = pd.DataFrame(
+            {
+                "patient": ["P-1", "P-1", "P-2"],
+                "full_name": ["Kenneth Gonzales", "Kenneth Gonzales", "Ada Lovelace"],
+                "address": [address, address, "12 Oak St"],
+                "notes": notes,
+            }
+        )
+        plan = _plan(
+            _target("patient", EntityType.UNIQUE_IDENTIFIER),
+            _target("full_name", EntityType.FULL_NAME),
+            _target("address", EntityType.STREET_ADDRESS),
+            _target("notes", EntityType.FREE_TEXT),
+        )
+        spans = [
+            _span(0, "notes", notes[0], "Kenneth Gonzales", EntityType.FULL_NAME),
+            _span(2, "notes", notes[2], "Ada", EntityType.FIRST_NAME),
+            _span(0, "address", address, "489 Park Blvd", EntityType.STREET_ADDRESS),
+            _span(1, "address", address, "489 Park Blvd", EntityType.STREET_ADDRESS),
+        ]
+        original = dataframe.copy(deep=True)
+
+        def executor(generator: _RecordingGenerator) -> StructuredReplacementExecutor:
+            return StructuredReplacementExecutor(
+                plan,
+                generator,
+                group_column=group_column,
+                base_seed=42,
+                free_text_detector=_StaticDetector(spans),
+                find_and_replace=True,
+            )
+
+        replaced = executor(_TwoWordNameGenerator()).execute(dataframe).column_statistics
+        detect_generator = _TwoWordNameGenerator()
+        detected = executor(detect_generator).detect(dataframe)
+
+        assert detect_generator.requests == []
+        pd.testing.assert_frame_equal(dataframe, original)
+        assert detected.keys() == replaced.keys()
+        for column_name, statistics in detected.items():
+            assert statistics.detected_entity_counts == replaced[column_name].detected_entity_counts
+            assert statistics.detected_entity_values == replaced[column_name].detected_entity_values
+            assert not statistics.is_transformed
+        # The detector found two names; known-value matching adds the missed street, ID, and name parts.
+        assert detected["notes"].detected_entity_values["street_address"] == {"489 Park Blvd"}
+        assert "P-1" in detected["notes"].detected_entity_values["unique_identifier"]
+        assert "Gonzales" in detected["notes"].detected_entity_values["last_name"]
+
+
 @pytest.mark.unit
 class TestResolveBaseSeed:
     def test_precedence_is_explicit_then_environment_then_default(self, monkeypatch: pytest.MonkeyPatch) -> None:

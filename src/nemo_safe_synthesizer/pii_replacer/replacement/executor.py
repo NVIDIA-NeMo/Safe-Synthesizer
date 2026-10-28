@@ -211,6 +211,66 @@ class StructuredReplacementExecutor:
             ),
         )
 
+    def detect(self, dataframe: pd.DataFrame) -> dict[str, ColumnStatistics]:
+        """Return the column statistics ``execute`` reports, without generating or writing any replacement.
+
+        Structured targets report their non-missing original values. Free-text targets report the spans
+        ``execute`` would replace: detector spans and, with ``find_and_replace``, matches of known values.
+        Each structured value is registered for that matching as its own replacement, so no generator is
+        called. The matches are those of ``execute``, except that a full name always contributes its name
+        words here, while ``execute`` skips them when the replacement has a different number of words.
+
+        Example:
+            With PII replacement off, the pipeline calls this on the training split so PII replay can still
+            count which original values reappear in the synthetic data.
+        """
+        self._reset_execution_state()
+        free_text_specs = [spec for spec in self._plan.columns_to_replace if spec.entity_type is EntityType.FREE_TEXT]
+        group_identities = self._snapshot_group_identities(dataframe)
+        if free_text_specs:
+            self._address_parts = detect_address_parts(
+                self._detector,
+                dataframe,
+                [spec for spec in self._plan.columns_to_replace if spec.entity_type is EntityType.STREET_ADDRESS],
+            )
+            for spec in compile_plan(self._plan):
+                if spec.entity_type is not EntityType.FREE_TEXT:
+                    self._register_originals(dataframe, spec, group_identities)
+        free_text_detections = self._free_text.detect(dataframe, free_text_specs)
+        free_text_statistics = self._free_text.detect_statistics(
+            dataframe, free_text_specs, group_identities, free_text_detections
+        )
+        return _column_statistics(
+            dataframe,
+            dataframe,
+            self._plan,
+            self._generator.backend.value,
+            free_text_statistics,
+            drift_by_target={},
+            repeated_by_target={},
+            kept_name_parts_by_target={},
+        )
+
+    def _register_originals(
+        self,
+        dataframe: pd.DataFrame,
+        spec: PiiColumnPlan,
+        group_identities: tuple[CanonicalValue, ...] | None,
+    ) -> None:
+        """Register every original value of a structured target as its own replacement, for free-text matching."""
+        column_position = dataframe.columns.get_loc(spec.column_name)
+        if not isinstance(column_position, int):
+            raise ParameterError(f"replacement column {spec.column_name!r} is duplicated in the dataframe")
+        original_texts = dataframe.iloc[:, column_position].astype(str).tolist()
+        address_parts = self._address_parts.get(spec.column_name, {})
+        for row_position in range(len(dataframe)):
+            original = dataframe.iat[row_position, column_position]
+            if is_missing_scalar(original):
+                continue
+            key = self._mapping_key(spec, row_position, canonicalize_scalar(original), group_identities)
+            text = original_texts[row_position]
+            self._free_text.register_structured_mapping(key, spec, text, text, address_parts.get(text))
+
     def _reset_execution_state(self) -> None:
         self._cache.clear()
         self._address_parts = {}

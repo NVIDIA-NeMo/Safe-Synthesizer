@@ -23,7 +23,7 @@ from .planning import resolve_replacement_config
 from .replacement.detection import CompositeFreeTextDetector
 from .replacement.executor import StructuredReplacementExecutor, resolve_base_seed
 from .replacement.generation import ReplacementGenerator
-from .transform_result import TransformResult
+from .transform_result import DetectionResult, TransformResult
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -98,6 +98,49 @@ class TabularPiiReplacer:
             self._time_series,
             check_pattern_coverage=check_pattern_coverage,
         )
+        executor = self._executor(resolved_config, capture_replacement_map=capture_replacement_map)
+        execution = executor.execute(df)
+        return TransformResult(
+            transformed_df=execution.dataframe,
+            column_statistics=execution.column_statistics,
+            resolved_config=resolved_config,
+            generation_statistics=execution.generation_statistics,
+            replacement_time_seconds=time.perf_counter() - started,
+            replacement_map=execution.replacement_map,
+        )
+
+    def detect(self, df: pd.DataFrame, *, check_pattern_coverage: bool = True) -> DetectionResult:
+        """Return the column statistics ``replace`` would report for ``df``, without replacing anything.
+
+        The plan is resolved and PII is detected exactly as in ``replace``, but no replacement value is
+        generated and ``df`` is not copied or changed.
+
+        Args:
+            df: Dataframe whose PII should be detected.
+            check_pattern_coverage: Same as for ``replace``.
+
+        Raises:
+            ParameterError: If the configured plan is invalid for ``df``.
+            GenerationError: If free-text detection fails.
+        """
+        started = time.perf_counter()
+        resolved_config = resolve_replacement_config(
+            df,
+            self._config,
+            self._data_config,
+            self._time_series,
+            check_pattern_coverage=check_pattern_coverage,
+        )
+        column_statistics = self._executor(resolved_config).detect(df)
+        return DetectionResult(
+            column_statistics=column_statistics,
+            resolved_config=resolved_config,
+            detection_time_seconds=time.perf_counter() - started,
+        )
+
+    def _executor(
+        self, resolved_config: ReplacePiiConfig, *, capture_replacement_map: bool = False
+    ) -> StructuredReplacementExecutor:
         plan = resolved_config.inline_plan
         if plan is None:
             raise InternalError("PII replacement configuration was not fully resolved")
@@ -110,7 +153,7 @@ class TabularPiiReplacer:
             )
             else None
         )
-        executor = StructuredReplacementExecutor(
+        return StructuredReplacementExecutor(
             plan,
             self._replacement_generator(resolved_config.sampler, resolved_config.locale),
             group_column=self._data_config.group_training_examples_by,
@@ -118,15 +161,6 @@ class TabularPiiReplacer:
             free_text_detector=free_text_detector,
             capture_replacement_map=capture_replacement_map,
             find_and_replace=_find_and_replace_enabled(resolved_config, plan),
-        )
-        execution = executor.execute(df)
-        return TransformResult(
-            transformed_df=execution.dataframe,
-            column_statistics=execution.column_statistics,
-            resolved_config=resolved_config,
-            generation_statistics=execution.generation_statistics,
-            replacement_time_seconds=time.perf_counter() - started,
-            replacement_map=execution.replacement_map,
         )
 
     def _replacement_generator(self, sampler: PiiSamplerConfig, locale: str) -> ReplacementGenerator:
