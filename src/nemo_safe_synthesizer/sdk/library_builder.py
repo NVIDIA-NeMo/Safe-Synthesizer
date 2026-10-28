@@ -34,6 +34,7 @@ from ..telemetry import (
     _telemetry_enabled,
     bucket_columns,
     bucket_records,
+    sanitize_locale_for_telemetry,
     sanitize_model_for_telemetry,
 )
 from .config_builder import ConfigBuilder
@@ -82,7 +83,48 @@ def _warn_for_saved_default_drift(saved_config: SafeSynthesizerParameters) -> No
         )
 
 
-def _build_telemetry_event(ss: SafeSynthesizer, status: TaskStatusEnum) -> NSSTrainingAndGenerationEvent:
+def _pii_plan_source(config: ReplacePiiConfig) -> str:
+    """Return whether the PII replacement plan is auto-discovered or user-supplied.
+
+    Call this before planning: resolution replaces ``"auto_discovery"`` with the
+    discovered plan. A plan file is loaded into an inline plan when the config is
+    validated, so files and inline plans are both ``"provided"``.
+    """
+    return "auto_discovery" if config.is_auto_discovery else "provided"
+
+
+def _pii_llm_usage(config: ReplacePiiConfig, plan_source: str) -> tuple[str, str]:
+    """Return the telemetry ``(mode, model)`` labels for LLM-assisted PII planning.
+
+    Resolves where planning runs the same way plan discovery does, without
+    launching a server. Only bundled model names are reported; custom profiles
+    and other endpoint models collapse to fixed labels so private model or
+    deployment names are never sent.
+    """
+    if plan_source != "auto_discovery":
+        return "none", "undefined"
+
+    from ..pii_replacer.local_inference import (
+        LocalServerRequest,
+        bundled_profile_for_model,
+        resolve_planning_inference,
+    )
+
+    try:
+        inference = resolve_planning_inference(config.llm)
+    except ParameterError:
+        return "invalid", "undefined"
+    if isinstance(inference, LocalServerRequest):
+        profile = inference.profile
+        is_bundled = bundled_profile_for_model(profile.served_name) == profile
+        return "local", profile.served_name if is_bundled else "custom_profile"
+    is_bundled_model = bundled_profile_for_model(inference.model_id) is not None
+    return "endpoint", inference.model_id if is_bundled_model else "other"
+
+
+def _build_telemetry_event(
+    ss: SafeSynthesizer, status: TaskStatusEnum, task: str = "run"
+) -> NSSTrainingAndGenerationEvent:
     """Build a telemetry event from the current pipeline state."""
     cfg = ss._nss_config
 
@@ -100,7 +142,22 @@ def _build_telemetry_event(ss: SafeSynthesizer, status: TaskStatusEnum) -> NSSTr
         if summary.data_privacy_score is not None:
             dps = summary.data_privacy_score
 
-    replace_pii = cfg is not None and cfg.replace_pii is not None
+    replace_pii_config = cfg.replace_pii if cfg is not None else None
+    replace_pii = replace_pii_config is not None
+    pii_sampler_backend = "undefined"
+    pii_plan_source = "undefined"
+    pii_columns_bucket = "undefined"
+    pii_locale = "undefined"
+    pii_llm_mode = "undefined"
+    pii_llm_model = "undefined"
+    if replace_pii_config is not None:
+        pii_sampler_backend = replace_pii_config.sampler.backend.value
+        # Planning rewrites replacement_plan to the resolved inline plan, so prefer the source recorded beforehand.
+        pii_plan_source = ss._pii_plan_source or _pii_plan_source(replace_pii_config)
+        if replace_pii_config.inline_plan is not None:
+            pii_columns_bucket = bucket_columns(len(replace_pii_config.inline_plan.columns_to_replace))
+        pii_locale = sanitize_locale_for_telemetry(replace_pii_config.locale)
+        pii_llm_mode, pii_llm_model = _pii_llm_usage(replace_pii_config, pii_plan_source)
     dp_enabled = cfg is not None and cfg.privacy is not None and cfg.privacy.dp_enabled
     ts_enabled = cfg is not None and cfg.time_series.is_timeseries
     group_by = cfg is not None and cfg.data.group_training_examples_by is not None
@@ -115,12 +172,18 @@ def _build_telemetry_event(ss: SafeSynthesizer, status: TaskStatusEnum) -> NSSTr
     gpu = get_device_name()
 
     return NSSTrainingAndGenerationEvent(
-        task="run",
+        task=task,
         task_status=status,
         deployment_type=ss._deployment_type,
         job_duration_sec=duration,
         num_records_generated=num_records,
         replace_pii_enabled=replace_pii,
+        pii_sampler_backend=pii_sampler_backend,
+        pii_plan_source=pii_plan_source,
+        pii_replaced_columns_bucket=pii_columns_bucket,
+        pii_locale=pii_locale,
+        pii_llm_mode=pii_llm_mode,
+        pii_llm_model=pii_llm_model,
         differential_privacy_enabled=dp_enabled,
         time_series_enabled=ts_enabled,
         group_by_enabled=group_by,
@@ -133,12 +196,12 @@ def _build_telemetry_event(ss: SafeSynthesizer, status: TaskStatusEnum) -> NSSTr
     )
 
 
-def _emit_nss_telemetry(ss: SafeSynthesizer, status: TaskStatusEnum) -> None:
+def _emit_nss_telemetry(ss: SafeSynthesizer, status: TaskStatusEnum, task: str = "run") -> None:
     """Enqueue and immediately flush a single telemetry event. Never raises."""
     try:
         if not ss._emit_telemetry:
             return
-        event = _build_telemetry_event(ss, status)
+        event = _build_telemetry_event(ss, status, task)
         handler = TelemetryHandler(source_client_version=__version__)
         handler.enqueue(event)
         handler.stop()  # Flushes the queue and sends
@@ -267,6 +330,7 @@ class SafeSynthesizer(ConfigBuilder):
         self._test_df: pd.DataFrame | None = None
         self._column_statistics: dict | None = None
         self._pii_replacer_time: float | None = None
+        self._pii_plan_source: str | None = None
         self._llm_metadata: ModelMetadata | None = None
         self._total_start: float | None = None
         self._loaded_from_save_path: bool = False
@@ -435,6 +499,7 @@ class SafeSynthesizer(ConfigBuilder):
         replace_pii = config.replace_pii
         if replace_pii is None:
             raise ParameterError("PII replacement is disabled; configure replace_pii before planning")
+        self._pii_plan_source = _pii_plan_source(replace_pii)
 
         from ..pii_replacer.planning import resolve_replacement_config
 
@@ -468,6 +533,9 @@ class SafeSynthesizer(ConfigBuilder):
         the full input and replaces that same dataframe. The end-to-end
         pipeline instead resolves against the full input and replaces only its
         training split after holdout creation.
+
+        When telemetry is enabled, emits one anonymous event with task
+        ``replace_pii`` and the final status, including on failure.
 
         Args:
             output_path: Optional destination for the replaced data, written as
@@ -516,6 +584,25 @@ class SafeSynthesizer(ConfigBuilder):
             result.resolved_config  # The plan and sampler mappings written to the YAML file.
         """
         self._ensure_observability()
+        self._total_start = time.monotonic()
+        self._pii_plan_source = None
+        try:
+            result = self._replace_full_input_pii(output_path, config_output_path, source_text)
+            _emit_nss_telemetry(self, TaskStatusEnum.COMPLETED, task="replace_pii")
+        except KeyboardInterrupt:
+            _emit_nss_telemetry(self, TaskStatusEnum.CANCELED, task="replace_pii")
+            raise
+        except Exception:
+            _emit_nss_telemetry(self, TaskStatusEnum.ERROR, task="replace_pii")
+            raise
+        return result
+
+    def _replace_full_input_pii(
+        self,
+        output_path: Path | str | None,
+        config_output_path: Path | str | None,
+        source_text: pd.DataFrame | None,
+    ) -> TransformResult:
         resolved = self.plan_pii_replacement(output_path=config_output_path)
 
         config = self._nss_config
@@ -591,6 +678,7 @@ class SafeSynthesizer(ConfigBuilder):
         from ..preflight import PreflightStage, run_preflight
 
         self._total_start = time.monotonic()
+        self._pii_plan_source = None
         if not os.environ.get("NSS_PHASE"):
             os.environ["NSS_PHASE"] = "process_data"
 
