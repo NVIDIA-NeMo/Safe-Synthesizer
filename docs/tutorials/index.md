@@ -22,6 +22,7 @@ one with Safe Synthesizer and all four notebooks already installed.
 - [Differential Privacy](differential-privacy.ipynb) -- enable differential privacy guarantees
 - [Time-Series Financial Transactions](time-series-financial-transactions.ipynb) -- synthesize grouped transaction histories
 - [Healthcare Hospital Readmissions](healthcare-hospital-readmissions.ipynb) -- explore privacy-aware healthcare utilization analytics
+- [Review the PII Replacement Plan](pii-replacement-review.ipynb) -- review and edit the PII replacement plan before training
 
 ## Adding a Tutorial
 
