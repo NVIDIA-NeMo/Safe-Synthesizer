@@ -1078,7 +1078,7 @@ tbody tr:hover td {
 }
 
 .columns-table .type-tag,
-.pii-panel .type-tag {
+.pii-replacement .type-tag {
     border-color: #888888;
     border-radius: 999px;
     background: transparent;
@@ -1245,21 +1245,31 @@ tbody tr:hover td {
     content: "";
 }
 
-.pii-panel {
-    margin-top: 24px;
+.metric-card-stat {
+    flex: 0 0 auto;
+    color: var(--muted);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
 }
 
-.pii-panel .metric-panel-heading {
-    padding-bottom: 18px;
+.pii-replacement .table-wrap {
+    margin: 0 0 16px;
 }
 
-.pii-panel .table-wrap {
-    margin-top: 0;
-    padding: 0 24px 24px;
-}
-
-.pii-panel table {
+.pii-replacement table {
     table-layout: auto;
+}
+
+.pii-replacement .pii-context,
+.pii-replacement .pii-footnote {
+    margin: 0 0 12px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 18px;
+}
+
+.pii-replacement .pii-footnote {
+    margin: 0;
 }
 
 .tnum {
@@ -1368,15 +1378,11 @@ tbody tr:hover td {
     }
 }
 
-.pii-panel table.pii-replacement-table {
-    min-width: 900px;
+.pii-replacement table.pii-replacement-table {
+    min-width: 760px;
     table-layout: fixed;
 }
 
-.pii-replacement h3,
-.pii-replacement .pii-kept {
-    padding: 0 24px;
-}
 
 .pii-replacement-table th {
     white-space: normal;

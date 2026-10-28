@@ -267,6 +267,8 @@ class SafeSynthesizer(ConfigBuilder):
         self._test_df: pd.DataFrame | None = None
         self._column_statistics: dict | None = None
         self._pii_replacer_time: float | None = None
+        # Why PII replay could not run, shown in the evaluation report; None when it ran or was turned off.
+        self._pii_replay_skipped_reason: str | None = None
         self._llm_metadata: ModelMetadata | None = None
         self._total_start: float | None = None
         self._loaded_from_save_path: bool = False
@@ -558,6 +560,36 @@ class SafeSynthesizer(ConfigBuilder):
             logger.info(f"Saved PII-replaced data to {replacement_output_path}")
         return result
 
+    def _detect_pii_for_replay(self, training_df: pd.DataFrame) -> None:
+        """Detect PII in the training split without replacing it, so PII replay can run with replacement off.
+
+        Runs just before evaluation, so a run that never evaluates never starts the planning LLM. Detection
+        resolves a plan with the default ``replace_pii`` settings and leaves the training data unchanged. A
+        failure only skips PII replay: the run continues with a warning, and the report says why.
+        """
+        from ..config.replace_pii import ReplacePiiConfig
+        from ..pii_replacer import TabularPiiReplacer
+
+        if TYPE_CHECKING:
+            assert self._nss_config is not None
+        logger.user.info("PII replacement is off; detecting PII in the training data for the PII replay check")
+        try:
+            result = TabularPiiReplacer(
+                ReplacePiiConfig(),
+                data_config=self._nss_config.data,
+                time_series=self._nss_config.time_series,
+            ).detect(training_df, check_pattern_coverage=False)
+        # PII replay is an optional evaluation check, so no detection failure may stop a run without replacement.
+        except Exception as exc:
+            self._pii_replay_skipped_reason = f"PII could not be detected in the training data ({exc})"
+            logger.user.warning(
+                "Skipping PII replay because PII could not be detected in the training data. Set "
+                "evaluation.pii_replay_enabled to false to skip detection.",
+                extra={"error": str(exc)},
+            )
+            return
+        self._column_statistics = result.column_statistics
+
     @traced("SafeSynthesizer.process_data", category=LogCategory.RUNTIME)
     def process_data(self, check_only: bool = False) -> SafeSynthesizer:
         """Perform train/test split, auto-config resolution, and optional PII replacement.
@@ -637,6 +669,7 @@ class SafeSynthesizer(ConfigBuilder):
         )
         self._training_df = original_training_df  # The active training df that might go through transformation
         self._column_statistics = None
+        self._pii_replay_skipped_reason = None
 
         resolver = AutoConfigResolver(self._training_df, self._nss_config)
         resolved_config = resolver()
@@ -855,6 +888,13 @@ class SafeSynthesizer(ConfigBuilder):
         evaluation_time = None
         report = None
         if self._nss_config.evaluation.enabled:
+            if (
+                self._nss_config.replace_pii is None
+                and self._nss_config.evaluation.pii_replay_enabled
+                and self._column_statistics is None
+                and self._pii_replay_skipped_reason is None
+            ):
+                self._detect_pii_for_replay(self._original_training_df)
             self.evaluator = Evaluator(
                 config=self._nss_config,
                 generate_results=self.generator.gen_results,
@@ -863,6 +903,7 @@ class SafeSynthesizer(ConfigBuilder):
                 training_df=self._original_training_df,
                 test_df=self._test_df,
                 workdir=self._workdir,
+                pii_replay_skipped_reason=self._pii_replay_skipped_reason,
             )
             self.evaluator.evaluate()
             evaluation_time = self.evaluator.evaluation_time

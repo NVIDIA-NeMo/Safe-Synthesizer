@@ -74,8 +74,8 @@ def _pii_column_groups(rows: list[dict], replay_data: list[dict]) -> list[dict]:
 
     A free-text column has an entry for every PII type found in its text, most frequent first, so the
     report can show the column once beside all of them. Replay fields are ``None`` when PII replay did
-    not run. Replay results for columns outside the plan, such as ``pii_replay_columns``, get their own
-    group with no replacement description.
+    not run. Replay results for columns outside the plan, such as every column when PII replacement was
+    off, get their own group with no replacement description.
     """
     replay_by_column: dict[str, list[dict]] = {}
     for datum in replay_data:
@@ -94,6 +94,27 @@ def _pii_column_groups(rows: list[dict], replay_data: list[dict]) -> list[dict]:
         entities = [_pii_entity(datum["pii_type"], datum["total_training_data"], datum) for datum in data]
         groups.append({"column_name": column_name, "replaced_with": None, "entities": entities})
     return groups
+
+
+def _pii_replay_note(config: SafeSynthesizerParameters | None, replay: dict) -> str | None:
+    """Return why PII replay results are missing, or ``None`` when replay ran."""
+    if reason := replay.get("skipped_reason"):
+        return f"PII replay was not run: {reason}."
+    if config is not None and not config.get("pii_replay_enabled"):
+        return "PII replay was turned off with evaluation.pii_replay_enabled."
+    return None
+
+
+def _pii_headline(rows: list[dict], groups: list[dict], replay_note: str | None) -> str:
+    """Return the short summary shown on the collapsed PII card, such as ``9 columns replaced``.
+
+    With replacement on, it counts the planned columns; with replacement off, the columns PII was found in.
+    """
+    if rows:
+        return f"{len(rows)} column{'' if len(rows) == 1 else 's'} replaced"
+    if groups:
+        return f"PII in {len(groups)} column{'' if len(groups) == 1 else 's'}, not replaced"
+    return "Replay not run" if replay_note else "No PII found"
 
 
 def _pii_entity(pii_type: str, found: int, replay: dict) -> dict:
@@ -194,13 +215,9 @@ class MultimodalReport(EvaluationReport):
                 if c.name == "Data Privacy Score" and c.score and c.score.grade.value != "Unavailable":
                     ctx["with_data_privacy"] = True
 
-            ctx["with_transform"] = False
-            if (
-                self.evaluation_datasets is not None
-                and self.evaluation_datasets.column_statistics is not None
-                and len(self.evaluation_datasets.column_statistics) > 0
-            ):
-                ctx["with_transform"] = True
+            statistics = self.evaluation_datasets.column_statistics if self.evaluation_datasets is not None else None
+            # Statistics from detection alone, with replacement off, mark no column transformed and add no columns.
+            ctx["with_transform"] = bool(statistics) and any(s.is_transformed for s in statistics.values())
 
             config = self.config
             ctx["dp_enabled"] = config is not None and config.get("dp_enabled")
@@ -208,12 +225,18 @@ class MultimodalReport(EvaluationReport):
                 ctx["delta"] = config.get("delta")
                 ctx["epsilon"] = config.get("epsilon")
 
-            ctx["pii_replacement"] = _pii_replacement_context(config, self.evaluation_datasets)
-            if ctx["pii_replacement"] is not None:
-                replay = ctx.get("pii_replay") or {}
-                ctx["pii_replacement"]["groups"] = _pii_column_groups(
-                    ctx["pii_replacement"]["rows"], replay.get("pii_replay_data") or []
-                )
+            replay = ctx.get("pii_replay") or {}
+            replay_data = replay.get("pii_replay_data") or []
+            pii: dict | None = _pii_replacement_context(config, self.evaluation_datasets)
+            rows: list[dict] = pii["rows"] if pii is not None else []
+            # With replacement off, PII is detected only for replay; the table then comes from replay alone.
+            if pii is None and (replay_data or replay.get("skipped_reason") or statistics is not None):
+                pii = {"replacement_off": True, "kept_columns": [], "mappings": {}}
+            if pii is not None:
+                groups = _pii_column_groups(rows, replay_data)
+                replay_note = _pii_replay_note(config, replay)
+                pii.update(groups=groups, replay_note=replay_note, headline=_pii_headline(rows, groups, replay_note))
+            ctx["pii_replacement"] = pii
 
             # Numeric per-column figures require access to the original data, a little hacky.
             if "column_distribution_stability" in ctx:
@@ -289,6 +312,7 @@ class MultimodalReport(EvaluationReport):
         test: pd.DataFrame | None = None,
         column_statistics: dict[str, ColumnStatistics] | None = None,
         config: SafeSynthesizerParameters | None = None,
+        pii_replay_skipped_reason: str | None = None,
     ) -> MultimodalReport:
         """Build a complete multi-modal evaluation report from dataframes.
 
@@ -301,6 +325,7 @@ class MultimodalReport(EvaluationReport):
             test: Optional holdout dataframe for privacy metrics.
             column_statistics: Per-column PII entity metadata.
             config: Pipeline configuration controlling which metrics are enabled.
+            pii_replay_skipped_reason: Why PII replay could not run, shown in the report, or ``None``.
 
         Returns:
             A fully populated ``MultimodalReport`` ready for rendering.
@@ -342,7 +367,7 @@ class MultimodalReport(EvaluationReport):
             )
         components.append(data_privacy_score)
 
-        pii_replay = PIIReplay()
+        pii_replay = PIIReplay(skipped_reason=pii_replay_skipped_reason)
         if column_statistics and config is not None and config.get("pii_replay_enabled"):
             # PII Replay requires full df's. Make a one-off dataset for that call.
             pii_replay = PIIReplay.from_evaluation_datasets(

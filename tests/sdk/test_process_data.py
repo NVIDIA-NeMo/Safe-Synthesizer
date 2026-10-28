@@ -410,12 +410,14 @@ class TestProcessDataMetadataLifecycle:
 class TestEvaluateUsesOriginalTrainingDf:
     """``evaluate()`` passes the original training data to ``Evaluator``."""
 
+    @patch("nemo_safe_synthesizer.pii_replacer.TabularPiiReplacer")
     @patch("nemo_safe_synthesizer.results.make_nss_results")
     @patch("nemo_safe_synthesizer.evaluation.evaluator.Evaluator")
     def test_evaluate_uses_original_training_df(
         self,
         mock_evaluator_cls,
         mock_make_results,
+        mock_replacer_cls,
         fixture_process_data_setup_without_pii,
     ):
         builder, train_split, test_split, _, _ = fixture_process_data_setup_without_pii
@@ -473,6 +475,83 @@ class TestEvaluateUsesOriginalTrainingDf:
         assert builder.results.evaluation_report_html is None
         assert builder.results.summary.timing.evaluation_time_sec is None
         pd.testing.assert_frame_equal(builder.results.synthetic_data, synthetic_df)
+
+
+class TestEvaluateDetectsPiiForReplay:
+    """With replacement off, ``evaluate()`` detects PII in the original training split for PII replay."""
+
+    @staticmethod
+    def _ready_for_evaluation(builder: SafeSynthesizer, train_split: pd.DataFrame, test_split: pd.DataFrame) -> None:
+        builder._training_df = train_split
+        builder._original_training_df = train_split
+        builder._test_df = test_split
+        builder._total_start = 0.0
+        builder.generator = MagicMock()
+
+    @patch("nemo_safe_synthesizer.pii_replacer.TabularPiiReplacer")
+    @patch("nemo_safe_synthesizer.results.make_nss_results")
+    @patch("nemo_safe_synthesizer.evaluation.evaluator.Evaluator")
+    def test_detection_statistics_reach_the_evaluator(
+        self,
+        mock_evaluator_cls,
+        mock_make_results,
+        mock_replacer_cls,
+        fixture_process_data_setup_without_pii,
+    ):
+        builder, train_split, test_split, _, _ = fixture_process_data_setup_without_pii
+        self._ready_for_evaluation(builder, train_split, test_split)
+        statistics = {"patient_name": MagicMock()}
+        mock_replacer_cls.return_value.detect.return_value.column_statistics = statistics
+
+        builder.evaluate()
+
+        detected_df = mock_replacer_cls.return_value.detect.call_args.args[0]
+        pd.testing.assert_frame_equal(detected_df, train_split)
+        call_kwargs = mock_evaluator_cls.call_args.kwargs
+        assert call_kwargs["column_statistics"] is statistics
+        assert call_kwargs["pii_replay_skipped_reason"] is None
+
+    @patch("nemo_safe_synthesizer.pii_replacer.TabularPiiReplacer")
+    @patch("nemo_safe_synthesizer.results.make_nss_results")
+    @patch("nemo_safe_synthesizer.evaluation.evaluator.Evaluator")
+    def test_detection_failure_skips_replay_with_a_reason(
+        self,
+        mock_evaluator_cls,
+        mock_make_results,
+        mock_replacer_cls,
+        fixture_process_data_setup_without_pii,
+        caplog: pytest.LogCaptureFixture,
+    ):
+        builder, train_split, test_split, _, _ = fixture_process_data_setup_without_pii
+        self._ready_for_evaluation(builder, train_split, test_split)
+        mock_replacer_cls.return_value.detect.side_effect = ParameterError("no planning LLM is reachable")
+
+        builder.evaluate()
+
+        call_kwargs = mock_evaluator_cls.call_args.kwargs
+        assert call_kwargs["column_statistics"] is None
+        assert "no planning LLM is reachable" in call_kwargs["pii_replay_skipped_reason"]
+        assert "Skipping PII replay" in caplog.text
+
+    @patch("nemo_safe_synthesizer.pii_replacer.TabularPiiReplacer")
+    @patch("nemo_safe_synthesizer.results.make_nss_results")
+    @patch("nemo_safe_synthesizer.evaluation.evaluator.Evaluator")
+    def test_replay_turned_off_detects_nothing(
+        self,
+        mock_evaluator_cls,
+        mock_make_results,
+        mock_replacer_cls,
+        fixture_process_data_setup_without_pii,
+    ):
+        builder, train_split, test_split, _, _ = fixture_process_data_setup_without_pii
+        assert builder._nss_config is not None
+        builder._nss_config.evaluation.pii_replay_enabled = False
+        self._ready_for_evaluation(builder, train_split, test_split)
+
+        builder.evaluate()
+
+        mock_replacer_cls.assert_not_called()
+        assert mock_evaluator_cls.call_args.kwargs["column_statistics"] is None
 
 
 # ---------------------------------------------------------------------------

@@ -66,6 +66,9 @@ class PIIReplay(Component):
     pii_replay_data: list[PIIReplayData] = Field(
         default=list(), description="Per-column / per-entity replay statistics."
     )
+    skipped_reason: str | None = Field(
+        default=None, description="Why PII replay could not run, such as a failed PII detection, or None."
+    )
 
     @cached_property
     def jinja_context(self) -> dict:
@@ -75,6 +78,7 @@ class PIIReplay(Component):
         d["synthetic_total_records"] = self.synthetic_total_records
         d["pii_types"] = list({datum.pii_type for datum in self.pii_replay_data})
         d["pii_replay_data"] = [datum.model_dump() for datum in self.pii_replay_data]
+        d["skipped_reason"] = self.skipped_reason
         return d
 
     @staticmethod
