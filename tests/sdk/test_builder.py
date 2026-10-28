@@ -13,7 +13,6 @@ from nemo_safe_synthesizer.config.replace_pii import (
     LLMConfig,
     PiiColumnPlan,
     PiiReplacementPlan,
-    PiiReplacementSettings,
     PiiSamplerBackend,
     PiiSamplerConfig,
     ReplacePiiConfig,
@@ -363,8 +362,7 @@ class TestTelemetryEmission:
         ("replace_pii", "expected_source", "expected_columns_bucket"),
         [
             (ReplacePiiConfig(), "auto_discovery", "undefined"),
-            (ReplacePiiConfig(replacement_plan="plans/pii_plan.yaml"), "file", "undefined"),
-            (ReplacePiiConfig(replacement_plan=PiiReplacementPlan()), "inline", "0"),
+            (ReplacePiiConfig(replacement_plan=PiiReplacementPlan()), "provided", "0"),
             (
                 ReplacePiiConfig(
                     replacement_plan=PiiReplacementPlan(
@@ -374,11 +372,11 @@ class TestTelemetryEmission:
                         ]
                     )
                 ),
-                "inline",
+                "provided",
                 "1-5",
             ),
         ],
-        ids=["auto-discovery", "file", "inline-empty", "inline-with-free-text"],
+        ids=["auto-discovery", "inline-empty", "inline-with-free-text"],
     )
     def test_build_telemetry_event_reports_pii_plan_source_and_column_bucket(
         self, replace_pii: ReplacePiiConfig, expected_source: str, expected_columns_bucket: str
@@ -390,6 +388,20 @@ class TestTelemetryEmission:
 
         assert event.pii_plan_source == expected_source
         assert event.pii_replaced_columns_bucket == expected_columns_bucket
+
+    def test_build_telemetry_event_reports_plan_file_as_provided(self, tmp_path: Path):
+        plan_file = tmp_path / "pii_replacement_plan.yaml"
+        plan_file.write_text("columns_to_replace:\n  - column_name: email\n    entity_type: email\n")
+        builder = _builder_for_telemetry()
+        builder._nss_config = SafeSynthesizerParameters(
+            emit_telemetry=True, replace_pii=ReplacePiiConfig(replacement_plan=str(plan_file))
+        )
+
+        event = _build_telemetry_event(builder, TaskStatusEnum.COMPLETED)
+
+        assert event.pii_plan_source == "provided"
+        assert event.pii_replaced_columns_bucket == "1-5"
+        assert (event.pii_llm_mode, event.pii_llm_model) == ("none", "undefined")
 
     def test_build_telemetry_event_prefers_plan_source_recorded_before_resolution(self):
         resolved = ReplacePiiConfig(
@@ -415,7 +427,7 @@ class TestTelemetryEmission:
         builder = _builder_for_telemetry()
         builder._nss_config = SafeSynthesizerParameters(
             emit_telemetry=True,
-            replace_pii=ReplacePiiConfig(replacement=PiiReplacementSettings(locale=locale)),
+            replace_pii=ReplacePiiConfig(locale=locale),
         )
 
         event = _build_telemetry_event(builder, TaskStatusEnum.COMPLETED)
@@ -425,7 +437,6 @@ class TestTelemetryEmission:
     @pytest.mark.parametrize(
         ("llm", "replacement_plan", "env", "expected_mode", "expected_model"),
         [
-            (None, "auto_discovery", {}, "none", "undefined"),
             ({}, PiiReplacementPlan(), {}, "none", "undefined"),
             ({}, "auto_discovery", {}, "local", "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16"),
             ({"model_id": "openai/gpt-oss-120b"}, "auto_discovery", {}, "local", "openai/gpt-oss-120b"),
@@ -453,7 +464,6 @@ class TestTelemetryEmission:
             ),
         ],
         ids=[
-            "no-llm",
             "user-supplied-plan",
             "local-default",
             "local-bundled",
