@@ -357,7 +357,7 @@ How to read this:
 - The row-level attack is at chance. Its 95% confidence interval (0.495–0.507) includes 0.5.
 - The conversation-level attack shows a modest signal. Its interval (0.524–0.568) sits just above 0.5.
 
-If any replay is a concern for your use case, you can filter the output before using it. Dropping the 2.60% of synthetic conversations that the linked-dialogue check flags removes every replayed combination of rare entities, and you can go further and drop any conversation that contains a rare training entity. Filtering only removes the exact matches these checks detect, so it works best alongside the training and generation settings that reduce replay in the first place. Part 2 explores those settings and the balance they strike between utility and replay.
+If any replay is a concern for your use case, you can filter the output before using it. Dropping the 2.60% of synthetic conversations that the linked-dialogue check flags removes every replayed combination of rare entities, and you can go further and drop any conversation that contains a rare training entity. Filtering only removes the exact matches these checks detect, so it works best alongside the training and generation settings that reduce replay in the first place. [Part 2](tuning-synthetic-conversations-abcd.md) explores those settings and the balance they strike between utility and replay.
 
 We are currently working on cross-row PII replacement, which swaps each recurring entity for the same consistent stand-in everywhere it appears before training. That should eliminate the kind of entity replay measured here, while keeping the values inside each conversation consistent with one another.
 
@@ -369,7 +369,7 @@ We are currently working on cross-row PII replacement, which swaps each recurrin
 
 ## Coming Up in Part 2
 
-Part 1 used the default settings. In Part 2, we push on that baseline with three experiments.
+Part 1 used the default settings. In [Part 2](tuning-synthetic-conversations-abcd.md), we push on that baseline with three experiments.
 
 - Can prompting replace fine-tuning? We skip training entirely and give the base model a few real conversations as examples. It does not work, and we look at why.
 - Which settings move the balance between utility and replay? We sweep temperature, learning rate, LoRA rank, weight decay, and the number of passes over the data, try a larger backbone model, and show how to pick a setting for a given replay budget.
