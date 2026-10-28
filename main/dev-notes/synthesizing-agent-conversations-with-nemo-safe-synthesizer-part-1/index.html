@@ -16,6 +16,8 @@
         <link rel="prev" href="../speeding-up-nemo-safe-synthesizer-generation-with-prompt-aware-token-budgets/">
       
       
+        <link rel="next" href="../tuning-nemo-safe-synthesizer-for-agent-conversations-part-2/">
+      
       
         
       
@@ -10106,7 +10108,7 @@
 <li>The row-level attack is at chance. Its 95% confidence interval (0.495–0.507) includes 0.5.</li>
 <li>The conversation-level attack shows a modest signal. Its interval (0.524–0.568) sits just above 0.5.</li>
 </ul>
-<p>If any replay is a concern for your use case, you can filter the output before using it. Dropping the 2.60% of synthetic conversations that the linked-dialogue check flags removes every replayed combination of rare entities, and you can go further and drop any conversation that contains a rare training entity. Filtering only removes the exact matches these checks detect, so it works best alongside the training and generation settings that reduce replay in the first place. Part 2 explores those settings and the balance they strike between utility and replay.</p>
+<p>If any replay is a concern for your use case, you can filter the output before using it. Dropping the 2.60% of synthetic conversations that the linked-dialogue check flags removes every replayed combination of rare entities, and you can go further and drop any conversation that contains a rare training entity. Filtering only removes the exact matches these checks detect, so it works best alongside the training and generation settings that reduce replay in the first place. <a href="../tuning-nemo-safe-synthesizer-for-agent-conversations-part-2/">Part 2</a> explores those settings and the balance they strike between utility and replay.</p>
 <p>We are currently working on cross-row PII replacement, which swaps each recurring entity for the same consistent stand-in everywhere it appears before training. That should eliminate the kind of entity replay measured here, while keeping the values inside each conversation consistent with one another.</p>
 <h2 id="takeaways-from-this-example">Takeaways from This Example<a class="headerlink" href="#takeaways-from-this-example" title="Permanent link">&para;</a></h2>
 <ul>
@@ -10115,7 +10117,7 @@
 <li>The output was new, not copied: no complete conversation was reproduced, and the synthetic conversations recombined the policy into new customers, items, and outcomes.</li>
 </ul>
 <h2 id="coming-up-in-part-2">Coming Up in Part 2<a class="headerlink" href="#coming-up-in-part-2" title="Permanent link">&para;</a></h2>
-<p>Part 1 used the default settings. In Part 2, we push on that baseline with three experiments.</p>
+<p>Part 1 used the default settings. In <a href="../tuning-nemo-safe-synthesizer-for-agent-conversations-part-2/">Part 2</a>, we push on that baseline with three experiments.</p>
 <ul>
 <li>Can prompting replace fine-tuning? We skip training entirely and give the base model a few real conversations as examples. It does not work, and we look at why.</li>
 <li>Which settings move the balance between utility and replay? We sweep temperature, learning rate, LoRA rank, weight decay, and the number of passes over the data, try a larger backbone model, and show how to pick a setting for a given replay budget.</li>
@@ -10182,6 +10184,22 @@
             </div>
           </a>
         
+        
+          
+          <a href="../tuning-nemo-safe-synthesizer-for-agent-conversations-part-2/" class="md-footer__link md-footer__link--next" aria-label="Next: Tuning NeMo Safe Synthesizer for Agent Conversations (Part 2)">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Tuning NeMo Safe Synthesizer for Agent Conversations (Part 2)
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
         
       </nav>
     
