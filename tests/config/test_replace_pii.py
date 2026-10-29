@@ -537,15 +537,6 @@ class TestReplacePiiConfig:
         assert replace_pii.inline_plan is not None
         assert replace_pii.inline_plan.columns_to_replace[0].column_name == "email"
 
-    @pytest.mark.parametrize("in_file", [True, False])
-    def test_a_plan_that_sets_sampler_is_pointed_at_replace_pii_sampler(self, tmp_path: Path, in_file: bool) -> None:
-        plan = {"sampler": {"backend": "faker"}}
-        if in_file:
-            path = tmp_path / "plan.yaml"
-            path.write_text("sampler:\n  backend: faker\n")
-        with pytest.raises(ValidationError, match="sets sampler, which is now set in replace_pii.sampler"):
-            ReplacePiiConfig.model_validate({"replacement_plan": str(path) if in_file else plan})
-
     def test_relative_personas_path_resolves_against_the_config_file(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:

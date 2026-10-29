@@ -883,20 +883,11 @@ def _load_plan_file(path: Path) -> dict[str, object]:
         raise ParameterError(f"Invalid YAML in the PII replacement plan file {str(path)!r}: {exc}") from exc
     if not isinstance(raw, Mapping):
         raise ParameterError(f"The PII replacement plan file {str(path)!r} must contain a mapping")
-    _reject_plan_sampler(cast(Mapping[str, object], raw), f"The PII replacement plan file {str(path)!r}")
     try:
         plan = normalize_unknown_fields(PiiReplacementPlan, cast(Mapping[str, object], raw), "reject")
     except ParameterError as exc:
         raise ParameterError(f"Invalid PII replacement plan file {str(path)!r}: {exc}") from exc
     return plan
-
-
-def _reject_plan_sampler(plan: Mapping[str, object], source: str) -> None:
-    """Reject a plan that still sets ``sampler``, which now belongs to ``replace_pii``."""
-    if "sampler" in plan:
-        raise ParameterError(
-            f"{source} sets sampler, which is now set in replace_pii.sampler, next to replace_pii.locale; move it there"
-        )
 
 
 class ReplacePiiConfig(Parameters):
@@ -1056,8 +1047,6 @@ class ReplacePiiConfig(Parameters):
             if not path.is_absolute() and config_dir is not None:
                 path = config_dir / path
             value = _load_plan_file(path)
-        elif isinstance(value, Mapping):
-            _reject_plan_sampler(cast(Mapping[str, object], value), "replace_pii.replacement_plan")
         if not isinstance(value, Mapping):
             raise ParameterError(
                 f"replace_pii.replacement_plan must be {AUTO_DISCOVERY!r}, an inline plan, or the path of a YAML "
