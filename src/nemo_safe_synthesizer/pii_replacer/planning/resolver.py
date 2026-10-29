@@ -365,8 +365,8 @@ def _resolve_replacement_config(
         columns = ", ".join(f"{column!r} ({count})" for column, count in sorted(unmatched.items()))
         raise ParameterError(
             "data_to_sampler_value_mapping has no entry for dataset values that match no value of the "
-            f"{sampler_name} sampler, counted by depends_on column: {columns}. Add an entry listing the sampler values each one may "
-            "match, or list every sampler value to allow any match"
+            f"{sampler_name} sampler, counted by depends_on column: {columns}. Add an entry listing the sampler "
+            "values each one may match, or list every sampler value to allow any match"
         )
     return config.with_plan(resolved_plan)
 
