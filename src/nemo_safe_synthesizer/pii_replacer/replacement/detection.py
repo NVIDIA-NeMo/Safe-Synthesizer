@@ -473,10 +473,6 @@ def _normalize_chunk_span(
     if score < threshold:
         return None, False
 
-    # An identifier without a digit is almost always a word the model mistook for one.
-    if entity_type is EntityType.UNIQUE_IDENTIFIER and not any(character.isdigit() for character in value):
-        return None, False
-
     rejected_birth_date = entity_type is EntityType.DATE_OF_BIRTH and not birth_date_is_supported(value)
     if rejected_birth_date:
         return None, rejected_birth_date

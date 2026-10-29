@@ -531,12 +531,12 @@ class TestGliner2Detector:
 
         assert [span.entity_type for span in detector.detect([_cell(text)]).spans] == [EntityType.MIDDLE_NAME]
 
-    def test_drops_identifier_predictions_without_a_digit(self) -> None:
-        text = "Customer Loyalty"
+    def test_keeps_identifier_predictions_without_a_digit(self) -> None:
+        text = "ABCD-EFGH"
         model = _FakeModel([{"entities": {"customer_id": [{"start": 0, "end": len(text), "confidence": 1.0}]}}])
         detector = Gliner2Detector(FreeTextDetectionConfig(), model_loader=lambda *_: model)
 
-        assert detector.detect([_cell(text)]).spans == ()
+        assert [span.entity_type for span in detector.detect([_cell(text)]).spans] == [EntityType.UNIQUE_IDENTIFIER]
 
     def test_normalizes_documented_government_id_label_to_national_id(self) -> None:
         text = "Identifier 123-45-6789"
