@@ -133,7 +133,7 @@ evaluation:
       max_groups: 128      # reproducible sample of shared groups above this count
 ```
 
-Metrics read timestamp ordering from `time_series.timestamp_column` and sequence grouping from `data.group_training_examples_by`; they have no column settings of their own.
+Metrics read timestamp ordering from `time_series.timestamp_column` and sequence grouping from `data.group_training_examples_by`; each metric chooses only which value columns it evaluates, with `value_columns`.
 See the [Autocorrelation Similarity guide](../../docs/user-guide/time-series-metrics/autocorrelation-similarity.md) for how to read the score and choose these values.
 
 ---
