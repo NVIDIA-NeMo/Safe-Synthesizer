@@ -552,13 +552,13 @@ def _effective_dependencies(
 def _full_name_patterns(plan: PiiReplacementPlan) -> dict[str, str]:
     """Return, for each target that depends on a replaced full-name column with a pattern, that pattern."""
     patterns = {spec.column_name: spec.pattern for spec in plan.columns_to_replace}
-    return {
-        spec.column_name: pattern
-        for spec in plan.columns_to_replace
-        for dependency in spec.depends_on
-        if dependency.entity_type is EntityType.FULL_NAME
-        and (pattern := patterns.get(dependency.column_name)) is not None
-    }
+    full_name_patterns: dict[str, str] = {}
+    for spec in plan.columns_to_replace:
+        for dependency in spec.depends_on:
+            pattern = patterns.get(dependency.column_name)
+            if dependency.entity_type is EntityType.FULL_NAME and pattern is not None:
+                full_name_patterns[spec.column_name] = pattern
+    return full_name_patterns
 
 
 def _compile_data_to_sampler_value_mapping(
