@@ -19,6 +19,7 @@ from faker import Faker
 from nameparser import FAMILY_FIRST, GIVEN_FIRST, Parser, Policy, locales, parser_for
 
 from ....config.replace_pii import EntityType
+from ....errors import GenerationError
 from ...planning.patterns import parse_name_pattern
 
 __all__ = ["FullNameLayout", "full_name_layout", "read_full_name", "write_full_name"]
@@ -47,13 +48,16 @@ _GIVEN_FIRST_LAYOUT = FullNameLayout(family_first=False, separator=" ")
 def full_name_layout(locale: str) -> FullNameLayout:
     """Return the layout of the first Faker full-name format for ``locale`` that has a given and a family name.
 
+    Raises:
+        GenerationError: If Faker cannot load ``locale``.
+
     Example:
         ``full_name_layout("zh_CN")`` is family first with no separator, from Faker's ``{{last_name}}{{first_name}}``.
     """
     try:
         providers = Faker(locale).providers
-    except Exception:
-        return _GIVEN_FIRST_LAYOUT
+    except AttributeError as exc:
+        raise GenerationError(f"PII replacement could not load Faker's name formats for locale {locale!r}") from exc
     for provider in providers:
         if getattr(provider, "__provider__", None) != "faker.providers.person":
             continue

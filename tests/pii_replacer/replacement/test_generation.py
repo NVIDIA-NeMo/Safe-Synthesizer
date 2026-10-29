@@ -23,7 +23,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiSamplerBackend,
     PiiSamplerConfig,
 )
-from nemo_safe_synthesizer.errors import InternalError, ParameterError
+from nemo_safe_synthesizer.errors import GenerationError, InternalError, ParameterError
 from nemo_safe_synthesizer.pii_replacer.replacement.generation import (
     ReplacementGenerationRequest,
     ReplacementGenerator,
@@ -457,6 +457,10 @@ class TestReplacementGenerator:
     )
     def test_full_names_are_written_in_the_locale_order(self, locale: str, expected: str) -> None:
         assert write_full_name("Grace", "Hopper", locale) == expected
+
+    def test_an_unknown_locale_fails_with_the_faker_error(self) -> None:
+        with pytest.raises(GenerationError, match="could not load Faker's name formats for locale 'xx_YY'"):
+            full_name_layout("xx_YY")
 
     @pytest.mark.parametrize(
         "locale", ["en_US", "fr_FR", "de_DE", "hu_HU", "ja_JP", "zh_CN", "zh_TW", "ko_KR", "ru_RU"]
