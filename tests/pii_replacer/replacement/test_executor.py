@@ -185,6 +185,16 @@ class TestStructuredReplacementExecutor:
 
         assert generator.requests[0].resolved_dependency_values == ((EntityType.GENDER, ("female",)),)
 
+    def test_passes_the_full_name_pattern_to_columns_that_depend_on_it(self) -> None:
+        dataframe = pd.DataFrame({"full_name": ["Lovelace, Ada"], "first_name": ["Ada"]})
+        full_name = PiiColumnPlan(column_name="full_name", entity_type=EntityType.FULL_NAME, pattern="{Last}, {First}")
+        plan = _plan(full_name, _target("first_name", EntityType.FIRST_NAME, ("full_name", None)))
+        generator = _ScriptedNameGenerator("Hopper, Grace", "Grace")
+
+        _execute(dataframe, plan, generator)
+
+        assert [request.full_name_pattern for request in generator.requests] == [None, "{Last}, {First}"]
+
     def test_matches_mapping_keys_for_non_string_dependency_values(self) -> None:
         dataframe = pd.DataFrame({"first_name": ["Ada", "Grace"], "sex": [1.0, 2.0]})
         plan = _plan(

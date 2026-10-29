@@ -56,6 +56,13 @@ class ReplacementGenerationRequest:
     the values derive from PII.
     """
 
+    full_name_pattern: str | None = None
+    """Pattern of the replaced full-name column this value depends on, or ``None``.
+
+    Used to read the first, middle, and last names out of that column's value, for example from ``Hopper, Grace``
+    written by ``{Last}, {First}``.
+    """
+
     def __post_init__(self) -> None:
         if not isinstance(self.entity_type, EntityType):
             raise InternalError("replacement generation entity_type must be a normalized EntityType")

@@ -78,7 +78,7 @@ class NemotronPersonasReplacementGenerator:
             return self._fallback_generator.generate(request)
 
         persona_values = self._persona_values(request)
-        replacement = None if persona_values is None else _generate_persona_value(request, persona_values)
+        replacement = None if persona_values is None else _generate_persona_value(request, persona_values, self._locale)
         if replacement is not None:
             # The executor rejects unchanged values and retries this generator
             # with a new seed, producing another Nemotron-Personas sample.
@@ -317,13 +317,14 @@ def _persona_row_values(
 def _generate_persona_value(
     request: ReplacementGenerationRequest,
     sampled: Mapping[str, str],
+    locale: str,
 ) -> str | None:
     dependencies = dependency_values(request.effective_dependency_tuple)
     entity_type = request.entity_type
     rng = Random(request.seed)
 
     if entity_type in NAME_ENTITY_TYPES:
-        values = name_values(dependencies, sampled)
+        values = name_values(dependencies, sampled, locale=locale, full_name_pattern=request.full_name_pattern)
         required = (
             required_pattern_values(entity_type, request.pattern)
             if request.pattern is not None
@@ -331,7 +332,7 @@ def _generate_persona_value(
         )
         if not _has_values(values, required):
             return None
-        return render_name(entity_type, request.pattern, rng, values)
+        return render_name(entity_type, request.pattern, rng, values, locale=locale)
     if entity_type is EntityType.STREET_ADDRESS:
         street = _persona_street_components(sampled)
         return street or None

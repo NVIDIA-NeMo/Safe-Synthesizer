@@ -16,6 +16,7 @@ from ....errors import GenerationError
 from ...planning.patterns import parse_character_mask, parse_name_pattern, render_name_pattern
 from ..types import EffectiveDependencyTuple
 from ..value_checks import is_luhn_valid
+from .person_names import read_full_name, write_full_name
 
 if TYPE_CHECKING:
     from ..generation import ReplacementGenerationRequest
@@ -58,23 +59,25 @@ def resolve_dependency_values(
 def name_values(
     dependencies: Mapping[EntityType, str],
     sampled: Mapping[str, str],
+    *,
+    locale: str,
+    full_name_pattern: str | None = None,
 ) -> dict[str, str]:
-    """Resolve name parts from dependencies first, then one sampler result."""
+    """Resolve name parts from dependencies first, then one sampler result.
+
+    A full-name dependency is read by :func:`read_full_name` in the order of ``full_name_pattern``, the pattern its
+    column was written with, or else in ``locale``'s order.
+    """
     full_name = dependencies.get(EntityType.FULL_NAME, "")
-    full_parts = full_name.split()
-    inferred = {
-        "first": full_parts[0] if full_parts else "",
-        "middle": " ".join(full_parts[1:-1]) if len(full_parts) > 2 else "",
-        "last": full_parts[-1] if len(full_parts) > 1 else "",
-    }
+    inferred = read_full_name(full_name, locale=locale, pattern=full_name_pattern) if full_name else {}
     return {
-        "first": dependencies.get(EntityType.FIRST_NAME) or inferred["first"] or sampled.get("first", ""),
-        "middle": dependencies.get(EntityType.MIDDLE_NAME) or inferred["middle"] or sampled.get("middle", ""),
-        "last": dependencies.get(EntityType.LAST_NAME) or inferred["last"] or sampled.get("last", ""),
+        "first": dependencies.get(EntityType.FIRST_NAME) or inferred.get("first") or sampled.get("first", ""),
+        "middle": dependencies.get(EntityType.MIDDLE_NAME) or inferred.get("middle") or sampled.get("middle", ""),
+        "last": dependencies.get(EntityType.LAST_NAME) or inferred.get("last") or sampled.get("last", ""),
     }
 
 
-def default_email_pattern(dependencies: Mapping[EntityType, str]) -> str | None:
+def default_email_pattern(dependencies: Mapping[EntityType, str], *, locale: str) -> str | None:
     """Return the email pattern for an email that depends on names but has no plan pattern.
 
     The local part joins whichever of the first and last names the dependencies resolve, then adds two random digits so
@@ -86,7 +89,7 @@ def default_email_pattern(dependencies: Mapping[EntityType, str]) -> str | None:
     Returns:
         The pattern, or ``None`` when no name dependency resolves and the generator samples a whole email.
     """
-    values = name_values(dependencies, {})
+    values = name_values(dependencies, {}, locale=locale)
     local_parts = [f"{{{part}}}" for part in ("first", "last") if values[part]]
     return f"{'.'.join(local_parts)}##@{{domain}}" if local_parts else None
 
@@ -96,14 +99,17 @@ def render_name(
     pattern: str | None,
     rng: Random,
     values: Mapping[str, str],
+    *,
+    locale: str,
 ) -> str:
     """Render a name from ``first``, ``middle``, and ``last`` parts, following ``pattern`` when one is set.
 
-    Without a pattern, a full name is ``"First Last"`` and a name part is that part alone.
+    Without a pattern, a full name is written in ``locale``'s order (see :func:`write_full_name`), and a name part is
+    that part alone.
 
     Example:
-        ``render_name(EntityType.FULL_NAME, None, rng, {"first": "Ada", "middle": "", "last": "Lovelace"})``
-        is ``"Ada Lovelace"``.
+        ``render_name(EntityType.FULL_NAME, None, rng, {"first": "Ada", "middle": "", "last": "Lovelace"},
+        locale="en_US")`` is ``"Ada Lovelace"``.
     """
     if pattern is not None:
         return render_name_pattern(entity_type, pattern, values, rng)
@@ -111,7 +117,7 @@ def render_name(
         EntityType.FIRST_NAME: values["first"],
         EntityType.MIDDLE_NAME: values["middle"],
         EntityType.LAST_NAME: values["last"],
-        EntityType.FULL_NAME: f"{values['first']} {values['last']}",
+        EntityType.FULL_NAME: write_full_name(values["first"], values["last"], locale),
     }[entity_type]
 
 

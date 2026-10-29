@@ -3077,6 +3077,15 @@ wheels = [
 ]
 
 [[package]]
+name = "nameparser"
+version = "2.8.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/21/4e/a501fe9da7065c9f5fb970891d46765b723c7b1175de7db17337a633eaf3/nameparser-2.8.0.tar.gz", hash = "sha256:fbb6b97d2c000c21a3dccce4e761dd2249c1c77bb75fd6536642c87a93c1ca38", size = 1353650, upload-time = "2026-10-28T08:59:52.554Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f9/8f/8d37572ddf9f05f1b473e456cd12d93b3a0426516d996070afcec8a095de/nameparser-2.8.0-py3-none-any.whl", hash = "sha256:1a99a140a01e958849428cd5ac8ec23701d20324fe61f8372b14bfdee5d4823f", size = 482307, upload-time = "2026-10-28T08:59:50.709Z" },
+]
+
+[[package]]
 name = "narwhals"
 version = "2.17.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3272,6 +3281,7 @@ engine = [
     { name = "huggingface-hub", version = "1.17.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' or platform_machine != 'x86_64' or sys_platform != 'linux'" },
     { name = "huggingface-hub", version = "1.33.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'" },
     { name = "json-repair" },
+    { name = "nameparser" },
     { name = "outlines-core" },
     { name = "pandas" },
     { name = "plotly" },
@@ -3372,6 +3382,7 @@ requires-dist = [
     { name = "kernels", marker = "extra == 'cpu'", specifier = ">=0.12.1,<0.15" },
     { name = "kernels", marker = "extra == 'cu129'", specifier = ">=0.12.1,<0.15" },
     { name = "kernels", marker = "extra == 'cu130'", specifier = ">=0.12.1,<0.15" },
+    { name = "nameparser", marker = "extra == 'engine'", specifier = ">=2.8.0,<3" },
     { name = "nvidia-cublas", marker = "sys_platform == 'linux' and extra == 'cu130'", index = "https://pypi.nvidia.com/" },
     { name = "nvidia-cublas-cu12", marker = "sys_platform == 'linux' and extra == 'cu129'", index = "https://download.pytorch.org/whl/cu129" },
     { name = "nvidia-ml-py", marker = "sys_platform == 'linux' and extra == 'cu129'" },

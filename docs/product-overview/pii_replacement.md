@@ -97,6 +97,11 @@ while Faker supports [many more](https://faker.readthedocs.io/en/master/locales.
 For a locale without a Nemotron-Personas dataset, leave `replace_pii.sampler`
 unset or set `backend: faker`.
 
+A full name with no pattern is written in the order of `replace_pii.locale`,
+as Faker writes that locale's names: given name first in `en_US`, family name
+first in `ja_JP` and `hu_HU`, and family name first with no space in `zh_CN`
+and `ko_KR`.
+
 ### Dependencies
 
 A column's `depends_on` lists other columns of the same record that its
@@ -109,8 +114,12 @@ replacement must stay consistent with. A dependency works in one of two ways:
   sampler understands; the next section explains how other values are mapped.
 - A column that is replaced passes on its new value. An email that depends on
   `first_name` and `last_name` is built from their replacements, and a first
-  name that depends on a full-name column takes the first word of the replaced
-  full name.
+  name that depends on a full-name column takes the first name of the replaced
+  full name. The [nameparser](https://pypi.org/project/nameparser/) library
+  reads the full name in the order of its column's pattern, such as
+  `{Last}, {First}`, or else in the order of `replace_pii.locale`. A comma
+  always marks the last name first, as in `Hopper, Grace`, a particle such as
+  `van` stays with the last name, and titles and suffixes are left out.
 
 Only these dependencies are allowed:
 

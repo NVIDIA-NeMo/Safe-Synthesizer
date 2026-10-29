@@ -87,8 +87,10 @@ class FakerReplacementGenerator:
             values = name_values(
                 dependencies,
                 _faker_name_values(fake, _select_dependency_value(gender_values, request.seed)),
+                locale=self._locale,
+                full_name_pattern=request.full_name_pattern,
             )
-            return render_name(entity_type, request.pattern, rng, values)
+            return render_name(entity_type, request.pattern, rng, values, locale=self._locale)
         if entity_type is EntityType.EMAIL:
             return self._generate_email(request, fake, rng, dependencies)
         if entity_type is EntityType.PHONE_NUMBER:
@@ -127,12 +129,17 @@ class FakerReplacementGenerator:
         rng: Random,
         dependencies: dict[EntityType, str],
     ) -> str:
-        pattern = request.pattern or default_email_pattern(dependencies)
+        pattern = request.pattern or default_email_pattern(dependencies, locale=self._locale)
         if pattern is None:
             return fake.email()
 
         required = required_pattern_values(EntityType.EMAIL, pattern)
-        values = name_values(dependencies, _faker_name_values(fake, None))
+        values = name_values(
+            dependencies,
+            _faker_name_values(fake, None),
+            locale=self._locale,
+            full_name_pattern=request.full_name_pattern,
+        )
         original_domain = email_domain(request.original_value)
         if original_domain is None and "domain" in required:
             self._warn_generation_fallback("unresolved_email_domain")

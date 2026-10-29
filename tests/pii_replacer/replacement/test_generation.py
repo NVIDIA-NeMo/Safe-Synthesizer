@@ -14,6 +14,7 @@ from typing import Literal
 import numpy as np
 import pandas as pd
 import pytest
+from faker import Faker
 from faker.providers.person.en_US import Provider as FakerPersonProvider
 from faker.providers.person.fr_FR import Provider as FrenchFakerPersonProvider
 
@@ -30,6 +31,11 @@ from nemo_safe_synthesizer.pii_replacer.replacement.generation import (
 from nemo_safe_synthesizer.pii_replacer.replacement.generators import (
     FakerReplacementGenerator,
     NemotronPersonasReplacementGenerator,
+)
+from nemo_safe_synthesizer.pii_replacer.replacement.generators.person_names import (
+    full_name_layout,
+    read_full_name,
+    write_full_name,
 )
 from nemo_safe_synthesizer.pii_replacer.replacement.types import CanonicalValue
 
@@ -51,6 +57,7 @@ def _request(
     pattern: str | None = None,
     seed: int = 42,
     resolved_values: tuple[tuple[EntityType, tuple[str, ...]], ...] = (),
+    full_name_pattern: str | None = None,
 ) -> ReplacementGenerationRequest:
     return ReplacementGenerationRequest(
         entity_type=entity_type,
@@ -59,6 +66,7 @@ def _request(
         pattern=pattern,
         seed=seed,
         resolved_dependency_values=resolved_values,
+        full_name_pattern=full_name_pattern,
     )
 
 
@@ -392,6 +400,72 @@ class TestReplacementGenerator:
         request = _request(EntityType.EMAIL, "hughes_b@original.example", dependencies=dependencies)
 
         assert re.fullmatch(expected, _faker_generator().generate(request))
+
+    @pytest.mark.parametrize(
+        ("full_name", "full_name_pattern", "expected_first"),
+        [
+            ("Person, Synthetic", None, "Synthetic"),
+            ("Synthetic Person, Jr.", None, "Synthetic"),
+            ("Person Synthetic", "{Last} {First}", "Synthetic"),
+            # A comma marks the last name first even when the pattern puts the first name first.
+            ("Person, Synthetic", "{First} {Last}", "Synthetic"),
+        ],
+    )
+    def test_name_parts_are_read_from_a_full_name_dependency(
+        self, full_name: str, full_name_pattern: str | None, expected_first: str
+    ) -> None:
+        dependencies = ((EntityType.FULL_NAME, CanonicalValue("string", full_name)),)
+        first = _request(EntityType.FIRST_NAME, dependencies=dependencies, full_name_pattern=full_name_pattern)
+        email = _request(
+            EntityType.EMAIL, "ada@original.example", dependencies=dependencies, full_name_pattern=full_name_pattern
+        )
+
+        assert _faker_generator().generate(first) == expected_first
+        assert re.fullmatch(r"synthetic\.person\d{2}@original\.example", _faker_generator().generate(email))
+
+    @pytest.mark.parametrize(
+        ("full_name", "locale", "pattern", "expected"),
+        [
+            ("Hopper, Grace Brewster", "en_US", None, ("Grace", "Brewster", "Hopper")),
+            ("Grace Brewster Hopper", "en_US", None, ("Grace", "Brewster", "Hopper")),
+            ("Guido van Rossum", "en_US", None, ("Guido", "", "van Rossum")),
+            ("Martin Luther King, Jr.", "en_US", None, ("Martin", "Luther", "King")),
+            ("Dr. Ada Lovelace", "en_US", None, ("Ada", "", "Lovelace")),
+            ("Cher", "en_US", None, ("Cher", "", "")),
+            ("Lee Eric", "en_US", "{Last} {First}", ("Eric", "", "Lee")),
+            ("Nagy Péter", "hu_HU", None, ("Péter", "", "Nagy")),
+            ("山田 太郎", "ja_JP", None, ("太郎", "", "山田")),
+            ("太郎 山田", "ja_JP", "{First} {Last}", ("太郎", "", "山田")),
+            ("欧阳小明", "zh_CN", None, ("小明", "", "欧阳")),
+            ("김민준", "ko_KR", None, ("민준", "", "김")),
+        ],
+    )
+    def test_full_names_are_read_in_the_pattern_or_locale_order(
+        self, full_name: str, locale: str, pattern: str | None, expected: tuple[str, str, str]
+    ) -> None:
+        parts = read_full_name(full_name, locale=locale, pattern=pattern)
+
+        assert (parts["first"], parts["middle"], parts["last"]) == expected
+
+    @pytest.mark.parametrize(
+        ("locale", "expected"),
+        [("en_US", "Grace Hopper"), ("fr_FR", "Grace Hopper"), ("ja_JP", "Hopper Grace"), ("zh_CN", "HopperGrace")],
+    )
+    def test_full_names_are_written_in_the_locale_order(self, locale: str, expected: str) -> None:
+        assert write_full_name("Grace", "Hopper", locale) == expected
+
+    @pytest.mark.parametrize(
+        "locale", ["en_US", "fr_FR", "de_DE", "hu_HU", "ja_JP", "zh_CN", "zh_TW", "ko_KR", "ru_RU"]
+    )
+    def test_a_written_full_name_reads_back_to_its_parts(self, locale: str) -> None:
+        fake = Faker(locale)
+        fake.seed_instance(0)
+        first, last = fake.first_name(), fake.last_name()
+
+        parts = read_full_name(write_full_name(first, last, locale), locale=locale)
+
+        assert (parts["first"], parts["last"]) == (first, last)
+        assert full_name_layout(locale).family_first is (locale not in {"en_US", "fr_FR", "de_DE"})
 
     def test_unpatterned_email_without_name_dependencies_is_sampled_whole(self) -> None:
         dependencies = ((EntityType.ORGANIZATION, CanonicalValue("string", "Acme")),)
