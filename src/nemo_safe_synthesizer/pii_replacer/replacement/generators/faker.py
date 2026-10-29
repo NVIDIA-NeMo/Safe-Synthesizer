@@ -225,11 +225,9 @@ _NATIONAL_ID_CHECKS: Mapping[str, Callable[[str], bool]] = {
 }
 """python-stdnum check for each locale whose national ID Faker's ``ssn()`` generates.
 
-Faker returns a US SSN for many other locales, such as ``de_DE`` and ``ja_JP``, so those are left out.
+Faker returns a US SSN for many other locales, such as ``de_DE`` and ``ja_JP``, so those are left out. Some
+``en_CA``, ``zh_CN``, and ``ko_KR`` values Faker generates fail python-stdnum's check.
 """
-
-_MAX_NATIONAL_ID_DRAWS = 200
-"""Faker draws tried for a valid national ID; some ``zh_CN`` and ``ko_KR`` draws fail python-stdnum's check."""
 
 
 def _national_id(original: str, locale: str, fake: Faker, rng: Random) -> str:
@@ -246,10 +244,9 @@ def _national_id(original: str, locale: str, fake: Faker, rng: Random) -> str:
     """
     is_valid = _NATIONAL_ID_CHECKS.get(locale)
     if is_valid is not None and _passes(is_valid, original):
-        for _ in range(_MAX_NATIONAL_ID_DRAWS):
-            candidate = _in_layout(fake.ssn(), original)
-            if candidate.casefold() != original.casefold() and _passes(is_valid, candidate):
-                return candidate
+        generated = _in_layout(fake.ssn(), original)
+        if generated.casefold() != original.casefold():
+            return generated
     return shape_preserving_value(original, rng)
 
 

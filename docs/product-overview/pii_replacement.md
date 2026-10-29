@@ -190,7 +190,8 @@ a Social Security number in `en_US`, SIN in `en_CA`, NIR in `fr_FR`, codice
 fiscale in `it_IT`, resident registration number in `ko_KR`, BSN in `nl_NL`,
 PESEL in `pl_PL`, CPF in `pt_BR`, personnummer in `sv_SE`, and resident ID in
 `zh_CN`. Faker generates the new ID, written with the original's separators,
-so `123456789` in `en_US` becomes another SSN without dashes. Every other value,
+so `123456789` in `en_US` becomes another SSN without dashes. Some IDs Faker
+generates for `en_CA`, `ko_KR`, and `zh_CN` fail python-stdnum's check. Every other value,
 and every value in another locale, keeps its layout with each letter and digit
 replaced: `D1234567` becomes a value such as `Q8051937`.
 
