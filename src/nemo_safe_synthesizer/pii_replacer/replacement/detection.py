@@ -16,6 +16,7 @@ from typing import NamedTuple, Protocol
 from unicodedata import normalize
 
 import regex
+from stdnum import luhn
 from stdnum.us import ssn as us_ssn
 from typing_extensions import TypeIs
 
@@ -815,16 +816,7 @@ def _valid_card(value: str) -> bool:
         return False
     if len(digits) == 15 and not digits.startswith(("34", "37")):
         return False
-    parity = len(digits) % 2
-    total = sum(_luhn_term(int(character), doubled=position % 2 == parity) for position, character in enumerate(digits))
-    return total % 10 == 0
-
-
-def _luhn_term(digit: int, *, doubled: bool) -> int:
-    """Return one digit's contribution to a Luhn sum: doubled digits above 9 contribute their digit sum."""
-    if not doubled:
-        return digit
-    return digit * 2 - 9 if digit > 4 else digit * 2
+    return luhn.is_valid(digits)
 
 
 _REGEX_RULES = (
