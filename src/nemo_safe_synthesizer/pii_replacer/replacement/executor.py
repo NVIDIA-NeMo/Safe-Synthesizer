@@ -98,6 +98,7 @@ class StructuredReplacementExecutor:
         free_text_detector: FreeTextDetector | None = None,
         capture_replacement_map: bool = False,
         find_and_replace: bool = False,
+        locale: str = "en_US",
     ) -> None:
         self._plan = plan
         self._generator = generator
@@ -115,6 +116,7 @@ class StructuredReplacementExecutor:
             base_seed=base_seed,
             capture_replacement_map=capture_replacement_map,
             find_and_replace=find_and_replace,
+            locale=locale,
         )
         self._replacement_records: list[StructuredReplacementRecord] = []
         self._shared: dict[_SharedMappingKey, str] = {}

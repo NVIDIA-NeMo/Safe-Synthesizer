@@ -35,7 +35,7 @@ from nemo_safe_synthesizer.pii_replacer.replacement.generators import (
     NemotronPersonasReplacementGenerator,
 )
 from nemo_safe_synthesizer.pii_replacer.replacement.generators._common import normalize_organization_domain
-from nemo_safe_synthesizer.pii_replacer.replacement.generators.person_names import (
+from nemo_safe_synthesizer.pii_replacer.replacement.person_names import (
     full_name_layout,
     read_full_name,
     write_full_name,

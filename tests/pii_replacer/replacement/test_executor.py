@@ -958,6 +958,9 @@ class TestStructuredReplacementExecutor:
             ("Prof Ada Byron Lovelace", "Prof Grace Mary Hopper"),
             ("John Smith Jr", "Grace Hopper Jr"),
             ("Mr. John Smith III", "Mr. Grace Hopper III"),
+            ("Lovelace, Ada", "Hopper, Grace"),
+            ("Guido van Rossum", "Grace Hopper"),
+            ("Ada Lovelace, PhD", "Grace Hopper, PhD"),
         ],
     )
     def test_free_text_full_name_keeps_titles_and_suffixes(self, name: str, expected: str) -> None:

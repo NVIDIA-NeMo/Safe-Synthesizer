@@ -15,9 +15,9 @@ from anyascii import anyascii
 from ....config.replace_pii import EntityType
 from ....errors import GenerationError
 from ...planning.patterns import parse_character_mask, parse_name_pattern, render_name_pattern
+from ..person_names import read_full_name, write_full_name
 from ..types import EffectiveDependencyTuple
 from ..value_checks import is_luhn_valid
-from .person_names import read_full_name, write_full_name
 
 if TYPE_CHECKING:
     from ..generation import ReplacementGenerationRequest

@@ -655,18 +655,21 @@ An independently detected name or street component may reuse a parent
 replacement only when NSS can align it semantically. A full name, whether in a
 structured column or detected in free text, aligns with first, middle, and
 last names through explicit name-pattern placeholders, or, without a pattern,
-when it is a two- or three-word name such as `Kenneth Gonzales`. A free-text
-full name like that is replaced word by word, so `Kenneth Gonzales` and a bare
-`Kenneth` in the same record or group get the same first-name replacement.
-Titles and suffixes such as `Dr`, `Mrs`, `Prof`, `Jr`, or `III` are kept
-unchanged and do not count as name words, so `Dr. Ada Lovelace` becomes
-`Dr. <first> <last>`. A single-letter initial is replaced by a different
+when [nameparser](https://pypi.org/project/nameparser/) finds both a first and
+a last name in it, reading it in the order of `replace_pii.locale`, as in
+`Kenneth Gonzales` or `Gonzales, Kenneth`. A free-text full name like that is
+replaced word by word, so `Kenneth Gonzales` and a bare `Kenneth` in the same
+record or group get the same first-name replacement. Titles and suffixes that
+nameparser recognizes, such as `Dr`, `Mrs`, `Mme`, `Prof`, `Jr`, `III`, or
+`PhD`, are kept unchanged, so `Dr. Ada Lovelace` becomes `Dr. <first> <last>`,
+and a last name keeps its particles, so `van Rossum` is replaced as one last
+name. A single-letter initial is replaced by a different
 letter: when the record or group has exactly one replaced name of that kind
 starting with the same letter, the initial takes the first letter of that
 replacement, so after `Ada Lovelace` becomes `Grace Hopper`, `Ada L.` becomes
-`Grace H.`. Initials are never reused on their own in other text. A name that
-does not leave two or three words after removing titles and suffixes is
-replaced whole. A street in free text reuses the street of a structured address
+`Grace H.`. Initials are never reused on their own in other text. A name
+without both a first and a last name, or with a nickname, digits, or other
+punctuation, is replaced whole. A street in free text reuses the street of a structured address
 whose locality was kept, as described in [Full street
 addresses](#full-street-addresses). NSS never guesses components from other
 token positions or isolated house numbers.
@@ -701,11 +704,9 @@ replacement were built and tuned for English text and US conventions:
   checkpoint covers English, French, Spanish, German, Italian, Portuguese, and
   Dutch, and it needs spaces between words, so most PII in Chinese, Japanese,
   Korean, or Thai sentences is not detected.
-- Free-text name handling recognizes only English titles and suffixes, such as
-  `Dr` and `Jr`, and reads a full name's words as first, middle, and last. A
-  title such as `Mme` or a particle such as `van` is replaced as a name, and
-  names written family name first have their parts swapped.
-- Generated full names are written first name first in every locale.
+- Free-text name handling uses nameparser's lists of titles and suffixes,
+  which are mostly English. It reads French `M.` as a first-name initial and a
+  Spanish second surname, as in `Ana García López`, as a middle name.
 - Email addresses built from generated names keep accented and non-Latin
   letters, such as `françois.prévost42@example.com`.
 - Full street addresses keep the locality only when the street comes first;

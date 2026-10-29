@@ -26,6 +26,7 @@ from .common_words import COMMON_WORDS
 from .detection import FreeTextDetector, fresh_detection_entity_types, resolve_overlapping_spans
 from .generation import ReplacementGenerationRequest, ReplacementGenerator
 from .letter_case import match_letter_case
+from .person_names import parse_full_name
 from .seeding import derive_seed
 from .types import (
     CanonicalValue,
@@ -53,13 +54,15 @@ _MIN_KNOWN_VALUE_LENGTH = 3
 _NAME_WORD = re.compile(r"[^\W\d_]+(?:['\u2019-][^\W\d_]+)*")
 # One initial: a single letter, optionally followed by a period, as in "K" or "K.".
 _NAME_INITIAL = re.compile(r"[^\W\d_]\.?")
-# Titles and suffixes, compared case-insensitively without a trailing period.
-_NAME_AFFIXES = frozenset({"dr", "mr", "mrs", "ms", "mx", "prof", "jr", "sr", "ii", "iii", "iv"})
-_NAME_PART_TYPES: dict[int, tuple[EntityType, ...]] = {
-    2: (EntityType.FIRST_NAME, EntityType.LAST_NAME),
-    3: (EntityType.FIRST_NAME, EntityType.MIDDLE_NAME, EntityType.LAST_NAME),
+_NAME_PART_ENTITY_TYPES = frozenset({EntityType.FIRST_NAME, EntityType.MIDDLE_NAME, EntityType.LAST_NAME})
+# nameparser roles of the words of a full name that are replaced, and the name part each one is.
+_NAME_ROLE_PART_TYPES = {
+    "given": EntityType.FIRST_NAME,
+    "middle": EntityType.MIDDLE_NAME,
+    "family": EntityType.LAST_NAME,
 }
-_NAME_PART_ENTITY_TYPES = frozenset(_NAME_PART_TYPES[3])
+# Roles of words kept unchanged, such as Dr. and Jr.
+_KEPT_NAME_ROLES = frozenset({"title", "suffix"})
 
 _KnownValueSource = Literal["structured_value", "detected_value"]
 
@@ -80,13 +83,20 @@ class _CellToReplace:
 
 @dataclass(frozen=True, slots=True)
 class _NameWord:
-    """One space-separated word of a full name and its role."""
+    """One word of a full name, its role, and where it is in the name."""
 
     text: str
-    """The word exactly as written, including any trailing period."""
+    """The word exactly as written, including any trailing period. A last name keeps its particles, as in
+    ``van Rossum``."""
 
     part_type: EntityType | None
-    """First, middle, or last name by position, or ``None`` for a title or suffix kept unchanged."""
+    """First, middle, or last name, or ``None`` for a title or suffix kept unchanged."""
+
+    start: int
+    """Offset of the word in the full name."""
+
+    end: int
+    """Offset just after the word in the full name."""
 
     is_initial: bool = False
     """Whether the word is a single-letter initial, which is replaced by a letter and never registered."""
@@ -157,6 +167,7 @@ class FreeTextReplacementExecutor:
             original and replacement value in the execution result.
         find_and_replace: Whether to also replace occurrences of known
             structured and detected values that the detector missed.
+        locale: ``replace_pii.locale``, whose name order full names in text are read in.
     """
 
     def __init__(
@@ -167,9 +178,11 @@ class FreeTextReplacementExecutor:
         base_seed: int,
         capture_replacement_map: bool = False,
         find_and_replace: bool = False,
+        locale: str = "en_US",
     ) -> None:
         self._generator = generator
         self._detector = detector
+        self._locale = locale
         self._base_seed = base_seed
         self._capture_replacement_map = capture_replacement_map
         self._find_and_replace = find_and_replace
@@ -297,7 +310,7 @@ class FreeTextReplacementExecutor:
                 if not spans or not isinstance(text, str):
                     continue
                 scope_identity = row_position if group_identities is None else group_identities[row_position]
-                _add_detected_values(known.setdefault(scope_identity, _KnownValues()), text, spans)
+                _add_detected_values(known.setdefault(scope_identity, _KnownValues()), text, spans, self._locale)
         return known
 
     def register_structured_mapping(
@@ -360,8 +373,8 @@ class FreeTextReplacementExecutor:
         where either side is an initial is skipped, because a one-letter mapping
         would replace every matching letter in later text.
         """
-        original_parts = _positional_name_words(original)
-        replacement_parts = _positional_name_words(replacement)
+        original_parts = _positional_name_words(original, self._locale)
+        replacement_parts = _positional_name_words(replacement, self._locale)
         if original_parts is None or replacement_parts is None or len(original_parts) != len(replacement_parts):
             return
         for original_word, replacement_word in zip(original_parts, replacement_parts, strict=True):
@@ -459,7 +472,7 @@ class FreeTextReplacementExecutor:
                 if key.entity_type in _NAME_PART_ENTITY_TYPES:
                     self._replacement_for(key, statistics)
                 elif key.entity_type is EntityType.FULL_NAME and key not in self._cache:
-                    for word in _name_parts(key.original_value) or ():
+                    for word in _name_parts(key.original_value, self._locale) or ():
                         if word.part_type is not None and not word.is_initial:
                             self._name_word_replacement(key.scope_identity, word)
 
@@ -544,11 +557,17 @@ class FreeTextReplacementExecutor:
         if cached is not None:
             self._register_name_parts(key.scope_identity, key.original_value, cached)
             return cached
-        words = _name_parts(key.original_value)
+        words = _name_parts(key.original_value, self._locale)
         if words is None:
             return self._replacement_for(key, statistics)
-        replacement = " ".join(self._name_word_replacement(key.scope_identity, word) for word in words)
-        return self._store(key, replacement)
+        # Text between the words, such as the comma in "Lovelace, Ada", is kept.
+        pieces: list[str] = []
+        cursor = 0
+        for word in words:
+            pieces += [key.original_value[cursor : word.start], self._name_word_replacement(key.scope_identity, word)]
+            cursor = word.end
+        pieces.append(key.original_value[cursor:])
+        return self._store(key, "".join(pieces))
 
     def _name_word_replacement(self, scope_identity: Hashable, word: _NameWord) -> str:
         """Return the replacement for one word of a full name: unchanged, a new initial, or a shared name part."""
@@ -641,56 +660,55 @@ class FreeTextReplacementExecutor:
             self._generation_elapsed += time.perf_counter() - started
 
 
-def _name_parts(value: str) -> tuple[_NameWord, ...] | None:
-    """Split a full name into typed words, or return ``None`` when the split would be a guess.
+def _name_parts(value: str, locale: str) -> tuple[_NameWord, ...] | None:
+    """Split a full name into typed words with nameparser, or return ``None`` when the split would be a guess.
 
-    Words are separated by single spaces. Titles and suffixes (``Dr``,
-    ``Mr``, ``Mrs``, ``Ms``, ``Mx``, ``Prof``, ``Jr``, ``Sr``, ``II``,
-    ``III``, ``IV``, in any case and with or without a trailing period) are
-    kept with no part type. The remaining two or three words are read as
-    first and last, or first, middle, and last. A single-letter initial, with
-    or without a period, takes the part type of its position. Any other word
-    count, or a word with digits or other punctuation, returns ``None``.
+    nameparser reads the name in ``locale``'s order, and a comma marks the last name first. Titles and
+    suffixes, such as ``Dr.`` and ``Jr.``, are kept with no part type, and a last name keeps its particles,
+    such as ``van`` in ``van Rossum``. A single-letter initial, with or without a period, takes the part
+    type nameparser gives it. A name without both a first and a last name, a nickname or maiden name, or a
+    word with digits or other punctuation returns ``None``.
 
     Example:
-        ``"Dr Ada K. Lovelace Jr"`` returns ``Dr`` and ``Jr`` with no part
-        type, ``Ada`` as the first name, ``K.`` as a middle-name initial, and
-        ``Lovelace`` as the last name.
+        ``"Dr Ada K. Lovelace Jr"`` returns ``Dr`` and ``Jr`` with no part type, ``Ada`` as the first name,
+        ``K.`` as a middle-name initial, and ``Lovelace`` as the last name.
     """
-    words = value.split(" ")
-    name_words = [word for word in words if not _is_name_affix(word)]
-    part_types = _NAME_PART_TYPES.get(len(name_words))
-    if part_types is None or not all(
-        _NAME_WORD.fullmatch(word) or _NAME_INITIAL.fullmatch(word) for word in name_words
-    ):
+    words: list[_NameWord] = []
+    for token in parse_full_name(value, locale=locale).tokens:
+        if token.span is None:
+            return None
+        role = token.role.value if token.role is not None else None
+        if role in _KEPT_NAME_ROLES:
+            words.append(_NameWord(token.text, None, token.span.start, token.span.end))
+            continue
+        part_type = _NAME_ROLE_PART_TYPES.get(role or "")
+        if part_type is None or not (_NAME_WORD.fullmatch(token.text) or _NAME_INITIAL.fullmatch(token.text)):
+            return None
+        previous = words[-1] if words else None
+        if part_type is EntityType.LAST_NAME and previous is not None and previous.part_type is EntityType.LAST_NAME:
+            words[-1] = _NameWord(value[previous.start : token.span.end], part_type, previous.start, token.span.end)
+            continue
+        is_initial = _NAME_INITIAL.fullmatch(token.text) is not None
+        words.append(_NameWord(token.text, part_type, token.span.start, token.span.end, is_initial=is_initial))
+    part_types = {word.part_type for word in words}
+    if EntityType.FIRST_NAME not in part_types or EntityType.LAST_NAME not in part_types:
         return None
-    positional_types = iter(part_types)
-    return tuple(
-        _NameWord(word, None)
-        if _is_name_affix(word)
-        else _NameWord(word, next(positional_types), is_initial=_NAME_INITIAL.fullmatch(word) is not None)
-        for word in words
-    )
+    return tuple(words)
 
 
-def _positional_name_words(value: str) -> tuple[_NameWord, ...] | None:
+def _positional_name_words(value: str, locale: str) -> tuple[_NameWord, ...] | None:
     """Return the first, middle, and last name words of ``value`` without titles or suffixes."""
-    words = _name_parts(value)
+    words = _name_parts(value, locale)
     return None if words is None else tuple(word for word in words if word.part_type is not None)
 
 
-def _registrable_name_words(value: str) -> tuple[tuple[EntityType, str], ...]:
+def _registrable_name_words(value: str, locale: str) -> tuple[tuple[EntityType, str], ...]:
     """Return the typed whole name words of ``value``, skipping titles, suffixes, and initials."""
     return tuple(
         (word.part_type, word.text)
-        for word in _name_parts(value) or ()
+        for word in _name_parts(value, locale) or ()
         if word.part_type is not None and not word.is_initial
     )
-
-
-def _is_name_affix(word: str) -> bool:
-    """Return whether ``word`` is a title or suffix such as ``Dr.`` or ``Jr``."""
-    return word.removesuffix(".").casefold() in _NAME_AFFIXES
 
 
 def _is_other_letter(candidate: str, letter: str) -> bool:
@@ -698,13 +716,13 @@ def _is_other_letter(candidate: str, letter: str) -> bool:
     return len(candidate) == 1 and candidate.isalpha() and candidate.casefold() != letter.casefold()
 
 
-def _add_detected_values(values: _KnownValues, text: str, spans: tuple[DetectedSpan, ...]) -> None:
+def _add_detected_values(values: _KnownValues, text: str, spans: tuple[DetectedSpan, ...], locale: str) -> None:
     """Add each detected value in ``text``, and the words of a detected plain full name, as known values."""
     for span in spans:
         value = text[span.start : span.end]
         values.add(value, span.entity_type, "detected_value")
         if span.entity_type is EntityType.FULL_NAME:
-            for part_type, word in _registrable_name_words(value):
+            for part_type, word in _registrable_name_words(value, locale):
                 values.add(word, part_type, "detected_value")
 
 

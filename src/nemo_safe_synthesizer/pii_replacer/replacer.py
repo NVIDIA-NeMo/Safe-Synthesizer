@@ -161,6 +161,7 @@ class TabularPiiReplacer:
             free_text_detector=free_text_detector,
             capture_replacement_map=capture_replacement_map,
             find_and_replace=_find_and_replace_enabled(resolved_config, plan),
+            locale=resolved_config.locale,
         )
 
     def _replacement_generator(self, sampler: PiiSamplerConfig, locale: str) -> ReplacementGenerator:
