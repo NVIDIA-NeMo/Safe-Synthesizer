@@ -10,7 +10,10 @@ candidates without importing generator implementations.
 from __future__ import annotations
 
 import ipaddress
+import string
 from typing import TYPE_CHECKING
+
+from stdnum import luhn
 
 from ...config.replace_pii import EntityType
 from ..planning.patterns import parse_name_pattern
@@ -46,19 +49,13 @@ def generated_value_is_valid(request: ReplacementGenerationRequest, value: str) 
 
 
 def is_luhn_valid(value: str) -> bool:
-    """Return whether the digits in ``value`` pass the Luhn checksum."""
-    digits = [int(character) for character in value if character.isdigit()]
-    if len(digits) < 2:
-        return False
-    total = 0
-    parity = len(digits) % 2
-    for index, digit in enumerate(digits):
-        if index % 2 == parity:
-            digit *= 2
-            if digit > 9:
-                digit -= 9
-        total += digit
-    return total % 10 == 0
+    """Return whether the ASCII digits in ``value``, ignoring separators such as spaces and dashes, pass the Luhn check.
+
+    Example:
+        ``is_luhn_valid("4111 1111 1111 1111")`` is ``True``.
+    """
+    digits = "".join(character for character in value if character in string.digits)
+    return len(digits) >= 2 and luhn.is_valid(digits)
 
 
 def keeps_original_name_part(original: str, candidate: str, pattern: str | None) -> bool:

@@ -38,6 +38,7 @@ from nemo_safe_synthesizer.pii_replacer.replacement.generators.person_names impo
     write_full_name,
 )
 from nemo_safe_synthesizer.pii_replacer.replacement.types import CanonicalValue
+from nemo_safe_synthesizer.pii_replacer.replacement.value_checks import is_luhn_valid
 
 
 def _construct(factory: Callable[..., object], *args: object, **kwargs: object) -> object:
@@ -468,6 +469,13 @@ class TestReplacementGenerator:
 
         assert (parts["first"], parts["last"]) == (first, last)
         assert full_name_layout(locale).family_first is (locale not in {"en_US", "fr_FR", "de_DE"})
+
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [("4111 1111 1111 1111", True), ("4111-1111-1111-1112", False), ("4111²111", False), ("7", False)],
+    )
+    def test_luhn_check_reads_ascii_digits_and_skips_separators(self, value: str, expected: bool) -> None:
+        assert is_luhn_valid(value) is expected
 
     def test_unpatterned_email_without_name_dependencies_is_sampled_whole(self) -> None:
         dependencies = ((EntityType.ORGANIZATION, CanonicalValue("string", "Acme")),)
