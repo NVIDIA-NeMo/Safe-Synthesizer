@@ -116,7 +116,9 @@ def local_runtime_problem_message(problem: str) -> str:
     """Explain a ``local_runtime_problem`` result and how to use a remote service instead."""
     return (
         f"LLM-assisted PII planning runs a local vLLM server unless {ENDPOINT_ENV} is set, but {problem}. "
-        f"Set {ENDPOINT_ENV}, plus {KEY_ENV} if it requires one, to use a remote OpenAI-compatible service instead."
+        f"Set {ENDPOINT_ENV}, plus {KEY_ENV} if it requires one, to use a remote OpenAI-compatible service instead. "
+        "To replace PII without an LLM, give an explicit replacement plan; to skip replacement, pass --no-replace-pii "
+        "or set replace_pii to null."
     )
 
 

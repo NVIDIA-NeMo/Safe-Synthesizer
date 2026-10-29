@@ -118,7 +118,8 @@ You can also run stages individually:
 
 - `safe-synthesizer run train` -- train only, saves the adapter
 - `safe-synthesizer run generate` -- generate only (use `--auto-discover-adapter` or `--run-path`)
-- `safe-synthesizer run replace-pii --plan-only` -- resolve a PII replacement plan without entering the pipeline
+- `safe-synthesizer run replace-pii --plan-only` -- resolve a PII replacement configuration without entering the
+  pipeline
 - SDK stepwise: `process_data()` → `train()` → `generate()` → `evaluate()`
 
 ## Pre-flight Validation
@@ -308,10 +309,10 @@ Accepts the same common options and synthesis parameter override syntax as `run`
 
 ### `run replace-pii --plan-only`
 
-Resolve a PII replacement plan against the full input dataframe and exit. This
-column-level planning operation does not produce a train/test split or any
-replaced rows. It does not invoke holdout, model metadata, replacement,
-training, generation, or evaluation.
+Resolve a PII replacement plan and sampler-specific dependency mappings against
+the full input dataframe, then exit. This planning operation does not produce a
+train/test split or any replaced rows. It does not invoke holdout, model
+metadata, replacement, training, generation, or evaluation.
 
 ```bash
 safe-synthesizer run replace-pii --plan-only \
@@ -319,22 +320,25 @@ safe-synthesizer run replace-pii --plan-only \
   --data-source data.csv
 ```
 
-The command writes `pii_replacement_plan.yaml` in the standard timestamped run
-directory beneath `--artifact-path`. The command currently requires
+The command writes two files in the standard timestamped run directory beneath
+`--artifact-path`: `pii_replacement_plan.yaml`, the resolved plan, and
+`safe-synthesizer-config.yaml`, a complete reusable NSS configuration that
+names it and records the sampler used. The command currently requires
 `--plan-only`.
 
-The SDK equivalent returns the plan object. Supplying `output_path` also writes
-the reusable YAML artifact; omitting it performs no plan write.
+The SDK equivalent returns the resolved `ReplacePiiConfig`. Supplying
+`output_path` writes the complete configuration there and
+`pii_replacement_plan.yaml` beside it; omitting it performs no write.
 
 ```python
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
 
 config = SafeSynthesizerParameters.from_yaml("config.yaml")
-plan = (
+resolved_pii = (
     SafeSynthesizer(config)
     .with_data_source("data.csv")
-    .plan_pii_replacement(output_path="pii_replacement_plan.yaml")
+    .plan_pii_replacement(output_path="safe-synthesizer-config.yaml")
 )
 ```
 
@@ -355,7 +359,7 @@ execute in order (`config` → `dataframe` → `metadata` → `advisory`).
 | Check name | Stage | What it validates |
 |-------|-------|-------------------|
 | `gpu.cuda` | config | PyTorch is importable and a CUDA GPU is visible |
-| `env.inference` | config | Validates the endpoint and hosted authentication when `replace_pii.llm` is enabled |
+| `env.inference` | config | Validates the PII planning endpoint and hosted authentication, or that the local vLLM server can run, when the replacement plan is discovered automatically |
 | `env.hf_model_availability` | config | The pretrained model reference is usable locally or can be fetched from Hugging Face; warns about a missing HF token only when online HF access may be needed |
 | `dataset.size` | dataframe | Training split meets the hard minimum row count |
 | `columns.groupby` | dataframe | `group_training_examples_by` column is present and has no nulls |
@@ -609,9 +613,10 @@ safe-synthesizer run replace-pii --plan-only \
   --data-source data.csv
 ```
 
-The training and generation pipeline currently requires PII replacement to be
-disabled. Set `replace_pii: null`, pass `--no-replace-pii`, or call
-`.with_replace_pii(enable=False)` before running it.
+During the normal synthesis pipeline, NSS applies structured-column replacements
+from the resolved plan before training. See
+[PII Replacement](../product-overview/pii_replacement.md) for Nemotron
+Personas setup and current free-text limitations.
 
 ---
 

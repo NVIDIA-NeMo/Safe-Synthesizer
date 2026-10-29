@@ -40,7 +40,10 @@ class ReplacementGenerationRequest:
     """
 
     pattern: str | None
-    """Plan pattern the generated value must follow, or ``None`` for the entity default."""
+    """Plan pattern the generated value must follow, or ``None`` for the entity default.
+
+    The default for an email that depends on names is ``{first}.{last}##@{domain}``, built from the dependency values.
+    """
 
     seed: int
     """Seed that makes generation deterministic for equal requests."""
@@ -51,6 +54,13 @@ class ReplacementGenerationRequest:
     Used only to filter the sampler, for example gender ``Woman`` resolved to ``("female",)``. Generators still read
     ``effective_dependency_tuple`` for values they render, such as names in an email. Excluded from ``repr`` because
     the values derive from PII.
+    """
+
+    full_name_pattern: str | None = None
+    """Pattern of the replaced full-name column this value depends on, or ``None``.
+
+    Used to read the first, middle, and last names out of that column's value, for example from ``Hopper, Grace``
+    written by ``{Last}, {First}``.
     """
 
     def __post_init__(self) -> None:
