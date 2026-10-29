@@ -14,7 +14,7 @@ This document describes the time series synthesis capabilities added to NeMo Saf
 4. [Training Data Assembly](#training-data-assembly)
 5. [Generation Logic](#generation-logic)
 6. [Record Validation](#record-validation)
-7. [Evaluation Metrics](#evaluation-metrics)
+7. [Evaluation Metrics (In Progress)](#evaluation-metrics-in-progress)
 8. [Usage Examples](#usage-examples)
 9. [Design Decisions & Rationale](#design-decisions--rationale)
 
@@ -37,7 +37,7 @@ Time series support enables Safe Synthesizer to generate synthetic tabular data 
   range and interval. Flexible generation learns a final-row marker, and the
   maximum observed group length is a hard limit for synthetic groups.
 - Chronological constraint enforcement: Validates that generated timestamps follow the expected interval pattern.
-- Time-series evaluation: Measures how well the synthetic data preserves temporal patterns from the original data, starting with Autocorrelation Similarity.
+- Time-series evaluation (In Progress): Measures how well the synthetic data preserves temporal patterns from the original data, starting with Autocorrelation Similarity.
 
 ---
 
@@ -117,19 +117,24 @@ Additional generation parameters in `src/nemo_safe_synthesizer/config/generate.p
 
 
 
-### Evaluation Parameters (ToDo)
+### Evaluation Parameters (In Progress)
 
-Time series evaluation is configured through `src/nemo_safe_synthesizer/config/evaluate.py`:
+Time-series evaluation is configured under `evaluation.time_series`, defined in `src/nemo_safe_synthesizer/config/evaluate.py`.
+Each metric has its own nested section; Autocorrelation Similarity is available today, and more metrics are being added.
 
-```python
-class AutocorrelationSimilarityParameters:
-    enabled: bool = False  # Enable the autocorrelation similarity metric
-    value_columns: list[str] | None = None  # Columns to evaluate (defaults to all numeric)
-    timestamp_column: str | None = None  # Timestamp column for ordering
-    group_column: str | None = None  # Column for independent time series groups
-    max_lag: int = 20  # Number of lags for autocorrelation comparison
-    distance_metric: Literal["euclidean", "mae"] = "euclidean"  # Distance metric
+```yaml
+evaluation:
+  time_series:
+    enabled: null          # null follows time_series.is_timeseries; false turns time-series metrics off
+    autocorrelation:
+      value_columns: null  # null evaluates every numeric training column
+      max_lag: 20          # largest lag compared; capped for short sequences
+      min_points: 4        # minimum finite observations in each sequence
+      max_groups: 128      # reproducible sample of shared groups above this count
 ```
+
+Metrics read timestamp ordering from `time_series.timestamp_column` and sequence grouping from `data.group_training_examples_by`; they have no column settings of their own.
+See the [Autocorrelation Similarity guide](../../docs/user-guide/time-series-metrics/autocorrelation-similarity.md) for how to read the score and choose these values.
 
 ---
 
@@ -457,7 +462,7 @@ Key Design Decision: If records don't continue from the group's last timestamp, 
 
 ---
 
-## Evaluation Metrics
+## Evaluation Metrics (In Progress)
 
 ### Autocorrelation Similarity
 

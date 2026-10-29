@@ -893,6 +893,29 @@ class TestTimeSeriesValueColumnCheck:
 
         assert any(issue.code == "evaluation_column_not_numeric" for issue in issues)
 
+    @pytest.mark.parametrize("column", ["time", "series", PSEUDO_GROUP_COLUMN])
+    def test_timestamp_and_grouping_columns_are_rejected(self, column):
+        config = SafeSynthesizerParameters(
+            data=DataParameters(group_training_examples_by="series"),
+            time_series=TimeSeriesParameters(is_timeseries=True, timestamp_column="time"),
+            evaluation=EvaluationParameters(
+                time_series=TimeSeriesEvaluationParameters(
+                    enabled=True,
+                    autocorrelation=AutocorrelationSimilarityParameters(value_columns=[column, "value"]),
+                ),
+            ),
+        )
+        data = pd.DataFrame(
+            {"time": [0, 1, 2], "series": [1, 1, 1], PSEUDO_GROUP_COLUMN: [0, 0, 0], "value": [1.0, 2.0, 3.0]}
+        )
+
+        issues = TimeSeriesValueColumnCheck().run(make_ctx(config=config, data=data))
+
+        assert [issue.code for issue in issues] == ["evaluation_column_reserved"]
+        assert (
+            f"Autocorrelation value column {column!r} is used for timestamp or sequence grouping." == issues[0].message
+        )
+
     def test_checks_value_columns_of_every_time_series_metric(self):
         class FakeMetricParameters(TimeSeriesMetricParameters):
             metric_label: ClassVar[str] = "Fake metric"

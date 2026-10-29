@@ -20,6 +20,7 @@ from ...data_processing.validation import (
     check_column_present,
     check_no_pseudo_column_collision,
 )
+from ...defaults import PSEUDO_GROUP_COLUMN
 from ...errors import DataError, ParameterError
 from ..base import DataFrameCheck, IssueCollector
 from ..helpers import emit_on_raise
@@ -229,11 +230,22 @@ class TimeSeriesValueColumnCheck(DataFrameCheck):
     @override
     def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
         time_series = ctx.config.evaluation.time_series
+        reserved = {
+            ctx.config.time_series.timestamp_column,
+            ctx.config.data.group_training_examples_by,
+            PSEUDO_GROUP_COLUMN,
+        }
         for field_name in type(time_series).model_fields:
             metric = getattr(time_series, field_name)
             if not isinstance(metric, TimeSeriesMetricParameters) or metric.value_columns is None:
                 continue
             for column in metric.value_columns:
+                if column in reserved:
+                    collector.error(
+                        "evaluation_column_reserved",
+                        f"{metric.metric_label} value column {column!r} is used for timestamp or sequence grouping.",
+                    )
+                    continue
                 if column not in ctx.data:
                     collector.error(
                         "evaluation_column_not_found",
