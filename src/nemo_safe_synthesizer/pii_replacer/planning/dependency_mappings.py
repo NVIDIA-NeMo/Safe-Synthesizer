@@ -166,8 +166,9 @@ def validate_data_to_sampler_value_mapping(
     if problems:
         raise ParameterError(
             f"data_to_sampler_value_mapping does not match the {sampler_name} sampler: {'; '.join(problems)}. "
-            "The plan may have been written for another sampler or locale; change these entries, or set "
-            "replace_pii.sampler and replace_pii.locale to the ones the plan was written for"
+            "The plan may have been written for another sampler or locale; change these entries, rerun discovery "
+            "with replace_pii.replacement_plan set to auto_discovery, or set replace_pii.sampler and "
+            "replace_pii.locale to the ones the plan was written for"
         )
 
 
