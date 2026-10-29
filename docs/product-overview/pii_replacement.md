@@ -323,8 +323,9 @@ Automatic discovery sends four kinds of LLM request, in this order:
    request would exceed its size limit, planning fails and asks for a manual
    mapping.
 
-The first three are split into batches of at most 32 columns and 48 KiB; the
-type and pattern requests share batches. The model only proposes the plan; how
+The first three are split into batches of at most 48 KiB. Type and pattern
+requests share batches of at most 8 columns, so a reasoning model's thinking
+budget reaches every column; dependency requests take up to 32 columns. The model only proposes the plan; how
 replacements stay consistent is decided by NSS, as described under
 [Replacement rules](#replacement-rules).
 

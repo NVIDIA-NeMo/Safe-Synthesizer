@@ -36,6 +36,7 @@ from nemo_safe_synthesizer.pii_replacer.planning import llm as llm_module
 from nemo_safe_synthesizer.pii_replacer.planning.llm import (
     MAX_BATCH_BYTES,
     MAX_BATCH_ENTRIES,
+    MAX_CLASSIFICATION_COLUMNS,
     RETRY_BASE_DELAY_SECONDS,
     RETRY_MAX_DELAY_SECONDS,
     _bounded_batches,
@@ -195,7 +196,8 @@ class TestClassificationBatching:
         batches = _profile_batches(captured[0].column_profiles)
 
         assert len(batches) > 1
-        assert all(len(batch) <= MAX_BATCH_ENTRIES for batch in batches)
+        assert len(batches[0]) == MAX_CLASSIFICATION_COLUMNS
+        assert all(len(batch) <= MAX_CLASSIFICATION_COLUMNS for batch in batches)
         assert all(_json_bytes(batch) <= MAX_BATCH_BYTES for batch in batches)
 
 
@@ -220,7 +222,7 @@ class TestDependencyBatching:
         # One worker keeps batch order deterministic for the scripted responses.
         enhancer, transport = _enhancer(
             [
-                *[_classifications({column: entity}) for column, entity in classifications.items()],
+                _classifications(classifications),
                 _dependency_selection({"first_name": {"gender": "gender"}}),
                 _dependency_selection({"spouse_first_name": {"gender": "spouse_gender"}}),
             ],
@@ -235,7 +237,7 @@ class TestDependencyBatching:
         assert depends_on == {"first_name": ["gender"], "spouse_first_name": ["spouse_gender"]}
         dependency_targets = [
             [target["target_column"] for target in json.loads(messages[1]["content"])["dependency_targets"]]
-            for messages, _ in transport.calls[len(classifications) :]
+            for messages, _ in transport.calls[1:]
         ]
         assert dependency_targets == [["first_name"], ["spouse_first_name"]]
 
@@ -245,6 +247,7 @@ class TestDependencyBatching:
                 [{"target_column": "email", "source_options": "x" * MAX_BATCH_BYTES}],
                 kind="Dependency options",
                 name_key="target_column",
+                max_entries=MAX_BATCH_ENTRIES,
             )
 
 
