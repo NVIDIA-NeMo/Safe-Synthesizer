@@ -8,8 +8,7 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-
-import pandas as pd
+from typing import TYPE_CHECKING
 
 from ...config.replace_pii import EntityType, PiiColumnPlan
 from ...errors import GenerationError, InternalError, ParameterError
@@ -17,6 +16,9 @@ from ...observability import get_logger
 from .canonicalization import is_missing_scalar
 from .detection import FreeTextDetector, fresh_detection_entity_types
 from .types import DetectedSpan, DetectionCell, DetectionCellId, detected_text
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 __all__ = ["AddressParts", "detect_address_parts"]
 
