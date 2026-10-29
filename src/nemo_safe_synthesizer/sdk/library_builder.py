@@ -370,10 +370,7 @@ class SafeSynthesizer(ConfigBuilder):
         When ``output_path`` is provided, the complete NSS configuration is
         written there, and its ``replace_pii.replacement_plan``, the part to
         review, is written to ``pii_replacement_plan.yaml`` in the same directory;
-        the configuration names that file, so either can be reused. Comments in
-        the plan help a person review it: they list the columns left unchanged
-        and, for each depends_on column, the dataset values used as is and the
-        values the sampler accepts.
+        the configuration names that file, so either can be reused.
 
         Args:
             output_path: Optional destination for the reusable NSS configuration YAML.

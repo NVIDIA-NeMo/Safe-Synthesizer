@@ -90,6 +90,13 @@ a Nemotron-Personas dataset. Faker generates values in `replace_pii.locale`
 too, such as French names for `fr_FR`, but cannot condition on ethnic
 background.
 
+The two samplers support different locales. Nemotron-Personas has datasets
+only for the locales listed in Data Designer's
+[person-sampling guide](https://docs.nvidia.com/nemo/datadesigner/concepts/person-sampling),
+while Faker supports [many more](https://faker.readthedocs.io/en/master/locales.html).
+For a locale without a Nemotron-Personas dataset, leave `replace_pii.sampler`
+unset or set `backend: faker`.
+
 ### Dependencies
 
 A column's `depends_on` lists other columns of the same record that its
@@ -300,13 +307,6 @@ under `--artifact-path`:
 - `safe-synthesizer-config.yaml`: the complete NSS configuration, which names
   `pii_replacement_plan.yaml` and records the sampler used, so it can be passed
   directly to a later run with `--config`.
-
-The plan file starts with a comment naming the sampler and locale it was
-written for. That comment is for the reader only; each run checks the plan
-against its own `replace_pii.sampler` and `replace_pii.locale`. A short comment
-above `columns_to_replace` explains `pattern` and `depends_on`, and the comment
-above `data_to_sampler_value_mapping` notes that the section is safe to ignore
-unless a run reports an error about it.
 
 The matching SDK interface returns the resolved `ReplacePiiConfig`. When an
 output path is supplied, it writes the complete configuration there and
