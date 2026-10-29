@@ -366,6 +366,8 @@ class TestGliner2Detector:
             ("government_id", "666-45-6789", EntityType.NATIONAL_ID),
             ("government_id", "123-00-6789", EntityType.NATIONAL_ID),
             ("government_id", "123-45-0000", EntityType.NATIONAL_ID),
+            ("government_id", "078-05-1120", EntityType.NATIONAL_ID),
+            ("government_id", "١٢٣-٤٥-٦٧٨٩", EntityType.NATIONAL_ID),
             ("national_id_number", "AB-12345", EntityType.NATIONAL_ID),
             ("passport_number", "X1234567", EntityType.NATIONAL_ID),
             ("tax_id", "12-3456789", EntityType.NATIONAL_ID),

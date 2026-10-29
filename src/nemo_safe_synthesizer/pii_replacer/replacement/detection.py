@@ -16,6 +16,7 @@ from typing import NamedTuple, Protocol
 from unicodedata import normalize
 
 import regex
+from stdnum.us import ssn as us_ssn
 from typing_extensions import TypeIs
 
 from ...config.replace_pii import (
@@ -80,7 +81,7 @@ _GLINER_LABEL_ENTITY_TYPES = {
     **{label: (entity_type,) for label, entity_type in _GLINER_LABELS.items()},
     **_GLINER_UNION_LABELS,
 }
-_SSN_SHAPE = regex.compile(r"(\d{3})-(\d{2})-(\d{4})")
+_SSN_SHAPE = regex.compile(r"[0-9]{3}-[0-9]{2}-[0-9]{4}")
 _NAME_ENTITY_TYPES = frozenset(
     {EntityType.FIRST_NAME, EntityType.MIDDLE_NAME, EntityType.LAST_NAME, EntityType.FULL_NAME}
 )
@@ -728,16 +729,13 @@ def _normalize_label(label: str) -> str:
 
 
 def _is_valid_ssn(value: str) -> bool:
-    """Return whether ``value`` is ``ddd-dd-dddd`` with an SSN-assignable area, group, and serial.
+    """Return whether ``value`` is a US Social Security number written ``ddd-dd-dddd``.
 
-    Area 000, 666, and 900-999 (ITINs and other tax IDs use the 9xx range), group 00, and serial 0000
-    are never assigned, so such values are typed ``national_id`` instead.
+    python-stdnum rejects numbers never assigned, such as area 000, 666, or 900-999 (ITINs and other tax IDs use the
+    9xx range), group 00, or serial 0000, and numbers made public in advertising, such as ``078-05-1120``. Such
+    values are typed ``national_id`` instead.
     """
-    match = _SSN_SHAPE.fullmatch(value)
-    if match is None:
-        return False
-    area, group, serial = match.groups()
-    return area not in {"000", "666"} and not area.startswith("9") and group != "00" and serial != "0000"
+    return _SSN_SHAPE.fullmatch(value) is not None and us_ssn.is_valid(value)
 
 
 def _load_gliner2_model(model_id: str, revision: str | None) -> _GlinerModel:

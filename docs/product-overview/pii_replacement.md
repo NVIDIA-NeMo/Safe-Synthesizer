@@ -572,7 +572,7 @@ Several checkpoint labels map to one NSS entity type:
 | `phone_number` | `phone_number`, `fax_number` |
 | `street_address` | `street_address` |
 | `national_id` | `national_id_number`, `passport_number`, `tax_id`, `tax_number`, and `government_id` values that are not SSNs |
-| `ssn` | `government_id` values shaped `ddd-dd-dddd` with an assignable area, group, and serial (not area 000, 666, or 900-999, group 00, or serial 0000) |
+| `ssn` | `government_id` values shaped `ddd-dd-dddd` that python-stdnum accepts as US SSNs: never area 000, 666, or 900-999, group 00, serial 0000, or a number made public in advertising |
 | `unique_identifier` | `customer_id`, `employee_id`, `medical_record_number`, `member_id`, `health_plan_beneficiary_number`, `certificate_number` |
 
 Identifiers are requested only by the kinds that text names, such as "customer
@@ -729,11 +729,10 @@ The input can be any format listed under
 [Data input](../user-guide/running.md#data-input). When `--output-file` is
 omitted, the command writes `<input stem>_pii_replaced` with the input's
 extension to the run directory. Output is written as Parquet when its path ends
-in `.parquet`, and as CSV otherwise. The
-resolved configuration and replacement file are always written, with the review
-comments described under [Plan-only workflow](#plan-only-workflow), so the exact
-plan and sampler mappings can be reviewed and reused. Replacement maps and raw detector results
-are not persisted.
+in `.parquet`, and as CSV otherwise. The resolved configuration and plan file
+are always written, as in the [Plan-only workflow](#plan-only-workflow), so the
+exact plan and sampler mappings can be reviewed and reused. Replacement maps
+and raw detector results are not persisted.
 
 For CSV and TXT inputs, every cell that replacement leaves unchanged is written
 exactly as it appears in the input file. For example, ZIP code `02054` stays
