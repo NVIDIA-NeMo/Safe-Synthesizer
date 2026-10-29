@@ -308,10 +308,11 @@ class StructuredReplacementExecutor:
         return self._used_by_distinct_column.get(spec.column_name)
 
     def _avoided_replacements(self, spec: PiiColumnPlan) -> set[str] | None:
-        """Return the case-folded values a new replacement in ``spec``'s column must avoid, or ``None``.
+        """Return the case-folded values a new replacement in ``spec``'s column should avoid, or ``None``.
 
         A column that must stay distinct avoids its own replacements and those of every column it shares
         replacements with. Otherwise a new value could equal one that another column later shares into it.
+        When only such values are left, an allocated identifier takes one its own column has not used.
 
         Example:
             ``parent_id`` must stay distinct. Its row 1 gets new value ``X`` while ``account_id`` already has
@@ -421,7 +422,13 @@ class StructuredReplacementExecutor:
         """Take the next usable value from the column's identifier space, starting at a seeded position."""
         started = time.perf_counter()
         seed = _derive_seed(self._base_seed, key, purpose="replacement", attempt=0)
-        allocation = allocator.allocate(seed, original_text, avoid=self._avoided_replacements(spec))
+        avoid = self._avoided_replacements(spec)
+        allocation = allocator.allocate(seed, original_text, avoid=avoid)
+        own = self._own_replacements(spec)
+        if (allocation is None or allocation[1] != "new") and own is not None and own is not avoid:
+            # Every value left is used by a column that shares this format; take one this column has not used.
+            # A value shared into this column later is then replaced instead of repeated.
+            allocation = allocator.allocate(seed, original_text, avoid=own)
         self._generation_elapsed += time.perf_counter() - started
         if allocation is None:
             raise ParameterError(

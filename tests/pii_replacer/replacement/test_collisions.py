@@ -171,6 +171,18 @@ class TestCrossColumnSharing:
         shared_rows = dataframe["account_id"] == dataframe["parent_id"]
         assert (result.loc[shared_rows, "account_id"] == result.loc[shared_rows, "parent_id"]).all()
 
+    def test_a_small_mask_falls_back_to_values_only_other_columns_used(self) -> None:
+        # account_id takes both values of [01], so parent_id can only use values account_id already has.
+        dataframe = pd.DataFrame({"account_id": ["0", "1"], "parent_id": ["1", "0"]})
+        specs = [
+            PiiColumnPlan(column_name=column, entity_type=EntityType.UNIQUE_IDENTIFIER, pattern="[01]")
+            for column in ("account_id", "parent_id")
+        ]
+
+        result = _execute(dataframe, *specs, generator=_ScriptedGenerator())
+
+        assert result.to_dict("list") == {"account_id": ["1", "0"], "parent_id": ["0", "1"]}
+
     def test_a_distinct_column_does_not_take_a_shared_value_it_already_has(self) -> None:
         # ssn repeats a value, so it may repeat replacements: rows 0 and 1 both get 444. alt_ssn must stay
         # distinct, so it shares 444 in row 0 but generates a new value in row 1.
