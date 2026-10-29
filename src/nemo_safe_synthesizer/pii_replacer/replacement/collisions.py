@@ -8,8 +8,9 @@ Every replacement follows the same rules:
 1. It differs from its own original, ignoring letter case. This rule is strict.
 2. In an identifier-like column whose original values are all distinct, such as a key column,
    replacements stay distinct too, ignoring case. When retries cannot find an unused value, an earlier
-   replacement is repeated and counted so the caller can warn. Other columns may repeat replacements,
-   and a replacement may equal another row's original.
+   replacement is repeated and counted so the caller can warn. A new replacement there also avoids the
+   values of columns that share replacements with it, so a value shared into it later is not a repeat.
+   Other columns may repeat replacements, and a replacement may equal another row's original.
 3. A full-name replacement avoids keeping the original's first or last name; when retries cannot, it
    keeps one and is counted.
 
@@ -74,10 +75,11 @@ class CandidateChooser:
         entity_type: Entity type of the value being replaced.
         original: Original text the replacement must differ from.
         pattern: Plan pattern of the target, used to skip fixed words when comparing full names.
-        used: Case-folded replacements already used in a column that must stay distinct, or ``None``
-            when replacements may repeat. A candidate in this set is kept only as a repeat fallback.
-        one_to_one: Case-folded replacements of a grouping column. When given, a candidate in this set
-            is rejected outright and no repeat fallback is allowed, so two groups never share one.
+        used: Case-folded values a column that must stay distinct should not get: its own replacements
+            and those of the columns that share replacements with it. ``None`` when replacements may
+            repeat. A candidate in this set is kept only as a repeat fallback.
+        one_to_one: The same values for a grouping column. When given, a candidate in this set is
+            rejected outright and no repeat fallback is allowed, so two groups never share one.
     """
 
     def __init__(

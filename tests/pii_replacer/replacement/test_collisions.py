@@ -142,6 +142,54 @@ class TestCrossColumnSharing:
         }
         assert len(generator.requests) == 3
 
+    @pytest.mark.parametrize(
+        ("account", "parent"),
+        [
+            # Row 0 shares account_id's value into parent_id; later rows must not get it again.
+            (
+                [f"{row:03d}" for row in range(200)],
+                [f"{row:03d}" if row % 2 else f"{500 + row:03d}" for row in range(200)],
+            ),
+            # Rows 100-199 share values parent_id could already have given rows 0-99.
+            (
+                [f"{row:03d}" for row in range(200)],
+                [f"{500 + row:03d}" for row in range(100)] + [f"{row:03d}" for row in range(100, 200)],
+            ),
+        ],
+    )
+    def test_shared_values_do_not_repeat_in_a_distinct_column(self, account: list[str], parent: list[str]) -> None:
+        dataframe = pd.DataFrame({"account_id": account, "parent_id": parent})
+        specs = [
+            PiiColumnPlan(column_name=column, entity_type=EntityType.UNIQUE_IDENTIFIER, pattern="###")
+            for column in ("account_id", "parent_id")
+        ]
+
+        result = _execute(dataframe, *specs, generator=_ScriptedGenerator())
+
+        assert result["account_id"].is_unique
+        assert result["parent_id"].is_unique
+        shared_rows = dataframe["account_id"] == dataframe["parent_id"]
+        assert (result.loc[shared_rows, "account_id"] == result.loc[shared_rows, "parent_id"]).all()
+
+    def test_a_distinct_column_does_not_take_a_shared_value_it_already_has(self) -> None:
+        # ssn repeats a value, so it may repeat replacements: rows 0 and 1 both get 444. alt_ssn must stay
+        # distinct, so it shares 444 in row 0 but generates a new value in row 1.
+        dataframe = pd.DataFrame(
+            {
+                "ssn": ["111-11-1111", "222-22-2222", "111-11-1111"],
+                "alt_ssn": ["111-11-1111", "222-22-2222", "333-33-3333"],
+            }
+        )
+        generator = _ScriptedGenerator("444-44-4444", "444-44-4444", "777-77-7777", "888-88-8888", "999-99-9999")
+        specs = [PiiColumnPlan(column_name=column, entity_type=EntityType.SSN) for column in ("ssn", "alt_ssn")]
+
+        result = _execute(dataframe, *specs, generator=generator)
+
+        assert result.to_dict("list") == {
+            "ssn": ["444-44-4444", "444-44-4444", "777-77-7777"],
+            "alt_ssn": ["444-44-4444", "888-88-8888", "999-99-9999"],
+        }
+
     def test_columns_with_different_patterns_are_replaced_separately(self) -> None:
         dataframe = pd.DataFrame({"phone": ["(555) 123-4567"], "work_phone": ["(555) 123-4567"]})
         specs = (

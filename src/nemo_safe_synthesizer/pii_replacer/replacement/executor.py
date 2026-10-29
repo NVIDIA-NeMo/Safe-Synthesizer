@@ -47,6 +47,8 @@ _CompiledDataToSamplerValueMapping = dict[str, dict[str, tuple[str, ...]]]
 # Identity shared by every column that gets the same replacement for a value: scope, entity type,
 # the column's format, and the case-folded original.
 _SharedMappingKey = tuple[tuple[str, Hashable], EntityType, tuple[str | None, int | None], CanonicalValue]
+# Entity type and format of a column; columns with the same one share replacements.
+_FormatKey = tuple[EntityType, tuple[str | None, int | None]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,6 +98,9 @@ class StructuredReplacementExecutor:
         # Case-folded replacements used so far in each identifier column whose originals are all distinct.
         self._used_by_distinct_column: dict[str, set[str]] = {}
         self._group_replacements: set[str] = set()
+        # Case-folded replacements in every column of a format that a distinct or grouping column has. New
+        # values in that column avoid them, so a value another column shares into it later is not a repeat.
+        self._used_by_format: dict[_FormatKey, set[str]] = {}
         self._repeated_by_target: dict[str, int] = {}
         self._kept_name_parts_by_target: dict[str, int] = {}
         self._identifier_allocators: dict[str, IdentifierAllocator] = {}
@@ -118,6 +123,9 @@ class StructuredReplacementExecutor:
         original_group_identities = self._snapshot_group_identities(dataframe)
         self._seed_reserved_values(dataframe)
         self._prepare_identifier_allocators(dataframe)
+        for spec in self._plan.columns_to_replace:
+            if self._own_replacements(spec) is not None:
+                self._used_by_format.setdefault(self._format_key(spec), set())
         for spec in compile_plan(self._plan):
             self._execute_target(working, spec, original_group_identities)
         _verify_result(dataframe, working, self._plan)
@@ -164,6 +172,7 @@ class StructuredReplacementExecutor:
         self._shared.clear()
         self._used_by_distinct_column.clear()
         self._group_replacements.clear()
+        self._used_by_format.clear()
         self._repeated_by_target.clear()
         self._kept_name_parts_by_target.clear()
         self._identifier_allocators.clear()
@@ -266,29 +275,56 @@ class StructuredReplacementExecutor:
             return cached.value
 
         provenance = None if isinstance(key, RecordMappingKey) else GroupMappingProvenance(dependencies)
-        one_to_one = spec.column_name == self._group_column
         shared_key = self._shared_key(key, spec)
         shared = self._shared.get(shared_key)
         # Another column of the same type and format already replaced this value in this record or group.
-        # A grouping column reuses it only if no other group has that replacement.
-        if shared is not None and not (one_to_one and shared.casefold() in self._group_replacements):
+        # A grouping column, or a column that must stay distinct, reuses it only if the column does not
+        # already have it, so no other group or original gets the same replacement.
+        if shared is not None and ((own := self._own_replacements(spec)) is None or shared.casefold() not in own):
             self._cache[key] = _CachedReplacement(shared, provenance)
-            self._record_used(spec.column_name, shared)
-            if one_to_one:
-                self._group_replacements.add(shared.casefold())
+            self._record_used(spec, shared)
             return shared
         replacement = self._generate_fresh(key, spec, original_text, dependencies)
         self._cache[key] = _CachedReplacement(replacement, provenance)
         self._shared.setdefault(shared_key, replacement)
-        self._record_used(spec.column_name, replacement)
-        if one_to_one:
-            self._group_replacements.add(replacement.casefold())
+        self._record_used(spec, replacement)
         self._generated_count += 1
         return replacement
 
-    def _record_used(self, column_name: str, replacement: str) -> None:
-        if (used := self._used_by_distinct_column.get(column_name)) is not None:
-            used.add(replacement.casefold())
+    def _record_used(self, spec: PiiColumnPlan, replacement: str) -> None:
+        folded = replacement.casefold()
+        if (used := self._used_by_distinct_column.get(spec.column_name)) is not None:
+            used.add(folded)
+        if spec.column_name == self._group_column:
+            self._group_replacements.add(folded)
+        if (used_by_format := self._used_by_format.get(self._format_key(spec))) is not None:
+            used_by_format.add(folded)
+
+    def _own_replacements(self, spec: PiiColumnPlan) -> set[str] | None:
+        """Return the case-folded replacements in ``spec``'s column if it must stay distinct, else ``None``."""
+        if spec.column_name == self._group_column:
+            return self._group_replacements
+        return self._used_by_distinct_column.get(spec.column_name)
+
+    def _avoided_replacements(self, spec: PiiColumnPlan) -> set[str] | None:
+        """Return the case-folded values a new replacement in ``spec``'s column must avoid, or ``None``.
+
+        A column that must stay distinct avoids its own replacements and those of every column it shares
+        replacements with. Otherwise a new value could equal one that another column later shares into it.
+
+        Example:
+            ``parent_id`` must stay distinct. Its row 1 gets new value ``X`` while ``account_id`` already has
+            ``X`` in row 2. If row 2's ``parent_id`` equals its ``account_id``, it would share ``X`` and
+            repeat it, so row 1 avoids ``X``.
+        """
+        if self._own_replacements(spec) is None:
+            return None
+        return self._used_by_format[self._format_key(spec)]
+
+    def _format_key(self, spec: PiiColumnPlan) -> _FormatKey:
+        allocator = self._identifier_allocators.get(spec.column_name)
+        digits = allocator.space.digits if allocator is not None and isinstance(allocator.space, NumberSpace) else None
+        return (spec.entity_type, (spec.pattern, digits))
 
     def _shared_key(self, key: StructuredMappingKey, spec: PiiColumnPlan) -> _SharedMappingKey:
         """Return the identity under which columns of one entity type and format share replacements.
@@ -302,9 +338,7 @@ class StructuredReplacementExecutor:
             if isinstance(key, RecordMappingKey)
             else ("group", key.original_group_identity)
         )
-        allocator = self._identifier_allocators.get(spec.column_name)
-        digits = allocator.space.digits if allocator is not None and isinstance(allocator.space, NumberSpace) else None
-        return (scope, spec.entity_type, (spec.pattern, digits), key.canonical_original_value)
+        return (scope, *self._format_key(spec), key.canonical_original_value)
 
     def _generate_fresh(
         self,
@@ -316,12 +350,13 @@ class StructuredReplacementExecutor:
         if (allocator := self._identifier_allocators.get(spec.column_name)) is not None:
             return self._allocate_identifier(key, spec, original_text, allocator)
         one_to_one = spec.column_name == self._group_column
+        avoid = self._avoided_replacements(spec)
         chooser = CandidateChooser(
             spec.entity_type,
             original_text,
             spec.pattern,
-            used=None if one_to_one else self._used_by_distinct_column.get(spec.column_name),
-            one_to_one=self._group_replacements if one_to_one else None,
+            used=None if one_to_one else avoid,
+            one_to_one=avoid if one_to_one else None,
         )
         attempts = _MAX_GROUP_GENERATION_ATTEMPTS if one_to_one else _MAX_GENERATION_ATTEMPTS
         for attempt in range(attempts):
@@ -384,12 +419,7 @@ class StructuredReplacementExecutor:
         """Take the next usable value from the column's identifier space, starting at a seeded position."""
         started = time.perf_counter()
         seed = _derive_seed(self._base_seed, key, purpose="replacement", attempt=0)
-        avoid = (
-            self._group_replacements
-            if spec.column_name == self._group_column
-            else self._used_by_distinct_column.get(spec.column_name)
-        )
-        allocation = allocator.allocate(seed, original_text, avoid=avoid)
+        allocation = allocator.allocate(seed, original_text, avoid=self._avoided_replacements(spec))
         self._generation_elapsed += time.perf_counter() - started
         if allocation is None:
             raise ParameterError(
