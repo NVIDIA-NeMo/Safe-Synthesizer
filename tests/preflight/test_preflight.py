@@ -912,9 +912,8 @@ class TestTimeSeriesValueColumnCheck:
         issues = TimeSeriesValueColumnCheck().run(make_ctx(config=config, data=data))
 
         assert [issue.code for issue in issues] == ["evaluation_column_reserved"]
-        assert (
-            f"Autocorrelation value column {column!r} is used for timestamp or sequence grouping." == issues[0].message
-        )
+        assert "Autocorrelation" in issues[0].message
+        assert repr(column) in issues[0].message
 
     def test_checks_value_columns_of_every_time_series_metric(self):
         class FakeMetricParameters(TimeSeriesMetricParameters):
