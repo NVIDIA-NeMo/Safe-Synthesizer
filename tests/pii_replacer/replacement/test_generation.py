@@ -32,6 +32,7 @@ from nemo_safe_synthesizer.pii_replacer.replacement.generators import (
     FakerReplacementGenerator,
     NemotronPersonasReplacementGenerator,
 )
+from nemo_safe_synthesizer.pii_replacer.replacement.generators._common import normalize_organization_domain
 from nemo_safe_synthesizer.pii_replacer.replacement.generators.person_names import (
     full_name_layout,
     read_full_name,
@@ -469,6 +470,18 @@ class TestReplacementGenerator:
 
         assert (parts["first"], parts["last"]) == (first, last)
         assert full_name_layout(locale).family_first is (locale not in {"en_US", "fr_FR", "de_DE"})
+
+    @pytest.mark.parametrize(
+        ("organization", "expected"),
+        [
+            ("Straße AG", "strasse-ag"),
+            ("Ørsted", "orsted"),
+            ("Москва Банк", "moskva-bank"),
+            ("北京大学", "beijingdaxue"),
+        ],
+    )
+    def test_organization_domains_are_transliterated_to_ascii(self, organization: str, expected: str) -> None:
+        assert normalize_organization_domain(organization) == expected
 
     @pytest.mark.parametrize(
         ("value", "expected"),

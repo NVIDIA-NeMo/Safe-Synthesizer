@@ -6,10 +6,11 @@
 from __future__ import annotations
 
 import re
-import unicodedata
 from collections.abc import Mapping
 from random import Random
 from typing import TYPE_CHECKING
+
+from anyascii import anyascii
 
 from ....config.replace_pii import EntityType
 from ....errors import GenerationError
@@ -142,8 +143,13 @@ def email_domain(value: str) -> str | None:
 
 
 def normalize_organization_domain(value: str) -> str:
-    """Normalize an organization value into one lowercase DNS label."""
-    ascii_value = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii")
+    """Normalize an organization value into one lowercase DNS label, transliterating it to ASCII with anyascii.
+
+    Example:
+        ``"Straße AG"`` becomes ``"strasse-ag"``, ``"Ørsted"`` becomes ``"orsted"``, and ``"北京大学"`` becomes
+        ``"beijingdaxue"``.
+    """
+    ascii_value = anyascii(value)
     normalized = re.sub(r"[^a-z0-9]+", "-", ascii_value.casefold()).strip("-")
     return normalized[:63].rstrip("-")
 
