@@ -23,6 +23,7 @@ from .dataframe import (
     MiaExcludedColumnsCheck,
     OrderbyColumnCheck,
     PseudoColumnCheck,
+    RollingStatsValueColumnCheck,
     TimeSeriesDataShapeCheck,
     TimeSeriesValueColumnCheck,
     TimestampColumnCheck,
@@ -47,6 +48,7 @@ __all__ = [
     "OrderbyColumnCheck",
     "OversamplingCheck",
     "PseudoColumnCheck",
+    "RollingStatsValueColumnCheck",
     "TimeSeriesDataShapeCheck",
     "TimeSeriesValueColumnCheck",
     "TimestampColumnCheck",
@@ -74,6 +76,7 @@ _CORE_CHECKS: tuple[PreflightCheck, ...] = (
     ConstantColumnCheck(),
     TimestampColumnCheck(),
     TimeSeriesValueColumnCheck(),
+    RollingStatsValueColumnCheck(),
     TimeSeriesDataShapeCheck(),
     # METADATA
     VRAMHeadroomCheck(),

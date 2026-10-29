@@ -13,6 +13,7 @@ from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
 from nemo_safe_synthesizer.evaluation.components.attribute_inference_protection import AttributeInferenceProtection
 from nemo_safe_synthesizer.evaluation.components.autocorrelation_similarity import AutocorrelationSimilarity
 from nemo_safe_synthesizer.evaluation.components.membership_inference_protection import MembershipInferenceProtection
+from nemo_safe_synthesizer.evaluation.components.rolling_stats_similarity import RollingStatsSimilarity
 from nemo_safe_synthesizer.evaluation.components.text_semantic_similarity import TextSemanticSimilarity
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import EvaluationScore, Grade, PrivacyGrade
@@ -285,4 +286,79 @@ def test_time_series_report_summarizes_all_profiles_in_one_chart_row() -> None:
     assert all(figure["tooltip"].strip() for figure in context["figures"])
     assert context["summary_columns"] == ["other", "value"]
     assert context["summary_traces_per_column"] == 4
+    assert context["pair_score_column_count"] == 2
+
+
+def test_rolling_stats_metric_is_absent_when_time_series_evaluation_is_disabled() -> None:
+    frame = pd.DataFrame({"time": range(8), "value": [0.0, 1.0, 3.0, 2.0, 4.0, 1.0, 5.0, 2.0]})
+
+    tabular = MultimodalReport.from_dataframes(frame, frame.copy(), config=SafeSynthesizerParameters())
+    disabled = MultimodalReport.from_dataframes(
+        frame, frame.copy(), config=_time_series_config(time_series_enabled=False)
+    )
+
+    assert not any(isinstance(component, RollingStatsSimilarity) for component in tabular.components)
+    assert not any(isinstance(component, RollingStatsSimilarity) for component in disabled.components)
+
+
+def test_rolling_stats_metric_runs_after_autocorrelation_and_renders_its_card() -> None:
+    time = np.arange(400)
+    training = pd.DataFrame({"time": time, "value": time / 40 + np.sin(time / 7)})
+
+    report = MultimodalReport.from_dataframes(training, training.copy(), config=_time_series_config())
+
+    component = next(item for item in report.components if isinstance(item, RollingStatsSimilarity))
+    assert component.score.score == 10
+    assert report.jinja_context["rolling_stats_similarity"]["evaluated_profile_count"] == 1
+    output = render_report(report)
+    assert output is not None
+    assert output.index('id="autocorrelation-similarity"') < output.index('id="rolling-stats-similarity"')
+    assert "Training median local average" in output
+    assert "Synthetic median local spread" in output
+
+
+def test_rolling_stats_report_summarizes_all_profiles_in_one_chart_row() -> None:
+    report = _minimal_multimodal_report()
+    profiles = [
+        {
+            "group": str(index),
+            "column": column,
+            "segments": 2,
+            "training_level": [0.5, 0.2],
+            "synthetic_level": [None, None] if index == 0 else [0.4, 0.1],
+            "training_spread": [1.0, 1.0],
+            "synthetic_spread": [None, None] if index == 0 else [0.9, 1.1],
+            "similarity": index / 13,
+        }
+        for index in range(13)
+        for column in ("value", "other")
+    ]
+    report.components = [
+        RollingStatsSimilarity(
+            score=EvaluationScore.finalize_grade(raw_score=0.5, score=5.0),
+            details={"profiles": profiles},
+        )
+    ]
+
+    context = report.jinja_context["rolling_stats_similarity"]
+
+    assert report.jinja_context["with_time_series"] is True
+    assert context["evaluated_profile_count"] == 26
+    assert context["evaluated_group_count"] == 13
+    assert context["evaluated_column_count"] == 2
+    assert context["constant_synthetic_profile_count"] == 2
+    assert [figure["title"] for figure in context["figures"]] == [
+        "Average and spread",
+        "Difference by segment",
+        "Pair scores",
+    ]
+    assert [figure["column_select"] for figure in context["figures"]] == [True, False, False]
+    assert [figure["tooltip_id"] for figure in context["figures"]] == [
+        "rolling-stats-profile-info",
+        "rolling-stats-difference-info",
+        "rolling-stats-pair-scores-info",
+    ]
+    assert all(figure["tooltip"].strip() for figure in context["figures"])
+    assert context["summary_columns"] == ["other", "value"]
+    assert context["summary_traces_per_column"] == 8
     assert context["pair_score_column_count"] == 2

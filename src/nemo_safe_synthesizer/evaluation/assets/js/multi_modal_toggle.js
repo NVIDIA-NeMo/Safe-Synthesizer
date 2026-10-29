@@ -614,6 +614,10 @@ document.querySelector("[data-columns-toggle]")?.addEventListener("click", toggl
 document.querySelectorAll("[data-autocorrelation-column-select]").forEach((select) => {
     select.addEventListener("change", selectAutocorrelationColumn);
 });
+// Rolling stats summary figures use the same trace-per-column layout as autocorrelation.
+document.querySelectorAll("[data-rolling-stats-column-select]").forEach((select) => {
+    select.addEventListener("change", selectAutocorrelationColumn);
+});
 document.addEventListener("click", (event) => {
     if (!event.target.closest(".metric-tooltip, [data-tooltip-toggle]")) {
         closeTooltips();
